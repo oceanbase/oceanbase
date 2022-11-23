@@ -15,22 +15,26 @@
 
 #include "share/ob_virtual_table_scanner_iterator.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObVirtualSqlMonitorStatname : public common::ObVirtualTableScannerIterator {
+class ObVirtualSqlMonitorStatname : public common::ObVirtualTableScannerIterator
+{
 public:
   ObVirtualSqlMonitorStatname();
   virtual ~ObVirtualSqlMonitorStatname();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-
 private:
-  enum SYS_COLUMN {
+  enum SYS_COLUMN
+  {
     ID = common::OB_APP_MIN_COLUMN_ID,
     GROUP_ID,
     NAME,
     DESCRIPTION,
+    TYPE,
   };
   int32_t stat_iter_;
   common::ObObj cells_[common::OB_ROW_MAX_COLUMNS_COUNT];

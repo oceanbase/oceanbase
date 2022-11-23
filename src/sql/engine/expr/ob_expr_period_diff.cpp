@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_ENG
+#define USING_LOG_PREFIX  SQL_ENG
 
 #include "sql/engine/expr/ob_expr_period_diff.h"
 #include "lib/ob_name_def.h"
@@ -18,31 +18,19 @@
 #include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObExprPeriodDiff::ObExprPeriodDiff(ObIAllocator& alloc)
+ObExprPeriodDiff::ObExprPeriodDiff(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_PERIOD_DIFF, N_PERIOD_DIFF, 2, NOT_ROW_DIMENSION)
-{}
+{
+}
 
 ObExprPeriodDiff::~ObExprPeriodDiff()
-{}
-
-int ObExprPeriodDiff::calc_result2(ObObj& result, const ObObj& left, const ObObj& right, ObExprCtx& expr_ctx) const
 {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(left.is_null() || right.is_null())) {
-    result.set_null();
-  } else {
-    TYPE_CHECK(left, ObUInt64Type);
-    TYPE_CHECK(right, ObUInt64Type);
-    if (OB_SUCC(ret)) {
-      ret = calc(result, left, right);
-    }
-  }
-  UNUSED(expr_ctx);
-  return ret;
 }
 
 int get_year_month(const uint64_t value, uint64_t &year, uint64_t &month)
@@ -68,7 +56,10 @@ int get_year_month(const uint64_t value, uint64_t &year, uint64_t &month)
 }
 
 template <typename T>
-int ObExprPeriodDiff::calc(T& result, const T& left, const T& right)
+int ObExprPeriodDiff::calc(
+    T &result,
+    const T &left,
+    const T &right)
 {
   int ret = OB_SUCCESS;
   uint64_t lvalue = left.get_uint64();
@@ -83,13 +74,15 @@ int ObExprPeriodDiff::calc(T& result, const T& left, const T& right)
   } else if (OB_FAIL(get_year_month(rvalue, ryear, rmonth))) {
     LOG_WARN("get_year_month failed", K(ret), K(rvalue), K(ryear), K(rmonth));
   } else {
-    diff = static_cast<int64_t>((lyear - ryear) * MONS_PER_YEAR + lmonth - rmonth);
+    diff = static_cast<int64_t> ((lyear - ryear) * MONS_PER_YEAR + lmonth - rmonth);
     result.set_int(diff);
   }
   return ret;
 }
 
-int ObExprPeriodDiff::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprPeriodDiff::cg_expr(ObExprCGCtx &op_cg_ctx,
+                              const ObRawExpr &raw_expr,
+                              ObExpr &rt_expr) const
 {
   UNUSED(op_cg_ctx);
   UNUSED(raw_expr);
@@ -97,7 +90,8 @@ int ObExprPeriodDiff::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr,
   if (rt_expr.arg_cnt_ != 2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("perioddiff expr should have two params", K(ret), K(rt_expr.arg_cnt_));
-  } else if (OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0]) || OB_ISNULL(rt_expr.args_[1])) {
+  } else if (OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0])
+            || OB_ISNULL(rt_expr.args_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children of perioddiff expr is null", K(ret), K(rt_expr.args_));
   } else {
@@ -108,17 +102,17 @@ int ObExprPeriodDiff::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr,
   return ret;
 }
 
-int ObExprPeriodDiff::calc_perioddiff(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprPeriodDiff::calc_perioddiff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  ObDatum* param_datum1 = NULL;
-  ObDatum* param_datum2 = NULL;
+  ObDatum *param_datum1 = NULL;
+  ObDatum *param_datum2 = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, param_datum1, param_datum2))) {
     LOG_WARN("eval param value failed", K(ret));
   } else if (OB_UNLIKELY(param_datum1->is_null() || param_datum2->is_null())) {
     expr_datum.set_null();
   } else {
-    ObDatum* res_datum = static_cast<ObDatum*>(&expr_datum);
+    ObDatum *res_datum = static_cast<ObDatum *>(&expr_datum);
     ret = calc(*res_datum, *param_datum1, *param_datum2);
   }
   return ret;
@@ -145,25 +139,6 @@ int ObExprPeriodAdd::calc_result_type2(ObExprResType &type,
   right.set_calc_type(common::ObIntType);
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
   return common::OB_SUCCESS;
-}
-
-int ObExprPeriodAdd::calc_result2(ObObj &result,
-                                   const ObObj &left,
-                                   const ObObj &right,
-                                   ObExprCtx &expr_ctx) const
-{
-  UNUSED(expr_ctx);
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(left.is_null() || right.is_null())) {
-    result.set_null();
-  } else {
-    TYPE_CHECK(left, ObIntType);
-    TYPE_CHECK(right, ObIntType);
-    if (OB_SUCC(ret)) {
-      ret = calc(result, left, right);
-    }
-  }
-  return ret;
 }
 
 template <typename T>
@@ -238,5 +213,5 @@ int ObExprPeriodAdd::calc_periodadd(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase

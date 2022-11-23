@@ -16,25 +16,29 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
-namespace oceanbase {
-namespace sql {
-
-ObExprBitAnd::ObExprBitAnd(ObIAllocator& alloc)
-    : ObBitwiseExprOperator(alloc, T_OP_BIT_AND, N_BIT_AND, 2, NOT_ROW_DIMENSION){};
-
-ObExprBitAnd::ObExprBitAnd(
-    ObIAllocator& alloc, ObExprOperatorType type, const char* name, int32_t param_num, int32_t dimension)
-    : ObBitwiseExprOperator(alloc, type, name, param_num, dimension){};
-
-int ObExprBitAnd::calc_result2(ObObj& res, const ObObj& obj1, const ObObj& obj2, ObExprCtx& expr_ctx) const
+namespace oceanbase
 {
-  return ObBitwiseExprOperator::calc_(res, obj1, obj2, expr_ctx, ObBitwiseExprOperator::BIT_AND);
-}
+namespace sql
+{
 
-ObExprBitAndOra::ObExprBitAndOra(ObIAllocator& alloc)
-    : ObExprBitAnd(alloc, T_OP_BIT_AND, N_BIT_AND_ORACLE, 2, NOT_ROW_DIMENSION){};
+ObExprBitAnd::ObExprBitAnd(ObIAllocator &alloc)
+    : ObBitwiseExprOperator(alloc, T_OP_BIT_AND, N_BIT_AND, 2, NOT_ROW_DIMENSION)
+{};
 
-int ObExprBitAnd::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+ObExprBitAnd::ObExprBitAnd(ObIAllocator &alloc,
+                           ObExprOperatorType type,
+                           const char *name,
+                           int32_t param_num,
+                           int32_t dimension)
+    : ObBitwiseExprOperator(alloc, type, name, param_num, dimension)
+{};
+
+ObExprBitAndOra::ObExprBitAndOra(ObIAllocator &alloc)
+    : ObExprBitAnd(alloc, T_OP_BIT_AND, N_BIT_AND_ORACLE, 2, NOT_ROW_DIMENSION)
+{};
+
+int ObExprBitAnd::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   const BitOperator op = BIT_AND;
@@ -45,5 +49,7 @@ int ObExprBitAnd::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, O
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}/* ns sql*/
+}/* ns oceanbase */
+
+

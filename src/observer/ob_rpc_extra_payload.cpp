@@ -14,8 +14,10 @@
 #include "ob_rpc_extra_payload.h"
 #include "share/ob_debug_sync.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
 int64_t ObRpcExtraPayload::get_serialize_size() const
 {
@@ -32,5 +34,5 @@ int ObRpcExtraPayload::deserialize(DESERIAL_PARAMS)
   return GDS.rpc_spread_actions().deserialize(buf, data_len, pos);
 }
 
-}  // namespace observer
-}  // end namespace oceanbase
+} // end namespace server
+} // end namespace oceanbase

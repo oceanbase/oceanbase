@@ -13,34 +13,43 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_vsize.h"
 #include "sql/engine/expr/ob_expr_util.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "share/object/ob_obj_cast.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {}
-}  // namespace oceanbase
-
-ObExprVsize::ObExprVsize(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_VSIZE, N_VSIZE, 1, NOT_ROW_DIMENSION)
-{}
-
-ObExprVsize::~ObExprVsize()
-{}
-
-bool ObExprVsize::is_blob_type(const ObObj& input) const
+namespace oceanbase
 {
-  return input.meta_.is_clob() || input.meta_.is_blob() || input.meta_.is_lob();
+namespace sql
+{
+}
 }
 
-int ObExprVsize::calc_result_type1(ObExprResType& type, ObExprResType& type1, common::ObExprTypeCtx& type_ctx) const
+ObExprVsize::ObExprVsize(ObIAllocator &alloc)
+  :ObFuncExprOperator(alloc, T_FUN_SYS_VSIZE, N_VSIZE, 1, NOT_ROW_DIMENSION)
+{
+}
+
+ObExprVsize::~ObExprVsize()
+{
+}
+
+bool ObExprVsize::is_blob_type(const ObObj &input) const
+{
+  return input.meta_.is_clob()
+            || input.meta_.is_blob()
+            || input.meta_.is_lob();
+}
+
+int ObExprVsize::calc_result_type1(ObExprResType &type,
+                                              ObExprResType &type1,
+                                              common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type1);
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(type1.is_lob())) {
+  if (OB_UNLIKELY(type1.is_lob())){
     // consistent to oracle error code;
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("inconsistent datatypes.", K(ret));
@@ -53,30 +62,10 @@ int ObExprVsize::calc_result_type1(ObExprResType& type, ObExprResType& type1, co
   return ret;
 }
 
-int ObExprVsize::calc_result1(ObObj& result, const ObObj& input, ObExprCtx& expr_ctx) const
+int ObExprVsize::calc_vsize_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (OB_UNLIKELY(input.is_null())) {
-    result.set_null();
-  } else {
-    number::ObNumber vsize;
-    ret = vsize.from(input.get_data_length(), *(expr_ctx.calc_buf_));
-    if (OB_FAIL(ret)) {
-      LOG_WARN("generator vsize result failed.", K(ret));
-    } else {
-      result.set_number(vsize);
-    }
-  }
-  return ret;
-}
-
-int ObExprVsize::calc_vsize_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
-{
-  int ret = OB_SUCCESS;
-  ObDatum* arg = NULL;
+  ObDatum *arg = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (arg->is_null()) {
@@ -94,7 +83,8 @@ int ObExprVsize::calc_vsize_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& re
   return ret;
 }
 
-int ObExprVsize::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprVsize::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);

@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX SQL_ENG
+#define USING_LOG_PREFIX  SQL_ENG
 
 #include "sql/engine/cmd/ob_load_data_executor.h"
 
@@ -18,15 +18,18 @@
 #include "sql/engine/cmd/ob_load_data_impl.h"
 #include "sql/engine/ob_exec_context.h"
 
-namespace oceanbase {
-namespace sql {
-int ObLoadDataExecutor::execute(ObExecContext& ctx, ObLoadDataStmt& stmt)
+namespace oceanbase
+{
+namespace sql
+{
+int ObLoadDataExecutor::execute(ObExecContext &ctx, ObLoadDataStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObLoadDataBase* load_impl = NULL;
-  if (stmt.get_load_arguments().is_csv_format_
-          ? OB_ISNULL(load_impl = OB_NEWx(ObLoadDataSPImpl, (&ctx.get_allocator())))
-          : OB_ISNULL(load_impl = OB_NEWx(ObLoadDataImpl, (&ctx.get_allocator())))) {
+  ObLoadDataBase *load_impl = NULL;
+  if (!stmt.get_load_arguments().is_csv_format_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid resolver results", K(ret));
+  } else if (OB_ISNULL(load_impl = OB_NEWx(ObLoadDataSPImpl, (&ctx.get_allocator())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else {
@@ -34,10 +37,9 @@ int ObLoadDataExecutor::execute(ObExecContext& ctx, ObLoadDataStmt& stmt)
       LOG_WARN("failed to execute load data stmt", K(ret));
     }
     load_impl->~ObLoadDataBase();
-    ctx.get_allocator().free(load_impl);
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+} // sql
+} // oceanbase

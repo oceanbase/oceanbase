@@ -22,12 +22,12 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 
-int ObDtlBufEncoder::switch_writer(const ObDtlMsg& msg)
+int ObDtlBufEncoder::switch_writer(const ObDtlMsg &msg)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == msg_writer_)) {
     if (msg.is_data_msg()) {
-      const ObPxNewRow& px_row = static_cast<const ObPxNewRow&>(msg);
+      const ObPxNewRow &px_row = static_cast<const ObPxNewRow&>(msg);
       if (DtlWriterType::CHUNK_ROW_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &row_msg_writer_;
       } else if (DtlWriterType::CHUNK_DATUM_WRITER == msg_writer_map[px_row.get_data_type()]) {
@@ -48,7 +48,7 @@ int ObDtlBufEncoder::switch_writer(const ObDtlMsg& msg)
   } else {
 #ifndef NDEBUG
     if (msg.is_data_msg()) {
-      const ObPxNewRow& px_row = static_cast<const ObPxNewRow&>(msg);
+      const ObPxNewRow &px_row = static_cast<const ObPxNewRow&>(msg);
       if (msg_writer_map[px_row.get_data_type()] != msg_writer_->type()) {
         ret = OB_ERR_UNEXPECTED;
       }
@@ -62,7 +62,8 @@ int ObDtlBufEncoder::switch_writer(const ObDtlMsg& msg)
   return ret;
 }
 
-int ObDtlBufEncoder::need_new_buffer(const ObDtlMsg& msg, ObEvalCtx* eval_ctx, int64_t& need_size, bool& need_new)
+int ObDtlBufEncoder::need_new_buffer(
+  const ObDtlMsg &msg, ObEvalCtx *eval_ctx, int64_t &need_size, bool &need_new)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(msg_writer_->need_new_buffer(msg, eval_ctx, need_size, need_new))) {
@@ -71,7 +72,7 @@ int ObDtlBufEncoder::need_new_buffer(const ObDtlMsg& msg, ObEvalCtx* eval_ctx, i
   return ret;
 }
 
-int ObDtlBufEncoder::write_data_msg(const ObDtlMsg& msg, ObEvalCtx* eval_ctx, bool is_eof)
+int ObDtlBufEncoder::write_data_msg(const ObDtlMsg &msg, ObEvalCtx *eval_ctx, bool is_eof)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(msg_writer_->write(msg, eval_ctx, is_eof))) {
@@ -79,17 +80,27 @@ int ObDtlBufEncoder::write_data_msg(const ObDtlMsg& msg, ObEvalCtx* eval_ctx, bo
       LOG_WARN("failed to add row", K(ret));
     }
   } else {
-    LOG_DEBUG("write row", K(ret), K(msg_writer_->rows()), K(msg_writer_->used()), KP(buffer_));
+    LOG_DEBUG("write row", K(ret),
+      K(msg_writer_->rows()), K(msg_writer_->used()), KP(buffer_));
     buffer_->pos() = (msg_writer_->rows() > 0 || is_eof) ? msg_writer_->used() : 0;
     buffer_->is_eof() = is_eof;
   }
   return ret;
 }
 
-int ObDtlBcastService::send_message(ObDtlLinkedBuffer*& bcast_buf, bool drain)
+int ObDtlBcastService::send_message(ObDtlLinkedBuffer *&bcast_buf, bool drain)
 {
   int ret = OB_SUCCESS;
-  ObCurTraceId::TraceId* cur_trace_id = NULL;
+  /**
+   * 一个broadcast组被接收端在同一台机器的发送channel共享。
+   * 假设三个发送channel共享此bcast service。一轮send消息，三个channel一定是在
+   * 发送同样的一个消息，如果是不同的消息则要报错。
+   * 前面两个channel send消息的时候，一定是计数的，并不真正的发送数据。
+   * 第三个channel发送数据的时候才会真正的发送数据。
+   * 发送的动作以后三个channel都会收到异步回包。
+   * 异步回报的对channel造成的状态更改会在channel下一次send的动作的时候得到生效。
+   */
+  ObCurTraceId::TraceId *cur_trace_id = NULL;
   if (OB_ISNULL(cur_trace_id = ObCurTraceId::get_trace_id()) || active_chs_count_ < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid trace id / invalid active count", K(ret), K(active_chs_count_));
@@ -99,6 +110,7 @@ int ObDtlBcastService::send_message(ObDtlLinkedBuffer*& bcast_buf, bool drain)
     // a new buffer come into this broadcast group.
     bcast_buf_ = bcast_buf;
     send_count_ = bcast_ch_count_ - 1;
+    // 这里每次发送msg都会--，所以每次都需要重置active_chs_count_
     active_chs_count_ = bcast_ch_count_;
     bcast_buf = nullptr;
     if (drain) {
@@ -141,7 +153,10 @@ int ObDtlBcastService::send_message(ObDtlLinkedBuffer*& bcast_buf, bool drain)
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(DTL.get_rpc_proxy().to(server_addr_).timeout(timeout_us).ap_send_bc_message(args, &cb))) {
+        if (OB_FAIL(DTL.get_rpc_proxy()
+                       .to(server_addr_)
+                       .timeout(timeout_us)
+                       .ap_send_bc_message(args, &cb))) {
           LOG_WARN("failed to seed message", K(ret));
         } else {
           // all rpc channel in this service has send this msg. this buffer will be release in agent.
@@ -161,21 +176,16 @@ int ObDtlBcastService::send_message(ObDtlLinkedBuffer*& bcast_buf, bool drain)
       bcast_buf_ = nullptr;
     }
   }
-  LOG_TRACE("send message",
-      K(ret),
-      K(this),
-      K(bcast_ch_count_),
-      K(send_count_),
-      K(bcast_buf),
-      K(bcast_buf_),
-      K(peer_ids_),
-      K(send_count_),
-      K(active_chs_count_));
+  LOG_TRACE("send message", K(ret), K(this), K(bcast_ch_count_), K(send_count_), K(bcast_buf),
+    K(bcast_buf_), K(peer_ids_), K(send_count_), K(active_chs_count_));
   return ret;
 }
 
-int ObDtlChanAgent::init(dtl::ObDtlFlowControl& dfc, ObPxTaskChSet& task_ch_set, ObIArray<ObDtlChannel*>& channels,
-    int64_t tenant_id, int64_t time_ts)
+int ObDtlChanAgent::init(dtl::ObDtlFlowControl &dfc,
+                         ObPxTaskChSet &task_ch_set,
+                         ObIArray<ObDtlChannel *> &channels,
+                         int64_t tenant_id,
+                         int64_t time_ts)
 {
   int ret = OB_SUCCESS;
   dtl_buf_allocator_.set_tenant_id(tenant_id);
@@ -192,7 +202,7 @@ int ObDtlChanAgent::init(dtl::ObDtlFlowControl& dfc, ObPxTaskChSet& task_ch_set,
   for (int64_t i = 0; i < channels.count() && OB_SUCC(ret); ++i) {
     bool find_bc_service = false;
 
-    ObDtlBasicChannel* data_ch = (ObDtlBasicChannel*)channels.at(i);
+    ObDtlBasicChannel *data_ch = (ObDtlBasicChannel*)channels.at(i);
     int64_t sys_buffer_size = data_ch->get_send_buffer_size();
 
     ObDtlChannelInfo ch_info;
@@ -202,7 +212,7 @@ int ObDtlChanAgent::init(dtl::ObDtlFlowControl& dfc, ObPxTaskChSet& task_ch_set,
     dtl_buf_allocator_.set_sys_buffer_size(sys_buffer_size);
     if (OB_FAIL(ret)) {
     } else if (ObDtlChannel::DtlChannelType::RPC_CHANNEL == data_ch->get_channel_type()) {
-      if (OB_FAIL(rpc_channels_.push_back((ObDtlRpcChannel*)data_ch))) {
+      if (OB_FAIL(rpc_channels_.push_back((ObDtlRpcChannel *)data_ch))) {
         LOG_WARN("failed to push back rpc channels", K(ret));
       }
       for (int64_t i = 0; i < bc_services_.count() && OB_SUCC(ret); ++i) {
@@ -224,13 +234,13 @@ int ObDtlChanAgent::init(dtl::ObDtlFlowControl& dfc, ObPxTaskChSet& task_ch_set,
         }
       }
       if (!find_bc_service && OB_SUCC(ret)) {
-        ObDtlBcastService* bc_service = nullptr;
-        void* buf = allocator_.alloc(sizeof(ObDtlBcastService));
+        ObDtlBcastService *bc_service = nullptr;
+        void *buf = allocator_.alloc(sizeof(ObDtlBcastService));
         if (nullptr == buf) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("no momery", K(ret));
         } else {
-          bc_service = new (buf) ObDtlBcastService();
+          bc_service = new(buf) ObDtlBcastService();
           bc_service->bcast_ch_count_++;
           bc_service->active_chs_count_++;
           bc_service->server_addr_ = data_ch->peer_;
@@ -248,7 +258,7 @@ int ObDtlChanAgent::init(dtl::ObDtlFlowControl& dfc, ObPxTaskChSet& task_ch_set,
         }
       }
     } else if (ObDtlChannel::DtlChannelType::LOCAL_CHANNEL == data_ch->get_channel_type()) {
-      if (OB_FAIL(local_channels_.push_back((ObDtlLocalChannel*)data_ch))) {
+      if (OB_FAIL(local_channels_.push_back((ObDtlLocalChannel *)data_ch))) {
         LOG_WARN("failed to push back server_ch", K(ret));
       }
       LOG_DEBUG("channel info by server", KP(data_ch->get_id()), K(data_ch->get_channel_type()));
@@ -266,15 +276,12 @@ int ObDtlChanAgent::init(dtl::ObDtlFlowControl& dfc, ObPxTaskChSet& task_ch_set,
     }
   }
 
-  LOG_TRACE("use shared broadcast msg optimizer",
-      K(bc_services_),
-      K(local_channels_.count()),
-      K(rpc_channels_.count()),
-      KP(bcast_channel_->get_id()));
+  LOG_TRACE("use shared broadcast msg optimizer", K(bc_services_), K(local_channels_.count()), K(rpc_channels_.count()), KP(bcast_channel_->get_id()));
   return ret;
 }
 
-int ObDtlChanAgent::inner_broadcast_row(const ObDtlMsg& msg, ObEvalCtx* eval_ctx, bool is_eof)
+int ObDtlChanAgent::inner_broadcast_row(
+  const ObDtlMsg &msg, ObEvalCtx *eval_ctx, bool is_eof)
 {
   int ret = OB_SUCCESS;
   int64_t need_size = 0;
@@ -304,7 +311,7 @@ int ObDtlChanAgent::inner_broadcast_row(const ObDtlMsg& msg, ObEvalCtx* eval_ctx
   return ret;
 }
 
-int ObDtlChanAgent::broadcast_row(const ObDtlMsg& msg, ObEvalCtx* eval_ctx, bool is_eof)
+int ObDtlChanAgent::broadcast_row(const ObDtlMsg &msg, ObEvalCtx *eval_ctx, bool is_eof)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(inner_broadcast_row(msg, eval_ctx, is_eof))) {
@@ -322,8 +329,8 @@ int ObDtlChanAgent::broadcast_row(const ObDtlMsg& msg, ObEvalCtx* eval_ctx, bool
 int ObDtlChanAgent::switch_buffer(int64_t need_size)
 {
   int ret = OB_SUCCESS;
-  ObDtlBasicChannel* bcast_ch = bcast_channel_;
-  ObDtlLinkedBuffer* last_buffer = dtl_buf_encoder_.get_buffer();
+  ObDtlBasicChannel *bcast_ch = bcast_channel_;
+  ObDtlLinkedBuffer *last_buffer = dtl_buf_encoder_.get_buffer();
   current_buffer_ = dtl_buf_allocator_.alloc_buf(*bcast_ch, std::max(sys_dtl_buf_size_, need_size));
   LOG_DEBUG("[DTL BROADCAST] encoder need a new buffer", KP(bcast_ch->get_id()), K(need_size));
   if (nullptr == current_buffer_) {
@@ -360,15 +367,15 @@ int ObDtlChanAgent::switch_buffer(int64_t need_size)
 int ObDtlChanAgent::flush()
 {
   int ret = OB_SUCCESS;
-  ObDtlLinkedBuffer* last_buffer = dtl_buf_encoder_.get_buffer();
+  ObDtlLinkedBuffer *last_buffer = dtl_buf_encoder_.get_buffer();
   if (nullptr == current_buffer_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("you should send a row before use this interface", K(ret));
   } else if (last_buffer != current_buffer_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("send buffer must be equal to last buffer", K(ret), K(last_buffer), K(current_buffer_));
-    // } else if (OB_FAIL(dtl_buf_encoder_.serialize())) {
-    //   LOG_WARN("failed to do serialize", K(ret));
+  // } else if (OB_FAIL(dtl_buf_encoder_.serialize())) {
+  //   LOG_WARN("failed to do serialize", K(ret));
   } else if (OB_FAIL(send_last_buffer(last_buffer))) {
     LOG_WARN("failed to send last buffer", K(ret));
   } else {
@@ -376,21 +383,22 @@ int ObDtlChanAgent::flush()
     current_buffer_ = nullptr;
   }
   return ret;
+
 }
 
-int ObDtlChanAgent::send_last_buffer(ObDtlLinkedBuffer*& last_buffer)
+int ObDtlChanAgent::send_last_buffer(ObDtlLinkedBuffer *&last_buffer)
 {
   int ret = OB_SUCCESS;
-  ObDtlBasicChannel* ch = nullptr;
-  ObDtlRpcChannel* rpc_ch = nullptr;
+  ObDtlBasicChannel *ch = nullptr;
+  ObDtlRpcChannel *rpc_ch = nullptr;
   last_buffer->set_dfo_key(dfo_key_);
-  ObDtlBasicChannel* bcast_ch = bcast_channel_;
-  const int64_t size = last_buffer->pos();  // yes, it is pos()
+  ObDtlBasicChannel *bcast_ch = bcast_channel_;
+  const int64_t size = last_buffer->pos(); // yes, it is pos()
   const int64_t pos = last_buffer->pos();
   for (int64_t i = 0; i < local_channels_.count() && OB_SUCC(ret); ++i) {
     ch = local_channels_.at(i);
     if (!ch->is_drain() || last_buffer->is_eof()) {
-      ObDtlLinkedBuffer* buf = dtl_buf_allocator_.alloc_buf(*ch, last_buffer->size());
+      ObDtlLinkedBuffer *buf = dtl_buf_allocator_.alloc_buf(*ch, last_buffer->size());
       if (nullptr == buf) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory", K(ret));
@@ -412,7 +420,7 @@ int ObDtlChanAgent::send_last_buffer(ObDtlLinkedBuffer*& last_buffer)
     rpc_ch = rpc_channels_.at(i);
     last_buffer->size() = size;
     last_buffer->pos() = pos;
-    ObDtlLinkedBuffer* current_ptr = last_buffer;
+    ObDtlLinkedBuffer *current_ptr = last_buffer;
     if (OB_FAIL(rpc_ch->send_buffer(last_buffer))) {
       rpc_ch->clean_broadcast_buffer();
       LOG_WARN("failed to send buffer", K(ret));

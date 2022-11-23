@@ -1,0 +1,55 @@
+digraph dooba {
+    rankdir=LR;
+    graph [fontsize=10 fontname="Verdana" compound=true];
+    node [shape=record fontsize=10 fontname="Verdana"];
+    edge [ fontsize=10 fontname="Verdana" ];
+    subgraph cluster_gallery {
+        label="dooba v0.1";
+        style=filled;
+        color=cyan;
+        node [ style=filled, color=white ];
+        gallery -> {sql_rt, sql_cnt, cs_rt, ups_rt} [label = widget];
+    }
+    subgraph cluster_ups {
+        style=filled;
+        color=lightgrey;
+        node [ style=filled, color=white ];
+        ups -> {ups_cnt, ups_queue_rt, ups_commit_rt, ups_flush_rt} [label = widget];
+    }
+    subgraph cluster_cs {
+        style=filled;
+        color=lightgrey;
+        node [ style=filled, color=white ];
+        cs -> {cs_cache, cs_io_cnt, cs_get_rt, cs_scan_rt} [label = widget];
+    }
+    subgraph cluster_ms {
+        style=filled;
+        color=lightgrey;
+        node [ style=filled, color=white ];
+        ms -> {ms_sql_cnt, ms_sql_rt, other} [label = widget];
+    }
+    subgraph cluster_rs {
+        style=filled;
+        color=lightgrey;
+        node [ style=filled, color=white ];
+        rs -> {} [label=widget];
+    }
+    subgraph cluster_custom {
+        style=filled;
+        color=lightgrey;
+        node [ style=filled, color=white ];
+        custom -> {} [label=widget];
+    }
+
+    dooba -> { header, main, status_bar};
+    main -> gallery [ltail=cluster_gallery];
+    main -> ups [ltail=cluster_ups];
+    main -> cs [ltail=cluster_cs];
+    main -> ms [ltail=cluster_ms];
+    main -> rs [ltail=cluster_rs];
+    main -> custom [ltail=cluster_custom];
+
+    header [shape=record, label="<f0> [header] | appname | ... | ..."];
+    status_bar [shape=record, label="<f0> [status_bar] | run_time | up_time | cluster | ..."];
+    { rank=1; header, status_bar }
+}

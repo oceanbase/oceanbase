@@ -11,18 +11,26 @@
  */
 
 #include "observer/virtual_table/ob_all_disk_stat.h"
+
+#include "storage/blocksstable/ob_block_manager.h"
 #include "observer/ob_server.h"
-#include "storage/blocksstable/ob_store_file.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 using namespace storage;
 ObInfoSchemaDiskStatTable::ObInfoSchemaDiskStatTable()
-    : ObVirtualTableScannerIterator(), addr_(NULL), ipstr_(), port_(0), is_end_(false)
-{}
+    : ObVirtualTableScannerIterator(),
+    addr_(NULL),
+    ipstr_(),
+    port_(0),
+    is_end_(false)
+{
+}
 
 ObInfoSchemaDiskStatTable::~ObInfoSchemaDiskStatTable()
 {
@@ -38,11 +46,11 @@ void ObInfoSchemaDiskStatTable::reset()
   is_end_ = false;
 }
 
-int ObInfoSchemaDiskStatTable::set_ip(common::ObAddr* addr)
+int ObInfoSchemaDiskStatTable::set_ip(common::ObAddr *addr)
 {
   int ret = OB_SUCCESS;
   char ipbuf[common::OB_IP_STR_BUFF];
-  if (NULL == addr) {
+  if (NULL == addr){
     ret = OB_ENTRY_NOT_EXIST;
   } else if (!addr_->ip_to_string(ipbuf, sizeof(ipbuf))) {
     SERVER_LOG(ERROR, "ip to string failed");
@@ -57,25 +65,34 @@ int ObInfoSchemaDiskStatTable::set_ip(common::ObAddr* addr)
   return ret;
 }
 
-int ObInfoSchemaDiskStatTable::inner_get_next_row(ObNewRow*& row)
+int ObInfoSchemaDiskStatTable::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
+  ObObj *cells = cur_row_.cells_;
   if (OB_ISNULL(allocator_) || OB_ISNULL(cells)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator is NULL", KP(allocator_), KP(cells), K(ret));
   } else {
     const int64_t col_count = output_column_ids_.count();
 
-    if (OB_SUCCESS != (ret = set_ip(addr_))) {
+    if (OB_SUCCESS != (ret = set_ip(addr_))){
       SERVER_LOG(WARN, "can't get ip", K(ret));
     } else if (is_end_) {
       ret = OB_ITER_END;
     }
+
+    int temp_ret = OB_SUCCESS;
+    ObDeviceHealthStatus dhs = DEVICE_HEALTH_NORMAL;
+    int64_t data_disk_abnormal_time = 0;
+    if (OB_SUCCESS != (temp_ret = ObIOManager::get_instance().get_device_health_status(dhs,
+        data_disk_abnormal_time))) {
+      SERVER_LOG(WARN, "get device health status failed", KR(temp_ret));
+    }
+
     if (OB_SUCC(ret)) {
       for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < col_count; ++cell_idx) {
         uint64_t col_id = output_column_ids_.at(cell_idx);
-        switch (col_id) {
+        switch(col_id) {
           case SVR_IP: {
             cells[cell_idx].set_varchar(ipstr_);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -86,40 +103,29 @@ int ObInfoSchemaDiskStatTable::inner_get_next_row(ObNewRow*& row)
             break;
           }
           case TOTAL_SIZE: {
-            cells[cell_idx].set_int(
-                OB_FILE_SYSTEM.get_total_macro_block_count() * OB_FILE_SYSTEM.get_macro_block_size());
+            cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
             break;
           }
           case USED_SIZE: {
-            cells[cell_idx].set_int(
-                OB_FILE_SYSTEM.get_used_macro_block_count() * OB_FILE_SYSTEM.get_macro_block_size());
+            cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_used_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
             break;
           }
           case FREE_SIZE: {
-            cells[cell_idx].set_int(
-                OB_FILE_SYSTEM.get_free_macro_block_count() * OB_FILE_SYSTEM.get_macro_block_size());
+            cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_free_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
             break;
           }
           case IS_DISK_VALID: {
-            bool disk_error = false;
-            int temp_ret = OB_SUCCESS;
-            if (OB_SUCCESS != (temp_ret = ObIOManager::get_instance().is_disk_error(disk_error))) {
-              SERVER_LOG(WARN, "is_disk_error failed", K(ret));
-              // if is_disk_error failed, set to null
-              cells[cell_idx].set_null();
-            } else {
-              cells[cell_idx].set_int(disk_error ? 0 : 1);
-            }
+            cells[cell_idx].set_int(DEVICE_HEALTH_NORMAL != dhs ? 0 : 1);
             break;
           }
           case DISK_ERROR_BEGIN_TS: {
-            const int64_t disk_error_begin_ts = 0;
-            cells[cell_idx].set_int(disk_error_begin_ts);
+            cells[cell_idx].set_int(DEVICE_HEALTH_NORMAL != dhs ? data_disk_abnormal_time : 0);
             break;
           }
           default: {
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
+            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                       K(output_column_ids_), K(col_id));
             break;
           }
         }
@@ -133,5 +139,5 @@ int ObInfoSchemaDiskStatTable::inner_get_next_row(ObNewRow*& row)
   }
   return ret;
 }
-}  // namespace observer
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */

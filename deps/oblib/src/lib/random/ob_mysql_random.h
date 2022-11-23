@@ -17,31 +17,29 @@
 #include <stdint.h>
 #include <string.h>
 #include "lib/ob_define.h"
+#include "lib/ob_errno.h"
 
-namespace oceanbase {
-namespace common {
-class ObMysqlRandom {
+namespace oceanbase
+{
+namespace common
+{
+class ObMysqlRandom
+{
 public:
-  ObMysqlRandom()
-  {
-    MEMSET(this, 0, sizeof(*this));
-  }
+  ObMysqlRandom() { MEMSET(this, 0, sizeof(*this)); }
 
   void init(const uint64_t seed1, const uint64_t seed2);
-  int create_random_string(char* buf, const int64_t length);
+  int create_random_string(char *buf, const int64_t length);
   double get_double();
   uint64_t get_uint64();
-  bool is_inited() const
-  {
-    return is_inited_;
-  }
+  bool is_inited() const { return is_inited_;}
 
 public:
   bool is_inited_;
   uint64_t seed1_;
   uint64_t seed2_;
   uint64_t max_value_;
-  double max_value_double_;
+  double   max_value_double_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMysqlRandom);
@@ -64,6 +62,7 @@ inline void ObMysqlRandom::init(const uint64_t seed1, const uint64_t seed2)
   is_inited_ = true;
 }
 
+
 /**
  **************** MySQL 4.1.1 authentication routines *************
   Generate string of printable pseudo random characters of requested length.
@@ -78,7 +77,7 @@ inline void ObMysqlRandom::init(const uint64_t seed1, const uint64_t seed2)
 
   DON'T RELY ON THIS FUNCTION FOR A UNIFORMLY DISTRIBUTION OF BITS!
 */
-inline int ObMysqlRandom::create_random_string(char* buf, const int64_t length)
+inline int ObMysqlRandom::create_random_string(char *buf, const int64_t length)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -86,7 +85,7 @@ inline int ObMysqlRandom::create_random_string(char* buf, const int64_t length)
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(length <= 0)) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    const int64_t end = length - 1;
+    const int64_t end  = length - 1;
     /*
       Warning: my_rnd() is a fast prng, but it doesn't necessarily have a uniform
       distribution.
@@ -122,6 +121,7 @@ inline uint64_t ObMysqlRandom::get_uint64()
   return static_cast<uint64_t>(get_double() * 0xFFFFFFFF);
 }
 
-}  // namespace common
-}  // namespace oceanbase
+
+}// namespace common
+}//namespace oceanbase
 #endif

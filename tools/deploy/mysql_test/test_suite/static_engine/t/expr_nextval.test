@@ -1,0 +1,88 @@
+# owner: bin.lb
+# owner group: sql2
+# tags: optimizer
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection default;
+
+
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 int, c2 int);
+drop table if exists t2;
+create table t2 (c1 int auto_increment primary key, c2 int);
+drop table if exists t3;
+create table t3 (c1 int unsigned auto_increment primary key, c2 int);
+drop table if exists t4;
+create table t4 (c1 float auto_increment primary key, c2 int);
+drop table if exists t5;
+create table t5 (c1 double auto_increment primary key, c2 int);
+--enable_warnings
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+# hidden PK
+insert into t1 (c1, c2) values (1, 1);
+insert into t1 (c1, c2) values (1, 1);
+select * from t1;
+
+# column conv added befoer nextval
+explain insert into t2 (c1, c2) values ('0', '1');
+
+insert into t2 (c1, c2) values (NULL, '1');
+insert into t2 (c1, c2) values (0, '2');
+insert into t2 (c2) values ('3');
+insert into t2 (c1, c2) values (-5, '4');
+insert into t2 (c1, c2) values (10, '5');
+insert into t2 (c1, c2) values (0, '6');
+insert into t2 (c1, c2) values ('0', '7');
+insert into t2 (c1, c2) values ('-10', '8');
+insert into t2 (c1, c2) values (-12.1, '9');
+insert into t2 (c1, c2) values (-13.9, '10');
+# error and no new values generated
+insert into t2 (c1, c2) values ('abc', '11');
+insert into t2 (c1, c2) values (0.0, '12');
+select * from t2;
+
+insert into t3 (c1, c2) values (NULL, '1');
+insert into t3 (c1, c2) values (-1, '2');
+insert into t3 (c1, c2) values (0, '3');
+insert into t3 (c1, c2) values (10, '4');
+insert into t3 (c1, c2) values (0, '5');
+select * from t3;
+
+
+insert into t4 (c1, c2) values (NULL, '1');
+insert into t4 (c1, c2) values (0, '2');
+insert into t4 (c1, c2) values ('0', '3');
+insert into t4 (c1, c2) values (0.0, '4');
+insert into t4 (c1, c2) values (-10.12, '5');
+insert into t4 (c1, c2) values (0, '6');
+insert into t4 (c1, c2) values (10.5, '7');
+insert into t4 (c1, c2) values (0, '8');
+select * from t4;
+
+insert into t5 (c1, c2) values (NULL, '1');
+insert into t5 (c1, c2) values (0, '2');
+insert into t5 (c1, c2) values ('0', '3');
+insert into t5 (c1, c2) values (0.0, '4');
+insert into t5 (c1, c2) values (-10.12, '5');
+insert into t5 (c1, c2) values (0, '6');
+insert into t5 (c1, c2) values (10.5, '7');
+insert into t5 (c1, c2) values (0, '8');
+select * from t5;
+
+# no strict mode
+set sql_mode = '';
+insert into t3 (c1, c2) values ("abc", '6');
+select * from t3;
+
+connection syscon;

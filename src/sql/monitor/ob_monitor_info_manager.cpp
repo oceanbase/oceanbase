@@ -14,19 +14,18 @@
 #include "sql/monitor/ob_monitor_info_manager.h"
 #include "sql/monitor/ob_phy_plan_monitor_info.h"
 using namespace oceanbase::common;
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 ObMonitorInfoManager::ObMonitorInfoManager()
-    : allocator_(),
-      slow_query_queue_(),
-      timer_(),
-      elimination_task_(),
-      plan_execution_time_map_(),
-      max_push_interval_(OB_MAX_PUSH_INTERVAL),
-      operator_info_size_(0)
+    : allocator_(), slow_query_queue_(), timer_(), elimination_task_(),
+    plan_execution_time_map_(), max_push_interval_(OB_MAX_PUSH_INTERVAL),
+    operator_info_size_(0)
 {
   memory_limit_ = min(
-      MAX_MEMORY_SIZE, static_cast<int64_t>(static_cast<double>(GCONF.get_server_memory_avail()) * MONITOR_MEM_FACTOR));
+      MAX_MEMORY_SIZE,
+      static_cast<int64_t>(static_cast<double>(GMEMCONF.get_server_memory_avail()) * MONITOR_MEM_FACTOR));
 }
 
 ObMonitorInfoManager::~ObMonitorInfoManager()
@@ -44,7 +43,7 @@ int ObMonitorInfoManager::init()
     LOG_WARN("fail to init history info", K(ret));
   } else if (OB_FAIL(timer_.init("MonInfoEvict"))) {
     LOG_WARN("fail to init timer", K(ret));
-  } else if (OB_FAIL(elimination_task_.init(this))) {
+  } else if (OB_FAIL(elimination_task_.init(this))){
     LOG_WARN("fail to init elimination task", K(ret));
   } else if (OB_FAIL(plan_execution_time_map_.init(ObModIds::OB_SQL_PLAN_MONITOR))) {
     LOG_WARN("fail to init plan execution time map", K(ret));
@@ -66,8 +65,10 @@ void ObMonitorInfoManager::destroy()
   allocator_.destroy();
 }
 
-int ObMonitorInfoManager::get_by_request_id(
-    int64_t request_id, int64_t& index, ObPhyPlanMonitorInfo*& plan_info, Ref* ref)
+int ObMonitorInfoManager::get_by_request_id(int64_t request_id,
+                                            int64_t &index,
+                                            ObPhyPlanMonitorInfo *&plan_info,
+                                            Ref* ref)
 {
   int ret = OB_SUCCESS;
   index = -1;
@@ -77,7 +78,7 @@ int ObMonitorInfoManager::get_by_request_id(
   } else {
     int64_t start_idx = slow_query_queue_.get_pop_idx();
     int64_t end_idx = slow_query_queue_.get_push_idx();
-    void* tmp_info = NULL;
+    void *tmp_info = NULL;
     ret = OB_ERROR;
     for (int64_t i = start_idx; i <= end_idx && OB_ERROR == ret; i++) {
       if (NULL == (tmp_info = slow_query_queue_.get(i, ref))) {
@@ -96,7 +97,9 @@ int ObMonitorInfoManager::get_by_request_id(
   return ret;
 }
 
-int ObMonitorInfoManager::get_by_index(int64_t index, ObPhyPlanMonitorInfo*& plan_info, Ref* ref)
+int ObMonitorInfoManager::get_by_index(int64_t index,
+                                       ObPhyPlanMonitorInfo *&plan_info,
+                                       Ref* ref)
 {
   int ret = OB_SUCCESS;
   plan_info = NULL;
@@ -111,7 +114,7 @@ int ObMonitorInfoManager::get_by_index(int64_t index, ObPhyPlanMonitorInfo*& pla
   return ret;
 }
 
-int ObMonitorInfoManager::is_info_nearly_duplicated(const ObAddr& addr, int64_t plan_id, bool& is_duplicated)
+int ObMonitorInfoManager::is_info_nearly_duplicated(const ObAddr &addr, int64_t plan_id, bool &is_duplicated)
 {
   int ret = OB_SUCCESS;
   is_duplicated = false;
@@ -136,7 +139,7 @@ int ObMonitorInfoManager::is_info_nearly_duplicated(const ObAddr& addr, int64_t 
   return ret;
 }
 
-int ObMonitorInfoManager::add_monitor_info(ObPhyPlanMonitorInfo* info)
+int ObMonitorInfoManager::add_monitor_info(ObPhyPlanMonitorInfo *info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(info)) {
@@ -145,15 +148,15 @@ int ObMonitorInfoManager::add_monitor_info(ObPhyPlanMonitorInfo* info)
   } else {
     int64_t retry_times = 3;
     while (retry_times > 0) {
-      retry_times--;
-      int64_t req_id = 0;
-      if (OB_FAIL(slow_query_queue_.push((void*)info, req_id))) {
+      retry_times --;
+      int64_t &req_id = info->get_request_id();
+      int64_t cur_operator_info_size = info->get_operator_info_memory_size();
+      if (OB_FAIL(slow_query_queue_.push_with_imme_seq((void*)info, req_id))) {
         if (OB_SIZE_OVERFLOW == ret) {
           clear_queue(OB_BATCH_GC_COUNT);
         }
       } else {
-        info->set_request_id(req_id);
-        operator_info_size_ += info->get_operator_info_memory_size();
+        operator_info_size_ += cur_operator_info_size;
         LOG_DEBUG("add monitor info", K(*info));
         break;
       }
@@ -169,31 +172,32 @@ int ObMonitorInfoManager::add_monitor_info(ObPhyPlanMonitorInfo* info)
 void ObMonitorInfoManager::clear_queue(int64_t limit)
 {
   int64_t pop_cnt = 0;
-  ObPhyPlanMonitorInfo* poped = NULL;
-  while (pop_cnt++ < limit && NULL != (poped = (ObPhyPlanMonitorInfo*)slow_query_queue_.pop())) {
+  ObPhyPlanMonitorInfo *poped = NULL;
+  while(pop_cnt++ < limit && NULL != (poped = (ObPhyPlanMonitorInfo*)slow_query_queue_.pop())) {
     operator_info_size_ -= poped->get_operator_info_memory_size();
     poped->destroy();
   }
 }
 
-int ObMonitorInfoManager::alloc(int64_t request_id, ObPhyPlanMonitorInfo*& info)
+int ObMonitorInfoManager::alloc(int64_t request_id,
+                                ObPhyPlanMonitorInfo *&info)
 {
   int ret = OB_SUCCESS;
-  void* ptr = NULL;
+  void *ptr = NULL;
   if (OB_UNLIKELY(request_id < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid agument", K(ret), K(request_id));
+     ret = OB_INVALID_ARGUMENT;
+     LOG_WARN("invalid agument", K(ret), K(request_id));
   } else if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObPhyPlanMonitorInfo)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to alloc memory", K(ret), K(request_id), K(allocator_.allocated()), K_(memory_limit));
   } else {
-    info = new (ptr) ObPhyPlanMonitorInfo(allocator_);
+    info = new(ptr) ObPhyPlanMonitorInfo(allocator_);
     info->set_request_id(request_id);
   }
   return ret;
 }
 
-int ObMonitorInfoManager::free(ObPhyPlanMonitorInfo*& info)
+int ObMonitorInfoManager::free(ObPhyPlanMonitorInfo *&info)
 {
   if (OB_ISNULL(info)) {
   } else {
@@ -224,7 +228,7 @@ int ObMonitorInfoManager::gc()
     int64_t pop_count = 3;
     while (mem_limit / 2 < allocator_.allocated() + operator_info_size_ && pop_count > 0) {
       clear_queue(OB_BATCH_GC_COUNT);
-      pop_count--;
+      pop_count --;
     }
   }
   if (OB_FAIL(reclain_map())) {
@@ -232,5 +236,7 @@ int ObMonitorInfoManager::gc()
   }
   return ret;
 }
-}  // namespace sql
-}  // namespace oceanbase
+} //namespace sql
+} //namespace oceanbase
+
+

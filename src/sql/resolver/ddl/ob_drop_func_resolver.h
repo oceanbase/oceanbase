@@ -16,21 +16,25 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/ddl/ob_drop_func_stmt.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-class ObDropFuncResolver : public ObDDLResolver {
+class ObDropFuncResolver : public ObDDLResolver
+{
 public:
-  explicit ObDropFuncResolver(ObResolverParams& params);
+  explicit ObDropFuncResolver(ObResolverParams &params);
   virtual ~ObDropFuncResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDropFuncResolver);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif /* _OB_DROP_FUNC_RESOLVER_H */
+
+

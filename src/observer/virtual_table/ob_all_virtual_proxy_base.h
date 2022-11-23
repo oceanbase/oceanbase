@@ -21,53 +21,65 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "common/ob_range.h"
 
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 class ObMultiVersionSchemaService;
 }
-}  // namespace share
-namespace observer {
+}
+namespace observer
+{
 // this class is just a base class, not for a real virtual table
-class ObAllVirtualProxyBaseIterator : public common::ObVirtualTableIterator {
+class ObAllVirtualProxyBaseIterator : public common::ObVirtualTableIterator
+{
 public:
   ObAllVirtualProxyBaseIterator();
   virtual ~ObAllVirtualProxyBaseIterator();
 
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual int inner_get_next_row() = 0;
 
-  void set_schema_service(share::schema::ObMultiVersionSchemaService& schema_service);
-  void set_calc_buf(common::ObIAllocator* calc_buf)
-  {
-    calc_buf_ = calc_buf;
-  }
+  void set_schema_service(share::schema::ObMultiVersionSchemaService &schema_service);
 
   // convert objs(rowkey, obj) to str, we will call out_obj.set_varchar() if SUCC
   // get_xxx_str will call print_sql_literal func
   // get_xxx_bin_str will call serialize func
-  int get_rowkey_str(const common::ObRowkey& rowkey, common::ObObj& out_obj);
-  int get_rowkey_bin_str(const common::ObRowkey& rowkey, common::ObObj& out_obj);
-  int get_rowkey_type_str(const common::ObRowkey& rowkey, common::ObObj& out_obj);
-  int get_obj_str(const common::ObObj& obj, common::ObObj& out_obj);
-  int get_obj_bin_str(const common::ObObj& obj, common::ObObj& out_obj);
-  int get_rows_str(const common::ObIArray<common::ObNewRow>& rows, common::ObObj& out_obj);
-  int get_rows_bin_str(const common::ObIArray<common::ObNewRow>& rows, common::ObObj& out_obj);
-  int get_partition_value_str(const share::schema::ObPartitionFuncType type,
-      const share::schema::ObBasePartition& partition, common::ObObj& out_obj);
-  int get_partition_value_bin_str(const share::schema::ObPartitionFuncType type,
-      const share::schema::ObBasePartition& partition, common::ObObj& out_obj);
-  int get_table_schema(share::schema::ObSchemaGetterGuard& schema_guard, uint64_t table_id,
-      const share::schema::ObTableSchema*& table_schema);
-
+  int get_rowkey_str(
+      const bool is_oracle_mode,
+      const common::ObRowkey &rowkey,
+      common::ObObj &out_obj);
+  int get_rowkey_bin_str(const common::ObRowkey &rowkey, common::ObObj &out_obj);
+  int get_rowkey_type_str(const common::ObRowkey &rowkey, common::ObObj &out_obj);
+  int get_obj_str(const common::ObObj &obj, common::ObObj &out_obj);
+  int get_obj_bin_str(const common::ObObj &obj, common::ObObj &out_obj);
+  int get_rows_str(
+      const bool is_oracle_mode,
+      const common::ObIArray<common::ObNewRow>& rows,
+      common::ObObj &out_obj);
+  int get_rows_bin_str(const common::ObIArray<common::ObNewRow>& rows, common::ObObj &out_obj);
+  int get_partition_value_str(
+      const bool is_oracle_mode,
+      const share::schema::ObPartitionFuncType type,
+      const share::schema::ObBasePartition &partition,
+      common::ObObj &out_obj);
+  int get_partition_value_bin_str(
+      const share::schema::ObPartitionFuncType type,
+      const share::schema::ObBasePartition &partition,
+      common::ObObj &out_obj);
+  int check_schema_version(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id);
 protected:
-  share::schema::ObMultiVersionSchemaService* schema_service_;
-  share::schema::ObSchemaGetterGuard full_schema_guard_;  // Not sure if the incoming SQL is tenant_schema_guard, please
-                                                          // try again here for safety
-  common::ObIAllocator* calc_buf_;                        // row allcator
+  common::ObString input_tenant_name_;
+  share::schema::ObMultiVersionSchemaService *schema_service_;
+  share::schema::ObSchemaGetterGuard tenant_schema_guard_;
+  //Not sure if the incoming SQL is tenant_schema_guard, try again here for safety
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualProxyBaseIterator);
 };
 
-}  // end of namespace observer
-}  // end of namespace oceanbase
+} // end of namespace observer
+} // end of namespace oceanbase
 #endif /* OCEANBASE_OBSERVER_ALL_VIRTUAL_PROXY_BASE_ */

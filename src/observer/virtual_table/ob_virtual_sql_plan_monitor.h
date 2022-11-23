@@ -17,47 +17,56 @@
 #include "lib/net/ob_addr.h"
 #include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObMonitorNode;
 }
-namespace common {
+namespace common
+{
 class ObIAllocator;
 }
-namespace share {
+namespace share
+{
 class ObTenantSpaceFetcher;
 }
 
-namespace observer {
-class ObVirtualSqlPlanMonitor : public common::ObVirtualTableScannerIterator {
+namespace observer
+{
+class ObVirtualSqlPlanMonitor : public common::ObVirtualTableScannerIterator
+{
 public:
   ObVirtualSqlPlanMonitor();
   virtual ~ObVirtualSqlPlanMonitor();
   virtual int inner_open() override;
-  virtual int inner_get_next_row(common::ObNewRow*& row) override;
-  void set_addr(const common::ObAddr& addr)
-  {
-    addr_ = addr;
-  }
-  virtual int set_ip(const common::ObAddr& addr);
+  virtual int inner_get_next_row(common::ObNewRow *&row) override;
+  void set_addr(const common::ObAddr &addr) { addr_ = addr; }
+  virtual int set_ip(const common::ObAddr &addr);
   virtual void reset();
-  int check_ip_and_port(bool& is_valid);
-  void use_index_scan()
-  {
-    is_use_index_ = true;
-  }
-  bool is_index_scan() const
-  {
-    return is_use_index_;
-  }
-
+  int check_ip_and_port(bool &is_valid);
+  void use_index_scan() { is_use_index_ = true; }
+  bool is_index_scan() const { return is_use_index_; }
 private:
-  int convert_node_to_row(sql::ObMonitorNode& node, ObNewRow*& row);
+  int convert_node_to_row(sql::ObMonitorNode &node, ObNewRow *&row);
   int extract_tenant_ids();
-  int extract_request_ids(const uint64_t tenant_id, int64_t& start_id, int64_t& end_id, bool& is_valid);
-
+  int extract_request_ids(const uint64_t tenant_id,
+                          int64_t &start_id,
+                          int64_t &end_id,
+                          bool &is_valid);
+  int switch_tenant_monitor_node_list();
+  int report_rt_monitor_node(common::ObNewRow *&row);
+  inline void reset_rt_node_info()
+  {
+    need_rt_node_ = false;
+    rt_nodes_.reset();
+    rt_node_idx_ = 0;
+    rt_start_idx_ = INT_MAX;
+    rt_end_idx_ = INT_MIN;
+  }
 private:
-  enum COLUMN_ID {
+  enum COLUMN_ID
+  {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
     SVR_PORT,
     TENANT_ID,
@@ -92,21 +101,26 @@ private:
     STARTS,
     OUTPUT_ROWS,
     PLAN_LINE_ID,
-    PLAN_DEPTH
+    PLAN_DEPTH,
+    OUTPUT_BATCHES, // for batch
+    SKIPPED_ROWS_COUNT, // for batch
+    DB_TIME,
+    USER_IO_WAIT_TIME
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualSqlPlanMonitor);
 
-  const static int64_t PRI_KEY_IP_IDX = 0;
-  const static int64_t PRI_KEY_PORT_IDX = 1;
+  const static int64_t PRI_KEY_IP_IDX        = 0;
+  const static int64_t PRI_KEY_PORT_IDX      = 1;
   const static int64_t PRI_KEY_TENANT_ID_IDX = 2;
-  const static int64_t PRI_KEY_REQ_ID_IDX = 3;
+  const static int64_t PRI_KEY_REQ_ID_IDX    = 3;
 
   const static int64_t IDX_KEY_TENANT_ID_IDX = 0;
-  const static int64_t IDX_KEY_REQ_ID_IDX = 1;
-  const static int64_t IDX_KEY_IP_IDX = 2;
-  const static int64_t IDX_KEY_PORT_IDX = 3;
+  const static int64_t IDX_KEY_REQ_ID_IDX    = 1;
+  const static int64_t IDX_KEY_IP_IDX        = 2;
+  const static int64_t IDX_KEY_PORT_IDX      = 3;
 
-  sql::ObPlanMonitorNodeList* cur_mysql_req_mgr_;
+
+  sql::ObPlanMonitorNodeList *cur_mysql_req_mgr_;
   int64_t start_id_;
   int64_t end_id_;
   int64_t cur_id_;
@@ -120,9 +134,14 @@ private:
   bool is_use_index_;
   common::ObSEArray<uint64_t, 16> tenant_id_array_;
   int64_t tenant_id_array_idx_;
-  share::ObTenantSpaceFetcher* with_tenant_ctx_;
+  share::ObTenantSpaceFetcher *with_tenant_ctx_;
+  bool need_rt_node_;
+  common::ObArray<sql::ObMonitorNode> rt_nodes_;
+  int64_t rt_node_idx_;
+  int64_t rt_start_idx_;
+  int64_t rt_end_idx_;
 };
 
-}  // namespace observer
-}  // namespace oceanbase
+} //namespace observer
+} //namespace oceanbase
 #endif

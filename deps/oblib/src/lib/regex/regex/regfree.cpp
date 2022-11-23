@@ -41,14 +41,16 @@
  *
  * Ignoring invocation with NULL is a convenience.
  */
-void ob_regfree(ob_regex_t* re)
+void
+ob_regfree(
+    ob_regex_t *re)
 {
-  if (re == NULL) {
-    return;
-  }
-  (*((struct fns*)re->re_fns)->free)(re);
+    if (re == NULL) {
+	return;
+    }
+    (*((struct fns *)re->re_fns)->free)(re);
 }
-
+
 /*
  * Local Variables:
  * mode: c

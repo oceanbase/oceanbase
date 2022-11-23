@@ -1,0 +1,373 @@
+// Copyright (c) 2014 Alibaba Inc. All Rights Reserved.
+// Author:
+
+#ifndef _OB_JOIN_ORDER_H
+#define _OB_JOIN_ORDER_H 1
+#include "share/schema/ob_schema_manager.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
+#include "ob_log_join.h"
+#include "sql/resolver/dml/ob_select_stmt.h"
+//#include "ob_logical_plan_tree.h"
+#include "ob_optimizer_util.h"
+
+using oceanbase::common::ObString;
+
+namespace oceanbase
+{
+namespace sql
+{
+  class ObSelectLogPlan;
+//  class ObJoinOrder
+//  {
+//  public:
+//    ObAccessPath();
+//    ~ObAccessPath();
+//    inline const uint64_t get_table_id() {return table_id_;}
+//    // add access path by name
+//    int add_path(uint64_t data_table_id, ObString &hinted_index_name);
+//    // add access path
+//    int add_path(ObTableSchema &index_table_schema,
+//                        uint64_t index_tid);
+//    bool is_emtpy();
+//
+//  private:
+//    // genereate all the ObRawExpr for index key columns
+//    int ObAccessPath::generate_index_key_raw_expr(
+//      ObTableSchema &index_table_schema,
+//      common::ObArray<ObBinaryRefRawExpr* > &index_keys);
+//    // add access path (with cost)
+//    int ObAccessPath::add_access_path(ObTableSchema &index_table_schema,
+//                                      uint64_t index_tid,
+//                                      int64_t cost);
+//    // add access path (with cost and index keys)
+//    int ObAccessPath::add_access_path(ObTableSchema &table_schema,
+//                                      uint64_t index_tid,
+//                                      common::ObArray<ObBinaryRefRawExpr* > &index_keys,
+//                                      int64_t cost);
+//  private:
+//
+//    uint64_t table_id_;
+//    typedef std::pair<ObIndexId, int64_t> ObCostedPath;
+//    // Note:
+//    //      "Unordered " path does not mean the path are "not ordered" - It only means that
+//    //       the user shall not assume any ordering while choosing the path.
+//    ObCostedPath unordered_path_;
+//    typedef std::pair<common::ObArray<ObBinaryRefRawExpr*>, ObCostedPath> interesting_order;
+//    typedef common::ObArray<interesting_order> interesting_orders;
+//    interesting_orders interesting_orders_;
+//  };
+
+
+  //added by ryan.ly 20141230
+  //start..
+  const double cpu_operator_cost = 1;
+
+//  struct RestrictInfo
+//  {
+//    ObBitSet<> table_ids_;
+//    ObRawExpr* qual_;
+//
+//    RestrictInfo();
+//  };
+  typedef ObRawExpr RestrictInfo; //RestrictInfo结构暂时没什么用，需要时再打开
+
+  enum ObJoinType //建议其他地方引用此ObJoinType。。。
+  {
+    UNKNOWN_JOIN = 1,
+    INNER_JOIN,
+    LEFT_OUTER_JOIN,
+    RIGHT_OUTER_JOIN,
+    FULL_OUTER_JOIN,
+    LEFT_SEMI_JOIN,
+    RIGHT_SEMI_JOIN,
+    LEFT_ANTI_SEMI_JOIN,
+    RIGHT_ANTI_SEMI_JOIN
+  };
+
+  struct JoinInfo
+  {
+    ObBitSet<> table_set_; //要连接的表集合（即包含在join_qual_中的，除自己之外的所有表）
+    ObArray<ObRawExpr*> join_qual_;
+    ObArray<ObRawExpr*> join_condition_;//是join_qual_的子集
+    ObJoinType join_type_;
+
+    JoinInfo(ObJoinType join_type) : join_type_(join_type){}
+    virtual ~JoinInfo() {};
+  };
+
+  enum PathType
+  {
+    ACCESS,
+    JOIN,
+    SUBQUERY
+  };
+
+  class Path
+  {
+  public:
+    Path(){}
+    Path(PathType path_type, ObJoinOrder* parent, double cost)
+      : path_type_(path_type), parent_(parent), cost_(cost), num_tables_(0) {}
+    virtual ~Path();
+    PathType path_type_;
+    ObJoinOrder* parent_;
+    ObArray<ObRawExpr*> ordering_;//Path的ordering不一定来自于Stmt上的expr，所以这里应该释放
+    double cost_;
+    uint64_t num_tables_;
+    virtual double cost() { return 0;}
+  };
+
+  //..end
+
+  class AccessPath : public Path //modified by liyang 20141230
+  {
+  public:
+  AccessPath() : Path(ACCESS, NULL, 0) , index_schema_(NULL), base_table_id_(0) {}
+    AccessPath(const share::schema::ObTableSchema *schema, ObJoinOrder* parent, double cost)
+      : Path(ACCESS, parent, cost), index_schema_(schema), base_table_id_(0) {}
+    virtual ~AccessPath(){}
+    share::schema::ObTableSchema *get_table_schema();
+//    int64_t get_card() const { return card_; }
+//    int64_t get_cost() const { return cost_; }
+    uint64_t get_base_table_id() const { return base_table_id_; }
+    void set_base_table_id(uint64_t table_id) { base_table_id_ = table_id; }
+    uint64_t get_index_table_id() const { return index_schema_->get_table_id(); }
+//  private:
+    const share::schema::ObTableSchema *index_schema_;
+    uint64_t base_table_id_;
+//    int64_t card_;
+//    double cost_;
+    //added by ryan.ly 20141230
+    //start..
+    virtual double cost() { return 0;}
+    //..end
+  };
+
+  class JoinOrder : public Path //modified by liyang 20141230
+  {
+  public:
+    JoinOrder()
+    {}
+    virtual ~JoinOrder()
+    {}
+    // join order
+    common::ObArray<Path*> joined_tables_;
+    // join methods
+    common::ObArray<JoinAlgo> join_algos_;
+    // ordering privided by the join_order
+//    common::ObArray<ObRawExpr*> ordering_;
+    // cost
+//    int64_t cost_;
+    // cardinality
+//    int64_t card_;
+
+    //added by ryan.ly 20141230
+    //start..
+    ObArray<ObJoinType> join_type_;
+    ObArray< ObRawExpr*> left_need_ordering_;
+    ObArray< ObRawExpr*> right_need_ordering_;
+    ObArray< ObRawExpr*> join_condition_;
+    ObArray< ObRawExpr*> join_filter_;
+    double cost();
+    double cost_nestloop();
+    double cost_mergejoin();
+    double cost_sort(double n, ObArray<ObRawExpr*> ordering);
+    //..end
+  };
+
+//  struct InterestingOrder
+//  {
+//    JoinOrder join_order_;
+//    common::ObArray<ObRawExpr*> *ordering_;
+//
+//  InterestingOrder() : ordering_(&join_order_.ordering_) {};
+//  };
+//  typedef common::ObArray<InterestingOrder> Interesting_Orders;
+
+  class ObJoinOrder
+  {
+  public:
+    //ObJoinOrder(){}
+  ObJoinOrder(ObIAllocator *allocator, ObLogPlan *plan)
+    : allocator_(allocator), plan_(plan), plain_join_order_(INT64_MAX, OB_INVALID_ID) {}
+    ObJoinOrder(ObIAllocator *allocator, ObLogPlan *plan, PathType type, double rows)
+      : allocator_(allocator), plan_(plan), type_(type), rows_(rows){}
+    virtual ~ObJoinOrder();
+    void reset();
+//    inline common::ObArray<uint64_t>& get_table_ids() {return sorted_table_ids_;}
+
+     // add access path by name
+    int add_path(uint64_t data_table_id, ObString &hinted_index_name);
+    // add access path
+    int add_path(share::schema::ObTableSchema &index_table_schema, uint64_t index_tid);
+    /**
+     * @brief  Check if there is any table added
+     * @retval true if there is no table at all
+     * @retval false otherwise
+     */
+//    inline bool is_empty() const { return (0 == sorted_table_ids_.count()); }
+
+    /**
+     * @brief  Add a table to the joined table chain
+     * @param [in] data_table_id      - table id of the base table
+     * @param [in] hinted_index_name  - index hint
+     * @retval OB_SUCCESS execute success
+     * @retval OB_SOME_ERROR special errno need to handle
+     *
+     *  This function add a table(all access paths that may be worth keeping) to
+     *  the join order.
+     *   1. If an index hint is given, it will be honored with our best effort.
+     *      Situations where hint cannot be honored include the specified index
+     *      not existing, index schema being not accessible, and etc.
+     *   2. If the hint cannot be used or there is no user hint, we will try to
+     *      collect all availabe indexes and keep the ones that're worth keeping.
+     *      ie. with minimum costs or providing an 'interesting' ordering.
+     *
+     */
+    int add_table(const uint64_t data_table_id, const ObString &hinted_index_name);
+    /**
+     * @brief  Get the join orders
+     * @param [in] data_table_id      - table id of the base table
+     * @param [in] hinted_index_name  - index hint
+     * @retval OB_SUCCESS execute success
+     * @retval OB_SOME_ERROR special errno need to handle
+     */
+    inline ObArray<Path*> &get_join_orders() {return interesting_paths_;}
+
+    //added by ryan.ly 20141231
+    //start.. //TODO
+    ObJoinOrder& operator=(const ObJoinOrder &other);
+    int add_path(Path* path);
+    int estimate_rel_size(ObJoinOrder* lefttree, ObJoinOrder* righttree);
+    double calculate_selectivity(const ObIArray<RestrictInfo*>& quals) const;
+    double clause_selectivity(const RestrictInfo* qual) const;
+    double convert_obj_to_scalar(const ObObj* obj) const;
+    double convert_string_to_scalar(char* str) const;
+    int extract_index_keys_filters(ObIArray<ObRawExpr*>& ordering,
+                                   ObIArray<RestrictInfo*>& keys,
+                                   ObIArray<RestrictInfo*>& filters,
+                                   ObIArray<RestrictInfo*>& quals);
+    inline double get_rows() const {return rows_;}
+    inline ObArray<JoinInfo*>& get_join_infos() {return join_info_set_;}
+    inline ObBitSet<>& get_tables() {return table_set_;}
+    inline ObBitSet<>& get_unjoined_tables() {return unjoined_tables_;}
+    inline ObArray<RestrictInfo*>& get_restrict_infos() {return restrict_info_set_;}
+    inline ObArray<Path*>& get_interesting_paths() {return interesting_paths_;}
+    inline void set_type(PathType type){type_ = type;}
+    inline PathType get_type(){return type_;}
+
+    //..end
+
+  private:
+
+    // The function is temporarily placed here to help us pass the compilation. We need to have
+    // this support from the storage layer.
+//    int64_t get_index_access_cost(uint64_t index_tid, int64_t cost, int64_t card);
+    int get_index_access_cost(uint64_t index_tid,
+                              ObArray<ObRawExpr*> conditions,
+                              ObArray<ObRawExpr*> filters,
+                              ObArray<ObRawExpr*> quals,
+                              double& cost);
+
+    /**
+     * @brief  Genereate all the ObRawExpr for index key columns
+     * @param [in] index_table_schema - schema of the index table
+     * @param [out] index_keys        - a sequence of the index keys
+     * @retval OB_SUCCESS execute success
+     * @retval OB_SOME_ERROR special errno need to handle
+     */
+    int generate_index_key_raw_expr(const share::schema::ObTableSchema &index_table_schema,
+                                    common::ObArray<ObRawExpr* > &index_keys);
+    /**
+     * @brief  Add an interesting order
+     * @param [in] io - interesting order to be added
+     * @retval OB_SUCCESS execute success
+     * @retval OB_SOME_ERROR special errno need to handle
+     */
+    int add_interesting_order(JoinOrder io);
+
+    /**
+     * @brief  Make a single table access path using the hint
+     * @param [in] table_id          - table id of the base table
+     * @param [in] hinted_index_name - index hint
+     * @param [in/out] ap - access path to generate
+     * @retval OB_SUCCESS execute success
+     * @retval OB_SOME_ERROR special errno need to handle
+     */
+    int generate_access_path_by_hint(const uint64_t data_table_id,
+                                     const ObString &hinted_index_name,
+                                     AccessPath* ap);
+    /**
+     * @brief  Add a table to the join order using the index hint
+     * @param [in] table_id          - table id of the base table
+     * @param [in] hinted_index_name - index hint
+     * @param [in/out] succeeded     - if the hint is successfully used
+     * @retval OB_SUCCESS execute success
+     * @retval OB_SOME_ERROR special errno need to handle
+     */
+    int add_table_by_hint(const uint64_t table_id,
+                          const ObString &hinted_index_name,
+                          bool &succeeded);
+
+    // @brief  check if all primary key are equal condition
+    int all_primary_key_equal(const uint64_t table_id,
+                              bool &all_primary_key_covered);
+
+    // @brief Check if we can use pure heuristics for optimizing single table query
+    int single_table_heuristics(bool &can_use_heuristics);
+    /**
+     * @brief  Add an interesting order(costly)
+     * @param [in] io - interesting order to be added
+     * @retval OB_SUCCESS execute success
+     * @retval OB_SOME_ERROR special errno need to handle
+     */
+    int add_interesting_order_costly(Path* io);
+    /**
+     *  @brief  Add an interesting order forcely
+     *  @param [in] io - interesting order to be added
+     *  @retval OB_SUCCESS execute success
+     *  @retval OB_SOME_ERROR special errno need to handle
+     */
+    int add_interesting_order_forcely(Path* io);
+
+
+
+//   // add access path (with cost)
+//   int ObJoinOrder::add_access_path(ObTableSchema &index_table_schema,
+//                                      uint64_t index_tid,
+//                                     int64_t cost);
+//   // add access path (with cost and index keys)
+//   int ObJoinOrder::add_access_path(ObTableSchema &table_schema,
+//                                     uint64_t index_tid,
+//                                     common::ObArray<ObBinaryRefRawExpr* > &index_keys,
+//                                     int64_t cost);
+  private:
+    // all table ids(sorted)
+//    common::ObArray<uint64_t> sorted_table_ids_;
+
+//    Interesting_Orders interesting_orders_;
+    // Note:
+    //    "Uninteresting" does not mean the join-order are "not ordered" - It only means that
+    //     the user shall not assume any ordering while choosing the path.
+    // FIRST - cost
+    // SECOND - index of the join order in join_orders_
+
+    ObIAllocator *allocator_;
+    ObLogPlan *plan_;
+    std::pair<int64_t, int64_t> plain_join_order_;
+    //added by ryan.ly 20141231
+    //start..
+    PathType type_;
+    ObArray<Path*> interesting_paths_; //因为JoinOrder继承于Path了，可以把interesting_orders_去掉了
+    ObBitSet<> table_set_; //存在这里的是TableItem所在的下标
+    ObArray<JoinInfo*> join_info_set_;
+    ObArray<RestrictInfo*> restrict_info_set_;
+    ObBitSet<> unjoined_tables_;
+    double rows_;
+    //..end
+  };
+}
+
+}
+
+#endif

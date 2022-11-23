@@ -19,22 +19,25 @@
 using namespace oceanbase::common;
 using namespace oceanbase::obmysql;
 
-OMPKResheader::OMPKResheader() : field_count_(0)
-{}
+OMPKResheader::OMPKResheader()
+    : field_count_(0)
+{
 
-OMPKResheader::~OMPKResheader()
-{}
+}
 
-int OMPKResheader::serialize(char* buffer, int64_t len, int64_t& pos) const
+
+OMPKResheader::~OMPKResheader() {}
+
+int OMPKResheader::serialize(char *buffer, int64_t len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
 
   if (NULL == buffer || len <= 0 || pos < 0) {
-    LOG_WARN("invalid argument", K(buffer), K(len), K(pos));
+    LOG_WARN("invalid argument", KP(buffer), K(len), K(pos));
     ret = OB_INVALID_ARGUMENT;
   } else {
     if (OB_FAIL(ObMySQLUtil::store_length(buffer, len, field_count_, pos))) {
-      LOG_WARN("serialize field count fail", K(buffer), K(len), K(pos), K(field_count_));
+      LOG_WARN("serialize field count fail", KP(buffer), K(len), K(pos), K(field_count_));
     }
   }
 
@@ -44,6 +47,6 @@ int OMPKResheader::serialize(char* buffer, int64_t len, int64_t& pos) const
 int64_t OMPKResheader::get_serialize_size() const
 {
   int64_t len = 0;
-  len += ObMySQLUtil::get_number_store_len(field_count_);  // field_count_
+  len += ObMySQLUtil::get_number_store_len(field_count_); // field_count_
   return len;
 }

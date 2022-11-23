@@ -16,16 +16,18 @@
 #include <regex.h>
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace common {
-class ObRegex {
+namespace oceanbase
+{
+namespace common
+{
+class ObRegex
+{
 public:
   ObRegex();
   virtual ~ObRegex();
-
 public:
   int init(const char* pattern, int flags);
-  int match(const char* text, int flags, bool& is_match);
+  int match(const char* text, int flags, bool &is_match);
   void destroy();
   inline const regmatch_t* get_match() const
   {
@@ -35,17 +37,16 @@ public:
   {
     return static_cast<int64_t>(nmatch_);
   }
-
 private:
   bool init_;
   regmatch_t* match_;
   regex_t reg_;
   size_t nmatch_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRegex);
 };
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_LIB_REGEX_OB_REGEX_
+#endif //OCEANBASE_LIB_REGEX_OB_REGEX_
+

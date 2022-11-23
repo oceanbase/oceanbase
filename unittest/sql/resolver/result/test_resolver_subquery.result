@@ -4049,7 +4049,7 @@ select * from t1 where 1<ANY(select c1 from t2);
       },
       "expr_info": [
         "CNT_CONST",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_SUB_QUERY",
         "IS_WITH_ANY"
       ],
@@ -4081,9 +4081,9 @@ select * from t1 where 1<ANY(select c1 from t2);
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -12150,7 +12150,7 @@ select * from t1 where (select c1 from t2) in (1, 2);
         "IS_IN",
         "CNT_CONST_EXPR",
         "CNT_CONST",
-        "CNT_PARAM",
+        "CNT_STATIC_PARAM",
         "CNT_IN",
         "CNT_SUB_QUERY"
       ],
@@ -12239,7 +12239,7 @@ select * from t1 where (select c1 from t2) in (1, 2);
           "expr_info": [
             "IS_CONST_EXPR",
             "CNT_CONST",
-            "CNT_PARAM"
+            "CNT_STATIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -12268,9 +12268,9 @@ select * from t1 where (select c1 from t2) in (1, 2);
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -12300,9 +12300,9 @@ select * from t1 where (select c1 from t2) in (1, 2);
               },
               "expr_info": [
                 "IS_CONST",
-                "IS_PARAM",
+                "IS_STATIC_PARAM",
                 "CNT_CONST",
-                "CNT_PARAM"
+                "CNT_STATIC_PARAM"
               ],
               "rel_id": [
               ],
@@ -15098,10 +15098,10 @@ select * from t1, (select * from t2) as v where exists(select c2 from t2 where t
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],
@@ -15539,10 +15539,10 @@ select * from t1, (select * from t2) as v where exists(select c2 from t2 where t
           },
           "expr_info": [
             "IS_CONST",
-            "IS_PARAM",
+            "IS_STATIC_PARAM",
             "CNT_CONST",
-            "CNT_PARAM",
-            "IS_EXEC_PARM"
+            "CNT_STATIC_PARAM",
+            "IS_DYNAMIC_PARAM"
           ],
           "rel_id": [
           ],

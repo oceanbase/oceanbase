@@ -18,17 +18,20 @@
 #include "lib/list/ob_dlist.h"
 #include "lib/lock/ob_mutex.h"
 
-namespace oceanbase {
-namespace common {
-// NOT thread safe.
-// A double linked 2MB MemBlock. There is a variable "obj_count_" in each
-// MemBlock, which records the current active object number in this MemBlock. After each object
-// alloc from the MemBlock, the obj_count_ add 1; After each object of the MemBlock free, the
-// obj_count_ sub 1. If the "obj_count_" of a MemBlock become 0 after a free action, this MemBlock
-// can be recycled. After expire duration time, a recycled MemBlock can be freed.
-class ObDelayFreeMemBlock : public common::ObDLinkBase<ObDelayFreeMemBlock> {
+namespace oceanbase
+{
+namespace common
+{
+//NOT thread safe.
+//A double linked 2MB MemBlock. There is a variable "obj_count_" in each
+//MemBlock, which records the current active object number in this MemBlock. After each object
+//alloc from the MemBlock, the obj_count_ add 1; After each object of the MemBlock free, the
+//obj_count_ sub 1. If the "obj_count_" of a MemBlock become 0 after a free action, this MemBlock
+//can be recycled. After expire duration time, a recycled MemBlock can be freed.
+class ObDelayFreeMemBlock: public common::ObDLinkBase<ObDelayFreeMemBlock>
+{
 public:
-  explicit ObDelayFreeMemBlock(char* end);
+  explicit ObDelayFreeMemBlock(char *end);
   virtual ~ObDelayFreeMemBlock();
   inline int64_t remain() const;
   inline int64_t data_size() const;
@@ -36,59 +39,56 @@ public:
   inline int64_t size() const;
   inline bool can_recycle() const;
   inline bool can_expire(const int64_t expire_duration_us) const;
-  inline void* alloc(const int64_t size);
-  inline void free(void* ptr);
+  inline void *alloc(const int64_t size);
+  inline void free(void *ptr);
   inline void reuse();
-
 private:
   int64_t free_timestamp_;
   int64_t obj_count_;
-  char* end_;
-  char* current_;
+  char *end_;
+  char *current_;
   char data_[0];
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDelayFreeMemBlock);
 };
 
-// Thread safe depends on the initialize parameters.
-// There are two double linked memory block list in it, working memblock list and free memblock
-// list. The memory is allocated from working memblock list. If a memblock can be recycled, it will
-// be moved from working list to free list. If a memblock in free list can be retired, it will be moved
-// from free list to working list. If the size of free list exceeds MAX_CACHE_MEMORY_SIZE, the expi-
-// red memblock will be freed.
-class ObDelayFreeAllocator : public ObIAllocator {
+//Thread safe depends on the initialize parameters.
+//There are two double linked memory block list in it, working memblock list and free memblock
+//list. The memory is allocated from working memblock list. If a memblock can be recycled, it will
+//be moved from working list to free list. If a memblock in free list can be retired, it will be moved
+//from free list to working list. If the size of free list exceeds MAX_CACHE_MEMORY_SIZE, the expi-
+//red memblock will be freed.
+class ObDelayFreeAllocator: public ObIAllocator
+{
 public:
   ObDelayFreeAllocator();
   virtual ~ObDelayFreeAllocator();
-  int init(const lib::ObLabel& label, const bool is_thread_safe, const int64_t expire_duration_us);
+  int init(const lib::ObLabel &label, const bool is_thread_safe, const int64_t expire_duration_us);
   void destroy();
-  virtual void* alloc(const int64_t sz);
-  virtual void* alloc(const int64_t sz, const ObMemAttr& attr)
+  virtual void *alloc(const int64_t sz);
+  virtual void *alloc(const int64_t sz, const ObMemAttr &attr)
   {
     UNUSED(attr);
     return alloc(sz);
   }
-  virtual void free(void* ptr);
-  virtual void set_label(const lib::ObLabel& label);
+  virtual void free(void *ptr);
+  virtual void set_label(const lib::ObLabel &label);
   void reset();
   inline int64_t get_memory_fragment_size() const;
   inline int64_t get_total_size() const;
-
 private:
-  struct DataMeta {
+  struct DataMeta
+  {
     int64_t data_len_;
-    ObDelayFreeMemBlock* mem_block_;
+    ObDelayFreeMemBlock *mem_block_;
   };
   static const int64_t MEM_BLOCK_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
   static const int64_t MEM_BLOCK_DATA_SIZE = MEM_BLOCK_SIZE - sizeof(ObDelayFreeMemBlock);
   static const int64_t MAX_CACHE_MEMORY_SIZE = OB_MALLOC_BIG_BLOCK_SIZE * 32;
-
 private:
-  ObDelayFreeMemBlock* alloc_block(const int64_t data_size);
-  void free_block(ObDelayFreeMemBlock* block);
-  void free_list(ObDList<ObDelayFreeMemBlock>& list);
-
+  ObDelayFreeMemBlock *alloc_block(const int64_t data_size);
+  void free_block(ObDelayFreeMemBlock *block);
+  void free_list(ObDList<ObDelayFreeMemBlock> &list);
 private:
   ObDList<ObDelayFreeMemBlock> working_list_;
   ObDList<ObDelayFreeMemBlock> free_list_;
@@ -100,7 +100,6 @@ private:
   ObTCMalloc allocator_;
   lib::ObMutex mutex_;
   bool inited_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDelayFreeAllocator);
 };
@@ -137,9 +136,9 @@ inline bool ObDelayFreeMemBlock::can_expire(const int64_t expire_duration_us) co
   return 0 == obj_count_ && ::oceanbase::common::ObTimeUtility::current_time() - free_timestamp_ >= expire_duration_us;
 }
 
-inline void* ObDelayFreeMemBlock::alloc(const int64_t size)
+inline void *ObDelayFreeMemBlock::alloc(const int64_t size)
 {
-  char* ptr_ret = NULL;
+  char *ptr_ret = NULL;
   if (size <= remain()) {
     ptr_ret = current_;
     current_ += size;
@@ -148,7 +147,7 @@ inline void* ObDelayFreeMemBlock::alloc(const int64_t size)
   return ptr_ret;
 }
 
-inline void ObDelayFreeMemBlock::free(void* ptr)
+inline void ObDelayFreeMemBlock::free(void *ptr)
 {
   UNUSED(ptr);
   --obj_count_;

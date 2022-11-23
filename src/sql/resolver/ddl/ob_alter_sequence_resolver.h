@@ -14,15 +14,17 @@
 #define OCEANBASE_ALTER_SEQUENCE_RESOLVER_ 1
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 
-namespace oceanbase {
-namespace sql {
-class ObAlterSequenceResolver : public ObStmtResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObAlterSequenceResolver: public ObStmtResolver
+{
 public:
-  explicit ObAlterSequenceResolver(ObResolverParams& params);
+  explicit ObAlterSequenceResolver(ObResolverParams &params);
   virtual ~ObAlterSequenceResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   // types and constants
 private:
@@ -34,7 +36,7 @@ private:
   // data members
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_ALTER_SEQUENCE_RESOLVER_ */

@@ -12,16 +12,24 @@
 
 #include "share/scheduler/ob_dag_type.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
 const TypeBasicSetting OB_DAG_TYPE[] = {
-#define DAG_TYPE_SETTING_DEF(def, default_score) {default_score},
+#define DAG_TYPE_SETTING_DEF(def, default_score) \
+      {default_score},
 #include "share/scheduler/ob_dag_type.h"
 #undef DAG_TYPE_SETTING_DEF
 };
 
-const common::ObString ObDagTypeStr[ObDagTypeIds::TYPE_SETTING_END] = {"MINOR_MERGE", "MAJOR_MERGE", "MINI_MERGE"};
+const common::ObString ObDagTypeStr[ObDagTypeIds::TYPE_SETTING_END] = {
+  "MINOR_MERGE",
+  "MAJOR_MERGE",
+  "MINI_MERGE"
+};
 
-}  // namespace share
-}  // namespace oceanbase
+
+} // namespace share
+} // namespace oceanbase

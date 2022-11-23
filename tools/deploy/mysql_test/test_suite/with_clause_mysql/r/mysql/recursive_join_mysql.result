@@ -1,0 +1,661 @@
+drop database if exists cte_st;
+create database cte_st;
+use cte_st;
+result_format: 4
+create table EMP (
+  EMPno  number,
+  ENAME VARCHAR(30),
+  JOB VARCHAR(30),
+  MGR number(4),
+  HIREDATE date,
+  SAL number(7,2),
+  COMM number(7,2),
+  DEPTNO number(2)
+) ;
+
+INSERT INTO EMP values (7369,'SMITH','CLERK',7902,    str_to_date('1980-12-17','%Y-%m-%d'),800,NULL, 20) ;
+INSERT INTO EMP VALUES (7499, 'ALLEN','SALESMAN',7698,str_to_date('1981-02-20','%Y-%m-%d'),1600,300,30) ;
+INSERT INTO EMP VALUES (7521,'WARD','SALESMAN',7698,  str_to_date('1981-02-22','%Y-%m-%d'),1250, 500, 30) ;
+INSERT INTO EMP VALUES (7566,'JONES','MANAGER',7839,  str_to_date('1981-08-02','%Y-%m-%d'), 2975, NULL, 20) ;
+INSERT INTO EMP VALUES (7654,'MARTIN','SALESMAN', 7698, str_to_date('1981-09-28','%Y-%m-%d'), 1250, 1400, 30) ;
+INSERT INTO EMP VALUES (7698, 'BLAKE','MANAGER', 7839,  str_to_date('1981-05-01','%Y-%m-%d'), 2850, NULL, 30) ;
+INSERT INTO EMP VALUES (7782, 'CLARK','MANAGER', 7839,  str_to_date('1981-06-09','%Y-%m-%d'), 2450, NULL, 10) ;
+insert into EMP values (7788,'SCOTT','ANALYST', 7566,   str_to_date('1987-08-19','%Y-%m-%d'), 3000, null, 20) ;
+INSERT INTO EMP VALUES (7839, 'KING','PRESIDENT', NULL, str_to_date('1981-11-17','%Y-%m-%d'), 5000, NULL, 10) ;
+INSERT INTO EMP VALUES (7844, 'TURNER','SALESMAN', 7698, str_to_date('1981-09-08','%Y-%m-%d'), 1500, 0, 30) ;
+INSERT INTO EMP VALUES(7876, 'ADAMS','CLERK', 7788,     str_to_date('1987-05-23','%Y-%m-%d'), 1100, NULL, 20) ;
+INSERT INTO EMP VALUES(7900, 'JAMES', 'CLEARK', 7698,   str_to_date('1981-12-03','%Y-%m-%d'), 950, NULL, 30) ;
+INSERT INTO EMP VALUES(7902, 'FORD','ANALYST',7566,     str_to_date('1981-12-03','%Y-%m-%d'), 3000, NULL, 20) ;
+INSERT INTO EMP VALUES(7934,'MILLER','CLERK', 7782,     str_to_date('1982-01-23','%Y-%m-%d'), 1300,NULL, 10) ;
+
+CREATE TABLE emp1 (
+   empno    VARCHAR(4000) NOT NULL,
+   ename    VARCHAR(14),
+   job      VARCHAR(9),
+   mgr      VARCHAR(4000),
+   hiredate DATE,
+   sal      NUMBER(7,2),
+   comm     NUMBER(7,2),
+   deptno   NUMBER(2));
+
+INSERT INTO emp1 values (7369, 'SMITH', 'CLERK', 7902, str_to_date('1980-12-17',
+'%Y-%m-%d'), 800, null, 20);
+INSERT INTO emp1 values (7499, 'ALLEN', 'SALESMAN', 7698, str_to_date('1981-02-20', '%Y-%m-%d'), 1600, 300, 30);
+INSERT INTO emp1 values (7521, 'WARD', 'SALESMAN', 7698, str_to_date('1981-02-22',
+'%Y-%m-%d'), 1250, 500, 30);
+INSERT INTO emp1 values (7566, 'JONES', 'MANAGER', 7839, str_to_date('1981-08-02',
+'%Y-%m-%d'), 2975, null, 20);
+INSERT INTO emp1 values (7654, 'MARTIN', 'SALESMAN', 7698, str_to_date('1981-09-28', '%Y-%m-%d'), 1250, 1400, 30);
+INSERT INTO emp1 values (7698, 'BLAKE', 'MANAGER', 7839, str_to_date('1981-05-01',
+'%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (7782, 'CLARK', 'MANAGER', 7839, str_to_date('1981-06-09'
+, '%Y-%m-%d'), 2450, null, 10);
+INSERT INTO emp1 values (7788, 'SCOTT', 'ANALYST', 7566, str_to_date('1987-08-19',
+'%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7839, 'KING', 'PRESIDENT', null, str_to_date('1981-11-17', '%Y-%m-%d'), 5000, null, 10);
+INSERT INTO emp1 values (7844, 'TURNER', 'SALESMAN', 7698, str_to_date('1981-09-08', '%Y-%m-%d'), 1500, 0, 30);
+INSERT INTO emp1 values (7876, 'ADAMS', 'CLERK', 7788, str_to_date('1987-05-23',
+'%Y-%m-%d'), 1100, null, 20);
+INSERT INTO emp1 values (7900, 'JAMES', 'CLERK', 7698, str_to_date('1981-12-03',
+'%Y-%m-%d'), 950, null, 30);
+INSERT INTO emp1 values (7902, 'FORD', 'ANALYST', 7566, str_to_date('1981-12-03',
+'%Y-%m-%d'), 3000, null, 20);
+INSERT INTO emp1 values (7934, 'MILLER', 'CLERK', 7782, str_to_date('1982-01-23',
+'%Y-%m-%d'), 1300, null, 10);
+
+INSERT INTO emp1 values (8100, 'Eve', 'MANAGER', 7839, str_to_date('1984-05-01',
+'%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (8101, 'Eve1', 'MANAGER', 8100, str_to_date('1984-05-01',
+'%Y-%m-%d'), 2850, null, 30);
+INSERT INTO emp1 values (8108, 'Eve8', 'CLERK', 8101, str_to_date('1984-05-01',
+'%Y-%m-%d'), 2850, null, 30);
+
+## =======================================================================
+## Test Case 1:
+## - recursive with RECURSIVE Query: Nested Loop Join
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_NL(r e) */  e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   |  7839 | NULL |
+| JONES  |  7566 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| SCOTT  |  7788 | 7566 |
+| FORD   |  7902 | 7566 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| TURNER |  7844 | 7698 |
+| JAMES  |  7900 | 7698 |
+| MILLER |  7934 | 7782 |
+| ADAMS  |  7876 | 7788 |
+| SMITH  |  7369 | 7902 |
++--------+-------+------+
+
+## =======================================================================
+## Test Case 2:
+## - recursive with RECURSIVE Query: SORT MERGE Join
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_MERGE(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   |  7839 | NULL |
+| JONES  |  7566 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| SCOTT  |  7788 | 7566 |
+| FORD   |  7902 | 7566 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| TURNER |  7844 | 7698 |
+| JAMES  |  7900 | 7698 |
+| MILLER |  7934 | 7782 |
+| ADAMS  |  7876 | 7788 |
+| SMITH  |  7369 | 7902 |
++--------+-------+------+
+
+## =======================================================================
+## Test Case 3:
+## - recursive with RECURSIVE Query: Hash Join
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   |  7839 | NULL |
+| CLARK  |  7782 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| JONES  |  7566 | 7839 |
+| MILLER |  7934 | 7782 |
+| JAMES  |  7900 | 7698 |
+| TURNER |  7844 | 7698 |
+| MARTIN |  7654 | 7698 |
+| WARD   |  7521 | 7698 |
+| ALLEN  |  7499 | 7698 |
+| FORD   |  7902 | 7566 |
+| SCOTT  |  7788 | 7566 |
+| SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
++--------+-------+------+
+
+## =======================================================================
+## Test Case 4:
+## - recursive with RECURSIVE Query: Join in Initialisation Branch
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT /*+ USE_NL(e d) */ e.ename, e.mgr, e.empno
+    FROM emp e, emp d
+    WHERE e.sal = d. sal
+    UNION ALL
+    SELECT /*+ USE_HASH(r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, emp e, emp d
+    WHERE r.empno = e.mgr and e.sal = d.sal
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| SMITH  |  7369 | 7902 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| WARD   |  7521 | 7698 |
+| JONES  |  7566 | 7839 |
+| MARTIN |  7654 | 7698 |
+| MARTIN |  7654 | 7698 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| SCOTT  |  7788 | 7566 |
+| SCOTT  |  7788 | 7566 |
+| KING   |  7839 | NULL |
+| TURNER |  7844 | 7698 |
+| ADAMS  |  7876 | 7788 |
+| JAMES  |  7900 | 7698 |
+| FORD   |  7902 | 7566 |
+| FORD   |  7902 | 7566 |
+| MILLER |  7934 | 7782 |
+| WARD   |  7521 | 7698 |
+| SMITH  |  7369 | 7902 |
+| SMITH  |  7369 | 7902 |
+| JONES  |  7566 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| ADAMS  |  7876 | 7788 |
+| ADAMS  |  7876 | 7788 |
+| MILLER |  7934 | 7782 |
+| ALLEN  |  7499 | 7698 |
+| FORD   |  7902 | 7566 |
+| MARTIN |  7654 | 7698 |
+| TURNER |  7844 | 7698 |
+| JAMES  |  7900 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| SCOTT  |  7788 | 7566 |
+| FORD   |  7902 | 7566 |
+| SCOTT  |  7788 | 7566 |
+| FORD   |  7902 | 7566 |
+| SCOTT  |  7788 | 7566 |
+| FORD   |  7902 | 7566 |
+| SCOTT  |  7788 | 7566 |
+| MARTIN |  7654 | 7698 |
+| WARD   |  7521 | 7698 |
+| JAMES  |  7900 | 7698 |
+| TURNER |  7844 | 7698 |
+| MARTIN |  7654 | 7698 |
+| WARD   |  7521 | 7698 |
+| ALLEN  |  7499 | 7698 |
+| MILLER |  7934 | 7782 |
+| SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
+| SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
+| SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
+| SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
++--------+-------+------+
+
+## =======================================================================
+## Test Case 6:
+## - recursive with RECURSIVE Query: Hash Join without using hints
+##                         Static input on build side and fits in memory
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM emp e, rw r
+    WHERE e.mgr = r.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   |  7839 | NULL |
+| CLARK  |  7782 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| JONES  |  7566 | 7839 |
+| MILLER |  7934 | 7782 |
+| JAMES  |  7900 | 7698 |
+| TURNER |  7844 | 7698 |
+| MARTIN |  7654 | 7698 |
+| WARD   |  7521 | 7698 |
+| ALLEN  |  7499 | 7698 |
+| FORD   |  7902 | 7566 |
+| SCOTT  |  7788 | 7566 |
+| SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
++--------+-------+------+
+
+## =======================================================================
+## Test Case 7:
+## - recursive with RECURSIVE Query: Hash Join without using hints
+##                         Static input on probe side and fits in memory
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   |  7839 | NULL |
+| CLARK  |  7782 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| JONES  |  7566 | 7839 |
+| MILLER |  7934 | 7782 |
+| JAMES  |  7900 | 7698 |
+| TURNER |  7844 | 7698 |
+| MARTIN |  7654 | 7698 |
+| WARD   |  7521 | 7698 |
+| ALLEN  |  7499 | 7698 |
+| FORD   |  7902 | 7566 |
+| SCOTT  |  7788 | 7566 |
+| SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
++--------+-------+------+
+
+## =======================================================================
+## 测试8-15都是在测试join的顺序或者hint的顺序
+## Test Case 8:
+## - recursive with RECURSIVE Query: Join Order tests
+##                         pump >< emp >< emp1
+## =======================================================================
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM emp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, emp e, emp1 n
+  WHERE r.mgr = e.empno and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
++-------+------+-------+---------+
+| empno | mgr  | iters | sal     |
++-------+------+-------+---------+
+|  7369 | 7902 |     1 |  800.00 |
+|  7499 | 7698 |     1 | 1600.00 |
+|  7499 | 7839 |     2 | 4450.00 |
+|  7521 | 7698 |     1 | 1250.00 |
+|  7521 | 7839 |     2 | 4100.00 |
+|  7566 | 7839 |     1 | 2975.00 |
+|  7654 | 7698 |     1 | 1250.00 |
+|  7654 | 7839 |     2 | 4100.00 |
+|  7698 | 7839 |     1 | 2850.00 |
+|  7782 | 7839 |     1 | 2450.00 |
++-------+------+-------+---------+
+
+## =======================================================================
+## Test Case 9:
+## - recursive with RECURSIVE Query: Join Order tests
+##                         emp >< pump >< emp1
+## =======================================================================
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM emp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp e, rw r, emp1 n
+  WHERE e.empno = r.mgr and e.mgr = n.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
++-------+------+-------+---------+
+| empno | mgr  | iters | sal     |
++-------+------+-------+---------+
+|  7369 | 7902 |     1 |  800.00 |
+|  7499 | 7698 |     1 | 1600.00 |
+|  7499 | 7839 |     2 | 4450.00 |
+|  7521 | 7698 |     1 | 1250.00 |
+|  7521 | 7839 |     2 | 4100.00 |
+|  7566 | 7839 |     1 | 2975.00 |
+|  7654 | 7698 |     1 | 1250.00 |
+|  7654 | 7839 |     2 | 4100.00 |
+|  7698 | 7839 |     1 | 2850.00 |
+|  7782 | 7839 |     1 | 2450.00 |
++-------+------+-------+---------+
+
+## =======================================================================
+## Test Case 10:
+## - recursive with RECURSIVE Query: Join Order tests
+##                         emp >< emp1 >< pump
+## =======================================================================
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM emp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp e, emp1 n, rw r
+  WHERE e.mgr = n.empno and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
++-------+------+-------+---------+
+| empno | mgr  | iters | sal     |
++-------+------+-------+---------+
+|  7369 | 7902 |     1 |  800.00 |
+|  7499 | 7698 |     1 | 1600.00 |
+|  7499 | 7839 |     2 | 4450.00 |
+|  7521 | 7698 |     1 | 1250.00 |
+|  7521 | 7839 |     2 | 4100.00 |
+|  7566 | 7839 |     1 | 2975.00 |
+|  7654 | 7698 |     1 | 1250.00 |
+|  7654 | 7839 |     2 | 4100.00 |
+|  7698 | 7839 |     1 | 2850.00 |
+|  7782 | 7839 |     1 | 2450.00 |
++-------+------+-------+---------+
+
+## =======================================================================
+## Test Case 11:
+## - recursive with RECURSIVE Query: Join Order tests
+##                         emp1 >< emp >< pump
+## =======================================================================
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM emp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, emp e, rw r
+  WHERE n.empno = e.mgr and e.empno = r.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
++-------+------+-------+---------+
+| empno | mgr  | iters | sal     |
++-------+------+-------+---------+
+|  7369 | 7902 |     1 |  800.00 |
+|  7499 | 7698 |     1 | 1600.00 |
+|  7499 | 7839 |     2 | 4450.00 |
+|  7521 | 7698 |     1 | 1250.00 |
+|  7521 | 7839 |     2 | 4100.00 |
+|  7566 | 7839 |     1 | 2975.00 |
+|  7654 | 7698 |     1 | 1250.00 |
+|  7654 | 7839 |     2 | 4100.00 |
+|  7698 | 7839 |     1 | 2850.00 |
+|  7782 | 7839 |     1 | 2450.00 |
++-------+------+-------+---------+
+
+## =======================================================================
+## Test Case 12:
+## - recursive with RECURSIVE Query: Join Order tests
+##                         pump >< emp
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   |  7839 | NULL |
+| JONES  |  7566 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| CLARK  |  7782 | 7839 |
+| SCOTT  |  7788 | 7566 |
+| FORD   |  7902 | 7566 |
+| ALLEN  |  7499 | 7698 |
+| WARD   |  7521 | 7698 |
+| MARTIN |  7654 | 7698 |
+| TURNER |  7844 | 7698 |
+| JAMES  |  7900 | 7698 |
+| MILLER |  7934 | 7782 |
+| ADAMS  |  7876 | 7788 |
+| SMITH  |  7369 | 7902 |
++--------+-------+------+
+
+## =======================================================================
+## Test Case 13:
+## - recursive with RECURSIVE Query: Join Order tests
+##                         emp >< pump
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ ORDERED  USE_HASH (r e) */ e.ename, e.mgr, e.empno
+    FROM  emp e, rw r
+    WHERE e.mgr = r.empno
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   |  7839 | NULL |
+| CLARK  |  7782 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| JONES  |  7566 | 7839 |
+| MILLER |  7934 | 7782 |
+| JAMES  |  7900 | 7698 |
+| TURNER |  7844 | 7698 |
+| MARTIN |  7654 | 7698 |
+| WARD   |  7521 | 7698 |
+| ALLEN  |  7499 | 7698 |
+| FORD   |  7902 | 7566 |
+| SCOTT  |  7788 | 7566 |
+| SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
++--------+-------+------+
+
+## =======================================================================
+## Test Case 14:
+## - recursive with RECURSIVE Query: Join Order tests
+##                         emp1 >< pump >< emp
+## =======================================================================
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM emp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM emp1 n, rw r, emp e
+  WHERE n.empno = e.mgr and r.mgr = e.empno and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
++-------+------+-------+---------+
+| empno | mgr  | iters | sal     |
++-------+------+-------+---------+
+|  7369 | 7902 |     1 |  800.00 |
+|  7499 | 7698 |     1 | 1600.00 |
+|  7499 | 7839 |     2 | 4450.00 |
+|  7521 | 7698 |     1 | 1250.00 |
+|  7521 | 7839 |     2 | 4100.00 |
+|  7566 | 7839 |     1 | 2975.00 |
+|  7654 | 7698 |     1 | 1250.00 |
+|  7654 | 7839 |     2 | 4100.00 |
+|  7698 | 7839 |     1 | 2850.00 |
+|  7782 | 7839 |     1 | 2450.00 |
++-------+------+-------+---------+
+
+## =======================================================================
+## Test Case 15:
+## - recursive with RECURSIVE Query: Join Order tests
+##                         pump >< emp1 >< emp
+## =======================================================================
+with RECURSIVE rw (empno, mgr, iters, sal) AS
+  (
+  SELECT e.empno, e.mgr, 1, e.sal
+  FROM emp e, emp1 n1, emp1 n2
+  WHERE e.empno = n1.empno and e.mgr = n2.empno and e.empno < e.mgr
+  UNION ALL
+  SELECT /*+ ORDERED  USE_HASH (r e) */r.empno, e.mgr, r.iters + 1, r.sal + e.sal
+  FROM rw r, emp1 n, emp e
+  WHERE r.mgr = e.empno and n.empno = e.mgr and e.empno < e.mgr
+  )
+  SELECT *
+  FROM rw
+  ORDER BY 1, 3;
++-------+------+-------+---------+
+| empno | mgr  | iters | sal     |
++-------+------+-------+---------+
+|  7369 | 7902 |     1 |  800.00 |
+|  7499 | 7698 |     1 | 1600.00 |
+|  7499 | 7839 |     2 | 4450.00 |
+|  7521 | 7698 |     1 | 1250.00 |
+|  7521 | 7839 |     2 | 4100.00 |
+|  7566 | 7839 |     1 | 2975.00 |
+|  7654 | 7698 |     1 | 1250.00 |
+|  7654 | 7839 |     2 | 4100.00 |
+|  7698 | 7839 |     1 | 2850.00 |
+|  7782 | 7839 |     1 | 2450.00 |
++-------+------+-------+---------+
+
+## =======================================================================
+## Test Case 16:
+## - recursive with RECURSIVE Query: Join Skew handling. No local filter
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   |  7839 | NULL |
+| CLARK  |  7782 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| JONES  |  7566 | 7839 |
+| MILLER |  7934 | 7782 |
+| JAMES  |  7900 | 7698 |
+| TURNER |  7844 | 7698 |
+| MARTIN |  7654 | 7698 |
+| WARD   |  7521 | 7698 |
+| ALLEN  |  7499 | 7698 |
+| FORD   |  7902 | 7566 |
+| SCOTT  |  7788 | 7566 |
+| SMITH  |  7369 | 7902 |
+| ADAMS  |  7876 | 7788 |
++--------+-------+------+
+
+## =======================================================================
+## Test Case 17:
+## - recursive with RECURSIVE Query: Join Skew handling with RECURSIVE an additional local filter
+## =======================================================================
+with RECURSIVE rw (ename, mgr, empno) AS
+(
+    SELECT ename, mgr, empno
+    FROM emp e
+    WHERE job = 'PRESIDENT'
+    UNION ALL
+    SELECT /*+ PQ_SKEW (r) */ e.ename, e.mgr, e.empno
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr and e.empno < e.mgr
+)
+SELECT ename, empno, mgr
+FROM rw;
++--------+-------+------+
+| ename  | empno | mgr  |
++--------+-------+------+
+| KING   |  7839 | NULL |
+| CLARK  |  7782 | 7839 |
+| BLAKE  |  7698 | 7839 |
+| JONES  |  7566 | 7839 |
+| MARTIN |  7654 | 7698 |
+| WARD   |  7521 | 7698 |
+| ALLEN  |  7499 | 7698 |
++--------+-------+------+
+drop database cte_st;

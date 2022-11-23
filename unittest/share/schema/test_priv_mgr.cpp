@@ -21,73 +21,76 @@
 #include "share/schema/ob_priv_mgr.h"
 #include "ob_schema_test_utils.cpp"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace share {
-namespace schema {
-class TestPrivMgr : public ::testing::Test {
+namespace share
+{
+namespace schema
+{
+class TestPrivMgr : public ::testing::Test
+{
 public:
   virtual void SetUp();
-  virtual void TearDown()
-  {}
-
+  virtual void TearDown() {}
 protected:
   ObPrivMgr priv_mgr_;
 };
 
 void TestPrivMgr::SetUp()
 {
-  // obsys::CConfig c1;
-  // priv_mgr_.init();
+  //obsys::ObSysConfig c1;
+  //priv_mgr_.init();
 }
 
-#define DB_PRIV_EQUAL(db_priv, db_priv_other)                                        \
-  ASSERT_EQ(db_priv.get_tenant_id(), db_priv_other.get_tenant_id());                 \
-  ASSERT_EQ(db_priv.get_user_id(), db_priv_other.get_user_id());                     \
+#define DB_PRIV_EQUAL(db_priv, db_priv_other) \
+  ASSERT_EQ(db_priv.get_tenant_id(), db_priv_other.get_tenant_id()); \
+  ASSERT_EQ(db_priv.get_user_id(), db_priv_other.get_user_id()); \
   ASSERT_EQ(db_priv.get_database_name_str(), db_priv_other.get_database_name_str()); \
   ASSERT_EQ(db_priv.get_priv_set(), db_priv_other.get_priv_set());
 
-#define TABLE_PRIV_EQUAL(table_priv, table_priv_other)                                     \
-  ASSERT_EQ(table_priv.get_tenant_id(), table_priv_other.get_tenant_id());                 \
-  ASSERT_EQ(table_priv.get_user_id(), table_priv_other.get_user_id());                     \
+#define TABLE_PRIV_EQUAL(table_priv, table_priv_other) \
+  ASSERT_EQ(table_priv.get_tenant_id(), table_priv_other.get_tenant_id()); \
+  ASSERT_EQ(table_priv.get_user_id(), table_priv_other.get_user_id()); \
   ASSERT_EQ(table_priv.get_database_name_str(), table_priv_other.get_database_name_str()); \
-  ASSERT_EQ(table_priv.get_table_name_str(), table_priv_other.get_table_name_str());       \
+  ASSERT_EQ(table_priv.get_table_name_str(), table_priv_other.get_table_name_str()); \
   ASSERT_EQ(table_priv.get_priv_set(), table_priv_other.get_priv_set());
+
 
 TEST_F(TestPrivMgr, privs_test)
 {
   int ret = OB_SUCCESS;
 
-  //----------------privileges constructed as follows---------------
-  //---__all_tenant
-  //--tenant_id--tenant_name--replica_num--zone_list--resource_pool_list--primary_zone--locked--status--info
-  //    1          ob            3         127.0.0.1   127.0.0.1            127.0.0.1    0       0
-  //    2          yz            3         127.0.0.1   127.0.0.1            127.0.0.1    0       0
+//----------------privileges constructed as follows---------------
+//---__all_tenant
+//--tenant_id--tenant_name--replica_num--zone_list--resource_pool_list--primary_zone--locked--status--info
+//    1          ob            3         127.0.0.1   127.0.0.1            127.0.0.1    0       0
+//    2          yz            3         127.0.0.1   127.0.0.1            127.0.0.1    0       0
 
-  //----__all_user
-  //--tenant_id--user_id--user_name--host--passwd--privs----locked
-  //  1          1        yz1        %     empty   SELECT   false
-  //  1          2        yz2        %     empty   empty    false
-  //  2          1        t2_u1      %     empty   empty    false
+//----__all_user
+//--tenant_id--user_id--user_name--host--passwd--privs----locked
+//  1          1        yz1        %     empty   SELECT   false
+//  1          2        yz2        %     empty   empty    false
+//  2          1        t2_u1      %     empty   empty    false
 
-  //----__all_database_privilige
-  //--tenant_id--user_id--database_name--privs
-  //  1          2        db             SELECT
-  //  1          2        ali%           ALTER
-  //  1          2        alipay%        CREATE
-  //  2          1        ali            CREATE
+//----__all_database_privilige
+//--tenant_id--user_id--database_name--privs
+//  1          2        db             SELECT
+//  1          2        ali%           ALTER
+//  1          2        alipay%        CREATE
+//  2          1        ali            CREATE
 
-  //----__all_table_privilege
-  //--tenant_id--user_id--database_name--table_name--privs
-  //  1          2        ali            sale        SELECT, INSERT
-  //  1          1        ali            customer    CREATE, UPDATE
-  //  2          1        db2            sale        CREATE, UPDATE
+//----__all_table_privilege
+//--tenant_id--user_id--database_name--table_name--privs
+//  1          2        ali            sale        SELECT, INSERT
+//  1          1        ali            customer    CREATE, UPDATE
+//  2          1        db2            sale        CREATE, UPDATE
 
   //-----------------add priv test--------------------
   //----add user db priv
   ObArray<ObDBPriv> db_priv_array;
   ObDBPriv db_priv;
-  // db_priv: tenant_id, user_id, db_name, priv_set, sort_value
+  //db_priv: tenant_id, user_id, db_name, priv_set, sort_value
   FILL_DB_PRIV(db_priv, 1, 2, "db", OB_PRIV_SELECT);
   db_priv_array.push_back(db_priv);
 
@@ -107,23 +110,23 @@ TEST_F(TestPrivMgr, privs_test)
   ASSERT_TRUE(OB_SUCC(ret));
 
   //----add user table priv
-  // user(1, "yz2") db(ali) table(sale) priv(SELECT,INSERT)
+  //user(1, "yz2") db(ali) table(sale) priv(SELECT,INSERT)
   ObArray<ObTablePriv> table_priv_array;
   ObTablePriv table_priv;
   FILL_TABLE_PRIV(table_priv, 1, 2, "ali", "sale", OB_PRIV_SELECT | OB_PRIV_INSERT);
   table_priv_array.push_back(table_priv);
 
-  // user(1, "yz1") db(ali) table(customer) priv(CREATE,UPDATE)
+  //user(1, "yz1") db(ali) table(customer) priv(CREATE,UPDATE)
   table_priv.reset();
   FILL_TABLE_PRIV(table_priv, 1, 1, "ali", "customer", OB_PRIV_CREATE | OB_PRIV_UPDATE);
   table_priv_array.push_back(table_priv);
 
-  // user(1, "yz1") db(ali) table(sale) priv(CREATE,UPDATE)
+  //user(1, "yz1") db(ali) table(sale) priv(CREATE,UPDATE)
   table_priv.reset();
   FILL_TABLE_PRIV(table_priv, 1, 1, "taobao", "sale", OB_PRIV_CREATE | OB_PRIV_UPDATE);
   table_priv_array.push_back(table_priv);
 
-  // user(2, "t2_u1") db(db2) table(sale) priv(CREATE,UPDATE)
+  //user(2, "t2_u1") db(db2) table(sale) priv(CREATE,UPDATE)
   table_priv.reset();
   FILL_TABLE_PRIV(table_priv, 2, 1, "db2", "sale", OB_PRIV_CREATE | OB_PRIV_UPDATE);
   table_priv_array.push_back(table_priv);
@@ -131,7 +134,7 @@ TEST_F(TestPrivMgr, privs_test)
   ret = priv_mgr_.add_table_privs(table_priv_array);
   ASSERT_TRUE(OB_SUCC(ret));
 
-  ObArray<const ObDBPriv*> db_priv_pointers;
+  ObArray<const ObDBPriv *>db_priv_pointers;
   ret = priv_mgr_.get_db_privs_in_tenant(2, db_priv_pointers);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, db_priv_pointers.count());
@@ -140,7 +143,7 @@ TEST_F(TestPrivMgr, privs_test)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, db_priv_pointers.count());
 
-  ObArray<const ObTablePriv*> table_priv_pointers;
+  ObArray<const ObTablePriv *>table_priv_pointers;
   ret = priv_mgr_.get_table_privs_in_user(OB_INVALID, OB_INVALID_ID, table_priv_pointers);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, table_priv_pointers.count());
@@ -154,10 +157,11 @@ TEST_F(TestPrivMgr, privs_test)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, table_priv_pointers.count());
 
+
   //-----------------get priv test--------------------
-  // get db priv
-  const ObDBPriv* p_db_priv = NULL;
-  ret = priv_mgr_.get_db_priv(ObOriginalDBKey(1, 2, "db"), p_db_priv);
+  //get db priv
+  const ObDBPriv *p_db_priv = NULL;
+  ret  = priv_mgr_.get_db_priv(ObOriginalDBKey(1, 2, "db"), p_db_priv);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL != p_db_priv);
   ASSERT_TRUE(1 == p_db_priv->get_tenant_id());
@@ -170,8 +174,8 @@ TEST_F(TestPrivMgr, privs_test)
   ASSERT_TRUE(1 == p_db_priv->get_tenant_id());
   ASSERT_TRUE(OB_PRIV_CREATE == p_db_priv->get_priv_set());
 
-  // get table priv
-  const ObTablePriv* p_table_priv = NULL;
+  //get table priv
+  const ObTablePriv *p_table_priv = NULL;
   ret = priv_mgr_.get_table_priv(ObTablePrivSortKey(1, 2, "ali", "sale"), p_table_priv);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL != p_table_priv);
@@ -183,6 +187,7 @@ TEST_F(TestPrivMgr, privs_test)
   ret = priv_mgr_.get_table_priv(ObTablePrivSortKey(1, 2, "ali", "fsdfs"), p_table_priv);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL == p_table_priv);
+
 
   ret = priv_mgr_.get_table_priv(ObTablePrivSortKey(1, 1, "ali", "customer"), p_table_priv);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -219,17 +224,17 @@ TEST_F(TestPrivMgr, privs_test)
 
   ret = priv_mgr_.del_db_privs(db_keys);
   ASSERT_EQ(OB_SUCCESS, ret);
-  // db priv with key (1, 2, db) deleted
+  //db priv with key (1, 2, db) deleted
   ret = priv_mgr_.get_db_priv(ObOriginalDBKey(1, 2, "db"), p_db_priv);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL == p_db_priv);
 
-  // db priv with key (1, 2, ali%) deleted
+  //db priv with key (1, 2, ali%) deleted
   ret = priv_mgr_.get_db_priv(ObOriginalDBKey(1, 2, "ali%"), p_db_priv);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL == p_db_priv);
 
-  // db priv with key (1, 2, alipay%) has not been deleted
+  //db priv with key (1, 2, alipay%) has not been deleted
   ret = priv_mgr_.get_db_priv(ObOriginalDBKey(1, 2, "alipay%"), p_db_priv);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL != p_db_priv);
@@ -249,12 +254,12 @@ TEST_F(TestPrivMgr, privs_test)
   ret = priv_mgr_.del_table_privs(table_keys);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // table priv with key(1, 2, ali, sale) deleted
+  //table priv with key(1, 2, ali, sale) deleted
   ret = priv_mgr_.get_table_priv(ObTablePrivSortKey(1, 2, "ali", "sale"), p_table_priv);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL == p_table_priv);
 
-  // table priv with key(2, 1, db2, sale) has not been deleted
+  //table priv with key(2, 1, db2, sale) has not been deleted
   ret = priv_mgr_.get_table_priv(ObTablePrivSortKey(2, 1, "db2", "sale"), p_table_priv);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL != p_table_priv);
@@ -268,6 +273,7 @@ TEST_F(TestPrivMgr, privs_test)
 
   // dump
   priv_mgr_.dump();
+
 }
 
 TEST_F(TestPrivMgr, reset_and_assign)
@@ -303,33 +309,33 @@ TEST_F(TestPrivMgr, reset_and_assign)
 
   ObPrivMgr new_priv_mgr;
   ret = new_priv_mgr.assign(priv_mgr);
-  for (int64_t i = 0; i < db_privs.count(); ++i) {
-    const ObDBPriv& cur_db_priv = db_privs.at(i);
-    const ObDBPriv* p_db_priv = NULL;
+  for (int64_t i = 0 ; i < db_privs.count(); ++i) {
+    const ObDBPriv &cur_db_priv = db_privs.at(i);
+    const ObDBPriv *p_db_priv = NULL;
     ret = new_priv_mgr.get_db_priv(cur_db_priv.get_original_key(), p_db_priv);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_TRUE(NULL != p_db_priv);
     DB_PRIV_EQUAL(cur_db_priv, (*p_db_priv));
   }
-  for (int64_t i = 0; i < table_privs.count(); ++i) {
-    const ObTablePriv& cur_table_priv = table_privs.at(i);
-    const ObTablePriv* p_table_priv = NULL;
+  for (int64_t i = 0 ; i < table_privs.count(); ++i) {
+    const ObTablePriv &cur_table_priv = table_privs.at(i);
+    const ObTablePriv *p_table_priv = NULL;
     ret = new_priv_mgr.get_table_priv(cur_table_priv.get_sort_key(), p_table_priv);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_TRUE(NULL != p_table_priv);
     TABLE_PRIV_EQUAL(cur_table_priv, (*p_table_priv));
   }
   new_priv_mgr.reset();
-  for (int64_t i = 0; i < db_privs.count(); ++i) {
-    const ObDBPriv& cur_db_priv = db_privs.at(i);
-    const ObDBPriv* p_db_priv = NULL;
+  for (int64_t i = 0 ; i < db_privs.count(); ++i) {
+    const ObDBPriv &cur_db_priv = db_privs.at(i);
+    const ObDBPriv *p_db_priv = NULL;
     ret = new_priv_mgr.get_db_priv(cur_db_priv.get_original_key(), p_db_priv);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_TRUE(NULL == p_db_priv);
   }
-  for (int64_t i = 0; i < table_privs.count(); ++i) {
-    const ObTablePriv& cur_table_priv = table_privs.at(i);
-    const ObTablePriv* p_table_priv = NULL;
+  for (int64_t i = 0 ; i < table_privs.count(); ++i) {
+    const ObTablePriv &cur_table_priv = table_privs.at(i);
+    const ObTablePriv *p_table_priv = NULL;
     ret = new_priv_mgr.get_table_priv(cur_table_priv.get_sort_key(), p_table_priv);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_TRUE(NULL == p_table_priv);
@@ -347,7 +353,7 @@ TEST_F(TestPrivMgr, external_allocator)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObPrivMgr new_priv_mgr;
   ret = new_priv_mgr.assign(priv_mgr);
-  const ObDBPriv* p_db_priv = NULL;
+  const ObDBPriv *p_db_priv = NULL;
   ret = new_priv_mgr.get_db_priv(db_priv.get_original_key(), p_db_priv);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(NULL != p_db_priv);
@@ -377,14 +383,14 @@ TEST_F(TestPrivMgr, get_priv_set)
   ASSERT_EQ(OB_PRIV_ALTER, priv_set);
 }
 
-}  // namespace schema
-}  // namespace share
-}  // namespace oceanbase
+}
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("WARN");
   OB_LOGGER.set_log_level("WARN");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

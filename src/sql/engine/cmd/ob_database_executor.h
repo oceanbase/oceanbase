@@ -15,8 +15,10 @@
 #include "share/ob_define.h"
 #include "share/schema/ob_schema_getter_guard.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObCreateDatabaseStmt;
 class ObDropDatabaseStmt;
@@ -24,72 +26,69 @@ class ObUseDatabaseStmt;
 class ObAlterDatabaseStmt;
 class ObFlashBackDatabaseStmt;
 class ObPurgeDatabaseStmt;
-class ObCreateDatabaseExecutor {
+class ObCreateDatabaseExecutor
+{
 public:
   ObCreateDatabaseExecutor();
   virtual ~ObCreateDatabaseExecutor();
-  int execute(ObExecContext& ctx, ObCreateDatabaseStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObCreateDatabaseStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateDatabaseExecutor);
 };
 
 ///////////////////////
-class ObUseDatabaseExecutor {
+class ObUseDatabaseExecutor
+{
 public:
   ObUseDatabaseExecutor();
   virtual ~ObUseDatabaseExecutor();
-  int execute(ObExecContext& ctx, ObUseDatabaseStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObUseDatabaseStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUseDatabaseExecutor);
 };
 
 ///////////////////////
-class ObAlterDatabaseExecutor {
+class ObAlterDatabaseExecutor
+{
 public:
   ObAlterDatabaseExecutor();
   virtual ~ObAlterDatabaseExecutor();
-  int execute(ObExecContext& ctx, ObAlterDatabaseStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObAlterDatabaseStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterDatabaseExecutor);
 };
 
 /////////////////////
-class ObDropDatabaseExecutor {
+class ObDropDatabaseExecutor
+{
 public:
   ObDropDatabaseExecutor();
   virtual ~ObDropDatabaseExecutor();
-  int execute(ObExecContext& ctx, ObDropDatabaseStmt& stmt);
-
+  int execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDropDatabaseExecutor);
 };
 
+
 /* *
  *
  * */
-class ObFlashBackDatabaseExecutor {
+class ObFlashBackDatabaseExecutor
+{
 public:
-  ObFlashBackDatabaseExecutor()
-  {}
-  virtual ~ObFlashBackDatabaseExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObFlashBackDatabaseStmt& stmt);
-
+  ObFlashBackDatabaseExecutor() {}
+  virtual ~ObFlashBackDatabaseExecutor() {}
+  int execute(ObExecContext &ctx, ObFlashBackDatabaseStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFlashBackDatabaseExecutor);
 };
 
-class ObPurgeDatabaseExecutor {
+class ObPurgeDatabaseExecutor
+{
 public:
-  ObPurgeDatabaseExecutor()
-  {}
-  virtual ~ObPurgeDatabaseExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObPurgeDatabaseStmt& stmt);
-
+  ObPurgeDatabaseExecutor() {}
+  virtual ~ObPurgeDatabaseExecutor() {}
+  int execute(ObExecContext &ctx, ObPurgeDatabaseStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPurgeDatabaseExecutor);
 };

@@ -16,40 +16,44 @@
 #include "share/ob_define.h"
 #include "share/ob_thread_pool.h"
 
-namespace oceanbase {
-namespace rootserver {
+namespace oceanbase
+{
+namespace rootserver
+{
 class ObRootService;
 }
-namespace storage {
-class ObPartitionService;
+namespace share
+{
+class ObRsMgr;
 }
 
-namespace observer {
-class ObRootServiceMonitor : public share::ObThreadPool {
+namespace observer
+{
+class ObRootServiceMonitor : public share::ObThreadPool
+{
 public:
-  ObRootServiceMonitor(rootserver::ObRootService& root_service, storage::ObPartitionService& partition_service);
+  ObRootServiceMonitor(rootserver::ObRootService &root_service,
+                       share::ObRsMgr &rs_mgr);
   virtual ~ObRootServiceMonitor();
   int init();
   void run1() final;
   int start();
   void stop();
-
 private:
-  static const int64_t MONITOR_ROOT_SERVICE_INTERVAL_US = 100 * 1000;  // 100ms
+  static const int64_t MONITOR_ROOT_SERVICE_INTERVAL_US = 10 * 1000;  //10ms
 
   int monitor_root_service();
   int try_start_root_service();
   int wait_rs_finish_start();
-
 private:
   bool inited_;
-  rootserver::ObRootService& root_service_;
+  rootserver::ObRootService &root_service_;
   int64_t fail_count_;
-  storage::ObPartitionService& partition_service_;
+  share::ObRsMgr &rs_mgr_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRootServiceMonitor);
 };
-}  // end namespace observer
-}  // end namespace oceanbase
-#endif  // OCEANBASE_OBSERVER_OB_ROOT_SERVICE_MONITOR_H_
+}//end namespace observer
+}//end namespace oceanbase
+#endif //OCEANBASE_OBSERVER_OB_ROOT_SERVICE_MONITOR_H_

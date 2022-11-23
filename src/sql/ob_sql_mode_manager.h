@@ -14,12 +14,14 @@
 #define OCEANBASE_SQL_OB_SQL_MODE_MANAGER_H
 
 #include "common/sql_mode/ob_sql_mode.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 // Get compatibility mode index of ObSQLModeManager, used to be compatible with old version
 // which ObSQLModeManager is used.
-extern int compatibility_mode2index(const common::ObCompatibilityMode mode, int64_t& index);
+extern int compatibility_mode2index(const common::ObCompatibilityMode mode, int64_t &index);
 
 //
 // ObSQLModeManager try to set default sql mode when compatibility mode switched, but hard to use.
@@ -61,6 +63,6 @@ public:
   int64_t current_mode_index_;
 };
 */
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif

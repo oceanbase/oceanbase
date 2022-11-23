@@ -16,14 +16,16 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/session/ob_sql_session_info.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-inline int create_test_session(ObExecContext& ctx)
+inline int create_test_session(ObExecContext &ctx)
 {
   int ret = 0;
   if (!ctx.get_my_session()) {
-    ObSQLSessionInfo* s = new ObSQLSessionInfo;
+    ObSQLSessionInfo *s = new ObSQLSessionInfo;
     if (OB_FAIL(s->test_init(0, 123456789, 123456789, NULL))) {
       delete s;
       return ret;
@@ -34,7 +36,7 @@ inline int create_test_session(ObExecContext& ctx)
   return 0;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_ENGINE_TEST_ENGINE_UTIL_H_
+#endif // OCEANBASE_ENGINE_TEST_ENGINE_UTIL_H_

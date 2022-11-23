@@ -23,35 +23,40 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace test {
+namespace test
+{
 
-class TestMultiParser : public TestSqlUtils, public ::testing::Test {
+
+class TestMultiParser: public TestSqlUtils, public ::testing::Test
+{
 public:
   TestMultiParser();
   virtual ~TestMultiParser();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestMultiParser);
-
 protected:
   // data members
   ObArenaAllocator allocator_;
 };
 
 TestMultiParser::TestMultiParser() : allocator_(ObModIds::TEST)
-{}
+{
+}
 
 TestMultiParser::~TestMultiParser()
-{}
+{
+}
 
 void TestMultiParser::SetUp()
-{}
+{
+}
 
 void TestMultiParser::TearDown()
-{}
+{
+}
 
 TEST_F(TestMultiParser, basic_test)
 {
@@ -59,15 +64,15 @@ TEST_F(TestMultiParser, basic_test)
   ObSQLMode mode = SMO_DEFAULT;
   /*
   const char *query_str = "alter system bootstrap ZONE 'zone1' SERVER '100.81.152.44:19518'";
-  const char *query_str = "create database if not exists rongxuan default character set = 'utf8'  default collate =
-  'default_collate'"; const char *query_str = "select * from d.t1 PARTITION(p1, p2);"; const char *query_str = "update
-  d.t1 PARTITION (p2) SET id = 2 WHERE name = 'Jill';"; const char *query_str = "delete from d.t1 PARTITION(p0, p1);";
+  const char *query_str = "create database if not exists rongxuan default character set = 'utf8'  default collate = 'default_collate'";
+  const char *query_str = "select * from d.t1 PARTITION(p1, p2);";
+  const char *query_str = "update d.t1 PARTITION (p2) SET id = 2 WHERE name = 'Jill';";
+  const char *query_str = "delete from d.t1 PARTITION(p0, p1);";
   */
-  // const char *query_str = "select '12', '11', '11', '11'";
-  // const char *query_str = "alter system bootstrap ZONE 'zone1' SERVER '100.81.152.44:19518';select 3;select
-  // '23';create table t1 (i int)  ;;;; ";
-  const char* query_str = "";
-  // const char *query_str = "select 1";
+  //const char *query_str = "select '12', '11', '11', '11'";
+  //const char *query_str = "alter system bootstrap ZONE 'zone1' SERVER '100.81.152.44:19518';select 3;select '23';create table t1 (i int)  ;;;; ";
+  const char *query_str = "";
+  //const char *query_str = "select 1";
   ObString query = ObString::make_string(query_str);
   ObSEArray<ObString, 4> queries;
   ObParser parser(allocator_, mode);
@@ -76,13 +81,16 @@ TEST_F(TestMultiParser, basic_test)
   LOG_INFO("YES. multi query", K(query), K(queries));
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, queries.count());
+
 }
 
-}  // namespace test
 
-int main(int argc, char** argv)
+}
+
+
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   OB_LOGGER.set_log_level("INFO");
   test::parse_cmd_line_param(argc, argv, test::clp);
   return RUN_ALL_TESTS();

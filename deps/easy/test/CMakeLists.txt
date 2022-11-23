@@ -21,7 +21,7 @@ function(easy_test case)
   target_link_libraries(${case}
     PRIVATE
     ${case}_base
-    pthread m easy
+    pthread m dl easy
   )
   add_test(${case} ${case})
 endfunction()

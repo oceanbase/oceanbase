@@ -1,0 +1,13 @@
+./test_schema_struct
+./test_table_schema
+./test_table_iter
+./test_ddl
+./test_schema_getter_guard
+./test_schema_utils
+./test_schema_cache
+./test_schema_mgr
+./test_outline_mgr
+./test_priv_mgr
+./test_schema_mgr_cache
+./test_schema_mem_mgr
+./test_outline_info

@@ -17,94 +17,102 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprNotTest : public ::testing::Test {
-public:
-  ObExprNotTest();
-  virtual ~ObExprNotTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObExprNotTest(const ObExprNotTest& other);
-  ObExprNotTest& operator=(const ObExprNotTest& other);
-
-protected:
-  // data members
+class ObExprNotTest: public ::testing::Test
+{
+  public:
+    ObExprNotTest();
+    virtual ~ObExprNotTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObExprNotTest(const ObExprNotTest &other);
+    ObExprNotTest& operator=(const ObExprNotTest &other);
+  protected:
+    // data members
 };
 
 ObExprNotTest::ObExprNotTest()
-{}
+{
+}
 
 ObExprNotTest::~ObExprNotTest()
-{}
+{
+}
 
 void ObExprNotTest::SetUp()
-{}
+{
+}
 
 void ObExprNotTest::TearDown()
-{}
+{
+}
 
 #define EV 0.00001
-#define LOGIC_EXPECT_TYPE_WITH_ROW(cmp_op, func, type1, res) \
-  {                                                          \
-    ObExprResType t1;                                        \
-    ObExprResType vres;                                      \
-    ObExprTypeCtx ctx;                                       \
-    cmp_op op;                                               \
-    op.set_row_dimension(1);                                 \
-    t1.set_type(type1);                                      \
-    int err = op.func(vres, t1, ctx);                        \
-    ASSERT_EQ(res, err);                                     \
-  }                                                          \
-  while (0)
+#define LOGIC_EXPECT_TYPE_WITH_ROW(cmp_op, func, type1, res)  \
+  {                                                           \
+    ObExprResType t1;                                         \
+    ObExprResType vres;                                       \
+    ObExprTypeCtx ctx;                                        \
+    cmp_op op;                                                \
+    op.set_row_dimension(1);                                  \
+    t1.set_type(type1);                                       \
+    int err = op.func(vres, t1, ctx);                         \
+    ASSERT_EQ(res, err);                                      \
+  }while(0)
 
 #define LOGIC_EXPECT_TYPE(cmp_op, func, type1, res) \
   {                                                 \
-    ObExprResType t1;                               \
-    ObExprResType vres;                             \
-    ObExprTypeCtx ctx;                              \
-    cmp_op op;                                      \
-    t1.set_type(type1);                             \
-    int err = op.func(vres, t1, ctx);               \
-    if (OB_SUCCESS == err) {                        \
-      ASSERT_EQ(res, vres.get_type());              \
-    } else {                                        \
-      ASSERT_EQ(res, err);                          \
+   ObExprResType t1;                                \
+   ObExprResType vres;                              \
+   ObExprTypeCtx ctx;                               \
+   cmp_op op;                                       \
+   t1.set_type(type1);                              \
+   int err = op.func(vres, t1, ctx);                \
+   if (OB_SUCCESS == err)                           \
+   {                                                \
+    ASSERT_EQ(res, vres.get_type());                \
     }                                               \
-  }                                                 \
-  while (0)
+   else                                             \
+   {                                                \
+    ASSERT_EQ(res, err);                            \
+    }                                               \
+   }while(0)
 
-#define LOGIC_ERROR(cmp_op, func, type1, v1, res) \
-  {                                               \
-    ObObj t1;                                     \
-    ObObj vres;                                   \
-    cmp_op op;                                    \
-    t1.set_##type1(v1);                           \
-    int err = op.func(vres, t1);                  \
-    ASSERT_EQ(, err);                             \
-  }                                               \
-  while (0)
+#define LOGIC_ERROR(cmp_op, func, type1, v1, res)            \
+  {                                                          \
+    ObObj t1;                                            \
+    ObObj vres;                                          \
+    cmp_op op;                                               \
+    t1.set_##type1(v1);                                      \
+      int err = op.func(vres, t1);                           \
+      ASSERT_EQ(, err);                                      \
+  }while(0)
 
-#define LOGIC_EXPECT(cmp_op, str_buf, func, type1, v1, res) \
-  {                                                         \
-    ObObj t1;                                               \
-    ObObj vres;                                             \
-    cmp_op op;                                              \
-    t1.set_##type1(v1);                                     \
-    int err = op.func(vres, t1, str_buf);                   \
-    if (OB_SUCCESS == err) {                                \
-      if (ObBoolType == vres.get_type()) {                  \
-        ASSERT_EQ(res, vres.get_bool());                    \
-      } else {                                              \
-        ASSERT_EQ(res, vres.get_type());                    \
-      }                                                     \
-    } else {                                                \
-      ASSERT_EQ(res, err);                                  \
-    }                                                       \
-  }                                                         \
-  while (0)
-#define R(t1, v1, res) LOGIC_EXPECT(ObExprNot, &buf, calc_result1, t1, v1, res)
+#define LOGIC_EXPECT(cmp_op, str_buf, func, type1, v1, res)  \
+  {                                                 \
+    ObObj t1;                                   \
+    ObObj vres;                                 \
+    cmp_op op;                                      \
+    t1.set_##type1(v1);                             \
+      int err = op.func(vres, t1, str_buf);                  \
+      if (OB_SUCCESS == err)                        \
+      {                                             \
+        if (ObBoolType == vres.get_type())          \
+        {                                           \
+          ASSERT_EQ(res, vres.get_bool());          \
+        }                                           \
+        else                                        \
+        {                                           \
+          ASSERT_EQ(res, vres.get_type());          \
+        }                                           \
+      }                                             \
+      else                                          \
+      {                                             \
+        ASSERT_EQ(res, err);                        \
+      }                                             \
+  } while(0)
+#define R(t1, v1, res)  LOGIC_EXPECT(ObExprNot, &buf, calc_result1, t1, v1, res)
 #define T(t1, res) LOGIC_EXPECT_TYPE(ObExprNot, calc_result_type1, t1, res)
 #define TE(t1, res) LOGIC_EXPECT_TYPE_WITH_ROW(ObExprNot, calc_result_type1, t1, res)
 
@@ -180,8 +188,8 @@ TEST_F(ObExprNotTest, result_test)
   R(bool, 122, 0);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

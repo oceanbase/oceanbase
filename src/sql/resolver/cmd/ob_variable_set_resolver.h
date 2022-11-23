@@ -15,33 +15,34 @@
 
 #include "sql/resolver/ob_stmt_resolver.h"
 
-namespace oceanbase {
-namespace sql {
-class ObVariableSetResolver : public ObStmtResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObVariableSetResolver : public ObStmtResolver
+{
 public:
-  explicit ObVariableSetResolver(ObResolverParams& params);
+  explicit ObVariableSetResolver(ObResolverParams &params);
   virtual ~ObVariableSetResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-  int resolve_set_variable(const ParseNode &set_node, ObVariableSetStmt::VariableSetNode &var_node,
-                          ObVariableSetStmt* variable_set_stmt);
-  int resolve_set_names(const ParseNode &set_node, ObVariableSetStmt::NamesSetNode &names_node);
-
+  virtual int resolve(const ParseNode &parse_tree);
+  int resolve_value_expr(ParseNode &val_node, ObRawExpr *&value_expr);
+  int resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subquery_info, ObRawExpr *&value_expr);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetResolver);
 };
 
-class ObAlterSessionSetResolver : public ObStmtResolver {
+class ObAlterSessionSetResolver : public ObStmtResolver
+{
 public:
-  explicit ObAlterSessionSetResolver(ObResolverParams& params);
+  explicit ObAlterSessionSetResolver(ObResolverParams &params);
   virtual ~ObAlterSessionSetResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterSessionSetResolver);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_RESOLVER_CMD_OB_VARIALBLE_SET_RESOLVER_ */

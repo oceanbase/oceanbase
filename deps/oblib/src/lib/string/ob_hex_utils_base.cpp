@@ -15,24 +15,26 @@
 #include "lib/string/ob_hex_utils_base.h"
 #include "lib/utility/utility.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-int ObHexUtilsBase::unhex(const ObString& text, ObIAllocator& alloc, ObObj& result)
+int ObHexUtilsBase::unhex(const ObString &text, ObIAllocator &alloc, ObObj &result)
 {
   int ret = OB_SUCCESS;
   ObString str_result;
-  char* buf = NULL;
+  char *buf = NULL;
   const bool need_fill_zero = (1 == text.length() % 2);
   const int32_t tmp_length = text.length() / 2 + need_fill_zero;
   int32_t alloc_length = (0 == tmp_length ? 1 : tmp_length);
-  /*
-    if (OB_ISNULL(cast_ctx.allocator_v2_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("allocator in cast ctx is NULL", K(ret), K(text));
-    } else
-  */
-  if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(alloc_length)))) {
+/*
+  if (OB_ISNULL(cast_ctx.allocator_v2_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("allocator in cast ctx is NULL", K(ret), K(text));
+  } else
+*/
+  if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(alloc_length)))) {
     result.set_null();
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc memory failed", K(alloc_length), K(ret));
@@ -55,8 +57,12 @@ int ObHexUtilsBase::unhex(const ObString& text, ObIAllocator& alloc, ObObj& resu
     while (OB_SUCC(ret) && all_valid_char && i < text.length()) {
       if (isxdigit(c1) && isxdigit(c2)) {
         buf[i / 2] = (char)((get_xdigit(c1) << 4) | get_xdigit(c2));
-        c1 = text[++i];
-        c2 = text[++i];
+        if (i + 2 < text.length()) {
+          c1 = text[++i];
+          c2 = text[++i];
+        }  else {
+          break;
+        }
       } else if (lib::is_oracle_mode()) {
         ret = OB_ERR_INVALID_HEX_NUMBER;
         LOG_WARN("invalid hex number", K(ret), K(c1), K(c2), K(text));
@@ -74,24 +80,24 @@ int ObHexUtilsBase::unhex(const ObString& text, ObIAllocator& alloc, ObObj& resu
   return ret;
 }
 
-int ObHexUtilsBase::hex(const ObString& text, ObIAllocator& alloc, ObObj& result)
+int ObHexUtilsBase::hex(const ObString &text, ObIAllocator &alloc, ObObj &result)
 {
   int ret = OB_SUCCESS;
   ObString str_result;
-  char* buf = NULL;
+  char *buf = NULL;
   const int32_t alloc_length = text.empty() ? 1 : text.length() * 2;
-  /*
-    if (OB_ISNULL(cast_ctx.allocator_v2_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("allocator in cast ctx is NULL", K(ret), K(text));
-    } else
-  */
-  if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(alloc_length)))) {
+/*
+  if (OB_ISNULL(cast_ctx.allocator_v2_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("allocator in cast ctx is NULL", K(ret), K(text));
+  } else
+*/
+  if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(alloc_length)))) {
     result.set_null();
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc memory failed", K(ret), K(alloc_length));
   } else {
-    static const char* HEXCHARS = "0123456789ABCDEF";
+    static const char *HEXCHARS = "0123456789ABCDEF";
     int32_t pos = 0;
     for (int32_t i = 0; i < text.length(); ++i) {
       buf[pos++] = HEXCHARS[text[i] >> 4 & 0xF];
@@ -104,5 +110,6 @@ int ObHexUtilsBase::hex(const ObString& text, ObIAllocator& alloc, ObObj& result
   return ret;
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
+

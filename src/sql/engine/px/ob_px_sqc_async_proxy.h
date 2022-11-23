@@ -32,154 +32,109 @@ using namespace common;
 
 namespace sql {
 
-class ObSqcAsyncCB : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_ASYNC_INIT_SQC> {
+class ObSqcAsyncCB
+    : public obrpc::ObPxRpcProxy::AsyncCB<obrpc::OB_PX_ASYNC_INIT_SQC> {
 public:
-  ObSqcAsyncCB(ObThreadCond& cond, const ObCurTraceId::TraceId trace_id) : cond_(cond), trace_id_(trace_id)
-  {
+  ObSqcAsyncCB(ObThreadCond &cond, const ObCurTraceId::TraceId trace_id)
+      : cond_(cond), trace_id_(trace_id) {
     reset();
   }
   ~ObSqcAsyncCB(){};
   virtual int process() override;
   virtual void on_invalid() override;
   virtual void on_timeout() override;
-  const ObPxRpcInitSqcResponse& get_result() const
-  {
-    return result_;
-  }
-  virtual rpc::frame::ObReqTransport::AsyncCB* clone(const rpc::frame::SPAlloc& alloc) const override;
-  void set_args(const AsyncCB::Request& arg) override
-  {
-    UNUSED(arg);
-  }
-  void reset()
-  {
+  const ObPxRpcInitSqcResponse &get_result() const { return result_; }
+  virtual rpc::frame::ObReqTransport::AsyncCB *
+  clone(const rpc::frame::SPAlloc &alloc) const override;
+  void set_args(const AsyncCB::Request &arg) override { UNUSED(arg); }
+  void reset() {
     is_processed_ = false;
     is_timeout_ = false;
     is_invalid_ = false;
     is_visited_ = false;
-    need_retry_ = false;
   }
-  void set_visited(bool value)
-  {
-    is_visited_ = value;
-  }
-  bool is_visited() const
-  {
-    return is_visited_;
-  }
-  bool is_timeout() const
-  {
-    return is_timeout_;
-  }
-  void set_invalid(bool value)
-  {
-    is_invalid_ = value;
-  }
-  bool is_invalid() const
-  {
-    return is_invalid_;
-  }
-  bool is_processed() const
-  {
-    return is_processed_;
-  }
-  void set_retry(bool value)
-  {
-    need_retry_ = value;
-  }
-  bool need_retry() const
-  {
-    return need_retry_;
-  }
-  const obrpc::ObRpcResultCode get_ret_code() const
-  {
-    return rcode_;
-  }
-  const common::ObAddr& get_dst() const
-  {
-    return dst_;
-  }
-  int64_t get_timeout() const
-  {
-    return timeout_;
-  }
+  void set_visited(bool value) { is_visited_ = value; }
+  bool is_visited() const { return is_visited_; }
+  bool is_timeout() const { return is_timeout_; }
+  void set_invalid(bool value) { is_invalid_ = value; }
+  bool is_invalid() const { return is_invalid_; }
+  bool is_processed() const { return is_processed_; }
+  const obrpc::ObRpcResultCode get_ret_code() const { return rcode_; }
+  const common::ObAddr &get_dst() const { return dst_; }
+  int64_t get_timeout() const { return timeout_; }
   // to string
-  TO_STRING_KV("dst", get_dst(), "timeout", get_timeout(), "ret_code", get_ret_code(), "result", get_result(),
-      "is_visited", is_visited(), "is_timeout", is_timeout(), "is_processed", is_processed(), "is_invalid",
-      is_invalid());
+  TO_STRING_KV("dst", get_dst(), "timeout", get_timeout(), "ret_code",
+               get_ret_code(), "result", get_result(), "is_visited",
+               is_visited(), "is_timeout", is_timeout(), "is_processed",
+               is_processed(), "is_invalid", is_invalid());
 
 private:
+  // rpc返回resp，rpc异步线程调用callback的process方法需要赋值为true；否则为false；
   bool is_processed_;
+  // rpc调用超时，rpc异步线程调用callback的on_timeout方法需要赋值为true；否则为false；
   bool is_timeout_;
+  // rpc返回消息包，消息包decode失败，rpc异步线程调用callback的on_invalid方法需要赋值为true；否则为false；
   bool is_invalid_;
+  // 标识callback对象是否被主线程访问，第一个被主线程访问时需要赋值为true；否则为false；
   bool is_visited_;
-  bool need_retry_;
-  ObThreadCond& cond_;
+  ObThreadCond &cond_;
   ObCurTraceId::TraceId trace_id_;
 };
 
 class ObPxSqcAsyncProxy {
 public:
-  ObPxSqcAsyncProxy(obrpc::ObPxRpcProxy& proxy, ObDfo& dfo, ObExecContext& exec_ctx, ObPhysicalPlanCtx* phy_plan_ctx,
-      ObSQLSessionInfo* session, const ObPhysicalPlan* phy_plan, ObArray<ObPxSqcMeta*>& sqcs)
-      : proxy_(proxy),
-        dfo_(dfo),
-        exec_ctx_(exec_ctx),
-        phy_plan_ctx_(phy_plan_ctx),
-        session_(session),
-        phy_plan_(phy_plan),
-        sqcs_(sqcs),
-        allocator_(ObModIds::OB_SQL_PX_ASYNC_SQC_RPC),
-        return_cb_count_(0),
-        error_index_(0)
-  {
+  ObPxSqcAsyncProxy(obrpc::ObPxRpcProxy &proxy, ObDfo &dfo,
+                    ObExecContext &exec_ctx, ObPhysicalPlanCtx *phy_plan_ctx,
+                    ObSQLSessionInfo *session, const ObPhysicalPlan *phy_plan,
+                    ObArray<ObPxSqcMeta *> &sqcs)
+      : proxy_(proxy), dfo_(dfo), exec_ctx_(exec_ctx),
+        phy_plan_ctx_(phy_plan_ctx), session_(session), phy_plan_(phy_plan),
+        sqcs_(sqcs), allocator_(ObModIds::OB_SQL_PX_ASYNC_SQC_RPC),
+        return_cb_count_(0), error_index_(0) {
     cond_.init(common::ObWaitEventIds::DEFAULT_COND_WAIT);
   }
 
-  ~ObPxSqcAsyncProxy()
-  {
-    destroy();
-  }
-  // asynchronously request all sqc rpc tasks
+  ~ObPxSqcAsyncProxy() { destroy(); }
+  // 异步请求所有sqc rpc任务
   int launch_all_rpc_request();
-  // synchronously wait for all asynchronous sqc rpc tasks to return results; if there is an
-  // internal error that can be handled, it will retry.
+  // 同步等待所有异步sqc rpc任务返回结果；内部如果有可处理的错误会进行重试。
   int wait_all();
 
-  const ObArray<ObSqcAsyncCB*>& get_callbacks() const
-  {
-    return callbacks_;
-  }
+  const ObArray<ObSqcAsyncCB *> &get_callbacks() const { return callbacks_; }
 
-  int get_error_index() const
-  {
-    return error_index_;
-  }
+  int get_error_index() const { return error_index_; }
 
 private:
   void destroy();
-  // asynchronously request a single sqc rpc task
-  int launch_one_rpc_request(int64_t idx, ObSqcAsyncCB* cb);
-  bool check_for_retry(ObSqcAsyncCB& callback);
+  // 异步请求单个sqc rpc任务
+  int launch_one_rpc_request(ObPxRpcInitSqcArgs &args, int64_t idx, ObSqcAsyncCB *cb);
+  // 内部发生错误以后，处理还未获得响应的callback
   void fail_process();
 
 private:
-  obrpc::ObPxRpcProxy& proxy_;
-  ObDfo& dfo_;
-  ObExecContext& exec_ctx_;
-  ObPhysicalPlanCtx* phy_plan_ctx_;
-  ObSQLSessionInfo* session_;
-  const ObPhysicalPlan* phy_plan_;
-  ObArray<ObPxSqcMeta*>& sqcs_;
-  ObArray<const ObPxRpcInitSqcResponse*> results_;
-  ObArray<ObSqcAsyncCB*> callbacks_;
+  // rpc proxy，提供rpc同步/异步调用方法
+  obrpc::ObPxRpcProxy &proxy_;
+  ObDfo &dfo_;
+  ObExecContext &exec_ctx_;
+  ObPhysicalPlanCtx *phy_plan_ctx_;
+  ObSQLSessionInfo *session_;
+  const ObPhysicalPlan *phy_plan_;
+  // 需要异步请求的sqc的集合
+  ObArray<ObPxSqcMeta *> &sqcs_;
+  // 异步init
+  // sqc获得结果集合，每一个response都是从对应的
+  // callback获得正确响应的结果中获得
+  ObArray<const ObPxRpcInitSqcResponse *> results_;
+  // 异步请求对应的callback
+  ObArray<ObSqcAsyncCB *> callbacks_;
   ObArenaAllocator allocator_;
+  // 获得响应结果的callback的数量
   int64_t return_cb_count_;
-  // the index of the first asynchronous sqc request with error
+  // 第一个出现错误的异步sqc请求的index
   int64_t error_index_;
   ObThreadCond cond_;
 };
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
 
 #endif

@@ -16,14 +16,16 @@
 #define private public
 #include "lib/thread/ob_reentrant_thread.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace share {
+namespace share
+{
 
-class TestReentrantThread : public ObReentrantThread {
+class TestReentrantThread : public ObReentrantThread
+{
 public:
-  TestReentrantThread() : sleeped_cnt_(0)
-  {}
+  TestReentrantThread() : sleeped_cnt_(0) {}
 
   volatile int64_t sleeped_cnt_;
   void run()
@@ -33,10 +35,7 @@ public:
       sleeped_cnt_++;
     }
   }
-  int blocking_run()
-  {
-    return ObReentrantThread::blocking_run();
-  }
+  int blocking_run() { return ObReentrantThread::blocking_run(); }
 };
 
 TEST(TestReentrantThread, all)
@@ -66,11 +65,11 @@ TEST(TestReentrantThread, all)
   ASSERT_EQ(0, thread.running_cnt_);
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

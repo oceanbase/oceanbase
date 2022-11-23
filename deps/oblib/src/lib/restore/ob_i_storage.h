@@ -16,67 +16,65 @@
 #include "lib/ob_define.h"
 #include "lib/string/ob_string.h"
 #include "lib/container/ob_array.h"
-#include "common/ob_partition_key.h"
+#include "common/storage/ob_device_common.h"
 
-namespace oceanbase {
-namespace common {
-enum StorageOpenMode {
-  CREATE_OPEN_LOCK = 0,    // default, create and open
-  EXCLUSIVE_CREATE = 1,    // exclusive create and open
-  ONLY_OPEN_UNLOCK = 2,    // only open
-  CREATE_OPEN_NOLOCK = 3,  // create and open nolock
-};
-class ObIStorageUtil {
-public:
-  virtual int is_exist(const common::ObString& uri, const common::ObString& storage_info, bool& exist) = 0;
-  virtual int get_file_length(
-      const common::ObString& uri, const common::ObString& storage_info, int64_t& file_length) = 0;
-  virtual int del_file(const common::ObString& uri, const common::ObString& storage_info) = 0;
-  virtual int write_single_file(
-      const common::ObString& uri, const common::ObString& storage_info, const char* buf, const int64_t size) = 0;
-  virtual int mkdir(const common::ObString& uri, const common::ObString& storage_info) = 0;
-  virtual int update_file_modify_time(const common::ObString& uri, const common::ObString& storage_info) = 0;
-  virtual int list_files(const common::ObString& dir_path, const common::ObString& storage_info,
-      common::ObIAllocator& allocator, common::ObIArray<common::ObString>& file_names) = 0;
-  virtual int del_dir(const common::ObString& uri, const common::ObString& storage_info) = 0;
-  virtual int get_pkeys_from_dir(const common::ObString& dir_path, const common::ObString& storage_info,
-      common::ObIArray<common::ObPartitionKey>& pkeys) = 0;
-  virtual int delete_tmp_files(const common::ObString& dir_path, const common::ObString& storage_info) = 0;
-  virtual int is_empty_directory(
-      const common::ObString& uri, const common::ObString& storage_info, bool& is_empty_directory) = 0;
-  virtual int check_backup_dest_lifecycle(
-      const common::ObString& path, const common::ObString& storage_info, bool& is_set_lifecycle) = 0;
-  virtual int list_directories(const common::ObString& dir_path, const common::ObString& storage_info,
-      common::ObIAllocator& allocator, common::ObIArray<common::ObString>& directory_names) = 0;
+namespace oceanbase
+{
+namespace common
+{
+enum StorageOpenMode
+{
+  CREATE_OPEN_LOCK = 0, // default, create and open
+  EXCLUSIVE_CREATE = 1, // exclusive create and open
+  ONLY_OPEN_UNLOCK = 2, // only open
+  CREATE_OPEN_NOLOCK = 3, // create and open nolock
 };
 
-class ObIStorageReader {
+class ObIStorageUtil
+{
 public:
-  virtual int open(const common::ObString& uri, const common::ObString& storage_info) = 0;
-  virtual int pread(char* buf, const int64_t buf_size, int64_t offset, int64_t& read_size) = 0;
+  enum {
+    NONE = 0,
+    DELETE = 1,
+    TAGGING = 2,
+    MAX
+  };
+  virtual int open(void* base_info) = 0;
+  virtual void close() = 0;
+  virtual int is_exist(const common::ObString &uri, bool &exist) = 0;
+  virtual int get_file_length(const common::ObString &uri, int64_t &file_length) = 0;
+  virtual int del_file(const common::ObString &uri) = 0;
+  virtual int write_single_file(const common::ObString &uri, const char *buf, const int64_t size) = 0;
+  virtual int mkdir(const common::ObString &uri) = 0;
+  virtual int list_files(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op) = 0;
+  virtual int del_dir(const common::ObString &uri) = 0;
+  virtual int check_backup_dest_lifecycle(const common::ObString &path, bool &is_set_lifecycle) = 0;
+  virtual int list_directories(const common::ObString &dir_path, common::ObBaseDirEntryOperator &op) = 0;
+  virtual int is_tagging(const common::ObString &uri, bool &is_tagging) = 0;
+};
+
+class ObIStorageReader
+{
+public:
+  virtual int open(const common::ObString &uri, void* handle) = 0;
+  virtual int pread(char *buf,const int64_t buf_size, int64_t offset, int64_t &read_size) = 0;
   virtual int close() = 0;
   virtual int64_t get_length() const = 0;
   virtual bool is_opened() const = 0;
 };
 
-class ObIStorageWriter {
+class ObIStorageWriter
+{
 public:
-  virtual int open(const common::ObString& uri, const common::ObString& storage_info) = 0;
-  virtual int write(const char* buf, const int64_t size) = 0;
-  virtual int pwrite(const char* buf, const int64_t size, const int64_t offset) = 0;
+  virtual int open(const common::ObString &uri, void* handle) = 0;
+  virtual int write(const char *buf,const int64_t size) = 0;
+  virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) = 0;
   virtual int close() = 0;
   virtual int64_t get_length() const = 0;
   virtual bool is_opened() const = 0;
 };
 
-class ObIStorageMetaWrapper {
-public:
-  virtual int get(const common::ObString& uri, const common::ObString& storage_info, char* buf, const int64_t buf_size,
-      int64_t& read_size) = 0;
-  virtual int set(
-      const common::ObString& uri, const common::ObString& storage_info, const char* buf, const int64_t size) = 0;
-};
 
-}  // namespace common
-}  // namespace oceanbase
+}//common
+}//oceanbase
 #endif /* SRC_LIBRARY_SRC_LIB_RESTORE_OB_I_STORAGE_H_ */

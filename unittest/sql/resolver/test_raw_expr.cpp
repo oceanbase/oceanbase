@@ -31,8 +31,10 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 #define BUF_LEN 102400
-namespace test {
-class TestRawExpr : public TestSqlUtils, public ::testing::Test {
+namespace test
+{
+class TestRawExpr: public TestSqlUtils, public ::testing::Test
+{
 public:
   TestRawExpr();
   virtual ~TestRawExpr();
@@ -40,42 +42,44 @@ public:
   virtual void TearDown();
   ObArenaAllocator allocator;
   ObRawExprFactory expr_factory_;
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestRawExpr);
-
 protected:
   // function members
-  int get_raw_expr(const char* expr, ObRawExpr*& raw_expr, const char*& json_expr);
-  int get_result_tree(const char* sql, ParseResult& parse_result, ObIAllocator& allocator);
-  void resolver(const char* expr, const char*& json_expr);
-
+  int get_raw_expr(const char *expr, ObRawExpr *&raw_expr, const char *&json_expr);
+  int get_result_tree(const char *sql,ParseResult &parse_result, ObIAllocator &allocator);
+  void resolver(const char *expr, const char *&json_expr);
 protected:
   // data members
+
 };
 
 TestRawExpr::TestRawExpr() : allocator(ObModIds::TEST), expr_factory_(allocator)
-{}
+{
+}
 
 TestRawExpr::~TestRawExpr()
-{}
+{
+}
 
 void TestRawExpr::SetUp()
-{}
+{
+}
 
 void TestRawExpr::TearDown()
-{}
-int TestRawExpr::get_result_tree(const char* sql, ParseResult& parse_result, ObIAllocator& allocator)
+{
+}
+int TestRawExpr::get_result_tree(const char *sql,ParseResult &parse_result, ObIAllocator &allocator)
 {
   ObSQLMode mode = SMO_DEFAULT;
   ObParser parser(allocator, mode);
   ObString query = ObString::make_string(sql);
   int ret = OB_SUCCESS;
-  ret = parser.parse(query, parse_result);
+  ret  = parser.parse(query, parse_result);
   return ret;
 }
-int TestRawExpr::get_raw_expr(const char* expr, ObRawExpr*& raw_expr, const char*& json_expr)
+int TestRawExpr::get_raw_expr(const char *expr, ObRawExpr *&raw_expr, const char *&json_expr)
 {
   int ret = OB_SUCCESS;
   ObArray<ObRawExpr*> expr_store;
@@ -84,6 +88,7 @@ int TestRawExpr::get_raw_expr(const char* expr, ObRawExpr*& raw_expr, const char
   ObArray<ObSubQueryInfo> sub_query_info;
   ObArray<ObAggFunRawExpr*> aggr_exprs;
   ObArray<ObWinFunRawExpr*> win_exprs;
+  ObArray<ObUDFInfo> udf_info;
   ObArray<ObOpRawExpr*> op_exprs;
 
   ObTimeZoneInfo tz_info;
@@ -92,16 +97,15 @@ int TestRawExpr::get_raw_expr(const char* expr, ObRawExpr*& raw_expr, const char
   ctx.connection_charset_ = ObCharset::get_default_charset();
   ctx.dest_collation_ = ObCharset::get_default_collation(ctx.connection_charset_);
   ObString ob_str(expr);
-  ret = ObRawExprUtils::make_raw_expr_from_str(
-      ob_str, ctx, raw_expr, columns, sys_vars, &sub_query_info, aggr_exprs, win_exprs);
+  ret = ObRawExprUtils::make_raw_expr_from_str(ob_str, ctx, raw_expr, columns, sys_vars, &sub_query_info, aggr_exprs ,win_exprs, udf_info, op_exprs);
   UNUSED(json_expr);
   return ret;
 }
 
-void TestRawExpr::resolver(const char* expr, const char*& json_expr)
+void TestRawExpr::resolver(const char *expr, const char *&json_expr)
 {
-  const char* canon_expr = NULL;
-  ObRawExpr* raw_expr = NULL;
+  const char *canon_expr = NULL;
+  ObRawExpr *raw_expr = NULL;
   if (OB_SUCCESS == get_raw_expr(expr, raw_expr, canon_expr)) {
     char buf[BUF_LEN];
     int64_t pos = 0;
@@ -116,20 +120,20 @@ void TestRawExpr::resolver(const char* expr, const char*& json_expr)
 
 TEST_F(TestRawExpr, basic_test)
 {
-  const char* canon_expr = NULL;
+  const char *canon_expr = NULL;
 
-  ObRawExpr* praw_expr = NULL;
+  ObRawExpr *praw_expr = NULL;
   get_raw_expr("1", praw_expr, canon_expr);
   ObRawExprPrintVisitor pvistor(*praw_expr);
-  ObRawExpr* raw_expr1 = NULL;
+  ObRawExpr *raw_expr1 = NULL;
   get_raw_expr("1", raw_expr1, canon_expr);
-  ObConstRawExpr* const_expr1 = dynamic_cast<ObConstRawExpr*>(raw_expr1);
-  ObRawExpr* raw_expr2 = NULL;
+  ObConstRawExpr *const_expr1 = dynamic_cast<ObConstRawExpr *>(raw_expr1);
+  ObRawExpr *raw_expr2 = NULL;
   get_raw_expr("1.5", raw_expr2, canon_expr);
-  ObConstRawExpr* const_expr2 = dynamic_cast<ObConstRawExpr*>(raw_expr2);
+  ObConstRawExpr *const_expr2 = dynamic_cast<ObConstRawExpr *>(raw_expr2);
 
   ASSERT_FALSE(const_expr2->same_as(*const_expr1));
-  (*const_expr1).assign(*const_expr2);
+  (*const_expr1).assign (*const_expr2);
   ASSERT_TRUE(const_expr2->same_as(*const_expr1));
   char buf[BUF_LEN];
   char str_buf[BUF_LEN];
@@ -139,14 +143,14 @@ TEST_F(TestRawExpr, basic_test)
   OK(const_expr1->postorder_replace(pvistor));
   _OB_LOG(INFO, "\nconst_expr------\n%s ", buf);
   int64_t pos = 0;
-  const_expr1->get_name_internal(str_buf, BUF_LEN, pos, EXPLAIN_JSON);
+  const_expr1->get_name_internal(str_buf, BUF_LEN, pos, EXPLAIN_FORMAT_JSON);
   raw_expr2->reset();
   const_expr2->reset();
 
   get_raw_expr("c1 in (select t1 from table1)", raw_expr1, canon_expr);
-  ObOpRawExpr* op_expr1 = dynamic_cast<ObOpRawExpr*>(raw_expr1);
+  ObOpRawExpr *op_expr1 = dynamic_cast<ObOpRawExpr *>(raw_expr1);
   get_raw_expr("c2 not in (select t2 from table1)", raw_expr2, canon_expr);
-  ObOpRawExpr* op_expr2 = dynamic_cast<ObOpRawExpr*>(raw_expr2);
+  ObOpRawExpr *op_expr2 = dynamic_cast<ObOpRawExpr *>(raw_expr2);
 
   ASSERT_FALSE(ObRawExprUtils::is_same_raw_expr(op_expr1, op_expr2));
   ObArray<ObRawExpr*> expr_store;
@@ -155,19 +159,18 @@ TEST_F(TestRawExpr, basic_test)
   OK(op_expr1->postorder_accept(pvistor));
   _OB_LOG(INFO, "\nop_expr------\n%s ", buf);
 
-  ObColumnRefRawExpr* bin_expr1 = dynamic_cast<ObColumnRefRawExpr*>(op_expr1->get_param_expr(0));
-  ObColumnRefRawExpr* bin_expr2 = dynamic_cast<ObColumnRefRawExpr*>(op_expr2->get_param_expr(0));
+  ObColumnRefRawExpr *bin_expr1 = dynamic_cast<ObColumnRefRawExpr *>(op_expr1->get_param_expr(0));
+  ObColumnRefRawExpr *bin_expr2 = dynamic_cast<ObColumnRefRawExpr *>(op_expr2->get_param_expr(0));
 
-  bin_expr1->set_ref_id(1, 1);
-  bin_expr2->set_ref_id(2, 2);
+  bin_expr1->set_ref_id(1,1);
+  bin_expr2->set_ref_id(2,2);
   bin_expr1->get_name_internal(str_buf, BUF_LEN, pos, EXPLAIN_EXTENDED);
   bin_expr2->get_name_internal(str_buf, BUF_LEN, pos, EXPLAIN_EXTENDED);
 
   ASSERT_FALSE(bin_expr1->same_as(*bin_expr2));
   (*bin_expr1).assign(*bin_expr2);
   ASSERT_TRUE(bin_expr1->same_as(*bin_expr2));
-  ObRawExpr* copy_expr = NULL;
-  ;
+  ObRawExpr *copy_expr = NULL;;
   ASSERT_EQ(OB_SUCCESS, ObRawExprUtils::copy_expr(expr_factory_, bin_expr1, copy_expr, true, true, true));
   ASSERT_TRUE(bin_expr1->same_as(*copy_expr));
 
@@ -176,12 +179,12 @@ TEST_F(TestRawExpr, basic_test)
   OK(bin_expr1->postorder_replace(pvistor));
   _OB_LOG(INFO, "\nbin_expr------\n%s", buf);
 
-  ObQueryRefRawExpr* sub_expr1 = dynamic_cast<ObQueryRefRawExpr*>(op_expr1->get_param_expr(1));
-  ObQueryRefRawExpr* sub_expr2 = dynamic_cast<ObQueryRefRawExpr*>(op_expr2->get_param_expr(1));
+  ObQueryRefRawExpr *sub_expr1 = dynamic_cast<ObQueryRefRawExpr *>(op_expr1->get_param_expr(1));
+  ObQueryRefRawExpr *sub_expr2 = dynamic_cast<ObQueryRefRawExpr *>(op_expr2->get_param_expr(1));
   OK(ObRawExprUtils::copy_expr(expr_factory_, sub_expr1, copy_expr, false, true, true));
   ASSERT_TRUE(sub_expr1->same_as(*sub_expr1));
-  ObRawExpr* texpr1 = NULL;
-  ObRawExpr* texpr2 = NULL;
+  ObRawExpr *texpr1 = NULL;
+  ObRawExpr *texpr2 = NULL;
   ASSERT_FALSE(ObRawExprUtils::is_same_raw_expr(texpr1, sub_expr2));
   ASSERT_TRUE(ObRawExprUtils::is_same_raw_expr(texpr1, texpr2));
   sub_expr1->set_ref_id(1);
@@ -225,8 +228,8 @@ TEST_F(TestRawExpr, basic_test)
 
   get_raw_expr("case name  when 'sam' then 'yong'  when 'lee' then 'handsome'  else 'good' end", raw_expr1, canon_expr);
   get_raw_expr("case when 1>0 then 'true' else 'false' end", raw_expr2, canon_expr);
-  ObCaseOpRawExpr* case_expr1 = dynamic_cast<ObCaseOpRawExpr*>(raw_expr1);
-  ObCaseOpRawExpr* case_expr2 = dynamic_cast<ObCaseOpRawExpr*>(raw_expr2);
+  ObCaseOpRawExpr *case_expr1 = dynamic_cast<ObCaseOpRawExpr *>(raw_expr1);
+  ObCaseOpRawExpr *case_expr2 = dynamic_cast<ObCaseOpRawExpr *>(raw_expr2);
   OK(ObRawExprUtils::copy_expr(expr_factory_, raw_expr1, copy_expr, false, true, true));
 
   OK(case_expr1->preorder_accept(pvistor));
@@ -245,10 +248,10 @@ TEST_F(TestRawExpr, basic_test)
 
   get_raw_expr("count(*)", raw_expr1, canon_expr);
   get_raw_expr("max(c1)", raw_expr2, canon_expr);
-  ObAggFunRawExpr* agg_expr1 = dynamic_cast<ObAggFunRawExpr*>(raw_expr1);
-  ObAggFunRawExpr* agg_expr2 = dynamic_cast<ObAggFunRawExpr*>(raw_expr2);
+  ObAggFunRawExpr *agg_expr1 = dynamic_cast<ObAggFunRawExpr *>(raw_expr1);
+  ObAggFunRawExpr *agg_expr2 = dynamic_cast<ObAggFunRawExpr *>(raw_expr2);
 
-  _OB_LOG(INFO, "\nstr_buf------\n%s", str_buf);
+  _OB_LOG(INFO, "\nstr_buf------\n%s",str_buf);
 
   ObRawExprPrintVisitor agg_vistor(*agg_expr1);
   char agg_buf[1024];
@@ -256,7 +259,7 @@ TEST_F(TestRawExpr, basic_test)
   OK(agg_expr1->preorder_accept(pvistor));
   OK(agg_expr1->postorder_accept(pvistor));
   OK(agg_expr1->postorder_replace(agg_vistor));
-  _OB_LOG(INFO, "\nagg_buf--post_replace----\n%s", agg_buf);
+  _OB_LOG(INFO, "\nagg_buf--post_replace----\n%s",agg_buf);
   ASSERT_FALSE(agg_expr1->same_as(*agg_expr2));
   (*agg_expr1).assign(*agg_expr2);
   ASSERT_TRUE(agg_expr1->same_as(*agg_expr2));
@@ -265,8 +268,8 @@ TEST_F(TestRawExpr, basic_test)
 
   get_raw_expr("charset(\"test\")", raw_expr1, canon_expr);
   get_raw_expr("now()", raw_expr2, canon_expr);
-  ObSysFunRawExpr* sys_expr1 = dynamic_cast<ObSysFunRawExpr*>(raw_expr1);
-  ObSysFunRawExpr* sys_expr2 = dynamic_cast<ObSysFunRawExpr*>(raw_expr2);
+  ObSysFunRawExpr *sys_expr1 = dynamic_cast<ObSysFunRawExpr *>(raw_expr1);
+  ObSysFunRawExpr *sys_expr2 = dynamic_cast<ObSysFunRawExpr *>(raw_expr2);
   sys_expr1->get_name_internal(str_buf, BUF_LEN, pos, EXPLAIN_EXTENDED);
   sys_expr2->get_name_internal(str_buf, BUF_LEN, pos, EXPLAIN_EXTENDED);
 
@@ -308,10 +311,10 @@ TEST_F(TestRawExpr, special_test)
   fprintf(stderr, "If tests failed, use `diff %s %s' to see the differences. \n", result_file, tmp_file);
   is_equal_content(tmp_file, result_file);
 }
-}  // namespace test
-int main(int argc, char** argv)
+}
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   init_sql_factories();
   test::parse_cmd_line_param(argc, argv, test::clp);
   return RUN_ALL_TESTS();

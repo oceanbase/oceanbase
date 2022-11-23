@@ -26,71 +26,71 @@ using namespace oceanbase::sql;
 #define null static_cast<const char*>(NULL)
 #define timestamp(val) convert_to_timestamp(val)
 
-#define COL(val)                                       \
-  ({                                                   \
-    ObObj* _obj = new ObObj();                         \
-    int err = OB_SUCCESS;                              \
+#define COL(val) \
+  ({\
+    ObObj *_obj = new ObObj(); \
+    int err = OB_SUCCESS; \
     if (OB_SUCCESS != (err = set_value(*_obj, val))) { \
       _OB_LOG(WARN, "fail to set value, err=%d", err); \
-    }                                                  \
-    _obj;                                              \
+    } \
+    _obj; \
   })
 
-#define COL_T(type, val)       \
-  ({                           \
-    ObObj* _obj = new ObObj(); \
-    _obj->set_##type(val);     \
-    _obj;                      \
+#define COL_T(type, val) \
+  ({ \
+    ObObj *_obj = new ObObj(); \
+    _obj->set_##type(val); \
+    _obj; \
   })
 
-#define ADD_ROW(table_op, args...)                             \
-  if (OB_SUCC(ret)) {                                          \
-    ObObj _cells[OB_MAX_COLUMN_NUMBER];                        \
-    ObNewRow _row;                                             \
-    _row.cells_ = _cells;                                      \
-    _row.count_ = table_op.get_column_count();                 \
-    if (OB_SUCCESS != (ret = fill_row(_row, ##args))) {        \
-      _OB_LOG(WARN, "fail to fill row, ret=%d", ret);          \
+#define ADD_ROW(table_op, args...) \
+  if (OB_SUCC(ret)) { \
+    ObObj _cells[OB_MAX_COLUMN_NUMBER]; \
+    ObNewRow _row; \
+    _row.cells_ = _cells; \
+    _row.count_ = table_op.get_column_count(); \
+    if (OB_SUCCESS != (ret = fill_row(_row, ##args))) { \
+      _OB_LOG(WARN, "fail to fill row, ret=%d", ret); \
     } else if (OB_SUCCESS != (ret = table_op.add_row(_row))) { \
-      _OB_LOG(WARN, "fail to add row, ret=%d", ret);           \
-    }                                                          \
+      _OB_LOG(WARN, "fail to add row, ret=%d", ret); \
+    } \
   }
 
 #define EXCEPT_RESULT(_ctx, _result_table, op, collation) \
-  EXCEPT_RESULT_WITH_IDX(_ctx, _result_table, op, 0, 0, collation)
+    EXCEPT_RESULT_WITH_IDX(_ctx, _result_table, op, 0, 0, collation)
 
 #define EXCEPT_RESULT_SET(_ctx, _result_table, op, start_idx, end_idx, collation) \
-  EXCEPT_RESULT_WITH_IDX(_ctx, _result_table, op, start_idx, end_idx, collation)
+    EXCEPT_RESULT_WITH_IDX(_ctx, _result_table, op, start_idx, end_idx, collation)
 
-#define EXCEPT_RESULT_WITH_IDX(_ctx, _result_table, op, start_idx, end_idx, collation)     \
-  if (OB_SUCC(ret)) {                                                                      \
-    int _ret = OB_SUCCESS;                                                                 \
-    const ObNewRow* result_row = NULL;                                                     \
-    while (OB_SUCCESS == (_ret = op.get_next_row(_ctx, result_row))) {                     \
-      const ObNewRow* except_row = NULL;                                                   \
-      printf("row=%s\n", to_cstring(*result_row));                                         \
-      ASSERT_EQ(OB_SUCCESS, _result_table.get_next_row(_ctx, except_row));                 \
-      printf("except_row=%s\n", to_cstring(*except_row));                                  \
-      ASSERT_TRUE(except_row->count_ == result_row->count_);                               \
-      for (int64_t i = start_idx; i < end_idx; ++i) {                                      \
-        printf("index=%ld, cell=%s, respect_cell=%s\n",                                    \
-            i,                                                                             \
-            to_cstring(result_row->cells_[i]),                                             \
-            to_cstring(except_row->cells_[i]));                                            \
+#define EXCEPT_RESULT_WITH_IDX(_ctx, _result_table, op, start_idx, end_idx, collation) \
+  if (OB_SUCC(ret)) { \
+    int _ret = OB_SUCCESS; \
+    const ObNewRow *result_row = NULL; \
+    while(OB_SUCCESS == (_ret = op.get_next_row(_ctx, result_row))) { \
+      const ObNewRow *except_row = NULL; \
+      printf("row=%s\n", to_cstring(*result_row)); \
+      ASSERT_EQ(OB_SUCCESS, _result_table.get_next_row(_ctx, except_row)); \
+      printf("except_row=%s\n", to_cstring(*except_row)); \
+      ASSERT_TRUE(except_row->count_ == result_row->count_); \
+      for (int64_t i = start_idx; i < end_idx; ++i) { \
+        printf("index=%ld, cell=%s, respect_cell=%s\n", i, to_cstring(result_row->cells_[i]), to_cstring(except_row->cells_[i])); \
         ASSERT_TRUE(0 == except_row->cells_[i].compare(result_row->cells_[i], collation)); \
-      }                                                                                    \
-      result_row = NULL;                                                                   \
-    }                                                                                      \
-    ASSERT_EQ(OB_ITER_END, _ret);                                                          \
+      } \
+      result_row = NULL; \
+    } \
+    ASSERT_EQ(OB_ITER_END, _ret); \
   }
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 extern void init_global_memory_pool();
 }  // namespace common
 }  // namespace oceanbase
 
-typedef struct TimeStampWrap {
+typedef struct TimeStampWrap
+{
   int64_t usec_;
 } TimeStampWrap;
 
@@ -101,55 +101,65 @@ TimeStampWrap convert_to_timestamp(int64_t usec)
   return time_stamp;
 }
 
-TimeStampWrap convert_to_timestamp(const char* str)
+TimeStampWrap convert_to_timestamp(const char *str)
 {
   TimeStampWrap time_stamp;
   ObString date = ObString::make_string(str);
 
-  // ObTimeUtility::str_to_usec(date, time_stamp.usec_);
+  //ObTimeUtility::str_to_usec(date, time_stamp.usec_);
   ObTimeConvertCtx cvrt_ctx(NULL, false);
   (void)ObTimeConverter::str_to_datetime(date, cvrt_ctx, time_stamp.usec_, NULL);
 
   return time_stamp;
 }
 
-int set_value(ObObj& obj, int val)
+int set_value(ObObj &obj, int val)
 {
   obj.set_int(static_cast<int64_t>(val));
   return OB_SUCCESS;
 }
 
-int set_value(ObObj& obj, int64_t val)
+int set_value(ObObj &obj, int64_t val)
 {
   obj.set_int(val);
   return OB_SUCCESS;
 }
 
-int set_value(ObObj& obj, float val)
+int set_value(ObObj &obj, float val)
 {
   int ret = OB_SUCCESS;
   ObObj obj1;
   obj1.set_float(val);
-  ObCastCtx cast_ctx(global_default_allocator, NULL, 0, CM_NONE, CS_TYPE_INVALID, NULL);
+  ObCastCtx cast_ctx(global_default_allocator,
+                     NULL,
+                     0,
+                     CM_NONE,
+                     CS_TYPE_INVALID,
+                     NULL);
   if (OB_FAIL(ObObjCaster::to_type(ObNumberType, cast_ctx, obj1, obj))) {
     _OB_LOG(WARN, "fail to cast obj, ret=%d", ret);
   }
   return ret;
 }
 
-int set_value(ObObj& obj, double val)
+int set_value(ObObj &obj, double val)
 {
   ObObj obj1;
   int ret = OB_SUCCESS;
   obj1.set_double(val);
-  ObCastCtx cast_ctx(global_default_allocator, NULL, 0, CM_NONE, CS_TYPE_INVALID, NULL);
+  ObCastCtx cast_ctx(global_default_allocator,
+                     NULL,
+                     0,
+                     CM_NONE,
+                     CS_TYPE_INVALID,
+                     NULL);
   if (OB_FAIL(ObObjCaster::to_type(ObNumberType, cast_ctx, obj1, obj))) {
     _OB_LOG(WARN, "fail to cast obj, ret=%d", ret);
   }
   return ret;
 }
 
-int set_value(ObObj& obj, const char* val)
+int set_value(ObObj &obj, const char *val)
 {
   if (NULL == val) {
     obj.set_null();
@@ -159,21 +169,21 @@ int set_value(ObObj& obj, const char* val)
   return OB_SUCCESS;
 }
 
-int set_value(ObObj& obj, const ObObj& val)
+int set_value(ObObj &obj, const ObObj &val)
 {
   obj = val;
   return OB_SUCCESS;
 }
 
-int set_value(ObObj& obj, TimeStampWrap val)
+int set_value(ObObj &obj, TimeStampWrap val)
 {
   obj.set_timestamp(val.usec_);
   return OB_SUCCESS;
 }
-int fill_row(ObNewRow& row, ...)
+int fill_row(ObNewRow &row, ...)
 {
   int ret = OB_SUCCESS;
-  ObObj* ptr = NULL;
+  ObObj *ptr = NULL;
   va_list ap;
 
 #pragma GCC diagnostic push
@@ -198,12 +208,16 @@ int fill_row(ObNewRow& row, ...)
   return ret;
 }
 static ObArenaAllocator alloc_;
-class ObFakeTable : public ObNoChildrenPhyOperator {
+class ObFakeTable : public ObNoChildrenPhyOperator
+{
 private:
-  class ObFakeTableCtx : public ObPhyOperatorCtx {
+  class ObFakeTableCtx : public ObPhyOperatorCtx
+  {
   public:
-    ObFakeTableCtx(ObExecContext& ctx) : ObPhyOperatorCtx(ctx)
-    {}
+    ObFakeTableCtx(ObExecContext &ctx)
+        : ObPhyOperatorCtx(ctx)
+    {
+    }
     int init(int64_t projector_size)
     {
       int ret = OB_SUCCESS;
@@ -219,12 +233,9 @@ private:
       }
       return ret;
     }
-    virtual void destroy()
-    {
-      return ObPhyOperatorCtx::destroy_base();
-    }
+    virtual void destroy() { return ObPhyOperatorCtx::destroy_base(); }
     int64_t projector_size_;
-    int32_t* projector_;
+    int32_t *projector_;
 
   private:
     ObRowStore::Iterator row_store_it_;
@@ -232,38 +243,35 @@ private:
   };
 
 public:
-  ObFakeTable(ObIAllocator& alloc) : ObNoChildrenPhyOperator(alloc), no_rescan_(false)
-  {}
+  ObFakeTable(ObIAllocator &alloc) : ObNoChildrenPhyOperator(alloc), no_rescan_(false)
+  {
+  }
 
   ObFakeTable() : ObNoChildrenPhyOperator(alloc_), no_rescan_(false)
-  {}
-  ~ObFakeTable()
-  {}
-
-  void set_no_rescan()
   {
-    no_rescan_ = true;
   }
+  ~ObFakeTable()
+  {
+  }
+
+  void set_no_rescan() { no_rescan_ = true; }
   void reset()
   {
     row_store_.reset();
     ObNoChildrenPhyOperator::reset();
   }
 
-  int add_row(const ObNewRow& row)
+  int add_row(const ObNewRow &row)
   {
     return row_store_.add_row(row);
   }
 
-  ObPhyOperatorType get_type() const
-  {
-    return PHY_FAKE_TABLE;
-  }
+  ObPhyOperatorType get_type() const { return PHY_FAKE_TABLE; }
 
-  int inner_open(ObExecContext& ctx) const
+  int inner_open(ObExecContext &ctx) const
   {
     int ret = OB_SUCCESS;
-    ObFakeTableCtx* table_ctx = NULL;
+    ObFakeTableCtx *table_ctx = NULL;
 
     if (OB_SUCCESS != (ret = init_op_ctx(ctx))) {
       _OB_LOG(WARN, "fail to init operator context, ret=%d", ret);
@@ -278,25 +286,24 @@ public:
     return ret;
   }
 
-  int rescan(ObExecContext& ctx) const
+  int rescan(ObExecContext &ctx) const
   {
-    if (no_rescan_) {
-      return OB_SUCCESS;
-    } else {
-      ObFakeTableCtx* fake_table_ctx = NULL;
-      fake_table_ctx = GET_PHY_OPERATOR_CTX(ObFakeTableCtx, ctx, get_id());
-      OB_ASSERT(fake_table_ctx);
-      fake_table_ctx->row_store_it_ = row_store_.begin();
-      return ObNoChildrenPhyOperator::rescan(ctx);
-    }
+  	if (no_rescan_) {
+  		return OB_SUCCESS;
+  	} else {
+			ObFakeTableCtx *fake_table_ctx = NULL;
+			fake_table_ctx = GET_PHY_OPERATOR_CTX(ObFakeTableCtx, ctx, get_id());
+			OB_ASSERT(fake_table_ctx);
+			fake_table_ctx->row_store_it_ = row_store_.begin();
+			return ObNoChildrenPhyOperator::rescan(ctx);
+  	}
   }
 
-  int inner_close(ObExecContext& ctx) const
+  int inner_close(ObExecContext &ctx) const
   {
     UNUSED(ctx);
     return OB_SUCCESS;
   }
-
 private:
   /**
    * @brief create operator context, only child operator can know it's specific operator type,
@@ -305,11 +312,15 @@ private:
    * @param op_ctx[out], the pointer of operator context
    * @return if success, return OB_SUCCESS, otherwise, return errno
    */
-  virtual int init_op_ctx(ObExecContext& ctx) const
+  virtual int init_op_ctx(ObExecContext &ctx) const
   {
     int ret = OB_SUCCESS;
-    ObPhyOperatorCtx* op_ctx = NULL;
-    if (OB_SUCCESS != (ret = CREATE_PHY_OPERATOR_CTX(ObFakeTableCtx, ctx, get_id(), get_type(), op_ctx))) {
+    ObPhyOperatorCtx *op_ctx = NULL;
+    if (OB_SUCCESS != (ret = CREATE_PHY_OPERATOR_CTX(ObFakeTableCtx,
+                                                     ctx,
+                                                     get_id(),
+                                                     get_type(),
+                                                     op_ctx))) {
       SQL_EXE_LOG(WARN, "create physical operator context failed", K(ret));
     } else if (OB_SUCCESS != (ret = op_ctx->create_cur_row(get_column_count(), projector_, projector_size_))) {
       SQL_EXE_LOG(WARN, "create current row failed", K(ret));
@@ -321,27 +332,28 @@ private:
    * @param ctx[in], execute context
    * @param row[out], ObSqlRow an obj array and row_size
    */
-  virtual int inner_get_next_row(ObExecContext& ctx, const ObNewRow*& row) const
+  virtual int inner_get_next_row(ObExecContext &ctx, const ObNewRow *&row) const
   {
     int ret = OB_SUCCESS;
-    ObFakeTableCtx* table_ctx = NULL;
+    ObFakeTableCtx *table_ctx = NULL;
 
     if (NULL == (table_ctx = GET_PHY_OPERATOR_CTX(ObFakeTableCtx, ctx, get_id()))) {
       ret = OB_ERR_UNEXPECTED;
       _OB_LOG(WARN, "fail to get physical operator context");
-    } else if (OB_SUCCESS != (ret = table_ctx->row_store_it_.get_next_row(table_ctx->get_cur_row()))) {
+    } else if (OB_SUCCESS != (ret = table_ctx->row_store_it_.get_next_row(
+        table_ctx->get_cur_row()))) {
       if (OB_ITER_END != ret) {
         _OB_LOG(WARN, "fail to get next row, ret=%d", ret);
       }
     } else {
       row = &table_ctx->get_cur_row();
-      const_cast<ObNewRow*>(row)->projector_ = table_ctx->projector_;
-      const_cast<ObNewRow*>(row)->projector_size_ = table_ctx->projector_size_;
+      const_cast<ObNewRow *>(row)->projector_ = table_ctx->projector_;
+      const_cast<ObNewRow *>(row)->projector_size_ = table_ctx->projector_size_;
     }
     return ret;
   }
 
-  virtual int64_t to_string_kv(char* buf, const int64_t buf_len) const
+  virtual int64_t to_string_kv(char *buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
     J_KV(N_ROW_STORE, row_store_);
@@ -349,7 +361,6 @@ private:
   }
 
   DISALLOW_COPY_AND_ASSIGN(ObFakeTable);
-
 private:
   ObRowStore row_store_;
   bool no_rescan_;

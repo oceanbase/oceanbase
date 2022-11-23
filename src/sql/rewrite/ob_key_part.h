@@ -18,21 +18,28 @@
 #include "lib/container/ob_array_serialization.h"
 #include "common/object/ob_object.h"
 #include "sql/engine/expr/ob_expr_res_type.h"
-#include "sql/engine/expr/ob_expr_res_type.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObQueryRange;
 
-enum ObKeyPartType { T_NORMAL_KEY = 0, T_LIKE_KEY };
+enum ObKeyPartType
+{
+  T_NORMAL_KEY = 0,
+  T_LIKE_KEY
+};
 
-class ObKeyPartId {
+class ObKeyPartId
+{
   OB_UNIS_VERSION(1);
-
 public:
   ObKeyPartId(uint64_t data_table_id = common::OB_INVALID_ID, uint64_t column_id = common::OB_INVALID_ID)
-      : table_id_(data_table_id), column_id_(column_id)
-  {}
+      : table_id_(data_table_id),
+        column_id_(column_id)
+  {
+  }
 
   inline uint64_t hash() const
   {
@@ -42,70 +49,87 @@ public:
     return hash_code;
   }
 
-  inline bool operator==(const ObKeyPartId& other) const
+  inline bool operator==(const ObKeyPartId &other) const
   {
     return (table_id_ == other.table_id_) && (column_id_ == other.column_id_);
   }
 
-  inline bool operator!=(const ObKeyPartId& other) const
+  inline bool operator!=(const ObKeyPartId &other) const
   {
     return !(*this == other);
   }
 
-  TO_STRING_KV(N_TID, table_id_, N_CID, column_id_);
+  TO_STRING_KV(N_TID, table_id_,
+               N_CID, column_id_);
   uint64_t table_id_;
   uint64_t column_id_;
 };
 
-class ObKeyPartPos {
+class ObKeyPartPos
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObKeyPartPos(common::ObIAllocator& alloc, int64_t offset = -1)
-      : offset_(offset), column_type_(alloc), enum_set_values_()
-  {}
+  ObKeyPartPos(common::ObIAllocator &alloc, int64_t offset = -1)
+      : offset_(offset),
+      column_type_(alloc),
+      enum_set_values_()
+  {
+  }
 
-  ObKeyPartPos(int64_t offset, ObExprResType type) : offset_(offset), column_type_(type), enum_set_values_()
-  {}
+  ObKeyPartPos(int64_t offset, ObExprResType type)
+      : offset_(offset),
+      column_type_(type),
+      enum_set_values_()
+  {
+  }
 
-  inline bool operator==(const ObKeyPartPos& other) const
+  inline bool operator==(const ObKeyPartPos &other) const
   {
     bool is_equal = true;
-    is_equal = ((offset_ == other.offset_) && (column_type_ == other.column_type_) &&
-                (enum_set_values_.count() == other.enum_set_values_.count()));
+    is_equal = ((offset_ == other.offset_)
+                && (column_type_ == other.column_type_)
+                && (enum_set_values_.count() == other.enum_set_values_.count()));
     for (int64_t i = 0; is_equal && i < enum_set_values_.count(); ++i) {
       is_equal = enum_set_values_.at(i) == other.enum_set_values_.at(i);
     }
     return is_equal;
   }
 
-  inline bool operator!=(const ObKeyPartPos& other) const
+  inline bool operator!=(const ObKeyPartPos &other) const
   {
     return !(*this == other);
   }
-  int set_enum_set_values(common::ObIAllocator& allocator, const common::ObIArray<common::ObString>& enum_set_values);
-  inline const common::ObIArray<common::ObString>& get_enum_set_values() const
-  {
-    return enum_set_values_;
-  }
-  TO_STRING_KV(N_OFFSET, offset_, N_COLUMN_TYPE, column_type_, N_ENUM_SET_VALUES, enum_set_values_);
+  int set_enum_set_values(common::ObIAllocator &allocator,
+                          const common::ObIArray<common::ObString> &enum_set_values);
+  inline const common::ObIArray<common::ObString> &get_enum_set_values() const { return enum_set_values_; }
+  TO_STRING_KV(N_OFFSET, offset_,
+               N_COLUMN_TYPE, column_type_,
+               N_ENUM_SET_VALUES, enum_set_values_);
 
   int64_t offset_;
   ObExprResType column_type_;
   common::ObSArray<common::ObString> enum_set_values_;
 };
 
-struct ObNormalKeyPart {
+struct ObNormalKeyPart
+{
   ObNormalKeyPart()
-      : start_(), include_start_(false), end_(), include_end_(false), always_true_(false), always_false_(false)
-  {}
-  bool operator==(const ObNormalKeyPart& other) const
+    : start_(),
+      include_start_(false),
+      end_(),
+      include_end_(false),
+      always_true_(false),
+      always_false_(false) {}
+  bool operator ==(const ObNormalKeyPart &other) const
   {
-    return (start_ == other.start_) && (end_ == other.end_) && (include_start_ == other.include_start_) &&
-           (include_end_ == other.include_end_) && (always_false_ == other.always_false_) &&
-           (always_true_ == other.always_true_);
+    return (start_ == other.start_)
+        && (end_ == other.end_)
+        && (include_start_ == other.include_start_)
+        && (include_end_ == other.include_end_)
+        && (always_false_ == other.always_false_)
+        && (always_true_ == other.always_true_);
   }
-  // normal key type
+  //normal key type
   common::ObObj start_;
   bool include_start_;
   common::ObObj end_;
@@ -114,17 +138,20 @@ struct ObNormalKeyPart {
   bool always_false_;
 };
 
-struct ObLikeKeyPart {
+struct ObLikeKeyPart
+{
   common::ObObj pattern_;
   common::ObObj escape_;
 };
 
-class ObKeyPart : public common::ObDLinkBase<ObKeyPart> {
+class ObKeyPart : public common::ObDLinkBase<ObKeyPart>
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObKeyPart(common::ObIAllocator& allocator, uint64_t data_table_id = common::OB_INVALID_ID,
-      uint64_t column_id = common::OB_INVALID_ID, int32_t offset = -1)
+  ObKeyPart(common::ObIAllocator &allocator,
+            uint64_t data_table_id = common::OB_INVALID_ID,
+            uint64_t column_id = common::OB_INVALID_ID,
+            int32_t offset = -1)
       : allocator_(allocator),
         pos_(allocator, offset),
         null_safe_(false),
@@ -132,17 +159,20 @@ public:
         normal_keypart_(),
         item_next_(NULL),
         or_next_(NULL),
-        and_next_(NULL)
+        and_next_(NULL),
+        rowid_column_idx_(OB_INVALID_ID),
+        is_phy_rowid_key_part_(false)
   {
     id_.table_id_ = data_table_id;
     id_.column_id_ = column_id;
   }
 
-  inline bool operator<=(const ObKeyPart& other) const
-  {
-    return pos_.offset_ <= other.pos_.offset_;
-  }
-  inline bool operator>(const ObKeyPart& other) const;
+  inline bool operator <=(const ObKeyPart &other) const { return pos_.offset_ <= other.pos_.offset_; }
+  inline bool operator >(const ObKeyPart &other) const;
+//  {
+//    int cmp = normal_keypart_.start_.compare(*other.end_);
+//    return (cmp > 0) || (0 == cmp && !(include_start_ && other.include_end_));
+//  }
 
   bool has_or()
   {
@@ -154,31 +184,47 @@ public:
     return NULL != and_next_;
   }
 
-  bool has_intersect(const ObKeyPart* other) const;
-  bool can_union(const ObKeyPart* other) const;
-  bool equal_to(const ObKeyPart* other);
+  bool has_intersect(const ObKeyPart *other) const;
+  bool can_union(const ObKeyPart *other) const;
+  bool equal_to(const ObKeyPart *other);
 
-  bool normal_key_is_equal(const ObKeyPart* other)
+  // bool equal_const()
+  // {
+  //   bool ret = false;
+  //   if (OB_UNLIKELY(NULL == start_ || NULL == end_)) {
+  //     // nothing
+  //   } else {
+  //     ret = (*start_ == *end_) && (include_start_) && (include_end_);
+  //   }
+  //   return ret;
+  // }
+
+  bool normal_key_is_equal(const ObKeyPart *other)
   {
     bool ret = false;
     if (other != NULL) {
-      ret = (!is_question_mark() && !(other->is_question_mark())) && (other->is_normal_key()) && (is_normal_key()) &&
-            (id_ == other->id_) && (pos_ == other->pos_) &&
-            (normal_keypart_->start_ == other->normal_keypart_->start_) &&
-            (normal_keypart_->end_ == other->normal_keypart_->end_) &&
-            (normal_keypart_->include_start_ == other->normal_keypart_->include_start_) &&
-            (normal_keypart_->include_end_ == other->normal_keypart_->include_end_) && (NULL == item_next_) &&
-            (NULL == other->item_next_);
+      ret = (!is_question_mark() && !(other->is_question_mark()))
+           && (other->is_normal_key())
+           && (is_normal_key())
+           && (id_ == other->id_)
+           && (pos_ == other->pos_)
+           && (is_rowid_key_part() == other->is_rowid_key_part())
+           && (normal_keypart_->start_ == other->normal_keypart_->start_)
+           && (normal_keypart_->end_ == other->normal_keypart_->end_)
+           && (normal_keypart_->include_start_ == other->normal_keypart_->include_start_)
+           && (normal_keypart_->include_end_ == other->normal_keypart_->include_end_)
+           && (NULL == item_next_)
+           && (NULL == other->item_next_);
     }
     return ret;
   }
 
-  int intersect(ObKeyPart* other, bool contain_row);
-  void link_gt(ObKeyPart* and_next);
+  int intersect(ObKeyPart *other, bool contain_row);
+  void link_gt(ObKeyPart *and_next);
 
   void cut_and_next_ptr()
   {
-    ObKeyPart* cur = this;
+    ObKeyPart *cur = this;
     while (NULL != cur) {
       cur->and_next_ = NULL;
       cur = cur->or_next_;
@@ -195,11 +241,15 @@ public:
     }
     return bret;
   }
-
+  //是否为严格的等值条件
+  //不能为恒false或者恒true
+  //必须start和end都是闭区间
+  //start与end的值相等
   bool is_equal_condition() const
   {
     bool bret = false;
-    for (const ObKeyPart* cur_key = this; !bret && cur_key != NULL; cur_key = cur_key->item_next_) {
+    //item_next上的节点都是合取范式，这个只要有一个节点满足equal condition，整个key都是equal condition
+    for (const ObKeyPart *cur_key = this; !bret && cur_key != NULL; cur_key = cur_key->item_next_) {
       if (cur_key->is_always_false() || cur_key->is_always_true()) {
         bret = false;
       } else if (cur_key->is_normal_key()) {
@@ -219,7 +269,8 @@ public:
   bool is_range_condition() const
   {
     bool bret = false;
-    for (const ObKeyPart* cur_key = this; !bret && cur_key != NULL; cur_key = cur_key->item_next_) {
+    //item_next上的节点都是合取范式，这个只要有一个节点满足range condition，整个key都是range condition
+    for (const ObKeyPart *cur_key = this; !bret && cur_key != NULL; cur_key = cur_key->item_next_) {
       if (cur_key->is_always_false() || cur_key->is_always_true()) {
         bret = false;
       } else if (cur_key->is_normal_key()) {
@@ -231,14 +282,15 @@ public:
   bool is_always_false_condition() const
   {
     bool bret = false;
-    for (const ObKeyPart* cur_key = this; !bret && cur_key != NULL; cur_key = cur_key->item_next_) {
+    //item_next上的节点都是合取范式，这个只要有一个节点满足always false，整个key都是always false
+    for (const ObKeyPart *cur_key = this; !bret && cur_key != NULL; cur_key = cur_key->item_next_) {
       if (cur_key->is_always_false()) {
         bret = true;
       }
     }
     return bret;
   }
-  void set_normal_start(ObKeyPart* other)
+  void set_normal_start(ObKeyPart *other)
   {
     if (NULL != other && other->is_normal_key() && is_normal_key()) {
       this->id_ = other->id_;
@@ -247,7 +299,7 @@ public:
       this->normal_keypart_->include_start_ = other->normal_keypart_->include_start_;
     }
   }
-  void set_normal_end(ObKeyPart* other)
+  void set_normal_end(ObKeyPart *other)
   {
     if (NULL != other && other->is_normal_key() && is_normal_key()) {
       this->id_ = other->id_;
@@ -256,71 +308,65 @@ public:
       this->normal_keypart_->include_end_ = other->normal_keypart_->include_end_;
     }
   }
-  inline bool is_always_true() const
-  {
-    return is_normal_key() && normal_keypart_->always_true_;
-  }
-  inline bool is_always_false() const
-  {
-    return is_normal_key() && normal_keypart_->always_false_;
-  }
-  inline bool is_normal_key() const
-  {
-    return T_NORMAL_KEY == key_type_ && normal_keypart_ != NULL;
-  }
-  inline bool is_like_key() const
-  {
-    return T_LIKE_KEY == key_type_ && like_keypart_ != NULL;
-  }
+  inline bool is_always_true() const { return is_normal_key() && normal_keypart_->always_true_; }
+  inline bool is_always_false() const { return is_normal_key() && normal_keypart_->always_false_; }
+  inline bool is_normal_key() const { return T_NORMAL_KEY == key_type_ && normal_keypart_ != NULL; }
+  inline bool is_like_key() const { return T_LIKE_KEY == key_type_ && like_keypart_ != NULL; }
   int create_normal_key();
   int create_like_key();
-  inline ObNormalKeyPart* get_normal_key()
+  inline ObNormalKeyPart *get_normal_key()
   {
-    ObNormalKeyPart* normal_key = NULL;
+    ObNormalKeyPart *normal_key = NULL;
     if (T_NORMAL_KEY == key_type_) {
       normal_key = normal_keypart_;
     }
     return normal_key;
   }
-  inline ObLikeKeyPart* get_like_key()
+  inline ObLikeKeyPart *get_like_key()
   {
-    ObLikeKeyPart* like_key = NULL;
+    ObLikeKeyPart *like_key = NULL;
     if (T_LIKE_KEY == key_type_) {
       like_key = like_keypart_;
     }
     return like_key;
   }
+  //通过值域来判断是否为恒true或者恒false，并且设置always_true或者always_false
   int formalize_keypart(bool contain_row);
-  int cast_value_type(const common::ObDataTypeCastParams& dtc_params, bool contain_row);
+  int cast_value_type(const common::ObDataTypeCastParams &dtc_params, bool contain_row);
   virtual void reset();
 
   // copy all except next_ pointer
-  int deep_node_copy(const ObKeyPart& other);
-  ObKeyPart* general_or_next();
-  ObKeyPart* cut_general_or_next();
+  int deep_node_copy(const ObKeyPart &other);
+  ObKeyPart *general_or_next();
+  ObKeyPart *cut_general_or_next();
+  bool is_rowid_key_part() const { return rowid_column_idx_ != OB_INVALID_ID; }
+  bool is_phy_rowid_key_part() const { return is_phy_rowid_key_part_; }
+  bool is_logical_rowid_key_part() const {
+    return !is_phy_rowid_key_part_ && rowid_column_idx_ != OB_INVALID_ID; }
   DECLARE_TO_STRING;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObKeyPart);
-
 public:
-  common::ObIAllocator& allocator_;
+  common::ObIAllocator &allocator_;
   ObKeyPartId id_;
   ObKeyPartPos pos_;
   bool null_safe_;
   ObKeyPartType key_type_;
   union {
-    // normal key type
-    ObNormalKeyPart* normal_keypart_;
-    // like expr type
-    ObLikeKeyPart* like_keypart_;
+    //normal key type
+    ObNormalKeyPart *normal_keypart_;
+    //like expr type
+    ObLikeKeyPart *like_keypart_;
   };
-  // list member
-  ObKeyPart* item_next_;
-  ObKeyPart* or_next_;
-  ObKeyPart* and_next_;
+  //list member
+  ObKeyPart *item_next_;
+  ObKeyPart *or_next_;
+  ObKeyPart *and_next_;
+  int64_t rowid_column_idx_;//used for rowid to extract query range, mark nth column in rowid.
+  bool is_phy_rowid_key_part_;//mark the rowid key part is physical rowid or not.
+
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_REWRITE_OB_KEY_PART_
+} // namespace sql
+} // namespace oceanbase
+#endif // OCEANBASE_SQL_REWRITE_OB_KEY_PART_

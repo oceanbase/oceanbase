@@ -18,23 +18,25 @@
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_compress_struct.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObStreamCompressor;
 class ObTimeGuard;
-};  // namespace common
+};
 
-namespace obrpc {
+namespace obrpc
+{
 
-class ObVirtualRpcProtocolProcessor {
+class ObVirtualRpcProtocolProcessor
+{
 public:
-  ObVirtualRpcProtocolProcessor()
-  {}
-  virtual ~ObVirtualRpcProtocolProcessor()
-  {}
+  ObVirtualRpcProtocolProcessor(){}
+  virtual ~ObVirtualRpcProtocolProcessor() {}
 
-  virtual int encode(easy_request_t* req, ObRpcPacket* pkt) = 0;
-  virtual int decode(easy_message_t* m, ObRpcPacket*& pkt) = 0;
+  virtual int encode(easy_request_t *req, ObRpcPacket *pkt) = 0;
+  virtual int decode(easy_message_t *m, ObRpcPacket *&pkt) = 0;
 
 protected:
   /*
@@ -43,8 +45,8 @@ protected:
    *@param [in] pkt: packet data to send
    *@param [out] full_size: total data len need to send after compressing
    * */
-  int encode_compressed_rpc_packet(
-      common::ObTimeGuard& timeguard, easy_request_t* req, ObRpcPacket*& pkt, int32_t& full_size);
+  int encode_compressed_rpc_packet(common::ObTimeGuard &timeguard,
+                                   easy_request_t *req, ObRpcPacket *&pkt, int32_t &full_size);
 
   /*this func is to encode rpc packet as  without compressing
    *@param [in] timeguard:
@@ -52,7 +54,10 @@ protected:
    *@param [in] pkt: packet data to send
    *@param [out] full_size: total data len need to send
    */
-  int encode_raw_rpc_packet(common::ObTimeGuard& timeguard, easy_request_t* req, ObRpcPacket*& pkt, int32_t& full_size);
+  int encode_raw_rpc_packet(common::ObTimeGuard &timeguard,
+                            easy_request_t *req,
+                            ObRpcPacket *&pkt,
+                            int32_t &full_size);
 
   /*this func is to  compress data beginning at segment , and then  set it to
    * send_list of easy buf
@@ -63,27 +68,45 @@ protected:
    *@param [in] header_buf: buf to place packet header
    *@param [out] compressed_size: data len of compressed data
    */
-  int encode_segment(easy_request_t* req, ObRpcCompressCCtx& compress_ctx, char* segment, int64_t segment_size,
-      int64_t header_size, char*& header_buf, int64_t& compressed_size);
+  int encode_segment(easy_request_t *req,
+                     ObRpcCompressCCtx &compress_ctx,
+                     char *segment, int64_t segment_size,
+                     int64_t header_size, char *&header_buf,
+                     int64_t &compressed_size);
 
-  int decode_compressed_packet_data(common::ObTimeGuard& timeguard, easy_message_t* ms,
-      const int64_t preceding_data_len, const int64_t decode_data_len, ObRpcPacket*& pkt);
+  /*
+   *@param [in] preceding_data_len: cmd_packet锁占的内存大小,
+   ms->input->pos + preceding_data_len 即为压缩后的packet的起始位置
+   *@param [in] decode_data_len: 压缩后数据的总大小
+   * */
+  int decode_compressed_packet_data(common::ObTimeGuard &timeguard,
+                                    easy_message_t *ms,
+                                    const int64_t preceding_data_len,
+                                    const int64_t decode_data_len,
+                                    ObRpcPacket *&pkt);
   /*
    * this func is to decode data after decompressed as a net rpc packet
+   *@param [in] data: 开始的sizeof(ObRpcPacket)个字节用于分配ObRpcPacket, 接下来的数据是一个完整的net packet
+   *@param [in] data_len: data的长度
    */
-  int decode_net_rpc_packet(common::ObTimeGuard& timeguard, char* data, int64_t data_len, ObRpcPacket*& pkt);
+  int decode_net_rpc_packet(common::ObTimeGuard &timeguard,
+                            char *data, int64_t data_len, ObRpcPacket *&pkt);
 
   /*
    * this func is to decode original data  as a net rpc packet, data is not compressed
    */
-  int decode_raw_net_rpc_packet(
-      common::ObTimeGuard& timeguard, easy_message_t* m, const int64_t preceding_data_len, ObRpcPacket*& pkt);
+  int decode_raw_net_rpc_packet(common::ObTimeGuard &timeguard,
+                                easy_message_t *m, const int64_t preceding_data_len, ObRpcPacket *&pkt);
 
-  char* easy_alloc(easy_pool_t* pool, int64_t size) const;
-  inline int set_next_read_len(easy_message_t* m, const int64_t fallback_len, const int64_t next_read_len);
+  char *easy_alloc(easy_pool_t *pool, int64_t size) const;
+  inline int set_next_read_len(easy_message_t *m,
+                               const int64_t fallback_len,
+                               const int64_t next_read_len);
 
-  int reset_compress_ctx(
-      easy_message_t* m, ObRpcCompressMode mode, bool& need_send_cmd_packet, bool& is_still_need_compress);
+  int reset_compress_ctx(easy_message_t *m,
+                         ObRpcCompressMode mode,
+                         bool &need_send_cmd_packet,
+                         bool &is_still_need_compress);
   /*
    * this func is to decompress segment data
    *@param [in] ctx : ctx of decompress
@@ -94,20 +117,26 @@ protected:
    *@param [in] compressed_size: size of data  to decompress
    *@param [in] original_size: size of original data  before compressing
    */
-  int decode_segment(ObRpcCompressDCtx& ctx, char* data, char* net_packet_buf, int64_t net_packet_buf_size,
-      bool is_data_compressed, int16_t compressed_size, int16_t original_size, int64_t& pos,
-      int64_t& net_packet_buf_pos);
-
+  int decode_segment(ObRpcCompressDCtx &ctx,
+                     char *data,
+                     char *net_packet_buf,
+                     int64_t net_packet_buf_size,
+                     bool is_data_compressed,
+                     int16_t compressed_size,
+                     int16_t original_size,
+                     int64_t &pos,
+                     int64_t &net_packet_buf_pos);
 protected:
-  // const int16_t COMPRESS_BLOCK_SIZE = 1024;
-  const int64_t MAX_COMPRESS_DATA_SIZE = (1UL << 32) - 1024;  // 4G - 1K
-  const int16_t COMPRESS_BLOCK_SIZE = (1 << 15) - 1024;       // 31K
-  const int32_t COMPRESS_RING_BUFFER_SIZE = 1 << 17;          // 128K
-  const int64_t ENCODE_SEGMENT_COST_TIME = 3 * 1000;          // 3ms
-  const int64_t DECODE_SEGMENT_COST_TIME = 3 * 1000;          // 3ms
+  //const int16_t COMPRESS_BLOCK_SIZE = 1024;
+  const int64_t MAX_COMPRESS_DATA_SIZE = (1UL << 32) - 1024;// 4G - 1K
+  const int16_t COMPRESS_BLOCK_SIZE = (1 << 15) - 1024;// 31K
+  const int32_t COMPRESS_RING_BUFFER_SIZE = 1 << 17;//128K
+  const int64_t ENCODE_SEGMENT_COST_TIME = 3 * 1000;//3ms
+  const int64_t DECODE_SEGMENT_COST_TIME = 3 * 1000;//3ms
 };
 
-}  // namespace obrpc
-}  // end of namespace oceanbase
+
+} // end of namespace obmysql
+} // end of namespace oceanbase
 
 #endif /* _OB_VIRTUAL_RPC_PROTOCOL_PROCESSOR_H_ */

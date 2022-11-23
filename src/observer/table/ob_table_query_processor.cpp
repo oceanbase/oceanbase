@@ -14,7 +14,6 @@
 #include "ob_table_query_processor.h"
 #include "ob_table_rpc_processor_util.h"
 #include "observer/ob_service.h"
-#include "storage/ob_partition_service.h"
 #include "ob_table_end_trans_cb.h"
 #include "sql/optimizer/ob_table_location.h"  // ObTableLocation
 #include "lib/stat/ob_diagnose_info.h"
@@ -80,7 +79,7 @@ uint64_t ObTableQueryP::get_request_checksum()
 
 void ObTableQueryP::reset_ctx()
 {
-  table_service_ctx_.reset_query_ctx(part_service_);
+  table_service_ctx_.reset_query_ctx(access_service_);
   need_retry_in_queue_ = false;
   result_row_count_ = 0;
   ObTableApiProcessorBase::reset_ctx();
@@ -92,15 +91,27 @@ ObTableAPITransCb *ObTableQueryP::new_callback(rpc::ObRequest *req)
   return nullptr;
 }
 
-int ObTableQueryP::get_partition_ids(uint64_t table_id, ObIArray<int64_t> &part_ids)
+int ObTableQueryP::get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
-  uint64_t partition_id = arg_.partition_id_;
-  if (OB_INVALID_ID == partition_id) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("partitioned table not supported", K(ret), K(table_id));
-  } else {
-    if (OB_FAIL(part_ids.push_back(partition_id))) {
+  ObTabletID tablet_id = arg_.tablet_id_;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = NULL;
+  if (!tablet_id.is_valid()) {
+    const uint64_t tenant_id = MTL_ID();
+    if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id), K(table_schema));
+    } else if (!table_schema->is_partitioned_table()) {
+      tablet_id = table_schema->get_tablet_id();
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("partitioned table not supported", K(ret), K(table_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
       LOG_WARN("failed to push back", K(ret));
     }
   }
@@ -120,20 +131,22 @@ int ObTableQueryP::try_process()
                                 false/*ignored*/,
                                 arg_.entity_type_,
                                 table::ObBinlogRowImageType::MINIMAL/*ignored*/);
-  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObTabletID, 1> tablet_ids;
   const bool is_readonly = true;
   const ObTableConsistencyLevel consistency_level = arg_.consistency_level_;
   ObTableQueryResultIterator *result_iterator = nullptr;
   int32_t result_count = 0;
   if (OB_FAIL(get_table_id(arg_.table_name_, arg_.table_id_, table_id))) {
     LOG_WARN("failed to get table id", K(ret));
-  } else if (OB_FAIL(get_partition_ids(table_id, part_ids))) {
-    LOG_WARN("failed to get part id", K(ret));
-  } else if (1 != part_ids.count()) {
+  } else if (OB_FAIL(get_tablet_ids(table_id, tablet_ids))) {
+    LOG_WARN("failed to get tablet id", K(ret));
+  } else if (1 != tablet_ids.count()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("should have one partition", K(ret), K(part_ids));
-  } else if (FALSE_IT(table_service_ctx_.param_partition_id() = part_ids.at(0))) {
-  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, part_ids, timeout_ts))) {
+    LOG_WARN("should have one tablet", K(ret), K(tablet_ids));
+  } else if (FALSE_IT(table_service_ctx_.param_tablet_id() = tablet_ids.at(0))) {
+  } else if (OB_FAIL(get_ls_id(tablet_ids.at(0), table_service_ctx_.param_ls_id()))) {
+    LOG_WARN("failed to get ls id", K(ret));
+  } else if (OB_FAIL(start_trans(is_readonly, sql::stmt::T_SELECT, consistency_level, table_id, table_service_ctx_.param_ls_id(), timeout_ts))) {
     LOG_WARN("failed to start readonly transaction", K(ret));
   } else if (OB_FAIL(table_service_->execute_query(table_service_ctx_, arg_.query_,
                                                    result_, result_iterator))) {
@@ -190,13 +203,14 @@ int ObTableQueryP::try_process()
     LOG_DEBUG("[yzfdebug] last result", K(ret), "row_count", result_.get_row_count());
     NG_TRACE_EXT(tag1, OB_ID(return_rows), result_count, OB_ID(arg2), result_row_count_);
   }
-  table_service_ctx_.destroy_result_iterator(part_service_);
+  table_service_ctx_.destroy_result_iterator(access_service_);
   bool need_rollback_trans = (OB_SUCCESS != ret);
   int tmp_ret = ret;
   if (OB_FAIL(end_trans(need_rollback_trans, req_, timeout_ts))) {
     LOG_WARN("failed to end trans", K(ret), "rollback", need_rollback_trans);
   }
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
+
   // record events
   if (arg_.query_.get_htable_filter().is_valid()) {
     stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY; // hbase query
@@ -205,14 +219,14 @@ int ObTableQueryP::try_process()
   }
   audit_row_count_ = result_row_count_;
 
-#ifndef NDEBUG
-  // debug mode
-  LOG_INFO("[TABLE] execute query", K(ret), K_(arg), K(rpc_timeout),
-           K_(retry_count), K(result_count), K_(result_row_count));
-#else
-  // release mode
-  LOG_TRACE("[TABLE] execute query", K(ret), K_(arg), K(rpc_timeout), K_(retry_count),
-            "receive_ts", get_receive_timestamp(), K(result_count), K_(result_row_count));
-#endif
+  #ifndef NDEBUG
+    // debug mode
+    LOG_INFO("[TABLE] execute query", K(ret), K_(arg), K(rpc_timeout),
+             K_(retry_count), K(result_count), K_(result_row_count));
+  #else
+    // release mode
+    LOG_TRACE("[TABLE] execute query", K(ret), K_(arg), K(rpc_timeout), K_(retry_count),
+              "receive_ts", get_receive_timestamp(), K(result_count), K_(result_row_count));
+  #endif
   return ret;
 }

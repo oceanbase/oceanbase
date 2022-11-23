@@ -15,16 +15,19 @@
 
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-enum ObStorageFormatVersion {
+enum ObStorageFormatVersion
+{
   OB_STORAGE_FORMAT_VERSION_INVALID = 0,
-  OB_STORAGE_FORMAT_VERSION_V1 = 1,   // supports micro block compaction
-  OB_STORAGE_FORMAT_VERSION_V2 = 2,   // supports encoding, not used any more
-  OB_STORAGE_FORMAT_VERSION_V3 = 3,   // supports micro block compaction optimization
-  OB_STORAGE_FORMAT_VERSION_V4 = 4,   // supports optimize ObNumber integer store
-  OB_STORAGE_FORMAT_VERSION_MAX = 5,  // update MAX each time add new version
+  OB_STORAGE_FORMAT_VERSION_V1 = 1, // supports micro block compaction
+  OB_STORAGE_FORMAT_VERSION_V2 = 2, // supports encoding, not used any more
+  OB_STORAGE_FORMAT_VERSION_V3 = 3, // supports micro block compaction optimization
+  OB_STORAGE_FORMAT_VERSION_V4 = 4, // supports optimize ObNumber integer store
+  OB_STORAGE_FORMAT_VERSION_MAX = 5, // update MAX each time add new version
 };
 
 }  // end namespace common

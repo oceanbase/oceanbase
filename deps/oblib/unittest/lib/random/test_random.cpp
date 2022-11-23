@@ -13,13 +13,15 @@
 #include <gtest/gtest.h>
 #include "lib/random/ob_random.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 TEST(ObRandom, normal)
 {
   int64_t res = 0;
-  // test static methods
+  //test static methods
   res = ObRandom::rand(10, 10);
   ASSERT_EQ(10, res);
   res = ObRandom::rand(0, 100);
@@ -29,7 +31,7 @@ TEST(ObRandom, normal)
   res = ObRandom::rand(10, 1);
   ASSERT_TRUE(res >= 1 && res <= 10);
 
-  // test int64_t random number
+  //test int64_t random number
   ObRandom rand1;
   res = rand1.get();
   res = rand1.get(10, 10);
@@ -41,23 +43,18 @@ TEST(ObRandom, normal)
   res = rand1.get(10, 1);
   ASSERT_TRUE(res >= 1 && res <= 10);
 
-  // test int32_t random number
+  //test int32_t random number
   res = rand1.get_int32();
-  res = rand1.get_int32(10, 10);
-  ASSERT_EQ(10, res);
-  res = rand1.get_int32(0, 100);
-  ASSERT_TRUE(res <= 100 && res >= 0);
-  res = rand1.get_int32(-1, -2);
-  ASSERT_TRUE(res >= -2 && res <= -1);
-  res = rand1.get_int32(10, 1);
-  ASSERT_TRUE(res >= 1 && res <= 10);
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+
+

@@ -16,7 +16,7 @@
 
 using namespace oceanbase::common;
 
-int ObSimpleLogFile::assign(const char* filename, FileType& type)
+int ObSimpleLogFile::assign(const char *filename, FileType &type)
 {
   int ret = OB_SUCCESS;
   if (NULL == filename) {
@@ -29,8 +29,9 @@ int ObSimpleLogFile::assign(const char* filename, FileType& type)
       type = UNKNOWN;
     } else {
       int ckpt_len = static_cast<int32_t>(strlen(DEFAULT_CKPT_EXTENSION));
-      if (f_len > ckpt_len + 1 && 0 == STRCMP(filename + f_len - ckpt_len, DEFAULT_CKPT_EXTENSION) &&
-          '.' == *(filename + f_len - ckpt_len - 1)) {
+      if (f_len > ckpt_len + 1
+          && 0 == STRCMP(filename + f_len - ckpt_len, DEFAULT_CKPT_EXTENSION)
+          && '.' == *(filename + f_len - ckpt_len - 1)) {
         f_len -= ckpt_len + 1;
         strncpy(basename, filename, f_len);
         basename[f_len] = '\0';
@@ -53,7 +54,7 @@ int ObSimpleLogFile::assign(const char* filename, FileType& type)
   return ret;
 }
 
-bool ObSimpleLogFile::is_log_id(const char* str) const
+bool ObSimpleLogFile::is_log_id(const char *str) const
 {
   bool ret = true;
   if (str == NULL || (*str) == '\0' || (*str) == '0') {
@@ -64,13 +65,13 @@ bool ObSimpleLogFile::is_log_id(const char* str) const
         ret = false;
         break;
       }
-      str++;
+      str ++;
     }
   }
   return ret;
 }
 
-uint64_t ObSimpleLogFile::str_to_uint64(const char* str) const
+uint64_t ObSimpleLogFile::str_to_uint64(const char *str) const
 {
   uint64_t u = 0U;
   if (NULL == str) {
@@ -81,7 +82,7 @@ uint64_t ObSimpleLogFile::str_to_uint64(const char* str) const
   return u;
 }
 
-bool ObSimpleLogFile::operator<(const ObSimpleLogFile& r) const
+bool ObSimpleLogFile::operator< (const ObSimpleLogFile &r) const
 {
   return id < r.id;
 }
@@ -92,9 +93,10 @@ ObLogDirScanner::ObLogDirScanner()
 }
 
 ObLogDirScanner::~ObLogDirScanner()
-{}
+{
+}
 
-int ObLogDirScanner::init(const char* log_dir)
+int ObLogDirScanner::init(const char *log_dir)
 {
   int ret = OB_SUCCESS;
 
@@ -105,26 +107,24 @@ int ObLogDirScanner::init(const char* log_dir)
     ret = search_log_dir_(log_dir);
     if (OB_SUCC(ret)) {
       is_init_ = true;
-      SHARE_LOG(INFO, "ObLogDirScanner initialize successfully", K_(min_log_id), K_(max_log_id), K_(max_ckpt_id));
+      SHARE_LOG(INFO, "ObLogDirScanner initialize successfully",
+                K_(min_log_id), K_(max_log_id), K_(max_ckpt_id));
     } else if (OB_DISCONTINUOUS_LOG == ret) {
       is_init_ = true;
-      _SHARE_LOG(INFO,
-          "ObLogDirScanner initialize successfully"
-          "[min_log_id_=%lu max_log_id_=%lu max_ckpt_id_=%lu], "
-          "but log files in \"%s\" directory is not continuous",
-          min_log_id_,
-          max_log_id_,
-          max_ckpt_id_,
-          log_dir);
+      _SHARE_LOG(INFO, "ObLogDirScanner initialize successfully"
+                "[min_log_id_=%lu max_log_id_=%lu max_ckpt_id_=%lu], "
+                "but log files in \"%s\" directory is not continuous",
+                min_log_id_, max_log_id_, max_ckpt_id_, log_dir);
     } else {
-      SHARE_LOG(ERROR, "search_log_dir_ error, ObLogDirScanner initialize failed", K(log_dir), K(ret));
+      SHARE_LOG(ERROR, "search_log_dir_ error, ObLogDirScanner initialize failed",
+                KCSTRING(log_dir), K(ret));
     }
   }
 
   return ret;
 }
 
-int ObLogDirScanner::get_min_log_id(uint64_t& log_id) const
+int ObLogDirScanner::get_min_log_id(uint64_t &log_id) const
 {
   int ret = OB_SUCCESS;
 
@@ -142,7 +142,7 @@ int ObLogDirScanner::get_min_log_id(uint64_t& log_id) const
   return ret;
 }
 
-int ObLogDirScanner::get_max_log_id(uint64_t& log_id) const
+int ObLogDirScanner::get_max_log_id(uint64_t &log_id) const
 {
   int ret = OB_SUCCESS;
 
@@ -160,7 +160,7 @@ int ObLogDirScanner::get_max_log_id(uint64_t& log_id) const
   return ret;
 }
 
-int ObLogDirScanner::get_max_ckpt_id(uint64_t& ckpt_id) const
+int ObLogDirScanner::get_max_ckpt_id(uint64_t &ckpt_id) const
 {
   int ret = OB_SUCCESS;
 
@@ -188,24 +188,25 @@ bool ObLogDirScanner::has_ckpt() const
   return has_ckpt_;
 }
 
-int ObLogDirScanner::search_log_dir_(const char* log_dir)
+int ObLogDirScanner::search_log_dir_(const char *log_dir)
 {
   int ret = OB_SUCCESS;
 
   int func_ret = 0;
 
   common::ObVector<ObSimpleLogFile> log_files(NULL, ObModIds::OB_SLOG_SCANNER);
-  DIR* plog_dir = opendir(log_dir);
+  DIR *plog_dir = opendir(log_dir);
   if (OB_UNLIKELY(NULL == plog_dir)) {
     func_ret = mkdir(log_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-    if (func_ret != 0 && EEXIST != errno) {
+    if (func_ret != 0
+        && EEXIST != errno) {
       ret = OB_ERROR;
-      SHARE_LOG(ERROR, "mkdir error", K(ret), K(log_dir), KERRMSG);
+      SHARE_LOG(ERROR, "mkdir error", K(ret), KCSTRING(log_dir), KERRMSG);
     } else {
       plog_dir = opendir(log_dir);
       if (NULL == plog_dir) {
         ret = OB_ERROR;
-        SHARE_LOG(ERROR, "opendir error", K(ret), K(log_dir), KERRMSG);
+        SHARE_LOG(ERROR, "opendir error", K(ret), KCSTRING(log_dir), KERRMSG);
       }
     }
   }
@@ -213,7 +214,7 @@ int ObLogDirScanner::search_log_dir_(const char* log_dir)
   if (OB_SUCC(ret)) {
     struct dirent entry;
     memset(&entry, 0x00, sizeof(struct dirent));
-    struct dirent* pentry = &entry;
+    struct dirent *pentry = &entry;
 
     ObSimpleLogFile log_file;
     ObSimpleLogFile::FileType file_type;
@@ -221,22 +222,23 @@ int ObLogDirScanner::search_log_dir_(const char* log_dir)
     func_ret = readdir_r(plog_dir, pentry, &pentry);
     while (OB_SUCC(ret) && 0 == func_ret && NULL != pentry) {
       if (OB_FAIL(log_file.assign(pentry->d_name, file_type))) {
-        SHARE_LOG(WARN, "assign log file fail", K(file_type), K(pentry->d_name));
+        SHARE_LOG(WARN, "assign log file fail", K(file_type), KCSTRING(pentry->d_name));
       } else {
         if (ObSimpleLogFile::LOG == file_type) {
           if (OB_FAIL(log_files.push_back(log_file))) {
-            SHARE_LOG(WARN, "fail to push log file", K(log_file.name));
+            SHARE_LOG(WARN, "fail to push log file", KCSTRING(log_file.name));
           } else {
-            SHARE_LOG(DEBUG, "find a valid log file", K(log_file.name));
+            SHARE_LOG(DEBUG, "find a valid log file", KCSTRING(log_file.name));
           }
         } else if (ObSimpleLogFile::CKPT == file_type) {
-          SHARE_LOG(DEBUG, "find a valid checkpoint file", K(log_file.name));
+          SHARE_LOG(DEBUG, "find a valid checkpoint file", KCSTRING(log_file.name));
           if (max_ckpt_id_ < log_file.id) {
             max_ckpt_id_ = log_file.id;
             has_ckpt_ = true;
           }
         } else {
-          _SHARE_LOG(DEBUG, "ignore file(\"%s\"): \"%s\" is not valid log file", pentry->d_name, pentry->d_name);
+          _SHARE_LOG(DEBUG, "ignore file(\"%s\"): \"%s\" is not valid log file",
+                    pentry->d_name, pentry->d_name);
         }
         if (OB_SUCC(ret)) {
           func_ret = readdir_r(plog_dir, pentry, &pentry);
@@ -249,7 +251,7 @@ int ObLogDirScanner::search_log_dir_(const char* log_dir)
     }
     func_ret = closedir(plog_dir);
     if (func_ret < 0) {
-      SHARE_LOG(ERROR, "closedir", K(log_dir), KERRMSG);
+      SHARE_LOG(ERROR, "closedir", KCSTRING(log_dir), KERRMSG);
       ret = OB_SUCCESS;
     }
   }
@@ -262,8 +264,8 @@ int ObLogDirScanner::search_log_dir_(const char* log_dir)
   return ret;
 }
 
-int ObLogDirScanner::check_continuity_(
-    const ObVector<ObSimpleLogFile>& files, uint64_t& min_file_id, uint64_t& max_file_id)
+int ObLogDirScanner::check_continuity_(const ObVector<ObSimpleLogFile> &files, uint64_t &min_file_id,
+                                       uint64_t &max_file_id)
 {
   int ret = OB_SUCCESS;
 

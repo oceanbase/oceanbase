@@ -11,21 +11,26 @@
  */
 
 #include <gtest/gtest.h>
+#define private public
 #include "lib/task/ob_timer.h"
+#undef private
 
-namespace oceanbase {
-namespace common {
+using namespace oceanbase::lib;
+namespace oceanbase
+{
+namespace common
+{
 
-class TestTimerTask : public ObTimerTask {
+class TestTimerTask : public ObTimerTask
+{
 public:
-  TestTimerTask() : running_(false), task_run_count_(0)
-  {}
+  TestTimerTask() : running_(false), task_run_count_(0) {}
 
   void runTimerTask()
   {
     running_ = true;
     ++task_run_count_;
-    this_routine::usleep(50000);  // 50ms
+    ::usleep(50000);//50ms
     running_ = false;
   }
 
@@ -35,30 +40,31 @@ public:
 
 TEST(TestTimer, timer_task)
 {
+  TestTimerTask task[32 + 1];
   ObTimer timer;
   ASSERT_EQ(OB_SUCCESS, timer.init());
   ASSERT_EQ(OB_SUCCESS, timer.start());
-  TestTimerTask task[33];
   const bool is_repeat = true;
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task[0], 100, is_repeat));
-  for (int i = 1; i < 32; ++i) {
-    ASSERT_EQ(OB_SUCCESS, timer.schedule(task[i], 5000000000, is_repeat));  // 5000s
+  for(int i=1; i<32; ++i)
+  {
+    ASSERT_EQ(OB_SUCCESS,timer.schedule(task[i], 5000000000, is_repeat));//5000s
   }
-  this_routine::usleep(5000);  // 5ms
+  ::usleep(5000);//5ms
   ASSERT_EQ(OB_ERR_UNEXPECTED, timer.schedule(task[32], 50000000, is_repeat));
-  this_routine::usleep(1000000);  // 1s
+  ::usleep(1000000);//1s
   ASSERT_GT(task[0].task_run_count_, 1);
 }
 
 TEST(TestTimer, task_cancel)
 {
+  TestTimerTask task;
   ObTimer timer;
   ASSERT_FALSE(timer.inited());
   ASSERT_EQ(OB_SUCCESS, timer.init());
   ASSERT_TRUE(timer.inited());
   ASSERT_EQ(OB_SUCCESS, timer.start());
-  TestTimerTask task;
-  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 1000, true));
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 50000, true));
   ASSERT_TRUE(timer.task_exist(task));
   timer.dump();
   timer.cancel(task);
@@ -66,33 +72,34 @@ TEST(TestTimer, task_cancel)
 
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 1000, false));
   ASSERT_TRUE(timer.task_exist(task));
-  this_routine::usleep(10000);
+  ::usleep(10000);
   ASSERT_FALSE(timer.task_exist(task));
 }
 
 TEST(TestTimer, scheduled_immediately_task)
 {
-  ObTimer timer;
   TestTimerTask task[2];
+  ObTimer timer;
   ASSERT_EQ(OB_SUCCESS, timer.init());
   ASSERT_EQ(OB_SUCCESS, timer.start());
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task[0], 500000, true));
-  this_routine::usleep(60000);
+  ::usleep(60000);
   ASSERT_EQ(task[0].task_run_count_, 0);
 
   ASSERT_EQ(OB_SUCCESS, timer.schedule_repeate_task_immediately(task[1], 50000));
-  this_routine::usleep(100);
+  ::usleep(100);
   ASSERT_EQ(task[1].task_run_count_, 1);
-  this_routine::usleep(600000);
+  ::usleep(600000);
   ASSERT_GT(task[1].task_run_count_, 1);
 }
 
+
 TEST(TestTimer, start_stop)
 {
+  TestTimerTask task;
   ObTimer timer;
   ASSERT_EQ(OB_SUCCESS, timer.init());
   ASSERT_EQ(OB_SUCCESS, timer.start());
-  TestTimerTask task;
   ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, true));
   timer.stop();
   ASSERT_NE(OB_SUCCESS, timer.schedule(task, 0, true));
@@ -113,10 +120,10 @@ TEST(TestTimer, start_stop)
   timer.destroy();
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

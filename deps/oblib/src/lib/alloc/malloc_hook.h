@@ -12,6 +12,7 @@
 
 #ifndef MALLOC_HOOK_H
 #define MALLOC_HOOK_H
+
 extern void init_malloc_hook();
 
 #endif /* MALLOC_HOOK_H */

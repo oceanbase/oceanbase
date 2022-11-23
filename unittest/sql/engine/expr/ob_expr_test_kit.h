@@ -25,23 +25,28 @@
 #include "sql/ob_sql_init.h"
 #include "sql/code_generator/ob_expr_generator_impl.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 // help create old expr && new expr
-struct ObExprTestKit {
+struct ObExprTestKit
+{
   ObExprTestKit();
   int init();
 
   void destroy();
 
-  int resolve_const_expr(const char* str, ObRawExpr*& expr);
+  int resolve_const_expr(const char *str, ObRawExpr *&expr);
 
   // resolve const expr and replace arguments with %args
-  int create_expr(
-      const char* expr_str, ObObj* args, int arg_cnt, ObRawExpr* raw_expr, ObSqlExpression& old_expr, ObExpr*& expr);
+  int create_expr(const char *expr_str, ObObj *args, int arg_cnt,
+                  ObRawExpr *raw_expr, ObSqlExpression &old_expr, ObExpr *&expr);
 
-  OB_INLINE int timed_execute(const char* info, const int64_t times, std::function<int(void)> func)
+  OB_INLINE int timed_execute(const char *info,
+                              const int64_t times,
+                              std::function<int(void)> func)
   {
     int ret = common::OB_SUCCESS;
     int64_t start = common::ObTimeUtility::current_time();
@@ -67,6 +72,6 @@ struct ObExprTestKit {
   ObEvalCtx eval_ctx_;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
-#endif  // OCEANBASE_EXPR_OB_EXPR_TEST_KIT_H_
+} // end namespace sql
+} // end namespace oceanbase
+#endif // OCEANBASE_EXPR_OB_EXPR_TEST_KIT_H_

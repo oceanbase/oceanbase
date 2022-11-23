@@ -46,6 +46,8 @@ static ObObjType ABS_RESULT_TYPE[ObMaxType] =
     ObMaxType,      /* ObNVarchar2Type      */
     ObMaxType,      /* ObNCharType          */
     ObMaxType,      /* ObURowIDType         */
+    ObMaxType,      /* ObLobType     */
+    ObDoubleType,    /* ObJsonType     */
 };
 
 static_assert(sizeof(ABS_RESULT_TYPE) / sizeof(ObObjType) == ObMaxType,

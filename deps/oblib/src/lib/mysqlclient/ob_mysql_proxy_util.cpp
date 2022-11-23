@@ -22,12 +22,14 @@ using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
 
 ObMySQLProxyUtil::ObMySQLProxyUtil() : pool_(NULL)
-{}
+{
+}
 
 ObMySQLProxyUtil::~ObMySQLProxyUtil()
-{}
+{
+}
 
-int ObMySQLProxyUtil::init(ObISQLConnectionPool* pool)
+int ObMySQLProxyUtil::init(ObISQLConnectionPool *pool)
 {
   int ret = OB_SUCCESS;
   if (NULL == pool) {
@@ -39,11 +41,12 @@ int ObMySQLProxyUtil::init(ObISQLConnectionPool* pool)
   return ret;
 }
 
-int ObMySQLProxyUtil::escape(const char* from, const uint64_t length, char* to, const uint64_t size)
+int ObMySQLProxyUtil::escape(const char *from, const uint64_t length, char *to, const uint64_t size)
 {
   int ret = OB_SUCCESS;
   if ((NULL == from) || (NULL == to) || (0 == size)) {
-    _OB_LOG(WARN, "check input param failed:from[%s], len[%lu], to[%p], size[%ld]", from, length, to, size);
+    _OB_LOG(WARN, "check input param failed:from[%s], len[%lu], to[%p], size[%ld]",
+              from, length, to, size);
     ret = OB_INVALID_ARGUMENT;
   } else {
     int64_t out_size = 0;
@@ -53,3 +56,4 @@ int ObMySQLProxyUtil::escape(const char* from, const uint64_t length, char* to, 
   }
   return ret;
 }
+

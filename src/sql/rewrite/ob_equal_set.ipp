@@ -10,17 +10,21 @@
  * See the Mulan PubL v2 for more details.
  */
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 template <typename COLUMN_INFO, typename CONST_INFO>
 ObEqualSet<COLUMN_INFO, CONST_INFO>::ObEqualSet()
-{}
+{
+}
 template <typename COLUMN_INFO, typename CONST_INFO>
 ObEqualSet<COLUMN_INFO, CONST_INFO>::~ObEqualSet()
-{}
+{
+}
 
-template <typename COLUMN_INFO, typename CONST_INFO>
-int ObEqualSet<COLUMN_INFO, CONST_INFO>::add_expr(int64_t expr_idx, bool flag, const COLUMN_INFO& payload)
+template<typename COLUMN_INFO, typename CONST_INFO>
+int ObEqualSet<COLUMN_INFO, CONST_INFO>::add_expr(int64_t expr_idx, bool flag, const COLUMN_INFO &payload)
 {
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(expr_idx < 0)) {
@@ -41,7 +45,7 @@ int ObEqualSet<COLUMN_INFO, CONST_INFO>::add_expr(int64_t expr_idx, bool flag, c
 }
 
 template <typename COLUMN_INFO, typename CONST_INFO>
-bool ObEqualSet<COLUMN_INFO, CONST_INFO>::intersect_equal_set(const ObEqualSet& other) const
+bool ObEqualSet<COLUMN_INFO, CONST_INFO>::intersect_equal_set(const ObEqualSet &other) const
 {
   return expr_bitmap_.overlap(other.expr_bitmap_);
 }
@@ -74,13 +78,13 @@ bool ObEqualSet<COLUMN_INFO, CONST_INFO>::has_expr(int64_t expr_idx) const
 }
 
 template <typename COLUMN_INFO, typename CONST_INFO>
-const COLUMN_INFO* ObEqualSet<COLUMN_INFO, CONST_INFO>::get_expr(int64_t expr_idx) const
+const COLUMN_INFO *ObEqualSet<COLUMN_INFO, CONST_INFO>::get_expr(int64_t expr_idx) const
 {
   return exprs_.get(expr_idx);
 }
 
 template <typename COLUMN_INFO, typename CONST_INFO>
-int ObEqualSet<COLUMN_INFO, CONST_INFO>::add_const(const CONST_INFO& obj)
+int ObEqualSet<COLUMN_INFO, CONST_INFO>::add_const(const CONST_INFO &obj)
 {
   return constants_.push_back(obj);
 }
@@ -90,8 +94,8 @@ bool ObEqualSet<COLUMN_INFO, CONST_INFO>::has_const() const
   return constants_.count() > 0;
 }
 
-// template <typename COLUMN_INFO, typename CONST_INFO>
-// void ObEqualSet<COLUMN_INFO, CONST_INFO>::reset()
+//template <typename COLUMN_INFO, typename CONST_INFO>
+//void ObEqualSet<COLUMN_INFO, CONST_INFO>::reset()
 //{
 //  exprs_.reuse();
 //  flags_.reset();
@@ -109,31 +113,37 @@ int64_t ObEqualSet<COLUMN_INFO, CONST_INFO>::get_const_num() const
   return constants_.count();
 }
 template <typename COLUMN_INFO, typename CONST_INFO>
-int ObEqualSet<COLUMN_INFO, CONST_INFO>::get_const(int64_t idx, CONST_INFO& val) const
+int ObEqualSet<COLUMN_INFO, CONST_INFO>::get_const(int64_t idx, CONST_INFO &val) const
 {
   return constants_.at(idx, val);
 }
 ////////////////////////////////////////////////////////////////
 template <typename COLUMN_INFO, typename CONST_INFO>
-ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::ColumnIterator() : equal_set_(NULL), col_iter_()
-{}
+ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::ColumnIterator()
+    : equal_set_(NULL),
+      col_iter_()
+{
+}
 template <typename COLUMN_INFO, typename CONST_INFO>
-ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::ColumnIterator(
-    const ObEqualSet* equal_set, const ObEqualSet<COLUMN_INFO, CONST_INFO>::ColIter& col_iter)
-    : equal_set_(equal_set), col_iter_(col_iter)
-{}
+ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::ColumnIterator(const ObEqualSet *equal_set,
+                                                                    const ObEqualSet<COLUMN_INFO, CONST_INFO>::ColIter &col_iter)
+    : equal_set_(equal_set),
+      col_iter_(col_iter)
+{
+}
 template <typename COLUMN_INFO, typename CONST_INFO>
 ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::~ColumnIterator()
-{}
+{
+}
 template <typename COLUMN_INFO, typename CONST_INFO>
-ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::ColumnIterator(
-    const ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator& other)
-    : equal_set_(other.equal_set_), col_iter_(other.col_iter_)
-{}
+ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::ColumnIterator(const ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator &other)
+    : equal_set_(other.equal_set_),
+      col_iter_(other.col_iter_)
+{
+}
 template <typename COLUMN_INFO, typename CONST_INFO>
-typename ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator&
-    ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::operator=(
-        const ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator& other)
+typename ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator
+&ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::operator=(const ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator &other)
 {
   if (this != &other) {
     equal_set_ = other.equal_set_;
@@ -142,20 +152,17 @@ typename ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator&
   return *this;
 }
 template <typename COLUMN_INFO, typename CONST_INFO>
-bool ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::operator==(
-    const ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator& other) const
+bool ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::operator==(const ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator &other) const
 {
   return equal_set_ == other.equal_set_ && col_iter_ == other.col_iter_;
 }
 template <typename COLUMN_INFO, typename CONST_INFO>
-bool ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::operator!=(
-    const ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator& other) const
+bool ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::operator!=(const ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator &other) const
 {
   return equal_set_ != other.equal_set_ || col_iter_ != other.col_iter_;
 }
 template <typename COLUMN_INFO, typename CONST_INFO>
-typename ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator&
-    ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::operator++()
+typename ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator &ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::operator++()
 {
   ++col_iter_;
   return *this;
@@ -171,9 +178,9 @@ int64_t ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::get_expr_idx() cons
   return (*col_iter_).first;
 }
 template <typename COLUMN_INFO, typename CONST_INFO>
-const COLUMN_INFO& ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::get_expr_info() const
+const COLUMN_INFO &ObEqualSet<COLUMN_INFO, CONST_INFO>::ColumnIterator::get_expr_info() const
 {
   return (*col_iter_).second;
 }
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase

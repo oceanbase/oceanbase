@@ -17,59 +17,50 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprUpperTest : public ::testing::Test {
+class ObExprUpperTest: public ::testing::Test
+{
 public:
   ObExprUpperTest();
   virtual ~ObExprUpperTest();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
-  ObExprUpperTest(const ObExprUpperTest& other);
-  ObExprUpperTest& operator=(const ObExprUpperTest& other);
-
+  ObExprUpperTest(const ObExprUpperTest &other);
+  ObExprUpperTest& operator=(const ObExprUpperTest &other);
 private:
   // data members
 };
-ObExprUpperTest::ObExprUpperTest()
-{}
+ObExprUpperTest::ObExprUpperTest() {}
 
-ObExprUpperTest::~ObExprUpperTest()
-{}
+ObExprUpperTest::~ObExprUpperTest() {}
 
-void ObExprUpperTest::SetUp()
-{}
+void ObExprUpperTest::SetUp() {}
 
-void ObExprUpperTest::TearDown()
-{}
+void ObExprUpperTest::TearDown() {}
 
-class TestAllocator : public ObIAllocator {
+class TestAllocator: public ObIAllocator
+{
 public:
-  TestAllocator() : label_(ObModIds::TEST)
-  {}
-  virtual ~TestAllocator()
-  {}
-  void* alloc(const int64_t sz)
-  {
+  TestAllocator() :
+      label_(ObModIds::TEST) {}
+  virtual ~TestAllocator() {}
+  void *alloc(const int64_t sz) {
     UNUSED(sz);
     return NULL;
   }
-  void free(void* p)
-  {
+  void free(void *p) {
     UNUSED(p);
   }
-  void freed(const int64_t sz)
-  {
+  void freed(const int64_t sz) {
     UNUSED(sz);
   }
-  void set_label(const char* label)
-  {
+  void set_label(const char *label) {
     label_ = label;
-  };
-
+  }
+  ;
 private:
-  const char* label_;
+  const char *label_;
 };
 
 #define T(obj, t1, v1, ref_type, ref_value) EXPECT_RESULT1(obj, &buf, calc_result1, t1, v1, ref_type, ref_value)
@@ -106,14 +97,15 @@ TEST_F(ObExprUpperTest, fail_test)
   F(upper, bool, true);
   F(upper, bool, false);
   F(upper, int, 123);
-  // OB_NOT_INIT
+  //OB_NOT_INIT
   TNI(upper, int, 123);
-  // OB_ALLOCATE_MEMORY_FAILED
+  //OB_ALLOCATE_MEMORY_FAILED
   TAMF(upper, varchar, "123");
 }
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("DEBUG");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+

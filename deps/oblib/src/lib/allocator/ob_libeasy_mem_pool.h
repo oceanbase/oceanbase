@@ -15,10 +15,12 @@
 
 #include <cstdlib>
 
-namespace oceanbase {
-namespace common {
-void* ob_easy_realloc(void* ptr, size_t size);
+namespace oceanbase
+{
+namespace common
+{
+void *ob_easy_realloc(void *ptr, size_t size);
 }
-}  // namespace oceanbase
+}
 
 #endif

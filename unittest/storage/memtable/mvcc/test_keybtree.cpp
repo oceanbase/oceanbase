@@ -22,32 +22,31 @@
 #include <gtest/gtest.h>
 #include <thread>
 
-namespace oceanbase {
-namespace unittest {
+namespace oceanbase
+{
+namespace unittest
+{
 using namespace oceanbase::common;
 using namespace oceanbase::keybtree;
 using namespace oceanbase::memtable;
 
 //#define IS_EQ(x, y) ASSERT_EQ(x, y)
 //#define IS_EQ(x, y) EXPECT_EQ(x, y)
-#define DUMP_BTREE                              \
-  {                                             \
-    FILE* file = fopen("dump_btree.txt", "w+"); \
-    btree.dump(file);                           \
-    fclose(file);                               \
-  }
+#define DUMP_BTREE \
+{ \
+  FILE *file = fopen("dump_btree.txt", "w+"); \
+  btree.dump(file); \
+  fclose(file); \
+}
 
-#define IS_EQ(x, y) \
-  if ((x) != (y)) { \
-    abort();        \
-  }
+#define IS_EQ(x, y) if ((x) != (y)) { abort(); }
 
-#define judge(key, val)                      \
-  {                                          \
-    if ((int64_t)(val) >> 3 != get_v(key)) { \
-      abort();                               \
-    }                                        \
-  }
+#define judge(key, val) \
+{ \
+  if ((int64_t)(val) >> 3 != get_v(key)) { \
+    abort(); \
+  } \
+}
 
 #define MAX_CPU_NUM 8
 #define CPU_NUM 8
@@ -77,48 +76,46 @@ int BIND_CPU(pthread_t thread)
   return pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
 }
 
-const char* attr = ObModIds::TEST;
+const char *attr = ObModIds::TEST;
 
-void init_key(BtreeKey* ptr, int64_t key)
+void init_key(BtreeKey *ptr, int64_t key)
 {
   ptr->get_rowkey()->get_rowkey().get_obj_ptr()[0].set_int(key);
 }
 
-int alloc_key(BtreeKey*& ret_key, int64_t key)
+int alloc_key(BtreeKey *&ret_key, int64_t key)
 {
   int ret = OB_SUCCESS;
-  ObObj* obj_ptr = nullptr;
-  ObStoreRowkey* storerowkey = nullptr;
-  if (OB_ISNULL(obj_ptr = (ObObj*)ob_malloc(sizeof(ObObj), attr)) || OB_ISNULL(new (obj_ptr) ObObj(key))) {
+  ObObj *obj_ptr = nullptr;
+  ObStoreRowkey *storerowkey = nullptr;
+  if (OB_ISNULL(obj_ptr = (ObObj *)ob_malloc(sizeof(ObObj), attr)) || OB_ISNULL(new(obj_ptr)ObObj(key))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_ISNULL(storerowkey = (ObStoreRowkey*)ob_malloc(sizeof(ObStoreRowkey), attr)) ||
-             OB_ISNULL(new (storerowkey) ObStoreRowkey(obj_ptr, 1))) {
+  } else if (OB_ISNULL(storerowkey = (ObStoreRowkey *)ob_malloc(sizeof(ObStoreRowkey), attr)) || OB_ISNULL(new(storerowkey)ObStoreRowkey(obj_ptr, 1))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_ISNULL(ret_key = (BtreeKey*)ob_malloc(sizeof(BtreeKey), attr)) ||
-             OB_ISNULL(new (ret_key) BtreeKey(storerowkey))) {
+  } else if (OB_ISNULL(ret_key = (BtreeKey *)ob_malloc(sizeof(BtreeKey), attr)) || OB_ISNULL(new(ret_key)BtreeKey(storerowkey))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   }
   return ret;
 }
 
-class FakeAllocator : public ObIAllocator {
+class FakeAllocator : public ObIAllocator
+{
 public:
-  void* alloc(int64_t size)
+  void *alloc(int64_t size) override { return ob_malloc(size, attr); }
+  void* alloc(const int64_t size, const ObMemAttr &attr) override
   {
-    return ob_malloc(size, attr);
+    UNUSED(attr);
+    return alloc(size);
   }
-  void free(void* ptr)
-  {
-    ob_free(ptr);
-  }
-  static FakeAllocator* get_instance()
+  void free(void *ptr) override { ob_free(ptr); }
+  static FakeAllocator*get_instance()
   {
     static FakeAllocator allocator;
     return &allocator;
   }
 };
 
-int64_t get_v(BtreeKey* ptr)
+int64_t get_v(BtreeKey *ptr)
 {
   int64_t tmp = 0;
   IS_EQ(OB_SUCCESS, ptr->get_rowkey()->get_rowkey().get_obj_ptr()[0].get_int(tmp));
@@ -133,9 +130,9 @@ constexpr int64_t ORDER_INSERT_THREAD_COUNT = THREAD_COUNT;
 constexpr int64_t RANDOM_INSERT_THREAD_COUNT = THREAD_COUNT >> 3;
 constexpr int64_t INSERT_COUNT_PER_THREAD = (1 << 20);
 
-constexpr int64_t DELETE_THREAD_COUNT = 2;  // THREAD_COUNT;
+constexpr int64_t DELETE_THREAD_COUNT = 2;//THREAD_COUNT;
 
-constexpr int64_t REINSERT_THREAD_COUNT = 2;  // THREAD_COUNT;
+constexpr int64_t REINSERT_THREAD_COUNT = 2;//THREAD_COUNT;
 
 constexpr int64_t SCAN_THREAD_COUNT = THREAD_COUNT;
 
@@ -156,9 +153,8 @@ TEST(TestKeyBtree, smoke_test)
 
   lib::set_memory_limit(200 * 1024 * 1024 * 1024L);
 
-  IS_EQ(INSERT_THREAD_COUNT * INSERT_COUNT_PER_THREAD >=
-            DELETE_THREAD_COUNT * DELETE_RANGE_COUNT_PER_THREAD * DELETE_RANGE_SIZE,
-      true);
+  IS_EQ(INSERT_THREAD_COUNT * INSERT_COUNT_PER_THREAD
+        >= DELETE_THREAD_COUNT * DELETE_RANGE_COUNT_PER_THREAD * DELETE_RANGE_SIZE, true);
   BtreeNodeAllocator allocator(*FakeAllocator::get_instance());
   Btree btree(allocator);
   int ret = OB_SUCCESS;
@@ -173,7 +169,7 @@ TEST(TestKeyBtree, smoke_test)
       BtreeNodeAllocator allocator(*FakeAllocator::get_instance());
       Btree btree(allocator);
       IS_EQ(OB_SUCCESS, btree.init());
-      BtreeKey* key = nullptr;
+      BtreeKey *key = nullptr;
       for (int64_t j = 0; !ATOMIC_LOAD(&should_stop); ++j) {
         auto v = (BtreeVal)(j << 3);
         IS_EQ(OB_SUCCESS, alloc_key(key, j));
@@ -187,7 +183,7 @@ TEST(TestKeyBtree, smoke_test)
   CACHE_ALIGNED int64_t head_num = -1;
   for (int64_t i = 0; i < 2; ++i) {
     head_insert_thread[i] = std::thread([&]() {
-      BtreeKey* key = nullptr;
+      BtreeKey *key = nullptr;
       while (!ATOMIC_LOAD(&should_stop)) {
         int64_t j = ATOMIC_FAA(&head_num, -1);
         auto v = (BtreeVal)(j << 3);
@@ -201,15 +197,15 @@ TEST(TestKeyBtree, smoke_test)
   for (int64_t i = 0; i < 2; ++i) {
     bad_scan_threads[i] = std::thread([&]() {
       int ret = OB_SUCCESS;
-      BtreeKey* start_key = nullptr;
-      BtreeKey* end_key = nullptr;
-      BtreeKey* tmp_key = nullptr;
+      BtreeKey *start_key = nullptr;
+      BtreeKey *end_key = nullptr;
+      BtreeKey *tmp_key = nullptr;
       BtreeVal tmp_value = nullptr;
       IS_EQ(OB_SUCCESS, alloc_key(start_key, 0));
       IS_EQ(OB_SUCCESS, alloc_key(end_key, 0));
       IS_EQ(OB_SUCCESS, alloc_key(tmp_key, 0));
       while (!ATOMIC_LOAD(&should_stop)) {
-        TScanHandle iter;
+        BtreeIterator iter;
         init_key(start_key, MAX_INSERT_NUM);
         init_key(end_key, INT64_MAX);
         ret = btree.set_key_range(iter, *start_key, false, *end_key, false, 2);
@@ -219,7 +215,7 @@ TEST(TestKeyBtree, smoke_test)
         iter.reset();
         init_key(start_key, INT64_MIN);
         init_key(end_key, INT64_MIN + 1);
-        ret = btree.set_key_range(iter, *start_key, false, *end_key, false, 2);
+        ret = btree.set_key_range(iter,*start_key, false, *end_key, false, 2);
         IS_EQ(OB_SUCCESS, ret);
         ret = iter.get_next(*tmp_key, tmp_value);
         IS_EQ(OB_ITER_END, ret);
@@ -232,17 +228,17 @@ TEST(TestKeyBtree, smoke_test)
   for (int64_t i = 0; i < 2; ++i) {
     scan_all_threads[i] = std::thread([&]() {
       int ret = OB_SUCCESS;
-      BtreeKey* start_key = nullptr;
-      BtreeKey* end_key = nullptr;
-      BtreeKey* tmp_key = nullptr;
+      BtreeKey *start_key = nullptr;
+      BtreeKey *end_key = nullptr;
+      BtreeKey *tmp_key = nullptr;
       BtreeVal tmp_value = nullptr;
-      BtreeKey* last = nullptr;
+      BtreeKey *last = nullptr;
       IS_EQ(OB_SUCCESS, alloc_key(start_key, INT64_MIN));
       IS_EQ(OB_SUCCESS, alloc_key(end_key, INT64_MAX));
       IS_EQ(OB_SUCCESS, alloc_key(tmp_key, 0));
       IS_EQ(OB_SUCCESS, alloc_key(last, 0));
       while (!ATOMIC_LOAD(&should_stop)) {
-        TScanHandle iter;
+        BtreeIterator iter;
         init_key(last, INT64_MIN);
         ret = btree.set_key_range(iter, *start_key, false, *end_key, false, 2);
         IS_EQ(OB_SUCCESS, ret);
@@ -265,7 +261,7 @@ TEST(TestKeyBtree, smoke_test)
   for (int64_t i = 0; i < ORDER_INSERT_THREAD_COUNT; ++i) {
     order_insert_threads[i] = std::thread([&]() {
       int ret = OB_SUCCESS;
-      BtreeKey* tmp_key = nullptr;
+      BtreeKey *tmp_key = nullptr;
       BtreeVal tmp_value = nullptr;
       for (int64_t j = 0; j < INSERT_COUNT_PER_THREAD; ++j) {
         int64_t key = ATOMIC_FAA(&global_key, 1);
@@ -289,7 +285,7 @@ TEST(TestKeyBtree, smoke_test)
     random_insert_threads[i] = std::thread([&]() {
       int ret = OB_SUCCESS;
       for (int64_t j = 0; j < INSERT_COUNT_PER_THREAD * 4; ++j) {
-        BtreeKey* tmp_key = nullptr;
+        BtreeKey *tmp_key = nullptr;
         BtreeVal tmp_value = nullptr;
         int64_t key = ObRandom::rand(0, MAX_INSERT_NUM - 1);
         auto v = (BtreeVal)(key << 3);
@@ -313,7 +309,7 @@ TEST(TestKeyBtree, smoke_test)
   for (int64_t i = 0; i < DELETE_THREAD_COUNT; ++i) {
     delete_threads[i] = std::thread([&]() {
       int ret = OB_SUCCESS;
-      BtreeKey* tmp_key = nullptr;
+      BtreeKey *tmp_key = nullptr;
       BtreeVal tmp_value = nullptr;
       int64_t key = 0;
       IS_EQ(OB_SUCCESS, alloc_key(tmp_key, 0));
@@ -333,7 +329,7 @@ TEST(TestKeyBtree, smoke_test)
   for (int64_t i = 0; i < REINSERT_THREAD_COUNT; ++i) {
     reinsert_threads[i] = std::thread([&]() {
       int ret = OB_SUCCESS;
-      BtreeKey* tmp_key = nullptr;
+      BtreeKey *tmp_key = nullptr;
       BtreeVal tmp_value = nullptr;
       int64_t key = 0;
       IS_EQ(OB_SUCCESS, alloc_key(tmp_key, 0));
@@ -371,10 +367,10 @@ TEST(TestKeyBtree, smoke_test)
   CACHE_ALIGNED int64_t sum = 0;
   for (int64_t i = 0; i < SCAN_THREAD_COUNT; ++i) {
     scan_threads[i] = std::thread([&, i]() {
-      TScanHandle iter1, iter2;
-      BtreeKey* start_key = nullptr;
-      BtreeKey* end_key = nullptr;
-      BtreeKey* tmp_key = nullptr;
+      BtreeIterator iter1, iter2;
+      BtreeKey *start_key = nullptr;
+      BtreeKey *end_key = nullptr;
+      BtreeKey *tmp_key = nullptr;
       BtreeVal tmp_value = nullptr;
       int64_t len = ORDER_INSERT_THREAD_COUNT * INSERT_COUNT_PER_THREAD / SCAN_THREAD_COUNT;
       IS_EQ(OB_SUCCESS, alloc_key(start_key, i * len));
@@ -400,15 +396,13 @@ TEST(TestKeyBtree, smoke_test)
   for (int64_t i = 0; i < SCAN_THREAD_COUNT; ++i) {
     scan_threads[i].join();
   }
-  IS_EQ((ORDER_INSERT_THREAD_COUNT * INSERT_COUNT_PER_THREAD - 1) * ORDER_INSERT_THREAD_COUNT *
-            INSERT_COUNT_PER_THREAD / 2,
-      sum);
+  IS_EQ((ORDER_INSERT_THREAD_COUNT * INSERT_COUNT_PER_THREAD - 1) * ORDER_INSERT_THREAD_COUNT * INSERT_COUNT_PER_THREAD / 2, sum);
   _OB_LOG(INFO, "cal sum end");
 
-  TScanHandle iter;
-  BtreeKey* start_key = nullptr;
-  BtreeKey* end_key = nullptr;
-  BtreeKey* tmp_key = nullptr;
+  BtreeIterator iter;
+  BtreeKey *start_key = nullptr;
+  BtreeKey *end_key = nullptr;
+  BtreeKey *tmp_key = nullptr;
   BtreeVal tmp_value = nullptr;
   IS_EQ(OB_SUCCESS, alloc_key(start_key, 0));
   IS_EQ(OB_SUCCESS, alloc_key(end_key, INT64_MAX));
@@ -430,7 +424,7 @@ TEST(TestKeyBtree, smoke_test)
   for (int64_t i = 0; i < SCAN_THREAD_COUNT; ++i) {
     scan_threads[i] = std::thread([&]() {
       int ret = OB_SUCCESS;
-      BtreeKey* tmp_key = nullptr;
+      BtreeKey *tmp_key = nullptr;
       int64_t key = 0;
       IS_EQ(OB_SUCCESS, alloc_key(tmp_key, 0));
       while ((key = ATOMIC_FAA(&global_key, 1)) < ORDER_INSERT_THREAD_COUNT * INSERT_COUNT_PER_THREAD) {
@@ -445,7 +439,8 @@ TEST(TestKeyBtree, smoke_test)
     scan_threads[i].join();
   }
   _OB_LOG(INFO, "reinsert end");
-
+  int32_t pos = btree.update_split_info(7);
+  _OB_LOG(INFO, "btree split info %d", pos);
   IS_EQ(OB_SUCCESS, btree.destroy());
 
   ATOMIC_STORE(&should_stop, true);
@@ -457,12 +452,12 @@ TEST(TestKeyBtree, smoke_test)
   }
 }
 
-}  // namespace unittest
-}  // namespace oceanbase
+}
+}
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  // oceanbase::unittest::BIND_CPU(pthread_self());
+  //oceanbase::unittest::BIND_CPU(pthread_self());
   oceanbase::common::ObLogger::get_logger().set_file_name("test_keybtree.log", true);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);

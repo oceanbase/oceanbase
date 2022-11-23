@@ -1,5 +1,5 @@
 <!--
-Thank you for contributing to **OceanBase**! Please read the [CONTRIBUTING](https://github.com/oceanbase/oceanbase/blob/master/CONTRIBUTING.md) document **BEFORE** filing this PR.
+Thank you for contributing to **OceanBase**! Please read the [How to Contribute](https://github.com/oceanbase/oceanbase/wiki/how_to_contribute) document **BEFORE** filing this PR.
 -->
 
 ### What changes were proposed in this pull request?
@@ -13,7 +13,6 @@ If possible, please consider writing useful notes for better and faster reviews 
   4. If there is a discussion in the mailing list, please add the link.
 -->
 
-
 ### Why are the changes needed?
 
 <!--
@@ -22,17 +21,14 @@ Please clarify why the changes are needed. For instance,
   2. If you fix a bug, you can clarify why it is a bug.
 -->
 
-
 ### Will break the compatibility? How if so?
 
-
 <!--
-Please label `alert/break' if so, such as
+Please make sure it do not break the system compatibility, such as
   1. nGQL grammar changes;
-  2. RPC protocol can't be compatible with previous, refer to https://diwakergupta.github.io/thrift-missing-guide/#_versioning_compatibility;
+  2. RPC protocol can't be compatible with previous;
   3. Storage format; etc.
 -->
-
 
 ### Does this PR introduce any user-facing change?
 
@@ -40,7 +36,6 @@ Please label `alert/break' if so, such as
 If yes, please clarify the previous behavior and the change this PR proposes - provide the console output, description and/or an example to show the behavior difference if possible.
 If no, write 'No'.
 -->
-
 
 ### How was this patch tested?
 

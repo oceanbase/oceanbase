@@ -15,36 +15,31 @@
 #include "gtest/gtest.h"
 #include "lib/thread/ob_async_task_queue.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace share {
+namespace share
+{
 
-class ObFakeTask : public ObAsyncTask {
+class ObFakeTask : public ObAsyncTask
+{
 public:
   ObFakeTask(const bool copy_success, const bool process_success)
-      : copy_success_(copy_success), process_success_(process_success)
-  {}
-  virtual int process()
-  {
-    return process_success_ ? OB_SUCCESS : OB_ERROR;
-  }
-  int64_t get_deep_copy_size() const
-  {
-    return sizeof(ObFakeTask);
-  }
-  ObAsyncTask* deep_copy(char* buf, const int64_t buf_size) const;
-
+    : copy_success_(copy_success), process_success_(process_success) {}
+  virtual int process() { return process_success_ ? OB_SUCCESS : OB_ERROR; }
+  int64_t get_deep_copy_size() const { return sizeof(ObFakeTask); }
+  ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const;
 protected:
   bool copy_success_;
   bool process_success_;
 };
 
-ObAsyncTask* ObFakeTask::deep_copy(char* buf, const int64_t buf_size) const
+ObAsyncTask *ObFakeTask::deep_copy(char *buf, const int64_t buf_size) const
 {
   UNUSED(buf_size);
-  ObAsyncTask* task = NULL;
+  ObAsyncTask *task = NULL;
   if (copy_success_) {
-    task = new (buf) ObFakeTask(copy_success_, process_success_);
+    task = new (buf)ObFakeTask(copy_success_, process_success_);
     memcpy(task, this, sizeof(*this));
   }
   return task;
@@ -90,12 +85,13 @@ TEST(TestAsyncTaskQueue, run)
   queue.destroy();
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+}//end namespace share
+}//end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
+

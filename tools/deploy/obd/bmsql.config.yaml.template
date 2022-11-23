@@ -1,0 +1,22 @@
+{{%% COMPONENT %%}}:
+{{%% SERVERS %%}}
+  tag: {{%% TAG %%}}
+  global:
+    devname: lo
+    production_mode: false
+    cluster_id: 1
+    memory_limit: '64G'
+    datafile_disk_percentage: '50'
+    datafile_size: '50G'
+    log_disk_percentage: '10'
+    system_memory: '3G'
+    cpu_count: '24'
+    stack_size: '512K'
+    cache_wash_threshold: '1G'
+    __min_full_resource_pool_memory: "1073741824"
+    workers_per_cpu_quota: '10'
+    schema_history_expire_time: '1d'
+    net_thread_count: '4'
+{{%% EXTRA_PARAM %%}}
+
+{{%% PROXY_CONF %%}}

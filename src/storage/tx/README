@@ -1,0 +1,123 @@
+Degsign of Read/Write Execution transaction Control
+---------------------------------------------------
+
+On Participant Side
+===================
+
+SQL or any sub transaction was splited into multiple read/write Operations,
+which finally accomplished by call storage service's `DML` interface:
+- insert
+- lock
+- update
+- delete
+- get
+- multiget
+- scan
+- ...
+
+1) prepare_snapshot: prepare snapshot info and check replica readable for read.
+
+before do any real `DML` action, need transaction relative info to be setup.
+hence, storage service call transaction layer:
+
+   trans_service::prep_snapshot(ObStoreCtx &store_ctx, ObTxDesc &tx_desc)
+
+which will setup transaction snapshot into store_ctx.snapshot_info, and ensure replica
+readable for read operation type(store_ctx.access_type_).
+
+2) get_tx_ctx: create transaction ctx and check replica writable for write.
+
+if write involved, transaction ctx need to be created. which delayed to before real write happen.
+(* the write operation can be memtable write, partition lock acquire/release etc)
+
+the transaction protected Resource Manager should call:
+
+  trans_service::get_tx_ctx(ObTxDesc &tx_desc, ObTxCtx *&tx_ctx)
+
+this interface call will prepare or create transaction context for following write operation.
+and it will ensure the tx_ctx returned was ready to write. any un-writable state will report
+an fail return code:
+
+- committed/aborted : transaction has decide to termination and can not accept write.
+- for_replay : current replica is a follower.
+- changing_leader : current replica was demoting to a follower.
+- exiting : transaction was releasing itself after terminated.
+- tx_desc.op_sn < tx_ctx.op_sn : which indicate message out-of-order and will be reject.
+
+after acquire tx_ctx, any admin action like demote, commit/abort will be denied.
+
+3) put_tx_ctx: exit race-region
+
+after complete real write operation, quit the race-region and let admin action come in.
+
+   trans_service::put_tx_ctx(ObTxCtx *tx_ctx)
+
+Detect admin/control action
+============================
+admin action/control can be:
+
+- demote leader to follower
+- commit/abort transaction
+- rollback an in-progress write operation
+
+admin action was exclusive with data-plan action.
+
+for any admin/control action
+
+    ObTxCtx::op_sn_ = current_action_op_sn
+this will interrupt any ongoing write action.
+
+then  acquire exclusive lock by:
+
+    ObTxCtx::try_wlock
+
+will wait the ongoing write action quit.
+
+
+Support Nested Stmt/Sub-transaction
+======================================
+because write operation was splitted into single write into memtable,
+an ongoing write operation can use new op_no from tx_desc which updated by
+nested stmt:
+
+ParentStmt                      ChildStmt
+write.1 op_no=100
+                      =>        start_stmt op_no=101
+                                write.1 op_no=101
+                                end_stmt
+set op_no = 102      <=
+write.2 op_no=102
+
+
+Enter transaction termination
+===============================
+if user or system intened transaction termination, any futher sub-transaction will be rejected.
+
+1) for transaction need to rollback/abort
+in such case, we just send abort message TRPC to participant and forget the transaction by exit itself from txManager.
+
+the TxDesc was released, and transaction always promised to be aborted eventually.
+
+which was a case of fast-fail.
+
+2) for transaction need to commit
+
+i. the transaction control was transfered to coordinator
+on-session-tx or any root-transaction will initialize an TxCommitMsg and send it to coordinator:
+
+   TxCommitMsg{ is_transfer_commit = true, participant_list, from=self_addr, ... }
+
+this cause the coordinator takeover the tx and manage its termination.
+
+ii. txDesc/session-tx arm keepalive with coordinaotr
+
+by keepalive with coordinaotr, we can sens its failure fastly and make fail-fast for commit failure.
+
+iii. transaction state transfer to prevent unknown tx complete state.
+
+Coordinator ---- /msg: commit|abort/ ------> normal-part     (4) ------\
+           \                                                              ===> complete
+            ---- /msg: commit|abort/ ------> session-tx      (3) ------/
+(3) send commit or abort result to session-tx and before into complete state.
+
+

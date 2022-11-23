@@ -18,14 +18,15 @@
 #include "lib/net/ob_addr.h"
 #include "lib/hash/ob_refered_map.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
-struct ObUnitStat {
-  ObUnitStat() : unit_id_(common::OB_INVALID_ID), required_size_(0), partition_cnt_(0)
-  {}
-  ~ObUnitStat()
-  {}
+struct ObUnitStat
+{
+  ObUnitStat() : unit_id_(common::OB_INVALID_ID), required_size_(0), partition_cnt_(0) {}
+  ~ObUnitStat() {}
   bool is_valid() const
   {
     return common::OB_INVALID_ID != unit_id_;
@@ -37,14 +38,8 @@ struct ObUnitStat {
     partition_cnt_ = 0;
   }
   // ObReferedMap template method
-  void set_key(const int64_t unit_id)
-  {
-    unit_id_ = unit_id;
-  }
-  const uint64_t& get_key() const
-  {
-    return unit_id_;
-  }
+  void set_key(const int64_t unit_id) { unit_id_ = unit_id; }
+  const uint64_t &get_key() const { return unit_id_; }
 
   TO_STRING_KV(K_(unit_id), K_(required_size), K_(partition_cnt));
 
@@ -55,7 +50,7 @@ struct ObUnitStat {
 
 typedef common::hash::ObReferedMap<uint64_t, ObUnitStat> ObUnitStatMap;
 
-}  // end namespace share
-}  // end namespace oceanbase
+}//end namespace share
+}//end namespace oceanbase
 
-#endif  // OCEANBASE_SHARE_OB_UNIT_STAT_H_
+#endif //OCEANBASE_SHARE_OB_UNIT_STAT_H_

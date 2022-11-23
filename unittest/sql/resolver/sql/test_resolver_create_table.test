@@ -128,7 +128,7 @@ CREATE TABLE s012 (c1 int primary key, c2 varchar(50), c3 int,c4 int, key k1(c1 
 ##index naming
 CREATE TABLE s013 (c1 int primary key, c2 varchar(50), c3 int,c4 int, key (c1), key (c1,c2), key (c1,c3))
 create table s014 (a int primary key, b int, c int, key(b), key(b, c), key(c));
-
+##测试table_option是否被index_option冲掉
 #index option should not specify compress method
 CREATE TABLE s015 (c1 int primary key, index idx(c1))compression='lz4_1.0';
 
@@ -191,7 +191,7 @@ create table a019(c1 int unique primary key);
 CREATE TABLE e001 (c1 int primary key, c2 varchar(50) comment 'the column of c2')
 
 ##table_option
-
+##CHARACTER_SET'指定表中字符串编码'目前仅支持utf-8
 CREATE TABLE f001 (c1 int primary key, c2 varchar(50)) CHARACTER SET = 'utf8'
 CREATE TABLE f002 (c1 int primary key, c2 varchar(50)) DEFAULT CHARACTER SET = 'utf8'
 CREATE TABLE f003 (c1 int primary key, c2 varchar(50)) CHARACTER SET 'utf8'
@@ -205,7 +205,7 @@ CREATE TABLE f008 (c1 int primary key, c2 varchar(50)) DEFAULT CHARSET 'utf8'
 CREATE TABLE g001 (c1 int primary key, c2 varchar(50))COMMENT = 'the table_name of tt1'
 CREATE TABLE g002 (c1 int primary key, c2 varchar(50))COMMENT 'the table_name of tt1'
 
-
+##COMPRESSION 'none（默认值'不压缩）、lz4_1.0、lzo_1.0、snappy_1.0、zlib_1.0
 CREATE TABLE h001 (c1 int primary key, c2 varchar(50))COMPRESSION = 'none'
 CREATE TABLE h002 (c1 int primary key, c2 varchar(50))COMPRESSION 'none'
 CREATE TABLE h003 (c1 int primary key, c2 varchar(50))COMPRESSION 'lz4_1.0'
@@ -213,7 +213,7 @@ CREATE TABLE h004 (c1 int primary key, c2 varchar(50))COMPRESSION 'LZ4_1.0'
 --error 4002
 CREATE TABLE h005 (c1 int primary key, c2 varchar(50))COMPRESSION 'abc'
 
-##CONSISTENT_MODE  static,frozen,weak,strong
+##CONSISTENT_MODE ,指定表的默认一致性' static、frozen、weak、strong
 #CREATE TABLE t021 (c1 int primary key, c2 varchar(50))CONSISTENT_MODE = 'static'
 
 ##EXPIRE_INFO
@@ -226,7 +226,7 @@ CREATE TABLE h005 (c1 int primary key, c2 varchar(50))COMPRESSION 'abc'
 CREATE TABLE j001 (c1 int primary key, c2 varchar(50))REPLICA_NUM = 3
 CREATE TABLE j002 (c1 int primary key, c2 varchar(50))REPLICA_NUM 3
 
-##TABLE_ID
+##TABLE_ID//如果指定的table_id小于1000'需要打开RootServer的配置项开关“ddl_system_table_switch”。
 CREATE TABLE k001 (c1 int primary key, c2 varchar(50))TABLE_ID = 4000
 CREATE TABLE k002 (c1 int primary key, c2 varchar(50))TABLE_ID 4000
 
@@ -401,7 +401,7 @@ create table r47(c1 varchar(2) collate utf8mb4_general_ci)charset=utf8mb4;
 create table r48(c1 varchar(2) collate utf8mb4_bin)charset=utf8mb4;
 create table r49(c1 varchar(2) charset utf8)collate=utf8mb4_general_ci;
 
-
+#default value(主要测试中文字符串)
 create table r50(c1 varchar(3) default 'abc');
 create table r51(c1 varchar(3) default '支付宝');
 create table r52(c1 varchar(4) default 'a支付宝');
@@ -416,6 +416,7 @@ create table r55(c1 varchar(4) default 'a支付宝d');
 create table r56(c1 varchar(3) binary);
 create table r57(c1 varchar(3) binary charset utf8mb4);
 create table r58(c1 varchar(3) binary charset utf8mb4 collate utf8mb4_general_ci);
+#TODO@nijia.nj 列字符集和表字符集同时指定非法值时的报错先后次序
 
 #using hash/btree(only syntax support)
 create table r59(c1 int primary key,c2 int ,index idx using btree(c1) using hash);

@@ -34,9 +34,10 @@ OMPKOK::OMPKOK()
       capability_(),
       is_schema_changed_(false),
       use_standard_serialize_(false)
-{}
+{
+}
 
-int OMPKOK::set_message(const ObString& message)
+int OMPKOK::set_message(const ObString &message)
 {
   int ret = OB_SUCCESS;
   if (!message.empty()) {
@@ -48,11 +49,14 @@ int OMPKOK::set_message(const ObString& message)
 void OMPKOK::set_state_changed(const bool state_changed)
 {
   state_changed_ = state_changed;
-  // is ok? mybe overwrite
-  server_status_.status_flags_.OB_SERVER_SESSION_STATE_CHANGED = 1;
+  // If the CLIENT_SESSION_TRACK capability is not enabled
+  // the Server should not set the SERVER_SESSION_STATE_CHANGED Flag
+  if (capability_.cap_flags_.OB_CLIENT_SESSION_TRACK) {
+    server_status_.status_flags_.OB_SERVER_SESSION_STATE_CHANGED = 1;
+  }
 }
 
-void OMPKOK::set_changed_schema(const common::ObString& schema)
+void OMPKOK::set_changed_schema(const common::ObString &schema)
 {
   changed_schema_ = schema;
   is_schema_changed_ = true;
@@ -66,17 +70,17 @@ void OMPKOK::set_use_standard_serialize(const bool value)
 int OMPKOK::decode()
 {
   int ret = OB_SUCCESS;
-  const char* buf = cdata_;
-  const char* pos = cdata_;
+  const char *buf = cdata_;
+  const char *pos = cdata_;
   const int64_t len = hdr_.len_;
-  const char* end = buf + len;
-  // OB_ASSERT(NULL != cdata_);
+  const char *end = buf + len;
+  //OB_ASSERT(NULL != cdata_);
   if (NULL != cdata_) {
     ObMySQLUtil::get_uint1(pos, field_count_);
     if (OB_FAIL(ObMySQLUtil::get_length(pos, affected_rows_))) {
-      LOG_WARN("get len fail", K(pos));
+      LOG_WARN("get len fail", KP(pos));
     } else if (OB_FAIL(ObMySQLUtil::get_length(pos, last_insert_id_))) {
-      LOG_WARN("get len fail", K(pos));
+      LOG_WARN("get len fail", KP(pos));
     }
     if (OB_SUCC(ret) && pos < end) {
       if (capability_.cap_flags_.OB_CLIENT_PROTOCOL_41) {
@@ -107,27 +111,27 @@ int OMPKOK::decode()
     }
     if (pos != end) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("pos not equals end", K(ret), KP(pos), KP(end));  // OB_ASSERT(pos == end);
+      LOG_ERROR("pos not equals end", K(ret), KP(pos), KP(end)); //OB_ASSERT(pos == end);
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("null input", K(ret), K(cdata_));
+    LOG_ERROR("null input", K(ret), KP(cdata_));
   }
   return ret;
 }
 
-int OMPKOK::decode_session_state_info(const char*& pos)
+int OMPKOK::decode_session_state_info(const char *&pos)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pos)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalie input value", K(pos), K(ret));
+    LOG_WARN("invalie input value", KP(pos), K(ret));
   } else {
     uint64_t session_info_len = 0;
     if (OB_FAIL(ObMySQLUtil::get_length(pos, session_info_len))) {
       LOG_WARN("fail to get len encode number", K(ret));
     } else if (session_info_len > 0) {
-      const char* end = pos + session_info_len;
+      const char *end = pos + session_info_len;
       ObStringKV tmp_kv;
       while (pos < end && OB_SUCC(ret)) {
         uint8_t type = 0;
@@ -136,7 +140,7 @@ int OMPKOK::decode_session_state_info(const char*& pos)
         ret = ObMySQLUtil::get_length(pos, filed_len);
         if (OB_SUCC(ret)) {
           if (SESSION_TRACK_SYSTEM_VARIABLES == type) {
-            const char* sys_var_end = pos + filed_len;
+            const char *sys_var_end = pos + filed_len;
             bool found_separator = false;
             while (pos < sys_var_end && OB_SUCC(ret)) {
               uint64_t name_len = 0;
@@ -151,9 +155,10 @@ int OMPKOK::decode_session_state_info(const char*& pos)
                 pos += value_len;
 
                 if (OB_SUCC(ret)) {
-                  if (tmp_kv.key_ == get_separator_kv().key_ && tmp_kv.value_ == get_separator_kv().value_) {
+                  if (tmp_kv.key_ == get_separator_kv().key_
+                      && tmp_kv.value_ == get_separator_kv().value_) {
                     found_separator = true;
-                    // continue;
+                    //continue;
                   } else {
                     if (found_separator) {
                       if (OB_FAIL(user_vars_.push_back(tmp_kv))) {
@@ -187,7 +192,7 @@ int OMPKOK::decode_session_state_info(const char*& pos)
                 pos += 1;
               } else {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_ERROR("state_len not equal 1", K(ret), K(state_len));  // OB_ASSERT(1 == state_len);
+                LOG_ERROR("state_len not equal 1", K(ret), K(state_len));//OB_ASSERT(1 == state_len);
               }
             }
           } else {
@@ -204,14 +209,14 @@ int OMPKOK::decode_session_state_info(const char*& pos)
 int64_t OMPKOK::get_serialize_size() const
 {
   int64_t len = 0;
-  len += 1;  // header
+  len += 1; // header
   len += ObMySQLUtil::get_number_store_len(affected_rows_);
   len += ObMySQLUtil::get_number_store_len(last_insert_id_);
   if (!!capability_.cap_flags_.OB_CLIENT_PROTOCOL_41) {
-    len += 2;  // status flag
-    len += 2;  // warnings
+    len += 2; // status flag
+    len += 2; // warnings
   } else if (!!capability_.cap_flags_.OB_CLIENT_TRANSACTIONS) {
-    len += 2;  // status flag
+    len += 2; // status flag
   }
   if (!!capability_.cap_flags_.OB_CLIENT_SESSION_TRACK) {
     if (use_standard_serialize_) {
@@ -245,33 +250,33 @@ int64_t OMPKOK::get_serialize_size() const
   return len;
 }
 
-int OMPKOK::serialize(char* buffer, const int64_t length, int64_t& pos) const
+int OMPKOK::serialize(char *buffer, const int64_t length, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
   const int64_t orig_pos = pos;
   if (OB_ISNULL(buffer) || OB_UNLIKELY(length - pos < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(buffer), K(length), K(pos), K(ret));
+    LOG_WARN("invalid argument", KP(buffer), K(length), K(pos), K(ret));
   } else if (OB_UNLIKELY(length - pos < static_cast<int64_t>(get_serialize_size()))) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("size is overflow", K(length), K(pos), "need_size", get_serialize_size(), K(ret));
+    LOG_WARN("size is overflow",  K(length), K(pos), "need_size", get_serialize_size(), K(ret));
   } else if (0 == capability_.capability_) {
     ret = OB_ITEM_NOT_SETTED;
     LOG_WARN("capability is not set", K_(capability_.capability), K(ret));
   } else {
     if (OB_FAIL(ObMySQLUtil::store_int1(buffer, length, field_count_, pos))) {
-      LOG_WARN("store int fail", K(buffer), K(length), K(field_count_), K(pos));
+      LOG_WARN("store int fail", KP(buffer), K(length), K(field_count_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_length(buffer, length, affected_rows_, pos))) {
-      LOG_WARN("store int fail", K(buffer), K(length), K(affected_rows_), K(pos));
+      LOG_WARN("store int fail", KP(buffer), K(length), K(affected_rows_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_length(buffer, length, last_insert_id_, pos))) {
-      LOG_WARN("store int fail", K(buffer), K(length), K(last_insert_id_), K(pos));
+      LOG_WARN("store int fail", KP(buffer), K(length), K(last_insert_id_), K(pos));
     }
     if (OB_SUCC(ret)) {
       if (capability_.cap_flags_.OB_CLIENT_PROTOCOL_41) {
         if (OB_FAIL(ObMySQLUtil::store_int2(buffer, length, server_status_.flags_, pos))) {
-          LOG_WARN("store int fail", K(buffer), K(length), K(server_status_.flags_), K(pos));
+          LOG_WARN("store int fail", KP(buffer), K(length), K(server_status_.flags_), K(pos));
         } else if (OB_FAIL(ObMySQLUtil::store_int2(buffer, length, warnings_, pos))) {
-          LOG_WARN("store int fail", K(buffer), K(length), K(warnings_), K(pos));
+          LOG_WARN("store int fail", KP(buffer), K(length), K(warnings_), K(pos));
         }
       } else {
         ret = ObMySQLUtil::store_int2(buffer, length, server_status_.flags_, pos);
@@ -282,12 +287,12 @@ int OMPKOK::serialize(char* buffer, const int64_t length, int64_t& pos) const
         if (use_standard_serialize_) {
           if (!message_.empty() || server_status_.status_flags_.OB_SERVER_SESSION_STATE_CHANGED) {
             if (OB_FAIL(ObMySQLUtil::store_obstr(buffer, length, message_, pos))) {
-              LOG_WARN("store str failed", K(buffer), K(length), K(message_), K(pos));
+              LOG_WARN("store str failed", KP(buffer), K(length), K(message_), K(pos));
             }
           }
         } else {
           if (OB_FAIL(ObMySQLUtil::store_obstr_with_pre_space(buffer, length, message_, pos))) {
-            LOG_WARN("store str failed", K(buffer), K(length), K(message_), K(pos));
+            LOG_WARN("store str failed", KP(buffer), K(length), K(message_), K(pos));
           }
         }
         if (OB_SUCC(ret)) {
@@ -298,15 +303,14 @@ int OMPKOK::serialize(char* buffer, const int64_t length, int64_t& pos) const
               if (system_vars_.count() > 0 || user_vars_.count() > 0) {
                 if (use_standard_serialize_) {
                   ObStringKV string_kv;
-                  uint64_t system_vars_len = 0;
                   for (int64_t i = 0; OB_SUCC(ret) && i < system_vars_.count(); ++i) {
                     if (OB_FAIL(ObMySQLUtil::store_int1(buffer, length, SESSION_TRACK_SYSTEM_VARIABLES, pos))) {
-                      LOG_WARN("store int fail", K(buffer), K(length), K(pos), K(ret));
+                      LOG_WARN("store int fail", KP(buffer), K(length), K(pos), K(ret));
                     } else if (FALSE_IT(string_kv = system_vars_.at(i))) {
                     } else if (ObMySQLUtil::store_length(buffer, length, get_kv_encode_len(string_kv), pos)) {
-                      LOG_WARN("store_length fail", K(buffer), K(length), K(pos), K(string_kv), K(ret));
+                      LOG_WARN("store_length fail", KP(buffer), K(length), K(pos), K(string_kv), K(ret));
                     } else if (serialize_string_kv(buffer, length, pos, string_kv)) {
-                      LOG_WARN("store_length fail", K(buffer), K(length), K(pos), K(string_kv), K(ret));
+                      LOG_WARN("store_length fail", KP(buffer), K(length), K(pos), K(string_kv), K(ret));
                     }
                   }
                 } else {
@@ -334,15 +338,15 @@ int OMPKOK::serialize(char* buffer, const int64_t length, int64_t& pos) const
               if (OB_SUCC(ret)) {
                 if (is_schema_changed_) {
                   if (OB_FAIL(ObMySQLUtil::store_int1(buffer, length, SESSION_TRACK_SCHEMA, pos))) {
-                    LOG_WARN("store int fail", K(buffer), K(length), K(pos), K(ret));
+                    LOG_WARN("store int fail", KP(buffer), K(length), K(pos), K(ret));
                   } else {
                     uint64_t schema_len = 0;
                     schema_len += ObMySQLUtil::get_number_store_len(changed_schema_.length());
                     schema_len += changed_schema_.length();
                     if (OB_FAIL(ObMySQLUtil::store_length(buffer, length, schema_len, pos))) {
-                      LOG_WARN("store length fail", K(buffer), K(length), K(schema_len), K(pos), K(ret));
+                      LOG_WARN("store length fail", KP(buffer), K(length), K(schema_len), K(pos), K(ret));
                     } else if (OB_FAIL(ObMySQLUtil::store_obstr(buffer, length, changed_schema_, pos))) {
-                      LOG_WARN("store obstr fail", K(buffer), K(length), K(changed_schema_), K(pos), K(ret));
+                      LOG_WARN("store obstr fail", KP(buffer), K(length), K(changed_schema_), K(pos), K(ret));
                     }
                   }
                 }
@@ -350,13 +354,13 @@ int OMPKOK::serialize(char* buffer, const int64_t length, int64_t& pos) const
               if (OB_SUCC(ret)) {
                 if (state_changed_) {
                   if (OB_FAIL(ObMySQLUtil::store_int1(buffer, length, SESSION_TRACK_STATE_CHANGE, pos))) {
-                    LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+                    LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
                   } else {
                     ObString state_changed_str = ObString::make_string("1");
                     if (OB_FAIL(ObMySQLUtil::store_length(buffer, length, 2, pos))) {
-                      LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+                      LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
                     } else if (OB_FAIL(ObMySQLUtil::store_obstr(buffer, length, state_changed_str, pos))) {
-                      LOG_WARN("store fail", K(ret), K(buffer), K(length), K(pos));
+                      LOG_WARN("store fail", K(ret), KP(buffer), K(length), K(pos));
                     }
                   }
                 }
@@ -379,24 +383,16 @@ int OMPKOK::serialize(char* buffer, const int64_t length, int64_t& pos) const
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(pos - orig_pos != get_serialize_size())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("serialize", K(ret), "result_len", pos - orig_pos, "calc_len", get_serialize_size());
+      LOG_ERROR("serialize", K(ret),"result_len", pos - orig_pos, "calc_len", get_serialize_size());
     } else {
       ObString tmp_str(pos - orig_pos, buffer + orig_pos);
-      LOG_DEBUG("serialize",
-          K(ret),
-          "result_len",
-          pos - orig_pos,
-          "calc_len",
-          get_serialize_size(),
-          K(message_),
-          K(tmp_str),
-          KPC(this));
+      LOG_DEBUG("serialize", K(ret),"result_len", pos - orig_pos, "calc_len", get_serialize_size(), K(message_), K(tmp_str), KPC(this));
     }
   }
   return ret;
 }
 
-int OMPKOK::add_system_var(const ObStringKV& system_var)
+int OMPKOK::add_system_var(const ObStringKV &system_var)
 {
   int ret = OB_SUCCESS;
   if (system_var.key_.empty()) {
@@ -408,7 +404,7 @@ int OMPKOK::add_system_var(const ObStringKV& system_var)
   return ret;
 }
 
-int OMPKOK::add_user_var(const ObStringKV& user_var)
+int OMPKOK::add_user_var(const ObStringKV &user_var)
 {
   int ret = OB_SUCCESS;
   if (user_var.key_.empty()) {
@@ -427,7 +423,7 @@ uint64_t OMPKOK::get_state_info_len() const
     if (use_standard_serialize_) {
       all_info_len += get_standard_track_system_vars_len();
     } else {
-      all_info_len += 1;  // type
+      all_info_len += 1; // type
       uint64_t sys_vars_len = get_track_system_vars_len();
       all_info_len += ObMySQLUtil::get_number_store_len(sys_vars_len);
       all_info_len += sys_vars_len;
@@ -435,7 +431,7 @@ uint64_t OMPKOK::get_state_info_len() const
   }
 
   if (is_schema_changed_) {
-    all_info_len += 1;  // type
+    all_info_len += 1; // type
     uint64_t schema_len = 0;
     schema_len += ObMySQLUtil::get_number_store_len(changed_schema_.length());
     schema_len += changed_schema_.length();
@@ -482,20 +478,20 @@ uint64_t OMPKOK::get_standard_track_system_vars_len() const
   if (!system_vars_.empty()) {
     for (int64_t i = 0; i < system_vars_.count(); ++i) {
       string_kv = system_vars_.at(i);
-      system_vars_len += 1;  // type
+      system_vars_len += 1; // type
 
-      // total len
+      //total len
       const uint64_t kv_encode_len = get_kv_encode_len(string_kv);
       system_vars_len += ObMySQLUtil::get_number_store_len(kv_encode_len);
 
-      // kv
+      //kv
       system_vars_len += kv_encode_len;
     }
   }
   return system_vars_len;
 }
 
-uint64_t OMPKOK::get_kv_encode_len(const ObStringKV& string_kv)
+uint64_t OMPKOK::get_kv_encode_len(const ObStringKV &string_kv)
 {
   uint64_t len = 0;
   len += ObMySQLUtil::get_number_store_len(string_kv.key_.length());
@@ -505,16 +501,17 @@ uint64_t OMPKOK::get_kv_encode_len(const ObStringKV& string_kv)
   return len;
 }
 
-int OMPKOK::serialize_string_kv(char* buffer, const int64_t length, int64_t& pos, const ObStringKV& string_kv) const
+int OMPKOK::serialize_string_kv(char *buffer, const int64_t length,
+                                int64_t &pos, const ObStringKV &string_kv) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == buffer || length <= 0 || pos < 0)) {
-    LOG_WARN("invalid argument", K(buffer), K(length), K(pos));
+  if (OB_UNLIKELY(NULL == buffer || length <=0 || pos < 0)) {
+    LOG_WARN("invalid argument", KP(buffer), K(length), K(pos));
   } else {
     if (OB_FAIL(ObMySQLUtil::store_obstr(buffer, length, string_kv.key_, pos))) {
-      LOG_WARN("store obstr fail", K(buffer), K(length), K(string_kv.key_), K(pos));
+      LOG_WARN("store obstr fail", KP(buffer), K(length), K(string_kv.key_), K(pos));
     } else if (OB_FAIL(ObMySQLUtil::store_obstr(buffer, length, string_kv.value_, pos))) {
-      LOG_WARN("store obstr fail", K(buffer), K(length), K(string_kv.key_), K(pos));
+      LOG_WARN("store obstr fail", KP(buffer), K(length), K(string_kv.key_), K(pos));
     }
   }
   return ret;
@@ -528,24 +525,23 @@ ObStringKV OMPKOK::get_separator_kv()
   return separator_kv;
 }
 
-int64_t OMPKOK::to_string(char* buf, const int64_t buf_len) const
+int64_t OMPKOK::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV("header",
-      hdr_,
-      K_(field_count),
-      K_(affected_rows),
-      K_(last_insert_id),
-      K_(server_status_.flags),
-      K_(warnings),
-      K_(message),
-      K_(changed_schema),
-      K_(state_changed),
-      K_(system_vars),
-      K_(user_vars),
-      K_(capability_.capability),
-      K_(use_standard_serialize));
+  J_KV("header", hdr_,
+       K_(field_count),
+       K_(affected_rows),
+       K_(last_insert_id),
+       K_(server_status_.flags),
+       K_(warnings),
+       K_(message),
+       K_(changed_schema),
+       K_(state_changed),
+       K_(system_vars),
+       K_(user_vars),
+       K_(capability_.capability),
+       K_(use_standard_serialize));
   J_OBJ_END();
   return pos;
 }

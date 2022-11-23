@@ -15,12 +15,15 @@
 
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
-namespace oceanbase {
-namespace lib {
+namespace oceanbase
+{
+namespace lib
+{
 
-class ObLibConfig {
+class ObLibConfig
+{
 public:
-  static ObLibConfig& get_instance();
+  static ObLibConfig &get_instance();
   void reload_diagnose_info_config(const bool enable_diagnose_info);
   void reload_trace_log_config(const bool enable_trace_log);
   bool is_diagnose_info_enabled() const
@@ -31,12 +34,11 @@ public:
   {
     return enable_trace_log_;
   }
-
 private:
   ObLibConfig();
   virtual ~ObLibConfig() = default;
-  volatile bool enable_diagnose_info_;
-  volatile bool enable_trace_log_;
+  volatile bool enable_diagnose_info_ CACHE_ALIGNED;
+  volatile bool enable_trace_log_ CACHE_ALIGNED;
 };
 
 inline bool is_diagnose_info_enabled()
@@ -63,6 +65,6 @@ inline int reload_trace_log_config(const bool enable_trace_log)
   return ret;
 }
 
-}  // namespace lib
-}  // namespace oceanbase
-#endif  // OB_LIB_CONFIG_H_
+} //lib
+} //oceanbase
+#endif // OB_LIB_CONFIG_H_

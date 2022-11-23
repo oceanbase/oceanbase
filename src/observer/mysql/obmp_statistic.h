@@ -15,26 +15,28 @@
 
 #include "observer/mysql/obmp_base.h"
 
-namespace oceanbase {
-namespace observer {
-class ObMPStatistic : public ObMPBase {
+namespace oceanbase
+{
+namespace observer
+{
+class ObMPStatistic
+    : public ObMPBase
+{
 public:
-  static const obmysql::ObMySQLCmd COM = obmysql::OB_MYSQL_COM_STATISTICS;
+  static const obmysql::ObMySQLCmd COM = obmysql::COM_STATISTICS;
 
 public:
-  explicit ObMPStatistic(const ObGlobalContext& gctx) : ObMPBase(gctx)
+  explicit ObMPStatistic(const ObGlobalContext &gctx)
+      : ObMPBase(gctx)
   {}
 
-  int deserialize()
-  {
-    return common::OB_SUCCESS;
-  }
+  int deserialize() { return common::OB_SUCCESS; }
 
 protected:
   int process();
 
-};  // end of class ObMPStatistic
-}  // end of namespace observer
-}  // end of namespace oceanbase
+}; // end of class ObMPStatistic
+} // end of namespace observer
+} // end of namespace oceanbase
 
 #endif /* _OBMP_STATISTIC_H_ */

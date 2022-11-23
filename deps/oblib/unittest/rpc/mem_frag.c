@@ -1,16 +1,12 @@
 /**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
- * You can use this software
- * according to the terms and conditions of the Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
- *
- * http://license.coscl.org.cn/MulanPubL-2.0
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
- * KIND,
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
- * MERCHANTABILITY OR FIT FOR A
- * PARTICULAR PURPOSE.
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
 
@@ -22,19 +18,19 @@
 #include <linux/tcp.h>
 
 struct page_list {
-  struct page_list* next;
+  struct page_list *next;
 };
 
-static struct page_list* free_list;
+static struct page_list *free_list;
 
-uint64_t count = 0;
+uint64_t count=0;
 
-#define PG_ORDER 2
+#define PG_ORDER  2
 
 int __init mem_frag_init(void)
 {
-  struct page* pg;
-  struct page_list* tmp;
+  struct page *pg;
+  struct page_list *tmp;
   struct page_list *prev, *next;
 
   free_list = NULL;
@@ -42,18 +38,18 @@ int __init mem_frag_init(void)
     pg = alloc_pages(GFP_KERNEL, PG_ORDER);
     if (pg == NULL)
       break;
-    tmp = (struct page_list*)page_address(pg);
+    tmp = (struct page_list *)page_address(pg);
     tmp->next = free_list;
     free_list = tmp;
     count++;
-    // printk(KERN_DEBUG "PFN:%lu\n", page_to_pfn(pg));
+    //printk(KERN_DEBUG "PFN:%lu\n", page_to_pfn(pg));
   }
 
   printk(KERN_DEBUG "%s: alloc count:%llu\n", __func__, count);
 
   if (free_list == NULL)
     return -ENOMEM;
-  // free half of pages back to buddy.
+  //free half of pages back to buddy.
   prev = free_list;
 
   while (prev && prev->next) {
@@ -70,7 +66,7 @@ int __init mem_frag_init(void)
 
 void __exit mem_frag_exit(void)
 {
-  struct page_list* tmp;
+  struct page_list *tmp;
 
   while (free_list) {
     tmp = free_list;

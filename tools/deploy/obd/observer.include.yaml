@@ -1,0 +1,32 @@
+runtime_dependencies:
+  - src_path: plugin_dir
+    target_path: plugin_dir
+  - src_path: admin
+    target_path: admin
+  - src_path: lib
+    target_path: lib
+  - src_path: tools
+    target_path: tools
+  - src_path: etc
+    target_path: etc
+  - src_path: wallet
+    target_path: wallet
+env:
+  ASAN_OPTIONS: 'abort_on_error=1:disable_coredump=0:unmap_shadow_on_exit=1:log_path=./log/asan.log'
+  ASAN_SYMBOLIZER_PATH: ./tools/llvm-symbolizer
+config:
+  production_mode: false
+  cluster_id: 1
+  # datafile_disk_percentage: '50'
+  datafile_size: '20G'
+  # log_disk_percentage: '10'
+  log_disk_size: '24G'
+  memory_limit: '8G'
+  system_memory: '1G'
+  cpu_count: '24'
+  cache_wash_threshold: '1G'
+  __min_full_resource_pool_memory: "1073741824"
+  workers_per_cpu_quota: '10'
+  schema_history_expire_time: '1d'
+  net_thread_count: '4'
+  syslog_io_bandwidth_limit: '10G'

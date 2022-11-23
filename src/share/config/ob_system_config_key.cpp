@@ -12,11 +12,13 @@
 
 #include "share/config/ob_system_config_key.h"
 
-namespace oceanbase {
-namespace common {
-const char* ObSystemConfigKey::DEFAULT_VALUE = "ANY";
+namespace oceanbase
+{
+namespace common
+{
+const char *ObSystemConfigKey::DEFAULT_VALUE = "ANY";
 
-int ObSystemConfigKey::set_varchar(const ObString& key, const char* strvalue)
+int ObSystemConfigKey::set_varchar(const ObString &key, const char *strvalue)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(strvalue)) {
@@ -49,7 +51,7 @@ int64_t ObSystemConfigKey::get_version() const
   return version_;
 }
 
-int ObSystemConfigKey::set_int(const ObString& key, int64_t intval)
+int ObSystemConfigKey::set_int(const ObString &key, int64_t intval)
 {
   int ret = OB_SUCCESS;
   if (key == "svr_port") {
@@ -61,19 +63,12 @@ int ObSystemConfigKey::set_int(const ObString& key, int64_t intval)
   return ret;
 }
 
-int64_t ObSystemConfigKey::to_string(char* buf, const int64_t len) const
+int64_t ObSystemConfigKey::to_string(char *buf, const int64_t len) const
 {
-  return snprintf(buf,
-      len,
-      "name: [%s] zone: [%s] "
-      "server_type: [%s] server_ip: [%s] server_port: [%ld] version: [%ld]",
-      name_,
-      zone_.ptr(),
-      server_type_,
-      server_ip_,
-      server_port_,
-      version_);
+  return snprintf(buf, len, "name: [%s] zone: [%s] "
+                  "server_type: [%s] server_ip: [%s] server_port: [%ld] version: [%ld]",
+                  name_, zone_.ptr(), server_type_, server_ip_, server_port_, version_);
 }
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase

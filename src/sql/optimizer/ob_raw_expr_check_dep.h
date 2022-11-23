@@ -17,36 +17,36 @@
 
 namespace oceanbase {
 namespace sql {
-class ObRawExpr;
-class ObRawExprCheckDep {
-public:
-  ObRawExprCheckDep(
-      common::ObIArray<ObRawExpr*>& dep_exprs, common::ObBitSet<common::OB_MAX_BITSET_SIZE>& deps, bool is_access)
-      : dep_exprs_(dep_exprs), dep_indices_(&deps), is_access_(is_access)
-  {}
-  virtual ~ObRawExprCheckDep()
-  {}
-
-  /**
-   *  The starting point
-   */
-  int check(const ObRawExpr& expr);
-
-  const common::ObBitSet<common::OB_MAX_BITSET_SIZE>* get_dep_indices() const
+  class ObRawExpr;
+  class ObRawExprCheckDep
   {
-    return dep_indices_;
-  }
+  public:
+  ObRawExprCheckDep(common::ObIArray<ObRawExpr *> &dep_exprs,
+                    common::ObBitSet<common::OB_MAX_BITSET_SIZE> &deps,
+                    bool is_access)
+      : dep_exprs_(dep_exprs),
+        dep_indices_(&deps),
+        is_access_(is_access) { }
+    virtual ~ObRawExprCheckDep() {}
 
-private:
-  int check_expr(const ObRawExpr& expr, bool& found);
+    /**
+     *  The starting point
+     */
+    int check(const ObRawExpr &expr);
 
-private:
-  common::ObIArray<ObRawExpr*>& dep_exprs_;
-  common::ObBitSet<common::OB_MAX_BITSET_SIZE>* dep_indices_;
-  bool is_access_;  // mark whether we are do project pruning for access exprs
-  DISALLOW_COPY_AND_ASSIGN(ObRawExprCheckDep);
-};
-}  // namespace sql
-}  // namespace oceanbase
+    int check(const ObIArray<ObRawExpr *> &exprs);
 
-#endif  // _OB_RAW_EXPR_CHECK_DEPENDENCY_H
+    const common::ObBitSet<common::OB_MAX_BITSET_SIZE> *get_dep_indices() const { return dep_indices_; }
+  private:
+    int check_expr(const ObRawExpr &expr, bool &found);
+  private:
+    common::ObIArray<ObRawExpr *> &dep_exprs_;
+    common::ObBitSet<common::OB_MAX_BITSET_SIZE> *dep_indices_;
+    bool is_access_; // mark whether we are do project pruning for access exprs
+    DISALLOW_COPY_AND_ASSIGN(ObRawExprCheckDep);
+  };
+}
+}
+
+#endif // _OB_RAW_EXPR_CHECK_DEPENDENCY_H
+

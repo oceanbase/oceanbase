@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "lib/compress/zlib/zlib.h"
+#include "lib/compress/zlib/zlib_src/zlib.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/ob_name_def.h"
 #include "lib/utility/ob_macro_utils.h"
@@ -34,8 +34,8 @@ int ObExprCrc32::calc_result_type1(ObExprResType& type, ObExprResType& type1, Ob
   UNUSED(type_ctx);
   type.set_precision(10);
   type.set_uint32();
-  if (OB_LIKELY(type1.is_not_null())) {
-    type.set_result_flag(OB_MYSQL_NOT_NULL_FLAG);
+  if (OB_LIKELY(type1.is_not_null_for_read())) {
+    type.set_result_flag(NOT_NULL_FLAG);
   }
 
   if (ob_is_string_type(type1.get_type())) {
@@ -44,29 +44,6 @@ int ObExprCrc32::calc_result_type1(ObExprResType& type, ObExprResType& type1, Ob
   } else {
     type1.set_calc_type(ObVarcharType);
     type1.set_calc_collation_type(ObCharset::get_system_collation());
-  }
-  return ret;
-}
-
-int ObExprCrc32::calc_result1(common::ObObj& obj, const common::ObObj& obj1, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else if (obj1.is_null()) {
-    obj.set_null();
-  } else {
-    uint64_t val;
-    ObString str_val = obj1.get_string();
-
-    if (str_val.length() <= 0) {
-      val = 0ULL;
-    } else {
-      val = crc32(0, reinterpret_cast<unsigned char*>(str_val.ptr()), str_val.length());
-    }
-    obj.set_uint32(val);
   }
   return ret;
 }

@@ -14,138 +14,109 @@
 #define OCEANBASE_SRC_SQL_ENGINE_BASIC_OB_TEMP_TABLE_ACCESS_OP_H_
 
 #include "sql/engine/ob_operator.h"
-#include "sql/engine/ob_no_children_phy_operator.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/ob_single_child_phy_operator.h"
 #include "sql/engine/basic/ob_ra_row_store.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
 #include "sql/engine/ob_tenant_sql_memory_manager.h"
-#include "sql/executor/ob_interm_result_manager.h"
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
+#include "sql/dtl/ob_dtl_interm_result_manager.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObTempTableAccessOp;
-class ObTempTableAccessOpInput : public ObOpInput {
+class ObTempTableAccessOpInput : public ObOpInput
+{
   OB_UNIS_VERSION_V(1);
   friend class ObTempTableAccessOp;
-
 public:
-  ObTempTableAccessOpInput(ObExecContext& ctx, const ObOpSpec& spec);
+  ObTempTableAccessOpInput(ObExecContext &ctx, const ObOpSpec &spec);
   virtual ~ObTempTableAccessOpInput();
   virtual void reset() override;
   virtual ObPhyOperatorType get_phy_op_type() const;
-  virtual void set_deserialize_allocator(common::ObIAllocator* allocator);
-  virtual int init(ObTaskInfo& task_info);
-  virtual int init(ObExecContext& ctx, ObTaskInfo& task_info, const ObPhyOperator& op);
-  int check_finish(bool& is_end, int64_t& interm_res_ids);
-  int check_closed_finish(bool& is_end);
-
+  virtual void set_deserialize_allocator(common::ObIAllocator *allocator);
+  virtual int init(ObTaskInfo &task_info);
+  int check_finish(bool &is_end, int64_t &interm_res_ids);
 protected:
-  common::ObIAllocator* deserialize_allocator_;
+  common::ObIAllocator *deserialize_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTempTableAccessOpInput);
-
 public:
-  uint64_t closed_count_;
   uint64_t unfinished_count_ptr_;
   common::ObSEArray<uint64_t, 8> interm_result_ids_;
 };
 
-class ObTempTableAccessOpSpec : public ObOpSpec {
+class ObTempTableAccessOpSpec : public ObOpSpec
+{
 public:
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObTempTableAccessOpSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
-      : ObOpSpec(alloc, type),
-        output_indexs_(alloc),
-        temp_table_id_(0),
-        is_distributed_(false),
-        need_release_(false),
-        access_exprs_(alloc)
-  {}
-  virtual ~ObTempTableAccessOpSpec()
-  {}
-  void set_temp_table_id(uint64_t temp_table_id)
-  {
-    temp_table_id_ = temp_table_id;
-  }
-  uint64_t get_table_id() const
-  {
-    return temp_table_id_;
-  }
-  void set_distributed(bool is_distributed)
-  {
-    is_distributed_ = is_distributed;
-  }
-  bool is_distributed() const
-  {
-    return is_distributed_;
-  }
-  void set_need_release(bool need_release)
-  {
-    need_release_ = need_release;
-  }
-  bool is_need_release() const
-  {
-    return need_release_;
-  }
-  int add_output_index(int64_t index)
-  {
-    return output_indexs_.push_back(index);
-  }
-  int init_output_index(int64_t count)
-  {
-    return output_indexs_.init(count);
-  }
-  int add_access_expr(ObExpr* access_expr)
-  {
-    return access_exprs_.push_back(access_expr);
-  }
-  int init_access_exprs(int64_t count)
-  {
-    return access_exprs_.init(count);
-  }
+  ObTempTableAccessOpSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObOpSpec(alloc, type),
+      output_indexs_(alloc),
+      temp_table_id_(0),
+      is_distributed_(false),
+      access_exprs_(alloc) {}
+  virtual ~ObTempTableAccessOpSpec() {}
+  void set_temp_table_id(uint64_t temp_table_id) { temp_table_id_ = temp_table_id; }
+  uint64_t get_table_id() const { return temp_table_id_; }
+  void set_distributed(bool is_distributed) { is_distributed_ = is_distributed; }
+  bool is_distributed() const { return is_distributed_; }
+  int add_output_index(int64_t index) { return output_indexs_.push_back(index); }
+  int init_output_index(int64_t count) { return output_indexs_.init(count); }
+  int add_access_expr(ObExpr *access_expr) { return access_exprs_.push_back(access_expr); }
+  int init_access_exprs(int64_t count) { return access_exprs_.init(count); }
 
   DECLARE_VIRTUAL_TO_STRING;
-
 public:
   common::ObFixedArray<int64_t, common::ObIAllocator> output_indexs_;
   uint64_t temp_table_id_;
   bool is_distributed_;
-  bool need_release_;
   // Operator access exprs expressions
   ExprFixedArray access_exprs_;
 };
 
-class ObTempTableAccessOp : public ObOperator {
+class ObTempTableAccessOp : public ObOperator
+{
 public:
-  ObTempTableAccessOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
-      : ObOperator(exec_ctx, spec, input), datum_store_(NULL), datum_store_it_(), is_started_(false)
-  {}
-  ~ObTempTableAccessOp()
-  {}
+  ObTempTableAccessOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
+    : ObOperator(exec_ctx, spec, input),
+      datum_store_it_(),
+      interm_result_ids_(),
+      cur_idx_(0),
+      can_rescan_(false),
+      is_started_(false),
+      stored_rows_(NULL),
+      result_info_guard_() {}
+  ~ObTempTableAccessOp() {}
 
   virtual int inner_open() override;
-  virtual int rescan() override;
+  virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;
+  virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   virtual int inner_close() override;
   virtual void destroy() override;
-  int prepare_scan_param();
-  int locate_next_interm_result(bool& is_end);
-  int locate_interm_result(dtl::ObDTLIntermResultKey& dtl_int_key);
-  int destory_interm_results();
+  int locate_next_interm_result(bool &is_end);
+  int locate_interm_result(int64_t result_id);
+  int get_local_interm_result_id(int64_t &result_id);
 
 private:
-  ObChunkDatumStore* datum_store_;
   ObChunkDatumStore::Iterator datum_store_it_;
+  //这里的result id是当前算子可用的任务（对于rescan而言）或者是已经完成或正在完成的任务
+  //TempTableAccess的rescan不会重新从任务池中抢占任务，而是选择重新执行之前抢占到的任务
+  common::ObSEArray<uint64_t, 8> interm_result_ids_;
+  uint64_t cur_idx_;
+  bool can_rescan_;
+  //如果是local result，只能读一次
   bool is_started_;
+  const ObChunkDatumStore::StoredRow **stored_rows_;
+  dtl::ObDTLIntermResultInfoGuard result_info_guard_;
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_SRC_SQL_ENGINE_BASIC_OB_TEMP_TABLE_ACCESS_OP_H_ */

@@ -9,7 +9,7 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
- 
+
 #ifndef _OB_TABLE_QUERY_AND_MUTATE_PROCESSOR_H
 #define _OB_TABLE_QUERY_AND_MUTATE_PROCESSOR_H 1
 #include "rpc/obrpc/ob_rpc_proxy.h"
@@ -39,10 +39,12 @@ protected:
   virtual uint64_t get_request_checksum() override;
 
 private:
-  int get_partition_ids(uint64_t table_id, common::ObIArray<int64_t> &part_ids);
+  int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
   int check_rowkey_and_generate_mutations(
       ObTableQueryResult &one_row,
       ObTableBatchOperation *&mutations);
+  // rewrite htable query to avoid lock too much rows for update 
+  int rewrite_htable_query_if_need(const ObTableOperation &mutaion, ObTableQuery &query);
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryAndMutateP);
 private:
   common::ObArenaAllocator allocator_;

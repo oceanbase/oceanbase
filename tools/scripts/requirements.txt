@@ -1,2 +1,0 @@
-psutil==5.8.0
-subprocess32==3.5.4

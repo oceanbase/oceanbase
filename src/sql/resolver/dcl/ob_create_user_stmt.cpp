@@ -22,26 +22,38 @@ using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-ObCreateUserStmt::ObCreateUserStmt(ObIAllocator* name_pool)
+ObCreateUserStmt::ObCreateUserStmt(ObIAllocator *name_pool)
     : ObDDLStmt(name_pool, stmt::T_CREATE_USER),
       tenant_id_(OB_INVALID_ID),
       users_(),
+      masked_sql_(),
       if_not_exist_(false),
       profile_id_(OB_INVALID_ID),
       max_connections_per_hour_(0),
       max_user_connections_(0)
-{}
+{
+}
 
 ObCreateUserStmt::ObCreateUserStmt()
-    : ObDDLStmt(NULL, stmt::T_CREATE_USER), tenant_id_(OB_INVALID_ID), users_(),
-      if_not_exist_(false), max_connections_per_hour_(0), max_user_connections_(0)
-{}
+    : ObDDLStmt(NULL, stmt::T_CREATE_USER),
+      tenant_id_(OB_INVALID_ID),
+      users_(),
+      masked_sql_(),
+      if_not_exist_(false),
+      profile_id_(OB_INVALID_ID),
+      max_connections_per_hour_(0),
+      max_user_connections_(0)
+{
+}
 
 ObCreateUserStmt::~ObCreateUserStmt()
-{}
+{
+}
 
-int ObCreateUserStmt::add_user(const common::ObString& user_name, const common::ObString& host_name,
-    const common::ObString& password, const common::ObString& need_enc)
+int ObCreateUserStmt::add_user(const common::ObString &user_name,
+                               const common::ObString &host_name,
+                               const common::ObString &password,
+                               const common::ObString &need_enc)
 {
   int ret = OB_SUCCESS;
 
@@ -54,13 +66,15 @@ int ObCreateUserStmt::add_user(const common::ObString& user_name, const common::
   } else if (OB_FAIL(users_.add_string(need_enc))) {
     LOG_WARN("failed to add need enc", K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
 
-int ObCreateUserStmt::add_ssl_info(const common::ObString& ssl_type, const common::ObString& ssl_cipher,
-    const common::ObString& x509_issuer, const common::ObString& x509_subject)
+int ObCreateUserStmt::add_ssl_info(const common::ObString &ssl_type,
+                                   const common::ObString &ssl_cipher,
+                                   const common::ObString &x509_issuer,
+                                   const common::ObString &x509_subject)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(users_.add_string(ssl_type))) {
@@ -72,17 +86,18 @@ int ObCreateUserStmt::add_ssl_info(const common::ObString& ssl_type, const commo
   } else if (OB_FAIL(users_.add_string(x509_subject))) {
     LOG_WARN("failed to add x509_subject", K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
 
-int64_t ObCreateUserStmt::to_string(char* buf, const int64_t buf_len) const
+int64_t ObCreateUserStmt::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   if (NULL != buf) {
     J_OBJ_START();
-    J_KV(N_STMT_TYPE, ((int)stmt_type_), "users_to_create", users_);
+    J_KV(N_STMT_TYPE, ((int)stmt_type_),
+         "users_to_create", users_);
     J_OBJ_END();
   }
   return pos;

@@ -17,14 +17,14 @@
 #include "ob_row_writer.h"
 #include "ob_imicro_block_writer.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObNewRow;
 }
-namespace storage {
-class ObStoreRow;
-}
-namespace blocksstable {
+namespace blocksstable
+{
 // memory
 //  |- row data buffer
 //        |- ObMicroBlockHeader
@@ -37,44 +37,58 @@ namespace blocksstable {
 //        |- ObMicroBlockHeader
 //        |- row data
 //        |- RowIndex
-class ObMicroBlockWriter : public ObIMicroBlockWriter {
+class ObMicroBlockWriter : public ObIMicroBlockWriter
+{
   static const int64_t INDEX_ENTRY_SIZE = sizeof(int32_t);
   static const int64_t DEFAULT_DATA_BUFFER_SIZE = common::OB_DEFAULT_MACRO_BLOCK_SIZE;
   static const int64_t DEFAULT_INDEX_BUFFER_SIZE = 2 * 1024;
-  static const int64_t MIN_RESERVED_SIZE = 1024;  // 1KB;
+  static const int64_t MIN_RESERVED_SIZE = 1024; //1KB;
 public:
   ObMicroBlockWriter();
   virtual ~ObMicroBlockWriter();
-  int init(const int64_t micro_block_size_limit, const int64_t rowkey_column_count, const int64_t column_count = 0,
+  int init(
+      const int64_t micro_block_size_limit,
+      const int64_t rowkey_column_count,
+      const int64_t column_count = 0,
+      const bool need_calc_column_chksum = false,
       const common::ObRowStoreType row_store_type = common::FLAT_ROW_STORE);
-  virtual int append_row(const storage::ObStoreRow& row) override;
-  virtual int build_block(char*& buf, int64_t& size) override;
-  virtual void reuse() override;
+
+  virtual int append_row(const ObDatumRow &row);
+  virtual int build_block(char *&buf, int64_t &size);
+  virtual void reuse();
 
   virtual int64_t get_block_size() const override;
   virtual int64_t get_row_count() const override;
   virtual int64_t get_data_size() const override;
   virtual int64_t get_column_count() const override;
-  virtual common::ObString get_last_rowkey() const override;
+  virtual int64_t get_original_size() const override;
   void reset();
-
 private:
+  int inner_init();
   inline int64_t get_index_size() const;
-  int check_input_param(const int64_t macro_block_size, const int64_t column_count, const int64_t rowkey_column_count,
+  int try_to_append_row(const int64_t &row_length);
+  int check_input_param(
+      const int64_t macro_block_size,
+      const int64_t column_count,
+      const int64_t rowkey_column_count,
       const ObRowStoreType row_store_type);
   int finish_row(const int64_t length);
-  int reserve_header(const int64_t column_count);
-  bool is_exceed_limit(const int64_t row_length, const int64_t rowkey_length);
-
+  int reserve_header(
+      const int64_t column_count,
+      const int64_t rowkey_column_count,
+      const bool need_calc_column_chksum);
+  bool is_exceed_limit(const int64_t row_length);
+  int64_t get_data_base_offset() const;
+  int64_t get_index_base_offset() const;
 private:
   int64_t micro_block_size_limit_;
   int64_t column_count_;
   ObRowWriter row_writer_;
   int64_t rowkey_column_count_;
-  ObMicroBlockHeader* header_;
-  ObPosition last_rowkey_pos_;
+  ObMicroBlockHeader *header_;
   ObSelfBufferWriter data_buffer_;
   ObSelfBufferWriter index_buffer_;
+  bool need_calc_column_chksum_;
   bool is_inited_;
 };
 
@@ -88,22 +102,45 @@ inline int64_t ObMicroBlockWriter::get_row_count() const
 }
 inline int64_t ObMicroBlockWriter::get_data_size() const
 {
-  return data_buffer_.length();
+  int64_t data_size = data_buffer_.length();
+  if (data_size == 0) { // lazy allocate
+    data_size = get_data_base_offset();
+  }
+  return data_size;
 }
 inline int64_t ObMicroBlockWriter::get_column_count() const
 {
-  return header_->column_count_;
-}
-inline common::ObString ObMicroBlockWriter::get_last_rowkey() const
-{
-  common::ObString rowkey(0, last_rowkey_pos_.length_, data_buffer_.data() + last_rowkey_pos_.offset_);
-  return rowkey;
+  return column_count_;
 }
 inline int64_t ObMicroBlockWriter::get_index_size() const
 {
-  return index_buffer_.length();
+  int64_t index_size = index_buffer_.length();
+  if (index_size == 0) { // lazy allocate
+    index_size = get_index_base_offset();
+  }
+  return index_size;
 }
 
-}  // end namespace blocksstable
-}  // end namespace oceanbase
+inline int64_t ObMicroBlockWriter::get_data_base_offset() const
+{
+  return ObMicroBlockHeader::get_serialize_size(column_count_, need_calc_column_chksum_);
+}
+
+inline int64_t ObMicroBlockWriter::get_index_base_offset() const
+{
+  return sizeof(int32_t);
+}
+
+inline int64_t ObMicroBlockWriter::get_original_size() const
+{
+  int64_t original_size = 0;
+  if (OB_NOT_NULL(header_)) {
+    original_size = data_buffer_.pos() - header_->header_size_;
+  }
+  return original_size;
+}
+
+}//end namespace blocksstable
+}//end namespace oceanbase
 #endif
+

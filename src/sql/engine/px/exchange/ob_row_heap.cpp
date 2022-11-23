@@ -14,10 +14,13 @@
 #include "sql/engine/px/exchange/ob_row_heap.h"
 #include "common/row/ob_row.h"
 
+
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-int ObRowComparer::init(const common::ObIArray<ObSortColumn>& columns, const common::ObIArray<const ObNewRow*>& rows)
+
+int ObRowComparer::init(const common::ObIArray<ObSortColumn> &columns,
+                        const common::ObIArray<const ObNewRow *> &rows)
 {
   columns_ = &columns;
   rows_ = &rows;
@@ -26,7 +29,7 @@ int ObRowComparer::init(const common::ObIArray<ObSortColumn>& columns, const com
 
 bool ObRowComparer::operator()(int64_t row_idx1, int64_t row_idx2)
 {
-  int& ret = ret_;
+  int &ret = ret_;
   int cmp = 0;
   bool cmp_ret = false;
   if (OB_FAIL(ret)) {
@@ -35,12 +38,13 @@ bool ObRowComparer::operator()(int64_t row_idx1, int64_t row_idx2)
   } else if (OB_ISNULL(columns_) || OB_ISNULL(rows_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("columns or rows is NULL", K(ret), K_(columns), K_(rows));
-  } else if (OB_UNLIKELY(!(0 <= row_idx1 && row_idx1 < rows_->count() && 0 <= row_idx2 && row_idx2 < rows_->count()))) {
+  } else if (OB_UNLIKELY(!(0 <= row_idx1 && row_idx1 < rows_->count() &&
+                           0 <= row_idx2 && row_idx2 < rows_->count()))) {
     ret = OB_INDEX_OUT_OF_RANGE;
     LOG_WARN("row idx out of range", K(ret), K(row_idx1), K(row_idx2), K(rows_->count()));
   } else {
-    const ObNewRow* row1 = rows_->at(row_idx1);
-    const ObNewRow* row2 = rows_->at(row_idx2);
+    const ObNewRow *row1 = rows_->at(row_idx1);
+    const ObNewRow *row2 = rows_->at(row_idx2);
     if (OB_UNLIKELY(OB_ISNULL(row1) || OB_ISNULL(row2))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("row should not be null", K(row_idx1), K(row_idx2), "total", rows_->count(), K(ret));
@@ -72,20 +76,23 @@ bool ObRowComparer::operator()(int64_t row_idx1, int64_t row_idx2)
 
 /************************************* ObDatumRowCompare *********************************/
 ObDatumRowCompare::ObDatumRowCompare()
-    : ret_(OB_SUCCESS), sort_collations_(nullptr), sort_cmp_funs_(nullptr), rows_(nullptr)
-{}
+  : ret_(OB_SUCCESS), sort_collations_(nullptr), sort_cmp_funs_(nullptr), rows_(nullptr)
+{
+}
 
-int ObDatumRowCompare::init(const ObIArray<ObSortFieldCollation>* sort_collations,
-    const ObIArray<ObSortCmpFunc>* sort_cmp_funs, const common::ObIArray<const ObChunkDatumStore::StoredRow*>& rows)
+int ObDatumRowCompare::init(
+    const ObIArray<ObSortFieldCollation> *sort_collations,
+    const ObIArray<ObSortCmpFunc> *sort_cmp_funs,
+    const common::ObIArray<const ObChunkDatumStore::StoredRow*> &rows)
 {
   int ret = OB_SUCCESS;
-  bool is_static_cmp = false;
   if (nullptr == sort_collations || nullptr == sort_cmp_funs) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(sort_collations), KP(sort_cmp_funs));
   } else if (sort_cmp_funs->count() != sort_cmp_funs->count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("column count miss match", K(ret), K(sort_cmp_funs->count()), K(sort_cmp_funs->count()));
+    LOG_WARN("column count miss match", K(ret),
+      K(sort_cmp_funs->count()), K(sort_cmp_funs->count()));
   } else {
     sort_collations_ = sort_collations;
     sort_cmp_funs_ = sort_cmp_funs;
@@ -94,20 +101,22 @@ int ObDatumRowCompare::init(const ObIArray<ObSortFieldCollation>* sort_collation
   return ret;
 }
 
-bool ObDatumRowCompare::operator()(int64_t l_idx, int64_t r_idx)
+bool ObDatumRowCompare::operator()(
+  int64_t l_idx,
+  int64_t r_idx)
 {
   bool cmp_ret = false;
-  int& ret = ret_;
-  const ObChunkDatumStore::StoredRow* l = rows_->at(l_idx);
-  const ObChunkDatumStore::StoredRow* r = rows_->at(r_idx);
+  int &ret = ret_;
+  const ObChunkDatumStore::StoredRow *l = rows_->at(l_idx);
+  const ObChunkDatumStore::StoredRow *r = rows_->at(r_idx);
   if (OB_UNLIKELY(OB_SUCCESS != ret)) {
     // already fail
   } else if (!is_inited() || OB_ISNULL(l) || OB_ISNULL(r)) {
     ret = !is_inited() ? OB_NOT_INIT : OB_INVALID_ARGUMENT;
     LOG_WARN("not init or invalid argument", K(ret), KP(l), KP(r));
   } else {
-    const ObDatum* lcells = l->cells();
-    const ObDatum* rcells = r->cells();
+    const ObDatum *lcells = l->cells();
+    const ObDatum *rcells = r->cells();
     int cmp = 0;
     for (int64_t i = 0; 0 == cmp && i < sort_cmp_funs_->count(); i++) {
       const int64_t idx = sort_collations_->at(i).field_idx_;
@@ -124,21 +133,23 @@ bool ObDatumRowCompare::operator()(int64_t l_idx, int64_t r_idx)
 
 /************************************* ObMaxDatumRowCompare *********************************/
 ObMaxDatumRowCompare::ObMaxDatumRowCompare()
-    : ret_(OB_SUCCESS), sort_collations_(nullptr), sort_cmp_funs_(nullptr), rows_(nullptr)
-{}
+  : ret_(OB_SUCCESS), sort_collations_(nullptr), sort_cmp_funs_(nullptr), rows_(nullptr)
+{
+}
 
-int ObMaxDatumRowCompare::init(const ObIArray<ObSortFieldCollation>* sort_collations,
-    const ObIArray<ObSortCmpFunc>* sort_cmp_funs,
-    const common::ObIArray<const ObChunkDatumStore::LastStoredRow<>*>& rows)
+int ObMaxDatumRowCompare::init(
+    const ObIArray<ObSortFieldCollation> *sort_collations,
+    const ObIArray<ObSortCmpFunc> *sort_cmp_funs,
+    const common::ObIArray<const ObChunkDatumStore::LastStoredRow*> &rows)
 {
   int ret = OB_SUCCESS;
-  bool is_static_cmp = false;
   if (nullptr == sort_collations || nullptr == sort_cmp_funs) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(sort_collations), KP(sort_cmp_funs));
   } else if (sort_cmp_funs->count() != sort_cmp_funs->count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("column count miss match", K(ret), K(sort_cmp_funs->count()), K(sort_cmp_funs->count()));
+    LOG_WARN("column count miss match", K(ret),
+      K(sort_cmp_funs->count()), K(sort_cmp_funs->count()));
   } else {
     sort_collations_ = sort_collations;
     sort_cmp_funs_ = sort_cmp_funs;
@@ -147,20 +158,22 @@ int ObMaxDatumRowCompare::init(const ObIArray<ObSortFieldCollation>* sort_collat
   return ret;
 }
 
-bool ObMaxDatumRowCompare::operator()(int64_t l_idx, int64_t r_idx)
+bool ObMaxDatumRowCompare::operator()(
+  int64_t l_idx,
+  int64_t r_idx)
 {
   bool cmp_ret = false;
-  int& ret = ret_;
-  const ObChunkDatumStore::StoredRow* l = rows_->at(l_idx)->store_row_;
-  const ObChunkDatumStore::StoredRow* r = rows_->at(r_idx)->store_row_;
+  int &ret = ret_;
+  const ObChunkDatumStore::StoredRow *l = rows_->at(l_idx)->store_row_;
+  const ObChunkDatumStore::StoredRow *r = rows_->at(r_idx)->store_row_;
   if (OB_UNLIKELY(OB_SUCCESS != ret)) {
     // already fail
   } else if (!is_inited() || OB_ISNULL(l) || OB_ISNULL(r)) {
     ret = !is_inited() ? OB_NOT_INIT : OB_INVALID_ARGUMENT;
     LOG_WARN("not init or invalid argument", K(ret), KP(l), KP(r));
   } else {
-    const ObDatum* lcells = l->cells();
-    const ObDatum* rcells = r->cells();
+    const ObDatum *lcells = l->cells();
+    const ObDatum *rcells = r->cells();
     int cmp = 0;
     for (int64_t i = 0; 0 == cmp && i < sort_cmp_funs_->count(); i++) {
       const int64_t idx = sort_collations_->at(i).field_idx_;

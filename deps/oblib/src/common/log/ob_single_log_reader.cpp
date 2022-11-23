@@ -39,7 +39,7 @@ ObSingleLogReader::~ObSingleLogReader()
   }
 }
 
-int ObSingleLogReader::init(const char* log_dir)
+int ObSingleLogReader::init(const char *log_dir)
 {
   int ret = OB_SUCCESS;
 
@@ -48,11 +48,11 @@ int ObSingleLogReader::init(const char* log_dir)
     SHARE_LOG(ERROR, "ObSingleLogReader init twice", K(ret));
   } else if (OB_UNLIKELY(NULL == log_dir)) {
     ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(ERROR, "ObSingleLogReader init error, invalid argument", K(ret), K(log_dir));
+    SHARE_LOG(ERROR, "ObSingleLogReader init error, invalid argument", K(ret), KCSTRING(log_dir));
   } else {
     int32_t log_dir_len = static_cast<int32_t>(strlen(log_dir));
     if (log_dir_len >= OB_MAX_FILE_NAME_LENGTH) {
-      SHARE_LOG(ERROR, "log_dir is too long", K(log_dir), K(log_dir_len));
+      SHARE_LOG(ERROR, "log_dir is too long", KCSTRING(log_dir), K(log_dir_len));
       ret = OB_INVALID_ARGUMENT;
     } else {
       STRNCPY(log_dir_, log_dir, log_dir_len + 1);
@@ -60,7 +60,7 @@ int ObSingleLogReader::init(const char* log_dir)
   }
   if (OB_SUCC(ret)) {
     if (NULL == log_buffer_.get_data()) {
-      char* buf = static_cast<char*>(ob_malloc(LOG_BUFFER_MAX_LENGTH, ObModIds::OB_LOG_READER));
+      char *buf = static_cast<char *>(ob_malloc(LOG_BUFFER_MAX_LENGTH, ObModIds::OB_LOG_READER));
       if (OB_ISNULL(buf)) {
         ret = OB_ERROR;
         SHARE_LOG(ERROR, "ob_malloc for log_buffer_ failed", K(ret));
@@ -81,7 +81,7 @@ int ObSingleLogReader::init(const char* log_dir)
   return ret;
 }
 
-int ObSingleLogReader::get_max_log_file_id(uint64_t& max_log_file_id)
+int ObSingleLogReader::get_max_log_file_id(uint64_t &max_log_file_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -99,7 +99,7 @@ int ObSingleLogReader::get_max_log_file_id(uint64_t& max_log_file_id)
 }
 
 // 0 is valid file id, so as last_log_seq
-int ObSingleLogReader::open(const uint64_t file_id, const uint64_t last_log_seq /* = 0*/)
+int ObSingleLogReader::open(const uint64_t file_id, const uint64_t last_log_seq/* = 0*/)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -109,7 +109,8 @@ int ObSingleLogReader::open(const uint64_t file_id, const uint64_t last_log_seq 
     int err = snprintf(file_name_, OB_MAX_FILE_NAME_LENGTH, "%s/%lu", log_dir_, file_id);
     if (OB_UNLIKELY(err < 0)) {
       ret = OB_ERROR;
-      SHARE_LOG(ERROR, "snprintf file name error", K(ret), K(err), K(log_dir_), K(file_id), KERRNOMSG(errno));
+      SHARE_LOG(ERROR, "snprintf file name error", K(ret), K(err), KCSTRING(log_dir_), K(file_id),
+                KERRNOMSG(errno));
     } else if (err >= OB_MAX_FILE_NAME_LENGTH) {
       ret = OB_ERROR;
       SHARE_LOG(ERROR, "snprintf file_name error", K(ret), K(file_id), KERRNOMSG(errno));
@@ -122,11 +123,11 @@ int ObSingleLogReader::open(const uint64_t file_id, const uint64_t last_log_seq 
       log_buffer_.get_position() = 0;
       log_buffer_.get_limit() = 0;
       if (OB_SUCC(file_.open(ObString(fn_len, fn_len, file_name_), dio_))) {
-        SHARE_LOG(INFO, "open log file success", K(file_name_), K(file_id));
+        SHARE_LOG(INFO, "open log file success", KCSTRING(file_name_), K(file_id));
       } else if (OB_FILE_NOT_EXIST == ret) {
-        SHARE_LOG(DEBUG, "log file not found", K(ret), K(file_name_), K(file_id));
+        SHARE_LOG(DEBUG, "log file not found", K(ret), KCSTRING(file_name_), K(file_id));
       } else {
-        SHARE_LOG(WARN, "open file error", K(ret), K(file_name_), KERRNOMSG(errno));
+        SHARE_LOG(WARN, "open file error", K(ret), KCSTRING(file_name_), KERRNOMSG(errno));
       }
     }
   }
@@ -155,7 +156,7 @@ int ObSingleLogReader::open_with_lucky(const uint64_t file_id, const uint64_t la
       }
     }
   }
-  return ret;
+  return  ret;
 }
 
 int ObSingleLogReader::close()
@@ -167,9 +168,9 @@ int ObSingleLogReader::close()
   } else {
     file_.close();
     if (last_log_seq_ == 0) {
-      SHARE_LOG(INFO, "close file, read no data from this log", K(file_name_));
+      SHARE_LOG(INFO, "close file, read no data from this log", KCSTRING(file_name_));
     } else {
-      SHARE_LOG(INFO, "close file successfully", K(file_name_), K(last_log_seq_));
+      SHARE_LOG(INFO, "close file successfully", KCSTRING(file_name_), K(last_log_seq_));
     }
   }
   return ret;
@@ -212,7 +213,8 @@ bool ObSingleLogReader::if_file_exist(const uint64_t file_id)
   int err = snprintf(file_name, OB_MAX_FILE_NAME_LENGTH, "%s/%lu", log_dir_, file_id);
   if (OB_UNLIKELY(err < 0)) {
     ret = OB_ERROR;
-    SHARE_LOG(ERROR, "snprintf file name error", K(ret), K(err), K(log_dir_), K(file_id), "error", strerror(errno));
+    SHARE_LOG(ERROR, "snprintf file name error", K(ret), K(err), KCSTRING(log_dir_), K(file_id),
+              "error", strerror(errno));
   } else if (err >= OB_MAX_FILE_NAME_LENGTH) {
     ret = OB_ERROR;
     SHARE_LOG(ERROR, "snprintf file_name error", K(ret), K(file_id), "error", strerror(errno));
@@ -224,7 +226,7 @@ bool ObSingleLogReader::if_file_exist(const uint64_t file_id)
   return bool_ret;
 }
 
-int ObSingleLogReader::read_header(ObLogEntry& entry)
+int ObSingleLogReader::read_header(ObLogEntry &entry)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -244,21 +246,17 @@ int ObSingleLogReader::read_header(ObLogEntry& entry)
         SHARE_LOG(INFO, "reach the end of log", K(ret));
       } else {
         ret = OB_LAST_LOG_NOT_COMPLETE;
-        SHARE_LOG(ERROR,
-            "last log not complete",
-            K(ret),
-            "remain_data_len",
-            log_buffer_.get_remain_data_len(),
-            "entry_size",
-            entry.get_serialize_size());
+        SHARE_LOG(ERROR, "last log not complete", K(ret),
+            "remain_data_len", log_buffer_.get_remain_data_len(),
+            "entry_size", entry.get_serialize_size());
       }
     } else if (ObLogGenerator::is_eof(log_buffer_.get_data() + log_buffer_.get_position(),
-                   log_buffer_.get_limit() - log_buffer_.get_position())) {
+                                      log_buffer_.get_limit() - log_buffer_.get_position())) {
       ret = OB_READ_NOTHING;
       pread_pos_ -= log_buffer_.get_limit() - log_buffer_.get_position();
       log_buffer_.get_limit() = log_buffer_.get_position();
-    } else if (OB_FAIL(
-                   entry.deserialize(log_buffer_.get_data(), log_buffer_.get_limit(), log_buffer_.get_position()))) {
+    } else if (OB_FAIL(entry.deserialize(log_buffer_.get_data(), log_buffer_.get_limit(),
+                                         log_buffer_.get_position()))) {
       ret = OB_LAST_LOG_RUINNED;
       SHARE_LOG(ERROR, "log entry deserialize error", K(ret));
     } else if (OB_FAIL(entry.check_header_integrity())) {
@@ -278,9 +276,8 @@ int ObSingleLogReader::read_log_()
     SHARE_LOG(ERROR, "single log reader not init", K(ret));
   } else {
     if (log_buffer_.get_remain_data_len() > 0) {
-      MEMMOVE(log_buffer_.get_data(),
-          log_buffer_.get_data() + log_buffer_.get_position(),
-          log_buffer_.get_remain_data_len());
+      MEMMOVE(log_buffer_.get_data(), log_buffer_.get_data() + log_buffer_.get_position(),
+              log_buffer_.get_remain_data_len());
       log_buffer_.get_limit() = log_buffer_.get_remain_data_len();
       log_buffer_.get_position() = 0;
     } else {
@@ -289,18 +286,10 @@ int ObSingleLogReader::read_log_()
 
     int64_t read_size = 0;
     ret = file_.pread(log_buffer_.get_data() + log_buffer_.get_limit(),
-        log_buffer_.get_capacity() - log_buffer_.get_limit(),
-        pread_pos_,
-        read_size);
-    SHARE_LOG(DEBUG,
-        "pread",
-        K(ret),
-        K(pread_pos_),
-        K(read_size),
-        "buf_pos",
-        log_buffer_.get_position(),
-        "buf_limit",
-        log_buffer_.get_limit());
+                      log_buffer_.get_capacity() - log_buffer_.get_limit(),
+                      pread_pos_, read_size);
+    SHARE_LOG(DEBUG, "pread", K(ret), K(pread_pos_), K(read_size), "buf_pos", log_buffer_.get_position(),
+              "buf_limit", log_buffer_.get_limit());
     if (OB_FAIL(ret)) {
       SHARE_LOG(ERROR, "read log file error", K(ret), K(file_id_));
     } else {
@@ -318,3 +307,4 @@ int ObSingleLogReader::read_log_()
   }
   return ret;
 }
+

@@ -15,8 +15,10 @@
 #include "lib/utility/utility.h"
 #include "lib/oblog/ob_log_module.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 OB_DEF_SERIALIZE(ObDataBuffer)
 {
@@ -59,13 +61,13 @@ OB_DEF_SERIALIZE_SIZE(ObDataBuffer)
   return len;
 }
 
-int64_t ObDataBuffer::to_string(char* buffer, const int64_t length) const
+int64_t ObDataBuffer::to_string(char *buffer, const int64_t length) const
 {
   int64_t pos = 0;
-  databuff_printf(
-      buffer, length, pos, "buffer=%p capacity=%ld position=%ld limit=%ld", data_, capacity_, position_, limit_);
+  databuff_printf(buffer, length, pos, "buffer=%p capacity=%ld position=%ld limit=%ld",
+                  data_, capacity_, position_, limit_);
   return pos;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+} /* common */
+} /* oceanbase */

@@ -15,20 +15,22 @@
 
 #include "share/ob_define.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObICmd;
 class ObExecContext;
-class ObCmdExecutor {
+class ObCmdExecutor
+{
 public:
-  static int execute(ObExecContext& ctx, ObICmd& cmd);
-
+  static int execute(ObExecContext &ctx, ObICmd &cmd);
 private:
   /* functions */
   /* variables */
   DISALLOW_COPY_AND_ASSIGN(ObCmdExecutor);
 };
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_EXECUTOR_OB_CMD_EXECUTOR_ */
 //// end of header file

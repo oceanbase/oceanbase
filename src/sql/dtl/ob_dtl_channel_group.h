@@ -50,23 +50,35 @@ class ObDtlFlowControl;
 //      dtl_ct->make_channel(p2, c2);
 //   }
 //
-class ObDtlChannelGroup {
+class ObDtlChannelGroup
+{
 public:
-  static int make_channel(const uint64_t tenant_id, const common::ObAddr& addr1, const common::ObAddr& addr2,
-      ObDtlChannelInfo& ci1, ObDtlChannelInfo& ci2);
-  static int make_channel(ObDtlChSet& producer, ObDtlChSet& consumer);
-  static int link_channel(const ObDtlChannelInfo& ci, ObDtlChannel*& ch, ObDtlFlowControl* dfc = nullptr);
-  static int unlink_channel(const ObDtlChannelInfo& ci);
-  static int remove_channel(const ObDtlChannelInfo& ci, ObDtlChannel*& ch);
+  static int make_channel(
+      const uint64_t tenant_id,
+      const common::ObAddr &addr1,
+      const common::ObAddr &addr2,
+      ObDtlChannelInfo &ci1,
+      ObDtlChannelInfo &ci2);
+  static int link_channel(const ObDtlChannelInfo &ci, ObDtlChannel *&ch, ObDtlFlowControl *dfc = nullptr);
+  static int unlink_channel(const ObDtlChannelInfo &ci);
+  static int remove_channel(const ObDtlChannelInfo &ci, ObDtlChannel *&ch);
 
-  static void make_transmit_channel(const uint64_t tenant_id, const common::ObAddr& peer_exec_addr, uint64_t ch_id,
-      ObDtlChannelInfo& ci_producer, bool is_local);
-  static void make_receive_channel(const uint64_t tenant_id, const common::ObAddr& peer_exec_addr, uint64_t ch_id,
-      ObDtlChannelInfo& ci_consumer, bool is_local);
+  static void make_transmit_channel(const uint64_t tenant_id,
+                                  const common::ObAddr &peer_exec_addr,
+                                  uint64_t ch_id,
+                                  ObDtlChannelInfo &ci_producer,
+                                  bool is_local);
+  static void make_receive_channel(const uint64_t tenant_id,
+                                  const common::ObAddr &peer_exec_addr,
+                                  uint64_t ch_id,
+                                  ObDtlChannelInfo &ci_consumer,
+                                  bool is_local);
 };
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+
+}  // dtl
+}  // sql
+}  // oceanbase
+
 
 #endif /* OB_DTL_CHANNEL_GROUP_H */

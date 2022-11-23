@@ -1,0 +1,32 @@
+# owner: xiaoyi.xy
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (sys, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+--sleep 2
+connection default;
+
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 varchar(30), c2 date, c3 date);
+insert into t1 values("2019-10-11", "2019-01-10", "2018-01-01");
+insert into t1 values(null, "2019-01-10", null);
+insert into t1 values("2019-10-11", "0000-00-00", "2019-10-19");
+
+connection sys;
+sleep 2;
+connection default;
+set @@ob_enable_plan_cache = 0;
+select datediff(c1, c2), datediff(c2, c3) from t1;
+select datediff(20080701, "2008-08-01");
+select datediff("20080701", "2012-05-25");
+select datediff("2012-05-25","20080701");
+select datediff(null,null);
+select datediff(null,"2012-05-25");
+select datediff("2012-05-25","0000-00-00");
+
+connection sys;
+
+--sleep 2

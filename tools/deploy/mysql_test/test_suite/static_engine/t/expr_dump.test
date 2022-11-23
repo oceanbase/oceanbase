@@ -1,0 +1,25 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
+connection syscon;
+
+sleep 2;
+
+connection default;
+set @@ob_enable_plan_cache = 0;
+
+select dump(NULL);
+select dump(0.2);
+select dump(2);
+select dump('abcdef');
+select dump('abcdef');
+select dump(date'2020-01-01');
+select dump(timestamp'2020-01-01');
+
+connection syscon;
+--sleep 2

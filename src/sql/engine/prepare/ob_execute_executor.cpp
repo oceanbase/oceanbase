@@ -19,11 +19,13 @@
 #include "observer/virtual_table/ob_virtual_table_iterator_factory.h"
 #include "sql/resolver/ob_schema_checker.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-int ObExecuteExecutor::execute(ObExecContext& ctx, ObExecuteStmt& stmt)
+int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx.get_sql_ctx()) || OB_ISNULL(ctx.get_my_session())) {
@@ -31,19 +33,18 @@ int ObExecuteExecutor::execute(ObExecContext& ctx, ObExecuteStmt& stmt)
     LOG_WARN("sql ctx or session is NULL", K(ctx.get_sql_ctx()), K(ctx.get_my_session()), K(ret));
   } else {
     ObObjParam result;
-    Ob2DArray<ObObjParam, OB_MALLOC_BIG_BLOCK_SIZE, ObWrapperAllocator, false> params_array(
-        (ObWrapperAllocator(ctx.get_allocator())));
+    ParamStore params_array( (ObWrapperAllocator(ctx.get_allocator())) );
     if (OB_FAIL(params_array.reserve(stmt.get_params().count()))) {
       LOG_WARN("failed to reserve params array", K(ret), "count", stmt.get_params().count());
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_params().count(); ++i) {
-      if (OB_FAIL(ObSQLUtils::calc_const_expr(
-              stmt.get_stmt_type(), ctx, stmt.get_params().at(i), result, &ctx.get_allocator(), params_array))) {
+      if (OB_FAIL(ObSQLUtils::calc_const_expr(ctx, stmt.get_params().at(i), result, ctx.get_allocator(), params_array))) {
         LOG_WARN("failed to calc const expr", K(stmt.get_params().at(i)), K(ret));
       } else {
         result.set_param_meta();
         result.set_accuracy(stmt.get_params().at(i)->get_accuracy());
         result.set_result_flag(stmt.get_params().at(i)->get_result_flag());
+        result.set_collation_level(CS_LEVEL_COERCIBLE);
         if (OB_FAIL(params_array.push_back(result))) {
           LOG_WARN("push_back error", K(result), K(ret));
         }
@@ -51,36 +52,26 @@ int ObExecuteExecutor::execute(ObExecContext& ctx, ObExecuteStmt& stmt)
     }
 
     if (OB_SUCC(ret)) {
-      SMART_VAR(ObResultSet, result_set, *ctx.get_my_session())
-      {
-        result_set.init_partition_location_cache(
-            GCTX.location_cache_, GCTX.self_addr_, ctx.get_sql_ctx()->schema_guard_);
+      SMART_VAR(ObResultSet, result_set, *ctx.get_my_session(), ctx.get_allocator()) {
         result_set.set_ps_protocol();
-        ObTaskExecutorCtx* task_ctx = result_set.get_exec_context().get_task_executor_ctx();
+        ObTaskExecutorCtx *task_ctx = result_set.get_exec_context().get_task_executor_ctx();
         int64_t tenant_version = 0;
         int64_t sys_version = 0;
         if (OB_ISNULL(task_ctx)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("task executor ctx can not be NULL", K(task_ctx), K(ret));
         } else if (OB_FAIL(GCTX.schema_service_->get_tenant_received_broadcast_version(
-                       ctx.get_my_session()->get_effective_tenant_id(), tenant_version))) {
+                    ctx.get_my_session()->get_effective_tenant_id(), tenant_version))) {
           LOG_WARN("fail get tenant schema version", K(ret));
-        } else if (OB_FAIL(
-                       GCTX.schema_service_->get_tenant_received_broadcast_version(OB_SYS_TENANT_ID, sys_version))) {
+        } else if (OB_FAIL(GCTX.schema_service_->get_tenant_received_broadcast_version(
+                    OB_SYS_TENANT_ID, sys_version))) {
           LOG_WARN("fail get sys schema version", K(ret));
         } else {
           ObSqlCtx sql_ctx;
-          observer::ObVirtualTableIteratorFactory vt_iter_factory(*GCTX.vt_iter_creator_);
           sql_ctx.retry_times_ = 0;
-          sql_ctx.merged_version_ = ctx.get_sql_ctx()->merged_version_;
-          sql_ctx.vt_iter_factory_ = &vt_iter_factory;
           sql_ctx.session_info_ = ctx.get_my_session();
-          sql_ctx.sql_proxy_ = ctx.get_sql_ctx()->sql_proxy_;
-          sql_ctx.use_plan_cache_ = true;
           sql_ctx.disable_privilege_check_ = true;
-          sql_ctx.partition_table_operator_ = ctx.get_sql_ctx()->partition_table_operator_;
-          sql_ctx.partition_location_cache_ = &(result_set.get_partition_location_cache());
-          sql_ctx.part_mgr_ = ctx.get_sql_ctx()->part_mgr_;
+          sql_ctx.secondary_namespace_ = ctx.get_sql_ctx()->secondary_namespace_;
           sql_ctx.is_prepare_protocol_ = ctx.get_sql_ctx()->is_prepare_protocol_;
           sql_ctx.is_prepare_stage_ = ctx.get_sql_ctx()->is_prepare_stage_;
           sql_ctx.schema_guard_ = ctx.get_sql_ctx()->schema_guard_;
@@ -91,26 +82,25 @@ int ObExecuteExecutor::execute(ObExecContext& ctx, ObExecuteStmt& stmt)
           if (OB_FAIL(result_set.init())) {
             LOG_WARN("result set init failed", K(ret));
           } else if (OB_FAIL(GCTX.sql_engine_->stmt_execute(stmt.get_prepare_id(),
-                         stmt.get_prepare_type(),
-                         params_array,
-                         sql_ctx,
-                         result_set,
-                         false /* is_inner_sql */))) {
+                                                            stmt.get_prepare_type(),
+                                                            params_array,
+                                                            sql_ctx,
+                                                            result_set,
+                                                            false/* is_inner_sql */))) {
             LOG_WARN("failed to prepare stmt", K(stmt.get_prepare_id()), K(stmt.get_prepare_type()), K(ret));
           } else {
             if (OB_ISNULL(ctx.get_sql_ctx()->schema_guard_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("schema guard is null");
-            } else if (OB_FAIL(ctx.get_my_session()->update_query_sensitive_system_variable(
-                           *(ctx.get_sql_ctx()->schema_guard_)))) {
+            } else if (OB_FAIL(ctx.get_my_session()->update_query_sensitive_system_variable(*(ctx.get_sql_ctx()->schema_guard_)))) {
               LOG_WARN("update query affacted system variable failed", K(ret));
-            } else if (OB_FAIL(result_set.sync_open())) {
+            } else if (OB_FAIL(result_set.open())) {
               LOG_WARN("result set open failed", K(result_set.get_statement_id()), K(ret));
             }
             if (OB_SUCC(ret)) {
               if (result_set.is_with_rows()) {
                 while (OB_SUCC(ret)) {
-                  const common::ObNewRow* row = NULL;
+                  const common::ObNewRow *row = NULL;
                   if (OB_FAIL(result_set.get_next_row(row))) {
                     if (OB_ITER_END == ret) {
                       ret = OB_SUCCESS;
@@ -135,5 +125,7 @@ int ObExecuteExecutor::execute(ObExecContext& ctx, ObExecuteStmt& stmt)
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+
+

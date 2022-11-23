@@ -14,14 +14,17 @@
 #include <pthread.h>
 #include <string>
 #include "common/ob_smart_call.h"
-#include "lib/coro/co_user_thread.h"
+#include "lib/thread/threads.h"
+#include "lib/utility/ob_hang_fatal_error.h"
 
 using namespace std;
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-int dec(int& i)
+int dec(int &i)
 {
   if (i <= 0) {
     return OB_SUCCESS;
@@ -45,8 +48,7 @@ TEST(sc, usability)
   {
     class Foo {
     public:
-      int dec()
-      {
+      int dec() {
         if (i_ <= 0) {
           return OB_SUCCESS;
         } else {
@@ -62,21 +64,22 @@ TEST(sc, usability)
   }
 
   // lambda && error code
-  EXPECT_EQ(OB_ERR_UNEXPECTED, SMART_CALL([]() { return OB_ERR_UNEXPECTED; }()));
+  EXPECT_EQ(OB_ERR_UNEXPECTED, SMART_CALL([]() { return OB_ERR_UNEXPECTED;}()));
 }
 
-void* cur_stack_addr = nullptr;
+void *cur_stack_addr = nullptr;
 size_t cur_stack_size = 0;
 int stack_change_cnt = 0;
-const int64_t s_size = STACK_PER_EXTEND;
-int test(int& i, int once_invoke_hold)
+#define STACK_PER_EXTEND_SIZE lib::ProtectedStackAllocator::adjust_size(STACK_PER_EXTEND)
+const int64_t s_size = STACK_PER_EXTEND_SIZE;
+int test(int &i, int once_invoke_hold)
 {
   int ret = OB_SUCCESS;
-  void* stack_addr = nullptr;
+  void *stack_addr = nullptr;
   size_t stack_size = 0;
   get_stackattr(stack_addr, stack_size);
   if (stack_addr != cur_stack_addr) {
-    if (stack_size != STACK_PER_EXTEND) {
+    if (stack_size != STACK_PER_EXTEND_SIZE) {
       ret = OB_ERR_UNEXPECTED;
     } else {
       char tmp = '\0';
@@ -100,7 +103,7 @@ int test(int& i, int once_invoke_hold)
       char buf[once_invoke_hold];
       MEMSET(buf, 0, once_invoke_hold);
       ret = SMART_CALL(test(--i, once_invoke_hold));
-      void* stack_addr_after = nullptr;
+      void *stack_addr_after = nullptr;
       size_t stack_size_after = 0;
       get_stackattr(stack_addr_after, stack_size_after);
       if (stack_addr_after != stack_addr || stack_size_after != stack_size) {
@@ -111,12 +114,13 @@ int test(int& i, int once_invoke_hold)
   return ret;
 }
 
-void* run(void*)
+void *run(void *)
 {
   int ret = OB_SUCCESS;
   // half, single, double
-  for (int k = 0; k < 3; k++) {
-    int i = s_size / STACK_RESERVED_SIZE * 0.5 * (1 << k);
+  for (int k = 0; k < 3; k++)
+  {
+    int i = s_size/STACK_RESERVED_SIZE * 0.5 * (1<<k);
     size_t stack_size = 0;
     get_stackattr(cur_stack_addr, stack_size);
     stack_change_cnt = 0;
@@ -134,9 +138,9 @@ void* run(void*)
     stack_change_cnt = 0;
     ret = test(i, STACK_RESERVED_SIZE);
     EXPECT_EQ(OB_SIZE_OVERFLOW, ret);
-    EXPECT_EQ(1 + stack_change_cnt, 1 + (ALL_STACK_LIMIT - stack_size) / STACK_PER_EXTEND);
+    EXPECT_EQ(1 + stack_change_cnt, 1 + (ALL_STACK_LIMIT - stack_size)/STACK_PER_EXTEND_SIZE);
   }
-  void* stack_addr = nullptr;
+  void *stack_addr= nullptr;
   size_t stack_size = 0;
   get_stackattr(stack_addr, stack_size);
   EXPECT_EQ(all_stack_size, stack_size);
@@ -157,8 +161,9 @@ TEST(sc, thread)
 
 TEST(sc, coro)
 {
-  lib::coro::config().stack_size_ = s_size;
-  class : public lib::CoKThread {
+  global_thread_stack_size = s_size;
+  class: public lib::Threads
+  {
     void run(int64_t) final
     {
       oceanbase::common::run(nullptr);
@@ -168,11 +173,11 @@ TEST(sc, coro)
   th.wait();
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

@@ -42,7 +42,7 @@ protected:
 private:
   int check_arg2() const;
   int get_rowkeys(common::ObIArray<common::ObRowkey> &rowkeys);
-  int get_partition_ids(uint64_t table_id, common::ObIArray<int64_t> &part_ids);
+  int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
   int multi_insert_or_update();
   int multi_get();
   int multi_delete();

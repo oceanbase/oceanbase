@@ -19,73 +19,62 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/objectpool/ob_tc_factory.h"
 #include "lib/allocator/ob_mod_define.h"
-#include "storage/transaction/ob_trans_result.h"
+#include "storage/tx/ob_trans_result.h"
 #include "rpc/obmysql/ob_2_0_protocol_utils.h"
+#include "observer/mysql/obmp_packet_sender.h"
 
-namespace oceanbase {
-namespace sql {
+
+namespace oceanbase
+{
+namespace sql
+{
 class ObSQLSessionInfo;
 }
-namespace obmysql {
+namespace obmysql
+{
 class ObMySQLPacket;
 }
-namespace rpc {
+namespace rpc
+{
 class ObRequest;
 }
-namespace observer {
-class ObOKPParam;
+namespace observer
+{
+struct ObOKPParam;
 class ObMySQLResultSet;
 struct ObSMConnection;
-class ObSqlEndTransCb {
+class ObSqlEndTransCb
+{
 public:
   ObSqlEndTransCb();
   virtual ~ObSqlEndTransCb();
 
   void callback(int cb_param);
-  void callback(int cb_param, const transaction::ObTransID& trans_id);
-  int init(rpc::ObRequest* req, sql::ObSQLSessionInfo* sess_info, uint8_t packet_seq, bool conn_status);
-  int set_packet_param(const sql::ObEndTransCbPacketParam& pkt_param);
-  void set_seq(uint8_t value);
-  void set_conn_valid(bool value);
+  void callback(int cb_param, const transaction::ObTransID &trans_id);
+  int init(ObMPPacketSender& packet_sender, 
+           sql::ObSQLSessionInfo *sess_info, 
+           int32_t stmt_id = 0,
+           uint64_t params_num = 0);
+  int set_packet_param(const sql::ObEndTransCbPacketParam &pkt_param);
   void destroy();
   void reset();
-  void set_need_disconnect(bool need_disconnect)
-  {
-    need_disconnect_ = need_disconnect;
-  }
-
-private:
-  int revert_session(sql::ObSQLSessionInfo* sess_info);
-  ObSMConnection* get_conn() const;
-  int get_conn_id(uint32_t& sessid) const;
+  void set_need_disconnect(bool need_disconnect) { need_disconnect_ = need_disconnect; }
+  void set_stmt_id(int32_t id) { stmt_id_ = id; }
+  void set_param_num(uint64_t num) { params_num_ = num; }
 
 protected:
-  int encode_ok_packet(rpc::ObRequest* req, easy_buf_t* buf, observer::ObOKPParam& ok_param,
-      sql::ObSQLSessionInfo& sess_info, uint8_t packet_seq);
-  int encode_error_packet(rpc::ObRequest* req, easy_buf_t* ez_buf, sql::ObSQLSessionInfo& sess_info, uint8_t packet_seq,
-      int err, const char* errmsg, bool is_partition_hit);
-  int get_conn(rpc::ObRequest* req, ObSMConnection*& conn) const;
-
-  inline int encode_packet(obmysql::ObMySQLPacket& pkt, const uint8_t packet_seq, const bool is_last);
-
-protected:
-  char* data_;
-  rpc::ObRequest* mysql_request_;
-  sql::ObSQLSessionInfo* sess_info_;
+  ObMPPacketSender packet_sender_;
+  sql::ObSQLSessionInfo *sess_info_;
   sql::ObEndTransCbPacketParam pkt_param_;
-  int16_t warning_count_;
-  uint8_t seq_;
-  obmysql::ObCompressionContext comp_context_;
-  obmysql::ObProto20Context proto20_context_;
-  easy_buf_t* ez_buf_;
-  bool conn_valid_;
   bool need_disconnect_;
-  uint32_t sessid_;
-
+  int32_t stmt_id_;
+  uint64_t params_num_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlEndTransCb);
 };
-}  // namespace observer
-}  // end of namespace oceanbase
+} //end of namespace obmysql
+} //end of namespace oceanbase
+
+
 
 #endif /* SRC_OBSERVER_MYSQL_OB_MYSQL_END_TRANS_CB_CPP_ */

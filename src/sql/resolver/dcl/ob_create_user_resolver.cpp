@@ -15,50 +15,52 @@
 #include "sql/resolver/ddl/ob_database_resolver.h"
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 
-ObCreateUserResolver::ObCreateUserResolver(ObResolverParams& params) : ObDCLResolver(params)
-{}
+ObCreateUserResolver::ObCreateUserResolver(ObResolverParams &params)
+    : ObDCLResolver(params)
+{
+}
 
 ObCreateUserResolver::~ObCreateUserResolver()
-{}
+{
+}
 
-int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
+int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObCreateUserStmt* create_user_stmt = NULL;
-  if (OB_UNLIKELY(share::is_oracle_mode() && 5 != parse_tree.num_child_) ||
-      OB_UNLIKELY(share::is_mysql_mode() && 4 != parse_tree.num_child_) ||
-      OB_UNLIKELY(T_CREATE_USER != parse_tree.type_)) {
+  ObCreateUserStmt *create_user_stmt = NULL;
+  if (OB_UNLIKELY(lib::is_oracle_mode() && 5 != parse_tree.num_child_)
+      || OB_UNLIKELY(lib::is_mysql_mode() && 4 != parse_tree.num_child_)
+      || OB_UNLIKELY(T_CREATE_USER != parse_tree.type_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expect 4 child in mysql mode and 5 child in oracle mode, create user type",
-        "actual_num",
-        parse_tree.num_child_,
-        "type",
-        parse_tree.type_,
-        K(ret));
-  } else if (OB_ISNULL(params_.session_info_) || OB_ISNULL(schema_checker_)) {
+             "actual_num", parse_tree.num_child_,
+             "type", parse_tree.type_,
+             K(ret));
+  } else if (OB_ISNULL(params_.session_info_)
+             || OB_ISNULL(schema_checker_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("Session info or schema checker should not be NULL", K(ret));
-  } else if (OB_ISNULL(create_user_stmt = create_stmt<ObCreateUserStmt>())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("Failed to create ObCreateUserStmt", K(ret));
-  } else {
+	} else if (OB_ISNULL(create_user_stmt = create_stmt<ObCreateUserStmt>())) {
+		ret = OB_ALLOCATE_MEMORY_FAILED;
+		LOG_ERROR("Failed to create ObCreateUserStmt", K(ret));
+	} else {
     stmt_ = create_user_stmt;
-    ParseNode* if_not_exist = const_cast<ParseNode*>(parse_tree.children_[0]);
-    ParseNode* users = const_cast<ParseNode*>(parse_tree.children_[1]);
-    ParseNode* require_info = const_cast<ParseNode*>(parse_tree.children_[2]);
-    ParseNode* resource_options = !share::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
-    ParseNode* profile = share::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
-    ParseNode* primary_zone = share::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[4]) : NULL;
-    ParseNode* ssl_infos = NULL;
+		ParseNode *if_not_exist = const_cast<ParseNode*>(parse_tree.children_[0]);
+    ParseNode *users = const_cast<ParseNode*>(parse_tree.children_[1]);
+    ParseNode *require_info = const_cast<ParseNode*>(parse_tree.children_[2]);
+    ParseNode *resource_options = !lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
+    ParseNode *profile = lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
+    ParseNode *primary_zone = lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[4]) : NULL; 
+    ParseNode *ssl_infos = NULL;
     create_user_stmt->set_tenant_id(params_.session_info_->get_effective_tenant_id());
-    // resolve if_not_exists
+		//resolve if_not_exists
     if (OB_SUCC(ret)) {
       if (NULL != if_not_exist) {
         if (T_IF_NOT_EXISTS != if_not_exist->type_) {
@@ -76,8 +78,18 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Create user ParseNode error", K(ret));
     } else {
+      // replace password to *** in query_string for audit
+      ObString masked_sql;
+      if (session_info_->is_inner()) {
+        // do nothing in inner_sql
+      } else if (OB_FAIL(mask_password_for_users(allocator_,
+          session_info_->get_current_query_string(), users, 1, masked_sql))) {
+        LOG_WARN("fail to mask_password_for_users", K(ret));
+      } else {
+        create_user_stmt->set_masked_sql(masked_sql);
+      }
       for (int i = 0; i < users->num_child_ && OB_SUCCESS == ret; ++i) {
-        ParseNode* user_pass = users->children_[i];
+        ParseNode *user_pass = users->children_[i];
         if (OB_ISNULL(user_pass)) {
           ret = OB_ERR_PARSE_SQL;
           LOG_WARN("The child of parseNode should not be NULL", K(ret), K(i));
@@ -90,21 +102,20 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
         } else {
           ObString user_name(user_pass->children_[0]->str_len_, user_pass->children_[0]->str_value_);
           ObString host_name;
-          ObCollationType client_cs_type = session_info_->get_local_collation_connection();
 
-          if (user_pass->children_[0]->type_ != T_IDENT &&
-              OB_FAIL(ObSQLUtils::copy_and_convert_string_charset(
-                  *allocator_, user_name, user_name, client_cs_type, CS_TYPE_UTF8MB4_BIN))) {
-            LOG_WARN(
-                "fail to convert user name to utf8", K(ret), K(user_name), KPHEX(user_name.ptr(), user_name.length()));
+          if (user_pass->children_[0]->type_ != T_IDENT
+              && OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+                           *allocator_, session_info_->get_dtc_params(), user_name))) {
+            LOG_WARN("fail to convert user name to utf8", K(ret), K(user_name),
+                     KPHEX(user_name.ptr(), user_name.length()));
           } else if (!session_info_->is_inner() && (0 == user_name.case_compare(OB_RESTORE_USER_NAME))) {
             ret = OB_ERR_NO_PRIVILEGE;
             LOG_WARN("__oceanbase_inner_restore_user is reserved", K(ret));
           } else if (NULL == user_pass->children_[3]) {
             host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
           } else {
-            host_name.assign_ptr(
-                user_pass->children_[3]->str_value_, static_cast<int32_t>(user_pass->children_[3]->str_len_));
+            host_name.assign_ptr(user_pass->children_[3]->str_value_,
+                                 static_cast<int32_t>(user_pass->children_[3]->str_len_));
           }
           ObString password;
           ObString need_enc_str = ObString::make_string("NO");
@@ -112,22 +123,21 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
             ret = OB_CANNOT_USER;
             LOG_WARN("user name is empty", K(ret));
             ObString create_user = ObString::make_string("CREATE USER");
-            LOG_USER_ERROR(
-                OB_CANNOT_USER, create_user.length(), create_user.ptr(), host_name.length(), host_name.ptr());
+            LOG_USER_ERROR(OB_CANNOT_USER, create_user.length(), create_user.ptr(), host_name.length(), host_name.ptr());
           } else if (OB_ISNULL(user_pass->children_[1])) {
             password = ObString::make_string("");
-            // no enc
+            //no enc
           } else if (OB_ISNULL(user_pass->children_[2])) {
             ret = OB_ERR_PARSE_SQL;
             LOG_WARN("Child 2 of user_pass should not be NULL here", K(ret));
           } else {
-            password.assign_ptr(
-                user_pass->children_[1]->str_value_, static_cast<int32_t>(user_pass->children_[1]->str_len_));
+            password.assign_ptr(user_pass->children_[1]->str_value_,
+                                static_cast<int32_t>(user_pass->children_[1]->str_len_));
             bool need_enc = (1 == user_pass->children_[2]->value_);
             if (need_enc) {
               need_enc_str = ObString::make_string("YES");
             } else {
-              // no enc
+              //no enc
               if (!ObSetPasswordResolver::is_valid_mysql41_passwd(password)) {
                 ret = OB_ERR_PASSWORD_FORMAT;
                 LOG_WARN("Wrong password format", K(user_name), K(password), K(ret));
@@ -136,8 +146,9 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
           }
           uint64_t profile_id = OB_INVALID_ID;
           if (OB_SUCC(ret) && NULL != profile) {
-            ParseNode* profile_name = nullptr;
-            if (OB_UNLIKELY(profile->type_ != T_USER_PROFILE) || OB_UNLIKELY(profile->num_child_ != 1)) {
+            ParseNode *profile_name = nullptr;
+            if (OB_UNLIKELY(profile->type_ != T_USER_PROFILE)
+              || OB_UNLIKELY(profile->num_child_ != 1)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("invalid type", K(ret), K(profile->type_), K(profile->num_child_));
             } else if (OB_ISNULL(profile_name = profile->children_[0])) {
@@ -146,22 +157,23 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
             } else if (profile_name->type_ == T_DEFAULT) {
               profile_id = OB_INVALID_ID;
             } else if (OB_FAIL(schema_checker_->get_profile_id(params_.session_info_->get_effective_tenant_id(),
-                           ObString(profile_name->str_len_, profile_name->str_value_),
-                           profile_id))) {
+                                                               ObString(profile_name->str_len_, profile_name->str_value_),
+                                                               profile_id))) {
               LOG_WARN("fail to get profile id", K(ret));
             }
           }
-          create_user_stmt->set_profile_id(profile_id);  // profile id is valid only in oracle mode
+          create_user_stmt->set_profile_id(profile_id);  //只有oracle模式profile id是有效的
           if (OB_SUCC(ret)) {
-            if (!share::is_oracle_mode() && OB_FAIL(check_password_strength(password, user_name))) {
+            if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password, user_name))) {
               LOG_WARN("password don't satisfied current policy", K(ret));
-            } else if (share::is_oracle_mode() &&
-                       OB_FAIL(check_oracle_password_strength(
-                           params_.session_info_->get_effective_tenant_id(), profile_id, password, user_name))) {
+            } else if (lib::is_oracle_mode() && OB_FAIL(check_oracle_password_strength(
+              params_.session_info_->get_effective_tenant_id(),
+              profile_id,
+              password, user_name))) {
               LOG_WARN("fail to check password strength", K(ret));
             }
           }
-
+          
           if (OB_SUCC(ret)) {
             if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
               ret = OB_WRONG_USER_NAME_LENGTH;
@@ -169,11 +181,11 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
             } else if (OB_FAIL(create_user_stmt->add_user(user_name, host_name, password, need_enc_str))) {
               LOG_WARN("Failed to add user to ObCreateUserStmt", K(user_name), K(host_name), K(password), K(ret));
             } else {
-              // do nothing
+              //do nothing
             }
           }
         }
-      }  // end of for
+      } //end of for
     }
 
     ObSSLType ssl_type = ObSSLType::SSL_TYPE_NOT_SPECIFIED;
@@ -183,27 +195,27 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
       // bypass
     } else if (NULL == require_info) {
       // bypass
-    } else if (OB_UNLIKELY(T_TLS_OPTIONS != require_info->type_) || OB_UNLIKELY(require_info->num_child_ != 1) ||
-               OB_ISNULL(ssl_infos = require_info->children_[0])) {
+    } else if (OB_UNLIKELY(T_TLS_OPTIONS != require_info->type_)
+               || OB_UNLIKELY(require_info->num_child_ != 1)
+               || OB_ISNULL(ssl_infos = require_info->children_[0])) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN(
-          "Create user ParseNode error", K(ret), K(require_info->type_), K(require_info->num_child_), KP(ssl_infos));
+      LOG_WARN("Create user ParseNode error", K(ret), K(require_info->type_), K(require_info->num_child_), KP(ssl_infos));
     } else if (OB_UNLIKELY(ssl_infos->type_ < T_TLS_NONE && ssl_infos->type_ > T_TLS_SPECIFIED)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Create user ParseNode error", K(ret), K(ssl_infos->type_));
     } else {
-      ssl_type =
-          static_cast<ObSSLType>(static_cast<int32_t>(ObSSLType::SSL_TYPE_NONE) + (ssl_infos->type_ - T_TLS_NONE));
+      ssl_type = static_cast<ObSSLType>(static_cast<int32_t>(ObSSLType::SSL_TYPE_NONE) + (ssl_infos->type_ - T_TLS_NONE));
 
       if (ObSSLType::SSL_TYPE_SPECIFIED == ssl_type) {
-        ParseNode* specified_ssl_infos = NULL;
-        if (OB_UNLIKELY(ssl_infos->num_child_ != 1) || OB_ISNULL(specified_ssl_infos = ssl_infos->children_[0])) {
+        ParseNode *specified_ssl_infos = NULL;
+        if (OB_UNLIKELY(ssl_infos->num_child_ != 1)
+            || OB_ISNULL(specified_ssl_infos = ssl_infos->children_[0])) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Create user ParseNode error", K(ret), K(ssl_infos->num_child_), KP(specified_ssl_infos));
         } else {
           bool check_repeat[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_MAX)] = {};
           for (int i = 0; i < specified_ssl_infos->num_child_ && OB_SUCC(ret); ++i) {
-            ParseNode* ssl_info = specified_ssl_infos->children_[i];
+            ParseNode *ssl_info = specified_ssl_infos->children_[i];
             if (OB_ISNULL(ssl_info)) {
               ret = OB_ERR_PARSE_SQL;
               LOG_WARN("The child of parseNode should not be NULL", K(ret), K(i));
@@ -213,51 +225,45 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
             } else if (OB_UNLIKELY(check_repeat[ssl_info->type_ - T_TLS_CIPHER])) {
               ret = OB_ERR_DUP_ARGUMENT;
               LOG_WARN("Option used twice in statement", K(ret), K(ssl_info->type_));
-              LOG_USER_ERROR(OB_ERR_DUP_ARGUMENT,
-                  get_ssl_spec_type_str(static_cast<ObSSLSpecifiedType>(ssl_info->type_ - T_TLS_CIPHER)));
+              LOG_USER_ERROR(OB_ERR_DUP_ARGUMENT, get_ssl_spec_type_str(static_cast<ObSSLSpecifiedType>(ssl_info->type_ - T_TLS_CIPHER)));
             } else {
               check_repeat[ssl_info->type_ - T_TLS_CIPHER] = true;
-              infos[ssl_info->type_ - T_TLS_CIPHER].assign_ptr(
-                  ssl_info->children_[0]->str_value_, ssl_info->children_[0]->str_len_);
+              infos[ssl_info->type_ - T_TLS_CIPHER].assign_ptr(ssl_info->children_[0]->str_value_, ssl_info->children_[0]->str_len_);
             }
           }
         }
       }
     }
     if (OB_SUCC(ret) && OB_NOT_NULL(primary_zone)) {
-      if (T_PRIMARY_ZONE != primary_zone->type_ || NULL == primary_zone->children_ || primary_zone->num_child_ != 1) {
+      if (T_PRIMARY_ZONE != primary_zone->type_ || NULL == primary_zone->children_ || 
+          primary_zone->num_child_ != 1) {
         ret = common::OB_INVALID_ARGUMENT;
         LOG_WARN("invalid primary_zone argument", K(ret), "num_child", primary_zone->num_child_);
       } else if (OB_FAIL(ObDatabaseResolver<ObCreateUserStmt>::resolve_primary_zone(
-                     create_user_stmt, primary_zone->children_[0]))) {
+            create_user_stmt, primary_zone->children_[0]))) {
         LOG_WARN("fail to resolve primary zone", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(create_user_stmt->add_ssl_info(get_ssl_type_string(ssl_type),
-              infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
-              infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
-              infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
-        LOG_WARN("Failed to add_ssl_info",
-            K(ssl_type),
-            "CIPHER",
-            infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
-            "ISSUER",
-            infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
-            "SUBJECT",
-            infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)],
-            K(ret));
+                                                 infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                                                 infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                                                 infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)]))) {
+        LOG_WARN("Failed to add_ssl_info", K(ssl_type),
+                 "CIPHER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
+                 "ISSUER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
+                 "SUBJECT", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)], K(ret));
       }
     }
     if (OB_SUCC(ret) && NULL != resource_options) {
       if (T_USER_RESOURCE_OPTIONS != resource_options->type_
                 || OB_ISNULL(resource_options->children_)) {
         ret = common::OB_INVALID_ARGUMENT;
-        LOG_WARN(
-            "invalid resource options argument", K(ret), K(resource_options->type_), K(resource_options->children_));
+        LOG_WARN("invalid resource options argument", K(ret), K(resource_options->type_),
+                  K(resource_options->children_));
       } else {
         for (int64_t i = 0; i < resource_options->num_child_; i++) {
-          ParseNode* res_option = resource_options->children_[i];
+          ParseNode *res_option = resource_options->children_[i];
           if (OB_ISNULL(res_option)) {
             ret = common::OB_INVALID_ARGUMENT;
             LOG_WARN("null res option", K(ret), K(i));
@@ -277,13 +283,13 @@ int ObCreateUserResolver::resolve(const ParseNode& parse_tree)
     }
 
     if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-      OZ(schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
-             session_info_->get_priv_user_id(),
-             ObString(""),
-             stmt::T_CREATE_USER,
-             session_info_->get_enable_role_array()),
-          session_info_->get_effective_tenant_id(),
-          session_info_->get_user_id());
+      OZ (schema_checker_->check_ora_ddl_priv(
+            session_info_->get_effective_tenant_id(),
+            session_info_->get_priv_user_id(),
+            ObString(""),
+            stmt::T_CREATE_USER,
+            session_info_->get_enable_role_array()),
+            session_info_->get_effective_tenant_id(), session_info_->get_user_id());
     }
   }
   return ret;

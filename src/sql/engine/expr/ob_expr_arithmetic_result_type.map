@@ -44,6 +44,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*TinyIntType*/
@@ -90,6 +96,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*SmallIntType*/
@@ -136,6 +148,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*MediumIntType*/
@@ -182,6 +200,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*Int32Type*/
@@ -228,6 +252,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*IntType*/
@@ -274,6 +304,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*UTinyIntType*/
@@ -320,6 +356,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*USmallIntType*/
@@ -366,6 +408,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*UMediumIntType*/
@@ -412,6 +460,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*UInt32Type*/
@@ -458,6 +512,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*UInt64Type*/
@@ -504,6 +564,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*FloatType*/
@@ -550,6 +616,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*DoubleType*/
@@ -596,6 +668,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*UFloatType*/
@@ -642,6 +720,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*UDoubleType*/
@@ -688,6 +772,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*NumberType*/
@@ -734,6 +824,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*UNumberType*/
@@ -780,6 +876,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*DateTimeType*/
@@ -826,6 +928,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*TimestampType*/
@@ -872,6 +980,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*DateType*/
@@ -918,6 +1032,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*TimeType*/
@@ -964,6 +1084,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*YearType*/
@@ -1010,6 +1136,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*VarcharType*/
@@ -1056,6 +1188,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*CharType*/
@@ -1102,6 +1240,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*HexStringType*/
@@ -1144,7 +1288,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,         /* ObSetInnerType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
-    
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 
   /*ExtendType*/
@@ -1191,6 +1340,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
   },
 
   /*UnknownType*/
@@ -1237,6 +1392,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
   /*ObTinyTextType*/
   {
@@ -1282,6 +1443,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
   /*ObTextType*/
   {
@@ -1327,6 +1494,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
   /*ObMediumTextType*/
   {
@@ -1372,6 +1545,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
   /*ObLongTextType*/
   {
@@ -1417,6 +1596,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
     /*BitType*/
   {
@@ -1462,6 +1647,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
   /*ObEnumType*/
   {
@@ -1507,6 +1698,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
   /*ObSetType*/
   {
@@ -1552,6 +1749,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
   /*ObEnumInnerType*/
   {
@@ -1597,6 +1800,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
   },
   /*ObSetInnerType*/
   {
@@ -1642,6 +1851,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
   },
   /*ObTimestampTZType*/
   {
@@ -1687,6 +1902,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
   /*ObTimestampLTZType*/
   {
@@ -1732,6 +1953,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
    /* ObTimestampNanoType*/
   {
@@ -1777,6 +2004,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
   /*ObRawType*/
   {
@@ -1822,6 +2055,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
   /*ObIntervalYMType*/
   {
@@ -1867,6 +2106,12 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
   },
   /*ObIntervalDSType*/
   {
@@ -1912,5 +2157,317 @@ static ObObjType ARITH_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,      /* ObRawType  */
     ObMaxType,         /* ObIntervalYMType     */
     ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
+  },
+  /*ObNumberFloatType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UInt64Type  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,         /* UnknownType  */
+    ObMaxType,         /* ObTinyTextType  */
+    ObMaxType,         /* ObTextType  */
+    ObMaxType,         /* ObMediumTextType  */
+    ObMaxType,        /* ObLongTextType  */
+    ObMaxType,         /* ObBitType  */
+    ObMaxType,      /* ObEnumType  */
+    ObMaxType,      /* ObSetType  */
+    ObMaxType,         /* ObEnumInnerType  */
+    ObMaxType,         /* ObSetInnerType  */
+    ObMaxType,      /* ObTimestampTZType  */
+    ObMaxType,      /* ObTimestampLTZType  */
+    ObMaxType,      /* ObTimestampNanoType  */
+    ObMaxType,      /* ObRawType  */
+    ObMaxType,         /* ObIntervalYMType     */
+    ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
+  },
+  /*ObNVarchar2Type*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UInt64Type  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,         /* UnknownType  */
+    ObMaxType,         /* ObTinyTextType  */
+    ObMaxType,         /* ObTextType  */
+    ObMaxType,         /* ObMediumTextType  */
+    ObMaxType,        /* ObLongTextType  */
+    ObMaxType,         /* ObBitType  */
+    ObMaxType,      /* ObEnumType  */
+    ObMaxType,      /* ObSetType  */
+    ObMaxType,         /* ObEnumInnerType  */
+    ObMaxType,         /* ObSetInnerType  */
+    ObMaxType,      /* ObTimestampTZType  */
+    ObMaxType,      /* ObTimestampLTZType  */
+    ObMaxType,      /* ObTimestampNanoType  */
+    ObMaxType,      /* ObRawType  */
+    ObMaxType,         /* ObIntervalYMType     */
+    ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
+  },
+  /*ObNCharType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UInt64Type  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,         /* UnknownType  */
+    ObMaxType,         /* ObTinyTextType  */
+    ObMaxType,         /* ObTextType  */
+    ObMaxType,         /* ObMediumTextType  */
+    ObMaxType,        /* ObLongTextType  */
+    ObMaxType,         /* ObBitType  */
+    ObMaxType,      /* ObEnumType  */
+    ObMaxType,      /* ObSetType  */
+    ObMaxType,         /* ObEnumInnerType  */
+    ObMaxType,         /* ObSetInnerType  */
+    ObMaxType,      /* ObTimestampTZType  */
+    ObMaxType,      /* ObTimestampLTZType  */
+    ObMaxType,      /* ObTimestampNanoType  */
+    ObMaxType,      /* ObRawType  */
+    ObMaxType,         /* ObIntervalYMType     */
+    ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
+  },
+  /*ObURowIDType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UInt64Type  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,         /* UnknownType  */
+    ObMaxType,         /* ObTinyTextType  */
+    ObMaxType,         /* ObTextType  */
+    ObMaxType,         /* ObMediumTextType  */
+    ObMaxType,        /* ObLongTextType  */
+    ObMaxType,         /* ObBitType  */
+    ObMaxType,      /* ObEnumType  */
+    ObMaxType,      /* ObSetType  */
+    ObMaxType,         /* ObEnumInnerType  */
+    ObMaxType,         /* ObSetInnerType  */
+    ObMaxType,      /* ObTimestampTZType  */
+    ObMaxType,      /* ObTimestampLTZType  */
+    ObMaxType,      /* ObTimestampNanoType  */
+    ObMaxType,      /* ObRawType  */
+    ObMaxType,         /* ObIntervalYMType     */
+    ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
+  },
+  /*ObLobType*/
+  {
+    ObMaxType,         /* NullType  */
+    ObMaxType,         /* TinyIntType  */
+    ObMaxType,         /* SmallIntType  */
+    ObMaxType,         /* MediumIntType  */
+    ObMaxType,         /* Int32Type  */
+    ObMaxType,         /* IntType  */
+    ObMaxType,         /* UTinyIntType  */
+    ObMaxType,         /* USmallIntType  */
+    ObMaxType,         /* UMediumIntType  */
+    ObMaxType,         /* UInt32Type  */
+    ObMaxType,         /* UInt64Type  */
+    ObMaxType,         /* FloatType  */
+    ObMaxType,         /* DoubleType  */
+    ObMaxType,         /* UFloatType  */
+    ObMaxType,         /* UDoubleType  */
+    ObMaxType,         /* NumberType  */
+    ObMaxType,         /* UNumberType  */
+    ObMaxType,         /* DateTimeType  */
+    ObMaxType,         /* TimestampType  */
+    ObMaxType,         /* DateType  */
+    ObMaxType,         /* TimeType  */
+    ObMaxType,         /* YearType  */
+    ObMaxType,         /* VarcharType  */
+    ObMaxType,         /* CharType  */
+    ObMaxType,         /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObMaxType,         /* UnknownType  */
+    ObMaxType,         /* ObTinyTextType  */
+    ObMaxType,         /* ObTextType  */
+    ObMaxType,         /* ObMediumTextType  */
+    ObMaxType,        /* ObLongTextType  */
+    ObMaxType,         /* ObBitType  */
+    ObMaxType,      /* ObEnumType  */
+    ObMaxType,      /* ObSetType  */
+    ObMaxType,         /* ObEnumInnerType  */
+    ObMaxType,         /* ObSetInnerType  */
+    ObMaxType,      /* ObTimestampTZType  */
+    ObMaxType,      /* ObTimestampLTZType  */
+    ObMaxType,      /* ObTimestampNanoType  */
+    ObMaxType,      /* ObRawType  */
+    ObMaxType,         /* ObIntervalYMType     */
+    ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObMaxType,      /* ObJsonType     */
+  },
+  /*ObJsonType*/
+  {
+    ObDoubleType,      /* NullType  */
+    ObDoubleType,      /* TinyIntType  */
+    ObDoubleType,      /* SmallIntType  */
+    ObDoubleType,      /* MediumIntType  */
+    ObDoubleType,      /* Int32Type  */
+    ObDoubleType,      /* IntType  */
+    ObDoubleType,      /* UTinyIntType  */
+    ObDoubleType,      /* USmallIntType  */
+    ObDoubleType,      /* UMediumIntType  */
+    ObDoubleType,      /* UInt32Type  */
+    ObDoubleType,      /* UInt64Type  */
+    ObDoubleType,      /* FloatType  */
+    ObDoubleType,      /* DoubleType  */
+    ObDoubleType,      /* UFloatType  */
+    ObDoubleType,      /* UDoubleType  */
+    ObDoubleType,      /* NumberType  */
+    ObDoubleType,      /* UNumberType  */
+    ObDoubleType,      /* DateTimeType  */
+    ObDoubleType,      /* TimestampType  */
+    ObDoubleType,      /* DateType  */
+    ObDoubleType,      /* TimeType  */
+    ObDoubleType,      /* YearType  */
+    ObDoubleType,      /* VarcharType  */
+    ObDoubleType,      /* CharType  */
+    ObDoubleType,      /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
+    ObDoubleType,      /* UnknownType  */
+    ObDoubleType,      /* ObTinyTextType  */
+    ObDoubleType,      /* ObTextType  */
+    ObDoubleType,      /* ObMediumTextType  */
+    ObDoubleType,      /* ObLongTextType  */
+    ObDoubleType,     /* ObBitType */
+    ObDoubleType,      /* ObEnumType  */
+    ObDoubleType,      /* ObSetType  */
+    ObMaxType,         /* ObEnumInnerType  */
+    ObMaxType,         /* ObSetInnerType  */
+    ObDoubleType,      /* ObTimestampTZType  */
+    ObDoubleType,      /* ObTimestampLTZType  */
+    ObDoubleType,      /* ObTimestampNanoType  */
+    ObDoubleType,      /* ObRawType  */
+    ObMaxType,         /* ObIntervalYMType     */
+    ObMaxType,         /* ObIntervalDSType     */
+    ObMaxType,         /* ObNumberFloatType     */
+    ObMaxType,         /* ObNVarchar2Type     */
+    ObMaxType,         /* ObNCharType     */
+    ObMaxType,         /* ObURowIDType     */
+    ObMaxType,         /* ObLobType     */
+    ObDoubleType,      /* ObJsonType     */
   },
 };

@@ -183,7 +183,7 @@
 #include <syscall.h>
 #include <signal.h>
 #include <sys/eventfd.h>
-#include "easy_log.h"
+#include "io/easy_log.h"
 
 int64_t ev_loop_warn_threshold = 10 * 1000;
 __thread int64_t ev_malloc_count = 0;
@@ -560,6 +560,8 @@ EV_CPP(extern "C" {
 #endif
 
     /*****************************************************************************/
+
+static inline int64_t current_time();
 
 #ifdef __linux
 # include <sys/utsname.h>
@@ -1113,8 +1115,12 @@ EV_CPP(extern "C" {
         unsigned long           arg = 1;
         ioctlsocket (EV_FD_TO_WIN32_HANDLE (fd), FIONBIO, &arg);
 #else
-        fcntl (fd, F_SETFD, FD_CLOEXEC);
-        fcntl (fd, F_SETFL, O_NONBLOCK);
+        if (fcntl (fd, F_SETFD, FD_CLOEXEC) < 0) {
+            easy_error_log("libev F_SETFD FD_CLOEXEC failed, errno:%d", errno);
+        }
+        if (fcntl (fd, F_SETFL, O_NONBLOCK) < 0) {
+            easy_error_log("libev F_SETFL O_NONBLOCK failed, errno:%d", errno);
+        }
 #endif
     }
 
@@ -1301,8 +1307,12 @@ EV_CPP(extern "C" {
 
                 fd_intern (evpipe [0]);
                 fd_intern (evpipe [1]);
-                fcntl (evpipe [0], F_SETFL, O_NONBLOCK | O_NOATIME);
-                fcntl (evpipe [1], F_SETFL, O_NONBLOCK | O_NOATIME);
+                if (fcntl (evpipe [0], F_SETFL, O_NONBLOCK | O_NOATIME)) {
+                    easy_error_log("libev F_SETFL O_NONBLOCK | O_NOATIME for evpipe[0] failed, errno:%d", errno);
+                }
+                if (fcntl (evpipe [1], F_SETFL, O_NONBLOCK | O_NOATIME)) {
+                    easy_error_log("libev F_SETFL O_NONBLOCK | O_NOATIME for evpipe[1] failed, errno:%d", errno);
+                }
                 ev_io_set (&pipe_w, evpipe [0], EV_READ);
             }
 
@@ -1405,7 +1415,7 @@ EV_CPP(extern "C" {
     {
         WL                      w;
 
-        if (expect_false (signum <= 0 || signum > EV_NSIG))
+        if (expect_false (signum <= 0 || signum >= EV_NSIG))
             return;
 
         --signum;
@@ -2098,16 +2108,6 @@ EV_CPP(extern "C" {
         return count;
     }
 
-#ifndef EASY_DEFINED_CURR_TIME
-  static inline int64_t current_time() {
-    struct timeval t;
-    if (gettimeofday(&t, NULL) < 0) {
-      easy_error_log("get time of day failed");
-    }
-    return ((t.tv_sec) * 1000000 + t.tv_usec);
-  }
-#endif
-
     void noinline
     ev_invoke_pending (EV_P)
     {
@@ -2351,6 +2351,14 @@ EV_CPP(extern "C" {
         }
     }
 
+  inline int64_t current_time()
+  {
+    struct timeval t;
+    if (gettimeofday(&t, NULL) < 0) {
+      easy_error_log("get time of day failed");
+    }
+    return ((t.tv_sec) * 1000000 + t.tv_usec);
+  }
 
     void
     ev_run (EV_P_ int flags)

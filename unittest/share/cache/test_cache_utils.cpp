@@ -18,10 +18,12 @@
 #include "share/cache/ob_cache_utils.h"
 
 using ::testing::_;
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace lib;
-namespace share {
+namespace share
+{
 TEST(TestFixedHashMap, basic)
 {
   ObFixedHashMap<int64_t, int64_t> fix_map;
@@ -45,7 +47,7 @@ TEST(TestFixedHashMap, basic)
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, fix_map.get(5000, value));
   ObFixedHashMap<int64_t, int64_t>::iterator iter = fix_map.begin();
   int64_t i = 0;
-  for (; iter != fix_map.end(); ++iter) {
+  for ( ; iter != fix_map.end(); ++iter) {
     ASSERT_EQ(i, iter->first);
     ASSERT_EQ(i, iter->second);
     ++i;
@@ -68,7 +70,7 @@ TEST(TestFixedHashMap, basic)
   ASSERT_EQ(OB_SIZE_OVERFLOW, fix_map.set(5000, 5000));
   iter = fix_map.begin();
   i = 0;
-  for (; iter != fix_map.end(); ++iter) {
+  for ( ; iter != fix_map.end(); ++iter) {
     ASSERT_EQ(i, iter->first);
     ASSERT_EQ(i, iter->second);
     ++i;
@@ -100,15 +102,15 @@ TEST(TestFreeHeap, basic)
   ObFreeHeap<int64_t> heap;
   ASSERT_EQ(OB_SUCCESS, heap.init(1024, "1"));
   for (int64_t i = 0; i < 1024; ++i) {
-    int64_t* ptr = NULL;
+    int64_t *ptr = NULL;
     ASSERT_EQ(OB_SUCCESS, heap.sbrk(ptr));
     MEMSET(ptr, 0, sizeof(int64_t));
   }
-  int64_t* ptr = NULL;
+  int64_t *ptr = NULL;
   ASSERT_EQ(OB_BUF_NOT_ENOUGH, heap.sbrk(ptr));
   heap.reuse();
   for (int64_t i = 0; i < 512; ++i) {
-    int64_t* ptr = NULL;
+    int64_t *ptr = NULL;
     ASSERT_EQ(OB_SUCCESS, heap.sbrk(ptr));
     MEMSET(ptr, 0, sizeof(int64_t));
   }
@@ -136,10 +138,10 @@ TEST(TestFixArray, basic)
   }
 }
 
-}  // end namespace share
-}  // end namespace oceanbase
+} // end namespace share
+} // end namespace oceanbase
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");

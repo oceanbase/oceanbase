@@ -19,17 +19,19 @@
 #include "share/config/ob_server_config.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
-class ObAllVirtualTenantParameterInfo : public common::ObVirtualTableIterator {
+class ObAllVirtualTenantParameterInfo : public common::ObVirtualTableIterator
+{
 public:
   ObAllVirtualTenantParameterInfo();
   virtual ~ObAllVirtualTenantParameterInfo();
   virtual int inner_open();
   virtual void reset();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
-
+  virtual int inner_get_next_row(common::ObNewRow *&row);
 private:
   enum ALL_TENANT_PARAMETER_INFO_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
@@ -51,7 +53,8 @@ private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTenantParameterInfo);
 };
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase
 
 #endif
+

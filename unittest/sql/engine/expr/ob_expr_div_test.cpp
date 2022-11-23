@@ -17,48 +17,50 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-class ObExprDivTest : public ::testing::Test {
-public:
-  ObExprDivTest();
-  virtual ~ObExprDivTest();
-  virtual void SetUp();
-  virtual void TearDown();
-
-private:
-  // disallow copy
-  ObExprDivTest(const ObExprDivTest& other);
-  ObExprDivTest& operator=(const ObExprDivTest& other);
-
-protected:
-  // data members
+class ObExprDivTest: public ::testing::Test
+{
+  public:
+    ObExprDivTest();
+    virtual ~ObExprDivTest();
+    virtual void SetUp();
+    virtual void TearDown();
+  private:
+    // disallow copy
+    ObExprDivTest(const ObExprDivTest &other);
+    ObExprDivTest& operator=(const ObExprDivTest &other);
+  protected:
+    // data members
 };
 
 ObExprDivTest::ObExprDivTest()
-{}
+{
+}
 
 ObExprDivTest::~ObExprDivTest()
-{}
+{
+}
 
 void ObExprDivTest::SetUp()
-{}
+{
+}
 
 void ObExprDivTest::TearDown()
-{}
+{
+}
 #define DIV_EXCEPT_NULL(cmp_op, str_buf, func, type1, v1, type2, v2) \
-  {                                                                  \
-    ObObj t1;                                                        \
-    ObObj t2;                                                        \
-    ObObj vres;                                                      \
-    t1.set_##type1(v1);                                              \
-    t2.set_##type2(v2);                                              \
-    t2.set_collation_type(CS_TYPE_UTF8MB4_BIN);                      \
-    ObArenaAllocator alloc;                                          \
-    cmp_op op(alloc);                                                \
-    int err = op.func(vres, t1, t2, str_buf, -1);                    \
-    EXPECT_TRUE(OB_SUCCESS == err);                                  \
-    EXPECT_TRUE(vres.is_null());                                     \
-  }                                                                  \
-  while (0)
+{                                                     \
+  ObObj t1;                                       \
+  ObObj t2;                                       \
+  ObObj vres;                                     \
+  t1.set_##type1(v1);                                 \
+  t2.set_##type2(v2);                                 \
+  t2.set_collation_type(CS_TYPE_UTF8MB4_BIN);         \
+  ObArenaAllocator alloc;\
+  cmp_op op(alloc);                                          \
+  int err = op.func(vres, t1, t2, str_buf, -1);           \
+  EXPECT_TRUE(OB_SUCCESS == err);                     \
+  EXPECT_TRUE(vres.is_null());                        \
+}while(0)
 
 #define R(t1, v1, t2, v2, rt, rv) ARITH_EXPECT_OBJ(ObExprDiv, &buf, calc, t1, v1, t2, v2, rt, rv)
 #define TN(t1, v1, t2, v2) DIV_EXCEPT_NULL(ObExprDiv, &buf, calc, t1, v1, t2, v2)
@@ -166,26 +168,26 @@ TEST_F(ObExprDivTest, int_uint_test)
 TEST_F(ObExprDivTest, float_double_test)
 {
   ObMalloc buf;
-  // basic_test
-  R(float, static_cast<float>(2323), float, static_cast<float>(23), double, static_cast<double>(2323 / 23));
-  R(float, 3, float, 2, double, 3 / 2.0);
+  //basic_test
+  R(float, static_cast<float>(2323), float, static_cast<float>(23), double, static_cast<double>(2323/23));
+  R(float, 3, float, 2, double, 3/2.0);
   R(float, 0, float, 34, double, 0.0);
-  R(float, 323.0, double, 46.66, double, static_cast<double>(323.0) / 46.66);
-  R(float, 3, float, 2, double, 3 / 2.0);
+  R(float, 323.0, double, 46.66, double, static_cast<double>(323.0)/46.66);
+  R(float, 3, float, 2, double, 3/2.0);
   R(float, 0, float, 34, double, 0.0);
-  R(double, 32323.4, double, 4656.66, double, 32323.4 / 4656.66);
-  R(double, 3, double, 2, double, 3 / 2.0);
+  R(double, 32323.4, double, 4656.66, double, 32323.4/4656.66);
+  R(double, 3, double, 2, double, 3/2.0);
   R(double, 0, double, 34, double, 0.0);
 
   // float_double_int_uint
   R(float, 0, int, INT64_MAX, double, 0.0);
   R(float, static_cast<float>(INT64_MAX), int, INT64_MAX, double, 1.0);
-  R(float, 3434, int, INT64_MIN, double, 3434.0 / INT64_MIN);
-  R(float, 3454, uint64, UINT64_MAX, double, 3454.0 / static_cast<double>(UINT64_MAX));
+  R(float, 3434, int, INT64_MIN, double, 3434.0/INT64_MIN);
+  R(float, 3454, uint64, UINT64_MAX, double, 3454.0/static_cast<double>(UINT64_MAX));
   R(double, 0, int, INT64_MAX, double, 0.0);
   R(double, static_cast<double>(INT64_MAX), int, INT64_MAX, double, 1.0);
-  R(double, 3434, int, INT64_MIN, double, 3434.0 / INT64_MIN);
-  R(double, 3454, uint64, UINT64_MAX, double, 3454.0 / static_cast<double>(UINT64_MAX));
+  R(double, 3434, int, INT64_MIN, double, 3434.0/INT64_MIN);
+  R(double, 3454, uint64, UINT64_MAX, double, 3454.0/static_cast<double>(UINT64_MAX));
 }
 
 TEST_F(ObExprDivTest, number_test)
@@ -226,23 +228,23 @@ TEST_F(ObExprDivTest, string_test)
 {
   ObMalloc buf;
   // string_int_uint
-  // R(varchar, "", int, INT64_MAX, double, 0);
-  // R(varchar, "", int, INT64_MIN, double, 0);
-  // R(varchar, "abc", int, INT64_MAX, double, 0);
-  // R(varchar, "abc", uint64, UINT64_MAX, double, 0);
-  // R(varchar, "-9223372036854775808abc", int, INT64_MIN, double, 1.0);
-  // R(varchar, "-9223372036854775807abc", int, INT64_MAX, double, -1.0);
-  // R(varchar, "18446744073709551615abd13", uint64, UINT64_MAX, double, 1.0);
-  // R(varchar, "-9223372036854775808", int, 1, double, static_cast<double>(INT64_MIN));
-  // R(varchar, "9223372036854775807abc", int, 1, double, static_cast<double>(INT64_MAX));
+  //R(varchar, "", int, INT64_MAX, double, 0);
+  //R(varchar, "", int, INT64_MIN, double, 0);
+  //R(varchar, "abc", int, INT64_MAX, double, 0);
+  //R(varchar, "abc", uint64, UINT64_MAX, double, 0);
+  //R(varchar, "-9223372036854775808abc", int, INT64_MIN, double, 1.0);
+  //R(varchar, "-9223372036854775807abc", int, INT64_MAX, double, -1.0);
+  //R(varchar, "18446744073709551615abd13", uint64, UINT64_MAX, double, 1.0);
+  //R(varchar, "-9223372036854775808", int, 1, double, static_cast<double>(INT64_MIN));
+  //R(varchar, "9223372036854775807abc", int, 1, double, static_cast<double>(INT64_MAX));
 
   // string_double
-  // R(varchar, "123abc", int, 123, double, 1.0);
-  // R(varchar, "-123abc", int, 123, double, -1.0);
-  // R(varchar, "-345abc12", double, 23.45, double, static_cast<double>(-345/23.45));
-  // R(varchar, "345abc456", double, 123.3, double, 345/123.3);
-  // R(varchar, "-123.5abc", double, 23.5, double, -123.5/23.5);
-  R(varchar, "456.45", double, 12.45, double, 456.45 / 12.45);
+  //R(varchar, "123abc", int, 123, double, 1.0);
+  //R(varchar, "-123abc", int, 123, double, -1.0);
+  //R(varchar, "-345abc12", double, 23.45, double, static_cast<double>(-345/23.45));
+  //R(varchar, "345abc456", double, 123.3, double, 345/123.3);
+  //R(varchar, "-123.5abc", double, 23.5, double, -123.5/23.5);
+  R(varchar, "456.45", double, 12.45, double, 456.45/12.45);
 }
 
 TEST_F(ObExprDivTest, null_test)
@@ -254,10 +256,11 @@ TEST_F(ObExprDivTest, null_test)
   TN(int, INT64_MIN, int, 0);
   TN(double, 12, double, 0.0);
   TN(float, static_cast<float>(121.3), float, 0.0);
-  // TN(int, 34, varchar, "");
-  // TN(int, 45, varchar, "abc");
-  // TN(double, 232.23, varchar, "abc12323");
+  //TN(int, 34, varchar, "");
+  //TN(int, 45, varchar, "abc");
+  //TN(double, 232.23, varchar, "abc12323");
   TN(double, 123.4, number, num_zero);
+
 }
 /*TEST_F(ObExprDivTest, type_test)
 {
@@ -672,8 +675,8 @@ TEST_F(ObExprDivTest, result_test)
   //R(null, 0, , 2, ObNullType); decimal not supported
 }*/
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

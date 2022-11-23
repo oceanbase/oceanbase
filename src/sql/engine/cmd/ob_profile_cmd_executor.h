@@ -16,28 +16,29 @@
 #include "lib/container/ob_array_serialization.h"
 #include "share/schema/ob_schema_struct.h"
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 class ObCommonRpcProxy;
 class ObUserProfileArg;
 class ObDropUserArg;
-}  // namespace obrpc
-namespace sql {
+}
+namespace sql
+{
 class ObExecContext;
 class ObUserProfileStmt;
-class ObProfileDDLExecutor {
+class ObProfileDDLExecutor
+{
 public:
-  ObProfileDDLExecutor()
-  {}
-  virtual ~ObProfileDDLExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObUserProfileStmt& stmt);
-
+  ObProfileDDLExecutor() {}
+  virtual ~ObProfileDDLExecutor() {}
+  int execute(ObExecContext &ctx, ObUserProfileStmt &stmt);
 private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObProfileDDLExecutor);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_ENGINE_CMD_PROFILE_CMD_EXECUTOR_
+}
+}
+#endif //OCEANBASE_SQL_ENGINE_CMD_PROFILE_CMD_EXECUTOR_

@@ -12,15 +12,19 @@
 
 #include "lib/allocator/ob_allocator_v2.h"
 #include "lib/alloc/alloc_failed_reason.h"
+#include "lib/alloc/memory_sanity.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 
 using namespace oceanbase::lib;
-namespace oceanbase {
-namespace common {
-void* ObAllocator::alloc(const int64_t size, const ObMemAttr& attr)
+namespace oceanbase
 {
+namespace common
+{
+void *ObAllocator::alloc(const int64_t size, const ObMemAttr &attr)
+{
+  SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   UNUSED(attr);
-  void* ptr = nullptr;
+  void *ptr = nullptr;
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = init();
@@ -31,24 +35,27 @@ void* ObAllocator::alloc(const int64_t size, const ObMemAttr& attr)
     if (attr.label_.is_valid()) {
       inner_attr.label_ = attr.label_;
     }
-    AObject* obj = os_.alloc_object(size, inner_attr);
+    AObject *obj = os_.alloc_object(size, inner_attr);
+    if (OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
+      ObTenantCtxAllocator &ta = os_.get_block_mgr()->get_tenant_ctx_allocator();
+      int64_t total_size = ta.sync_wash();
+      obj = os_.alloc_object(size, inner_attr);
+    }
     if (NULL != obj) {
       ptr = obj->data_;
-      get_mem_leak_checker().on_alloc(*obj);
+      get_mem_leak_checker().on_alloc(*obj, inner_attr);
+      SANITY_POISON(obj, AOBJECT_HEADER_SIZE);
+      SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
+      SANITY_POISON((void*)upper_align((int64_t)obj->data_ + obj->alloc_bytes_, 8), sizeof(AOBJECT_TAIL_MAGIC_CODE));
     }
     if (OB_UNLIKELY(nullptr == obj) && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-      ObTenantCtxAllocator& ta = os_.get_block_mgr()->get_tenant_ctx_allocator();
+      ObTenantCtxAllocator &ta = os_.get_block_mgr()->get_tenant_ctx_allocator();
       _OB_LOG(WARN, "[OOPS] alloc failed reason: %s", alloc_failed_msg());
-      _OB_LOG(WARN,
-          "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
-          "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld",
-          inner_attr.tenant_id_,
-          inner_attr.ctx_id_,
-          common::get_global_ctx_info().get_ctx_name(inner_attr.ctx_id_),
-          ta.get_hold(),
-          ta.get_limit(),
-          ta.get_tenant_hold(),
-          ta.get_tenant_limit());
+      _OB_LOG(WARN, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
+              "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld",
+              inner_attr.tenant_id_, inner_attr.ctx_id_,
+              common::get_global_ctx_info().get_ctx_name(inner_attr.ctx_id_),
+              ta.get_hold(), ta.get_limit(), ta.get_tenant_hold(), ta.get_tenant_limit());
       // 49 is the user defined signal to dump memory
       raise(49);
     }
@@ -56,36 +63,39 @@ void* ObAllocator::alloc(const int64_t size, const ObMemAttr& attr)
   return ptr;
 }
 
-void ObAllocator::free(void* ptr)
+void ObAllocator::free(void *ptr)
 {
+  SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = init();
   }
   if (OB_SUCC(ret)) {
     if (OB_LIKELY(nullptr != ptr)) {
-      AObject* obj = reinterpret_cast<AObject*>((char*)ptr - lib::AOBJECT_HEADER_SIZE);
+      AObject *obj = reinterpret_cast<AObject*>((char*)ptr - lib::AOBJECT_HEADER_SIZE);
       abort_unless(NULL != obj);
-      abort_unless(obj->MAGIC_CODE_ == lib::AOBJECT_MAGIC_CODE || obj->MAGIC_CODE_ == lib::BIG_AOBJECT_MAGIC_CODE);
+      abort_unless(obj->MAGIC_CODE_ == lib::AOBJECT_MAGIC_CODE
+                   || obj->MAGIC_CODE_ == lib::BIG_AOBJECT_MAGIC_CODE);
       abort_unless(obj->in_use_);
+      SANITY_POISON(obj->data_, obj->alloc_bytes_);
 
       get_mem_leak_checker().on_free(*obj);
-      lib::ABlock* block = obj->block();
+      lib::ABlock *block = obj->block();
       abort_unless(block);
-      abort_unless(block->check_magic_code());
-      ObjectSet* os = block->obj_set_;
+      abort_unless(block->is_valid());
+      ObjectSet *os = block->obj_set_;
       abort_unless(os == &os_);
       os->free_object(obj);
     }
   }
 }
 
-void* ObParallelAllocator::alloc(const int64_t size, const ObMemAttr& attr)
+void *ObParallelAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
-  void* ptr = NULL;
+  void *ptr = NULL;
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
-    lib::ObMutexGuard guard(mutex_);
+    lib::ObLockGuard<decltype(mutex_)> guard(mutex_);
     if (!is_inited_) {
       ret = init();
     }
@@ -112,23 +122,26 @@ void* ObParallelAllocator::alloc(const int64_t size, const ObMemAttr& attr)
   return ptr;
 }
 
-void ObParallelAllocator::free(void* ptr)
+void ObParallelAllocator::free(void *ptr)
 {
+  SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   if (OB_LIKELY(nullptr != ptr)) {
-    AObject* obj = reinterpret_cast<AObject*>((char*)ptr - lib::AOBJECT_HEADER_SIZE);
+    AObject *obj = reinterpret_cast<AObject*>((char*)ptr - lib::AOBJECT_HEADER_SIZE);
     abort_unless(obj);
-    abort_unless(obj->MAGIC_CODE_ == lib::AOBJECT_MAGIC_CODE || obj->MAGIC_CODE_ == lib::BIG_AOBJECT_MAGIC_CODE);
+    abort_unless(obj->MAGIC_CODE_ == lib::AOBJECT_MAGIC_CODE
+                 || obj->MAGIC_CODE_ == lib::BIG_AOBJECT_MAGIC_CODE);
     abort_unless(obj->in_use_);
+    SANITY_POISON(obj->data_, obj->alloc_bytes_);
 
     get_mem_leak_checker().on_free(*obj);
-    lib::ABlock* block = obj->block();
+    lib::ABlock *block = obj->block();
     abort_unless(block);
-    abort_unless(block->check_magic_code());
-    ObjectSet* os = block->obj_set_;
+    abort_unless(block->is_valid());
+    ObjectSet *os = block->obj_set_;
     // The locking process is driven by obj_set
     os->free_object(obj);
   }
 }
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase

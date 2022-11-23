@@ -20,14 +20,17 @@ using namespace oceanbase::common;
 using namespace oceanbase::omt;
 using namespace oceanbase::observer;
 
-class TestWorkerPool : public ::testing::Test {
+class TestWorkerPool
+    : public ::testing::Test
+{
 public:
-  TestWorkerPool() : pool_(procor_)
+  TestWorkerPool()
+      : pool_()
   {}
 
   virtual void SetUp()
   {
-    ASSERT_EQ(OB_SUCCESS, pool_.init(1, 5, 10));
+    ASSERT_EQ(OB_SUCCESS, pool_.init(1, 5));
   }
 
   virtual void TearDown()
@@ -36,7 +39,6 @@ public:
   }
 
 protected:
-  ObFakeWorkerProcessor procor_;
   ObGlobalContext gctx_;
   ObWorkerPool pool_;
 };
@@ -45,17 +47,17 @@ TEST_F(TestWorkerPool, TestName)
 {
   ObThWorker* ws[10] = {NULL};
   for (int i = 0; i < 10; ++i) {
-    ObThWorker* w = pool_.alloc();
+    ObThWorker *w = pool_.alloc();
     EXPECT_TRUE(w);
     ws[i] = w;
   }
-  EXPECT_FALSE(pool_.alloc());
+  //EXPECT_FALSE(pool_.alloc());
   for (int i = 0; i < 10; ++i) {
     pool_.free(ws[i]);
   }
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

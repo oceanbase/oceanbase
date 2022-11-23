@@ -56,6 +56,17 @@
 #WITH cte1 (a, b) AS (SELECT c1, c2 FROM t1), cte2 (c, d) AS (SELECT c1, c2 FROM t2) select * from (with cte2 as(select * from t3) select c3 as c11, c4 from cte2) cte1 join cte2 on cte1.c11=cte2.c;
 #--error 5217
 #with cte(n) as ( select 1 from dual union all select n+1 from cte where n < 10 ) search depth first by a set abc select * from cte;
+##这两种写法oracle也是支持的，因此我们也会支持，但是这个地方其实oracle做的不合理
+##举个例子
+##with cte(n) as (select 1 from dual) cycle n set iscyc to 'y' default 'n' select n from cte;
+##oracle中，上面这条语句会报错，报主查询中的n是找不到，我们这边在非递归的cte中直接忽略了cycle和search的解析
+##符合实现oracle超集的目标
+##但是后来发现事情没有这么简单
+##假设t1表有c1，c2，c3三个列，那么下面这句
+##with cte(n,x) as (select * from t1) cycle n set iscyc to 'y' default 'n' select * from cte;
+##在oracle中会出现3个列，即c1，c2，c3, 即cte完全变成了t1表
+##这个就比较恶心了，这样的定义cte感觉有明显的错误(因为cte表的伪列数量都已经和内部子查询产出的列数量不等了)
+##应该被报错才对, 暂时不支持，OB遇到这样的语句会报错
 #with cte(n) as (select 1 from dual) search depth first by n set abc select * from cte;
 #with cte(a,b,c) as (select * from emp) search depth first by a set abc select * from cte;
 #--error 4002

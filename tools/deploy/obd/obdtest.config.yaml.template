@@ -1,0 +1,34 @@
+{{%% COMPONENT %%}}:
+{{%% SERVERS %%}}
+  tag: {{%% TAG %%}}
+  rsync:
+    - src_path: {{%% DEPLOY_PATH %%}}/plugin_dir
+      target_path: plugin_dir
+    - src_path: {{%% DEPLOY_PATH %%}}/admin
+      target_path: admin
+    - src_path: {{%% DEPLOY_PATH %%}}/lib
+      target_path: lib
+    - src_path: {{%% DEPLOY_PATH %%}}/tools
+      target_path: tools
+    - src_path: {{%% DEPLOY_PATH %%}}/etc
+      target_path: etc
+    - src_path: {{%% DEPLOY_PATH %%}}/wallet
+      target_path: wallet
+  global:
+    devname: lo
+    production_mode: false
+    cluster_id: 1
+    memory_limit: '60G'
+    log_disk_percentage: '10'
+    datafile_disk_percentage: '50'
+    datafile_size: '60G'
+    system_memory: '15G'
+    cpu_count: '16'
+    cache_wash_threshold: '1G'
+    __min_full_resource_pool_memory: "1073741824"
+    workers_per_cpu_quota: '10'
+    schema_history_expire_time: '1d'
+    net_thread_count: '4'
+{{%% EXTRA_PARAM %%}}
+
+{{%% PROXY_CONF %%}}

@@ -1,0 +1,71 @@
+drop database if exists cte_st;
+create database cte_st;
+use cte_st;
+result_format: 4
+create table EMP (
+EMPno  number,
+ENAME varchar(30),
+JOB varchar(30),
+MGR number(4),
+HIREDATE date,
+SAL number(7,2),
+COMM number(7,2),
+DEPTNO number(2)
+) ;
+create table DEPT(
+DEPTNO number(2),
+DNAME char(45),
+LOC varchar(39)
+) ;
+insert into EMP values (7369,'SMITH','CLERK',7902,    str_to_date('17-DEC-80','%d-%b-%Y'),800,NULL, 20) ;
+INSERT INTO EMP VALUES (7499, 'ALLEN','SALESMAN',7698,str_to_date('20-FEB-81','%d-%b-%Y'),1600,300,30) ;
+INSERT INTO EMP VALUES (7521,'WARD','SALESMAN',7698,  str_to_date('22-FEB-81','%d-%b-%Y'),1250, 500, 30) ;
+INSERT INTO EMP VALUES (7566,'JONES','MANAGER',7839,  str_to_date('02-APR-81','%d-%b-%Y'), 2975, NULL, 20) ;
+INSERT INTO EMP VALUES (7654,'MARTIN','SALESMAN', 7698, str_to_date('28-SEP-81','%d-%b-%Y'), 1250, 1400, 30) ;
+INSERT INTO EMP VALUES (7698, 'BLAKE','MANAGER', 7839,  str_to_date('01-MAY-81','%d-%b-%Y'), 2850, NULL, 30) ;
+INSERT INTO EMP VALUES (7782, 'CLARK','MANAGER', 7839,  str_to_date('09-JUN-81','%d-%b-%Y'), 2450, NULL, 10) ;
+insert into EMP values (7788,'SCOTT','ANALYST', 7566,   str_to_date('19-APR-87','%d-%b-%Y'), 3000, null, 20) ;
+INSERT INTO EMP VALUES (7839, 'KING','PRESIDENT', NULL, str_to_date('17-NOV-81','%d-%b-%Y'), 5000, NULL, 10) ;
+INSERT INTO EMP VALUES (7844, 'TURNER','SALESMAN', 7698, str_to_date('08-SEP-81','%d-%b-%Y'), 1500, 0, 30) ;
+INSERT INTO EMP VALUES(7876, 'ADAMS','CLERK', 7788,     str_to_date('23-MAY-87','%d-%b-%Y'), 1100, NULL, 20) ;
+INSERT INTO EMP VALUES(7900, 'JAMES', 'CLEARK', 7698,   str_to_date('03-DEC-81','%d-%b-%Y'), 950, NULL, 30) ;
+INSERT INTO EMP VALUES(7902, 'FORD','ANALYST',7566,     str_to_date('03-DEC-81','%d-%b-%Y'), 3000, NULL, 20) ;
+INSERT INTO EMP VALUES(7934,'MILLER','CLERK', 7782,     str_to_date('23-JAN-82','%d-%b-%Y'), 1300,NULL, 10) ;
+
+## =======================================================================
+## Test Case 1:
+## - recursive WITH Query: Optimization on query with outside filter. 
+##   Predicate pushdown optimization on static  value job.
+##   The plan should reflect optimization or development can provide 
+##   parameter to show that pushdown optimization happened for init branch  
+## =======================================================================
+explain basic
+WITH rw (ename, mgr, empno, job) AS
+(
+    SELECT ename, mgr, empno, job
+    FROM emp e
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno, e.job
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT ename, empno, mgr, job
+FROM rw
+WHERE job = 'PRESIDENT' ;
+ERROR 42S02: Table doesn't exist
+
+WITH rw (ename, mgr, empno, job) AS
+(
+    SELECT ename, mgr, empno, job
+    FROM emp e
+    UNION ALL
+    SELECT e.ename, e.mgr, e.empno, e.job
+    FROM rw r, emp e
+    WHERE r.empno = e.mgr
+)
+SELECT /*+ :HINT: */ ename, empno, mgr, job
+FROM rw
+WHERE job = 'PRESIDENT' ;
+ERROR 42S02: Table doesn't exist
+
+drop database cte_st;

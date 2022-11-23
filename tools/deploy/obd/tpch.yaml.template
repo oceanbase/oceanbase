@@ -1,0 +1,25 @@
+oceanbase-ce:
+  tag: latest
+  servers:
+    - name: server1
+      ip: 127.0.0.1
+  server1:
+    mysql_port: ${mysql_port}
+    rpc_port: ${rpc_port}
+    home_path: ${home_path}
+  global:
+    production_mode: false
+    devname: lo
+    cluster_id: 1
+    memory_limit: '80G'
+    datafile_disk_percentage: '50'
+    datafile_size: '50G'
+    log_disk_percentage: '10'
+    system_memory: '10G'
+    cpu_count: '24'
+    stack_size: '512K'
+    cache_wash_threshold: '1G'
+    __min_full_resource_pool_memory: "1073741824"
+    workers_per_cpu_quota: '10'
+    schema_history_expire_time: '1d'
+    net_thread_count: '4'

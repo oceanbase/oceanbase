@@ -15,11 +15,15 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
-ObSingleChildPhyOperator::ObSingleChildPhyOperator(ObIAllocator& alloc) : ObPhyOperator(alloc), child_op_(NULL)
-{}
+ObSingleChildPhyOperator::ObSingleChildPhyOperator(ObIAllocator &alloc)
+    : ObPhyOperator(alloc),
+      child_op_(NULL)
+{
+}
 
 ObSingleChildPhyOperator::~ObSingleChildPhyOperator()
-{}
+{
+}
 
 void ObSingleChildPhyOperator::reset()
 {
@@ -33,7 +37,7 @@ void ObSingleChildPhyOperator::reuse()
   ObPhyOperator::reuse();
 }
 
-int ObSingleChildPhyOperator::set_child(int32_t child_idx, ObPhyOperator& child_operator)
+int ObSingleChildPhyOperator::set_child(int32_t child_idx, ObPhyOperator &child_operator)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL != child_op_)) {
@@ -49,16 +53,16 @@ int ObSingleChildPhyOperator::set_child(int32_t child_idx, ObPhyOperator& child_
   return ret;
 }
 
-ObPhyOperator* ObSingleChildPhyOperator::get_child(int32_t child_idx) const
+ObPhyOperator *ObSingleChildPhyOperator::get_child(int32_t child_idx) const
 {
-  ObPhyOperator* ret = NULL;
+  ObPhyOperator *ret = NULL;
   if (OB_LIKELY(0 == child_idx)) {
     ret = child_op_;
   }
   return ret;
 }
 
-int ObSingleChildPhyOperator::accept(ObPhyOperatorVisitor& visitor) const
+int ObSingleChildPhyOperator::accept(ObPhyOperatorVisitor &visitor) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(visitor.pre_visit(*this))) {

@@ -1,0 +1,540 @@
+***************   Case 1   ***************
+
+SQL: 
+create procedure p(x bigint) begin declare i bigint default 1; if(i=1) then select 42 from dual; end if; end 
+FUNCTION:
+{type:1, ref_count:0, schema_version:-1, merged_version:0, object_id:18446744073709551615, dependency_tables:[], outline_state:{outline_version_:{table_id:-1, schema_version:0, object_type:1}, is_plan_fixed_:false}, pre_calc_exprs:[], params_info:[], is_contain_virtual_table:false, is_contain_inner_table:false, fetch_cur_time:false, variables:[{type:1, obj_type:"?ÿÿÿÿÿÿÿÿÿ", {type:1, obj_type:"?ÿÿÿÿÿÿÿÿÿ"], default_idx:[2]}
+>>>>>>>>>>>>>>>> IR Code <<<<<<<<<<<<<<<<
+
+================Original================
+; ModuleID = 'expr_module'
+source_filename = "expr_module"
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+
+%pl_exec_context = type { i64, i64, %param_store.2*, %obj*, i32* }
+%param_store.2 = type { i64, [12 x %objparam.1]*, [12 x %objparam.1], i64, i64, i64, %param_store, i32 }
+%objparam.1 = type { %obj, i64, i32, %obj.0 }
+%obj = type { %obj_meta, i32, i64 }
+%obj_meta = type { i8, i8, i8, i8 }
+%obj.0 = type { i64, i8 }
+%param_store = type { i64, [0 x %objparam.1]*, i64, i64, i64, i64, i32, i32 }
+%pl_exec_context.3 = type { %obj_meta, i64, i32, i8 }
+%unwind_exception = type { i64 }
+%pl_condition_value = type { i64, i64, i8*, i64, i64, i8 }
+
+declare i32 @spi_calc_expr(%pl_exec_context*, i64, i64, %objparam.1*)
+
+declare i32 @spi_set_variable(%pl_exec_context*, i64, %objparam.1*)
+
+declare i32 @spi_query(%pl_exec_context*, i8*, i64*, i64, %pl_exec_context.3*, i64, i8)
+
+declare i32 @spi_execute(%pl_exec_context*, i64, i64, i64*, i64, i64*, i64, %pl_exec_context.3*, i64, i8)
+
+declare i32 @spi_execute_immediate(%pl_exec_context*, i64, i64, i64, i64*, i64, %pl_exec_context.3*, i64, i8)
+
+declare i32 @spi_extend_collection(%pl_exec_context*, i64, i64, i64, i64, i8)
+
+declare i32 @spi_open(%pl_exec_context*, i8*, i64, i64, i64*, i64, i64*)
+
+declare i32 @spi_fetch(%pl_exec_context*, i64, i64*, i64, %pl_exec_context.3*, i64, i8, i64)
+
+declare i32 @spi_close(i64)
+
+declare i32 @spi_destruct_collection(%pl_exec_context*, i64)
+
+declare i32 @spi_init_nestedtable(%pl_exec_context*, i64, i64, i64, i8)
+
+declare i32 @spi_copy_datum(%pl_exec_context*, i64, %obj*, %obj*, i8)
+
+declare %unwind_exception* @eh_create_exception(i64, %pl_condition_value*)
+
+declare i32 @_Unwind_RaiseException(%unwind_exception*)
+
+declare void @_Unwind_Resume(%unwind_exception*)
+
+declare i32 @eh_personality(i32, i32, i64, i8, i8)
+
+declare i32 @eh_convert_exception(i32, i64*, i64*, i8**, i64*)
+
+declare i64 @eh_classify_exception(i8*)
+
+declare void @eh_debug_int64(i64)
+
+declare void @eh_debug_int32(i32)
+
+declare void @eh_debug_int8ptr(i8*)
+
+declare i32 @pl_execute(%pl_exec_context*, i64, i64, i64)
+
+declare i32 @set_user_type_var(%pl_exec_context*, i64, i64)
+
+define i32 @p(%pl_exec_context* %__hidden_exec_ctx__, i64 %__argc__, [1 x i64]* %__argv__) personality i32 (i32, i32, i64, i8, i8)* @eh_personality {
+entry:
+  %__ret__ = alloca i32
+  store i32 0, i32* %__ret__
+  %x = alloca i64
+  %extract_arg = getelementptr [1 x i64], [1 x i64]* %__argv__, i32 0, i32 0
+  %cast_arg_to_pointer = bitcast i64* %extract_arg to %objparam.1*
+  %extract_int64_pointer = getelementptr %objparam.1, %objparam.1* %cast_arg_to_pointer, i32 0, i32 0, i32 2
+  %load_datum = load i64, i64* %extract_int64_pointer
+  store i64 %load_datum, i64* %x
+  %i = alloca i64
+  %ObObjParam = alloca %objparam.1
+  store %objparam.1 zeroinitializer, %objparam.1* %ObObjParam
+  %extract_meta_pointer = getelementptr %objparam.1, %objparam.1* %ObObjParam, i32 0, i32 0, i32 0
+  %extract_arg1 = getelementptr %obj_meta, %obj_meta* %extract_meta_pointer, i32 0, i32 1
+  store i8 7, i8* %extract_arg1
+  %extract_meta_pointer2 = getelementptr %objparam.1, %objparam.1* %ObObjParam, i32 0, i32 0, i32 0
+  %extract_arg3 = getelementptr %obj_meta, %obj_meta* %extract_meta_pointer2, i32 0, i32 3
+  store i8 -1, i8* %extract_arg3
+  %extract_meta_pointer4 = getelementptr %objparam.1, %objparam.1* %ObObjParam, i32 0, i32 1
+  store i64 -1, i64* %extract_meta_pointer4
+  %extract_meta_pointer5 = getelementptr %objparam.1, %objparam.1* %ObObjParam, i32 0, i32 3
+  %extract_arg6 = getelementptr %obj.0, %obj.0* %extract_meta_pointer5, i32 0, i32 1
+  store i8 1, i8* %extract_arg6
+  %calc_expr = call i32 @spi_calc_expr(%pl_exec_context* %__hidden_exec_ctx__, i64 140497062073872, i64 1, %objparam.1* %ObObjParam)
+  store i32 %calc_expr, i32* %__ret__
+  %0 = icmp eq i32 %calc_expr, 0
+  br i1 %0, label %ob_success, label %ob_fail
+
+exit:                                             ; preds = %continue
+  %load_ret = load i32, i32* %__ret__
+  ret i32 %load_ret
+
+ob_success:                                       ; preds = %ob_fail, %ob_fail, %entry
+  %extract_int64_pointer13 = getelementptr %objparam.1, %objparam.1* %ObObjParam, i32 0, i32 0, i32 2
+  %load_datum14 = load i64, i64* %extract_int64_pointer13
+  store i64 %load_datum14, i64* %i
+  %ObObjParam39 = alloca %objparam.1
+  store %objparam.1 zeroinitializer, %objparam.1* %ObObjParam39
+  %extract_meta_pointer40 = getelementptr %objparam.1, %objparam.1* %ObObjParam39, i32 0, i32 0, i32 0
+  %extract_arg41 = getelementptr %obj_meta, %obj_meta* %extract_meta_pointer40, i32 0, i32 1
+  store i8 7, i8* %extract_arg41
+  %extract_meta_pointer42 = getelementptr %objparam.1, %objparam.1* %ObObjParam39, i32 0, i32 0, i32 0
+  %extract_arg43 = getelementptr %obj_meta, %obj_meta* %extract_meta_pointer42, i32 0, i32 3
+  store i8 -1, i8* %extract_arg43
+  %extract_meta_pointer44 = getelementptr %objparam.1, %objparam.1* %ObObjParam39, i32 0, i32 1
+  store i64 -1, i64* %extract_meta_pointer44
+  %extract_meta_pointer45 = getelementptr %objparam.1, %objparam.1* %ObObjParam39, i32 0, i32 3
+  %extract_arg46 = getelementptr %obj.0, %obj.0* %extract_meta_pointer45, i32 0, i32 1
+  store i8 1, i8* %extract_arg46
+  %calc_expr47 = call i32 @spi_calc_expr(%pl_exec_context* %__hidden_exec_ctx__, i64 140497062074016, i64 -1, %objparam.1* %ObObjParam39)
+  store i32 %calc_expr47, i32* %__ret__
+  %1 = icmp eq i32 %calc_expr47, 0
+  br i1 %1, label %ob_success48, label %ob_fail49
+
+ob_fail:                                          ; preds = %entry
+  %exception_type = alloca i64
+  %error_code = alloca i64
+  %sql_state = alloca i8*
+  %str_len = alloca i64
+  %convert_exception = call i32 @eh_convert_exception(i32 %calc_expr, i64* %exception_type, i64* %error_code, i8** %sql_state, i64* %str_len)
+  %load_type = load i64, i64* %exception_type
+  %load_error_code = load i64, i64* %error_code
+  %load_sql_state = load i8*, i8** %sql_state
+  %load_str_len = load i64, i64* %str_len
+  %load_pl_exex_ctx = load %pl_exec_context, %pl_exec_context* %__hidden_exec_ctx__
+  %extract_allocator_pointer = extractvalue %pl_exec_context %load_pl_exex_ctx, 0
+  %handler_condition = alloca %pl_condition_value
+  %extract_arg7 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i32 0, i32 0
+  store i64 %load_type, i64* %extract_arg7
+  %extract_arg8 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i32 0, i32 1
+  store i64 %load_error_code, i64* %extract_arg8
+  %extract_arg9 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i32 0, i32 2
+  store i8* %load_sql_state, i8** %extract_arg9
+  %extract_arg10 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i32 0, i32 3
+  store i64 %load_str_len, i64* %extract_arg10
+  %extract_arg11 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i32 0, i32 4
+  store i64 0, i64* %extract_arg11
+  %extract_arg12 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i32 0, i32 5
+  store i8 0, i8* %extract_arg12
+  call void @eh_debug_int64(i64 4444)
+  %create_exception = call %unwind_exception* @eh_create_exception(i64 %extract_allocator_pointer, %pl_condition_value* %handler_condition)
+  %get_exception_class = call i64 @eh_classify_exception(i8* %load_sql_state)
+  switch i64 %get_exception_class, label %early_exit [
+    i64 2, label %early_exit
+    i64 3, label %ob_success
+    i64 4, label %ob_success
+  ]
+
+early_exit:                                       ; preds = %ob_fail, %ob_fail
+  %raise_exception = call i32 @_Unwind_RaiseException(%unwind_exception* %create_exception)
+  unreachable
+
+continue:                                         ; preds = %ob_success48, %ob_success15
+  br label %exit
+
+then:                                             ; preds = %ob_success48
+  %array = alloca [20 x i8]
+  store [20 x i8] c"select 42 from dual\00", [20 x i8]* %array
+  %extract_first_addr_from_array = getelementptr [20 x i8], [20 x i8]* %array, i32 0, i32 0
+  %datatype_array = alloca [0 x %pl_exec_context.3]
+  %datatype_array_to_pointer = bitcast [0 x %pl_exec_context.3]* %datatype_array to %pl_exec_context.3*
+  %spi_query = call i32 @spi_query(%pl_exec_context* %__hidden_exec_ctx__, i8* %extract_first_addr_from_array, i64* null, i64 0, %pl_exec_context.3* %datatype_array_to_pointer, i64 0, i8 0)
+  store i32 %spi_query, i32* %__ret__
+  %2 = icmp eq i32 %spi_query, 0
+  br i1 %2, label %ob_success15, label %ob_fail16
+
+ob_success15:                                     ; preds = %ob_fail16, %ob_fail16, %then
+  br label %continue
+
+ob_fail16:                                        ; preds = %then
+  %exception_type17 = alloca i64
+  %error_code18 = alloca i64
+  %sql_state19 = alloca i8*
+  %str_len20 = alloca i64
+  %convert_exception21 = call i32 @eh_convert_exception(i32 %spi_query, i64* %exception_type17, i64* %error_code18, i8** %sql_state19, i64* %str_len20)
+  %load_type22 = load i64, i64* %exception_type17
+  %load_error_code23 = load i64, i64* %error_code18
+  %load_sql_state24 = load i8*, i8** %sql_state19
+  %load_str_len25 = load i64, i64* %str_len20
+  %load_pl_exex_ctx26 = load %pl_exec_context, %pl_exec_context* %__hidden_exec_ctx__
+  %extract_allocator_pointer27 = extractvalue %pl_exec_context %load_pl_exex_ctx26, 0
+  %handler_condition28 = alloca %pl_condition_value
+  %extract_arg29 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i32 0, i32 0
+  store i64 %load_type22, i64* %extract_arg29
+  %extract_arg30 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i32 0, i32 1
+  store i64 %load_error_code23, i64* %extract_arg30
+  %extract_arg31 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i32 0, i32 2
+  store i8* %load_sql_state24, i8** %extract_arg31
+  %extract_arg32 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i32 0, i32 3
+  store i64 %load_str_len25, i64* %extract_arg32
+  %extract_arg33 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i32 0, i32 4
+  store i64 76, i64* %extract_arg33
+  %extract_arg34 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i32 0, i32 5
+  store i8 0, i8* %extract_arg34
+  call void @eh_debug_int64(i64 4444)
+  %create_exception35 = call %unwind_exception* @eh_create_exception(i64 %extract_allocator_pointer27, %pl_condition_value* %handler_condition28)
+  %get_exception_class37 = call i64 @eh_classify_exception(i8* %load_sql_state24)
+  switch i64 %get_exception_class37, label %early_exit36 [
+    i64 2, label %early_exit36
+    i64 3, label %ob_success15
+    i64 4, label %ob_success15
+  ]
+
+early_exit36:                                     ; preds = %ob_fail16, %ob_fail16
+  %raise_exception38 = call i32 @_Unwind_RaiseException(%unwind_exception* %create_exception35)
+  unreachable
+
+ob_success48:                                     ; preds = %ob_fail49, %ob_fail49, %ob_success
+  %extract_int64_pointer72 = getelementptr %objparam.1, %objparam.1* %ObObjParam39, i32 0, i32 0, i32 2
+  %cast_int64_to_int32 = bitcast i64* %extract_int64_pointer72 to i32*
+  %load_value = load i32, i32* %cast_int64_to_int32
+  %3 = icmp eq i32 %load_value, 0
+  br i1 %3, label %continue, label %then
+
+ob_fail49:                                        ; preds = %ob_success
+  %exception_type50 = alloca i64
+  %error_code51 = alloca i64
+  %sql_state52 = alloca i8*
+  %str_len53 = alloca i64
+  %convert_exception54 = call i32 @eh_convert_exception(i32 %calc_expr47, i64* %exception_type50, i64* %error_code51, i8** %sql_state52, i64* %str_len53)
+  %load_type55 = load i64, i64* %exception_type50
+  %load_error_code56 = load i64, i64* %error_code51
+  %load_sql_state57 = load i8*, i8** %sql_state52
+  %load_str_len58 = load i64, i64* %str_len53
+  %load_pl_exex_ctx59 = load %pl_exec_context, %pl_exec_context* %__hidden_exec_ctx__
+  %extract_allocator_pointer60 = extractvalue %pl_exec_context %load_pl_exex_ctx59, 0
+  %handler_condition61 = alloca %pl_condition_value
+  %extract_arg62 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i32 0, i32 0
+  store i64 %load_type55, i64* %extract_arg62
+  %extract_arg63 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i32 0, i32 1
+  store i64 %load_error_code56, i64* %extract_arg63
+  %extract_arg64 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i32 0, i32 2
+  store i8* %load_sql_state57, i8** %extract_arg64
+  %extract_arg65 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i32 0, i32 3
+  store i64 %load_str_len58, i64* %extract_arg65
+  %extract_arg66 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i32 0, i32 4
+  store i64 63, i64* %extract_arg66
+  %extract_arg67 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i32 0, i32 5
+  store i8 0, i8* %extract_arg67
+  call void @eh_debug_int64(i64 4444)
+  %create_exception68 = call %unwind_exception* @eh_create_exception(i64 %extract_allocator_pointer60, %pl_condition_value* %handler_condition61)
+  %get_exception_class70 = call i64 @eh_classify_exception(i8* %load_sql_state57)
+  switch i64 %get_exception_class70, label %early_exit69 [
+    i64 2, label %early_exit69
+    i64 3, label %ob_success48
+    i64 4, label %ob_success48
+  ]
+
+early_exit69:                                     ; preds = %ob_fail49, %ob_fail49
+  %raise_exception71 = call i32 @_Unwind_RaiseException(%unwind_exception* %create_exception68)
+  unreachable
+}
+
+================Optimized================
+; ModuleID = 'expr_module'
+source_filename = "expr_module"
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+
+%pl_exec_context = type { i64, i64, %param_store.2*, %obj*, i32* }
+%param_store.2 = type { i64, [12 x %objparam.1]*, [12 x %objparam.1], i64, i64, i64, %param_store, i32 }
+%objparam.1 = type { %obj, i64, i32, %obj.0 }
+%obj = type { %obj_meta, i32, i64 }
+%obj_meta = type { i8, i8, i8, i8 }
+%obj.0 = type { i64, i8 }
+%param_store = type { i64, [0 x %objparam.1]*, i64, i64, i64, i64, i32, i32 }
+%pl_exec_context.3 = type { %obj_meta, i64, i32, i8 }
+%unwind_exception = type { i64 }
+%pl_condition_value = type { i64, i64, i8*, i64, i64, i8 }
+
+declare i32 @spi_calc_expr(%pl_exec_context*, i64, i64, %objparam.1*)
+
+declare i32 @spi_set_variable(%pl_exec_context*, i64, %objparam.1*)
+
+declare i32 @spi_query(%pl_exec_context*, i8*, i64*, i64, %pl_exec_context.3*, i64, i8)
+
+declare i32 @spi_execute(%pl_exec_context*, i64, i64, i64*, i64, i64*, i64, %pl_exec_context.3*, i64, i8)
+
+declare i32 @spi_execute_immediate(%pl_exec_context*, i64, i64, i64, i64*, i64, %pl_exec_context.3*, i64, i8)
+
+declare i32 @spi_extend_collection(%pl_exec_context*, i64, i64, i64, i64, i8)
+
+declare i32 @spi_open(%pl_exec_context*, i8*, i64, i64, i64*, i64, i64*)
+
+declare i32 @spi_fetch(%pl_exec_context*, i64, i64*, i64, %pl_exec_context.3*, i64, i8, i64)
+
+declare i32 @spi_close(i64)
+
+declare i32 @spi_destruct_collection(%pl_exec_context*, i64)
+
+declare i32 @spi_init_nestedtable(%pl_exec_context*, i64, i64, i64, i8)
+
+declare i32 @spi_copy_datum(%pl_exec_context*, i64, %obj*, %obj*, i8)
+
+declare %unwind_exception* @eh_create_exception(i64, %pl_condition_value*)
+
+declare i32 @_Unwind_RaiseException(%unwind_exception*)
+
+declare void @_Unwind_Resume(%unwind_exception*)
+
+declare i32 @eh_personality(i32, i32, i64, i8, i8)
+
+declare i32 @eh_convert_exception(i32, i64*, i64*, i8**, i64*)
+
+declare i64 @eh_classify_exception(i8*)
+
+declare void @eh_debug_int64(i64)
+
+declare void @eh_debug_int32(i32)
+
+declare void @eh_debug_int8ptr(i8*)
+
+declare i32 @pl_execute(%pl_exec_context*, i64, i64, i64)
+
+declare i32 @set_user_type_var(%pl_exec_context*, i64, i64)
+
+define i32 @p(%pl_exec_context* %__hidden_exec_ctx__, i64 %__argc__, [1 x i64]* %__argv__) personality i32 (i32, i32, i64, i8, i8)* @eh_personality {
+entry:
+  %const = bitcast i64 140497062073872 to i64
+  %datatype_array = alloca [0 x %pl_exec_context.3], align 8
+  %__ret__ = alloca i32, align 4
+  store i32 0, i32* %__ret__, align 4
+  %ObObjParam = alloca %objparam.1, align 8
+  store %objparam.1 zeroinitializer, %objparam.1* %ObObjParam, align 8
+  %extract_arg1 = getelementptr %objparam.1, %objparam.1* %ObObjParam, i64 0, i32 0, i32 0, i32 1
+  store i8 7, i8* %extract_arg1, align 1
+  %extract_arg3 = getelementptr %objparam.1, %objparam.1* %ObObjParam, i64 0, i32 0, i32 0, i32 3
+  store i8 -1, i8* %extract_arg3, align 1
+  %extract_meta_pointer4 = getelementptr %objparam.1, %objparam.1* %ObObjParam, i64 0, i32 1
+  store i64 -1, i64* %extract_meta_pointer4, align 8
+  %extract_arg6 = getelementptr %objparam.1, %objparam.1* %ObObjParam, i64 0, i32 3, i32 1
+  store i8 1, i8* %extract_arg6, align 8
+  %calc_expr = call i32 @spi_calc_expr(%pl_exec_context* %__hidden_exec_ctx__, i64 %const, i64 1, %objparam.1* nonnull %ObObjParam)
+  store i32 %calc_expr, i32* %__ret__, align 4
+  %0 = icmp eq i32 %calc_expr, 0
+  br i1 %0, label %ob_success, label %ob_fail
+
+ob_success:                                       ; preds = %ob_fail, %entry
+  %ObObjParam39 = alloca %objparam.1, align 8
+  store %objparam.1 zeroinitializer, %objparam.1* %ObObjParam39, align 8
+  %extract_arg41 = getelementptr %objparam.1, %objparam.1* %ObObjParam39, i64 0, i32 0, i32 0, i32 1
+  store i8 7, i8* %extract_arg41, align 1
+  %extract_arg43 = getelementptr %objparam.1, %objparam.1* %ObObjParam39, i64 0, i32 0, i32 0, i32 3
+  store i8 -1, i8* %extract_arg43, align 1
+  %extract_meta_pointer44 = getelementptr %objparam.1, %objparam.1* %ObObjParam39, i64 0, i32 1
+  store i64 -1, i64* %extract_meta_pointer44, align 8
+  %extract_arg46 = getelementptr %objparam.1, %objparam.1* %ObObjParam39, i64 0, i32 3, i32 1
+  store i8 1, i8* %extract_arg46, align 8
+  %const_mat = add i64 %const, 144
+  %calc_expr47 = call i32 @spi_calc_expr(%pl_exec_context* %__hidden_exec_ctx__, i64 %const_mat, i64 -1, %objparam.1* nonnull %ObObjParam39)
+  store i32 %calc_expr47, i32* %__ret__, align 4
+  %1 = icmp eq i32 %calc_expr47, 0
+  br i1 %1, label %ob_success48, label %ob_fail49
+
+ob_fail:                                          ; preds = %entry
+  %exception_type = alloca i64, align 8
+  %error_code = alloca i64, align 8
+  %sql_state = alloca i8*, align 8
+  %str_len = alloca i64, align 8
+  %convert_exception = call i32 @eh_convert_exception(i32 %calc_expr, i64* nonnull %exception_type, i64* nonnull %error_code, i8** nonnull %sql_state, i64* nonnull %str_len)
+  %load_type = load i64, i64* %exception_type, align 8
+  %load_error_code = load i64, i64* %error_code, align 8
+  %load_sql_state = load i8*, i8** %sql_state, align 8
+  %load_str_len = load i64, i64* %str_len, align 8
+  %load_pl_exex_ctx.elt122 = bitcast %pl_exec_context* %__hidden_exec_ctx__ to i64*
+  %load_pl_exex_ctx.unpack = load i64, i64* %load_pl_exex_ctx.elt122, align 8
+  %handler_condition = alloca %pl_condition_value, align 8
+  %extract_arg7123 = bitcast %pl_condition_value* %handler_condition to i64*
+  store i64 %load_type, i64* %extract_arg7123, align 8
+  %extract_arg8 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i64 0, i32 1
+  store i64 %load_error_code, i64* %extract_arg8, align 8
+  %extract_arg9 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i64 0, i32 2
+  store i8* %load_sql_state, i8** %extract_arg9, align 8
+  %extract_arg10 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i64 0, i32 3
+  store i64 %load_str_len, i64* %extract_arg10, align 8
+  %extract_arg11 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i64 0, i32 4
+  store i64 0, i64* %extract_arg11, align 8
+  %extract_arg12 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition, i64 0, i32 5
+  store i8 0, i8* %extract_arg12, align 8
+  call void @eh_debug_int64(i64 4444)
+  %create_exception = call %unwind_exception* @eh_create_exception(i64 %load_pl_exex_ctx.unpack, %pl_condition_value* nonnull %handler_condition)
+  %get_exception_class = call i64 @eh_classify_exception(i8* %load_sql_state)
+  %get_exception_class.off = add i64 %get_exception_class, -3
+  %switch = icmp ult i64 %get_exception_class.off, 2
+  br i1 %switch, label %ob_success, label %early_exit
+
+early_exit:                                       ; preds = %ob_fail
+  %raise_exception = call i32 @_Unwind_RaiseException(%unwind_exception* %create_exception)
+  unreachable
+
+continue:                                         ; preds = %ob_fail16, %then, %ob_success48
+  %load_ret = phi i32 [ %calc_expr47, %ob_success48 ], [ %spi_query, %ob_fail16 ], [ %spi_query, %then ]
+  ret i32 %load_ret
+
+then:                                             ; preds = %ob_success48
+  %array = alloca [20 x i8], align 1
+  %array.repack124 = bitcast [20 x i8]* %array to i8*
+  store i8 115, i8* %array.repack124, align 1
+  %array.repack91 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 1
+  store i8 101, i8* %array.repack91, align 1
+  %array.repack92 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 2
+  store i8 108, i8* %array.repack92, align 1
+  %array.repack93 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 3
+  store i8 101, i8* %array.repack93, align 1
+  %array.repack94 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 4
+  store i8 99, i8* %array.repack94, align 1
+  %array.repack95 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 5
+  store i8 116, i8* %array.repack95, align 1
+  %array.repack96 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 6
+  store i8 32, i8* %array.repack96, align 1
+  %array.repack97 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 7
+  store i8 52, i8* %array.repack97, align 1
+  %array.repack98 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 8
+  store i8 50, i8* %array.repack98, align 1
+  %array.repack99 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 9
+  store i8 32, i8* %array.repack99, align 1
+  %array.repack100 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 10
+  store i8 102, i8* %array.repack100, align 1
+  %array.repack101 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 11
+  store i8 114, i8* %array.repack101, align 1
+  %array.repack102 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 12
+  store i8 111, i8* %array.repack102, align 1
+  %array.repack103 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 13
+  store i8 109, i8* %array.repack103, align 1
+  %array.repack104 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 14
+  store i8 32, i8* %array.repack104, align 1
+  %array.repack105 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 15
+  store i8 100, i8* %array.repack105, align 1
+  %array.repack106 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 16
+  store i8 117, i8* %array.repack106, align 1
+  %array.repack107 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 17
+  store i8 97, i8* %array.repack107, align 1
+  %array.repack108 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 18
+  store i8 108, i8* %array.repack108, align 1
+  %array.repack109 = getelementptr inbounds [20 x i8], [20 x i8]* %array, i64 0, i64 19
+  store i8 0, i8* %array.repack109, align 1
+  %datatype_array_to_pointer125 = bitcast [0 x %pl_exec_context.3]* %datatype_array to %pl_exec_context.3*
+  %spi_query = call i32 @spi_query(%pl_exec_context* %__hidden_exec_ctx__, i8* %array.repack124, i64* null, i64 0, %pl_exec_context.3* %datatype_array_to_pointer125, i64 0, i8 0)
+  store i32 %spi_query, i32* %__ret__, align 4
+  %2 = icmp eq i32 %spi_query, 0
+  br i1 %2, label %continue, label %ob_fail16
+
+ob_fail16:                                        ; preds = %then
+  %exception_type17 = alloca i64, align 8
+  %error_code18 = alloca i64, align 8
+  %sql_state19 = alloca i8*, align 8
+  %str_len20 = alloca i64, align 8
+  %convert_exception21 = call i32 @eh_convert_exception(i32 %spi_query, i64* nonnull %exception_type17, i64* nonnull %error_code18, i8** nonnull %sql_state19, i64* nonnull %str_len20)
+  %load_type22 = load i64, i64* %exception_type17, align 8
+  %load_error_code23 = load i64, i64* %error_code18, align 8
+  %load_sql_state24 = load i8*, i8** %sql_state19, align 8
+  %load_str_len25 = load i64, i64* %str_len20, align 8
+  %load_pl_exex_ctx26.elt126 = bitcast %pl_exec_context* %__hidden_exec_ctx__ to i64*
+  %load_pl_exex_ctx26.unpack = load i64, i64* %load_pl_exex_ctx26.elt126, align 8
+  %handler_condition28 = alloca %pl_condition_value, align 8
+  %extract_arg29127 = bitcast %pl_condition_value* %handler_condition28 to i64*
+  store i64 %load_type22, i64* %extract_arg29127, align 8
+  %extract_arg30 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i64 0, i32 1
+  store i64 %load_error_code23, i64* %extract_arg30, align 8
+  %extract_arg31 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i64 0, i32 2
+  store i8* %load_sql_state24, i8** %extract_arg31, align 8
+  %extract_arg32 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i64 0, i32 3
+  store i64 %load_str_len25, i64* %extract_arg32, align 8
+  %extract_arg33 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i64 0, i32 4
+  store i64 76, i64* %extract_arg33, align 8
+  %extract_arg34 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition28, i64 0, i32 5
+  store i8 0, i8* %extract_arg34, align 8
+  call void @eh_debug_int64(i64 4444)
+  %create_exception35 = call %unwind_exception* @eh_create_exception(i64 %load_pl_exex_ctx26.unpack, %pl_condition_value* nonnull %handler_condition28)
+  %get_exception_class37 = call i64 @eh_classify_exception(i8* %load_sql_state24)
+  %get_exception_class37.off = add i64 %get_exception_class37, -3
+  %switch120 = icmp ult i64 %get_exception_class37.off, 2
+  br i1 %switch120, label %continue, label %early_exit36
+
+early_exit36:                                     ; preds = %ob_fail16
+  %raise_exception38 = call i32 @_Unwind_RaiseException(%unwind_exception* %create_exception35)
+  unreachable
+
+ob_success48:                                     ; preds = %ob_fail49, %ob_success
+  %extract_int64_pointer72 = getelementptr %objparam.1, %objparam.1* %ObObjParam39, i64 0, i32 0, i32 2
+  %cast_int64_to_int32 = bitcast i64* %extract_int64_pointer72 to i32*
+  %load_value = load i32, i32* %cast_int64_to_int32, align 8
+  %3 = icmp eq i32 %load_value, 0
+  br i1 %3, label %continue, label %then
+
+ob_fail49:                                        ; preds = %ob_success
+  %exception_type50 = alloca i64, align 8
+  %error_code51 = alloca i64, align 8
+  %sql_state52 = alloca i8*, align 8
+  %str_len53 = alloca i64, align 8
+  %convert_exception54 = call i32 @eh_convert_exception(i32 %calc_expr47, i64* nonnull %exception_type50, i64* nonnull %error_code51, i8** nonnull %sql_state52, i64* nonnull %str_len53)
+  %load_type55 = load i64, i64* %exception_type50, align 8
+  %load_error_code56 = load i64, i64* %error_code51, align 8
+  %load_sql_state57 = load i8*, i8** %sql_state52, align 8
+  %load_str_len58 = load i64, i64* %str_len53, align 8
+  %load_pl_exex_ctx59.elt128 = bitcast %pl_exec_context* %__hidden_exec_ctx__ to i64*
+  %load_pl_exex_ctx59.unpack = load i64, i64* %load_pl_exex_ctx59.elt128, align 8
+  %handler_condition61 = alloca %pl_condition_value, align 8
+  %extract_arg62129 = bitcast %pl_condition_value* %handler_condition61 to i64*
+  store i64 %load_type55, i64* %extract_arg62129, align 8
+  %extract_arg63 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i64 0, i32 1
+  store i64 %load_error_code56, i64* %extract_arg63, align 8
+  %extract_arg64 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i64 0, i32 2
+  store i8* %load_sql_state57, i8** %extract_arg64, align 8
+  %extract_arg65 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i64 0, i32 3
+  store i64 %load_str_len58, i64* %extract_arg65, align 8
+  %extract_arg66 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i64 0, i32 4
+  store i64 63, i64* %extract_arg66, align 8
+  %extract_arg67 = getelementptr %pl_condition_value, %pl_condition_value* %handler_condition61, i64 0, i32 5
+  store i8 0, i8* %extract_arg67, align 8
+  call void @eh_debug_int64(i64 4444)
+  %create_exception68 = call %unwind_exception* @eh_create_exception(i64 %load_pl_exex_ctx59.unpack, %pl_condition_value* nonnull %handler_condition61)
+  %get_exception_class70 = call i64 @eh_classify_exception(i8* %load_sql_state57)
+  %get_exception_class70.off = add i64 %get_exception_class70, -3
+  %switch121 = icmp ult i64 %get_exception_class70.off, 2
+  br i1 %switch121, label %ob_success48, label %early_exit69
+
+early_exit69:                                     ; preds = %ob_fail49
+  %raise_exception71 = call i32 @_Unwind_RaiseException(%unwind_exception* %create_exception68)
+  unreachable
+}
+
+; Function Attrs: nounwind
+declare void @llvm.stackprotector(i8*, i8**) #0
+
+attributes #0 = { nounwind }
+
+
+*************** Case 1(end)  ************** 
+

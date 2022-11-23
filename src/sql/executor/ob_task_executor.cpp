@@ -16,22 +16,22 @@
 #include "sql/executor/ob_task_info.h"
 #include "sql/executor/ob_task_executor.h"
 #include "sql/executor/ob_task_spliter.h"
-#include "sql/executor/ob_receive.h"
-#include "sql/engine/ob_phy_operator.h"
+#include "sql/engine/px/exchange/ob_receive_op.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/table/ob_table_scan.h"
 #include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 ObTaskExecutor::ObTaskExecutor()
-{}
+{
+}
 
 ObTaskExecutor::~ObTaskExecutor()
-{}
+{
+}
 
-int ObTaskExecutor::execute(ObExecContext& query_ctx, ObJob* job, ObTaskInfo* task_info)
+int ObTaskExecutor::execute(ObExecContext &query_ctx, ObJob *job, ObTaskInfo *task_info)
 {
   UNUSED(query_ctx);
   UNUSED(job);
@@ -39,59 +39,66 @@ int ObTaskExecutor::execute(ObExecContext& query_ctx, ObJob* job, ObTaskInfo* ta
   return OB_NOT_IMPLEMENT;
 }
 
-// Recursively construct the Input of each Opeator belonging to this task
-// Note: There can be multiple tasks of the same structure under a job,
-//    but their parameters are different (task_info)
-// For each task, you need to call build_task_op_input
-int ObTaskExecutor::build_task_op_input(ObExecContext& query_ctx, ObTaskInfo& task_info, const ObPhyOperator& root_op)
+// for static engine
+int ObTaskExecutor::build_task_op_input(ObExecContext &query_ctx,
+                                        ObTaskInfo &task_info,
+                                        const ObOpSpec &root_spec)
 {
   int ret = OB_SUCCESS;
-  const ObPhyOperator* child_op = NULL;
-  ObIPhyOperatorInput* op_input = GET_PHY_OP_INPUT(ObIPhyOperatorInput, query_ctx, root_op.get_id());
-  // Some ops have no input and continue to recurse when NULL == op_input
+  const ObOpSpec *child_op = NULL;
+  ObOpInput *op_input = query_ctx.get_operator_kit(root_spec.get_id())->input_;
+
   if (NULL != op_input) {
     op_input->reset();
-    OZ(op_input->init(query_ctx, task_info, root_op));
+    OZ(op_input->init(task_info));
   }
   if (OB_SUCC(ret)) {
-    if (!IS_RECEIVE(root_op.get_type())) {
-      for (int32_t i = 0; OB_SUCC(ret) && i < root_op.get_child_num(); ++i) {
-        if (OB_ISNULL(child_op = root_op.get_child(i))) {
+    if (!IS_RECEIVE(root_spec.get_type())) {
+      for (int32_t i = 0; OB_SUCC(ret) && i < root_spec.get_child_num(); ++i) {
+        if (OB_ISNULL(child_op = root_spec.get_child(i))) {
           ret = OB_ERR_UNEXPECTED;
         } else if (OB_FAIL(OB_I(t2) build_task_op_input(query_ctx, task_info, *child_op))) {
           LOG_WARN("fail to build child op input", K(ret), K(i), K(child_op->get_id()));
         }
       }
     } else {
-      // Encounter ObReceive, stop recursion
+      // do nothing
     }
   }
   return ret;
 }
 
-int ObTaskExecutor::should_skip_failed_tasks(ObTaskInfo& task_info, bool& skip_failed_tasks) const
+int ObTaskExecutor::should_skip_failed_tasks(ObTaskInfo &task_info, bool &skip_failed_tasks) const
 {
   int ret = OB_SUCCESS;
-  // when the task only involves virtual tables, the failed tasks are skipped
+  // 目前的情况下，当该task只涉及到虚拟表的时候，则跳过失败的那些task
   skip_failed_tasks = false;
-  ObPhyOperator* root_op = NULL;
-  ObSEArray<const ObTableScan*, 1> scan_ops;
-  if (OB_ISNULL(root_op = task_info.get_root_op())) {
+  ObOpSpec *root_spec = task_info.get_root_spec();
+
+  ObSEArray<const ObTableScanSpec*, 1> scan_specs;
+  if (OB_ISNULL(root_spec)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("root op is NULL", K(ret), K(task_info));
-  } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
-    LOG_WARN("fail to find scan ops", K(ret), K(*root_op), K(task_info));
-  } else if (scan_ops.count() > 0) {
+    LOG_ERROR("root_spec is NULL", K(ret));
+  } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_specs, *root_spec))) {
+    LOG_WARN("fail to find scan specs", K(ret), K(*root_spec), K(task_info));
+  } else if (scan_specs.count() > 0) {
     skip_failed_tasks = true;
-    for (int64_t i = 0; OB_SUCC(ret) && true == skip_failed_tasks && i < scan_ops.count(); ++i) {
-      const ObTableScan* scan_op = scan_ops.at(i);
-      if (OB_ISNULL(scan_op)) {
+    for (int64_t i = 0;
+         OB_SUCC(ret) && true == skip_failed_tasks && i < scan_specs.count();
+         ++i) {
+      const ObTableScanSpec *scan_spec = scan_specs.at(i);
+      if (OB_ISNULL(scan_spec)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("scan op is NULL", K(ret), K(i), K(*root_op), K(task_info));
-      } else if (!is_virtual_table(scan_op->get_ref_table_id())) {
+        LOG_ERROR("scan op is NULL", K(ret), K(i), K(task_info));
+      } else if (!is_virtual_table(scan_spec->ref_table_id_)) {
         skip_failed_tasks = false;
       }
     }
   }
+
+
   return ret;
 }
+
+
+
