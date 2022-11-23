@@ -83,7 +83,7 @@ TEST(TestCrc64, test_speed)
       crc64_sse42(0, tmp_str, i);
     }
     end = get_current_time_us();
-    cout << "          ob_crc64(sse42), execut_count = "<< COUNT << ", cost_us = " << end - start << " len = " << i << endl;
+    cout << "          ob_crc64(sse42), execut_count = "<< COUNT << ", cost_us = " << end - start << " len = " << i << endl;  
 
     start = get_current_time_us();
     for (int64_t j = 0; j < COUNT; ++j) {
