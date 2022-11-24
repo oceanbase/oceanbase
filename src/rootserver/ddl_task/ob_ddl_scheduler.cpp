@@ -901,6 +901,7 @@ int ObDDLScheduler::recover_task()
       const ObDDLTaskRecord &cur_record = task_records.at(i);
       int64_t tenant_schema_version = 0;
       int64_t table_task_status = 0;
+      int64_t execution_id = 0;
       ObMySQLTransaction trans;
       if (OB_FAIL(schema_service.get_tenant_schema_version(cur_record.tenant_id_, tenant_schema_version))) {
         LOG_WARN("failed to get tenant schema version", K(ret), K(cur_record));
@@ -911,7 +912,8 @@ int ObDDLScheduler::recover_task()
       } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans,
                                                                     cur_record.tenant_id_,
                                                                     cur_record.task_id_,
-                                                                    table_task_status))) {
+                                                                    table_task_status,
+                                                                    execution_id))) {
         LOG_WARN("select for update failed", K(ret), K(cur_record));
       } else if (OB_FAIL(schedule_ddl_task(cur_record))) {
         LOG_WARN("failed to schedule ddl task", K(ret), K(cur_record));

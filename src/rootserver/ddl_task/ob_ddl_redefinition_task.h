@@ -217,7 +217,6 @@ protected:
   int64_t update_autoinc_job_time_;
   int64_t check_table_empty_job_ret_code_;
   int64_t check_table_empty_job_time_;
-  int64_t redefinition_execution_id_;
 };
 
 }  // end namespace rootserver

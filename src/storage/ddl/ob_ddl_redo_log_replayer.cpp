@@ -75,7 +75,11 @@ int ObDDLRedoLogReplayer::replay_start(const ObDDLStartLog &log, const int64_t l
     LOG_WARN("need replay but tablet handle is invalid", K(ret), K(need_replay), K(tablet_handle));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
     LOG_WARN("create ddl kv mgr failed", K(ret), K(table_key));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(table_key, log_ts, log.get_cluster_version()))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(table_key,
+                                                            log_ts,
+                                                            log.get_cluster_version(),
+                                                            log.get_execution_id(),
+                                                            0/*checkpoint_log_ts*/))) {
     LOG_WARN("start ddl log failed", K(ret), K(log), K(log_ts));
   } else {
     LOG_INFO("succeed to replay ddl start log", K(ret), K(log));

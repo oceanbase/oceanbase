@@ -328,7 +328,7 @@ int ObComplementDataContext::write_start_log(const ObComplementDataParam &param)
   } else if (OB_UNLIKELY(!hidden_table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table key", K(ret), K(hidden_table_key));
-  } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(hidden_table_key, ddl_kv_mgr_handle_))) {
+  } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(hidden_table_key, param.execution_id_, ddl_kv_mgr_handle_))) {
     LOG_WARN("fail write start log", K(ret), K(hidden_table_key), K(param));
   } else {
     LOG_INFO("complement task start ddl redo success", K(hidden_table_key));
@@ -1217,11 +1217,11 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_prepare_log(hidden_table_key,
                                                                            param_->hidden_table_schema_->get_table_id(),
-                                                                           1/*execution_id*/,
+                                                                           param_->execution_id_,
                                                                            param_->task_id_,
                                                                            prepare_log_ts))) {
     if (OB_TASK_EXPIRED == ret) {
-      LOG_INFO("ddl task expired, but return success", K(ret), K(hidden_table_key), KPC(param_));
+      LOG_INFO("ddl task expired", K(ret), K(hidden_table_key), KPC(param_));
     } else {
       LOG_WARN("fail write ddl prepare log", K(ret), K(hidden_table_key));
     }
@@ -1236,12 +1236,10 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_log_ts,
                                                                 prepare_log_ts,
                                                                 param_->hidden_table_schema_->get_table_id(),
-                                                                1/*execution_id*/,
                                                                 param_->task_id_))) {
       if (OB_TASK_EXPIRED == ret) {
         LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
             K(ddl_start_log_ts), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
-        ret = OB_SUCCESS;
       } else {
         LOG_WARN("commit ddl log failed", K(ret), K(ddl_start_log_ts), K(prepare_log_ts), K(hidden_table_key));
       }
@@ -1249,7 +1247,6 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
       if (OB_TASK_EXPIRED == ret) {
         LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
             K(ddl_start_log_ts), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
-        ret = OB_SUCCESS;
       } else {
         LOG_WARN("wait ddl commit failed", K(ret), K(ddl_start_log_ts), K(hidden_table_key));
       }

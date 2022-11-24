@@ -212,7 +212,8 @@ int ObTablet::init(
   } else if (OB_FAIL(tablet_meta_.init(*allocator_, old_tablet.tablet_meta_,
       param.snapshot_version_, param.multi_version_start_,
       tx_data, ddl_data, autoinc_seq, input_max_sync_schema_version,
-      param.clog_checkpoint_ts_, param.ddl_checkpoint_ts_, param.ddl_start_log_ts_, param.ddl_snapshot_version_))) {
+      param.clog_checkpoint_ts_, param.ddl_checkpoint_ts_, param.ddl_start_log_ts_, param.ddl_snapshot_version_,
+      param.ddl_execution_id_, param.ddl_cluster_version_))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(param),
         K(tx_data), K(ddl_data), K(autoinc_seq), K(input_max_sync_schema_version));
   } else if (OB_FAIL(table_store_.init(*allocator_, this, param, old_tablet.table_store_))) {
@@ -1834,6 +1835,8 @@ int ObTablet::build_migration_tablet_param(ObMigrationTabletParam &mig_tablet_pa
     mig_tablet_param.ddl_start_log_ts_ = tablet_meta_.ddl_start_log_ts_;
     mig_tablet_param.ddl_snapshot_version_ = tablet_meta_.ddl_snapshot_version_;
     mig_tablet_param.max_sync_storage_schema_version_ = tablet_meta_.max_sync_storage_schema_version_;
+    mig_tablet_param.ddl_execution_id_ = tablet_meta_.ddl_execution_id_;
+    mig_tablet_param.ddl_cluster_version_ = tablet_meta_.ddl_cluster_version_;
     mig_tablet_param.report_status_.reset();
 
     if (OB_FAIL(mig_tablet_param.storage_schema_.init(mig_tablet_param.allocator_, storage_schema_))) {
@@ -2145,9 +2148,10 @@ int ObTablet::start_ddl_if_need()
     const int64_t start_log_ts = tablet_meta_.ddl_start_log_ts_;
     if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(table_key,
                                                        start_log_ts,
-                                                       GET_MIN_CLUSTER_VERSION(),
+                                                       tablet_meta_.ddl_cluster_version_,
+                                                       tablet_meta_.ddl_execution_id_,
                                                        tablet_meta_.ddl_checkpoint_ts_))) {
-      LOG_WARN("start ddl kv manager failed", K(ret), K(table_key), K(start_log_ts));
+      LOG_WARN("start ddl kv manager failed", K(ret), K(table_key), K(tablet_meta_));
     }
   }
   return ret;

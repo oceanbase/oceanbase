@@ -52,7 +52,7 @@ public:
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(task_id), K_(parent_task_id), K_(ddl_type), K_(trace_id), K_(task_status), K_(tenant_id), K_(object_id),
-      K_(schema_version), K_(target_object_id), K_(snapshot_version), K_(message), K_(task_version), K_(ret_code));
+      K_(schema_version), K_(target_object_id), K_(snapshot_version), K_(message), K_(task_version), K_(ret_code), K_(execution_id));
 public:
   static const int64_t MAX_MESSAGE_LENGTH = 4096;
   typedef common::ObFixedLengthString<MAX_MESSAGE_LENGTH> TaskMessage;
@@ -70,6 +70,7 @@ public:
   ObString message_;
   int64_t task_version_;
   int64_t ret_code_;
+  int64_t execution_id_;
   ObString ddl_stmt_str_;
 };
 
@@ -126,6 +127,12 @@ public:
       const int64_t task_id,
       const int64_t ret_code);
 
+  static int update_execution_id(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const int64_t execution_id);
+
   static int update_message(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
@@ -141,7 +148,8 @@ public:
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
       const int64_t task_id,
-      int64_t &task_status);
+      int64_t &task_status,
+      int64_t &execution_id);
 
   static int get_all_record(
       common::ObMySQLProxy &proxy,
@@ -254,7 +262,8 @@ public:
       task_type_(task_type), trace_id_(), tenant_id_(0), object_id_(0), schema_version_(0),
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
-      allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0)
+      allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
+      delay_schedule_time_(0), next_schedule_ts_(0), execution_id_(0)
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -278,6 +287,7 @@ public:
   ObDDLTaskKey get_task_key() const { return ObDDLTaskKey(target_object_id_, schema_version_); }
   int64_t get_parent_task_id() const { return parent_task_id_; }
   int64_t get_task_version() const { return task_version_; }
+  int64_t get_execution_id() const { return execution_id_; }
   int64_t get_parallelism() const { return parallelism_; }
   static int deep_copy_table_arg(common::ObIAllocator &allocator, const obrpc::ObDDLArg &source_arg, obrpc::ObDDLArg &dest_arg);
   static int fetch_new_task_id(ObMySQLProxy &sql_proxy, int64_t &new_task_id);
@@ -300,6 +310,9 @@ public:
       const common::ObIArray<common::ObTabletID> &tablet_ids);
   void set_sys_task_id(const TraceId &sys_task_id) { sys_task_id_ = sys_task_id; }
   const TraceId &get_sys_task_id() const { return sys_task_id_; }
+  void calc_next_schedule_ts(int ret_code);
+  bool need_schedule() { return next_schedule_ts_ <= ObTimeUtility::current_time(); }
+  int push_execution_id();
   #ifdef ERRSIM
   int check_errsim_error();
   #endif
@@ -309,8 +322,9 @@ public:
       K(target_object_id_), K(task_status_), K(snapshot_version_),
       K_(ret_code), K_(task_id), K_(parent_task_id), K_(parent_task_key),
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
-      K_(sys_task_id), K_(err_code_occurence_cnt));
+      K_(sys_task_id), K_(err_code_occurence_cnt), K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_));
 protected:
+  int check_is_latest_execution_id(const int64_t execution_id, bool &is_latest);
   virtual bool is_error_need_retry(const int ret_code)
   {
     return !share::ObIDDLTask::in_ddl_retry_black_list(ret_code) && (share::ObIDDLTask::in_ddl_retry_white_list(ret_code)
@@ -340,6 +354,9 @@ protected:
   lib::Worker::CompatMode compat_mode_;
   TraceId sys_task_id_;
   int64_t err_code_occurence_cnt_; // occurence count for all error return codes not in white list.
+  int64_t delay_schedule_time_;
+  int64_t next_schedule_ts_;
+  int64_t execution_id_;
 };
 
 enum ColChecksumStat

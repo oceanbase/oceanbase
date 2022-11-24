@@ -1934,7 +1934,6 @@ int ObRpcRemoteWriteDDLPrepareLogP::process()
       } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(arg_.start_log_ts_,
                                                                   prepare_log_ts,
                                                                   arg_.table_id_,
-                                                                  arg_.execution_id_,
                                                                   arg_.ddl_task_id_))) {
         LOG_WARN("failed to do ddl kv prepare", K(ret), K(arg_));
       } else {
