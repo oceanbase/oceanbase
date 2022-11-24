@@ -4329,6 +4329,7 @@ int ValueItemExpr::serialize(char *buf, const int64_t buf_len, int64_t &pos) con
   } else if (QUESTMARK_TYPE == type_) {
     OB_UNIS_ENCODE(idx_);
   }
+  OB_UNIS_ENCODE(dst_type_);
   if (ob_is_enum_or_set_type(dst_type_)) {
     CK(OB_NOT_NULL(enum_set_values_));
     OB_UNIS_ENCODE_ARRAY(enum_set_values_, enum_set_values_cnt_);
@@ -4349,6 +4350,7 @@ int64_t ValueItemExpr::get_serialize_size() const
   } else if (QUESTMARK_TYPE == type_) {
     OB_UNIS_ADD_LEN(idx_);
   }
+  OB_UNIS_ADD_LEN(dst_type_);
   if (ob_is_enum_or_set_type(dst_type_)) {
     OB_UNIS_ADD_LEN_ARRAY(enum_set_values_, enum_set_values_cnt_);
   }
@@ -4371,12 +4373,15 @@ int ValueItemExpr::deserialize(common::ObIAllocator &allocator, const char *buf,
   } else if (QUESTMARK_TYPE == type_) {
     OB_UNIS_DECODE(idx_);
   }
-  OB_UNIS_DECODE(enum_set_values_cnt_);
-  if (enum_set_values_cnt_ > 0) {
-    enum_set_values_ =
-      static_cast<ObString *>(allocator.alloc(sizeof(ObString) * enum_set_values_cnt_));
-    CK(OB_NOT_NULL(enum_set_values_));
-    OB_UNIS_DECODE_ARRAY(enum_set_values_, enum_set_values_cnt_)
+  OB_UNIS_DECODE(dst_type_);
+  if (ob_is_enum_or_set_type(dst_type_)) {
+    OB_UNIS_DECODE(enum_set_values_cnt_);
+    if (enum_set_values_cnt_ > 0) {
+      enum_set_values_ =
+        static_cast<ObString *>(allocator.alloc(sizeof(ObString) * enum_set_values_cnt_));
+      CK(OB_NOT_NULL(enum_set_values_));
+      OB_UNIS_DECODE_ARRAY(enum_set_values_, enum_set_values_cnt_)
+    }
   }
 
   return ret;
@@ -4391,6 +4396,7 @@ int ValueItemExpr::deep_copy(ObIAllocator &allocator, ValueItemExpr &dst) const
   } else if (CONST_EXPR_TYPE == type_) {
     OZ(expr_->deep_copy(allocator, dst.expr_));
   }
+  dst.dst_type_ = dst_type_;
   if (ob_is_enum_or_set_type(dst_type_)) {
     dst.enum_set_values_cnt_ = enum_set_values_cnt_;
     dst.enum_set_values_ =
