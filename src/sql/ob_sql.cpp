@@ -2266,6 +2266,8 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   stmt_need_privs.need_privs_.set_allocator(&allocator);
   stmt_ora_need_privs.need_privs_.set_allocator(&allocator);
   uint64_t aggregate_setting = 0;
+  // TODO: @linlin.xll remove ori_bl_key after eval_udf use identical sql ctx.
+  ObPlanBaseKeyGuard(sql_ctx.spm_ctx_.bl_key_);
   _LOG_DEBUG("start to generate physical plan for query.(query = %.*s)",
               parse_result.input_sql_len_, parse_result.input_sql_);
   if (OB_FAIL(sanity_check(sql_ctx))) { //check sql_ctx.session_info_ and sql_ctx.schema_guard_
@@ -3741,8 +3743,6 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
     LOG_TRACE("batched multi_stmt needs rollback", K(ret));
   }
   generate_sql_id(pc_ctx, add_plan_to_pc, parse_result, signature_sql, ret);
-  // TODO: @linlin.xll remove ori_bl_key after eval_udf use identical sql ctx.
-  ObBaselineKey ori_bl_key = context.spm_ctx_.bl_key_;
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(get_outline_data(context, pc_ctx, signature_sql,
@@ -3760,7 +3760,6 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
     } else {
       LOG_WARN("Failed to generate plan", K(ret), K(result.get_exec_context().need_disconnect()));
     }
-  } else if (OB_FALSE_IT(pc_ctx.sql_ctx_.spm_ctx_.bl_key_ = ori_bl_key)) {
   } else if (OB_FAIL(need_add_plan(pc_ctx,
                                    result,
                                    use_plan_cache,
