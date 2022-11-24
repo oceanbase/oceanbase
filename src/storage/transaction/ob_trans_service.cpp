@@ -7655,7 +7655,7 @@ void ObTransService::handle(void* task)
     } else if (ObTransRetryTaskType::RETRY_STMT_ROLLBACK_TASK == trans_task->get_task_type()) {
       rpc_task = static_cast<TransRpcTask*>(task);
       const ObPartitionKey& partition = rpc_task->get_partition();
-      const ObTransID& trans_id = rpc_task->get_trans_id();
+      const ObTransID trans_id = rpc_task->get_trans_id();
       const int64_t request_id = rpc_task->get_request_id();
       const int64_t msg_type = rpc_task->get_msg_type();
       const int64_t sql_no = rpc_task->get_sql_no();
