@@ -408,6 +408,18 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
                                                  p_result_obj))) {
               LOG_WARN("failed to generate calc_expr func", K(ret));
             }
+            if (lib::is_mysql_mode()) {
+              ObLLVMValue ret_err;
+              ObSEArray<ObLLVMValue, 1> args;
+              OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
+              OZ (generator_.get_helper().create_call(ObString("spi_clear_diagnostic_area"),
+                                                        generator_.get_spi_service().spi_clear_diagnostic_area_,
+                                                        args,
+                                                        ret_err));
+              OZ (generator_.check_success(ret_err, s.get_stmt_id(),
+                                                s.get_block()->in_notfound(),
+                                                s.get_block()->in_warning()));
+            }
           }
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObObjAccessIdx::datum_need_copy(into_expr, value_expr, alloc_scop))) {

@@ -802,6 +802,8 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
   }
   if (OB_SUCC(ret)) {
     result->set_is_pl_mock_default_param(expr->get_is_pl_mock_default_expr());
+  } else if (lib::is_mysql_mode()) {
+    ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(ret);
   }
   SET_SPI_STATUS;
   return ret;
@@ -3207,6 +3209,9 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
       }
     }
   }
+  if (OB_FAIL(ret) && lib::is_mysql_mode()) {
+    ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(ret);
+  }
   SET_SPI_STATUS;
   return ret;
 }
@@ -3724,6 +3729,10 @@ int ObSPIService::spi_cursor_fetch(ObPLExecCtx *ctx,
                       pl_integer_ranges,
                       is_bulk,
                       limit));
+
+  if (OB_FAIL(ret) && lib::is_mysql_mode()) {
+    ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(ret);
+  }
 
   if (lib::is_mysql_mode() || OB_READ_NOTHING != ret) {
     //Oracle模式的cursor发生NOT FOUND错误的时候不对外报错，而是把错误信息记录在CURSOR上，PL的CG会吞掉这个错误
