@@ -1013,8 +1013,10 @@ void ObRebalanceTaskMgr::run3()
         } else if (OB_FAIL(execute_task(*input_task))) {
           LOG_WARN("send task to execute failed", K(ret));
         } else {
-          int64_t now = ObTimeUtility::current_time();
-          task->set_executor_time(now);
+          task = NULL;
+          // Fix Bug: task may be released in execute_task(), here can not access it any more
+          // int64_t now = ObTimeUtility::current_time();
+          // task->set_executor_time(now);
         }  // no more to do
         if (nullptr != input_task) {
           input_task->~ObRebalanceTask();
