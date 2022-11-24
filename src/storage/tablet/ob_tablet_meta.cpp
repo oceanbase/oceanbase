@@ -315,7 +315,7 @@ int ObTabletMeta::init(
     ddl_start_log_ts_ = old_tablet_meta.ddl_start_log_ts_;
     ddl_snapshot_version_ = old_tablet_meta.ddl_snapshot_version_;
     max_sync_storage_schema_version_ = max_sync_storage_schema_version;
-    ddl_execution_id_ = old_tablet_meta.ddl_checkpoint_ts_;
+    ddl_execution_id_ = old_tablet_meta.ddl_execution_id_;
     ddl_cluster_version_ = old_tablet_meta.ddl_cluster_version_;
 
     if (OB_SUCC(ret)) {
