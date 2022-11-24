@@ -963,7 +963,14 @@ int ObGlobalUniqueIndexCallback::operator()(const int ret_code)
   arg.source_table_id_ = data_table_id_;
   arg.schema_version_ = schema_version_;
   arg.task_id_ = task_id_;
-  if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = E(EventTable::EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL) OB_SUCCESS;
+      LOG_INFO("report replica build status errsim", K(ret));
+    }
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
     ret = OB_ERR_SYS;
     STORAGE_LOG(WARN, "innner system error, rootserver rpc proxy or rs mgr must not be NULL", K(ret), K(GCTX));
   } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
