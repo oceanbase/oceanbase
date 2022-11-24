@@ -1037,9 +1037,6 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
     LOG_WARN("failed to get ls saved info", K(ret), KPC(ls), KPC(ctx_));
   } else if (!saved_info.is_empty()) {
     LOG_INFO("saved info is not empty, no need wait ls checkpoint ts push", K(saved_info), KPC(ctx_));
-  } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("checkpoint executor should not be NULL", K(ret), KPC(ctx_), KP(checkpoint_executor));
   } else {
     const int64_t wait_checkpoint_push_start_ts = ObTimeUtility::current_time();
     while (OB_SUCC(ret)) {
@@ -1059,7 +1056,7 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_checkpoint_push_start_ts;
         LOG_INFO("succeed wait clog checkpoint ts push", "cost", cost_ts, "ls_id", ctx_->arg_.ls_id_);
         break;
-      } else if (OB_FAIL(checkpoint_executor->advance_checkpoint_by_flush(ctx_->log_sync_scn_))) {
+      } else if (OB_FAIL(ls->advance_checkpoint_by_flush(ctx_->log_sync_scn_))) {
         if (OB_NO_NEED_UPDATE == ret) {
           ret = OB_SUCCESS;
         } else {
