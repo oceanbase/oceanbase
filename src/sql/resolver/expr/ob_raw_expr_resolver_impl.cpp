@@ -2754,7 +2754,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode* node, ObRawExpr*& e
       sub_expr = NULL;
       int64_t pos = (T_FUN_GROUPING == node->type_) ? 0 : 1;
       if ((T_FUN_VAR_POP == node->type_ || T_FUN_VAR_SAMP == node->type_ || T_FUN_STDDEV_POP == node->type_ ||
-              T_FUN_STDDEV_SAMP == node->type_ || T_FUN_MEDIAN == node->type_) &&
+              T_FUN_STDDEV_SAMP == node->type_ || T_FUN_MEDIAN == node->type_ || T_FUN_JSON_ARRAYAGG == node->type_) &&
           node->children_[0] != NULL && node->children_[0]->type_ == T_DISTINCT) {
         ret = OB_DISTINCT_NOT_ALLOWED;
         LOG_WARN("distinct not allowed in aggr", K(ret));
