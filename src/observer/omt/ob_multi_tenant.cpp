@@ -569,11 +569,18 @@ int ObMultiTenant::create_tenant_without_unit(const uint64_t tenant_id,
     static const int64_t VIRTUAL_TENANT_MEMORY_LIMTI = 1L << 30;
     mem_limit = VIRTUAL_TENANT_MEMORY_LIMTI;
   }
-
   if (OB_FAIL(construct_meta_for_virtual_tenant(tenant_id, min_cpu, max_cpu, mem_limit, meta))) {
     LOG_WARN("fail to construct_meta_for_virtual_tenant", K(ret), K(tenant_id));
   } else if (OB_FAIL(create_tenant(meta, false))) {
     LOG_WARN("fail to create virtual tenant", K(ret), K(tenant_id));
+  }
+  if (OB_SUCC(ret) && is_virtual_tenant_id(tenant_id)) {
+    ObVirtualTenantManager &omti = ObVirtualTenantManager::get_instance();
+    if (OB_FAIL(omti.add_tenant(tenant_id))) {
+      LOG_ERROR("Fail to add virtual tenant to tenant manager, ", K(ret));
+    } else if (OB_FAIL(omti.set_tenant_mem_limit(tenant_id, 0, mem_limit))) {
+      LOG_ERROR("Fail to set virtual tenant mem limit, ", K(ret));
+    }
   }
   return ret;
 }
