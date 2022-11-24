@@ -434,7 +434,9 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
       (void)unregister_timeout_task_();
       update_trans_2pc_timeout_();
       timeout_task_.set_running(true);
-      if (ObTxState::INIT == exec_info_.state_ && now >= (trans_expired_time_ + OB_TRANS_WARN_USE_TIME)) {
+      if (ObTxState::INIT == exec_info_.state_ &&
+          trans_expired_time_ > 0 && trans_expired_time_ < INT64_MAX &&
+          now >= (trans_expired_time_ + OB_TRANS_WARN_USE_TIME)) {
         TRANS_LOG(ERROR, "transaction use too much time", KPC(this));
       }
       if (exec_info_.is_dup_tx_) {
