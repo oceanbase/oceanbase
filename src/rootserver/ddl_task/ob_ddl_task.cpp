@@ -292,6 +292,7 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
   int tmp_ret = OB_SUCCESS;
   bool is_cancel = false;
   int real_ret_code = ret_code;
+  bool is_tenant_dropped = false;
   const ObDDLTaskStatus old_status = task_status_;
   if (OB_TMP_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(trace_id_, is_cancel))) {
     LOG_WARN("check task is canceled", K(tmp_ret), K(trace_id_));
@@ -310,6 +311,11 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(root_service->get_schema_service().check_if_tenant_has_been_dropped(tenant_id_, is_tenant_dropped))) {
+    LOG_WARN("check if tenant has been dropped failed", K(ret), K(tenant_id_));
+  } else if (is_tenant_dropped) {
+    need_retry_ = false;
+    LOG_INFO("tenant has been dropped, exit anyway", K(ret), K(tenant_id_));
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {

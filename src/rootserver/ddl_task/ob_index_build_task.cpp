@@ -581,13 +581,13 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
     const ObTableSchema *data_table_schema = nullptr;
     ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
     if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
-      if (OB_TABLE_NOT_EXIST == ret) {
+      if (OB_TABLE_NOT_EXIST == ret || OB_TENANT_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get data table snapshot", K(ret));
       }
     } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, target_object_id_, tablet_ids))) {
-      if (OB_TABLE_NOT_EXIST == ret) {
+      if (OB_TABLE_NOT_EXIST == ret || OB_TENANT_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get dest table snapshot", K(ret));

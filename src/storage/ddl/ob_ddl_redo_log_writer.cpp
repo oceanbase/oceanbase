@@ -669,7 +669,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
       if (tmp_cb->is_success()) {
         finish = true;
       } else if (tmp_cb->is_failed()) {
-        ret = OB_ERR_SYS;
+        ret = OB_NOT_MASTER;
       }
       if (OB_SUCC(ret) && !finish) {
         const int64_t current_time = ObTimeUtility::current_time();
@@ -810,7 +810,7 @@ int ObDDLRedoLogHandle::wait(const int64_t timeout)
       if (cb_->is_success()) {
         finish = true;
       } else if (cb_->is_failed()) {
-        ret = OB_ERR_SYS;
+        ret = OB_NOT_MASTER;
       }
       if (OB_SUCC(ret) && !finish) {
         const int64_t current_time = ObTimeUtility::current_time();
@@ -847,7 +847,7 @@ int ObDDLCommitLogHandle::wait(const int64_t timeout)
       if (cb_->is_success()) {
         finish = true;
       } else if (cb_->is_failed()) {
-        ret = OB_ERR_SYS;
+        ret = OB_NOT_MASTER;
       }
       if (OB_SUCC(ret) && !finish) {
         const int64_t current_time = ObTimeUtility::current_time();
