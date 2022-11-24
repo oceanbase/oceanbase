@@ -67,10 +67,6 @@ install(FILES
   tools/upgrade/upgrade_post_checker.py
   tools/upgrade/upgrade_checker.py
   tools/upgrade/upgrade_cluster_health_checker.py
-  tools/upgrade/upgrade_rolling_pre.py
-  tools/upgrade/upgrade_rolling_post.py
-  tools/upgrade/priv_checker.py
-  tools/upgrade/mysql_to_ora_priv.py
   DESTINATION etc
   COMPONENT server)
 
