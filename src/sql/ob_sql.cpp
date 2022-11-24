@@ -1837,7 +1837,7 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
     ret = OB_ERR_EMPTY_QUERY;
     LOG_WARN("query is empty", K(ret));
     LOG_USER_ERROR(OB_ERR_EMPTY_QUERY);
-    // 空请求，可以归类到paser的已知错误，不需要断连接
+    // 空请求，可以归类到parser的已知错误，不需要断连接
     result.get_exec_context().set_need_disconnect(false);
     //FIXME qianfu NG_TRACE_EXT(set_need_disconnect, OB_ID(need_disconnect), false);
   }
@@ -2079,7 +2079,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
 
   if (OB_FAIL(ret)) {
   } else if (stmt::T_ANONYMOUS_BLOCK == context.stmt_type_ && context.is_prepare_protocol_ && !context.is_prepare_stage_) {
-    //anonymous + ps在execute阶段不会做parser, 因此不应该检查paser_result
+    //anonymous + ps在execute阶段不会做parser, 因此不应该检查parser_result
     //do nothing...
   } else if (OB_ISNULL(parse_result.result_tree_)
         || OB_ISNULL(parse_result.result_tree_->children_)

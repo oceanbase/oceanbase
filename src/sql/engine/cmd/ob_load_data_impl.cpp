@@ -178,7 +178,7 @@ int ObLoadDataBase::make_parameterize_stmt(ObExecContext &ctx,
     ObMaxConcurrentParam::FixParamStore fixed_param_store(OB_MALLOC_NORMAL_BLOCK_SIZE,
                                                           ObWrapperAllocator(&ctx.get_allocator()));
     if (OB_FAIL(parser.parse(insertsql.string(), parse_result))) {
-      LOG_WARN("paser template insert sql failed", K(ret));
+      LOG_WARN("parser template insert sql failed", K(ret));
     } else if (OB_FAIL(ObSqlParameterization::transform_syntax_tree(ctx.get_allocator(),
                                                                     *session,
                                                                     NULL,
