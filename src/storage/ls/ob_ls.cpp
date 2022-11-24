@@ -711,15 +711,25 @@ int ObLS::offline()
   int ret = OB_SUCCESS;
   int64_t read_lock = 0;
   int64_t write_lock = LSLOCKALL;
+  int64_t start_ts = ObTimeUtility::current_time();
+  int64_t retry_times = 0;
 
-  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
-  // only follower can do this.
-  if (OB_FAIL(offline_())) {
-    LOG_WARN("ls offline failed", K(ret), K(ls_meta_));
-  } else {
-    // do nothing
-  }
-
+  do {
+    retry_times++;
+    {
+      ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+      // only follower can do this.
+      if (OB_FAIL(offline_())) {
+        LOG_WARN("ls offline failed", K(ret), K(ls_meta_));
+      }
+    }
+    if (OB_EAGAIN == ret) {
+      ob_usleep(100 * 1000); // 100 ms
+      if (retry_times % 100 == 0) { // every 10 s
+        LOG_WARN("ls offline use too much time.", K(ls_meta_), K(start_ts));
+      }
+    }
+  } while (OB_EAGAIN == ret);
   FLOG_INFO("ls offline end", KR(ret), "ls_id", get_ls_id());
   return ret;
 }
@@ -1351,8 +1361,12 @@ int ObLS::set_tablet_change_checkpoint_ts(const int64_t log_ts)
   int ret = OB_SUCCESS;
   int64_t read_lock = 0;
   int64_t write_lock = LSLOCKLOGMETA;
-  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
-  if (IS_NOT_INIT) {
+  const bool try_lock = true; // the upper layer should deal with try lock fail.
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock, try_lock);
+  if (!lock_myself.locked()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("try lock failed, please retry later", K(ret), K(ls_meta_));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret), K(ls_meta_));
   } else if (OB_UNLIKELY(is_stopped_)) {

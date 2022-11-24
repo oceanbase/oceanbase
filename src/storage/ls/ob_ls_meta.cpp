@@ -98,6 +98,7 @@ ObInnerLSStatus ObLSMeta::get_ls_create_status() const
 ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
 {
   ObSpinLockTimeGuard guard(other.lock_);
+  ObSpinLockTimeGuard guard_myself(lock_);
   if (this != &other) {
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
