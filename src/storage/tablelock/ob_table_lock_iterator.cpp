@@ -51,7 +51,7 @@ int ObTableLockScanIterator::inner_get_next_row(const blocksstable::ObDatumRow *
     int64_t pos = 0;
 
     if (OB_SUCC(ret)) {
-      ObTableLockOp &store_info = table_lock_store_info_[idx_];
+      transaction::tablelock::ObTableLockOp &store_info = table_lock_store_info_[idx_];
       int64_t serialize_size = store_info.get_serialize_size();
 
       if (OB_FAIL(buf_.reserve(serialize_size))) {

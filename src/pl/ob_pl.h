@@ -21,7 +21,7 @@
 #include "lib/rc/context.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log_module.h"
-#include "objit/common/ob_expr_res_type.h"
+#include "sql/engine/expr/ob_expr_res_type.h"
 #include "objit/ob_llvm_helper.h"
 #include "objit/ob_llvm_di_helper.h"
 #include "share/ob_errno.h"

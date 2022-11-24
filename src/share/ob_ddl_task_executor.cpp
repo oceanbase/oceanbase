@@ -20,6 +20,10 @@
 using namespace oceanbase::share;
 using namespace oceanbase::common;
 
+namespace oceanbase
+{
+namespace share
+{
 ObDDLTaskQueue::ObDDLTaskQueue()
   : task_list_(), task_set_(), lock_(), is_inited_(false), allocator_()
 {
@@ -335,3 +339,6 @@ int ObDDLReplicaBuilder::push_task(ObAsyncTask &task)
   }
   return ret;
 }
+
+}  // end namespace share
+}  // end namespace oceanbase

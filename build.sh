@@ -164,6 +164,11 @@ function build
       xdebug_no_unity)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DOB_ENABLE_UNITY=OFF
         ;;
+      xccls)
+        do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DOB_BUILD_CCLS=ON
+        # build soft link for ccls
+        ln -sf ${TOPDIR}/build_ccls/compile_commands.json ${TOPDIR}/compile_commands.json
+        ;;
       xdebug_asan)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DOB_USE_ASAN=$ASAN_OPTION
         ;;

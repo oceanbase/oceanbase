@@ -18,7 +18,6 @@
 #include "lib/container/ob_array_serialization.h"
 #include "common/object/ob_object.h"
 #include "sql/engine/expr/ob_expr_res_type.h"
-#include "objit/common/ob_expr_res_type.h"
 
 namespace oceanbase
 {

@@ -158,7 +158,7 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
     log_ts_ = log_ts;
   }
   return ret;
-  #undef PRINT_WRAPPERd
+  #undef PRINT_WRAPPER
 }
 
 int PriorityV1::compare_fatal_failures_(int &ret, const PriorityV1&rhs) const

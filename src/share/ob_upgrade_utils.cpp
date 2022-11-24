@@ -1585,6 +1585,8 @@ int ObUpgradeFor4000Processor::grant_context_privilege_for_dba_role(
   return ret;
 }
 
+#undef FORMAT_STR
+
 /* =========== 4000 upgrade processor end ============= */
 
 /* =========== upgrade processor end ============= */

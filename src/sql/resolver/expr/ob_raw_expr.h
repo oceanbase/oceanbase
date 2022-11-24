@@ -27,7 +27,7 @@
 #include "objit/expr/ob_op_expr.h"
 #include "objit/expr/ob_column_ref_expr.h"
 #include "objit/expr/ob_case_op_expr.h"
-#include "objit/common/ob_expr_res_type.h"
+#include "sql/engine/expr/ob_expr_res_type.h"
 #include "share/schema/ob_schema_utils.h"
 #include "sql/ob_sql_define.h"
 #include "sql/resolver/expr/ob_expr_info_flag.h"

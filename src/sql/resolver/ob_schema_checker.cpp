@@ -1385,7 +1385,7 @@ int ObSchemaChecker::get_routine_infos_in_udt(const uint64_t tenant_id,
 int ObSchemaChecker::get_package_info(const uint64_t tenant_id,
                                       const ObString &database_name,
                                       const ObString &package_name,
-                                      const ObPackageType type,
+                                      const share::schema::ObPackageType type,
                                       const int64_t compatible_mode,
                                       const ObPackageInfo *&package_info)
 {
