@@ -12947,7 +12947,7 @@ int ObPartitionService::enable_backup_white_list()
   } else if (!backup_zone_str.empty()) {
     // Backup zone is set.
     ObArray<ObBackupZone> backup_zone;
-    if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_zone_str, MAX_ZONE_LENGTH, backup_zone))) {
+    if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_zone_str, OB_MAX_BACKUP_ZONE_LENGTH, backup_zone))) {
       LOG_WARN("failed to parse backup zone format", K(ret), K(backup_zone_str));
     } else if (backup_zone.empty()) {
       ret = OB_ERR_UNEXPECTED;

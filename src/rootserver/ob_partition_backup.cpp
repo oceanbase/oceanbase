@@ -221,7 +221,7 @@ int ObPartitionBackup::get_detected_region_and_zone(const uint64_t tenant_id,
     LOG_WARN("failed to get detected region", K(ret), K(tenant_ids));
   } else if (OB_FAIL(GCONF.backup_zone.copy(backup_zone_str, sizeof(backup_zone_str)))) {
     LOG_WARN("failed to copy backup zone", K(ret));
-  } else if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_zone_str, MAX_ZONE_LENGTH, backup_zone))) {
+  } else if (OB_FAIL(ObBackupUtils::parse_backup_format_input(backup_zone_str, OB_MAX_BACKUP_ZONE_LENGTH, backup_zone))) {
     LOG_WARN("failed to parase backup format input", K(ret), K(backup_zone_str));
   }
   return ret;

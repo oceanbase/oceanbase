@@ -93,6 +93,7 @@ const int64_t OB_BACKUP_INVALID_PIECE_ID = -1;
 const int64_t OB_BACKUP_SWITCH_BASE_PIECE_ID = 1;
 const int64_t OB_MIN_LOG_ARCHIVE_CHECKPOINT_INTERVAL = 5 * 1000LL * 1000LL;   // 5s
 const int64_t OB_MIN_LOG_ARCHIVE_PIECE_SWITH_INTERVAL = 5 * 1000LL * 1000LL;  // 5s
+const int64_t OB_MAX_BACKUP_ZONE_LENGTH = 1024;
 
 // add by physical backup and restore
 const char* const OB_STR_INCARNATION = "incarnation";
