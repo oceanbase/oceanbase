@@ -1798,7 +1798,7 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
                                         static_cast<const ObColumnRefRawExpr *>(expr),
                                         is_not_null,
                                         constraints))) {
-      LOG_WARN("failed to check expr not null", K(ret));
+      LOG_WARN("failed to check expr not null", K(ret), K(*expr));
     }
   } else if (expr->is_set_op_expr()) {
     if (OB_FAIL(is_set_expr_not_null(ctx,
@@ -6819,136 +6819,6 @@ int ObTransformUtils::create_view_with_table(ObDMLStmt *stmt,
   return ret;
 }
 
-/**
- * @brief 
- * create view with tables, the tables must be a not-empty subset of
- * tables in FROM ITEMs
- * the tables can be basic table / generated table / joined table
- * @param stmt 
- * @param ctx 
- * @param tables 
- * @param view_table 
- * @return int 
- */
-int ObTransformUtils::create_view_with_tables(ObDMLStmt *stmt,
-                                              ObTransformerCtx *ctx,
-                                              const ObIArray<TableItem *> &tables,
-                                              const ObIArray<SemiInfo *> &semi_infos,
-                                              TableItem *&view_table)
-{
-  int ret = OB_SUCCESS;
-  ObSelectStmt *simple_stmt = NULL;
-  ObSEArray<ObRawExpr *, 8> tmp_column_exprs;
-  ObSEArray<ObRawExpr *, 8> tmp_select_exprs;
-  ObSEArray<ObRawExpr *, 8> new_column_exprs;
-  ObSEArray<ObRawExpr *, 8> old_column_exprs;
-  ObSEArray<uint64_t, 8> old_table_ids;
-  TableItem *new_table = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(stmt), K(ctx));
-  } else {
-    // 1. construct simple stmt
-    // 2. generate a view table for simple stmt, add the table into stmt
-    // 3. generate new column exprs
-    if (OB_FAIL(construct_simple_view(stmt, 
-                                      tables,
-                                      semi_infos,
-                                      ctx, 
-                                      simple_stmt))) {
-      LOG_WARN("failed to construct simple view with tables", K(ret));
-    } else if (OB_FAIL(add_new_table_item(ctx,
-                                          stmt,
-                                          simple_stmt,
-                                          new_table))) {
-      LOG_WARN("failed to add new table item", K(ret));
-    } else if (OB_FAIL(create_columns_for_view(ctx,
-                                              *new_table,
-                                              stmt,
-                                              tmp_column_exprs))) {
-      LOG_WARN("failed to create columns for view", K(ret));
-    } else if (OB_FAIL(convert_column_expr_to_select_expr(tmp_column_exprs,
-                                                          *simple_stmt,
-                                                          tmp_select_exprs))) {
-      LOG_WARN("failed to convert column expr to select expr", K(ret));
-    } else if (OB_FAIL(generate_col_exprs(stmt,
-                                          tables,
-                                          tmp_select_exprs,
-                                          tmp_column_exprs,
-                                          old_column_exprs,
-                                          new_column_exprs))) {
-      LOG_WARN("failed to link view with upper stmt", K(ret));
-    }
-    // 4. replace tables in stmt
-    for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos.count(); ++i) {
-      SemiInfo *semi_info = semi_infos.at(i);
-      ObSEArray<uint64_t, 4> table_ids;
-      TableItem *table = NULL;
-      if (OB_ISNULL(semi_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null semi info", K(ret));
-      } else if (OB_ISNULL(table = stmt->get_table_item_by_id(semi_info->right_table_id_))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null table", K(ret));
-      } else if (OB_FAIL(remove_tables_from_stmt(stmt, table, table_ids))) {
-        LOG_WARN("failed to remove tables from stmt", K(ret));
-      } else if (OB_FAIL(stmt->remove_semi_info(semi_info))) {
-        LOG_WARN("failed to remove semi info", K(ret));
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
-      TableItem *table = tables.at(i);
-      ObSEArray<uint64_t, 4> table_ids;
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null table", K(ret));
-      } else if (OB_FAIL(remove_tables_from_stmt(stmt, table, table_ids))) {
-        LOG_WARN("failed to remove tables from stmt", K(ret));
-      } else if (OB_FAIL(replace_table_in_semi_infos(stmt, new_table, table))) {
-        LOG_WARN("failed to replace semi infos from stmt", K(ret));
-      } else if (OB_FAIL(replace_table_in_joined_tables(stmt, new_table, table))) {
-        LOG_WARN("failed to replace table in joined tables", K(ret));
-      } else if (OB_FAIL(stmt->remove_from_item(table->table_id_))) {
-        LOG_WARN("failed to remove from item", K(ret));
-      } else if (OB_FAIL(append(old_table_ids, table_ids))) {
-        LOG_WARN("failed to append table ids", K(ret));
-      }
-    }
-    // 5. adjust structures
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(stmt->add_from_item(new_table->table_id_, false))) {
-      LOG_WARN("failed to add from item", K(ret));
-    } else if (OB_FAIL(simple_stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
-    } else if (OB_FAIL(simple_stmt->adjust_subquery_stmt_parent(stmt, simple_stmt))) {
-      LOG_WARN("failed to adjust subquery stmt parent", K(ret));
-    } else if (OB_FAIL(stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to stmt adjust subquery list", K(ret));
-    } else if ((stmt->is_delete_stmt() || stmt->is_update_stmt() || stmt->is_merge_stmt()) &&
-              OB_FAIL(adjust_updatable_view(*ctx->expr_factory_, static_cast<ObDelUpdStmt*>(stmt),
-                                            *new_table, &old_table_ids))) {
-      LOG_WARN("failed to adjust updatable view", K(ret));
-    } else if (OB_FAIL(adjust_pseudo_column_like_exprs(*stmt))) {
-      LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
-    } else if (OB_FAIL(stmt->remove_table_item(new_table))) {
-      LOG_WARN("failed to remove table item", K(ret));
-    } else if (OB_FAIL(stmt->replace_inner_stmt_expr(old_column_exprs, new_column_exprs))) {
-      LOG_WARN("failed to replace inner stmt expr", K(ret));
-    } else if (OB_FAIL(stmt->get_table_items().push_back(new_table))) {
-      LOG_WARN("failed to push back table item", K(ret));
-    } else if (OB_FAIL(stmt->rebuild_tables_hash())) {
-      LOG_WARN("failed to rebuild tables hash", K(ret));
-    } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
-      LOG_WARN("failed to update column item rel ids", K(ret));
-    } else if (OB_FAIL(stmt->formalize_stmt(ctx->session_info_))) {
-      LOG_WARN("failed to formalize stmt", K(ret));
-    } else {
-      view_table = new_table;
-    }
-  }
-  return ret;
-}
-
 int ObTransformUtils::construct_simple_view(ObDMLStmt *stmt,
                                             const ObIArray<TableItem *> &tables,
                                             const ObIArray<SemiInfo *> &semi_infos,
@@ -6956,6 +6826,7 @@ int ObTransformUtils::construct_simple_view(ObDMLStmt *stmt,
                                             ObSelectStmt *&simple_stmt)
 {
   int ret = OB_SUCCESS;
+  ObArray<uint64_t> basic_table_ids;
   simple_stmt = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->stmt_factory_)
       || OB_ISNULL(ctx->allocator_)) {
@@ -6965,117 +6836,264 @@ int ObTransformUtils::construct_simple_view(ObDMLStmt *stmt,
     LOG_WARN("failed to create stmt", K(ret));
   } else if (OB_ISNULL(simple_stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(simple_stmt));
   } else if (OB_FAIL(simple_stmt->get_stmt_hint().set_simple_view_hint(&stmt->get_stmt_hint()))) {
     LOG_WARN("failed to set simple view hint", K(ret));
+  } else if (FALSE_IT(simple_stmt->set_query_ctx(stmt->get_query_ctx()))) {
+    // do nothing
+  } else if (OB_FAIL(simple_stmt->adjust_statement_id(ctx->allocator_,
+                                                      ctx->src_qb_name_,
+                                                      ctx->src_hash_val_))) {
+    LOG_WARN("failed to adjust statement id", K(ret));
   } else {
-    simple_stmt->set_query_ctx(stmt->get_query_ctx());
     simple_stmt->set_current_level(stmt->get_current_level());
     simple_stmt->set_parent_namespace_stmt(stmt->get_parent_namespace_stmt());
-    
-    ObSEArray<TableItem *, 8> all_tables;
-    ObSEArray<uint64_t, 8> all_table_ids;
-    // 1. collect tables and table ids
-    // 2. add from item according to the table id
-    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
-      TableItem *table = tables.at(i);
-      if (OB_ISNULL(table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null table", K(ret));
-      } else if (table->is_joined_table()) {
-        ObSEArray<TableItem *, 8> joined_child_tables;
-        JoinedTable *joined_table = static_cast<JoinedTable *>(table);
-        if (OB_FAIL(extract_table_items(joined_table, joined_child_tables))) {
-          LOG_WARN("failed to extract table items", K(ret));
-        } else if (OB_FAIL(append(all_tables, joined_child_tables))) {
-          LOG_WARN("failed to append tables within joined table", K(ret));
-        } else if (OB_FAIL(append(all_table_ids, joined_table->single_table_ids_))) {
-          LOG_WARN("failed to append single table ids", K(ret));
-        } else if (OB_FAIL(simple_stmt->add_joined_table(joined_table))) {
-          LOG_WARN("failed to add joined table", K(ret));
-        } else if (OB_FAIL(simple_stmt->add_from_item(joined_table->table_id_,
-                                                      true))) {
-          LOG_WARN("failed to add from item", K(ret));
-        }
-      } else {
-        if (OB_FAIL(all_tables.push_back(table))) {
-          LOG_WARN("failed to push back tables", K(ret));
-        } else if (OB_FAIL(all_table_ids.push_back(table->table_id_))) {
-          LOG_WARN("failed to push back table id", K(ret));
-        } else if (OB_FAIL(simple_stmt->add_from_item(table->table_id_, false))) {
-          LOG_WARN("failedto add from item", K(ret));
-        }
-      }
+  }
+
+  // move from table
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
+    bool is_joined_table = (NULL != tables.at(i) && tables.at(i)->is_joined_table());
+    if (OB_ISNULL(tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is null", K(ret), K(tables.at(i)));
+    } else if (OB_FAIL(stmt->remove_from_item(tables.at(i)->table_id_))) {
+      LOG_WARN("failed to remove from item", K(ret));
+    } else if (OB_FAIL(simple_stmt->add_from_item(tables.at(i)->table_id_, is_joined_table))) {
+      LOG_WARN("failed to add from item", K(ret));
+    } else if (!is_joined_table) {
+      ret = basic_table_ids.push_back(tables.at(i)->table_id_);
+    } else if (OB_FAIL(append(basic_table_ids,
+                              static_cast<JoinedTable *>(tables.at(i))->single_table_ids_))) {
+      LOG_WARN("failed to append basic table ids", K(ret));
+    } else if (OB_FAIL(simple_stmt->add_joined_table(static_cast<JoinedTable *>(tables.at(i))))) {
+      LOG_WARN("failed to add joined table", K(ret));
     }
-    // 3. add semi table items
-    for (int i = 0; OB_SUCC(ret) && i < semi_infos.count(); ++i) {
-      SemiInfo *semi_info = semi_infos.at(i);
-      TableItem *table = NULL;
-      if (OB_ISNULL(semi_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null semi info", K(ret));
-      } else if (OB_ISNULL(table = stmt->get_table_item_by_id(semi_info->right_table_id_))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null table", K(ret));
-      } else if (OB_FAIL(all_tables.push_back(table))) {
-        LOG_WARN("failed to push back tables", K(ret));
-      } else if (OB_FAIL(all_table_ids.push_back(table->table_id_))) {
-        LOG_WARN("failed to push back table id", K(ret));
-      } else if (OB_FAIL(simple_stmt->add_semi_info(semi_info))) {
-        LOG_WARN("failedto add from item", K(ret));
-      }
+  }
+
+  // move semi filter info
+  for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos.count(); ++i) {
+    SemiInfo *semi = NULL;
+    if (OB_ISNULL(semi = semi_infos.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("semi info is null", K(ret), K(semi));
+    } else if (OB_FAIL(stmt->remove_semi_info(semi))) {
+      LOG_WARN("failed to remove semi info", K(ret));
+    } else if (OB_FAIL(simple_stmt->add_semi_info(semi))) {
+      LOG_WARN("failed to add semi info", K(ret));
+    } else if (OB_FAIL(basic_table_ids.push_back(semi->right_table_id_))) {
+      LOG_WARN("failed to push back right table id", K(ret));
     }
-    // 4. adjust part expr items, column items, select items
-    ObSEArray<ObDMLStmt::PartExprItem, 8> part_items;
-    ObSEArray<ColumnItem, 8> column_items;
-    ObSqlBitSet<> from_tables_set;
-    ObSEArray<ObRawExpr *, 8> tmp_column_exprs;
-    ObSEArray<ObRawExpr *, 8> select_exprs;
-    ObSEArray<ObRawExpr *, 8> shared_exprs;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(add_table_item(simple_stmt, all_tables))) {
-      LOG_WARN("failed to add table items", K(ret));
-    } else if (OB_FAIL(stmt->get_part_expr_items(all_table_ids, part_items))) {
-      LOG_WARN("failed to get part expr items", K(ret));
-    } else if (OB_FAIL(simple_stmt->set_part_expr_items(part_items))) {
-      LOG_WARN("failed to set part expr items", K(ret));
-    } else if (OB_FAIL(stmt->remove_part_expr_items(all_table_ids))) {
-      LOG_WARN("failed to remove part items", K(ret));
-    } else if (OB_FAIL(stmt->get_column_items(all_table_ids, column_items))) {
+  }
+
+  // move table item
+  for (int64_t i = 0; OB_SUCC(ret) && i < basic_table_ids.count(); ++i) {
+    uint64_t table_id = basic_table_ids.at(i);
+    TableItem *table = NULL;
+    ObArray<ColumnItem> column_items;
+    ObArray<ObDMLStmt::PartExprItem> part_expr_items;
+    ObDMLStmt::CheckConstraintItem check_constraint_item;
+    if (OB_ISNULL(table = stmt->get_table_item_by_id(table_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table is null", K(ret), K(table));
+    } else if (OB_FAIL(stmt->get_column_items(table_id, column_items))) {
       LOG_WARN("failed to get column items", K(ret));
-    } else if (OB_FAIL(simple_stmt->add_column_item(column_items))) {
+    } else if (OB_FAIL(stmt->get_part_expr_items(table_id, part_expr_items))) {
+      LOG_WARN("failed to get part expr items", K(ret));
+    } else if (OB_FAIL(stmt->get_check_constraint_items(table_id, check_constraint_item))) {
+      LOG_WARN("failed to get check constraint item", K(ret));
+    } else if (OB_FAIL(simple_stmt->get_table_items().push_back(table))) {
+      LOG_WARN("failed to add table item", K(ret));
+    } else if (OB_FAIL(append(simple_stmt->get_column_items(), column_items))) {
       LOG_WARN("failed to add column items", K(ret));
-    } else if (OB_FAIL(stmt->remove_column_item(all_table_ids))) {
+    } else if (OB_FAIL(simple_stmt->set_part_expr_items(part_expr_items))) {
+      LOG_WARN("failed to set part expr items", K(ret));
+    } else if (OB_FAIL(simple_stmt->set_check_constraint_item(check_constraint_item))) {
+      LOG_WARN("failed to add check constraint items", K(ret));
+    } else if (OB_FAIL(stmt->remove_table_item(table))) {
+      LOG_WARN("failed to remove table item", K(ret));
+    } else if (OB_FAIL(stmt->remove_column_item(basic_table_ids.at(i)))) {
       LOG_WARN("failed to remove column item", K(ret));
-    } else if (OB_FAIL(simple_stmt->adjust_statement_id(ctx->allocator_,
-                                                        ctx->src_qb_name_,
-                                                        ctx->src_hash_val_))) {
-      LOG_WARN("failed to adjust statement id", K(ret));
-    } else if (OB_FAIL(simple_stmt->rebuild_tables_hash())) {
+    } else if (OB_FAIL(stmt->remove_part_expr_items(basic_table_ids.at(i)))) {
+      LOG_WARN("failed to remove part expr items", K(ret));
+    } else if (OB_FAIL(stmt->remove_check_constraint_item(basic_table_ids.at(i)))) {
+      LOG_WARN("failed to remove check constraint item", K(ret));
+    }
+  }
+
+  // rebuild relation id info
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(simple_stmt->rebuild_tables_hash())) {
       LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(simple_stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update column item by id", K(ret));
-    } else if (OB_FAIL(simple_stmt->get_column_exprs(tmp_column_exprs))) {
-      LOG_WARN("failed to get column exprs", K(ret));
-    } else if (OB_FAIL(simple_stmt->get_from_tables(from_tables_set))) {
-      LOG_WARN("failed to get from tables", K(ret));
-    } else if (OB_FAIL(extract_table_exprs(*simple_stmt, tmp_column_exprs,
-                                           from_tables_set, select_exprs))) {
-      LOG_WARN("failed to extract table exprs", K(ret));
-      // TODO: extract inseparable query exprs if they can be shared
-    } else if (OB_FAIL(extract_shared_expr(stmt,
-                                           simple_stmt,
-                                           shared_exprs,
-                                           RelExprCheckerBase::JOIN_CONDITION_SCOPE))) {
-      LOG_WARN("failed to extract shared exprs", K(ret));
-    } else if (OB_FAIL(append_array_no_dup(select_exprs, shared_exprs))) {
-      LOG_WARN("failed to append array", K(ret));
-    } else if (OB_FAIL(create_select_item(*ctx->allocator_,
-                                          select_exprs,
-                                          simple_stmt))) {
-      LOG_WARN("failed to create select item", K(ret));
-    } else if (OB_FAIL(simple_stmt->formalize_stmt(ctx->session_info_))) {
-      LOG_WARN("failed to formalize simple stmt", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
+                                           ObDMLStmt *stmt,
+                                           TableItem *table)
+{
+  int ret = OB_SUCCESS;
+  ObSelectStmt *view_stmt = NULL;
+  ObArray<ObRawExpr *> shared_exprs;
+  ObArray<ObRawExpr *> column_exprs;
+  if (OB_ISNULL(stmt) || OB_ISNULL(table) ||
+      OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_) ||
+      OB_UNLIKELY(!table->is_generated_table()) ||
+      OB_ISNULL(view_stmt = table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(stmt), K(table));
+  } else if (OB_FAIL(extract_shared_exprs(stmt, view_stmt, shared_exprs))) {
+    LOG_WARN("failed to extract shared expr", K(ret));
+  } else if (OB_FAIL(remove_const_exprs(shared_exprs, shared_exprs))) {
+    LOG_WARN("failed to remove const exprs", K(ret));
+  } else if (OB_FAIL(create_columns_for_view(ctx, *table, stmt, shared_exprs, column_exprs))) {
+    LOG_WARN("failed to create columns for view", K(ret));
+  } else if (shared_exprs.empty()) {
+    ret = create_dummy_select_item(*view_stmt, ctx);
+  } else if (OB_FAIL(stmt->remove_table_item(table))) {
+    LOG_WARN("failed to remove table item", K(ret));
+  } else if (OB_FAIL(stmt->replace_inner_stmt_expr(shared_exprs, column_exprs))) {
+    LOG_WARN("failed to replace inner stmt expr", K(ret));
+  } else if (OB_FAIL(stmt->get_table_items().push_back(table))) {
+    LOG_WARN("failed to push back table", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(stmt->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(view_stmt->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(adjust_pseudo_column_like_exprs(*stmt))) {
+      LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
+    } else if (OB_FAIL(adjust_pseudo_column_like_exprs(*view_stmt))) {
+      LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
+    } else if (OB_FAIL(view_stmt->adjust_subquery_stmt_parent(stmt, view_stmt))) {
+      LOG_WARN("failed to adjust subquery stmt parent", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::extract_shared_exprs(ObDMLStmt *parent,
+                                           ObSelectStmt *view_stmt,
+                                           ObIArray<ObRawExpr *> &common_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t set_size = 32;
+  hash::ObHashSet<uint64_t> expr_set;
+  ObArray<ObRawExpr *> relation_exprs;
+  if (OB_ISNULL(parent) || OB_ISNULL(view_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(parent), K(view_stmt));
+  } else if (OB_FAIL(view_stmt->get_column_exprs(relation_exprs))) {
+    LOG_WARN("failed to get column exprs", K(ret));
+  } else if (OB_FAIL(view_stmt->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else if (relation_exprs.count() > set_size) {
+    set_size = relation_exprs.count();
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(expr_set.create(set_size,
+                                "TransExprSet", "TransExprSet"))) {
+      LOG_WARN("failed to create expr set", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
+    if (OB_FAIL(append_hashset(relation_exprs.at(i), expr_set))) {
+      LOG_WARN("failed to append hashset", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    relation_exprs.reuse();
+    if (OB_FAIL(parent->get_relation_exprs(relation_exprs))) {
+      LOG_WARN("failed to get relation exprs", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < relation_exprs.count(); ++i) {
+    if (OB_FAIL(find_hashset(relation_exprs.at(i), expr_set, common_exprs))) {
+      LOG_WARN("failed to find expr in hashset", K(ret));
+    }
+  }
+  if (expr_set.created()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = expr_set.destroy())) {
+      LOG_WARN("failed to destroy expr set", K(ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
+                                         ObIArray<ObRawExpr *> &output_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObRawExpr *> tmp;
+  for (int64_t i = 0; OB_SUCC(ret) && i < input_exprs.count(); ++i) {
+    if (OB_ISNULL(input_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("input expr is null", K(ret));
+    } else if (input_exprs.at(i)->is_const_expr()) {
+      // do nothing
+    } else if (OB_FAIL(tmp.push_back(input_exprs.at(i)))) {
+      LOG_WARN("failed to push back input expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(output_exprs.assign(tmp))) {
+      LOG_WARN("failed to assign tmp expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::append_hashset(ObRawExpr *expr,
+                                     hash::ObHashSet<uint64_t> &expr_set)
+{
+  int ret = OB_SUCCESS;
+  uint64_t key = reinterpret_cast<uint64_t>(expr);
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (OB_HASH_EXIST == expr_set.exist_refactored(key)) {
+    // do nothing
+  } else if (OB_FAIL(expr_set.set_refactored(key))) {
+    LOG_WARN("failed to set key", K(ret), K(expr));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(append_hashset(expr->get_param_expr(i),
+                                            expr_set)))) {
+        LOG_WARN("failed to append hashset", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::find_hashset(ObRawExpr *expr,
+                                   hash::ObHashSet<uint64_t> &expr_set,
+                                   ObIArray<ObRawExpr *> &common_exprs)
+{
+  int ret = OB_SUCCESS;
+  uint64_t key = reinterpret_cast<uint64_t>(expr);
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (OB_HASH_EXIST == expr_set.exist_refactored(key)) {
+    if (OB_FAIL(add_var_to_array_no_dup(common_exprs, expr))) {
+      LOG_WARN("failed to append expr", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(find_hashset(expr->get_param_expr(i),
+                                          expr_set,
+                                          common_exprs)))) {
+        LOG_WARN("failed to find hashset", K(ret));
+      }
     }
   }
   return ret;

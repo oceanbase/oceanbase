@@ -1100,11 +1100,6 @@ public:
                                     TableItem *table,
                                     TableItem *&view_table);
 
-  static int create_view_with_tables(ObDMLStmt *stmt,
-                                     ObTransformerCtx *ctx,
-                                     const ObIArray<TableItem *> &tables,
-                                     const ObIArray<SemiInfo *> &semi_infos,
-                                     TableItem *&view_table);
   static int extract_right_tables_from_semi_infos(ObDMLStmt *stmt,
                                                   const ObIArray<SemiInfo *> &semi_infos, 
                                                   ObIArray<TableItem *> &tables);
@@ -1578,13 +1573,19 @@ public:
                                            TableItem *target_table,
                                            bool is_right_child,
                                            bool &combinable);
-                                             
+
   static int rebuild_win_compare_range_expr(ObRawExprFactory* expr_factory,
                                             ObWinFunRawExpr &win_expr,
                                             ObRawExpr* order_expr);
 
   static int check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
                                              bool &is_valid);
+
+  static int construct_simple_view(ObDMLStmt *stmt,
+                                   const ObIArray<TableItem *> &tables,
+                                   const ObIArray<SemiInfo *> &semi_infos,
+                                   ObTransformerCtx *ctx,
+                                   ObSelectStmt *&simple_stmt);
 
   static int generate_select_list(ObTransformerCtx *ctx,
                                   ObDMLStmt *stmt,
@@ -1633,11 +1634,18 @@ private:
 
   static int add_non_duplicated_select_expr(ObIArray<ObRawExpr*> &add_select_exprs,
                                             ObIArray<ObRawExpr*> &org_select_exprs);
-  static int construct_simple_view(ObDMLStmt *stmt,
-                                   const ObIArray<TableItem *> &tables,
-                                   const ObIArray<SemiInfo *> &semi_infos,
-                                   ObTransformerCtx *ctx,
-                                   ObSelectStmt *&simple_stmt);
+
+  static int extract_shared_exprs(ObDMLStmt *parent,
+                                  ObSelectStmt *view_stmt,
+                                  ObIArray<ObRawExpr *> &common_exprs);
+
+  static int append_hashset(ObRawExpr *expr,
+                            hash::ObHashSet<uint64_t> &expr_set);
+
+  static int find_hashset(ObRawExpr *expr,
+                          hash::ObHashSet<uint64_t> &expr_set,
+                          ObIArray<ObRawExpr *> &common_exprs);
+
   static int generate_col_exprs(ObDMLStmt *stmt,
                                 const ObIArray<TableItem *> &tables,
                                 const ObIArray<ObRawExpr *> &tmp_select_exprs,
