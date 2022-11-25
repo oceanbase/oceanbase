@@ -1019,7 +1019,7 @@ int ObLSTabletService::migrate_create_tablet(
     int tmp_ret = OB_SUCCESS;
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
     if (OB_TMP_FAIL(tablet_id_set_.erase(tablet_id))) {
-      if (OB_HASH_NOT_EXIST != ret) {
+      if (OB_HASH_NOT_EXIST != tmp_ret) {
         LOG_ERROR("fail to erase tablet id from set", K(tmp_ret), K(tablet_id));
       }
     }
@@ -2907,7 +2907,35 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
       //it is necessary to make the left side of the newly created memtable start from clog_checkpinoit_ts
       //the new memtable can be stuck during the creation of the tablet, it is safe here
 
-      if (OB_FAIL(old_tablet->get_tx_data(tx_data))) {
+      // try tablet freeze
+      if (!tablet_id.is_ls_inner_tablet()) {
+        if (OB_FAIL(old_tablet->set_memtable_clog_checkpoint_ts(param.tablet_meta_))) {
+          LOG_WARN("failed to set memtable clog checkpoint ts", K(ret), KPC(old_tablet), K(param));
+        } else if (nullptr != param.tablet_meta_
+            && old_tablet->get_clog_checkpoint_ts() < param.tablet_meta_->clog_checkpoint_ts_) {
+          if (OB_FAIL(freezer->tablet_freeze_for_replace_tablet_meta(tablet_id, imemtable))) {
+            if (OB_ENTRY_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("failed to freeze tablet", K(ret), K(tablet_id), KPC(old_tablet));
+            }
+          } else {
+            is_tablet_freeze = true;
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (!is_tablet_freeze) {
+        } else if (nullptr != imemtable) {
+          memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
+          if (OB_FAIL(memtable->resolve_right_boundary_for_migration())) {
+            LOG_WARN("failed to resolve right boundary", K(ret), K(tablet_id));
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(old_tablet->get_tx_data(tx_data))) {
         LOG_WARN("failed to get tx data from old tablet", K(ret), K(tablet_id));
       } else if (OB_FAIL(old_tablet->get_ddl_data(ddl_data))) {
         LOG_WARN("failed to get tx data from old tablet", K(ret), K(tablet_id));
@@ -2918,23 +2946,31 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
       } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
       } else if (OB_FAIL(new_tablet->init(param, *old_tablet, tx_data, ddl_data, autoinc_seq))) {
         LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
-      } else if (tablet_id.is_ls_inner_tablet()) {
-        //do nothing
-      } else if (old_tablet->get_tablet_meta().clog_checkpoint_ts_ < new_tablet->get_tablet_meta().clog_checkpoint_ts_) {
-        if (OB_FAIL(freezer->tablet_freeze_for_replace_tablet_meta(tablet_id, imemtable))) {
-          if (OB_ENTRY_EXIST == ret) {
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("failed to freeze tablet", K(ret), K(tablet_id), KPC(old_tablet), KPC(new_tablet));
-          }
+      } else {
+        common::ObSArray<ObITable*> memtables;
+        const int64_t clog_checkpoint_ts = new_tablet->get_clog_checkpoint_ts();
+        const int64_t snapshot_version = new_tablet->get_snapshot_version();
+        if (OB_FAIL(new_tablet->get_memtables(memtables, true/*need_active*/))) {
+          LOG_WARN("failed to get memtables", K(ret), K(key));
         } else {
-          is_tablet_freeze = true;
+          for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
+            const memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(memtables.at(i));
+            if (OB_UNLIKELY(memtable->get_end_log_ts() < clog_checkpoint_ts)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("memtable end log ts is smaller than clog checkpoint ts", K(ret),
+                  "end_log_ts", memtable->get_end_log_ts(), K(clog_checkpoint_ts));
+            } else if (memtable->get_end_log_ts() == clog_checkpoint_ts) {
+              if (memtable->get_snapshot_version() <= snapshot_version) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("memtable snapshot version is no bigger than tablet snapshot version", K(ret),
+                    "memtable_snapshot_version", memtable->get_snapshot_version(), K(snapshot_version));
+              }
+            }
+          }
         }
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(new_tablet->set_memtable_clog_checkpoint_ts(param.tablet_meta_))) {
-        LOG_WARN("failed to set memtable clog checkpoint ts", K(ret), KPC(old_tablet), KPC(new_tablet), K(param));
       } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(new_tablet_handle, disk_addr))) {
         LOG_WARN("fail to write update tablet slog", K(ret), K(new_tablet_handle), K(disk_addr));
       } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, disk_addr, old_tablet_handle, new_tablet_handle))) {

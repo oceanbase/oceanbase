@@ -457,6 +457,7 @@ private:
   int set_tx_data_in_tablet_pointer(const ObTabletTxMultiSourceDataUnit &tx_data);
   int get_max_sync_storage_schema_version(int64_t &max_schema_version) const;
   int check_max_sync_schema_version() const;
+
   template<class T>
   int dec_unsynced_cnt_for_if_need(
       T &multi_source_data_unit,
@@ -775,7 +776,15 @@ int ObTablet::save_multi_source_data_unit(
   } else if (is_callback) {
     memtable::ObMemtable *memtable = nullptr;
     if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(memtable, msd->type()))) {
-      TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_log_ts));
+      if (OB_ENTRY_NOT_EXIST == ret && for_replay) {
+        TRANS_LOG(INFO, "clog_checkpoint_ts of ls is bigger than the commit_info log_ts of this multi-trans in replay, failed to get multi source data unit",
+                  K(ret), K(ls_id), K(tablet_id), K(memtable_log_ts));
+        if (OB_FAIL(save_multi_source_data_unit(msd, memtable_log_ts, for_replay, ref_op, false))) {
+          TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_log_ts), K(ref_op));
+        }
+      } else {
+        TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_log_ts));
+      }
     } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_log_ts, for_replay, ref_op, is_callback))) {
       TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_log_ts), K(ref_op));
     }

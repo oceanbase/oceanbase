@@ -434,6 +434,7 @@ public:
   int get_tx_table_guard(storage::ObTxTableGuard &tx_table_guard);
   int set_migration_clog_checkpoint_ts(const int64_t clog_checkpoint_ts);
   int64_t get_migration_clog_checkpoint_ts() { return ATOMIC_LOAD(&migration_clog_checkpoint_ts_); }
+  int resolve_right_boundary_for_migration();
 
   /* multi source data operations */
   virtual int get_multi_source_data_unit(ObIMultiSourceDataUnit *multi_source_data_unit, ObIAllocator *allocator);
@@ -453,7 +454,7 @@ public:
                        K_(freeze_clock), K_(max_schema_version), K_(write_ref_cnt), K_(local_allocator),
                        K_(unsubmitted_cnt), K_(unsynced_cnt),
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
-                       K_(contain_hotspot_row), K_(max_end_log_ts), K_(rec_log_ts), K_(snapshot_version),
+                       K_(contain_hotspot_row), K_(max_end_log_ts), K_(rec_log_ts), K_(snapshot_version), K_(migration_clog_checkpoint_ts),
                        K_(is_tablet_freeze), K_(is_force_freeze), K_(contain_hotspot_row),
                        K_(read_barrier), K_(is_flushed), K_(freeze_state));
 private:
@@ -588,7 +589,7 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
         if (OB_FAIL(ret)) {
         } 
         // skip updating max_end_log_ts of frozen memtable for commit/abort when replay clog.
-        else if ((ObLogTsRange::MAX_TS == get_end_log_ts() || !for_replay || !is_callback) 
+        else if ((!for_replay || !is_callback)
                  && OB_FAIL(set_max_end_log_ts(log_ts))) {
           TRANS_LOG(WARN, "failed to set max_end_log_ts", K(ret), K(log_ts), KPC(this));
         } else if (OB_FAIL(set_rec_log_ts(log_ts))) {
