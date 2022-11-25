@@ -370,7 +370,7 @@ int ObDMLService::process_before_stmt_trigger(const ObDMLBaseCtDef &dml_ctdef,
                                                             dml_event))) {
       LOG_WARN("failed to handle before stmt trigger", K(ret));
     } else if (OB_FAIL(ObSqlTransControl::stmt_refresh_snapshot(dml_rtctx.get_exec_ctx()))) {
-      LOG_WARN("failed to get new sanpshot after before stmt trigger evaluated", K(ret));
+      LOG_WARN("failed to get new snapshot after before stmt trigger evaluated", K(ret));
     }
   }
   return ret;
