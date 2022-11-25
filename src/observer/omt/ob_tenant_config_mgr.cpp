@@ -314,7 +314,7 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
         LOG_INFO("tenant config deleted", K(tenant_id), K(ret));
       }
       if (OB_FAIL(ret)) {
-        config->wrunlock();
+        config->unlock();
       }
     }
   }
