@@ -435,11 +435,17 @@ int ObTabletGCHandler::gc_tablets(const common::ObTabletIDArray &tablet_ids)
   return ret;
 }
 
-void ObTabletGCHandler::offline()
+int ObTabletGCHandler::offline()
 {
+  int ret = OB_SUCCESS;
   set_stop();
-  wait_stop();
-  STORAGE_LOG(INFO, "tablet gc handler offline", KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
+  if (!is_finish()) {
+    ret = OB_EAGAIN;
+    STORAGE_LOG(INFO, "tablet gc handler not finish, retry", KR(ret), KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
+  } else {
+    STORAGE_LOG(INFO, "tablet gc handler offline", KPC(this), KPC(ls_), K(ls_->get_ls_meta()));
+  }
+  return ret;
 }
 
 void ObTabletGCHandler::online()
