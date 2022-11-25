@@ -1830,6 +1830,38 @@ int ObMemtable::resolve_right_boundary()
   return ret;
 }
 
+int ObMemtable::resolve_right_boundary_for_migration()
+{
+  bool bool_ret = false;
+  int ret = OB_SUCCESS;
+  share::ObLSID ls_id = freezer_->get_ls_id();
+  int64_t start_time = ObTimeUtility::current_time();
+
+  do {
+    bool_ret = is_frozen_memtable() && 0 == get_write_ref();
+    if (bool_ret) {
+      if (OB_FAIL(resolve_snapshot_version_())) {
+        TRANS_LOG(WARN, "fail to resolve snapshot version", K(ret), KPC(this), K(ls_id));
+      } else if (OB_FAIL(resolve_max_end_log_ts_())) {
+        TRANS_LOG(WARN, "fail to resolve snapshot version", K(ret), KPC(this), K(ls_id));
+      } else {
+        resolve_right_boundary();
+        TRANS_LOG(INFO, "resolve_right_boundary_for_migration", K(ls_id), KPC(this));
+      }
+    } else {
+      const int64_t cost_time = ObTimeUtility::current_time() - start_time;
+      if (cost_time > 5 * 1000 * 1000) {
+        if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+          TRANS_LOG(WARN, "cannot resolve_right_boundary_for_migration", K(ret), KPC(this), K(ls_id));
+        }
+      }
+      ob_usleep(100);
+    }
+  } while (!bool_ret);
+
+  return ret;
+}
+
 void ObMemtable::resolve_left_boundary(int64_t end_log_ts)
 {
   set_start_log_ts(end_log_ts);

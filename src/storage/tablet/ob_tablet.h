@@ -457,6 +457,7 @@ private:
   int set_tx_data_in_tablet_pointer(const ObTabletTxMultiSourceDataUnit &tx_data);
   int get_max_sync_storage_schema_version(int64_t &max_schema_version) const;
   int check_max_sync_schema_version() const;
+
   template<class T>
   int dec_unsynced_cnt_for_if_need(
       T &multi_source_data_unit,
