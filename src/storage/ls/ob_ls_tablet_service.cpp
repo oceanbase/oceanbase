@@ -1051,7 +1051,11 @@ int ObLSTabletService::update_tablet_table_store(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(param));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle, true/*only acquire*/))) {
-    LOG_WARN("failed to acquire tablet", K(ret), K(key));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TABLET_NOT_EXIST;
+    } else {
+      LOG_WARN("failed to acquire tablet", K(ret), K(key));
+    }
   } else {
     new_tablet = new_tablet_handle.get_obj();
     time_guard.click("Acquire");
