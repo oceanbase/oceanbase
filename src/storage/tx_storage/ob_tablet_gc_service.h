@@ -58,7 +58,7 @@ public:
                                  const int64_t checkpoint_ts);
   int gc_tablets(const common::ObTabletIDArray &tablet_ids);
   bool check_stop() { return ATOMIC_LOAD(&update_enabled_) == false; }
-  void offline();
+  int offline();
   void online();
   TO_STRING_KV(K_(tablet_persist_trigger), K_(is_inited));
 
@@ -68,7 +68,7 @@ private:
   int freeze_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids);
   int wait_unpersist_tablet_ids_flushed(const common::ObTabletIDArray &unpersist_tablet_ids,
                                         const int64_t checkpoint_ts);
-  void wait_stop() { obsys::ObWLockGuard lock(wait_lock_); }
+  bool is_finish() { obsys::ObWLockGuard lock(wait_lock_, false); return lock.acquired(); }
   void set_stop() { ATOMIC_STORE(&update_enabled_, false); }
   void set_start() { ATOMIC_STORE(&update_enabled_, true); }
 
