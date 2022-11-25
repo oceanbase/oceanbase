@@ -17,27 +17,37 @@
 #include "rpc/ob_request.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 
-class ObRpcRequest : public rpc::ObRequest {
+class ObRpcRequest : public rpc::ObRequest
+{
 public:
-  ObRpcRequest(Type type) : ObRequest(type)
-  {}
+  ObRpcRequest(Type type): ObRequest(type){}
 
   template <class T>
-  int response_success(
-      common::ObDataBuffer* buffer, const T& result, const ObRpcResultCode& res_code, const int64_t& sessid);
+  int response_success(common::ObDataBuffer *buffer,
+                       const T &result,
+                       const ObRpcResultCode &res_code,
+                       const int64_t &sessid);
 
-  inline int response_fail(common::ObDataBuffer* buffer, const ObRpcResultCode& res_code, const int64_t& sessid);
-
+  inline int response_fail(common::ObDataBuffer *buffer,
+                           const ObRpcResultCode &res_code,
+                           const int64_t &sessid);
 protected:
+
   template <class T>
-  int do_serilize_result(common::ObDataBuffer* buffer, const T& result, const ObRpcResultCode& res_code);
+  int do_serilize_result(common::ObDataBuffer *buffer,
+                         const T &result,
+                         const ObRpcResultCode &res_code);
 
-  inline int do_flush_buffer(common::ObDataBuffer* buffer, const ObRpcPacket* pkt, int64_t sessid);
+  inline int do_flush_buffer(common::ObDataBuffer *buffer,
+                             const ObRpcPacket *pkt,
+                             int64_t sessid);
 
-  inline int do_serilize_fail(common::ObDataBuffer* buffer, const ObRpcResultCode& res_code);
+  inline int do_serilize_fail(common::ObDataBuffer *buffer, const ObRpcResultCode &res_code);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRequest);
@@ -45,7 +55,10 @@ private:
 
 template <class T>
 int ObRpcRequest::response_success(
-    common::ObDataBuffer* buffer, const T& result, const ObRpcResultCode& res_code, const int64_t& sessid)
+    common::ObDataBuffer *buffer,
+    const T &result,
+    const ObRpcResultCode &res_code,
+    const int64_t &sessid)
 {
   using namespace common;
   int ret = common::OB_SUCCESS;
@@ -66,16 +79,20 @@ int ObRpcRequest::response_success(
     RPC_OBRPC_LOG(WARN, "ez_req_'s message is null", K(ret));
   } else if (OB_FAIL(do_serilize_result<T>(buffer, result, res_code))) {
     RPC_OBRPC_LOG(WARN, "failed to serilize result code and result", K(ret));
-  } else if (OB_FAIL(do_flush_buffer(buffer, reinterpret_cast<const obrpc::ObRpcPacket*>(pkt_), sessid))) {
+  } else if (OB_FAIL(do_flush_buffer(buffer, reinterpret_cast<const obrpc::ObRpcPacket*>(pkt_),
+                                     sessid))){
     RPC_OBRPC_LOG(WARN, "failed to flush rpc buffer", K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
 
 template <class T>
-int ObRpcRequest::do_serilize_result(common::ObDataBuffer* buffer, const T& result, const ObRpcResultCode& res_code)
+int ObRpcRequest::do_serilize_result(
+    common::ObDataBuffer *buffer,
+    const T &result,
+    const ObRpcResultCode &res_code)
 {
   using namespace obrpc;
   using namespace common;
@@ -86,17 +103,21 @@ int ObRpcRequest::do_serilize_result(common::ObDataBuffer* buffer, const T& resu
   } else if (OB_ISNULL(buffer->get_data())) {
     ret = common::OB_ERR_NULL_VALUE;
     RPC_OBRPC_LOG(WARN, "buffer is nul", K(ret));
-  } else if (OB_FAIL(res_code.serialize(buffer->get_data(), buffer->get_capacity(), buffer->get_position()))) {
+  } else if (OB_FAIL(res_code.serialize(buffer->get_data(),
+                                        buffer->get_capacity(),
+                                        buffer->get_position()))) {
     RPC_OBRPC_LOG(WARN, "serialize result code fail", K(ret));
-  } else if (OB_FAIL(common::serialization::encode(
-                 buffer->get_data(), buffer->get_capacity(), buffer->get_position(), result))) {
+  } else if (OB_FAIL(common::serialization::encode(buffer->get_data(),
+                                                   buffer->get_capacity(),
+                                                   buffer->get_position(),
+                                                   result))) {
     RPC_OBRPC_LOG(WARN, "serialize result fail", K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
 
-}  // end of namespace obrpc
-}  // end of namespace oceanbase
+} // end of namespace obrpc
+} // end of namespace oceanbase
 #endif

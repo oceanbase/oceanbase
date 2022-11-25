@@ -14,10 +14,11 @@
 
 using namespace oceanbase::obmysql;
 
-OMPKField::OMPKField(ObMySQLField& field) : field_(field)
+OMPKField::OMPKField(ObMySQLField &field)
+    : field_(field)
 {}
 
-int OMPKField::serialize(char* buffer, int64_t len, int64_t& pos) const
+int OMPKField::serialize(char *buffer, int64_t len, int64_t &pos) const
 {
   return field_.serialize(buffer, len, pos);
 }

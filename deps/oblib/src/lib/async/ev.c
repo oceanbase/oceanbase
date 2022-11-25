@@ -711,8 +711,6 @@ struct signalfd_siginfo
       #define ECB_MEMORY_FENCE_RELEASE __asm__ __volatile__ ("")
     #elif defined __ia64__
       #define ECB_MEMORY_FENCE         __asm__ __volatile__ ("mf"       : : : "memory")
-    #elif defined __loongarch__
-      #define ECB_MEMORY_FENCE         __asm__ __volatile__ ("dbar 0"   : : : "memory")
     #elif defined __m68k__
       #define ECB_MEMORY_FENCE         __asm__ __volatile__ (""         : : : "memory")
     #elif defined __m88k__

@@ -479,3 +479,25 @@ select ifnull(locate('a','a'),2.345 );
 ifnull(locate('a','a'),2.345 )
 1.000
 drop table if exists test;
+issue 40636846
+select locate('', '中文', 1);
+locate('', '中文', 1)
+1
+select locate('', '中文', 2);
+locate('', '中文', 2)
+4
+select locate('', '中文', 3);
+locate('', '中文', 3)
+7
+select locate('', '中文', 4);
+locate('', '中文', 4)
+0
+select locate('', '中文', 5);
+locate('', '中文', 5)
+0
+select locate('', '中文', 6);
+locate('', '中文', 6)
+0
+select locate('', '中文', 7);
+locate('', '中文', 7)
+0

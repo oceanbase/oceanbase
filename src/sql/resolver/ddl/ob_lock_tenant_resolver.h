@@ -15,15 +15,17 @@
 #include "sql/resolver/ddl/ob_lock_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "lib/container/ob_se_array.h"
-namespace oceanbase {
-namespace sql {
-class ObLockTenantResolver : public ObDDLResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObLockTenantResolver: public ObDDLResolver
+{
 public:
-  explicit ObLockTenantResolver(ObResolverParams& params);
+  explicit ObLockTenantResolver(ObResolverParams &params);
   virtual ~ObLockTenantResolver();
 
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   // types and constants
 private:
@@ -34,7 +36,7 @@ private:
   // data members
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* _OB_LOCK_TENANT_RESOLVER_H */

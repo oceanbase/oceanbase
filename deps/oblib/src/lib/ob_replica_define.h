@@ -18,15 +18,16 @@
 
 #include "lib/utility/ob_print_utils.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class ObReplicaProperty {
+class ObReplicaProperty
+{
   OB_UNIS_VERSION(1);
-
 public:
-  ObReplicaProperty() : memstore_percent_(100), reserved_(0)
-  {}
+  ObReplicaProperty() : memstore_percent_(100), reserved_(0) {}
 
   static ObReplicaProperty create_property(int64_t memstore_percent)
   {
@@ -37,10 +38,7 @@ public:
   }
 
   int set_memstore_percent(int64_t memstore_percent);
-  int64_t get_memstore_percent() const
-  {
-    return memstore_percent_;
-  }
+  int64_t get_memstore_percent() const { return memstore_percent_; }
 
   bool is_valid() const
   {
@@ -52,24 +50,21 @@ public:
     memstore_percent_ = 100;
   }
 
-  bool operator==(const ObReplicaProperty& o) const
-  {
-    return property_ == o.property_;
-  }
+  bool operator ==(const ObReplicaProperty &o) const { return property_ == o.property_; }
 
   TO_STRING_KV(K(memstore_percent_));
 
 private:
   union {
     struct {
-      uint64_t memstore_percent_ : 7;  // 0-100
+      uint64_t memstore_percent_ : 7; // 0-100
       uint64_t reserved_ : 57;
     };
     uint64_t property_;
   };
 };
 
-}  // namespace common
-}  // namespace oceanbase
+} // common
+} // oceanbase
 
 #endif /* OB_LIB_REPLICA_DEFINE_H_ */

@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#owner: guoping.wgp
+#owner: zhenling.zzg
 #owner group: sql1
 # tags: optimizer
 
@@ -53,9 +53,9 @@ explain select /*+index(test_table index_1)*/ * from test_table where age = 22;
 select count(*) from test_table where name = 'name22';
 explain select /*+index(test_table index_2)*/ * from test_table where name = 'name22';
 
---source mysql_test/include/majorfreeze.inc
---source mysql_test/include/wait_daily_merge.inc
---source mysql_test/include/check_stat.inc
+--source mysql_test/include/minorfreeze.inc
+--source mysql_test/include/wait_minor_merge.inc
+call dbms_stats.gather_table_stats('TEST', 'test_table');
 
 # case 2: all data in sstable, not memtable data
 --echo case 2: all data in sstable, not memtable data

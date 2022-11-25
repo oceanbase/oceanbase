@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#owner:guoping.wgp
+#owner:link.zt
 #owner group: sql1
 # tags: optimizer, global_index
 #test different select statement of global index
@@ -117,6 +117,7 @@ select /*+index(t1 gkey1)*/ count(*) from t1;
 select /*+index(t1 gkey2)*/ count(*) from t1;
 drop table if exists t1;
 
+###bug https://aone.alibaba-inc.com/issue/17548879?spm=a2o8d.corp_prod_MY_DESKTOP.0.0.549d41e3kz5z83
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
@@ -128,6 +129,7 @@ insert into t1 values (1,1,1,1),(2,2,2,2),(3,3,3,3);
 update t1 set d=d+1 where (a,b)>=(1,1) and c=1;
 drop table if exists t1;
 
+####bug https://aone.alibaba-inc.com/issue/17661378?spm=a2o8d.corp_prod_MY_DESKTOP.0.0.549d41e3yIxDVL
 --disable_warnings
 drop table if exists obright_part;
 --enable_warnings

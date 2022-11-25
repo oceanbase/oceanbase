@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: guoping.wgp
+# owner: zhenling.zzg
 # owner group: SQL1
 # tags: optimizer
 # description: leading hint is used to specify table join order, e.g., select /*+ leading(t1, t3, t2) */ ... from t1,t2,t3,t4,t5,t6...  
@@ -32,6 +32,27 @@ create table nn2(d1 int, d2 int, d3 varchar(10));
 create table t1(a int, b int, c int);
 create table t2(a int, b int, c int);
 create table t3(a int, b int, c int);
+
+delimiter //;
+
+create procedure insert_p_nn1nn2() 
+begin
+  declare i int;
+    insert into nn1 values(null, null, null);
+    insert into nn2 values(null, null, null);
+    set i = 0;
+    while i < 10 do
+      insert into nn1 values(mod(i, 7), mod(i, 6), concat('hello1', mod(i, 3)));
+      insert into nn2 values(mod(i, 5), mod(i, 3), concat('hello1', mod(i, 2)));
+      set i = i + 1;
+    end while;
+end 
+//
+
+delimiter ;//
+
+call insert_p_nn1nn2();
+sleep 3;
 
 ## set @@session.ob_enable_transformation = 0;
 # trace result set and plan both
@@ -295,6 +316,7 @@ where t1.c1 = t2.c1 and
       t4.d1 = t5.d1 AND
       t1.c1 + t2.c1  = t4.d1 + t5.d2 ;
 
+--echo ### 9. https://work.aone.alibaba-inc.com/issue/22041461 leading hint与join order冲突修复 ###
 explain select /*+leading(t1 (t2 t3))*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2); #失效
 explain select /*+leading(t2 t3 t1)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2); #失效
 explain select /*+leading(t3 t1 t2)*/* from t1,t3 where t1.a = t3.a and t1.b not in (select b from t2); #生效

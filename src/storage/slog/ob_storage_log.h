@@ -1,0 +1,198 @@
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
+#ifndef OCEANBASE_STORAGE_OB_STORAGE_LOG_H_
+#define OCEANBASE_STORAGE_OB_STORAGE_LOG_H_
+
+#include "storage/slog/ob_storage_log_struct.h"
+#include <inttypes.h>
+#include "storage/ob_super_block_struct.h"
+#include "observer/omt/ob_tenant_meta.h"
+#include "share/ob_unit_getter.h"
+#include "storage/ls/ob_ls_meta.h"
+
+namespace oceanbase
+{
+
+namespace share
+{
+  class ObLSID;
+}
+namespace storage
+{
+class ObTablet;
+struct ObCreateTenantPrepareLog : public ObIBaseStorageLogEntry
+{
+public:
+  explicit ObCreateTenantPrepareLog(omt::ObTenantMeta &meta);
+  virtual ~ObCreateTenantPrepareLog() {}
+  virtual bool is_valid() const override;
+  TO_STRING_KV(K_(meta));
+  OB_UNIS_VERSION_V(1);
+
+private:
+  omt::ObTenantMeta &meta_;
+};
+
+struct ObCreateTenantCommitLog : public ObIBaseStorageLogEntry
+{
+public:
+  explicit ObCreateTenantCommitLog(uint64_t &tenant_id);
+  virtual ~ObCreateTenantCommitLog() {}
+  virtual bool is_valid() const override;
+  TO_STRING_KV(K_(tenant_id));
+  OB_UNIS_VERSION_V(1);
+
+private:
+  uint64_t &tenant_id_;
+};
+
+struct ObCreateTenantAbortLog : public ObIBaseStorageLogEntry
+{
+public:
+  explicit ObCreateTenantAbortLog(uint64_t &tenant_id);
+  virtual ~ObCreateTenantAbortLog() {}
+  virtual bool is_valid() const override;
+  TO_STRING_KV(K_(tenant_id));
+  OB_UNIS_VERSION_V(1);
+
+private:
+  uint64_t &tenant_id_;
+};
+
+struct ObDeleteTenantPrepareLog : public ObIBaseStorageLogEntry
+{
+public:
+  explicit ObDeleteTenantPrepareLog(uint64_t &tenant_id);
+  virtual ~ObDeleteTenantPrepareLog() {}
+  virtual bool is_valid() const override;
+  TO_STRING_KV(K_(tenant_id));
+  OB_UNIS_VERSION_V(1);
+
+private:
+  uint64_t &tenant_id_;
+};
+struct ObDeleteTenantCommitLog : public ObIBaseStorageLogEntry
+{
+public:
+  explicit ObDeleteTenantCommitLog(uint64_t &tenant_id);
+  virtual ~ObDeleteTenantCommitLog() {}
+  virtual bool is_valid() const override;
+  TO_STRING_KV(K_(tenant_id));
+  OB_UNIS_VERSION_V(1);
+
+private:
+  uint64_t &tenant_id_;
+};
+
+struct ObUpdateTenantUnitLog : public ObIBaseStorageLogEntry
+{
+public:
+  explicit ObUpdateTenantUnitLog(share::ObUnitInfoGetter::ObTenantConfig &unit);
+  virtual ~ObUpdateTenantUnitLog() {}
+  virtual bool is_valid() const override;
+
+  TO_STRING_KV(K_(unit));
+
+  OB_UNIS_VERSION_V(1);
+
+private:
+  share::ObUnitInfoGetter::ObTenantConfig  &unit_;
+};
+
+struct ObUpdateTenantSuperBlockLog : public ObIBaseStorageLogEntry
+{
+public:
+  explicit ObUpdateTenantSuperBlockLog(ObTenantSuperBlock &super_block);
+  virtual ~ObUpdateTenantSuperBlockLog() {}
+  virtual bool is_valid() const override;
+
+  TO_STRING_KV(K_(super_block));
+
+  OB_UNIS_VERSION_V(1);
+
+private:
+  ObTenantSuperBlock &super_block_;
+};
+
+struct ObLSMetaLog : public ObIBaseStorageLogEntry
+{
+public:
+  ObLSMetaLog() : ls_meta_() {}
+  ObLSMetaLog(const ObLSMeta &ls_meta);
+  const ObLSMeta &get_ls_meta() const { return ls_meta_; }
+  virtual ~ObLSMetaLog() {}
+  virtual bool is_valid() const override;
+
+  DECLARE_TO_STRING;
+  OB_UNIS_VERSION_V(1);
+
+private:
+  ObLSMeta ls_meta_;
+};
+
+struct ObLSIDLog : public ObIBaseStorageLogEntry
+{
+public:
+  explicit ObLSIDLog(share::ObLSID &ls_id);
+  virtual ~ObLSIDLog() {}
+  virtual bool is_valid() const override;
+
+  DECLARE_TO_STRING;
+  OB_UNIS_VERSION_V(1);
+
+private:
+  share::ObLSID &ls_id_;
+};
+
+using ObCreateLSPrepareSlog = ObLSMetaLog;
+using ObCreateLSCommitSLog = ObLSIDLog;
+using ObCreateLSAbortSLog = ObLSIDLog;
+using ObDeleteLSLog = ObLSIDLog;
+
+struct ObCreateTabletLog : public ObIBaseStorageLogEntry
+{
+public:
+  ObCreateTabletLog() {}
+  explicit ObCreateTabletLog(ObTablet *tablet);
+  virtual ~ObCreateTabletLog() {}
+  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos) override;
+  virtual int64_t get_serialize_size() const override;
+  virtual bool is_valid() const override;
+
+  DECLARE_TO_STRING;
+
+public:
+  ObTablet *tablet_;
+};
+
+struct ObDeleteTabletLog : public ObIBaseStorageLogEntry
+{
+public:
+  ObDeleteTabletLog();
+  ObDeleteTabletLog(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
+  virtual ~ObDeleteTabletLog() {}
+  virtual bool is_valid() const override;
+
+  DECLARE_TO_STRING;
+  OB_UNIS_VERSION_V(1);
+
+public:
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+};
+
+}
+}
+
+#endif

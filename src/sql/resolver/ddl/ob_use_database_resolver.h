@@ -14,20 +14,22 @@
 #define OCEANBASE_SQL_OB_USE_DATABASE_RESOLVER_H
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 
-namespace oceanbase {
-namespace sql {
-class ObUseDatabaseResolver : public ObDDLResolver {
+namespace oceanbase
+{
+namespace sql
+{
+class ObUseDatabaseResolver: public ObDDLResolver
+{
 public:
-  explicit ObUseDatabaseResolver(ObResolverParams& params);
+  explicit ObUseDatabaseResolver(ObResolverParams &params);
   virtual ~ObUseDatabaseResolver();
-  virtual int resolve(const ParseNode& parse_tree);
-
+  virtual int resolve(const ParseNode &parse_tree);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObUseDatabaseResolver);
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_SQL_OB_USE_DATABASE_RESOLVER_H */

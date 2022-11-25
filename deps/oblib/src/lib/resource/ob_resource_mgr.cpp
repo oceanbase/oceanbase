@@ -21,46 +21,40 @@
 #include "lib/utility/utility.h"
 #include "lib/alloc/alloc_failed_reason.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace lib {
+namespace lib
+{
 ObTenantMemoryMgr::ObTenantMemoryMgr()
-    : cache_washer_(NULL),
-      tenant_id_(common::OB_INVALID_ID),
-      limit_(INT64_MAX),
-      sum_hold_(0),
-      rpc_hold_(0),
-      cache_hold_(0),
-      cache_item_count_(0)
+  : cache_washer_(NULL), tenant_id_(common::OB_INVALID_ID),
+    limit_(INT64_MAX), sum_hold_(0), rpc_hold_(0), cache_hold_(0),
+    cache_item_count_(0)
 {
   for (uint64_t i = 0; i < common::ObCtxIds::MAX_CTX_ID; i++) {
-    IGNORE_RETURN ATOMIC_SET(&(hold_bytes_[i]), 0);
-    IGNORE_RETURN ATOMIC_SET(&(limit_bytes_[i]), INT64_MAX);
+    ATOMIC_STORE(&(hold_bytes_[i]), 0);
+    ATOMIC_STORE(&(limit_bytes_[i]), INT64_MAX);
   }
 }
 
 ObTenantMemoryMgr::ObTenantMemoryMgr(const uint64_t tenant_id)
-    : cache_washer_(NULL),
-      tenant_id_(tenant_id),
-      limit_(INT64_MAX),
-      sum_hold_(0),
-      rpc_hold_(0),
-      cache_hold_(0),
-      cache_item_count_(0)
+  : cache_washer_(NULL), tenant_id_(tenant_id),
+    limit_(INT64_MAX), sum_hold_(0), rpc_hold_(0), cache_hold_(0),
+    cache_item_count_(0)
 {
   for (uint64_t i = 0; i < common::ObCtxIds::MAX_CTX_ID; i++) {
-    IGNORE_RETURN ATOMIC_SET(&(hold_bytes_[i]), 0);
-    IGNORE_RETURN ATOMIC_SET(&(limit_bytes_[i]), INT64_MAX);
+    ATOMIC_STORE(&(hold_bytes_[i]), 0);
+    ATOMIC_STORE(&(limit_bytes_[i]), INT64_MAX);
   }
 }
-void ObTenantMemoryMgr::set_cache_washer(ObICacheWasher& cache_washer)
+void ObTenantMemoryMgr::set_cache_washer(ObICacheWasher &cache_washer)
 {
   cache_washer_ = &cache_washer;
 }
 
-AChunk* ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr& attr)
+AChunk *ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr &attr)
 {
-  AChunk* chunk = NULL;
+  AChunk *chunk = NULL;
   int ret = OB_SUCCESS;
   if (tenant_id_ != attr.tenant_id_) {
     ret = OB_INVALID_ARGUMENT;
@@ -69,31 +63,34 @@ AChunk* ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr& attr
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid size", K(ret), K(size));
   } else {
-    const int64_t chunk_aligned_size = static_cast<int64_t>(CHUNK_MGR.aligned(static_cast<uint64_t>(size)));
+    const int64_t hold_size = static_cast<int64_t>(CHUNK_MGR.hold(static_cast<uint64_t>(size)));
     bool reach_ctx_limit = false;
-    if (update_hold(static_cast<int64_t>(chunk_aligned_size), attr.ctx_id_, attr.label_, reach_ctx_limit)) {
-      chunk = CHUNK_MGR.alloc_chunk(static_cast<uint64_t>(size), OB_HIGH_ALLOC == attr.prio_);
+    if (update_hold(hold_size, attr.ctx_id_, attr.label_, reach_ctx_limit)) {
+      chunk = alloc_chunk_(size, attr);
       if (NULL == chunk) {
-        update_hold(-chunk_aligned_size, attr.ctx_id_, attr.label_, reach_ctx_limit);
+        update_hold(-hold_size, attr.ctx_id_, attr.label_, reach_ctx_limit);
       } else if (attr.label_ == ObNewModIds::OB_KVSTORE_CACHE_MB) {
-        update_cache_hold(chunk_aligned_size);
+        update_cache_hold(hold_size);
       }
     }
 
-    if (!reach_ctx_limit && NULL != cache_washer_ && NULL == chunk && chunk_aligned_size < cache_hold_ &&
-        attr.label_ != ObNewModIds::OB_KVSTORE_CACHE_MB) {
+    if (!reach_ctx_limit && NULL != cache_washer_ && NULL == chunk && hold_size < cache_hold_
+        && attr.label_ != ObNewModIds::OB_KVSTORE_CACHE_MB) {
       common::ObTimeGuard time_guard("sync wash", 1000 * 1000);
       // try wash memory from cache
-      ObICacheWasher::ObCacheMemBlock* washed_blocks = NULL;
+      ObICacheWasher::ObCacheMemBlock *washed_blocks = NULL;
       bool wash_single_mb = true;
-      int64_t wash_size = chunk_aligned_size;
-      if (wash_size > ALIGN_SIZE) {
-        wash_size = wash_size + LARGE_REQUEST_EXTRA_MB_COUNT * ALIGN_SIZE;
+      int64_t wash_size = hold_size;
+      if (attr.ctx_id_ == ObCtxIds::CO_STACK) {
+        wash_single_mb = false;
+      } else if (wash_size > INTACT_ACHUNK_SIZE) {
+        wash_size = wash_size + LARGE_REQUEST_EXTRA_MB_COUNT * INTACT_ACHUNK_SIZE;
         wash_single_mb = false;
       }
 
       if (wash_single_mb) {
-        if (OB_FAIL(cache_washer_->sync_wash_mbs(tenant_id_, wash_size, wash_single_mb, washed_blocks))) {
+        if (OB_FAIL(cache_washer_->sync_wash_mbs(tenant_id_, wash_size,
+            wash_single_mb, washed_blocks))) {
           LOG_WARN("sync_wash_mbs failed", K(ret), K_(tenant_id), K(wash_size), K(wash_single_mb));
         } else if (NULL != washed_blocks->next_) {
           ret = OB_ERR_UNEXPECTED;
@@ -105,35 +102,38 @@ AChunk* ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr& attr
           if (!update_ctx_hold(attr.ctx_id_, chunk_hold)) {
             // reach ctx limit
             // The ctx_id here can be given freely, because ctx_id is meaningless when the label is OB_KVSTORE_CACHE_MB
-            update_hold(-chunk_hold, attr.ctx_id_, ObNewModIds::OB_KVSTORE_CACHE_MB, reach_ctx_limit);
-            CHUNK_MGR.free_chunk(chunk);
+            update_hold(-chunk_hold, attr.ctx_id_,
+                        ObNewModIds::OB_KVSTORE_CACHE_MB, reach_ctx_limit);
+            free_chunk_(chunk, attr);
             chunk = NULL;
           }
         }
       } else {
         const int64_t max_retry_count = 3;
         int64_t retry_count = 0;
-        while (!reach_ctx_limit && OB_SUCC(ret) && NULL == chunk && wash_size < cache_hold_ &&
-               retry_count < max_retry_count) {
-          if (OB_FAIL(cache_washer_->sync_wash_mbs(tenant_id_, wash_size, wash_single_mb, washed_blocks))) {
+        while (!reach_ctx_limit && OB_SUCC(ret) && NULL == chunk && wash_size < cache_hold_
+            && retry_count < max_retry_count) {
+          if (OB_FAIL(cache_washer_->sync_wash_mbs(tenant_id_, wash_size,
+              wash_single_mb, washed_blocks))) {
             LOG_WARN("sync_wash_mbs failed", K(ret), K_(tenant_id), K(wash_size), K(wash_single_mb));
           } else {
             // should return back to os, then realloc again
             ObMemAttr cache_attr;
             cache_attr.tenant_id_ = tenant_id_;
             cache_attr.label_ = ObNewModIds::OB_KVSTORE_CACHE_MB;
-            ObICacheWasher::ObCacheMemBlock* next = NULL;
+            ObICacheWasher::ObCacheMemBlock *next = NULL;
             while (NULL != washed_blocks) {
-              AChunk* chunk = ptr2chunk(washed_blocks);
+              AChunk *chunk = ptr2chunk(washed_blocks);
               next = washed_blocks->next_;
               free_chunk(chunk, cache_attr);
               washed_blocks = next;
             }
 
-            if (update_hold(static_cast<int64_t>(chunk_aligned_size), attr.ctx_id_, attr.label_, reach_ctx_limit)) {
-              chunk = CHUNK_MGR.alloc_chunk(static_cast<uint64_t>(size), OB_HIGH_ALLOC == attr.prio_);
+            if (update_hold(static_cast<int64_t>(hold_size), attr.ctx_id_, attr.label_,
+                            reach_ctx_limit)) {
+              chunk = alloc_chunk_(size, attr);
               if (NULL == chunk) {
-                update_hold(-chunk_aligned_size, attr.ctx_id_, attr.label_, reach_ctx_limit);
+                update_hold(-hold_size, attr.ctx_id_, attr.label_, reach_ctx_limit);
               }
             }
           }
@@ -141,15 +141,11 @@ AChunk* ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr& attr
           if (OB_SUCC(ret) && NULL == chunk) {
             if (retry_count < max_retry_count) {
               LOG_WARN("after wash from cache, still can't alloc large chunk from chunk_mgr, "
-                       "maybe alloc by other thread, need retry",
-                  K(retry_count),
-                  K(max_retry_count),
-                  K(size));
+                  "maybe alloc by other thread, need retry",
+                  K(retry_count), K(max_retry_count), K(size));
             } else {
               LOG_WARN("after wash from cache, still can't alloc large chunk from chunk_mgr, "
-                       "maybe alloc by other thread",
-                  K(max_retry_count),
-                  K(size));
+                  "maybe alloc by other thread", K(max_retry_count), K(size));
             }
           }
         }
@@ -159,43 +155,47 @@ AChunk* ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr& attr
   return chunk;
 }
 
-void ObTenantMemoryMgr::free_chunk(AChunk* chunk, const ObMemAttr& attr)
+void ObTenantMemoryMgr::free_chunk(AChunk *chunk, const ObMemAttr &attr)
 {
   if (tenant_id_ != attr.tenant_id_) {
     LOG_ERROR("tenant_id not match", K_(tenant_id), K(attr));
   } else if (NULL != chunk) {
     bool reach_ctx_limit = false;
-    const int64_t chunk_aligned_size = static_cast<int64_t>(chunk->hold());
-    update_hold(-chunk_aligned_size, attr.ctx_id_, attr.label_, reach_ctx_limit);
+    const int64_t hold_size = static_cast<int64_t>(chunk->hold());
+    update_hold(-hold_size, attr.ctx_id_, attr.label_, reach_ctx_limit);
     if (attr.label_ == ObNewModIds::OB_KVSTORE_CACHE_MB) {
-      update_cache_hold(-chunk_aligned_size);
+      update_cache_hold(-hold_size);
     }
-    CHUNK_MGR.free_chunk(chunk);
+    free_chunk_(chunk, attr);
   }
 }
 
-void* ObTenantMemoryMgr::alloc_cache_mb(const int64_t size)
+void *ObTenantMemoryMgr::alloc_cache_mb(const int64_t size)
 {
-  void* ptr = NULL;
-  AChunk* chunk = NULL;
+  void *ptr = NULL;
+  AChunk *chunk = NULL;
   ObMemAttr attr;
   attr.tenant_id_ = tenant_id_;
   attr.prio_ = OB_NORMAL_ALLOC;
   attr.label_ = ObNewModIds::OB_KVSTORE_CACHE_MB;
   if (NULL != (chunk = alloc_chunk(size, attr))) {
+    const int64_t all_size = CHUNK_MGR.aligned(size);
+    SANITY_UNPOISON(chunk, all_size);
     ptr = chunk->data_;
   }
   return ptr;
 }
 
-void ObTenantMemoryMgr::free_cache_mb(void* ptr)
+void ObTenantMemoryMgr::free_cache_mb(void *ptr)
 {
   if (NULL != ptr) {
     ObMemAttr attr;
     attr.tenant_id_ = tenant_id_;
     attr.prio_ = OB_NORMAL_ALLOC;
     attr.label_ = ObNewModIds::OB_KVSTORE_CACHE_MB;
-    AChunk* chunk = ptr2chunk(ptr);
+    AChunk *chunk = ptr2chunk(ptr);
+    const int64_t all_size = chunk->aligned();
+    SANITY_POISON(chunk, all_size);
     free_chunk(chunk, attr);
   }
 }
@@ -212,7 +212,7 @@ int ObTenantMemoryMgr::set_ctx_limit(const uint64_t ctx_id, const int64_t limit)
   return ret;
 }
 
-int ObTenantMemoryMgr::get_ctx_limit(const uint64_t ctx_id, int64_t& limit) const
+int ObTenantMemoryMgr::get_ctx_limit(const uint64_t ctx_id, int64_t &limit) const
 {
   int ret = OB_SUCCESS;
   if (ctx_id >= ObCtxIds::MAX_CTX_ID) {
@@ -224,7 +224,7 @@ int ObTenantMemoryMgr::get_ctx_limit(const uint64_t ctx_id, int64_t& limit) cons
   return ret;
 }
 
-int ObTenantMemoryMgr::get_ctx_hold(const uint64_t ctx_id, int64_t& hold) const
+int ObTenantMemoryMgr::get_ctx_hold(const uint64_t ctx_id, int64_t &hold) const
 {
   int ret = OB_SUCCESS;
   if (ctx_id >= ObCtxIds::MAX_CTX_ID) {
@@ -232,6 +232,9 @@ int ObTenantMemoryMgr::get_ctx_hold(const uint64_t ctx_id, int64_t& hold) const
     LOG_WARN("invalid arguemnt", K(ret), K(ctx_id));
   } else {
     hold = hold_bytes_[ctx_id];
+    if (ObCtxIds::KVSTORE_CACHE_ID == ctx_id) {
+      hold += get_cache_hold();
+    }
   }
   return ret;
 }
@@ -244,8 +247,8 @@ void ObTenantMemoryMgr::update_cache_hold(const int64_t size)
   }
 }
 
-bool ObTenantMemoryMgr::update_hold(
-    const int64_t size, const uint64_t ctx_id, const lib::ObLabel& label, bool& reach_ctx_limit)
+bool ObTenantMemoryMgr::update_hold(const int64_t size, const uint64_t ctx_id,
+                                    const lib::ObLabel &label, bool &reach_ctx_limit)
 {
   bool updated = false;
   reach_ctx_limit = false;
@@ -263,7 +266,7 @@ bool ObTenantMemoryMgr::update_hold(
     }
   }
   if (!updated) {
-    auto& afc = g_alloc_failed_ctx();
+    auto &afc = g_alloc_failed_ctx();
     afc.reason_ = TENANT_HOLD_REACH_LIMIT;
     afc.alloc_size_ = size;
     afc.tenant_id_ = tenant_id_;
@@ -283,8 +286,8 @@ bool ObTenantMemoryMgr::update_ctx_hold(const uint64_t ctx_id, const int64_t siz
 {
   bool updated = false;
   if (ctx_id < ObCtxIds::MAX_CTX_ID) {
-    volatile int64_t& hold = hold_bytes_[ctx_id];
-    volatile int64_t& limit = limit_bytes_[ctx_id];
+    volatile int64_t &hold = hold_bytes_[ctx_id];
+    volatile int64_t &limit = limit_bytes_[ctx_id];
     if (size <= 0) {
       ATOMIC_AAF(&hold, size);
       updated = true;
@@ -299,7 +302,7 @@ bool ObTenantMemoryMgr::update_ctx_hold(const uint64_t ctx_id, const int64_t siz
       }
     }
     if (!updated) {
-      auto& afc = g_alloc_failed_ctx();
+      auto &afc = g_alloc_failed_ctx();
       afc.reason_ = CTX_HOLD_REACH_LIMIT;
       afc.alloc_size_ = size;
       afc.ctx_id_ = ctx_id;
@@ -312,21 +315,44 @@ bool ObTenantMemoryMgr::update_ctx_hold(const uint64_t ctx_id, const int64_t siz
   return updated;
 }
 
-AChunk* ObTenantMemoryMgr::ptr2chunk(void* ptr)
+AChunk *ObTenantMemoryMgr::ptr2chunk(void *ptr)
 {
-  AChunk* chunk = NULL;
+  AChunk *chunk = NULL;
   if (NULL != ptr) {
-    chunk = reinterpret_cast<AChunk*>(reinterpret_cast<char*>(ptr) - ACHUNK_HEADER_SIZE);
+    chunk = reinterpret_cast<AChunk *>(reinterpret_cast<char *>(ptr) - ACHUNK_PURE_HEADER_SIZE);
   }
   return chunk;
 }
 
-ObTenantResourceMgr::ObTenantResourceMgr() : tenant_id_(OB_INVALID_ID), memory_mgr_(), ref_cnt_(0)
-{}
+AChunk *ObTenantMemoryMgr::alloc_chunk_(const int64_t size, const ObMemAttr &attr)
+{
+  AChunk *chunk = nullptr;
+  if (OB_UNLIKELY(attr.ctx_id_ == ObCtxIds::CO_STACK)) {
+    chunk = CHUNK_MGR.alloc_co_chunk(static_cast<uint64_t>(size));
+  } else {
+    chunk = CHUNK_MGR.alloc_chunk(static_cast<uint64_t>(size), OB_HIGH_ALLOC == attr.prio_);
+  }
+  return chunk;
+}
+
+void ObTenantMemoryMgr::free_chunk_(AChunk *chunk, const ObMemAttr &attr)
+{
+  if (OB_UNLIKELY(attr.ctx_id_ == ObCtxIds::CO_STACK)) {
+    CHUNK_MGR.free_co_chunk(chunk);
+  } else {
+    CHUNK_MGR.free_chunk(chunk);
+  }
+}
+
+ObTenantResourceMgr::ObTenantResourceMgr()
+  : tenant_id_(OB_INVALID_ID), memory_mgr_(), ref_cnt_(0)
+{
+}
 
 ObTenantResourceMgr::ObTenantResourceMgr(const uint64_t tenant_id)
-    : tenant_id_(tenant_id), memory_mgr_(tenant_id), ref_cnt_(0)
-{}
+  : tenant_id_(tenant_id), memory_mgr_(tenant_id), ref_cnt_(0)
+{
+}
 
 ObTenantResourceMgr::~ObTenantResourceMgr()
 {
@@ -334,15 +360,18 @@ ObTenantResourceMgr::~ObTenantResourceMgr()
   ref_cnt_ = 0;
 }
 
-ObTenantResourceMgrHandle::ObTenantResourceMgrHandle() : resource_mgr_(NULL), tenant_resource_mgr_(NULL)
-{}
+ObTenantResourceMgrHandle::ObTenantResourceMgrHandle()
+  : resource_mgr_(NULL),
+    tenant_resource_mgr_(NULL)
+{
+}
 
 ObTenantResourceMgrHandle::~ObTenantResourceMgrHandle()
 {
   reset();
 }
 
-int ObTenantResourceMgrHandle::init(ObResourceMgr* resource_mgr, ObTenantResourceMgr* tenant_resource_mgr)
+int ObTenantResourceMgrHandle::init(ObResourceMgr *resource_mgr, ObTenantResourceMgr *tenant_resource_mgr)
 {
   // can't invoke reset here, because init is invoked with read lock acquired,
   // reset will invoke dec_ref which may try to acquire write lock, leading to
@@ -376,28 +405,9 @@ void ObTenantResourceMgrHandle::reset()
   }
 }
 
-ObTenantResourceMgr* ObTenantResourceMgrHandle::get_mgr()
+ObTenantMemoryMgr *ObTenantResourceMgrHandle::get_memory_mgr()
 {
-  return tenant_resource_mgr_;
-}
-
-ObTenantMemoryMgr* ObTenantResourceMgrHandle::get_memory_mgr()
-{
-  ObTenantMemoryMgr* memory_mgr = NULL;
-  if (NULL != tenant_resource_mgr_) {
-    memory_mgr = &tenant_resource_mgr_->memory_mgr_;
-  }
-  return memory_mgr;
-}
-
-const ObTenantResourceMgr* ObTenantResourceMgrHandle::get_mgr() const
-{
-  return tenant_resource_mgr_;
-}
-
-const ObTenantMemoryMgr* ObTenantResourceMgrHandle::get_memory_mgr() const
-{
-  const ObTenantMemoryMgr* memory_mgr = NULL;
+  ObTenantMemoryMgr *memory_mgr = NULL;
   if (NULL != tenant_resource_mgr_) {
     memory_mgr = &tenant_resource_mgr_->memory_mgr_;
   }
@@ -412,6 +422,16 @@ void ObTenantResourceMgrList::destroy()
     inited_ = false;
   }
 }
+
+const ObTenantMemoryMgr *ObTenantResourceMgrHandle::get_memory_mgr() const
+{
+  const ObTenantMemoryMgr *memory_mgr = NULL;
+  if (NULL != tenant_resource_mgr_) {
+    memory_mgr = &tenant_resource_mgr_->memory_mgr_;
+  }
+  return memory_mgr;
+}
+
 int ObTenantResourceMgrList::init(const int64_t max_count)
 {
   int ret = OB_SUCCESS;
@@ -430,7 +450,7 @@ int ObTenantResourceMgrList::init(const int64_t max_count)
       LOG_WARN("alloc_chunk failed", K(ret), K(size), K(high_prio));
     } else {
       for (int64_t i = 0; i < max_count; ++i) {
-        ObTenantResourceMgr* tenant_resource_mgr =
+        ObTenantResourceMgr *tenant_resource_mgr =
             new (chunk_->data_ + i * (static_cast<int64_t>(sizeof(ObTenantResourceMgr)))) ObTenantResourceMgr();
         if (NULL == header_) {
           header_ = tenant_resource_mgr;
@@ -445,7 +465,7 @@ int ObTenantResourceMgrList::init(const int64_t max_count)
   return ret;
 }
 
-int ObTenantResourceMgrList::push(ObTenantResourceMgr* tenant_resource_mgr)
+int ObTenantResourceMgrList::push(ObTenantResourceMgr *tenant_resource_mgr)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -462,7 +482,7 @@ int ObTenantResourceMgrList::push(ObTenantResourceMgr* tenant_resource_mgr)
   return ret;
 }
 
-int ObTenantResourceMgrList::pop(ObTenantResourceMgr*& tenant_resource_mgr)
+int ObTenantResourceMgrList::pop(ObTenantResourceMgr *&tenant_resource_mgr)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -476,7 +496,7 @@ int ObTenantResourceMgrList::pop(ObTenantResourceMgr*& tenant_resource_mgr)
       LOG_WARN("free tenant resource mgr not exist", K(ret));
     } else {
       tenant_resource_mgr = header_;
-      header_ = static_cast<ObTenantResourceMgr*>(header_->next_);
+      header_ = static_cast<ObTenantResourceMgr *>(header_->next_);
       tenant_resource_mgr->next_ = NULL;
     }
   }
@@ -484,11 +504,14 @@ int ObTenantResourceMgrList::pop(ObTenantResourceMgr*& tenant_resource_mgr)
   return ret;
 }
 
-ObResourceMgr::ObResourceMgr() : inited_(false), cache_washer_(NULL), locks_(), tenant_resource_mgrs_(), free_list_()
-{}
+ObResourceMgr::ObResourceMgr()
+  : inited_(false), cache_washer_(NULL), locks_(), tenant_resource_mgrs_(), free_list_()
+{
+}
 
 ObResourceMgr::~ObResourceMgr()
-{}
+{
+}
 
 int ObResourceMgr::init()
 {
@@ -508,13 +531,13 @@ void ObResourceMgr::destroy()
 {
   if (inited_) {
     cache_washer_ = NULL;
-    memset(tenant_resource_mgrs_, 0, sizeof(ObTenantResourceMgr*) * MAX_TENANT_COUNT);
+    memset(tenant_resource_mgrs_, 0, sizeof(ObTenantResourceMgr *) * MAX_TENANT_COUNT);
     free_list_.destroy();
     inited_ = false;
   }
 }
 
-ObResourceMgr& ObResourceMgr::get_instance()
+ObResourceMgr &ObResourceMgr::get_instance()
 {
   static ObResourceMgr resource_mgr;
   if (!resource_mgr.inited_) {
@@ -530,7 +553,7 @@ ObResourceMgr& ObResourceMgr::get_instance()
   return resource_mgr;
 }
 
-int ObResourceMgr::set_cache_washer(ObICacheWasher& cache_washer)
+int ObResourceMgr::set_cache_washer(ObICacheWasher &cache_washer)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -540,17 +563,18 @@ int ObResourceMgr::set_cache_washer(ObICacheWasher& cache_washer)
     cache_washer_ = &cache_washer;
     for (int64_t pos = 0; pos < MAX_TENANT_COUNT; ++pos) {
       SpinWLockGuard guard(locks_[pos]);
-      ObTenantResourceMgr* tenant_resource_mgr = tenant_resource_mgrs_[pos];
+      ObTenantResourceMgr *tenant_resource_mgr = tenant_resource_mgrs_[pos];
       while (NULL != tenant_resource_mgr) {
         tenant_resource_mgr->memory_mgr_.set_cache_washer(cache_washer);
-        tenant_resource_mgr = static_cast<ObTenantResourceMgr*>(tenant_resource_mgr->next_);
+        tenant_resource_mgr = static_cast<ObTenantResourceMgr *>(tenant_resource_mgr->next_);
       }
     }
   }
   return ret;
 }
 
-int ObResourceMgr::get_tenant_resource_mgr(const uint64_t tenant_id, ObTenantResourceMgrHandle& handle)
+int ObResourceMgr::get_tenant_resource_mgr(const uint64_t tenant_id,
+                                           ObTenantResourceMgrHandle &handle)
 {
   int ret = OB_SUCCESS;
   handle.reset();
@@ -562,7 +586,7 @@ int ObResourceMgr::get_tenant_resource_mgr(const uint64_t tenant_id, ObTenantRes
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
   } else {
     const int64_t pos = tenant_id % MAX_TENANT_COUNT;
-    ObTenantResourceMgr* tenant_resource_mgr = NULL;
+    ObTenantResourceMgr *tenant_resource_mgr = NULL;
     {
       SpinRLockGuard guard(locks_[pos]);
       if (OB_FAIL(get_tenant_resource_mgr_unsafe(tenant_id, tenant_resource_mgr))) {
@@ -599,14 +623,14 @@ int ObResourceMgr::get_tenant_resource_mgr(const uint64_t tenant_id, ObTenantRes
   return ret;
 }
 
-void ObResourceMgr::inc_ref(ObTenantResourceMgr* tenant_resource_mgr)
+void ObResourceMgr::inc_ref(ObTenantResourceMgr *tenant_resource_mgr)
 {
   if (NULL != tenant_resource_mgr) {
     ATOMIC_AAF(&tenant_resource_mgr->ref_cnt_, 1);
   }
 }
 
-void ObResourceMgr::dec_ref(ObTenantResourceMgr* tenant_resource_mgr)
+void ObResourceMgr::dec_ref(ObTenantResourceMgr *tenant_resource_mgr)
 {
   if (NULL != tenant_resource_mgr) {
     int64_t ref_cnt = 0;
@@ -616,7 +640,8 @@ void ObResourceMgr::dec_ref(ObTenantResourceMgr* tenant_resource_mgr)
       if (0 == ATOMIC_LOAD(&tenant_resource_mgr->ref_cnt_)) {
         int ret = OB_SUCCESS;
         if (OB_FAIL(remove_tenant_resource_mgr_unsafe(tenant_resource_mgr->tenant_id_))) {
-          LOG_WARN("remove_tenant_resource_mgr_unsafe failed", K(ret), "tenant_id", tenant_resource_mgr->tenant_id_);
+          LOG_WARN("remove_tenant_resource_mgr_unsafe failed", K(ret),
+              "tenant_id", tenant_resource_mgr->tenant_id_);
         }
       }
     } else if (ref_cnt < 0) {
@@ -625,7 +650,8 @@ void ObResourceMgr::dec_ref(ObTenantResourceMgr* tenant_resource_mgr)
   }
 }
 
-int ObResourceMgr::get_tenant_resource_mgr_unsafe(const uint64_t tenant_id, ObTenantResourceMgr*& tenant_resource_mgr)
+int ObResourceMgr::get_tenant_resource_mgr_unsafe(const uint64_t tenant_id,
+                                                  ObTenantResourceMgr *&tenant_resource_mgr)
 {
   int ret = OB_SUCCESS;
   tenant_resource_mgr = NULL;
@@ -637,12 +663,12 @@ int ObResourceMgr::get_tenant_resource_mgr_unsafe(const uint64_t tenant_id, ObTe
     LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
   } else {
     const int64_t pos = tenant_id % MAX_TENANT_COUNT;
-    ObTenantResourceMgr* iter = tenant_resource_mgrs_[pos];
+    ObTenantResourceMgr *iter = tenant_resource_mgrs_[pos];
     while (NULL != iter && NULL == tenant_resource_mgr) {
       if (iter->tenant_id_ == tenant_id) {
         tenant_resource_mgr = iter;
       } else {
-        iter = static_cast<ObTenantResourceMgr*>(iter->next_);
+        iter = static_cast<ObTenantResourceMgr *>(iter->next_);
       }
     }
     if (NULL == tenant_resource_mgr) {
@@ -652,8 +678,8 @@ int ObResourceMgr::get_tenant_resource_mgr_unsafe(const uint64_t tenant_id, ObTe
   return ret;
 }
 
-int ObResourceMgr::create_tenant_resource_mgr_unsafe(
-    const uint64_t tenant_id, ObTenantResourceMgr*& tenant_resource_mgr)
+int ObResourceMgr::create_tenant_resource_mgr_unsafe(const uint64_t tenant_id,
+                                                     ObTenantResourceMgr *&tenant_resource_mgr)
 {
   int ret = OB_SUCCESS;
   tenant_resource_mgr = NULL;
@@ -688,22 +714,22 @@ int ObResourceMgr::remove_tenant_resource_mgr_unsafe(const uint64_t tenant_id)
     LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
   } else {
     const int64_t pos = tenant_id % MAX_TENANT_COUNT;
-    ObTenantResourceMgr* head = tenant_resource_mgrs_[pos];
-    ObTenantResourceMgr* tenant_resource_mgr = NULL;
+    ObTenantResourceMgr *head = tenant_resource_mgrs_[pos];
+    ObTenantResourceMgr *tenant_resource_mgr = NULL;
     if (NULL == head) {
     } else if (head->tenant_id_ == tenant_id) {
       tenant_resource_mgr = head;
-      tenant_resource_mgrs_[pos] = static_cast<ObTenantResourceMgr*>(head->next_);
+      tenant_resource_mgrs_[pos] = static_cast<ObTenantResourceMgr *>(head->next_);
     } else {
-      ObTenantResourceMgr* prev = head;
-      ObTenantResourceMgr* cur = static_cast<ObTenantResourceMgr*>(head->next_);
+      ObTenantResourceMgr *prev = head;
+      ObTenantResourceMgr *cur = static_cast<ObTenantResourceMgr *>(head->next_);
       while (NULL != cur && NULL == tenant_resource_mgr) {
         if (cur->tenant_id_ == tenant_id) {
           prev->next_ = cur->next_;
           tenant_resource_mgr = cur;
         } else {
           prev = cur;
-          cur = static_cast<ObTenantResourceMgr*>(cur->next_);
+          cur = static_cast<ObTenantResourceMgr *>(cur->next_);
         }
       }
     }
@@ -717,5 +743,5 @@ int ObResourceMgr::remove_tenant_resource_mgr_unsafe(const uint64_t tenant_id)
   return ret;
 }
 
-}  // namespace lib
-}  // end namespace oceanbase
+}//end namespace common
+}//end namespace oceanbase

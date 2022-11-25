@@ -18,26 +18,28 @@
 #include <type_traits>
 #include "lib/utility/ob_macro_utils.h"
 
-namespace oceanbase {
-namespace common {
-// The search starts with a short gallop favoring small numbers,
-// after which it goes into a hand-woven binary search.
+namespace oceanbase
+{
+namespace common
+{
+//The search starts with a short gallop favoring small numbers,
+//after which it goes into a hand-woven binary search.
 inline uint32_t ob_fast_digits10(uint64_t v)
 {
   static const uint64_t MAX_INTEGER[13] = {
-      0,
-      10,
-      100,
-      1000,
-      10000,
-      100000,
-      1000000,
-      10000000,
-      100000000,
-      1000000000,
-      10000000000,
-      100000000000,
-      1000000000000,
+    0,
+    10,
+    100,
+    1000,
+    10000,
+    100000,
+    1000000,
+    10000000,
+    100000000,
+    1000000000,
+    10000000000,
+    100000000000,
+    1000000000000,
   };
   uint32_t ret_int = 0;
   if (v < MAX_INTEGER[1]) {
@@ -70,7 +72,6 @@ inline uint32_t ob_fast_digits10(uint64_t v)
 
 /*
  * The idea comes from the talk by Alexandrescu "Three Optimization Tips for C++".
- * https://m.facebook.com/notes/facebook-engineering/three-optimization-tips-for-c/10151361643253920/?__tn__=H-R
  * faster then databuff_print for 20~4 times(digits from 1~20),  20~7 times(digits from 1~9),
  *
  * usage:
@@ -83,39 +84,24 @@ inline uint32_t ob_fast_digits10(uint64_t v)
  *  ObFastFormatInt::format_signed(num, buf);
  *  ObFastFormatInt::format_unsigned(num, buf);
  */
-class ObFastFormatInt {
+class ObFastFormatInt
+{
 public:
-  explicit ObFastFormatInt(const int8_t value)
-  {
-    format_signed(value);
-  }
-  explicit ObFastFormatInt(const int16_t value)
-  {
-    format_signed(value);
-  }
-  explicit ObFastFormatInt(const int32_t value)
-  {
-    format_signed(value);
-  }
-  explicit ObFastFormatInt(const int64_t value)
-  {
-    format_signed(value);
-  }
+  explicit ObFastFormatInt(const int8_t value) { format_signed(value); }
+  explicit ObFastFormatInt(const int16_t value) { format_signed(value); }
+  explicit ObFastFormatInt(const int32_t value) { format_signed(value); }
+  explicit ObFastFormatInt(const int64_t value) { format_signed(value); }
   explicit ObFastFormatInt(const uint8_t value)
-      : ptr_(format_unsigned(value)), len_(buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1)
-  {}
+    : ptr_(format_unsigned(value)), len_(buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1) {}
   explicit ObFastFormatInt(const uint16_t value)
-      : ptr_(format_unsigned(value)), len_(buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1)
-  {}
+    : ptr_(format_unsigned(value)), len_(buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1) {}
   explicit ObFastFormatInt(const uint32_t value)
-      : ptr_(format_unsigned(value)), len_(buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1)
-  {}
+    : ptr_(format_unsigned(value)), len_(buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1) {}
   explicit ObFastFormatInt(const uint64_t value)
-      : ptr_(format_unsigned(value)), len_(buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1)
-  {}
+    : ptr_(format_unsigned(value)), len_(buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1) {}
 
   explicit ObFastFormatInt(const int64_t value, const bool is_unsigned)
-      : ptr_(nullptr), len_(buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1)
+    : ptr_(nullptr), len_(buf_ - ptr_ + MAX_DIGITS10_STR_SIZE - 1)
   {
     if (is_unsigned) {
       ptr_ = format_unsigned(static_cast<uint64_t>(value));
@@ -125,31 +111,21 @@ public:
     }
   }
 
-  // Returns a pointer to the output buffer content without terminating null character is appended.
-  const char* ptr() const
-  {
-    return ptr_;
-  }
+  //Returns a pointer to the output buffer content without terminating null character is appended.
+  const char *ptr() const { return ptr_; }
 
-  // Returns then formated length not including null character.
-  int64_t length() const
-  {
-    return len_;
-  }
+  //Returns then formated length not including null character.
+  int64_t length() const { return len_; }
 
-  // Returns a pointer to the output buffer content with terminating null character appended.
-  const char* str() const
-  {
-    buf_[MAX_DIGITS10_STR_SIZE - 1] = '\0';
-    return ptr_;
-  }
+  //Returns a pointer to the output buffer content with terminating null character appended.
+  const char *str() const { buf_[MAX_DIGITS10_STR_SIZE - 1] = '\0'; return ptr_; }
 
-  // Returns the number of tail '0' characters written to the output buffer
+  //Returns the number of tail '0' characters written to the output buffer
   inline int64_t get_tail_zero_count() const
   {
     int64_t tail_zero_count = 0;
     if (len_ > 0) {
-      const char* ptr = buf_ + (MAX_DIGITS10_STR_SIZE - 2);
+      const char *ptr = buf_ + (MAX_DIGITS10_STR_SIZE - 2);
       while (ptr >= ptr_ && '0' == *ptr) {
         --ptr;
       }
@@ -167,7 +143,7 @@ public:
    * output:
    *      Returns then formated length not including null character.
    */
-  static int64_t format_unsigned(uint64_t value, char* buf);
+  static int64_t format_unsigned(uint64_t value, char *buf);
 
   /*
    * Formats value into input buf with terminating null character appended, like snprintf
@@ -178,7 +154,7 @@ public:
    * output:
    *      Returns then formated length not including null character.
    */
-  static int64_t format_signed(int64_t value, char* buf);
+  static int64_t format_signed(int64_t value, char *buf);
 
   // Buffer should be large enough to hold all digits (digits10 + 1), a sign and a null character.
   static const int64_t MAX_DIGITS10_STR_SIZE = std::numeric_limits<uint64_t>::digits10 + 3;
@@ -192,7 +168,7 @@ private:
    * output:
    *      Returns a pointer to the output buffer content with terminating null character appended.
    */
-  char* format_unsigned(uint64_t value);
+  char *format_unsigned(uint64_t value);
 
   /*
    * Formats value in reverse and set the the beginning pointer to this->ptr_,
@@ -209,14 +185,24 @@ private:
   static const char DIGITS[];
 
   mutable char buf_[MAX_DIGITS10_STR_SIZE];
-  char* ptr_;
+  char *ptr_;
   int64_t len_;
 };
 
-// ref: https://github.com/jsteemann/atoi
-template <typename T>
-class ObFastAtoi {
+//ref: https://github.com/jsteemann/atoi
+template<typename T>
+class ObFastAtoi
+{
 public:
+  // low-level worker function to convert the string value between p
+  // (inclusive) and e (exclusive) into a negative number value of type T,
+  // without validation of the input string - use this only for trusted input!
+  //
+  // the input string will always be interpreted as a base-10 number.
+  // expects the input string to contain only the digits '0' to '9'.
+  // there is no validation of the input string, and overflow or underflow
+  // of the result value will not be detected.
+  // this function will not modify errno.
   static inline T atoi_negative_unchecked(char const* p, char const* e)
   {
     T result = 0;
@@ -226,6 +212,15 @@ public:
     return result;
   }
 
+  // low-level worker function to convert the string value between p
+  // (inclusive) and e (exclusive) into a positive number value of type T,
+  // without validation of the input string - use this only for trusted input!
+  //
+  // the input string will always be interpreted as a base-10 number.
+  // expects the input string to contain only the digits '0' to '9'.
+  // there is no validation of the input string, and overflow or underflow
+  // of the result value will not be detected.
+  // this function will not modify errno.
   static inline T atoi_positive_unchecked(char const* p, char const* e)
   {
     T result = 0;
@@ -236,6 +231,16 @@ public:
     return result;
   }
 
+  // function to convert the string value between p
+  // (inclusive) and e (exclusive) into a number value of type T, without
+  // validation of the input string - use this only for trusted input!
+  //
+  // the input string will always be interpreted as a base-10 number.
+  // expects the input string to contain only the digits '0' to '9'. an
+  // optional '+' or '-' sign is allowed too.
+  // there is no validation of the input string, and overflow or underflow
+  // of the result value will not be detected.
+  // this function will not modify errno.
   static inline T atoi_unchecked(char const* p, char const* e)
   {
     if (OB_UNLIKELY(p == e)) {
@@ -255,6 +260,15 @@ public:
     return atoi_positive_unchecked(p, e);
   }
 
+  // low-level worker function to convert the string value between p
+  // (inclusive) and e (exclusive) into a negative number value of type T
+  //
+  // the input string will always be interpreted as a base-10 number.
+  // expects the input string to contain only the digits '0' to '9'.
+  // if any other character is found, the output parameter "valid" will
+  // be set to false. if the parsed value is less than what type T can
+  // store without truncation, "valid" will also be set to false.
+  // this function will not modify errno.
   static inline T atoi_negative(char const* p, char const* e, bool& valid)
   {
     if (OB_UNLIKELY(p == e)) {
@@ -288,6 +302,15 @@ public:
     return result;
   }
 
+  // low-level worker function to convert the string value between p
+  // (inclusive) and e (exclusive) into a positive number value of type T
+  //
+  // the input string will always be interpreted as a base-10 number.
+  // expects the input string to contain only the digits '0' to '9'.
+  // if any other character is found, the output parameter "valid" will
+  // be set to false. if the parsed value is greater than what type T can
+  // store without truncation, "valid" will also be set to false.
+  // this function will not modify errno.
   static inline T atoi_positive(char const* p, char const* e, bool& valid)
   {
     if (OB_UNLIKELY(p == e)) {
@@ -322,6 +345,17 @@ public:
     return result;
   }
 
+  // function to convert the string value between p
+  // (inclusive) and e (exclusive) into a number value of type T
+  //
+  // the input string will always be interpreted as a base-10 number.
+  // expects the input string to contain only the digits '0' to '9'. an
+  // optional '+' or '-' sign is allowed too.
+  // if any other character is found, the output parameter "valid" will
+  // be set to false. if the parsed value is less or greater than what
+  // type T can store without truncation, "valid" will also be set to
+  // false.
+  // this function will not modify errno.
   static inline T atoi(char const* p, char const* e, bool& valid)
   {
     if (OB_UNLIKELY(p == e)) {
@@ -340,7 +374,8 @@ public:
   }
 };
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_FAST_FORMAT_H_
+
+#endif //OCEANBASE_COMMON_FAST_FORMAT_H_

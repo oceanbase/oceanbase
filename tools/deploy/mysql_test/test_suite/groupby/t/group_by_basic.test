@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#owner: guoping.wgp
+#owner: jiangxiu.wt
 #owner group: sql1
 
 ##
@@ -53,6 +53,7 @@ select c2, sum(c1), count(c2), avg(c2), max(c1), min(c1) from t1 group by c3;
 select c1, sum(c2), count(c2), avg(c2), max(c2), min(c2) from t2 group by c1;
 select c2, sum(c1), count(c1), avg(c1), max(c1), min(c1) from t2 group by c2;
 
+## bug 6429995
 --sorted_result
 select c3, sum(c1), count(c1), avg(c1), max(c2), min(c1) from t2 group by c3;
 
@@ -192,6 +193,7 @@ insert into t5 values (5, 25, 'e', 1);
 --sorted_result
 select count(c2), group_concat(c3 order by c3 desc), max(c1) from t5 group by c4;
 
+# bug7726379
 set @bug7726379 = 1;
 select group_concat(@bug7726379 order by 1);
 select group_concat(@bug7726379 order by @bug7726379);

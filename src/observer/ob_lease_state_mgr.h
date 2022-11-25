@@ -21,36 +21,40 @@
 #include "share/ob_lease_struct.h"
 #include "share/ob_rs_mgr.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
-namespace obrpc {
+namespace obrpc
+{
 class ObCommonRpcProxy;
 }
 
-namespace observer {
+namespace observer
+{
 class ObLeaseStateMgr;
 class ObService;
 
-class IHeartBeatProcess {
+class IHeartBeatProcess
+{
 public:
-  virtual ~IHeartBeatProcess()
-  {}
-  virtual int init_lease_request(share::ObLeaseRequest& lease_request) = 0;
-  virtual int do_heartbeat_event(const share::ObLeaseResponse& lease_response) = 0;
+  virtual ~IHeartBeatProcess() {}
+  virtual int init_lease_request(share::ObLeaseRequest &lease_request) = 0;
+  virtual int do_heartbeat_event(const share::ObLeaseResponse &lease_response) = 0;
 };
 
-class ObRefreshSchemaStatusTimerTask : public common::ObTimerTask {
+class ObRefreshSchemaStatusTimerTask: public common::ObTimerTask
+{
 public:
-  ObRefreshSchemaStatusTimerTask();  // no repeat, no retry
-  virtual ~ObRefreshSchemaStatusTimerTask()
-  {}
+  ObRefreshSchemaStatusTimerTask();  //no repeat, no retry
+  virtual ~ObRefreshSchemaStatusTimerTask() {}
   void destroy();
   virtual void runTimerTask() override;
 };
 
-// heartbeat or lease management
-// root servers list maintenance
-class ObLeaseStateMgr {
+//heartbeat or lease management
+//root servers list maintenance
+class ObLeaseStateMgr
+{
 public:
   friend class HeartBeat;
   friend class AvgCalculator;
@@ -58,91 +62,84 @@ public:
   ~ObLeaseStateMgr();
 
   void destroy();
-  int init(obrpc::ObCommonRpcProxy* rpc_proxy, share::ObRsMgr* rs_mgr, IHeartBeatProcess* heartbeat_process,
-      ObService& service, const int64_t renew_timeout = RENEW_TIMEOUT);
+  int init(obrpc::ObCommonRpcProxy *rpc_proxy, share::ObRsMgr *rs_mgr,
+           IHeartBeatProcess *heartbeat_process,
+           ObService &service,
+           const int64_t renew_timeout = RENEW_TIMEOUT);
   int register_self();
   int register_self_busy_wait();
   int renew_lease();
 
-  inline void set_stop()
-  {
-    stopped_ = true;
-  }
-  inline bool is_inited() const
-  {
-    return inited_;
-  }
+  inline void set_stop() { stopped_  = true; }
+  inline bool is_inited() const { return inited_; }
   inline bool is_valid_heartbeat() const;
   inline bool is_valid_lease() const;
   inline int64_t get_heartbeat_expire_time();
   inline int64_t get_lease_expire_time();
-  inline int set_lease_response(const share::ObLeaseResponse& lease_response);
-
+  inline int set_lease_response(const share::ObLeaseResponse &lease_response);
 private:
-  int try_report_all_core_table_partition();
-  class HeartBeat : public common::ObTimerTask {
+  int try_report_sys_ls();
+  class HeartBeat : public common::ObTimerTask
+  {
   public:
     HeartBeat();
     ~HeartBeat();
 
-    int init(ObLeaseStateMgr* lease_state_mgr);
+    int init(ObLeaseStateMgr *lease_state_mgr);
     virtual void runTimerTask();
-
   private:
     bool inited_;
-    ObLeaseStateMgr* lease_state_mgr_;
-
+    ObLeaseStateMgr *lease_state_mgr_;
   private:
     DISALLOW_COPY_AND_ASSIGN(HeartBeat);
   };
 
   static const int64_t STORE_RTT_NUM = 10;
-  static const int64_t DELAY_TIME = 2 * 1000 * 1000;           // 2s
-  static const int64_t RENEW_TIMEOUT = 2 * 1000 * 1000;        // 2s
-  static const int64_t REGISTER_TIME_SLEEP = 5 * 1000 * 1000;  // 5s
+  static const int64_t DELAY_TIME = 2 * 1000 * 1000;//2s
+  static const int64_t RENEW_TIMEOUT = 2 * 1000 * 1000; //2s
+  static const int64_t REGISTER_TIME_SLEEP = 2 * 1000 * 1000; //5s
 
   // maintain fixed-length buffer and calculate avarage value
-  class AvgCalculator {
+  class AvgCalculator
+  {
   public:
     AvgCalculator();
     ~AvgCalculator();
 
     int init(int64_t limit_num);
     int calc_avg(int64_t num);
-    int get_avg(double& avg);
-
+    int get_avg(double &avg);
   private:
     common::ObSEArray<int64_t, STORE_RTT_NUM> calc_buffer_;
     bool inited_;
     int64_t limit_num_;
     int64_t head_;
     double avg_;
-
   private:
     DISALLOW_COPY_AND_ASSIGN(AvgCalculator);
   };
-
 private:
   int start_heartbeat();
   int do_renew_lease();
-
+  int update_major_merge_info(const share::ObLeaseResponse &lease_response);
 private:
   bool inited_;
   bool stopped_;
   share::ObLeaseResponse lease_response_;
   volatile int64_t lease_expire_time_ CACHE_ALIGNED;
   ObRefreshSchemaStatusTimerTask schema_status_task_;
-  common::ObTimer timer_;
-  share::ObRsMgr* rs_mgr_;
-  obrpc::ObCommonRpcProxy* rpc_proxy_;
-  IHeartBeatProcess* heartbeat_process_;
+  common::ObTimer hb_timer_;
+  common::ObTimer cluster_info_timer_;
+  common::ObTimer merge_timer_;
+  share::ObRsMgr *rs_mgr_;
+  obrpc::ObCommonRpcProxy *rpc_proxy_;
+  IHeartBeatProcess *heartbeat_process_;
   HeartBeat hb_;
   int64_t renew_timeout_;
-  ObService* ob_service_;
+  ObService *ob_service_;
   AvgCalculator avg_calculator_;
   int64_t baseline_schema_version_;
   volatile int64_t heartbeat_expire_time_ CACHE_ALIGNED;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLeaseStateMgr);
 };
@@ -157,7 +154,7 @@ bool ObLeaseStateMgr::is_valid_lease() const
   return lease_expire_time_ > common::ObTimeUtility::current_time();
 }
 
-int ObLeaseStateMgr::set_lease_response(const share::ObLeaseResponse& lease_response)
+int ObLeaseStateMgr::set_lease_response(const share::ObLeaseResponse &lease_response)
 {
   if (lease_expire_time_ < lease_response.lease_expire_time_) {
     lease_expire_time_ = lease_response.lease_expire_time_;
@@ -175,6 +172,6 @@ int64_t ObLeaseStateMgr::get_lease_expire_time()
 {
   return lease_expire_time_;
 }
-}  // end namespace observer
-}  // end namespace oceanbase
-#endif  // OCEANBASE_OBSERVER_OB_LEASE_STATE_MGR_H_
+}//end namespace observer
+}//end namespace oceanbase
+#endif //OCEANBASE_OBSERVER_OB_LEASE_STATE_MGR_H_

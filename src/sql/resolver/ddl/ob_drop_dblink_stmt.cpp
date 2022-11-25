@@ -17,17 +17,23 @@
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 
-namespace oceanbase {
-namespace sql {
-ObDropDbLinkStmt::ObDropDbLinkStmt() : ObDDLStmt(stmt::T_DROP_DBLINK), drop_dblink_arg_()
+namespace oceanbase
+{
+namespace sql
+{
+ObDropDbLinkStmt::ObDropDbLinkStmt()
+   : ObDDLStmt(stmt::T_DROP_DBLINK),
+     drop_dblink_arg_()
 {}
 
-ObDropDbLinkStmt::ObDropDbLinkStmt(common::ObIAllocator* name_pool)
-    : ObDDLStmt(name_pool, stmt::T_DROP_DBLINK), drop_dblink_arg_()
+ObDropDbLinkStmt::ObDropDbLinkStmt(common::ObIAllocator *name_pool)
+  : ObDDLStmt(name_pool, stmt::T_DROP_DBLINK),
+    drop_dblink_arg_()
 {}
 
 ObDropDbLinkStmt::~ObDropDbLinkStmt()
-{}
+{
+}
 
-}  // namespace sql
-}  // namespace oceanbase
+}//namespace sql
+}//namespace oceanbase

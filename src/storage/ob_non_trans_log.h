@@ -13,17 +13,18 @@
 #ifndef OCEANBASE_STORAGE_OB_NON_TRANS_LOG_
 #define OCEANBASE_STORAGE_OB_NON_TRANS_LOG_
 
-namespace oceanbase {
-namespace storage {
-class ObNonTransLog {
+namespace oceanbase
+{
+namespace storage
+{
+class ObNonTransLog
+{
 public:
-  ObNonTransLog()
-  {}
-  virtual ~ObNonTransLog()
-  {}
+  ObNonTransLog() {}
+  virtual ~ObNonTransLog() {}
   virtual int replace_tenant_id(const uint64_t new_tenant_id) = 0;
 };
 
-}  // namespace storage
-}  // namespace oceanbase
-#endif  // OCEANBASE_STORAGE_OB_NON_TRANS_LOG_
+} // storage
+} // oceanbase
+#endif //OCEANBASE_STORAGE_OB_NON_TRANS_LOG_

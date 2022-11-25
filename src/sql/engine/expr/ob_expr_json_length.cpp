@@ -10,12 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation for json_length.
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_length.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast.h"
-#include "sql/parser/ob_item_type.h"
+#include "objit/common/ob_item_type.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "ob_expr_json_func_helper.h"
@@ -127,41 +126,6 @@ int ObExprJsonLength::calc(const T &data1, ObObjType type1, ObCollationType cs_t
   return ret;
 }
 
-// for old sql engine
-int ObExprJsonLength::calc_resultN(common::ObObj &result,
-                                   const common::ObObj *objs,
-                                   int64_t param_num,
-                                   common::ObExprCtx &expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-
-  if (OB_ISNULL(objs)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(objs), K(param_num));
-  } else if (OB_ISNULL(allocator)) { // check allocator
-    ret = OB_NOT_INIT;
-    LOG_WARN("varchar buffer not init", K(ret));
-  } else {
-    ObObjType path_type = ObMaxType;
-    const common::ObObj *path_obj_ptr = NULL;
-    if (param_num > 1) {
-      path_obj_ptr = &objs[1];
-      path_type = objs[1].get_type();
-    }
-
-    if (OB_SUCC(ret)) {
-      ObJsonPathCache path_cache(allocator);
-      if (OB_FAIL(calc(objs[0], objs[0].get_type(), objs[0].get_collation_type(), path_obj_ptr,
-          path_type, allocator, result, &path_cache))) {
-        LOG_WARN("fail to calc json length result", K(ret), K(objs[0]), K(param_num));
-      }
-    }
-  }
-
-  return ret;
-}
-
 // for new sql engine 
 int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
@@ -172,7 +136,8 @@ int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObExpr *arg0 = expr.args_[0];
   ObObjType type0 = arg0->datum_meta_.type_;
   ObCollationType cs_type0 = arg0->datum_meta_.cs_type_;
-  common::ObArenaAllocator &tmp_allocator = ctx.get_reset_tmp_alloc();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
 
   if (OB_FAIL(arg0->eval(ctx, datum0))) { // json doc
     LOG_WARN("fail to eval json arg", K(ret), K(type1));

@@ -11,11 +11,13 @@
  */
 
 #include "ob_uniq_task_queue.h"
-namespace oceanbase {
-namespace observer {
-void* ObHighPrioMemAllocator::alloc(const int64_t sz)
+namespace oceanbase
 {
-  void* mem = NULL;
+namespace observer
+{
+void *ObHighPrioMemAllocator::alloc(const int64_t sz)
+{
+  void *mem = NULL;
   int ret = common::OB_SUCCESS;
   if (sz > 0) {
     mem = common::ob_malloc(sz, attr_);
@@ -27,12 +29,12 @@ void* ObHighPrioMemAllocator::alloc(const int64_t sz)
   return mem;
 }
 
-void ObHighPrioMemAllocator::free(void* p)
+void ObHighPrioMemAllocator::free(void *p)
 {
   if (NULL != p) {
     common::ob_free(p);
     p = NULL;
   }
 }
-}  // namespace observer
-}  // namespace oceanbase
+}
+}

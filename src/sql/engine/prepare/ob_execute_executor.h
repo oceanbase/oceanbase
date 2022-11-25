@@ -17,24 +17,27 @@
 #include "sql/parser/parse_node.h"
 #include "sql/resolver/ob_stmt_type.h"
 
-namespace oceanbase {
-namespace sql {
+
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 class ObExecuteStmt;
 
-class ObExecuteExecutor {
+class ObExecuteExecutor
+{
 public:
-  ObExecuteExecutor()
-  {}
-  virtual ~ObExecuteExecutor()
-  {}
-  int execute(ObExecContext& ctx, ObExecuteStmt& stmt);
-
+  ObExecuteExecutor() {}
+  virtual ~ObExecuteExecutor() {}
+  int execute(ObExecContext &ctx, ObExecuteStmt &stmt);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecuteExecutor);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+
+
 
 #endif /* OCEANBASE_SRC_SQL_ENGINE_PREPARE_OB_EXECUTE_EXECUTOR_H_ */

@@ -13,8 +13,11 @@
 #ifndef UDF_REGISTRATION_TYPES_H_
 #define UDF_REGISTRATION_TYPES_H_
 
-namespace oceanbase {
-namespace sql {
+
+namespace oceanbase
+{
+namespace sql
+{
 
 /*
  * All these types are also defined in mysql.
@@ -42,13 +45,13 @@ Only got the row we are working on can we fill args and lengths.
 */
 typedef struct UDF_ARGS {
   unsigned int arg_count;           /* Number of arguments */
-  enum UdfItemResult* arg_type;     /* Pointer to item_results */
-  char** args;                      /* Pointer to argument */
-  unsigned long* lengths;           /* Length of string arguments */
-  char* maybe_null;                 /* Set to 1 (not '1') for all maybe_null args */
-  char** attributes;                /* Pointer to attribute name */
-  unsigned long* attribute_lengths; /* Length of attribute arguments */
-  void* extension;
+  enum UdfItemResult *arg_type;     /* Pointer to item_results */
+  char **args;                      /* Pointer to argument */
+  unsigned long *lengths;           /* Length of string arguments */
+  char *maybe_null;                 /* Set to 1 (not '1') for all maybe_null args */
+  char **attributes;                /* Pointer to attribute name */
+  unsigned long *attribute_lengths; /* Length of attribute arguments */
+  void *extension;
 } ObUdfArgs;
 
 /*
@@ -62,35 +65,52 @@ typedef struct UDF_INIT {
   bool maybe_null;          /* 1 if function can return NULL */
   unsigned int decimals;    /* for real functions */
   unsigned long max_length; /* For string functions */
-  char* ptr;                /* free pointer for function data */
+  char *ptr;                /* free pointer for function data */
   bool const_item;          /* 1 if function always returns the same value */
-  void* extension;
+  void *extension;
 } ObUdfInit;
 
+
 /* udf helper function */
-typedef void (*ObUdfFuncClear)(ObUdfInit* udf_init, unsigned char* is_null, unsigned char* error);
+typedef void (*ObUdfFuncClear)(ObUdfInit *udf_init,
+                               unsigned char *is_null,
+                               unsigned char *error);
 
-typedef void (*ObUdfFuncAdd)(ObUdfInit* udf_init, ObUdfArgs* udf_args, unsigned char* is_null, unsigned char* error);
+typedef void (*ObUdfFuncAdd)(ObUdfInit *udf_init,
+                             ObUdfArgs *udf_args,
+                             unsigned char *is_null,
+                             unsigned char *error);
 
-typedef void (*ObUdfFuncDeinit)(ObUdfInit* udf_init);
+typedef void (*ObUdfFuncDeinit)(ObUdfInit *udf_init);
 
-typedef bool (*ObUdfFuncInit)(ObUdfInit* udf_init, ObUdfArgs* udf_args, char* message);
+typedef bool (*ObUdfFuncInit)(ObUdfInit *udf_init,
+                              ObUdfArgs *udf_args,
+                              char *message);
+
 
 /* udf process row function */
 typedef void (*ObUdfFuncAny)(void);
 
-typedef double (*ObUdfFuncDouble)(
-    ObUdfInit* udf_init, ObUdfArgs* udf_args, unsigned char* is_null, unsigned char* error);
+typedef double (*ObUdfFuncDouble)(ObUdfInit *udf_init,
+                                  ObUdfArgs *udf_args,
+                                  unsigned char *is_null,
+                                  unsigned char *error);
 
-typedef long long (*ObUdfFuncLonglong)(
-    ObUdfInit* udf_init, ObUdfArgs* udf_args, unsigned char* is_null, unsigned char* error);
-
-typedef char* (*ObUdfFuncString)(ObUdfInit* initid, ObUdfArgs* args, char* result, unsigned long* length,
-    unsigned char* is_null, unsigned char* error);
+typedef long long (*ObUdfFuncLonglong)(ObUdfInit *udf_init,
+                                       ObUdfArgs *udf_args,
+                                       unsigned char *is_null,
+                                       unsigned char *error);
+ 
+typedef char *(*ObUdfFuncString)(ObUdfInit *initid,
+                                 ObUdfArgs *args,
+                                 char *result,
+                                 unsigned long *length,
+                                 unsigned char *is_null,
+                                 unsigned char *error);
 
 typedef void* ObUdfSoHandler;
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 
 #endif

@@ -22,6 +22,6 @@ OB_SERIALIZE_MEMBER(ObDtlSendArgs, chid_, buffer_);
 OB_SERIALIZE_MEMBER(ObDtlBCSendArgs, args_, bc_buffer_);
 OB_SERIALIZE_MEMBER(ObDtlBCRpcDataResponse, resps_);
 
-}  // namespace dtl
-}  // namespace sql
-}  // namespace oceanbase
+}  // dtl
+}  // sql
+}  // oceanbase

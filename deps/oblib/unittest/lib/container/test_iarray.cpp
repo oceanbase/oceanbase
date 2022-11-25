@@ -17,49 +17,51 @@
 #include "lib/container/ob_2d_array.h"
 using namespace oceanbase::common;
 
-class TestIArray : public ::testing::Test {
+class TestIArray: public ::testing::Test
+{
 public:
   TestIArray();
   virtual ~TestIArray();
   virtual void SetUp();
   virtual void TearDown();
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(TestIArray);
-
 protected:
   // function members
   template <typename T>
-  void setup(int32_t N, T& arr);
-  void verify(int32_t N, const ObIArray<int32_t>& arr);
-
+  void setup(int32_t N, T &arr);
+  void verify(int32_t N, const ObIArray<int32_t> &arr);
 protected:
   // data members
 };
 
 TestIArray::TestIArray()
-{}
-
-TestIArray::~TestIArray()
-{}
-
-void TestIArray::SetUp()
-{}
-
-void TestIArray::TearDown()
-{}
-
-template <typename T>
-void TestIArray::setup(int32_t N, T& arr)
 {
-  arr.reset();
-  for (int32_t i = 0; i < N; ++i) {
-    OK(arr.push_back(i));
-  }  // end for
 }
 
-void TestIArray::verify(int32_t N, const ObIArray<int32_t>& arr)
+TestIArray::~TestIArray()
+{
+}
+
+void TestIArray::SetUp()
+{
+}
+
+void TestIArray::TearDown()
+{
+}
+
+template <typename T>
+void TestIArray::setup(int32_t N, T &arr)
+{
+  arr.reset();
+  for (int32_t i = 0;i < N; ++i) {
+    OK(arr.push_back(i));
+  } // end for
+}
+
+void TestIArray::verify(int32_t N, const ObIArray<int32_t> &arr)
 {
   ASSERT_EQ(N, arr.count());
   for (int32_t i = 0; i < N; ++i) {
@@ -139,8 +141,8 @@ TEST_F(TestIArray, array_append)
   }
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }

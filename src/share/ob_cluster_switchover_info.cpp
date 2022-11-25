@@ -12,12 +12,14 @@
 
 #include "ob_cluster_switchover_info.h"
 
-namespace oceanbase {
-namespace share {
-
-const char* switchover_info_to_str(const ObClusterSwitchoverInfo so_info)
+namespace oceanbase
 {
-  const char* cstr = "";
+namespace share
+{
+
+const char *switchover_info_to_str(const ObClusterSwitchoverInfo so_info)
+{
+  const char *cstr = "";
   switch (so_info) {
     case SWITCHOVER_INFO_NONE:
       cstr = "";
@@ -111,6 +113,18 @@ const char* switchover_info_to_str(const ObClusterSwitchoverInfo so_info)
       cstr = "CHECK OTHER PRIMARY CLUSTER";
       break;
 
+    case SWITCHOVER_INFO_CLUSTER_IS_DISABLED:
+      cstr = "CLUSTER IS DISABLED";
+      break;
+
+    case SWITCHOVER_INFO_CLUSTER_INFO_NOT_SYNC:
+      cstr = "CLUSTER INFO NOT SYNC";
+      break;
+
+    case SWITCHOVER_INFO_FAILOVER_INFO_NOT_SYNC:
+      cstr = "FAILOVER INFO NOT SYNC";
+      break;
+
     default:
       cstr = "";
       break;
@@ -118,7 +132,8 @@ const char* switchover_info_to_str(const ObClusterSwitchoverInfo so_info)
   return cstr;
 }
 
-OB_SERIALIZE_MEMBER(ObClusterSwitchoverInfoWrap, info_, synced_cluster_id_array_, can_not_access_cluster_);
+OB_SERIALIZE_MEMBER(ObClusterSwitchoverInfoWrap, info_,
+                    synced_cluster_id_array_, can_not_access_cluster_);
 
-}  // namespace share
-}  // namespace oceanbase
+}
+}

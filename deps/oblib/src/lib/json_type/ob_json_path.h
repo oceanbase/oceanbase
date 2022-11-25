@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains interface support for the JSON path abstraction.
 #ifndef OCEANBASE_SQL_OB_JSON_PATH
 #define OCEANBASE_SQL_OB_JSON_PATH
 
@@ -24,12 +23,12 @@ namespace common {
 
 
 enum ObJsonPathNodeType {
-  JPN_MEMBER = 0,               // member, example:.key
-  JPN_MEMBER_WILDCARD,          // member wildcard, example:.*
-  JPN_ARRAY_CELL,               // single array ele, example:[index]
-  JPN_ARRAY_RANGE,              // array range, example:[8 to 16]
-  JPN_ARRAY_CELL_WILDCARD,      // array ele wildcatd, example:[*]
-  JPN_ELLIPSIS                  // ellipsis, example:**
+  JPN_MEMBER = 0,               // member, example：.key
+  JPN_MEMBER_WILDCARD,          // member wildcard, example：.*
+  JPN_ARRAY_CELL,               // single array ele, example：[index]
+  JPN_ARRAY_RANGE,              // array range, example：[8 to 16]
+  JPN_ARRAY_CELL_WILDCARD,      // array ele wildcatd, example：[*]
+  JPN_ELLIPSIS                  // ellipsis, example：**
 };
 
 typedef struct ObPathMember

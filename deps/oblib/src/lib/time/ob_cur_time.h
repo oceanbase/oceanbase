@@ -15,18 +15,22 @@
 
 #include "lib/task/ob_timer.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 extern volatile int64_t g_cur_time;
 
-class TimeUpdateDuty : public common::ObTimerTask {
+class TimeUpdateDuty : public common::ObTimerTask
+{
 public:
   static const int64_t SCHEDULE_PERIOD = 2000;
-  TimeUpdateDuty(){};
-  virtual ~TimeUpdateDuty(){};
+  TimeUpdateDuty() {};
+  virtual ~TimeUpdateDuty() {};
   virtual void runTimerTask();
 };
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
 #endif /* _OB_CUR_TIME_H */
+

@@ -16,36 +16,46 @@
 #include <stdint.h>
 #include "lib/utility/ob_unify_serialize.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
-class ObTraceIdAdaptor {
+class ObTraceIdAdaptor
+{
   OB_UNIS_VERSION(1);
 
 public:
-  ObTraceIdAdaptor()
+  ObTraceIdAdaptor() { reset(); }
+  void reset()
   {
-    reset();
+    uval_[0] = 0;
+    uval_[1] = 0;
+    uval_[2] = 0;
+    uval_[3] = 0;
   }
-  void reset();
-  const uint64_t* get() const
+  const uint64_t* get() const { return uval_; }
+  void set(const uint64_t *uval) { uval_[0] = uval[0]; uval_[1] = uval[1]; uval_[2] = uval[2]; uval_[3] = uval[3]; }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  bool operator==(const ObTraceIdAdaptor &other) const
   {
-    return uval_;
+    return (uval_[0] == other.uval_[0]) && (uval_[1] == other.uval_[1]) && 
+           (uval_[2] == other.uval_[2]) && (uval_[3] == other.uval_[3]);
   }
-  void set(const uint64_t* uval)
+  ObTraceIdAdaptor &operator=(const ObTraceIdAdaptor &other)
   {
-    uval_[0] = uval[0];
-    uval_[1] = uval[1];
+    uval_[0] = other.uval_[0];
+    uval_[1] = other.uval_[1];
+    uval_[2] = other.uval_[2];
+    uval_[3] = other.uval_[3];
+    return *this;
   }
-  int64_t to_string(char* buf, const int64_t buf_len) const;
-  bool operator==(const ObTraceIdAdaptor& other) const;
-  ObTraceIdAdaptor& operator=(const ObTraceIdAdaptor& other);
-
 private:
-  uint64_t uval_[2];
+  uint64_t uval_[4];
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}// namespace common
+}// namespace oceanbase
 
-#endif  // OB_COMMON_OB_TRACE_ID_ADAPTOR_H_
+#endif //OB_COMMON_OB_TRACE_ID_ADAPTOR_H_
+

@@ -258,23 +258,11 @@ void PrintHelper::print_row_title(const bool use_csv, const ObStoreRow *row, con
       P_NAME("ROW");
       P_VALUE_BINT_B(row_index);
       P_COLON();
-      if (OB_NOT_NULL(row->trans_id_ptr_)) {
-        P_NAME("trans_id=");
-        P_VALUE_BINT_B(row->trans_id_ptr_->hash());
-        P_COMMA();
-      } else {
-        P_NAME("trans_id=");
-        P_VALUE_INT_B(0);
-        P_COMMA();
-      }
+      P_NAME("trans_id=");
+      P_VALUE_BINT_B(row->trans_id_.get_id());
+      P_COMMA();
       P_NAME("flag=");
-      P_VALUE_BINT_B(row->flag_);
-      P_COMMA();
-      P_NAME("first_dml=");
-      P_VALUE_INT_B(row->get_first_dml());
-      P_COMMA();
-      P_NAME("dml=");
-      P_VALUE_INT_B(row->get_dml());
+      P_VALUE_INT_B(row->flag_.get_serialize_flag());
       P_COMMA();
       P_NAME("multi_version_row_flag=");
       P_VALUE_INT_B(row->row_type_flag_.flag_);
@@ -285,23 +273,11 @@ void PrintHelper::print_row_title(const bool use_csv, const ObStoreRow *row, con
       P_NAME("ROW");
       P_VALUE_BINT_B(row_index);
       P_COLON();
-      if (OB_NOT_NULL(row->trans_id_ptr_)) {
-        P_NAME("trans_id=");
-        P_VALUE_BINT_B(row->trans_id_ptr_->hash());
-        P_COMMA();
-      } else {
-        P_NAME("trans_id=");
-        P_VALUE_INT_B(0);
-        P_COMMA();
-      }
+      P_NAME("trans_id=");
+      P_VALUE_BINT_B(row->trans_id_.get_id());
+      P_COMMA();
       P_NAME("flag=");
-      P_VALUE_BINT_B(row->flag_);
-      P_COMMA();
-      P_NAME("first_dml=");
-      P_VALUE_INT_B(row->get_first_dml());
-      P_COMMA();
-      P_NAME("dml=");
-      P_VALUE_INT_B(row->get_dml());
+      P_VALUE_INT_B(row->flag_.get_serialize_flag());
       P_COMMA();
       P_NAME("multi_version_row_flag=");
       P_VALUE_INT_B(row->row_type_flag_.flag_);

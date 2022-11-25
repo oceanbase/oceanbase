@@ -1,23 +1,22 @@
 # What is OceanBase Database
-OceanBase is a distributed relational SQL database built from scratch by Ant Group. It is highly scalable, resilient and can take on both transactional and analytical workloads, and it is highly compatible with MySQL syntax and features. OceanBase can be deployed on virtual machines in any cloud or physical hosts on-premise. Meanwhile, since it is a multi-tenant cluster, users can achieve database resource pooling and improve their efficiency.
+OceanBase Database is a native distributed relational database. It is developed entirely by Ant Group. OceanBase Database is built on a common server cluster. Based on the Paxos protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
 
 ## Core features
 
 - Scalable OLTP
    - Linear scalability by adding nodes to the cluster
-   - Continuous availability with Paxos-based regional disaster tolerance
-   - Partition-level leader distribution and transparent data shuffling
-   - Convert distributed transactions across multi-node into local transactions via "table group" technology
-   - Highly concurrent updates on hot row through early lock release (ELR)
-   - Nearly unlimited connections in one instance on scalable nodes through decoupled session & thread
+   - Partition-level leader distribution and transparent data shuffling 
+   - Optimized performance for distributed transaction through "table group" technology
+   - High concurrency updates on hot row through early lock release (ELR)
+   - 80000+ connections per node and unlimited connections in one instance through multi threads and coroutines
    - Prevent silent data corruption (SDC) through multidimensional data consistency checksum
    - No.1 in TPC-C benchmark with 707 million tpmC
 - Operational OLAP
    - Process analytical tasks in one engine, no need to migrate data to OLAP engine
    - Analyze large amounts of data on multiple nodes in one OceanBase cluster with MPP architecture
    - Advanced SQL engine with CBO optimizer, distributed execution scheduler and global index
-   - Fast data loading through parallel DML, and with 50% storage cost under compression in most cases
-   - No.2 in TPC-H 30,000 GB benchmark with 15.26 million QphH
+   - Fast data loading through parallel DML, and with only 50% storage cost under compression
+   - Broke world record with 15.26 million QphH in TPC-H 30TB benchmark in 2021
 - Multi-tenant
    - Create multiple tenants (instances) in one OceanBase cluster with isolated resource and access
    - Multidimensional and transparently scale up/out for each tenant, and scaling up takes effect immediately
@@ -25,17 +24,17 @@ OceanBase is a distributed relational SQL database built from scratch by Ant Gro
    - Improve management efficiency and reduce costs without compromising performance and availability
 
 ## Quick start
-See [Quick start](https://www.oceanbase.com/en/docs/community/observer-en/V3.1.4/10000000000601796) to try out OceanBase Database.
+See [Quick start](https://open.oceanbase.com/quickStart) to try out OceanBase Database.
 
 ## System architecture
 
-## ![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1660643534074-2649c2e4-473a-4d07-8021-d8d1a2b2da49.png#clientId=u5d9acd3a-25ad-4&crop=0&crop=0&crop=1&crop=1&from=paste&height=1101&id=u46f6dd09&margin=%5Bobject%20Object%5D&name=image.png&originHeight=1101&originWidth=1746&originalType=binary&ratio=1&rotation=0&showTitle=false&size=130476&status=done&style=none&taskId=ud87a5d0f-5140-45f2-9274-c8375b3c7c0&title=&width=1746)
+![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873624-c1707034-471a-4f79-980f-6d1760dac8eb.png)
 
 ## Roadmap
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1660643534293-a5f53258-a9ac-462c-b9fd-9832901853c2.png#clientId=u5d9acd3a-25ad-4&crop=0&crop=0&crop=1&crop=1&from=paste&height=352&id=u0f71535e&margin=%5Bobject%20Object%5D&name=image.png&originHeight=528&originWidth=1683&originalType=binary&ratio=1&rotation=0&showTitle=false&size=719961&status=done&style=none&taskId=u676e97dd-1309-42b9-b380-a423c27199c&title=&width=1122)
+![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873613-44957682-76fe-42c2-b4c7-9356ed5b35f0.png)
 
-Link: [3.1.5 function list](https://github.com/oceanbase/oceanbase/milestone/6)
+Link: [4.0.0 function list](https://github.com/oceanbase/oceanbase/milestone/3)
 
 ## Case study
 For our success stories, see [Success stories](https://www.oceanbase.com/en/customer/home).

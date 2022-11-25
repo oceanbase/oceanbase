@@ -13,19 +13,23 @@
 #ifndef _OB_RS_RESTORE_SQL_MODIFIER_H_
 #define _OB_RS_RESTORE_SQL_MODIFIER_H_
 
-namespace oceanbase {
+namespace oceanbase
+{
 
-namespace sql {
+namespace sql
+{
 class ObResultSet;
 }
 
-namespace observer {
-class ObRestoreSQLModifier {
+namespace observer
+{
+class ObRestoreSQLModifier
+{
 public:
-  virtual int modify(sql::ObResultSet& rs) = 0;
+  virtual int modify(sql::ObResultSet &rs) = 0;
 };
-}  // namespace observer
+}
 
-}  // namespace oceanbase
+}
 #endif /* _OB_RS_RESTORE_SQL_MODIFIER_H_ */
 //// end of header file

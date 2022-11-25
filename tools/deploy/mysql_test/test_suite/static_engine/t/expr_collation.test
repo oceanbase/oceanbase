@@ -1,5 +1,6 @@
 #owner: luofan.zp
 #owner group: sql2
+#tags: optimizer
 
 --disable_abort_on_error
 --result_format 4
@@ -27,7 +28,9 @@ create table t1 (c1 int, c2 int unsigned,
     c17 decimal, c18 decimal unsigned, 
     c19 datetime, c20 timestamp, 
     c21 varchar(30), c22 char(30),
-    c23 varchar(30) charset utf8);
+    c23 varchar(30) charset utf8,
+    c24 varchar(30) charset utf16,
+    c25 varchar(30) charset gbk);
     
 insert into t1 values(1, 2, 
     1, 2, 
@@ -39,7 +42,7 @@ insert into t1 values(1, 2,
     5.5, 6.5,
     7.5, 8.5,
     '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
-    '9.5', '10.5', 'utf8 col');
+    '9.5', '10.5', 'utf8 col', 'utf16 col', 'gbk col');
 insert into t1 values(-1, 2, 
     -1, 2, 
     -1, 2, 
@@ -50,7 +53,7 @@ insert into t1 values(-1, 2,
     -5.5, 6.5,
     -7.5, 8.5,
     '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
-    '-9.5', '10.5', 'utf8 col');
+    '-9.5', '10.5', 'utf8 col', 'utf16 col', 'gbk col');
 
 --sleep 1
 
@@ -65,6 +68,8 @@ while ($left <= $cnt)
 
 --echo // test set_collation expr
 --echo // set_collation表达式检查charset与collate不匹配，报错
+--error 1253
+select _utf8mb4'a' collate gbk_bin;
 --echo // 下面的是等号表达式在类型推导时，进行aggregate collation发现collation不一致报错
 --error 1267
 select _utf8mb4'a' collate utf8mb4_general_ci = _utf8mb4'A' collate utf8mb4_bin;

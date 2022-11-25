@@ -23,17 +23,22 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
-ObExprEffectiveTenant::ObExprEffectiveTenant(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_EFFECTIVE_TENANT, N_EFFECTIVE_TENANT, 0, NOT_ROW_DIMENSION)
-{}
+
+ObExprEffectiveTenant::ObExprEffectiveTenant(ObIAllocator &alloc)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_EFFECTIVE_TENANT, N_EFFECTIVE_TENANT, 0, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprEffectiveTenant::~ObExprEffectiveTenant()
-{}
+{
+}
 
-int ObExprEffectiveTenant::calc_result_type0(ObExprResType& type, ObExprTypeCtx& type_ctx) const
+int ObExprEffectiveTenant::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   type.set_varchar();
@@ -43,31 +48,12 @@ int ObExprEffectiveTenant::calc_result_type0(ObExprResType& type, ObExprTypeCtx&
   return OB_SUCCESS;
 }
 
-int ObExprEffectiveTenant::calc_result0(ObObj& result, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObSQLSessionInfo* session_info = NULL;
-  if (OB_ISNULL(session_info = expr_ctx.my_session_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null", K(ret));
-  } else {
-    const ObString effective_tenant_name = session_info->get_effective_tenant_name();
-    if (effective_tenant_name.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("effective tenant name is empty", K(ret));
-    } else {
-      result.set_varchar(effective_tenant_name);
-      result.set_collation(result_type_);
-    }
-  }
-  return ret;
-}
-
-int ObExprEffectiveTenant::eval_effective_tenant(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& expr_datum)
+int ObExprEffectiveTenant::eval_effective_tenant(const ObExpr &expr, ObEvalCtx &ctx,
+    ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  const ObBasicSessionInfo* session_info = NULL;
+  const ObBasicSessionInfo *session_info = NULL;
   if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
@@ -77,7 +63,8 @@ int ObExprEffectiveTenant::eval_effective_tenant(const ObExpr& expr, ObEvalCtx& 
   return ret;
 }
 
-int ObExprEffectiveTenant::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprEffectiveTenant::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
+    ObExpr &rt_expr) const
 {
   UNUSED(raw_expr);
   UNUSED(op_cg_ctx);
@@ -85,5 +72,6 @@ int ObExprEffectiveTenant::cg_expr(ObExprCGCtx& op_cg_ctx, const ObRawExpr& raw_
   return OB_SUCCESS;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+
+}/* ns sql*/
+}/* ns oceanbase */

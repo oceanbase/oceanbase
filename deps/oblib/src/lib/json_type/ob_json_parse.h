@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains interface support for the json parse abstraction.
 #ifndef OCEANBASE_SQL_OB_JSON_PARSE
 #define OCEANBASE_SQL_OB_JSON_PARSE
 

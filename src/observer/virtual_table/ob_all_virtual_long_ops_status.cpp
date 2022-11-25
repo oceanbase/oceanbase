@@ -18,8 +18,10 @@ using namespace oceanbase::common;
 using namespace oceanbase::observer;
 using namespace oceanbase::storage;
 
-ObAllVirtualLongOpsStatus::ObAllVirtualLongOpsStatus() : is_inited_(false), iter_(), ip_()
-{}
+ObAllVirtualLongOpsStatus::ObAllVirtualLongOpsStatus()
+  : is_inited_(false), iter_(), ip_()
+{
+}
 
 int ObAllVirtualLongOpsStatus::init()
 {
@@ -29,16 +31,17 @@ int ObAllVirtualLongOpsStatus::init()
     LOG_WARN("ObAllVirtualLongOpsStatus has been inited twice", K(ret));
   } else if (OB_FAIL(iter_.init())) {
     LOG_WARN("fail to init iterator", K(ret));
-  } else if (!GCTX.self_addr_.ip_to_string(ip_, sizeof(ip_))) {
+  } else if (!GCTX.self_addr().ip_to_string(ip_, sizeof(ip_))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to convert ip to string", K(ret), "addr", GCTX.self_addr_);
+    LOG_WARN("fail to convert ip to string", K(ret), "addr", GCTX.self_addr());
   } else {
     is_inited_ = true;
   }
   return ret;
 }
 
-int ObAllVirtualLongOpsStatus::convert_stat_to_row(const ObILongOpsStat& stat, ObNewRow*& row)
+int ObAllVirtualLongOpsStatus::convert_stat_to_row(
+    const ObILongOpsStat &stat, ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -70,13 +73,13 @@ int ObAllVirtualLongOpsStatus::convert_stat_to_row(const ObILongOpsStat& stat, O
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case OB_APP_MIN_COLUMN_ID + 4:
-          // svr_ip
+          //svr_ip
           cur_row_.cells_[i].set_varchar(ip_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case OB_APP_MIN_COLUMN_ID + 5:
           // svr_port
-          cur_row_.cells_[i].set_int(GCTX.self_addr_.get_port());
+          cur_row_.cells_[i].set_int(GCTX.self_addr().get_port());
           break;
         case OB_APP_MIN_COLUMN_ID + 6:
           // start_time
@@ -107,6 +110,11 @@ int ObAllVirtualLongOpsStatus::convert_stat_to_row(const ObILongOpsStat& stat, O
           cur_row_.cells_[i].set_varchar(stat.common_value_.message_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
+        case OB_APP_MIN_COLUMN_ID + 13:
+          // trace id
+          cur_row_.cells_[i].set_varchar("");
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
       }
     }
 
@@ -117,26 +125,34 @@ int ObAllVirtualLongOpsStatus::convert_stat_to_row(const ObILongOpsStat& stat, O
   return ret;
 }
 
-int ObAllVirtualLongOpsStatus::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualLongOpsStatus::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObILongOpsStatHandle handle;
-  ObILongOpsStat* stat = NULL;
+  ObILongOpsStat *stat = NULL;
   row = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObAllVirtualLongOpsStatus has not been inited", K(ret));
-  } else if (OB_FAIL(iter_.get_next_stat(handle))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to get next stat", K(ret));
+    LOG_WARN("ObAllVirtualLongOpsStatus has not been inited", KR(ret));
+  } else {
+    while (OB_SUCC(ret) && OB_SUCC(iter_.get_next_stat(handle))) {
+      if (OB_ISNULL(stat = handle.get_resource_ptr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, part stat must not be NULL", KR(ret));
+      } else if (OB_FAIL(stat->estimate_cost())) {
+        LOG_WARN("fail to estimate partition cost", KR(ret));
+      } else if (!is_sys_tenant(effective_tenant_id_)
+                 && stat->get_key().tenant_id_ != effective_tenant_id_) {
+        continue;
+      } else if (OB_FAIL(convert_stat_to_row(*stat, row))) {
+        LOG_WARN("fail to convert stat to row", KR(ret));
+      } else {
+        break;
+      }
+    } // end while
+    if (OB_SUCCESS != ret && OB_ITER_END != ret) {
+      LOG_WARN("fail to iter next stat", KR(ret));
     }
-  } else if (OB_ISNULL(stat = handle.get_resource_ptr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, part stat must not be NULL", K(ret));
-  } else if (OB_FAIL(stat->estimate_cost())) {
-    LOG_WARN("fail to estimate partition cost", K(ret));
-  } else if (OB_FAIL(convert_stat_to_row(*stat, row))) {
-    LOG_WARN("fail to convert stat to row", K(ret));
   }
   return ret;
 }

@@ -15,42 +15,44 @@
 
 #include "sql/resolver/ob_stmt_resolver.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObSQLSessionInfo;
 
 /// the interface of this module
-class ObResolver {
+class ObResolver
+{
 public:
-  enum IsPrepared { IS_PREPARED_STMT, IS_NOT_PREPARED_STMT };
+  enum IsPrepared
+  {
+    IS_PREPARED_STMT,
+    IS_NOT_PREPARED_STMT
+  };
 
-  explicit ObResolver(ObResolverParams& params);
+  explicit ObResolver(ObResolverParams &params);
   virtual ~ObResolver();
 
-  virtual int resolve(IsPrepared if_prepared, const ParseNode& parse_tree, ObStmt*& stmt);
-  const common::ObTimeZoneInfo* get_timezone_info();
-  ObResolverParams& get_params()
-  {
-    return params_;
-  }
+  virtual int resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObStmt *&stmt);
+  const common::ObTimeZoneInfo *get_timezone_info();
+  ObResolverParams &get_params() { return params_; }
 
 private:
   template <typename ResolverType>
-  int stmt_resolver_func(ObResolverParams& params, const ParseNode& parse_tree, ObStmt*& stmt);
+  int stmt_resolver_func(ObResolverParams &params, const ParseNode &parse_tree, ObStmt *&stmt);
 
   template <typename SelectResolverType>
-  int select_stmt_resolver_func(ObResolverParams& params, const ParseNode& parse_tree, ObStmt*& stmt);
-
+  int select_stmt_resolver_func(ObResolverParams &params, const ParseNode &parse_tree, ObStmt *&stmt);
 private:
   // data members
   ObResolverParams params_;
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObResolver);
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 
 #endif /* OCEANBASE_SQL_RESOLVER_OB_RESOLVER */

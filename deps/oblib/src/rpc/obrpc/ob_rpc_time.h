@@ -13,23 +13,18 @@
 #ifndef OCEANBASE_RPC_OBRPC_OB_RPC_TIME_
 #define OCEANBASE_RPC_OBRPC_OB_RPC_TIME_
 
-namespace oceanbase {
-namespace obrpc {
-struct ObRpcCostTime {
+namespace oceanbase
+{
+namespace obrpc
+{
+struct ObRpcCostTime
+{
 public:
   static const uint8_t RPC_COST_TIME_SIZE = 40;
-
 public:
-  ObRpcCostTime()
-  {
-    memset(this, 0, sizeof(*this));
-  }
-  ~ObRpcCostTime()
-  {}
-  int64_t get_encoded_size() const
-  {
-    return RPC_COST_TIME_SIZE;
-  }
+  ObRpcCostTime() { memset(this, 0, sizeof(*this)); }
+  ~ObRpcCostTime() {}
+  static inline int64_t get_encoded_size() { return RPC_COST_TIME_SIZE; }
 
   int32_t len_;
   int32_t arrival_push_diff_;
@@ -42,10 +37,11 @@ public:
 
   NEED_SERIALIZE_AND_DESERIALIZE;
 
-  TO_STRING_KV(K_(len), K_(arrival_push_diff), K_(push_pop_diff), K_(pop_process_start_diff),
-      K_(process_start_end_diff), K_(process_end_response_diff), K_(packet_id), K_(request_arrival_time));
+  TO_STRING_KV(K_(len), K_(arrival_push_diff),
+      K_(push_pop_diff), K_(pop_process_start_diff), K_(process_start_end_diff),
+      K_(process_end_response_diff), K_(packet_id), K_(request_arrival_time));
 };
 
-}  // namespace obrpc
-}  // end of namespace oceanbase
+} // end of namespace rpc
+} // end of namespace oceanbase
 #endif

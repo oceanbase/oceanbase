@@ -352,26 +352,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |21       |119 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|21       |117 |
-|2 |  SORT                    |        |21       |117 |
-|3 |   PX PARTITION ITERATOR  |        |21       |94  |
-|4 |    MERGE FULL OUTER JOIN |        |21       |94  |
-|5 |     TABLE SCAN           |t1      |18       |39  |
-|6 |     TABLE SCAN           |t2      |21       |40  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |12  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |11  |
+|2 |  SORT                    |        |1        |11  |
+|3 |   PX PARTITION ITERATOR  |        |1        |11  |
+|4 |    MERGE FULL OUTER JOIN |        |1        |11  |
+|5 |     TABLE SCAN           |t1      |1        |6   |
+|6 |     TABLE SCAN           |t2      |1        |6   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-2])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-2])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -412,26 +412,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |10       |107 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|10       |106 |
-|2 |  SORT                    |        |10       |106 |
-|3 |   PX PARTITION ITERATOR  |        |10       |96  |
-|4 |    MERGE FULL OUTER JOIN |        |10       |96  |
-|5 |     TABLE SCAN           |t1      |20       |39  |
-|6 |     TABLE SCAN           |t2      |20       |39  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |17  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |17  |
+|2 |  SORT                    |        |1        |17  |
+|3 |   PX PARTITION ITERATOR  |        |1        |17  |
+|4 |    MERGE FULL OUTER JOIN |        |1        |17  |
+|5 |     TABLE SCAN           |t1      |1        |9   |
+|6 |     TABLE SCAN           |t2      |1        |9   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -460,26 +460,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |20       |120 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|20       |118 |
-|2 |  SORT                    |        |20       |118 |
-|3 |   PX PARTITION ITERATOR  |        |20       |97  |
-|4 |    MERGE FULL OUTER JOIN |        |20       |97  |
-|5 |     TABLE SCAN           |t1      |20       |40  |
-|6 |     TABLE SCAN           |t2      |20       |40  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |15  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |15  |
+|2 |  SORT                    |        |1        |14  |
+|3 |   PX PARTITION ITERATOR  |        |1        |14  |
+|4 |    MERGE FULL OUTER JOIN |        |1        |14  |
+|5 |     TABLE SCAN           |t1      |1        |7   |
+|6 |     TABLE SCAN           |t2      |1        |7   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-3])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-3])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r4_01_20 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -512,26 +512,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |10       |108 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|10       |107 |
-|2 |  SORT                    |        |10       |107 |
-|3 |   PX PARTITION ITERATOR  |        |10       |97  |
-|4 |    MERGE FULL OUTER JOIN |        |10       |97  |
-|5 |     TABLE SCAN           |t1      |20       |40  |
-|6 |     TABLE SCAN           |t2      |20       |40  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |17  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |17  |
+|2 |  SORT                    |        |1        |17  |
+|3 |   PX PARTITION ITERATOR  |        |1        |17  |
+|4 |    MERGE FULL OUTER JOIN |        |1        |17  |
+|5 |     TABLE SCAN           |t1      |1        |9   |
+|6 |     TABLE SCAN           |t2      |1        |9   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter([t1.a >= 13], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_09_28 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 13 and 24 order by t1.a, t2.a;
@@ -556,26 +556,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |21       |119 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|21       |117 |
-|2 |  SORT                    |        |21       |117 |
-|3 |   PX PARTITION ITERATOR  |        |21       |94  |
-|4 |    MERGE FULL OUTER JOIN |        |21       |94  |
-|5 |     TABLE SCAN           |t1      |18       |39  |
-|6 |     TABLE SCAN           |t2      |21       |40  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |12  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |11  |
+|2 |  SORT                    |        |1        |11  |
+|3 |   PX PARTITION ITERATOR  |        |1        |11  |
+|4 |    MERGE FULL OUTER JOIN |        |1        |11  |
+|5 |     TABLE SCAN           |t1      |1        |6   |
+|6 |     TABLE SCAN           |t2      |1        |6   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-2])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-2])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -616,26 +616,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |10       |107 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|10       |106 |
-|2 |  SORT                    |        |10       |106 |
-|3 |   PX PARTITION ITERATOR  |        |10       |96  |
-|4 |    MERGE FULL OUTER JOIN |        |10       |96  |
-|5 |     TABLE SCAN           |t1      |20       |39  |
-|6 |     TABLE SCAN           |t2      |20       |39  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |17  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |17  |
+|2 |  SORT                    |        |1        |17  |
+|3 |   PX PARTITION ITERATOR  |        |1        |17  |
+|4 |    MERGE FULL OUTER JOIN |        |1        |17  |
+|5 |     TABLE SCAN           |t1      |1        |9   |
+|6 |     TABLE SCAN           |t2      |1        |9   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -664,26 +664,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |20       |120 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|20       |118 |
-|2 |  SORT                    |        |20       |118 |
-|3 |   PX PARTITION ITERATOR  |        |20       |97  |
-|4 |    MERGE FULL OUTER JOIN |        |20       |97  |
-|5 |     TABLE SCAN           |t1      |20       |40  |
-|6 |     TABLE SCAN           |t2      |20       |40  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |15  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |15  |
+|2 |  SORT                    |        |1        |14  |
+|3 |   PX PARTITION ITERATOR  |        |1        |14  |
+|4 |    MERGE FULL OUTER JOIN |        |1        |14  |
+|5 |     TABLE SCAN           |t1      |1        |7   |
+|6 |     TABLE SCAN           |t2      |1        |7   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-3])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-3])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r4_01_20 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -716,26 +716,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |10       |108 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|10       |107 |
-|2 |  SORT                    |        |10       |107 |
-|3 |   PX PARTITION ITERATOR  |        |10       |97  |
-|4 |    MERGE FULL OUTER JOIN |        |10       |97  |
-|5 |     TABLE SCAN           |t1      |20       |40  |
-|6 |     TABLE SCAN           |t2      |20       |40  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |17  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |17  |
+|2 |  SORT                    |        |1        |17  |
+|3 |   PX PARTITION ITERATOR  |        |1        |17  |
+|4 |    MERGE FULL OUTER JOIN |        |1        |17  |
+|5 |     TABLE SCAN           |t1      |1        |9   |
+|6 |     TABLE SCAN           |t2      |1        |9   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter([t1.a >= 13], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_09_28 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 13 and 24 order by t1.a, t2.a;
@@ -760,26 +760,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |21       |140 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|21       |138 |
-|2 |  SORT                    |        |21       |138 |
-|3 |   PX PARTITION ITERATOR  |        |21       |116 |
-|4 |    HASH FULL OUTER JOIN  |        |21       |116 |
-|5 |     TABLE SCAN           |t1      |18       |39  |
-|6 |     TABLE SCAN           |t2      |21       |40  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |12  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |12  |
+|2 |  SORT                    |        |1        |11  |
+|3 |   PX PARTITION ITERATOR  |        |1        |11  |
+|4 |    HASH FULL OUTER JOIN  |        |1        |11  |
+|5 |     TABLE SCAN           |t1      |1        |6   |
+|6 |     TABLE SCAN           |t2      |1        |6   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-2])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-2])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -820,26 +820,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |10       |130 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|10       |129 |
-|2 |  SORT                    |        |10       |129 |
-|3 |   PX PARTITION ITERATOR  |        |10       |119 |
-|4 |    HASH FULL OUTER JOIN  |        |10       |119 |
-|5 |     TABLE SCAN           |t1      |20       |39  |
-|6 |     TABLE SCAN           |t2      |20       |39  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |18  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |18  |
+|2 |  SORT                    |        |1        |18  |
+|3 |   PX PARTITION ITERATOR  |        |1        |18  |
+|4 |    HASH FULL OUTER JOIN  |        |1        |18  |
+|5 |     TABLE SCAN           |t1      |1        |9   |
+|6 |     TABLE SCAN           |t2      |1        |9   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -868,26 +868,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |20       |143 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|20       |141 |
-|2 |  SORT                    |        |20       |141 |
-|3 |   PX PARTITION ITERATOR  |        |20       |120 |
-|4 |    HASH FULL OUTER JOIN  |        |20       |120 |
-|5 |     TABLE SCAN           |t1      |20       |40  |
-|6 |     TABLE SCAN           |t2      |20       |40  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |15  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |15  |
+|2 |  SORT                    |        |1        |14  |
+|3 |   PX PARTITION ITERATOR  |        |1        |14  |
+|4 |    HASH FULL OUTER JOIN  |        |1        |14  |
+|5 |     TABLE SCAN           |t1      |1        |7   |
+|6 |     TABLE SCAN           |t2      |1        |7   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-3])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-3])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r4_01_20 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -920,26 +920,26 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |10       |131 |
-|1 | EXCHANGE OUT DISTR       |:EX10000|10       |130 |
-|2 |  SORT                    |        |10       |130 |
-|3 |   PX PARTITION ITERATOR  |        |10       |120 |
-|4 |    HASH FULL OUTER JOIN  |        |10       |120 |
-|5 |     TABLE SCAN           |t1      |20       |40  |
-|6 |     TABLE SCAN           |t2      |20       |40  |
+|0 |PX COORDINATOR MERGE SORT |        |1        |18  |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |18  |
+|2 |  SORT                    |        |1        |18  |
+|3 |   PX PARTITION ITERATOR  |        |1        |18  |
+|4 |    HASH FULL OUTER JOIN  |        |1        |18  |
+|5 |     TABLE SCAN           |t1      |1        |9   |
+|6 |     TABLE SCAN           |t2      |1        |9   |
 =======================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil)
-  4 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256
+  4 - output([t1.a], [t2.a]), filter([t1.a >= 13], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  5 - output([t1.a]), filter(nil), 
+  5 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  6 - output([t2.a]), filter(nil), 
+  6 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r5_09_28 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 13 and 24 order by t1.a, t2.a;
@@ -962,37 +962,35 @@ select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r5_09_28 t1 full join t_r5_09_28 t
 
 EXPLAIN select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |20       |136 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|20       |134 |
-|2 |  SORT                          |        |20       |134 |
-|3 |   MERGE FULL OUTER JOIN        |        |20       |112 |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |18       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|18       |39  |
-|6 |      PX PARTITION ITERATOR     |        |18       |39  |
-|7 |       TABLE SCAN               |t1      |18       |39  |
-|8 |    SORT                        |        |20       |57  |
-|9 |     PX PARTITION ITERATOR      |        |20       |39  |
-|10|      TABLE SCAN                |t2      |20       |39  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
+|2 |  SORT                        |        |1        |15  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
+|4 |    EXCHANGE IN DISTR         |        |1        |6   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
+|6 |      PX PARTITION ITERATOR   |        |1        |6   |
+|7 |       TABLE SCAN             |t1      |1        |6   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC]), Local Order
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-2])
-  8 - output([t2.a]), filter(nil), sort_keys([t2.a, ASC]), local merge sort
-  9 - output([t2.a]), filter(nil)
-  10 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -1030,37 +1028,35 @@ select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |11       |127 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|11       |126 |
-|2 |  SORT                          |        |11       |126 |
-|3 |   MERGE FULL OUTER JOIN        |        |11       |116 |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR     |        |20       |39  |
-|7 |       TABLE SCAN               |t1      |20       |39  |
-|8 |    SORT                        |        |21       |58  |
-|9 |     PX PARTITION ITERATOR      |        |21       |40  |
-|10|      TABLE SCAN                |t2      |21       |40  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |15  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
+|2 |  SORT                        |        |1        |15  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |6   |
+|9 |     TABLE SCAN               |t2      |1        |6   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC]), Local Order
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil), sort_keys([t2.a, ASC]), local merge sort
-  9 - output([t2.a]), filter(nil)
-  10 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-2])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -1086,35 +1082,35 @@ select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |20       |121 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|20       |119 |
-|2 |  SORT                          |        |20       |119 |
-|3 |   MERGE FULL OUTER JOIN        |        |20       |98  |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |41  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |40  |
-|6 |      PX PARTITION ITERATOR     |        |20       |40  |
-|7 |       TABLE SCAN               |t1      |20       |40  |
-|8 |    PX PARTITION ITERATOR       |        |20       |40  |
-|9 |     TABLE SCAN                 |t2      |20       |40  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |17  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |17  |
+|2 |  SORT                        |        |1        |16  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
+|4 |    EXCHANGE IN DISTR         |        |1        |8   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
+|6 |      PX PARTITION ITERATOR   |        |1        |7   |
+|7 |       TABLE SCAN             |t1      |1        |7   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC])
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-3])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -1152,35 +1148,35 @@ select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |10       |108 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|10       |107 |
-|2 |  SORT                          |        |10       |107 |
-|3 |   MERGE FULL OUTER JOIN        |        |10       |97  |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR     |        |20       |39  |
-|7 |       TABLE SCAN               |t1      |20       |39  |
-|8 |    PX PARTITION ITERATOR       |        |20       |39  |
-|9 |     TABLE SCAN                 |t2      |20       |39  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |16  |
+|2 |  SORT                        |        |1        |16  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |7   |
+|9 |     TABLE SCAN               |t2      |1        |7   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC])
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-3])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -1206,35 +1202,35 @@ select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |20       |118 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|20       |116 |
-|2 |  SORT                          |        |20       |116 |
-|3 |   MERGE FULL OUTER JOIN        |        |20       |95  |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |18       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|18       |39  |
-|6 |      PX PARTITION ITERATOR     |        |18       |39  |
-|7 |       TABLE SCAN               |t1      |18       |39  |
-|8 |    PX PARTITION ITERATOR       |        |20       |39  |
-|9 |     TABLE SCAN                 |t2      |20       |39  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
+|2 |  SORT                        |        |1        |13  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
+|4 |    EXCHANGE IN DISTR         |        |1        |6   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
+|6 |      PX PARTITION ITERATOR   |        |1        |6   |
+|7 |       TABLE SCAN             |t1      |1        |6   |
+|8 |    PX PARTITION ITERATOR     |        |1        |7   |
+|9 |     TABLE SCAN               |t2      |1        |7   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC]), Local Order
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-2])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-3])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -1272,35 +1268,35 @@ select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |10       |108 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|10       |107 |
-|2 |  SORT                          |        |10       |107 |
-|3 |   MERGE FULL OUTER JOIN        |        |10       |97  |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR     |        |20       |39  |
-|7 |       TABLE SCAN               |t1      |20       |39  |
-|8 |    PX PARTITION ITERATOR       |        |20       |40  |
-|9 |     TABLE SCAN                 |t2      |20       |40  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
+|2 |  SORT                        |        |1        |18  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC]), Local Order
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -1326,37 +1322,35 @@ select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |21       |141 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|21       |139 |
-|2 |  SORT                          |        |21       |139 |
-|3 |   MERGE FULL OUTER JOIN        |        |21       |116 |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |41  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |40  |
-|6 |      PX PARTITION ITERATOR     |        |20       |40  |
-|7 |       TABLE SCAN               |t1      |20       |40  |
-|8 |    SORT                        |        |21       |58  |
-|9 |     PX PARTITION ITERATOR      |        |21       |40  |
-|10|      TABLE SCAN                |t2      |21       |40  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
+|2 |  SORT                        |        |1        |13  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
+|4 |    EXCHANGE IN DISTR         |        |1        |8   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
+|6 |      PX PARTITION ITERATOR   |        |1        |7   |
+|7 |       TABLE SCAN             |t1      |1        |7   |
+|8 |    PX PARTITION ITERATOR     |        |1        |6   |
+|9 |     TABLE SCAN               |t2      |1        |6   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC])
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-3])
-  8 - output([t2.a]), filter(nil), sort_keys([t2.a, ASC]), local merge sort
-  9 - output([t2.a]), filter(nil)
-  10 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-2])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -1394,37 +1388,35 @@ select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |10       |125 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|10       |124 |
-|2 |  SORT                          |        |10       |124 |
-|3 |   MERGE FULL OUTER JOIN        |        |10       |114 |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR     |        |20       |39  |
-|7 |       TABLE SCAN               |t1      |20       |39  |
-|8 |    SORT                        |        |20       |57  |
-|9 |     PX PARTITION ITERATOR      |        |20       |39  |
-|10|      TABLE SCAN                |t2      |20       |39  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
+|2 |  SORT                        |        |1        |18  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC])
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil), sort_keys([t2.a, ASC]), local merge sort
-  9 - output([t2.a]), filter(nil)
-  10 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -1450,37 +1442,35 @@ select /*+use_nl(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |20       |136 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|20       |134 |
-|2 |  SORT                          |        |20       |134 |
-|3 |   MERGE FULL OUTER JOIN        |        |20       |112 |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |18       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|18       |39  |
-|6 |      PX PARTITION ITERATOR     |        |18       |39  |
-|7 |       TABLE SCAN               |t1      |18       |39  |
-|8 |    SORT                        |        |20       |57  |
-|9 |     PX PARTITION ITERATOR      |        |20       |39  |
-|10|      TABLE SCAN                |t2      |20       |39  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
+|2 |  SORT                        |        |1        |15  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
+|4 |    EXCHANGE IN DISTR         |        |1        |6   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
+|6 |      PX PARTITION ITERATOR   |        |1        |6   |
+|7 |       TABLE SCAN             |t1      |1        |6   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC]), Local Order
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-2])
-  8 - output([t2.a]), filter(nil), sort_keys([t2.a, ASC]), local merge sort
-  9 - output([t2.a]), filter(nil)
-  10 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -1518,37 +1508,35 @@ select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |11       |127 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|11       |126 |
-|2 |  SORT                          |        |11       |126 |
-|3 |   MERGE FULL OUTER JOIN        |        |11       |116 |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR     |        |20       |39  |
-|7 |       TABLE SCAN               |t1      |20       |39  |
-|8 |    SORT                        |        |21       |58  |
-|9 |     PX PARTITION ITERATOR      |        |21       |40  |
-|10|      TABLE SCAN                |t2      |21       |40  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |15  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
+|2 |  SORT                        |        |1        |15  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |6   |
+|9 |     TABLE SCAN               |t2      |1        |6   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC]), Local Order
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil), sort_keys([t2.a, ASC]), local merge sort
-  9 - output([t2.a]), filter(nil)
-  10 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-2])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -1574,35 +1562,35 @@ select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |20       |121 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|20       |119 |
-|2 |  SORT                          |        |20       |119 |
-|3 |   MERGE FULL OUTER JOIN        |        |20       |98  |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |41  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |40  |
-|6 |      PX PARTITION ITERATOR     |        |20       |40  |
-|7 |       TABLE SCAN               |t1      |20       |40  |
-|8 |    PX PARTITION ITERATOR       |        |20       |40  |
-|9 |     TABLE SCAN                 |t2      |20       |40  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |17  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |17  |
+|2 |  SORT                        |        |1        |16  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
+|4 |    EXCHANGE IN DISTR         |        |1        |8   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
+|6 |      PX PARTITION ITERATOR   |        |1        |7   |
+|7 |       TABLE SCAN             |t1      |1        |7   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC])
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-3])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -1640,35 +1628,35 @@ select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |10       |108 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|10       |107 |
-|2 |  SORT                          |        |10       |107 |
-|3 |   MERGE FULL OUTER JOIN        |        |10       |97  |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR     |        |20       |39  |
-|7 |       TABLE SCAN               |t1      |20       |39  |
-|8 |    PX PARTITION ITERATOR       |        |20       |39  |
-|9 |     TABLE SCAN                 |t2      |20       |39  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |16  |
+|2 |  SORT                        |        |1        |16  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |7   |
+|9 |     TABLE SCAN               |t2      |1        |7   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC])
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-3])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -1694,35 +1682,35 @@ select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |20       |118 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|20       |116 |
-|2 |  SORT                          |        |20       |116 |
-|3 |   MERGE FULL OUTER JOIN        |        |20       |95  |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |18       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|18       |39  |
-|6 |      PX PARTITION ITERATOR     |        |18       |39  |
-|7 |       TABLE SCAN               |t1      |18       |39  |
-|8 |    PX PARTITION ITERATOR       |        |20       |39  |
-|9 |     TABLE SCAN                 |t2      |20       |39  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
+|2 |  SORT                        |        |1        |13  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
+|4 |    EXCHANGE IN DISTR         |        |1        |6   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
+|6 |      PX PARTITION ITERATOR   |        |1        |6   |
+|7 |       TABLE SCAN             |t1      |1        |6   |
+|8 |    PX PARTITION ITERATOR     |        |1        |7   |
+|9 |     TABLE SCAN               |t2      |1        |7   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC]), Local Order
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-2])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-3])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -1760,35 +1748,35 @@ select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |10       |108 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|10       |107 |
-|2 |  SORT                          |        |10       |107 |
-|3 |   MERGE FULL OUTER JOIN        |        |10       |97  |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR     |        |20       |39  |
-|7 |       TABLE SCAN               |t1      |20       |39  |
-|8 |    PX PARTITION ITERATOR       |        |20       |40  |
-|9 |     TABLE SCAN                 |t2      |20       |40  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
+|2 |  SORT                        |        |1        |18  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC]), Local Order
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -1814,37 +1802,35 @@ select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |21       |141 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|21       |139 |
-|2 |  SORT                          |        |21       |139 |
-|3 |   MERGE FULL OUTER JOIN        |        |21       |116 |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |41  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |40  |
-|6 |      PX PARTITION ITERATOR     |        |20       |40  |
-|7 |       TABLE SCAN               |t1      |20       |40  |
-|8 |    SORT                        |        |21       |58  |
-|9 |     PX PARTITION ITERATOR      |        |21       |40  |
-|10|      TABLE SCAN                |t2      |21       |40  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
+|2 |  SORT                        |        |1        |13  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
+|4 |    EXCHANGE IN DISTR         |        |1        |8   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
+|6 |      PX PARTITION ITERATOR   |        |1        |7   |
+|7 |       TABLE SCAN             |t1      |1        |7   |
+|8 |    PX PARTITION ITERATOR     |        |1        |6   |
+|9 |     TABLE SCAN               |t2      |1        |6   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC])
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-3])
-  8 - output([t2.a]), filter(nil), sort_keys([t2.a, ASC]), local merge sort
-  9 - output([t2.a]), filter(nil)
-  10 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-2])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -1882,37 +1868,35 @@ select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 
 +----+----+
 EXPLAIN select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
 Query Plan
-=============================================================
-|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
--------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT       |        |10       |125 |
-|1 | EXCHANGE OUT DISTR             |:EX10001|10       |124 |
-|2 |  SORT                          |        |10       |124 |
-|3 |   MERGE FULL OUTER JOIN        |        |10       |114 |
-|4 |    EXCHANGE IN MERGE SORT DISTR|        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)  |:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR     |        |20       |39  |
-|7 |       TABLE SCAN               |t1      |20       |39  |
-|8 |    SORT                        |        |20       |57  |
-|9 |     PX PARTITION ITERATOR      |        |20       |39  |
-|10|      TABLE SCAN                |t2      |20       |39  |
-=============================================================
+===========================================================
+|ID|OPERATOR                      |NAME    |EST. ROWS|COST|
+-----------------------------------------------------------
+|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
+|2 |  SORT                        |        |1        |18  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
+===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil), sort_keys([t1.a, ASC])
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil), sort_keys([t2.a, ASC]), local merge sort
-  9 - output([t2.a]), filter(nil)
-  10 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_mj(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -1941,32 +1925,32 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |20       |139 |
-|1 | EXCHANGE OUT DISTR           |:EX10001|20       |137 |
-|2 |  SORT                        |        |20       |137 |
-|3 |   HASH FULL OUTER JOIN       |        |20       |116 |
-|4 |    EXCHANGE IN DISTR         |        |18       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|18       |39  |
-|6 |      PX PARTITION ITERATOR   |        |18       |39  |
-|7 |       TABLE SCAN             |t1      |18       |39  |
-|8 |    PX PARTITION ITERATOR     |        |20       |39  |
-|9 |     TABLE SCAN               |t2      |20       |39  |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
+|2 |  SORT                        |        |1        |15  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
+|4 |    EXCHANGE IN DISTR         |        |1        |6   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
+|6 |      PX PARTITION ITERATOR   |        |1        |6   |
+|7 |       TABLE SCAN             |t1      |1        |6   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
 ===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil)
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-2])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -2007,32 +1991,32 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |11       |132 |
-|1 | EXCHANGE OUT DISTR           |:EX10001|11       |131 |
-|2 |  SORT                        |        |11       |131 |
-|3 |   HASH FULL OUTER JOIN       |        |11       |120 |
-|4 |    EXCHANGE IN DISTR         |        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR   |        |20       |39  |
-|7 |       TABLE SCAN             |t1      |20       |39  |
-|8 |    PX PARTITION ITERATOR     |        |21       |40  |
-|9 |     TABLE SCAN               |t2      |21       |40  |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |15  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
+|2 |  SORT                        |        |1        |15  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |6   |
+|9 |     TABLE SCAN               |t2      |1        |6   |
 ===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil)
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-2])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -2061,32 +2045,32 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |20       |144 |
-|1 | EXCHANGE OUT DISTR           |:EX10001|20       |142 |
-|2 |  SORT                        |        |20       |142 |
-|3 |   HASH FULL OUTER JOIN       |        |20       |121 |
-|4 |    EXCHANGE IN DISTR         |        |20       |41  |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|20       |40  |
-|6 |      PX PARTITION ITERATOR   |        |20       |40  |
-|7 |       TABLE SCAN             |t1      |20       |40  |
-|8 |    PX PARTITION ITERATOR     |        |20       |40  |
-|9 |     TABLE SCAN               |t2      |20       |40  |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |17  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |17  |
+|2 |  SORT                        |        |1        |16  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
+|4 |    EXCHANGE IN DISTR         |        |1        |8   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
+|6 |      PX PARTITION ITERATOR   |        |1        |7   |
+|7 |       TABLE SCAN             |t1      |1        |7   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
 ===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil)
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-3])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -2127,32 +2111,32 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |10       |131 |
-|1 | EXCHANGE OUT DISTR           |:EX10001|10       |130 |
-|2 |  SORT                        |        |10       |130 |
-|3 |   HASH FULL OUTER JOIN       |        |10       |120 |
-|4 |    EXCHANGE IN DISTR         |        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR   |        |20       |39  |
-|7 |       TABLE SCAN             |t1      |20       |39  |
-|8 |    PX PARTITION ITERATOR     |        |20       |39  |
-|9 |     TABLE SCAN               |t2      |20       |39  |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |16  |
+|2 |  SORT                        |        |1        |16  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |7   |
+|9 |     TABLE SCAN               |t2      |1        |7   |
 ===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil)
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-3])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -2181,32 +2165,32 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |20       |139 |
-|1 | EXCHANGE OUT DISTR           |:EX10001|20       |137 |
-|2 |  SORT                        |        |20       |137 |
-|3 |   HASH FULL OUTER JOIN       |        |20       |116 |
-|4 |    EXCHANGE IN DISTR         |        |18       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|18       |39  |
-|6 |      PX PARTITION ITERATOR   |        |18       |39  |
-|7 |       TABLE SCAN             |t1      |18       |39  |
-|8 |    PX PARTITION ITERATOR     |        |20       |39  |
-|9 |     TABLE SCAN               |t2      |20       |39  |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
+|2 |  SORT                        |        |1        |13  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
+|4 |    EXCHANGE IN DISTR         |        |1        |6   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
+|6 |      PX PARTITION ITERATOR   |        |1        |6   |
+|7 |       TABLE SCAN             |t1      |1        |6   |
+|8 |    PX PARTITION ITERATOR     |        |1        |7   |
+|9 |     TABLE SCAN               |t2      |1        |7   |
 ===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil)
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-2])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-3])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h3_01_20 t1 full join t_r4_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -2247,32 +2231,32 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |10       |131 |
-|1 | EXCHANGE OUT DISTR           |:EX10001|10       |130 |
-|2 |  SORT                        |        |10       |130 |
-|3 |   HASH FULL OUTER JOIN       |        |10       |120 |
-|4 |    EXCHANGE IN DISTR         |        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR   |        |20       |39  |
-|7 |       TABLE SCAN             |t1      |20       |39  |
-|8 |    PX PARTITION ITERATOR     |        |20       |40  |
-|9 |     TABLE SCAN               |t2      |20       |40  |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
+|2 |  SORT                        |        |1        |18  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
 ===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil)
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_h5_01_20 t1 full join t_r5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;
@@ -2301,32 +2285,32 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |21       |145 |
-|1 | EXCHANGE OUT DISTR           |:EX10001|21       |143 |
-|2 |  SORT                        |        |21       |143 |
-|3 |   HASH FULL OUTER JOIN       |        |21       |121 |
-|4 |    EXCHANGE IN DISTR         |        |20       |41  |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|20       |40  |
-|6 |      PX PARTITION ITERATOR   |        |20       |40  |
-|7 |       TABLE SCAN             |t1      |20       |40  |
-|8 |    PX PARTITION ITERATOR     |        |21       |40  |
-|9 |     TABLE SCAN               |t2      |21       |40  |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
+|2 |  SORT                        |        |1        |13  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
+|4 |    EXCHANGE IN DISTR         |        |1        |8   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
+|6 |      PX PARTITION ITERATOR   |        |1        |7   |
+|7 |       TABLE SCAN             |t1      |1        |7   |
+|8 |    PX PARTITION ITERATOR     |        |1        |6   |
+|9 |     TABLE SCAN               |t2      |1        |6   |
 ===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter(nil), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter(nil), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil)
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-3])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-2])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r4_01_20 t1 full join t_h3_09_28 t2 on t1.a = t2.a order by t1.a, t2.a;
@@ -2367,32 +2351,32 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |10       |131 |
-|1 | EXCHANGE OUT DISTR           |:EX10001|10       |130 |
-|2 |  SORT                        |        |10       |130 |
-|3 |   HASH FULL OUTER JOIN       |        |10       |120 |
-|4 |    EXCHANGE IN DISTR         |        |20       |40  |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|20       |39  |
-|6 |      PX PARTITION ITERATOR   |        |20       |39  |
-|7 |       TABLE SCAN             |t1      |20       |39  |
-|8 |    PX PARTITION ITERATOR     |        |20       |39  |
-|9 |     TABLE SCAN               |t2      |20       |39  |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
+|2 |  SORT                        |        |1        |18  |
+|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
+|4 |    EXCHANGE IN DISTR         |        |1        |9   |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
+|6 |      PX PARTITION ITERATOR   |        |1        |9   |
+|7 |       TABLE SCAN             |t1      |1        |9   |
+|8 |    PX PARTITION ITERATOR     |        |1        |9   |
+|9 |     TABLE SCAN               |t2      |1        |9   |
 ===========================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  1 - output([t1.a], [t2.a]), filter(nil), dop=1
-  2 - output([t1.a], [t2.a]), filter(nil), sort_keys([t1.a, ASC], [t2.a, ASC])
-  3 - output([t1.a], [t2.a]), filter([(T_OP_BTW, cast(t1.a, DECIMAL(11, 0)), ?, ?)]), 
+  0 - output([INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  1 - output([t1.a], [t2.a], [INTERNAL_FUNCTION(t1.a, t2.a)]), filter(nil), rowset=256, dop=1
+  2 - output([t1.a], [t2.a]), filter(nil), rowset=256, sort_keys([t1.a, ASC], [t2.a, ASC])
+  3 - output([t1.a], [t2.a]), filter([t1.a >= 5], [t1.a <= 24]), rowset=256, 
       equal_conds([t1.a = t2.a]), other_conds(nil)
-  4 - output([t1.a]), filter(nil)
-  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), dop=1
-  6 - output([t1.a]), filter(nil)
-  7 - output([t1.a]), filter(nil), 
+  4 - output([t1.a]), filter(nil), rowset=256
+  5 - (#keys=1, [t1.a]), output([t1.a]), filter(nil), rowset=256, dop=1
+  6 - output([t1.a]), filter(nil), rowset=256
+  7 - output([t1.a]), filter(nil), rowset=256, 
       access([t1.a]), partitions(p[0-4])
-  8 - output([t2.a]), filter(nil)
-  9 - output([t2.a]), filter(nil), 
+  8 - output([t2.a]), filter(nil), rowset=256
+  9 - output([t2.a]), filter(nil), rowset=256, 
       access([t2.a]), partitions(p[0-4])
 
 select /*+use_hash(t1 t2)*/ t1.a, t2.a from t_r5_01_20 t1 full join t_h5_09_28 t2 on t1.a = t2.a where t1.a between 5 and 24 order by t1.a, t2.a;

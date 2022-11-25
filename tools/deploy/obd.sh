@@ -27,11 +27,23 @@ function variables_parpare {
   HOST=$(hostname -i)
   DATA_PATH="/data/$(whoami)"
   IPADDRESS="127.0.0.1"
-  COMPONENT="oceanbase-ce"
-  DEP_PATH=$BASE_DIR/deps/3rd
+  if [[ -f "$BASE_DIR/.ce" ]]
+  then 
+    export IS_CE=1
+    COMPONENT="oceanbase-ce"
+  else
+    COMPONENT="oceanbase"
+  fi
+  if grep 'dep_create.sh' $BASE_DIR/build.sh 2>&1 >/dev/null
+  then
+    DEP_PATH=$BASE_DIR/deps/3rd
+  else
+    DEP_PATH=$BASE_DIR/rpm/.dep_create/var
+  fi
+
   OBCLIENT_BIN=$DEP_PATH/u01/obclient/bin/obclient
   MYSQLTEST_BIN=$DEP_PATH/u01/obclient/bin/mysqltest
-  
+
   export OBD_HOME=$DEPLOY_PATH
   export OBD_INSTALL_PRE=$DEP_PATH
   DEFAULT_DEPLOY_NAME_FILE=$OBD_HOME/.obd/.default_deploy
@@ -55,11 +67,16 @@ function mirror_create {
   fi
 
   # observer mirror create
-  obs_version=$($OBSERVER_BIN -V 2>&1 | grep -E "observer \(OceanBase( CE)? ([.0-9]+)\)" | grep -Eo '([.0-9]+)')
+  obs_version=$($OBSERVER_BIN -V 2>&1 | grep -E "observer \(OceanBase([ \_]CE)? ([.0-9]+)\)" | grep -Eo '([.0-9]+)')
   if [[ "$obs_version" == "" ]]
   then
     echo "$OBSERVER_BIN not found"
     return 1
+  fi
+  if [ "x$IS_CE" == "x" ]
+  then
+    export IS_CE="0"
+    [[ $($OBSERVER_BIN -V 2>&1 | grep -E 'OceanBase[_ ]CE') ]] && COMPONENT="oceanbase-ce" && export IS_CE="1"
   fi
   [[ -f "$BASE_DIR/tools/deploy/obd/.observer_obd_plugin_version" ]] && obs_version=$(cat $BASE_DIR/tools/deploy/obd/.observer_obd_plugin_version)
   obs_mirror_info=$(obd_exec mirror create -n $COMPONENT -p "$DEPLOY_PATH" -V "$obs_version"  -t $tag -f) && success=1
@@ -79,8 +96,6 @@ function mirror_create {
 ## generate config
 function generate_config {
   app_name=$task.$USER.$HOST
-  ocp_config_server='http://ocp-cfg.alibaba.net:8080/services?User_ID=alibaba&UID=test'
-  proxy_cfg_url=${ocp_config_server}\&Action=GetObProxyConfig\&ObRegionGroup=$app_name
 
   port_num=$port_gen
   mysql_port=$port_num && port_num=$((port_num+1))
@@ -101,7 +116,6 @@ function generate_config {
   proxy_conf=${proxy_conf//'{{%% LISTEN_PORT %%}}'/$listen_port}
   proxy_conf=${proxy_conf//'{{%% PROMETHEUS_LISTEN_PORT %%}}'/$prometheus_listen_port}
   proxy_conf=${proxy_conf//'{{%% OBPORXY_HOME_PATH %%}}'/"$DATA_PATH"/obproxy}
-  proxy_conf=${proxy_conf//'{{%% OBPROXY_CONFIG_SERVER_URL %%}}'/$proxy_cfg_url}
 
 
   base_template=${base_template//"{{%% COMPONENT %%}}"/$COMPONENT}
@@ -109,7 +123,6 @@ function generate_config {
   base_template=${base_template//"{{%% DEPLOY_PATH %%}}"/$DEPLOY_PATH}
   base_template=${base_template//"{{%% TOOLS_PATH %%}}"/$BASE_DIR/tools}
   base_template=${base_template//"{{%% MINI_SIZE %%}}"/$mem}
-  base_template=${base_template//"{{%% OBCONFIG_URL %%}}"/$ocp_config_server}
   base_template=${base_template//"{{%% APPNAME %%}}"/$app_name}
   base_template=${base_template//"{{%% EXTRA_PARAM %%}}"/}
 
@@ -266,13 +279,17 @@ function get_obproxy {
 }
 
 function deploy_cluster {
-  [[ "$YAML_CONF" == "" ]] || yaml_config_args="-c $YAML_CONF"
   get_deploy_name
   if [[ "$YAML_CONF" != "" ]] 
   then
     config_yaml=$YAML_CONF
   else
-    config_yaml=$OBD_CLUSTER_PATH/$deploy_name/config.yaml
+    if [[ -f $OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml ]]
+    then
+      config_yaml=$OBD_CLUSTER_PATH/$deploy_name/tmp_config.yaml
+    else
+      config_yaml=$OBD_CLUSTER_PATH/$deploy_name/config.yaml
+    fi
   fi
   [[ "$(grep -E "^obproxy:" $config_yaml)" != "" ]] && ( get_obproxy || exit 1 )
 
@@ -283,7 +300,18 @@ function deploy_cluster {
   else
     obd cluster destroy "$deploy_name" -f
   fi
-  obd cluster deploy "$deploy_name" $yaml_config_args -C || exit 1
+  if [ "x$IS_CE" == "x" ]; then
+    [[ "$YAML_CONF" == "" ]] || yaml_config_args="-c $YAML_CONF"
+  else
+    yaml_config_args=""
+    if [ $IS_CE == '0' ]; then
+      sed 's/oceanbase-ce\(:\?\)$/oceanbase\1/g' $config_yaml | obd cluster edit-config "$deploy_name"
+    fi
+    if [ $IS_CE == '1' ]; then
+      sed 's/oceanbase\(:\?\)$/oceanbase-ce\1/g' $config_yaml | obd cluster edit-config "$deploy_name"
+    fi
+  fi
+  obd cluster deploy "$deploy_name" -C $yaml_config_args || exit 1
   if ! obd cluster start "$deploy_name" -f;
   then
     while [[ "$NO_CONFIRM" != "1" && "$(grep 'config_status: NEED_REDEPLOY' $OBD_CLUSTER_PATH/$deploy_name/.data)" != "" ]] 
@@ -305,11 +333,17 @@ function deploy_cluster {
       esac
     done
   fi
-  init_sql
+  get_init_sql
+  obd test mysqltest "$deploy_name" $INIT_FLIES --init-only $CLIENT_BIN_ARGS
 }
 
-function init_sql {
-  obd test mysqltest "$deploy_name" "$INIT_FLIES" --init-only $CLIENT_BIN_ARGS
+function get_init_sql {
+  [[ "$INIT_FLIES" != "" ]] && return
+  if [[ "$MINI" == "1" && -f $BASE_DIR/tools/deploy/init.sql ]]
+  then
+    INIT_FLIES="--init-sql-files=init.sql,init_user.sql|root@mysql|test"
+    [ -f init_user_oracle.sql ] && INIT_FLIES="${INIT_FLIES},init_user_oracle.sql|SYS@oracle|SYS"
+  fi
 }
 
 function start_cluster {
@@ -374,8 +408,9 @@ function mysqltest {
   if [[ "$NEED_REBOOT" == "1" || "$YAML_CONF" != "" ]]
   then
   mirror_create || return 1
-  deploy_cluster || return 2
+  deploy_cluster
   fi
+  get_init_sql
   obd test mysqltest "$deploy_name" $CLIENT_BIN_ARGS $extra_args $INIT_FLIES
 }
 
@@ -486,11 +521,11 @@ oracle [-n DEPLOY_NAME]                  Connect to target server by SYS@oracle,
 
 Options:
 -V, --version                            Show version of obd.
--c YAML_CONF, --config=YAML_CONF         The deploy yaml file.
--n DEPLOY_NAME, --deploy-name=DEPLOY_NAME
+-c YAML_CONF, --config YAML_CONF         The deploy yaml file.
+-n DEPLOY_NAME, --deploy-name DEPLOY_NAME
                                          The name of the deployment.
 -v VERBOSE                               Activate verbose output.
--p DATA_PATH, --data-path=DATA_PATH      The data path for server deployment, it can be changed in the yaml file.
+-p DATA_PATH, --data-path DATA_PATH      The data path for server deployment, it can be changed in the yaml file.
 --ip IPADDRESS                           The ipaddress for server deployment, it can be changed in the yaml file.
 --port PORT_BEGIN                        The port starting point. All the ports can be changed in the yaml file.
 --with-local-obproxy                     Use local obproxy.
@@ -498,7 +533,6 @@ Options:
 --cp                                     Exec copy.sh.
 --reboot                                 Redeploy cluster before mysqltest
 
-https://yuque.antfin-inc.com/docs/share/7f5dc9e8-dbe8-4f59-852d-b7ce57b88fdd
 """
 }
 
@@ -512,38 +546,26 @@ function main() {
     case "$1" in
       -v ) VERBOSE_FLAG='-v'; set -x; shift ;;
       --with-local-obproxy) WITH_LOCAL_PROXY="1";SKIP_COPY="1"; shift ;;
-      -c | --config ) 
-      if [[ "$commond" == "deploy" || "$commond" == "redeploy" ||  "$commond" == "mysqltest" ]]
-      then
-      YAML_CONF="$2"
-      shift 2 
-      else
-      extra_args="$extra_args $1"
-      shift
-      fi
-      ;;
+      -c | --config ) YAML_CONF="$2"; shift 2 ;;
       -n | --deploy-name ) DEPLOY_NAME="$2"; shift 2 ;;
-      -p | --data-path ) 
-      if [[ "$commond" == "prepare" ]]
-      then
-        DATA_PATH="$2";
-        shift 2 
-      else
-        extra_args="$extra_args $1"
-        shift
-      fi
-      ;;
+      -p | --data-path ) DATA_PATH="$2"; shift 2 ;;
       -N ) NO_CONFIRM="1"; shift ;;
       --ip ) IPADDRESS="$2"; shift 2 ;;
-      # --disable-reboot ) DISABLE_REBOOT="1"; extra_args="$extra_args $1"; shift ;;
+      --disable-reboot ) DISABLE_REBOOT="1"; extra_args="$extra_args $1"; shift ;;
       --reboot ) NEED_REBOOT="1"; shift ;;
       --cp ) EXEC_CP="1"; shift ;;
       --skip-copy ) SKIP_COPY="1"; shift ;;
+      --mini) MINI="1"; shift ;;
+      --port ) export port_gen="$2"; extra_args="$extra_args $1"; shift ;;
       -- ) shift ;;
       "" ) break ;;
       * ) extra_args="$extra_args $1"; [[ "$1" == "--help" || "$1" == "-h" ]] && HELP="1" ; shift ;;
     esac
   done
+  if [[ "$MINI" == "1" && "$DISABLE_REBOOT" != "1" ]]
+  then 
+    NEED_REBOOT="1"
+  fi
   if [[ ! -f $DEPLOY_PATH/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
   then
   obd devmode enable || (echo "Exec obd cmd failed. If your branch is based on 3.1_opensource_release, please go to the deps/3rd directory and execute 'bash dep_create.sh all' to install obd." && exit 1)

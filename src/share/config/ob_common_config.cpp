@@ -13,19 +13,22 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/config/ob_server_config.h"
+#include "lib/utility/ob_defer.h"
 #include "common/ob_record_header.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
-namespace oceanbase {
-namespace common {
-
-ObConfigContainer*& ObInitConfigContainer::local_container()
+namespace oceanbase
 {
-  static RLOCAL(ObConfigContainer*, l_container);
+namespace common
+{
+
+ObConfigContainer *&ObInitConfigContainer::local_container()
+{
+  RLOCAL(ObConfigContainer*, l_container);
   return l_container;
 }
 
-const ObConfigContainer& ObInitConfigContainer::get_container()
+const ObConfigContainer &ObInitConfigContainer::get_container()
 {
   return container_;
 }
@@ -36,19 +39,23 @@ ObInitConfigContainer::ObInitConfigContainer()
 }
 
 ObCommonConfig::ObCommonConfig()
-{}
+{
+}
 
 ObCommonConfig::~ObCommonConfig()
-{}
+{
+}
 
-int ObCommonConfig::add_extra_config(const char* config_str, int64_t version /* = 0 */, bool check_name /* = false */)
+int ObCommonConfig::add_extra_config(const char *config_str,
+                                     int64_t version /* = 0 */ ,
+                                     bool check_name /* = false */)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_OPTS_LENGTH = sysconf(_SC_ARG_MAX);
   int64_t config_str_length = 0;
-  char* buf = NULL;
-  char* saveptr = NULL;
-  char* token = NULL;
+  char *buf = NULL;
+  char *saveptr = NULL;
+  char *token = NULL;
   bool split_by_comma = false;
 
   if (OB_ISNULL(config_str)) {
@@ -68,50 +75,91 @@ int ObCommonConfig::add_extra_config(const char* config_str, int64_t version /* 
       token = STRTOK_R(buf, ",\n", &saveptr);
       split_by_comma = true;
     }
-  }
-  char external_info_val[OB_MAX_CONFIG_VALUE_LEN];
-  external_info_val[0] = '\0';
-  const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
-  const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
-  while (OB_SUCC(ret) && OB_LIKELY(NULL != token)) {
-    char* saveptr_one = NULL;
-    const char* name = NULL;
-    const char* value = NULL;
-    ObConfigItem* const* pp_item = NULL;
-    if (OB_ISNULL(name = STRTOK_R(token, "=", &saveptr_one))) {
-      ret = OB_INVALID_CONFIG;
-      LOG_ERROR("Invalid config string", K(token), K(ret));
-    } else if (OB_ISNULL(saveptr_one) || OB_UNLIKELY('\0' == *(value = saveptr_one))) {
-      LOG_INFO("Empty config string", K(token), K(name));
-      // ret = OB_INVALID_CONFIG;
-      name = "";
-    } else if (OB_ISNULL(pp_item = container_.get(ObConfigStringKey(name)))) {
-      /* make compatible with previous configuration */
-      ret = check_name ? OB_INVALID_CONFIG : OB_SUCCESS;
-      LOG_WARN("Invalid config string, no such config item", K(name), K(value), K(ret));
-    } else if (external_kms_info_cfg.case_compare(name) == 0 || ssl_external_kms_info_cfg.case_compare(name) == 0) {
-      if (OB_FAIL(common::hex_to_cstr(value, strlen(value), external_info_val, OB_MAX_CONFIG_VALUE_LEN))) {
-        LOG_WARN("fail to hex to cstr", K(ret));
-      } else {
-        value = external_info_val;
+    const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
+    const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
+    auto func = [&]() {
+      char *saveptr_one = NULL;
+      const char *name = NULL;
+      const char *value = NULL;
+      ObConfigItem *const *pp_item = NULL;
+      if (OB_ISNULL(name = STRTOK_R(token, "=", &saveptr_one))) {
+        ret = OB_INVALID_CONFIG;
+        LOG_ERROR("Invalid config string", K(token), K(ret));
+      } else if (OB_ISNULL(saveptr_one) || OB_UNLIKELY('\0' == *(value = saveptr_one))) {
+        LOG_INFO("Empty config string", K(token), K(name));
+        // ret = OB_INVALID_CONFIG;
+        name = "";
       }
+      if (OB_SUCC(ret)) {
+        const int value_len = strlen(value);
+        // hex2cstring -> value_len / 2 + 1
+        // '\0' -> 1
+        const int external_info_val_len = value_len / 2 + 1 + 1;
+        char *external_info_val = (char*)ob_malloc(external_info_val_len, "temp");
+        DEFER(if (external_info_val != nullptr) ob_free(external_info_val););
+        DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
+        if (OB_ISNULL(external_info_val)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("failed to alloc", K(ret));
+        } else if (FALSE_IT(external_info_val[0] = '\0')) {
+        } else if (OB_ISNULL(pp_item = container_.get(ObConfigStringKey(name)))) {
+          /* make compatible with previous configuration */
+          ret = check_name ? OB_INVALID_CONFIG : OB_SUCCESS;
+          LOG_ERROR("Invalid config string, no such config item", K(name), K(value), K(ret));
+        } else if (external_kms_info_cfg.case_compare(name) == 0
+                   || ssl_external_kms_info_cfg.case_compare(name) == 0) {
+          if (OB_FAIL(common::hex_to_cstr(value, value_len,
+              external_info_val, external_info_val_len))) {
+            LOG_ERROR("fail to hex to cstr", K(ret));
+          } else {
+            value = external_info_val;
+          }
+        }
+        if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
+        } else if (!(*pp_item)->set_value(value)) {
+          ret = OB_INVALID_CONFIG;
+          LOG_ERROR("Invalid config value", K(name), K(value), K(ret));
+        } else if (!(*pp_item)->check()) {
+          ret = OB_INVALID_CONFIG;
+          const char* range = (*pp_item)->range();
+          if (OB_ISNULL(range) || strlen(range) == 0) {
+            LOG_ERROR("Invalid config, value out of range", K(name), K(value), K(ret));
+          } else {
+            _LOG_ERROR("Invalid config, value out of %s (for reference only). name=%s, value=%s, ret=%d", range, name, value, ret);
+          }
+        } else {
+          (*pp_item)->set_version(version);
+          LOG_INFO("Load config succ", K(name), K(value));
+        }
+      }
+    };
+    // init enable_production_mode at first
+    while (OB_SUCC(ret) && OB_NOT_NULL(token)) {
+      if (strncmp(token, "enable_production_mode=", 23) == 0) {
+        func();
+        break;
+      }
+      token = (true == split_by_comma) ? STRTOK_R(NULL, ",\n", &saveptr) : STRTOK_R(NULL, "\n", &saveptr);
     }
-    if (OB_FAIL(ret) || OB_ISNULL(pp_item)) {
-    } else if (!(*pp_item)->set_value(value)) {
-      ret = OB_INVALID_CONFIG;
-      LOG_WARN("Invalid config value", K(name), K(value), K(ret));
-    } else if (!(*pp_item)->check()) {
-      ret = OB_INVALID_CONFIG;
-      LOG_WARN("Invalid config, value out of range", K(name), K(value), K(ret));
-    } else {
-      (*pp_item)->set_version(version);
-      LOG_INFO("Load config succ", K(name), K(value));
+    // reset
+    MEMCPY(buf, config_str, config_str_length);
+    buf[config_str_length] = '\0';
+    saveptr = nullptr;
+    token = STRTOK_R(buf, "\n", &saveptr);
+    if (0 == STRLEN(saveptr)) {
+      token = STRTOK_R(buf, ",\n", &saveptr);
+      split_by_comma = true;
     }
-    token = (true == split_by_comma) ? STRTOK_R(NULL, ",\n", &saveptr) : STRTOK_R(NULL, "\n", &saveptr);
+    while (OB_SUCC(ret) && OB_NOT_NULL(token)) {
+      if (strncmp(token, "enable_production_mode:", 23) != 0) {
+        func();
+      }
+      token = (true == split_by_comma) ? STRTOK_R(NULL, ",\n", &saveptr) : STRTOK_R(NULL, "\n", &saveptr);
+    }
   }
 
   if (NULL != buf) {
-    delete[] buf;
+    delete [] buf;
     buf = NULL;
   }
   return ret;
@@ -125,30 +173,30 @@ OB_DEF_SERIALIZE(ObCommonConfig)
   ObConfigContainer::const_iterator it = container_.begin();
   const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
   const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
-  char external_info_val[OB_MAX_CONFIG_VALUE_LEN];
-  external_info_val[0] = '\0';
-  for (; OB_SUCC(ret) && it != container_.end(); ++it) {
-    if (OB_ISNULL(it->second)) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (it->second->value_updated()) {
-      if (external_kms_info_cfg.case_compare(it->first.str()) == 0 ||
-          ssl_external_kms_info_cfg.case_compare(it->first.str()) == 0) {
-        int64_t hex_pos = 0, hex_c_str_pos = 0;
-        if (OB_FAIL(common::to_hex_cstr((void*)it->second->spfile_str(),
-                strlen(it->second->spfile_str()),
-                external_info_val,
-                OB_MAX_CONFIG_VALUE_LEN,
-                hex_pos,
-                hex_c_str_pos))) {
-          LOG_WARN("fail to convert hex str", K(ret));
+  HEAP_VAR(char[OB_MAX_CONFIG_VALUE_LEN], external_info_val) {
+    external_info_val[0] = '\0';
+    for (; OB_SUCC(ret) && it != container_.end(); ++it) {
+      if (OB_ISNULL(it->second)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (it->second->value_updated()) {
+        if (external_kms_info_cfg.case_compare(it->first.str()) == 0
+            || ssl_external_kms_info_cfg.case_compare(it->first.str()) == 0) {
+          int64_t hex_pos = 0, hex_c_str_pos = 0;
+          if (OB_FAIL(common::to_hex_cstr((void *)it->second->spfile_str(),
+              strlen(it->second->spfile_str()),
+              external_info_val, OB_MAX_CONFIG_VALUE_LEN, hex_pos, hex_c_str_pos))) {
+            LOG_WARN("fail to convert hex str", K(ret));
+          } else {
+            ret = databuff_printf(buf, buf_len, pos, "%s=%s\n",
+                it->first.str(), external_info_val);
+          }
         } else {
-          ret = databuff_printf(buf, buf_len, pos, "%s=%s\n", it->first.str(), external_info_val);
+          ret = databuff_printf(buf, buf_len, pos, "%s=%s\n",
+              it->first.str(), it->second->spfile_str());
         }
-      } else {
-        ret = databuff_printf(buf, buf_len, pos, "%s=%s\n", it->first.str(), it->second->spfile_str());
       }
-    }
-  }  // for
+    } // for
+  }
   if (OB_SUCC(ret)) {
     int64_t writen_len = pos - saved_pos;
     if (writen_len != expect_data_len) {
@@ -165,7 +213,7 @@ OB_DEF_DESERIALIZE(ObCommonConfig)
   if (data_len == 0 || pos >= data_len) {
   } else {
     int64_t config_str_length = 0;
-    char* copy_buf = nullptr;
+    char *copy_buf = nullptr;
     if (OB_ISNULL(buf + pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("config str is null", K(ret));
@@ -180,7 +228,7 @@ OB_DEF_DESERIALIZE(ObCommonConfig)
       }
 
       if (nullptr != copy_buf) {
-        delete[] copy_buf;
+        delete [] copy_buf;
         copy_buf = NULL;
       }
     }
@@ -192,32 +240,29 @@ OB_DEF_SERIALIZE_SIZE(ObCommonConfig)
 {
   int64_t len = 0;
   int ret = OB_SUCCESS;
-  char kv_str[OB_MAX_CONFIG_NAME_LEN + OB_MAX_CONFIG_VALUE_LEN + 1];
-  ObConfigContainer::const_iterator it = container_.begin();
-  const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
-  const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
-  for (; OB_SUCC(ret) && it != container_.end(); ++it) {
-    MEMSET(kv_str, '\0', OB_MAX_CONFIG_NAME_LEN + OB_MAX_CONFIG_VALUE_LEN + 1);
-    int64_t pos = 0;
-    if (OB_NOT_NULL(it->second) && it->second->value_updated()) {
-      if (OB_FAIL(databuff_printf(kv_str,
-              OB_MAX_CONFIG_NAME_LEN + OB_MAX_CONFIG_VALUE_LEN,
-              pos,
-              "%s=%s\n",
-              it->first.str(),
-              it->second->spfile_str()))) {
-        LOG_WARN("write data buff failed", K(ret));
-      } else {
-        len += pos;
-        if (external_kms_info_cfg.case_compare(it->first.str()) == 0 ||
-            ssl_external_kms_info_cfg.case_compare(it->first.str()) == 0) {
-          len += strlen(it->second->spfile_str());
+  HEAP_VAR(char[OB_MAX_CONFIG_NAME_LEN + OB_MAX_CONFIG_VALUE_LEN + 1], kv_str) {
+    ObConfigContainer::const_iterator it = container_.begin();
+    const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
+    const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
+    for (; OB_SUCC(ret) && it != container_.end(); ++it) {
+      MEMSET(kv_str, '\0', OB_MAX_CONFIG_NAME_LEN + OB_MAX_CONFIG_VALUE_LEN + 1);
+      int64_t pos = 0;
+      if (OB_NOT_NULL(it->second) && it->second->value_updated()) {
+        if (OB_FAIL(databuff_printf(kv_str, OB_MAX_CONFIG_NAME_LEN + OB_MAX_CONFIG_VALUE_LEN,
+                        pos, "%s=%s\n", it->first.str(), it->second->spfile_str()))) {
+          LOG_WARN("write data buff failed", K(ret));
+        } else {
+          len += pos;
+          if (external_kms_info_cfg.case_compare(it->first.str()) == 0
+              || ssl_external_kms_info_cfg.case_compare(it->first.str()) == 0) {
+            len += strlen(it->second->spfile_str());
+          }
         }
       }
-    }
-  }  // for
+    } // for
+  }
   return len;
 }
 
-}  // end of namespace common
-}  // end of namespace oceanbase
+} // end of namespace common
+} // end of namespace oceanbase

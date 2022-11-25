@@ -27,11 +27,15 @@ using namespace sql;
 
 #define OK(value) ASSERT_EQ(OB_SUCCESS, (value))
 
-namespace oceanbase {
-namespace storage {
 
-void MockMultiVersionSchemaService::do_resolve(
-    ObArenaAllocator& allocator, schema::ObSchemaManager* schema_mgr, const char* query_str, ObStmt*& stmt)
+namespace oceanbase
+{
+namespace storage
+{
+
+void MockMultiVersionSchemaService::do_resolve(ObArenaAllocator &allocator,
+                                               schema::ObSchemaManager *schema_mgr,
+                                               const char *query_str, ObStmt *&stmt)
 {
   ObParser parser(allocator);
   ObString query = ObString::make_string(query_str);
@@ -42,7 +46,7 @@ void MockMultiVersionSchemaService::do_resolve(
   ObSchemaChecker schema_checker;
   schema_checker.init(*schema_mgr);
   ObResolverParams resolver_ctx;
-  resolver_ctx.allocator_ = &allocator;
+  resolver_ctx.allocator_  = &allocator;
   resolver_ctx.schema_checker_ = &schema_checker;
   OK(resolver_ctx.create_query_ctx());
   ObResolver resolver(resolver_ctx);
@@ -50,13 +54,15 @@ void MockMultiVersionSchemaService::do_resolve(
   //_LOG_DEBUG("%s", SJ(*stmt));   // segv
 }
 
-void MockMultiVersionSchemaService::do_create_table(common::ObArenaAllocator& allocator,
-    share::schema::ObSchemaManager* schema_mgr, const char* query_str, uint64_t table_id)
+void MockMultiVersionSchemaService::do_create_table(common::ObArenaAllocator &allocator,
+                                                    share::schema::ObSchemaManager *schema_mgr,
+                                                    const char *query_str,
+                                                    uint64_t table_id)
 {
-  ObStmt* stmt = NULL;
+  ObStmt *stmt = NULL;
   do_resolve(allocator, schema_mgr, query_str, stmt);
   // add the created table schema
-  ObCreateTableStmt* create_table_stmt = dynamic_cast<ObCreateTableStmt*>(stmt);
+  ObCreateTableStmt *create_table_stmt = dynamic_cast<ObCreateTableStmt *>(stmt);
   OB_ASSERT(NULL != create_table_stmt);
   /*
   schema::ObTableSchema table_schema;
@@ -77,7 +83,7 @@ void MockMultiVersionSchemaService::do_create_table(common::ObArenaAllocator& al
   OK(schema_mgr->add_new_table_schema(create_table_stmt->get_create_table_arg().schema_));
 }
 
-int MockMultiVersionSchemaService::parse_from_file(const char* path)
+int MockMultiVersionSchemaService::parse_from_file(const char *path)
 {
   int ret = OB_SUCCESS;
   /**
@@ -91,7 +97,7 @@ int MockMultiVersionSchemaService::parse_from_file(const char* path)
 
   // create schema
   std::ifstream if_schema(path);
-  // ASSERT_TRUE(if_schema.is_open());
+  //ASSERT_TRUE(if_schema.is_open());
   std::string line;
   uint64_t tid = 1;
 
@@ -101,11 +107,13 @@ int MockMultiVersionSchemaService::parse_from_file(const char* path)
   return ret;
 }
 
-const share::schema::ObSchemaManager* MockMultiVersionSchemaService::get_user_schema_manager(const int64_t version)
+const share::schema::ObSchemaManager *MockMultiVersionSchemaService::get_user_schema_manager(
+    const int64_t version)
 {
   UNUSED(version);
   return schema_manager_;
 }
 
-}  // namespace storage
-}  // namespace oceanbase
+}
+}
+

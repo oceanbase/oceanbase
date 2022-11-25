@@ -1,5 +1,6 @@
 # owner: peihan.dph
 # owner group: sql2
+# tags: optimizer
 
 --result_format 4
 --explain_protocol 0

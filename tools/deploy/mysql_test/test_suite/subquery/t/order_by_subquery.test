@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#owner: ryan.ly 
+#owner: link.zt 
 #owner group: SQL1
 # tags: optimizer
 #tags: optimizer
@@ -71,6 +71,7 @@ select * from t1 order by c1,(select c1 from t2 where t1.c1<t2.c1);
 select * from t1 order by c1,(select c1 from t2 where 1=t2.c1 order by c1,(select c1 from t3));
 --error 1242
 select * from t1 order by c1,(select c1 from t5 order by c1,(select c1 from t3));
+--error 1242
 (select * from t1 order by c1,(select c1 from t5 order by c1,(select c1 from t3))) intersect (select * from t1 order by c1,(select c1 from t5 order by c1,(select c1 from t3)));
 (select * from t1 order by c1,(select c1 from t5 order by c1)) intersect (select * from t1 order by c1,(select c1 from t5 order by c1));
 

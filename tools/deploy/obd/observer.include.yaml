@@ -16,20 +16,16 @@ env:
   ASAN_SYMBOLIZER_PATH: ./tools/llvm-symbolizer
 config:
   cluster_id: 1
-  major_freeze_duty_time: 'Disable'
   # datafile_disk_percentage: '50'
   datafile_size: '20G'
-  memory_limit: '10G'
-  system_memory: '5G'
+  # log_disk_percentage: '10'
+  log_disk_size: '24G'
+  memory_limit: '8G'
+  system_memory: '1G'
   cpu_count: '24'
-  stack_size: '512K'
   cache_wash_threshold: '1G'
-  __min_full_resource_pool_memory: "268435456"
+  __min_full_resource_pool_memory: "1073741824"
   workers_per_cpu_quota: '10'
   schema_history_expire_time: '1d'
   net_thread_count: '4'
-  minor_freeze_times: '10'
-  enable_separate_sys_clog: 'FALSE'
-  enable_merge_by_turn: 'FALSE'
   syslog_io_bandwidth_limit: '10G'
-  enable_async_syslog: 'FALSE'

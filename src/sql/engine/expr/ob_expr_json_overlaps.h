@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation for json_overlaps.
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_OVERLAPS_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_OVERLAPS_H_
 
@@ -32,10 +31,7 @@ public:
                                 ObExprResType &type1,
                                 ObExprResType &type2,
                                 ObExprTypeCtx &type_ctx) const override;
-  virtual int calc_result2(common::ObObj &result,
-                           const common::ObObj &obj1,
-                           const common::ObObj &obj2,
-                           common::ObExprCtx &expr_ctx) const;
+                                
   static int eval_json_overlaps(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,

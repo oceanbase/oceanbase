@@ -23,23 +23,22 @@
 namespace oceanbase {
 namespace lib {
 
-class ObSimpleRateLimiter : public lib::ObRateLimiter {
+class ObSimpleRateLimiter
+    : public lib::ObRateLimiter
+{
   static constexpr int64_t DEFAULT_RATE = 100;
-
 public:
-  ObSimpleRateLimiter(int64_t rate = DEFAULT_RATE) : last_ts_(0), permits_(rate)
+  ObSimpleRateLimiter(int64_t rate=DEFAULT_RATE)
+      : last_ts_(0), permits_(rate)
   {
     last_ts_ = current_time();
     set_rate(rate);
   }
 
-  bool is_force_allows() const override
-  {
-    return false;
-  }
-  void reset_force_allows() override{};
-  int acquire(int64_t permits = 1) override;
-  int try_acquire(int64_t permits = 1) override;
+  bool is_force_allows() const override { return false; }
+  void reset_force_allows() override { };
+  int acquire(int64_t permits=1) override;
+  int try_acquire(int64_t permits=1) override;
 
 public:
   // This is a copy of ObTimeUtility::current_time() that depends on
@@ -90,12 +89,14 @@ inline int64_t ObSimpleRateLimiter::current_time()
   int64_t time = 0;
   struct timeval t;
   if (gettimeofday(&t, nullptr) >= 0) {
-    time = (static_cast<int64_t>(t.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(t.tv_usec));
+    time = (static_cast<int64_t>(t.tv_sec)
+            * static_cast<int64_t>(1000000)
+            + static_cast<int64_t>(t.tv_usec));
   }
   return time;
 }
 
-}  // namespace lib
-}  // namespace oceanbase
+}  // lib
+}  // oceanbase
 
 #endif /* OB_SIMPLE_RATE_LIMITER_H */

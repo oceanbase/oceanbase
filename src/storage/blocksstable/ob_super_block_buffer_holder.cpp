@@ -13,20 +13,27 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_super_block_buffer_holder.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace blocksstable {
+namespace blocksstable
+{
 ObSuperBlockBufferHolder::ObSuperBlockBufferHolder()
-    : is_inited_(false), buf_(NULL), len_(0), allocator_(ObModIds::OB_SUPER_BLOCK_BUFFER)
-{}
+  : is_inited_(false),
+    buf_(NULL),
+    len_(0),
+    allocator_(ObModIds::OB_SUPER_BLOCK_BUFFER)
+{
+}
 
 ObSuperBlockBufferHolder::~ObSuperBlockBufferHolder()
-{}
+{
+}
 
 int ObSuperBlockBufferHolder::init(const int64_t buf_size)
 {
   int ret = OB_SUCCESS;
-  char* tmp_buf = NULL;
+  char *tmp_buf = NULL;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -34,12 +41,12 @@ int ObSuperBlockBufferHolder::init(const int64_t buf_size)
   } else if (buf_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(buf_size));
-  } else if (NULL == (tmp_buf = (char*)allocator_.alloc(buf_size + DIO_READ_ALIGN_SIZE))) {
+  } else if (NULL == (tmp_buf = (char*) allocator_.alloc(buf_size + DIO_READ_ALIGN_SIZE))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(ERROR, "allocate buffer for super block fail", K(ret), K(buf_size), KP(tmp_buf));
   } else {
     // ObArenaAllocator::alloc_aligned has bug, manually align address
-    buf_ = (char*)upper_align((int64_t)tmp_buf, DIO_READ_ALIGN_SIZE);
+    buf_ = (char *) upper_align((int64_t) tmp_buf, DIO_READ_ALIGN_SIZE);
     len_ = buf_size;
     is_inited_ = true;
   }
@@ -58,7 +65,7 @@ void ObSuperBlockBufferHolder::reset()
   is_inited_ = false;
 }
 
-int ObSuperBlockBufferHolder::serialize_super_block(const ObServerSuperBlock& super_block)
+int ObSuperBlockBufferHolder::serialize_super_block(const storage::ObServerSuperBlock &super_block)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -66,12 +73,13 @@ int ObSuperBlockBufferHolder::serialize_super_block(const ObServerSuperBlock& su
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
   } else if (OB_FAIL(super_block.serialize(buf_, len_, pos))) {
-    STORAGE_LOG(ERROR, "fail to write super block buf", K(ret), KP_(buf), K_(len), K(pos), K(super_block));
+    STORAGE_LOG(ERROR, "fail to write super block buf", K(ret), KP_(buf), K_(len),
+        K(pos), K(super_block));
   }
   return ret;
 }
 
-int ObSuperBlockBufferHolder::assign(const char* buf, const int64_t buf_len)
+int ObSuperBlockBufferHolder::assign(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
@@ -90,10 +98,10 @@ int ObSuperBlockBufferHolder::assign(const char* buf, const int64_t buf_len)
   return ret;
 }
 
-int ObSuperBlockBufferHolder::deserialize_super_block_header_version(int64_t& version)
+int ObSuperBlockBufferHolder::deserialize_super_block_header_version(int64_t &version)
 {
   int ret = OB_SUCCESS;
-  ObSuperBlockHeaderV2 new_header;
+  storage::ObServerSuperBlockHeader new_header;
   int64_t pos = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -107,5 +115,5 @@ int ObSuperBlockBufferHolder::deserialize_super_block_header_version(int64_t& ve
   return ret;
 }
 
-}  // namespace blocksstable
-}  // namespace oceanbase
+} // namespace blocksstable
+} // namespace oceanbase

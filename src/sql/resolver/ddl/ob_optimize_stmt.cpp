@@ -15,18 +15,23 @@
 #include "sql/resolver/ddl/ob_optimize_stmt.h"
 #include "lib/container/ob_array.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using obrpc::ObTableItem;
-namespace sql {
-ObOptimizeTableStmt::ObOptimizeTableStmt(ObIAllocator* name_pool)
+namespace sql
+{
+ObOptimizeTableStmt::ObOptimizeTableStmt(ObIAllocator *name_pool)
     : ObDDLStmt(name_pool, stmt::T_OPTIMIZE_TABLE), optimize_table_arg_()
-{}
+{
+}
 
-ObOptimizeTableStmt::ObOptimizeTableStmt() : ObDDLStmt(stmt::T_OPTIMIZE_TABLE), optimize_table_arg_()
-{}
+ObOptimizeTableStmt::ObOptimizeTableStmt()
+    : ObDDLStmt(stmt::T_OPTIMIZE_TABLE), optimize_table_arg_()
+{
+}
 
-int ObOptimizeTableStmt::add_table_item(const ObTableItem& table_item)
+int ObOptimizeTableStmt::add_table_item(const ObTableItem &table_item)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(optimize_table_arg_.tables_.push_back(table_item))) {
@@ -35,24 +40,30 @@ int ObOptimizeTableStmt::add_table_item(const ObTableItem& table_item)
   return ret;
 }
 
-ObOptimizeTenantStmt::ObOptimizeTenantStmt(ObIAllocator* name_pool)
-    : ObDDLStmt(name_pool, stmt::T_OPTIMIZE_TENANT), optimize_tenant_arg_()
-{}
+ObOptimizeTenantStmt::ObOptimizeTenantStmt(ObIAllocator *name_pool)
+  : ObDDLStmt(name_pool, stmt::T_OPTIMIZE_TENANT), optimize_tenant_arg_()
+{
+}
 
-ObOptimizeTenantStmt::ObOptimizeTenantStmt() : ObDDLStmt(stmt::T_OPTIMIZE_TENANT), optimize_tenant_arg_()
-{}
+ObOptimizeTenantStmt::ObOptimizeTenantStmt()
+  : ObDDLStmt(stmt::T_OPTIMIZE_TENANT), optimize_tenant_arg_()
+{
+}
 
-void ObOptimizeTenantStmt::set_tenant_name(const ObString& tenant_name)
+void ObOptimizeTenantStmt::set_tenant_name(const ObString &tenant_name)
 {
   optimize_tenant_arg_.tenant_name_ = tenant_name;
 }
 
-ObOptimizeAllStmt::ObOptimizeAllStmt(ObIAllocator* name_pool)
-    : ObDDLStmt(name_pool, stmt::T_OPTIMIZE_ALL), optimize_all_arg_()
-{}
+ObOptimizeAllStmt::ObOptimizeAllStmt(ObIAllocator *name_pool)
+  : ObDDLStmt(name_pool, stmt::T_OPTIMIZE_ALL), optimize_all_arg_()
+{
+}
 
-ObOptimizeAllStmt::ObOptimizeAllStmt() : ObDDLStmt(stmt::T_OPTIMIZE_ALL), optimize_all_arg_()
-{}
+ObOptimizeAllStmt::ObOptimizeAllStmt()
+  : ObDDLStmt(stmt::T_OPTIMIZE_ALL), optimize_all_arg_()
+{
+}
 
 }  // end namespace sql
 }  // end namespace oceanbase

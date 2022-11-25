@@ -18,12 +18,16 @@
 #include "share/ob_define.h"
 #include "lib/hash/ob_hashmap.h"
 
-namespace oceanbase {
-namespace sql {
-class ObPreparedSqlValue {
+namespace oceanbase
+{
+namespace sql
+{
+class ObPreparedSqlValue
+{
 public:
-  ObPreparedSqlValue() : ref_count_(0)
-  {}
+  ObPreparedSqlValue(): ref_count_(0)
+  {
+  }
 
   int init()
   {
@@ -48,15 +52,19 @@ public:
   pthread_rwlock_t rwlock_;
 };
 
-class ObPreparedSqlStoreAtomic {
+class ObPreparedSqlStoreAtomic
+{
 public:
-  ObPreparedSqlStoreAtomic() : rc_(common::OB_SUCCESS), value_(NULL)
-  {}
+  ObPreparedSqlStoreAtomic(): rc_(common::OB_SUCCESS),
+                              value_(NULL)
+  {
+  }
 
   virtual ~ObPreparedSqlStoreAtomic()
-  {}
+  {
+  }
 
-  virtual void operator()(common::hash::HashMapPair<common::ObString, ObPreparedSqlValue*> entry)
+  virtual void operator()(common::hash::HashMapPair<common::ObString, ObPreparedSqlValue *> entry)
   {
     UNUSED(entry);
   }
@@ -66,31 +74,33 @@ public:
     return rc_;
   }
 
-  common::ObString& get_sql()
+  common::ObString &get_sql()
   {
     return sql_;
   }
 
-  ObPreparedSqlValue* get_prepared_sql_value()
+  ObPreparedSqlValue *get_prepared_sql_value()
   {
     return value_;
   }
-
 protected:
   int rc_;
-  ObPreparedSqlValue* value_;
+  ObPreparedSqlValue *value_;
   common::ObString sql_;
 };
 
-class ObPreparedSqlStoreAddRef : public ObPreparedSqlStoreAtomic {
+class ObPreparedSqlStoreAddRef: public ObPreparedSqlStoreAtomic
+{
 public:
   ObPreparedSqlStoreAddRef()
-  {}
+  {
+  }
 
   virtual ~ObPreparedSqlStoreAddRef()
-  {}
+  {
+  }
 
-  virtual void operator()(common::hash::HashMapPair<common::ObString, ObPreparedSqlValue*> entry)
+  virtual void operator()(common::hash::HashMapPair<common::ObString, ObPreparedSqlValue *> entry)
   {
     rc_ = entry.second->try_rlock();
     if (0 == rc_) {
@@ -101,22 +111,25 @@ public:
     } else if (EBUSY == rc_) {
       rc_ = common::OB_EAGAIN;
     } else {
-      // LOG_ERROR("try rlock on ObPreparedSqlValue failed", K(rc_),
+      //LOG_ERROR("try rlock on ObPreparedSqlValue failed", K(rc_),
       //          K(entry.first));
       rc_ = common::OB_ERROR;
     }
   }
 };
 
-class ObPreparedSqlStoreDecRef : public ObPreparedSqlStoreAtomic {
+class ObPreparedSqlStoreDecRef: public ObPreparedSqlStoreAtomic
+{
 public:
   ObPreparedSqlStoreDecRef()
-  {}
+  {
+  }
 
   virtual ~ObPreparedSqlStoreDecRef()
-  {}
+  {
+  }
 
-  virtual void operator()(common::hash::HashMapPair<common::ObString, ObPreparedSqlValue*> entry)
+  virtual void operator()(common::hash::HashMapPair<common::ObString, ObPreparedSqlValue *> entry)
   {
     entry.second->ref_count_--;
     if (0 == entry.second->ref_count_) {
@@ -134,34 +147,36 @@ public:
   }
 };
 
-class ObPreparedSqlStore {
+class ObPreparedSqlStore
+{
 public:
-  ObPreparedSqlStore() : allocator_(common::get_global_tc_allocator())
-  {}
+  ObPreparedSqlStore(): allocator_(common::get_global_tc_allocator())
+  {
+  }
 
   ~ObPreparedSqlStore()
-  {}
+  {
+  }
 
   int init();
-
 public:
-  int store_sql(const common::ObString& sql, common::ObString& osql);
-  int free_sql(const common::ObString& sql);
-  // typedef common::ObPooledAllocator<common::hash::HashMapTypes<common::ObString,
+  int store_sql(const common::ObString &sql, common::ObString &osql);
+  int free_sql(const common::ObString &sql);
+  //typedef common::ObPooledAllocator<common::hash::HashMapTypes<common::ObString,
   //                                                             ObPreparedSqlValue*>::AllocType,
   //                                  common::ObWrapperAllocator>
-  // PreparedSqlMapAllocator;
-  typedef common::hash::ObHashMap<common::ObString, ObPreparedSqlValue*> PreparedSqlMap;
-
+  //PreparedSqlMapAllocator;
+  typedef common::hash::ObHashMap<common::ObString,
+                                  ObPreparedSqlValue *> PreparedSqlMap;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPreparedSqlStore);
 
 private:
   PreparedSqlMap psmap_;
-  //  common::ObBuddyAllocator allocator_;
+//  common::ObBuddyAllocator allocator_;
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+} // namespace sql
+} // namespace oceanbase
 
-#endif  // OCEANBASE_SQL_SESSION_OB_PREPARED_SQL_STORE_
+#endif // OCEANBASE_SQL_SESSION_OB_PREPARED_SQL_STORE_

@@ -16,20 +16,24 @@
 #include "sql/session/ob_sql_session_mgr.h"
 #include "observer/ob_server_struct.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
 
-namespace observer {
-const char* const ObInfoSchemaGlobalStatusTable::variables_name[] = {
-    "Threads_connected",
-    "Uptime",
-    NULL,
+namespace observer
+{
+const char * const ObInfoSchemaGlobalStatusTable::variables_name[] =
+{
+  "Threads_connected",
+  "Uptime",
+  NULL,
 };
 
-ObInfoSchemaGlobalStatusTable::ObInfoSchemaGlobalStatusTable()
-    : ObVirtualTableScannerIterator(), cur_session_(NULL), global_ctx_(NULL)
-{}
+ObInfoSchemaGlobalStatusTable::ObInfoSchemaGlobalStatusTable() :
+    ObVirtualTableScannerIterator(), cur_session_(NULL), global_ctx_(NULL)
+{
+}
 
 ObInfoSchemaGlobalStatusTable::~ObInfoSchemaGlobalStatusTable()
 {
@@ -43,11 +47,13 @@ void ObInfoSchemaGlobalStatusTable::reset()
   global_ctx_ = NULL;
 }
 
-int ObInfoSchemaGlobalStatusTable::fetch_all_global_status(AllStatus& all_status)
+int ObInfoSchemaGlobalStatusTable::fetch_all_global_status(
+    AllStatus &all_status)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(global_ctx_) || OB_ISNULL(global_ctx_->session_mgr_)) {
+  if (OB_ISNULL(global_ctx_) ||
+      OB_ISNULL(global_ctx_->session_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "global_ctx_ is NULL or session_mgr_ is NULL", K(ret));
   } else {
@@ -55,7 +61,7 @@ int ObInfoSchemaGlobalStatusTable::fetch_all_global_status(AllStatus& all_status
     for (int64_t i = 0; OB_SUCC(ret) && NULL != variables_name[i]; ++i) {
       obj.reset();
       switch (i) {
-        case THREADS_CONNECTED: {
+      case THREADS_CONNECTED: {
           int64_t session_cnt = 0;
           if (OB_FAIL(global_ctx_->session_mgr_->get_session_count(session_cnt))) {
             SERVER_LOG(WARN, "get session count failed");
@@ -64,20 +70,21 @@ int ObInfoSchemaGlobalStatusTable::fetch_all_global_status(AllStatus& all_status
           }
           break;
         }
-        case UPTIME: {
-          int64_t uptime = ObTimeUtility2::extract_second(ObTimeUtility::current_time()) -
-                           ObTimeUtility2::extract_second(global_ctx_->start_time_);
+      case UPTIME: {
+          int64_t uptime = ObTimeUtility2::extract_second(ObTimeUtility::current_time())
+              - ObTimeUtility2::extract_second(global_ctx_->start_time_);
           obj.set_int(uptime);
           break;
         }
-        default: {
+      default: {
           ret = OB_ERR_UNEXPECTED;
           break;
         }
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(all_status.set_refactored(variables_name[i], obj))) {
-          SERVER_LOG(WARN, "insert to all_status failed", K(ret), K(variables_name[i]), K(obj));
+          SERVER_LOG(WARN, "insert to all_status failed", K(ret),
+              K(variables_name[i]), K(obj));
         }
       }
     }
@@ -86,40 +93,40 @@ int ObInfoSchemaGlobalStatusTable::fetch_all_global_status(AllStatus& all_status
   return ret;
 }
 
-int ObInfoSchemaGlobalStatusTable::inner_get_next_row(ObNewRow*& row)
+int ObInfoSchemaGlobalStatusTable::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(allocator_) || OB_ISNULL(global_ctx_) || OB_ISNULL(cur_session_)) {
     ret = OB_NOT_INIT;
-    SERVER_LOG(WARN,
-        "allocator is NULL or global_ctx_ or cur_session_ is NULL",
-        K(ret),
-        K(allocator_),
-        K(global_ctx_),
-        K(cur_session_));
+    SERVER_LOG(WARN, "allocator is NULL or global_ctx_ or cur_session_ is NULL", K(ret),
+               K(allocator_), K(global_ctx_), K(cur_session_));
   } else {
     if (!start_to_read_) {
-      ObObj* cells = NULL;
+      ObObj *cells = NULL;
       const int64_t col_count = output_column_ids_.count();
       if (OB_ISNULL(cells = cur_row_.cells_)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
-      } else if (OB_UNLIKELY(col_count < 1 || col_count > GLOBAL_STATUS_COLUMN_COUNT)) {
+      } else if (OB_UNLIKELY(col_count < 0 ||
+                             col_count > GLOBAL_STATUS_COLUMN_COUNT)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "column count error ", K(ret), K(col_count));
       } else if (OB_UNLIKELY(col_count > reserved_column_cnt_)) {
         ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "cells count error", K(ret), K(col_count), K(reserved_column_cnt_));
+        SERVER_LOG(WARN, "cells count error", K(ret), K(col_count),
+                   K(reserved_column_cnt_));
       } else {
         AllStatus all_status;
-        if (OB_FAIL(all_status.create(GLOBAL_STATUS_MAP_BUCKET_NUM, ObModIds::OB_HASH_BUCKET_GLOBAL_STATUS_MAP))) {
+        if (OB_FAIL(all_status.create(GLOBAL_STATUS_MAP_BUCKET_NUM,
+                                      ObModIds::OB_HASH_BUCKET_GLOBAL_STATUS_MAP))) {
           SERVER_LOG(WARN, "fail to init all status map", K(ret));
         } else if (OB_FAIL(fetch_all_global_status(all_status))) {
           SERVER_LOG(WARN, "fail to fetch all status", K(ret));
         } else {
           ObObj casted_cell;
-          const ObDataTypeCastParams dtc_params = sql::ObBasicSessionInfo::create_dtc_params(session_);
+          const ObDataTypeCastParams dtc_params
+                  = sql::ObBasicSessionInfo::create_dtc_params(session_);
           ObCastCtx cast_ctx(allocator_, &dtc_params, CM_NONE, ObCharset::get_system_collation());
           AllStatus::const_iterator it_begin = all_status.begin();
           AllStatus::const_iterator it_end = all_status.end();
@@ -128,29 +135,33 @@ int ObInfoSchemaGlobalStatusTable::inner_get_next_row(ObNewRow*& row)
             for (int64_t j = 0; OB_SUCC(ret) && j < col_count; ++j) {
               uint64_t col_id = output_column_ids_.at(j);
               switch (col_id) {
-                case VARIABLE_NAME: {
+              case VARIABLE_NAME: {
                   cells[cell_idx].set_varchar(it_begin->first);
                   cells[cell_idx].set_collation_type(
-                      ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                      ObCharset::get_default_collation(
+                          ObCharset::get_default_charset()));
                   break;
                 }
-                case VARIABLE_VALUE: {
+              case VARIABLE_VALUE: {
                   casted_cell.reset();
-                  const ObObj* res_cell = NULL;
-                  if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, it_begin->second, casted_cell, res_cell))) {
-                    SERVER_LOG(WARN, "failed to cast to ObVarcharType object", K(ret), K(it_begin->second));
+                  const ObObj *res_cell = NULL;
+                  if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, it_begin->second,
+                                                     casted_cell, res_cell))) {
+                    SERVER_LOG(WARN, "failed to cast to ObVarcharType object",
+                               K(ret), K(it_begin->second));
                   } else if (OB_ISNULL(res_cell)) {
                     ret = OB_ERR_UNEXPECTED;
-                    SERVER_LOG(
-                        ERROR, "succ to cast to ObVarcharType, but res_cell is NULL", K(ret), K(it_begin->second));
+                    SERVER_LOG(ERROR, "succ to cast to ObVarcharType, but res_cell is NULL",
+                               K(ret), K(it_begin->second));
                   } else {
                     cells[cell_idx] = *res_cell;
                   }
                   break;
                 }
-                default: {
+              default: {
                   ret = OB_ERR_UNEXPECTED;
-                  SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(j), K(output_column_ids_), K(col_id));
+                  SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(j),
+                             K(output_column_ids_), K(col_id));
                   break;
                 }
               }
@@ -167,7 +178,7 @@ int ObInfoSchemaGlobalStatusTable::inner_get_next_row(ObNewRow*& row)
             start_to_read_ = true;
           }
         }
-        // need to free the memory anyway
+        // 无需考虑返回码，不管成功与否都需要释放内存
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = all_status.destroy())) {
           SERVER_LOG(WARN, "fail to destroy all status", K(tmp_ret));
@@ -189,5 +200,5 @@ int ObInfoSchemaGlobalStatusTable::inner_get_next_row(ObNewRow*& row)
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+} //namespace observer
+} //namespace oceanbase

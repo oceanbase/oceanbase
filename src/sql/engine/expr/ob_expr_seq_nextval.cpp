@@ -19,18 +19,27 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_util.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace share;
-namespace sql {
-ObExprSeqNextval::ObExprSeqNextval(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_SEQ_NEXTVAL, N_SEQ_NEXTVAL, 1, NOT_ROW_DIMENSION)
-{}
+namespace sql
+{
+ObExprSeqNextval::ObExprSeqNextval(ObIAllocator &alloc)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_SEQ_NEXTVAL, N_SEQ_NEXTVAL, 1, NOT_ROW_DIMENSION,
+                         INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+{
+}
+
 
 ObExprSeqNextval::~ObExprSeqNextval()
-{}
+{
+}
 
-int ObExprSeqNextval::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
+
+int ObExprSeqNextval::calc_result_type1(ObExprResType &type,
+                                      ObExprResType &type1,
+                                      ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
@@ -39,38 +48,17 @@ int ObExprSeqNextval::calc_result_type1(ObExprResType& type, ObExprResType& type
     LOG_WARN("input param should be uint64_t type", K(type1), K(ret));
   } else {
     type.set_number();
-    type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObNumberType].scale_);
-    type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObNumberType].precision_);
-    type.set_result_flag(OB_MYSQL_NOT_NULL_FLAG);
+    type.set_scale(0);
+    type.set_precision(OB_MAX_NUMBER_PRECISION);
+    type.set_result_flag(NOT_NULL_FLAG);
   }
   return ret;
 }
 
-int ObExprSeqNextval::calc_result1(ObObj& result, const ObObj& obj, ObExprCtx& expr_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr_ctx.my_session_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(expr_ctx.my_session_), K(ret));
-  } else {
-    ObSQLSessionInfo& session = *expr_ctx.my_session_;
-    common::ObIAllocator& allocator = *expr_ctx.calc_buf_;
-    uint64_t tenant_id = session.get_effective_tenant_id();
-    int64_t seq_id = obj.get_int();
-    ObSequenceValue value;
-    common::number::ObNumber tmp;
-    if (OB_FAIL(session.get_sequence_value(tenant_id, seq_id, value))) {
-      LOG_WARN("failed to get sequence value from session", K(tenant_id), K(seq_id), K(ret));
-    } else if (OB_FAIL(tmp.from(value.val(), allocator))) {
-      LOG_WARN("fail deep copy value", K(ret));
-    } else {
-      result.set_number(tmp);
-    }
-  }
-  return ret;
-}
-
-int ObExprSeqNextval::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const
+int ObExprSeqNextval::cg_expr(
+  ObExprCGCtx &expr_cg_ctx,
+  const ObRawExpr &raw_expr,
+  ObExpr &rt_expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
@@ -84,22 +72,22 @@ int ObExprSeqNextval::cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_exp
   return ret;
 }
 
-int ObExprSeqNextval::calc_sequence_nextval(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res)
+int ObExprSeqNextval::calc_sequence_nextval(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  uint64_t operator_id = expr.extra_;
-  ObDatum* arg_datum = nullptr;
+  ObDatum *arg_datum = nullptr;
   if (OB_FAIL(expr.args_[0]->eval(ctx, arg_datum))) {
     LOG_WARN("failed to eval expr", K(ret));
   } else {
-    ObSQLSessionInfo* session = ctx.exec_ctx_.get_my_session();
+    ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
     common::number::ObNumber num;
     ObNumStackOnceAlloc tmp_alloc;
     uint64_t tenant_id = session->get_effective_tenant_id();
     int64_t seq_id = arg_datum->get_int();
     ObSequenceValue value;
     if (OB_FAIL(session->get_sequence_value(tenant_id, seq_id, value))) {
-      LOG_WARN("failed to get sequence value from session", K(tenant_id), K(seq_id), K(ret));
+      LOG_WARN("failed to get sequence value from session",
+               K(tenant_id), K(seq_id), K(ret));
     } else if (OB_FAIL(num.from(value.val(), tmp_alloc))) {
       LOG_WARN("fail deep copy value", K(ret));
     } else {
@@ -110,5 +98,5 @@ int ObExprSeqNextval::calc_sequence_nextval(const ObExpr& expr, ObEvalCtx& ctx, 
   return ret;
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+}//end namespace sql
+}//end namespace oceanbase

@@ -39,7 +39,7 @@ OB_OBJ_PRIV_TYPE_DEF(OBJ_PRIV_ID_MAX, "")
 #endif
 
 /* to do, No! May be no do forever. */
-#ifdef asfasgasgfa
+#ifdef asfasgasgfa 
 
 OB_OBJ_PRIV_TYPE_DEF(OBJ_PRIV_ID_ENQUEUE, "ENQUEUE")
 OB_OBJ_PRIV_TYPE_DEF(OBJ_PRIV_ID_DEQUEUE, "DEQUEUE")
@@ -57,7 +57,8 @@ OB_OBJ_PRIV_TYPE_DEF(OBJ_PRIV_ID_FLASHBACK_ARCHIVE, "FLASHBACK ARCHIVE")
 #ifndef OCEANBASE_SHARE_SCHEMA_OB_OBJ_PRIV_TYPE_
 #define OCEANBASE_SHARE_SCHEMA_OB_OBJ_PRIV_TYPE_
 
-enum OB_RAW_OBJ_PRIV_ID {
+enum OB_RAW_OBJ_PRIV_ID 
+{
 #define OB_OBJ_PRIV_TYPE_DEF(priv_id, priv_name) priv_id,
 #include "share/schema/ob_obj_priv_type.h"
 #undef OB_OBJ_PRIV_TYPE_DEF

@@ -10,49 +10,47 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_COMMON_CONCURRENT_FIFO_ALLOCATOR_H_
-#define OCEANBASE_COMMON_CONCURRENT_FIFO_ALLOCATOR_H_
+#ifndef  OCEANBASE_COMMON_CONCURRENT_FIFO_ALLOCATOR_H_
+#define  OCEANBASE_COMMON_CONCURRENT_FIFO_ALLOCATOR_H_
 #include "lib/allocator/ob_lf_fifo_allocator.h"
 
-namespace oceanbase {
-namespace common {
-class ObConcurrentFIFOAllocator : public common::ObIAllocator {
+namespace oceanbase
+{
+namespace common
+{
+class ObConcurrentFIFOAllocator : public common::ObIAllocator
+{
 public:
   ObConcurrentFIFOAllocator();
   virtual ~ObConcurrentFIFOAllocator();
-
 public:
-  int init(const int64_t total_limit, const int64_t hold_limit, const int64_t page_size);
+  int init(const int64_t total_limit,
+           const int64_t hold_limit,
+           const int64_t page_size);
 
-  int init(const int64_t total_limit, const int64_t hold_limit, const int64_t tenant_id, const lib::ObLabel& label,
-      const int64_t page_size);
-
-  int init(const int64_t page_size, const lib::ObLabel& label, const uint64_t tenant_id, const int64_t total_limit);
+  int init(const int64_t page_size,
+           const lib::ObLabel &label,
+           const uint64_t tenant_id,
+           const int64_t total_limit);
   void destroy();
-
 public:
-  void set_label(const lib::ObLabel& label);
-  void* alloc(const int64_t size);
-  void* alloc(const int64_t size, const ObMemAttr& attr);
-  void free(void* ptr);
-  int64_t allocated();
-  int64_t hold() const
-  {
-    return 0;
-  }
+  void set_label(const lib::ObLabel &label);
+  void set_tenant_id(const uint64_t tenant_id);
+  void *alloc(const int64_t size);
+  void *alloc(const int64_t size, const ObMemAttr &attr);
+  void free(void *ptr);
+  int64_t allocated() const;
+  int64_t hold() const {return 0;}
   int set_hold_limit(int64_t hold_limit);
   void set_total_limit(int64_t total_limit);
-
 private:
   static const int64_t STORAGE_SIZE_TIMES = 2;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConcurrentFIFOAllocator);
-
 private:
   ObLfFIFOAllocator inner_allocator_;
 };
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_COMMON_FIFO_ALLOCATOR_H_
+#endif //OCEANBASE_COMMON_FIFO_ALLOCATOR_H_

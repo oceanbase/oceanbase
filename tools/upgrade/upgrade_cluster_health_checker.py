@@ -76,7 +76,7 @@ sys.argv[0] + """ [OPTIONS]""" +\
 '-t, --timeout=name  check timeout, default: 600(s).\n' + \
 '\n\n' +\
 'Maybe you want to run cmd like that:\n' +\
-sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u xxx -p xxx\n'
+sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
 
 version_str = """version 1.0.0"""
 
@@ -270,140 +270,32 @@ def config_logging_module(log_filenamme):
 # 1. 检查paxos副本是否同步, paxos副本是否缺失
 def check_paxos_replica(query_cur):
   # 2.1 检查paxos副本是否同步
-  (desc, results) = query_cur.exec_query("""select count(1) as unsync_cnt from __all_virtual_clog_stat where is_in_sync = 0 and is_offline = 0 and replica_type != 16""")
+  (desc, results) = query_cur.exec_query("""select count(1) as unsync_cnt from GV$OB_LOG_STAT where in_sync = 'NO'""")
   if results[0][0] > 0 :
     raise MyError('{0} replicas unsync, please check'.format(results[0][0]))
   # 2.2 检查paxos副本是否有缺失 TODO
   logging.info('check paxos replica success')
 
-# 2. 检查是否有做balance, locality变更
-def check_rebalance_task(query_cur):
+# 2. 检查observer是否可服务
+def check_observer_status(query_cur):
   # 3.1 检查是否有做locality变更
-  (desc, results) = query_cur.exec_query("""select count(1) as cnt from __all_rootservice_job where job_status='INPROGRESS' and return_code is null""")
+  (desc, results) = query_cur.exec_query("""select count(*) from oceanbase.__all_server where start_service_time is null  or status='INACTIVE'""")
   if results[0][0] > 0 :
-    raise MyError('{0} locality tasks is doing, please check'.format(results[0][0]))
-  # 3.2 检查是否有做balance
-  (desc, results) = query_cur.exec_query("""select count(1) as rebalance_task_cnt from __all_virtual_rebalance_task_stat""")
-  if results[0][0] > 0 :
-    raise MyError('{0} rebalance tasks is doing, please check'.format(results[0][0]))
-  logging.info('check rebalance task success')
+    raise MyError('{0} observer not service, please check'.format(results[0][0]))
+  logging.info('check observer status success')
 
-# 3. 检查集群状态
-def check_cluster_status(query_cur):
+# 3. 检查schema是否刷新成功
+def check_schema_status(query_cur):
   # 4.1 检查是否非合并状态
-  (desc, results) = query_cur.exec_query("""select info from __all_zone where zone='' and name='merge_status'""")
-  if cmp(results[0][0], 'IDLE')  != 0 :
-    raise MyError('global status expected = {0}, actual = {1}'.format('IDLE', results[0][0]))
-  logging.info('check cluster status success')
-  # 4.2 检查合并版本是否>=3
-  (desc, results) = query_cur.exec_query("""select cast(value as unsigned) value from __all_zone where zone='' and name='last_merged_version'""")
-  if results[0][0] < 2:
-      raise MyError('global last_merged_version expected >= 2 actual = {0}'.format(results[0][0]))
-  logging.info('check global last_merged_version success')
+  (desc, results) = query_cur.exec_query("""select count(*) from __all_server a left join __all_virtual_server_schema_info b on a.svr_ip = b.svr_ip and a.svr_port = b.svr_port where b.svr_ip is null""")
+  if results[0][0] > 0 :
+    raise MyError('refresh schema failed, please check')
+  (desc, results) = query_cur.exec_query("""select count(*) from __all_virtual_server_schema_info a join __all_virtual_server_schema_info b on a.tenant_id = b.tenant_id where a.refreshed_schema_version != b.refreshed_schema_version or a.refreshed_schema_version <= 1""")
+  if results[0][0] > 0 :
+    raise MyError('refresh schema failed, please check')
+  logging.info('check schema status success')
 
-# 4. 检查租户分区数是否超出内存限制
-def check_tenant_part_num(query_cur):
-  # 统计每个租户在各个server上的分区数量
-  (desc, res_part_num) = query_cur.exec_query("""select svr_ip, svr_port, table_id >> 40 as tenant_id, count(*) as part_num from  __all_virtual_clog_stat  group by 1,2,3  order by 1,2,3""")
-  # 计算每个租户在每个server上的max_memory
-  (desc, res_unit_memory) = query_cur.exec_query("""select u.svr_ip, u.svr_port, t.tenant_id, uc.max_memory, p.replica_type  from __all_unit u, __All_resource_pool p, __all_tenant t, __all_unit_config uc where p.resource_pool_id = u.resource_pool_id and t.tenant_id = p.tenant_id and p.unit_config_id = uc.unit_config_id""")
-  # 查询每个server的memstore_limit_percentage
-  (desc, res_svr_memstore_percent) = query_cur.exec_query("""select svr_ip, svr_port, name, value  from __all_virtual_sys_parameter_stat where name = 'memstore_limit_percentage'""")
-  part_static_cost = 128 * 1024
-  part_dynamic_cost = 400 * 1024
-  # 考虑到升级过程中可能有建表的需求，因此预留512个分区
-  part_num_reserved = 512
-  for line in res_part_num:
-    svr_ip = line[0]
-    svr_port = line[1]
-    tenant_id = line[2]
-    part_num = line[3]
-    for uline in res_unit_memory:
-      uip = uline[0]
-      uport = uline[1]
-      utid = uline[2]
-      umem = uline[3]
-      utype = uline[4]
-      if svr_ip == uip and svr_port == uport and tenant_id == utid:
-        for mpline in res_svr_memstore_percent:
-          mpip = mpline[0]
-          mpport = mpline[1]
-          if mpip == uip and mpport == uport:
-            mspercent = int(mpline[3])
-            mem_limit = umem
-            if 0 == utype:
-              # full类型的unit需要为memstore预留内存
-              mem_limit = umem * (100 - mspercent) / 100
-            part_num_limit = mem_limit / (part_static_cost + part_dynamic_cost / 10);
-            if part_num_limit <= 1000:
-              part_num_limit = mem_limit / (part_static_cost + part_dynamic_cost)
-            if part_num >= (part_num_limit - part_num_reserved):
-              raise MyError('{0} {1} {2} exceed tenant partition num limit, please check'.format(line, uline, mpline))
-            break
-  logging.info('check tenant partition num success')
-
-# 5. 检查存在租户partition，但是不存在unit的observer
-def check_tenant_resource(query_cur):
-  (desc, res_unit) = query_cur.exec_query("""select tenant_id, svr_ip, svr_port from __all_virtual_partition_info where (tenant_id, svr_ip, svr_port) not in (select tenant_id, svr_ip, svr_port from __all_unit, __all_resource_pool where __all_unit.resource_pool_id = __all_resource_pool.resource_pool_id group by tenant_id, svr_ip, svr_port) group by tenant_id, svr_ip, svr_port""")
-  for line in res_unit:
-    raise MyError('{0} tenant unit not exist but partition exist'.format(line))
-  logging.info("check tenant resource success")
-
-# 6. 检查progressive_merge_round都升到1
-def check_progressive_merge_round(query_cur):
-  (desc, results) = query_cur.exec_query("""select count(*) as cnt from __all_virtual_table where progressive_merge_round = 0 and table_type not in (1,2,4) and data_table_id = 0""")
-  if results[0][0] != 0:
-    raise MyError("""progressive_merge_round of main table should all be 1""")
-  (desc, results) = query_cur.exec_query("""select count(*) as cnt from __all_virtual_table where progressive_merge_round = 0 and table_type not in (1,2,4) and data_table_id > 0 and data_table_id in (select table_id from __all_virtual_table where table_type not in (1,2,4) and data_table_id = 0)""")
-  if results[0][0] != 0:
-    raise MyError("""progressive_merge_round of index should all be 1""")
-  logging.info("""check progressive_merge_round status success""")
-
-# 主库状态检查
-def check_primary_cluster_sync_status(query_cur, timeout):
-  (desc, res) = query_cur.exec_query("""select  current_scn  from oceanbase.v$ob_cluster where cluster_role='PRIMARY' and cluster_status='VALID'""")
-  if len(res) != 1:
-      raise MyError('query results count is not 1')
-  query_sql = "select count(*) from oceanbase.v$ob_standby_status where cluster_role != 'PHYSICAL STANDBY' or cluster_status != 'VALID' or current_scn < {0}".format(res[0][0]);  
-  times = timeout
-  print times
-  while times > 0 :
-    (desc, res1) = query_cur.exec_query(query_sql)
-    if len(res1) == 1 and res1[0][0] == 0:
-      break;
-    time.sleep(1)
-    times -=1
-  if times == 0:
-    raise MyError("there exists standby cluster not synchronizing, checking primary cluster status failed!!!")
-  else:
-    logging.info("check primary cluster sync status success")
-
-# 备库状态检查
-def check_standby_cluster_sync_status(query_cur, timeout):
-  (desc, res) = query_cur.exec_query("""select time_to_usec(now(6)) from dual""")
-  query_sql = "select count(*) from oceanbase.v$ob_cluster where (cluster_role != 'PHYSICAL STANDBY') or (cluster_status != 'VALID') or (current_scn  < {0}) or (switchover_status != 'NOT ALLOWED')".format(res[0][0]);
-  times = timeout
-  while times > 0 :
-    (desc, res2) = query_cur.exec_query(query_sql)
-    if len(res2) == 1 and res2[0][0] == 0:
-      break
-    time.sleep(1)
-    times -= 1
-  if times == 0:
-    raise MyError('current standby cluster not synchronizing, please check!!!')
-  else:
-    logging.info("check standby cluster sync status success")
-
-# 判断是主库还是备库
-def check_cluster_sync_status(query_cur, timeout):
-  (desc, res) = query_cur.exec_query("""select cluster_role from oceanbase.v$ob_cluster""")
-  if res[0][0] == 'PRIMARY':
-    check_primary_cluster_sync_status(query_cur, timeout)
-  else:
-    check_standby_cluster_sync_status(query_cur, timeout)
-  
-
-# 开始升级前的检查
+# 开始健康检查
 def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout):
   try:
     conn = mysql.connector.connect(user = my_user,
@@ -417,11 +309,8 @@ def do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout):
     try:
       query_cur = QueryCursor(cur)
       check_paxos_replica(query_cur)
-      check_rebalance_task(query_cur)
-      check_cluster_status(query_cur)
-      check_tenant_part_num(query_cur)
-      check_tenant_resource(query_cur)
-      check_cluster_sync_status(query_cur, timeout)
+      check_observer_status(query_cur)
+      check_schema_status(query_cur)
     except Exception, e:
       logging.exception('run error')
       raise e

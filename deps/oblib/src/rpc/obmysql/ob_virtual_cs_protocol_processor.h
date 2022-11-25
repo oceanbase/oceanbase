@@ -16,45 +16,38 @@
 #include "lib/ob_define.h"
 #include "rpc/frame/ob_req_handler.h"
 #include "rpc/frame/ob_req_deliver.h"
+#include "rpc/obmysql/ob_i_cs_mem_pool.h"
 
-namespace oceanbase {
-namespace rpc {
+namespace oceanbase
+{
+namespace rpc
+{
 class ObPacket;
 }
-namespace obmysql {
+namespace observer
+{
+struct ObSMConnection;
+}
+namespace obmysql
+{
 class ObMySQLHandler;
-class ObVirtualCSProtocolProcessor {
+class ObVirtualCSProtocolProcessor
+{
 public:
-  ObVirtualCSProtocolProcessor(ObMySQLHandler& handler) : handler_(handler)
-  {}
-  virtual ~ObVirtualCSProtocolProcessor()
-  {}
+  ObVirtualCSProtocolProcessor() {}
+  virtual ~ObVirtualCSProtocolProcessor() {}
 
-  virtual int decode(easy_message_t* m, rpc::ObPacket*& pkt) = 0;
-  virtual int process(easy_request_t* r, bool& need_read_more) = 0;
+  int decode(easy_message_t *m, rpc::ObPacket *&pkt) { return easy_decode(m, pkt); }
+  int process(easy_request_t *r, bool &need_read_more) { return easy_process(r, need_read_more); }
 
-protected:
-  inline int set_next_read_len(easy_message_t* m, const int64_t fallback_len, const int64_t next_read_len);
+  virtual int easy_decode(easy_message_t *m, rpc::ObPacket *&pkt);
+  virtual int easy_process(easy_request_t *r, bool &need_read_more);
 
-protected:
-  ObMySQLHandler& handler_;
+  virtual int do_decode(observer::ObSMConnection& conn, ObICSMemPool& pool, const char*& start, const char* end, rpc::ObPacket*& pkt, int64_t& next_read_bytes) = 0;
+  virtual int do_splice(observer::ObSMConnection& conn, ObICSMemPool& pool, void*& pkt, bool& need_decode_more) = 0;
 };
 
-inline int ObVirtualCSProtocolProcessor::set_next_read_len(
-    easy_message_t* m, const int64_t fallback_len, const int64_t next_read_len)
-{
-  INIT_SUCC(ret);
-  if (OB_UNLIKELY(NULL == m) || OB_UNLIKELY(NULL == m->input) || OB_UNLIKELY(fallback_len < 0) ||
-      OB_UNLIKELY(next_read_len <= 0)) {
-    ret = common::OB_INVALID_ARGUMENT;
-  } else {
-    m->input->pos -= fallback_len;
-    m->next_read_len = static_cast<int>(next_read_len);
-  }
-  return ret;
-}
-
-}  // end of namespace obmysql
-}  // end of namespace oceanbase
+} // end of namespace obmysql
+} // end of namespace oceanbase
 
 #endif /* _OB_VIRTUAL_CS_PROTOCOL_PROCESSOR_H_ */

@@ -15,43 +15,42 @@
 
 #include "sql/engine/px/exchange/ob_receive_op.h"
 #include "share/ob_scanner.h"
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 class ObExecContext;
 
-class ObDirectReceiveSpec : public ObReceiveSpec {
+class ObDirectReceiveSpec : public ObReceiveSpec
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObDirectReceiveSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type) : ObReceiveSpec(alloc, type)
+  ObDirectReceiveSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+  : ObReceiveSpec(alloc, type)
   {}
 
-  virtual ~ObDirectReceiveSpec(){};
+  virtual ~ObDirectReceiveSpec() {};
 };
 
-class ObDirectReceiveOp : public ObReceiveOp {
+class ObDirectReceiveOp : public ObReceiveOp
+{
 public:
-  ObDirectReceiveOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input);
+  ObDirectReceiveOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
 
-  virtual ~ObDirectReceiveOp()
-  {}
+  virtual ~ObDirectReceiveOp() {}
 
   virtual int inner_open() override;
   virtual int inner_get_next_row() override;
   int inner_close();
-  virtual int rescan() override;
-  virtual void destroy() override
-  {
-    ObReceiveOp::destroy();
-  }
+  virtual int inner_rescan() override;
+  virtual void destroy() override { ObReceiveOp::destroy(); }
 
 private:
   int setup_next_scanner();
   int get_next_row_from_cur_scanner();
   int update_user_var();
-
 private:
-  common::ObScanner* scanner_;
+  common::ObScanner *scanner_;
   ObChunkDatumStore::Iterator scanner_iter_;
   bool all_data_empty_;
   bool cur_data_empty_;
@@ -62,7 +61,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDirectReceiveOp);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_SQL_EXECUTOR_OB_DIRECT_RECEIVE_OP_ */
 //// end of header file

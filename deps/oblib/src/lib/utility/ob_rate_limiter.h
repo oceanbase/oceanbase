@@ -18,39 +18,41 @@
 namespace oceanbase {
 namespace lib {
 
-class ObRateLimiter {
+class ObRateLimiter
+{
 public:
   ObRateLimiter();
   virtual ~ObRateLimiter();
 
-  void set_name(const char* name);
-  const char* name() const;
+  void set_name(const char *name);
+  const char *name() const;
 
   void set_rate(int64_t rate);
   int64_t rate() const;
 
   virtual bool is_force_allows() const = 0;
   virtual void reset_force_allows() = 0;
-  virtual int try_acquire(int64_t permits = 1) = 0;
-  virtual int acquire(int64_t permits = 1) = 0;
+  virtual int try_acquire(int64_t permits=1) = 0;
+  virtual int acquire(int64_t permits=1) = 0;
 
 protected:
   int64_t rate_;
-  const char* name_;
+  const char *name_;
 };
 
-inline ObRateLimiter::ObRateLimiter() : rate_(0), name_(nullptr)
+inline ObRateLimiter::ObRateLimiter()
+    : rate_(0), name_(nullptr)
 {}
 
 inline ObRateLimiter::~ObRateLimiter()
 {}
 
-inline void ObRateLimiter::set_name(const char* name)
+inline void ObRateLimiter::set_name(const char *name)
 {
   name_ = name;
 }
 
-inline const char* ObRateLimiter::name() const
+inline const char *ObRateLimiter::name() const
 {
   return name_;
 }
@@ -65,7 +67,7 @@ inline int64_t ObRateLimiter::rate() const
   return rate_;
 }
 
-}  // namespace lib
-}  // namespace oceanbase
+}  // lib
+}  // oceanbase
 
 #endif /* OB_RATE_LIMITER_H */

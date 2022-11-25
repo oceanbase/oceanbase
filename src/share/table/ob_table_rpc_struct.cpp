@@ -45,14 +45,14 @@ OB_SERIALIZE_MEMBER(ObTableOperationRequest,
                     credential_,
                     table_name_,
                     table_id_,
-                    partition_id_,
+                    tablet_id_,
                     entity_type_,
                     table_operation_,
                     consistency_level_,
                     returning_rowkey_,
                     returning_affected_entity_,
-                    returning_affected_rows_
-                    );
+                    returning_affected_rows_,
+                    binlog_row_image_type_);
 
 OB_SERIALIZE_MEMBER(ObTableBatchOperationRequest,
                     credential_,
@@ -64,27 +64,27 @@ OB_SERIALIZE_MEMBER(ObTableBatchOperationRequest,
                     returning_rowkey_,
                     returning_affected_entity_,
                     returning_affected_rows_,
-                    partition_id_
-                    );
+                    tablet_id_,
+                    binlog_row_image_type_);
 
 OB_SERIALIZE_MEMBER(ObTableQueryRequest,
                     credential_,
                     table_name_,
                     table_id_,
-                    partition_id_,
+                    tablet_id_,
                     entity_type_,
                     consistency_level_,
                     query_
                     );
-
 ////////////////////////////////////////////////////////////////
 OB_SERIALIZE_MEMBER(ObTableQueryAndMutateRequest,
                     credential_,
                     table_name_,
                     table_id_,
-                    partition_id_,
+                    tablet_id_,
                     entity_type_,
-                    query_and_mutate_);
+                    query_and_mutate_,
+                    binlog_row_image_type_);
 
 OB_SERIALIZE_MEMBER((ObTableQuerySyncRequest, ObTableQueryRequest),
                     query_session_id_,

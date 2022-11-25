@@ -14,23 +14,23 @@
 #define OCEANBASE_SQL_OB_EXPR_USEC_TO_TIME_H_
 #include "sql/engine/expr/ob_expr_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObExprUsecToTime : public ObFuncExprOperator {
+namespace oceanbase
+{
+namespace sql
+{
+class ObExprUsecToTime : public ObFuncExprOperator
+{
 public:
-  explicit ObExprUsecToTime(common::ObIAllocator& alloc);
+  explicit  ObExprUsecToTime(common::ObIAllocator &alloc);
   virtual ~ObExprUsecToTime();
-  virtual int calc_result_type1(
-      ObExprResType& type, ObExprResType& usec, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result1(
-      common::ObObj& result, const common::ObObj& usec, common::ObExprCtx& expr_ctx) const override;
-  virtual int cg_expr(ObExprCGCtx& expr_cg_ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  virtual int calc_result_type1(ObExprResType &type, ObExprResType &usec, common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                        ObExpr &rt_expr) const override;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprUsecToTime);
 };
 
-}  // namespace sql
-}  // namespace oceanbase
-#endif  // OCEANBASE_SQL_OB_EXPR_USEC_TO_TIME_H_
+} //sql
+} //oceanbase
+#endif //OCEANBASE_SQL_OB_EXPR_USEC_TO_TIME_H_

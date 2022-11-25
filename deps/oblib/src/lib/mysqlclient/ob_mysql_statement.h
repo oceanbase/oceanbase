@@ -15,19 +15,23 @@
 
 #include "lib/mysqlclient/ob_mysql_result_impl.h"
 
-namespace oceanbase {
-namespace common {
-namespace sqlclient {
+namespace oceanbase
+{
+namespace common
+{
+namespace sqlclient
+{
 class ObMySQLConnection;
 
-class ObMySQLStatement {
+class ObMySQLStatement
+{
 public:
   ObMySQLStatement();
   ~ObMySQLStatement();
-  ObMySQLConnection* get_connection();
-  MYSQL* get_stmt_handler();
-  MYSQL* get_conn_handler();
-  int init(ObMySQLConnection& conn, const char* sql);
+  ObMySQLConnection *get_connection();
+  MYSQL *get_stmt_handler();
+  MYSQL *get_conn_handler();
+  int init(ObMySQLConnection &conn, const char *sql);
 
   /*
    * close statement
@@ -40,7 +44,7 @@ public:
    *  - commit
    *  - insert into t values (v1,v2),(v3,v4)
    */
-  int execute_update(int64_t& affected_rows);
+  int execute_update(int64_t &affected_rows);
   /*
    * same as execute_update(affected_rows)
    * but ignore affected_rows
@@ -52,15 +56,15 @@ public:
    * use prepare method to read data instead
    * reference ObMySQLPrepareStatement
    */
-  ObMySQLResult* execute_query();
+  ObMySQLResult *execute_query();
 
 private:
-  ObMySQLConnection* conn_;
+  ObMySQLConnection *conn_;
   ObMySQLResultImpl result_;
-  MYSQL* stmt_;
-  const char* sql_str_;
+  MYSQL *stmt_;
+  const char *sql_str_;
 };
-}  // namespace sqlclient
-}  // namespace common
-}  // namespace oceanbase
+} //namespace sqlclient
+}
+}
 #endif

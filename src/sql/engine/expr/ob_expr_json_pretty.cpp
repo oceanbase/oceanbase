@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file is for implementation of func json_pretty
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_pretty.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
@@ -39,7 +38,7 @@ int ObExprJsonPretty::calc_result_type1(ObExprResType &type,
                                         ObExprResType &type1,
                                         common::ObExprTypeCtx &type_ctx) const
 {
-  UNUSED(type_ctx); // type_ctx session, collation, raw expr, maybe should use type_ctx in oracle mode to judge character set
+  UNUSED(type_ctx); // type_ctx session, collation, raw expr, oracle模式下可能需要从type_ctx来判断字符集
   INIT_SUCC(ret);
 
   type.set_type(ObLongTextType);
@@ -85,41 +84,12 @@ int ObExprJsonPretty::calc(const T &data, ObObjType type, ObCollationType cs_typ
   return ret;
 }
 
-// for old sql engine
-int ObExprJsonPretty::calc_result1(common::ObObj &result, const common::ObObj &obj,
-                                   common::ObExprCtx &expr_ctx) const
-{
-  INIT_SUCC(ret);
-  ObIAllocator *allocator = expr_ctx.calc_buf_;
-  ObObjType type = obj.get_type();
-  ObCollationType cs_type = obj.get_collation_type();
-  ObJsonBuffer j_buf(allocator);
-  bool is_null = false;
-
-  if (OB_FAIL(calc(obj, type, cs_type, allocator, j_buf, is_null))) {
-    LOG_WARN("fail to calc json pretty result", K(ret), K(obj), K(type), K(cs_type));
-  } else if (is_null) {
-    result.set_null();
-  } else {
-    char *buf = static_cast<char*>(allocator->alloc(j_buf.length()));
-    if (buf) {
-      MEMMOVE(buf, j_buf.ptr(), j_buf.length());
-      result.set_string(ObLongTextType, buf, j_buf.length());
-      result.set_collation_type(result_type_.get_collation_type());
-    } else {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc memory for result", K(ret), K(j_buf));
-    }
-  }
-
-  return ret;
-}
-
 // for new sql engine
 int ObExprJsonPretty::eval_json_pretty(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
-  common::ObArenaAllocator &tmp_allocator = ctx.get_reset_tmp_alloc();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObExpr *arg = expr.args_[0];
   ObDatum *j_datum = NULL;
   ObObjType type = arg->datum_meta_.type_;

@@ -123,7 +123,7 @@ Oracle:
 1.用例5
 
 ```shell
-$ ob_error ora 600 -a=5858
+$ ob_error ora 600 -a 5858
 
 OceanBase:
 	OceanBase Error Code: OB_ERR_CONFLICTING_DECLARATIONS(-5858)

@@ -16,11 +16,13 @@
 #include "sql/engine/ob_exec_context.h"
 #include "observer/ob_server_struct.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-int ObDeallocateExecutor::execute(ObExecContext& ctx, ObDeallocateStmt& stmt)
+int ObDeallocateExecutor::execute(ObExecContext &ctx, ObDeallocateStmt &stmt)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx.get_sql_ctx()) || OB_ISNULL(ctx.get_my_session())) {
@@ -31,11 +33,12 @@ int ObDeallocateExecutor::execute(ObExecContext& ctx, ObDeallocateStmt& stmt)
       LOG_WARN("failed to remove prepare", K(stmt.get_prepare_name()), K(ret));
     } else if (OB_FAIL(ctx.get_my_session()->close_ps_stmt(stmt.get_prepare_id()))) {
       LOG_WARN("fail to deallocate ps stmt", K(ret), K(stmt.get_prepare_id()));
-    } else { /*do nothing*/
-    }
+    } else { /*do nothing*/ }
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}
+
+

@@ -1,5 +1,6 @@
 #owner: dachuan.sdc
 #owner group: sql2
+#tags: optimizer
 
 --disable_abort_on_error
 --result_format 4
@@ -12,9 +13,6 @@ connection conn_admin;
 alter system set enable_async_syslog = false;
 
 connection default;
-set @@ob_enable_plan_cache = 0;
-set @@ob_log_level='debug';
-
 
 --disable_warnings
 drop view if exists v1;
@@ -53,7 +51,7 @@ create view v1 as select current_timestamp() from dual limit 10;desc v1;drop vie
 create view v1 as select current_timestamp(3) from dual limit 10;desc v1;drop view v1;
 create view v1 as select sysdate() from dual limit 10;desc v1;drop view v1;
 create view v1 as select sysdate(3) from dual limit 10;desc v1;drop view v1;
-create view v1 as select cur_date() from dual limit 10;desc v1;drop view v1;
+create view v1 as select curdate() from dual limit 10;desc v1;drop view v1;
 create view v1 as select curtime() from dual limit 10;desc v1;drop view v1;
 create view v1 as select current_user() from dual limit 10;desc v1;drop view v1;
 create view v1 as select database() from dual limit 10;desc v1;drop view v1;

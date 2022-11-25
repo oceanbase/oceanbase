@@ -14,17 +14,20 @@
 #define __OCEANBASE_COMMON_OB_ATOMIC_TYPE_H__
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace common {
-// Support concurrent read/write
-template <typename T>
-struct ObAtomicType {
+namespace oceanbase
+{
+namespace common
+{
+// 支持并发读写
+template<typename T>
+struct ObAtomicType
+{
   volatile int64_t modify_version_;
-  ObAtomicType() : modify_version_(0)
+  ObAtomicType(): modify_version_(0)
   {}
   ~ObAtomicType()
   {}
-  int copy(T& that)
+  int copy(T &that)
   {
     int err = OB_EAGAIN;
     while (OB_EAGAIN == err) {
@@ -32,7 +35,7 @@ struct ObAtomicType {
       if (0 > old_version) {
         err = OB_EAGAIN;
       } else {
-        that = *(T*)this;
+        that = *(T *)this;
         err = OB_SUCCESS;
       }
       if (OB_SUCCESS == err && old_version != modify_version_) {
@@ -42,19 +45,21 @@ struct ObAtomicType {
     return err;
   }
 
-  int set(T& that)
+  int set(T &that)
   {
     int err = OB_EAGAIN;
     while (OB_EAGAIN == err) {
       int64_t old_version = modify_version_;
-      if (0 > old_version || !__sync_bool_compare_and_swap(&modify_version_, old_version, -1)) {
+      if (0 > old_version
+          || !__sync_bool_compare_and_swap(&modify_version_, old_version, -1)) {
         err = OB_EAGAIN;
       } else {
         that.modify_version_ = -1;
-        *(T*)this = that;
+        *(T *)this = that;
         err = OB_SUCCESS;
       }
-      if (OB_SUCCESS == err && !__sync_bool_compare_and_swap(&modify_version_, -1, old_version + 1)) {
+      if (OB_SUCCESS == err
+          && !__sync_bool_compare_and_swap(&modify_version_, -1, old_version + 1)) {
         err = OB_ERR_UNEXPECTED;
       }
     }
@@ -62,23 +67,23 @@ struct ObAtomicType {
   }
 };
 
-template <typename T>
-struct AtomicWrapper : public common::ObAtomicType<AtomicWrapper<T> > {
-  AtomicWrapper() : t_()
-  {}
-  ~AtomicWrapper()
-  {}
-  int read(T& t)
+template<typename T>
+struct AtomicWrapper: public common::ObAtomicType<AtomicWrapper<T> >
+{
+  AtomicWrapper(): t_() {}
+  ~AtomicWrapper() {}
+  int read(T &t)
   {
     int err = OB_SUCCESS;
     AtomicWrapper wrapper;
-    if (OB_SUCCESS != (err = copy(wrapper))) {
-    } else {
+    if (OB_SUCCESS != (err = copy(wrapper)))
+    {}
+    else {
       t = wrapper.t_;
     }
     return err;
   }
-  int write(const T& t)
+  int write(const T &t)
   {
     AtomicWrapper wrapper;
     wrapper.t_ = t;
@@ -86,7 +91,7 @@ struct AtomicWrapper : public common::ObAtomicType<AtomicWrapper<T> > {
   }
   T t_;
 };
-};  // end namespace common
-};  // end namespace oceanbase
+}; // end namespace common
+}; // end namespace oceanbase
 
-#endif  //__OCEANBASE_COMMON_OB_ATOMIC_TYPE_H__
+#endif //__OCEANBASE_COMMON_OB_ATOMIC_TYPE_H__

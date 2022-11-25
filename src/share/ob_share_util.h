@@ -13,16 +13,22 @@
 #ifndef OCEANBASE_SHARE_OB_SHARE_UTIL_H_
 #define OCEANBASE_SHARE_OB_SHARE_UTIL_H_
 #include "share/ob_define.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObTimeoutCtx;
 }
-namespace share {
-class ObShareUtil {
+namespace share
+{
+class ObShareUtil
+{
 public:
-  // Order of setting timeout_ctx: ctx > worker > default_timeout
+  // priority to set timeout_ctx: ctx > worker > default_timeout
   static int set_default_timeout_ctx(common::ObTimeoutCtx &ctx, const int64_t default_timeout);
+  // priority to get timeout: ctx > worker > default_timeout
+  static int get_abs_timeout(const int64_t default_timeout, int64_t &abs_timeout);
 };
-}  // end namespace share
-}  // end namespace oceanbase
-#endif  // OCEANBASE_SHARE_OB_SHARE_UTIL_H_
+}//end namespace share
+}//end namespace oceanbase
+#endif //OCEANBASE_SHARE_OB_SHARE_UTIL_H_

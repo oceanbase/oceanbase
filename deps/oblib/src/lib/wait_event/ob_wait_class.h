@@ -31,27 +31,33 @@ WAIT_CLASS_DEF(QUEUEING, "QUEUEING", 112)
 #define OB_WAIT_CLASS_H_
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 static const int64_t MAX_WAIT_CLASS_NAME_LENGTH = 64;
 
-struct ObWaitClassIds {
-  enum ObWaitClassIdEnum {
+struct ObWaitClassIds
+{
+  enum ObWaitClassIdEnum
+  {
 #define WAIT_CLASS_DEF(name, wait_class, wait_class_id) name,
 #include "lib/wait_event/ob_wait_class.h"
 #undef WAIT_CLASS_DEF
   };
 };
 
-struct ObWaitClass {
+struct ObWaitClass
+{
   char wait_class_[MAX_WAIT_CLASS_NAME_LENGTH];
   int64_t wait_class_id_;
 };
 
 extern const ObWaitClass OB_WAIT_CLASSES[];
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
+
 
 #endif /* OB_WAIT_CLASS_H_ */

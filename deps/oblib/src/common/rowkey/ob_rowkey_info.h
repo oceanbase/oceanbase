@@ -21,26 +21,22 @@
 #include "lib/hash/ob_hashutils.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/hash/ob_hashset.h"
-#include "common/ob_hint.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 typedef ObObjType ColumnType;
 typedef ObObjTypeClass ColumnTypeClass;
-struct ObRowkeyColumn {
-  ObRowkeyColumn()
-  {
-    memset(this, 0, sizeof(ObRowkeyColumn));
-  }
+struct ObRowkeyColumn
+{
+  ObRowkeyColumn() { memset(this, 0, sizeof(ObRowkeyColumn)); }
   bool is_valid() const
   {
-    return length_ >= 0 && common::OB_INVALID_ID != column_id_ &&
-           common::ob_is_valid_obj_type(static_cast<ObObjType>(type_.get_type()));
+    return (ObURowIDType == type_.get_type() || length_ >= 0) && common::OB_INVALID_ID != column_id_
+           && common::ob_is_valid_obj_type(static_cast<ObObjType>(type_.get_type()));
   }
-  const ObObjMeta get_meta_type() const
-  {
-    return type_;
-  }
+  const ObObjMeta get_meta_type() const { return type_; }
   TO_STRING_KV(K_(length), K_(column_id), K_(type), K_(order), K_(fulltext_flag));
 
   int64_t length_;
@@ -51,18 +47,17 @@ struct ObRowkeyColumn {
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 
-class ObRowkeyInfo {
+class ObRowkeyInfo
+{
 public:
   ObRowkeyInfo();
-  explicit ObRowkeyInfo(ObIAllocator* allocator);
+  explicit ObRowkeyInfo(ObIAllocator *allocator);
   ~ObRowkeyInfo();
 
-  // ObRowkeyInfo& operator =(const ObRowkeyInfo &rowkey);
+  //ObRowkeyInfo& operator =(const ObRowkeyInfo &rowkey);
 
-  inline int64_t get_size() const
-  {
-    return size_;
-  }
+  inline int64_t get_size() const { return size_; }
+
 
   /**
    * Get rowkey column by index
@@ -71,8 +66,8 @@ public:
    *
    * @return int  return OB_SUCCESS if get the column, otherwist return OB_ERROR
    */
-  int get_column(const int64_t index, ObRowkeyColumn& column) const;
-  const ObRowkeyColumn* get_column(const int64_t index) const;
+  int get_column(const int64_t index, ObRowkeyColumn &column) const;
+  const ObRowkeyColumn *get_column(const int64_t index) const;
 
   /**
    * Get rowkey column id by index
@@ -81,20 +76,20 @@ public:
    *
    * @return int  return OB_SUCCESS if get the column, otherwist return OB_ERROR
    */
-  int get_column_id(const int64_t index, uint64_t& column_id) const;
+  int get_column_id(const int64_t index, uint64_t &column_id) const;
 
   /**
    * Add column to rowkey info
    * @param column column to add
    * @return itn  return OB_SUCCESS if add success, otherwise return OB_ERROR
    */
-  int add_column(const ObRowkeyColumn& column);
+  int add_column(const ObRowkeyColumn &column);
 
-  int get_index(const uint64_t column_id, int64_t& index, ObRowkeyColumn& column) const;
-  int get_index(const uint64_t column_id, int64_t& index) const;
-  int is_rowkey_column(const uint64_t column_id, bool& is_rowkey) const;
-  int get_fulltext_column(uint64_t& column_id) const;
-  int set_column(const int64_t idx, const ObRowkeyColumn& column);
+  int get_index(const uint64_t column_id, int64_t &index, ObRowkeyColumn &column) const;
+  int get_index(const uint64_t column_id, int64_t &index) const;
+  int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
+  int get_fulltext_column(uint64_t &column_id) const;
+  int set_column(const int64_t idx, const ObRowkeyColumn &column);
   void reset();
   bool contain_timestamp_ltz_column() const;
 
@@ -102,30 +97,28 @@ public:
   bool is_valid() const;
   int64_t get_convert_size() const;
   TO_STRING_KV("columns", common::ObArrayWrap<ObRowkeyColumn>(columns_, size_), K_(capacity));
-  int get_column_orders(ObIArray<ObOrderType>& column_orders) const;
-  int get_column_ids(ObIArray<uint64_t>& column_ids) const;
-  int get_column_ids(ObBitSet<>& column_ids) const;
+  int get_column_ids(ObIArray<uint64_t> &column_ids) const;
+  int get_column_ids(ObBitSet<> &column_ids) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
-
 private:
   int expand(const int64_t size);
   static const int64_t DEFAULT_ROWKEY_COLUMN_ARRAY_CAPACITY = 8;
-  ObRowkeyColumn* columns_;
+  ObRowkeyColumn *columns_;
   int64_t size_;
   int64_t capacity_;
   ObArenaAllocator arena_;
-  ObIAllocator* allocator_;
+  ObIAllocator *allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObRowkeyInfo);
 };
 
-// used for index info
+//used for index info
 typedef ObRowkeyColumn ObIndexColumn;
 typedef ObRowkeyInfo ObIndexInfo;
-// used for partition expr
+//used for partition expr
 typedef ObRowkeyColumn ObPartitionKeyColumn;
 typedef ObRowkeyInfo ObPartitionKeyInfo;
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 
-#endif  // OCEANBASE_ROWKEY_INFO_H_
+#endif //OCEANBASE_ROWKEY_INFO_H_

@@ -15,51 +15,52 @@
 
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 
 template <class T>
-class ObDITls {
+class ObDITls
+{
 public:
-  static ObDITls& get_di_tls();
+  static ObDITls &get_di_tls();
   void destroy();
-  T* new_instance();
-  static T* get_instance();
-
+  T *new_instance();
+  static T *get_instance();
 private:
   ObDITls() : key_(INT32_MAX)
   {
-    if (0 != pthread_key_create(&key_, destroy_thread_data_)) {}
+    if (0 != pthread_key_create(&key_, destroy_thread_data_)) {
+    }
   }
-  ~ObDITls()
-  {
-    destroy();
-  }
-  static void destroy_thread_data_(void* ptr);
-
+  ~ObDITls() { destroy(); }
+  static void destroy_thread_data_(void *ptr);
 private:
   pthread_key_t key_;
-  static __thread T *instance_;
-  static __thread bool in_create_;
+  static TLOCAL(T *, instance_);
+  static TLOCAL(bool, disable_);
 };
 // NOTE: thread local diagnose information
 // TODO: check if multi-query execute within one thread.
-template <class T> __thread T *ObDITls<T>::instance_ = NULL;
-template <class T> __thread bool ObDITls<T>::in_create_ = false;
+template <class T>
+TLOCAL(T *, ObDITls<T>::instance_);
+template <class T>
+TLOCAL(bool, ObDITls<T>::disable_);
 
 template <class T>
-void ObDITls<T>::destroy_thread_data_(void* ptr)
+void ObDITls<T>::destroy_thread_data_(void *ptr)
 {
   if (NULL != ptr) {
-    T* tls = (T*)ptr;
-    delete tls;
+    T *tls = (T *)ptr;
     instance_ = NULL;
-    in_create_ = false;
+    disable_ = true;
+    delete tls;
   }
 }
 
 template <class T>
-ObDITls<T>& ObDITls<T>::get_di_tls()
+ObDITls<T> &ObDITls<T>::get_di_tls()
 {
   static ObDITls<T> di_tls;
   return di_tls;
@@ -69,7 +70,7 @@ template <class T>
 void ObDITls<T>::destroy()
 {
   if (INT32_MAX != key_) {
-    void* ptr = pthread_getspecific(key_);
+    void *ptr = pthread_getspecific(key_);
     destroy_thread_data_(ptr);
     if (0 != pthread_key_delete(key_)) {
     } else {
@@ -79,11 +80,11 @@ void ObDITls<T>::destroy()
 }
 
 template <class T>
-T* ObDITls<T>::new_instance()
+T *ObDITls<T>::new_instance()
 {
-  T* instance = NULL;
+  T *instance = NULL;
   if (INT32_MAX != key_) {
-    T* tls = (T*)pthread_getspecific(key_);
+    T *tls = (T *)pthread_getspecific(key_);
     if (NULL == tls) {
       tls = new (std::nothrow) T();
       if (NULL != tls && 0 != pthread_setspecific(key_, tls)) {
@@ -99,18 +100,18 @@ T* ObDITls<T>::new_instance()
 }
 
 template <class T>
-T* ObDITls<T>::get_instance()
+T *ObDITls<T>::get_instance()
 {
   if (OB_UNLIKELY(NULL == instance_)) {
-    if (OB_LIKELY(!in_create_)) {
-      in_create_ = true;
+    if (OB_LIKELY(!disable_)) {
+      disable_ = true;
       instance_ = get_di_tls().new_instance();
-      in_create_ = false;
+      disable_ = false;
     }
   }
   return instance_;
 }
 
-}  // namespace common
-}  // namespace oceanbase
+}
+}
 #endif

@@ -15,11 +15,14 @@
 
 #include "share/ob_virtual_table_scanner_iterator.h"
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 struct ObGlobalContext;
-class ObInfoSchemaSessionStatusTable : public common::ObVirtualTableScannerIterator {
-#define SESSION_STATUS_MAP_BUCKET_NUM 10
+class ObInfoSchemaSessionStatusTable : public common::ObVirtualTableScannerIterator
+{
+  #define SESSION_STATUS_MAP_BUCKET_NUM 10
 
   static const int32_t SESSION_STATUS_COLUMN_COUNT = 2;
   enum SESSION_STATUS_COLUMN {
@@ -27,7 +30,10 @@ class ObInfoSchemaSessionStatusTable : public common::ObVirtualTableScannerItera
     VARIABLE_VALUE,
   };
 
-  enum VARIABLE { THREADS_CONNECTED = 0, UPTIME };
+  enum VARIABLE {
+    THREADS_CONNECTED = 0,
+    UPTIME
+  };
 
   typedef common::hash::ObHashMap<common::ObString, common::ObObj> AllStatus;
 
@@ -35,28 +41,26 @@ public:
   ObInfoSchemaSessionStatusTable();
   virtual ~ObInfoSchemaSessionStatusTable();
 
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
 
-  inline void set_cur_session(sql::ObSQLSessionInfo* session)
+  inline void set_cur_session(sql::ObSQLSessionInfo *session)
   {
     cur_session_ = session;
   }
-  inline void set_global_ctx(const ObGlobalContext* global_ctx)
+  inline void set_global_ctx(const ObGlobalContext *global_ctx)
   {
     global_ctx_ = global_ctx;
   }
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObInfoSchemaSessionStatusTable);
-  int fetch_all_session_status(AllStatus& all_status);
-
+  int fetch_all_session_status(AllStatus &all_status);
 private:
-  sql::ObSQLSessionInfo* cur_session_;
-  const observer::ObGlobalContext* global_ctx_;
-  static const char* const variables_name[];
+  sql::ObSQLSessionInfo *cur_session_;
+  const observer::ObGlobalContext *global_ctx_;
+  static const char *const variables_name[];
 };
-}  // namespace observer
-}  // namespace oceanbase
+} // namespace observer
+} // namespace oceanbase
 
-#endif  // OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_INFORMATION_SESSION_STATUS_TABLE_
+#endif // OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_INFORMATION_SESSION_STATUS_TABLE_

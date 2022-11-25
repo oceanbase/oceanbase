@@ -18,23 +18,34 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "common/object/ob_object.h"
 using namespace oceanbase;
-namespace oceanbase {
-namespace share {
-namespace schema {
+namespace oceanbase
+{
+namespace share
+{
+namespace schema
+{
 class ObSchemaManager;
 }
-}  // namespace share
-}  // namespace oceanbase
-namespace test {
-class ObMockPartMgr : public oceanbase::common::ObPartMgr {
+}
+}
+namespace test
+{
+class ObMockPartMgr : public oceanbase::common::ObPartMgr
+{
 public:
   ObMockPartMgr() : schema_guard_(NULL)
-  {}
+  { }
 
-  virtual inline int get_part(uint64_t table_id, share::schema::ObPartitionLevel part_level, int64_t part_id,
-      const common::ObNewRange& range, bool reverse, common::ObIArray<int64_t>& part_ids);
+  virtual inline int get_part(uint64_t table_id,
+                              share::schema::ObPartitionLevel part_level,
+                              int64_t part_id,
+                              const common::ObNewRange &range,
+                              bool reverse,
+                              common::ObIArray<int64_t> &part_ids);
 
-  virtual int update_part_desc_hash(uint64_t table_id, int64_t part_num, int64_t part_space)
+  virtual int update_part_desc_hash(uint64_t table_id,
+                                    int64_t part_num,
+                                    int64_t part_space)
   {
     UNUSED(table_id);
     UNUSED(part_num);
@@ -42,11 +53,15 @@ public:
     return common::OB_NOT_IMPLEMENT;
   }
   static const int64_t COUNT = 200;
-  oceanbase::share::schema::ObSchemaGetterGuard* schema_guard_;
+  oceanbase::share::schema::ObSchemaGetterGuard *schema_guard_;
 };
 
-int ObMockPartMgr::get_part(uint64_t table_id, share::schema::ObPartitionLevel part_level, int64_t part_id,
-    const common::ObNewRange& range, bool reverse, common::ObIArray<int64_t>& part_ids)
+int ObMockPartMgr::get_part(uint64_t table_id,
+                            share::schema::ObPartitionLevel part_level,
+                            int64_t part_id,
+                            const common::ObNewRange &range,
+                            bool reverse,
+                            common::ObIArray<int64_t> &part_ids)
 {
   int ret = common::OB_SUCCESS;
   int64_t part_num = 0;
@@ -58,7 +73,7 @@ int ObMockPartMgr::get_part(uint64_t table_id, share::schema::ObPartitionLevel p
     ret = common::OB_NOT_INIT;
     OB_LOG(WARN, "Schema mgr not inited", K(ret));
   } else {
-    const oceanbase::share::schema::ObTableSchema* table_schema = NULL;
+    const oceanbase::share::schema::ObTableSchema *table_schema = NULL;
     schema_guard_->get_table_schema(table_id, table_schema);
     if (OB_ISNULL(table_schema)) {
       ret = common::OB_SCHEMA_ERROR;
@@ -70,16 +85,15 @@ int ObMockPartMgr::get_part(uint64_t table_id, share::schema::ObPartitionLevel p
 
   if (OB_FAIL(ret)) {
   } else if (range.is_single_rowkey()) {
-    const common::ObObj& value = range.get_start_key().get_obj_ptr()[0];
+    const common::ObObj &value = range.get_start_key().get_obj_ptr()[0];
     int64_t result = 0;
     if (common::ObInt32Type == value.get_type()) {
       result = value.get_int32();
     } else if (common::ObIntType == value.get_type()) {
       result = value.get_int();
-    } else {
-    }
+    } else { }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(part_ids.push_back(result % part_num))) {
+      if (OB_FAIL(part_ids.push_back(result%part_num))) {
         OB_LOG(WARN, "Failed to add id", K(ret));
       }
     }
@@ -93,6 +107,6 @@ int ObMockPartMgr::get_part(uint64_t table_id, share::schema::ObPartitionLevel p
   return ret;
 }
 
-}  // namespace test
+}
 
 #endif

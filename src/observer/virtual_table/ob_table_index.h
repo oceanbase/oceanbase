@@ -16,54 +16,75 @@
 #include "lib/container/ob_se_array.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "common/ob_range.h"
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 class ObString;
 class ObObj;
-}  // namespace common
-namespace share {
-namespace schema {
+}
+namespace share
+{
+namespace schema
+{
 class ObTableSchema;
 class ObDatabaseSchema;
-}  // namespace schema
-}  // namespace share
-namespace observer {
-class ObTableIndex : public common::ObVirtualTableScannerIterator {
+}
+}
+namespace observer
+{
+class ObTableIndex : public common::ObVirtualTableScannerIterator
+{
 public:
   ObTableIndex();
   virtual ~ObTableIndex();
   virtual int inner_open();
-  virtual int inner_get_next_row(common::ObNewRow*& row);
+  virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-  inline void set_tenant_id(uint64_t tenant_id)
-  {
-    tenant_id_ = tenant_id;
-  }
-
+  inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
 private:
-  int add_table_indexes(const share::schema::ObTableSchema& table_schema, const common::ObString& database_name,
-      common::ObObj* cells, int64_t col_count, bool& is_end);
-  int add_database_indexes(
-      const share::schema::ObDatabaseSchema& database_schema, common::ObObj* cells, int64_t col_count, bool& is_end);
 
-  int add_rowkey_indexes(const share::schema::ObTableSchema& table_schema, const common::ObString& database_name,
-      common::ObObj* cells, int64_t col_count, bool& is_end);
-  int add_normal_indexes(const share::schema::ObTableSchema& table_schema, const common::ObString& database_name,
-      common::ObObj* cells, int64_t col_count, bool& is_end);
-  int add_normal_index_column(const common::ObString& database_name, const share::schema::ObTableSchema& table_schema,
-      const share::schema::ObTableSchema* index_schema, common::ObObj* cells, int64_t col_count, bool& is_end);
-  int add_fulltext_index_column(const common::ObString& database_name, const share::schema::ObTableSchema& table_schema,
-      const share::schema::ObTableSchema* index_schema, common::ObObj* cells, int64_t col_count,
-      const uint64_t column_id);
-  int get_show_column_name(const share::schema::ObTableSchema& table_schema,
-      const share::schema::ObColumnSchemaV2& column_schema, common::ObString& column_name);
+  int add_table_indexes(const share::schema::ObTableSchema &table_schema,
+                        const common::ObString &database_name,
+                        common::ObObj *cells,
+                        int64_t col_count,
+                        bool &is_end);
+  int add_database_indexes(const share::schema::ObDatabaseSchema &database_schema,
+                           common::ObObj *cells,
+                           int64_t col_count,
+                           bool &is_end);
 
+  int add_rowkey_indexes(const share::schema::ObTableSchema &table_schema,
+                         const common::ObString &database_name,
+                         common::ObObj *cells,
+                         int64_t col_count,
+                         bool &is_end);
+  int add_normal_indexes(const share::schema::ObTableSchema &table_schema,
+                         const common::ObString &database_name,
+                         common::ObObj *cells,
+                         int64_t col_count,
+                         bool &is_end);
+  int add_normal_index_column(const common::ObString &database_name,
+                              const share::schema::ObTableSchema &table_schema,
+                              const share::schema::ObTableSchema *index_schema,
+                              common::ObObj *cells,
+                              int64_t col_count,
+                              bool &is_end);
+  int add_fulltext_index_column(const common::ObString &database_name,
+                                const share::schema::ObTableSchema &table_schema,
+                                const share::schema::ObTableSchema *index_schema,
+                                common::ObObj *cells,
+                                int64_t col_count,
+                                const uint64_t column_id);
+  int get_show_column_name(const share::schema::ObTableSchema &table_schema,
+                           const share::schema::ObColumnSchemaV2 &column_schema,
+                           common::ObString &column_name);
 private:
   uint64_t tenant_id_;
   uint64_t show_table_id_;
-  common::ObSArray<const share::schema::ObDatabaseSchema*> database_schemas_;
+  common::ObSArray<const share::schema::ObDatabaseSchema *> database_schemas_;
   int64_t database_schema_idx_;
-  common::ObSArray<const share::schema::ObTableSchema*> table_schemas_;
+  common::ObSArray<const share::schema::ObTableSchema *> table_schemas_;
   int64_t table_schema_idx_;
   int64_t rowkey_info_idx_;
   int64_t index_tid_array_idx_;
@@ -74,6 +95,6 @@ private:
   int64_t ft_dep_col_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObTableIndex);
 };
-}  // namespace observer
-}  // namespace oceanbase
+}
+}
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_TABLE_INDEX_ */

@@ -12,8 +12,8 @@
 
 #include <gtest/gtest.h>
 
-#define private public
-#define protected public
+#define private  public
+#define protected  public
 #include "sql/ob_sql_init.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/subquery/ob_subplan_filter.h"
@@ -26,10 +26,12 @@
 #include "share/ob_tenant_mgr.h"
 #include "sql/engine/test_engine_util.h"
 
+
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::observer;
-class ObSubPlanFilterTest : public ::testing::Test {
+class ObSubPlanFilterTest: public ::testing::Test
+{
 public:
   ObSubPlanFilterTest();
   virtual ~ObSubPlanFilterTest();
@@ -39,9 +41,8 @@ public:
   void add_filter_expr();
   void add_calc_expr();
   void add_limit();
-  void init_plan(ObExecContext& ctx);
-  void init_plan_for_calc(ObExecContext& ctx);
-
+  void init_plan(ObExecContext &ctx);
+  void init_plan_for_calc(ObExecContext &ctx);
 protected:
   ObFakeTable fake_table1_;
   ObFakeTable fake_table2_;
@@ -49,12 +50,10 @@ protected:
   int32_t projector_;
   ObSubPlanFilter subplan_filter_;
   ObPhysicalPlan physical_plan_;
-
 private:
   // disallow copy
-  ObSubPlanFilterTest(const ObSubPlanFilterTest& other);
-  ObSubPlanFilterTest& operator=(const ObSubPlanFilterTest& other);
-
+  ObSubPlanFilterTest(const ObSubPlanFilterTest &other);
+  ObSubPlanFilterTest& operator=(const ObSubPlanFilterTest &other);
 private:
   // data members
 };
@@ -65,27 +64,30 @@ ObSubPlanFilterTest::ObSubPlanFilterTest() : limit_(alloc_), subplan_filter_(all
 }
 
 ObSubPlanFilterTest::~ObSubPlanFilterTest()
-{}
+{
+}
 
 void ObSubPlanFilterTest::SetUp()
-{}
+{
+}
 
 void ObSubPlanFilterTest::TearDown()
-{}
+{
+}
 
 void ObSubPlanFilterTest::add_filter_expr()
 {
-  ObSqlExpression* sql_expr = NULL;
+  ObSqlExpression *sql_expr = NULL;
   ObPostExprItem expr_item;
-  // column 0
+  //column 0
   ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, sql_expr));
   sql_expr->set_item_count(3);
   expr_item.set_column(0);
   sql_expr->add_expr_item(expr_item);
-  // subquery ref op
-  ObExprSubQueryRef* subquery_ref = NULL;
-  // static_cast<ObExprSubQueryRef*>(ObExprOperator::alloc(T_REF_QUERY));
-  ObExprOperator* op = NULL;
+  //subquery ref op
+  ObExprSubQueryRef *subquery_ref = NULL;
+  //static_cast<ObExprSubQueryRef*>(ObExprOperator::alloc(T_REF_QUERY));
+  ObExprOperator *op = NULL;
   physical_plan_.get_expr_op_factory().alloc(static_cast<ObExprOperatorType>(T_REF_QUERY), op);
   subquery_ref = static_cast<ObExprSubQueryRef*>(op);
   subquery_ref->set_real_param_num(0);
@@ -96,16 +98,16 @@ void ObSubPlanFilterTest::add_filter_expr()
   subquery_ref->set_subquery_idx(0);
   expr_item.assign(subquery_ref);
   sql_expr->add_expr_item(expr_item);
-  // greater than
-  ObExprOperator* greater_op = NULL;
-  // ObExprOperator::alloc(T_OP_GT);
+  //greater than
+  ObExprOperator *greater_op = NULL;
+  //ObExprOperator::alloc(T_OP_GT);
   physical_plan_.get_expr_op_factory().alloc(T_OP_GT, greater_op);
   greater_op->set_result_type(ObTinyIntType);
   greater_op->set_real_param_num(2);
   greater_op->set_row_dimension(-1);
   expr_item.assign(greater_op);
   sql_expr->add_expr_item(expr_item);
-  ObExprOperator* expr_op = expr_item.get_expr_operator();
+  ObExprOperator *expr_op = expr_item.get_expr_operator();
   ObExprResType type;
   type.set_type(ObIntType);
   type.set_calc_type(ObIntType);
@@ -115,17 +117,17 @@ void ObSubPlanFilterTest::add_filter_expr()
 
 void ObSubPlanFilterTest::add_calc_expr()
 {
-  ObColumnExpression* column_expr = NULL;
+  ObColumnExpression *column_expr = NULL;
   ObPostExprItem expr_item;
   ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, column_expr));
   column_expr->set_item_count(6);
   column_expr->set_result_index(1);
-  // subquery ref op
-  // ObExprSubQueryRef *subquery_ref = static_cast<ObExprSubQueryRef*>(ObExprOperator::alloc(T_REF_QUERY));
-  // ObExprSubQueryRef *subquery_ref = NULL;
-  ObExprOperator* op = NULL;
+  //subquery ref op
+  //ObExprSubQueryRef *subquery_ref = static_cast<ObExprSubQueryRef*>(ObExprOperator::alloc(T_REF_QUERY));
+  //ObExprSubQueryRef *subquery_ref = NULL;
+  ObExprOperator *op = NULL;
   physical_plan_.get_expr_op_factory().alloc(static_cast<ObExprOperatorType>(T_REF_QUERY), op);
-  ObExprSubQueryRef* subquery_ref = static_cast<ObExprSubQueryRef*>(op);
+  ObExprSubQueryRef *subquery_ref = static_cast<ObExprSubQueryRef*>(op);
   subquery_ref->set_real_param_num(0);
   subquery_ref->set_result_is_scalar(false);
   subquery_ref->set_result_type(ObNullType);
@@ -134,7 +136,7 @@ void ObSubPlanFilterTest::add_calc_expr()
   subquery_ref->set_subquery_idx(0);
   expr_item.assign(subquery_ref);
   column_expr->add_expr_item(expr_item);
-  // row(1, 2, 3)
+  //row(1, 2, 3)
   ObObj val;
   val.set_int(20);
   expr_item.assign(val);
@@ -145,9 +147,9 @@ void ObSubPlanFilterTest::add_calc_expr()
   val.set_int(22);
   expr_item.assign(val);
   column_expr->add_expr_item(expr_item);
-  // subquery equal
-  ObSubQueryRelationalExpr* equal_op = NULL;
-  // static_cast<ObSubQueryRelationalExpr*>(ObExprOperator::alloc(T_OP_SQ_EQ));
+  //subquery equal
+  ObSubQueryRelationalExpr *equal_op = NULL;
+  //static_cast<ObSubQueryRelationalExpr*>(ObExprOperator::alloc(T_OP_SQ_EQ));
   physical_plan_.get_expr_op_factory().alloc(T_OP_SQ_EQ, op);
   equal_op = static_cast<ObSubQueryRelationalExpr*>(op);
   ObExprCalcType calc_type;
@@ -173,7 +175,7 @@ void ObSubPlanFilterTest::add_calc_expr()
 void ObSubPlanFilterTest::add_limit()
 {
   limit_.set_phy_plan(&physical_plan_);
-  ObColumnExpression* col_expr = NULL;
+  ObColumnExpression *col_expr = NULL;
   ObPostExprItem expr_item;
   ObObj val;
   ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, col_expr));
@@ -183,7 +185,7 @@ void ObSubPlanFilterTest::add_limit()
   col_expr->add_expr_item(expr_item);
   col_expr->set_result_index(1);
   ASSERT_EQ(OB_SUCCESS, limit_.add_compute(col_expr));
-  ObSqlExpression* sql_expr = NULL;
+  ObSqlExpression *sql_expr = NULL;
   ASSERT_EQ(OB_SUCCESS, ObSqlExpressionUtil::make_sql_expr(&physical_plan_, sql_expr));
   sql_expr->set_item_count(1);
   sql_expr->add_expr_item(expr_item);
@@ -194,7 +196,7 @@ void ObSubPlanFilterTest::add_limit()
   limit_.set_child(0, fake_table2_);
 }
 
-void ObSubPlanFilterTest::init_plan(ObExecContext& ctx)
+void ObSubPlanFilterTest::init_plan(ObExecContext &ctx)
 {
   fake_table1_.set_column_count(2);
   fake_table2_.set_column_count(1);
@@ -210,19 +212,21 @@ void ObSubPlanFilterTest::init_plan(ObExecContext& ctx)
   ASSERT_EQ(OB_SUCCESS, subplan_filter_.create_child_array(2));
   subplan_filter_.set_child(0, fake_table1_);
   subplan_filter_.set_child(1, limit_);
-
+  subplan_filter_.init_px_batch_rescan_flags(2);
+  subplan_filter_.get_px_batch_rescan_flags().push_back(false);
+  subplan_filter_.get_px_batch_rescan_flags().push_back(false);
   add_filter_expr();
   add_limit();
   ASSERT_EQ(OB_SUCCESS, create_test_session(ctx));
   ASSERT_EQ(OB_SUCCESS, ctx.init_phy_op(4));
   ASSERT_EQ(OB_SUCCESS, ctx.create_physical_plan_ctx());
   ASSERT_FALSE(NULL == ctx.get_physical_plan_ctx());
-  ASSERT_FALSE(NULL == ctx.get_my_session());
+  ASSERT_FALSE(NULL ==  ctx.get_my_session());
   ASSERT_EQ(OB_SUCCESS, ctx.get_my_session()->set_time_zone(ObString("+8:00"), true, true));
   ctx.get_physical_plan_ctx()->set_phy_plan(&physical_plan_);
 }
 
-void ObSubPlanFilterTest::init_plan_for_calc(ObExecContext& ctx)
+void ObSubPlanFilterTest::init_plan_for_calc(ObExecContext &ctx)
 {
   fake_table1_.reset();
   fake_table2_.reset();
@@ -244,6 +248,9 @@ void ObSubPlanFilterTest::init_plan_for_calc(ObExecContext& ctx)
   subplan_filter_.set_child(0, fake_table1_);
   subplan_filter_.set_child(1, fake_table2_);
 
+  subplan_filter_.init_px_batch_rescan_flags(2);
+  subplan_filter_.get_px_batch_rescan_flags().push_back(false);
+  subplan_filter_.get_px_batch_rescan_flags().push_back(false);
   add_calc_expr();
   ASSERT_EQ(OB_SUCCESS, create_test_session(ctx));
   ASSERT_EQ(OB_SUCCESS, ctx.init_phy_op(3));
@@ -252,8 +259,8 @@ void ObSubPlanFilterTest::init_plan_for_calc(ObExecContext& ctx)
   ASSERT_FALSE(NULL == ctx.get_my_session());
   ASSERT_EQ(OB_SUCCESS, ctx.get_my_session()->set_time_zone(ObString("+8:00"), true, true));
   ctx.get_physical_plan_ctx()->set_phy_plan(&physical_plan_);
-  // add projector
-  int32_t* projector = NULL;
+  //add projector
+  int32_t *projector = NULL;
   projector = static_cast<int32_t*>(ctx.get_allocator().alloc(sizeof(int32_t)));
   ASSERT_FALSE(NULL == projector);
   projector[0] = 1;
@@ -263,7 +270,7 @@ void ObSubPlanFilterTest::init_plan_for_calc(ObExecContext& ctx)
 TEST_F(ObSubPlanFilterTest, test_subplan_filter)
 {
   int ret = OB_SUCCESS;
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
   ObExecContext ctx;
   init_plan(ctx);
 
@@ -276,11 +283,11 @@ TEST_F(ObSubPlanFilterTest, test_subplan_filter)
   SQL_ENG_LOG(INFO, "row result", K(*row));
 }
 
-// select (select 1, 2, 3)=ROW(1, 2, 3)
+//select (select 1, 2, 3)=ROW(1, 2, 3)
 TEST_F(ObSubPlanFilterTest, test_subplan_filter2)
 {
   int ret = OB_SUCCESS;
-  const ObNewRow* row = NULL;
+  const ObNewRow *row = NULL;
   ObExecContext ctx;
   init_plan_for_calc(ctx);
 
@@ -292,12 +299,12 @@ TEST_F(ObSubPlanFilterTest, test_subplan_filter2)
   ASSERT_EQ(OB_SUCCESS, subplan_filter_.close(ctx));
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   init_global_memory_pool();
   init_sql_factories();
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleTest(&argc,argv);
   int ret = RUN_ALL_TESTS();
   OB_LOGGER.disable();
   return ret;

@@ -30,6 +30,7 @@ select repeat("abc", NULL);
 select repeat(1.414, 1);
 select repeat(1.414, 2);
 
+--error 1301
 select repeat("abc", 200000000);
 
 --enable_warnings

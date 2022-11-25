@@ -15,18 +15,22 @@
 
 #include "lib/atomic/ob_atomic.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 /// @brief ObRoleMgr manages the role and status of the process
-class ObRoleMgr {
+class ObRoleMgr
+{
 public:
   static const int32_t OB_MASTER = 1;
   static const int32_t OB_SLAVE = 2;
-  enum Role {
-    // TODO : remove MASTER, SLAVE
+  enum Role
+  {
+    // TODO baihua: remove MASTER, SLAVE
     MASTER = 1,
     SLAVE = 2,
-    STANDALONE = 3,  // used for test
+    STANDALONE = 3, // used for test
     LEADER = 1,
     FOLLOWER = 2,
   };
@@ -39,7 +43,8 @@ public:
   /// STOP:
   /// The sequence of state transition in the process of switching from Slave to Master is:
   ///     (SLAVE, ACTIVE) -> (MASTER, SWITCHING) -> (MASTER, ACTIVE)
-  enum State {
+  enum State
+  {
     ERROR = 1,
     INIT = 2,
     NOTSYNC = 3,
@@ -51,11 +56,9 @@ public:
   };
 
 public:
-  ObRoleMgr() : role_(SLAVE), state_(INIT)
-  {}
+  ObRoleMgr() : role_(SLAVE), state_(INIT) {}
 
-  virtual ~ObRoleMgr()
-  {}
+  virtual ~ObRoleMgr() {}
 
   /// @brief Get Role
   inline Role get_role() const;
@@ -63,7 +66,7 @@ public:
   /// @brief modify Role
   inline void set_role(const Role role);
 
-  inline const char* get_role_str() const;
+  inline const char *get_role_str() const;
 
   inline bool is_master() const;
 
@@ -73,7 +76,7 @@ public:
   /// Modify State
   inline void set_state(const State state);
 
-  inline const char* get_state_str() const;
+  inline const char *get_state_str() const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRoleMgr);
@@ -93,11 +96,11 @@ ObRoleMgr::Role ObRoleMgr::get_role() const
 void ObRoleMgr::set_role(const ObRoleMgr::Role role)
 {
   COMMON_LOG(INFO, "before", K(get_role_str()), K(get_state_str()));
-  (void)ATOMIC_TAS(reinterpret_cast<volatile uint32_t*>(&role_), role);
+  (void)ATOMIC_TAS(reinterpret_cast<volatile uint32_t *>(&role_), role);
   COMMON_LOG(INFO, "after", K(get_role_str()), K(get_state_str()));
 }
 
-const char* ObRoleMgr::get_role_str() const
+const char *ObRoleMgr::get_role_str() const
 {
   switch (role_) {
     case MASTER:
@@ -116,6 +119,7 @@ bool ObRoleMgr::is_master() const
   return (role_ == ObRoleMgr::MASTER) && (state_ == ObRoleMgr::ACTIVE);
 }
 
+
 ObRoleMgr::State ObRoleMgr::get_state() const
 {
   return state_;
@@ -124,11 +128,11 @@ ObRoleMgr::State ObRoleMgr::get_state() const
 void ObRoleMgr::set_state(const State state)
 {
   COMMON_LOG(INFO, "before", K(get_state_str()), K(get_role_str()));
-  (void)ATOMIC_TAS(reinterpret_cast<volatile uint32_t*>(&state_), state);
+  (void)ATOMIC_TAS(reinterpret_cast<volatile uint32_t *>(&state_), state);
   COMMON_LOG(INFO, "after", K(get_state_str()), K(get_role_str()));
 }
 
-const char* ObRoleMgr::get_state_str() const
+const char *ObRoleMgr::get_state_str() const
 {
   switch (state_) {
     case ERROR:
@@ -152,7 +156,7 @@ const char* ObRoleMgr::get_state_str() const
   }
 }
 
-}  // end namespace common
-}  // end namespace oceanbase
+} // end namespace common
+} // end namespace oceanbase
 
-#endif  // OCEANBASE_COMMON_OB_ROLE_MGR_
+#endif // OCEANBASE_COMMON_OB_ROLE_MGR_

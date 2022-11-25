@@ -15,22 +15,23 @@
 
 #include "common/ob_accuracy.h"
 
-namespace oceanbase {
-namespace common {
-struct ObZerofillInfo {
+namespace oceanbase
+{
+namespace common
+{
+struct ObZerofillInfo
+{
 public:
-  ObZerofillInfo(const bool zf, const ObLength len) : max_length_(len), need_zerofill_(zf)
-  {}
-  ObZerofillInfo() : max_length_(0), need_zerofill_(false)
-  {}
-
+  ObZerofillInfo(const bool zf, const ObLength len) : max_length_(len), need_zerofill_(zf) {}
+  ObZerofillInfo() : max_length_(0), need_zerofill_(false) {}
 public:
   ObLength max_length_;
   bool need_zerofill_;
 };
 
-}  // namespace common
-}  // namespace oceanbase
+}/* ns common*/
+}/* ns oceanbase */
 
 #endif /* OCEANBASE_COMMON_ZEROFILL_INFO_ */
 //// end of header file
+

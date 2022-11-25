@@ -37,7 +37,7 @@ int ObReqTranslator::th_destroy()
   return ret;
 }
 
-int ObReqTranslator::translate(ObRequest& req, ObReqProcessor*& processor)
+int ObReqTranslator::translate(ObRequest &req, ObReqProcessor *&processor)
 {
   int ret = OB_SUCCESS;
   processor = get_processor(req);
@@ -45,13 +45,13 @@ int ObReqTranslator::translate(ObRequest& req, ObReqProcessor*& processor)
     RPC_LOG(WARN, "can't translate packet", K(req), K(ret));
     ret = OB_NOT_SUPPORTED;
   } else {
-    processor->reuse();
+    //processor->reuse();
     processor->set_ob_request(req);
   }
   return ret;
 }
 
-int ObReqTranslator::release(ObReqProcessor* processor)
+int ObReqTranslator::release(ObReqProcessor *processor)
 {
   int ret = OB_SUCCESS;
   UNUSED(processor);

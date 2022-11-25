@@ -15,19 +15,22 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
 ObAllVirtualSysEvent::ObAllVirtualSysEvent()
     : ObVirtualTableScannerIterator(),
-      tenant_dis_(),
-      addr_(NULL),
-      ipstr_(),
-      port_(0),
-      iter_(0),
-      event_iter_(0),
-      tenant_id_(OB_INVALID_ID)
-{}
+    ObMultiTenantOperator(),
+    addr_(NULL),
+    ipstr_(),
+    port_(0),
+    event_iter_(0),
+    tenant_id_(OB_INVALID_ID),
+    diag_info_()
+{
+}
 
 ObAllVirtualSysEvent::~ObAllVirtualSysEvent()
 {
@@ -36,21 +39,21 @@ ObAllVirtualSysEvent::~ObAllVirtualSysEvent()
 
 void ObAllVirtualSysEvent::reset()
 {
+  omt::ObMultiTenantOperator::reset();
   ObVirtualTableScannerIterator::reset();
   addr_ = NULL;
   port_ = 0;
   ipstr_.reset();
-  iter_ = 0;
   event_iter_ = 0;
   tenant_id_ = OB_INVALID_ID;
-  tenant_dis_.reset();
+  diag_info_.reset();
 }
 
-int ObAllVirtualSysEvent::set_ip(common::ObAddr* addr)
+int ObAllVirtualSysEvent::set_ip(common::ObAddr *addr)
 {
   int ret = OB_SUCCESS;
   char ipbuf[common::OB_IP_STR_BUFF];
-  if (NULL == addr) {
+  if (NULL == addr){
     ret = OB_ENTRY_NOT_EXIST;
   } else if (!addr_->ip_to_string(ipbuf, sizeof(ipbuf))) {
     SERVER_LOG(ERROR, "ip to string failed");
@@ -65,34 +68,65 @@ int ObAllVirtualSysEvent::set_ip(common::ObAddr* addr)
   return ret;
 }
 
-int ObAllVirtualSysEvent::get_all_diag_info()
+int ObAllVirtualSysEvent::get_the_diag_info(
+    const uint64_t tenant_id,
+    common::ObDiagnoseTenantInfo &diag_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCCESS != (ret = ObDIGlobalTenantCache::get_instance().get_all_wait_event(*allocator_, tenant_dis_))) {
-    SERVER_LOG(WARN, "Fail to get tenant status, ", K(ret));
+  diag_info_.reset();
+  if (OB_FAIL(common::ObDIGlobalTenantCache::get_instance().get_the_diag_info(tenant_id, diag_info))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      SERVER_LOG(WARN, "Fail to get tenant sys event", KR(ret), K(tenant_id));
+    }
   }
   return ret;
 }
 
-int ObAllVirtualSysEvent::inner_get_next_row(ObNewRow*& row)
+void ObAllVirtualSysEvent::release_last_tenant()
+{
+  diag_info_.reset();
+  tenant_id_ = OB_INVALID_TENANT_ID;
+}
+
+bool ObAllVirtualSysEvent::is_need_process(uint64_t tenant_id)
+{
+  return (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_);
+}
+
+int ObAllVirtualSysEvent::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
+  if (OB_FAIL(execute(row))) {
+    SERVER_LOG(WARN, "execute fail", K(ret));
+  }
+  return ret;
+}
+
+int ObAllVirtualSysEvent::process_curr_tenant(ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  ObObj *cells = cur_row_.cells_;
+  const int64_t col_count = output_column_ids_.count();
+
   if (OB_UNLIKELY(NULL == allocator_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator is NULL", K(ret));
   } else {
-    const int64_t col_count = output_column_ids_.count();
 
-    if (0 == iter_ && 0 == event_iter_) {
-      if (OB_SUCCESS != (ret = set_ip(addr_))) {
+    if (MTL_ID() != tenant_id_) {
+      tenant_id_ = MTL_ID(); // new tenant, init diag info
+      if (OB_FAIL(set_ip(addr_))){
         SERVER_LOG(WARN, "can't get ip", K(ret));
-      } else if (OB_SUCCESS != (ret = get_all_diag_info())) {
-        SERVER_LOG(WARN, "Fail to get tenant status, ", K(ret));
+      } else if (OB_FAIL(get_the_diag_info(tenant_id_, diag_info_))) {
+        SERVER_LOG(WARN, "get diag info fail", K(ret), K(tenant_id_));
+      } else {
+        event_iter_ = 0;
       }
     }
 
-    if (iter_ >= tenant_dis_.count()) {
+    if (event_iter_ >= ObWaitEventIds::WAIT_EVENT_END) {
       ret = OB_ITER_END;
     }
 
@@ -101,9 +135,9 @@ int ObAllVirtualSysEvent::inner_get_next_row(ObNewRow*& row)
       double value = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
         uint64_t col_id = output_column_ids_.at(i);
-        switch (col_id) {
-          case TENANT_ID: {
-            cells[cell_idx].set_int(tenant_dis_.at(iter_).first);
+        switch(col_id) {
+           case TENANT_ID: {
+            cells[cell_idx].set_int(tenant_id_);
             break;
           }
           case SVR_IP: {
@@ -138,33 +172,27 @@ int ObAllVirtualSysEvent::inner_get_next_row(ObNewRow*& row)
             break;
           }
           case TOTAL_WAITS: {
-            cells[cell_idx].set_int(tenant_dis_.at(iter_).second->get_event_stats().get(event_iter_)->total_waits_);
+            cells[cell_idx].set_int(diag_info_.get_event_stats().get(event_iter_)->total_waits_);
             break;
           }
           case TOTAL_TIMEOUTS: {
-            cells[cell_idx].set_int(tenant_dis_.at(iter_).second->get_event_stats().get(event_iter_)->total_timeouts_);
+            cells[cell_idx].set_int(diag_info_.get_event_stats().get(event_iter_)->total_timeouts_);
             break;
           }
           case TIME_WAITED: {
-            value =
-                static_cast<double>(tenant_dis_.at(iter_).second->get_event_stats().get(event_iter_)->time_waited_) /
-                10000;
+            value = static_cast<double>(diag_info_.get_event_stats().get(event_iter_)->time_waited_) / 10000;
             cells[cell_idx].set_double(value);
             break;
           }
           case MAX_WAIT: {
-            value = static_cast<double>(tenant_dis_.at(iter_).second->get_event_stats().get(event_iter_)->max_wait_) /
-                    10000;
+            value = static_cast<double>(diag_info_.get_event_stats().get(event_iter_)->max_wait_) / 10000;
             cells[cell_idx].set_double(value);
             break;
           }
           case AVERAGE_WAIT: {
-            if (0 != tenant_dis_.at(iter_).second->get_event_stats().get(event_iter_)->total_waits_) {
-              value =
-                  (static_cast<double>(tenant_dis_.at(iter_).second->get_event_stats().get(event_iter_)->time_waited_) /
-                      static_cast<double>(
-                          tenant_dis_.at(iter_).second->get_event_stats().get(event_iter_)->total_waits_)) /
-                  10000;
+            if (0 != diag_info_.get_event_stats().get(event_iter_)->total_waits_) {
+              value = (static_cast<double>(diag_info_.get_event_stats().get(event_iter_)->time_waited_)
+                  / static_cast<double>(diag_info_.get_event_stats().get(event_iter_)->total_waits_)) / 10000;
               cells[cell_idx].set_double(value);
             } else {
               cells[cell_idx].set_double(0);
@@ -172,12 +200,13 @@ int ObAllVirtualSysEvent::inner_get_next_row(ObNewRow*& row)
             break;
           }
           case TIME_WAITED_MICRO: {
-            cells[cell_idx].set_int(tenant_dis_.at(iter_).second->get_event_stats().get(event_iter_)->time_waited_);
+            cells[cell_idx].set_int(diag_info_.get_event_stats().get(event_iter_)->time_waited_);
             break;
           }
           default: {
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
+            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                       K(output_column_ids_), K(col_id));
             break;
           }
         }
@@ -190,43 +219,24 @@ int ObAllVirtualSysEvent::inner_get_next_row(ObNewRow*& row)
     if (OB_SUCC(ret)) {
       event_iter_++;
       row = &cur_row_;
-      if (event_iter_ >= ObWaitEventIds::WAIT_EVENT_END) {
-        event_iter_ = 0;
-        iter_++;
-      }
     }
   }
   return ret;
 }
 
-int ObAllVirtualSysEventI1::get_all_diag_info()
+int ObAllVirtualSysEventI1::get_the_diag_info(
+    const uint64_t tenant_id,
+    common::ObDiagnoseTenantInfo &diag_info)
 {
   int ret = OB_SUCCESS;
-  void* buf = NULL;
-  int64_t index_id = -1;
-  uint64_t key = 0;
-  std::pair<uint64_t, common::ObDiagnoseTenantInfo*> pair;
-  for (int64_t i = 0; OB_SUCC(ret) && i < get_index_ids().count(); ++i) {
-    index_id = get_index_ids().at(i);
-    if (0 < index_id) {
-      key = static_cast<uint64_t>(index_id);
-      pair.first = key;
-      if (NULL == (buf = allocator_->alloc(sizeof(common::ObDiagnoseTenantInfo)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else {
-        pair.second = new (buf) common::ObDiagnoseTenantInfo();
-        if (OB_SUCCESS != (ret = ObDIGlobalTenantCache::get_instance().get_the_diag_info(key, *(pair.second)))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-          } else {
-            SERVER_LOG(WARN, "Fail to get tenant status, ", K(ret));
-          }
-        } else {
-          if (OB_SUCCESS != (ret = tenant_dis_.push_back(pair))) {
-            SERVER_LOG(WARN, "Fail to push diag info value to array, ", K(ret));
-          }
-        }
-      }
+  diag_info.reset();
+  if (!is_contain(get_index_ids(), (int64_t)tenant_id)) {
+    ret = OB_ITER_END;
+  } else if (OB_FAIL(common::ObDIGlobalTenantCache::get_instance().get_the_diag_info(tenant_id, diag_info))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      SERVER_LOG(WARN, "Fail to get tenant stat event", KR(ret), K(tenant_id));
     }
   }
   return ret;

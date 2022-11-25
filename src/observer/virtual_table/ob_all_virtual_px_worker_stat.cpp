@@ -13,26 +13,31 @@
 #include "observer/virtual_table/ob_all_virtual_px_worker_stat.h"
 #include "observer/ob_server_utils.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
 using namespace sql;
-namespace observer {
+namespace observer
+{
 
-ObAllPxWorkerStatTable::ObAllPxWorkerStatTable() : addr_(NULL), start_to_read_(false), stat_array_(), index_(0)
-{}
+ObAllPxWorkerStatTable::ObAllPxWorkerStatTable():addr_(NULL), start_to_read_(false),
+    stat_array_(), index_(0)
+{
+}
 ObAllPxWorkerStatTable::~ObAllPxWorkerStatTable()
-{}
-void ObAllPxWorkerStatTable::reset()
+{
+}
+void ObAllPxWorkerStatTable::reset() 
 {
   addr_ = NULL;
   start_to_read_ = false;
   stat_array_.reset();
   index_ = 0;
 }
-int ObAllPxWorkerStatTable::inner_get_next_row(ObNewRow*& row)
+int ObAllPxWorkerStatTable::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = cur_row_.cells_;
+  ObObj *cells = cur_row_.cells_;
   ObString ipstr;
   if (OB_ISNULL(allocator_) || OB_ISNULL(addr_)) {
     ret = OB_NOT_INIT;
@@ -44,43 +49,41 @@ int ObAllPxWorkerStatTable::inner_get_next_row(ObNewRow*& row)
     SERVER_LOG(ERROR, "get server ip failed", K(ret));
   } else {
     if (!start_to_read_) {
-      ObPxWorkerStatList::instance().list_to_array(stat_array_);
+      ObPxWorkerStatList::instance().list_to_array(stat_array_, effective_tenant_id_);
     }
     if (index_ >= stat_array_.size()) {
       ret = OB_ITER_END;
     }
-    for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < output_column_ids_.count(); ++cell_idx) {
+    for (int64_t cell_idx = 0;
+        OB_SUCC(ret) && cell_idx < output_column_ids_.count();
+        ++cell_idx) {
       const uint64_t column_id = output_column_ids_.at(cell_idx);
-      switch (column_id) {
+      switch(column_id) {
         case SESSION_ID: {
           int64_t session_id = stat_array_.at(index_).get_session_id();
           cells[cell_idx].set_int(session_id);
-          break;
+          break; 
         }
         case TENANT_ID: {
-          int64_t tenant_id = stat_array_.at(index_).get_tenant_id();
-          cells[cell_idx].set_int(tenant_id);
-          break;
+         int64_t tenant_id = stat_array_.at(index_).get_tenant_id();
+         cells[cell_idx].set_int(tenant_id);
+         break;
         }
         case SVR_IP: {
           cells[cell_idx].set_varchar(ipstr);
-          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          cells[cell_idx].set_collation_type(
+              ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
-        }
+        } 
         case SVR_PORT: {
           cells[cell_idx].set_int(addr_->get_port());
           break;
         }
         case TRACE_ID: {
-          const uint64_t* trace_id_p = stat_array_.at(index_).get_trace_id();
-          if (OB_ISNULL(trace_id_p)) {
-            ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "trace_id_p is NULL", K(ret));
-          } else {
-            int len = snprintf(trace_id_, 128, TRACE_ID_FORMAT, trace_id_p[0], trace_id_p[1]);
-            cells[cell_idx].set_varchar(trace_id_, len);
-            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-          }
+          int len = stat_array_.at(index_).get_trace_id().to_string(trace_id_, sizeof(trace_id_));
+          cells[cell_idx].set_varchar(trace_id_, len);
+          cells[cell_idx].set_collation_type(
+              ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case QC_ID: {
@@ -102,10 +105,10 @@ int ObAllPxWorkerStatTable::inner_get_next_row(ObNewRow*& row)
           int64_t dfo_id = stat_array_.at(index_).get_dfo_id();
           cells[cell_idx].set_int(dfo_id);
           break;
-        }
+        }        
         case START_TIME: {
           int64_t start_time = stat_array_.at(index_).get_start_time();
-          cells[cell_idx].set_timestamp(start_time);
+          cells[cell_idx].set_timestamp(start_time);            
           break;
         }
         case THREAD_ID: {
@@ -115,13 +118,14 @@ int ObAllPxWorkerStatTable::inner_get_next_row(ObNewRow*& row)
         }
         default: {
           ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "invalid column id", K(cell_idx), K_(output_column_ids), K(ret));
+          SERVER_LOG(WARN, "invalid column id", K(cell_idx), 
+              K_(output_column_ids), K(ret));
           break;
         }
-      }
+      } 
     }
-    ++index_;
-  }
+    ++index_; 
+  } 
   if (OB_SUCC(ret)) {
     start_to_read_ = true;
     row = &cur_row_;
@@ -129,5 +133,6 @@ int ObAllPxWorkerStatTable::inner_get_next_row(ObNewRow*& row)
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */
+

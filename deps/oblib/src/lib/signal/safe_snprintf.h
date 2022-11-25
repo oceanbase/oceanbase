@@ -34,13 +34,15 @@ EXTERN_C_BEGIN
    Does not support any width/precision.
    Implemented with simplicity, and async-signal-safety in mind.
 */
-int _safe_vsnprintf(char* to, size_t size, const char* format, va_list ap);
-int _safe_snprintf(char* to, size_t n, const char* fmt, ...);
+int _safe_vsnprintf(char *to, size_t size, const char *format, va_list ap);
+int _safe_snprintf(char *to, size_t n, const char *fmt, ...);
 
-#define safe_snprintf(_s, _n, ...) _safe_snprintf((char*)(_s), (size_t)(_n), __VA_ARGS__)
+#define safe_snprintf(_s, _n, ...)                            \
+  _safe_snprintf((char *)(_s), (size_t)(_n), __VA_ARGS__)
 
-#define safe_vsnprintf(_s, _n, _f, _a) _safe_vsnprintf((char*)(_s), (size_t)(_n), _f, _a)
+#define safe_vsnprintf(_s, _n, _f, _a)                \
+  _safe_vsnprintf((char *)(_s), (size_t)(_n), _f, _a)
 
 EXTERN_C_END
 
-#endif  // OCEANBASE_SAFE_SNPRINTF_H_
+#endif // OCEANBASE_SAFE_SNPRINTF_H_

@@ -10,7 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-// This file contains implementation for json_member_of.
 #ifndef OCEANBASE_SQL_OB_EXPR_JSON_MEMBER_OF_H_
 #define OCEANBASE_SQL_OB_EXPR_JSON_MEMBER_OF_H_
 
@@ -32,13 +31,9 @@ public:
                                 ObExprResType &type1,
                                 ObExprResType &type2,
                                 ObExprTypeCtx &type_ctx) const override;
-  virtual int calc_result2(common::ObObj &result,
-                           const common::ObObj &obj1,
-                           const common::ObObj &obj2,
-                           common::ObExprCtx &expr_ctx) const;
   static int check_json_member_of_array(const ObIJsonBase *json_a,
-                                        const ObIJsonBase *json_b,
-                                        bool &is_member_of);
+                                      const ObIJsonBase *json_b,
+                                      bool &is_member_of);
   static int eval_json_member_of(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;

@@ -14,81 +14,113 @@
 #define SRC_SQL_ENGINE_EXPR_OB_EXPR_SYS_CONTEXT_H_
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/charset/ob_charset.h"
+#include "share/schema/ob_schema_getter_guard.h"
 
-namespace oceanbase {
-namespace sql {
+namespace oceanbase
+{
+namespace sql
+{
 
 class ObExprSysContext : public ObFuncExprOperator {
 public:
   ObExprSysContext();
   explicit ObExprSysContext(common::ObIAllocator& alloc);
   virtual ~ObExprSysContext();
-  virtual int calc_result_type2(
-      ObExprResType& type, ObExprResType& arg1, ObExprResType& arg2, common::ObExprTypeCtx& type_ctx) const override;
-  virtual int calc_result2(common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2,
-      common::ObExprCtx& expr_ctx) const override;
-
-  struct UserEnvParameter {
+  virtual int calc_result_type2(ObExprResType& type,
+                                ObExprResType& arg1,
+                                ObExprResType& arg2,
+                                common::ObExprTypeCtx& type_ctx) const override;
+  struct UserEnvParameter
+  {
     char name[32];
-    int (*calc)(
-        common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2, common::ObExprCtx& expr_ctx);
-    int (*eval)(const ObExpr& expr, common::ObDatum& res, const common::ObDatum& arg1, const common::ObDatum& arg2,
-        ObEvalCtx& ctx);
+    int (*eval)(const ObExpr &expr, common::ObDatum &res, const common::ObDatum &arg1,
+                const common::ObDatum &arg2, ObEvalCtx &ctx);
   };
-  static int calc_schemaid(
-      common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2, common::ObExprCtx& expr_ctx);
-  static int calc_current_schemaid(
-      common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2, common::ObExprCtx& expr_ctx);
-  static int calc_current_schema(
-      common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2, common::ObExprCtx& expr_ctx);
-  static int calc_user(
-      common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2, common::ObExprCtx& expr_ctx);
-  static int get_tenant_name(
-      common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2, common::ObExprCtx& expr_ctx);
-  static int get_tenant_id(
-      common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2, common::ObExprCtx& expr_ctx);
-  static int calc_sessionid_result(
-      common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2, common::ObExprCtx& expr_ctx);
-  static int calc_ip_address(
-      common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2, common::ObExprCtx& expr_ctx);
-  typedef int (*calc_fun)(
-      common::ObObj& result, const common::ObObj& arg1, const common::ObObj& arg2, common::ObExprCtx& expr_ctx);
+  struct NLS_Lang
+  {
+    char language[128];
+    char abbreviated[32];
+  };
 
-  static int eval_schemaid(const ObExpr& expr, common::ObDatum& res, const common::ObDatum& arg1,
-      const common::ObDatum& arg2, ObEvalCtx& ctx);
-  static int eval_current_schemaid(const ObExpr& expr, common::ObDatum& res, const common::ObDatum& arg1,
-      const common::ObDatum& arg2, ObEvalCtx& ctx);
-  static int eval_current_schema(const ObExpr& expr, common::ObDatum& res, const common::ObDatum& arg1,
-      const common::ObDatum& arg2, ObEvalCtx& ctx);
-  static int eval_user(const ObExpr& expr, common::ObDatum& res, const common::ObDatum& arg1,
-      const common::ObDatum& arg2, ObEvalCtx& ctx);
-  static int eval_tenant_name(const ObExpr& expr, common::ObDatum& res, const common::ObDatum& arg1,
-      const common::ObDatum& arg2, ObEvalCtx& ctx);
-  static int eval_tenant_id(const ObExpr& expr, common::ObDatum& res, const common::ObDatum& arg1,
-      const common::ObDatum& arg2, ObEvalCtx& ctx);
-  static int eval_sessionid(const ObExpr& expr, common::ObDatum& res, const common::ObDatum& arg1,
-      const common::ObDatum& arg2, ObEvalCtx& ctx);
-  static int eval_ip_address(const ObExpr& expr, common::ObDatum& res, const common::ObDatum& arg1,
-      const common::ObDatum& arg2, ObEvalCtx& ctx);
-  typedef int (*eval_fun)(const ObExpr& expr, common::ObDatum& res, const common::ObDatum& arg1,
-      const common::ObDatum& arg2, ObEvalCtx& ctx);
+  static int eval_schemaid(const ObExpr &expr, common::ObDatum &res,
+                           const common::ObDatum &arg1,
+                           const common::ObDatum &arg2, ObEvalCtx &ctx);
+  static int eval_current_schemaid(const ObExpr &expr, common::ObDatum &res,
+                                   const common::ObDatum &arg1,
+                                   const common::ObDatum &arg2, ObEvalCtx &ctx);
+  static int eval_current_schema(const ObExpr &expr, common::ObDatum &res,
+                                 const common::ObDatum &arg1,
+                                 const common::ObDatum &arg2, ObEvalCtx &ctx);
+  static int eval_user(const ObExpr &expr, common::ObDatum &res,
+                       const common::ObDatum &arg1,
+                       const common::ObDatum &arg2, ObEvalCtx &ctx);
+  static int eval_tenant_name(const ObExpr &expr, common::ObDatum &res,
+                              const common::ObDatum &arg1,
+                              const common::ObDatum &arg2, ObEvalCtx &ctx);
+  static int eval_tenant_id(const ObExpr &expr, common::ObDatum &res,
+                            const common::ObDatum &arg1,
+                            const common::ObDatum &arg2, ObEvalCtx &ctx);
+  static int eval_sessionid(const ObExpr &expr, common::ObDatum &res,
+                            const common::ObDatum &arg1,
+                            const common::ObDatum &arg2, ObEvalCtx &ctx);
+  static int eval_ip_address(const ObExpr &expr, common::ObDatum &res,
+                            const common::ObDatum &arg1,
+                            const common::ObDatum &arg2, ObEvalCtx &ctx);
+  static int eval_curr_user_id(const ObExpr &expr, common::ObDatum &res,
+                               const common::ObDatum &arg1, const common::ObDatum &arg2,
+                               ObEvalCtx &ctx);
+  static int eval_curr_user(const ObExpr &expr, common::ObDatum &res,
+                               const common::ObDatum &arg1, const common::ObDatum &arg2,
+                               ObEvalCtx &ctx);
+  static int eval_instance(const ObExpr &expr, common::ObDatum &res,
+                           const common::ObDatum &arg1, const common::ObDatum &arg2,
+                           ObEvalCtx &ctx);
+  static int eval_instance_name(const ObExpr &expr, common::ObDatum &res,
+                           const common::ObDatum &arg1, const common::ObDatum &arg2,
+                           ObEvalCtx &ctx);
+  static int eval_language(const ObExpr &expr, common::ObDatum &res,
+                           const common::ObDatum &arg1, const common::ObDatum &arg2,
+                           ObEvalCtx &ctx);
+  static int eval_lang(const ObExpr &expr, common::ObDatum &res,
+                           const common::ObDatum &arg1, const common::ObDatum &arg2,
+                           ObEvalCtx &ctx);
+  static int eval_action(const ObExpr &expr, common::ObDatum &res,
+                         const common::ObDatum &arg1, const common::ObDatum &arg2,
+                         ObEvalCtx &ctx);
+  static int eval_client_info(const ObExpr &expr, common::ObDatum &res,
+                              const common::ObDatum &arg1, const common::ObDatum &arg2,
+                              ObEvalCtx &ctx);
+  static int eval_module(const ObExpr &expr, common::ObDatum &res,
+                         const common::ObDatum &arg1, const common::ObDatum &arg2,
+                         ObEvalCtx &ctx);
+  static int eval_client_identifier(const ObExpr &expr, common::ObDatum &res,
+                                    const common::ObDatum &arg1, const common::ObDatum &arg2,
+                                    ObEvalCtx &ctx);
+  static int eval_application_context(const ObExpr &expr, common::ObDatum &res,
+                                      const common::ObString &arg1, const common::ObString &arg2,
+                                      ObEvalCtx &ctx);
+  typedef int (*eval_fun)(const ObExpr &expr, common::ObDatum &res,
+                          const common::ObDatum &arg1,
+                          const common::ObDatum &arg2, ObEvalCtx &ctx);
 
-  static int eval_sys_context(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res);
-  virtual int cg_expr(ObExprCGCtx& ctx, const ObRawExpr& raw_expr, ObExpr& rt_expr) const override;
-
+  static int eval_sys_context(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  virtual int cg_expr(ObExprCGCtx &ctx, const ObRawExpr &raw_expr,
+                      ObExpr &rt_expr) const override;
+  static int get_schema_guard(share::schema::ObSchemaGetterGuard &schema_guard, uint64_t tenant_id);
 private:
-  static int get_calc_fun(const common::ObString& ns_str, const common::ObString& para_str, calc_fun& fun);
-  static int get_userenv_fun(const common::ObString& para_str, calc_fun& fun);
   static UserEnvParameter userenv_parameters_[];
+  static NLS_Lang lang_map_[];
   static const int DEFAULT_LENGTH = 256;
 
-  static int get_eval_fun(const common::ObString& ns_str, const common::ObString& para_str, eval_fun& fun);
-  static int get_userenv_fun(const common::ObString& para_str, eval_fun& fun);
-  static int uint_string(const ObExpr& expr, ObEvalCtx& ctx, uint64_t id, common::ObDatum& res);
-  static int extract_ip(const common::ObString& user_at_client_ip, int64_t& start);
+  static int get_eval_fun(const common::ObString& ns_str, const common::ObString& para_str,
+                          eval_fun &fun);
+  static int get_userenv_fun(const common::ObString& para_str, eval_fun &fun);
+  static int uint_string(const ObExpr &expr, ObEvalCtx &ctx, uint64_t id,
+                         common::ObDatum &res);
+  static int extract_ip(const common::ObString &user_at_client_ip, int64_t &start);
   DISALLOW_COPY_AND_ASSIGN(ObExprSysContext);
 };
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 #endif

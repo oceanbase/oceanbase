@@ -1,11 +1,3 @@
-// **********************************************************************
-//
-// Copyright (c) 2003-2016 ZeroC, Inc. All rights reserved.
-//
-// This copy of Ice is licensed to you under the terms described in the
-// ICE_LICENSE file included in this distribution.
-//
-// **********************************************************************
 #ifndef TBSYS_TIME_H
 #define TBSYS_TIME_H
 #include <sys/time.h>
@@ -242,7 +234,8 @@ public:
     ObSysTime(int64_t);
 
 private:
-  int64_t _usec;
+
+    int64_t _usec;
 };
-}  // namespace obutil
+}//end namespace
 #endif

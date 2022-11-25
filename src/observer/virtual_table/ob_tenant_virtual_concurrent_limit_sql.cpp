@@ -16,8 +16,10 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "common/row/ob_row.h"
 #include "lib/utility/utility.h"
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -26,7 +28,7 @@ void ObTenantVirtualConcurrentLimitSql::reset()
   ObTenantVirtualOutlineBase::reset();
 }
 
-int ObTenantVirtualConcurrentLimitSql::is_need_output(const ObOutlineInfo* outline_info, bool& is_output)
+int ObTenantVirtualConcurrentLimitSql::is_need_output(const ObOutlineInfo *outline_info, bool &is_output)
 {
   int ret = OB_SUCCESS;
   is_output = false;
@@ -59,21 +61,22 @@ int ObTenantVirtualConcurrentLimitSql::inner_open()
   return ret;
 }
 
-int ObTenantVirtualConcurrentLimitSql::get_next_concurrent_limit_row(
-    const ObOutlineInfo* outline_info, bool& is_iter_end)
+
+int ObTenantVirtualConcurrentLimitSql::get_next_concurrent_limit_row(const ObOutlineInfo *outline_info,
+                                                                     bool &is_iter_end)
 {
   int ret = OB_SUCCESS;
   is_iter_end = false;
-  const ObMaxConcurrentParam* param = NULL;
+  const ObMaxConcurrentParam *param = NULL;
   if (OB_ISNULL(outline_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arguement", K(ret), K(outline_info));
   } else {
-    const ObOutlineParamsWrapper& params_wrapper = outline_info->get_outline_params_wrapper();
+    const ObOutlineParamsWrapper &params_wrapper = outline_info->get_outline_params_wrapper();
     if (param_idx_ < 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid param idx", K(ret), K(param_idx_));
-    } else if (OB_UNLIKELY(param_idx_ >= params_wrapper.get_param_count())) {
+    } else if (OB_UNLIKELY(param_idx_ >= params_wrapper.get_param_count())){
       is_iter_end = true;
     } else if (OB_ISNULL(param = params_wrapper.get_outline_param(param_idx_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -93,10 +96,10 @@ int ObTenantVirtualConcurrentLimitSql::get_next_concurrent_limit_row(
   }
   return ret;
 }
-int ObTenantVirtualConcurrentLimitSql::inner_get_next_row(common::ObNewRow*& row)
+int ObTenantVirtualConcurrentLimitSql::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  const ObOutlineInfo* outline_info = NULL;
+  const ObOutlineInfo *outline_info = NULL;
   bool is_output = false;
   bool is_iter_end = false;
   if (outline_info_idx_ < 0) {
@@ -130,12 +133,16 @@ int ObTenantVirtualConcurrentLimitSql::inner_get_next_row(common::ObNewRow*& row
   return ret;
 }
 
-int ObTenantVirtualConcurrentLimitSql::fill_cells(const ObOutlineInfo* outline_info, const ObMaxConcurrentParam* param)
+int ObTenantVirtualConcurrentLimitSql::fill_cells(const ObOutlineInfo *outline_info,
+                                                  const ObMaxConcurrentParam *param)
 {
   int ret = OB_SUCCESS;
-  ObObj* cells = NULL;
-  if (OB_ISNULL(cells = cur_row_.cells_) || OB_ISNULL(allocator_) || OB_ISNULL(session_) || OB_ISNULL(outline_info) ||
-      OB_ISNULL(param)) {
+  ObObj *cells = NULL;
+  if (OB_ISNULL(cells = cur_row_.cells_)
+      || OB_ISNULL(allocator_)
+      || OB_ISNULL(session_)
+      || OB_ISNULL(outline_info)
+      || OB_ISNULL(param)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("some data member is NULL", K(ret), K(cells), K(allocator_), K(session_), K(outline_info), K(param));
   } else if (OB_UNLIKELY(reserved_column_cnt_ < output_column_ids_.count())) {
@@ -145,19 +152,19 @@ int ObTenantVirtualConcurrentLimitSql::fill_cells(const ObOutlineInfo* outline_i
     for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < output_column_ids_.count(); ++cell_idx) {
       const uint64_t col_id = output_column_ids_.at(cell_idx);
       switch (col_id) {
-        case TENANT_ID: {
+        case TENANT_ID : {
           cells[cell_idx].set_int(static_cast<int64_t>(tenant_id_));
           break;
         }
-        case DATABASE_ID: {
+        case DATABASE_ID : {
           cells[cell_idx].set_int(static_cast<int64_t>(outline_info->get_database_id()));
           break;
         }
-        case OUTLINE_ID: {
+        case OUTLINE_ID : {
           cells[cell_idx].set_int(static_cast<int64_t>(outline_info->get_outline_id()));
           break;
         }
-        case DATABASE_NAME: {
+        case DATABASE_NAME : {
           DBInfo db_info;
           if (OB_FAIL(database_infos_.get_refactored(outline_info->get_database_id(), db_info))) {
             LOG_WARN("fail to ge value from database_infos", K(ret), K(outline_info->get_database_id()));
@@ -167,7 +174,7 @@ int ObTenantVirtualConcurrentLimitSql::fill_cells(const ObOutlineInfo* outline_i
           }
           break;
         }
-        case OUTLINE_NAME: {
+        case OUTLINE_NAME : {
           ObString outline_name;
           if (OB_FAIL(ob_write_string(*allocator_, outline_info->get_name_str(), outline_name))) {
             LOG_WARN("fail to deep copy obstring", K(ret), K(outline_info->get_name_str()), K(outline_name));
@@ -177,19 +184,18 @@ int ObTenantVirtualConcurrentLimitSql::fill_cells(const ObOutlineInfo* outline_i
           }
           break;
         }
-        case OUTLINE_CONTENT: {
+        case  OUTLINE_CONTENT : {
           ObString outline_content;
           if (OB_FAIL(ob_write_string(*allocator_, outline_info->get_outline_content_str(), outline_content))) {
-            LOG_WARN(
-                "fail to deep copy obstring", K(ret), K(outline_info->get_outline_content_str()), K(outline_content));
+            LOG_WARN("fail to deep copy obstring", K(ret), K(outline_info->get_outline_content_str()), K(outline_content));
           } else {
-            cells[cell_idx].set_lob_value(
-                ObLongTextType, outline_content.ptr(), static_cast<int32_t>(outline_content.length()));
+            cells[cell_idx].set_lob_value(ObLongTextType, outline_content.ptr(),
+                                          static_cast<int32_t>(outline_content.length()));
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
           break;
         }
-        case VISIBLE_SIGNATURE: {
+        case VISIBLE_SIGNATURE : {
           ObString local_str;
           ObString visible_sigature;
           if (OB_FAIL(outline_info->get_visible_signature(local_str))) {
@@ -197,27 +203,28 @@ int ObTenantVirtualConcurrentLimitSql::fill_cells(const ObOutlineInfo* outline_i
           } else if (OB_FAIL(ob_write_string(*allocator_, local_str, visible_sigature))) {
             LOG_WARN("fail to deep copy ObString", K(ret), K(local_str), K(visible_sigature));
           } else {
-            cells[cell_idx].set_lob_value(
-                ObLongTextType, visible_sigature.ptr(), static_cast<int32_t>(visible_sigature.length()));
+            cells[cell_idx].set_lob_value(ObLongTextType, visible_sigature.ptr(),
+                                          static_cast<int32_t>(visible_sigature.length()));
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
           break;
         }
-        case SQL_TEXT: {
+        case SQL_TEXT : {
           ObString sql_text;
-          if (OB_FAIL(ob_write_string(*allocator_, outline_info->get_sql_text_str(), sql_text))) {
-            LOG_WARN("fail to deep copy obstring", K(ret), K(outline_info->get_sql_text_str()), K(sql_text));
+          if (OB_FAIL(ob_write_string(*allocator_, param->get_sql_text(), sql_text))) {
+            LOG_WARN("fail to deep copy obstring", K(ret), K(param->get_sql_text()), K(sql_text));
           } else {
-            cells[cell_idx].set_lob_value(ObLongTextType, sql_text.ptr(), static_cast<int32_t>(sql_text.length()));
+            cells[cell_idx].set_lob_value(ObLongTextType, sql_text.ptr(),
+                                          static_cast<int32_t>(sql_text.length()));
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
           break;
         }
-        case CONCURRENT_NUM: {
+        case CONCURRENT_NUM : {
           cells[cell_idx].set_int(param->get_concurrent_num());
           break;
         }
-        case LIMIT_TARGET: {
+        case LIMIT_TARGET : {
           ObString visible_signature;
           ObString limit_sql;
           if (outline_info->get_sql_text_str().empty()) {
@@ -225,19 +232,19 @@ int ObTenantVirtualConcurrentLimitSql::fill_cells(const ObOutlineInfo* outline_i
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           } else if (OB_FAIL(outline_info->get_visible_signature(visible_signature))) {
             LOG_WARN("fail to get visibale signature", K(ret));
-          } else if (OB_FAIL(
-                         ObOutlineInfo::gen_limit_sql(visible_signature, param, *session_, *allocator_, limit_sql))) {
+          } else if (OB_FAIL(ObOutlineInfo::gen_limit_sql(visible_signature, param, *session_, *allocator_, limit_sql))) {
             LOG_WARN("fail to gen limit sql", K(ret), K(visible_signature), KPC(param), K(limit_sql));
           } else {
-            cells[cell_idx].set_lob_value(ObLongTextType, limit_sql.ptr(), static_cast<int32_t>(limit_sql.length()));
+            cells[cell_idx].set_lob_value(ObLongTextType, limit_sql.ptr(),
+                                          static_cast<int32_t>(limit_sql.length()));
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
           break;
         }
         default: {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected column id", K(col_id), K(cell_idx), K(ret));
-          break;
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected column id", K(col_id), K(cell_idx), K(ret));
+            break;
         }
       }
     }
@@ -245,5 +252,5 @@ int ObTenantVirtualConcurrentLimitSql::fill_cells(const ObOutlineInfo* outline_i
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}//observer
+}//oceanbase

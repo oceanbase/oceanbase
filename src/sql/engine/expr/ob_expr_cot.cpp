@@ -11,55 +11,61 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include "sql/parser/ob_item_type.h"
+
+#include "objit/common/ob_item_type.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/number/ob_number_v2.h"
 #include "sql/engine/expr/ob_expr_cot.h"
 #include "sql/session/ob_sql_session_info.h"
 #include <math.h>
+
 namespace oceanbase
 {
 using namespace common;
 using namespace common::number;
 namespace sql
 {
+
 ObExprCot::ObExprCot(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_COT, N_COT, 1, NOT_ROW_DIMENSION)
 {
 }
+
 ObExprCot::~ObExprCot()
 {
 }
+
 int ObExprCot::calc_result_type1(ObExprResType &type,
                                  ObExprResType &radian,
                                  ObExprTypeCtx &type_ctx) const
 {
   return calc_trig_function_result_type1(type, radian, type_ctx);
 }
-int ObExprCot::calc_result1(ObObj &result,
-                            const ObObj &radian_obj,
-                            ObExprCtx &expr_ctx) const
+
+int ObExprCot::calc_cot_expr(const ObExpr &expr, ObEvalCtx &ctx,
+                               ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  if (radian_obj.is_null()) {
-    result.set_null();
-  } else if (OB_ISNULL(expr_ctx.calc_buf_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("expr_ctx.calc_buf_ is NULL", K(ret));
-  } else if (radian_obj.is_double()) {
-    double arg = radian_obj.get_double();
+  ObDatum *radian = NULL;
+  if (OB_FAIL(expr.args_[0]->eval(ctx, radian))) {
+    LOG_WARN("eval radian arg failed", K(ret), K(expr));
+  } else if (radian->is_null()) {
+    /* radian is already be cast to number type, no need to is_null_oracle */
+    res_datum.set_null();
+  } else if (ObDoubleType == expr.args_[0]->datum_meta_.type_) {
+    const double arg = radian->get_double();
     double tan_out = tan(arg);
-    // to check tan(arg) is small enough to be zero
+    // 检查 tan(arg)是否趋近于0，当太小时，就认为是0
     if (0.0 == tan_out) {
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_DOUBLE_OVERFLOW;
       LOG_WARN("tan(x) is zero", K(ret));
     } else {
       double res = 1.0/tan_out;
       if (!std::isfinite(res)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("tan(x) is like zero", K(ret));
+        ret = OB_DOUBLE_OVERFLOW;
+        LOG_WARN("tan(x) is zero", K(ret));
       } else {
-        result.set_double(res);
+        res_datum.set_double(res);
       }
     }
   } else {
@@ -67,5 +73,16 @@ int ObExprCot::calc_result1(ObObj &result,
   }
   return ret;
 }
+
+int ObExprCot::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                       ObExpr &rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  rt_expr.eval_func_ = calc_cot_expr;
+  return ret;
+}
+
 } /* sql */
 } /* oceanbase */

@@ -13,11 +13,14 @@
 #ifndef OB_SUPER_BLOCK_BUFFER_HOLDER_H_
 #define OB_SUPER_BLOCK_BUFFER_HOLDER_H_
 
-#include "ob_block_sstable_struct.h"
+#include "storage/ob_super_block_struct.h"
 
-namespace oceanbase {
-namespace blocksstable {
-class ObSuperBlockBufferHolder {
+namespace oceanbase
+{
+namespace blocksstable
+{
+class ObSuperBlockBufferHolder
+{
 public:
   ObSuperBlockBufferHolder();
   virtual ~ObSuperBlockBufferHolder();
@@ -25,32 +28,26 @@ public:
   int init(const int64_t buf_size);
   void reset();
 
-  int serialize_super_block(const ObServerSuperBlock& super_block);
-  template <typename SuperBlockClass>
-  int deserialize_super_block(SuperBlockClass& super_block);
-  int deserialize_super_block_header_version(int64_t& version);
-  int assign(const char* buf, const int64_t buf_len);
+  int serialize_super_block(const storage::ObServerSuperBlock &super_block);
+  template<typename SuperBlockClass>
+  int deserialize_super_block(SuperBlockClass &super_block);
+  int deserialize_super_block_header_version(int64_t &version);
+  int assign(const char *buf, const int64_t buf_len);
 
-  OB_INLINE char* get_buffer()
-  {
-    return buf_;
-  }
-  OB_INLINE int64_t get_len()
-  {
-    return len_;
-  }
+  OB_INLINE char *get_buffer() { return buf_; }
+  OB_INLINE int64_t get_len() { return len_; }
 
   TO_STRING_KV(KP_(buf), K_(len));
 
 private:
   bool is_inited_;
-  char* buf_;
+  char *buf_;
   int64_t len_;
   common::ObArenaAllocator allocator_;
 };
 
-template <typename SuperBlockClass>
-int ObSuperBlockBufferHolder::deserialize_super_block(SuperBlockClass& super_block)
+template<typename SuperBlockClass>
+int ObSuperBlockBufferHolder::deserialize_super_block(SuperBlockClass &super_block)
 {
   int ret = common::OB_SUCCESS;
   int64_t pos = 0;
@@ -66,7 +63,7 @@ int ObSuperBlockBufferHolder::deserialize_super_block(SuperBlockClass& super_blo
   return ret;
 }
 
-}  // namespace blocksstable
-}  // namespace oceanbase
+} // namespace blocksstable
+} // namespace oceanbase
 
 #endif /* OB_SUPER_BLOCK_BUFFER_HOLDER_H_ */

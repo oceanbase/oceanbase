@@ -21,25 +21,22 @@
 #include "rpc/obrpc/ob_rpc_time.h"
 #include "rpc/ob_packet.h"
 
-namespace oceanbase {
-namespace obrpc {
+namespace oceanbase
+{
+namespace obrpc
+{
 
-enum ObRpcPriority {
+enum ObRpcPriority
+{
   ORPR_UNDEF = 0,
-  ORPR1,
-  ORPR2,
-  ORPR3,
-  ORPR4,
-  ORPR5,
-  ORPR6,
-  ORPR7,
-  ORPR8,
-  ORPR9,
+  ORPR1, ORPR2, ORPR3, ORPR4,
+  ORPR5, ORPR6, ORPR7, ORPR8, ORPR9,
   ORPR_DDL = 10,
   ORPR11 = 11,
 };
 
-enum ObRpcPacketCode {
+enum ObRpcPacketCode
+{
   OB_INVALID_RPC_CODE = 0,
 
 #define PCODE_DEF(name, id) name = id,
@@ -52,20 +49,21 @@ enum ObRpcPacketCode {
   OB_PACKET_NUM,
 };
 
-class ObRpcPacketCodeChecker {
+class ObRpcPacketCodeChecker
+{
 public:
-  ObRpcPacketCodeChecker()
-  {}
-  ~ObRpcPacketCodeChecker()
-  {}
+  ObRpcPacketCodeChecker() {}
+  ~ObRpcPacketCodeChecker() {}
   static bool is_valid_pcode(const int32_t pcode)
   {
     return (pcode > OB_INVALID_RPC_CODE && pcode < OB_PACKET_NUM);
   }
 };
 
-class ObRpcPacketSet {
-  enum {
+class ObRpcPacketSet
+{
+  enum
+  {
 #define PCODE_DEF(name, id) name,
 #include "rpc/obrpc/ob_rpc_packet_list.h"
 #undef PCODE_DEF
@@ -74,9 +72,9 @@ class ObRpcPacketSet {
 
   ObRpcPacketSet()
   {
-#define PCODE_DEF(name, id)   \
-  names_[name] = #name;       \
-  pcode_[name] = obrpc::name; \
+#define PCODE_DEF(name, id)                     \
+  names_[name] = #name;                         \
+  pcode_[name] = obrpc::name;                   \
   index_[obrpc::name] = name;
 #include "rpc/obrpc/ob_rpc_packet_list.h"
 #undef PCODE_DEF
@@ -92,9 +90,9 @@ public:
     return index;
   }
 
-  const char* name_of_idx(int64_t idx) const
+  const char *name_of_idx(int64_t idx) const
   {
-    const char* name = "Unknown";
+    const char *name = "Unknown";
     if (idx >= 0 && idx < PCODE_COUNT) {
       name = names_[idx];
     }
@@ -110,7 +108,7 @@ public:
     return pcode;
   }
 
-  static ObRpcPacketSet& instance()
+  static ObRpcPacketSet &instance()
   {
     return instance_;
   }
@@ -121,21 +119,25 @@ public:
 private:
   static ObRpcPacketSet instance_;
 
-  const char* names_[PCODE_COUNT];
+  const char *names_[PCODE_COUNT];
   ObRpcPacketCode pcode_[PCODE_COUNT];
   int64_t index_[OB_PACKET_NUM];
 };
 
-class ObRpcPacketHeader {
+class ObRpcPacketHeader
+{
 public:
-  static const uint8_t HEADER_SIZE = 112;  // you should never change this.
-  static const uint16_t RESP_FLAG = 1 << 15;
-  static const uint16_t STREAM_FLAG = 1 << 14;
-  static const uint16_t STREAM_LAST_FLAG = 1 << 13;
+  static const uint8_t  HEADER_SIZE = 136; // 112 -> 128: add 16 bytes for trace_id ipv6 extension. (Note yanyuan.cxf: but you should never change it)
+  static const uint16_t RESP_FLAG              = 1 << 15;
+  static const uint16_t STREAM_FLAG            = 1 << 14;
+  static const uint16_t STREAM_LAST_FLAG       = 1 << 13;
   static const uint16_t DISABLE_DEBUGSYNC_FLAG = 1 << 12;
-  static const uint16_t CONTEXT_FLAG = 1 << 11;
-  static const uint16_t UNNEED_RESPONSE_FLAG = 1 << 10;
-  static const uint16_t BAD_ROUTING_FLAG = 1 << 9;
+  static const uint16_t CONTEXT_FLAG           = 1 << 11;
+  static const uint16_t UNNEED_RESPONSE_FLAG   = 1 << 10;
+  static const uint16_t BAD_ROUTING_FLAG       = 1 << 9;
+  static const uint16_t ENABLE_RATELIMIT_FLAG  = 1 << 8;
+  static const uint16_t BACKGROUND_FLOW_FLAG   = 1 << 7;
+  static const uint16_t TRACE_INFO_FLAG        = 1 << 6;
 
   uint64_t checksum_;
   ObRpcPacketCode pcode_;
@@ -145,42 +147,45 @@ public:
   uint64_t tenant_id_;
   uint64_t priv_tenant_id_;
   uint64_t session_id_;
-  uint64_t trace_id_[2];  // 128 bits trace id
+  uint64_t trace_id_[4];  // 128 bits trace id change to 256 bits
   uint64_t timeout_;
   int64_t timestamp_;
   ObRpcCostTime cost_time_;
   int64_t dst_cluster_id_;
 
-  common::ObCompressorType compressor_type_;  // enum ObCompressorType
+  common::ObCompressorType compressor_type_; // enum ObCompressorType
   int32_t original_len_;
   int64_t src_cluster_id_;
   uint64_t unis_version_;
   int32_t request_level_;
   int64_t seq_no_;
   int32_t group_id_;
+  uint64_t cluster_name_hash_;
 
-  NEED_SERIALIZE_AND_DESERIALIZE;
+  int serialize(char* buf, const int64_t buf_len, int64_t& pos);
+  int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
 
-  TO_STRING_KV(K(checksum_), K(pcode_), K(hlen_), K(priority_), K(flags_), K(tenant_id_), K(priv_tenant_id_),
-      K(session_id_), K(trace_id_), K(timeout_), K_(timestamp), K_(dst_cluster_id), K_(cost_time), K(compressor_type_),
-      K(original_len_), K(src_cluster_id_), K(seq_no_));
+  TO_STRING_KV(K(checksum_), K(pcode_), K(hlen_), K(priority_),
+               K(flags_), K(tenant_id_), K(priv_tenant_id_), K(session_id_),
+               K(trace_id_), K(timeout_), K_(timestamp), K_(dst_cluster_id), K_(cost_time),
+               K(compressor_type_), K(original_len_), K(src_cluster_id_), K(seq_no_));
 
-  ObRpcPacketHeader()
+  ObRpcPacketHeader() { memset(this, 0, sizeof(*this)); flags_ |= (OB_LOG_LEVEL_NONE & 0x7); }
+  static inline int64_t get_encoded_size()
   {
-    memset(this, 0, sizeof(*this));
-    flags_ |= (OB_LOG_LEVEL_NONE & 0x7);
+    return HEADER_SIZE + ObRpcCostTime::get_encoded_size() + 8 /* for seq no */;
   }
-  int64_t get_encoded_size() const
-  {
-    return HEADER_SIZE + cost_time_.get_encoded_size() + 8 /* for seq no */;
-  }
+
 };
 
-class ObRpcPacket : public rpc::ObPacket {
+class ObRpcPacket
+    : public rpc::ObPacket
+{
   friend class ObPacketQueue;
 
 public:
   static uint32_t global_chid;
+  static uint64_t INVALID_CLUSTER_NAME_HASH;
 
 public:
   ObRpcPacket();
@@ -217,15 +222,14 @@ public:
   inline int64_t get_request_process_end_time() const;
   inline int64_t get_server_response_time() const;
 
-  inline void set_content(const char* content, int64_t len);
-  inline const char* get_cdata() const;
+  inline void set_content(const char *content, int64_t len);
+  inline const char *get_cdata() const;
   inline uint32_t get_clen() const;
 
-  inline int decode(const char* buf, int64_t len);
-  inline int encode(char* buf, int64_t len, int64_t& pos);
-  inline int encode_header(char* buf, int64_t len, int64_t& pos);
+  inline int decode(const char *buf, int64_t len);
+  inline int encode(char *buf, int64_t len, int64_t &pos);
+  inline int encode_header(char *buf, int64_t len, int64_t &pos);
   inline int64_t get_encoded_size() const;
-  inline int64_t get_header_size() const;
 
   inline void set_resp();
   inline void unset_resp();
@@ -236,15 +240,22 @@ public:
   inline bool is_stream_last() const;
   inline bool has_context() const;
   inline bool has_disable_debugsync() const;
+  inline bool has_trace_info() const;
   inline void set_stream_next();
   inline void set_stream_last();
   inline void set_has_context();
   inline void set_disable_debugsync();
+  inline void set_has_trace_info();
   inline void unset_stream();
   inline void set_unneed_response();
   inline bool unneed_response() const;
   inline void set_bad_routing();
   inline bool bad_routing() const;
+
+  inline bool ratelimit_enabled() const;
+  inline void enable_ratelimit();
+  inline bool is_background_flow() const;
+  inline void set_background_flow();
 
   inline void set_packet_len(int length);
 
@@ -256,29 +267,17 @@ public:
   inline int64_t get_session_id() const;
   inline void set_session_id(const int64_t session_id);
 
-  inline void set_timeout(int64_t timeout)
-  {
-    hdr_.timeout_ = timeout;
-  }
-  inline int64_t get_timeout() const
-  {
-    return hdr_.timeout_;
-  }
+  inline void set_timeout(int64_t timeout) { hdr_.timeout_ = timeout; }
+  inline int64_t get_timeout() const { return hdr_.timeout_; }
 
-  inline void set_receive_ts(const int64_t receive_ts)
-  {
-    receive_ts_ = receive_ts;
-  }
-  inline int64_t get_receive_ts() const
-  {
-    return receive_ts_;
-  }
+  inline void set_receive_ts(const int64_t receive_ts) {receive_ts_ = receive_ts;}
+  inline int64_t get_receive_ts() const { return receive_ts_;}
 
   inline void set_priority(uint8_t priority);
   inline uint8_t get_priority() const;
 
-  inline void set_trace_id(const uint64_t* trace_id);
-  inline const uint64_t* get_trace_id() const;
+  inline void set_trace_id(const uint64_t *trace_id);
+  inline const uint64_t *get_trace_id() const;
   inline int8_t get_log_level() const;
   inline void set_log_level(const int8_t level);
 
@@ -294,9 +293,12 @@ public:
   inline void set_dst_cluster_id(const int64_t dst_cluster_id);
   inline int64_t get_dst_cluster_id() const;
 
+  inline void set_cluster_name_hash(const uint64_t cluster_name_hash);
+  inline uint64_t get_cluster_name_hash() const;
+
   inline uint64_t get_packet_len() const;
 
-  inline void set_compressor_type(const common::ObCompressorType& compessor_type);
+  inline void set_compressor_type(const common::ObCompressorType &compessor_type);
   inline enum common::ObCompressorType get_compressor_type() const;
 
   inline void set_original_len(const int32_t original_len);
@@ -313,13 +315,20 @@ public:
   inline void set_group_id(int32_t group_id);
   inline int32_t get_group_id() const;
 
+  int encode_ez_header(char *buf, int64_t len, int64_t &pos);
   TO_STRING_KV(K(hdr_), K(chid_), K(clen_), K_(assemble), K_(msg_count), K_(payload));
+
+  static inline int64_t get_header_size()
+  {
+    return ObRpcPacketHeader::get_encoded_size();
+  }
+  static uint64_t get_self_cluster_name_hash();
 
 private:
   ObRpcPacketHeader hdr_;
-  const char* cdata_;
+  const char *cdata_;
   uint32_t clen_;
-  uint32_t chid_;       // channel id
+  uint32_t chid_;         // channel id
   int64_t receive_ts_;  // do not serialize it
 public:
   // for assemble
@@ -327,7 +336,9 @@ public:
   int32_t msg_count_;
   int64_t payload_;
   easy_list_t list_;
-
+  static const uint8_t API_VERSION = 1;
+  static const uint8_t MAGIC_HEADER_FLAG[4];
+  static const uint8_t MAGIC_COMPRESS_HEADER_FLAG[4];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcPacket);
 };
@@ -349,16 +360,18 @@ void ObRpcPacket::calc_checksum()
 
 int ObRpcPacket::verify_checksum() const
 {
-  return hdr_.checksum_ == common::ob_crc64(cdata_, clen_) ? common::OB_SUCCESS : common::OB_CHECKSUM_ERROR;
+  return hdr_.checksum_ == common::ob_crc64(cdata_, clen_) ?
+      common::OB_SUCCESS :
+      common::OB_CHECKSUM_ERROR;
 }
 
-void ObRpcPacket::set_content(const char* content, int64_t len)
+void ObRpcPacket::set_content(const char *content, int64_t len)
 {
   cdata_ = content;
   clen_ = static_cast<uint32_t>(len);
 }
 
-const char* ObRpcPacket::get_cdata() const
+const char *ObRpcPacket::get_cdata() const
 {
   return cdata_;
 }
@@ -368,20 +381,18 @@ uint32_t ObRpcPacket::get_clen() const
   return clen_;
 }
 
-int64_t ObRpcPacket::get_header_size() const
-{
-  return hdr_.get_encoded_size();
-}
-
-int ObRpcPacket::decode(const char* buf, int64_t len)
+int ObRpcPacket::decode(const char *buf, int64_t len)
 {
   int ret = common::OB_SUCCESS;
   int64_t pos = 0;
   if (OB_FAIL(hdr_.deserialize(buf, len, pos))) {
-    RPC_OBRPC_LOG(ERROR, "decode rpc packet header fail", K(ret), K(len), K(pos));
+    RPC_OBRPC_LOG(ERROR, "decode rpc packet header fail",
+        K(ret), K(len), K(pos));
   } else if (len < hdr_.hlen_) {
     ret = common::OB_RPC_PACKET_INVALID;
-    RPC_OBRPC_LOG(WARN, "rpc packet invalid", K_(hdr), K(len));
+    RPC_OBRPC_LOG(
+        WARN,
+        "rpc packet invalid", K_(hdr), K(len));
   } else {
     cdata_ = buf + hdr_.hlen_;
     clen_ = static_cast<uint32_t>(len - hdr_.hlen_);
@@ -389,7 +400,7 @@ int ObRpcPacket::decode(const char* buf, int64_t len)
   return ret;
 }
 
-int ObRpcPacket::encode(char* buf, int64_t len, int64_t& pos)
+int ObRpcPacket::encode(char *buf, int64_t len, int64_t &pos)
 {
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(hdr_.serialize(buf, len, pos))) {
@@ -404,7 +415,7 @@ int ObRpcPacket::encode(char* buf, int64_t len, int64_t& pos)
   return ret;
 }
 
-int ObRpcPacket::encode_header(char* buf, int64_t len, int64_t& pos)
+int ObRpcPacket::encode_header(char *buf, int64_t len, int64_t &pos)
 {
   int ret = common::OB_SUCCESS;
   if (OB_FAIL(hdr_.serialize(buf, len, pos))) {
@@ -453,6 +464,11 @@ bool ObRpcPacket::has_context() const
   return hdr_.flags_ & ObRpcPacketHeader::CONTEXT_FLAG;
 }
 
+bool ObRpcPacket::has_trace_info() const
+{
+  return hdr_.flags_ & ObRpcPacketHeader::TRACE_INFO_FLAG;
+}
+
 void ObRpcPacket::set_stream_next()
 {
   hdr_.flags_ &= static_cast<uint16_t>(~ObRpcPacketHeader::STREAM_LAST_FLAG);
@@ -473,6 +489,11 @@ void ObRpcPacket::set_has_context()
 void ObRpcPacket::set_disable_debugsync()
 {
   hdr_.flags_ |= ObRpcPacketHeader::DISABLE_DEBUGSYNC_FLAG;
+}
+
+void ObRpcPacket::set_has_trace_info()
+{
+  hdr_.flags_ |= ObRpcPacketHeader::TRACE_INFO_FLAG;
 }
 
 void ObRpcPacket::unset_stream()
@@ -498,6 +519,26 @@ void ObRpcPacket::set_bad_routing()
 bool ObRpcPacket::bad_routing() const
 {
   return hdr_.flags_ & ObRpcPacketHeader::BAD_ROUTING_FLAG;
+}
+
+bool ObRpcPacket::ratelimit_enabled() const
+{
+  return hdr_.flags_ & ObRpcPacketHeader::ENABLE_RATELIMIT_FLAG;
+}
+
+void ObRpcPacket::enable_ratelimit()
+{
+  hdr_.flags_ |= ObRpcPacketHeader::ENABLE_RATELIMIT_FLAG;
+}
+
+bool ObRpcPacket::is_background_flow() const
+{
+  return hdr_.flags_ & ObRpcPacketHeader::BACKGROUND_FLOW_FLAG;
+}
+
+void ObRpcPacket::set_background_flow()
+{
+  hdr_.flags_ |= ObRpcPacketHeader::BACKGROUND_FLOW_FLAG;
 }
 
 int64_t ObRpcPacket::get_encoded_size() const
@@ -543,7 +584,7 @@ void ObRpcPacket::set_push_pop_diff(const int32_t diff)
 
 void ObRpcPacket::set_pop_process_start_diff(const int32_t diff)
 {
-  hdr_.cost_time_.pop_process_start_diff_ = diff;
+  hdr_.cost_time_.pop_process_start_diff_ = diff ;
 }
 
 void ObRpcPacket::set_process_start_end_diff(const int32_t diff)
@@ -621,7 +662,7 @@ uint8_t ObRpcPacket::get_priority() const
   return hdr_.priority_;
 }
 
-const uint64_t* ObRpcPacket::get_trace_id() const
+const uint64_t *ObRpcPacket::get_trace_id() const
 {
   return hdr_.trace_id_;
 }
@@ -631,17 +672,19 @@ int8_t ObRpcPacket::get_log_level() const
   return hdr_.flags_ & 0x7;
 }
 
-void ObRpcPacket::set_trace_id(const uint64_t* trace_id)
+void ObRpcPacket::set_trace_id(const uint64_t *trace_id)
 {
   if (trace_id != NULL) {
     hdr_.trace_id_[0] = trace_id[0];
     hdr_.trace_id_[1] = trace_id[1];
+    hdr_.trace_id_[2] = trace_id[2];
+    hdr_.trace_id_[3] = trace_id[3];
   }
 }
 
 void ObRpcPacket::set_log_level(const int8_t log_level)
 {
-  hdr_.flags_ &= static_cast<uint16_t>(~0x7);  // must set zero first
+  hdr_.flags_ &= static_cast<uint16_t>(~0x7);   //must set zero first
   hdr_.flags_ |= static_cast<uint16_t>(log_level);
 }
 
@@ -685,7 +728,17 @@ int64_t ObRpcPacket::get_dst_cluster_id() const
   return hdr_.dst_cluster_id_;
 }
 
-void ObRpcPacket::set_compressor_type(const common::ObCompressorType& compressor_type)
+void ObRpcPacket::set_cluster_name_hash(const uint64_t cluster_name_hash)
+{
+  hdr_.cluster_name_hash_ = cluster_name_hash;
+}
+
+uint64_t ObRpcPacket::get_cluster_name_hash() const
+{
+  return hdr_.cluster_name_hash_;
+}
+
+void ObRpcPacket::set_compressor_type(const common::ObCompressorType &compressor_type)
 {
   hdr_.compressor_type_ = compressor_type;
 }
@@ -744,7 +797,7 @@ int32_t ObRpcPacket::get_group_id() const
   return hdr_.group_id_;
 }
 
-extern RLOCAL(int, g_pcode);
+RLOCAL_EXTERN(int, g_pcode);
 inline ObRpcPacketCode current_pcode()
 {
   const int val = g_pcode;
@@ -756,11 +809,18 @@ inline void set_current_pcode(const ObRpcPacketCode pcode)
   g_pcode = pcode;
 }
 
-enum class ObRpcCheckSumCheckLevel { INVALID, FORCE, OPTIONAL, DISABLE };
+enum class ObRpcCheckSumCheckLevel
+{
+  INVALID,
+  FORCE,
+  OPTIONAL,
+  DISABLE
+};
 
 extern ObRpcCheckSumCheckLevel g_rpc_checksum_check_level;
 
-inline void set_rpc_checksum_check_level(const ObRpcCheckSumCheckLevel rpc_checksum_check_level)
+inline void set_rpc_checksum_check_level(
+  const ObRpcCheckSumCheckLevel rpc_checksum_check_level)
 {
   g_rpc_checksum_check_level = rpc_checksum_check_level;
 }
@@ -770,7 +830,8 @@ inline ObRpcCheckSumCheckLevel get_rpc_checksum_check_level()
   return g_rpc_checksum_check_level;
 }
 
-inline ObRpcCheckSumCheckLevel get_rpc_checksum_check_level_from_string(const common::ObString& string)
+inline ObRpcCheckSumCheckLevel get_rpc_checksum_check_level_from_string(
+  const common::ObString &string)
 {
   ObRpcCheckSumCheckLevel ret_type = ObRpcCheckSumCheckLevel::INVALID;
   if (0 == string.case_compare("Force")) {
@@ -783,7 +844,7 @@ inline ObRpcCheckSumCheckLevel get_rpc_checksum_check_level_from_string(const co
   return ret_type;
 }
 
-}  // namespace obrpc
-}  // end of namespace oceanbase
+} // end of namespace rpc
+} // end of namespace oceanbase
 
-#endif  // OCEANBASE_RPC_OBRPC_OB_RPC_PACKET_
+#endif // OCEANBASE_RPC_OBRPC_OB_RPC_PACKET_

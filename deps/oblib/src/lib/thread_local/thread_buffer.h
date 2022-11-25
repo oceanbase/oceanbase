@@ -16,65 +16,55 @@
 #include <pthread.h>
 #include "lib/ob_define.h"
 
-namespace oceanbase {
-namespace common {
+namespace oceanbase
+{
+namespace common
+{
 /**
  * Provide a memeory allocate mechanism by allocate
  * a buffer associate with specific thread, whenever
  * this buffer allocate by user function in a thread
  * and free when thread exit.
  */
-class ThreadSpecificBuffer {
+class ThreadSpecificBuffer
+{
 public:
   explicit ThreadSpecificBuffer(const int32_t size = MAX_THREAD_BUFFER_SIZE);
   ~ThreadSpecificBuffer();
-  class Buffer {
+  class Buffer
+  {
   public:
-    Buffer(char* start, const int32_t size) : end_of_storage_(start + size), end_(start)
-    {}
-    char* ptr();
-    int write(const char* bytes, const int32_t size);
+    Buffer(char *start, const int32_t size)
+        : end_of_storage_(start + size), end_(start) {}
+    char *ptr();
+    int write(const char *bytes, const int32_t size);
     int advance(const int32_t size);
-    void reset();
-    int32_t used() const
-    {
-      return static_cast<int32_t>(end_ - start_);
-    }
-    int32_t remain() const
-    {
-      return static_cast<int32_t>(end_of_storage_ - end_);
-    }
-    int32_t capacity() const
-    {
-      return static_cast<int32_t>(end_of_storage_ - start_);
-    }
-    char* current() const
-    {
-      return end_;
-    }
-
+    void reset() ;
+    int32_t used() const { return static_cast<int32_t>(end_ - start_); }
+    int32_t remain() const { return static_cast<int32_t>(end_of_storage_ - end_); }
+    int32_t capacity() const { return static_cast<int32_t>(end_of_storage_ - start_); }
+    char *current() const { return end_; }
   private:
-    char* end_of_storage_;
-    char* end_;
+    char *end_of_storage_;
+    char *end_;
     char start_[0];
   };
-  Buffer* get_buffer() const;
-
+  Buffer *get_buffer() const;
 private:
   int create_thread_key();
   int delete_thread_key();
-  static void destroy_thread_key(void* ptr);
+  static void destroy_thread_key(void *ptr);
   DISALLOW_COPY_AND_ASSIGN(ThreadSpecificBuffer);
-
 private:
   static const int32_t MAX_THREAD_BUFFER_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
-
 private:
   pthread_key_t key_;
   int32_t size_;
 };
 
-}  // namespace common
-}  // end namespace oceanbase
+char *get_tc_buffer(int64_t &size);
 
-#endif  // OCEANBASE_COMMON_THREAD_BUFFER_
+} // end namespace chunkserver
+} // end namespace oceanbase
+
+#endif //OCEANBASE_COMMON_THREAD_BUFFER_

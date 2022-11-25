@@ -14,20 +14,23 @@
 
 using namespace oceanbase::common;
 
-namespace oceanbase {
-namespace observer {
+namespace oceanbase
+{
+namespace observer
+{
 
 ObAllVirtualSessionWaitHistory::ObAllVirtualSessionWaitHistory()
     : ObVirtualTableScannerIterator(),
-      session_status_(),
-      addr_(NULL),
-      ipstr_(),
-      port_(0),
-      session_iter_(0),
-      event_iter_(0),
-      history_iter_(),
-      collect_(NULL)
-{}
+    session_status_(),
+    addr_(NULL),
+    ipstr_(),
+    port_(0),
+    session_iter_(0),
+    event_iter_(0),
+    history_iter_(),
+    collect_(NULL)
+{
+}
 
 ObAllVirtualSessionWaitHistory::~ObAllVirtualSessionWaitHistory()
 {
@@ -47,11 +50,11 @@ void ObAllVirtualSessionWaitHistory::reset()
   collect_ = NULL;
 }
 
-int ObAllVirtualSessionWaitHistory::set_ip(common::ObAddr* addr)
+int ObAllVirtualSessionWaitHistory::set_ip(common::ObAddr *addr)
 {
   int ret = OB_SUCCESS;
   char ipbuf[common::OB_IP_STR_BUFF];
-  if (NULL == addr) {
+  if (NULL == addr){
     ret = OB_ENTRY_NOT_EXIST;
   } else if (!addr_->ip_to_string(ipbuf, sizeof(ipbuf))) {
     SERVER_LOG(ERROR, "ip to string failed");
@@ -75,19 +78,19 @@ int ObAllVirtualSessionWaitHistory::get_all_diag_info()
   return ret;
 }
 
-int ObAllVirtualSessionWaitHistory::inner_get_next_row(ObNewRow*& row)
+int ObAllVirtualSessionWaitHistory::inner_get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   int iter_ret = OB_SUCCESS;
-  ObWaitEventDesc* event_desc = NULL;
-  ObObj* cells = cur_row_.cells_;
+  ObWaitEventDesc *event_desc = NULL;
+  ObObj *cells = cur_row_.cells_;
   if (OB_UNLIKELY(NULL == allocator_)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator is NULL", K(ret));
   } else {
     const int64_t col_count = output_column_ids_.count();
     if (0 == session_iter_ && 0 == event_iter_) {
-      if (OB_SUCCESS != (ret = set_ip(addr_))) {
+      if (OB_SUCCESS != (ret = set_ip(addr_))){
         SERVER_LOG(WARN, "can't get ip", K(ret));
       } else if (OB_SUCCESS != (ret = get_all_diag_info())) {
         SERVER_LOG(WARN, "can't get session status", K(ret));
@@ -98,7 +101,9 @@ int ObAllVirtualSessionWaitHistory::inner_get_next_row(ObNewRow*& row)
         while (OB_SUCCESS == ret && session_iter_ < session_status_.count()) {
           collect_ = session_status_.at(session_iter_).second;
           if (NULL != collect_ && OB_SUCCESS == collect_->lock_.try_rdlock()) {
-            if (session_status_.at(session_iter_).first == collect_->session_id_) {
+            const uint64_t tenant_id = collect_->base_value_.get_tenant_id();
+            if (session_status_.at(session_iter_).first == collect_->session_id_
+                && (is_sys_tenant(effective_tenant_id_) || tenant_id == effective_tenant_id_)) {
               collect_->base_value_.get_event_history().get_iter(history_iter_);
               break;
             } else {
@@ -138,21 +143,20 @@ int ObAllVirtualSessionWaitHistory::inner_get_next_row(ObNewRow*& row)
         }
       }
     }
-    if (OB_SUCCESS == ret) {
-      if (session_iter_ >= session_status_.count()) {
-        ret = OB_ITER_END;
-      } else if (OB_ISNULL(event_desc) || OB_ISNULL(collect_)) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "unexpected null", KP(event_desc), KP(collect_), K(ret));
-      }
+    if (OB_SUCCESS == ret && session_iter_ >= session_status_.count()) {
+      ret = OB_ITER_END;
     }
     if (OB_SUCCESS == ret && session_status_.count() != 0) {
+      if (OB_ISNULL(event_desc) || OB_ISNULL(collect_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "event_desc or collect_ is NULL", K(ret), KP(event_desc), KP(collect_));
+      }
       uint64_t cell_idx = 0;
       double value = 0;
       int64_t curr_time = ObTimeUtility::current_time();
       for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
         uint64_t col_id = output_column_ids_.at(i);
-        switch (col_id) {
+        switch(col_id) {
           case SESSION_ID: {
             cells[cell_idx].set_int(collect_->session_id_);
             break;
@@ -241,9 +245,12 @@ int ObAllVirtualSessionWaitHistory::inner_get_next_row(ObNewRow*& row)
             break;
           }
           default: {
-            collect_->lock_.unlock();
+            if (nullptr != collect_) {
+              collect_->lock_.unlock();
+            }
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
+            SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
+                       K(output_column_ids_), K(col_id));
             break;
           }
         }
@@ -288,5 +295,5 @@ int ObAllVirtualSessionWaitHistoryI1::get_all_diag_info()
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+}/* ns observer*/
+}/* ns oceanbase */

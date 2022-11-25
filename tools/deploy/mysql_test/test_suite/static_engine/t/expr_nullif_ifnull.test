@@ -1,5 +1,6 @@
 #owner: peihan.dph
 #owner group: sql2
+#tags: optimizer
 
 --disable_abort_on_error
 --result_format 4
@@ -113,6 +114,7 @@ show create view v1;
 --echo // 类型应该是c1的类型(datetime)
 desc v1;
 select * from v1;
+drop view v1;
 
 select collation(nullif('a', binary'b'));
 select NULLIF(14152561829011783680, 1);
@@ -185,3 +187,64 @@ from
       ) as c3
   ) as subq_0;
 --enable_result_log
+
+
+##bugfix: https://work.aone.alibaba-inc.com/issue/28830638
+create table t1 (pk int);
+insert into t1 values (1);
+select pk, ( NULLIF( 14152561829011783680, INSTR( TRIM( SUBSTRING( HEX( SUBSTRING( 'a',1, LEAST( 218, 20 ) ) ) , 1 , LEAST( 218, 20 ) ) ), 'oh' ) ) ) s , INSTR( TRIM( SUBSTRING( HEX( SUBSTRING( 'a',1, LEAST( 218, 20 ) ) ) , 1 , LEAST( 218, 20 ) ) ), 'oh' ) s2 from t1;
+drop table t1;
+create table t1 as select NULLIF( 14152561829011783680, 1) c1, NULLIF( 14152561829011783680, 14152561829011783680) c2 from dual;
+desc t1;
+select * from t1;
+drop table t1;
+
+create table t1(c1 enum('a', 'b'));
+insert into t1 values('a');
+select c1, nullif(c1, 'a'), nullif(c1, 0), nullif(c1, 1) from t1;
+--disable_warnings
+drop table if exists t2;
+--enable_warnings
+create table t2 as select c1, nullif(c1, 'a') c2, nullif(c1, 0) c3, nullif(c1, 1) c4 from t1;
+desc t2;
+select * from t2;
+drop table t1,t2;
+
+## https://work.aone.alibaba-inc.com/issue/28471451
+select collation(nullif('a', binary 'b'));
+
+## test nullif with enumset parameter.
+create table t1(d1 enum('中文字符','123456','ABCabc','2020','2020-10-10','2020-10-10 10:10:10','10:10:10'),
+                d2 set('中文字符','123456','ABCabc','2020','2020-10-10','2020-10-10 10:10:10','10:10:10'));
+insert into t1 values('中文字符', '中文字符');
+insert into t1 values('123456', '123456');
+insert into t1 values('ABCabc', 'ABCabc');
+insert into t1 values('2020', '2020');
+insert into t1 values('2020-10-10', '2020-10-10');
+insert into t1 values('2020-10-10 10:10:10', '2020-10-10 10:10:10');
+insert into t1 values('10:10:10', '10:10:10');
+insert into t1 values(null, null);
+
+create table t2(c1 int, c2 int unsigned, c3 decimal, c4 date, c5 datetime, c6 time, c7 year, c8 varchar(100));
+insert into t2 values(1, 2, 3, '2020-10-10', '2020-10-10 10:10:10', '10:10:10', 2020, '中文字符');
+insert into t2 values(123456, 123456, 123456, '2020-12-12', '2020-12-12 10:10:10', '12:12:12', 2022, 'ABCabc');
+insert into t2 values(null, null, null, null, null, null, null, null);
+
+select d1, d2, nullif(d1, null), nullif(null, d1), nullif(d2, null), nullif(null, d2) from t1;
+select d1, c1, nullif(d1, c1), nullif(c1, d1) from t1, t2 order by d1, c1;
+select d1, c2, nullif(d1, c2), nullif(c2, d1) from t1, t2 order by d1, c1;
+select d1, c3, nullif(d1, c3), nullif(c3, d1) from t1, t2 order by d1, c1;
+select d1, c4, nullif(d1, c4), nullif(c4, d1) from t1, t2 order by d1, c1;
+select d1, c5, nullif(d1, c5), nullif(c5, d1) from t1, t2 order by d1, c1;
+select d1, c6, nullif(d1, c6), nullif(c6, d1) from t1, t2 order by d1, c1;
+select d1, c7, nullif(d1, c7), nullif(c7, d1) from t1, t2 order by d1, c1;
+select d1, c8, nullif(d1, c8), nullif(c8, d1) from t1, t2 order by d1, c1;
+
+select d2, c1, nullif(d2, c1), nullif(c1, d2) from t1, t2 order by d2, c1;
+select d2, c2, nullif(d2, c2), nullif(c2, d2) from t1, t2 order by d2, c1;
+select d2, c3, nullif(d2, c3), nullif(c3, d2) from t1, t2 order by d2, c1;
+select d2, c4, nullif(d2, c4), nullif(c4, d2) from t1, t2 order by d2, c1;
+select d2, c5, nullif(d2, c5), nullif(c5, d2) from t1, t2 order by d2, c1;
+select d2, c6, nullif(d2, c6), nullif(c6, d2) from t1, t2 order by d2, c1;
+select d2, c7, nullif(d2, c7), nullif(c7, d2) from t1, t2 order by d2, c1;
+select d2, c8, nullif(d2, c8), nullif(c8, d2) from t1, t2 order by d2, c1;

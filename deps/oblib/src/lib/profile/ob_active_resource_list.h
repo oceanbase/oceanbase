@@ -15,9 +15,12 @@
 
 #include "lib/list/dlink.h"
 
-namespace oceanbase {
-namespace common {
-struct ActiveResource {};
+namespace oceanbase
+{
+namespace common
+{
+struct ActiveResource
+{};
 
 // struct ActiveResource: CDLink
 // {
@@ -121,13 +124,13 @@ struct ActiveResource {};
 // }
 
 //#define GARL get_global_active_resource_list()
-// #define GARL_ADD(res, key) GARL.add(res, "%s " "%ld %ld %s", key, pthread_self(),
-// ::oceanbase::common::ObTimeUtility::current_time(), lbt()) #define GARL_DEL(res) GARL.del(res)
+// #define GARL_ADD(res, key) GARL.add(res, "%s " "%ld %ld %s", key, pthread_self(), ::oceanbase::common::ObTimeUtility::current_time(), lbt())
+// #define GARL_DEL(res) GARL.del(res)
 #define GARL_ADD(res, key)
 #define GARL_DEL(res)
-#define GARL_PRINT()  // GARL.print()
+#define GARL_PRINT() //GARL.print()
 
-};  // namespace common
-};  // end namespace oceanbase
+}; // end namespace profile
+}; // end namespace oceanbase
 
 #endif /* OCEANBASE_PROFILE_OB_ACTIVE_RESOURCE_LIST_H_ */

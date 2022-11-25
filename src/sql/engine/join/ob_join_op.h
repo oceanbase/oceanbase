@@ -15,80 +15,78 @@
 
 #include "sql/engine/ob_operator.h"
 
-namespace oceanbase {
-namespace sql {
-class ObJoinSpec : public ObOpSpec {
+namespace oceanbase
+{
+namespace sql
+{
+class ObJoinSpec: public ObOpSpec
+{
   OB_UNIS_VERSION_V(1);
-
 public:
-  ObJoinSpec(common::ObIAllocator& alloc, const ObPhyOperatorType type)
-      : ObOpSpec(alloc, type), join_type_(UNKNOWN_JOIN), other_join_conds_(alloc)
+  ObJoinSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
+    : ObOpSpec(alloc, type),
+      join_type_(UNKNOWN_JOIN),
+      other_join_conds_(alloc)
   {}
 
 public:
   ObJoinType join_type_;
-  common::ObFixedArray<ObExpr*, common::ObIAllocator> other_join_conds_;
-
+  common::ObFixedArray<ObExpr *, common::ObIAllocator> other_join_conds_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObJoinSpec);
 };
 
-class ObJoinOp : public ObOperator {
+class ObJoinOp: public ObOperator
+{
 public:
-  ObJoinOp(ObExecContext& exec_ctx, const ObOpSpec& spec, ObOpInput* input)
-      : ObOperator(exec_ctx, spec, input), output_row_produced_(false), left_row_joined_(false)
+  ObJoinOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
+    : ObOperator(exec_ctx, spec, input),
+      output_row_produced_(false),
+      left_row_joined_(false)
   {}
-  virtual ~ObJoinOp()
-  {}
+  virtual ~ObJoinOp() {}
 
-  virtual int inner_open() override
-  {
-    return ObOperator::inner_open();
-  }
-  virtual int rescan() override;
-  virtual void destroy() override
-  {
-    ObOperator::destroy();
-  }
-  virtual int inner_close() override
-  {
-    return ObOperator::inner_close();
-  }
+  virtual int inner_open() override { return ObOperator::inner_open(); }
+  virtual int inner_rescan() override;
+  virtual void destroy() override { ObOperator::destroy(); }
+  virtual int inner_close() override { return ObOperator::inner_close(); }
 
-  int blank_left_row();
-  int blank_right_row();
+  int blank_row(const ExprFixedArray &exprs);
+  void blank_row_batch(const ExprFixedArray &exprs, int64_t batch_size);
+  void blank_row_batch_one(const ExprFixedArray &exprs);
 
   inline bool need_left_join() const;
   inline bool need_right_join() const;
 
-  int calc_other_conds(bool& is_match);
+  int calc_other_conds(bool &is_match);
 
   virtual int get_next_left_row();
   virtual int get_next_right_row();
 
-  const ObJoinSpec& get_spec() const
-  {
-    return static_cast<const ObJoinSpec&>(spec_);
-  }
+  const ObJoinSpec &get_spec() const
+  { return static_cast<const ObJoinSpec &>(spec_); }
 
 public:
+  // 记录当前join算子output是否生成，用于结束状态机的while循环
   bool output_row_produced_;
   bool left_row_joined_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObJoinOp);
 };
 
 inline bool ObJoinOp::need_left_join() const
 {
-  return (LEFT_OUTER_JOIN == get_spec().join_type_ || FULL_OUTER_JOIN == get_spec().join_type_);
+  return (LEFT_OUTER_JOIN == get_spec().join_type_
+          || FULL_OUTER_JOIN == get_spec().join_type_);
 }
 
 inline bool ObJoinOp::need_right_join() const
 {
-  return (RIGHT_OUTER_JOIN == get_spec().join_type_ || FULL_OUTER_JOIN == get_spec().join_type_);
+  return (RIGHT_OUTER_JOIN == get_spec().join_type_
+          || FULL_OUTER_JOIN == get_spec().join_type_);
 }
 
-}  // end namespace sql
-}  // end namespace oceanbase
+} // end namespace sql
+} // end namespace oceanbase
 #endif
+

@@ -11,54 +11,45 @@
  */
 
 #include <gtest/gtest.h>
+#include <thread>
 #include "lib/oblog/ob_base_log_writer.h"
 #include "lib/ob_errno.h"
 
-using namespace ::oblib;
+//using namespace ::oblib;
 
-namespace oceanbase {
-namespace common {
-class ObTLogItem : public ObIBaseLogItem {
+namespace oceanbase
+{
+namespace common
+{
+class ObTLogItem : public ObIBaseLogItem
+{
 public:
-  ObTLogItem()
-  {}
-  virtual ~ObTLogItem()
-  {}
-  virtual char* get_buf()
-  {
-    return NULL;
-  }
-  virtual const char* get_buf() const
-  {
-    return NULL;
-  }
-  virtual int64_t get_buf_size() const
-  {
-    return 0;
-  }
-  virtual int64_t get_data_len() const
-  {
-    return 0;
-  }
+  ObTLogItem() {}
+  virtual ~ObTLogItem() {}
+  virtual char *get_buf() { return a_; }
+  virtual const char *get_buf() const { return NULL; }
+  virtual int64_t get_buf_size() const { return 0; }
+  virtual int64_t get_data_len() const { return 0; }
+  char a_[16];
 };
 
-class ObTLogWriter : public ObBaseLogWriter {
+class ObTLogWriter : public ObBaseLogWriter
+{
 public:
-  ObTLogWriter() : process_cnt_(0)
-  {}
-  virtual ~ObTLogWriter()
-  {}
+  ObTLogWriter() : process_cnt_(0) {}
+  virtual ~ObTLogWriter() {}
   int64_t process_cnt_;
-
 protected:
-  virtual void process_log_items(ObIBaseLogItem** items, const int64_t item_cnt, int64_t& finish_cnt);
+  virtual void process_log_items(ObIBaseLogItem **items, const int64_t item_cnt, int64_t &finish_cnt);
 };
 
-void ObTLogWriter::process_log_items(ObIBaseLogItem** items, const int64_t item_cnt, int64_t& finish_cnt)
+void ObTLogWriter::process_log_items(ObIBaseLogItem **items, const int64_t item_cnt, int64_t &finish_cnt)
 {
   if (NULL != items) {
     finish_cnt = item_cnt;
     process_cnt_ += item_cnt;
+    ObTLogItem* a = (ObTLogItem*)(items[finish_cnt - 1]);
+    (a->get_buf())[15] = '@';
   }
 }
 
@@ -70,71 +61,65 @@ TEST(ObBaseLogWriter, normal)
   ObTLogItem log_item;
   int64_t process_cnt = 0;
 
-  // invalid argument
-  ret = writer.init(cfg);
-  ASSERT_NE(OB_SUCCESS, ret);
-
-  // invoke when not init
+  //invoke when not init
   ret = writer.append_log(log_item);
   ASSERT_NE(OB_SUCCESS, ret);
-  ret = writer.reconfig(cfg);
-  ASSERT_NE(OB_SUCCESS, ret);
 
-  // normal init
-  cfg.group_commit_max_wait_us_ = 1;
-  cfg.group_commit_min_item_cnt_ = 1;
-  cfg.group_commit_max_item_cnt_ = 1;
+  //normal init
+  cfg = ObBaseLogWriterCfg(512 << 10, 500000, 1, 4);
   ret = writer.init(cfg);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ret = writer.start();
 
-  // repeat init
+  //repeat init
   ret = writer.init(cfg);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  // normal append
+  //normal append
   ret = writer.append_log(log_item, 10000000);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  //ASSERT_EQ(OB_SUCCESS, ret);
   ++process_cnt;
 
-  // multi append
-  for (int64_t i = 0; i < 10000; ++i) {
-    ret = writer.append_log(log_item, 10000000);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    process_cnt++;
-  }
+  //multi append
+  //constexpr int cnt = 64;
+  //std::thread threads[cnt];
+  //for (auto j = 0; j < cnt; ++j) {
+  //  threads[j] = std::thread([&]() {
+  //    for (int64_t i = 0; i < 100000; ++i) {
+  //      ret = writer.append_log(log_item, 10000000);
+  //      //ASSERT_EQ(OB_SUCCESS, ret);
+  //      process_cnt++;
+  //    }
+  //  });
+  //}
 
-  // invalid reconfig
-  cfg.group_commit_max_item_cnt_ = 0;
-  ret = writer.reconfig(cfg);
-  ASSERT_NE(OB_SUCCESS, ret);
-
-  // normal reconfig
-  cfg.group_commit_min_item_cnt_ = cfg.max_buffer_item_cnt_;
-  cfg.group_commit_max_item_cnt_ = cfg.max_buffer_item_cnt_;
-  ret = writer.reconfig(cfg);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  // run multi append again
+  //run multi append again
   for (int64_t i = 0; i < 100000; ++i) {
     ret = writer.append_log(log_item, 10000000);
-    ASSERT_EQ(OB_SUCCESS, ret);
+    //ASSERT_EQ(OB_SUCCESS, ret);
     process_cnt++;
   }
+  //for (auto j = 0; j < cnt; ++j) {
+  //  threads[j].join();
+  //}
 
-  // destroy and init
+  //destroy and init
+  writer.stop();
+  writer.wait();
   writer.destroy();
   ret = writer.init(cfg);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // repeat destroy
+  //repeat destroy
   writer.destroy();
   writer.destroy();
 }
 
-}  // namespace common
-}  // namespace oceanbase
 
-int main(int argc, char** argv)
+}
+}
+
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

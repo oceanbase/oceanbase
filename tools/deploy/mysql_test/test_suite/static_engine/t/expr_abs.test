@@ -1,4 +1,5 @@
 #owner: peihan.dph
+#tags: optimizer
 
 --disable_abort_on_error
 --result_format 4
@@ -91,6 +92,7 @@ while ($cnt <= 29)
   inc $cnt;
 }
 
+#verify bugfix of https://work.aone.alibaba-inc.com/issue/29519901
 --disable_warnings
 drop table if exists t1;
 --enable_warnings

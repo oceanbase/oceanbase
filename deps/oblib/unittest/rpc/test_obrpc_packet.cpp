@@ -16,24 +16,28 @@
 using namespace oceanbase::rpc;
 using namespace oceanbase::obrpc;
 
-class TestObrpcPacket : public ::testing::Test {
+class TestObrpcPacket
+    : public ::testing::Test
+{
 public:
   virtual void SetUp()
-  {}
+  {
+  }
 
   virtual void TearDown()
-  {}
+  {
+  }
 };
 
 TEST_F(TestObrpcPacket, NameIndex)
 {
-  ObRpcPacketSet& set = ObRpcPacketSet::instance();
+  ObRpcPacketSet &set = ObRpcPacketSet::instance();
   EXPECT_EQ(OB_RENEW_LEASE, set.pcode_of_idx(set.idx_of_pcode(OB_RENEW_LEASE)));
   EXPECT_EQ(OB_BOOTSTRAP, set.pcode_of_idx(set.idx_of_pcode(OB_BOOTSTRAP)));
   EXPECT_STREQ("OB_BOOTSTRAP", set.name_of_idx(set.idx_of_pcode(OB_BOOTSTRAP)));
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

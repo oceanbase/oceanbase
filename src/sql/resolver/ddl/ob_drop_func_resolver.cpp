@@ -13,25 +13,34 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_drop_func_resolver.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 using namespace common;
-namespace sql {
+namespace sql
+{
 
-ObDropFuncResolver::ObDropFuncResolver(ObResolverParams& params) : ObDDLResolver(params)
-{}
+ObDropFuncResolver::ObDropFuncResolver(ObResolverParams &params)
+    : ObDDLResolver(params)
+{
+}
 
 ObDropFuncResolver::~ObDropFuncResolver()
-{}
+{
+}
 
-int ObDropFuncResolver::resolve(const ParseNode& parse_tree)
+int ObDropFuncResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObDropFuncStmt* drop_func_stmt = NULL;
+  ObDropFuncStmt *drop_func_stmt = NULL;
   ObCollationType cs_type;
   ObString lower_name;
-  if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_) || OB_ISNULL(allocator_) ||
-      (T_DROP_FUNC != parse_tree.type_) || 2 != parse_tree.num_child_ || OB_ISNULL(parse_tree.children_) ||
-      (parse_tree.children_[0] != NULL && T_IF_EXISTS != parse_tree.children_[0]->type_)) {
+  if (OB_ISNULL(session_info_)
+      || OB_ISNULL(schema_checker_)
+      || OB_ISNULL(allocator_)
+      || (T_DROP_FUNC != parse_tree.type_)
+      || 2 != parse_tree.num_child_
+      || OB_ISNULL(parse_tree.children_)
+      || (parse_tree.children_[0] != NULL && T_IF_EXISTS != parse_tree.children_[0]->type_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
   } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
@@ -48,7 +57,7 @@ int ObDropFuncResolver::resolve(const ParseNode& parse_tree)
 
   if (OB_SUCC(ret)) {
     bool exist = false;
-    const share::schema::ObUDF* udf_info = nullptr;
+    const share::schema::ObUDF *udf_info = nullptr;
     uint64_t tenant_id = session_info_->get_effective_tenant_id();
     if (OB_FAIL(schema_checker_->get_udf_info(tenant_id, lower_name, udf_info, exist))) {
       LOG_WARN("failed to get udf info", K(ret));
@@ -58,22 +67,23 @@ int ObDropFuncResolver::resolve(const ParseNode& parse_tree)
         ret = OB_ALLOCATE_MEMORY_FAILED;
         SQL_RESV_LOG(ERROR, "create drop func stmt failed");
       }
-      // stmt_ = drop_func_stmt;
+      //stmt_ = drop_func_stmt;
     } else {
-      // pl udf
+      //pl udf
       ret = OB_ERR_FUNCTION_UNKNOWN;
     }
   }
 
+
   if (OB_SUCC(ret)) {
     const uint64_t tenant_id = session_info_->get_effective_tenant_id();
-    obrpc::ObDropUserDefinedFunctionArg& drop_func_arg = drop_func_stmt->get_drop_func_arg();
+    obrpc::ObDropUserDefinedFunctionArg &drop_func_arg = drop_func_stmt->get_drop_func_arg();
     drop_func_arg.tenant_id_ = tenant_id;
     drop_func_arg.name_ = lower_name;
-    drop_func_arg.if_exist_ = (NULL != parse_tree.children_[0]);
+    drop_func_arg.if_exist_ =  (NULL != parse_tree.children_[0]);
   }
   return ret;
 }
 
-}  // namespace sql
-}  // namespace oceanbase
+}
+}

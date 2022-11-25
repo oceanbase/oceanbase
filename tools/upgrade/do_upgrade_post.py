@@ -11,10 +11,6 @@ import config
 import opts
 import run_modules
 import actions
-import normal_ddl_actions_post
-import normal_dml_actions_post
-import each_tenant_dml_actions_post
-import each_tenant_ddl_actions_post
 import special_upgrade_action_post
 
 # 由于用了/*+read_consistency(WEAK) */来查询，因此升级期间不能允许创建或删除租户
@@ -108,41 +104,6 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, my_module_set, upgrade_para
         raise MyError('no tenant id')
       logging.info('there has %s distinct tenant ids: [%s]', len(tenant_id_list), ','.join(str(tenant_id) for tenant_id in tenant_id_list))
       conn.commit()
-
-      actions.refresh_commit_sql_list()
-      dump_sql_to_file(upgrade_params.sql_dump_filename, tenant_id_list)
-      logging.info('================succeed to dump sql to file: {0}==============='.format(upgrade_params.sql_dump_filename))
-
-      if run_modules.MODULE_DDL in my_module_set:
-        logging.info('================begin to run ddl===============')
-        conn.autocommit = True
-        normal_ddl_actions_post.do_normal_ddl_actions(cur)
-        logging.info('================succeed to run ddl===============')
-        conn.autocommit = False
-
-      if run_modules.MODULE_EACH_TENANT_DDL in my_module_set:
-        has_run_ddl = True
-        logging.info('================begin to run each tenant ddl===============')
-        conn.autocommit = True
-        each_tenant_ddl_actions_post.do_each_tenant_ddl_actions(cur, tenant_id_list)
-        logging.info('================succeed to run each tenant ddl===============')
-        conn.autocommit = False
-
-      if run_modules.MODULE_NORMAL_DML in my_module_set:
-        logging.info('================begin to run normal dml===============')
-        normal_dml_actions_post.do_normal_dml_actions(cur)
-        logging.info('================succeed to run normal dml===============')
-        conn.commit()
-        actions.refresh_commit_sql_list()
-        logging.info('================succeed to commit dml===============')
-
-      if run_modules.MODULE_EACH_TENANT_DML in my_module_set:
-        logging.info('================begin to run each tenant dml===============')
-        conn.autocommit = True
-        each_tenant_dml_actions_post.do_each_tenant_dml_actions(cur, tenant_id_list)
-        conn.autocommit = False
-        logging.info('================succeed to run each tenant dml===============')
-
       if run_modules.MODULE_SPECIAL_ACTION in my_module_set:
         logging.info('================begin to run special action===============')
         conn.autocommit = True
