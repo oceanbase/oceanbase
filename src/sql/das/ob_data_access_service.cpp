@@ -176,9 +176,8 @@ int ObDataAccessService::refresh_partition_location(ObDASRef &das_ref, ObIDASTas
 int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op)
 {
   int ret = task_op.errcode_;
-  while (is_master_changed_error(ret) ||
-         is_partition_change_error(ret) ||
-         OB_REPLICA_NOT_READABLE == ret) {
+  while (!is_virtual_table(task_op.get_ref_table_id()) &&
+         (is_master_changed_error(ret) || is_partition_change_error(ret) || OB_REPLICA_NOT_READABLE == ret)) {
     if (!can_fast_fail(task_op)) {
       task_op.in_part_retry_ = true;
       das_ref.get_exec_ctx().get_my_session()->set_session_in_retry(true, ret);
