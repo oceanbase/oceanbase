@@ -194,7 +194,8 @@ public:
         || OB_TABLE_IS_DELETED == dag_ret_
         || OB_TENANT_HAS_BEEN_DROPPED == dag_ret_
         || OB_LS_NOT_EXIST == dag_ret_
-        || OB_TABLET_NOT_EXIST == dag_ret_;
+        || OB_TABLET_NOT_EXIST == dag_ret_
+        || OB_CANCELED == dag_ret_;
   }
   int get_tablet_and_compat_mode();
   virtual int64_t to_string(char* buf, const int64_t buf_len) const override;
