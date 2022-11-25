@@ -176,6 +176,14 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
     }
 
     if (OB_SUCC(ret)) {
+      if (OB_FAIL(transform_rollup_exprs(stmt, is_happened))) {
+        LOG_WARN("failed to transform rollup exprs", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        LOG_TRACE("succeed to transform rollup exprs",  K(is_happened));
+      }
+    }
+    if (OB_SUCC(ret)) {
       LOG_DEBUG("transform pre process succ", K(*stmt));
       if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));
@@ -5466,6 +5474,225 @@ int ObTransformPreProcess::extract_idx_from_table_items(ObDMLStmt *sub_stmt,
     if (OB_FAIL(rel_ids.add_member(sub_stmt->get_table_bit_index(table_item->table_id_)))) {
       LOG_WARN("failed to add member to rel ids.", K(ret));
     } else {}
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  ObSelectStmt *sel_stmt = NULL;
+  ObSEArray<ObRawExpr*, 4> static_const_exprs;
+  ObSEArray<ObRawExpr*, 4> static_remove_const_exprs;
+  ObSEArray<ObRawExpr*, 4> exec_param_exprs;
+  ObSEArray<ObRawExpr*, 4> exec_param_remove_const_exprs;
+  ObSEArray<ObRawExpr*, 4> column_ref_exprs;
+  ObSEArray<ObRawExpr*, 4> column_ref_remove_const_exprs;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (!stmt->is_select_stmt()) {
+    //do nothing
+  } else if (OB_FALSE_IT(sel_stmt = static_cast<ObSelectStmt*>(stmt))) {
+  } else if (!sel_stmt->has_rollup()) {
+    //do nothing
+  } else if (OB_FAIL(get_rollup_const_exprs(sel_stmt,
+                                            static_const_exprs,
+                                            static_remove_const_exprs,
+                                            exec_param_exprs,
+                                            exec_param_remove_const_exprs,
+                                            column_ref_exprs,
+                                            column_ref_remove_const_exprs,
+                                            trans_happened))) {
+    LOG_WARN("failed to get rollup const exprs", K(ret));
+  } else if (static_const_exprs.empty() && exec_param_exprs.empty()) {
+    //do nothing
+  } else if (OB_FAIL(replace_remove_const_exprs(
+                                        sel_stmt,
+                                        static_const_exprs,
+                                        static_remove_const_exprs,
+                                        exec_param_exprs,
+                                        exec_param_remove_const_exprs,
+                                        column_ref_exprs,
+                                        column_ref_remove_const_exprs))) {
+    LOG_WARN("failed to replace remove const exprs", K(ret));
+  }
+  return ret;
+}
+ int ObTransformPreProcess::get_rollup_const_exprs(ObSelectStmt *stmt,
+                                                  ObIArray<ObRawExpr*> &static_const_exprs,
+                                                  ObIArray<ObRawExpr*> &static_remove_const_exprs,
+                                                  ObIArray<ObRawExpr*> &exec_param_exprs,
+                                                  ObIArray<ObRawExpr*> &exec_params_remove_const_exprs,
+                                                  ObIArray<ObRawExpr*> &column_ref_exprs,
+                                                  ObIArray<ObRawExpr*> &column_ref_remove_const_exprs,
+                                                  bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<std::pair<int64_t, ObRawExpr *>, 2> dummy_onetime_exprs;
+  ObRawExpr *remove_const_expr = NULL;
+  bool is_const = false;
+  trans_happened = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
+      OB_ISNULL(ctx_->expr_factory_) ||
+      OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret));
+  }
+  for (int i = 0; OB_SUCC(ret) && i < stmt->get_rollup_expr_size(); ++i) {
+    ObRawExpr *expr = stmt->get_rollup_exprs().at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (expr->has_flag(CNT_VOLATILE_CONST) || !expr->is_const_expr()) {
+      //do nothing
+    } else if (expr->is_static_const_expr()) { //static const expr
+      if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(
+                                        *ctx_->expr_factory_,
+                                        *ctx_->session_info_,
+                                        expr,
+                                        remove_const_expr))) {
+        LOG_WARN("failed to build remove const expr", K(ret));
+      } else if (OB_ISNULL(remove_const_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (OB_FAIL(static_const_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(static_remove_const_exprs.push_back(remove_const_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else {
+        stmt->get_rollup_exprs().at(i) = remove_const_expr;
+        trans_happened = true;
+      }
+    } else if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(
+                                      *ctx_->expr_factory_,
+                                      *ctx_->session_info_,
+                                      expr,
+                                      remove_const_expr))) {
+      LOG_WARN("failed to build remove const expr", K(ret));
+    } else if (OB_ISNULL(remove_const_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else {
+      stmt->get_rollup_exprs().at(i) = remove_const_expr;
+      trans_happened = true;
+      if (lib::is_mysql_mode()) {
+        ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr *>(expr);
+        const ObRawExpr *ref_expr = exec_expr->get_ref_expr();
+        if (OB_ISNULL(ref_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (ref_expr->is_column_ref_expr()) {
+          if (OB_FAIL(column_ref_exprs.push_back(expr))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          } else if (OB_FAIL(column_ref_remove_const_exprs.push_back(remove_const_expr))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(exec_param_exprs.push_back(expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_FAIL(exec_params_remove_const_exprs.push_back(remove_const_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::replace_remove_const_exprs(ObSelectStmt *stmt,
+                                                      ObIArray<ObRawExpr*> &static_const_exprs,
+                                                      ObIArray<ObRawExpr*> &static_remove_const_exprs,
+                                                      ObIArray<ObRawExpr*> &exec_params,
+                                                      ObIArray<ObRawExpr*> &exec_params_remove_const_exprs,
+                                                      ObIArray<ObRawExpr*> &column_ref_exprs,
+                                                      ObIArray<ObRawExpr*> &column_ref_remove_const_exprs)
+{
+  int ret = OB_SUCCESS;
+  ObQueryCtx *query_ctx = NULL;
+  ObStmtCompareContext compare_ctx;
+  if (OB_ISNULL(stmt) || OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret), K(stmt), K(query_ctx));
+  } else if (static_const_exprs.count() != static_remove_const_exprs.count() ||
+             exec_params.count() != exec_params_remove_const_exprs.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect expr size", K(ret));
+  } else if (OB_FALSE_IT(compare_ctx.init(&query_ctx->calculable_items_))) {
+    LOG_WARN("failed to init compare context", K(ret));
+  } else {
+    if (is_mysql_mode()) {
+      if (OB_FAIL(ObTransformUtils::replace_exprs(static_const_exprs, static_remove_const_exprs, stmt->get_having_exprs()))) {
+        LOG_WARN("failed to replace exec_params in having expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::replace_exprs(column_ref_exprs, column_ref_remove_const_exprs, stmt->get_having_exprs()))) {
+        LOG_WARN("failed to replace exec_params in having expr", K(ret));
+      }
+    } else if (is_oracle_mode() && OB_FAIL(ObTransformUtils::replace_exprs(exec_params, exec_params_remove_const_exprs, stmt->get_having_exprs()))) {
+      LOG_WARN("failed to replace exec_params in having expr", K(ret));
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < stmt->get_select_item_size(); ++i) {
+    if (OB_ISNULL(stmt->get_select_item(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (is_mysql_mode()) {
+      if (OB_FAIL(ObTransformUtils::replace_expr(static_const_exprs, static_remove_const_exprs, stmt->get_select_item(i).expr_))) {
+        LOG_WARN("failed to replace exec_params in having expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::replace_expr(column_ref_exprs, column_ref_remove_const_exprs, stmt->get_select_item(i).expr_))) {
+        LOG_WARN("failed to replace exec_params in having expr", K(ret));
+      }
+    } else if (OB_FAIL(ObTransformUtils::replace_expr(exec_params, exec_params_remove_const_exprs, stmt->get_select_item(i).expr_))) {
+      LOG_WARN("failed to replace exec_params in having expr", K(ret));
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < stmt->get_order_item_size(); ++i) {
+    if (OB_ISNULL(stmt->get_order_item(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (is_mysql_mode()) {
+      if (OB_FAIL(ObTransformUtils::replace_expr(static_const_exprs, static_remove_const_exprs, stmt->get_order_item(i).expr_))) {
+        LOG_WARN("failed to replace exec_params in having expr", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::replace_expr(column_ref_exprs, column_ref_remove_const_exprs, stmt->get_order_item(i).expr_))) {
+        LOG_WARN("failed to replace exec_params in having expr", K(ret));
+      }
+    } else if (OB_FAIL(ObTransformUtils::replace_expr(exec_params, exec_params_remove_const_exprs, stmt->get_order_item(i).expr_))) {
+      LOG_WARN("failed to replace exec_params in having expr", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_aggr_item_size(); ++i) {
+    ObAggFunRawExpr *agg_expr = NULL;
+    if (OB_ISNULL(agg_expr =stmt->get_aggr_item(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (T_FUN_GROUPING == agg_expr->get_expr_type() || T_FUN_GROUPING_ID == agg_expr->get_expr_type()) {
+      for (int64_t j = 0; j < agg_expr->get_param_count(); ++j) {
+        bool replaced = false;
+        int64_t pos = OB_INVALID_ID;
+        if (OB_ISNULL(agg_expr->get_param_expr(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (!agg_expr->get_param_expr(j)->is_const_expr()) {
+        } else if (ObOptimizerUtil::find_item(static_const_exprs, agg_expr->get_param_expr(j), &pos)) {
+          if (OB_UNLIKELY(pos < 0 || pos >= static_remove_const_exprs.count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected array pos", K(ret), K(pos), K(static_remove_const_exprs.count()));
+          } else {
+            agg_expr->get_param_expr(j) = static_remove_const_exprs.at(pos);
+          }
+        } else if (ObOptimizerUtil::find_item(exec_params, agg_expr->get_param_expr(j), &pos)) {
+          if (OB_UNLIKELY(pos < 0 || pos >= exec_params_remove_const_exprs.count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected array pos", K(ret), K(pos), K(exec_params_remove_const_exprs.count()));
+          } else {
+            agg_expr->get_param_expr(j) = exec_params_remove_const_exprs.at(pos);
+          }
+        }
+      }
+    }
   }
   return ret;
 }
