@@ -683,7 +683,7 @@ public:
     ASSERT_SUCC(OB_IO_MANAGER.add_device_channel(THE_IO_DEVICE, 16, 2, 1024));
 
     // add tenant io manager
-    const uint64_t tenant_id = 500;
+    const uint64_t tenant_id = OB_SERVER_TENANT_ID;
     ObTenantIOConfig io_config;
     io_config.memory_limit_ = memory_limit;
     io_config.callback_thread_count_ = 2;
