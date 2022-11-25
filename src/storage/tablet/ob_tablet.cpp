@@ -2305,7 +2305,7 @@ int ObTablet::write_tablet_schema_version_change_clog(
         ret = OB_TIMEOUT;
         LOG_WARN("submit schema version change log timeout", K(ret));
       } else if (tmp_cb->is_failed()) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NOT_MASTER;
         LOG_WARN("submit schema version change log failed", K(ret));
       } else {
         LOG_INFO("submit schema version change log succeed", K(tablet_id), K(schema_version));
