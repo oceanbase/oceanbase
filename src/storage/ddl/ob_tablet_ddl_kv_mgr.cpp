@@ -27,7 +27,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::storage;
 
 ObTabletDDLKvMgr::ObTabletDDLKvMgr()
-  : is_inited_(false), is_commit_success_(false), ls_id_(), tablet_id_(), table_key_(), cluster_version_(0),
+  : is_inited_(false), success_start_log_ts_(0), ls_id_(), tablet_id_(), table_key_(), cluster_version_(0),
     start_log_ts_(0), max_freeze_log_ts_(0),
     table_id_(0), execution_id_(0), head_(0), tail_(0), lock_(), ref_cnt_(0)
 {
@@ -61,7 +61,7 @@ void ObTabletDDLKvMgr::destroy()
   max_freeze_log_ts_ = 0;
   table_id_ = 0;
   execution_id_ = 0;
-  is_commit_success_ = false;
+  success_start_log_ts_ = 0;
   is_inited_ = false;
 }
 
@@ -153,7 +153,7 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
     LOG_WARN("ddl not started", K(ret));
   } else if (start_log_ts < start_log_ts_) {
     ret = OB_TASK_EXPIRED;
-    LOG_INFO("skip ddl prepare log", K(start_log_ts), K(start_log_ts_), K(ls_id_), K(tablet_id_));
+    LOG_INFO("skip ddl prepare log", K(start_log_ts), K(*this));
   } else if (OB_FAIL(freeze_ddl_kv(prepare_log_ts))) {
     LOG_WARN("freeze ddl kv failed", K(ret), K(prepare_log_ts));
   } else {
@@ -178,12 +178,13 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
           ret = OB_SUCCESS;
           ob_usleep(10L * 1000L);
           if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
-            LOG_INFO("retry schedule ddl commit task", K(ls_id_), K(table_key_), K(prepare_log_ts), K(max_freeze_log_ts_),
+            LOG_INFO("retry schedule ddl commit task",
+                K(start_log_ts), K(prepare_log_ts), K(table_id), K(ddl_task_id), K(*this),
                 "wait_elpased_s", (ObTimeUtility::fast_current_time() - start_ts) / 1000000L);
           }
         }
       } else {
-        LOG_INFO("schedule ddl commit task success", K(ls_id_), K(tablet_id_), K(prepare_log_ts));
+        LOG_INFO("schedule ddl commit task success", K(start_log_ts), K(prepare_log_ts), K(table_id), K(ddl_task_id), K(*this));
         break;
       }
     }
@@ -198,11 +199,11 @@ int ObTabletDDLKvMgr::ddl_commit(const int64_t start_log_ts, const int64_t prepa
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (is_commit_success_) {
-    LOG_INFO("ddl commit already succeed", K(ls_id_), K(tablet_id_), K(table_id_));
+  } else if (is_commit_success()) {
+    FLOG_INFO("ddl commit already succeed", K(start_log_ts), K(prepare_log_ts), K(*this));
   } else if (start_log_ts < start_log_ts_) {
     ret = OB_TASK_EXPIRED;
-    LOG_INFO("skip ddl commit log", K(start_log_ts), K(start_log_ts_), K(ls_id_), K(tablet_id_));
+    LOG_INFO("skip ddl commit log", K(start_log_ts), K(prepare_log_ts), K(*this));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else {
@@ -231,7 +232,7 @@ int ObTabletDDLKvMgr::ddl_commit(const int64_t start_log_ts, const int64_t prepa
       ret = OB_SUCCESS; // think as succcess for replay
     } else {
       if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
-        LOG_INFO("replay ddl commit", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(start_log_ts), K(prepare_log_ts), K(max_freeze_log_ts_));
+        LOG_INFO("replay ddl commit", K(ret), K(start_log_ts), K(prepare_log_ts), K(*this));
       }
       ret = OB_EAGAIN; // retry by replay service
     }
@@ -276,16 +277,34 @@ int ObTabletDDLKvMgr::wait_ddl_commit(const int64_t start_log_ts, const int64_t 
   return ret;
 }
 
-int ObTabletDDLKvMgr::set_commit_success()
+int ObTabletDDLKvMgr::set_commit_success(const int64_t start_log_ts)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(start_log_ts <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(start_log_ts));
   } else {
-    is_commit_success_ = true;
+    TCWLockGuard guard(lock_);
+    if (start_log_ts < start_log_ts_) {
+      ret = OB_TASK_EXPIRED;
+      LOG_WARN("ddl task expired", K(ret), K(start_log_ts), K(*this));
+    } else if (OB_UNLIKELY(start_log_ts > start_log_ts_)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("sucess start log ts too large", K(ret), K(start_log_ts), K(*this));
+    } else {
+      success_start_log_ts_ = start_log_ts;
+    }
   }
   return ret;
+}
+
+bool ObTabletDDLKvMgr::is_commit_success() const
+{
+  TCRLockGuard guard(lock_);
+  return success_start_log_ts_ > 0 && success_start_log_ts_ == start_log_ts_;
 }
 
 int ObTabletDDLKvMgr::cleanup()
@@ -317,7 +336,7 @@ void ObTabletDDLKvMgr::cleanup_unlock()
   max_freeze_log_ts_ = 0;
   table_id_ = 0;
   execution_id_ = 0;
-  is_commit_success_ = false;
+  success_start_log_ts_ = 0;
 }
 
 bool ObTabletDDLKvMgr::is_execution_id_older(const int64_t execution_id)
