@@ -443,6 +443,7 @@ int ObLSMeta::update_ls_meta(
       replayable_point_ = src_ls_meta.replayable_point_;
       tablet_change_checkpoint_ts_ = src_ls_meta.tablet_change_checkpoint_ts_;
       all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
+      rebuild_seq_ = tmp.rebuild_seq_;
       if (update_restore_status) {
         restore_status_ = ls_restore_status;
       }
