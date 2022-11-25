@@ -1244,17 +1244,13 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
         LOG_WARN("commit ddl log failed", K(ret), K(ddl_start_log_ts), K(prepare_log_ts), K(hidden_table_key));
       }
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_log_ts, prepare_log_ts))) {
-      if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
-            K(ddl_start_log_ts), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
-      } else {
-        LOG_WARN("wait ddl commit failed", K(ret), K(ddl_start_log_ts), K(hidden_table_key));
-      }
+      LOG_WARN("wait ddl commit failed", K(ret), K(ls_id), K(tablet_id), K(hidden_table_key),
+          K(ddl_start_log_ts), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(ddl_start_log_ts, ddl_kv_mgr_handle))) {
+      LOG_WARN("ddl kv mgr unregister failed", K(ret), KPC(param_));
     } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_commit_log(hidden_table_key,
                                                                             prepare_log_ts))) {
       LOG_WARN("fail write ddl commit log", K(ret), K(hidden_table_key));
-    } else {
-      tablet_handle.get_obj()->remove_ddl_kv_mgr();
     }
   }
   return ret;

@@ -263,6 +263,12 @@ public:
            || OB_EAGAIN == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret;
   }
 
+  static int check_can_convert_character(const ObObjMeta &obj_meta)
+  {
+    return (obj_meta.is_string_type() || obj_meta.is_enum_or_set())
+              && CS_TYPE_BINARY != obj_meta.get_collation_type();
+  }
+
 private:
   static int generate_column_name_str(
     const common::ObIArray<ObColumnNameInfo> &column_names,

@@ -968,6 +968,8 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
   } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_start_log(ddl_kv_mgr_handle, log, ls->get_log_handler(), tmp_log_ts))) {
     LOG_WARN("fail to write ddl start log", K(ret), K(table_key));
   } else if (FALSE_IT(set_start_log_ts(tmp_log_ts))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->register_to_tablet(get_start_log_ts(), ddl_kv_mgr_handle))) {
+    LOG_WARN("register ddl kv mgr to tablet failed", K(ret), K(ls_id_), K(tablet_id_));
   }
   return ret;
 }

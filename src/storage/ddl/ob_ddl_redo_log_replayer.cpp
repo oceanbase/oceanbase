@@ -223,8 +223,8 @@ int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const int64_t
     if (OB_TABLET_NOT_EXIST == ret) {
       ret = OB_SUCCESS; // allow tablet not exist
     }
-  } else {
-    tablet_handle.get_obj()->remove_ddl_kv_mgr();
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(log.get_start_log_ts(), ddl_kv_mgr_handle))) {
+    LOG_WARN("unregister ddl kv mgr from tablet failed", K(ret));
   }
   LOG_INFO("finish replay ddl commit log", K(ret), K(need_replay), K(log));
   return ret;

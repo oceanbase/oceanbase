@@ -291,7 +291,8 @@ public:
 
   // ddl kv
   int get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_create = false);
-  void remove_ddl_kv_mgr();
+  int set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int start_ddl_if_need();
   int get_ddl_sstable_handles(ObTablesHandleArray &ddl_sstable_handles);
   int get_migration_sstable_size(int64_t &data_size);

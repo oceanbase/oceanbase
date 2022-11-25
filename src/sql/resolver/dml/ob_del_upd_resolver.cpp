@@ -630,7 +630,7 @@ int ObDelUpdResolver::add_assignment(common::ObIArray<ObTableAssignment> &assign
   ObTableAssignment *table_assign = NULL;
   int64_t N = assigns.count();
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(table_item) || OB_ISNULL(assign.column_expr_)
-      || OB_ISNULL(get_stmt())) {
+      || OB_ISNULL(get_stmt()) || OB_ISNULL(get_stmt()->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K_(schema_checker), K(table_item), K_(assign.column_expr));
   } else if (assign.column_expr_->get_result_type().is_lob()
@@ -672,11 +672,15 @@ int ObDelUpdResolver::add_assignment(common::ObIArray<ObTableAssignment> &assign
     }
   }
   bool found = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !found && i < table_assign->assignments_.count(); ++i) {
-    if (assign.column_expr_ == table_assign->assignments_.at(i).column_expr_) {
-      table_assign->assignments_.at(i) = assign;
-      table_assign->assignments_.at(i).is_duplicated_ = true; //this column was updated repeatedly
-      found = true;
+  if (get_stmt()->get_query_ctx()->is_prepare_stmt()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < table_assign->assignments_.count(); ++i) {
+      if (assign.column_expr_ == table_assign->assignments_.at(i).column_expr_) {
+        table_assign->assignments_.at(i) = assign;
+        table_assign->assignments_.at(i).is_duplicated_ = true; //this column was updated repeatedly
+        found = true;
+      }
     }
   }
 

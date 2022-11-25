@@ -1322,6 +1322,8 @@ private:
                               const int64_t frozen_version,
                               ObDDLOperator &ddl_operator,
                               common::ObMySQLTransaction &trans);
+  int convert_to_character_for_partition(const ObCollationType &to_collation,
+                           share::schema::ObTableSchema &new_table_schema);
   int convert_to_character(obrpc::ObAlterTableArg &alter_table_arg,
                            const share::schema::ObTableSchema &orgin_table_schema,
                            share::schema::ObTableSchema &new_table_schema,
@@ -2147,7 +2149,6 @@ private:
       const int64_t part_id,
       const share::schema::ObPartition *&part);
   int check_table_pk(const share::schema::ObTableSchema &orig_table_schema);
-  int check_can_convert_to_character(const share::schema::ObColumnSchemaV2 &col_schema, bool &can_convert);
   int clean_global_context(const ObContextSchema &context_schema);
 
   int get_hard_code_system_table_schema_(

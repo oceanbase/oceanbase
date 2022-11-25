@@ -1708,6 +1708,7 @@ int ObSPIService::spi_prepare(common::ObIAllocator &allocator,
       spi_resolve_prepare(allocator,
                           session,
                           sql_proxy,
+                          schema_guard,
                           expr_factory,
                           sql,
                           is_cursor,
@@ -1807,6 +1808,7 @@ int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,
 
 int ObSPIService::spi_build_record_type_by_result_set(common::ObIAllocator &allocator,
                                                       ObSQLSessionInfo &session,
+                                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                                       const sql::ObResultSet &result_set,
                                                       int64_t hidden_column_count,
                                                       ObRecordType *&record_type,
@@ -1854,8 +1856,6 @@ int ObSPIService::spi_build_record_type_by_result_set(common::ObIAllocator &allo
     if (OB_SUCC(ret) && 1 == hidden_column_count) {
         const common::ObField &field = columns->at(columns->count() - 1);
         uint64_t table_id = OB_INVALID_ID;
-        share::schema::ObSchemaGetterGuard schema_guard;
-        OZ (GCTX.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(), schema_guard));
         OZ (schema_guard.get_table_id(session.get_effective_tenant_id(), field.dname_, field.org_tname_,
                                       false, ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id));
         OX (rowid_table_id = table_id);
@@ -1869,6 +1869,7 @@ int ObSPIService::spi_build_record_type_by_result_set(common::ObIAllocator &allo
 int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                       ObSQLSessionInfo &session,
                                       ObMySQLProxy &sql_proxy,
+                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                       sql::ObRawExprFactory &expr_factory,
                                       const ObString &sql,
                                       bool is_cursor,
@@ -1921,6 +1922,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                        && inner_result->result_set().get_field_columns()->count() > 0) {
               OZ (spi_build_record_type_by_result_set(allocator,
                                                       session,
+                                                      schema_guard,
                                                       inner_result->result_set(),
                                                       prepare_result.has_hidden_rowid_ ? 1 : 0,
                                                       prepare_result.record_type_,
@@ -1948,6 +1950,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                 CK (OB_NOT_NULL(result = static_cast<observer::ObInnerSQLResult*>(proxy_result.get_result())));
                 OZ (spi_build_record_type_by_result_set(allocator,
                                                         session,
+                                                        schema_guard,
                                                         result->result_set(),
                                                         prepare_result.has_hidden_rowid_ ? 1 : 0,
                                                         prepare_result.record_type_,

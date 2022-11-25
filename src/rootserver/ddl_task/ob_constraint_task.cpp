@@ -809,7 +809,7 @@ int ObConstraintTask::check_replica_end(bool &is_end)
     ret_code_ = check_job_ret_code_;
     is_end = true;
     LOG_WARN("complete sstable job failed", K(ret_code_), K(object_id_), K(target_object_id_));
-    if (ObIDDLTask::in_ddl_retry_white_list(ret_code_) || OB_REPLICA_NOT_READABLE == ret_code_ || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code_) {
+    if (is_replica_build_need_retry(ret_code_)) {
       check_replica_request_time_ = 0;
       check_job_ret_code_ = INT64_MAX;
       ret_code_ = OB_SUCCESS;
@@ -1681,19 +1681,6 @@ int ObConstraintTask::set_constraint_validated()
   DEBUG_SYNC(CONSTRAINT_SET_VALID);
   if (OB_FAIL(switch_status(ObDDLTaskStatus::SUCCESS, ret))) {
     LOG_WARN("switch status failed", K(ret));
-  }
-  return ret;
-}
-
-int ObConstraintTask::check_table_exist(bool &exist)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  exist = false;
-  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("get tanant schema guard failed", K(ret), K(tenant_id_));
-  } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, object_id_, exist))) {
-    LOG_WARN("check data table exist failed", K(ret), K_(tenant_id), K(object_id_));
   }
   return ret;
 }

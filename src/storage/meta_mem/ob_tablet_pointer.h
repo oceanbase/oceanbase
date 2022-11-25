@@ -17,7 +17,6 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "storage/meta_mem/ob_meta_pointer.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/ob_i_memtable_mgr.h"
 #include "storage/tablet/ob_tablet_ddl_info.h"
 #include "storage/tablet/ob_tablet_meta.h"
@@ -29,6 +28,7 @@ namespace oceanbase
 namespace storage
 {
 class ObTablet;
+class ObTabletDDLKvMgr;
 
 typedef ObMetaObjGuard<ObTabletDDLKvMgr> ObDDLKvMgrHandle;
 
@@ -58,7 +58,8 @@ public:
   int get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data) const;
   int create_ddl_kv_mgr(const share::ObLSID &ls_id, const ObTabletID &tablet_id, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   void get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle);
-  void remove_ddl_kv_mgr();
+  int set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
 private:
   int wash_obj();
   virtual int do_post_work_for_load() override;

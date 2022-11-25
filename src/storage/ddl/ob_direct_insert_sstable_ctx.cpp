@@ -714,11 +714,11 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
       } else {
         LOG_WARN("failed to wait ddl kv commit", K(ret), K(ddl_start_log_ts), K(build_param_));
       }
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(ddl_start_log_ts, ddl_kv_mgr_handle))) {
+      LOG_WARN("ddl kv mgr unregister failed", K(ret), K(build_param_));
     } else if (OB_FAIL(data_sstable_redo_writer_.write_commit_log(table_key,
                                                                   prepare_log_ts))) {
       LOG_WARN("fail write ddl commit log", K(ret), K(table_key));
-    } else {
-      tablet_handle.get_obj()->remove_ddl_kv_mgr();
     }
   }
   return ret;

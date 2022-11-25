@@ -671,7 +671,7 @@ int ObIndexBuildTask::check_build_single_replica(bool &is_end)
   } else if (OB_SUCCESS != complete_sstable_job_ret_code_) {
     ret = complete_sstable_job_ret_code_;
     LOG_WARN("sstable complete job has failed", K(ret), K(object_id_), K(index_table_id_));
-    if (ObIDDLTask::in_ddl_retry_white_list(ret) || OB_REPLICA_NOT_READABLE == ret || OB_ERR_INSUFFICIENT_PX_WORKER == ret) {
+    if (is_replica_build_need_retry(ret)) {
       // retry sql job by re-submit
       is_sstable_complete_task_submitted_ = false;
       complete_sstable_job_ret_code_ = INT64_MAX;

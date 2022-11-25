@@ -302,6 +302,7 @@ int ObTabletDDLKvMgr::cleanup()
 
 void ObTabletDDLKvMgr::cleanup_unlock()
 {
+  LOG_INFO("cleanup ddl kv mgr", K(*this));
   for (int64_t pos = head_; pos < tail_; ++pos) {
     const int64_t idx = get_idx(pos);
     free_ddl_kv(idx);
@@ -355,6 +356,84 @@ int ObTabletDDLKvMgr::online()
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("start ddl kv manager failed", K(ret), K(tablet_meta));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletDDLKvMgr::register_to_tablet(const int64_t ddl_start_log_ts, ObDDLKvMgrHandle &kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(ddl_start_log_ts <= 0 || kv_mgr_handle.get_obj() != this)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_start_log_ts), KP(kv_mgr_handle.get_obj()), KP(this));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
+                                                    tablet_handle,
+                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else {
+    TCWLockGuard guard(lock_);
+    if (ddl_start_log_ts < start_log_ts_) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl task expired", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(ddl_start_log_ts));
+    } else if (ddl_start_log_ts > start_log_ts_) {
+      if (0 == start_log_ts_) {
+        // maybe ls offline
+        ret = OB_EAGAIN;
+      } else {
+        ret = OB_ERR_SYS;
+      }
+      LOG_WARN("ddl kv mgr register before start", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(ddl_start_log_ts));
+    } else {
+      if (OB_FAIL(tablet_handle.get_obj()->set_ddl_kv_mgr(kv_mgr_handle))) {
+        LOG_WARN("set ddl kv mgr into tablet failed", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletDDLKvMgr::unregister_from_tablet(const int64_t ddl_start_log_ts, ObDDLKvMgrHandle &kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(ddl_start_log_ts <= 0 || kv_mgr_handle.get_obj() != this)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_start_log_ts), KP(kv_mgr_handle.get_obj()), KP(this));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
+                                                    tablet_handle,
+                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else {
+    TCWLockGuard guard(lock_);
+    if (ddl_start_log_ts < start_log_ts_) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl task expired", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(ddl_start_log_ts));
+    } else if (ddl_start_log_ts > start_log_ts_) {
+      if (0 == start_log_ts_) {
+        // maybe ls offline
+        ret = OB_EAGAIN;
+      } else {
+        ret = OB_ERR_SYS;
+      }
+      LOG_WARN("ddl kv mgr register before start", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(ddl_start_log_ts));
+    } else {
+      if (OB_FAIL(tablet_handle.get_obj()->remove_ddl_kv_mgr(kv_mgr_handle))) {
+        LOG_WARN("set ddl kv mgr into tablet failed", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_));
       }
     }
   }

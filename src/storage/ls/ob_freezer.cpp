@@ -505,8 +505,12 @@ int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
       stat_.add_diagnose_info("fail to get tablet");
     } else if (FALSE_IT(tablet = handle.get_obj())) {
     } else if (OB_FAIL(create_memtable_if_no_active_memtable(tablet))) {
-      LOG_WARN("[Freezer] fail to create an active memtable for force_tablet_freeze", K(ret), K_(ls_id), K(tablet_id));
-      stat_.add_diagnose_info("fail to create an active memtable for force_tablet_freeze");
+      if (OB_NO_NEED_UPDATE == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("[Freezer] fail to create an active memtable for force_tablet_freeze", K(ret), K_(ls_id), K(tablet_id));
+        stat_.add_diagnose_info("fail to create an active memtable for force_tablet_freeze");
+      }
     } else if (OB_ISNULL(memtable_mgr = static_cast<ObTabletMemtableMgr*>(tablet->get_memtable_mgr()))) {
       TRANS_LOG(WARN, "[Freezer] tablet_memtable_mgr is null", K(ret), K_(ls_id), K(tablet_id));
     } else if (OB_FAIL(memtable_mgr->set_is_tablet_freeze_for_active_memtable(imemtable, true))) {
@@ -722,11 +726,18 @@ int ObFreezer::create_memtable_if_no_active_memtable(ObTablet *tablet)
   ObTabletMemtableMgr *memtable_mgr = nullptr;
   memtable::ObMemtable *last_frozen_memtable = nullptr;
   const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
+  int64_t clog_checkpoint_ts = tablet->get_tablet_meta().clog_checkpoint_ts_;
   int64_t schema_version = 0;
+  int64_t max_callbacked_log_ts = 0;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("[Freezer] not inited", K(ret), K_(is_inited), K_(ls_id), K(tablet_id));
+  } else if (OB_FAIL(get_max_consequent_callbacked_log_ts(max_callbacked_log_ts))) {
+    LOG_WARN("[Freezer] fail to get max_consequent_callbacked_log_ts", K(ret), K_(ls_id), K(tablet_id));
+  } else if (max_callbacked_log_ts < clog_checkpoint_ts) {
+    ret = OB_NO_NEED_UPDATE;
+    LOG_WARN("[Freezer] cannot create memtable because max_callbacked_log_ts < clog_checkpoint_ts", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_ISNULL(memtable_mgr = static_cast<ObTabletMemtableMgr *>(tablet->get_memtable_mgr()))) {
     LOG_WARN("[Freezer] memtable mgr should not be null", K(ret), K_(ls_id), K(tablet_id));
   } else if (memtable_mgr->has_active_memtable()) {

@@ -315,7 +315,7 @@ private:
 
 private:
   static const int32_t MAX_AIO_EVENT_CNT = 512;
-  static const int64_t AIO_POLLING_TIMEOUT_NS = 1000L * 1000L * 1000L; //1s
+  static const int64_t AIO_POLLING_TIMEOUT_NS = 1000L * 1000L * 1000L - 1L; // almost 1s, for timespec_valid check
   ObIOContext *io_context_;
   ObIOEvents *io_events_;
   struct timespec polling_timeout_;

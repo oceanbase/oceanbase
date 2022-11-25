@@ -21,6 +21,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
+#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 namespace oceanbase
 {

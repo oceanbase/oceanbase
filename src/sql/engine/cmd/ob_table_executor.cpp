@@ -1501,8 +1501,8 @@ int ObAlterTableExecutor::check_alter_part_key(ObExecContext &ctx,
           const ObString &orig_column_name = alter_column_schema->get_origin_column_name();
           orig_column_schema = orig_table_schema->get_column_schema(orig_column_name);
           if (OB_ISNULL(orig_column_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unknown column", K(orig_column_name), KPC(orig_table_schema));
+            ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+            LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, orig_column_name.length(), orig_column_name.ptr());
           } else if (OB_FAIL(ObTableSchema::check_is_exactly_same_type(
             *orig_column_schema, *alter_column_schema, is_same))) {
             LOG_WARN("failed to check is exactly same type", K(ret));
