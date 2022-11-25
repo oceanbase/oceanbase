@@ -294,6 +294,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   ObRawExpr *cast_raw_expr = NULL;
   const sql::ObSQLSessionInfo *session = NULL;
   bool is_explicit_cast = false;
+  bool is_to_column_cs_level = false;
   if (OB_ISNULL(session = type_ctx.get_session()) ||
       OB_ISNULL(cast_raw_expr = get_raw_expr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -310,6 +311,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
              "dst", ob_obj_type_str(dst_type.get_type()));
   } else if (FALSE_IT(is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr->get_extra()))) {
   // check cast supported in cast_map but not support here.
+  } else if (FALSE_IT(is_to_column_cs_level = CM_IS_TO_COLUMN_CS_LEVEL(cast_raw_expr->get_extra()))) {
   } else if (!check_cast_allowed(type1.get_type(), type1.get_collation_type(),
                                  dst_type.get_type(), dst_type.get_collation_type(),
                                  is_explicit_cast)) {
@@ -355,7 +357,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
       if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())) {
-        type.set_collation_level(is_explicit_cast
+        type.set_collation_level((is_explicit_cast || is_to_column_cs_level)
                                  ? CS_LEVEL_IMPLICIT
                                  : type1.get_collation_level());
         int32_t len = dst_type.get_length();
