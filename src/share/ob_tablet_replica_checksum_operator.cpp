@@ -1506,7 +1506,7 @@ int ObTabletReplicaChecksumOperator::set_column_meta_with_hex_str(
     } else if (OB_FAIL(hex_to_cstr(hex_str.ptr(), hex_str_len, deserialize_buf, deserialize_size))) {
       LOG_WARN("fail to get cstr from hex", KR(ret), K(hex_str_len), K(deserialize_size));
     } else if (OB_FAIL(column_meta.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
-      LOG_WARN("fail to deserialize from str to build colume meta", KR(ret), "column_meta_str", hex_str.ptr());
+      LOG_WARN("fail to deserialize from str to build column meta", KR(ret), "column_meta_str", hex_str.ptr());
     } else if (deserialize_pos > deserialize_size) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("deserialize size overflow", KR(ret), K(deserialize_pos), K(deserialize_size));
