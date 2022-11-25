@@ -1442,7 +1442,7 @@ int ObBasicSessionInfo::get_influence_plan_sys_var(ObSysVarInPC &sys_vars) const
 int ObBasicSessionInfo::gen_sys_var_in_pc_str()
 {
   int ret = OB_SUCCESS;
-  int64_t MAX_SYS_VARS_STR_SIZE = 1024;
+  const int64_t MAX_SYS_VARS_STR_SIZE = 1024;
   ObSysVarInPC sys_vars;
   char *buf = NULL;
   int64_t pos = 0;
@@ -1462,33 +1462,10 @@ int ObBasicSessionInfo::gen_sys_var_in_pc_str()
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_influence_plan_sys_var(sys_vars))) {
     LOG_WARN("fail to get influence plan system variables", K(ret));
+  } else if (OB_FAIL(sys_vars.serialize_sys_vars(buf, MAX_SYS_VARS_STR_SIZE, pos))) {
+    LOG_WARN("fail to serialize system vars");
   } else {
-    int64_t times = 0;
-    bool need_retry = true;
-    while (OB_SUCC(ret) && times <= 3 && need_retry) {
-      if (NULL == (buf = (char *)name_pool_.alloc(MAX_SYS_VARS_STR_SIZE))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocator memory", K(ret), K(MAX_SYS_VARS_STR_SIZE));
-      } else if (OB_FAIL(sys_vars.serialize_sys_vars(buf, MAX_SYS_VARS_STR_SIZE, pos))) {
-        if (OB_BUF_NOT_ENOUGH == ret || OB_SIZE_OVERFLOW ==ret) {
-          ret = OB_SUCCESS;
-          // expand MAX_SYS_VARS_STR_SIZE 3 times.
-          MAX_SYS_VARS_STR_SIZE = 2 * MAX_SYS_VARS_STR_SIZE;
-          times++;
-        } else {
-          LOG_WARN("fail to serialize system vars", K(ret));
-        }
-      } else {
-        // alloc succ no need retry.
-        need_retry = false;
-      }
-    }
-    if (times > 3) {
-      LOG_WARN("fail to serialize system vars", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      (void)sys_var_in_pc_str_.assign(buf, int32_t(pos));
-    }
+    (void)sys_var_in_pc_str_.assign(buf, int32_t(pos));
   }
 
   return ret;
