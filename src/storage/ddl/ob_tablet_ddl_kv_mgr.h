@@ -51,8 +51,8 @@ public:
   int get_ddl_kv_min_log_ts(int64_t &min_log_ts); // for calculate rec_log_ts of ls
   int64_t get_start_log_ts() const { return start_log_ts_; }
   bool is_started() const { return 0 != start_log_ts_; }
-  int set_commit_success();
-  bool is_commit_success() const { return is_commit_success_; }
+  int set_commit_success(const int64_t start_log_ts);
+  bool is_commit_success() const;
   common::ObTabletID get_tablet_id() const { return tablet_id_; }
   int cleanup();
   int online();
@@ -63,7 +63,7 @@ public:
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
   OB_INLINE void reset() { destroy(); }
-  TO_STRING_KV(K_(is_inited), K_(is_commit_success), K_(ls_id), K_(tablet_id), K_(table_key),
+  TO_STRING_KV(K_(is_inited), K_(success_start_log_ts), K_(ls_id), K_(tablet_id), K_(table_key),
       K_(cluster_version), K_(start_log_ts), K_(max_freeze_log_ts),
       K_(table_id), K_(execution_id), K_(ddl_task_id), K_(head), K_(tail), K_(ref_cnt));
 
@@ -80,7 +80,7 @@ private:
 private:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 64;
   bool is_inited_;
-  bool is_commit_success_;
+  int64_t success_start_log_ts_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   ObITable::TableKey table_key_;
