@@ -1624,6 +1624,12 @@ int ObTransformSubqueryCoalesce::coalesce_update_assignment(ObDMLStmt *stmt, boo
         LOG_WARN("failed to adjust subquery list", K(ret));
       }
     }
+    for (int64_t i = 0; i < coalesce_infos.count(); i++) {
+      if (coalesce_infos.at(i) != NULL) {
+        coalesce_infos.at(i)->~StmtCompareHelper();
+        coalesce_infos.at(i) = NULL;
+      }
+    }
   }
   return ret;
 }
