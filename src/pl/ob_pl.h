@@ -843,7 +843,7 @@ public:
   int is_inited() { return session_info_ != NULL; }
 
   int init(sql::ObSQLSessionInfo &session_info, sql::ObExecContext &ctx,
-           bool is_autonomous, bool is_function_or_trigger);
+           bool is_autonomous, bool is_function_or_trigger, ObIAllocator *allocator = NULL);
   void destory(sql::ObSQLSessionInfo &session_info, sql::ObExecContext &ctx, int &ret);
 
   inline ObPLCursorInfo& get_cursor_info() { return cursor_info_; }
