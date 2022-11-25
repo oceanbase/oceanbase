@@ -212,6 +212,41 @@ int ObUpdateResolver::try_expand_returning_exprs()
       }
     }
   }
+
+  if (OB_SUCC(ret) && is_oracle_mode()) {
+    if (OB_FAIL(check_update_assign_duplicated(update_stmt))) {
+      LOG_WARN("update has duplicate columns", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObUpdateResolver::check_update_assign_duplicated(const ObUpdateStmt *update_stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(update_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else {
+    // check duplicate assignments
+    // update t1 set c1 = 1, c1 = 2;
+    const ObIArray<ObUpdateTableInfo*> &table_infos = update_stmt->get_update_table_info();
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_infos.count(); ++i) {
+      ObUpdateTableInfo* table_info = table_infos.at(i);
+      if (OB_ISNULL(table_info))  {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null table info", K(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < table_info->assignments_.count(); ++j) {
+        const ObAssignment &assign_item = table_info->assignments_.at(j);
+        if (assign_item.is_duplicated_) {
+          ret = OB_ERR_FIELD_SPECIFIED_TWICE;
+          LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(assign_item.column_expr_->get_column_name()));
+        }
+      }
+    }
+  }
   return ret;
 }
 
