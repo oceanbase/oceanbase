@@ -25,23 +25,22 @@ TEST(ObString, set_length)
   ASSERT_EQ(0, TestString.length());
   ASSERT_EQ(0, TestString.size());
   TestString.set_length(5);
-  ASSERT_EQ(5, TestString.length());
+  ASSERT_EQ(0, TestString.length());
   ASSERT_EQ(0, TestString.size());
 
   const char* test_str = "ABCD";
-  TestString = ObString(test_str)
+  TestString = ObString(test_str);
   ASSERT_EQ(4, TestString.length());
   TestString.set_length(5);
   ASSERT_EQ(5, TestString.length());
   ASSERT_NE(5, TestString.size());
 
-  TestString = ObString(4,strlen(test_str) , test_str)
+  TestString = ObString(4,strlen(test_str) , test_str);
   TestString.set_length(5);
   ASSERT_NE(5, TestString.length());
   ASSERT_EQ(4, TestString.size());
 
-  TestString = ObString(6,strlen(test_str) , test_str)
-
+  TestString = ObString(6,strlen(test_str) , test_str);
   TestString.set_length(5);
   ASSERT_EQ(5, TestString.length());
   ASSERT_EQ(6, TestString.size());
