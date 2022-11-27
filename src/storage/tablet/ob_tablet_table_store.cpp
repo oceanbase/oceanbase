@@ -1423,6 +1423,8 @@ int ObTabletTableStore::combin_ha_minor_sstables_(
       break;
     } else if (OB_FAIL(new_minor_sstables.push_back(table))) {
       LOG_WARN("failed to push minor table into array", K(ret), K(old_store_minor_sstables), KPC(table));
+    } else {
+      max_copy_end_log_ts = std::max(table->get_end_log_ts(), max_copy_end_log_ts);
     }
   }
 
@@ -1461,6 +1463,10 @@ int ObTabletTableStore::combin_ha_minor_sstables_(
         if (OB_ISNULL(new_table) || !new_table->is_minor_sstable()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("new table is null or table type is unexpected", K(ret), KPC(new_table));
+        } else if (new_table->get_end_log_ts() <= max_copy_end_log_ts) {
+          //do nothing
+          //need_add_minor_sstables is copied from src.
+          //Old table store table will be reused when new table end log ts is smaller than old table.
         } else if (OB_FAIL(new_minor_sstables.push_back(new_table))) {
           LOG_WARN("failed to push minor table into array", K(ret), K(new_minor_sstables), KPC(new_table));
         } else {
