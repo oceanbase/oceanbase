@@ -1315,6 +1315,7 @@ int ObConstraintTask::rollback_failed_check_constraint()
             ? CST_FK_NO_VALIDATE : CST_FK_VALIDATED;
           (*iter)->set_validate_flag(validate_flag);
         }
+        (*iter)->set_need_validate_data(false);
         alter_table_arg.alter_constraint_type_ = obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE;
         if (OB_FAIL(set_alter_constraint_ddl_stmt_str_for_check(alter_table_arg, allocator))) {
           LOG_WARN("fail to set alter constraint ddl_stmt_str", K(ret));
