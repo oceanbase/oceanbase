@@ -116,6 +116,46 @@ struct ObStmtCompareContext : ObExprEqualCheckContext
     map_info_(),
     equal_param_info_()
   {
+    init_override_params();
+  }
+  ObStmtCompareContext(bool need_check_deterministic) :
+    ObExprEqualCheckContext(need_check_deterministic),
+    calculable_items_(NULL),
+    inner_(NULL),
+    outer_(NULL),
+    map_info_(),
+    equal_param_info_()
+  {
+    init_override_params();
+  }
+  // for common expression extraction
+  ObStmtCompareContext(const ObIArray<ObHiddenColumnItem> *calculable_items,
+                       bool need_check_deterministic = false) :
+    ObExprEqualCheckContext(need_check_deterministic),
+    calculable_items_(calculable_items),
+    inner_(NULL),
+    outer_(NULL),
+    map_info_(),
+    equal_param_info_()
+  {
+    init_override_params();
+  }
+  ObStmtCompareContext(const ObDMLStmt *inner,
+                       const ObDMLStmt *outer,
+                       const ObStmtMapInfo &map_info,
+                       const ObIArray<ObHiddenColumnItem> *calculable_items,
+                       bool need_check_deterministic = false) :
+    ObExprEqualCheckContext(need_check_deterministic),
+    calculable_items_(calculable_items),
+    inner_(inner),
+    outer_(outer),
+    map_info_(map_info),
+    equal_param_info_()
+  {
+    init_override_params();
+  }
+  inline void init_override_params()
+  {
     override_column_compare_ = true;
     override_const_compare_ = true;
     override_query_compare_ = true;
@@ -123,6 +163,8 @@ struct ObStmtCompareContext : ObExprEqualCheckContext
   }
   virtual ~ObStmtCompareContext() {}
 
+  // since the init() func only initialize the class members,
+  // it is better to use constructor
   // for common expression extraction
   void init(const ObIArray<ObHiddenColumnItem> *calculable_items);
 
