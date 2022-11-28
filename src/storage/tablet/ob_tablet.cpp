@@ -2314,6 +2314,9 @@ int ObTablet::check_schema_version_elapsed(
     transaction::ObTransService *txs = MTL(transaction::ObTransService*);
     if (OB_FAIL(txs->get_max_commit_version(max_commit_scn))) {
       LOG_WARN("fail to get max commit version", K(ret));
+    } else if (OB_UNLIKELY(!max_commit_scn.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, scn is invalid", K(ret), K(max_commit_scn));
     } else {
       max_commit_version = max_commit_scn.get_val_for_tx();
     }
@@ -2551,7 +2554,7 @@ int ObTablet::update_ddl_info(
 {
   int ret = OB_SUCCESS;
   ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
-  if (OB_FAIL(tablet_ptr->ddl_info_.update(schema_version, scn.get_val_for_inner_table_field(), schema_refreshed_ts))) {
+  if (OB_FAIL(tablet_ptr->ddl_info_.update(schema_version, scn, schema_refreshed_ts))) {
     LOG_WARN("fail to update ddl info", K(ret), K(schema_version), K(scn));
   }
   return ret;

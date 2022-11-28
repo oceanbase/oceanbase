@@ -31,15 +31,15 @@ public:
   ~ObDDLRedoLogReplayer();
   int init(ObLS *ls);
   void reset() { destroy(); }
-  int replay_start(const ObDDLStartLog &log, const palf::SCN &log_scn);
-  int replay_redo(const ObDDLRedoLog &log, const palf::SCN &log_scn);
-  int replay_prepare(const ObDDLPrepareLog &log, const palf::SCN &log_scn);
-  int replay_commit(const ObDDLCommitLog &log, const palf::SCN &log_scn);
+  int replay_start(const ObDDLStartLog &log, const palf::SCN &scn);
+  int replay_redo(const ObDDLRedoLog &log, const palf::SCN &scn);
+  int replay_prepare(const ObDDLPrepareLog &log, const palf::SCN &scn);
+  int replay_commit(const ObDDLCommitLog &log, const palf::SCN &scn);
 private:
   void destroy();
   int check_need_replay_ddl_log(const ObITable::TableKey &table_key,
                                 const palf::SCN &ddl_start_scn,
-                                const palf::SCN &log_scn,
+                                const palf::SCN &scn,
                                 bool &need_replay,
                                 ObTabletHandle &tablet_handle);
 private:

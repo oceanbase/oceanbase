@@ -46,7 +46,7 @@ OB_SERIALIZE_MEMBER(ObPGReportStatus,
     snapshot_version_);
 
 ObPartitionBarrierLogState::ObPartitionBarrierLogState()
-  : state_(BARRIER_LOG_INIT), log_id_(0), log_ts_(0), schema_version_(0)
+  : state_(BARRIER_LOG_INIT), log_id_(0), scn_(), schema_version_(0)
 {
 }
 
@@ -69,11 +69,11 @@ ObPartitionBarrierLogStateEnum ObPartitionBarrierLogState::to_persistent_state()
   return persistent_state;
 }
 
-void ObPartitionBarrierLogState::set_log_info(const ObPartitionBarrierLogStateEnum state, const int64_t log_id, const int64_t log_ts, const int64_t schema_version)
+void ObPartitionBarrierLogState::set_log_info(const ObPartitionBarrierLogStateEnum state, const int64_t log_id, const palf::SCN &scn, const int64_t schema_version)
 {
   state_ = state;
   log_id_ = log_id;
-  log_ts_ = log_ts;
+  scn_ = scn;
   schema_version_ = schema_version;
 }
 
@@ -85,8 +85,8 @@ int ObPartitionBarrierLogState::serialize(char *buf, const int64_t buf_len, int6
     LOG_WARN("fail to encode state", K(ret));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, log_id_))) {
     LOG_WARN("encode log id failed", K(ret));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, log_ts_))) {
-    LOG_WARN("encode log ts failed", K(ret));
+  } else if (OB_FAIL(scn_.fixed_serialize(buf, buf_len, pos))) {
+    LOG_WARN("fix serialized failed", K(ret));
   }
   return ret;
 }
@@ -99,8 +99,8 @@ int ObPartitionBarrierLogState::deserialize(const char *buf, const int64_t data_
     LOG_WARN("fail to decode state", K(ret));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &log_id_))) {
     LOG_WARN("decode log id failed", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &log_ts_))) {
-    LOG_WARN("decode log ts failed", K(ret));
+  } else if (OB_FAIL(scn_.fixed_deserialize(buf, data_len, pos))) {
+    LOG_WARN("fixed deserialize failed", K(ret));
   } else {
     state_ = static_cast<ObPartitionBarrierLogStateEnum>(tmp_state);
   }
@@ -112,7 +112,7 @@ int64_t ObPartitionBarrierLogState::get_serialize_size() const
   int64_t len = 0;
   len += serialization::encoded_length_i64(to_persistent_state());
   len += serialization::encoded_length_i64(log_id_);
-  len += serialization::encoded_length_i64(log_ts_);
+  len += scn_.get_fixed_serialize_size();
   return len;
 }
 

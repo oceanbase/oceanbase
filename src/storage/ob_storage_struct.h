@@ -223,9 +223,9 @@ public:
   ~ObPartitionBarrierLogState() = default;
   ObPartitionBarrierLogStateEnum &get_state() { return state_; }
   int64_t get_log_id() { return log_id_; }
-  int64_t get_log_ts() { return log_ts_; }
+  palf::SCN get_scn() { return scn_; }
   int64_t get_schema_version() { return schema_version_; }
-  void set_log_info(const ObPartitionBarrierLogStateEnum state, const int64_t log_id, const int64_t log_ts, const int64_t schema_version);
+  void set_log_info(const ObPartitionBarrierLogStateEnum state, const int64_t log_id, const palf::SCN &scn, const int64_t schema_version);
   NEED_SERIALIZE_AND_DESERIALIZE;
   TO_STRING_KV(K_(state));
 private:
@@ -233,7 +233,7 @@ private:
 private:
   ObPartitionBarrierLogStateEnum state_;
   int64_t log_id_;
-  int64_t log_ts_;
+  palf::SCN scn_;
   int64_t schema_version_;
 };
 

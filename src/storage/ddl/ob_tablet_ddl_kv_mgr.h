@@ -42,7 +42,7 @@ public:
   int ddl_commit(const palf::SCN &start_scn, const palf::SCN &prepare_scn, const bool is_replay); // try wait build major sstable
   int wait_ddl_commit(const palf::SCN &start_scn, const palf::SCN &prepare_scn);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
-  int get_or_create_ddl_kv(const palf::SCN &log_scn, ObDDLKVHandle &kv_handle); // used in active ddl kv guard
+  int get_or_create_ddl_kv(const palf::SCN &scn, ObDDLKVHandle &kv_handle); // used in active ddl kv guard
   int get_freezed_ddl_kv(const palf::SCN &freeze_scn, ObDDLKVHandle &kv_handle); // locate ddl kv with exeact freeze log ts
   int get_ddl_kvs(const bool frozen_only, ObDDLKVsHandle &ddl_kvs_handle); // get all freeze ddl kvs
   int freeze_ddl_kv(const palf::SCN &freeze_scn = palf::SCN::invalid_scn()); // freeze the active ddl kv, when memtable freeze or ddl commit
@@ -68,7 +68,7 @@ private:
   int alloc_ddl_kv(ObDDLKV *&kv);
   void free_ddl_kv(const int64_t idx);
   int get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle);
-  void try_get_ddl_kv_unlock(const palf::SCN &log_scn, ObDDLKV *&kv);
+  void try_get_ddl_kv_unlock(const palf::SCN &scn, ObDDLKV *&kv);
   int update_tablet(const palf::SCN &start_scn, const int64_t snapshot_version, const palf::SCN &ddl_checkpoint_scn);
   void destroy();
 private:

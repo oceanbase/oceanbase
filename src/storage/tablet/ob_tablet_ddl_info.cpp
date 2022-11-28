@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/utility.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -24,7 +25,7 @@ namespace storage
 ObTabletDDLInfo::ObTabletDDLInfo()
   : ddl_schema_version_(0),
     ddl_schema_refreshed_ts_(OB_INVALID_TIMESTAMP),
-    schema_version_change_log_ts_(OB_INVALID_TIMESTAMP),
+    schema_version_change_scn_(),
     rwlock_()
 {
 }
@@ -33,7 +34,7 @@ ObTabletDDLInfo &ObTabletDDLInfo::operator=(const ObTabletDDLInfo &other)
 {
   ddl_schema_version_ = other.ddl_schema_version_;
   ddl_schema_refreshed_ts_ = other.ddl_schema_refreshed_ts_;
-  schema_version_change_log_ts_ = other.schema_version_change_log_ts_;
+  schema_version_change_scn_ = other.schema_version_change_scn_;
   return *this;
 }
 
@@ -41,7 +42,7 @@ void ObTabletDDLInfo::reset()
 {
   ddl_schema_version_ = 0;
   ddl_schema_refreshed_ts_ = OB_INVALID_TIMESTAMP;
-  schema_version_change_log_ts_ = OB_INVALID_TIMESTAMP;
+  schema_version_change_scn_.reset();
 }
 
 int ObTabletDDLInfo::get(int64_t &schema_version, int64_t &schema_refreshed_ts)
@@ -53,17 +54,17 @@ int ObTabletDDLInfo::get(int64_t &schema_version, int64_t &schema_refreshed_ts)
   return ret;
 }
 int ObTabletDDLInfo::update(const int64_t schema_version,
-                            const int64_t log_ts,
+                            const palf::SCN &scn,
                             int64_t &schema_refreshed_ts)
 {
   int ret = OB_SUCCESS;
   TCWLockGuard guard(rwlock_);
-  if (schema_version <= 0 || log_ts <= 0) {
+  if (schema_version <= 0 || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(schema_version), K(log_ts));
+    LOG_WARN("invalid arguments", K(ret), K(schema_version), K(scn));
   } else if (ddl_schema_version_ < schema_version) {
     ddl_schema_refreshed_ts_ = common::max(ObTimeUtility::current_time(), ddl_schema_refreshed_ts_);
-    schema_version_change_log_ts_ = log_ts;
+    schema_version_change_scn_ = scn;
     ddl_schema_version_ = schema_version;
   } else {
     // do nothing

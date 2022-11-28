@@ -430,7 +430,7 @@ int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle)
   return ret;
 }
 
-int ObTabletDDLKvMgr::get_or_create_ddl_kv(const palf::SCN &log_scn, ObDDLKVHandle &kv_handle)
+int ObTabletDDLKvMgr::get_or_create_ddl_kv(const palf::SCN &scn, ObDDLKVHandle &kv_handle)
 {
   int ret = OB_SUCCESS;
   kv_handle.reset();
@@ -438,12 +438,12 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(const palf::SCN &log_scn, ObDDLKVHand
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
-  } else if (!log_scn.is_valid()) {
+  } else if (!scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(log_scn));
+    LOG_WARN("invalid argument", K(ret), K(scn));
   } else {
     TCRLockGuard guard(lock_);
-    try_get_ddl_kv_unlock(log_scn, kv);
+    try_get_ddl_kv_unlock(scn, kv);
     if (nullptr != kv) {
       // increase or decrease the reference count must be under the lock
       if (OB_FAIL(kv_handle.set_ddl_kv(kv))) {
@@ -453,7 +453,7 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(const palf::SCN &log_scn, ObDDLKVHand
   }
   if (OB_SUCC(ret) && nullptr == kv) {
     TCWLockGuard guard(lock_);
-    try_get_ddl_kv_unlock(log_scn, kv);
+    try_get_ddl_kv_unlock(scn, kv);
     if (nullptr != kv) {
       // do nothing
     } else if (OB_FAIL(alloc_ddl_kv(kv))) {
@@ -469,7 +469,7 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(const palf::SCN &log_scn, ObDDLKVHand
   return ret;
 }
 
-void ObTabletDDLKvMgr::try_get_ddl_kv_unlock(const palf::SCN &log_scn, ObDDLKV *&kv)
+void ObTabletDDLKvMgr::try_get_ddl_kv_unlock(const palf::SCN &scn, ObDDLKV *&kv)
 {
   int ret = OB_SUCCESS;
   if (get_count() > 0) {
@@ -478,7 +478,7 @@ void ObTabletDDLKvMgr::try_get_ddl_kv_unlock(const palf::SCN &log_scn, ObDDLKV *
       if (OB_ISNULL(tmp_kv)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(tmp_kv), K(i), K(head_), K(tail_));
-      } else if (log_scn <= tmp_kv->get_freeze_scn()) {
+      } else if (scn <= tmp_kv->get_freeze_scn()) {
         kv = tmp_kv;
         break;
       }

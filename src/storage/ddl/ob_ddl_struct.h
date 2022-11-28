@@ -57,13 +57,13 @@ public:
   const blocksstable::MacroBlockId &get_block_id() const { return block_handle_.get_block_id(); }
   int deep_copy(ObDDLMacroBlock &dst_block, common::ObIAllocator &allocator) const;
   bool is_valid() const;
-  TO_STRING_KV(K_(block_handle), K_(logic_id), K_(block_type), K_(ddl_start_scn), K_(log_scn), KP_(buf), K_(size));
+  TO_STRING_KV(K_(block_handle), K_(logic_id), K_(block_type), K_(ddl_start_scn), K_(scn), KP_(buf), K_(size));
 public:
   ObDDLMacroHandle block_handle_;
   blocksstable::ObLogicMacroBlockId logic_id_;
   blocksstable::ObDDLMacroBlockType block_type_;
   palf::SCN ddl_start_scn_;
-  palf::SCN log_scn_;
+  palf::SCN scn_;
   const char *buf_;
   int64_t size_;
 };
@@ -161,13 +161,13 @@ class ObDDLKVPendingGuard final
 public:
   static int set_macro_block(ObTablet *tablet, const ObDDLMacroBlock &macro_block);
 public:
-  ObDDLKVPendingGuard(ObTablet *tablet, const palf::SCN &log_scn);
+  ObDDLKVPendingGuard(ObTablet *tablet, const palf::SCN &scn);
   ~ObDDLKVPendingGuard();
   int get_ret() const { return ret_; }
   int get_ddl_kv(ObDDLKV *&kv);
 private:
   ObTablet *tablet_;
-  palf::SCN log_scn_;
+  palf::SCN scn_;
   ObDDLKVHandle kv_handle_;
   int ret_;
 };

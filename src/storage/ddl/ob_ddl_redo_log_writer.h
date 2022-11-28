@@ -163,10 +163,10 @@ public:
   ~ObDDLRedoLogHandle();
   int wait(const int64_t timeout = DDL_REDO_LOG_TIMEOUT);
   void reset();
-  bool is_valid() const { return nullptr != cb_  && log_scn_.is_valid(); }
+  bool is_valid() const { return nullptr != cb_  && scn_.is_valid(); }
 public:
   ObDDLMacroBlockClogCb *cb_;
-  palf::SCN log_scn_;
+  palf::SCN scn_;
 };
 
 class ObDDLCommitLogHandle final
