@@ -229,12 +229,6 @@ ObZoneMergeInfo::MergeStatus ObZoneMergeInfo::get_merge_status(const char* merge
   return status;
 }
 
-bool ObZoneMergeInfo::is_merged(const int64_t broadcast_version) const
-{
-  return (broadcast_version == broadcast_scn_.get_scn_val())
-         && (broadcast_scn_.get_scn_val() == last_merged_scn_.get_scn_val());
-}
-
 bool ObZoneMergeInfo::is_valid() const
 {
   bool is_valid = true;

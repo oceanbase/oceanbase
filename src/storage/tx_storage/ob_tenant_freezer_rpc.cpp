@@ -126,7 +126,7 @@ int ObTenantFreezerP::do_major_freeze_()
   if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
     LOG_WARN("get_frozen_scn failed", KR(ret));
   } else {
-    int64_t frozen_scn_val = frozen_scn.get_val_for_inner_table_field();
+    int64_t frozen_scn_val = frozen_scn.get_val_for_tx();
     bool need_major = true;
     ObTenantFreezer *freezer = MTL(ObTenantFreezer *);
     ObRetryMajorInfo retry_major_info = freezer->get_retry_major_info();

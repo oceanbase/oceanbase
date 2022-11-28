@@ -231,7 +231,7 @@ int ObMajorMergeProgressChecker::check_tablet_data_version(
           // logonly replica no need check
         } else {
           palf::SCN rep_snapshot_scn;
-          if (OB_FAIL(rep_snapshot_scn.convert_for_inner_table_field((uint64_t)(r->get_snapshot_version())))) {
+          if (OB_FAIL(rep_snapshot_scn.convert_for_tx(r->get_snapshot_version()))) {
             LOG_WARN("fail to convert val to SCN", KR(ret), "snapshot_version", r->get_snapshot_version());
           } else {
             if ((p->smallest_snapshot_scn_ <= palf::SCN::min_scn())
