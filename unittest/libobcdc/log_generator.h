@@ -287,8 +287,8 @@ void ObTxLogGenerator::gen_prepare_log()
 void ObTxLogGenerator::gen_commit_log()
 {
   int64_t commit_ts = get_timestamp();
-  palf::SCN commit_scn;
-  commit_scn.convert_for_lsn_allocator(commit_ts);
+  palf::SCN commit_version;
+  commit_version.convert_for_lsn_allocator(commit_ts);
   uint64_t checksum = 0;
   share::ObLSArray inc_ls_arr;
   ObTxBufferNodeArray mds_arr;
@@ -302,7 +302,7 @@ void ObTxLogGenerator::gen_commit_log()
   }
 
   ObTxCommitLog commit_log(
-      commit_scn,
+      commit_version,
       checksum,
       inc_ls_arr,
       mds_arr,

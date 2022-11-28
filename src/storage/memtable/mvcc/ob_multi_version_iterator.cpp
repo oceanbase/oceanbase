@@ -30,6 +30,8 @@ using namespace storage;
 using namespace transaction;
 using namespace common;
 using namespace blocksstable;
+using namespace palf;
+
 namespace memtable
 {
 
@@ -263,14 +265,14 @@ int ObMultiVersionValueIterator::get_trans_status(
 {
   UNUSED(cluster_version);
   int ret = OB_SUCCESS;
-  int64_t trans_version = INT64_MAX;
+  SCN trans_version = SCN::max_scn();
   ObTxTable *tx_table = ctx_->get_tx_table_guard().get_tx_table();
   int64_t read_epoch = ctx_->get_tx_table_guard().epoch();
   if (OB_ISNULL(tx_table)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tx_table_ is null", K(ret), KPC_(ctx), K(merge_scn_), K(trans_id));
-  } else if (OB_FAIL(tx_table->get_tx_state_with_log_ts(trans_id,
-                                                        merge_scn_.get_val_for_lsn_allocator(),
+  } else if (OB_FAIL(tx_table->get_tx_state_with_scn(trans_id,
+                                                        merge_scn_,
                                                         read_epoch,
                                                         state,
                                                         trans_version))) {

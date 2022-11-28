@@ -21,6 +21,7 @@
 namespace oceanbase
 {
 using namespace share;
+using namespace palf;
 namespace storage
 {
 
@@ -65,11 +66,11 @@ void ObTxCtxMemtableMgr::reset()
   is_inited_ = false;
 }
 
-int ObTxCtxMemtableMgr::create_memtable(const int64_t last_replay_log_ts,
+int ObTxCtxMemtableMgr::create_memtable(const SCN last_replay_scn,
                                         const int64_t schema_version,
                                         const bool for_replay)
 {
-  UNUSED(last_replay_log_ts);
+  UNUSED(last_replay_scn);
   UNUSED(schema_version);
   UNUSED(for_replay);
 

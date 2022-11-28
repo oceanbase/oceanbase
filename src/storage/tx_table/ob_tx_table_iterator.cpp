@@ -96,7 +96,7 @@ int ObTxDataMemtableScanIterator::init(ObTxDataMemtable *tx_data_memtable)
     // cur_node_ point to the next tx data
     cur_node_ = cur_node_->next_;
     tx_data_memtable_ = tx_data_memtable;
-    cur_max_commit_scn_.set_min();
+    cur_max_commit_version_.set_min();
     pre_start_scn_.set_min();
     tx_data_row_cnt_ = 0;
     pre_tx_data_ = nullptr;
@@ -113,7 +113,7 @@ void ObTxDataMemtableScanIterator::reset()
     tx_data_memtable_->reset_is_iterating();
   }
   dump_tx_data_done_ = false;
-  cur_max_commit_scn_.set_min();
+  cur_max_commit_version_.set_min();
   pre_start_scn_.set_min();
   tx_data_row_cnt_ = 0;
   pre_tx_data_ = nullptr;
@@ -215,7 +215,7 @@ int ObTxDataMemtableScanIterator::get_next_tx_data_row_(const blocksstable::ObDa
     int64_t end_ts_column = TX_DATA_END_TS_COLUMN + SSTABLE_HIDDEN_COLUMN_CNT;
     int64_t value_column = TX_DATA_VAL_COLUMN + SSTABLE_HIDDEN_COLUMN_CNT;
     row_.storage_datums_[total_row_cnt_column].set_int(1);
-    row_.storage_datums_[end_ts_column].set_int(tx_data->end_scn_.get_val_for_tx());
+    row_.storage_datums_[end_ts_column].set_int(tx_data->end_scn_.get_val_for_row_cell());
     row_.storage_datums_[value_column].set_string(ObString(serialize_size, buf_.get_ptr()));
     row_.set_first_multi_version_row();
     row_.set_last_multi_version_row();
@@ -234,8 +234,8 @@ int ObTxDataMemtableScanIterator::get_next_tx_data_row_(const blocksstable::ObDa
 
 // This function is called after sorting tx_data by start_scn and the following steps is
 // executed:
-// 1. Select (start_scn, commit_scn) point per second and push them into an array.
-// 2. Read (start_scn, commit_scn) array from the latest tx data sstable.
+// 1. Select (start_scn, commit_version) point per second and push them into an array.
+// 2. Read (start_scn, commit_version) array from the latest tx data sstable.
 // 3. Get the recycle_scn to filtrate the point which is not needed any more.
 // 4. Merge the arrays above. This procedure should filtrate the points are not needed and keep the
 // commit versions monotonically increasing.
@@ -298,7 +298,7 @@ int ObTxDataMemtableScanIterator::DEBUG_try_calc_upper_and_check_(ObCommitSCNsAr
     SCN upper_trans_version = SCN::min_scn();
     if (OB_FAIL(DEBUG_fake_calc_upper_trans_version(tx_data->start_scn_, upper_trans_version, merged_commit_versions))) {
       STORAGE_LOG(ERROR, "invalid upper trans version", KR(ret));
-    } else if (upper_trans_version < tx_data->commit_scn_) {
+    } else if (upper_trans_version < tx_data->commit_version_) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "invalid upper trans version", KR(ret), K(upper_trans_version), KPC(tx_data));
     }
@@ -326,7 +326,7 @@ int ObTxDataMemtableScanIterator::DEBUG_fake_calc_upper_trans_version(const SCN 
   int l = 0;
   int r = array.count() - 1;
 
-  // Binary find the first start_scn that is greater than or equal to sstable_end_log_ts
+  // Binary find the first start_scn that is greater than or equal to sstable_end_scn
   while (l < r) {
     int mid = (l + r) >> 1;
     if (array.at(mid).start_scn_ < sstable_end_scn) {
@@ -336,14 +336,14 @@ int ObTxDataMemtableScanIterator::DEBUG_fake_calc_upper_trans_version(const SCN 
     }
   }
 
-  // Check if the start_scn is greater than or equal to the sstable_end_log_ts. If not, delay the
+  // Check if the start_scn is greater than or equal to the sstable_end_scn. If not, delay the
   // upper_trans_version calculation to the next time.
-  if (0 == array.count() || !array.at(l).commit_scn_.is_valid()) {
+  if (0 == array.count() || !array.at(l).commit_version_.is_valid()) {
     upper_trans_version.set_max();
     ret = OB_ERR_UNDEFINED;
     STORAGE_LOG(WARN, "unexpected array count or commit version", K(array.count()), K(array.at(l)));
   } else {
-    upper_trans_version = array.at(l).commit_scn_;
+    upper_trans_version = array.at(l).commit_version_;
   }
 
   return ret;
@@ -352,7 +352,7 @@ int ObTxDataMemtableScanIterator::DEBUG_fake_calc_upper_trans_version(const SCN 
 void ObTxDataMemtableScanIterator::DEBUG_print_start_scn_list_()
 {
   int ret = OB_SUCCESS;
-  const char *real_fname = "tx_data_start_log_ts_list";
+  const char *real_fname = "tx_data_start_scn_list";
   FILE *fd = NULL;
 
   if (NULL == (fd = fopen(real_fname, "w"))) {
@@ -369,18 +369,18 @@ void ObTxDataMemtableScanIterator::DEBUG_print_start_scn_list_()
       fprintf(fd,
               "ObTxData : tx_id=%-19ld is_in_memtable=%-3d state=%-8s start_scn=%-19s "
               "end_scn=%-19s "
-              "commit_scn=%-19s\n",
+              "commit_version=%-19s\n",
               tx_data->tx_id_.get_id(),
               tx_data->is_in_tx_data_table_,
               ObTxData::get_state_string(tx_data->state_),
               to_cstring(tx_data->start_scn_),
               to_cstring(tx_data->end_scn_),
-              to_cstring(tx_data->commit_scn_));
+              to_cstring(tx_data->commit_version_));
     }
   }
 
   if (NULL != fd) {
-    fprintf(fd, "end of start log ts list\n");
+    fprintf(fd, "end of start scn list\n");
     fclose(fd);
     fd = NULL;
   }
@@ -405,9 +405,9 @@ void ObTxDataMemtableScanIterator::DEBUG_print_merged_commit_versions_(ObCommitS
     for (int i = 0; i < array.count(); i++) {
       fprintf(fd,
               "start_scn=%-19s "
-              "commit_scn=%-19s\n",
+              "commit_version=%-19s\n",
               to_cstring(array.at(i).start_scn_),
-              to_cstring(array.at(i).commit_scn_));
+              to_cstring(array.at(i).commit_version_));
     }
   }
 
@@ -490,19 +490,19 @@ int ObTxDataMemtableScanIterator::periodical_get_next_commit_scn_(ObCommitSCNsAr
 
     if (DEBUG_last_start_scn_ > tx_data->start_scn_) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "unexpected start log ts order", K(DEBUG_last_start_scn_), KPC(tx_data));
+      STORAGE_LOG(ERROR, "unexpected start scn order", K(DEBUG_last_start_scn_), KPC(tx_data));
       break;
     } else {
       DEBUG_last_start_scn_ = tx_data->start_scn_;
     }
 
     // update pre_commit_version
-    if (tx_data->commit_scn_ > cur_max_commit_scn_) {
-      cur_max_commit_scn_ = tx_data->commit_scn_;
+    if (tx_data->commit_version_ > cur_max_commit_version_) {
+      cur_max_commit_version_ = tx_data->commit_version_;
     }
 
     // If this tx data is the first tx data in sorted list or its start_scn is 1_s larger than
-    // the pre_start_log_ts, we use this start_scn to calculate upper_trans_version
+    // the pre_start_scn, we use this start_scn to calculate upper_trans_version
     if (pre_start_scn_.is_min() ||
         tx_data->start_scn_ >= SCN::plus(pre_start_scn_, PERIODICAL_SELECT_INTERVAL_NS)/*1s*/) {
       pre_start_scn_ = tx_data->start_scn_;
@@ -513,7 +513,7 @@ int ObTxDataMemtableScanIterator::periodical_get_next_commit_scn_(ObCommitSCNsAr
   if (nullptr != tx_data) {
     node.start_scn_ = tx_data->start_scn_;
     // use cur_max_commit_version_ to keep the commit versions monotonically increasing
-    node.commit_scn_ = cur_max_commit_scn_;
+    node.commit_version_ = cur_max_commit_version_;
     // STORAGE_LOG(INFO, "GENGLI ", K(iter_cnt), K(PERIODICAL_SELECT_INTERVAL_NS), K(node));
     tx_data = nullptr;
   } else if (nullptr == cur_node_) {
@@ -591,12 +591,12 @@ int ObTxDataMemtableScanIterator::merge_cur_and_past_commit_verisons_(const palf
   // array whose start_scn is larger than the minimum start_scn in current array will be dropped. The reason is in this
   // issue: https://work.aone.alibaba-inc.com/issue/43389863
   palf::SCN cur_min_start_scn = cur_arr.count() > 0 ? cur_arr.at(0).start_scn_ : palf::SCN::max_scn();
-  palf::SCN max_commit_scn = palf::SCN::min_scn();
+  palf::SCN max_commit_version = palf::SCN::min_scn();
   if (OB_FAIL(
-          merge_pre_process_node_(step_len, cur_min_start_scn, recycle_scn, past_arr, max_commit_scn, merged_arr))) {
+          merge_pre_process_node_(step_len, cur_min_start_scn, recycle_scn, past_arr, max_commit_version, merged_arr))) {
     STORAGE_LOG(WARN, "merge past commit versions failed.", KR(ret), K(past_arr), KPC(tx_data_memtable_));
   } else if (OB_FAIL(
-                 merge_pre_process_node_(step_len, SCN::max_scn(), recycle_scn, cur_arr, max_commit_scn, merged_arr))) {
+                 merge_pre_process_node_(step_len, SCN::max_scn(), recycle_scn, cur_arr, max_commit_version, merged_arr))) {
     STORAGE_LOG(WARN, "merge current commit versions failed.", KR(ret), K(cur_arr), KPC(tx_data_memtable_));
   } else if (0 == merged_arr.count()) {
     if (OB_FAIL(merged_arr.push_back(ObCommitSCNsArray::Node(SCN::max_scn(), SCN::max_scn())))) {
@@ -621,7 +621,7 @@ int ObTxDataMemtableScanIterator::merge_pre_process_node_(const int64_t step_len
                                                           const palf::SCN start_scn_limit,
                                                           const palf::SCN recycle_scn,
                                                           const ObIArray<ObCommitSCNsArray::Node> &data_arr,
-                                                          palf::SCN &max_commit_scn,
+                                                          palf::SCN &max_commit_version,
                                                           ObIArray<ObCommitSCNsArray::Node> &merged_arr)
 {
   int ret = OB_SUCCESS;
@@ -635,9 +635,9 @@ int ObTxDataMemtableScanIterator::merge_pre_process_node_(const int64_t step_len
       if (data_arr.at(i).start_scn_ >= start_scn_limit) {
         break;
       }
-      max_commit_scn = std::max(max_commit_scn, data_arr.at(i).commit_scn_);
-      ObCommitSCNsArray::Node new_node(data_arr.at(i).start_scn_, max_commit_scn);
-      if (new_node.commit_scn_ <= recycle_scn) {
+      max_commit_version = std::max(max_commit_version, data_arr.at(i).commit_version_);
+      ObCommitSCNsArray::Node new_node(data_arr.at(i).start_scn_, max_commit_version);
+      if (new_node.commit_version_ <= recycle_scn) {
         // this tx data should be recycled
         // do nothing
       } else if (OB_FAIL(merged_arr.push_back(new_node))) {
@@ -646,9 +646,9 @@ int ObTxDataMemtableScanIterator::merge_pre_process_node_(const int64_t step_len
     }
 
     // push back the last pre-process node
-    max_commit_scn = std::max(max_commit_scn, data_arr.at(arr_len - 1).commit_scn_);
+    max_commit_version = std::max(max_commit_version, data_arr.at(arr_len - 1).commit_version_);
     if (OB_SUCC(ret) && data_arr.at(arr_len - 1).start_scn_ < start_scn_limit) {
-      ObCommitSCNsArray::Node new_node(data_arr.at(arr_len - 1).start_scn_, max_commit_scn);
+      ObCommitSCNsArray::Node new_node(data_arr.at(arr_len - 1).start_scn_, max_commit_version);
       if (OB_FAIL(merged_arr.push_back(new_node))) {
         STORAGE_LOG(WARN, "push back commit version node failed.", KR(ret), KPC(tx_data_memtable_));
       }
@@ -888,8 +888,8 @@ int ObTxCtxMemtableScanIterator::init(ObTxCtxMemtable *tx_ctx_memtable)
     STORAGE_LOG(WARN, "Failed to reserve tx ctx buffer", K(ret));
   } else if (OB_FAIL(meta_buf_.reserve(TX_CTX_META_BUF_LENGTH))) {
     STORAGE_LOG(WARN, "Failed to reserve tx ctx meta buffer", K(ret));
-    // NB: We must first prepare the rec_log_ts for ObLSTxCtxMgr and then
-    // prepare the rec_log_ts for tx ctx
+    // NB: We must first prepare the rec_scn for ObLSTxCtxMgr and then
+    // prepare the rec_scn for tx ctx
   } else if (OB_FAIL(ls_tx_ctx_mgr->refresh_aggre_rec_log_ts())) {
     STORAGE_LOG(WARN, "Failed to prepare for dump tx ctx", K(ret));
   } else if (OB_FAIL(ls_tx_ctx_iter_.set_ready(ls_tx_ctx_mgr))) {

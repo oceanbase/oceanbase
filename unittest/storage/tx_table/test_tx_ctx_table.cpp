@@ -161,7 +161,7 @@ int64_t TestTxCtxTable::ref_count_;
 TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
 {
   EXPECT_EQ(0, TestTxCtxTable::ref_count_);
-  EXPECT_EQ(OB_SUCCESS, mt_mgr_->create_memtable(0, /*last_replay_log_ts*/
+  EXPECT_EQ(OB_SUCCESS, mt_mgr_->create_memtable(SCN::min_scn(), /*last_replay_log_ts*/
                                                  0  /*schema_version*/));
 
   EXPECT_EQ(1, TestTxCtxTable::ref_count_);

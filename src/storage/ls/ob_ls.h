@@ -627,7 +627,7 @@ public:
 
   // ObTxTable interface
   DELEGATE_WITH_RET(tx_table_, get_tx_table_guard, int);
-  DELEGATE_WITH_RET(tx_table_, get_upper_trans_version_before_given_log_ts, int);
+  DELEGATE_WITH_RET(tx_table_, get_upper_trans_version_before_given_scn, int);
   DELEGATE_WITH_RET(tx_table_, dump_single_tx_data_2_text, int);
 
   // ObCheckpointExecutor interface:

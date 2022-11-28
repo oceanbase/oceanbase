@@ -207,7 +207,6 @@ public:
   int64_t prepare_version_;
 };
 
-// FIXME : @gengli remove log ts
 class ObTxCommitData
 {
 public:
@@ -216,7 +215,7 @@ public:
   TO_STRING_KV(K_(tx_id),
                K_(state),
                K_(is_in_tx_data_table),
-               K_(commit_scn),
+               K_(commit_version),
                K_(start_scn),
                K_(end_scn));
 
@@ -235,12 +234,11 @@ public:
   transaction::ObTransID tx_id_;
   int32_t state_;
   bool is_in_tx_data_table_;
-  palf::SCN commit_scn_;
+  palf::SCN commit_version_;
   palf::SCN start_scn_;
   palf::SCN end_scn_;
 };
 
-// DONT : Modify this definition
 class ObTxData : public ObTxCommitData, public TxDataHashValue
 {
   friend TxDataHashMapAllocHandle;

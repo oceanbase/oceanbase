@@ -275,7 +275,7 @@ DEF_TO_STRING(ObCommitSCNsArray::Node)
 {
   int64_t pos = 0;
   J_KV(K_(start_scn),
-       K_(commit_scn));
+       K_(commit_version));
   return pos;
 }
 
@@ -353,7 +353,7 @@ int ObCommitSCNsArray::serialize_(char *buf, const int64_t buf_len, int64_t &pos
 {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < array_.count(); i++) {
-    LST_DO_CODE(OB_UNIS_ENCODE, array_.at(i).start_scn_, array_.at(i).commit_scn_);
+    LST_DO_CODE(OB_UNIS_ENCODE, array_.at(i).start_scn_, array_.at(i).commit_version_);
   }
   return ret;
 }
@@ -364,7 +364,7 @@ int ObCommitSCNsArray::deserialize_(const char *buf, const int64_t data_len, int
 
   ObCommitSCNsArray::Node node;
   while (OB_SUCC(ret) && pos < data_len) {
-    LST_DO_CODE(OB_UNIS_DECODE, node.start_scn_, node.commit_scn_);
+    LST_DO_CODE(OB_UNIS_DECODE, node.start_scn_, node.commit_version_);
     array_.push_back(node);
   }
 
@@ -375,7 +375,7 @@ int64_t ObCommitSCNsArray::get_serialize_size_() const
 {
   int64_t len = 0;
   for (int i = 0; i < array_.count(); i++) {
-    LST_DO_CODE(OB_UNIS_ADD_LEN, array_.at(i).start_scn_, array_.at(i).commit_scn_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, array_.at(i).start_scn_, array_.at(i).commit_version_);
   }
   return len;
 }
@@ -385,9 +385,9 @@ bool ObCommitSCNsArray::is_valid()
   bool bool_ret = true;
   for (int i = 0; i < array_.count() - 1; i++) {
     if (!array_.at(i).start_scn_.is_valid() ||
-        !array_.at(i).commit_scn_.is_valid() ||
+        !array_.at(i).commit_version_.is_valid() ||
         array_.at(i).start_scn_ > array_.at(i + 1).start_scn_ ||
-        array_.at(i).start_scn_ > array_.at(i).commit_scn_) {
+        array_.at(i).start_scn_ > array_.at(i).commit_version_) {
       bool_ret = false;
       STORAGE_LOG(ERROR, "this commit version array is invalid", K(array_.at(i)),
                   K(array_.at(i + 1)));

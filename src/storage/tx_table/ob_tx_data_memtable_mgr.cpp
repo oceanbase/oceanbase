@@ -146,17 +146,6 @@ int ObTxDataMemtableMgr::create_memtable(const palf::SCN clog_checkpoint_scn,
   return ret;
 }
 
-int ObTxDataMemtableMgr::create_memtable(const int64_t clog_checkpoint_ts,
-                                         const int64_t schema_version,
-                                         const bool for_replay)
-{
-  UNUSED(for_replay);
-  SCN clog_checkpoint_scn;
-  clog_checkpoint_scn.convert_for_lsn_allocator(clog_checkpoint_ts);
-
-  return create_memtable(clog_checkpoint_scn, schema_version);
-}
-
 int ObTxDataMemtableMgr::create_memtable_(const palf::SCN clog_checkpoint_scn, int64_t schema_version)
 {
   UNUSED(schema_version);

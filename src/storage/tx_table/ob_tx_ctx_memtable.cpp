@@ -19,6 +19,8 @@
 namespace oceanbase
 {
 using namespace share;
+using namespace palf;
+
 namespace storage
 {
 
@@ -225,9 +227,9 @@ palf::SCN ObTxCtxMemtable::get_rec_scn()
   palf::SCN rec_scn;
 
   if (OB_FAIL(get_ls_tx_ctx_mgr()->get_rec_scn(rec_scn))) {
-    TRANS_LOG(WARN, "get rec log ts failed", K(ret));
+    TRANS_LOG(WARN, "get rec scn failed", K(ret));
   } else {
-    TRANS_LOG(INFO, "tx ctx memtable get rec log ts", KPC(this), K(rec_scn));
+    TRANS_LOG(INFO, "tx ctx memtable get rec scn", KPC(this), K(rec_scn));
   }
 
   return rec_scn;
@@ -265,7 +267,7 @@ int ObTxCtxMemtable::flush(palf::SCN recycle_scn, bool need_freeze)
   ObSpinLockGuard guard(flush_lock_);
   
   if (need_freeze) {
-    palf::SCN rec_scn = get_rec_scn();
+    SCN rec_scn = get_rec_scn();
     if (rec_scn >= recycle_scn) {
       TRANS_LOG(INFO, "no need to freeze", K(rec_scn), K(recycle_scn));
     } else if (is_active_memtable()) {

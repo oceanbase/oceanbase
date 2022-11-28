@@ -418,7 +418,7 @@ bool ObTxDataMemtable::ready_for_flush()
     bool_ret = true;
     STORAGE_LOG(INFO, "memtable is frozen yet.", KP(this));
   } else if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(max_consequent_callbacked_scn))) {
-    STORAGE_LOG(WARN, "get_max_consequent_callbacked_log_ts failed", K(ret), K(freezer_->get_ls_id()));
+    STORAGE_LOG(WARN, "get_max_consequent_callbacked_scn failed", K(ret), K(freezer_->get_ls_id()));
   } else if (max_consequent_callbacked_scn >= key_.scn_range_.end_scn_) {
     state_ = ObTxDataMemtable::State::FROZEN;
     set_snapshot_version(min_tx_scn_);
@@ -463,7 +463,7 @@ int ObTxDataMemtable::do_sort_by_tx_id_()
 
 int64_t get_start_ts_(const ObTxData &tx_data)
 {
-  return tx_data.start_scn_.get_val_for_lsn_allocator();
+  return tx_data.start_scn_.get_val_for_tx();
 }
 
 int ObTxDataMemtable::do_sort_by_start_scn_()

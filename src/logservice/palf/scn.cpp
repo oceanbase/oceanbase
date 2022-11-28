@@ -169,15 +169,14 @@ SCN SCN::minus(const SCN &ref, uint64_t delta)
 {
   int ret = OB_SUCCESS;
   SCN result;
-  uint64_t new_val = OB_INVALID_SCN_VAL;
   if (OB_UNLIKELY(delta >= OB_MAX_SCN_TS_NS || !ref.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid argument", K(delta), K(ref), K(ret));
-  } else if (OB_UNLIKELY((new_val = ref.val_ - delta) > ref.val_)) {
+  } else if (OB_UNLIKELY(ref.val_ < delta)) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR , "new_val is not valid", K(new_val), K(ref), K(delta), K(ret));
+    PALF_LOG(ERROR , "new_val is not valid", K(ref), K(delta), K(ret));
   } else {
-    result.val_ = new_val;
+    result.val_ = ref.val_ - delta;
   }
   return result;
 }
@@ -315,6 +314,11 @@ uint64_t SCN::get_val_for_gts() const
 }
 
 uint64_t SCN::get_val_for_lsn_allocator() const
+{
+  return val_;
+}
+
+uint64_t SCN::get_val_for_row_cell() const
 {
   return val_;
 }

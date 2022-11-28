@@ -198,8 +198,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     //         is_delay_cleanout() to check the state and we only cleanout it
     //         when data is delay cleanout
     bool can_read = false;
-    // palf::SCN data_scn = palf::SCN::max_scn();
-    int64_t data_version = INT64_MAX;
+    palf::SCN data_version = palf::SCN::max_scn();
     bool is_determined_state = false;
     // Opt3: we only cleanout tx node who is delay cleanout
     ObCleanoutOp cleanout_op;
@@ -225,7 +224,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
                                         cleanout_op,
                                         recheck_op))) {
       TRANS_LOG(WARN, "lock for read failed", KPC(iter), K(lock_for_read_arg));
-    } else if (can_read && snapshot_version.get_val_for_lsn_allocator() >= data_version) {
+    } else if (can_read && snapshot_version >= data_version) {
       // Case 5.1: data is cleanout by lock for read and can be read by reader's
       //           snapshot
       version_iter_ = iter;

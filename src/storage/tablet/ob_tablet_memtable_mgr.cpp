@@ -129,7 +129,7 @@ int ObTabletMemtableMgr::init_storage_schema_recorder(
 // There are two cases:
 // 1. create the first memtable for tablet
 // 2. create the new memtable after freezing the old memtable
-int ObTabletMemtableMgr::create_memtable(const int64_t clog_checkpoint_ts,
+int ObTabletMemtableMgr::create_memtable(const palf::SCN clog_checkpoint_scn,
                                          const int64_t schema_version,
                                          const bool for_replay)
 {
@@ -168,7 +168,7 @@ int ObTabletMemtableMgr::create_memtable(const int64_t clog_checkpoint_ts,
     ObITable::TableKey table_key;
     table_key.table_type_ = ObITable::DATA_MEMTABLE;
     table_key.tablet_id_ = tablet_id_;
-    table_key.scn_range_.start_scn_.convert_for_gts(clog_checkpoint_ts); //TODO(SCN) fix clog_checkpoint_ts with SCN
+    table_key.scn_range_.start_scn_ = clog_checkpoint_scn;
     table_key.scn_range_.end_scn_.set_max();
     memtable::ObMemtable *memtable = NULL;
 
@@ -213,10 +213,10 @@ int ObTabletMemtableMgr::create_memtable(const int64_t clog_checkpoint_ts,
           }
         }
       // there is no frozen memtable and new sstable will not be generated,
-      // meaning that clog_checkpoint_ts will not be updated now,
-      // so get newest clog_checkpoint_ts to set left boundary
+      // meaning that clog_checkpoint_scn will not be updated now,
+      // so get newest clog_checkpoint_scn to set left boundary
       } else if (OB_FAIL(get_newest_clog_checkpoint_scn(new_clog_checkpoint_scn))){
-        LOG_WARN("failed to get newest clog_checkpoint_ts", K(ret), K(ls_id), K(tablet_id_),
+        LOG_WARN("failed to get newest clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id_),
                  K(new_clog_checkpoint_scn));
       } else if (OB_FAIL(get_newest_snapshot_version(new_snapshot_version))){
         LOG_WARN("failed to get newest snapshot_version", K(ret), K(ls_id), K(tablet_id_), K(new_snapshot_version));
