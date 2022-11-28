@@ -278,8 +278,8 @@ int ObTableLockOp::inner_get_next_batch(const int64_t max_row_cnt)
         err_log_rt_def_.curr_err_log_record_num_++;
         err_log_rt_def_.reset();
         continue;
-      } else if (need_return_row_) {
-        //break to output this batch
+      } else if (!brs_.skip_->is_all_true(brs_.size_)) {
+        //this batch has not been skipped for all rows, need break to output this batch
         break;
       }
     }
@@ -313,6 +313,8 @@ OB_INLINE int ObTableLockOp::lock_one_row_post_proc()
       LOG_WARN("submit all dml task failed", K(ret));
     } else if (MY_SPEC.is_skip_locked()) {
       ret = OB_SUCCESS;
+      dml_rtctx_.reuse(); //reuse current context to lock the next row
+      need_return_row_ = false;
     }
   } else {
     need_return_row_ = true;
@@ -425,6 +427,7 @@ int ObTableLockOp::lock_batch_to_das(const ObBatchRows *child_brs)
   operator_evalctx_guard.set_batch_size(child_brs->size_);
   (void) brs_.copy(child_brs);
   for (auto i = 0; OB_SUCC(ret) && i < child_brs->size_; i++) {
+    need_return_row_ = false;
     if (child_brs->skip_->at(i)) {
       continue;
     }
