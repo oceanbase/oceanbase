@@ -199,7 +199,7 @@ int ObCopyMacroBlockObReader::init(
         arg.ls_id_ = param.ls_id_;
         arg.table_key_ = param.table_key_;
         //TODO(yanfeng) fix backfill tx log ts and data version
-        arg.backfill_tx_log_ts_ = 0;
+        arg.backfill_tx_scn_.set_min();
         arg.data_version_ = 0;
         LOG_INFO("init arg", K(param), K(arg));
       }
@@ -555,7 +555,7 @@ int ObCopyMacroBlockObProducer::init(
     const ObITable::TableKey &table_key,
     const ObCopyMacroRangeInfo &copy_macro_range_info,
     const int64_t data_version,
-    const int64_t backfill_tx_log_ts)
+    const palf::SCN backfill_tx_scn)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -569,10 +569,10 @@ int ObCopyMacroBlockObProducer::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret));
   } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !table_key.is_valid()
-      || !copy_macro_range_info.is_valid() || data_version < 0 || backfill_tx_log_ts < 0) {
+      || !copy_macro_range_info.is_valid() || data_version < 0 || !backfill_tx_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tenant_id), K(ls_id), K(table_key),
-        K(copy_macro_range_info), K(data_version), K(backfill_tx_log_ts));
+        K(copy_macro_range_info), K(data_version), K(backfill_tx_scn));
   } else if (OB_FAIL(guard.switch_to(tenant_id))) {
     LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
@@ -614,7 +614,7 @@ int ObCopyMacroBlockObProducer::init(
       meta_ = &sstable_->get_meta();
       is_inited_ = true;
       LOG_INFO("succeed to init macro block producer",
-          K(table_key), K(data_version), K(backfill_tx_log_ts), K(copy_macro_range_info));
+          K(table_key), K(data_version), K(backfill_tx_scn), K(copy_macro_range_info));
     }
   }
 

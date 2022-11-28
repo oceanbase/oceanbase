@@ -51,7 +51,7 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     max_merged_trans_version_(0),
     recycle_version_(0),
     ddl_log_ts_(0),
-    filled_tx_log_ts_(0),
+    filled_tx_scn_(palf::SCN::min_scn()),
     data_index_tree_height_(0),
     table_mode_(),
     status_(0),
@@ -91,7 +91,7 @@ bool ObSSTableBasicMeta::operator==(const ObSSTableBasicMeta &other) const
       && upper_trans_version_ == other.upper_trans_version_
       && max_merged_trans_version_ == other.max_merged_trans_version_
       && ddl_log_ts_ == other.ddl_log_ts_
-      && filled_tx_log_ts_ == other.filled_tx_log_ts_
+      && filled_tx_scn_ == other.filled_tx_scn_
       && data_index_tree_height_ == other.data_index_tree_height_
       && table_mode_ == other.table_mode_
       && status_ == other.status_
@@ -124,7 +124,7 @@ bool ObSSTableBasicMeta::is_valid() const
            && max_merged_trans_version_ >= 0
            && recycle_version_ >= 0
            && ddl_log_ts_ >= 0
-           && filled_tx_log_ts_ >= 0
+           // && filled_tx_scn_.is_valid() // TODO(scn), TODO(yangyi.yyy) wait TODO(danling) modify merge_scn
            && data_index_tree_height_ >= 0
            && row_store_type_ < ObRowStoreType::MAX_ROW_STORE);
   return ret;
@@ -154,7 +154,7 @@ void ObSSTableBasicMeta::reset()
   max_merged_trans_version_ = 0;
   recycle_version_ = 0;
   ddl_log_ts_ = 0;
-  filled_tx_log_ts_ = 0;
+  filled_tx_scn_.set_min();
   data_index_tree_height_ = 0;
   table_mode_.reset();
   status_ = SSTABLE_NOT_INIT;
@@ -209,7 +209,7 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   max_merged_trans_version_,
                   recycle_version_,
                   ddl_log_ts_,
-                  filled_tx_log_ts_,
+                  filled_tx_scn_,
                   data_index_tree_height_,
                   table_mode_,
                   status_,
@@ -270,7 +270,7 @@ DEFINE_DESERIALIZE(ObSSTableBasicMeta)
                   max_merged_trans_version_,
                   recycle_version_,
                   ddl_log_ts_,
-                  filled_tx_log_ts_,
+                  filled_tx_scn_,
                   data_index_tree_height_,
                   table_mode_,
                   status_,
@@ -316,7 +316,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               max_merged_trans_version_,
               recycle_version_,
               ddl_log_ts_,
-              filled_tx_log_ts_,
+              filled_tx_scn_,
               data_index_tree_height_,
               table_mode_,
               status_,
@@ -458,7 +458,7 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.upper_trans_version_ = contain_uncommitted_row() ?
         INT64_MAX : basic_meta_.max_merged_trans_version_;
     basic_meta_.ddl_log_ts_ = param.ddl_log_ts_;
-    basic_meta_.filled_tx_log_ts_ = param.filled_tx_log_ts_;
+    basic_meta_.filled_tx_scn_ = param.filled_tx_scn_;
     basic_meta_.data_index_tree_height_ = param.data_index_tree_height_;
     basic_meta_.row_store_type_ = param.root_row_store_type_;
     basic_meta_.compressor_type_ = param.compressor_type_;

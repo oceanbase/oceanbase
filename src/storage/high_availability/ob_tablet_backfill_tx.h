@@ -36,7 +36,7 @@ public:
   int build_backfill_tx_ctx(
       const share::ObTaskId &task_id,
       const share::ObLSID &ls_id,
-      const int64_t log_sync_scn,
+      const palf::SCN log_sync_scn,
       const common::ObIArray<common::ObTabletID> &tablet_id_array);
   bool is_empty() const;
   int check_is_same(
@@ -54,7 +54,7 @@ public:
 public:
   share::ObTaskId task_id_;
   share::ObLSID ls_id_;
-  int64_t log_sync_scn_;
+  palf::SCN log_sync_scn_;
 private:
   bool inner_is_valid_() const;
 private:
@@ -189,7 +189,7 @@ public:
   int init(
       const share::ObTaskId &task_id,
       const share::ObLSID &ls_id,
-      const int64_t log_sync_scn,
+      const palf::SCN log_sync_scn,
       ObIHADagNetCtx *ha_dag_net_ctx);
   ObBackfillTXCtx *get_backfill_tx_ctx() { return &backfill_tx_ctx_; }
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
@@ -197,7 +197,7 @@ protected:
   int prepare_backfill_tx_ctx_(
       const share::ObTaskId &task_id,
       const share::ObLSID &ls_id,
-      const int64_t log_sync_scn);
+      const palf::SCN log_sync_scn);
 
 protected:
   bool is_inited_;

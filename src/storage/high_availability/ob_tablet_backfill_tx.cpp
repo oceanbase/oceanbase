@@ -26,7 +26,7 @@ namespace storage
 ObBackfillTXCtx::ObBackfillTXCtx()
   : task_id_(),
     ls_id_(),
-    log_sync_scn_(0),
+    log_sync_scn_(palf::SCN::min_scn()),
     lock_(),
     tablet_id_index_(0),
     tablet_id_array_()
@@ -85,7 +85,7 @@ int ObBackfillTXCtx::get_tablet_id(ObTabletID &tablet_id)
 int ObBackfillTXCtx::build_backfill_tx_ctx(
     const share::ObTaskId &task_id,
     const share::ObLSID &ls_id,
-    const int64_t log_sync_scn,
+    const palf::SCN log_sync_scn,
     const common::ObIArray<common::ObTabletID> &tablet_id_array)
 {
   int ret = OB_SUCCESS;
@@ -93,7 +93,7 @@ int ObBackfillTXCtx::build_backfill_tx_ctx(
   if (!tablet_id_array_.empty()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backfill tx ctx init twice", K(ret), KPC(this));
-  } else if (task_id.is_invalid() || !ls_id.is_valid() || log_sync_scn < 0) {
+  } else if (task_id.is_invalid() || !ls_id.is_valid() || !log_sync_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("build backfill tx ctx get invalid argument", K(ret), K(task_id), K(ls_id),
         K(log_sync_scn), K(tablet_id_array));
@@ -527,7 +527,7 @@ int ObTabletBackfillTXTask::generate_table_backfill_tx_task_(
         LOG_WARN("table should not be NULL or table type is unexpected", K(ret), KPC(table));
       } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
       } else if (!sstable->get_meta().get_basic_meta().contain_uncommitted_row_
-          || sstable->get_meta().get_basic_meta().filled_tx_log_ts_ >= backfill_tx_ctx_->log_sync_scn_) {
+          || sstable->get_meta().get_basic_meta().filled_tx_scn_ >= backfill_tx_ctx_->log_sync_scn_) {
         FLOG_INFO("sstable do not contain uncommitted row, no need backfill tx", KPC(sstable),
             "log sync scn", backfill_tx_ctx_->log_sync_scn_);
       } else if (OB_FAIL(tablet_backfill_tx_dag->alloc_task(table_backfill_tx_task))) {
@@ -656,7 +656,7 @@ int ObTabletTableBackfillTXTask::prepare_merge_ctx_()
     tablet_merge_ctx_.sstable_version_range_.multi_version_start_ = tablet_handle_.get_obj()->get_multi_version_start();
     tablet_merge_ctx_.sstable_version_range_.snapshot_version_ = tablet_handle_.get_obj()->get_snapshot_version();
     tablet_merge_ctx_.scn_range_ = table_handle_.get_table()->get_key().scn_range_;
-    tablet_merge_ctx_.merge_scn_ = backfill_tx_ctx_->log_sync_scn_;
+    tablet_merge_ctx_.merge_scn_ = backfill_tx_ctx_->log_sync_scn_.get_val_for_lsn_allocator();
     tablet_merge_ctx_.create_snapshot_version_ = 0;
 
     if (OB_FAIL(tablet_merge_ctx_.tables_handle_.add_table(table_handle_))) {
@@ -945,7 +945,7 @@ int64_t ObFinishBackfillTXDag::hash() const
 int ObFinishBackfillTXDag::init(
     const share::ObTaskId &task_id,
     const share::ObLSID &ls_id,
-    const int64_t log_sync_scn,
+    const palf::SCN log_sync_scn,
     ObIHADagNetCtx *ha_dag_net_ctx)
 {
   int ret = OB_SUCCESS;
@@ -953,7 +953,7 @@ int ObFinishBackfillTXDag::init(
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("finish backfill tx dag init twice", K(ret));
-  } else if (task_id.is_invalid() || !ls_id.is_valid() || log_sync_scn < 0|| OB_ISNULL(ha_dag_net_ctx)) {
+  } else if (task_id.is_invalid() || !ls_id.is_valid() || !log_sync_scn.is_valid() || OB_ISNULL(ha_dag_net_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init finish backfill tx dag get invalid argument", K(ret), K(task_id), K(ls_id), K(log_sync_scn) ,KP(ha_dag_net_ctx));
   } else if (OB_FAIL(prepare_backfill_tx_ctx_(task_id, ls_id, log_sync_scn))) {
@@ -968,7 +968,7 @@ int ObFinishBackfillTXDag::init(
 int ObFinishBackfillTXDag::prepare_backfill_tx_ctx_(
     const share::ObTaskId &task_id,
     const share::ObLSID &ls_id,
-    const int64_t log_sync_scn)
+    const palf::SCN log_sync_scn)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;

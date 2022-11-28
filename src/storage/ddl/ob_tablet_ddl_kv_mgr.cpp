@@ -335,8 +335,9 @@ int ObTabletDDLKvMgr::update_tablet(const int64_t start_log_ts, const int64_t sn
     param.keep_old_ddl_sstable_ = false;
     param.ddl_start_log_ts_ = start_log_ts;
     param.ddl_snapshot_version_ = snapshot_version;
-    param.ddl_checkpoint_ts_ = ddl_checkpoint_ts;
-    if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
+    if (OB_FAIL(param.ddl_checkpoint_scn_.convert_for_lsn_allocator(ddl_checkpoint_ts))) {
+      LOG_WARN("failed to convert for scn", K(ret));
+    } else if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(ls_id_), K(tablet_id_), K(param));
     } else {
       LOG_INFO("update tablet success", K(ls_id_), K(tablet_id_), K(param), K(start_log_ts), K(snapshot_version), K(ddl_checkpoint_ts));

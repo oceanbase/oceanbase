@@ -204,7 +204,7 @@ struct ObTabletMergeCtx
   // 2. filled in ObPartitionStore::get_merge_tables
   ObVersionRange sstable_version_range_;// version range for new sstable
   share::ObScnRange scn_range_;
-  int64_t merge_scn_;
+  int64_t merge_scn_; // TODO(scn), TODO(danling): change type from int64_t to palf::SCN
   int64_t create_snapshot_version_;
 
   storage::ObTablesHandleArray tables_handle_;

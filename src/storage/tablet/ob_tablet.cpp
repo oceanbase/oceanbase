@@ -238,7 +238,7 @@ int ObTablet::init(
       param.multi_version_start_, tx_data, ddl_data, autoinc_seq,
       // use min schema version to avoid lose storage_schema in replay/reboot
       MIN(MAX(param.storage_schema_->schema_version_, old_tablet.storage_schema_.schema_version_), max_sync_schema_version),
-      param.clog_checkpoint_ts_, param.ddl_checkpoint_ts_, param.ddl_start_log_ts_, param.ddl_snapshot_version_))) {
+      param.clog_checkpoint_ts_, param.ddl_checkpoint_scn_.get_val_for_lsn_allocator(), param.ddl_start_log_ts_, param.ddl_snapshot_version_))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(param), K(tx_data), K(ddl_data));
   } else if (OB_FAIL(table_store_.init(*allocator_, this, param, old_tablet.table_store_))) {
     LOG_WARN("failed to init table store", K(ret), K(old_tablet));
@@ -1846,12 +1846,12 @@ int ObTablet::try_update_start_scn()
 {
   int ret = OB_SUCCESS;
   ObSSTable *first_minor = static_cast<ObSSTable *>(table_store_.get_minor_sstables().get_boundary_table(false /*first*/));
-  const int64_t start_scn = OB_NOT_NULL(first_minor) ? first_minor->get_start_log_ts() : tablet_meta_.clog_checkpoint_scn_.get_val_for_gts();
-  if (OB_UNLIKELY(start_scn < tablet_meta_.start_scn_.get_val_for_gts())) {
+  const palf::SCN &start_scn = OB_NOT_NULL(first_minor) ? first_minor->get_start_scn() : tablet_meta_.clog_checkpoint_scn_;
+  if (OB_UNLIKELY(start_scn < tablet_meta_.start_scn_)) {
     // ignore ret on purpose
     LOG_WARN("tablet start scn can not fallback", K(start_scn), K(tablet_meta_));
   } else {
-    tablet_meta_.start_scn_.convert_tmp(start_scn);
+    tablet_meta_.start_scn_ = start_scn;
   }
   return ret;
 }

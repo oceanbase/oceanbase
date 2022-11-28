@@ -113,13 +113,13 @@ private:
       ObTablesHandleArray &tables_handle);
   int create_remote_logical_sstable_(
       const common::ObTabletID &tablet_id,
-      const int64_t start_log_ts,
-      const int64_t end_log_ts,
+      const palf::SCN start_scn,
+      const palf::SCN end_scn,
       ObTablet *tablet,
       ObTableHandleV2 &table_handle);
   int build_remote_logical_sstable_param_(
-      const int64_t start_log_ts,
-      const int64_t end_log_ts,
+      const palf::SCN start_scn,
+      const palf::SCN end_scn,
       const ObStorageSchema &table_schema,
       const common::ObTabletID &tablet_id,
       ObTabletCreateSSTableParam &param);
