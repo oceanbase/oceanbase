@@ -19,6 +19,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/ls/ob_ls.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
@@ -172,7 +173,7 @@ ObMacroBlockBackupReader::~ObMacroBlockBackupReader()
 {}
 
 int ObMacroBlockBackupReader::init(
-    const common::ObLogicMacroBlockId &logic_id, const blocksstable::MacroBlockId &macro_block_id)
+    const blocksstable::ObLogicMacroBlockId &logic_id, const blocksstable::MacroBlockId &macro_block_id)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -191,7 +192,7 @@ int ObMacroBlockBackupReader::init(
 }
 
 int ObMacroBlockBackupReader::get_macro_block_data(
-    blocksstable::ObBufferReader &buffer_reader, common::ObLogicMacroBlockId &logic_id)
+    blocksstable::ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -254,7 +255,7 @@ int ObMacroBlockBackupReader::process_()
 }
 
 int ObMacroBlockBackupReader::get_macro_read_info_(
-    const common::ObLogicMacroBlockId &logic_id, blocksstable::ObMacroBlockReadInfo &read_info)
+    const blocksstable::ObLogicMacroBlockId &logic_id, blocksstable::ObMacroBlockReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!logic_id.is_valid())) {
@@ -343,7 +344,7 @@ int ObMultiMacroBlockBackupReader::init(
 }
 
 int ObMultiMacroBlockBackupReader::get_next_macro_block(
-    blocksstable::ObBufferReader &data, common::ObLogicMacroBlockId &logic_id)
+    blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -404,7 +405,7 @@ int ObMultiMacroBlockBackupReader::prepare_macro_block_reader_(const int64_t idx
     LOG_WARN("get invalid args", K(ret), K(idx), K(readers_.count()));
   } else {
     const ObBackupMacroBlockId &macro_id = macro_list_.at(idx);
-    const common::ObLogicMacroBlockId &logic_id = macro_id.logic_id_;
+    const blocksstable::ObLogicMacroBlockId &logic_id = macro_id.logic_id_;
     const blocksstable::MacroBlockId &macro_block_id = macro_id.macro_block_id_;
     if (OB_FAIL(readers_.at(idx)->init(logic_id, macro_block_id))) {
       LOG_WARN("failed to init reader", K(ret), K(idx), K(logic_id), K(macro_block_id));
@@ -414,7 +415,7 @@ int ObMultiMacroBlockBackupReader::prepare_macro_block_reader_(const int64_t idx
 }
 
 int ObMultiMacroBlockBackupReader::fetch_macro_block_with_retry_(
-    blocksstable::ObBufferReader &data, common::ObLogicMacroBlockId &logic_id)
+    blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id)
 {
   int ret = OB_SUCCESS;
   int64_t retry_times = 0;
@@ -437,7 +438,7 @@ int ObMultiMacroBlockBackupReader::fetch_macro_block_with_retry_(
 }
 
 int ObMultiMacroBlockBackupReader::fetch_macro_block_(
-    blocksstable::ObBufferReader &data, common::ObLogicMacroBlockId &logic_id)
+    blocksstable::ObBufferReader &data, blocksstable::ObLogicMacroBlockId &logic_id)
 {
   int ret = OB_SUCCESS;
   const int64_t idx = reader_idx_;

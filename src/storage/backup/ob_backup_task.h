@@ -31,6 +31,7 @@
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "storage/ls/ob_ls_tablet_service.h"
 #include "share/backup/ob_backup_data_store.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase {
 namespace backup {
@@ -79,7 +80,7 @@ struct ObLSBackupDagInitParam : public share::ObIDagInitParam {
   int64_t turn_id_;
   int64_t retry_id_;
   ObLSBackupStage backup_stage_;
-  int64_t dest_id_; 
+  int64_t dest_id_;
 };
 
 enum ObBackupDagNetSubType : int64_t {
@@ -384,7 +385,7 @@ public:
   ObLSBackupComplementLogDag();
   virtual ~ObLSBackupComplementLogDag();
   int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
-      const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t turn_id, 
+      const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t turn_id,
       const int64_t retry_id, const palf::SCN &start_scn, const palf::SCN &end_scn, const ObBackupReportCtx &report_ctx);
   virtual int create_first_task() override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
@@ -533,9 +534,9 @@ private:
   int prepare_tablet_meta_reader_(const common::ObTabletID &tablet_id, const ObTabletMetaReaderType &reader_type,
       storage::ObTabletHandle &tablet_handle, ObITabletMetaBackupReader *&reader);
   int get_next_macro_block_data_(ObMultiMacroBlockBackupReader *reader, blocksstable::ObBufferReader &buffer_reader,
-      common::ObLogicMacroBlockId &logic_id);
+      blocksstable::ObLogicMacroBlockId &logic_id);
   int check_macro_block_data_(const blocksstable::ObBufferReader &data);
-  int write_macro_block_data_(const blocksstable::ObBufferReader &data, const common::ObLogicMacroBlockId &logic_id,
+  int write_macro_block_data_(const blocksstable::ObBufferReader &data, const blocksstable::ObLogicMacroBlockId &logic_id,
       ObBackupMacroBlockIndex &macro_index);
   int write_backup_meta_(const blocksstable::ObBufferReader &data, const common::ObTabletID &tablet_id,
       const ObBackupMetaType &meta_type, ObBackupMetaIndex &meta_index);
@@ -547,13 +548,13 @@ private:
   bool is_change_turn_error_(const int64_t error_code) const;
   void record_server_event_(const int64_t cost_us) const;
   int mark_backup_item_finished_(const ObBackupProviderItem &item, const ObBackupPhysicalID &physical_id);
-  int get_backup_item_(const common::ObLogicMacroBlockId &logic_id, ObBackupProviderItem &item);
+  int get_backup_item_(const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupProviderItem &item);
   int finish_backup_items_();
   int backup_secondary_metas_(ObBackupTabletStat *tablet_stat);
   int may_fill_reused_backup_items_(
       const common::ObTabletID &tablet_id, ObBackupTabletStat *tablet_stat);
-  int check_macro_block_need_reuse_when_recover_(const common::ObLogicMacroBlockId &logic_id,
-      const common::ObArray<common::ObLogicMacroBlockId> &logic_id_list, bool &need_reuse);
+  int check_macro_block_need_reuse_when_recover_(const blocksstable::ObLogicMacroBlockId &logic_id,
+      const common::ObArray<blocksstable::ObLogicMacroBlockId> &logic_id_list, bool &need_reuse);
   int release_tablet_handles_(ObBackupTabletStat *tablet_stat);
 
 private:

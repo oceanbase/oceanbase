@@ -41,6 +41,7 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_sstable_macro_block_header.cpp
   blocksstable/ob_sstable_meta.cpp
   blocksstable/ob_sstable_meta_info.cpp
+  blocksstable/ob_logic_macro_id.cpp
   blocksstable/ob_sstable_printer.cpp
   blocksstable/ob_sstable_sec_meta_iterator.cpp
   blocksstable/ob_storage_cache_suite.cpp

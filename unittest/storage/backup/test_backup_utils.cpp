@@ -20,11 +20,13 @@
 #include <gtest/gtest.h>
 #include "test_backup.h"
 #include "storage/backup/ob_backup_utils.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::backup;
+using namespace oceanbase::blocksstable;
 
 namespace oceanbase {
 namespace backup {
@@ -116,7 +118,7 @@ int ObFakeBackupTabletProvider::get_next_batch_items(common::ObIArray<ObBackupPr
     int64_t i = 0;
     int64_t total = random(256, 1024);
     while (OB_SUCC(ret) && i < total) {
-      common::ObLogicMacroBlockId fake_logic_id;
+      blocksstable::ObLogicMacroBlockId fake_logic_id;
       blocksstable::MacroBlockId fake_macro_block_id;
       storage::ObITable::TableKey fake_table_key;
       common::ObTabletID tablet_id(supplied_item_count_ + 1);
@@ -242,7 +244,7 @@ TEST(TestBackupUtils, test_check_macro_block_reuse)
 
   make_macro_block_id_array(tablet_id, logic_version_1, data_seq_list, id_pair_list_1);
 
-  common::ObLogicMacroBlockId logic_id_1(0/*data_seq*/, 100/*logic_version*/, tablet_id);
+  blocksstable::ObLogicMacroBlockId logic_id_1(0/*data_seq*/, 100/*logic_version*/, tablet_id);
   provider.inner_check_macro_block_need_skip_(logic_id_1, id_pair_list_1, need_skip);
   ASSERT_TRUE(need_skip);
 

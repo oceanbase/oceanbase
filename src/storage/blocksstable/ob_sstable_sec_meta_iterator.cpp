@@ -15,6 +15,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "share/schema/ob_table_param.h"
 #include "ob_sstable_sec_meta_iterator.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {

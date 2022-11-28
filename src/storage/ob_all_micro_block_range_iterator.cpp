@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "storage/ob_all_micro_block_range_iterator.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {

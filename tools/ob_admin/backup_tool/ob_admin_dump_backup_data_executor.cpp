@@ -15,6 +15,7 @@
 #include "lib/container/ob_array.h"
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "../dumpsst/ob_admin_dumpsst_print_helper.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 #include <algorithm>
 #include <functional>
@@ -2084,7 +2085,7 @@ int ObAdminDumpBackupDataExecutor::dump_backup_sstable_meta_(const backup::ObBac
   PrintHelper::print_dump_line("sstable_meta:data_macro_block_count", sstable_meta.sstable_meta_.basic_meta_.data_macro_block_count_);
   PrintHelper::print_dump_list_start("logic_id_array");
   for (int64_t i = 0; OB_SUCC(ret) && i < sstable_meta.logic_id_list_.count(); ++i) {
-    const ObLogicMacroBlockId &macro_id = sstable_meta.logic_id_list_.at(i);
+    const blocksstable::ObLogicMacroBlockId &macro_id = sstable_meta.logic_id_list_.at(i);
     PrintHelper::print_dump_list_value(to_cstring(macro_id), i == sstable_meta.logic_id_list_.count() - 1);
   }
   PrintHelper::print_dump_list_end();
@@ -2107,7 +2108,7 @@ int ObAdminDumpBackupDataExecutor::dump_backup_macro_block_id_mapping_meta_(
     PrintHelper::print_dump_line("num_of_entries", num_of_entries);
     for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
       const ObBackupMacroBlockIDPair &pair = item.id_pair_list_.at(j);
-      const common::ObLogicMacroBlockId &logic_id = pair.logic_id_;
+      const blocksstable::ObLogicMacroBlockId &logic_id = pair.logic_id_;
       const ObBackupPhysicalID &physical_id = pair.physical_id_;
       PrintHelper::print_dump_line("logic_id", to_cstring(logic_id));
       PrintHelper::print_dump_line("physical_id", to_cstring(physical_id));

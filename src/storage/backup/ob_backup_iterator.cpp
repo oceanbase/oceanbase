@@ -16,6 +16,7 @@
 #include "storage/backup/ob_backup_operator.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 #include <algorithm>
 
@@ -644,7 +645,7 @@ int ObBackupMacroBlockIndexIterator::inner_get_next_macro_range_index_(ObBackupM
     const ObBackupMacroBlockIndex &start_index = cur_index_list_.at(cur_idx_);
     ObBackupMacroBlockIndex end_index;
     for (; OB_SUCC(ret) && i < cur_index_list_.count() && i <= block_desc.last_index_; ++i) {
-      const ObLogicMacroBlockId &cur_key = cur_index_list_.at(i).logic_id_;
+      const blocksstable::ObLogicMacroBlockId &cur_key = cur_index_list_.at(i).logic_id_;
       if (cur_key.tablet_id_ != start_index.logic_id_.tablet_id_) {
         end_index = cur_index_list_.at(i - 1);
         cur_idx_ = i - 1;

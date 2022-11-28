@@ -16,6 +16,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "share/rc/ob_tenant_base.h"
 #include "logservice/palf/scn.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {

@@ -26,6 +26,7 @@
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "storage/ob_i_store.h"
 #include "storage/ob_sstable_struct.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {

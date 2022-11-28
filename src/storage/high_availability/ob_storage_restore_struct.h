@@ -24,6 +24,7 @@
 #include "storage/backup/ob_backup_index_store.h"
 #include "storage/backup/ob_backup_restore_util.h"
 #include "storage/backup/ob_backup_data_struct.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {
@@ -162,7 +163,7 @@ struct ObRestoreMacroBlockId final
       K_(logic_block_id),
       K_(backup_physic_block_id));
 
-  ObLogicMacroBlockId logic_block_id_;
+  blocksstable::ObLogicMacroBlockId logic_block_id_;
   backup::ObBackupPhysicalID backup_physic_block_id_;
 };
 
@@ -179,10 +180,10 @@ public:
       backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
   int get_macro_block_id(
       const int64_t block_id_index,
-      ObLogicMacroBlockId &logic_block_id,
+      blocksstable::ObLogicMacroBlockId &logic_block_id,
       backup::ObBackupPhysicalID &physic_block_id);
   int get_block_id_index(
-      const ObLogicMacroBlockId &logic_block_id,
+      const blocksstable::ObLogicMacroBlockId &logic_block_id,
       int64_t &block_id_index);
   int get_restore_macro_block_id_array(
       common::ObIArray<ObRestoreMacroBlockId> &block_id_array);

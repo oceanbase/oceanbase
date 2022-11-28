@@ -20,6 +20,7 @@
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {
@@ -58,7 +59,7 @@ public:
   TO_STRING_KV(K_(block_handle), K_(logic_id), K_(block_type), K_(ddl_start_log_ts), K_(log_ts), KP_(buf), K_(size));
 public:
   ObDDLMacroHandle block_handle_;
-  ObLogicMacroBlockId logic_id_;
+  blocksstable::ObLogicMacroBlockId logic_id_;
   blocksstable::ObDDLMacroBlockType block_type_;
   int64_t ddl_start_log_ts_;
   int64_t log_ts_;

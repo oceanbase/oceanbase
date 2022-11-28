@@ -19,6 +19,7 @@
 #include "share/schema/ob_table_param.h"
 #include "share/ob_encryption_util.h"
 #include "common/ob_store_format.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 
 namespace oceanbase
