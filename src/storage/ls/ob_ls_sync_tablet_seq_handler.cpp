@@ -112,17 +112,16 @@ int ObLSSyncTabletSeqHandler::resume_leader()
   return ret;
 }
 
-int ObLSSyncTabletSeqHandler::flush(int64_t rec_log_ts)
+int ObLSSyncTabletSeqHandler::flush(palf::SCN &scn)
 {
   // TODO
-  UNUSED(rec_log_ts);
+  UNUSED(scn);
   return OB_SUCCESS;
 }
 
-int64_t ObLSSyncTabletSeqHandler::get_rec_log_ts()
+palf::SCN ObLSSyncTabletSeqHandler::get_rec_scn()
 {
-  // TODO
-  return INT64_MAX;
+  return palf::SCN::max_scn();
 }
 
 }

@@ -158,8 +158,8 @@ public:
 class ObICheckpointSubHandler
 {
 public:
-  virtual int64_t get_rec_log_ts() = 0;
-  virtual int flush(int64_t rec_log_ts) = 0;
+  virtual palf::SCN get_rec_scn() = 0;
+  virtual int flush(palf::SCN &scn) = 0;
 };
 
 #define REGISTER_TO_LOGSERVICE(type, subhandler)                                            \

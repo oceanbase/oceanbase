@@ -17,6 +17,7 @@
 #include "storage/checkpoint/ob_common_checkpoint.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -39,8 +40,8 @@ struct ObCheckpointDList
   int unlink(ObFreezeCheckpoint *ob_freeze_checkpoint);
   int insert(ObFreezeCheckpoint *ob_freeze_checkpoint, bool ordered = true);
   void get_iterator(ObCheckpointIterator &iterator);
-  int64_t get_min_rec_log_ts_in_list(bool ordered = true);
-  ObFreezeCheckpoint *get_first_greater(const int64_t rec_log_ts);
+  palf::SCN get_min_rec_scn_in_list(bool ordered = true);
+  ObFreezeCheckpoint *get_first_greater(const palf::SCN rec_scn);
   int get_freezecheckpoint_info(
     ObIArray<checkpoint::ObFreezeCheckpointVTInfo> &freeze_checkpoint_array);
 
@@ -65,7 +66,6 @@ private:
 };
 
 // responsible for maintenance transaction checkpoint unit
-// including data_memtable, tx_data_memtable
 class ObDataCheckpoint : public ObCommonCheckpoint
 {
   friend class ObFreezeCheckpoint;
@@ -88,21 +88,21 @@ public:
   static const uint64_t LS_DATA_CHECKPOINT_TABLET_ID = 40000;
   int init(ObLS *ls);
   int safe_to_destroy();
-  int64_t get_rec_log_ts() override;
-  // if min_rec_log_ts <= the input rec_log_ts
+  palf::SCN get_rec_scn();
+  // if min_rec_scn <= the input rec_scn
   // logstream freeze
-  int flush(int64_t recycle_log_ts, bool need_freeze = true) override;
-  // if min_rec_log_ts <= the input rec_log_ts
+  int flush(palf::SCN recycle_scn, bool need_freeze = true);
+  // if min_rec_scn <= the input rec_scn
   // add ls_freeze task
   // logstream freeze optimization
-  int ls_freeze(int64_t rec_log_ts);
+  int ls_freeze(palf::SCN rec_scn);
   // logstream_freeze schedule and minor merge schedule
-  void road_to_flush(int64_t rec_log_ts);
+  void road_to_flush(palf::SCN rec_scn);
   // ObFreezeCheckpoint register into ObDataCheckpoint
   int add_to_new_create(ObFreezeCheckpoint *ob_freeze_checkpoint);
   // remove from prepare_list when finish minor_merge
   int unlink_from_prepare(ObFreezeCheckpoint *ob_freeze_checkpoint);
-  // timer to tranfer freeze_checkpoint that rec_log_ts is stable from new_create_list to
+  // timer to tranfer freeze_checkpoint that rec_scn is stable from new_create_list to
   // active_list
   int check_can_move_to_active_in_newcreate();
 

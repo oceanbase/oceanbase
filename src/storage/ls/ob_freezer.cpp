@@ -343,7 +343,7 @@ int ObFreezer::inner_logstream_freeze()
   uint32_t freeze_clock = get_freeze_clock();
   TRANS_LOG(INFO, "[Freezer] freeze_clock", K(ret), K_(ls_id), K(freeze_clock));
 
-  if (OB_FAIL(data_checkpoint_->ls_freeze(INT64_MAX))) {
+  if (OB_FAIL(data_checkpoint_->ls_freeze(palf::SCN::max_scn()))) {
     // move memtables from active_list to frozen_list
     TRANS_LOG(WARN, "[Freezer] data_checkpoint freeze failed", K(ret), K_(ls_id));
     stat_.add_diagnose_info("data_checkpoint freeze failed");

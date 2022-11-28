@@ -46,10 +46,11 @@ public:
   ObLSMeta(const ObLSMeta &ls_meta);
   ~ObLSMeta() {}
   ObLSMeta &operator=(const ObLSMeta &other);
+  palf::SCN get_clog_checkpoint_scn() const;
   int64_t get_clog_checkpoint_ts() const;
   palf::LSN &get_clog_base_lsn();
   int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
-                          const int64_t clog_checkpoint_ts,
+                          const palf::SCN clog_checkpoint_scn,
                           const bool write_slog = true);
   void reset();
   bool is_valid() const;
@@ -108,7 +109,7 @@ public:
     ObSpinLockGuard lock_guard_;
   };
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(replica_type), K_(ls_create_status),
-               K_(clog_checkpoint_ts), K_(clog_base_lsn),
+               K_(clog_checkpoint_scn), K_(clog_base_lsn),
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_scn_),
                K_(restore_status), K_(replayable_point), K_(tablet_change_checkpoint_scn),
                K_(all_id_meta));
@@ -125,10 +126,10 @@ private:
   void set_write_slog_func_(WriteSlog write_slog);
   static WriteSlog write_slog_;
 
-  // clog_checkpoint_ts_, meaning:
-  // 1. dump points of all modules have exceeded clog_checkpoint_ts_
-  // 2. all clog entries which log_ts are smaller than clog_checkpoint_ts_ can be recycled
-  int64_t clog_checkpoint_ts_;
+  // clog_checkpoint_scn_, meaning:
+  // 1. dump points of all modules have exceeded clog_checkpoint_scn_
+  // 2. all clog entries which log_scn are smaller than clog_checkpoint_scn_ can be recycled
+  palf::SCN clog_checkpoint_scn_;
   // clog_base_lsn_, meaning:
   // 1. all clog entries which lsn are smaller than clog_base_lsn_ have been recycled
   // 2. log_ts of log entry that clog_base_lsn_ points to is smaller than/equal to clog_checkpoint_ts_

@@ -42,7 +42,6 @@ int ObAdvanceLSCkptTask::try_advance_ls_ckpt_ts()
   int ret = OB_SUCCESS;
 
   storage::ObLSHandle ls_handle;
-  int64_t target_ckpt_ts = 0;
 
   if (OB_ISNULL(MTL(ObLSService *))
       || OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, storage::ObLSGetMod::TRANS_MOD))
@@ -52,10 +51,8 @@ int ObAdvanceLSCkptTask::try_advance_ls_ckpt_ts()
     }
     TRANS_LOG(WARN, "get ls faild", K(ret), K(MTL(ObLSService *)));
   } else if (ls_handle.get_ls()->get_checkpoint_executor()->advance_checkpoint_by_flush(
-                 target_ckpt_ts)) {
-    TRANS_LOG(WARN, "advance checkpoint ts failed", K(ret), K(ls_id_), K(target_ckpt_ts));
-  } else if (OB_FAIL(target_ckpt_ts_.convert_for_lsn_allocator(target_ckpt_ts))) {
-    TRANS_LOG(WARN, "convert for lsn fail", K(target_ckpt_ts));
+             target_ckpt_ts_)) {
+    TRANS_LOG(WARN, "advance checkpoint ts failed", K(ret), K(ls_id_), K(target_ckpt_ts_));
   }
 
   if (OB_SUCC(ret)) {

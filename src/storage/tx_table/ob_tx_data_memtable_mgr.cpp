@@ -369,11 +369,6 @@ int ObTxDataMemtableMgr::get_all_memtables_for_write(ObTxDataMemtableWriteGuard 
   return ret;
 }
 
-int64_t ObTxDataMemtableMgr::get_rec_log_ts()
-{
-  return get_rec_scn().get_val_for_lsn_allocator();
-}
-
 palf::SCN ObTxDataMemtableMgr::get_rec_scn()
 {
   int ret = OB_SUCCESS;
@@ -420,7 +415,6 @@ int ObTxDataMemtableMgr::flush_all_frozen_memtables_(ObTableHdlArray &memtable_h
   return ret;
 }
 
-
 int ObTxDataMemtableMgr::flush(palf::SCN recycle_scn, bool need_freeze)
 {
   int ret = OB_SUCCESS;
@@ -457,17 +451,6 @@ int ObTxDataMemtableMgr::flush(palf::SCN recycle_scn, bool need_freeze)
   }
 
   return ret;
-}
-
-int ObTxDataMemtableMgr::flush(int64_t recycle_log_ts, bool need_freeze)
-{
-  palf::SCN recycle_scn;
-  if (INT64_MAX == recycle_log_ts) {
-    recycle_scn.set_max();
-  } else {
-    recycle_scn.convert_for_lsn_allocator(recycle_log_ts);
-  }
-  return flush(recycle_scn, need_freeze);
 }
 
 ObTabletID ObTxDataMemtableMgr::get_tablet_id() const

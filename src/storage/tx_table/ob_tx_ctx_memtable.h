@@ -66,9 +66,8 @@ public:
   virtual int64_t get_occupied_size() const override { return 0; }
 
   // ================ INHERITED FROM ObCommonCheckpoint ===============
-  virtual int64_t get_rec_log_ts() override;
   virtual palf::SCN get_rec_scn();
-  virtual int flush(int64_t recycle_log_ts, bool need_freeze = true) override;
+  virtual int flush(palf::SCN recycle_scn, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const override;
 

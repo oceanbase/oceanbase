@@ -207,10 +207,8 @@ public:
   virtual int resume_leader() override;
 
   // for checkpoint
-  virtual int64_t get_rec_log_ts() override;
-  virtual void get_rec_log_scn(palf::SCN &scn);
-  virtual int flush(int64_t rec_log_ts) override;
-  virtual int flush(const palf::SCN &scn) ;
+  virtual palf::SCN get_rec_scn() override;
+  virtual int flush(palf::SCN &scn) override;
 
   TO_STRING_KV(K(is_inited_),
                K(gc_seq_invalid_member_));

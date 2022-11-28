@@ -1026,6 +1026,8 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
     LOG_WARN("checkpoint executor should not be NULL", K(ret), KPC(ctx_), KP(checkpoint_executor));
   } else {
     const int64_t wait_checkpoint_push_start_ts = ObTimeUtility::current_time();
+    palf::SCN tmp;
+    tmp.convert_for_lsn_allocator(ctx_->log_sync_scn_);
     while (OB_SUCC(ret)) {
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
@@ -1041,7 +1043,7 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_checkpoint_push_start_ts;
         LOG_INFO("succeed wait clog checkpoint ts push", "cost", cost_ts, "ls_id", ctx_->arg_.ls_id_);
         break;
-      } else if (OB_FAIL(checkpoint_executor->advance_checkpoint_by_flush(ctx_->log_sync_scn_))) {
+      } else if (OB_FAIL(checkpoint_executor->advance_checkpoint_by_flush(tmp))) {
         if (OB_NO_NEED_UPDATE == ret) {
           ret = OB_SUCCESS;
         } else {

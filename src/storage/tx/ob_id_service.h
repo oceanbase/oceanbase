@@ -18,6 +18,7 @@
 #include "logservice/ob_append_callback.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -112,7 +113,8 @@ public:
   int handle_replay_result(const int64_t last_id, const int64_t limited_id, const palf::SCN log_ts);
 
   // clog checkpoint
-  int flush(int64_t rec_log_ts);
+  int flush(palf::SCN &scn);
+  palf::SCN get_rec_scn();
   int64_t get_rec_log_ts();
 
   // for clog replay

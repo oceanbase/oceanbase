@@ -320,11 +320,8 @@ public:
   virtual void do_work() override;
 
 public:
-  //TODO(SCN)yaoying.yyy: get_rec_log_scn() and flush() override
-  virtual int64_t get_rec_log_ts() override { return INT64_MAX;}
-  virtual const palf::SCN get_rec_log_scn(){ return palf::SCN::max_scn();}
-  virtual int flush(int64_t rec_log_ts) override { return OB_SUCCESS; }
-  virtual int flush(palf::SCN &scn) { return OB_SUCCESS; }
+  virtual palf::SCN get_rec_scn() override { return palf::SCN::max_scn();}
+  virtual int flush(palf::SCN &scn) override { return OB_SUCCESS; }
   int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const palf::SCN &scn) override
   {
     UNUSED(buffer);

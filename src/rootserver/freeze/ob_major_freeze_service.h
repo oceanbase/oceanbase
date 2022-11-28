@@ -38,21 +38,12 @@ public:
 
   int init(uint64_t tenant_id);
 
-  // clog checkpoint, do nothing
-  int flush(int64_t rec_log_ts)
-  {
-    UNUSED(rec_log_ts);
-    return OB_SUCCESS;
-  }
-
   int flush(palf::SCN &rec_scn)
   {
     UNUSED(rec_scn);
     return OB_SUCCESS;
   }
-  int64_t get_rec_log_ts() { return INT64_MAX; }
-
-  palf::SCN get_rec_log_scn() { return palf::SCN::max_scn(); }
+  palf::SCN get_rec_scn() override { return palf::SCN::max_scn(); }
  
   // for replay, do nothing
   int replay(const void *buffer,

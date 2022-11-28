@@ -219,19 +219,6 @@ transaction::ObLSTxCtxMgr *ObTxCtxMemtable::get_ls_tx_ctx_mgr()
   return ls_ctx_mgr_guard_.get_ls_tx_ctx_mgr();
 }
 
-// TODO: handle exception
-int64_t ObTxCtxMemtable::get_rec_log_ts()
-{
-  int ret = OB_SUCCESS;
-
-  // TODO: cxf remove this
-  palf::SCN tmp;
-  int64_t tmp_rec_log_ts = INT64_MAX;
-  tmp = get_rec_scn();
-  tmp_rec_log_ts = tmp == palf::SCN::max_scn() ? INT64_MAX : tmp.get_val_for_lsn_allocator();
-  return tmp_rec_log_ts;
-}
-
 palf::SCN ObTxCtxMemtable::get_rec_scn()
 {
   int ret = OB_SUCCESS;
@@ -272,15 +259,15 @@ bool ObTxCtxMemtable::is_active_memtable() const
   return !ATOMIC_LOAD(&is_frozen_);
 }
 
-int ObTxCtxMemtable::flush(int64_t recycle_log_ts, bool need_freeze)
+int ObTxCtxMemtable::flush(palf::SCN recycle_scn, bool need_freeze)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(flush_lock_);
   
   if (need_freeze) {
-    int64_t rec_log_ts = get_rec_log_ts();
-    if (rec_log_ts >= recycle_log_ts) {
-      TRANS_LOG(INFO, "no need to freeze", K(rec_log_ts), K(recycle_log_ts));
+    palf::SCN rec_scn = get_rec_scn();
+    if (rec_scn >= recycle_scn) {
+      TRANS_LOG(INFO, "no need to freeze", K(rec_scn), K(recycle_scn));
     } else if (is_active_memtable()) {
       int64_t cur_ts = common::ObClockGenerator::getClock();
       ObScnRange scn_range;

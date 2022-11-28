@@ -114,8 +114,8 @@ public:
   int switch_to_leader() { ATOMIC_STORE(&is_master_,true); return OB_SUCCESS;}
   int switch_to_follower_gracefully() { ATOMIC_STORE(&is_master_,false); return OB_SUCCESS;}
   int resume_leader() { ATOMIC_STORE(&is_master_,true);return OB_SUCCESS; }
-  int64_t get_rec_log_ts() { return INT64_MAX; }
-  int flush(int64_t rec_log_ts) { return OB_SUCCESS;}
+  palf::SCN get_rec_scn() { return palf::SCN::max_scn(); }
+  int flush(palf::SCN &rec_scn) { return OB_SUCCESS;}
 
 private:
   bool check_gts_();

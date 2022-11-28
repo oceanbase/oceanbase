@@ -370,11 +370,12 @@ public:
 
   /* freeze */
   virtual int set_frozen() override { local_allocator_.set_frozen(); return OB_SUCCESS; }
-  virtual bool rec_log_ts_is_stable() override;
+  virtual bool rec_scn_is_stable() override;
   virtual bool ready_for_flush() override;
   void print_ready_for_flush();
   virtual int flush(share::ObLSID ls_id) override;
-  virtual int64_t get_rec_log_ts() override { return ATOMIC_LOAD(&rec_log_ts_); }
+  virtual int64_t get_rec_log_ts() { return ATOMIC_LOAD(&rec_log_ts_); }
+  virtual palf::SCN get_rec_scn();
   virtual bool is_frozen_checkpoint() const override { return is_frozen_memtable();}
   virtual bool is_active_checkpoint() const override { return is_active_memtable();}
 
