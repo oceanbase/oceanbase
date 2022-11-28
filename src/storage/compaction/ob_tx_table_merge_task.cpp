@@ -145,7 +145,7 @@ int ObTxTableMergePrepareTask::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Unexcepted empty log ts range in minor merge", K(ret), K(ctx->scn_range_));
   } else {
-    ctx->merge_scn_ = ctx->scn_range_.end_scn_.get_val_for_inner_table_field();
+    ctx->merge_scn_ = ctx->scn_range_.end_scn_;
   }
 
   if (OB_FAIL(ret)) {

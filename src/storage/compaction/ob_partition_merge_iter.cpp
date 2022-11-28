@@ -140,7 +140,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
         LOG_WARN("Failed to init table access context", K(ret), K(query_flag));
       } else {
         // always use end_scn for safety
-        access_context_.merge_log_ts_ = merge_param.scn_range_.end_scn_.get_val_for_inner_table_field();
+        access_context_.merge_scn_ = merge_param.scn_range_.end_scn_;
       }
     }
   }

@@ -656,7 +656,7 @@ int ObTabletTableBackfillTXTask::prepare_merge_ctx_()
     tablet_merge_ctx_.sstable_version_range_.multi_version_start_ = tablet_handle_.get_obj()->get_multi_version_start();
     tablet_merge_ctx_.sstable_version_range_.snapshot_version_ = tablet_handle_.get_obj()->get_snapshot_version();
     tablet_merge_ctx_.scn_range_ = table_handle_.get_table()->get_key().scn_range_;
-    tablet_merge_ctx_.merge_scn_ = backfill_tx_ctx_->log_sync_scn_.get_val_for_lsn_allocator();
+    tablet_merge_ctx_.merge_scn_ = backfill_tx_ctx_->log_sync_scn_;
     tablet_merge_ctx_.create_snapshot_version_ = 0;
 
     if (OB_FAIL(tablet_merge_ctx_.tables_handle_.add_table(table_handle_))) {

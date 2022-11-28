@@ -43,7 +43,7 @@ struct ObMigrationTabletParam;
 class ObTabletMeta final
 {
 public:
-  static const int64_t INIT_CLOG_CHECKPOINT_TS;
+  static const palf::SCN INIT_CLOG_CHECKPOINT_SCN;
 
 public:
   ObTabletMeta();

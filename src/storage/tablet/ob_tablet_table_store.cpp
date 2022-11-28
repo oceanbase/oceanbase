@@ -1394,13 +1394,9 @@ int ObTabletTableStore::combin_ha_minor_sstables_(
     common::ObIArray<ObITable *> &new_minor_sstables)
 {
   int ret = OB_SUCCESS;
-  //TODO(SCN) TabletMeta::INIT_CLOG_CHECKPOINT_TS should be SCN
-  palf::SCN logical_start_scn;
-  logical_start_scn.convert_for_lsn_allocator(ObTabletMeta::INIT_CLOG_CHECKPOINT_TS);
-  palf::SCN logical_end_scn;
-  logical_end_scn.convert_for_lsn_allocator(ObTabletMeta::INIT_CLOG_CHECKPOINT_TS);
-  palf::SCN max_copy_end_scn;
-  max_copy_end_scn.convert_for_lsn_allocator(ObTabletMeta::INIT_CLOG_CHECKPOINT_TS);
+  palf::SCN logical_start_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+  palf::SCN logical_end_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+  palf::SCN max_copy_end_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
   int64_t old_store_minor_tables_index = 0;
 
   //get remote logical minor sstable log ts
@@ -1441,7 +1437,7 @@ int ObTabletTableStore::combin_ha_minor_sstables_(
         }
       }
 
-      if (OB_SUCC(ret) && !found && ObTabletMeta::INIT_CLOG_CHECKPOINT_TS != logical_end_scn.get_val_for_inner_table_field()) {
+      if (OB_SUCC(ret) && !found && ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN != logical_end_scn) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("can not find table continue with old table store", K(ret),
             K(old_store_minor_sstables), K(logical_start_scn), K(logical_end_scn), K(need_add_minor_sstables));
