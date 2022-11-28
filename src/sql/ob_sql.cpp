@@ -2440,7 +2440,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
                                          stmt_need_privs, stmt_ora_need_privs,
                                          audit_units,
                                          logical_plan, phy_plan))) { //gen phy plan
-          LOG_WARN("Failed to genenrate phy plan", K(ret));
+          LOG_WARN("Failed to generate phy plan", K(ret));
         }
 
         // memory debug for sql work arena
