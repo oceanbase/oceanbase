@@ -20,6 +20,8 @@
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "lib/utility/ob_tracepoint.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
@@ -404,6 +406,7 @@ int ObMultiMacroBlockBackupReader::prepare_macro_block_reader_(const int64_t idx
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(idx), K(readers_.count()));
   } else {
+    readers_.at(idx)->reset();
     const ObBackupMacroBlockId &macro_id = macro_list_.at(idx);
     const blocksstable::ObLogicMacroBlockId &logic_id = macro_id.logic_id_;
     const blocksstable::MacroBlockId &macro_block_id = macro_id.macro_block_id_;
@@ -420,12 +423,22 @@ int ObMultiMacroBlockBackupReader::fetch_macro_block_with_retry_(
   int ret = OB_SUCCESS;
   int64_t retry_times = 0;
   while (retry_times < OB_MAX_RETRY_TIMES) {
-    if (retry_times > 1) {
+    if (retry_times >= 1) {
       LOG_WARN("retry get macro block", K(retry_times));
     }
     if (OB_FAIL(fetch_macro_block_(data, logic_id))) {
       LOG_WARN("failed to fetch macro block", K(ret), K(retry_times));
     }
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = E(EventTable::EN_BACKUP_READ_MACRO_BLOCK_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        SERVER_EVENT_SYNC_ADD("backup", "fetch_macro_block_failed",
+                              "logic_id", logic_id);
+        DEBUG_SYNC(AFTER_BACKUP_FETCH_MACRO_BLOCK_FAILED);
+      }
+    }
+#endif
     if (OB_SUCC(ret)) {
       break;
     }

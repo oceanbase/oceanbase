@@ -47,6 +47,7 @@ public:
   static SCN scn_inc(const SCN &ref);
   static SCN scn_dec(const SCN &ref);
 
+  void atomic_store(const SCN &ref);
   void atomic_set(const SCN &ref);
   SCN atomic_get() const;
   bool atomic_bcas(const SCN &old_v, const SCN &new_val);
@@ -81,7 +82,6 @@ public:
 
   // change val_ from INT64_MAX to OB_MAX_SCN_TS_NS for compitibility in
   // deserialization
-  void transform_max();
 
   //only for filling inner_table fields
   uint64_t get_val_for_inner_table_field() const;
@@ -118,6 +118,8 @@ public:
   int to_yson(char *buf, const int64_t buf_len, int64_t &pos) const;
 
   TO_STRING_KV(K_(val));
+private:
+  void transform_max_();
 private:
   static const uint64_t SCN_VERSION = 0;
   union {

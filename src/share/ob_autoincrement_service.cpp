@@ -249,7 +249,6 @@ int ObAutoincrementService::init(ObAddr &addr,
                                  ObMySQLProxy *mysql_proxy,
                                  ObSrvRpcProxy *srv_proxy,
                                  ObMultiVersionSchemaService *schema_service,
-                                 ObLocationService &location_service,
                                  rpc::frame::ObReqTransport *req_transport)
 {
   int ret = OB_SUCCESS;
@@ -260,7 +259,7 @@ int ObAutoincrementService::init(ObAddr &addr,
 
   if (OB_FAIL(distributed_autoinc_service_.init(mysql_proxy))) {
     LOG_WARN("fail init distributed_autoinc_service_ service", K(ret));
-  } else if (OB_FAIL(global_autoinc_service_.init(my_addr_, *schema_service, location_service, req_transport))) {
+  } else if (OB_FAIL(global_autoinc_service_.init(my_addr_, req_transport))) {
     LOG_WARN("fail init auto inc global service", K(ret));
   } else if (OB_FAIL(node_allocator_.init(sizeof(TableNode), ObModIds::OB_AUTOINCREMENT))) {
     LOG_WARN("failed to init table node allocator", K(ret));
@@ -277,7 +276,6 @@ int ObAutoincrementService::init_for_backup(ObAddr &addr,
                                             ObMySQLProxy *mysql_proxy,
                                             ObSrvRpcProxy *srv_proxy,
                                             ObMultiVersionSchemaService *schema_service,
-                                            share::ObLocationService &location_service,
                                             rpc::frame::ObReqTransport *req_transport)
 {
   int ret = OB_SUCCESS;
@@ -286,7 +284,7 @@ int ObAutoincrementService::init_for_backup(ObAddr &addr,
   srv_proxy_ = srv_proxy;
   schema_service_ = schema_service;
   OZ(distributed_autoinc_service_.init(mysql_proxy));
-  OZ(global_autoinc_service_.init(my_addr_, *schema_service, location_service, req_transport));
+  OZ(global_autoinc_service_.init(my_addr_, req_transport));
   return ret;
 }
 
@@ -1441,8 +1439,6 @@ int ObInnerTableGlobalAutoIncrementService::local_sync_with_global_value(
 
 int ObRpcGlobalAutoIncrementService::init(
     const common::ObAddr &addr,
-    share::schema::ObMultiVersionSchemaService &schema_service,
-    share::ObLocationService &location_service,
     rpc::frame::ObReqTransport *req_transport)
 {
   int ret = OB_SUCCESS;
@@ -1452,13 +1448,11 @@ int ObRpcGlobalAutoIncrementService::init(
   } else if (!addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(addr));
-  } else if (OB_FAIL(location_adapter_def_.init(&schema_service, &location_service))) {
-    LOG_WARN("localtion adapter init error", K(ret));
   } else if (OB_FAIL(gais_request_rpc_proxy_.init(req_transport, addr))) {
     LOG_WARN("rpc proxy init failed", K(ret), K(req_transport), K(addr));
   } else if (OB_FAIL(gais_request_rpc_.init(&gais_request_rpc_proxy_, addr))) {
     LOG_WARN("response rpc init failed", K(ret), K(addr));
-  } else if (OB_FAIL(gais_client_.init(addr, &gais_request_rpc_, &location_adapter_def_))) {
+  } else if (OB_FAIL(gais_client_.init(addr, &gais_request_rpc_))) {
     LOG_WARN("init client failed", K(ret));
   }
   return ret;

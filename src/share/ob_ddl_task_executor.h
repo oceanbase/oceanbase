@@ -20,6 +20,7 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/profile/ob_trace_id.h"
 #include "lib/thread/thread_mgr_interface.h"
+#include "share/location_cache/ob_location_struct.h"
 #include "share/ob_errno.h"
 #include "share/ob_thread_pool.h"
 
@@ -57,7 +58,9 @@ public:
       || common::OB_TRANS_STMT_TIMEOUT == ret_code || common::OB_RS_NOT_MASTER == ret_code || OB_TRANS_NEED_ROLLBACK == ret_code
       || common::OB_SCHEMA_EAGAIN == ret_code || common::OB_GTS_NOT_READY == ret_code || common::OB_ERR_SHARED_LOCK_CONFLICT == ret_code
       || common::OB_PARTITION_NOT_EXIST == ret_code || common::OB_PG_IS_REMOVED == ret_code || common::OB_TENANT_NOT_EXIST == ret_code
-      || common::OB_RPC_SEND_ERROR == ret_code || common::OB_RPC_CONNECT_ERROR == ret_code || common::OB_DDL_SCHEMA_VERSION_NOT_MATCH == ret_code;
+      || common::OB_RPC_SEND_ERROR == ret_code || common::OB_RPC_CONNECT_ERROR == ret_code || common::OB_DDL_SCHEMA_VERSION_NOT_MATCH == ret_code
+      || OB_TRANS_ROLLBACKED == ret_code || OB_TRANS_TIMEOUT == ret_code || OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code
+      || is_location_service_renew_error(ret_code);
   }
   static bool in_ddl_retry_black_list(const int ret_code)
   {

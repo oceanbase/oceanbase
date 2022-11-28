@@ -142,6 +142,7 @@ public:
   int update_replayable_point(const share::SCN &replayable_scn);
   int stat_for_each(const common::ObFunction<int (const ObReplayStatus &)> &func);
   int stat_all_ls_replay_process(int64_t &replayed_log_size, int64_t &unreplayed_log_size);
+  int diagnose(const share::ObLSID &id, ReplayDiagnoseInfo &diagnose_info);
   void inc_pending_task_size(const int64_t log_size);
   void dec_pending_task_size(const int64_t log_size);
   int64_t get_pending_task_size() const;
@@ -197,8 +198,6 @@ private:
   int remove_all_ls_();
 private:
   const int64_t MAX_REPLAY_TIME_PER_ROUND = 100 * 1000; //100ms
-  const int64_t MAX_SINGLE_REPLAY_WARNING_TIME_THRESOLD = 1000 * 1000; //1s 单条日志回放执行时间超过此值报error
-  const int64_t MAX_SINGLE_RETRY_WARNING_TIME_THRESOLD = 5 * 1000 * 1000; //1s 单条日志回放重试超过此值报error
   const int64_t MAX_SUBMIT_TIME_PER_ROUND = 1000 * 1000; //1s
   const int64_t TASK_QUEUE_WAIT_IN_GLOBAL_QUEUE_TIME_THRESHOLD = 5 * 1000 * 1000; //5s
   const int64_t PENDING_TASK_MEMORY_LIMIT = 128 * (1LL << 20); //128MB

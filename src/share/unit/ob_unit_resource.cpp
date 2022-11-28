@@ -685,13 +685,13 @@ int ObUnitResource::gen_sys_tenant_default_unit_resource()
 int ObUnitResource::get_sys_tenant_default_memory(int64_t &memory_size)
 {
   int ret = OB_SUCCESS;
-  const int64_t server_avail_memory = GCONF.get_server_memory_avail();
   const int64_t sys_tenant_default_memory_percentage = SYS_TENANT_DEFAULT_MEMORY_PERCENTAGE;
   const int64_t sys_tenant_default_memory_max =  SYS_TENANT_DEFAULT_MEMORY_MAX;
   const int64_t unit_min_memory = UNIT_MIN_MEMORY;
   const int64_t __min_full_resource_pool_memory = GCONF.__min_full_resource_pool_memory;
-  const int64_t system_memory = GCONF.get_reserved_server_memory();
-  const int64_t server_memory_limit = GCONF.get_server_memory_limit();
+  const int64_t system_memory = GMEMCONF.get_reserved_server_memory();
+  const int64_t server_memory_limit = GMEMCONF.get_server_memory_limit();
+  const int64_t server_avail_memory = server_memory_limit - system_memory;
 
   memory_size = 0;
 

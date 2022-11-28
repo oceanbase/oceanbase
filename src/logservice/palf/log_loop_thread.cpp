@@ -71,6 +71,8 @@ void LogLoopThread::run1()
 void LogLoopThread::log_loop_()
 {
   int64_t last_switch_state_time = OB_INVALID_TIMESTAMP;
+  int64_t last_check_freeze_mode_time = OB_INVALID_TIMESTAMP;
+  int64_t last_sw_freeze_time = OB_INVALID_TIMESTAMP;
   while (!has_set_stop()) {
     int tmp_ret = OB_SUCCESS;
     const int64_t start_ts = ObTimeUtility::current_time();
@@ -81,8 +83,15 @@ void LogLoopThread::log_loop_()
       }
       last_switch_state_time = start_ts;
     }
-    // try freeze log
+    // try switch freeze mode
     const int64_t now = ObTimeUtility::current_time();
+    if (now - last_check_freeze_mode_time >= 1 * 1000 * 1000) {
+      if (OB_SUCCESS != (tmp_ret = palf_env_impl_->check_and_switch_freeze_mode())) {
+        PALF_LOG(WARN, "check_and_switch_freeze_mode failed", K(tmp_ret));
+      }
+      last_check_freeze_mode_time = now;
+    }
+    // try freeze log
     if (OB_SUCCESS != (tmp_ret = palf_env_impl_->try_freeze_log_for_all())) {
       PALF_LOG(WARN, "try_freeze_log_for_all failed", K(tmp_ret));
     }

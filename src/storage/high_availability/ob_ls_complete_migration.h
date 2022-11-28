@@ -41,6 +41,7 @@ public:
 
   int64_t start_ts_;
   int64_t finish_ts_;
+  int64_t rebuild_seq_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -48,7 +49,8 @@ public:
       K_(arg),
       K_(task_id),
       K_(start_ts),
-      K_(finish_ts));
+      K_(finish_ts),
+      K_(rebuild_seq));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSCompleteMigrationCtx);
 };
@@ -61,10 +63,11 @@ public:
   virtual bool is_valid() const override;
   void reset();
 
-  VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id), K_(result));
+  VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id), K_(result), K_(rebuild_seq));
   ObMigrationOpArg arg_;
   share::ObTaskId task_id_;
   int32_t result_;
+  int64_t rebuild_seq_;
 };
 
 class ObLSCompleteMigrationDagNet: public share::ObIDagNet
@@ -80,7 +83,8 @@ public:
   virtual int64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
-  virtual int clear_dag_net_ctx();
+  virtual int clear_dag_net_ctx() override;
+  virtual int deal_with_cancel() override;
 
   ObLSCompleteMigrationCtx *get_ctx() { return &ctx_; }
   const share::ObLSID &get_ls_id() const { return ctx_.arg_.ls_id_; }
@@ -173,7 +177,7 @@ private:
   int wait_log_replay_sync_();
   int wait_trans_tablet_explain_data_();
   int change_member_list_();
-  int check_need_wait_log_sync_(
+  int check_need_wait_(
       ObLS *ls,
       bool &need_wait);
   int update_ls_migration_status_hold_();
@@ -181,10 +185,7 @@ private:
   int check_tablet_ready_(
       const common::ObTabletID &tablet_id,
       ObLS *ls);
-  int check_need_wait_checkpoint_scn_push_(
-      ObLS *ls,
-      bool &need_wait);
-  int wait_ls_checkpoint_scn_push_();
+  int wait_log_replay_to_max_minor_end_scn_();
   int record_server_event_();
 
 private:

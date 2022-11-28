@@ -311,6 +311,7 @@ struct EstimateCostInfo {
       location_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
       contain_fake_cte_(false),
       contain_pw_merge_op_(false),
+      contain_match_all_fake_cte_(false),
       contain_das_op_(false),
       parallel_(1),
       server_cnt_(1)
@@ -336,6 +337,7 @@ struct EstimateCostInfo {
         location_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
         contain_fake_cte_(false),
         contain_pw_merge_op_(false),
+        contain_match_all_fake_cte_(false),
         contain_das_op_(false),
         parallel_(1),
         server_cnt_(1),
@@ -410,6 +412,7 @@ struct EstimateCostInfo {
     double get_path_output_rows() const;
     bool contain_fake_cte() const { return contain_fake_cte_; }
     bool contain_pw_merge_op() const { return contain_pw_merge_op_; }
+    bool contain_match_all_fake_cte() const { return contain_match_all_fake_cte_; }
     bool is_pipelined_path() const { return is_pipelined_path_; }
     bool is_nl_style_pipelined_path() const { return is_nl_style_pipelined_path_; }
     virtual int compute_pipeline_info();
@@ -481,6 +484,7 @@ struct EstimateCostInfo {
     ObPhyPlanType location_type_;
     bool contain_fake_cte_;
     bool contain_pw_merge_op_;
+    bool contain_match_all_fake_cte_;
     bool contain_das_op_;
     // remember the parallel info to get this sharding
     int64_t parallel_;
@@ -1482,6 +1486,8 @@ struct NullAwareAntiJoinInfo {
                                               const ObIArray<ObRawExpr*> &filters,
                                               double &output_card);
 
+    int create_one_cte_table_path(const TableItem* table_item,
+                                  ObShardingInfo * sharding);
     int generate_cte_table_paths();
     int generate_function_table_paths();
 

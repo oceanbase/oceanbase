@@ -141,7 +141,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
                                          const int64_t schema_version,
                                          const bool for_replay)
 {
-  ObTimeGuard time_guard("ObTabletMemtableMgr::create_memtable", 1 * 1000 * 1000);
+  ObTimeGuard time_guard("ObTabletMemtableMgr::create_memtable", 10 * 1000);
   // Write lock
   SpinWLockGuard lock_guard(lock_);
   time_guard.click("lock");
@@ -217,7 +217,8 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
           last_frozen_memtable->resolve_right_boundary();
           TRANS_LOG(INFO, "[resolve_right_boundary] create_memtable", K(for_replay), K(ls_id), KPC(last_frozen_memtable));
           if (memtable != last_frozen_memtable) {
-            memtable->resolve_left_boundary(last_frozen_memtable->get_end_scn());
+            const SCN &new_start_scn = MAX(last_frozen_memtable->get_end_scn(), last_frozen_memtable->get_migration_clog_checkpoint_scn());
+            memtable->resolve_left_boundary(new_start_scn);
           }
         }
       // there is no frozen memtable and new sstable will not be generated,
@@ -551,44 +552,6 @@ int ObTabletMemtableMgr::get_all_memtables(ObTableHdlArray &handle)
   } else if (OB_FAIL(get_memtables_nolock(handle))) {
     LOG_WARN("failed to get all memtables", K(ret));
   }
-  return ret;
-}
-
-int ObTabletMemtableMgr::release_head_empty_memtable(memtable::ObIMemtable *flush_memtable)
-{
-  int ret = OB_SUCCESS;
-  const share::ObLSID ls_id = ls_->get_ls_id();
-
-  if (lock_.try_wrlock()) {
-    if (IS_NOT_INIT) {
-      ret = OB_NOT_INIT;
-      TRANS_LOG(WARN, "not inited", K(ret));
-    } else {
-      memtable::ObIMemtable *imemtable = tables_[get_memtable_idx(memtable_head_)];
-      if (OB_ISNULL(imemtable)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "memtable is nullptr", K(ret), KP(imemtable), K(memtable_head_));
-      } else if (flush_memtable == imemtable) {
-        memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
-        if (memtable->is_empty()) {
-          if (!memtable->is_frozen_memtable() ||
-              0 != memtable->get_write_ref() ||
-              0 != memtable->get_unsubmitted_cnt() ||
-              0 != memtable->get_unsynced_cnt()) {
-            STORAGE_LOG(WARN, "The empty memtable cannot be released!", K(ls_id), K(tablet_id_), KPC(memtable));
-          } else if (OB_FAIL(release_head_memtable_(imemtable))) {
-            STORAGE_LOG(WARN, "fail to release empty memtable", K(ret), K(ls_id), K(tablet_id_));
-          } else {
-            STORAGE_LOG(INFO, "succeed to release empty memtable", K(ret), K(ls_id), K(tablet_id_));
-          }
-        }
-      }
-    }
-    lock_.unlock();
-  } else {
-    ret = OB_EAGAIN;
-  }
-
   return ret;
 }
 

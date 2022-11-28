@@ -384,7 +384,7 @@ int ObDataBackupDestConfigParser::update_inner_config_table(common::ObISQLClient
   ObBackupDestMgr dest_mgr;
   share::ObBackupPathString backup_dest;
   ObBackupDestType::TYPE dest_type = ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA;
-  // TODO: wangxiaohui.wxh, handle trans failed after write format file.
+  // TODO: handle trans failed after write format file.
   if (!type_.is_valid() || 1 != config_items_.count() ) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parser", K(ret), KPC(this));
@@ -489,7 +489,7 @@ int ObLogArchiveDestConfigParser::update_archive_dest_config_(common::ObISQLClie
       LOG_WARN("fail to gen archive config items", K(ret)); 
     }
 
-    // TODO: wangxiaohui.wxh, handle trans failed after write format file.
+  // TODO: handle trans failed after write format file.
     ARRAY_FOREACH_X(config_items_, i, cnt, OB_SUCC(ret)) {
       const BackupConfigItemPair &config_item = config_items_.at(i);
       if (OB_FAIL(helper.set_kv_item(trans, dest_no_, config_item.key_, config_item.value_))) {

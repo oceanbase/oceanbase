@@ -247,6 +247,8 @@ public:
   int get_newest_snapshot_version(const ObTabletID &tablet_id,
                                   share::SCN &snapshot_version);
   ObFreezerStat& get_stat() { return stat_; }
+  bool need_resubmit_log() { return ATOMIC_LOAD(&need_resubmit_log_); }
+  void set_need_resubmit_log(bool flag) { return ATOMIC_STORE(&need_resubmit_log_, flag); }
 
 private:
   class ObLSFreezeGuard
@@ -314,6 +316,8 @@ private:
   // make sure ls freeze has higher priority than tablet freeze
   int64_t high_priority_freeze_cnt_; // waiting and freeze cnt
   int64_t low_priority_freeze_cnt_; // freeze tablet cnt
+
+  bool need_resubmit_log_;
 
   bool is_inited_;
 };

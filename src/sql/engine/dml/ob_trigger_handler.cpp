@@ -403,7 +403,7 @@ int TriggerHandle::calc_trigger_routine(
   trigger_id = ObTriggerInfo::get_trigger_spec_package_id(trigger_id);
   OV (OB_NOT_NULL(exec_ctx.get_pl_engine()));
   OZ (exec_ctx.get_pl_engine()->execute(
-    exec_ctx, trigger_id, routine_id, path, params, nocopy_params, result),
+    exec_ctx, exec_ctx.get_allocator(), trigger_id, routine_id, path, params, nocopy_params, result),
       trigger_id, routine_id, params);
   return ret;
 }

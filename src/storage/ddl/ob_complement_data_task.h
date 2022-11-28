@@ -39,7 +39,7 @@ public:
   ObComplementDataParam():
     is_inited_(false), tenant_id_(common::OB_INVALID_TENANT_ID), ls_id_(share::ObLSID::INVALID_LS_ID), 
     source_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID), 
-    data_table_schema_(nullptr), hidden_table_schema_(nullptr), allocator_("ComplementData"),
+    data_table_schema_(nullptr), hidden_table_schema_(nullptr), allocator_("CompleteDataPar"),
     row_store_type_(common::ENCODING_ROW_STORE), schema_version_(0), snapshot_version_(0),
     concurrent_cnt_(0), task_id_(0), execution_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID)
   {}
@@ -70,6 +70,7 @@ public:
     }
     data_table_schema_ = nullptr;
     hidden_table_schema_ = nullptr;
+    ranges_.reset();
     allocator_.reset();
     row_store_type_ = common::ENCODING_ROW_STORE;
     schema_version_ = 0;
@@ -105,8 +106,8 @@ struct ObComplementDataContext final
 {
 public:
   ObComplementDataContext():
-    is_inited_(false), complement_data_ret_(common::OB_SUCCESS),
-    allocator_("ComplementData"), lock_(), concurrent_cnt_(0), data_sstable_redo_writer_(), index_builder_(nullptr)
+    is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
+    allocator_("CompleteDataCtx"), lock_(), concurrent_cnt_(0), data_sstable_redo_writer_(), index_builder_(nullptr)
   {}
   ~ObComplementDataContext() { destroy(); }
   int init(const ObComplementDataParam &param, const ObDataStoreDesc &desc);
@@ -115,6 +116,7 @@ public:
   TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder));
 public:
   bool is_inited_;
+  bool is_major_sstable_exist_;
   int complement_data_ret_;
   common::ObArenaAllocator allocator_;
   ObSpinLock lock_;
@@ -144,6 +146,7 @@ public:
   int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return param_.compat_mode_; }
+  virtual int create_first_task() override;
   // report replica build status to RS.
   int report_replica_build_status();
 private:
@@ -160,9 +163,6 @@ public:
   ~ObComplementPrepareTask();
   int init(ObComplementDataParam &param, ObComplementDataContext &context);
   int process() override;
-private:
-  int generate_complement_write_task(ObComplementDataDag *dag, ObComplementWriteTask *&write_task);
-  int generate_complement_merge_task(ObComplementDataDag *dag, ObComplementWriteTask *write_task, ObComplementMergeTask *&merge_task);
 private:
   bool is_inited_;
   ObComplementDataParam *param_;

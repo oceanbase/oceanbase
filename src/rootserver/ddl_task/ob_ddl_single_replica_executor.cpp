@@ -99,7 +99,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
       for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count(); ++i) {
         ObPartitionBuildInfo &build_info = build_infos.at(i);
         if (ObPartitionBuildStat::BUILD_INIT == build_info.stat_||
-            ObPartitionBuildStat::BUILD_RETRY == build_info.stat_) {
+            build_info.need_schedule()) {
           // get leader of partition
           ObAddr leader_addr;
           obrpc::ObDDLBuildSingleReplicaRequestArg arg;
@@ -147,6 +147,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
           continue;
         } else if (OB_SUCCESS == ret_array.at(i)) {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_REQUESTED;
+          build_infos.at(idx).heart_beat_time_ = ObTimeUtility::current_time();
           LOG_INFO("rpc send successfully", K(source_tablet_ids_.at(idx)), K(dest_tablet_ids_.at(idx)));
         } else if (ObIDDLTask::in_ddl_retry_white_list(ret_array.at(i))) {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_RETRY;
@@ -154,6 +155,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
         } else {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_FAILED;
           build_infos.at(idx).ret_code_ = ret_array.at(i);
+          build_infos.at(idx).heart_beat_time_ = ObTimeUtility::current_time();
           LOG_INFO("task is failed", K(build_infos.at(idx)), K(source_tablet_ids_.at(idx)), K(dest_tablet_ids_.at(idx)));
         }
       }
@@ -183,7 +185,7 @@ int ObDDLSingleReplicaExecutor::check_build_end(bool &is_end, int64_t &ret_code)
     if (OB_SUCC(ret) && !is_end) {
       for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count(); ++i) {
         succ_cnt +=  ObPartitionBuildStat::BUILD_SUCCEED == build_infos.at(i).stat_;
-        need_schedule |= (ObPartitionBuildStat::BUILD_RETRY == build_infos.at(i).stat_);
+        need_schedule |= build_infos.at(i).need_schedule();
       }
       if (OB_SUCC(ret) && build_infos.count() == succ_cnt) {
         is_end = true;

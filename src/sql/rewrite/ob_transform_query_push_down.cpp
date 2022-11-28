@@ -485,6 +485,8 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
   int ret = OB_SUCCESS;
   can_be = false;
   bool check_status = false;
+  bool is_select_expr_valid = false;
+  ObSEArray<ObRawExpr*, 8> select_exprs;
   if (OB_ISNULL(select_stmt) || OB_ISNULL(view_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(select_stmt), K(view_stmt), K(ret));
@@ -493,6 +495,13 @@ int ObTransformQueryPushDown::check_select_item_push_down(ObSelectStmt *select_s
   } else if (!check_status) {
     can_be = false;
   } else if (view_stmt->is_contains_assignment() || select_stmt->is_contains_assignment()) {
+    can_be = false;
+  } else if (OB_FAIL(view_stmt->get_select_exprs(select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::check_expr_valid_for_stmt_merge(select_exprs,
+                                                                       is_select_expr_valid))) {
+    LOG_WARN("failed to check select expr valid", K(ret));
+  } else if (!is_select_expr_valid) {
     can_be = false;
   } else if(OB_FAIL(is_select_item_same(select_stmt,
                                         view_stmt,

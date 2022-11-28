@@ -486,6 +486,8 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
   bool has_ref_assign_user_var = false;
   bool force_merge = false;
   bool force_no_merge = false;
+  bool is_select_expr_valid = false;
+  ObSEArray<ObRawExpr*, 8> select_exprs;
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -514,6 +516,13 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
   } else if (OB_FAIL(child_stmt->has_rownum(has_rownum_expr))) {
     LOG_WARN("failed to check has rownum expr", K(ret));
   } else if (has_rownum_expr) {
+    can_be = false;
+  } else if (OB_FAIL(child_stmt->get_select_exprs(select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::check_expr_valid_for_stmt_merge(select_exprs,
+                                                                       is_select_expr_valid))) {
+    LOG_WARN("failed to check select expr valid", K(ret));
+  } else if (!is_select_expr_valid) {
     can_be = false;
   } else if (0 == child_stmt->get_from_item_size()) {
     //当 view 为 select ... from dual, 若上层非层次查询, 允许视图合并

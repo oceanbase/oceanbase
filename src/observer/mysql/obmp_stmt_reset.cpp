@@ -70,6 +70,7 @@ int ObMPStmtReset::process()
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session->get_piece_cache());
     int64_t param_num = 0;
+    THIS_WORKER.set_session(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_sessid()));
 
@@ -138,6 +139,7 @@ int ObMPStmtReset::process()
   }
   flush_buffer(true);
 
+  THIS_WORKER.set_session(NULL);
   if (NULL != session) {
     revert_session(session);
   }

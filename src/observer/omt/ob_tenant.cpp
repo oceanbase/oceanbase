@@ -291,30 +291,35 @@ void ObResourceGroup::calibrate_token_count()
   const auto current_time = ObTimeUtility::current_time();
   if (current_time - last_calibrate_token_ts_ > CALIBRATE_TOKEN_INTERVAL &&
       OB_SUCC(workers_lock_.trylock())) {
-    int64_t wait_worker = 0;
-    int64_t active_workers = 0;
-    DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
-      const auto w = static_cast<ObThWorker*>(wnode->get_data());
-      if (w->is_active()) {
-        active_workers++;
-        if (!w->has_req_flag()) {
-          wait_worker++;
+    if (has_stop_) {
+      // do nothing
+    } else {
+      int64_t wait_worker = 0;
+      int64_t active_workers = 0;
+      DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
+        const auto w = static_cast<ObThWorker*>(wnode->get_data());
+        if (w->is_active()) {
+          active_workers++;
+          if (!w->has_req_flag()) {
+            wait_worker++;
+          }
         }
       }
+      if (static_cast<int64_t>(ceil(tenant_->unit_min_cpu())) != min_token_cnt_) { // If the user manually adjusts the tenant specifications, the dynamic token adjustment alone cannot respond quickly, and it needs to be adjusted forcibly
+        set_token_cnt(static_cast<int64_t>(ceil(tenant_->unit_min_cpu())));
+        set_min_token_cnt(token_cnt_);
+      }
+      if (last_pop_req_cnt_ != 0 && pop_req_cnt_ == last_pop_req_cnt_
+          && token_cnt_ == ass_token_cnt_) {
+        set_token_cnt(min(token_cnt_ + 1, max_token_cnt_));
+      }
+      if (wait_worker > active_workers / 2) {
+        set_token_cnt(max(token_cnt_ - 1, min_token_cnt_));
+      }
+      last_calibrate_token_ts_ = current_time;
+      last_pop_req_cnt_ = pop_req_cnt_;
     }
-    if (static_cast<int64_t>(ceil(tenant_->unit_min_cpu())) != min_token_cnt_) { // If the user manually adjusts the tenant specifications, the dynamic token adjustment alone cannot respond quickly, and it needs to be adjusted forcibly
-      set_token_cnt(static_cast<int64_t>(ceil(tenant_->unit_min_cpu())));
-      set_min_token_cnt(token_cnt_);
-    }
-    if (last_pop_req_cnt_ != 0 && pop_req_cnt_ == last_pop_req_cnt_
-        && token_cnt_ == ass_token_cnt_) {
-      set_token_cnt(min(token_cnt_ + 1, max_token_cnt_));
-    }
-    if (wait_worker > active_workers / 2) {
-      set_token_cnt(max(token_cnt_ - 1, min_token_cnt_));
-    }
-    last_calibrate_token_ts_ = current_time;
-    last_pop_req_cnt_ = pop_req_cnt_;
+
     IGNORE_RETURN workers_lock_.unlock();
   }
 }
@@ -323,30 +328,34 @@ void ObResourceGroup::check_worker_count()
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(workers_lock_.trylock())) {
-    DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
-      const auto w = static_cast<ObThWorker*>(wnode->get_data());
-      const auto active_inactive_ts = w->get_active_inactive_ts();
-      const auto sojourn_time = ObTimeUtility::current_time() - active_inactive_ts;
-      if (w->is_active()) {
-        //w->set_tidx(active_workers);
-      } else if (w->is_waiting_active() &&
-                sojourn_time > PRESERVE_INACTIVE_WORKER_TIME) {
+    if (has_stop_) {
+      // do nothing
+    } else {
+      DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
+        const auto w = static_cast<ObThWorker*>(wnode->get_data());
         const auto active_inactive_ts = w->get_active_inactive_ts();
         const auto sojourn_time = ObTimeUtility::current_time() - active_inactive_ts;
-        if (sojourn_time > PRESERVE_INACTIVE_WORKER_TIME) {
-          workers_.remove(wnode);
-          w->reset();
-          worker_pool_->free(w);
+        if (w->is_active()) {
+          //w->set_tidx(active_workers);
+        } else if (w->is_waiting_active() &&
+                  sojourn_time > PRESERVE_INACTIVE_WORKER_TIME) {
+          const auto active_inactive_ts = w->get_active_inactive_ts();
+          const auto sojourn_time = ObTimeUtility::current_time() - active_inactive_ts;
+          if (sojourn_time > PRESERVE_INACTIVE_WORKER_TIME) {
+            workers_.remove(wnode);
+            w->reset();
+            worker_pool_->free(w);
+          }
         }
       }
-    }
-    const auto diff = token_cnt_ - ass_token_cnt_;
-    if (diff > 0) {
-      int64_t succ_num = 0L;
-      acquire_more_worker(diff, succ_num);
-      ass_token_cnt_ += succ_num;
-    } else if (diff < 0) {
-      //ret = OB_NEED_WAIT;
+      const auto diff = token_cnt_ - ass_token_cnt_;
+      if (diff > 0) {
+        int64_t succ_num = 0L;
+        acquire_more_worker(diff, succ_num);
+        ass_token_cnt_ += succ_num;
+      } else if (diff < 0) {
+        //ret = OB_NEED_WAIT;
+      }
     }
     IGNORE_RETURN workers_lock_.unlock();
   }
@@ -359,7 +368,9 @@ void ObResourceGroup::check_worker_count(ObThWorker &w)
       OB_SUCC(workers_lock_.trylock())) {
     const auto diff = token_cnt_ - ass_token_cnt_;
     int tmp_ret = OB_SUCCESS;
-    if (diff > 0) {
+    if (has_stop_) {
+      // do nothing
+    } else if (diff > 0) {
       int64_t succ_num = 0L;
       acquire_more_worker(diff, succ_num);
       ass_token_cnt_ += succ_num;
@@ -378,29 +389,28 @@ void ObResourceGroup::check_worker_count(ObThWorker &w)
 int ObResourceGroup::clear_worker()
 {
   int ret = OB_SUCCESS;
+  ObMutexGuard guard(workers_lock_);
   while (workers_.get_size() > 0) {
     int ret = OB_SUCCESS;
-    if (OB_SUCC(workers_lock_.trylock())) {
-      DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
-        const auto w = static_cast<ObThWorker*>(wnode->get_data());
-        w->set_inactive();
-        if (w->is_waiting_active()) {
-          w->reset();
-          workers_.remove(wnode);
-          worker_pool_->free(w);
-        }
+    DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
+      const auto w = static_cast<ObThWorker*>(wnode->get_data());
+      w->set_inactive();
+      if (w->is_waiting_active()) {
+        w->reset();
+        workers_.remove(wnode);
+        worker_pool_->free(w);
       }
-      IGNORE_RETURN workers_lock_.unlock();
-      if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
-        LOG_INFO(
-            "Tenant has some group workers need stop",
-            K(tenant_->id()),
-            "group workers", workers_.get_size(),
-            "group type", get_group_id());
-      }
+    }
+    if (REACH_TIME_INTERVAL(10 * 1000L * 1000L)) {
+      LOG_INFO(
+          "Tenant has some group workers need stop",
+          K(tenant_->id()),
+          "group workers", workers_.get_size(),
+          "group type", get_group_id());
     }
     ob_usleep(10L * 1000L);
   }
+  has_stop_ = true;
   return ret;
 }
 
@@ -1757,7 +1767,17 @@ void ObTenant::update_token_usage()
     token_usage_check_ts_ = now;
     const auto idle_us = static_cast<double>(ATOMIC_TAS(&idle_us_, 0));
     const auto tokens = static_cast<double>(token_cnt());
-    const auto total_us = duration * (tokens + nesting_worker_has_init_ - 1);
+
+    int group_worker_cnt = 0;
+    ObResourceGroupNode* iter = NULL;
+    ObResourceGroup* group = nullptr;
+    while (NULL != (iter = group_map_.quick_next(iter))) {
+      group = static_cast<ObResourceGroup*>(iter);
+      group_worker_cnt += group->workers_.get_size();
+    }
+
+    const auto total_us = duration * (tokens + group_worker_cnt +
+                                      nesting_worker_has_init_ - 1);
     token_usage_ = (total_us - idle_us) / duration;
     token_usage_ = std::max(.0, token_usage_);
   }

@@ -1428,6 +1428,7 @@ TEST_F(TestDagScheduler, test_free_dag_func)
 class ObCancelDag : public ObBasicDag
 {
 public:
+  ObCancelDag() : can_schedule_(false) {}
   virtual int create_first_task() override
   {
     int ret = OB_SUCCESS;
@@ -1441,8 +1442,10 @@ public:
   }
   virtual bool check_can_schedule() override
   {
-    return false;
+    return can_schedule_;
   }
+
+  bool can_schedule_;
 };
 
 class ObCancelDagNet: public ObFatherDagNet
@@ -1499,6 +1502,37 @@ TEST_F(TestDagScheduler, test_cancel_dag_func)
   EXPECT_EQ(true, scheduler->is_empty());
   EXPECT_EQ(0, ObDagWarningHistoryManager::get_instance().size());
 }
+
+
+
+TEST_F(TestDagScheduler, test_cancel_dag_net_func)
+{
+  int ret = OB_SUCCESS;
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+  ObCancelDagNet *dag_net = nullptr;
+  EXPECT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net(nullptr, dag_net));
+
+  while (scheduler->get_cur_dag_cnt() < 3) {
+    usleep(100);
+  }
+
+  ObArray<ObIDag *> dag_array;
+  dag_net->get_dag_list(dag_array);
+  ret = scheduler->cancel_dag_net(dag_net->get_dag_id());
+
+  for (int i = 0; i < dag_array.count(); ++i) {
+    ObCancelDag *dag = static_cast<ObCancelDag *>(dag_array[i]);
+    dag->can_schedule_ = true;
+  }
+
+  EXPECT_EQ(OB_SUCCESS, ret);
+  ob_usleep(5000 * 1000);
+
+  EXPECT_EQ(true, scheduler->is_empty());
+  EXPECT_EQ(0, ObDagWarningHistoryManager::get_instance().size());
+}
+
 
 }
 }

@@ -1436,13 +1436,6 @@ private:
                               ObMySQLTransaction &trans,
                               const common::ObString *ddl_stmt_str,
                               const common::ObString &db_name);
-  int restore_obj_priv_after_truncation(
-      ObDDLOperator &ddl_operator,
-      ObMySQLTransaction &trans,
-      common::ObIArray<share::schema::ObObjPriv> &orig_obj_privs_ora,
-      uint64_t new_table_id,
-      const common::ObString &database_name,
-      const common::ObString &table_name);
   int drop_aux_table_in_truncate(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -2168,6 +2161,17 @@ private:
   int alter_system_table_column_(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &hard_code_schema);
+  int get_obj_privs_ora(const uint64_t tenant_id,
+                        const uint64_t obj_id,
+                        const uint64_t obj_type,
+                        ObSchemaGetterGuard &schema_guard,
+                        ObIArray<ObObjPriv> &obj_privs);
+  int restore_obj_privs_for_table(const uint64_t new_table_id,
+                                  const common::ObString &database_name,
+                                  const common::ObString &table_name,
+                                  ObDDLOperator &ddl_operator,
+                                  ObMySQLTransaction &trans,
+                                  common::ObIArray<share::schema::ObObjPriv> &orig_obj_privs_ora);
 private:
   bool inited_;
   volatile bool stopped_;

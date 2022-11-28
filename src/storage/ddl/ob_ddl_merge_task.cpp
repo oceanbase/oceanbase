@@ -106,7 +106,12 @@ int ObDDLTableMergeDag::create_first_task()
                                                     ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("get tablet failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    LOG_WARN("get ddl kv mgr failed", K(ret), K(ddl_param_));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl kv mgr not exist", K(ret), K(ddl_param_));
+    } else {
+      LOG_WARN("get ddl kv mgr failed", K(ret), K(ddl_param_));
+    }
   } else if (ddl_param_.start_scn_ < ddl_kv_mgr_handle.get_obj()->get_start_scn()) {
     ret = OB_TASK_EXPIRED;
     LOG_WARN("ddl task expired, skip it", K(ret), K(ddl_param_), "new_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
@@ -192,6 +197,13 @@ int ObDDLTableMergeDag::fill_dag_key(char *buf, const int64_t buf_len) const
   return ret;
 }
 
+bool ObDDLTableMergeDag::ignore_warning()
+{
+  return OB_LS_NOT_EXIST == dag_ret_
+    || OB_TABLET_NOT_EXIST == dag_ret_
+    || OB_TASK_EXPIRED == dag_ret_;
+}
+
 /******************             ObDDLTableDumpTask             *****************/
 ObDDLTableDumpTask::ObDDLTableDumpTask()
   : ObITask(ObITaskType::TASK_TYPE_DDL_KV_DUMP),
@@ -241,7 +253,12 @@ int ObDDLTableDumpTask::process()
                                                     ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    LOG_WARN("get ddl kv mgr failed", K(ret));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl kv mgr not exist", K(ret), K(ls_id_), K(tablet_id_));
+    } else {
+      LOG_WARN("get ddl kv mgr failed", K(ret), K(ls_id_), K(tablet_id_));
+    }
   } else {
     ObDDLKVHandle ddl_kv_handle;
     ObDDLKV *ddl_kv = nullptr;
@@ -316,7 +333,12 @@ int ObDDLTableMergeTask::process()
                                                     ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(merge_param_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    LOG_WARN("get ddl kv mgr failed", K(ret));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl kv mgr not exist", K(ret), K(merge_param_));
+    } else {
+      LOG_WARN("get ddl kv mgr failed", K(ret), K(merge_param_));
+    }
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_sstable_handles(ddl_sstable_handles))) {
     LOG_WARN("get ddl sstable handles failed", K(ret));
   } else if (ddl_sstable_handles.get_count() >= MAX_DDL_SSTABLE || merge_param_.is_commit_) {
@@ -332,10 +354,10 @@ int ObDDLTableMergeTask::process()
     ObTabletDDLParam ddl_param;
     ObTableHandleV2 table_handle;
     bool is_data_complete = false;
-    bool is_major_sstable_exist = false;
-    if (OB_FAIL(ObTabletDDLUtil::check_if_major_sstable_exist(merge_param_.ls_id_, merge_param_.tablet_id_, is_major_sstable_exist))) {
+    const ObSSTable *latest_major_sstable = nullptr;
+    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(merge_param_.ls_id_, merge_param_.tablet_id_, latest_major_sstable))) {
       LOG_WARN("check if major sstable exist failed", K(ret));
-    } else if (is_major_sstable_exist) {
+    } else if (nullptr != latest_major_sstable) {
       LOG_INFO("major sstable has been created before", K(merge_param_), K(ddl_param.table_key_));
       sstable = static_cast<ObSSTable *>(tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(false/*first*/));
     } else if (tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable()) {
@@ -751,8 +773,8 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
   } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid table schema", K(ret), K(tenant_id), K(table_id));
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_INFO("table not exit", K(ret), K(tenant_id), K(table_id));
   } else {
     ObArray<ObColDesc> column_ids;
     ObArray<ObDDLChecksumItem> ddl_checksum_items;
@@ -807,14 +829,14 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
   return ret;
 }
 
-int ObTabletDDLUtil::check_if_major_sstable_exist(const share::ObLSID &ls_id,
-                                                  const ObTabletID &tablet_id,
-                                                  bool &is_major_sstable_exist)
+int ObTabletDDLUtil::check_and_get_major_sstable(const share::ObLSID &ls_id,
+                                                 const ObTabletID &tablet_id,
+                                                 const ObSSTable *&latest_major_sstable)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
-  ObSSTable *latest_major_sstable = nullptr;
+  latest_major_sstable = nullptr;
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id));
@@ -830,7 +852,6 @@ int ObTabletDDLUtil::check_if_major_sstable_exist(const share::ObLSID &ls_id,
   } else {
     latest_major_sstable = static_cast<ObSSTable *>(
         tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(true/*last*/));
-    is_major_sstable_exist = nullptr != latest_major_sstable;
   }
   return ret;
 }

@@ -398,6 +398,7 @@ int ObTabletBindingHelper::lock_tablet_binding_for_unbind(const ObBatchUnbindTab
         }
       }
     }
+
     if (OB_FAIL(ret) && !trans_flags.for_replay_) {
       int tmp_ret = OB_SUCCESS;
       ObMulSourceDataNotifyArg rollback_trans_flags = trans_flags;
@@ -871,14 +872,14 @@ int ObTabletBindingHelper::lock_and_set_tx_data(ObTabletHandle &handle, ObTablet
       need_update = false;
     } else {
       ret = OB_EAGAIN;
-      LOG_WARN("tablet binding locked by others", K(ret), "tablet_id", tablet->get_tablet_meta().tablet_id_, K(tx_data), K(old_tx_data));
+      LOG_WARN("tablet binding locked by others", K(ret), K(tablet_id), K(tx_data), K(old_tx_data));
     }
     if (OB_FAIL(ret)) {
     } else if (need_update && OB_FAIL(tablet->set_tx_data(tx_data, scn, for_replay,
-        false/*update_cache*/, ref_op, false/*is_callback*/))) {
+        ref_op, false/*is_callback*/))) {
       LOG_WARN("failed to save msd", K(ret), K(tx_data), K(scn), K(for_replay), K(ref_op));
     } else if (OB_FAIL(t3m->insert_pinned_tablet(key))) {
-      LOG_WARN("failed to insert in tx tablet", K(key));
+      LOG_WARN("failed to insert in tx tablet", K(ret), K(key));
     }
   }
   return ret;
@@ -888,10 +889,12 @@ int ObTabletBindingHelper::lock_and_set_tx_data(ObTabletHandle &handle, ObTablet
 int ObTabletBindingHelper::lock_tablet_binding(ObTabletHandle &handle, const ObMulSourceDataNotifyArg &trans_flags)
 {
   int ret = OB_SUCCESS;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   const ObTransID &tx_id = trans_flags.tx_id_;
   const SCN scn = trans_flags.scn_;
   const bool for_replay = trans_flags.for_replay_;
   ObTablet *tablet = handle.get_obj();
+  const ObTabletMapKey key(tablet->tablet_meta_.ls_id_, tablet->tablet_meta_.tablet_id_);
   ObTabletTxMultiSourceDataUnit tx_data;
   if (OB_FAIL(tablet->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret));
@@ -900,7 +903,6 @@ int ObTabletBindingHelper::lock_tablet_binding(ObTabletHandle &handle, const ObM
     const SCN old_scn = tx_data.tx_scn_;
     bool need_update = true;
     const SCN memtable_scn = for_replay ? scn : SCN::max_scn();;
-    const bool update_cache = for_replay; // if for replay is true, we should update cache in tablet pointer
     const MemtableRefOp ref_op = for_replay ? MemtableRefOp::NONE : MemtableRefOp::INC_REF;
     if (!old_tx_id.is_valid()) {
       tx_data.tx_id_ = tx_id;
@@ -913,8 +915,10 @@ int ObTabletBindingHelper::lock_tablet_binding(ObTabletHandle &handle, const ObM
     }
     if (OB_FAIL(ret)) {
     } else if (need_update && OB_FAIL(tablet->set_tx_data(tx_data, memtable_scn, for_replay,
-        update_cache, ref_op, false/*is_callback*/))) {
+        ref_op, false/*is_callback*/))) {
       LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(scn), K(for_replay), K(ref_op));
+    } else if (OB_FAIL(t3m->insert_pinned_tablet(key))) {
+      LOG_WARN("failed to insert in tx tablet", K(ret), K(key));
     }
   }
   return ret;
@@ -962,7 +966,7 @@ int ObTabletBindingHelper::set_scn(ObTabletHandle &handle, const ObMulSourceData
     LOG_WARN("failed to get data", K(ret));
   } else if (OB_UNLIKELY(data.tx_id_ != tx_id)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cannot set log ts for unlocked tablet", K(ret), K(tx_id), K(data), K(tablet->get_tablet_meta().tablet_id_));
+    LOG_WARN("cannot set log ts for unlocked tablet", K(ret), K(tx_id), K(data), "tablet_id", tablet->get_tablet_meta().tablet_id_);
   } else if (OB_UNLIKELY(!data.tx_scn_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid log scn", K(ret), K(tx_id), K(scn), K(data));
@@ -970,9 +974,7 @@ int ObTabletBindingHelper::set_scn(ObTabletHandle &handle, const ObMulSourceData
     LOG_WARN("log ts already set, may be bug or retry", K(ret), K(tx_id), K(scn), K(data));
   } else {
     data.tx_scn_ = scn;
-    const bool update_cache = true;
-    if (OB_FAIL(tablet->set_tx_data(data, scn, for_replay,
-        update_cache, memtable::MemtableRefOp::DEC_REF, true/*is_callback*/))) {
+    if (OB_FAIL(tablet->set_tx_data(data, scn, for_replay, memtable::MemtableRefOp::DEC_REF, true/*is_callback*/))) {
       LOG_WARN("failed to save msd", K(ret), K(data), K(scn), K(for_replay));
     }
   }
@@ -1025,11 +1027,13 @@ int ObTabletBindingHelper::check_need_dec_cnt_for_abort(const ObTabletTxMultiSou
 int ObTabletBindingHelper::unlock_tablet_binding(ObTabletHandle &handle, const ObMulSourceDataNotifyArg &trans_flags)
 {
   int ret = OB_SUCCESS;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   const ObTransID &tx_id = trans_flags.tx_id_;
   const SCN scn = trans_flags.scn_;
   const bool for_replay = trans_flags.for_replay_;
   const bool for_commit = trans_flags.notify_type_ == NotifyType::ON_COMMIT;
   ObTablet *tablet = handle.get_obj();
+  const ObTabletMapKey key(tablet->tablet_meta_.ls_id_, tablet->tablet_meta_.tablet_id_);
   ObTabletTxMultiSourceDataUnit tx_data;
 
   LOG_INFO("unlock_tablet_binding", KPC(tablet), K(trans_flags));
@@ -1056,6 +1060,8 @@ int ObTabletBindingHelper::unlock_tablet_binding(ObTabletHandle &handle, const O
         } else if (FALSE_IT(ref_op = (need_dec ? MemtableRefOp::DEC_REF : MemtableRefOp::NONE))) {
         } else if (OB_FAIL(tablet->set_tablet_final_status(tx_data, memtable_scn, for_replay, ref_op))) {
           LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(scn), K(for_replay), K(ref_op));
+        } else if (OB_FAIL(t3m->erase_pinned_tablet(key))) {
+          LOG_WARN("failed to erase in tx tablet", K(ret), K(key));
         }
       }
     } else {

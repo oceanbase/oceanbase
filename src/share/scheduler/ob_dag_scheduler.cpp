@@ -842,7 +842,8 @@ ObIDagNet::ObIDagNet(
      type_(type),
      add_time_(0),
      start_time_(0),
-     dag_record_map_()
+     dag_record_map_(),
+     is_cancel_(false)
 {
 }
 
@@ -851,18 +852,21 @@ int ObIDagNet::add_dag_into_dag_net(ObIDag &dag)
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   WEAK_BARRIER();
-  const bool is_stopped = is_stopped_;
+
   ObDagRecord *dag_record = nullptr;
   int hash_ret = OB_SUCCESS;
+  ObMutexGuard guard(lock_);
 
   if (OB_NOT_NULL(dag.get_dag_net())) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "dag already belongs to a dag_net", K(ret), K(dag));
-  } else if (is_stopped) {
+  } else if (is_stopped_) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("dag_net is in stop state, not allowed to add dag", K(ret), K(is_stopped_));
+  } else if (is_cancel_) {
+    ret = OB_CANCELED;
+    LOG_WARN("dag net is cancel, do not allow to add new dag", K(ret), K(is_cancel_));
   } else {
-    ObMutexGuard guard(lock_);
     if (!dag_record_map_.created() && OB_FAIL(dag_record_map_.create(DEFAULT_DAG_BUCKET, "DagRecordMap"))) {
       COMMON_LOG(WARN, "failed to create dag record map", K(ret), K(dag));
     } else if (OB_HASH_NOT_EXIST != (hash_ret = dag_record_map_.get_refactored(&dag, dag_record))) {
@@ -1031,6 +1035,18 @@ int ObIDagNet::set_dag_id(const ObDagId &dag_id)
     dag_id_ = dag_id;
   }
   return ret;
+}
+
+void ObIDagNet::set_cancel()
+{
+  ObMutexGuard guard(lock_);
+  is_cancel_ = true;
+}
+
+bool ObIDagNet::is_cancel()
+{
+  ObMutexGuard guard(lock_);
+  return is_cancel_;
 }
 
 void ObIDagNet::gene_dag_info(ObDagInfo &info, const char *list_info)
@@ -2239,10 +2255,6 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask &task, ObTenantDagWorker
     }
   }
   if (OB_SUCC(ret) && nullptr != erase_dag_net) {
-    if (OB_TMP_FAIL(erase_dag_net->clear_dag_net_ctx())) {
-      COMMON_LOG(WARN, "failed to clear dag net ctx", K(tmp_ret), KPC(erase_dag_net));
-    }
-
     if (OB_FAIL(finish_dag_net(erase_dag_net))) {
       COMMON_LOG(WARN, "failed to finish dag net", K(ret));
     }
@@ -2291,7 +2303,12 @@ int ObTenantDagScheduler::finish_task_in_dag(ObITask &task, ObIDag &dag, ObIDagN
 int ObTenantDagScheduler::finish_dag_net(ObIDagNet *dag_net)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(dag_net)) {
+    if (OB_TMP_FAIL(dag_net->clear_dag_net_ctx())) {
+      COMMON_LOG(WARN, "failed to clear dag net ctx", K(tmp_ret), KPC(dag_net));
+    }
+
     {
       ObMutexGuard guard(dag_net_map_lock_);
       if (OB_FAIL(dag_net_map_[RUNNING_DAG_NET_MAP].erase_refactored(dag_net))) {
@@ -2658,7 +2675,10 @@ int ObTenantDagScheduler::pop_task_from_ready_list(
         move_dag_to_waiting_list = true;
       } else if (ObIDag::DAG_STATUS_READY == dag_status
           || ObIDag::DAG_STATUS_RETRY == dag_status) { // first schedule this dag
-        if (!cur->check_can_schedule()) { // cur dag can't be scheduled now
+        ObIDag::ObDagStatus next_dag_status = dag_status;
+        if (OB_NOT_NULL(cur->get_dag_net()) && cur->get_dag_net()->is_cancel()) {
+          next_dag_status = ObIDag::DAG_STATUS_NODE_FAILED;
+        } else if (!cur->check_can_schedule()) { // cur dag can't be scheduled now
           move_dag_to_waiting_list = true;
         } else { // dag can be scheduled
           if (ObIDag::DAG_STATUS_READY == dag_status) {
@@ -2669,11 +2689,12 @@ int ObTenantDagScheduler::pop_task_from_ready_list(
               LOG_WARN("failed to generate next dag", K(ret), K(cur));
             }
           }
-          cur->set_dag_status(ObIDag::DAG_STATUS_NODE_RUNNING);
-          cur->update_status_in_dag_net();
+          next_dag_status = ObIDag::DAG_STATUS_NODE_RUNNING;
         }
+        cur->set_dag_status(next_dag_status);
+        cur->update_status_in_dag_net();
         cur->start_time_ = ObTimeUtility::current_time(); // dag start running
-        COMMON_LOG(DEBUG, "dag start running", K(ret), KP(cur));
+        COMMON_LOG(DEBUG, "dag start running", K(ret), KPC(cur));
       } else if (ObIDag::DAG_STATUS_NODE_FAILED == dag_status
           && 0 == cur->get_running_task_count()) { // no task running failed dag, need free
         tmp_dag = cur;
@@ -3078,6 +3099,7 @@ int ObTenantDagScheduler::check_dag_net_exist(
 {
   int ret = OB_SUCCESS;
   const ObIDagNet *dag_net = nullptr;
+  ObMutexGuard guard(dag_net_map_lock_);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -3223,6 +3245,47 @@ int ObTenantDagScheduler::try_move_child_to_ready_list(
   return ret;
 }
 
+int ObTenantDagScheduler::cancel_dag_net(const ObDagId &dag_id)
+{
+  int ret = OB_SUCCESS;
+  const ObIDagNet *dag_net_key = nullptr;
+  ObIDagNet *dag_net = nullptr;
+  ObArray<ObIDag*> dag_array;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
+  } else if (dag_id.is_invalid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cancel dag net get invalid argument", K(ret), K(dag_id));
+  } else {
+    {
+      ObMutexGuard dag_net_guard(dag_net_map_lock_);
+      if (OB_FAIL(dag_net_id_map_.get_refactored(dag_id, dag_net_key))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get dag id from dag net", K(ret), K(dag_id));
+        }
+      } else if (OB_ISNULL(dag_net_key)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag net key should not be NULL", K(ret), K(dag_id), KP(dag_net));
+      } else if (OB_FAIL(dag_net_map_[RUNNING_DAG_NET_MAP].get_refactored(dag_net_key, dag_net))) {
+        LOG_WARN("failed to get dag net", K(ret), KPC(dag_net_key));
+      } else {
+        dag_net->set_cancel();
+        if (OB_FAIL(dag_net->deal_with_cancel())) {
+          LOG_WARN("failed to deal with cancel", K(ret), KPC(dag_net));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      notify();
+    }
+  }
+  return ret;
+}
 
 int ObFakeTask::process()
 {

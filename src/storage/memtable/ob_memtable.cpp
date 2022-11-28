@@ -127,6 +127,7 @@ ObMemtable::ObMemtable()
       multi_source_data_lock_()
 {
   mt_stat_.reset();
+  migration_clog_checkpoint_scn_.set_min();
 }
 
 ObMemtable::~ObMemtable()
@@ -251,6 +252,7 @@ void ObMemtable::destroy()
   unset_active_memtable_logging_blocked_ = false;
   resolve_active_memtable_left_boundary_ = true;
   max_end_scn_ = ObScnRange::MIN_SCN;
+  migration_clog_checkpoint_scn_.set_min();
   rec_scn_ = SCN::max_scn();
   read_barrier_ = false;
   is_tablet_freeze_ = false;
@@ -312,7 +314,7 @@ int ObMemtable::set(
                row,
                NULL,
                NULL);
-    guard.set_is_freeze(freezer_->is_freeze());
+    guard.set_memtable(this);
   }
   return ret;
 }
@@ -347,7 +349,7 @@ int ObMemtable::set(
                new_row,
                &old_row,
                &update_idx);
-    guard.set_is_freeze(freezer_->is_freeze());
+    guard.set_memtable(this);
   }
   return ret;
 }
@@ -1367,7 +1369,8 @@ int64_t ObMemtable::dec_write_ref()
     } else {
       if (0 == get_unsynced_cnt()) {
         resolve_right_boundary();
-        if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, get_end_scn(), get_snapshot_version_scn()))) {
+        const SCN new_start_scn = MAX(get_end_scn(), get_migration_clog_checkpoint_scn());
+        if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, new_start_scn, get_snapshot_version_scn()))) {
           TRANS_LOG(WARN, "fail to resolve left boundary for active memtable", K(ret), K(ls_id), KPC(this));
         }
       }
@@ -1400,7 +1403,8 @@ int ObMemtable::dec_unsynced_cnt()
   } else if (is_frozen && 0 == write_ref_cnt && 0 == unsynced_cnt) {
     resolve_right_boundary();
     TRANS_LOG(INFO, "[resolve_right_boundary] dec_unsynced_cnt", K(ls_id), KPC(this));
-    if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, get_end_scn(), get_snapshot_version_scn()))) {
+    const SCN new_start_scn = MAX(get_end_scn(), get_migration_clog_checkpoint_scn());
+    if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, new_start_scn, get_snapshot_version_scn()))) {
       TRANS_LOG(WARN, "fail to set start log ts for active memtable", K(ret), K(ls_id), KPC(this));
     }
     TRANS_LOG(INFO, "memtable log synced", K(ret), K(ls_id), KPC(this));
@@ -1425,19 +1429,30 @@ void ObMemtable::dec_unsubmitted_and_unsynced_cnt()
 
 bool ObMemtable::can_be_minor_merged()
 {
-  bool bool_ret = false;
-
-  if (!is_empty() || get_is_force_freeze()) {
-    bool_ret = is_in_prepare_list_of_data_checkpoint();
-  }
-
-  return bool_ret;
+  return is_in_prepare_list_of_data_checkpoint();
 }
 
 int ObMemtable::get_frozen_schema_version(int64_t &schema_version) const
 {
   UNUSED(schema_version);
   return OB_NOT_SUPPORTED;
+}
+
+int ObMemtable::set_migration_clog_checkpoint_scn(const SCN &clog_checkpoint_scn)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not inited", K(ret));
+  } else if (clog_checkpoint_scn <= ObScnRange::MIN_SCN) {
+    ret = OB_SCN_OUT_OF_BOUND;
+    TRANS_LOG(WARN, "invalid clog_checkpoint_ts", K(ret));
+  } else {
+    (void)migration_clog_checkpoint_scn_.atomic_store(clog_checkpoint_scn);
+  }
+
+  return ret;
 }
 
 int ObMemtable::set_snapshot_version(const SCN snapshot_version)
@@ -1849,33 +1864,19 @@ int ObMemtable::flush(share::ObLSID ls_id)
                        "ready for flush time:",
                        mt_stat_.ready_for_flush_time_);
     }
+    ObTabletMergeDagParam param;
+    param.ls_id_ = ls_id;
+    param.tablet_id_ = key_.tablet_id_;
+    param.merge_type_ = MINI_MERGE;
+    param.merge_version_ = ObVersion::MIN_VERSION;
 
-    if (is_empty() && !get_is_force_freeze()) {
-      if (OB_FAIL(memtable_mgr_->release_head_empty_memtable(this))) {
-        if (OB_EAGAIN != ret) {
-          TRANS_LOG(WARN, "fail to release empty memtable", K(ret), K(ls_id), KPC(this));
-        } else {
-          // wait next time flush
-          ret = OB_SUCCESS;
-        }
-      } else {
-        TRANS_LOG(INFO, "release head empty memtable", K(ret), KPC(this));
+    if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_merge_dag(param))) {
+      if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
+        TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
       }
     } else {
-      ObTabletMergeDagParam param;
-      param.ls_id_ = ls_id;
-      param.tablet_id_ = key_.tablet_id_;
-      param.merge_type_ = MINI_MERGE;
-      param.merge_version_ = ObVersion::MIN_VERSION;
-
-      if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_merge_dag(param))) {
-        if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-          TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
-        }
-      } else {
-        mt_stat_.create_flush_dag_time_ = cur_time;
-        TRANS_LOG(INFO, "schedule tablet merge dag successfully", K(ret), K(param), KPC(this));
-      }
+      mt_stat_.create_flush_dag_time_ = cur_time;
+      TRANS_LOG(INFO, "schedule tablet merge dag successfully", K(ret), K(param), KPC(this));
     }
   }
 

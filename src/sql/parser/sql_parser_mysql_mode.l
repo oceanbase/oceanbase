@@ -912,7 +912,6 @@ Timestamp{whitespace}?\"[^\"]*\" {
     }
   }
 }
-<hint>HOTSPOT  { return HOTSPOT; }
 <hint>LOG_LEVEL  { return LOG_LEVEL; }
 <hint>LEADING  { return LEADING_HINT; }
 <hint>ORDERED  { return ORDERED; }
@@ -942,6 +941,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>END_OUTLINE_DATA { return END_OUTLINE_DATA; }
 <hint>OPTIMIZER_FEATURES_ENABLE { return OPTIMIZER_FEATURES_ENABLE; }
 <hint>NO_QUERY_TRANSFORMATION { return NO_QUERY_TRANSFORMATION; }
+<hint>NO_COST_BASED_QUERY_TRANSFORMATION { return NO_COST_BASED_QUERY_TRANSFORMATION; }
 <hint>TRANS_PARAM { return TRANS_PARAM; }
 <hint>PQ_DISTRIBUTE { return PQ_DISTRIBUTE; }
 <hint>PQ_DISTRIBUTE_WINDOW { return PQ_DISTRIBUTE_WINDOW; }

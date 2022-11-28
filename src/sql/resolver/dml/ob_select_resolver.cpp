@@ -1559,6 +1559,8 @@ int ObSelectResolver::resolve_literal_order_item(const ParseNode &sort_node, ObR
   int ret = OB_SUCCESS;
   if (!is_oracle_mode()) {
     // nothing to do
+  } else if (T_OBJ_ACCESS_REF == sort_node.type_) {
+    //do nothing
   } else if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));

@@ -607,7 +607,7 @@ protected:
   }
   inline void end_cpu_time_counting()
   {
-    op_monitor_info_.cpu_time_ += (rdtsc() - cpu_begin_time_);
+    total_time_ += (rdtsc() - cpu_begin_time_);
     // move back to parent operator
     if (OB_LIKELY(spec_.get_parent())) {
       common::ObActiveSessionGuard::get_stat().plan_line_id_ = spec_.get_parent()->id_;
@@ -617,6 +617,7 @@ protected:
   }
 
   uint64_t cpu_begin_time_; // start of counting cpu time
+  uint64_t total_time_; //  total time cost on this op, including io & cpu time
 protected:
   bool batch_reach_end_;
   bool row_reach_end_;

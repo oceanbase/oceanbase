@@ -206,6 +206,7 @@ public:
                            PalfHandleImplGuard &palf_handle_impl_guard);
   void revert_palf_handle_impl(PalfHandleImpl *palf_handle_impl);
   int try_switch_state_for_all();
+  int check_and_switch_freeze_mode();
   int try_freeze_log_for_all();
   // =================== memory space management ==================
   bool check_tenant_memory_enough();
@@ -245,6 +246,13 @@ private:
   public:
     FreezeLogFunctor() {}
     ~FreezeLogFunctor() {}
+    bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
+  };
+  class CheckFreezeModeFunctor
+  {
+  public:
+    CheckFreezeModeFunctor() {}
+    ~CheckFreezeModeFunctor() {}
     bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
   };
   struct LogGetRecycableFileCandidate {

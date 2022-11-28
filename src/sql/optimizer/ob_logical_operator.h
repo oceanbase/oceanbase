@@ -1502,6 +1502,11 @@ public:
   {
     contain_pw_merge_op_ = contain_pw_merge_op;
   }
+  inline bool get_contains_match_all_fake_cte() const { return contain_match_all_fake_cte_; }
+  inline void set_contains_match_all_fake_cte(bool contain_match_all_fake_cte)
+  {
+    contain_match_all_fake_cte_ = contain_match_all_fake_cte;
+  }
   inline bool get_contains_das_op() const { return contain_das_op_; }
   inline void set_contains_das_op(bool contain_das_op)
   {
@@ -1822,6 +1827,7 @@ protected:
   bool contain_fake_cte_;
   bool contain_pw_merge_op_;
   bool contain_das_op_;
+  bool contain_match_all_fake_cte_;
   common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> dup_table_pos_; // for duplicated table
   ObShardingInfo *strong_sharding_;
   common::ObSEArray<ObShardingInfo*, 8, common::ModulePageAllocator, true> weak_sharding_;

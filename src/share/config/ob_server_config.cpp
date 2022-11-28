@@ -31,6 +31,7 @@ namespace oceanbase
 {
 namespace common
 {
+
 int64_t get_cpu_count()
 {
   int64_t cpu_cnt = GCONF.cpu_count;
@@ -75,46 +76,6 @@ bool ObServerConfig::in_upgrade_mode() const
             && stage <= obrpc::OB_UPGRADE_STAGE_POSTUPGRADE);
   }
   return bret;
-}
-
-int64_t ObServerConfig::get_server_memory_limit()
-{
-  int64_t memory = 0;
-  if (0 != memory_limit.get()) {
-    memory = memory_limit;
-  } else {
-    memory = get_phy_mem_size() * memory_limit_percentage / 100;
-  }
-  return memory;
-}
-
-int64_t ObServerConfig::get_server_memory_avail()
-{
-  return get_server_memory_limit() - get_reserved_server_memory();
-}
-
-int64_t ObServerConfig::get_reserved_server_memory()
-{
-  int64_t system_memory_b = system_memory;
-  if (0 == system_memory_b) {
-    int64_t memory_limit_g = get_server_memory_limit() >> 30;
-    if (memory_limit_g < 4) {
-      OB_LOG(ERROR, "memory_limit with unexpected value", K(memory_limit_g));
-    } else if (memory_limit_g <= 8) {
-      system_memory_b = 2LL << 30;
-    } else if (memory_limit_g <= 16) {
-      system_memory_b = 3LL << 30;
-    } else if (memory_limit_g <= 32) {
-      system_memory_b = 5LL << 30;
-    } else if (memory_limit_g <= 48) {
-      system_memory_b = 7LL << 30;
-    } else if (memory_limit_g <= 64) {
-      system_memory_b = 10LL << 30;
-    } else {
-      system_memory_b = int64_t(15 + 3 * (sqrt(memory_limit_g) - 8)) << 30;
-    }
-  }
-  return system_memory_b;
 }
 
 int ObServerConfig::read_config()
@@ -235,6 +196,64 @@ int ObServerConfig::deserialize_with_compat(const char *buf, const int64_t data_
     } // if
   }
   return ret;
+}
+
+ObServerMemoryConfig::ObServerMemoryConfig()
+  : memory_limit_(0), system_memory_(0)
+{}
+
+ObServerMemoryConfig &ObServerMemoryConfig::get_instance()
+{
+  static ObServerMemoryConfig memory_config;
+  return memory_config;
+}
+
+int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
+{
+  int ret = OB_SUCCESS;
+  int64_t memory_limit = server_config.memory_limit;
+  if (0 == memory_limit) {
+    memory_limit = get_phy_mem_size() * server_config.memory_limit_percentage / 100;
+  }
+  int64_t system_memory = server_config.system_memory;
+  if (0 == system_memory) {
+    int64_t memory_limit_g = memory_limit >> 30;
+    if (memory_limit_g < 4) {
+      LOG_ERROR("memory_limit with unexpected value", K(memory_limit));
+    } else if (memory_limit_g <= 8) {
+      system_memory = 2LL << 30;
+    } else if (memory_limit_g <= 16) {
+      system_memory = 3LL << 30;
+    } else if (memory_limit_g <= 32) {
+      system_memory = 5LL << 30;
+    } else if (memory_limit_g <= 48) {
+      system_memory = 7LL << 30;
+    } else if (memory_limit_g <= 64) {
+      system_memory = 10LL << 30;
+    } else {
+      system_memory = int64_t(15 + 3 * (sqrt(memory_limit_g) - 8)) << 30;
+    }
+  }
+  if (memory_limit > system_memory) {
+    memory_limit_ = memory_limit;
+    system_memory_ = system_memory;
+    LOG_INFO("update memory_limit or system_memory success",
+              K(memory_limit_), K(system_memory_));
+  } else {
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("update memory_limit or system_memory failed",
+              K(memory_limit), K(system_memory));
+  }
+  return ret;
+}
+
+void ObServerMemoryConfig::set_server_memory_limit(int64_t memory_limit)
+{
+  if (memory_limit > system_memory_) {
+    LOG_INFO("update memory_limit success", K(memory_limit), K(system_memory_));
+  } else {
+    LOG_ERROR("update memory_limit failed", K(memory_limit), K(system_memory_));
+  }
 }
 
 OB_DEF_SERIALIZE(ObServerConfig)

@@ -22,7 +22,7 @@ using namespace share;
 // round op
 int ObTenantArchiveMgr::get_tenant_current_round(const int64_t tenant_id, const int64_t incarnation, ObTenantArchiveRoundAttr &round_attr)
 {
-  // TODO: fix get round from other channel
+  // Only one dest is supported now.
   const int64_t fake_dest_no = 0;
   return get_dest_round_by_dest_no(tenant_id, fake_dest_no, round_attr);
 }

@@ -1090,5 +1090,18 @@ LogReplicaType LogStateMgr::get_replica_type() const
 {
   return ATOMIC_LOAD(&replica_type_);
 }
+
+int LogStateMgr::get_election_role(common::ObRole &role, int64_t &epoch) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(election_->get_role(role, epoch))) {
+    PALF_LOG(WARN, "get elect role failed", K(ret));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
 } // namespace palf
 } // namespace oceanbase

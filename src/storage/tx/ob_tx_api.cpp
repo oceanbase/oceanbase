@@ -966,7 +966,7 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
   tx.inc_op_sn();
   bool reset_tx = false, normal_rollback = false;
   // merge extra touched ls
-  if (OB_NOT_NULL(extra_touched_ls)) {
+  if (OB_NOT_NULL(extra_touched_ls) && !extra_touched_ls->empty()) {
     if (OB_FAIL(tx.update_parts(*extra_touched_ls))) {
       TRANS_LOG(WARN, "add tx part with extra_touched_ls fail", K(ret), K(tx), KPC(extra_touched_ls));
       abort_tx_(tx, ret);

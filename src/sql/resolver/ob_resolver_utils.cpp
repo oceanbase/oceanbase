@@ -399,7 +399,7 @@ int ObResolverUtils::get_candidate_routines(ObSchemaChecker &schema_checker,
   }
 
 #define TRY_SYNONYM(synonym_name)             \
-if (OB_FAIL(ret) || 0 == routines.count()) {  \
+if ((OB_FAIL(ret) && OB_ALLOCATE_MEMORY_FAILED != ret) || 0 == routines.count()) {  \
   ret = OB_SUCCESS;                           \
   bool exist = false;                         \
   ObSynonymChecker synonym_checker;           \
@@ -772,10 +772,17 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
         || ObExtendTC == ob_obj_type_class(dst_type)) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("argument count not match", K(ret), K(src_type), K(dst_type));
-    } else {
-      // 检查普通类型之间是否可以互转
-      OZ (ObObjCaster::can_cast_in_oracle_mode(dst_type,
+    } else { // 检查普通类型之间是否可以互转
+      if (lib::is_oracle_mode()) {
+        OZ (ObObjCaster::can_cast_in_oracle_mode(dst_type,
           dst_pl_type.get_meta_type()->get_collation_type(), src_type, src_coll_type));
+      } else if (!cast_supported(
+        src_type, src_coll_type, dst_type, dst_pl_type.get_meta_type()->get_collation_type())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("inconsistent datatypes",
+          K(ret), K(src_type), K(src_coll_type),
+          K(dst_type), K(dst_pl_type.get_meta_type()->get_collation_type()));
+      }
     }
     bool is_numric_type = (IS_NUMRIC_TYPE(src_type) && IS_NUMRIC_TYPE(dst_type));
     OX (match_info = ObRoutineMatchInfo::MatchInfo(
@@ -6299,6 +6306,15 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("access idxs is empty", K(ret));
       } else {
+        sql::ObExprResType result_type = expr->get_result_type();
+        if (result_type.get_length() == -1) {
+          if (result_type.is_varchar() || result_type.is_nvarchar2()) {
+            result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
+          } else if (result_type.is_char() || result_type.is_nchar()) {
+            result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);
+          }
+        }
+        expr->set_result_type(result_type);
         ObConstRawExpr *param_expr = static_cast<ObConstRawExpr*>(expr);
         const_cast<sql::ObExprResType &>(param_expr->get_result_type())
                                           .set_param(param_expr->get_value());

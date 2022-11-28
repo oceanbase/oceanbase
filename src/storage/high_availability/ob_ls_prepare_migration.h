@@ -80,7 +80,8 @@ public:
   virtual int64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
-  virtual int clear_dag_net_ctx();
+  virtual int clear_dag_net_ctx() override;
+  virtual int deal_with_cancel() override;
 
   ObLSPrepareMigrationCtx *get_ctx() { return &ctx_; }
   const share::ObLSID &get_ls_id() const { return ctx_.arg_.ls_id_; }

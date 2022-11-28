@@ -311,7 +311,8 @@ private:
   int add_table_part_info(common::ObISQLClient &sql_client, const ObTableSchema &table);
   int delete_foreign_key(common::ObISQLClient &sql_client,
       const ObTableSchema &table_schema,
-      const int64_t new_schema_version);
+      const int64_t new_schema_version,
+      const bool is_truncate_table);
   int delete_from_all_foreign_key(common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const int64_t new_schema_version,

@@ -34,10 +34,6 @@ OB_DEF_DESERIALIZE(ObScnRange)
   using oceanbase::common::serialization::decode;
   int ret = OB_SUCCESS;
   LST_DO_CODE(OB_UNIS_DECODE, start_scn_, end_scn_);
-
-  if (OB_SUCC(ret)) {
-    (void)end_scn_.transform_max();
-  }
   return ret;
 }
 

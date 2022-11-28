@@ -182,7 +182,7 @@ void LogTask::set_group_log_checksum(const int64_t data_checksum)
 
 void LogTask::inc_update_max_scn(const SCN &scn)
 {
-  header_.max_scn_ = scn;
+  header_.max_scn_.inc_update(scn);
 }
 
 void LogTask::update_data_len(const int64_t data_len)

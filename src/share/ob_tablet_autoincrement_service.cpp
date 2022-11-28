@@ -253,6 +253,8 @@ int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, cons
   }
   if (OB_SUCC(ret)) {
     ObTabletCacheInterval interval(tablet_id, 1/*cache size*/);
+    lib::ObMutex &mutex = init_node_mutexs_[tablet_id.id() % INIT_NODE_MUTEX_NUM];
+    lib::ObMutexGuard guard(mutex);
     if (OB_ISNULL(autoinc_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("autoinc mgr is unexpected null", K(ret));

@@ -360,6 +360,7 @@ int ObNestedLoopJoinOp::read_left_operate()
     if (OB_FAIL(group_read_left_operate()) && OB_ITER_END != ret) {
       LOG_WARN("failed to read left group", K(ret));
     }
+  } else if (FALSE_IT(set_param_null())) {
   } else if (OB_FAIL(get_next_left_row()) && OB_ITER_END != ret) {
     LOG_WARN("failed to get next left row", K(ret));
   }
@@ -530,6 +531,7 @@ int ObNestedLoopJoinOp::group_read_left_operate()
           }
         }
         save_last_row_ = false;
+        set_param_null();
         while (OB_SUCC(ret) && !is_full()) {
           // need clear evaluated flag, since prepare_rescan_params() will evaluate expression.
           clear_evaluated_flag();

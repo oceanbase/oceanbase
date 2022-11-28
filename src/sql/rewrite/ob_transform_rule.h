@@ -160,7 +160,6 @@ enum TRANSFORM_TYPE {
   GROUPBY_PUSHDOWN              ,
   GROUPBY_PULLUP                ,
   SUBQUERY_COALESCE             ,
-  WIN_GROUPBY                   ,
   PREDICATE_MOVE_AROUND         ,
   NL_FULL_OUTER_JOIN            ,
   SEMI_TO_INNER                 ,
@@ -250,13 +249,19 @@ public:
       (1L << PROJECTION_PRUNING) |
       (1L << JOIN_ELIMINATION) |
       (1L << AGGR_SUBQUERY) |
-      (1L << WIN_GROUPBY) |
       (1L << PREDICATE_MOVE_AROUND) |
       (1L << NL_FULL_OUTER_JOIN) |
       (1L << JOIN_LIMIT_PUSHDOWN) |
       (1L << CONST_PROPAGATE) |
       (1L << LEFT_JOIN_TO_ANTI) |
       (1L << COUNT_TO_EXISTS);
+  static const uint64_t ALL_COST_BASED_RULES =
+      (1L << OR_EXPANSION) |
+      (1L << WIN_MAGIC) |
+      (1L << GROUPBY_PUSHDOWN) |
+      (1L << GROUPBY_PULLUP) |
+      (1L << SUBQUERY_COALESCE) |
+      (1L << SEMI_TO_INNER);
 
   ObTransformRule(ObTransformerCtx *ctx,
                   TransMethod transform_method,

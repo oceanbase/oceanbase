@@ -723,7 +723,7 @@ public:
       if (ObTxState::INIT < tx_ctx->exec_info_.state_) {
         has_decided = true;
       }
-      if (tx_ctx->is_too_slow_transaction()) {
+      if (tx_ctx->is_too_long_transaction()) {
         // If the transaction has not completed in 600 seconds, print its trace log
         tx_ctx->print_trace_log();
       }

@@ -210,7 +210,7 @@ int ObDropIndexTask::drop_index_impl()
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("index schema is null", K(ret), K(target_object_id_));
   } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
-    LOG_WARN("get index name failed", K(ret));
+    LOG_WARN("get index name failed", K(ret), K(index_schema->get_table_type()), KPC(index_schema));
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, index_schema->get_database_id(), database_schema))) {
     LOG_WARN("get database schema failed", K(ret), K(index_schema->get_database_id()));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_schema->get_data_table_id(), data_table_schema))) {

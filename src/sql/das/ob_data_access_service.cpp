@@ -191,6 +191,8 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
       } else if (OB_FAIL(execute_dist_das_task(das_ref, task_op))) {
         LOG_WARN("execute dist das task failed", K(ret));
       }
+    } else {
+      break;
     }
   }
   return ret;

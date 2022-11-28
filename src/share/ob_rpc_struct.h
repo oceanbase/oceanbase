@@ -1275,6 +1275,7 @@ public:
     is_add_to_scheduler_ = false;
     is_hidden_ = false;
     is_in_recyclebin_ = false;
+    is_inner_ = false;
   }
   virtual ~ObDropIndexArg() {}
   void reset()
@@ -1284,12 +1285,14 @@ public:
     is_add_to_scheduler_ = false;
     is_hidden_ = false;
     is_in_recyclebin_ = false;
+    is_inner_ = false;
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
   bool is_add_to_scheduler_;
   bool is_hidden_;
   bool is_in_recyclebin_;
+  bool is_inner_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };
@@ -1462,7 +1465,8 @@ public:
       database_name_(),
       table_name_(),
       is_add_to_scheduler_(false),
-      compat_mode_(lib::Worker::CompatMode::INVALID)
+      compat_mode_(lib::Worker::CompatMode::INVALID),
+      foreign_key_checks_(false)
   {}
 
   ObTruncateTableArg &operator=(const ObTruncateTableArg &other) = delete;
@@ -1476,6 +1480,7 @@ public:
   common::ObString table_name_;
   bool is_add_to_scheduler_;
   lib::Worker::CompatMode compat_mode_;
+  bool foreign_key_checks_;
 };
 
 struct ObRenameTableItem
@@ -2695,6 +2700,8 @@ public:
   common::ObSArray<int64_t> table_schema_index_;
   lib::Worker::CompatMode compat_mode_;
   bool is_create_bind_hidden_tablets_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCreateTabletInfo);
 };
 
 struct ObBatchCreateTabletArg

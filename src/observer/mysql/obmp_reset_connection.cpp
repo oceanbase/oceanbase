@@ -50,6 +50,7 @@ int ObMPResetConnection::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to get session info", K(ret), K(session));
   } else {
+    THIS_WORKER.set_session(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->update_last_active_time();
 
@@ -83,6 +84,7 @@ int ObMPResetConnection::process()
     force_disconnect();
   }
 
+  THIS_WORKER.set_session(NULL);
   if (session != NULL) {
     revert_session(session);
   }

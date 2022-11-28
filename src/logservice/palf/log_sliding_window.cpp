@@ -91,6 +91,7 @@ LogSlidingWindow::LogSlidingWindow()
     accum_log_cnt_(0),
     accum_group_log_size_(0),
     last_record_group_log_id_(FIRST_VALID_LOG_ID - 1),
+    freeze_mode_(FEEDBACK_FREEZE_MODE),
     is_inited_(false)
 {}
 
@@ -174,6 +175,8 @@ int LogSlidingWindow::init(const int64_t palf_id,
     last_slide_log_accum_checksum_ = prev_log_info.accum_checksum_;
 
     committed_end_lsn_ = palf_base_info.curr_lsn_;
+
+    MEMSET(append_cnt_array_, 0, APPEND_CNT_ARRAY_SIZE * sizeof(int64_t));
 
     is_inited_ = true;
     LogGroupEntryHeader group_header;
@@ -385,6 +388,18 @@ int LogSlidingWindow::submit_log(const char *buf,
           PALF_LOG(TRACE, "append_to_group_log_ success", K_(palf_id), K_(self), K(log_id), K(lsn), K(scn),
               K(valid_log_size), K(is_need_handle), K(is_need_handle_next));
         }
+      }
+      // inc append count
+      const int64_t array_idx = get_itid() & APPEND_CNT_ARRAY_MASK;
+      OB_ASSERT(0 <= array_idx && array_idx < APPEND_CNT_ARRAY_SIZE);
+      ATOMIC_INC(&append_cnt_array_[array_idx]);
+
+      LSN last_submit_end_lsn, max_flushed_end_lsn;
+      get_last_submit_end_lsn_(last_submit_end_lsn);
+      get_max_flushed_end_lsn(max_flushed_end_lsn);
+      if (max_flushed_end_lsn >= last_submit_end_lsn) {
+        // all logs have been flushed, freeze last log in feedback mode
+        (void) feedback_freeze_last_log_();
       }
     }
 
@@ -878,7 +893,8 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
               (void) set_last_submit_log_info_(begin_lsn, log_end_lsn, tmp_log_id, \
                   group_entry_header.get_log_proposal_id());
               if (FOLLOWER == state_mgr_->get_role() || state_mgr_->is_leader_reconfirm()) {
-                try_update_committed_lsn_for_fetch_(log_end_lsn, tmp_log_id);
+                try_update_committed_lsn_for_fetch_(log_end_lsn, tmp_log_id, \
+                    group_entry_header.get_committed_end_lsn());
                 // Advance committed_end_lsn_, follower/reconfirm leader needs
                 // the order with try_update_committed_lsn_for_fetch_() is important,
                 // this exec order can avoid trigger failure of next round fetch by sliding_cb()
@@ -961,9 +977,9 @@ int LogSlidingWindow::generate_group_entry_header_(const int64_t log_id,
   return ret;
 }
 
-int LogSlidingWindow::try_freeze_last_log_(const int64_t expected_log_id,
-                                           const LSN &expected_end_lsn,
-                                           bool &is_need_handle)
+int LogSlidingWindow::try_freeze_last_log_task_(const int64_t expected_log_id,
+                                                const LSN &expected_end_lsn,
+                                                bool &is_need_handle)
 {
   int ret = OB_SUCCESS;
   is_need_handle = false;
@@ -1014,24 +1030,76 @@ int LogSlidingWindow::try_freeze_last_log_(const int64_t expected_log_id,
   return ret;
 }
 
-int LogSlidingWindow::try_freeze_last_log()
+int LogSlidingWindow::feedback_freeze_last_log_()
 {
   int ret = OB_SUCCESS;
   LSN last_log_end_lsn;
   int64_t last_log_id = OB_INVALID_LOG_ID;
   bool is_need_handle = false;
-  if (OB_FAIL(lsn_allocator_.try_freeze(last_log_end_lsn, last_log_id))) {
+  if (FEEDBACK_FREEZE_MODE != freeze_mode_) {
+    // Only FEEDBACK_FREEZE_MODE need exec this fucntion
+    PALF_LOG(TRACE, "current freeze mode is not feedback", K_(palf_id), K_(self), K_(freeze_mode));
+  } else if (OB_FAIL(lsn_allocator_.try_freeze(last_log_end_lsn, last_log_id))) {
     PALF_LOG(WARN, "lsn_allocator try_freeze failed", K(ret), K_(palf_id), K_(self), K(last_log_end_lsn), K(last_log_id));
   } else if (last_log_id <= 0) {
     // no log, no need freeze
-  } else if (OB_FAIL(try_freeze_last_log_(last_log_id, last_log_end_lsn, is_need_handle))) {
-    PALF_LOG(WARN, "try_freeze_last_log_ failed", K(ret), K_(palf_id), K_(self), K(last_log_id), K(last_log_end_lsn));
+  } else if (OB_FAIL(try_freeze_last_log_task_(last_log_id, last_log_end_lsn, is_need_handle))) {
+    PALF_LOG(WARN, "try_freeze_last_log_task_ failed", K(ret), K_(palf_id), K_(self), K(last_log_id), K(last_log_end_lsn));
   } else {
     bool is_committed_lsn_updated = false;
     (void) handle_next_submit_log_(is_committed_lsn_updated);
-
     (void) handle_committed_log_();
   }
+  return ret;
+}
+
+int LogSlidingWindow::check_and_switch_freeze_mode()
+{
+  int ret = OB_SUCCESS;
+  int64_t total_append_cnt = 0;
+  for (int i = 0; i < APPEND_CNT_ARRAY_SIZE; ++i) {
+    total_append_cnt += ATOMIC_LOAD(&append_cnt_array_[i]);
+    ATOMIC_STORE(&append_cnt_array_[i], 0);
+  }
+  if (FEEDBACK_FREEZE_MODE == freeze_mode_) {
+    if (total_append_cnt >= APPEND_CNT_LB_FOR_PERIOD_FREEZE) {
+      freeze_mode_ = PERIOD_FREEZE_MODE;
+      PALF_LOG(INFO, "switch freeze_mode to period", K_(palf_id), K_(self), K(total_append_cnt));
+    }
+  } else if (PERIOD_FREEZE_MODE == freeze_mode_) {
+    if (total_append_cnt < APPEND_CNT_LB_FOR_PERIOD_FREEZE) {
+      freeze_mode_ = FEEDBACK_FREEZE_MODE;
+      PALF_LOG(INFO, "switch freeze_mode to feedback", K_(palf_id), K_(self), K(total_append_cnt));
+      (void) feedback_freeze_last_log_();
+    }
+  } else {}
+  PALF_LOG(TRACE, "finish check_and_switch_freeze_mode", K_(palf_id), K_(self), K(total_append_cnt), K_(freeze_mode));
+  return ret;
+}
+
+int LogSlidingWindow::period_freeze_last_log()
+{
+  int ret = OB_SUCCESS;
+  LSN last_log_end_lsn;
+  int64_t last_log_id = OB_INVALID_LOG_ID;
+  bool is_need_handle = false;
+  if (PERIOD_FREEZE_MODE != freeze_mode_) {
+    // Only PERIOD_FREEZE_MODE need exec this fucntion
+    PALF_LOG(TRACE, "current freeze mode is not period", K_(palf_id), K_(self), K_(freeze_mode));
+  } else if (OB_FAIL(lsn_allocator_.try_freeze(last_log_end_lsn, last_log_id))) {
+    PALF_LOG(WARN, "lsn_allocator try_freeze failed", K(ret), K_(palf_id), K_(self), K(last_log_end_lsn), K(last_log_id));
+  } else if (last_log_id <= 0) {
+    // no log, no need freeze
+  } else if (OB_FAIL(try_freeze_last_log_task_(last_log_id, last_log_end_lsn, is_need_handle))) {
+    PALF_LOG(WARN, "try_freeze_last_log_task_ failed", K(ret), K_(palf_id), K_(self), K(last_log_id), K(last_log_end_lsn));
+  } else {
+    bool is_committed_lsn_updated = false;
+    (void) handle_next_submit_log_(is_committed_lsn_updated);
+  }
+  // handle committed log periodically
+  // because committed_end_lsn may be advanced during reconfirm,
+  // so there is maybe some log that can be slid in sw.
+  (void) handle_committed_log_();
   return ret;
 }
 
@@ -1167,6 +1235,9 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
       const int64_t last_submit_log_id = get_last_submit_log_id_();
       if (log_id == last_submit_log_id) {
         // 基于log_id连续性条件触发后续日志处理
+        // feedback mode下尝试冻结后面的log
+        (void) feedback_freeze_last_log_();
+        // 非feedback mode需触发handle next log
         bool is_committed_lsn_updated = false;
         (void) handle_next_submit_log_(is_committed_lsn_updated);
       }
@@ -1198,6 +1269,11 @@ int64_t LogSlidingWindow::get_last_submit_log_id_() const
 {
   ObSpinLockGuard guard(last_submit_info_lock_);
   return last_submit_log_id_;
+}
+
+void LogSlidingWindow::get_last_submit_end_lsn_(LSN &end_lsn) const
+{
+  end_lsn = ATOMIC_LOAD(&last_submit_end_lsn_.val_);
 }
 
 void LogSlidingWindow::get_last_submit_log_info_(LSN &lsn, LSN &end_lsn,
@@ -1304,7 +1380,7 @@ int LogSlidingWindow::set_last_submit_log_info_(const LSN &lsn,
     ObSpinLockGuard guard(last_submit_info_lock_);
     const int64_t old_submit_log_id = last_submit_log_id_;
     last_submit_lsn_ = lsn;
-    last_submit_end_lsn_ = end_lsn;
+    ATOMIC_STORE(&last_submit_end_lsn_.val_, end_lsn.val_);
     last_submit_log_id_ = log_id;
     last_submit_log_pid_ = log_proposal_id;
     PALF_LOG(TRACE, "set_last_submit_log_info_ success", K_(palf_id), K_(self), K(old_submit_log_id), K(lsn), K(log_id), \
@@ -1462,7 +1538,9 @@ void LogSlidingWindow::try_reset_last_fetch_log_info_(const LSN &expected_end_ls
   }
 }
 
-void LogSlidingWindow::try_update_committed_lsn_for_fetch_(const LSN &log_end_lsn, const int64_t &log_id)
+void LogSlidingWindow::try_update_committed_lsn_for_fetch_(const LSN &log_end_lsn,
+    const int64_t &log_id,
+    const LSN &log_committed_end_lsn)
 {
   bool need_update = false;
   LSN last_fetch_end_lsn;
@@ -1493,9 +1571,9 @@ void LogSlidingWindow::try_update_committed_lsn_for_fetch_(const LSN &log_end_ls
                || log_id == last_fetch_max_log_id_) {
       LSN committed_end_lsn;
       get_committed_end_lsn_(committed_end_lsn);
-      ATOMIC_STORE(&last_fetch_committed_end_lsn_.val_, committed_end_lsn.val_);
+      ATOMIC_STORE(&last_fetch_committed_end_lsn_.val_, log_committed_end_lsn.val_);
       PALF_LOG(INFO, "update last fetch log info", K_(palf_id), K_(self), K(last_fetch_end_lsn), K(log_id),
-          K_(last_fetch_end_lsn), K_(last_fetch_committed_end_lsn));
+          K_(last_fetch_end_lsn), K_(last_fetch_committed_end_lsn), K(committed_end_lsn));
     } else {
       PALF_LOG(INFO, "last_fetch_max_log_id_ has changed, skip update", K_(palf_id), K_(self),
           K(last_fetch_end_lsn), K(log_id), K_(last_fetch_max_log_id), K_(last_fetch_end_lsn),
@@ -1891,8 +1969,8 @@ int LogSlidingWindow::freeze_pending_log_(LSN &last_lsn)
     PALF_LOG(WARN, "lsn_allocator try_freeze failed", K(ret), K_(palf_id), K_(self), K(last_lsn));
   } else if (last_log_id <= 0) {
     // no log, no need freeze
-  } else if (OB_FAIL(try_freeze_last_log_(last_log_id, last_lsn, is_need_handle))) {
-    PALF_LOG(WARN, "try_freeze_last_log_ failed", K(ret), K_(palf_id), K_(self), K(last_lsn));
+  } else if (OB_FAIL(try_freeze_last_log_task_(last_log_id, last_lsn, is_need_handle))) {
+    PALF_LOG(WARN, "try_freeze_last_log_task_ failed", K(ret), K_(palf_id), K_(self), K(last_lsn));
   } else {
     const int64_t last_submit_log_id = get_last_submit_log_id_();
     if (last_log_id == last_submit_log_id + 1) {
@@ -3292,19 +3370,9 @@ int LogSlidingWindow::try_send_committed_info(const common::ObAddr &server,
     ret = OB_NOT_INIT;
   } else if (!log_lsn.is_valid() || !log_end_lsn.is_valid() || INVALID_PROPOSAL_ID == log_proposal_id) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (state_mgr_->is_leader_active()) {
-    // Leader
-    int64_t last_log_id = OB_INVALID_LOG_ID;
-    int64_t last_log_proposal_id = INVALID_PROPOSAL_ID;
-    if (OB_FAIL(leader_get_committed_log_info_(committed_end_lsn, last_log_id, last_log_proposal_id))
-        || OB_INVALID_LOG_ID == last_log_id) {
-      // no need send committed_info
-    } else if (OB_FAIL(log_engine_->submit_committed_info_req(server, curr_proposal_id,
-                last_log_id, log_proposal_id, committed_end_lsn))) {
-      PALF_LOG(WARN, "submit_committed_info_req failed", K(ret), K_(palf_id), K_(self), K(server));
-    }
   } else {
-    // Follower
+    // leader/follower can send committed_info to request server,
+    // if the arg log has slid out and its end_lsn equals to committed_end_lsn.
     int64_t last_slide_log_id = OB_INVALID_LOG_ID;
     SCN last_slide_scn;
     LSN last_slide_lsn;
@@ -3322,7 +3390,7 @@ int LogSlidingWindow::try_send_committed_info(const common::ObAddr &server,
             last_slide_log_id, log_proposal_id, committed_end_lsn))) {
         PALF_LOG(WARN, "submit_committed_info_req failed", K(ret), K_(palf_id), K_(self), K(server));
       } else {
-        PALF_LOG(TRACE, "follower try_send_committed_info success", K(ret), K_(palf_id), K_(self),
+        PALF_LOG(TRACE, "try_send_committed_info success", K(ret), K_(palf_id), K_(self),
             K(last_slide_log_id), K(log_proposal_id), K(committed_end_lsn));
       }
     }

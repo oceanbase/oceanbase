@@ -50,7 +50,7 @@ ObExprDayOfWeek::~ObExprDayOfWeek() {}
 int ObExprDayOfWeek::calc_dayofweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  if (ObExprTimeBase::calc(expr, ctx, expr_datum, DT_WDAY, true)) {
+  if (OB_FAIL(ObExprTimeBase::calc(expr, ctx, expr_datum, DT_WDAY, true))) {
     LOG_WARN("calc day of week failed", K(ret));
   } else if (!expr_datum.is_null()) {
     expr_datum.set_int32(expr_datum.get_int32() % 7 + 1);
@@ -623,7 +623,7 @@ ObExprDayName::~ObExprDayName() {}
 int ObExprDayName::calc_dayname(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
-  if (ObExprTimeBase::calc(expr, ctx, expr_datum, DT_WDAY, true)) {
+  if (OB_FAIL(ObExprTimeBase::calc(expr, ctx, expr_datum, DT_WDAY, true))) {
     LOG_WARN("dayname calc day of dayweek failed", K(ret));
   }
   return ret;

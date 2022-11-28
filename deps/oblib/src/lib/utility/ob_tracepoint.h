@@ -25,6 +25,7 @@
 #include "lib/alloc/alloc_assist.h"
 #include "lib/list/ob_dlist.h"
 #include "lib/coro/co_var.h"
+#include "lib/time/ob_tsc_timestamp.h"
 
 #define TP_COMMA(x) ,
 #define TP_EMPTY(x)
@@ -218,7 +219,9 @@ struct EventItem
       ret = 0;
     } else if (trigger_freq_ == 1) {
       ret = static_cast<int>(error_code_);
-      COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret));
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+        COMMON_LOG(WARN, "[ERRSIM] sim error", K(ret));
+      }
     } else {
       if (rand() % trigger_freq_ == 0) {
         ret = static_cast<int>(error_code_);
@@ -576,6 +579,7 @@ class EventTable
       EN_DDL_COMPACT_FAIL = 513,
       EN_DDL_RELEASE_DDL_KV_FAIL = 514,
       EN_DDL_REPORT_CHECKSUM_FAIL = 515,
+      EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL = 516,
 
       // 600-700 For PX use
       EN_PX_SQC_EXECUTE_FAILED = 600,
@@ -629,6 +633,7 @@ class EventTable
       EN_ADD_BACKUP_FINISH_DAG_FAILED = 1108,
       EN_ADD_BACKUP_PREFETCH_DAG_FAILED = 1109,
       EN_BACKUP_PERSIST_SET_TASK_FAILED = 1110,
+      EN_BACKUP_READ_MACRO_BLOCK_FAILED = 1111,
       
       EVENT_TABLE_MAX = SIZE_OF_EVENT_TABLE
     };

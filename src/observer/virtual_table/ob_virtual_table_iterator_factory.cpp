@@ -174,6 +174,7 @@
 #include "observer/virtual_table/ob_all_virtual_dtl_interm_result_monitor.h"
 #include "observer/virtual_table/ob_all_virtual_log_stat.h"
 #include "observer/virtual_table/ob_all_virtual_apply_stat.h"
+#include "observer/virtual_table/ob_all_virtual_ha_diagnose.h"
 #include "observer/virtual_table/ob_all_virtual_replay_stat.h"
 #include "observer/virtual_table/ob_all_virtual_unit.h"
 #include "observer/virtual_table/ob_all_virtual_server.h"
@@ -1597,6 +1598,19 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualLSArchiveStat construct fail", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(ls_archive_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_HA_DIAGNOSE_TID: {
+            ObAllVirtualHADiagnose *diagnose_info = NULL;
+            omt::ObMultiTenant *omt = GCTX.omt_;
+            if (OB_UNLIKELY(NULL == omt)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "get tenant fail", K(ret));
+            } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualHADiagnose, diagnose_info, omt))) {
+              SERVER_LOG(ERROR, "ObAllVirtualHADiagnose construct fail", K(ret));
+            } else {
+              vt_iter = static_cast<ObAllVirtualHADiagnose *>(diagnose_info);
             }
             break;
           }

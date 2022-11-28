@@ -179,20 +179,29 @@ int ObTenantTabletScheduler::init()
 {
   int ret = OB_SUCCESS;
   int64_t schedule_interval = DEFAULT_COMPACTION_SCHEDULE_INTERVAL;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (tenant_config.is_valid()) {
-    schedule_interval = tenant_config->ob_compaction_schedule_interval;
-    fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
-  }
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      schedule_interval = tenant_config->ob_compaction_schedule_interval;
+      fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
+    }
+  } // end of ObTenantConfigGuard
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantTabletScheduler has inited", K(ret));
   } else if (FALSE_IT(bf_queue_.set_run_wrapper(MTL_CTX()))) {
-  } else if (OB_FAIL(bf_queue_.init(BLOOM_FILTER_LOAD_BUILD_THREAD_CNT, "BFBuildTask"))) {
+  } else if (OB_FAIL(bf_queue_.init(BLOOM_FILTER_LOAD_BUILD_THREAD_CNT,
+                                    "BFBuildTask",
+                                    BF_TASK_QUEUE_SIZE,
+                                    BF_TASK_MAP_SIZE,
+                                    BF_TASK_TOTAL_LIMIT,
+                                    BF_TASK_HOLD_LIMIT,
+                                    BF_TASK_PAGE_SIZE,
+                                    MTL_ID(),
+                                    "bf_queue"))) {
     LOG_WARN("Fail to init bloom filter queue", K(ret));
   } else {
     schedule_interval_ = schedule_interval;
-    bf_queue_.set_label("bf_queue");
     is_inited_ = true;
   }
 
@@ -226,11 +235,13 @@ int ObTenantTabletScheduler::reload_tenant_config()
 {
   int ret = OB_SUCCESS;
   int64_t merge_schedule_interval = DEFAULT_COMPACTION_SCHEDULE_INTERVAL;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (tenant_config.is_valid()) {
-    merge_schedule_interval = tenant_config->ob_compaction_schedule_interval;
-    fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
-  }
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      merge_schedule_interval = tenant_config->ob_compaction_schedule_interval;
+      fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
+    }
+  } // end of ObTenantConfigGuard
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("The ObTenantTabletScheduler has not been inited", K(ret));

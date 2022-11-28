@@ -276,6 +276,7 @@ void ObPartTransCtx::default_init_()
   mds_cache_.reset();
   start_replay_ts_.reset();
   is_incomplete_replay_ctx_ = false;
+  is_submitting_redo_log_for_freeze_ = false;
   start_working_log_ts_ = SCN::min_scn();
   coord_prepare_info_arr_.reset();
   reserve_allocator_.reset();
@@ -365,13 +366,14 @@ int ObPartTransCtx::trans_kill_()
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "trans killed", K(trans_id_));
 
+  mt_ctx_.trans_kill();
+
   if (ctx_tx_data_.get_state() == ObTxData::RUNNING) {
     if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::ABORT))) {
       TRANS_LOG(WARN, "set abort state in ctx_tx_data_ failed", K(ret));
     }
   }
 
-  mt_ctx_.trans_kill();
   return ret;
 }
 
@@ -634,6 +636,7 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
     case ObTxState::ABORT:
       ret = OB_TRANS_KILLED;
       break;
+    case ObTxState::PRE_COMMIT:
     case ObTxState::COMMIT:
     case ObTxState::CLEAR:
       ret = OB_TRANS_COMMITED;
@@ -866,7 +869,7 @@ int ObPartTransCtx::update_publish_version_(const SCN &publish_version, const bo
     TRANS_LOG(WARN, "set commit version failed", K(ret));
   } else {
     trans_service_->get_tx_version_mgr().update_max_commit_ts(publish_version, false);
-    REC_TRANS_TRACE_EXT2(tlog_, update_trans_version, OB_ID(trans_version), publish_version,
+    REC_TRANS_TRACE_EXT2(tlog_, push_max_commit_version, OB_ID(trans_version), publish_version,
                          OB_ID(ctx_ref), get_ref());
   }
 
@@ -1419,6 +1422,7 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
   if (is_freeze) {
     // spin lock
     CtxLockGuard guard(lock_);
+    ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, true);
 
     is_tx_committing = ObTxState::INIT != get_downstream_state();
     final_log_submitting = final_log_cb_.is_valid();
@@ -1430,6 +1434,7 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
       }
       try_submit = true;
     }
+    ATOMIC_STORE(&is_submitting_redo_log_for_freeze_, false);
     if (try_submit) {
       REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, Y(ret), OB_ID(arg2), is_freeze,
                            OB_ID(used), ObTimeUtility::fast_current_time() - start,
@@ -1518,21 +1523,81 @@ int ObPartTransCtx::update_max_commit_version_()
   return ret;
 }
 
+// Unified interface for normal transaction end(both commit and abort). We We
+// want to integrate the following five things that all txn commits should do.
+//
+// 1.end_log_ts: We set end_log_ts during final log state is synced which must
+// have been done, so we check the validation of end_log_ts here(Maybe set it in
+// this function is better?)
+// 2.commit_version: We set commit version after submit the commit log for local
+// tx and during the do_prepare for dist tx which must have been done, so we
+// check the validation of commit_version here(Maybe set it in this function is
+// better?)
+// 3.mt_ctx.tx_end: We need callback all txn ops for all data in txn after final
+// state is synced. It must be called for all txns to clean and release its data
+// resource.
+// 4.set_state: We need set state after final state is synced. It tells others
+// that all data for this txn is decided and visible.
+// 5.insert_tx_data: We need insert into tx_data in order to cleanot data which
+// need be delay cleanout
+//
+// NB: You need pay much attention to the order of the following steps
+// TODO: Integrate trans_kill and trans_replay_end into the same function
+int ObPartTransCtx::tx_end_(const bool commit)
+{
+  int ret = OB_SUCCESS;
+
+  // NB: The order of the following steps is critical
+  // We need first set end_code_ for the s
+  int32_t state = commit ? ObTxData::COMMIT : ObTxData::ABORT;
+  const SCN &commit_version = ctx_tx_data_.get_commit_version();
+  const SCN &end_scn = ctx_tx_data_.get_end_log_ts();
+
+  // STEP1: We need check whether the end_log_ts is valid before state is filled
+  // in here because it will be used to cleanout the tnode if state is decided.
+  // What's more the end_log_ts is also be used during mt_ctx_.trans_end to
+  // backfill normal tnode.
+  if (has_persisted_log_() && !end_scn.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "end log ts is invalid when tx end", K(end_scn), K(ret), KPC(this));
+  // STEP2: We need check whether the commi_version is valid before state is
+  // filled in with commit here because it will be used to cleanout the tnode or
+  // lock for read if state is decided. What's more the commit_version is also
+  // be used during mt_ctx_.trans_end to backfill normal tnode..
+  } else if (commit && !commit_version.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "commit version is invalid when tx end", K(ret), KPC(this));
+  // STEP3: We need invoke mt_ctx_.trans_end before state is filled in here
+  // because we relay on the end_code_ in mt_ctx_ to report the suicide before
+  // the tnode can be cleanout by concurrent read.
+  } else if (OB_FAIL(mt_ctx_.trans_end(commit, commit_version, end_scn))) {
+    TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), "context", *this);
+  // STEP4: We need set state in order to informing others of the final status
+  // of my txn. What you need pay attention to is that after this action, others
+  // can cleanout the unfinished txn state and see all your data.
+  // TODO: we can move set_state before mt_ctx_.trans_end for commit state in
+  // order to accelerate users to see the data state.
+  } else if (OB_FAIL(ctx_tx_data_.set_state(state))) {
+    TRANS_LOG(WARN, "set tx data state failed", K(ret), KPC(this));
+  // STEP5: We need insert into the tx_data after all states are filled
+  } else if (has_persisted_log_() && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
+    TRANS_LOG(WARN, "insert to tx table failed", KR(ret), KPC(this));
+  }
+
+  return ret;
+}
+
 int ObPartTransCtx::on_dist_end_(const bool commit)
 {
   int ret = OB_SUCCESS;
 
   int64_t start_us, end_us;
   start_us = end_us = 0;
-  const SCN trans_version = commit ? ctx_tx_data_.get_commit_version() : SCN::invalid_scn();
   // Distributed transactions need to wait for the commit log majority successfully before
   // unlocking. If you want to know the reason, it is in the ::do_dist_commit
-
   start_us = ObTimeUtility::fast_current_time();
-  if (OB_FAIL(mt_ctx_.trans_end(commit,
-                                trans_version,
-                                ctx_tx_data_.get_end_log_ts()))) {
-    TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), K(trans_version), "context", *this);
+  if (OB_FAIL(tx_end_(commit))) {
+    TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), "context", *this);
   } else if (FALSE_IT(end_us = ObTimeUtility::fast_current_time())) {
   } else if (commit) {
     // reset the early lock release stat after the txn commits
@@ -1738,17 +1803,10 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
         if (is_local_tx_()) {
           if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
             TRANS_LOG(WARN, "set end log ts failed", K(ret));
-          } else if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::COMMIT))) {
-            TRANS_LOG(WARN, "set tx data state failed", K(ret));
           } else {
             tg.click();
-            if (OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
-              TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
-            } else {
-              tg.click();
-              if (OB_FAIL(on_local_commit_tx_())) {
-                TRANS_LOG(WARN, "on local commit failed", KR(ret), K(*this));
-              }
+            if (OB_FAIL(on_local_commit_tx_())) {
+              TRANS_LOG(WARN, "on local commit failed", KR(ret), K(*this));
             }
           }
         } else {
@@ -1756,10 +1814,6 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
           const NotifyType type = NotifyType::ON_COMMIT;
           if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
             TRANS_LOG(WARN, "set end log ts failed", K(ret));
-          } else if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::COMMIT))) {
-            TRANS_LOG(WARN, "set tx data state failed", K(ret));
-          } else if (OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
-            TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
           } else if (OB_FAIL(notify_data_source_(type, log_ts, false, exec_info_.multi_data_source_))) {
             TRANS_LOG(WARN, "notify data source failed", KR(ret), K(*this));
           }
@@ -1781,10 +1835,6 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
         if (is_local_tx_() || sub_state_.is_force_abort()) {
           if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
             TRANS_LOG(WARN, "set end log ts failed", K(ret));
-          } else if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::ABORT))) {
-            TRANS_LOG(WARN, "set tx data state failed", K(ret));
-          } else if (OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
-            TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
           } else if (OB_FAIL(on_local_abort_tx_())) {
             TRANS_LOG(WARN, "on local abort failed", KR(ret), K(*this));
           }
@@ -1794,10 +1844,6 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
           tmp_array.reset();
           if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
             TRANS_LOG(WARN, "set end log ts failed", K(ret));
-          } else if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::ABORT))) {
-            TRANS_LOG(WARN, "set tx data state failed", K(ret));
-          } else if (OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
-            TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
           } else if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
             TRANS_LOG(WARN, "gen total mds array failed", K(ret));
           } else if (OB_FAIL(notify_data_source_(type, log_ts, false, tmp_array))) {
@@ -1827,7 +1873,7 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
     }
     REC_TRANS_TRACE_EXT(tlog_, log_sync_succ_cb,
                                OB_ID(ret), ret,
-                               Y(log_type),
+                               OB_ID(log_type), (void*)log_type,
                                OB_ID(t), log_ts,
                                OB_ID(offset), log_lsn,
                                OB_ID(ctx_ref), get_ref());
@@ -1955,7 +2001,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
       }
       if (need_callback_scheduler_()) {
         int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(defer_commit_callback_(OB_TRANS_KILLED, SCN()))) {
+        if (OB_TMP_FAIL(defer_callback_scheduler_(OB_TRANS_KILLED, SCN::invalid_scn()))) {
           TRANS_LOG(WARN, "notify scheduler txn killed fail", K(tmp_ret), K_(trans_id));
         } else {
           commit_cb_.disable();
@@ -1966,7 +2012,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
     }
     REC_TRANS_TRACE_EXT(tlog_, on_fail_cb,
                                OB_ID(ret), ret,
-                               Y(log_type),
+                               OB_ID(log_type), (void*)log_type,
                                OB_ID(t), log_ts,
                                OB_ID(ctx_ref), get_ref());
     TRANS_LOG(INFO, "ObPartTransCtx::on_failure end", KR(ret), K(*this), KPC(log_cb));
@@ -2923,7 +2969,7 @@ int ObPartTransCtx::submit_record_log_()
 
   if (OB_FAIL(log_block.init(replay_hint, log_block_header))) {
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
-  } else if (OB_FAIL(get_log_cb_(!NEED_FINAL_CB, log_cb))) {
+  } else if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
     if (OB_UNLIKELY(OB_TX_NOLOGCB != ret)) {
       TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
     }
@@ -3177,7 +3223,11 @@ int ObPartTransCtx::get_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb)
   } else {
     if (free_cbs_.is_empty()) {
       ret = OB_TX_NOLOGCB;
-      //TRANS_LOG(INFO, "all log cbs are busy now, try again later", K(*this));
+      //TRANS_LOG(INFO, "all log cbs are busy now, try again later", K(ret), K(*this));
+    } else if (free_cbs_.get_size() <= RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING &&
+        ATOMIC_LOAD(&is_submitting_redo_log_for_freeze_) == false) {
+      ret = OB_TX_NOLOGCB;
+      //TRANS_LOG(INFO, "reserve log callback for freezing, try again later", K(ret), K(*this));
     } else if (OB_ISNULL(log_cb = free_cbs_.remove_first())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected null log cb", KR(ret), K(*this));
@@ -3510,7 +3560,10 @@ int ObPartTransCtx::replay_update_tx_data_(const bool commit,
                                            const SCN &commit_version)
 {
   int ret = OB_SUCCESS;
-  if (commit) {
+
+  if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
+    TRANS_LOG(WARN, "set end log ts failed", K(ret));
+  } else if (commit) {
     if (TransType::SP_TRANS == exec_info_.trans_type_
         && !commit_version.is_valid()) {
       if (OB_FAIL(ctx_tx_data_.set_commit_version(log_ts))) {
@@ -3534,10 +3587,7 @@ int ObPartTransCtx::replay_update_tx_data_(const bool commit,
       TRANS_LOG(WARN, "set tx data state failed", K(ret));
     }
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ctx_tx_data_.set_end_log_ts(log_ts))) {
-    TRANS_LOG(WARN, "set end log ts failed", K(ret));
-  }
+
   return ret;
 }
 
@@ -3849,6 +3899,8 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
     //   tx_data_->end_scn_ = redo_log_no_;
     // }
     if (exec_info_.participants_.count() > 1) {
+      exec_info_.trans_type_ = TransType::DIST_TRANS;
+    } else if (exec_info_.upstream_.is_valid()) {
       exec_info_.trans_type_ = TransType::DIST_TRANS;
     } else if (is_sub2pc()) {
       exec_info_.trans_type_ = TransType::DIST_TRANS;
@@ -5687,7 +5739,7 @@ int ObPartTransCtx::submit_rollback_to_log_(const int64_t from_scn,
     TRANS_LOG(WARN, "init log block fail", K(ret), KPC(this));
   } else if (OB_FAIL(exec_info_.redo_lsns_.reserve(exec_info_.redo_lsns_.count() + 1))) {
     TRANS_LOG(WARN, "reserve memory for redo lsn failed", K(ret));
-  } else if (OB_FAIL(get_log_cb_(!NEED_FINAL_CB, log_cb))) {
+  } else if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
     TRANS_LOG(WARN, "get log_cb fail", K(ret), KPC(this));
   } else if (OB_FAIL(log_block.add_new_log(log))) {
     TRANS_LOG(WARN, "logblock add log fail", K(ret), KPC(this));
@@ -5915,9 +5967,7 @@ int ObPartTransCtx::on_local_commit_tx_()
       TRANS_LOG(WARN, "wait gts elapse commit version failed", KR(ret), KPC(this));
     } else if (FALSE_IT(tg.click())) {
     } else if (FALSE_IT(start_us = ObTimeUtility::fast_current_time())) {
-    } else if (OB_FAIL(mt_ctx_.trans_end(true,
-                                         ctx_tx_data_.get_commit_version(),
-                                         ctx_tx_data_.get_end_log_ts()))) {
+    } else if (OB_FAIL(tx_end_(true /*commit*/))) {
       TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
     } else if (FALSE_IT(end_us = ObTimeUtility::fast_current_time())) {
     } else if (FALSE_IT(elr_handler_.reset_elr_state())) {
@@ -5965,10 +6015,9 @@ int ObPartTransCtx::on_local_abort_tx_()
 
   ObTxBufferNodeArray tmp_array;
 
-  if (!has_persisted_log_() && OB_FAIL(ctx_tx_data_.set_state(ObTxData::ABORT))) {
-    TRANS_LOG(WARN, "set abort state failed", K(ret));
-  } else if (OB_FALSE_IT(start_us = ObTimeUtility::fast_current_time())) {
-  } else if (OB_FAIL(mt_ctx_.trans_end(false, SCN::invalid_scn(), ctx_tx_data_.get_end_log_ts()))) {
+  if (OB_FALSE_IT(start_us = ObTimeUtility::fast_current_time())) {
+
+  } else if (OB_FAIL(tx_end_(false /*commit*/))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), K(commit_version), "context", *this);
   } else if (FALSE_IT(end_us = ObTimeUtility::fast_current_time())) {
 

@@ -298,11 +298,10 @@ int ObTabletCreateDeleteHelper::handle_special_tablets_for_replay(
         tx_data.tx_id_ = trans_flags.tx_id_;
         tx_data.tx_scn_ = trans_flags.scn_;
         tx_data.tablet_status_ = ObTabletStatus::CREATING;
-        const bool update_cache = false;
+        const MemtableRefOp ref_op = MemtableRefOp::NONE;
 
-        if (OB_FAIL(tablet_handle.get_obj()->set_tx_data(tx_data, trans_flags.for_replay_,
-            update_cache, MemtableRefOp::NONE/*ref_op*/))) {
-          LOG_WARN("failed to set tx data", K(ret), K(tx_data), K(trans_flags));
+        if (OB_FAIL(tablet_handle.get_obj()->set_tx_data(tx_data, trans_flags.for_replay_, ref_op))) {
+          LOG_WARN("failed to set tx data", K(ret), K(tx_data), K(trans_flags), K(ref_op));
         } else if (OB_FAIL(t3m->insert_pinned_tablet(key))) {
           LOG_WARN("failed to insert in tx tablet", K(ret));
         }
@@ -663,10 +662,10 @@ int ObTabletCreateDeleteHelper::abort_create_tablets(
     LOG_WARN("unexpected arg", K(ret), K(PRINT_CREATE_ARG(arg)));
   } else if (OB_FAIL(do_abort_create_tablets(arg, trans_flags))) {
     LOG_WARN("failed to do abort create tablets", K(ret), K(PRINT_CREATE_ARG(arg)), K(trans_flags));
-  } else if (OB_FAIL(ObTabletBindingHelper::unlock_tablet_binding_for_create(arg, ls_, trans_flags))) {
-    LOG_WARN("failed to unlock tablet binding", K(ret), K(trans_flags));
   } else if (OB_FAIL(ObTabletBindingHelper::fix_binding_info_for_create_tablets(arg, ls_, trans_flags))) {
     LOG_WARN("failed to fix_binding_info_for_create_tablets", K(ret), K(arg), K(trans_flags));
+  } else if (OB_FAIL(ObTabletBindingHelper::unlock_tablet_binding_for_create(arg, ls_, trans_flags))) {
+    LOG_WARN("failed to unlock tablet binding", K(ret), K(trans_flags));
   } else {
     LOG_INFO("succeeded to abort create tablets", K(ret), K(PRINT_CREATE_ARG(arg)), K(trans_flags));
   }
@@ -1723,7 +1722,7 @@ int ObTabletCreateDeleteHelper::build_tablet_create_info(
         // find hidden lob info
         int64_t aux_idx = -1;
         if (find_related_aux_info(arg, tablet_create_info.data_tablet_id_, aux_idx)) {
-          const ObCreateTabletInfo aux_info = arg.tablets_.at(aux_idx);
+          const ObCreateTabletInfo &aux_info = arg.tablets_.at(aux_idx);
           if (OB_FAIL(fill_aux_infos(arg, aux_info, tablet_create_info))) {
             LOG_WARN("failed to fill aux info", K(ret), K(PRINT_CREATE_ARG(arg)), K(aux_idx));
           } else if (OB_FAIL(skip_idx.push_back(aux_idx))) {
@@ -2282,10 +2281,9 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
     tx_data.tx_id_ = tx_id;
     tx_data.tx_scn_ = scn;
     tx_data.tablet_status_ = ObTabletStatus::CREATING;
-    const bool update_cache = trans_flags.for_replay_; // if for replay is true, we should update cache in tablet pointer
 
-    if (OB_FAIL(tablet->set_tx_data(tx_data, trans_flags.for_replay_, update_cache, ref_op))) {
-      LOG_WARN("failed to set tx data", K(ret), K(tx_data), K(trans_flags), K(update_cache), K(ref_op));
+    if (OB_FAIL(tablet->set_tx_data(tx_data, trans_flags.for_replay_, ref_op))) {
+      LOG_WARN("failed to set tx data", K(ret), K(tx_data), K(trans_flags), K(ref_op));
     } else if (OB_FAIL(t3m->insert_pinned_tablet(key))) {
       LOG_WARN("failed to insert in tx tablet", K(ret), K(key));
     }

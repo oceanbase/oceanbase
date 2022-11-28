@@ -178,9 +178,13 @@ void coredump_cb(int sig, siginfo_t *si, void *context)
       int64_t ip = -1;
       int64_t bp = -1;
 #endif
+      char rlimit_core[32] = "unlimited";
+      if (UINT64_MAX != g_rlimit_core) {
+        safe_snprintf(rlimit_core, sizeof(rlimit_core), "%lu", g_rlimit_core);
+      }
       ssize_t print_len = safe_snprintf(print_buf, sizeof(print_buf),
-                                       "CRASH ERROR!!! IP=%lx, RBP=%lx, sig=%d, sig_code=%d, sig_addr=%p, "COMMON_FMT"\n",
-                                       ip, bp, sig, si->si_code, si->si_addr, ts, GETTID(), tname, uval[0], uval[1], uval[2], uval[3],
+                                       "CRASH ERROR!!! IP=%lx, RBP=%lx, sig=%d, sig_code=%d, sig_addr=%p, RLIMIT_CORE=%s, "COMMON_FMT"\n",
+                                       ip, bp, sig, si->si_code, si->si_addr, rlimit_core, ts, GETTID(), tname, uval[0], uval[1], uval[2], uval[3],
                                        (NULL == extra_info) ? NULL : to_cstring(*extra_info), bt);
       write(STDERR_FILENO, print_buf, print_len);
     #if MINICORE

@@ -51,7 +51,7 @@ protected:
 
   bool is_conn_valid() const { return packet_sender_.is_conn_valid(); }
 
-  virtual void update_last_pkt_pos() { return packet_sender_.update_last_pkt_pos(); }
+  virtual int update_last_pkt_pos() { return packet_sender_.update_last_pkt_pos(); }
   virtual bool need_send_extra_ok_packet() { return packet_sender_.need_send_extra_ok_packet(); }
 
 

@@ -82,14 +82,21 @@ private:
   struct ObPartitionBuildInfo final
   {
   public:
+    static const int64_t PARTITION_BUILD_HEART_BEAT_TIME = 10 * 1000 * 1000;
     ObPartitionBuildInfo()
-      : ret_code_(common::OB_SUCCESS), stat_(ObPartitionBuildStat::BUILD_INIT)
+      : ret_code_(common::OB_SUCCESS), stat_(ObPartitionBuildStat::BUILD_INIT), heart_beat_time_(0)
     {}
     ~ObPartitionBuildInfo() = default;
-    TO_STRING_KV(K_(ret_code), K_(stat));
+    bool need_schedule() const {
+      return ObPartitionBuildStat::BUILD_RETRY == stat_
+        || (ObPartitionBuildStat::BUILD_REQUESTED == stat_
+          && ObTimeUtility::current_time() - heart_beat_time_ > PARTITION_BUILD_HEART_BEAT_TIME);
+    }
+    TO_STRING_KV(K_(ret_code), K_(stat), K_(heart_beat_time));
   public:
     int64_t ret_code_;
     ObPartitionBuildStat stat_;
+    int64_t heart_beat_time_;
   };
 private:
   uint64_t tenant_id_;

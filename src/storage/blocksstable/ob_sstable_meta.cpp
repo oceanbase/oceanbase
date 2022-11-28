@@ -284,8 +284,6 @@ DEFINE_DESERIALIZE(ObSSTableBasicMeta)
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, deserialize may has bug", K(ret), K(pos), K(start_pos), KPC(this));
-      } else {
-        filled_tx_scn_.transform_max();
       }
     }
   }

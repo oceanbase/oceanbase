@@ -308,6 +308,7 @@ public:
 
   // // TODO: ==================== Memtable Other Interface ==================
   int set_freezer(storage::ObFreezer *handler);
+  storage::ObFreezer *get_freezer() { return freezer_; }
   int get_ls_id(share::ObLSID &ls_id);
   void set_memtable_mgr(storage::ObTabletMemtableMgr *mgr) { memtable_mgr_ = mgr; }
   void set_freeze_clock(const uint32_t freeze_clock) { ATOMIC_STORE(&freeze_clock_, freeze_clock); }
@@ -431,6 +432,8 @@ public:
   blocksstable::ObDatumRange &m_get_real_range(blocksstable::ObDatumRange &real_range,
                                         const blocksstable::ObDatumRange &range, const bool is_reverse) const;
   int get_tx_table_guard(storage::ObTxTableGuard &tx_table_guard);
+  int set_migration_clog_checkpoint_scn(const share::SCN &clog_checkpoint_scn);
+  share::SCN get_migration_clog_checkpoint_scn() { return migration_clog_checkpoint_scn_.atomic_get(); }
 
   /* multi source data operations */
   virtual int get_multi_source_data_unit(ObIMultiSourceDataUnit *multi_source_data_unit, ObIAllocator *allocator);
@@ -531,6 +534,7 @@ private:
   int64_t state_;
   int64_t freeze_state_;
   int64_t timestamp_;
+  share::SCN migration_clog_checkpoint_scn_;
   bool is_tablet_freeze_;
   bool is_force_freeze_;
   bool is_flushed_;

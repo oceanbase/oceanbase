@@ -557,8 +557,19 @@ bool PalfEnvImpl::FreezeLogFunctor::operator() (const LSKey &palf_id, PalfHandle
   int tmp_ret = OB_SUCCESS;
   if (NULL == palf_handle_impl) {
     PALF_LOG(ERROR, "palf_handle_impl is NULL", KP(palf_handle_impl), K(palf_id));
-  } else if (OB_SUCCESS != (tmp_ret = palf_handle_impl->try_freeze_last_log())) {
-    PALF_LOG(WARN, "try_freeze_last_log failed", K(tmp_ret), K(palf_id));
+  } else if (OB_SUCCESS != (tmp_ret = palf_handle_impl->period_freeze_last_log())) {
+    PALF_LOG(WARN, "period_freeze_last_log failed", K(tmp_ret), K(palf_id));
+  } else {}
+  return true;
+}
+
+bool PalfEnvImpl::CheckFreezeModeFunctor::operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl)
+{
+  int tmp_ret = OB_SUCCESS;
+  if (NULL == palf_handle_impl) {
+    PALF_LOG(ERROR, "palf_handle_impl is NULL", KP(palf_handle_impl), K(palf_id));
+  } else if (OB_SUCCESS != (tmp_ret = palf_handle_impl->check_and_switch_freeze_mode())) {
+    PALF_LOG(WARN, "check_and_switch_freeze_mode failed", K(tmp_ret), K(palf_id));
   } else {}
   return true;
 }
@@ -571,6 +582,19 @@ int PalfEnvImpl::try_switch_state_for_all()
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfEnvImpl is not inited", K(ret));
   } else if (OB_FAIL(palf_handle_impl_map_.for_each(switch_state_functor))) {
+    PALF_LOG(WARN, "palf_handle_impl_map_ for_each failed", K(ret));
+  } else {}
+  return ret;
+}
+
+int PalfEnvImpl::check_and_switch_freeze_mode()
+{
+  int ret = OB_SUCCESS;
+  CheckFreezeModeFunctor check_freeze_mode_functor;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfEnvImpl is not inited", K(ret));
+  } else if (OB_FAIL(palf_handle_impl_map_.for_each(check_freeze_mode_functor))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ for_each failed", K(ret));
   } else {}
   return ret;
@@ -622,11 +646,11 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
     const block_id_t min_using_block_id = lsn_2_block(base_lsn, PALF_BLOCK_SIZE);
     block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
     SCN min_block_max_scn;
-    // OB_ENTRY_EXIST means there is not any block;
+    // OB_ENTRY_NOT_EXIST means there is not any block;
     // OB_NO_SUCH_FILE_OR_DIRECTORY means there is concurrently with rebuild.
     // OB_ERR_OUT_OF_UPPER_BOUND means there is one block
     auto need_skip_by_ret = [](const int ret ){
-      return OB_ENTRY_EXIST == ret  || OB_NO_SUCH_FILE_OR_DIRECTORY == ret
+      return OB_ENTRY_NOT_EXIST == ret  || OB_NO_SUCH_FILE_OR_DIRECTORY == ret
           || OB_ERR_OUT_OF_UPPER_BOUND == ret;
     };
     if (false == base_lsn.is_valid()) {

@@ -72,7 +72,7 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
   } else if (OB_UNLIKELY(0 == inner_attr.tenant_id_)
              || OB_UNLIKELY(INT64_MAX == inner_attr.tenant_id_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", KCSTRING(lbt()), K(inner_attr.tenant_id_), K(ret));
+    LOG_ERROR("invalid argument", K(inner_attr.tenant_id_), K(ret));
   } else if (OB_NOT_NULL(allocator = get_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_))) {
     // do nothing
   } else if (OB_FAIL(create_tenant_ctx_allocator(inner_attr.tenant_id_, inner_attr.ctx_id_))) {

@@ -15,20 +15,12 @@ set @@session.ob_query_timeout = 200000000;
 source init_create_tenant_routines.sql;
 
 call adjust_sys_resource();
-call create_tenant_by_memory_resource('oracle', 'oracle');
 call create_tenant_by_memory_resource('mysql', 'mysql');
 
 set @@session.ob_query_timeout = 10000000;
 system sleep 5;
 alter tenant sys set variables recyclebin = 'on';
 alter tenant sys set variables ob_enable_truncate_flashback = 'on';
-alter tenant oracle set variables ob_tcp_invited_nodes='%';
-alter tenant oracle set variables autocommit='on';
-alter tenant oracle set variables nls_date_format='YYYY-MM-DD HH24:MI:SS';
-alter tenant oracle set variables nls_timestamp_format='YYYY-MM-DD HH24:MI:SS.FF';
-alter tenant oracle set variables nls_timestamp_tz_format='YYYY-MM-DD HH24:MI:SS.FF TZR TZD';
-alter tenant oracle set variables recyclebin = 'on';
-alter tenant oracle set variables ob_enable_truncate_flashback = 'on';
 alter tenant mysql set variables ob_tcp_invited_nodes='%';
 alter tenant mysql set variables recyclebin = 'on';
 alter tenant mysql set variables ob_enable_truncate_flashback = 'on';

@@ -102,8 +102,11 @@ void ObSqlEndTransCb::callback(int cb_param)
       //network problem, callback will still be called
       tmp_ret = OB_CONNECT_ERROR;
       SERVER_LOG(INFO, "connection is invalid", "ret", tmp_ret);
+    } else if (OB_SUCCESS != packet_sender_.alloc_ezbuf()) {
+      LOG_WARN("failed to alloc easy buf");
+    } else if (OB_SUCCESS != packet_sender_.update_last_pkt_pos()) {
+      LOG_WARN("failed to update last packet pos");
     } else {
-      packet_sender_.update_last_pkt_pos();
       session_info->set_show_warnings_buf(cb_param);
       if (OB_SUCCESS == cb_param) {
         //ok pakcet

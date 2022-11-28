@@ -29,6 +29,7 @@ extern signal_handler_t &get_signal_handler();
 extern bool g_redirect_handler;
 extern const int MP_SIG; // MP means MULTI-PURPOSE
 extern const int SIG_STACK_SIZE;
+extern uint64_t g_rlimit_core;
 
 class DTraceId
 {

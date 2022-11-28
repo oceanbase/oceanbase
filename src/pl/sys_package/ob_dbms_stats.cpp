@@ -117,7 +117,7 @@ int ObDbmsStats::gather_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
 }
 
 /**
- * @brief ObDbmsStat::gather_table_stats
+ * @brief ObDbmsStat::gather_schema_stats
  * @param ctx
  * @param params
  *      0. ownname       VARCHAR2,
@@ -3217,10 +3217,14 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       col_param.set_size_manual();
       col_param.bucket_num_ = -1;
       col_param.column_attribute_ = 0;
-      col_param.is_valid_hist_type_ =
+      if (lib::is_oracle_mode() && col->get_meta_type().is_varbinary_or_binary()) {
+        //oracle don't have this type. but agent table will have this type, such as "SYS"."ALL_VIRTUAL_COLUMN_REAL_AGENT"
+      } else {
+        col_param.is_valid_hist_type_ =
           ObColumnStatParam::is_valid_histogram_type(col->get_meta_type().get_type());
-      col_param.need_truncate_str_ = ob_is_string_type(col->get_meta_type().get_type()) &&
+        col_param.need_truncate_str_ = ob_is_string_type(col->get_meta_type().get_type()) &&
                                               col->get_data_length() > OPT_STATS_MAX_VALUE_CAHR_LEN;
+      }
       if (col->is_rowkey_column() && !table_schema.is_heap_table()) {
         col_param.set_is_index_column();
         if (1 == table_schema.get_rowkey_column_num()) {
@@ -5499,13 +5503,16 @@ int ObDbmsStats::gather_tables_stats_with_default_param(ObExecContext &ctx,
       LOG_WARN("failed to gather table stats with default param", K(ret));
     }
     if (OB_FAIL(ret)) {
-      if (OB_TABLE_NOT_EXIST == ret || OB_TIMEOUT == ret) {
+      if (OB_ERR_QUERY_INTERRUPTED == ret) {
+        LOG_WARN("query interrupted", K(ret));
+      } else if (OB_TABLE_NOT_EXIST == ret || OB_TIMEOUT == ret) {
         // do nothing
+        ret = OB_SUCCESS;
       } else {
         ++failed_count;
         LOG_WARN("failed to gather table stats with some unknown reason", K(ret));
+        ret = OB_SUCCESS;
       }
-      ret = OB_SUCCESS;
     } else {
       ++ succeed_count;
     }

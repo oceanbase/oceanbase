@@ -126,6 +126,7 @@ struct ObGlobalHint {
 
   bool has_hint_exclude_concurrent() const;
   int print_global_hint(planText &plan_text) const;
+  int print_monitoring_hints(planText &plan_text) const;
 
   ObPDMLOption get_pdml_option() const { return pdml_option_; }
   ObParamOption get_param_option() const { return param_option_; }
@@ -136,12 +137,12 @@ struct ObGlobalHint {
   static bool is_valid_opt_features_version(uint64_t version)
   { return MIN_OUTLINE_ENABLE_VERSION <= version && CLUSTER_CURRENT_VERSION >= version; }
   bool disable_query_transform() const { return disable_transform_; }
+  bool disable_cost_based_transform() const { return disable_cost_based_transform_; }
 
   TO_STRING_KV(K_(frozen_version),
                K_(topk_precision),
                K_(sharding_minimum_row_count),
                K_(query_timeout),
-               K_(hotspot),
                K_(read_consistency),
                K_(plan_cache_policy),
                K_(force_trace_log),
@@ -157,13 +158,13 @@ struct ObGlobalHint {
                K_(dops),
                K_(opt_features_version),
                K_(disable_transform),
+               K_(disable_cost_based_transform),
                K_(opt_params),
                K_(ob_ddl_schema_versions));
   int64_t frozen_version_;
   int64_t topk_precision_;
   int64_t sharding_minimum_row_count_;
   int64_t query_timeout_;
-  bool hotspot_;
   common::ObConsistencyLevel read_consistency_;
   ObPlanCachePolicy plan_cache_policy_;
   bool force_trace_log_;
@@ -179,6 +180,7 @@ struct ObGlobalHint {
   common::ObSArray<ObDopHint> dops_;
   uint64_t opt_features_version_;
   bool disable_transform_;
+  bool disable_cost_based_transform_;
   ObOptParamHint opt_params_;
   common::ObSArray<ObDDLSchemaVersionHint> ob_ddl_schema_versions_;
 };

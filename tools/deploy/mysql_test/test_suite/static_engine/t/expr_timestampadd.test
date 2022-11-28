@@ -4,8 +4,6 @@
 
 --disable_abort_on_error
 --result_format 4
-connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
-connection conn_admin;
 
 --disable_warnings
 drop table if exists t1;

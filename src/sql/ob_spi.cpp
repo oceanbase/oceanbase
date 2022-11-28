@@ -591,7 +591,9 @@ int ObSPIService::spi_calc_raw_expr(ObSQLSessionInfo *session,
   int ret = OB_SUCCESS;
   ObExecContext *exec_ctx = NULL;
   ParamStore param_store((ObWrapperAllocator(*allocator)));
+  CK (OB_NOT_NULL(result));
   OZ (ObSQLUtils::se_calc_const_expr(session, expr, param_store, *allocator, exec_ctx, *result));
+  OX (result->set_collation_level(expr->get_result_type().get_collation_level()));
   OZ (spi_pad_char_or_varchar(session, expr, allocator, result));
   return ret;
 }

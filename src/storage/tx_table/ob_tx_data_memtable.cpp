@@ -108,6 +108,18 @@ void ObTxDataMemtable::reset()
 void ObTxDataMemtable::reset_thread_local_list_()
 {
   for (int i = 0; i < MAX_TX_DATA_TABLE_CONCURRENCY; i++) {
+    ObTxDataSortListNode *cur_node = local_sort_list_head_[i].next_;
+    while (OB_NOT_NULL(cur_node)) {
+      ObTxData *tx_data = ObTxData::get_tx_data_by_sort_list_node(cur_node);
+      cur_node = cur_node->next_;
+      if (false == tx_data->is_in_tx_data_table_) {
+        if (OB_ISNULL(tx_data_map_)) {
+          STORAGE_LOG(ERROR, "tx_data_map is unexpected nullptr", KP(tx_data_map_), KPC(tx_data));
+        } else {
+          tx_data_map_->revert(tx_data);
+        }
+      }
+    }
     local_sort_list_head_[i].reset();
   }
 }
@@ -266,13 +278,14 @@ int ObTxDataMemtable::construct_list_for_sort_()
   int64_t skip_list_node_cnt = 0;
   for (int i = 0; i < MAX_TX_DATA_TABLE_CONCURRENCY; i++) {
     cur_node = local_sort_list_head_[i].next_;
+    local_sort_list_head_[i].reset();
     while (OB_NOT_NULL(cur_node)) {
       ObTxData *tx_data = ObTxData::get_tx_data_by_sort_list_node(cur_node);
 
       if (false == tx_data->is_in_tx_data_table_) {
         cur_node = cur_node->next_;
         // TODO : @gengli remove log info after stable
-        STORAGE_LOG(INFO, "skip one tx data", KPC(tx_data), KP(this), K(freezer_->get_ls_id()));
+        // STORAGE_LOG(INFO, "skip one tx data", KPC(tx_data), KP(this), K(freezer_->get_ls_id()));
         skip_list_node_cnt++;
         // revert must behind move pointer
         tx_data_map_->revert(tx_data);

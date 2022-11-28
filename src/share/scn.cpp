@@ -32,6 +32,11 @@ SCN SCN::atomic_get() const
   return result;
 }
 
+void SCN::atomic_store(const SCN &ref)
+{
+  ATOMIC_STORE(&val_, ATOMIC_LOAD(&ref.val_));
+}
+
 void SCN::atomic_set(const SCN &ref)
 {
   ATOMIC_SET(&val_, ATOMIC_LOAD(&ref.val_));
@@ -316,13 +321,6 @@ int SCN::convert_for_sql(uint64_t value)
   return ret;
 }
 
-void SCN::transform_max()
-{
-  if (INT64_MAX  == val_) {
-    this->set_max();
-  }
-}
-
 uint64_t SCN::get_val_for_inner_table_field() const
 {
   return val_;
@@ -478,6 +476,7 @@ int SCN::fixed_deserialize(const char* buf, const int64_t data_len, int64_t& pos
     PALF_LOG(WARN, "failed to decode val_", K(buf), K(data_len), K(new_pos), K(ret));
   } else {
     pos = new_pos;
+    (void)transform_max_();
   }
   return ret;
 }
@@ -515,6 +514,7 @@ int SCN::deserialize(const char* buf, const int64_t data_len, int64_t& pos)
     PALF_LOG(WARN, "failed to decode val_", K(buf), K(data_len), K(new_pos), K(ret));
   } else {
     pos = new_pos;
+    (void)transform_max_();
   }
   return ret;
 }
@@ -525,6 +525,14 @@ int64_t SCN::get_serialize_size(void) const
   size += serialization::encoded_length(val_);
   return size;
 }
+
+void SCN::transform_max_()
+{
+  if (INT64_MAX  == val_) {
+    this->set_max();
+  }
+}
+
 
 } // end namespace share
 } // end namespace oceanbase

@@ -833,6 +833,7 @@ public:
   static int all_virtual_schema_memory_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_schema_slot_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_minor_freeze_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ha_diagnose_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2734,6 +2735,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_schema_memory_schema,
   ObInnerTableSchema::all_virtual_schema_slot_schema,
   ObInnerTableSchema::all_virtual_minor_freeze_info_schema,
+  ObInnerTableSchema::all_virtual_ha_diagnose_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
   ObInnerTableSchema::all_virtual_plan_cache_plan_explain_ora_schema,
@@ -7052,7 +7054,8 @@ const uint64_t cluster_distributed_vtables [] = {
   OB_ALL_VIRTUAL_KVCACHE_HANDLE_LEAK_INFO_TID,
   OB_ALL_VIRTUAL_SCHEMA_MEMORY_TID,
   OB_ALL_VIRTUAL_SCHEMA_SLOT_TID,
-  OB_ALL_VIRTUAL_MINOR_FREEZE_INFO_TID,  };
+  OB_ALL_VIRTUAL_MINOR_FREEZE_INFO_TID,
+  OB_ALL_VIRTUAL_HA_DIAGNOSE_TID,  };
 
 const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_PROCESSLIST_TID,
@@ -9152,11 +9155,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 212;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 550;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 551;
 const int64_t OB_SYS_VIEW_COUNT = 601;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1368;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1369;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1371;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1372;
 
 } // end namespace share
 } // end namespace oceanbase

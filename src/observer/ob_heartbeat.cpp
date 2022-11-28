@@ -108,7 +108,7 @@ int ObHeartBeatProcess::init_lease_request(ObLeaseRequest &lease_request)
     lease_request.resource_info_.report_cpu_max_assigned_ = svr_res_assigned.max_cpu_;
     lease_request.resource_info_.report_mem_assigned_ = svr_res_assigned.memory_size_;
     lease_request.resource_info_.mem_in_use_ = 0;
-    lease_request.resource_info_.mem_total_ = GCONF.get_server_memory_avail();
+    lease_request.resource_info_.mem_total_ = GMEMCONF.get_server_memory_avail();
     lease_request.resource_info_.disk_total_
         = OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
     lease_request.resource_info_.disk_in_use_

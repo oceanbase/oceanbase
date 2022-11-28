@@ -241,8 +241,6 @@ TEST(TestSCN, test_serialize)
   EXPECT_EQ(pos3, de_pos3);
   EXPECT_EQ(pos4, de_pos4);
 
-  //test transform_max
-  de_scn.transform_max();
 
   EXPECT_EQ(false, de_scn == SCN::max_scn());
 
@@ -252,8 +250,6 @@ TEST(TestSCN, test_serialize)
   de_pos1 = 0;
   EXPECT_EQ(OB_SUCCESS, de_scn.deserialize(buf1, pos1, de_pos1));
   EXPECT_EQ(pos1, de_pos1);
-  de_scn.transform_max();
-  EXPECT_EQ(de_scn, SCN::max_scn());
 }
 
 } // end of unittest

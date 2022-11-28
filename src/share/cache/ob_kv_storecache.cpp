@@ -167,8 +167,8 @@ ObKVGlobalCache &ObKVGlobalCache::get_instance()
 
 int64_t ObKVGlobalCache::get_suitable_bucket_num()
 {
-  int64_t server_memory_factor = upper_align(GCONF.get_server_memory_limit(), BASE_SERVER_MEMORY_FACTOR) / BASE_SERVER_MEMORY_FACTOR;
-  int64_t reserved_memory = GCONF.get_reserved_server_memory() * MAX_RESERVED_MEMORY_RATIO;
+  int64_t server_memory_factor = upper_align(GMEMCONF.get_server_memory_limit(), BASE_SERVER_MEMORY_FACTOR) / BASE_SERVER_MEMORY_FACTOR;
+  int64_t reserved_memory = GMEMCONF.get_reserved_server_memory() * MAX_RESERVED_MEMORY_RATIO;
   int64_t bucket_num = DEFAULT_BUCKET_NUM;
   for (int64_t bucket_level = MAX_BUCKET_NUM_LEVEL -1; bucket_level > 0; bucket_level--) {
     if ((1 << bucket_level) > server_memory_factor) {

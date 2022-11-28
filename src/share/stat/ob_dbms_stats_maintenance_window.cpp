@@ -155,7 +155,7 @@ int ObDbmsStatsMaintenanceWindow::get_stat_window_job_sql(const bool is_oracle_m
   int ret = OB_SUCCESS;
   int64_t interval_ts = DEFAULT_WEEK_INTERVAL_USEC;
   int64_t end_date = 64060560000000000;//4000-01-01 00:00:00.000000
-  int64_t default_duration_uesc = is_work_day(job_id) ? DEFAULT_WORKING_DAY_DURATION_USEC : DEFAULT_NON_WORKING_DAY_DURATION_USEC;
+  int64_t default_duration_sec = is_work_day(job_id) ? DEFAULT_WORKING_DAY_DURATION_SEC : DEFAULT_NON_WORKING_DAY_DURATION_SEC;
   share::ObDMLSqlSplicer dml;
   OZ (dml.add_pk_column("tenant_id", share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
   OZ (dml.add_column("job_name", ObHexEscapeSqlStr(ObString(job_name))));
@@ -186,7 +186,7 @@ int ObDbmsStatsMaintenanceWindow::get_stat_window_job_sql(const bool is_oracle_m
   OZ (dml.add_column("credential_name", ObHexEscapeSqlStr(ObString(""))));
   OZ (dml.add_column("destination_name", ObHexEscapeSqlStr(ObString(""))));
   OZ (dml.add_column("interval_ts", interval_ts));
-  OZ (dml.add_column("max_run_duration", default_duration_uesc));
+  OZ (dml.add_column("max_run_duration", default_duration_sec));
   OZ (dml.splice_values(raw_sql));
   return ret;
 }
@@ -300,13 +300,15 @@ int ObDbmsStatsMaintenanceWindow::get_window_job_info(const int64_t current_time
     //work day set default start time is 22:00 and non-work day set default start time is 6:00
     int64_t default_start_hour = is_work_day(nth_window) ? DEFAULT_WORKING_DAY_START_HOHR : DEFAULT_NON_WORKING_DAY_START_HOHR;
     //work day set default duration time is 4 hours and non-work day set default duration time is 20 hours
+    int64_t default_duration_usec = is_work_day(nth_window) ? DEFAULT_WORKING_DAY_DURATION_USEC : DEFAULT_NON_WORKING_DAY_DURATION_USEC;
     int64_t total_hour_with_trunc = current_time / USEC_OF_HOUR;
     int64_t current_hour = ob_time.parts_[DT_HOUR];
     int64_t current_wday = ob_time.parts_[DT_WDAY];
     LOG_INFO("begin to get window job info", K(current_time), K(total_hour_with_trunc),
                                              K(current_hour), K(current_wday), K(nth_window),
-                                             K(default_start_hour));
-    if (OB_FAIL(job_action.append("DBMS_STATS.GATHER_DATABASE_STATS_JOB_PROC()"))) {
+                                             K(default_start_hour), K(default_duration_usec));
+    if (OB_FAIL(job_action.append_fmt("DBMS_STATS.GATHER_DATABASE_STATS_JOB_PROC(%ld)",
+                                      default_duration_usec))) {
       LOG_WARN("failed to append", K(ret));
     } else {
       int64_t offset_day = nth_window - current_wday;
@@ -320,7 +322,7 @@ int ObDbmsStatsMaintenanceWindow::get_window_job_info(const int64_t current_time
       LOG_INFO("succeed to get window job info", K(start_usec), K(offset_hour), K(current_time),
                                                  K(total_hour_with_trunc), K(current_hour),
                                                  K(current_wday), K(nth_window), K(offset_sec),
-                                                 K(default_start_hour),
+                                                 K(default_start_hour), K(default_duration_usec),
                                                  K(job_action), K(offset_day));
     }
   }
@@ -354,7 +356,7 @@ int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(const sql::Ob
           }
         } else {/*do nothing*/}
       } else {
-        const char *job_action_name = "DBMS_STATS.GATHER_DATABASE_STATS_JOB_PROC()";
+        const char *job_action_name = "DBMS_STATS.GATHER_DATABASE_STATS_JOB_PROC(";
         if (0 == strncasecmp(val_name.ptr(), job_action_name, strlen(job_action_name))) {
           if (OB_FAIL(dml.add_column("job_action", ObHexEscapeSqlStr(val_name)))) {
             LOG_WARN("failed to add column", K(ret));

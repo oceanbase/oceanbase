@@ -891,33 +891,21 @@ int ObDDLMacroBlockRedoWriter::remote_write_macro_redo(const ObAddr &leader_addr
 
 ObDDLSSTableRedoWriter::ObDDLSSTableRedoWriter()
   : is_inited_(false), remote_write_(false), start_scn_(),
-    ls_handle_(), tablet_handle_(), ddl_redo_handle_(), leader_addr_(), leader_ls_id_(), tablet_id_(), buffer_(nullptr)
+    ls_id_(), tablet_id_(), ddl_redo_handle_(), leader_addr_(), leader_ls_id_(), buffer_(nullptr)
 {
 }
 
 int ObDDLSSTableRedoWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
-  ObLSService *ls_service = nullptr;
-  bool is_cache_hit = false;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDDLSSTableRedoWriter has been inited twice", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls service should not be null", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle_, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("get ls failed", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls should not be null", K(ret));
-  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_))) {
-    LOG_WARN("fail to get tablet handle", K(ret), K(tablet_id));
   } else {
+    ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     is_inited_ = true;
   }
@@ -927,7 +915,9 @@ int ObDDLSSTableRedoWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_i
 int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key, ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
   ObLS *ls = nullptr;
+  ObTabletHandle tablet_handle;
   ObDDLStartLog log;
   ddl_kv_mgr_handle.reset();
   SCN tmp_scn;
@@ -939,13 +929,17 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key, 
     LOG_WARN("invalid arguments", K(ret), K(table_key));
   } else if (OB_FAIL(log.init(table_key, GET_MIN_CLUSTER_VERSION()))) {
     LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), "cluster_version", GET_MIN_CLUSTER_VERSION());
-  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("get ls failed", K(ret), K(ls_id_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
+  } else if (OB_FAIL(ls->get_tablet(tablet_id_, tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
   } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_start_log(log, ls->get_log_handler(), tmp_scn))) {
     LOG_WARN("fail to write ddl start log", K(ret), K(table_key));
   } else if (FALSE_IT(set_start_scn(tmp_scn))) {
-  } else if (OB_FAIL(tablet_handle_.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
     LOG_WARN("create ddl kv mgr failed", K(ret));
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(table_key, get_start_scn(), log.get_cluster_version()))) {
     LOG_WARN("start ddl log failed", K(ret), K(table_key), K(start_scn_), K(log));
@@ -956,6 +950,7 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key, 
 int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_info, const blocksstable::MacroBlockId &macro_block_id)
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   const int64_t BUF_SIZE = 2 * 1024 * 1024 + 16 * 1024;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -964,7 +959,9 @@ int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_i
   } else if (OB_UNLIKELY(!redo_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret));
-  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("get ls failed", K(ret), K(ls_id_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret));
   } else if (nullptr == buffer_ && OB_ISNULL(buffer_ = static_cast<char *>(ob_malloc(BUF_SIZE)))) {
@@ -1030,6 +1027,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
   DEBUG_SYNC(BEFORE_DDL_WRITE_PREPARE_LOG);
 #endif
   prepare_scn.reset();
+  ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObDDLPrepareLog log;
   ObDDLCommitLogHandle handle;
@@ -1041,7 +1039,9 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_));
   } else if (OB_FAIL(log.init(table_key, get_start_scn()))) {
     LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn_));
-  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("get ls failed", K(ret), K(ls_id_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
   } else if (!remote_write_) {
@@ -1083,6 +1083,7 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
                                              const SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObDDLCommitLog log;
   ObDDLCommitLogHandle handle;
@@ -1094,7 +1095,9 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_), K(prepare_scn));
   } else if (OB_FAIL(log.init(table_key, get_start_scn(), prepare_scn))) {
     LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn_), K(prepare_scn));
-  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("get ls failed", K(ret), K(ls_id_));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
   } else if (!remote_write_) {

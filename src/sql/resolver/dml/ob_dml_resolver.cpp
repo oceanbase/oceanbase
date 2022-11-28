@@ -1619,7 +1619,8 @@ int ObDMLResolver::resolve_basic_table(const ParseNode &parse_tree, TableItem *&
         } else { }
       }
       if (OB_SUCCESS == ret && sample_node != NULL && T_SAMPLE_SCAN == sample_node->type_) {
-        if (is_virtual_table(table_item->ref_id_)) {
+        if (is_virtual_table(table_item->ref_id_) &&
+            !is_oracle_mapping_real_virtual_table(table_item->ref_id_)) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "sampling virtual table");
         } else if (OB_FAIL(resolve_sample_clause(sample_node, table_item->table_id_))) {
@@ -9080,10 +9081,6 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
 
 
   switch (hint_node.type_) {
-    case T_HOTSPOT: {
-      global_hint.hotspot_ = true;
-      break;
-    }
     case T_TOPK: {
       CHECK_HINT_PARAM(hint_node, 2) {
         global_hint.merge_topk_hint(child0->value_, child1->value_);
@@ -9264,6 +9261,10 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     }
     case T_NO_QUERY_TRANSFORMATION: {
       global_hint.disable_transform_ = true;
+      break;
+    }
+    case T_NO_COST_BASED_QUERY_TRANSFORMATION: {
+      global_hint.disable_cost_based_transform_ = true;
       break;
     }
     default: {

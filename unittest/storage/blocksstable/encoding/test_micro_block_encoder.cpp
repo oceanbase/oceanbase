@@ -41,7 +41,8 @@ enum EncodeTestCase
 class TestIColumnEncoder : public ::testing::Test
 {
 public:
-  TestIColumnEncoder() {}
+  TestIColumnEncoder(const bool is_multi_version_row = false)
+    : is_multi_version_row_(is_multi_version_row) {}
   virtual ~TestIColumnEncoder() {}
   virtual void SetUp();
   virtual void TearDown() {}
@@ -55,6 +56,7 @@ protected:
   ObTableReadInfo read_info_;
   ObArenaAllocator allocator_;
   common::ObArray<share::schema::ObColDesc> col_descs_;
+  bool is_multi_version_row_;
 };
 
 void TestIColumnEncoder::SetUp()
@@ -89,18 +91,23 @@ void TestIColumnEncoder::SetUp()
     ASSERT_EQ(OB_SUCCESS, table.add_column(col));
   }
 
-  ASSERT_EQ(OB_SUCCESS, row_generate_.init(table));
-  ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(col_descs_));
+  ASSERT_EQ(OB_SUCCESS, row_generate_.init(table, is_multi_version_row_));
+  if (is_multi_version_row_) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_multi_version_column_descs(col_descs_));
+  } else {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_schema().get_column_ids(col_descs_));
+  }
   ASSERT_EQ(OB_SUCCESS, read_info_.init(allocator_,
                                       row_generate_.get_schema().get_column_count(),
                                       row_generate_.get_schema().get_rowkey_column_num(),
                                       lib::is_oracle_mode(),
-                                      col_descs_));
+                                      col_descs_,
+                                      true));
 
   ctx_.micro_block_size_ = 1L << 20; // 1MB, maximum micro block size;
   ctx_.macro_block_size_ = 2L << 20;
   ctx_.rowkey_column_cnt_ = rowkey_cnt_;
-  ctx_.column_cnt_ = column_cnt_;
+  ctx_.column_cnt_ = is_multi_version_row_ ? column_cnt_ + 2 : column_cnt_;
   ctx_.col_descs_ = &col_descs_;
   ctx_.major_working_cluster_version_=cal_version(3, 1, 0, 0);
   ctx_.row_store_type_ = common::ENCODING_ROW_STORE;
@@ -158,6 +165,63 @@ TEST_F(TestEncoderOverFlow, test_append_row_with_timestamp_and_max_estimate_limi
     int64_t size = 0;
     ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, size));
   }
+}
+
+static ObObjType test_dict_large_varchar[2] = {ObIntType, ObVarcharType};
+class TestDictLargeVarchar : public TestIColumnEncoder
+{
+public:
+  TestDictLargeVarchar() : TestIColumnEncoder(true)
+  {
+    rowkey_cnt_ = 1;
+    column_cnt_ = 2;
+    col_types_ = reinterpret_cast<ObObjType *>(allocator_.alloc(sizeof(ObObjType) * column_cnt_));
+    for (int64_t i = 0; i < column_cnt_; ++i) {
+      col_types_[i] = test_dict_large_varchar[i];
+    }
+  }
+  virtual ~TestDictLargeVarchar()
+  {
+    allocator_.free(col_types_);
+  }
+
+  int64_t full_column_cnt_ = 4;
+};
+
+TEST_F(TestDictLargeVarchar, test_dict_large_varchar)
+{
+  ctx_.column_encodings_ = static_cast<int64_t *>(allocator_.alloc(sizeof(int64_t) * full_column_cnt_));
+  for (int64_t i = 0; i < full_column_cnt_; ++i) {
+    ctx_.column_encodings_[i] = ObColumnHeader::Type::DICT;
+  }
+  ObMicroBlockEncoder encoder;
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, full_column_cnt_));
+  const int64_t varchar_data_size = UINT16_MAX * 2 + 1;
+  char *varchar_data = static_cast<char *>(allocator_.alloc(varchar_data_size));
+  ASSERT_TRUE(nullptr != varchar_data);
+  MEMSET(varchar_data, 7, varchar_data_size);
+  row.storage_datums_[0].set_int(1);
+  row.storage_datums_[3].set_string(varchar_data, varchar_data_size);
+
+  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+
+  char *buf = nullptr;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, size));
+
+  ObMicroBlockData micro_data(buf, size);
+  ObMicroBlockDecoder decoder;
+  ObDatumRow read_row;
+  ASSERT_EQ(OB_SUCCESS, read_row.init(full_column_cnt_));
+  ASSERT_EQ(OB_SUCCESS, decoder.init(micro_data, read_info_));
+  ASSERT_EQ(OB_SUCCESS, decoder.get_row(0, read_row));
+  STORAGE_LOG(INFO, "[Salton]", K(read_row));
+
+  ASSERT_EQ(row.storage_datums_[3].len_, read_row.storage_datums_[3].len_);
+  ASSERT_TRUE(ObDatum::binary_equal(row.storage_datums_[3], read_row.storage_datums_[3]));
 }
 
 class TestEncodingRowBufHolder : public ::testing::Test

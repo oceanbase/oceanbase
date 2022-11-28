@@ -49,6 +49,13 @@ class ObLogApplyService;
 class ObApplyStatus;
 class ObLogReplayService;
 class AppendCb;
+struct LogHandlerDiagnoseInfo {
+  common::ObRole log_handler_role_;
+  int64_t log_handler_proposal_id_;
+  TO_STRING_KV(K(log_handler_role_),
+               K(log_handler_proposal_id_));
+};
+
 class ObILogHandler
 {
 public:
@@ -510,6 +517,8 @@ public:
   int enable_vote() override final;
   int register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb) override final;
   int unregister_rebuild_cb() override final;
+  int diagnose(LogHandlerDiagnoseInfo &diagnose_info) const;
+  int diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const;
   TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_env_), K(is_in_stop_state_), K(is_inited_));
 private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
