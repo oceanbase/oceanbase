@@ -150,7 +150,7 @@ int ObStorageSchemaRecorder::init(
 
 // schema log is barrier, there is no concurrency problem, no need to lock
 int ObStorageSchemaRecorder::replay_schema_log(
-    const int64_t log_ts,
+    const palf::SCN &scn,
     const char *buf,
     const int64_t size,
     int64_t &pos)
@@ -164,11 +164,7 @@ int ObStorageSchemaRecorder::replay_schema_log(
     int64_t table_version = OB_INVALID_VERSION;
     ObArenaAllocator tmp_allocator;
     ObStorageSchema replay_storage_schema;
-    // TODO: fix it
-    palf::SCN scn;
-    if (OB_FAIL(scn.convert_for_lsn_allocator(log_ts))) {
-      LOG_WARN("convert failed", K(log_ts), K(ret));
-    } else if (tablet_id_.is_special_merge_tablet()) {
+    if (tablet_id_.is_special_merge_tablet()) {
       // do nothing
     } else if (OB_FAIL(serialization::decode_i64(buf, size, pos, &table_version))) {
       // table_version
@@ -176,8 +172,8 @@ int ObStorageSchemaRecorder::replay_schema_log(
     } else if (table_version <= ATOMIC_LOAD(&max_saved_table_version_)) {
       LOG_INFO("skip schema log with smaller table version", K_(tablet_id), K(table_version),
           K(max_saved_table_version_));
-    } else if (OB_FAIL(replay_get_tablet_handle(log_ts, tablet_handle_))) {
-      LOG_WARN("failed to get tablet handle", K(ret), K_(tablet_id), K(log_ts));
+    } else if (OB_FAIL(replay_get_tablet_handle(scn, tablet_handle_))) {
+      LOG_WARN("failed to get tablet handle", K(ret), K_(tablet_id), K(scn));
     } else if (OB_FAIL(replay_storage_schema.deserialize(tmp_allocator, buf, size, pos))) {
       LOG_WARN("fail to deserialize storage schema", K(ret), K_(tablet_id));
     } else if (FALSE_IT(replay_storage_schema.set_sync_finish(true))) {
@@ -314,15 +310,12 @@ int ObStorageSchemaRecorder::get_tablet_handle(ObTabletHandle &tablet_handle)
   return ret;
 }
 
-int ObStorageSchemaRecorder::replay_get_tablet_handle(const int64_t log_ts, ObTabletHandle &tablet_handle)
+int ObStorageSchemaRecorder::replay_get_tablet_handle(const palf::SCN &scn, ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
-  palf::SCN scn;
   if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
-  } else if (OB_FAIL(scn.convert_for_lsn_allocator(log_ts))) {
-    LOG_WARN("convert failed", K(log_ts), K(ret));
   } else if (OB_FAIL(ls_handle.get_ls()->replay_get_tablet(tablet_id_, scn, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K_(ls_id), K_(tablet_id), K(scn));
   }

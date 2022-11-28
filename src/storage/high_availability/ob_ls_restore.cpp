@@ -2025,8 +2025,8 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablet_(
     param.data_tablet_id_ = tablet_id;
     param.clog_checkpoint_scn_.reset();
     param.compat_mode_ = lib::Worker::get_compatibility_mode();
-    param.multi_version_start_.set_min();
-    param.snapshot_version_.set_min();
+    param.multi_version_start_ = 0;
+    param.snapshot_version_ = 0;
     param.tx_data_.tablet_status_ = ObTabletStatus::NORMAL;
 
     if (OB_FAIL(param.ha_status_.set_restore_status(restore_status))) {

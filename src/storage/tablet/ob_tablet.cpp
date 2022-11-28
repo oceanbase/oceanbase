@@ -152,7 +152,7 @@ int ObTablet::init(
     LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id), KP(freezer));
   } else if (OB_FAIL(tablet_meta_.init(*allocator_, ls_id, tablet_id, data_tablet_id,
       lob_meta_tablet_id, lob_piece_tablet_id,
-      create_scn, snapshot_version, compat_mode, store_flag, table_schema.get_schema_version()))) {
+      create_scn, snapshot_version.get_val_for_tx(), compat_mode, store_flag, table_schema.get_schema_version()))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(lob_meta_tablet_id), K(lob_piece_tablet_id),
         K(create_scn), K(snapshot_version), K(compat_mode), K(store_flag));
@@ -201,8 +201,8 @@ int ObTablet::init(
   SCN snapshot_scn;
   if (OB_FAIL(scn.convert_tmp(create_scn))) {
     LOG_WARN("failed to convert_tmp", K(ret), K(create_scn));
-  } else if (OB_FAIL(snapshot_scn.convert_tmp(snapshot_version))) {
-    LOG_WARN("failed to convert_tmp", K(ret), K(snapshot_version));
+  } else if (OB_FAIL(snapshot_scn.convert_for_lsn_allocator(snapshot_version))) {
+    LOG_WARN("failed to convert scn", K(ret), K(snapshot_version));
   } else if (OB_FAIL(init(ls_id, tablet_id, data_tablet_id, lob_meta_tablet_id, lob_piece_tablet_id,
       scn, snapshot_scn, table_schema, compat_mode, store_flag, table_handle, freezer))) {
     LOG_WARN("failed to init tablet", K(ret), K(scn));
@@ -633,6 +633,24 @@ int ObTablet::load_deserialize(
     reset();
   }
 
+  return ret;
+}
+
+int ObTablet::get_multi_version_start(SCN &scn) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(scn.convert_for_tx(tablet_meta_.multi_version_start_))) {
+    LOG_WARN("fail to convert scn", K(ret), K(tablet_meta_.multi_version_start_));
+  }
+  return ret;
+}
+
+int ObTablet::get_snapshot_version(SCN &scn) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(scn.convert_for_tx(tablet_meta_.snapshot_version_))) {
+    LOG_WARN("fail to convert scn", K(ret), K(tablet_meta_.snapshot_version_));
+  }
   return ret;
 }
 
@@ -1504,36 +1522,6 @@ int ObTablet::assign_pointer_handle(const ObTabletPointerHandle &ptr_hdl)
 }
 
 int ObTablet::replay_update_storage_schema(
-    const int64_t log_ts,
-    const char *buf,
-    const int64_t buf_size,
-    int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  int64_t new_pos = pos;
-  ObIMemtableMgr *memtable_mgr = nullptr;
-  ObTabletMemtableMgr *data_memtable_mgr = nullptr;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (tablet_meta_.tablet_id_.is_special_merge_tablet()) {
-    // do nothing
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
-    LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
-  } else if (OB_FAIL(data_memtable_mgr->get_storage_schema_recorder().replay_schema_log(log_ts, buf, buf_size, new_pos))) {
-    LOG_WARN("storage schema recorder replay fail", K(ret), K(log_ts));
-  } else {
-    pos = new_pos;
-  }
-  if (OB_TIMEOUT == ret) {
-    ret = OB_EAGAIN; // need retry.
-  }
-  return ret;
-}
-
-int ObTablet::replay_update_storage_schema(
     const palf::SCN &scn,
     const char *buf,
     const int64_t buf_size,
@@ -1552,7 +1540,7 @@ int ObTablet::replay_update_storage_schema(
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
   } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
-  } else if (OB_FAIL(data_memtable_mgr->get_storage_schema_recorder().replay_schema_log(scn.get_val_for_gts(), buf, buf_size, new_pos))) {
+  } else if (OB_FAIL(data_memtable_mgr->get_storage_schema_recorder().replay_schema_log(scn, buf, buf_size, new_pos))) {
     LOG_WARN("storage schema recorder replay fail", K(ret), K(scn));
   } else {
     pos = new_pos;
@@ -2364,7 +2352,7 @@ int ObTablet::start_ddl_if_need()
     table_key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
     table_key.tablet_id_ = tablet_meta_.tablet_id_;
     table_key.version_range_.base_version_ = 0;
-    table_key.version_range_.snapshot_version_ = tablet_meta_.ddl_snapshot_version_.get_val_for_gts();
+    table_key.version_range_.snapshot_version_ = tablet_meta_.ddl_snapshot_version_;
     const SCN start_scn = tablet_meta_.ddl_start_scn_;
     if (OB_FAIL(ddl_kv_mgr->ddl_start(table_key, start_scn.get_val_for_gts(), GET_MIN_CLUSTER_VERSION(), tablet_meta_.ddl_checkpoint_scn_.get_val_for_gts()))) {
       LOG_WARN("start ddl kv manager failed", K(ret), K(table_key), K(start_scn));

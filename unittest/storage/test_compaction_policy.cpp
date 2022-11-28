@@ -362,7 +362,7 @@ int TestCompactionPolicy::mock_tablet(
               K(table_schema), K(compat_mode));
   } else {
     tablet->tablet_meta_.clog_checkpoint_scn_.convert_tmp(clog_checkpoint_ts);
-    tablet->tablet_meta_.snapshot_version_.convert_tmp(snapshot_version);
+    tablet->tablet_meta_.snapshot_version_ = snapshot_version;
   }
   return ret;
 }
@@ -726,7 +726,7 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
   ASSERT_EQ(3, result.handle_.get_count());
 
   tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_scn_.convert_tmp(300);
-  tablet_handle_.get_obj()->tablet_meta_.snapshot_version_.convert_tmp(300);
+  tablet_handle_.get_obj()->tablet_meta_.snapshot_version_ = 300;
   result.reset();
   ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
   ASSERT_EQ(OB_NO_NEED_MERGE, ret);

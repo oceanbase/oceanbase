@@ -277,7 +277,8 @@ int SCN::convert_for_lsn_allocator(uint64_t scn_val)
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_MAX_SCN_TS_NS < scn_val)) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", K(scn_val), K(ret));
+    PALF_LOG(WARN, "invalid argument", K(scn_val), K(ret), K(lbt()));
+    // TODO(yaoying.yyy):remove lbt() later
   } else {
     val_ = scn_val;
   }

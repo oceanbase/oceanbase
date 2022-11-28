@@ -327,8 +327,10 @@ public:
   const ObTabletTableStore &get_table_store() const { return table_store_; }
   int64_t get_clog_checkpoint_ts() const { return tablet_meta_.clog_checkpoint_scn_.get_val_for_gts(); }
   palf::SCN get_clog_checkpoint_scn() const { return tablet_meta_.clog_checkpoint_scn_; }
-  int64_t get_snapshot_version() const { return tablet_meta_.snapshot_version_.get_val_for_gts(); }
-  int64_t get_multi_version_start() const { return tablet_meta_.multi_version_start_.get_val_for_gts(); }
+  int64_t get_snapshot_version() const { return tablet_meta_.snapshot_version_; }
+  int64_t get_multi_version_start() const { return tablet_meta_.multi_version_start_; }
+  int get_multi_version_start(palf::SCN &scn) const;
+  int get_snapshot_version(palf::SCN &scn) const;
 
   // deprecated later, DO NOT use it!
   ObTabletTableStore &get_table_store() { return table_store_; }
@@ -344,11 +346,6 @@ public:
 
   int assign_pointer_handle(const ObTabletPointerHandle &ptr_hdl);
 
-  int replay_update_storage_schema(
-      const int64_t log_ts,
-      const char *buf,
-      const int64_t buf_size,
-      int64_t &pos);
   int replay_update_storage_schema(
       const palf::SCN &scn,
       const char *buf,

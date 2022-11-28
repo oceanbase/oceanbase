@@ -2255,7 +2255,6 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   SCN snapshot_version;
-  snapshot_version.convert_tmp(arg.frozen_timestamp_);
   const ObLSID &ls_id = arg.id_;
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTablet *tablet = nullptr;
@@ -2271,7 +2270,9 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
   ObMetaDiskAddr mem_addr;
   ObTabletTableStoreFlag table_store_flag;
   table_store_flag.set_with_major_sstable();
-  if (OB_FAIL(mem_addr.set_mem_addr(0, sizeof(ObTablet)))) {
+  if (OB_FAIL(snapshot_version.convert_tmp(arg.frozen_timestamp_))) {
+    LOG_WARN("fail to convert scn", K(ret), K(arg.frozen_timestamp_));
+  } else if (OB_FAIL(mem_addr.set_mem_addr(0, sizeof(ObTablet)))) {
     LOG_WARN("fail to set memory address", K(ret));
   } else if (OB_FAIL(acquire_tablet(key, tablet_handle, false/*only acquire*/))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));

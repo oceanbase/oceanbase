@@ -236,7 +236,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;
     const bool enable_fuse_row_cache = access_ctx_->use_fuse_row_cache_ &&
                                        access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_) &&
-                                       read_snapshot_version >= tablet_meta.snapshot_version_.get_val_for_gts();
+                                       read_snapshot_version >= tablet_meta.snapshot_version_;
     bool need_update_fuse_cache = false;
     access_ctx_->query_flag_.set_not_use_row_cache();
     nop_pos_.reset();
@@ -273,7 +273,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
 #endif
     } else if (enable_fuse_row_cache) {
       if (OB_FAIL(get_and_fuse_cache_row(read_snapshot_version,
-                                         tablet_meta.multi_version_start_.get_val_for_gts(),
+                                         tablet_meta.multi_version_start_,
                                          full_row_,
                                          final_result,
                                          have_uncommited_row,

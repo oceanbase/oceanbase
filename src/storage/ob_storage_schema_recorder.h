@@ -61,7 +61,7 @@ public:
   void reset();
 
   // follower
-  int replay_schema_log(const int64_t log_ts, const char *buf, const int64_t size, int64_t &pos);
+  int replay_schema_log(const palf::SCN &scn, const char *buf, const int64_t size, int64_t &pos);
   // leader
   int try_update_storage_schema(
       const int64_t table_id,
@@ -109,7 +109,7 @@ private:
   void free_allocated_info();
   int try_update_with_lock(const int64_t table_id, const int64_t table_version, const int64_t expire_ts);
   int get_tablet_handle(ObTabletHandle &tablet_handle);
-  int replay_get_tablet_handle(const int64_t log_ts, ObTabletHandle &tablet_handle);
+  int replay_get_tablet_handle(const palf::SCN &scn, ObTabletHandle &tablet_handle);
   // clog callback
   void update_table_schema_fail();
   void update_table_schema_succ(const int64_t table_version, bool &finish_flag);
