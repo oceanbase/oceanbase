@@ -1011,8 +1011,8 @@ int ObCopyTabletInfoObProducer::build_deleted_tablet_info_(
     tablet_info.param_.start_scn_.set_base();
     tablet_info.param_.clog_checkpoint_scn_.set_base();
     tablet_info.param_.compat_mode_ = lib::Worker::get_compatibility_mode();
-    tablet_info.param_.multi_version_start_.set_min();
-    tablet_info.param_.snapshot_version_.set_min();
+    tablet_info.param_.multi_version_start_ = 0;
+    tablet_info.param_.snapshot_version_ = 0;
     tablet_info.param_.tx_data_.tablet_status_ = ObTabletStatus::DELETING;
     tablet_info.param_.tx_data_.tx_scn_ = palf::SCN::min_scn();
 

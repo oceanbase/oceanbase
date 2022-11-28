@@ -103,7 +103,7 @@ int ObTabletServiceClogReplayExecutor::replay_update_storage_schema(
     } else {
       LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
     }
-  } else if (OB_FAIL(handle.get_obj()->replay_update_storage_schema(scn.get_val_for_lsn_allocator(), buf, buf_size, tmp_pos))) {
+  } else if (OB_FAIL(handle.get_obj()->replay_update_storage_schema(scn, buf, buf_size, tmp_pos))) {
     LOG_WARN("update tablet storage schema fail", K(ret), K(tablet_id), K(scn));
   }
   return ret;

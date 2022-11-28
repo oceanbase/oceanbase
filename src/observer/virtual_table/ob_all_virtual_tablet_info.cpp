@@ -189,11 +189,11 @@ int ObAllVirtualTabletInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // snapshot_version
-          cur_row_.cells_[i].set_uint64(tablet_meta.snapshot_version_.get_val_for_inner_table_field());
+          cur_row_.cells_[i].set_uint64(tablet_meta.snapshot_version_);
           break;
         case OB_APP_MIN_COLUMN_ID + 9:
           // multi_version_start
-          cur_row_.cells_[i].set_uint64(tablet_meta.multi_version_start_.get_val_for_inner_table_field());
+          cur_row_.cells_[i].set_uint64(tablet_meta.multi_version_start_);
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

@@ -71,7 +71,7 @@ public:
       const common::ObTabletID &lob_meta_tablet_id,
       const common::ObTabletID &lob_piece_tablet_id,
       const palf::SCN create_scn,
-      const palf::SCN snapshot_version,
+      const int64_t snapshot_version,
       const lib::Worker::CompatMode compat_mode,
       const ObTabletTableStoreFlag &table_store_flag,
       const int64_t max_sync_storage_schema_version);
@@ -91,8 +91,8 @@ public:
   int init(
       common::ObIAllocator &allocator,
       const ObTabletMeta &old_tablet_meta,
-      const palf::SCN &snapshot_version,
-      const palf::SCN multi_version_start,
+      const int64_t snapshot_version,
+      const int64_t multi_version_start,
       const ObTabletTxMultiSourceDataUnit &tx_data,
       const ObTabletBindingInfo &ddl_data,
       const share::ObTabletAutoincSeq &autoinc_seq,
@@ -100,7 +100,7 @@ public:
       const palf::SCN clog_checkpoint_scn = palf::SCN::min_scn(),
       const palf::SCN ddl_checkpoint_scn = palf::SCN::min_scn(),
       const palf::SCN ddl_start_scn = palf::SCN::min_scn(),
-      const palf::SCN ddl_snapshot_version = palf::SCN::min_scn());
+      const int64_t ddl_snapshot_version = 0);
   int init(
       common::ObIAllocator &allocator,
       const ObMigrationTabletParam &param);
@@ -166,8 +166,8 @@ public:
   palf::SCN clog_checkpoint_scn_;
   palf::SCN ddl_checkpoint_scn_;
   // snapshot_version of last minor
-  palf::SCN snapshot_version_;
-  palf::SCN multi_version_start_;
+  int64_t snapshot_version_;
+  int64_t multi_version_start_;
   lib::Worker::CompatMode compat_mode_;
   share::ObTabletAutoincSeq autoinc_seq_;
   ObTabletHAStatus ha_status_;
@@ -176,7 +176,7 @@ public:
   ObTabletBindingInfo ddl_data_;
   ObTabletTableStoreFlag table_store_flag_;
   palf::SCN ddl_start_scn_;
-  palf::SCN ddl_snapshot_version_;
+  int64_t ddl_snapshot_version_;
   int64_t max_sync_storage_schema_version_;
 
 private:
@@ -237,8 +237,8 @@ public:
   palf::SCN start_scn_;              // for migration
   palf::SCN clog_checkpoint_scn_;
   palf::SCN ddl_checkpoint_scn_;
-  palf::SCN snapshot_version_;
-  palf::SCN multi_version_start_;
+  int64_t snapshot_version_;
+  int64_t multi_version_start_;
   lib::Worker::CompatMode compat_mode_;
   share::ObTabletAutoincSeq autoinc_seq_;
   ObTabletHAStatus ha_status_;
@@ -249,7 +249,7 @@ public:
   compaction::ObMediumCompactionInfoList medium_info_list_;
   ObTabletTableStoreFlag table_store_flag_;
   palf::SCN ddl_start_scn_;
-  palf::SCN ddl_snapshot_version_;
+  int64_t ddl_snapshot_version_;
   // max_sync_version may less than storage_schema.schema_version_ when major update schema
   int64_t max_sync_storage_schema_version_;
 };
