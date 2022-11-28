@@ -5577,7 +5577,7 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
     } else {
       stmt->get_rollup_exprs().at(i) = remove_const_expr;
       trans_happened = true;
-      if (lib::is_mysql_mode()) {
+      if (lib::is_mysql_mode() && expr->is_exec_param_expr()) {
         ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr *>(expr);
         const ObRawExpr *ref_expr = exec_expr->get_ref_expr();
         if (OB_ISNULL(ref_expr)) {
