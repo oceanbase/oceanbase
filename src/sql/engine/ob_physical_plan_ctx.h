@@ -403,8 +403,6 @@ public:
   int64_t get_cur_stmt_id() const { return cur_stmt_id_; }
   int switch_implicit_cursor();
   const ObIArray<int64_t> *get_part_param_idxs(int64_t part_id) const;
-  void set_large_query(bool v) { is_large_query_ = v; }
-  bool is_large_query() { return is_large_query_; }
   void add_px_dml_row_info(const ObPxDmlRowInfo &dml_row_info);
   TO_STRING_KV("tenant_id", tenant_id_);
   void set_field_array(const common::ObIArray<common::ObField> *field_array) { field_array_ = field_array; }
@@ -545,7 +543,6 @@ private:
   bool is_multi_dml_;
 
   ObRemoteSqlInfo remote_sql_info_;
-  bool is_large_query_; // 存储层使用该标记决定是否进行io限流
   //used for expr output pack, do encode according to its field
   const common::ObIArray<ObField> *field_array_;
   //used for expr output pack, do bianry encode or text encode

@@ -369,7 +369,7 @@ def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, colum
     if column_id != 0:
       if column_scale > 0 :
         line = """
-  if (OB_SUCC(ret) {{
+  if (OB_SUCC(ret)) {{
     ObObj gmt_default;
     ObObj gmt_default_null;
 
@@ -468,7 +468,7 @@ def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, colum
     if column_id != 0:
       if column_scale > 0 :
         line = """
-  if (OB_SUCC(ret) {{
+  if (OB_SUCC(ret)) {{
     ObObj gmt_default;
     ObObj gmt_default_null;
 
@@ -509,7 +509,7 @@ def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, colum
       {12}); //is_on_update_for_timestamp
   }}
 """
-      cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrementi, is_on_update_for_timestamp))
+      cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, is_on_update_for_timestamp))
     else:
       if column_scale > 0 :
         line = """
@@ -1184,8 +1184,8 @@ def generate_sys_index_table_misc_data(f):
   f.write('\n\n#ifdef SYS_INDEX_TABLE_ID_SWITCH\n' + sys_index_table_id_switch + '\n#endif\n')
 
   sys_index_data_table_id_switch = '\n'
-  for kw in sys_index_tables:
-    sys_index_data_table_id_switch += 'case ' + table_name2tid(kw['table_name']) + ':\n'
+  for data_table_name in data_table_dict.keys():
+    sys_index_data_table_id_switch += 'case ' + table_name2tid(data_table_name) + ':\n'
   f.write('\n\n#ifdef SYS_INDEX_DATA_TABLE_ID_SWITCH\n' + sys_index_data_table_id_switch + '\n#endif\n')
 
   sys_index_data_table_id_to_index_ids_switch = '\n'
@@ -1204,12 +1204,11 @@ def generate_sys_index_table_misc_data(f):
     sys_index_data_table_id_to_index_schema_switch += 'case ' + table_name2tid(data_table_name) + ': {\n'
     for kw in sys_indexs:
       method_name = kw['table_name'].replace('$', '_').strip('_').lower() + '_' + kw['index_name'].lower() + '_schema'
+      sys_index_data_table_id_to_index_schema_switch += '  index_schema.reset();\n'
       sys_index_data_table_id_to_index_schema_switch += '  if (FAILEDx(ObInnerTableSchema::' + method_name +'(index_schema))) {\n'
       sys_index_data_table_id_to_index_schema_switch += '    LOG_WARN(\"fail to create index schema\", KR(ret), K(tenant_id), K(data_table_id));\n'
-      sys_index_data_table_id_to_index_schema_switch += '  } else if (!is_sys_tenant(tenant_id) && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, index_schema))) {\n'
-      sys_index_data_table_id_to_index_schema_switch += '    LOG_WARN(\"fail to construct full table\", KR(ret), K(tenant_id), K(data_table_id));\n'
-      sys_index_data_table_id_to_index_schema_switch += '  } else if (OB_FAIL(tables.push_back(index_schema))) {\n'
-      sys_index_data_table_id_to_index_schema_switch += '    LOG_WARN(\"fail to push back index\", KR(ret), K(tenant_id), K(data_table_id));\n'
+      sys_index_data_table_id_to_index_schema_switch += '  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {\n'
+      sys_index_data_table_id_to_index_schema_switch += '    LOG_WARN(\"fail to append\", KR(ret), K(tenant_id), K(data_table_id));\n'
       sys_index_data_table_id_to_index_schema_switch += '  }\n'
     sys_index_data_table_id_to_index_schema_switch += '  break;\n'
     sys_index_data_table_id_to_index_schema_switch += '}\n'
@@ -1589,6 +1588,7 @@ def def_table_schema(**keywords):
   index_def = ''
   calculate_rowkey_column_num(keywords)
   is_oracle_sys_table = False
+  column_collation = 'CS_TYPE_INVALID'
 
   ##virtual table will set index_using_type to USING_HASH by default
   if is_virtual_table(keywords['table_id']):

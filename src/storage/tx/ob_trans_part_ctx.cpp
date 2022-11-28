@@ -2040,9 +2040,9 @@ int ObPartTransCtx::generate_prepare_version_()
 {
   int ret = OB_SUCCESS;
 
-  if (!exec_info_.prepare_version_.is_valid()) {
-    palf::SCN gts;
-    palf::SCN local_max_read_version;
+  if (ObTxState::PREPARE > upstream_state_) {
+    palf::SCN gts = palf::SCN::min_scn();
+    palf::SCN local_max_read_version = palf::SCN::min_scn();
     bool is_gts_ok = false;
     bool need_gts = need_request_gts_();
 
@@ -3086,7 +3086,7 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
   if (OB_SUCC(ret) && is_contain(cb_arg_array, ObTxLogType::TX_PREPARE_LOG)) {
     sub_state_.set_state_log_submitting();
     sub_state_.set_state_log_submitted();
-    exec_info_.prepare_version_ = log_cb->get_log_ts();
+    exec_info_.prepare_version_ = MAX(log_cb->get_log_ts(), exec_info_.prepare_version_);
   }
   if (OB_SUCC(ret) && is_contain(cb_arg_array, ObTxLogType::TX_COMMIT_LOG)) {
     sub_state_.set_state_log_submitting();

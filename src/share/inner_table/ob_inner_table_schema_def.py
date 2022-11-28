@@ -577,7 +577,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'wenduo.swd',
+    owner = 'wanhong.wwh',
     table_name    = '__all_server',
     table_id      = '117',
     table_type = 'SYSTEM_TABLE',
@@ -707,7 +707,7 @@ def_table_schema(
 # 122: __all_column_statistic, abandoned on 4.0
 
 def_table_schema(
-    owner = 'wenduo.swd',
+    owner = 'wanhong.wwh',
     table_name    = '__all_unit',
     table_id      = '123',
     table_type = 'SYSTEM_TABLE',
@@ -729,7 +729,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'wenduo.swd',
+    owner = 'wanhong.wwh',
     table_name    = '__all_unit_config',
     table_id      = '124',
     table_type = 'SYSTEM_TABLE',
@@ -750,7 +750,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'wenduo.swd',
+    owner = 'wanhong.wwh',
     table_name    = '__all_resource_pool',
     table_id      = '125',
     table_type = 'SYSTEM_TABLE',
@@ -813,7 +813,7 @@ def_table_schema(
   rowkey_columns = [
   ('help_topic_id', 'int','false'),
   ],
-  in_tenant_space = False,
+  in_tenant_space = True,
 
   normal_columns = [
   ('name', 'varchar:64','false'),
@@ -834,7 +834,7 @@ def_table_schema(
   rowkey_columns = [
   ('help_category_id', 'int','false'),
   ],
-  in_tenant_space = False,
+  in_tenant_space = True,
 
   normal_columns = [
   ('name', 'varchar:64','false'),
@@ -853,7 +853,7 @@ def_table_schema(
   rowkey_columns = [
   ('help_keyword_id', 'int','false'),
   ],
-  in_tenant_space = False,
+  in_tenant_space = True,
 
   normal_columns = [
   ('name', 'varchar:64','false'),
@@ -871,7 +871,7 @@ def_table_schema(
   ('help_topic_id', 'int','false'),
   ('help_keyword_id', 'int','false'),
   ],
-  in_tenant_space = False,
+  in_tenant_space = True,
 
   normal_columns = [],
 )
@@ -1456,7 +1456,7 @@ def_table_schema(
   ('tenant_id', 'int'),
   ('table_id', 'int'),
   ('execution_id', 'int'),
-  ('tablet_id', 'int'),
+  ('ddl_task_id', 'int'),
   ('column_id', 'int'),
   ('task_id', 'int'),
   ],
@@ -1955,7 +1955,7 @@ def_table_schema(**gen_history_table_def(233, all_dblink_def))
 # 234: __all_tenant_partition_meta_table is deprecated in 4.0.
 
 all_tenant_role_grantee_map_def = dict(
-  owner = 'xinqi.zlm',
+  owner = 'sean.yyj',
   table_name = '__all_tenant_role_grantee_map',
   table_id = '235',
   table_type = 'SYSTEM_TABLE',
@@ -2154,7 +2154,7 @@ all_profile_def = dict(
   in_tenant_space = True,
 
   normal_columns = [
-    ('profile_name', 'varchar:OB_MAX_SQL_LENGTH'),
+    ('profile_name', 'varchar:MAX_ORACLE_NAME_LENGTH'),
     ('failed_login_attempts', 'int'),
     ('password_lock_time', 'int'),
     ('password_verify_function', 'varchar:MAX_ORACLE_NAME_LENGTH', 'true'),
@@ -2169,7 +2169,7 @@ def_table_schema(**all_profile_def)
 def_table_schema(**gen_history_table_def(251,  all_profile_def))
 
 all_tenant_security_audit_def = dict(
-    owner = 'xinqi.zlm',
+    owner = 'sean.yyj',
     table_name = '__all_tenant_security_audit',
     table_id = '252',
     table_type = 'SYSTEM_TABLE',
@@ -2318,7 +2318,7 @@ all_tenant_security_audit_record_def = dict(
 def_table_schema(**all_tenant_security_audit_record_def)
 
 all_sysauth_def = dict(
-    owner = 'xinqi.zlm',
+    owner = 'sean.yyj',
     table_name     = '__all_tenant_sysauth',
     table_id       = '260',
     table_type = 'SYSTEM_TABLE',
@@ -2340,7 +2340,7 @@ def_table_schema(**all_sysauth_def)
 def_table_schema(**gen_history_table_def(261, all_sysauth_def))
 
 all_objauth_def = dict(
-    owner = 'xinqi.zlm',
+    owner = 'sean.yyj',
     table_name     = '__all_tenant_objauth',
     table_id       = '262',
     table_type = 'SYSTEM_TABLE',
@@ -2889,6 +2889,7 @@ def_table_schema(
     ('status', 'int'),
     ('snapshot_version', 'uint', 'false', '0'),
     ('task_version', 'int', 'false', '0'),
+    ('execution_id', 'int', 'false', '0'),
     ('ddl_stmt_str', 'longtext', 'true'),
     ('ret_code', 'int', 'false', '0'),
     ('message', 'longtext', 'true'),
@@ -4216,7 +4217,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'wenduo.swd',
+  owner = 'wanhong.wwh',
   table_name    = '__all_balance_group_ls_stat',
   table_id = '376',
   table_type = 'SYSTEM_TABLE',
@@ -5022,10 +5023,10 @@ def_table_schema(**all_mock_fk_parent_table_column_def)
 
 def_table_schema(**gen_history_table_def(408, all_mock_fk_parent_table_column_def))
 
-# 409 : __all_log_archive_source
+# 409 : __all_log_restore_source
 def_table_schema(
     owner = 'shuning.tsn',
-    table_name    = '__all_log_archive_source',
+    table_name    = '__all_log_restore_source',
     table_id      = '409',
     table_type = 'SYSTEM_TABLE',
     gm_columns = ['gmt_create', 'gmt_modified'],
@@ -5041,7 +5042,7 @@ def_table_schema(
   normal_columns = [
         ('type', 'varchar:32'),
         ('value', 'longtext'),
-        ('recovery_until_ts', 'int'),
+        ('recovery_until_scn', 'uint'),
   ],
 )
 
@@ -9774,9 +9775,7 @@ def_table_schema(
   ('access_mode', 'varchar:32'),
   ('paxos_member_list', 'varchar:1024'),
   ('paxos_replica_num', 'int'),
-  ('allow_vote', 'bool'),
   ('in_sync', 'bool'),
-  ('replica_type', 'varchar:32'),
   ('base_lsn', 'uint'),
   ('begin_lsn', 'uint'),
   ('begin_scn', 'uint'),
@@ -10599,8 +10598,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12324',
-  table_name = '__all_virtual_log_archive_source',
-  keywords = all_def_keywords['__all_log_archive_source']))
+  table_name = '__all_virtual_log_restore_source',
+  keywords = all_def_keywords['__all_log_restore_source']))
 
 def_table_schema(
   owner = 'wangzelin.wzl',
@@ -13929,7 +13928,6 @@ def_table_schema(
     DEST_ID,
     ROUND_ID,
     PIECE_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -13998,7 +13996,6 @@ def_table_schema(
     TENANT_ID,
     BACKUP_SET_ID,
     DEST_ID,
-    INCARNATION,
     BACKUP_TYPE,
     PREV_FULL_BACKUP_SET_ID,
     PREV_INC_BACKUP_SET_ID,
@@ -14272,7 +14269,6 @@ def_table_schema(
     SELECT
     TENANT_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -14310,7 +14306,6 @@ def_table_schema(
     SELECT
     TENANT_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -14349,7 +14344,6 @@ def_table_schema(
     TENANT_ID,
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
@@ -14400,7 +14394,6 @@ def_table_schema(
     TENANT_ID,
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
@@ -19598,7 +19591,6 @@ def_table_schema(
     SELECT
       TENANT_ID,
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -19633,7 +19625,6 @@ def_table_schema(
     SELECT
       TENANT_ID,
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -19668,7 +19659,6 @@ def_table_schema(
     SELECT
       TENANT_ID,
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -19703,7 +19693,6 @@ def_table_schema(
     SELECT
       TENANT_ID,
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -20451,7 +20440,6 @@ def_table_schema(
   view_definition = """
     SELECT
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -20491,7 +20479,6 @@ def_table_schema(
   view_definition = """
     SELECT
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -20532,7 +20519,6 @@ def_table_schema(
     SELECT
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
@@ -20585,7 +20571,6 @@ def_table_schema(
     SELECT
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,
     CASE 
@@ -20638,7 +20623,6 @@ def_table_schema(
     SELECT
     BACKUP_SET_ID,
     DEST_ID,
-    INCARNATION,
     BACKUP_TYPE,
     PREV_FULL_BACKUP_SET_ID,
     PREV_INC_BACKUP_SET_ID,
@@ -21147,7 +21131,6 @@ def_table_schema(
   view_definition = """
     SELECT
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -21184,7 +21167,6 @@ def_table_schema(
   view_definition = """
     SELECT
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -21221,7 +21203,6 @@ def_table_schema(
   view_definition = """
     SELECT
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -21258,7 +21239,6 @@ def_table_schema(
   view_definition = """
     SELECT
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -21545,7 +21525,6 @@ def_table_schema(
     SELECT
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -21639,7 +21618,6 @@ def_table_schema(
     SELECT
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -21718,7 +21696,6 @@ def_table_schema(
 (
 SELECT DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        STATUS,
        START_SCN,
@@ -21740,7 +21717,6 @@ SELECT DEST_ID,
 UNION
 SELECT DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        'STOP' AS STATUS,
        START_SCN,
@@ -21777,7 +21753,6 @@ def_table_schema(
     DEST_ID,
     ROUND_ID,
     PIECE_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -21888,7 +21863,6 @@ def_table_schema(
     TENANT_ID,
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -21981,7 +21955,6 @@ def_table_schema(
     TENANT_ID,
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -22061,7 +22034,6 @@ def_table_schema(
 SELECT TENANT_ID,
        DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        STATUS,
        START_SCN,
@@ -22084,7 +22056,6 @@ UNION
 SELECT TENANT_ID,
        DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        'STOP' AS STATUS,
        START_SCN,
@@ -22249,15 +22220,10 @@ def_table_schema(
     ACCESS_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
-    CASE allow_vote
-      WHEN 1 THEN 'YES'
-      ELSE 'NO' END
-    AS ALLOW_VOTE,
     CASE in_sync
       WHEN 1 THEN 'YES'
       ELSE 'NO' END
     AS IN_SYNC,
-    REPLICA_TYPE,
     BASE_LSN,
     BEGIN_LSN,
     BEGIN_SCN,
@@ -38393,7 +38359,6 @@ def_table_schema(
   """
     SELECT
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -38435,7 +38400,6 @@ def_table_schema(
   view_definition = """
     SELECT
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     INITIATOR_TENANT_ID,
     INITIATOR_JOB_ID,
@@ -38478,7 +38442,6 @@ def_table_schema(
     SELECT
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
     CASE 
@@ -38533,7 +38496,6 @@ def_table_schema(
     SELECT
     TASK_ID,
     JOB_ID,
-    INCARNATION,
     BACKUP_SET_ID,
     TO_CHAR(START_TS / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIMESTAMP,
     CASE 
@@ -38588,7 +38550,6 @@ def_table_schema(
     SELECT
     BACKUP_SET_ID,
     DEST_ID,
-    INCARNATION,
     BACKUP_TYPE,
     PREV_FULL_BACKUP_SET_ID,
     PREV_INC_BACKUP_SET_ID,
@@ -38917,7 +38878,6 @@ def_table_schema(
   view_definition = """
     SELECT
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -38956,7 +38916,6 @@ def_table_schema(
   view_definition = """
     SELECT
       JOB_ID,
-      INCARNATION,
       INITIATOR_TENANT_ID,
       INITIATOR_JOB_ID,
       EXECUTOR_TENANT_ID,
@@ -38995,7 +38954,6 @@ def_table_schema(
   view_definition = """
     SELECT
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -39034,7 +38992,6 @@ def_table_schema(
   view_definition = """
     SELECT
       TASK_ID,
-      INCARNATION,
       JOB_ID,
       TASK_TYPE,
       ID,
@@ -39262,7 +39219,6 @@ def_table_schema(
     SELECT
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -39348,7 +39304,6 @@ def_table_schema(
     SELECT
     DEST_ID,
     ROUND_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -39417,7 +39372,6 @@ def_table_schema(
 (
 SELECT DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        STATUS,
        START_SCN,
@@ -39439,7 +39393,6 @@ SELECT DEST_ID,
 UNION
 SELECT DEST_ID,
        ROUND_ID,
-       INCARNATION,
        DEST_NO,
        'STOP' AS STATUS,
        START_SCN,
@@ -39478,7 +39431,6 @@ def_table_schema(
     DEST_ID,
     ROUND_ID,
     PIECE_ID,
-    INCARNATION,
     DEST_NO,
     STATUS,
     START_SCN,
@@ -44484,15 +44436,10 @@ def_table_schema(
     ACCESS_MODE,
     PAXOS_MEMBER_LIST,
     PAXOS_REPLICA_NUM,
-    CASE allow_vote
-      WHEN 1 THEN 'YES'
-      ELSE 'NO' END
-    AS ALLOW_VOTE,
     CASE in_sync
       WHEN 1 THEN 'YES'
       ELSE 'NO' END
     AS IN_SYNC,
-    REPLICA_TYPE,
     BASE_LSN,
     BEGIN_LSN,
     BEGIN_SCN,
@@ -44765,9 +44712,56 @@ FROM (
 # Index for other sys table (101000, 200000)
 ################################################################################
 # Index for core table (100000, 101000)
+def_sys_index_table(
+  index_name = 'idx_data_table_id',
+  index_table_id = 100001,
+  index_columns = ['data_table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_table'])
+
+def_sys_index_table(
+  index_name = 'idx_db_tb_name',
+  index_table_id = 100002,
+  index_columns = ['database_id', 'table_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_table'])
+
+def_sys_index_table(
+  index_name = 'idx_tb_name',
+  index_table_id = 100003,
+  index_columns = ['table_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_table'])
+
+def_sys_index_table(
+  index_name = 'idx_tb_column_name',
+  index_table_id = 100004,
+  index_columns = ['table_id', 'column_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_column'])
+
+def_sys_index_table(
+  index_name = 'idx_column_name',
+  index_table_id = 100005,
+  index_columns = ['column_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_column'])
+
+def_sys_index_table(
+  index_name = 'idx_ddl_type',
+  index_table_id = 100006,
+  index_columns = ['operation_type', 'schema_version'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_ddl_operation'])
 
 
-# Index for other core table (100000, 101000)
+# Index for other sys table (100000, 101000)
 def_sys_index_table(
   index_name = 'idx_data_table_id',
   index_table_id = 101001,
@@ -44799,3 +44793,619 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_ddl_task_status'])
+
+def_sys_index_table(
+  index_name = 'idx_ur_name',
+  index_table_id = 101005,
+  index_columns = ['user_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_user'])
+
+def_sys_index_table(
+  index_name = 'idx_db_name',
+  index_table_id = 101006,
+  index_columns = ['database_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_database'])
+
+def_sys_index_table(
+  index_name = 'idx_tg_name',
+  index_table_id = 101007,
+  index_columns = ['tablegroup_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tablegroup'])
+
+def_sys_index_table(
+  index_name = 'idx_tenant_deleted',
+  index_table_id = 101008,
+  index_columns = ['is_deleted'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_history'])
+
+def_sys_index_table(
+  index_name = 'idx_rs_module',
+  index_table_id = 101009,
+  index_columns = ['module'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_rootservice_event_history'])
+
+def_sys_index_table(
+  index_name = 'idx_rs_event',
+  index_table_id = 101010,
+  index_columns = ['event'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_rootservice_event_history'])
+
+def_sys_index_table(
+  index_name = 'idx_recyclebin_db_type',
+  index_table_id = 101011,
+  index_columns = ['tenant_id', 'database_id','type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_recyclebin'])
+
+def_sys_index_table(
+  index_name = 'idx_part_name',
+  index_table_id = 101012,
+  index_columns = ['part_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_part'])
+
+def_sys_index_table(
+  index_name = 'idx_sub_part_name',
+  index_table_id = 101013,
+  index_columns = ['sub_part_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_sub_part'])
+
+def_sys_index_table(
+  index_name = 'idx_def_sub_part_name',
+  index_table_id = 101014,
+  index_columns = ['sub_part_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_def_sub_part'])
+
+def_sys_index_table(
+  index_name = 'idx_server_module',
+  index_table_id = 101015,
+  index_columns = ['module'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_server_event_history'])
+
+def_sys_index_table(
+  index_name = 'idx_server_event',
+  index_table_id = 101016,
+  index_columns = ['event'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_server_event_history'])
+
+def_sys_index_table(
+  index_name = 'idx_rs_job_type',
+  index_table_id = 101017,
+  index_columns = ['job_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_rootservice_job'])
+
+def_sys_index_table(
+  index_name = 'idx_fk_child_tid',
+  index_table_id = 101018,
+  index_columns = ['child_table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_foreign_key'])
+
+def_sys_index_table(
+  index_name = 'idx_fk_parent_tid',
+  index_table_id = 101019,
+  index_columns = ['parent_table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_foreign_key'])
+
+def_sys_index_table(
+  index_name = 'idx_fk_name',
+  index_table_id = 101020,
+  index_columns = ['foreign_key_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_foreign_key'])
+
+def_sys_index_table(
+  index_name = 'idx_fk_his_child_tid',
+  index_table_id = 101021,
+  index_columns = ['tenant_id', 'child_table_id', 'schema_version'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_foreign_key_history'])
+
+def_sys_index_table(
+  index_name = 'idx_fk_his_parent_tid',
+  index_table_id = 101022,
+  index_columns = ['tenant_id', 'parent_table_id', 'schema_version'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_foreign_key_history'])
+
+def_sys_index_table(
+  index_name = 'idx_db_synonym_name',
+  index_table_id = 101023,
+  index_columns = ['database_id', 'synonym_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_synonym'])
+
+def_sys_index_table(
+  index_name = 'idx_synonym_name',
+  index_table_id = 101024,
+  index_columns = ['synonym_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_synonym'])
+
+def_sys_index_table(
+  index_name = 'idx_ddl_checksum_task',
+  index_table_id = 101025,
+  index_columns = ['ddl_task_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_ddl_checksum'])
+
+def_sys_index_table(
+  index_name = 'idx_db_routine_name',
+  index_table_id = 101026,
+  index_columns = ['database_id', 'routine_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_routine'])
+
+def_sys_index_table(
+  index_name = 'idx_routine_name',
+  index_table_id = 101027,
+  index_columns = ['routine_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_routine'])
+
+def_sys_index_table(
+  index_name = 'idx_routine_pkg_id',
+  index_table_id = 101028,
+  index_columns = ['package_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_routine'])
+
+def_sys_index_table(
+  index_name = 'idx_routine_param_name',
+  index_table_id = 101029,
+  index_columns = ['param_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_routine_param'])
+
+def_sys_index_table(
+  index_name = 'idx_db_pkg_name',
+  index_table_id = 101030,
+  index_columns = ['database_id', 'package_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_package'])
+
+def_sys_index_table(
+  index_name = 'idx_pkg_name',
+  index_table_id = 101031,
+  index_columns = ['package_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_package'])
+
+def_sys_index_table(
+  index_name = 'idx_snapshot_tablet',
+  index_table_id = 101032,
+  index_columns = ['tablet_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_acquired_snapshot'])
+
+def_sys_index_table(
+  index_name = 'idx_cst_name',
+  index_table_id = 101033,
+  index_columns = ['constraint_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_constraint'])
+
+def_sys_index_table(
+  index_name = 'idx_db_type_name',
+  index_table_id = 101034,
+  index_columns = ['database_id', 'type_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_type'])
+
+def_sys_index_table(
+  index_name = 'idx_type_name',
+  index_table_id = 101035,
+  index_columns = ['type_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_type'])
+
+def_sys_index_table(
+  index_name = 'idx_type_attr_name',
+  index_table_id = 101036,
+  index_columns = ['name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_type_attr'])
+
+def_sys_index_table(
+  index_name = 'idx_coll_name_type',
+  index_table_id = 101037,
+  index_columns = ['coll_name', 'coll_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_coll_type'])
+
+def_sys_index_table(
+  index_name = 'idx_owner_dblink_name',
+  index_table_id = 101038,
+  index_columns = ['owner_id', 'dblink_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_dblink'])
+
+def_sys_index_table(
+  index_name = 'idx_dblink_name',
+  index_table_id = 101039,
+  index_columns = ['dblink_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_dblink'])
+
+def_sys_index_table(
+  index_name = 'idx_grantee_role_id',
+  index_table_id = 101040,
+  index_columns = ['tenant_id', 'role_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_role_grantee_map'])
+
+def_sys_index_table(
+  index_name = 'idx_grantee_his_role_id',
+  index_table_id = 101041,
+  index_columns = ['tenant_id', 'role_id', 'schema_version'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_role_grantee_map_history'])
+
+def_sys_index_table(
+  index_name = 'idx_keystore_master_key_id',
+  index_table_id = 101042,
+  index_columns = ['master_key_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_keystore'])
+
+def_sys_index_table(
+  index_name = 'idx_keystore_his_master_key_id',
+  index_table_id = 101043,
+  index_columns = ['master_key_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_keystore_history'])
+
+def_sys_index_table(
+  index_name = 'idx_ols_policy_name',
+  index_table_id = 101044,
+  index_columns = ['policy_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_ols_policy'])
+
+def_sys_index_table(
+  index_name = 'idx_ols_policy_col_name',
+  index_table_id = 101045,
+  index_columns = ['column_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_ols_policy'])
+
+def_sys_index_table(
+  index_name = 'idx_ols_com_policy_id',
+  index_table_id = 101046,
+  index_columns = ['label_se_policy_id', 'comp_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_ols_component'])
+
+def_sys_index_table(
+  index_name = 'idx_ols_lab_policy_id',
+  index_table_id = 101047,
+  index_columns = ['label_se_policy_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_ols_label'])
+
+def_sys_index_table(
+  index_name = 'idx_ols_lab_tag',
+  index_table_id = 101048,
+  index_columns = ['label_tag'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_ols_label'])
+
+def_sys_index_table(
+  index_name = 'idx_ols_lab',
+  index_table_id = 101049,
+  index_columns = ['label'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_ols_label'])
+
+def_sys_index_table(
+  index_name = 'idx_ols_level_uid',
+  index_table_id = 101050,
+  index_columns = ['user_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_ols_user_level'])
+
+def_sys_index_table(
+  index_name = 'idx_ols_level_policy_id',
+  index_table_id = 101051,
+  index_columns = ['label_se_policy_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_ols_user_level'])
+
+def_sys_index_table(
+  index_name = 'idx_profile_name',
+  index_table_id = 101052,
+  index_columns = ['profile_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_profile'])
+
+def_sys_index_table(
+  index_name = 'idx_audit_type',
+  index_table_id = 101053,
+  index_columns = ['audit_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_security_audit'])
+
+def_sys_index_table(
+  index_name = 'idx_trigger_base_obj_id',
+  index_table_id = 101054,
+  index_columns = ['base_object_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_trigger'])
+
+def_sys_index_table(
+  index_name = 'idx_db_trigger_name',
+  index_table_id = 101055,
+  index_columns = ['database_id', 'trigger_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_trigger'])
+
+def_sys_index_table(
+  index_name = 'idx_trigger_name',
+  index_table_id = 101056,
+  index_columns = ['trigger_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_trigger'])
+
+def_sys_index_table(
+  index_name = 'idx_trigger_his_base_obj_id',
+  index_table_id = 101057,
+  index_columns = ['tenant_id', 'base_object_id', 'schema_version'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_trigger_history'])
+
+def_sys_index_table(
+  index_name = 'idx_objauth_grantor',
+  index_table_id = 101058,
+  index_columns = ['grantor_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_objauth'])
+
+def_sys_index_table(
+  index_name = 'idx_objauth_grantee',
+  index_table_id = 101059,
+  index_columns = ['grantee_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_objauth'])
+
+def_sys_index_table(
+  index_name = 'idx_obj_type_db_obj_name',
+  index_table_id = 101060,
+  index_columns = ['database_id', 'object_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_object_type'])
+
+def_sys_index_table(
+  index_name = 'idx_obj_type_obj_name',
+  index_table_id = 101061,
+  index_columns = ['object_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_object_type'])
+
+def_sys_index_table(
+  index_name = 'idx_xa_trans_id',
+  index_table_id = 101062,
+  index_columns = ['tenant_id', 'trans_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_global_transaction'])
+
+def_sys_index_table(
+  index_name = 'idx_dependency_ref_obj',
+  index_table_id = 101063,
+  index_columns = ['ref_obj_id', 'ref_obj_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_dependency'])
+
+def_sys_index_table(
+  index_name = 'idx_ddl_error_object',
+  index_table_id = 101064,
+  index_columns = ['object_id', 'target_object_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_ddl_error_message'])
+
+def_sys_index_table(
+  index_name = 'idx_table_stat_his_savtime',
+  index_table_id = 101065,
+  index_columns = ['savtime'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_table_stat_history'])
+
+def_sys_index_table(
+  index_name = 'idx_column_stat_his_savtime',
+  index_table_id = 101066,
+  index_columns = ['savtime'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_column_stat_history'])
+
+def_sys_index_table(
+  index_name = 'idx_histogram_stat_his_savtime',
+  index_table_id = 101067,
+  index_columns = ['savtime'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_histogram_stat_history'])
+
+def_sys_index_table(
+  index_name = 'idx_tablet_to_ls_id',
+  index_table_id = 101068,
+  index_columns = ['ls_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tablet_to_ls'])
+
+def_sys_index_table(
+  index_name = 'idx_tablet_to_table_id',
+  index_table_id = 101069,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tablet_to_ls'])
+
+def_sys_index_table(
+  index_name = 'idx_pending_tx_id',
+  index_table_id = 101070,
+  index_columns = ['gtrid', 'bqual', 'format_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_pending_transaction'])
+
+def_sys_index_table(
+  index_name = 'idx_ctx_namespace',
+  index_table_id = 101071,
+  index_columns = ['namespace'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_context'])
+
+def_sys_index_table(
+  index_name = 'idx_spm_item_sql_id',
+  index_table_id = 101072,
+  index_columns = ['sql_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_plan_baseline_item'])
+
+def_sys_index_table(
+  index_name = 'idx_spm_item_value',
+  index_table_id = 101073,
+  index_columns = ['plan_hash_value'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_plan_baseline_item'])
+
+def_sys_index_table(
+  index_name = 'idx_directory_name',
+  index_table_id = 101074,
+  index_columns = ['directory_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_tenant_directory'])
+
+def_sys_index_table(
+  index_name = 'idx_job_powner',
+  index_table_id = 101075,
+  index_columns = ['powner'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_job'])
+
+def_sys_index_table(
+  index_name = 'idx_seq_obj_db_name',
+  index_table_id = 101076,
+  index_columns = ['database_id', 'sequence_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_sequence_object'])
+
+def_sys_index_table(
+  index_name = 'idx_seq_obj_name',
+  index_table_id = 101077,
+  index_columns = ['sequence_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_sequence_object'])
+
+def_sys_index_table(
+  index_name = 'idx_recyclebin_ori_name',
+  index_table_id = 101078,
+  index_columns = ['original_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_recyclebin'])
+
+def_sys_index_table(
+  index_name = 'idx_tb_priv_db_name',
+  index_table_id = 101079,
+  index_columns = ['database_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_table_privilege'])
+
+def_sys_index_table(
+  index_name = 'idx_tb_priv_tb_name',
+  index_table_id = 101080,
+  index_columns = ['table_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_table_privilege'])
+
+def_sys_index_table(
+  index_name = 'idx_db_priv_db_name',
+  index_table_id = 101081,
+  index_columns = ['database_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_database_privilege'])

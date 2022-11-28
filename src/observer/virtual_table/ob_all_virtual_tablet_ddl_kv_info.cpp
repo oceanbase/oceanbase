@@ -90,11 +90,11 @@ int ObAllVirtualTabletDDLKVInfo::get_next_ls(ObLS *&ls)
   return ret;
 }
 
-int ObAllVirtualTabletDDLKVInfo::get_next_tablet(ObTabletHandle &tablet_handle)
+int ObAllVirtualTabletDDLKVInfo::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(ls_tablet_iter_.get_next_tablet(tablet_handle))) {
+    if (OB_FAIL(ls_tablet_iter_.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       if (!ls_tablet_iter_.is_valid() || OB_ITER_END == ret) {
         ret = OB_SUCCESS; // continue to next ls
         ObLS *ls = nullptr;
@@ -106,10 +106,10 @@ int ObAllVirtualTabletDDLKVInfo::get_next_tablet(ObTabletHandle &tablet_handle)
           SERVER_LOG(WARN, "fail to get tablet iter", K(ret));
         }
       } else {
-        SERVER_LOG(WARN, "fail to get next tablet", K(ret));
+        SERVER_LOG(WARN, "fail to get next ddl kv mgr", K(ret));
       }
     } else {
-      curr_tablet_id_ = tablet_handle.get_obj()->get_tablet_meta().tablet_id_;
+      curr_tablet_id_ = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
       break;
     }
   }
@@ -123,16 +123,9 @@ int ObAllVirtualTabletDDLKVInfo::get_next_ddl_kv(ObDDLKV *&ddl_kv)
   while (OB_SUCC(ret)) {
     if (ddl_kv_idx_ < 0 || ddl_kv_idx_ >= ddl_kvs_handle_.get_count()) {
       ObDDLKvMgrHandle ddl_kv_mgr_handle;
-      if (OB_FAIL(get_next_tablet(tablet_handle))) {
+      if (OB_FAIL(get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
         if (OB_ITER_END != ret) {
-          SERVER_LOG(WARN, "get_next_tablet failed", K(ret));
-        }
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          SERVER_LOG(WARN, "fail to get freezed ddl kv", K(ret));
-        } else {
-          ddl_kv_idx_ = -1; // to get next tablet
-          ret = OB_SUCCESS;
+          SERVER_LOG(WARN, "get_next_ddl_kv_mgr failed", K(ret));
         }
       } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(false/*frozen_only*/, ddl_kvs_handle_))) {
         SERVER_LOG(WARN, "fail to get ddl kvs", K(ret));

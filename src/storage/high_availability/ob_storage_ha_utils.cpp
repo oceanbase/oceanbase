@@ -72,9 +72,9 @@ int ObStorageHAUtils::fetch_src_tablet_meta_info_(const uint64_t tenant_id, cons
     LOG_WARN("failed to init operator", K(ret));
   } else if (OB_FAIL(op.get(tenant_id, tablet_id, ls_id, src_addr, tablet_replica))) {
     LOG_WARN("failed to get tablet meta info", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
-  } else {
-    compaction_scn.convert_for_tx(tablet_replica.get_snapshot_version());
-  }
+  } else if (OB_FAIL(compaction_scn.convert_for_tx(tablet_replica.get_snapshot_version()))) {
+    LOG_WARN("failed to get tablet meta info", K(ret), K(compaction_scn), K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
+  } else {/*do nothing*/}
   return ret;
 }
 

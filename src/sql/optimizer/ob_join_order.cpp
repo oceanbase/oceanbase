@@ -5764,15 +5764,12 @@ int ObJoinOrder::pruning_unstable_access_path(BaseTableOptInfo *table_opt_info,
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
-  bool use_acs = false;
   ObSEArray<uint64_t, 4> unstable_index_id;
   if (OB_UNLIKELY(access_paths.empty()) || OB_ISNULL(get_plan()) ||
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(access_paths.count()), K(get_plan()), K(session_info));
-  } else if (OB_FAIL(session_info->get_adaptive_cursor_sharing(use_acs))) {
-    LOG_WARN("failed to check is acs enabled", K(ret));
-  } else if (use_acs || access_paths.count() <= 1 ||
+  } else if (access_paths.count() <= 1 ||
              OB_DEFAULT_STAT_EST == table_meta_info_.cost_est_type_) {
     /* do not pruning access path */
   } else if (OB_FAIL(try_pruning_base_table_access_path(access_paths, unstable_index_id))) {

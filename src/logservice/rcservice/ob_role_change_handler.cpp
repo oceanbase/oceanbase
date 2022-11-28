@@ -151,6 +151,18 @@ int ObRoleChangeHandler::switch_to_follower_gracefully()
   return ret;
 }
 
+int ObRoleChangeHandler::resume_to_leader()
+{
+  int ret = OB_SUCCESS;
+  int cursor = ObLogBaseType::MAX_LOG_BASE_TYPE;
+  if (OB_FAIL(resume_leader_when_switch_failure_(cursor))) {
+    CLOG_LOG(WARN, "resume_leader_when_switch_failure_ failed");
+  } else {
+    CLOG_LOG(INFO, "resume_to_leader success");
+  }
+  return ret;
+}
+
 int ObRoleChangeHandler::resume_leader_when_switch_failure_(const int64_t cursor)
 {
   int ret = OB_SUCCESS;

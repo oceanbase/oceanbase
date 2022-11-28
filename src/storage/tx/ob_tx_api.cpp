@@ -687,9 +687,9 @@ int ObTransService::get_weak_read_snapshot_version(palf::SCN &snapshot)
   } else {
     const int64_t snapshot_barrier = ObTimeUtility::current_time() -
       ObWeakReadUtil::max_stale_time_for_weak_consistency(tenant_id_);
-    if (snapshot.get_val_for_gts() < snapshot_barrier * 1000 /*ns*/) {
+    if (snapshot.convert_to_ts() < snapshot_barrier) {
       TRANS_LOG(WARN, "weak read snapshot too stale", K(snapshot),
-                K(snapshot_barrier), "delta_ns", (snapshot_barrier*1000 - snapshot.get_val_for_gts()));
+                K(snapshot_barrier), "delta", (snapshot_barrier - snapshot.convert_to_ts()));
       ret = OB_REPLICA_NOT_READABLE;
     }
   }

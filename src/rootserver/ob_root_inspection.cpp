@@ -1243,9 +1243,8 @@ int ObRootInspection::check_sys_table_schemas_(
       share::sys_table_schema_creators,
       share::virtual_table_schema_creators,
       share::sys_view_schema_creators,
-      // TODO: will check sys index when compat case changed.
-      //share::core_index_table_schema_creators,
-      //share::sys_index_table_schema_creators,
+      share::core_index_table_schema_creators,
+      share::sys_index_table_schema_creators,
       NULL };
 
     int back_ret = OB_SUCCESS;

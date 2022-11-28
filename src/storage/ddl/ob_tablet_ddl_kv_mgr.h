@@ -53,6 +53,7 @@ public:
   bool is_started() const { return start_scn_.is_valid(); }
   int set_commit_success();
   bool is_commit_success() const { return is_commit_success_; }
+  common::ObTabletID get_tablet_id() const { return tablet_id_; }
   int cleanup();
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }

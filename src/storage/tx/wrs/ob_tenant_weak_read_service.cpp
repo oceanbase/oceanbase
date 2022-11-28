@@ -324,13 +324,14 @@ void ObTenantWeakReadService::get_weak_read_stat(ObTenantWeakReadStat &wrs_stat)
   cluster_service_.get_serve_info(in_service, master_epoch);
   wrs_stat.tenant_id_ = tenant_id_;
 
+  const bool ignore_invalid = true;
   //get server info with lock
   ObTenantWeakReadServerVersionMgr::ServerVersion sv;
   svr_version_mgr_.get_version(sv);
   wrs_stat.server_version_ = sv.version_;
-  wrs_stat.server_version_delta_ = cur_tstamp - wrs_stat.server_version_.convert_to_ts();
+  wrs_stat.server_version_delta_ = cur_tstamp - wrs_stat.server_version_.convert_to_ts(ignore_invalid);
   wrs_stat.local_cluster_version_ = local_cluster_version_.atomic_get();
-  wrs_stat.local_cluster_version_delta_ = cur_tstamp - wrs_stat.local_cluster_version_.convert_to_ts();
+  wrs_stat.local_cluster_version_delta_ = cur_tstamp - wrs_stat.local_cluster_version_.convert_to_ts(ignore_invalid);
   wrs_stat.total_part_count_ = sv.total_part_count_;
   wrs_stat.valid_inner_part_count_ = sv.valid_inner_part_count_;
   wrs_stat.valid_user_part_count_ = sv.valid_user_part_count_;
@@ -351,7 +352,7 @@ void ObTenantWeakReadService::get_weak_read_stat(ObTenantWeakReadStat &wrs_stat)
   // cluster info
   cluster_service_.get_version(current_cluster_version, min_cluster_version, max_cluster_version);
   wrs_stat.cluster_version_ = current_cluster_version;
-  wrs_stat.cluster_version_delta_ = in_service? (cur_tstamp - wrs_stat.cluster_version_.convert_to_ts()):0;
+  wrs_stat.cluster_version_delta_ = in_service? (cur_tstamp - wrs_stat.cluster_version_.convert_to_ts(ignore_invalid)):0;
   wrs_stat.min_cluster_version_ = min_cluster_version;
   wrs_stat.max_cluster_version_ = max_cluster_version;
   wrs_stat.cluster_version_gen_tstamp_ = ATOMIC_LOAD(&last_generate_cluster_version_tstamp_);
@@ -505,22 +506,23 @@ void ObTenantWeakReadService::print_stat_()
         max_cluster_version);
   }
 
+  const bool ignore_invalid = true;
   ISTAT("[STAT]", K_(tenant_id),
       "server_version", sv,
-      "server_version_delta", cur_tstamp - sv.version_.convert_to_ts(),
+      "server_version_delta", cur_tstamp - sv.version_.convert_to_ts(ignore_invalid),
       K(in_cluster_service),
       K(cluster_version),
       K(min_cluster_version),
       K(max_cluster_version),
       K(get_cluster_version_err),
-      "cluster_version_delta", cur_tstamp - cluster_version.convert_to_ts(),
+      "cluster_version_delta", cur_tstamp - cluster_version.convert_to_ts(ignore_invalid),
       K_(cluster_service_master),
       "cluster_service_tablet_id", cluster_service_.get_cluster_service_tablet_id(),
       K_(post_cluster_heartbeat_count),
       K_(succ_cluster_heartbeat_count),
       K_(cluster_heartbeat_interval),
       K_(local_cluster_version),
-      "local_cluster_delta", cur_tstamp - local_cluster_version_.convert_to_ts(),
+      "local_cluster_delta", cur_tstamp - local_cluster_version_.convert_to_ts(ignore_invalid),
       K_(force_self_check),
       K(weak_read_refresh_interval));
 }

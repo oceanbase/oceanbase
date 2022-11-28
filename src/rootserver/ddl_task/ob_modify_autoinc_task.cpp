@@ -91,9 +91,9 @@ int ObUpdateAutoincSequenceTask::process()
         // if data_table_id != dest_table_id, meaning this is happening in ddl double write
         session_param.ddl_info_.set_source_table_hidden(data_table_id_ != dest_table_id_);
         ObObj obj;
-        if (OB_FAIL(timeout_ctx.set_trx_timeout_us(GCONF.global_index_build_single_replica_timeout.get()))) {
+        if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
           LOG_WARN("set trx timeout failed", K(ret));
-        } else if (OB_FAIL(timeout_ctx.set_timeout(GCONF.global_index_build_single_replica_timeout.get()))) {
+        } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
           LOG_WARN("set timeout failed", K(ret));
         } else if (OB_FAIL(sql.assign_fmt("SELECT /*+no_rewrite*/ CAST(MAX(%s) AS SIGNED) AS MAX_VALUE FROM %s.%s",
                                     column_schema->get_column_name(),

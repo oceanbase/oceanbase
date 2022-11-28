@@ -649,30 +649,7 @@ int ObStorageHATaskUtils::check_minor_sstable_need_copy_(
     }
 
     if (OB_SUCC(ret) && !found) {
-      const palf::SCN start_scn = minor_sstables.at(0)->get_start_scn();
-      const palf::SCN end_scn = minor_sstables.at(minor_sstables.count() - 1)->get_end_scn();
-      if (param.table_key_.scn_range_.start_scn_ >= start_scn
-          && param.table_key_.scn_range_.end_scn_ <= end_scn) {
-        need_copy = false;
-      } else {
-        need_copy = true;
-      }
-    }
-
-    if (OB_SUCC(ret) && !need_copy) {
-      const ObSSTableArray &minor_sstable_array = tablet->get_table_store().get_minor_sstables();
-      bool has_remote_logical_sstable = false;
-      for (int64_t i = 0; OB_SUCC(ret) && i < minor_sstable_array.count(); ++i) {
-        ObITable *table = minor_sstable_array.get_table(i);
-        if (OB_ISNULL(table)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("table should not be NULL", K(ret), KP(table));
-        } else if (table->is_remote_logical_minor_sstable()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("tablet still has remote logical minor sstable, cannot reuse local sstable",
-              K(ret), KPC(tablet), K(param));
-        }
-      }
+      need_copy = true;
     }
   }
   return ret;

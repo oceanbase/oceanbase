@@ -236,13 +236,17 @@ SCN SCN::scn_dec(const SCN &ref)
   return result;
 }
 
-int64_t SCN::convert_to_ts() const
+int64_t SCN::convert_to_ts(bool ignore_invalid) const
 {
   int64_t ts_us = 0;
   if (is_valid()) {
     ts_us = ts_ns_ / 1000UL;
   } else {
-    PALF_LOG(ERROR, "invalid scn should not convert to ts ", K(val_), K(lbt()));
+    if (ignore_invalid) {
+      PALF_LOG(WARN, "invalid scn should not convert to ts ", K(val_));
+    } else {
+      PALF_LOG(ERROR, "invalid scn should not convert to ts ", K(val_), K(lbt()));
+    }
   }
   return ts_us;
 }

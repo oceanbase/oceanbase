@@ -2253,6 +2253,22 @@ int ObDMLStmt::get_from_subquery_stmts(ObIArray<ObSelectStmt*> &child_stmts) con
   return ret;
 }
 
+int ObDMLStmt::get_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t j = 0; OB_SUCC(ret) && j < get_subquery_expr_size(); ++j) {
+    ObQueryRefRawExpr *subquery_ref = subquery_exprs_.at(j);
+    if (OB_ISNULL(subquery_ref) ||
+        OB_ISNULL(subquery_ref->get_ref_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subquery reference is null", K(subquery_ref));
+    } else if (OB_FAIL(child_stmts.push_back(subquery_ref->get_ref_stmt()))) {
+      LOG_WARN("stored subquery reference stmt failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::get_table_item(const ObSQLSessionInfo *session_info,
                               const ObString &database_name,
                               const ObString &object_name,

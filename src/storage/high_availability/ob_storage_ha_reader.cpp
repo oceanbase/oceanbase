@@ -1457,6 +1457,7 @@ int ObCopyTabletsSSTableInfoObProducer::get_next_tablet_sstable_info(
 
 ObCopySSTableInfoObProducer::ObCopySSTableInfoObProducer()
   : is_inited_(false),
+    ls_id_(),
     tablet_sstable_info_(),
     tablet_handle_(),
     iter_(),
@@ -1507,6 +1508,7 @@ int ObCopySSTableInfoObProducer::init(
 
   if (OB_FAIL(ret)) {
   } else {
+    ls_id_ = ls->get_ls_id();
     tablet_sstable_info_ = tablet_sstable_info;
     is_inited_ = true;
   }
@@ -1676,6 +1678,15 @@ int ObCopySSTableInfoObProducer::get_copy_tablet_sstable_header(
       } else if (OB_FAIL(get_copy_sstable_count_(copy_header.sstable_count_))) {
         LOG_WARN("failed to get copy sstable count", K(ret), K(tablet_sstable_info_));
       }
+    } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status_) {
+      if (OB_FAIL(fake_deleted_tablet_meta_(copy_header.tablet_meta_))) {
+        LOG_WARN("failed to fake deleted tablet meta", K(ret), K(copy_header));
+      } else {
+        copy_header.sstable_count_ = 0;
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("copy tablet status is unexpected", K(ret), K(status_), K(tablet_sstable_info_));
     }
   }
   return ret;
@@ -1695,6 +1706,43 @@ int ObCopySSTableInfoObProducer::get_tablet_meta_(ObMigrationTabletParam &tablet
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
   } else if (OB_FAIL(tablet->build_migration_tablet_param(tablet_meta))) {
     LOG_WARN("failed to build migration tablet param", K(ret), KPC(tablet));
+  }
+  return ret;
+}
+
+int ObCopySSTableInfoObProducer::fake_deleted_tablet_meta_(
+    ObMigrationTabletParam &tablet_meta)
+{
+  int ret = OB_SUCCESS;
+  tablet_meta.reset();
+  const ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::FULL;
+  const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("copy sstable info ob producer do not init", K(ret));
+  } else {
+    tablet_meta.ls_id_ = ls_id_;
+    tablet_meta.tablet_id_ = tablet_sstable_info_.tablet_id_;
+    tablet_meta.data_tablet_id_ = tablet_sstable_info_.tablet_id_;
+    tablet_meta.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+    tablet_meta.clog_checkpoint_scn_.set_max();
+    tablet_meta.compat_mode_ = lib::Worker::get_compatibility_mode();
+    tablet_meta.multi_version_start_ = 0;
+    tablet_meta.snapshot_version_ = 0;
+    tablet_meta.tx_data_.tablet_status_ = ObTabletStatus::DELETED;
+
+    if (OB_FAIL(tablet_meta.ha_status_.set_restore_status(restore_status))) {
+      LOG_WARN("failed to set restore status", K(ret), K(restore_status));
+    } else if (OB_FAIL(tablet_meta.ha_status_.set_data_status(data_status))) {
+      LOG_WARN("failed to set data status", K(ret), K(data_status));
+    } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema(tablet_meta.allocator_,
+        tablet_meta.storage_schema_))) {
+      LOG_WARN("failed to construct placeholder storage schema");
+    } else if (!tablet_meta.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("create deleted tablet meta is invalid", K(ret), K(tablet_meta));
+    }
   }
   return ret;
 }

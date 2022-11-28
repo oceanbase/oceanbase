@@ -159,7 +159,7 @@ int ObInnerTableSchema::cdb_ob_backup_jobs_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     EXECUTOR_TENANT_ID,     PLUS_ARCHIVELOG,     BACKUP_TYPE,     JOB_LEVEL,     ENCRYPTION_MODE,     PASSWD,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         USEC_TO_TIME(END_TS)        END AS END_TIMESTAMP,     STATUS,     RESULT,     COMMENT,     DESCRIPTION,     PATH     FROM OCEANBASE.__all_virtual_backup_job )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     JOB_ID,     BACKUP_SET_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     EXECUTOR_TENANT_ID,     PLUS_ARCHIVELOG,     BACKUP_TYPE,     JOB_LEVEL,     ENCRYPTION_MODE,     PASSWD,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         USEC_TO_TIME(END_TS)        END AS END_TIMESTAMP,     STATUS,     RESULT,     COMMENT,     DESCRIPTION,     PATH     FROM OCEANBASE.__all_virtual_backup_job )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -209,7 +209,7 @@ int ObInnerTableSchema::cdb_ob_backup_job_history_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     EXECUTOR_TENANT_ID,     PLUS_ARCHIVELOG,     BACKUP_TYPE,     JOB_LEVEL,     ENCRYPTION_MODE,     PASSWD,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         USEC_TO_TIME(END_TS)        END AS END_TIMESTAMP,     STATUS,     RESULT,     COMMENT,     DESCRIPTION,     PATH     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_JOB_HISTORY )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     JOB_ID,     BACKUP_SET_ID,     INITIATOR_TENANT_ID,     INITIATOR_JOB_ID,     EXECUTOR_TENANT_ID,     PLUS_ARCHIVELOG,     BACKUP_TYPE,     JOB_LEVEL,     ENCRYPTION_MODE,     PASSWD,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         USEC_TO_TIME(END_TS)        END AS END_TIMESTAMP,     STATUS,     RESULT,     COMMENT,     DESCRIPTION,     PATH     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_JOB_HISTORY )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -259,7 +259,7 @@ int ObInnerTableSchema::cdb_ob_backup_tasks_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     TASK_ID,     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         USEC_TO_TIME(END_TS)        END AS END_TIMESTAMP,     STATUS,     START_SCN,     END_SCN,     USER_LS_START_SCN,     ENCRYPTION_MODE,     PASSWD,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE          OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)        END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     COMMENT,     PATH     FROM OCEANBASE.__all_virtual_backup_task )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     TASK_ID,     JOB_ID,     BACKUP_SET_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         USEC_TO_TIME(END_TS)        END AS END_TIMESTAMP,     STATUS,     START_SCN,     END_SCN,     USER_LS_START_SCN,     ENCRYPTION_MODE,     PASSWD,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE          OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)        END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     COMMENT,     PATH     FROM OCEANBASE.__all_virtual_backup_task )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -309,7 +309,7 @@ int ObInnerTableSchema::cdb_ob_backup_task_history_schema(ObTableSchema &table_s
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     TASK_ID,     JOB_ID,     INCARNATION,     BACKUP_SET_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         USEC_TO_TIME(END_TS)        END AS END_TIMESTAMP,     STATUS,     START_SCN,     END_SCN,     USER_LS_START_SCN,     ENCRYPTION_MODE,     PASSWD,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE          OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)        END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     COMMENT,     PATH     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_TASK_HISTORY )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT     TENANT_ID,     TASK_ID,     JOB_ID,     BACKUP_SET_ID,     USEC_TO_TIME(START_TS) AS START_TIMESTAMP,     CASE        WHEN END_TS = 0         THEN ''       ELSE         USEC_TO_TIME(END_TS)        END AS END_TIMESTAMP,     STATUS,     START_SCN,     END_SCN,     USER_LS_START_SCN,     ENCRYPTION_MODE,     PASSWD,     INPUT_BYTES,     OUTPUT_BYTES,     CASE       WHEN END_TS = 0         THEN 0       ELSE          OUTPUT_BYTES / ((END_TS - START_TS)/1000/1000)        END AS OUTPUT_RATE_BYTES,     EXTRA_BYTES AS EXTRA_META_BYTES,     TABLET_COUNT,     FINISH_TABLET_COUNT,     MACRO_BLOCK_COUNT,     FINISH_MACRO_BLOCK_COUNT,     FILE_COUNT,     META_TURN_ID,     DATA_TURN_ID,     RESULT,     COMMENT,     PATH     FROM OCEANBASE.__ALL_VIRTUAL_BACKUP_TASK_HISTORY )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

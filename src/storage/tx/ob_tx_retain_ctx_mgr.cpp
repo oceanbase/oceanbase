@@ -145,7 +145,7 @@ int ObMDSRetainCtxFunctor::operator()(ObLS *ls, ObTxRetainCtxMgr *retain_mgr)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "find a tx ctx without retain_cause", K(ret), KPC(tx_ctx_), KPC(this));
   } else if (OB_FALSE_IT(retain_mgr->set_max_ckpt_ts(final_log_ts_))) {
-  } else if (final_log_ts_.get_val_for_lsn_allocator() < ls->get_clog_checkpoint_ts()) {
+  } else if (final_log_ts_ < ls->get_clog_checkpoint_scn()) {
     // only compare with ls_ckpt_ts because of flush success.
     // The downstream filters the redundant replay itself.
     ret = OB_SUCCESS;

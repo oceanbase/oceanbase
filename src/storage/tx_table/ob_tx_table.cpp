@@ -713,7 +713,7 @@ int ObTxTable::restore_tx_ctx_table_(ObITable &trans_sstable)
   common::ObVersionRange trans_version_range;
   trans_version_range.base_version_ = 0;
   trans_version_range.multi_version_start_ = 0;
-  trans_version_range.snapshot_version_ = common::ObVersionRange::MAX_VERSION - 2;
+  trans_version_range.snapshot_version_ = MERGE_READ_SNAPSHOT_VERSION;
 
   common::ObSEArray<share::schema::ObColDesc, 2> columns;
   ObTableReadInfo read_info;

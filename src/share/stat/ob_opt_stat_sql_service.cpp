@@ -1486,6 +1486,9 @@ int ObOptStatSqlService::get_compressed_llc_bitmap(ObIAllocator &allocator,
       comp_buf = const_cast<char*>(bitmap_buf);
       comp_size = bitmap_size;
     }
+    if (compressor != nullptr) {
+      compressor->reset_mem();
+    }
   }
   return ret;
 }
@@ -1523,6 +1526,8 @@ int ObOptStatSqlService::get_decompressed_llc_bitmap(ObIAllocator &allocator,
     LOG_WARN("decompress bitmap buffer failed.",
                KP(comp_buf), K(comp_size), KP(bitmap_buf),
                K(max_bitmap_size), K(bitmap_size), K(ret));
+  } else {
+    compressor->reset_mem();
   }
   return ret;
 }

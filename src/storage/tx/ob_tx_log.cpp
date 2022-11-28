@@ -459,7 +459,7 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
                                palf::block_id_t block_id,
                                palf::LSN lsn,
                                int64_t tx_id,
-                               palf::SCN log_ts,
+                               palf::SCN scn,
                                bool &has_dumped_tx_id)
 {
   int ret = OB_SUCCESS;
@@ -490,8 +490,8 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
       has_output = true;
     } else {
       if (!has_dumped_tx_id) {
-        databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "{BlockID: %ld; LSN:%ld, TxID:%ld; log_ts:%ld",
-                        block_id, lsn.val_, tx_id, log_ts.get_val_for_lsn_allocator());
+        databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "{BlockID: %ld; LSN:%ld, TxID:%ld; SCN:%s",
+                        block_id, lsn.val_, tx_id, to_cstring(scn));
       }
       databuff_printf(arg.buf_, arg.buf_len_, arg.pos_,
                       "<TxRedoLog>: {TxCtxInfo: {%s}; MutatorMeta: {%s}; MutatorRows: {",

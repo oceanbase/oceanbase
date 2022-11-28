@@ -40,7 +40,9 @@ ObCgSet ObCgSet::instance_;
 int ObCgroupCtrl::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(init_cgroup_root_dir_(root_cgroup_))) {
+  if (GCONF.enable_cgroup == false) {
+    // not init cgroup when config set to false
+  } else if (OB_FAIL(init_cgroup_root_dir_(root_cgroup_))) {
     LOG_WARN("init cgroup dir failed", K(ret), K(root_cgroup_));
   } else if (OB_FAIL(init_cgroup_dir_(other_cgroup_))) {
     LOG_WARN("init other cgroup dir failed", K(ret), K_(other_cgroup));
