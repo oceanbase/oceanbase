@@ -19,7 +19,7 @@
 #include "share/ls/ob_ls_status_operator.h" //ObLSStatus
 #include "share/ls/ob_ls_i_life_manager.h"//ObLSTemplateOperator
 #include "logservice/palf/log_define.h"//SCN
-#include "logservice/palf/scn.h"//SCN
+#include "share/scn.h"//SCN
 
 
 namespace oceanbase
@@ -36,12 +36,9 @@ namespace sqlclient
 class ObMySQLResult;
 }
 }
-namespace palf
-{
-class SCN;
-}
 namespace share
 {
+class SCN;
 //TODO for duplicate ls
 enum ObLSFlag
 {
@@ -89,7 +86,7 @@ struct ObLSAttr
            const ObLSFlag &flag,
            const ObLSStatus &status,
            const ObLSOperationType &type,
-           const palf::SCN &create_scn);
+           const SCN &create_scn);
   void reset();
   int assign(const ObLSAttr &other);
   bool ls_is_creating() const
@@ -135,7 +132,7 @@ struct ObLSAttr
   {
     return flag_;
   }
-  palf::SCN get_create_scn() const
+  SCN get_create_scn() const
   {
     return create_scn_;
   }
@@ -148,7 +145,7 @@ private:
   ObLSFlag flag_;
   ObLSStatus status_;
   ObLSOperationType operation_type_;
-  palf::SCN create_scn_;
+  SCN create_scn_;
 };
 
 typedef common::ObArray<ObLSAttr> ObLSAttrArray;
@@ -187,8 +184,8 @@ public:
    * @param[out] read_scn:the snapshot of read_version
    * @param[out] ObLSAttrIArray ls_info in __all_ls
    * */
-  int load_all_ls_and_snapshot(palf::SCN &read_scn, ObLSAttrIArray &ls_array);
-  static int get_tenant_gts(const uint64_t &tenant_id, palf::SCN &gts_scn);
+  int load_all_ls_and_snapshot(share::SCN &read_scn, ObLSAttrIArray &ls_array);
+  static int get_tenant_gts(const uint64_t &tenant_id, SCN &gts_scn);
 
 private:
   int process_sub_trans_(const ObLSAttr &ls_attr, ObMySQLTransaction &trans);

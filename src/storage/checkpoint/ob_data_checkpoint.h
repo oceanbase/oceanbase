@@ -17,7 +17,7 @@
 #include "storage/checkpoint/ob_common_checkpoint.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -40,8 +40,8 @@ struct ObCheckpointDList
   int unlink(ObFreezeCheckpoint *ob_freeze_checkpoint);
   int insert(ObFreezeCheckpoint *ob_freeze_checkpoint, bool ordered = true);
   void get_iterator(ObCheckpointIterator &iterator);
-  palf::SCN get_min_rec_scn_in_list(bool ordered = true);
-  ObFreezeCheckpoint *get_first_greater(const palf::SCN rec_scn);
+  share::SCN get_min_rec_scn_in_list(bool ordered = true);
+  ObFreezeCheckpoint *get_first_greater(const share::SCN rec_scn);
   int get_freezecheckpoint_info(
     ObIArray<checkpoint::ObFreezeCheckpointVTInfo> &freeze_checkpoint_array);
 
@@ -88,16 +88,16 @@ public:
   static const uint64_t LS_DATA_CHECKPOINT_TABLET_ID = 40000;
   int init(ObLS *ls);
   int safe_to_destroy();
-  palf::SCN get_rec_scn();
+  share::SCN get_rec_scn();
   // if min_rec_scn <= the input rec_scn
   // logstream freeze
-  int flush(palf::SCN recycle_scn, bool need_freeze = true);
+  int flush(share::SCN recycle_scn, bool need_freeze = true);
   // if min_rec_scn <= the input rec_scn
   // add ls_freeze task
   // logstream freeze optimization
-  int ls_freeze(palf::SCN rec_scn);
+  int ls_freeze(share::SCN rec_scn);
   // logstream_freeze schedule and minor merge schedule
-  void road_to_flush(palf::SCN rec_scn);
+  void road_to_flush(share::SCN rec_scn);
   // ObFreezeCheckpoint register into ObDataCheckpoint
   int add_to_new_create(ObFreezeCheckpoint *ob_freeze_checkpoint);
   // remove from prepare_list when finish minor_merge

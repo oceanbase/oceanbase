@@ -43,7 +43,7 @@ namespace storage
 class ObLSService;
 class ObLS;
 }
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -198,7 +198,7 @@ public:
   virtual int replay(const void *buffer,
                      const int64_t nbytes,
                      const palf::LSN &lsn,
-                     const palf::SCN &scn) override;
+                     const share::SCN &scn) override;
 
   // for role change
   virtual void switch_to_follower_forcedly() override;
@@ -207,8 +207,8 @@ public:
   virtual int resume_leader() override;
 
   // for checkpoint
-  virtual palf::SCN get_rec_scn() override;
-  virtual int flush(palf::SCN &scn) override;
+  virtual share::SCN get_rec_scn() override;
+  virtual int flush(share::SCN &scn) override;
 
   TO_STRING_KV(K(is_inited_),
                K(gc_seq_invalid_member_));
@@ -249,7 +249,7 @@ private:
 private:
   const int64_t LS_CLOG_ALIVE_TIMEOUT_US = 100 * 1000; //100ms
   const int64_t GET_GTS_TIMEOUT_US = 10L * 1000 * 1000; //10s
-  int get_gts_(const int64_t timeout_us, palf::SCN &gts_scn);
+  int get_gts_(const int64_t timeout_us, share::SCN &gts_scn);
   bool is_ls_blocked_state_(const LSGCState &state);
   bool is_ls_offline_state_(const LSGCState &state);
   bool is_ls_wait_gc_state_(const LSGCState &state);
@@ -260,9 +260,9 @@ private:
   void try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_status);
   void submit_log_(const ObGCLSLOGType log_type);
   void update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_type,
-                                            const palf::SCN &scn);
-  void block_ls_transfer_in_(const palf::SCN &block_scn);
-  void offline_ls_(const palf::SCN &offline_scn);
+                                            const share::SCN &scn);
+  void block_ls_transfer_in_(const share::SCN &block_scn);
+  void offline_ls_(const share::SCN &offline_scn);
   int get_palf_role_(common::ObRole &role);
   void handle_gc_ls_dropping_(const ObGarbageCollector::LSStatus &ls_status);
   void handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status);

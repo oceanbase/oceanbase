@@ -31,6 +31,7 @@
 #include "log_mode_mgr.h"
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
 LogSlidingWindow::LogSlidingWindow()

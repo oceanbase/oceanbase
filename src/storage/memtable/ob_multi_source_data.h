@@ -78,7 +78,7 @@ public:
   virtual bool is_valid() const = 0;
   virtual int64_t get_data_size() const = 0;
   virtual MultiSourceDataUnitType type() const = 0;
-  virtual int set_scn(const palf::SCN &scn)
+  virtual int set_scn(const share::SCN &scn)
   {
     UNUSED(scn);
     return common::OB_SUCCESS;

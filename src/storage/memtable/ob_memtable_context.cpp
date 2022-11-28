@@ -231,7 +231,7 @@ void ObMemtableCtx::set_replay()
   is_master_ = false;
 }
 
-palf::SCN ObMemtableCtx::get_tx_end_scn() const
+SCN ObMemtableCtx::get_tx_end_scn() const
 {
   return ctx_->get_tx_end_log_ts();
 }
@@ -314,8 +314,8 @@ void ObMemtableCtx::on_wlock_retry(const ObMemtableKey& key, const transaction::
 }
 
 void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key,
-                                 const palf::SCN snapshot_version,
-                                 const palf::SCN max_trans_version,
+                                 const SCN snapshot_version,
+                                 const SCN max_trans_version,
                                  const transaction::ObTransID &conflict_tx_id)
 {
   mtstat_.on_tsc_retry();
@@ -417,7 +417,7 @@ int ObMemtableCtx::trans_begin()
   return ret;
 }
 
-int ObMemtableCtx::replay_begin(const palf::SCN scn)
+int ObMemtableCtx::replay_begin(const SCN scn)
 {
   ObByteLockGuard guard(lock_);
 
@@ -427,7 +427,7 @@ int ObMemtableCtx::replay_begin(const palf::SCN scn)
 }
 
 int ObMemtableCtx::replay_end(const bool is_replay_succ,
-                              const palf::SCN scn)
+                              const SCN scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
@@ -441,7 +441,7 @@ int ObMemtableCtx::replay_end(const bool is_replay_succ,
   return ret;
 }
 
-int ObMemtableCtx::rollback_redo_callbacks(const palf::SCN scn)
+int ObMemtableCtx::rollback_redo_callbacks(const SCN scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
@@ -453,10 +453,15 @@ int ObMemtableCtx::rollback_redo_callbacks(const palf::SCN scn)
 
 int ObMemtableCtx::trans_end(
     const bool commit,
-    const palf::SCN trans_version,
-    const palf::SCN final_scn)
+    const SCN trans_version,
+    const SCN final_scn)
 {
   int ret = OB_SUCCESS;
+
+  if (commit && get_trans_version().is_max()) {
+    TRANS_LOG(ERROR, "unexpected prepare version", K(*this));
+    // no retcode
+  }
 
   ret = do_trans_end(commit,
                      trans_version,
@@ -483,8 +488,8 @@ int ObMemtableCtx::elr_trans_preparing()
 
 int ObMemtableCtx::do_trans_end(
     const bool commit,
-    const palf::SCN trans_version,
-    const palf::SCN final_scn,
+    const SCN trans_version,
+    const SCN final_scn,
     const int end_code)
 {
   int ret = OB_SUCCESS;
@@ -528,7 +533,7 @@ int ObMemtableCtx::trans_kill()
 {
   int ret = OB_SUCCESS;
   bool commit = false;
-  ret = do_trans_end(commit, palf::SCN::max_scn(), palf::SCN::max_scn(), OB_TRANS_KILLED);
+  ret = do_trans_end(commit, SCN::max_scn(), SCN::max_scn(), OB_TRANS_KILLED);
   return ret;
 }
 
@@ -551,8 +556,8 @@ int ObMemtableCtx::trans_replay_begin()
 }
 
 int ObMemtableCtx::trans_replay_end(const bool commit,
-                                    const palf::SCN trans_version,
-                                    const palf::SCN final_scn,
+                                    const SCN trans_version,
+                                    const SCN final_scn,
                                     const uint64_t log_cluster_version,
                                     const uint64_t checksum)
 {
@@ -662,7 +667,7 @@ int ObMemtableCtx::log_submitted(const ObRedoLogSubmitHelper &helper)
   return log_gen_.log_submitted(helper.callbacks_);
 }
 
-int ObMemtableCtx::sync_log_succ(const palf::SCN scn, const ObCallbackScope &callbacks)
+int ObMemtableCtx::sync_log_succ(const SCN scn, const ObCallbackScope &callbacks)
 {
   int ret = OB_SUCCESS;
 
@@ -671,7 +676,10 @@ int ObMemtableCtx::sync_log_succ(const palf::SCN scn, const ObCallbackScope &cal
       TRANS_LOG(WARN, "sync log failed", K(ret));
     }
   } else {
-    TRANS_LOG(INFO, "No memtable callbacks because of trans_end", K(end_code_), KPC(ctx_));
+    if (!callbacks.is_empty()) {
+      TRANS_LOG(INFO, "No memtable callbacks because of trans_end", K(end_code_), K(scn),
+                KPC(ctx_));
+    }
   }
 
   return ret;
@@ -685,7 +693,9 @@ void ObMemtableCtx::sync_log_fail(const ObCallbackScope &callbacks)
   if (is_partial_rollbacked_() || OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
     log_gen_.sync_log_fail(callbacks);
   } else {
-    TRANS_LOG(INFO, "No memtable callbacks because of trans_end", K(end_code_), KPC(ctx_));
+    if (!callbacks.is_empty()) {
+      TRANS_LOG(INFO, "No memtable callbacks because of trans_end", K(end_code_), KPC(ctx_));
+    }
   }
   return;
 }
@@ -997,9 +1007,9 @@ int ObMemtableCtx::reuse_log_generator_()
   return ret;
 }
 
-int ObMemtableCtx::calc_checksum_before_scn(const palf::SCN scn,
+int ObMemtableCtx::calc_checksum_before_scn(const SCN scn,
                                             uint64_t &checksum,
-                                            palf::SCN &checksum_scn)
+                                            SCN &checksum_scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
@@ -1012,7 +1022,7 @@ int ObMemtableCtx::calc_checksum_before_scn(const palf::SCN scn,
 }
 
 void ObMemtableCtx::update_checksum(const uint64_t checksum,
-                                    const palf::SCN checksum_scn)
+                                    const SCN checksum_scn)
 {
   ObByteLockGuard guard(lock_);
 
@@ -1081,7 +1091,7 @@ int ObMemtableCtx::recover_from_table_lock_durable_info(const ObTableLockInfo &t
   return ret;
 }
 
-int ObMemtableCtx::check_lock_need_replay(const palf::SCN &scn,
+int ObMemtableCtx::check_lock_need_replay(const SCN &scn,
                                           const tablelock::ObTableLockOp &lock_op,
                                           bool &need_replay)
 {
@@ -1189,7 +1199,7 @@ int ObMemtableCtx::add_lock_record(const tablelock::ObTableLockOp &lock_op)
 
 int ObMemtableCtx::replay_add_lock_record(
     const tablelock::ObTableLockOp &lock_op,
-    const palf::SCN &scn)
+    const SCN &scn)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = true;
@@ -1228,14 +1238,14 @@ void ObMemtableCtx::remove_lock_record(ObMemCtxLockOpLinkNode *lock_op)
   lock_mem_ctx_.remove_lock_record(lock_op);
 }
 
-void ObMemtableCtx::set_log_synced(ObMemCtxLockOpLinkNode *lock_op, const palf::SCN &scn)
+void ObMemtableCtx::set_log_synced(ObMemCtxLockOpLinkNode *lock_op, const SCN &scn)
 {
   lock_mem_ctx_.set_log_synced(lock_op, scn);
 }
 
 int ObMemtableCtx::clear_table_lock_(const bool is_commit,
-                                     const palf::SCN &commit_version,
-                                     const palf::SCN &commit_scn)
+                                     const SCN &commit_version,
+                                     const SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   ObLockMemtable *memtable = nullptr;
@@ -1300,7 +1310,7 @@ int ObMemtableCtx::register_multi_source_data_if_need_(
 }
 
 int ObMemtableCtx::replay_lock(const tablelock::ObTableLockOp &lock_op,
-                               const palf::SCN &scn)
+                               const SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObLockMemtable *memtable = nullptr;

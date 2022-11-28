@@ -235,7 +235,7 @@ void ObTxLSLogWriter::destroy()
   destroy_cbs_(free_cbs_);
 }
 
-int ObTxLSLogWriter::submit_start_working_log(const int64_t &leader_epoch, palf::SCN &log_ts)
+int ObTxLSLogWriter::submit_start_working_log(const int64_t &leader_epoch, SCN &log_ts)
 {
   int ret = OB_SUCCESS;
 

@@ -1021,8 +1021,10 @@ int ObTransformJoinElimination::eliminate_left_outer_join(ObDMLStmt *stmt,
       if (OB_UNLIKELY(semi_infos.at(i)->left_table_ids_.empty())) {
         if (OB_ISNULL(root_table)) {
           // do nothing
-        } else if (OB_FAIL(semi_infos.at(i)->left_table_ids_.push_back(root_table->table_id_))) {
-          LOG_WARN("failed to add semi-info", K(ret));
+        } else if (root_table->is_joined_table()) {
+          ret = append(semi_infos.at(i)->left_table_ids_, static_cast<JoinedTable *>(root_table)->single_table_ids_);
+        } else {
+          ret = semi_infos.at(i)->left_table_ids_.push_back(root_table->table_id_);
         }
       }
     }

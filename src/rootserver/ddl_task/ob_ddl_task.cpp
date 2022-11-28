@@ -320,6 +320,8 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
       // task failed marked by user
       real_new_status = FAIL;
       ret_code_ = OB_CANCELED;
+    } else if (table_task_status == SUCCESS && old_status != table_task_status) {
+      real_new_status = SUCCESS;
     } else if (old_status == new_status) {
       // do nothing.
     } else if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(
@@ -519,7 +521,7 @@ int ObDDLTask::batch_release_snapshot(
   bool need_commit = false;
   ObMySQLTransaction trans;
   ObRootService *root_service = GCTX.root_service_;
-  palf::SCN snapshot_scn;
+  SCN snapshot_scn;
   if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
@@ -842,7 +844,7 @@ int ObDDLWaitTransEndCtx::get_snapshot(int64_t &snapshot_version)
   ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
   ObSimpleFrozenStatus frozen_status;
   const int64_t timeout = 10 * 1000 * 1000;//  10s
-  palf::SCN curr_ts;
+  SCN curr_ts;
   bool is_external_consistent = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -881,7 +883,7 @@ int ObDDLWaitTransEndCtx::get_snapshot(int64_t &snapshot_version)
         int tmp_ret = OB_SUCCESS;
         snapshot_version = max(max_snapshot, curr_ts.get_val_for_tx() - INDEX_SNAPSHOT_VERSION_DIFF);
         if (OB_SUCCESS != (tmp_ret = freeze_info_proxy.get_freeze_info(
-            root_service->get_sql_proxy(), palf::SCN::min_scn(), frozen_status))) {
+            root_service->get_sql_proxy(), SCN::min_scn(), frozen_status))) {
           LOG_WARN("get freeze info failed", K(ret));
         } else {
           const int64_t frozen_scn_val = frozen_status.frozen_scn_.get_val_for_tx();
@@ -1537,7 +1539,7 @@ int ObDDLTaskRecordOperator::fill_task_record(
     EXTRACT_VARCHAR_FIELD_MYSQL(*result_row, "message_unhex", task_message);
     EXTRACT_VARCHAR_FIELD_MYSQL(*result_row, "ddl_stmt_str_unhex", ddl_stmt_str);
     if (OB_SUCC(ret)) {
-      palf::SCN check_snapshot_version;
+      SCN check_snapshot_version;
       if (OB_FAIL(check_snapshot_version.convert_for_tx(task_record.snapshot_version_))) {
         LOG_WARN("convert for inner table field failed", K(ret), K(task_record.snapshot_version_));
       } else if (!check_snapshot_version.is_valid()) {

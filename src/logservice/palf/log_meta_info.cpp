@@ -20,6 +20,7 @@ namespace oceanbase
 namespace palf
 {
 using namespace common;
+using namespace share;
 
 LogVotedFor::LogVotedFor()
 {

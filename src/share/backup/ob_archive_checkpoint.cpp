@@ -39,14 +39,14 @@ void ObDestRoundCheckpointer::Counter::reset()
   interrupted_cnt_ = 0;
   doing_cnt_ = 0;
   stopped_cnt_ = 0;
-  max_scn_ = palf::SCN::min_scn();
-  checkpoint_scn_ = palf::SCN::max_scn();
+  max_scn_ = SCN::min_scn();
+  checkpoint_scn_ = SCN::max_scn();
   max_active_piece_id_ = INT64_MAX;
 }
 
 
 int ObDestRoundCheckpointer::init(ObArchiveRoundHandler *round_handler, const PieceGeneratedCb &piece_generated_cb, 
-    const RoundCheckpointCb &round_checkpoint_cb, const palf::SCN &max_checkpoint_scn)
+    const RoundCheckpointCb &round_checkpoint_cb, const SCN &max_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -55,7 +55,7 @@ int ObDestRoundCheckpointer::init(ObArchiveRoundHandler *round_handler, const Pi
   } else if (OB_ISNULL(round_handler)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("round_handler is null.", K(ret));
-  } else if (palf::SCN::min_scn() >= max_checkpoint_scn) {
+  } else if (SCN::min_scn() >= max_checkpoint_scn) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid max_checkpoint_scn.", K(ret), K(max_checkpoint_scn));
   } else {
@@ -165,7 +165,7 @@ int ObDestRoundCheckpointer::gen_new_round_info_(const ObTenantArchiveRoundAttr 
   int ret = OB_SUCCESS;
   // Current existing log stream count.
   int64_t actual_count = counter.ls_count_ - counter.deleted_ls_count_;
-  palf::SCN next_checkpoint_scn = palf::SCN::min_scn();
+  SCN next_checkpoint_scn = SCN::min_scn();
   need_checkpoint = true;
   if (OB_FAIL(new_round_info.deep_copy_from(old_round_info))) {
     LOG_WARN("failed to deep copy round info", K(ret), K(old_round_info), K(counter));
@@ -329,7 +329,7 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
 
   // stat data amount and checkpoint ts for current piece.
   const ObArray<ObLSDestRoundSummary> &ls_round_list = summary.ls_round_list_;
-  piece.piece_info_.max_scn_ = palf::SCN::min_scn();
+  piece.piece_info_.max_scn_ = SCN::min_scn();
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_round_list.count(); i++) {
     const ObLSDestRoundSummary &ls_round = ls_round_list.at(i);
     // search the piece

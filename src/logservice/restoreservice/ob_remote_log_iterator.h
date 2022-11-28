@@ -22,7 +22,7 @@
 #include "ob_remote_log_source.h"              // ObRemoteLogParent
 #include "logservice/palf/log_group_entry.h"   // LogGroupEntry
 #include "logservice/palf/lsn.h"               // LSN
-#include "logservice/palf/scn.h"               // SCN
+#include "share/scn.h"               // SCN
 #include "logservice/palf/log_iterator_storage.h" // MemoryStorage
 #include "ob_remote_data_generator.h"          // RemoteDataBuffer
 
@@ -67,7 +67,7 @@ public:
   //            iteraotr should be inited again to follow this change
   int init(const uint64_t tenant_id,
       const ObLSID &id,
-      const palf::SCN &pre_scn,
+      const share::SCN &pre_scn,
       const LSN &start_lsn,
       const LSN &end_lsn);
     // = [](share::ObBackupDest &dest) -> int { return OB_NOT_SUPPORTED; });
@@ -79,17 +79,17 @@ public:
   // @param[out] entry 迭代的LogGroupEntry
   // @param[out] lsn LogGroupEntry在日志流起始offset
   int next(LogGroupEntry &entry, LSN &lsn, char *&buf, int64_t &buf_size);
-  int get_cur_lsn_scn(LSN &lsn, palf::SCN &scn) const;
+  int get_cur_lsn_scn(LSN &lsn, share::SCN &scn) const;
 
   TO_STRING_KV(K_(inited), K_(tenant_id), K_(id), K_(start_lsn), K_(cur_lsn), K_(end_lsn), K_(gen));
 
 private:
-  int build_data_generator_(const palf::SCN &pre_scn,
+  int build_data_generator_(const share::SCN &pre_scn,
       ObRemoteLogParent *source,
       const std::function<int(share::ObBackupDest &dest)> &refresh_storage_info_func);
   int build_service_data_generator_(ObRemoteSerivceParent *source);
-  int build_dest_data_generator_(const palf::SCN &pre_scn, ObRemoteRawPathParent *source);
-  int build_location_data_generator_(const palf::SCN &pre_scn,
+  int build_dest_data_generator_(const share::SCN &pre_scn, ObRemoteRawPathParent *source);
+  int build_location_data_generator_(const share::SCN &pre_scn,
       ObRemoteLocationParent *source,
       const std::function<int(share::ObBackupDest &dest)> &refresh_storage_info_func);
   int next_entry_(LogGroupEntry &entry, LSN &lsn, char *&buf, int64_t &buf_size);
@@ -105,7 +105,7 @@ private:
   ObLSID id_;
   LSN start_lsn_;
   LSN cur_lsn_;            // 迭代最新一条日志所对应终点LSN
-  palf::SCN cur_scn_;     // 迭代最新一条日志scn
+  share::SCN cur_scn_;     // 迭代最新一条日志scn
   LSN end_lsn_;
   ObRemoteSourceGuard source_guard_;
   RemoteDataBuffer data_buffer_;

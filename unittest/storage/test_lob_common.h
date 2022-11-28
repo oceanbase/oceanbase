@@ -77,16 +77,16 @@ int TestLobCommon::create_data_tablet(
   } else {
     transaction::ObMulSourceDataNotifyArg trans_flags;
     trans_flags.tx_id_ = 123;
-    trans_flags.scn_ = palf::SCN::invalid_scn();
+    trans_flags.scn_ = share::SCN::invalid_scn();
     trans_flags.for_replay_ = false;
 
     ObLS *ls = ls_handle.get_ls();
     if (OB_FAIL(ls->get_tablet_svr()->on_prepare_create_tablets(arg, trans_flags))) {
       STORAGE_LOG(WARN, "failed to prepare create tablets", K(ret), K(arg));
-    } else if (FALSE_IT(trans_flags.scn_ = palf::SCN::minus(palf::SCN::max_scn(), 100))) {
+    } else if (FALSE_IT(trans_flags.scn_ = share::SCN::minus(share::SCN::max_scn(), 100))) {
     } else if (OB_FAIL(ls->get_tablet_svr()->on_redo_create_tablets(arg, trans_flags))) {
       STORAGE_LOG(WARN, "failed to redo create tablets", K(ret), K(arg));
-    } else if (FALSE_IT(trans_flags.scn_ = palf::SCN::plus(trans_flags.scn_, 1))) {
+    } else if (FALSE_IT(trans_flags.scn_ = share::SCN::plus(trans_flags.scn_, 1))) {
     } else if (OB_FAIL(ls->get_tablet_svr()->on_commit_create_tablets(arg, trans_flags))) {
       STORAGE_LOG(WARN, "failed to commit create tablets", K(ret), K(arg));
     }
@@ -332,7 +332,7 @@ int TestLobCommon::build_lob_tablet_arg(
       lib::get_compat_mode(), false/*is_create_bind_hidden_tablets*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, palf::SCN::min_scn()))) {
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, share::SCN::min_scn()))) {
     STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     STORAGE_LOG(WARN, "failed to push back table schema", K(ret), K(table_schema));

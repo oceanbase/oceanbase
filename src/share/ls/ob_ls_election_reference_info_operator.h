@@ -36,12 +36,9 @@ namespace sqlclient
 class ObMySQLResult;
 }
 }
-namespace palf
-{
-class SCN;
-}
 namespace share
 {
+class SCN;
 /*
  * description: operation of __all_ls_election_reference_info
  * insert into __all_ls_election_reference_info while create new ls
@@ -60,7 +57,7 @@ public:
    * @param[in] create_ls_scn: ls's create scn
    * @param[in] trans:*/
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
-                            const palf::SCN &create_ls_scn,
+                            const SCN &create_ls_scn,
                             const common::ObString &zone_priority,
                             ObMySQLTransaction &trans) override final;
   /*
@@ -82,7 +79,7 @@ public:
   virtual int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
-                      const palf::SCN &drop_scn,
+                      const SCN &drop_scn,
                       ObMySQLTransaction &trans) override final;
   /*
    * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference 

@@ -217,7 +217,7 @@ int ObTxTable::prepare_for_safe_destroy()
   return ret;
 }
 
-int ObTxTable::create_tablet(const lib::Worker::CompatMode compat_mode, const palf::SCN &create_scn)
+int ObTxTable::create_tablet(const lib::Worker::CompatMode compat_mode, const SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -341,7 +341,7 @@ int ObTxTable::gen_create_tablet_arg_(
                                              false/*is_create_bind_hidden_tablets*/))) {
     LOG_WARN("create tablet info init failed", K(ret), K(tablet_ids), K(tablet_id));
   // create ObBatchCreateTabletArg
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, palf::SCN::base_scn()))) {
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, SCN::base_scn()))) {
     LOG_WARN("ObBatchCreateTabletArg init create tablet failed", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     LOG_WARN("add table schema failed", K(ret), K(table_schema));
@@ -372,13 +372,13 @@ int ObTxTable::create_ctx_tablet_(
     const uint64_t tenant_id,
     const ObLSID ls_id,
     const lib::Worker::CompatMode compat_mode,
-    const palf::SCN &create_scn)
+    const SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   obrpc::ObBatchCreateTabletArg arg;
   const bool no_need_write_clog = true;
   share::schema::ObTableSchema table_schema;
-  palf::SCN tmp_scn;
+  SCN tmp_scn;
 
   if (OB_FAIL(get_ctx_table_schema_(tenant_id,
                                     table_schema))) {
@@ -503,7 +503,7 @@ int ObTxTable::create_data_tablet_(
     const uint64_t tenant_id,
     const ObLSID ls_id,
     const lib::Worker::CompatMode compat_mode,
-    const palf::SCN &create_scn)
+    const SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   obrpc::ObBatchCreateTabletArg arg;
@@ -999,7 +999,7 @@ int ObTxTable::get_recycle_scn(SCN &recycle_scn)
   return ret;
 }
 
-int ObTxTable::get_upper_trans_version_before_given_scn(const palf::SCN sstable_end_scn, palf::SCN &upper_trans_version)
+int ObTxTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn, SCN &upper_trans_version)
 {
   return tx_data_table_.get_upper_trans_version_before_given_scn(sstable_end_scn, upper_trans_version);
 }

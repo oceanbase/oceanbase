@@ -27,14 +27,10 @@
 #include "share/restore/ob_ls_restore_status.h"
 #include "storage/tx/ob_id_service.h"
 #include "storage/ls/ob_ls_saved_info.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
-namespace palf
-{
-class SCN;
-}
 namespace storage
 {
 
@@ -46,10 +42,10 @@ public:
   ObLSMeta(const ObLSMeta &ls_meta);
   ~ObLSMeta() {}
   ObLSMeta &operator=(const ObLSMeta &other);
-  palf::SCN get_clog_checkpoint_scn() const;
+  share::SCN get_clog_checkpoint_scn() const;
   palf::LSN &get_clog_base_lsn();
   int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
-                          const palf::SCN &clog_checkpoint_scn,
+                          const share::SCN &clog_checkpoint_scn,
                           const bool write_slog = true);
   void reset();
   bool is_valid() const;
@@ -60,13 +56,13 @@ public:
   int get_migration_status (ObMigrationStatus &migration_status) const;
   int set_gc_state(const logservice::LSGCState &gc_state);
   int get_gc_state(logservice::LSGCState &gc_state);
-  int set_offline_scn(const palf::SCN &offline_scn);
-  int get_offline_scn(palf::SCN &offline_scn);
+  int set_offline_scn(const share::SCN &offline_scn);
+  int get_offline_scn(share::SCN &offline_scn);
 
   int set_restore_status(const share::ObLSRestoreStatus &restore_status);
   int get_restore_status(share::ObLSRestoreStatus &restore_status) const;
-  int update_ls_replayable_point(const palf::SCN &replayable_point);
-  int get_ls_replayable_point(palf::SCN &replayable_point);
+  int update_ls_replayable_point(const share::SCN &replayable_point);
+  int get_ls_replayable_point(share::SCN &replayable_point);
 
   //for ha batch update ls meta element
   int update_ls_meta(
@@ -75,11 +71,11 @@ public:
   //for ha rebuild update ls meta
   int set_ls_rebuild();
   int check_valid_for_backup();
-  palf::SCN get_tablet_change_checkpoint_scn() const;
-  int set_tablet_change_checkpoint_scn(const palf::SCN &tablet_change_checkpoint_scn);
+  share::SCN get_tablet_change_checkpoint_scn() const;
+  int set_tablet_change_checkpoint_scn(const share::SCN &tablet_change_checkpoint_scn);
   int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,
-                     const palf::SCN &latest_scn,
+                     const share::SCN &latest_scn,
                      const bool write_slog);
   int update_id_service()
   {
@@ -95,7 +91,7 @@ public:
       const ObReplicaType &replica_type,
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &restore_status,
-      const palf::SCN &create_scn);
+      const share::SCN &create_scn);
   class ObSpinLockTimeGuard
   {
   public:
@@ -128,7 +124,7 @@ private:
   // clog_checkpoint_scn_, meaning:
   // 1. dump points of all modules have exceeded clog_checkpoint_scn_
   // 2. all clog entries which log_scn are smaller than clog_checkpoint_scn_ can be recycled
-  palf::SCN clog_checkpoint_scn_;
+  share::SCN clog_checkpoint_scn_;
   // clog_base_lsn_, meaning:
   // 1. all clog entries which lsn are smaller than clog_base_lsn_ have been recycled
   // 2. log_scn of log entry that clog_base_lsn_ points to is smaller than/equal to clog_checkpoint_scn_
@@ -137,11 +133,11 @@ private:
   int64_t rebuild_seq_;
   ObMigrationStatus migration_status_;
   logservice::LSGCState gc_state_;
-  palf::SCN offline_scn_;
+  share::SCN offline_scn_;
   share::ObLSRestoreStatus restore_status_;
-  palf::SCN replayable_point_;
+  share::SCN replayable_point_;
   //TODO(yaoying.yyy):modify this
-  palf::SCN tablet_change_checkpoint_scn_;
+  share::SCN tablet_change_checkpoint_scn_;
   transaction::ObAllIDMeta all_id_meta_;
   ObLSSavedInfo saved_info_;
 };

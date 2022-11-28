@@ -40,19 +40,38 @@ namespace storage
 {
 
 ObTabletBindingInfo::ObTabletBindingInfo()
+  : redefined_(false),
+    snapshot_version_(INT64_MAX),
+    schema_version_(INT64_MAX),
+    data_tablet_id_(),
+    hidden_tablet_ids_(),
+    lob_meta_tablet_id_(),
+    lob_piece_tablet_id_()
 {
-  reset();
 }
 
 void ObTabletBindingInfo::reset()
 {
   redefined_ = false;
-  snapshot_version_ = OB_INVALID_VERSION;
-  schema_version_ = OB_INVALID_VERSION;
+  snapshot_version_ = INT64_MAX;
+  schema_version_ = INT64_MAX;
   data_tablet_id_.reset();
   hidden_tablet_ids_.reset();
   lob_meta_tablet_id_.reset();
   lob_piece_tablet_id_.reset();
+}
+
+bool ObTabletBindingInfo::is_valid() const
+{
+  bool valid = true;
+
+  if (INT64_MAX == snapshot_version_) {
+    valid = false;
+  } else if (INT64_MAX == schema_version_) {
+    valid = false;
+  }
+
+  return valid;
 }
 
 int ObTabletBindingInfo::assign(const ObTabletBindingInfo &other)
@@ -449,7 +468,7 @@ int ObTabletBindingHelper::check_skip_tx_end(const ObTabletID &tablet_id, const 
   ObTabletTxMultiSourceDataUnit tx_data;
   ObTabletBindingHelper helper(ls, trans_flags);
 
-  if (palf::SCN::invalid_scn() == trans_flags.scn_) {
+  if (SCN::invalid_scn() == trans_flags.scn_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(ls));
   } else if (OB_FAIL(helper.get_tablet(tablet_id, tablet_handle))) {
@@ -609,9 +628,9 @@ int ObTabletBindingHelper::modify_tablet_binding_for_unbind(
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   const ObTransID &tx_id = trans_flags.tx_id_;
-  const palf::SCN scn = trans_flags.scn_;
+  const SCN scn = trans_flags.scn_;
   const bool for_replay = trans_flags.for_replay_;
-  const palf::SCN commit_version = trans_flags.trans_version_;
+  const SCN commit_version = trans_flags.trans_version_;
   if (OB_FAIL(get_ls(arg.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret));
   } else {
@@ -758,7 +777,7 @@ int ObTabletBindingHelper::get_tablet(const ObTabletID &tablet_id, ObTabletHandl
     ObTabletTxMultiSourceDataUnit tx_data;
     if (OB_FAIL(handle.get_obj()->get_tx_data(tx_data))) {
       LOG_WARN("failed to get tx data", K(ret), K(key));
-    } else if (palf::SCN::invalid_scn() != trans_flags_.scn_ && trans_flags_.scn_ <= tx_data.tx_scn_) {
+    } else if (SCN::invalid_scn() != trans_flags_.scn_ && trans_flags_.scn_ <= tx_data.tx_scn_) {
       ret = OB_NO_NEED_UPDATE;
       LOG_INFO("tablet frozen", K(ret), K(key), K(trans_flags_), K(tx_data));
     }
@@ -772,7 +791,7 @@ int ObTabletBindingHelper::replay_get_tablet(const ObTabletMapKey &key, ObTablet
 {
   // NOTICE: temporarily used, will be removed later!
   int ret = OB_SUCCESS;
-  const palf::SCN tablet_change_checkpoint_scn = ls_.get_tablet_change_checkpoint_scn();
+  const SCN tablet_change_checkpoint_scn = ls_.get_tablet_change_checkpoint_scn();
   ObTabletHandle tablet_handle;
 
   if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
@@ -870,7 +889,7 @@ int ObTabletBindingHelper::lock_tablet_binding(ObTabletHandle &handle, const ObM
 {
   int ret = OB_SUCCESS;
   const ObTransID &tx_id = trans_flags.tx_id_;
-  const palf::SCN scn = trans_flags.scn_;
+  const SCN scn = trans_flags.scn_;
   const bool for_replay = trans_flags.for_replay_;
   ObTablet *tablet = handle.get_obj();
   ObTabletTxMultiSourceDataUnit tx_data;
@@ -935,7 +954,7 @@ int ObTabletBindingHelper::set_scn(ObTabletHandle &handle, const ObMulSourceData
 {
   int ret = OB_SUCCESS;
   const ObTransID &tx_id = trans_flags.tx_id_;
-  const palf::SCN scn = trans_flags.scn_;
+  const SCN scn = trans_flags.scn_;
   const bool for_replay = trans_flags.for_replay_;
   ObTablet *tablet = handle.get_obj();
   ObTabletTxMultiSourceDataUnit data;
@@ -987,12 +1006,27 @@ int ObTabletBindingHelper::set_scn(const ObIArray<ObTabletID> &tablet_ids) const
   return ret;
 }
 
+int ObTabletBindingHelper::check_need_dec_cnt_for_abort(const ObTabletTxMultiSourceDataUnit &tx_data, bool &need_dec)
+{
+  int ret = OB_SUCCESS;
+  const int cnt = tx_data.get_unsync_cnt_for_multi_data();
+  need_dec = false;
+  if ((tx_data.is_tx_end() && cnt == 2) || (!tx_data.is_tx_end() && cnt == 1)) {
+    need_dec = true;
+  } else if ((tx_data.is_tx_end() && cnt == 1) || (!tx_data.is_tx_end() && cnt == 0)) {
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid cnt", K(ret), K(tx_data));
+  }
+  return ret;
+}
+
 /// for commit or abort, reentrant for replay
 int ObTabletBindingHelper::unlock_tablet_binding(ObTabletHandle &handle, const ObMulSourceDataNotifyArg &trans_flags)
 {
   int ret = OB_SUCCESS;
   const ObTransID &tx_id = trans_flags.tx_id_;
-  const palf::SCN scn = trans_flags.scn_;
+  const SCN scn = trans_flags.scn_;
   const bool for_replay = trans_flags.for_replay_;
   const bool for_commit = trans_flags.notify_type_ == NotifyType::ON_COMMIT;
   ObTablet *tablet = handle.get_obj();
@@ -1014,9 +1048,13 @@ int ObTabletBindingHelper::unlock_tablet_binding(ObTabletHandle &handle, const O
         const bool abort_without_redo = !for_commit && !for_replay && !trans_flags.is_redo_synced();
         tx_data.tx_id_ = ObTabletCommon::FINAL_TX_ID;
         tx_data.tx_scn_ = abort_without_redo ? old_scn : scn;
-        const SCN memtable_log_scn = (!scn.is_valid()) ? SCN::max_scn(): scn;
-        MemtableRefOp ref_op = (abort_without_redo ? MemtableRefOp::DEC_REF : MemtableRefOp::NONE);
-        if (OB_FAIL(tablet->set_tablet_final_status(tx_data, memtable_log_scn, for_replay, ref_op))) {
+        const SCN memtable_scn = (!scn.is_valid()) ? SCN::max_scn(): scn;
+        bool need_dec = false;
+        MemtableRefOp ref_op = MemtableRefOp::NONE;
+        if (OB_FAIL(check_need_dec_cnt_for_abort(tx_data, need_dec))) {
+          LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(scn), K(for_replay));
+        } else if (FALSE_IT(ref_op = (need_dec ? MemtableRefOp::DEC_REF : MemtableRefOp::NONE))) {
+        } else if (OB_FAIL(tablet->set_tablet_final_status(tx_data, memtable_scn, for_replay, ref_op))) {
           LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(scn), K(for_replay), K(ref_op));
         }
       }

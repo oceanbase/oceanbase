@@ -8,6 +8,7 @@
 
 connect (conn_admin_tz, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connection conn_admin_tz;
+set session ob_query_timeout = 20000000;
 select count(*) c1 from oceanbase.__all_tenant_time_zone;
 select count(*) c1 from oceanbase.__all_tenant_time_zone_name;
 select count(*) c1 from oceanbase.__all_tenant_time_zone_transition;

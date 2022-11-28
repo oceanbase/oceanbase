@@ -221,10 +221,10 @@ transaction::ObLSTxCtxMgr *ObTxCtxMemtable::get_ls_tx_ctx_mgr()
   return ls_ctx_mgr_guard_.get_ls_tx_ctx_mgr();
 }
 
-palf::SCN ObTxCtxMemtable::get_rec_scn()
+SCN ObTxCtxMemtable::get_rec_scn()
 {
   int ret = OB_SUCCESS;
-  palf::SCN rec_scn;
+  SCN rec_scn;
 
   if (OB_FAIL(get_ls_tx_ctx_mgr()->get_rec_scn(rec_scn))) {
     TRANS_LOG(WARN, "get rec scn failed", K(ret));
@@ -261,7 +261,7 @@ bool ObTxCtxMemtable::is_active_memtable() const
   return !ATOMIC_LOAD(&is_frozen_);
 }
 
-int ObTxCtxMemtable::flush(palf::SCN recycle_scn, bool need_freeze)
+int ObTxCtxMemtable::flush(SCN recycle_scn, bool need_freeze)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(flush_lock_);

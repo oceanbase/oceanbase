@@ -30,6 +30,7 @@ namespace archive
 {
 using namespace oceanbase::logservice;
 using namespace oceanbase::palf;
+using namespace oceanbase::share;
 StartArchiveHelper::StartArchiveHelper(const ObLSID &id,
     const uint64_t tenant_id,
     const ArchiveWorkStation &station,
@@ -239,7 +240,7 @@ int StartArchiveHelper::get_local_start_scn_(SCN &scn)
   if (OB_FAIL(persist_mgr_->get_ls_create_scn(id_, create_scn))) {
     ARCHIVE_LOG(WARN, "get ls create scn failed", K(ret), K(id_));
   } else {
-    SCN last_scn = palf::SCN::minus(min_scn_, 1);
+    SCN last_scn = SCN::minus(min_scn_, 1);
     scn = create_scn > last_scn ? create_scn : last_scn;
     if (!scn.is_valid()) {
       ret = OB_ERR_UNEXPECTED;

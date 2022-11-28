@@ -28,7 +28,7 @@ struct ObTxCommitCallback
 public:
   ObTxCommitCallback() { reset(); }
   ~ObTxCommitCallback() { reset(); }
-  int init(ObTransService* txs, const ObTransID tx_id, const int ret, const palf::SCN commit_version)
+  int init(ObTransService* txs, const ObTransID tx_id, const int ret, const share::SCN commit_version)
   {
     txs_ = txs;
     tx_id_ = tx_id;
@@ -52,7 +52,7 @@ public:
   ObTransService* txs_;
   ObTransID tx_id_;
   int ret_;
-  palf::SCN commit_version_;
+  share::SCN commit_version_;
 };
 
 class ObTxCommitCallbackTask : public ObTransTask

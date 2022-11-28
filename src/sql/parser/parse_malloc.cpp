@@ -267,27 +267,24 @@ char *parse_strdup_with_replace_multi_byte_char(const char *str, int *connection
 }
 
 bool check_real_escape(const ObCharsetInfo *cs, char *str, int64_t str_len,
-                       int64_t *last_well_formed_len)
+                       int64_t last_escape_check_pos)
 {
   bool is_real_escape = true;
-  if (NULL != cs && NULL != last_well_formed_len && cs->escape_with_backslash_is_dangerous) {
+  if (NULL != cs && cs->escape_with_backslash_is_dangerous) {
     char *cur_pos = str + str_len;
-    char *last_check_pos = str + *last_well_formed_len;
+    char *last_check_pos = str + last_escape_check_pos;
     int error = 0;
     size_t expected_well_formed_len = cur_pos - last_check_pos;
-    size_t real_well_formed_len = cs->cset->well_formed_len(
-                cs, last_check_pos, cur_pos, UINT64_MAX, &error);
-    if (error != 0) {
+    while (last_check_pos < cur_pos) {
+      size_t real_well_formed_len = cs->cset->well_formed_len(
+                  cs, last_check_pos, cur_pos, UINT64_MAX, &error);
+      last_check_pos += (real_well_formed_len + ((error != 0) ? 1 : 0));
+    }
+    if (error != 0) { //the final well-formed result
       *cur_pos = '\\';
-      if (real_well_formed_len == expected_well_formed_len - 1
-          && cs->cset->ismbchar(cs, cur_pos - 1, cur_pos + 1)) {
+      if (cs->cset->ismbchar(cs, cur_pos - 1, cur_pos + 1)) {
         is_real_escape = false;
-        *last_well_formed_len = str_len + 1;
-      } else {
-        *last_well_formed_len = str_len;
       }
-    } else {
-      *last_well_formed_len = str_len;
     }
   }
   return is_real_escape;

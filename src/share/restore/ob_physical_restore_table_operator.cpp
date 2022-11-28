@@ -459,8 +459,8 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_INT_VALUE(restore_start_ts, job);
     if (OB_SUCC(ret)) {
       if (name == "restore_scn") {
-        uint64_t current_value = palf::OB_INVALID_SCN_VAL;
-        palf::SCN restore_scn;
+        uint64_t current_value = share::OB_INVALID_SCN_VAL;
+        SCN restore_scn;
         if (OB_FAIL(retrieve_uint_value(result, current_value))) {
           LOG_WARN("fail to retrive int value", K(ret), "column_name", "restore_scn");
         } else if (OB_FAIL(restore_scn.convert_for_inner_table_field(current_value))) {

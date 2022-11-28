@@ -27,7 +27,7 @@
 #include "rootserver/ob_root_utils.h" // majority
 #include "logservice/palf/log_define.h" // INVALID_PROPOSAL_ID
 #include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
-#include "logservice/palf/scn.h" // SCN
+#include "share/scn.h" // SCN
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -240,7 +240,7 @@ const char* ObLSStatusOperator::ls_status_to_str(const ObLSStatus &status)
 }
 
 int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
-                                      const palf::SCN &current_tenant_scn,
+                                      const SCN &current_tenant_scn,
                                       const common::ObString &zone_priority,
                                       ObMySQLTransaction &trans)
 {
@@ -289,7 +289,7 @@ int ObLSStatusOperator::drop_ls(const uint64_t &tenant_id,
 int ObLSStatusOperator::set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
-                      const palf::SCN &drop_scn,
+                      const SCN &drop_scn,
                       ObMySQLTransaction &trans)
 {
   UNUSEDx(drop_scn);

@@ -167,7 +167,7 @@ public:
       const ObITable::TableKey &table_key,
       const ObCopyMacroRangeInfo &copy_macro_range_info,
       const int64_t data_version,
-      const palf::SCN backfill_tx_scn);
+      const share::SCN backfill_tx_scn);
   int get_next_macro_block(
       blocksstable::ObBufferReader &data,
       ObCopyMacroBlockHeader &copy_macro_block_header);

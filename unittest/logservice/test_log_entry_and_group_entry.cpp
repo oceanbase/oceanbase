@@ -19,7 +19,7 @@
 #define private public
 #include "logservice/palf/log_group_entry_header.h"
 #include "logservice/palf/log_entry.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #undef private
 
 #include <gtest/gtest.h>
@@ -50,7 +50,7 @@ TEST(TestLogGroupEntryHeader, test_log_group_entry_header)
   const char *data = buf + header_size;
   int64_t data_len = strlen(ptr);
   int64_t min_timestamp = 0;
-  SCN max_scn = SCN::min_scn();
+  share::SCN max_scn = share::SCN::min_scn();
   int64_t log_id = 1;
   LSN committed_lsn;
   committed_lsn.val_ = 1;
@@ -59,8 +59,8 @@ TEST(TestLogGroupEntryHeader, test_log_group_entry_header)
 
   // test LogEntry and LogEntryHeader
   LogEntry log_entry;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_entry_header.generate_header(NULL, 0, SCN::base_scn()));
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(data, data_len, SCN::base_scn()));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_entry_header.generate_header(NULL, 0, share::SCN::base_scn()));
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(data, data_len, share::SCN::base_scn()));
   log_entry.header_ = log_entry_header;
   log_entry.buf_ = data;
   int64_t tmp_pos = 0;

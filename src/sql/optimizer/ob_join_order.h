@@ -1456,9 +1456,7 @@ struct NullAwareAntiJoinInfo {
     int generate_base_table_paths(PathHelper &helper);
 
     int compute_base_table_property(uint64_t table_id,
-                                    uint64_t ref_table_id,
-                                    PathHelper &helper,
-                                    ObIArray<AccessPath *> &access_paths);
+                                    uint64_t ref_table_id);
 
     /**
      * @brief generate_subquery_path

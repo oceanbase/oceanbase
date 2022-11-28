@@ -24,7 +24,7 @@
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_base_header.h"
 #include "logservice/palf/lsn.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 //#include <cstdint>
 
 namespace oceanbase
@@ -241,7 +241,7 @@ public:
                     palf::block_id_t block_id,
                     palf::LSN lsn,
                     int64_t tx_id,
-                    palf::SCN scn,
+                    share::SCN scn,
                     bool &has_output);
   //------------
 
@@ -587,11 +587,11 @@ public:
   int init(const storage::ObTxData * const tx_data);
   void reset();
 
-  palf::SCN get_start_log_ts() const { return start_log_ts_; }
+  share::SCN get_start_log_ts() const { return start_log_ts_; }
 
   TO_STRING_KV(K(start_log_ts_));
 private:
-  palf::SCN start_log_ts_;
+  share::SCN start_log_ts_;
 };
 
 class ObTxCommitLogTempRef
@@ -621,7 +621,7 @@ public:
   {
     before_serialize();
   }
-  ObTxCommitLog(palf::SCN commit_version,
+  ObTxCommitLog(share::SCN commit_version,
                 uint64_t checksum,
                 share::ObLSArray &incremental_participants,
                 ObTxBufferNodeArray &multi_source_data,
@@ -637,7 +637,7 @@ public:
   }
   int init_tx_data_backup(const storage::ObTxData *const tx_data);
   const ObTxDataBackup &get_tx_data_backup() const { return tx_data_backup_; }
-  palf::SCN get_commit_version() const { return commit_version_; }
+  share::SCN get_commit_version() const { return commit_version_; }
   uint64_t get_checksum() const { return checksum_; }
   const share::ObLSArray &get_incremental_participants() const { return incremental_participants_; }
   const ObTxBufferNodeArray &get_multi_source_data() const { return multi_source_data_; }
@@ -664,7 +664,7 @@ private:
 
 private:
   ObTxSerCompatByte compat_bytes_;
-  palf::SCN commit_version_; // equal to INVALID_COMMIT_VERSION in Single LS Transaction
+  share::SCN commit_version_; // equal to INVALID_COMMIT_VERSION in Single LS Transaction
   uint64_t checksum_;
   share::ObLSArray &incremental_participants_;
   ObTxBufferNodeArray &multi_source_data_;

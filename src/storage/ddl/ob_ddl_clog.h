@@ -151,14 +151,14 @@ public:
   ObDDLPrepareLog();
   ~ObDDLPrepareLog() = default;
   int init(const ObITable::TableKey &table_key,
-           const palf::SCN &start_scn);
+           const share::SCN &start_scn);
   bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid(); }
   ObITable::TableKey get_table_key() const { return table_key_; }
-  palf::SCN get_start_scn() const { return start_scn_; }
+  share::SCN get_start_scn() const { return start_scn_; }
   TO_STRING_KV(K_(table_key), K_(start_scn));
 private:
   ObITable::TableKey table_key_;
-  palf::SCN start_scn_;
+  share::SCN start_scn_;
 };
 
 class ObDDLCommitLog final
@@ -168,17 +168,17 @@ public:
   ObDDLCommitLog();
   ~ObDDLCommitLog() = default;
   int init(const ObITable::TableKey &table_key,
-           const palf::SCN &start_scn,
-           const palf::SCN &prepare_scn);
+           const share::SCN &start_scn,
+           const share::SCN &prepare_scn);
   bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid() && prepare_scn_.is_valid(); }
   ObITable::TableKey get_table_key() const { return table_key_; }
-  palf::SCN get_start_scn() const { return start_scn_; }
-  palf::SCN get_prepare_scn() const { return prepare_scn_; }
+  share::SCN get_start_scn() const { return start_scn_; }
+  share::SCN get_prepare_scn() const { return prepare_scn_; }
   TO_STRING_KV(K_(table_key), K_(start_scn), K_(prepare_scn));
 private:
   ObITable::TableKey table_key_;
-  palf::SCN start_scn_;
-  palf::SCN prepare_scn_;
+  share::SCN start_scn_;
+  share::SCN prepare_scn_;
 };
 
 class ObTabletSchemaVersionChangeLog final

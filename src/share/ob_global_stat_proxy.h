@@ -17,7 +17,7 @@
 #include "lib/list/ob_dlist.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_core_table_proxy.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -50,12 +50,12 @@ public:
   virtual int set_init_value(const int64_t core_schema_version,
                              const int64_t baseline_schema_version,
                              const int64_t rootservice_epoch,
-                             const palf::SCN &snapshot_gc_scn,
+                             const SCN &snapshot_gc_scn,
                              const int64_t gc_schema_version);
 
   virtual int set_tenant_init_global_stat(const int64_t core_schema_version,
                                           const int64_t baseline_schema_version,
-                                          const palf::SCN &snapshot_gc_scn);
+                                          const SCN &snapshot_gc_scn);
 
   virtual int set_core_schema_version(const int64_t core_schema_version);
   virtual int set_baseline_schema_version(const int64_t baseline_schema_version);
@@ -69,14 +69,14 @@ public:
                                 int64_t &gc_schema_version);
   static int select_snapshot_gc_scn_for_update(common::ObISQLClient &sql_client, 
                                                const uint64_t tenant_id,
-                                               palf::SCN &snapshot_gc_scn);
+                                               SCN &snapshot_gc_scn);
   static int update_snapshot_gc_scn(common::ObISQLClient &sql_client, 
                                     const uint64_t tenant_id,
-                                    const palf::SCN &snapshot_gc_scn,
+                                    const SCN &snapshot_gc_scn,
                                     int64_t &affected_rows);
-  int get_snapshot_gc_scn(palf::SCN &snapshot_gc_scn);
+  int get_snapshot_gc_scn(share::SCN &snapshot_gc_scn);
   //interface of standby
-  int set_snapshot_gc_scn(const palf::SCN &snapshot_gc_scn);
+  int set_snapshot_gc_scn(const SCN &snapshot_gc_scn);
 private:
   int update(const ObGlobalStatItem::ItemList &list, const bool is_incremental = false);
   int get(ObGlobalStatItem::ItemList &list);

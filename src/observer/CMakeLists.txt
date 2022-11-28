@@ -35,7 +35,6 @@ ob_set_subtarget(ob_server common
   ob_srv_xlator_primary.cpp
   ob_srv_xlator_rootserver.cpp
   ob_srv_xlator_storage.cpp
-  ob_tablet_checksum_updater.cpp
   ob_tenant_duty_task.cpp
   ob_uniq_task_queue.cpp
 )

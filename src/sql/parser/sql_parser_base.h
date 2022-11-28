@@ -64,7 +64,7 @@ extern int64_t ob_strntoll(const char *ptr, size_t len, int base, char **end, in
 extern int64_t ob_strntoull(const char *ptr, size_t len, int base, char **end, int *err);
 extern int store_prentthese_info(int left, int right, ParseResult *result);
 extern bool check_real_escape(const struct ObCharsetInfo *cs, char *str, int64_t str_len,
-                              int64_t *last_well_formed_len);
+                              int64_t last_escape_check_pos);
 
 int add_alias_name(ParseNode *node, ParseResult *result, int end);
 
@@ -692,7 +692,7 @@ do {                                                                            
 
 #define CHECK_REAL_ESCAPE(is_real_escape)                                         \
   is_real_escape = check_real_escape(p->charset_info_, p->tmp_literal_,           \
-                                     yylval->node->str_len_, &(p->last_well_formed_len_))
+                                     yylval->node->str_len_, p->last_escape_check_pos_)
   /*
 do {                                                                              \
   if (NULL !=  p->charset_info_ && p->charset_info_->escape_with_backslash_is_dangerous) { \

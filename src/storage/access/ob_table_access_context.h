@@ -16,7 +16,7 @@
 #include "ob_table_access_param.h"
 #include "storage/lob/ob_lob_locator.h"
 #include "storage/tx/ob_defensive_check_mgr.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -141,7 +141,7 @@ public:
   int64_t out_cnt_;
   common::ObVersionRange trans_version_range_;
   const common::ObSEArray<int64_t, 4, common::ModulePageAllocator> *range_array_pos_;
-  palf::SCN merge_scn_;
+  share::SCN merge_scn_;
   ObLobLocatorHelper *lob_locator_helper_;
   ObStoreRowIterPool *iter_pool_;
   ObBlockRowStore *block_row_store_;

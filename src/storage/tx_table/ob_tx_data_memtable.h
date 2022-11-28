@@ -15,7 +15,7 @@
 
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/tx/ob_tx_data_define.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -239,7 +239,7 @@ public: /* derived from ObIMemtable */
                    const blocksstable::ObDatumRowkey &rowkey) override;
 
 public:  // checkpoint
-  palf::SCN get_rec_scn();
+  share::SCN get_rec_scn();
 
   // int freeze();
 
@@ -253,7 +253,7 @@ public:  // checkpoint
   bool ready_for_flush();
 
 public:  // getter && setter
-  palf::SCN get_min_start_scn() { return min_start_scn_.atomic_get(); }
+  share::SCN get_min_start_scn() { return min_start_scn_.atomic_get(); }
   int64_t get_tx_data_count() { return tx_data_map_->count(); }
   int64_t size() { return get_tx_data_count(); }
   int64_t get_inserted_count() { return inserted_cnt_; }
@@ -266,17 +266,17 @@ public:  // getter && setter
   const char* get_state_string();
   ObTxDataMemtableMgr *get_tx_data_memtable_mgr() { return memtable_mgr_; }
 
-  palf::SCN get_min_tx_scn() { return min_tx_scn_; }
-  palf::SCN get_max_tx_scn() { return max_tx_scn_; }
+  share::SCN get_min_tx_scn() { return min_tx_scn_; }
+  share::SCN get_max_tx_scn() { return max_tx_scn_; }
   int set_freezer(ObFreezer *handler);
-  void set_start_scn(const palf::SCN start_scn) {key_.scn_range_.start_scn_ = start_scn; }
+  void set_start_scn(const share::SCN start_scn) {key_.scn_range_.start_scn_ = start_scn; }
   void set_end_scn() { key_.scn_range_.end_scn_ = max_tx_scn_; }
   void set_state(const ObTxDataMemtable::State &state) { state_ = state; }
   void set_has_constructed_list(bool val) { has_constructed_list_ = val; }
   void reset_is_iterating() { ATOMIC_STORE(&is_iterating_, false); }
 
 
-  palf::SCN get_end_scn() { return key_.scn_range_.end_scn_;}
+  share::SCN get_end_scn() { return key_.scn_range_.end_scn_;}
 
 
 private:  // ObTxDataMemtable
@@ -308,13 +308,13 @@ private:  // ObTxDataMemtable
   bool has_constructed_list_;
 
   // the minimum scn of commit_version in this tx data memtable
-  palf::SCN min_tx_scn_;
+  share::SCN min_tx_scn_;
 
   // the maximum scn in this tx data memtable
-  palf::SCN max_tx_scn_;
+  share::SCN max_tx_scn_;
 
   // the minimum start scn in this tx data memtable
-  palf::SCN min_start_scn_;
+  share::SCN min_start_scn_;
 
   int64_t inserted_cnt_;
 
@@ -407,7 +407,7 @@ private:
   FILE *fd_;
 };
 
-OB_INLINE palf::SCN ObTxDataMemtable::get_rec_scn()
+OB_INLINE share::SCN ObTxDataMemtable::get_rec_scn()
 {
   // TODO : @gengli
   // rec_scn changes constantly. The rec_scn obtained by checkpoint mgr

@@ -91,7 +91,7 @@ public:
     return palf_handle_.seek(start_lsn, iter);
   }
 
-  int seek(const palf::SCN &scn,
+  int seek(const share::SCN &scn,
            PalfGroupBufferIterator &iter)
   {
     return palf_handle_.seek(scn, iter);

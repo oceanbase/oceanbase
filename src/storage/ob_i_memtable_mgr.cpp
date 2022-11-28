@@ -74,7 +74,7 @@ int ObIMemtableMgr::get_all_memtables(ObTableHdlArray &handles)
   return ret;
 }
 
-int ObIMemtableMgr::get_newest_clog_checkpoint_scn(palf::SCN &clog_checkpoint_scn)
+int ObIMemtableMgr::get_newest_clog_checkpoint_scn(SCN &clog_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -92,7 +92,7 @@ int ObIMemtableMgr::get_newest_clog_checkpoint_scn(palf::SCN &clog_checkpoint_sc
   return ret;
 }
 
-int ObIMemtableMgr::get_newest_snapshot_version(palf::SCN &snapshot_version)
+int ObIMemtableMgr::get_newest_snapshot_version(SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
 
@@ -109,7 +109,7 @@ int ObIMemtableMgr::get_newest_snapshot_version(palf::SCN &snapshot_version)
   return ret;
 }
 
-int ObIMemtableMgr::release_memtables(const palf::SCN &scn)
+int ObIMemtableMgr::release_memtables(const SCN &scn)
 {
   SpinWLockGuard lock_guard(lock_);
   int ret = OB_SUCCESS;

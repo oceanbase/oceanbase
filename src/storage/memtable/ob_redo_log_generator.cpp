@@ -22,6 +22,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace memtable
 {
 
@@ -201,7 +202,7 @@ int ObRedoLogGenerator::log_submitted(const ObCallbackScope &callbacks)
   return ret;
 }
 
-int ObRedoLogGenerator::sync_log_succ(const palf::SCN scn, const ObCallbackScope &callbacks)
+int ObRedoLogGenerator::sync_log_succ(const SCN scn, const ObCallbackScope &callbacks)
 {
   // no need to submit log
   // since the number of log callback is enough now

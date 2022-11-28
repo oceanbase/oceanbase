@@ -45,7 +45,7 @@ if (OB_USE_CLANG)
   if (ENABLE_SANITY)
     target_compile_options(oblib_base_base
       INTERFACE
-      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -load -Xclang ${CMAKE_CURRENT_SOURCE_DIR}/lib/alloc/libsanity.so>"
+      "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-Xclang -load -Xclang ${CMAKE_CURRENT_SOURCE_DIR}/lib/alloc/libsanity_${ARCHITECTURE}.so>"
       -fno-builtin-memset
       -fno-builtin-bzero
       -fno-builtin-memcpy

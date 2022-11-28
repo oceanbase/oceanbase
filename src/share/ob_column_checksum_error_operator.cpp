@@ -98,7 +98,7 @@ int ObColumnChecksumErrorOperator::insert_column_checksum_err_info_(
 int ObColumnChecksumErrorOperator::delete_column_checksum_err_info(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    const palf::SCN &min_frozen_scn)
+    const SCN &min_frozen_scn)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;

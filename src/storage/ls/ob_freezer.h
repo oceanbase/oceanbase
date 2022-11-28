@@ -107,8 +107,8 @@ class ObFrozenMemtableInfo
 public:
   ObFrozenMemtableInfo();
   ObFrozenMemtableInfo(const ObTabletID &tablet_id,
-                       const palf::SCN &start_scn_,
-                       const palf::SCN &end_scn,
+                       const share::SCN &start_scn_,
+                       const share::SCN &end_scn,
                        const int64_t write_ref_cnt,
                        const int64_t unsubmitted_cnt,
                        const int64_t unsynced_cnt,
@@ -117,8 +117,8 @@ public:
 
   void reset();
   void set(const ObTabletID &tablet_id,
-           const palf::SCN &start_scn,
-           const palf::SCN &end_scn,
+           const share::SCN &start_scn,
+           const share::SCN &end_scn,
            const int64_t write_ref_cnt,
            const int64_t unsubmitted_cnt,
            const int64_t unsynced_cnt,
@@ -127,8 +127,8 @@ public:
 
 public:
   ObTabletID tablet_id_;
-  palf::SCN start_scn_;
-  palf::SCN end_scn_;
+  share::SCN start_scn_;
+  share::SCN end_scn_;
   int64_t write_ref_cnt_;
   int64_t unsubmitted_cnt_;
   int64_t unsynced_cnt_;
@@ -151,8 +151,8 @@ public:
 
 public:
   int add_memtable_info(const ObTabletID &tablet_id,
-                        const palf::SCN &start_scn,
-                        const palf::SCN &end_scn,
+                        const share::SCN &start_scn,
+                        const share::SCN &end_scn,
                         const int64_t write_ref_cnt,
                         const int64_t unsubmitted_cnt,
                         const int64_t unsynced_cnt,
@@ -224,10 +224,10 @@ public:
   ObLSTabletService *get_ls_tablet_svr() { return ls_tablet_svr_; }
 
   /* freeze_snapshot_version */
-  palf::SCN get_freeze_snapshot_version() { return freeze_snapshot_version_; }
+  share::SCN get_freeze_snapshot_version() { return freeze_snapshot_version_; }
 
   /* max_decided_scn */
-  palf::SCN get_max_decided_scn() { return max_decided_scn_; }
+  share::SCN get_max_decided_scn() { return max_decided_scn_; }
 
   /* statistics*/
   void inc_empty_memtable_cnt();
@@ -237,15 +237,15 @@ public:
 
   /* others */
   // get consequent callbacked log_ts right boundary
-  virtual int get_max_consequent_callbacked_scn(palf::SCN &max_consequent_callbacked_scn);
+  virtual int get_max_consequent_callbacked_scn(share::SCN &max_consequent_callbacked_scn);
   // to set snapshot version when memtables meet ready_for_flush
-  int get_ls_weak_read_scn(palf::SCN &weak_read_scn);
-  int decide_max_decided_scn(palf::SCN &max_decided_scn);
+  int get_ls_weak_read_scn(share::SCN &weak_read_scn);
+  int decide_max_decided_scn(share::SCN &max_decided_scn);
   // to resolve concurrency problems about multi-version tablet
   int get_newest_clog_checkpoint_scn(const ObTabletID &tablet_id,
-                                    palf::SCN &clog_checkpoint_scn);
+                                    share::SCN &clog_checkpoint_scn);
   int get_newest_snapshot_version(const ObTabletID &tablet_id,
-                                  palf::SCN &snapshot_version);
+                                  share::SCN &snapshot_version);
   ObFreezerStat& get_stat() { return stat_; }
 
 private:
@@ -296,10 +296,10 @@ private:
   // weak read timestamp saved for memtable, which means the version before
   // which all transaction has been saved into the memtable and the memtables
   // before it.
-  palf::SCN freeze_snapshot_version_;
+  share::SCN freeze_snapshot_version_;
   // max_decided_scn saved for memtable when freeze happen, which means the
   // log ts before which will be smaller than the log ts in the latter memtables
-  palf::SCN max_decided_scn_;
+  share::SCN max_decided_scn_;
 
   ObLSWRSHandler *ls_wrs_handler_;
   ObLSTxService *ls_tx_svr_;

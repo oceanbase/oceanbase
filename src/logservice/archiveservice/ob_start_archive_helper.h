@@ -17,7 +17,7 @@
 #include "share/ob_ls_id.h"           // ObLSID
 #include "share/backup/ob_backup_struct.h"    // ObBackupPathString
 #include "logservice/palf/lsn.h"      // LSN
-#include "logservice/palf/scn.h"      // SCN
+#include "share/scn.h"      // SCN
 #include "ob_archive_define.h"        // ArchiveWorkStation
 #include "ob_archive_persist_mgr.h"   // ObArchivePersistMgr ObLSArchivePersistInfo
 
@@ -48,9 +48,9 @@ public:
   explicit StartArchiveHelper(const ObLSID &id,
       const uint64_t tenant_id,
       const ArchiveWorkStation &station,
-      const palf::SCN &min_scn,
+      const share::SCN &min_scn,
       const int64_t piece_interval,
-      const palf::SCN &genesis_scn,
+      const share::SCN &genesis_scn,
       const int64_t base_piece_id,
       ObArchivePersistMgr *persist_mgr);
 
@@ -66,8 +66,8 @@ public:
   const LSN &get_offset() const { return start_offset_; }
   int64_t get_file_id() const { return archive_file_id_; }
   int64_t get_file_offset() const { return archive_file_offset_; }
-  const palf::SCN &get_round_start_scn() const { return min_scn_; }
-  const palf::SCN &get_max_archived_scn() const { return max_archived_scn_; }
+  const share::SCN &get_round_start_scn() const { return min_scn_; }
+  const share::SCN &get_max_archived_scn() const { return max_archived_scn_; }
   const share::ObArchivePiece &get_piece() const { return piece_; }
   bool is_log_gap_exist() const { return log_gap_exist_; }
   TO_STRING_KV(K_(id),
@@ -90,22 +90,22 @@ private:
   int locate_round_start_archive_point_();
   int cal_archive_file_id_offset_(const LSN &lsn, const int64_t archive_file_id, const int64_t archive_file_offset);
   int get_local_base_lsn_(palf::LSN &lsn, bool &log_gap);
-  int get_local_start_scn_(palf::SCN &scn);
+  int get_local_start_scn_(share::SCN &scn);
 
 private:
   ObLSID id_;
   uint64_t tenant_id_;
   ArchiveWorkStation station_;
   bool log_gap_exist_;
-  palf::SCN min_scn_;
+  share::SCN min_scn_;
   int64_t piece_interval_;
-  palf::SCN genesis_scn_;
+  share::SCN genesis_scn_;
   int64_t base_piece_id_;
   LSN piece_min_lsn_;
   LSN start_offset_;
   int64_t archive_file_id_;
   int64_t archive_file_offset_;
-  palf::SCN max_archived_scn_;
+  share::SCN max_archived_scn_;
   share::ObArchivePiece piece_;
 
   ObArchivePersistMgr *persist_mgr_;

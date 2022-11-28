@@ -38,7 +38,7 @@ public:
   }
   virtual ~ObRLEDecoder() {}
 
-  OB_INLINE int init(const common::ObObjMeta &obj_meta,
+  OB_INLINE int init(
       const ObMicroBlockHeader &micro_block_header,
       const ObColumnHeader &column_header,
       const char *block_data);
@@ -134,12 +134,12 @@ private:
   ObDictDecoder dict_decoder_;
 };
 
-OB_INLINE int ObRLEDecoder::init(const common::ObObjMeta &obj_meta,
+OB_INLINE int ObRLEDecoder::init(
     const ObMicroBlockHeader &micro_block_header,
     const ObColumnHeader &column_header,
     const char *block_data)
 {
-  UNUSEDx(micro_block_header, column_header);
+  UNUSEDx(micro_block_header);
   // performance critical, don't check params
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(is_inited())) {
@@ -151,7 +151,7 @@ OB_INLINE int ObRLEDecoder::init(const common::ObObjMeta &obj_meta,
     const char *dict_meta_header = block_data + column_header.offset_
         + meta_header_->offset_;
 
-    if (OB_FAIL(dict_decoder_.init(obj_meta, dict_meta_header))) {
+    if (OB_FAIL(dict_decoder_.init(column_header.get_store_obj_type(), dict_meta_header))) {
       STORAGE_LOG(WARN, "failed to init dict decoder", K(ret), KP(dict_meta_header));
       meta_header_ = NULL;
     } else {

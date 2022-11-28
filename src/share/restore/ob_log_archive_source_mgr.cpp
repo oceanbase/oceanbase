@@ -40,7 +40,7 @@ int ObLogArchiveSourceMgr::init(const uint64_t tenant_id, ObISQLClient *proxy)
   return ret;
 }
 
-int ObLogArchiveSourceMgr::update_recovery_until_ts(const palf::SCN &recovery_until_scn)
+int ObLogArchiveSourceMgr::update_recovery_until_ts(const SCN &recovery_until_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -76,7 +76,7 @@ int ObLogArchiveSourceMgr::delete_source()
   return ret;
 }
 
-int ObLogArchiveSourceMgr::add_service_source(const palf::SCN &recovery_until_scn,
+int ObLogArchiveSourceMgr::add_service_source(const SCN &recovery_until_scn,
     const ObAddr &addr)
 {
   int ret = OB_SUCCESS;
@@ -92,7 +92,7 @@ int ObLogArchiveSourceMgr::add_service_source(const palf::SCN &recovery_until_sc
   return ret;
 }
 
-int ObLogArchiveSourceMgr::add_location_source(const palf::SCN &recovery_until_scn,
+int ObLogArchiveSourceMgr::add_location_source(const SCN &recovery_until_scn,
     const ObString &archive_dest)
 {
   int ret = OB_SUCCESS;
@@ -124,7 +124,7 @@ int ObLogArchiveSourceMgr::add_location_source(const palf::SCN &recovery_until_s
   return ret;
 }
 
-int ObLogArchiveSourceMgr::add_rawpath_source(const palf::SCN &recovery_until_scn, const DirArray &array)
+int ObLogArchiveSourceMgr::add_rawpath_source(const SCN &recovery_until_scn, const DirArray &array)
 {
   return OB_NOT_SUPPORTED;
 }

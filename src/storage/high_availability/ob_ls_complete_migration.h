@@ -188,11 +188,12 @@ private:
   int record_server_event_();
 
 private:
+  static const int64_t IS_REPLAY_DONE_THRESHOLD_US = 3L * 1000 * 1000L;
   bool is_inited_;
   ObLSHandle ls_handle_;
   ObLSCompleteMigrationCtx *ctx_;
-  palf::SCN log_sync_scn_;
-  palf::SCN max_minor_end_scn_;
+  share::SCN log_sync_scn_;
+  share::SCN max_minor_end_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObStartCompleteMigrationTask);
 };
 

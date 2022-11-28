@@ -189,17 +189,16 @@ bool init_dict_cmp_ref_funcs()
 
 bool dict_cmp_ref_funcs_inited = init_dict_cmp_ref_funcs();
 
-int ObDictDecoder::init(const ObObjMeta &obj_meta, const char *meta_header)
+int ObDictDecoder::init(const common::ObObjType &store_obj_type, const char *meta_header)
 {
-  UNUSEDx(obj_meta);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited())) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else {
-    store_class_ = get_store_class_map()[ob_obj_type_class(obj_meta.get_type())];
-    if (ObIntTC == ob_obj_type_class(obj_meta.get_type())) {
-      int64_t type_store_size = get_type_size_map()[obj_meta.get_type()];
+    store_class_ = get_store_class_map()[ob_obj_type_class(store_obj_type)];
+    if (ObIntTC == ob_obj_type_class(store_obj_type)) {
+      int64_t type_store_size = get_type_size_map()[store_obj_type];
       integer_mask_ = ~INTEGER_MASK_TABLE[type_store_size];
     } else {
       integer_mask_ = 0;
@@ -402,7 +401,8 @@ int ObDictDecoder::batch_decode(
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret));
   } else if (fast_decode_valid(ctx)) {
-    const ObObjTypeStoreClass store_class = get_store_class_map()[ctx.obj_meta_.get_type_class()];
+    const ObObjType store_obj_type = ctx.col_header_->get_store_obj_type();
+    const ObObjTypeStoreClass store_class = get_store_class_map()[ob_obj_type_class(store_obj_type)];
 
     const char *ref_data = reinterpret_cast<char *>(
         const_cast<ObDictMetaHeader *>(meta_header_)) + ctx.col_header_->length_;
@@ -410,9 +410,9 @@ int ObDictDecoder::batch_decode(
     if (meta_header_->is_fix_length_dict()) {
       // Only need store_len for UIntSC/IntSC
       const int64_t store_size = meta_header_->data_size_;
-      const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(ctx.obj_meta_.get_type());
+      const ObObjDatumMapType map_type = ObDatum::get_obj_datum_map_type(store_obj_type);
       bool read_as_signed_data = ObIntSC == store_class
-                                && store_size == get_type_size_map()[ctx.obj_meta_.get_type()];
+                                && store_size == get_type_size_map()[store_obj_type];
       const int64_t func_entry_store_size_idx = (store_class == ObIntSC || store_class == ObUIntSC)
                                               ? store_size : 0;
       dict_fix_batch_decode_func decode_func = dict_fix_batch_decode_funcs
@@ -423,7 +423,7 @@ int ObDictDecoder::batch_decode(
                       [get_store_class_tag_map()[store_class]];
       decode_func(ref_data, base_data, store_size, meta_header_->count_, row_ids, row_cap, datums);
       LOG_DEBUG("[batch_decode] Run fix dict fast batch decode",
-          K(ret), K(store_class), K(store_size), K(map_type), K(ctx.obj_meta_.get_type()),
+          K(ret), K(store_class), K(store_size), K(map_type), K(store_obj_type),
           K(read_as_signed_data), K(func_entry_store_size_idx));
     } else {
       dict_var_batch_decode_func decode_func = dict_var_batch_decode_funcs
@@ -456,7 +456,7 @@ int ObDictDecoder::batch_decode(
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(batch_decode_dict(
-        ctx.obj_meta_.get_type(),
+        ctx.col_header_->get_store_obj_type(),
         cell_datas,
         row_cap,
         ctx.col_header_->length_,
@@ -542,7 +542,8 @@ int ObDictDecoder::batch_decode_dict(
 bool ObDictDecoder::fast_decode_valid(const ObColumnDecoderCtx &ctx) const
 {
   bool valid = false;
-  const ObObjTypeStoreClass store_class = get_store_class_map()[ctx.obj_meta_.get_type_class()];
+  const ObObjTypeStoreClass store_class =
+      get_store_class_map()[ob_obj_type_class(ctx.col_header_->get_store_obj_type())];
   if (meta_header_->is_fix_length_dict()) {
     valid = !ctx.is_bit_packing()
           && meta_header_->row_ref_size_ <= 2

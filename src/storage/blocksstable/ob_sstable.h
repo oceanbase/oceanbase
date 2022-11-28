@@ -15,7 +15,7 @@
 
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "ob_datum_range.h"
 
 namespace oceanbase
@@ -121,7 +121,7 @@ public:
   {
     return meta_.basic_meta_.recycle_version_;
   }
-  palf::SCN get_filled_tx_scn() const
+  share::SCN get_filled_tx_scn() const
   {
     return meta_.basic_meta_.filled_tx_scn_;
   }

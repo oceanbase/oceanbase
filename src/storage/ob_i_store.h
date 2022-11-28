@@ -239,7 +239,7 @@ struct ObStoreRowLockState
 {
 public:
   ObStoreRowLockState()
-    : is_locked_(false), trans_version_(palf::SCN::min_scn()), lock_trans_id_(),
+    : is_locked_(false), trans_version_(share::SCN::min_scn()), lock_trans_id_(),
     lock_data_sequence_(0), is_delayed_cleanout_(false),
     mvcc_row_(NULL)
   {}
@@ -249,7 +249,7 @@ public:
                KP_(mvcc_row));
 
   bool is_locked_;
-  palf::SCN trans_version_;
+  share::SCN trans_version_;
   transaction::ObTransID lock_trans_id_;
   int64_t lock_data_sequence_;
   bool is_delayed_cleanout_;
@@ -420,11 +420,11 @@ struct ObStoreCtx
   int init_for_read(const share::ObLSID &ls_id,
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
-                    const palf::SCN &snapshot_version);
+                    const share::SCN &snapshot_version);
   int init_for_read(const storage::ObLSHandle &ls_handle,
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
-                    const palf::SCN &snapshot_version);
+                    const share::SCN &snapshot_version);
   void force_print_trace_log();
   TO_STRING_KV(KP(this),
                K_(ls_id),
@@ -442,7 +442,7 @@ struct ObStoreCtx
   int64_t table_version_;                          // used to update memtable's max_schema_version
   int64_t timeout_;
   memtable::ObMvccAccessCtx mvcc_acc_ctx_;         // all txn relative context
-  palf::SCN replay_log_scn_;                         // used in replay pass log_ts
+  share::SCN replay_log_scn_;                         // used in replay pass log_ts
 };
 
 

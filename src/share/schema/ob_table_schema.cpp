@@ -1852,8 +1852,7 @@ int ObTableSchema::alter_column(ObColumnSchemaV2 &column_schema, ObColumnCheckMo
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FALSE_IT(*src_schema = column_schema)) {
-    } else if (OB_FAIL(src_schema->get_err_ret())) {
+    } else if (OB_FAIL(src_schema->assign(column_schema))) {
       LOG_WARN("failed to assign src schema", K(ret), K(column_schema));
     }
   }
@@ -3826,11 +3825,6 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
            || (src_meta.is_varbinary() && dst_meta.is_blob())
            || (src_meta.is_text() && (dst_meta.is_text() || dst_meta.is_varchar()))
            || (src_meta.is_blob() && (dst_meta.is_blob() || dst_meta.is_varbinary())))) {
-          if (src_meta.is_integer_type() && dst_meta.is_integer_type()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("Type increment of integer type is not supported", K(ret), K(src_meta), K(dst_meta));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Type increment of integer type is");
-          }
           // online, do nothing
         } else {
           is_offline = true;
@@ -4276,10 +4270,10 @@ int ObTableSchema::check_column_can_be_altered_offline(
 
 int ObTableSchema::check_column_can_be_altered_online(
     const ObColumnSchemaV2 *src_schema,
-    ObColumnSchemaV2 *dst_schema)
+    ObColumnSchemaV2 *dst_schema) const
 {
   int ret = OB_SUCCESS;
-  ObColumnSchemaV2 *tmp_column = NULL;
+  const ObColumnSchemaV2 *tmp_column = NULL;
   if (OB_ISNULL(src_schema) || NULL == dst_schema) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The column schema is NULL", K(ret));
@@ -4294,8 +4288,23 @@ int ObTableSchema::check_column_can_be_altered_online(
     LOG_WARN("Only NORMAL table and INDEX table and SYSTEM table are allowed", K(ret));
   } else {
     LOG_DEBUG("check column schema can be altered", KPC(src_schema), KPC(dst_schema));
+    // Additional restriction for system table:
+    // 1. Can't alter column name
+    // 2. Can't alter column from "NULL" to "NOT NULL"
+    if (is_system_table(get_table_id())) {
+      if (0 != src_schema->get_column_name_str().compare(dst_schema->get_column_name_str())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter system table's column name is");
+        LOG_WARN("Alter system table's column name is not supported", KR(ret), K(src_schema), K(dst_schema));
+      } else if (src_schema->is_nullable() && !dst_schema->is_nullable()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter system table's column from `NULL` to `NOT NULL`");
+        LOG_WARN("Alter system table's column from `NULL` to `NOT NULL` is not supported", KR(ret), K(src_schema), K(dst_schema));
+      }
+    }
+
     bool is_oracle_mode = false;
-    if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
+    if (FAILEDx(check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("check if oracle compat mode failed", K(ret));
     } else if (is_oracle_mode
               && ob_is_number_tc(src_schema->get_data_type())

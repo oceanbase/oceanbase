@@ -22,7 +22,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/tablet/ob_tablet_info.h"
 #include "share/ob_column_checksum_error_operator.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -31,6 +31,7 @@ namespace common
 class ObISQLClient;
 class ObAddr;
 class ObTabletID;
+class ObMySQLTransaction;
 namespace sqlclient
 {
 class ObMySQLResult;
@@ -38,6 +39,7 @@ class ObMySQLResult;
 }
 namespace share
 {
+class ObTabletReplica;
 
 struct ObTabletReplicaReportColumnMeta
 {
@@ -92,7 +94,7 @@ public:
   common::ObTabletID tablet_id_;
   common::ObAddr server_;
   int64_t row_count_;
-  palf::SCN compaction_scn_;
+  SCN compaction_scn_;
   int64_t data_checksum_;
   ObTabletReplicaReportColumnMeta column_meta_;
 };
@@ -105,7 +107,7 @@ public:
       const uint64_t tenant_id,
       const ObTabletLSPair &start_pair,
       const int64_t batch_cnt,
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
   static int batch_get(
@@ -118,25 +120,20 @@ public:
       const common::ObSqlString &sql,
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
-  static int batch_insert(
+  static int batch_update_with_trans(
+      common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
-      const common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      common::ObISQLClient &sql_proxy);
-  static int batch_update(
+      const common::ObIArray<ObTabletReplicaChecksumItem> &item);
+  static int batch_remove_with_trans(
+      common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
-      const common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      common::ObISQLClient &sql_proxy);
-  static int batch_remove(
-      const uint64_t tenant_id,
-      const common::ObIArray<share::ObLSID> &ls_ids,
-      const common::ObIArray<common::ObTabletID> &tablet_ids,
-      common::ObISQLClient &sql_proxy);
+      const common::ObIArray<share::ObTabletReplica> &tablet_replicas);
 
   static int check_column_checksum(
       const uint64_t tenant_id,
       const schema::ObTableSchema &data_table_schema,
       const schema::ObTableSchema &index_table_schema,
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       common::ObMySQLProxy &sql_proxy);
 
   static int set_column_meta_with_hex_str(
@@ -154,10 +151,10 @@ public:
       common::ObString &column_meta_hex_str);
 
 private:
-  static int batch_insert_or_update_(
+  static int batch_insert_or_update_with_trans_(
       const uint64_t tenant_id,
       const common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      common::ObISQLClient &sql_proxy,
+      common::ObMySQLTransaction &trans,
       const bool is_update);
 
   static int inner_batch_insert_or_update_by_sql_(
@@ -167,6 +164,13 @@ private:
       const int64_t end_idx,
       common::ObISQLClient &sql_client,
       const bool is_update);
+
+  static int inner_batch_remove_by_sql_(
+      const uint64_t tenant_id,
+      const common::ObIArray<share::ObTabletReplica> &tablet_replicas,
+      const int64_t start_idx,
+      const int64_t end_idx,
+      common::ObMySQLTransaction &trans);
 
   static int inner_batch_get_by_sql_(
       const uint64_t tenant_id,
@@ -178,7 +182,7 @@ private:
       const uint64_t tenant_id,
       const ObTabletLSPair &start_pair,
       const int64_t batch_cnt,
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       common::ObSqlString &sql);
 
   static int construct_batch_get_sql_str_(
@@ -204,21 +208,21 @@ private:
       const uint64_t tenant_id,
       const schema::ObTableSchema &data_table_schema,
       const schema::ObTableSchema &index_table_schema,
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       common::ObMySQLProxy &sql_proxy);
 
   static int check_local_index_column_checksum(
       const uint64_t tenant_id,
       const schema::ObTableSchema &data_table_schema,
       const schema::ObTableSchema &index_table_schema,
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       common::ObMySQLProxy &sql_proxy);
 
   // get column checksum_sum from items and store result in map
   // KV of @column_ckm_sum_map is: <column_id, column_checksum_sum>
   static int get_column_checksum_sum_map_(
       const schema::ObTableSchema &table_schema,
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       common::hash::ObHashMap<int64_t, int64_t> &column_ckm_sum_map,
       const common::ObIArray<ObTabletReplicaChecksumItem> &items);
 
@@ -226,7 +230,7 @@ private:
   // KV of @column_ckm_map is: <column_id, column_checksum>
   static int get_column_checksum_map_(
       const schema::ObTableSchema &table_schema,
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       common::hash::ObHashMap<int64_t, int64_t> &column_ckm_map,
       const ObTabletReplicaChecksumItem &item);
 
@@ -240,7 +244,7 @@ private:
   static int find_checksum_item_by_id_(
       const common::ObTabletID &tablet_id,
       common::ObIArray<ObTabletReplicaChecksumItem> &items,
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       int64_t &idx);
 
   static int get_table_all_tablet_id_(
@@ -248,7 +252,7 @@ private:
       common::ObIArray<common::ObTabletID> &schema_tablet_ids);
 
   static int need_verify_checksum_(
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       bool &need_verify,
       common::ObIArray<common::ObTabletID> &schema_tablet_ids,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);

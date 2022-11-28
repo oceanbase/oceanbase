@@ -20,6 +20,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 using namespace memtable;
 using namespace storage;
 namespace transaction
@@ -113,7 +114,7 @@ void ObLockMemCtx::abort_table_lock_()
   }
 }
 
-int ObLockMemCtx::commit_table_lock_(const palf::SCN &commit_version, const palf::SCN &commit_scn)
+int ObLockMemCtx::commit_table_lock_(const SCN &commit_version, const SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   ObLockMemtable *memtable = nullptr;
@@ -188,8 +189,8 @@ int ObLockMemCtx::get_table_lock_store_info(ObTableLockInfo &table_lock_info)
 
 int ObLockMemCtx::clear_table_lock(
     const bool is_committed,
-    const palf::SCN &commit_version,
-    const palf::SCN &commit_scn)
+    const SCN &commit_version,
+    const SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   if (lock_list_.is_empty()) {
@@ -284,7 +285,7 @@ void ObLockMemCtx::remove_lock_record(
 
 void ObLockMemCtx::set_log_synced(
     ObMemCtxLockOpLinkNode *lock_op,
-    const palf::SCN &scn)
+    const SCN &scn)
 {
   if (OB_ISNULL(lock_op)) {
     LOG_WARN("invalid argument.", K(lock_op));
@@ -394,7 +395,7 @@ int ObLockMemCtx::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
 }
 
 int ObLockMemCtx::check_lock_need_replay(
-    const palf::SCN &scn,
+    const SCN &scn,
     const ObTableLockOp &lock_op,
     bool &need_replay)
 {

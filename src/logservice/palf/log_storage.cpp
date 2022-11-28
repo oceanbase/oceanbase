@@ -15,7 +15,7 @@
 #include "lib/ob_errno.h"            // OB_INVALID_ARGUMENT
 #include "share/rc/ob_tenant_base.h" // mtl_malloc
 #include "log_reader_utils.h"        // ReadBuf
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {

@@ -28,6 +28,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 using namespace transaction;
 namespace memtable
 {
@@ -74,14 +75,14 @@ void TableLockRedoDataNode::set(
   create_schema_version_ = lock_op.create_schema_version_;
 }
 
-void ObITransCallback::set_scn(const palf::SCN scn)
+void ObITransCallback::set_scn(const SCN scn)
 {
-  if (palf::SCN::max_scn() == scn_) {
+  if (SCN::max_scn() == scn_) {
     scn_ = scn;
   }
 }
 
-palf::SCN ObITransCallback::get_scn() const
+SCN ObITransCallback::get_scn() const
 {
   return scn_;
 }
@@ -126,11 +127,11 @@ int ObITransCallback::undo_log_submitted_cb()
   return ret;
 }
 
-int ObITransCallback::log_sync_cb(const palf::SCN scn)
+int ObITransCallback::log_sync_cb(const SCN scn)
 {
   int ret = OB_SUCCESS;
   if (!need_fill_redo_) {
-  } else if (OB_UNLIKELY(palf::SCN::max_scn() == scn)) {
+  } else if (OB_UNLIKELY(SCN::max_scn() == scn)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "log ts should not be invalid", K(ret), K(scn), K(*this));
   } else if (OB_SUCC(log_sync(scn))) {
@@ -414,13 +415,13 @@ int ObTransCallbackMgr::clean_unlog_callbacks(int64_t &removed_cnt)
   return ret;
 }
 
-int ObTransCallbackMgr::calc_checksum_before_scn(const palf::SCN scn,
+int ObTransCallbackMgr::calc_checksum_before_scn(const SCN scn,
                                                  uint64_t &checksum,
-                                                 palf::SCN &checksum_scn)
+                                                 SCN &checksum_scn)
 {
   int ret = OB_SUCCESS;
 
-  if (palf::SCN::max_scn() == scn) {
+  if (SCN::max_scn() == scn) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "log ts is invalid", K(scn));
   } else if (OB_FAIL(callback_list_.tx_calc_checksum_before_scn(scn))) {
@@ -433,7 +434,7 @@ int ObTransCallbackMgr::calc_checksum_before_scn(const palf::SCN scn,
 }
 
 void ObTransCallbackMgr::update_checksum(const uint64_t checksum,
-                                         const palf::SCN checksum_scn)
+                                         const SCN checksum_scn)
 {
   callback_list_.update_checksum(checksum, checksum_scn);
 }
@@ -557,12 +558,12 @@ void ObTransCallbackMgr::set_for_replay(const bool for_replay)
   }
 }
 
-int ObTransCallbackMgr::replay_fail(const palf::SCN scn)
+int ObTransCallbackMgr::replay_fail(const SCN scn)
 {
   return callback_list_.replay_fail(scn);
 }
 
-int ObTransCallbackMgr::replay_succ(const palf::SCN scn)
+int ObTransCallbackMgr::replay_succ(const SCN scn)
 {
   return OB_SUCCESS;
 }
@@ -854,7 +855,7 @@ ObTransCtx *ObMvccRowCallback::get_trans_ctx() const
   return trans_ctx;
 }
 
-int ObMvccRowCallback::calc_checksum(const palf::SCN checksum_scn,
+int ObMvccRowCallback::calc_checksum(const SCN checksum_scn,
                                      ObBatchChecksum *checksumer)
 {
   ObRowLatchGuard guard(value_.latch_);
@@ -975,11 +976,11 @@ int ObMvccRowCallback::trans_commit()
           (void)ATOMIC_FAA(&value_.update_since_compact_, 1);
           if (value_.need_compact(for_read, ctx_.is_for_replay())) {
             if (ctx_.is_for_replay()) {
-              if (palf::SCN::min_scn() != ctx_.get_replay_compact_version() && palf::SCN::max_scn() != ctx_.get_replay_compact_version()) {
+              if (SCN::min_scn() != ctx_.get_replay_compact_version() && SCN::max_scn() != ctx_.get_replay_compact_version()) {
                 memtable_->row_compact(&value_, ctx_.is_for_replay(), ctx_.get_replay_compact_version());
               }
             } else {
-              palf::SCN snapshot_version_for_compact = palf::SCN::minus(palf::SCN::max_scn(), 100);
+              SCN snapshot_version_for_compact = SCN::minus(SCN::max_scn(), 100);
               memtable_->row_compact(&value_, ctx_.is_for_replay(), snapshot_version_for_compact);
             }
           }
@@ -1054,7 +1055,7 @@ int ObMvccRowCallback::rollback_callback()
 
   if (need_submit_log_
       && need_fill_redo_
-      && palf::SCN::max_scn() == scn_) {
+      && SCN::max_scn() == scn_) {
     ctx_.inc_pending_log_size(-1 * data_size_);
   }
 
@@ -1166,7 +1167,7 @@ int64_t ObMvccRowCallback::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
-int ObMvccRowCallback::log_sync(const palf::SCN scn)
+int ObMvccRowCallback::log_sync(const SCN scn)
 {
   int ret = OB_SUCCESS;
 

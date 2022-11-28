@@ -23,6 +23,7 @@
 namespace oceanbase
 {
 using namespace palf;
+using namespace share;
 namespace logservice
 {
 // =========================== ObRemoteLogParent ==============================//

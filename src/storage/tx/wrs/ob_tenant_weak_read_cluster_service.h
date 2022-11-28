@@ -80,8 +80,8 @@ public:
   /// @retval OB_NOT_MASTER         self is in service, but not wrs leader, should stop service
   /// @retval OB_NEED_RETRY         wrs not ready，need retry
   /// @retval OTHER CODE            fail
-  int get_version(palf::SCN &version) const;
-  int get_version(palf::SCN &version, palf::SCN &min_version, palf::SCN &max_version) const;
+  int get_version(share::SCN &version) const;
+  int get_version(share::SCN &version, share::SCN &min_version, share::SCN &max_version) const;
 
   /// update wrs version
   ///
@@ -114,7 +114,7 @@ public:
 
   /// update server level weak read version
   int update_server_version(const common::ObAddr &addr,
-      const palf::SCN version,
+      const share::SCN version,
       const int64_t valid_part_count,
       const int64_t total_part_count,
       const int64_t generate_timestamp);
@@ -122,28 +122,28 @@ public:
 private:
   int check_leader_info_(int64_t &leader_epoch) const;
   void update_valid_server_count_();
-  int query_cluster_version_range_(palf::SCN &cur_min_version, palf::SCN &cur_max_version,
+  int query_cluster_version_range_(share::SCN &cur_min_version, share::SCN &cur_max_version,
       bool &record_exist);
-  int persist_version_if_need_(const palf::SCN last_min_version,
-      const palf::SCN last_max_version,
-      const palf::SCN new_min_version,
-      const palf::SCN new_max_version,
+  int persist_version_if_need_(const share::SCN last_min_version,
+      const share::SCN last_max_version,
+      const share::SCN new_min_version,
+      const share::SCN new_max_version,
       const bool record_exist,
       int64_t &affected_rows);
-  int build_update_version_sql_(const palf::SCN last_min_version,
-      const palf::SCN last_max_version,
-      const palf::SCN new_min_version,
-      const palf::SCN new_max_version,
+  int build_update_version_sql_(const share::SCN last_min_version,
+      const share::SCN last_max_version,
+      const share::SCN new_min_version,
+      const share::SCN new_max_version,
       const bool record_exist,
       common::ObSqlString &sql);
   bool check_can_update_version_();
-  palf::SCN generate_max_version_(const palf::SCN min_version) const
+  share::SCN generate_max_version_(const share::SCN min_version) const
   {
-    return palf::SCN::plus(min_version, WRS_VERSION_GAP_FOR_PERSISTENCE * 1000);
+    return share::SCN::plus(min_version, WRS_VERSION_GAP_FOR_PERSISTENCE * 1000);
   }
   void stop_service_impl_();
-  palf::SCN compute_version_(int64_t &skipped_servers, bool need_print) const;
-  int get_version_(palf::SCN &version, palf::SCN &min_version, palf::SCN &max_version) const;
+  share::SCN compute_version_(int64_t &skipped_servers, bool need_print) const;
+  int get_version_(share::SCN &version, share::SCN &min_version, share::SCN &max_version) const;
   bool need_force_change_leader_();
   int force_change_leader_() const;
   int verify_candidate_server_(const common::ObAddr &server) const;
@@ -187,9 +187,9 @@ private:
   int64_t                       all_valid_server_count_;
 
   // current version cached in local
-  palf::SCN                     current_version_ CACHE_ALIGNED;
-  palf::SCN                     min_version_ CACHE_ALIGNED;
-  palf::SCN                     max_version_;
+  share::SCN                     current_version_ CACHE_ALIGNED;
+  share::SCN                     min_version_ CACHE_ALIGNED;
+  share::SCN                     max_version_;
 
   ClusterVersionMgr             cluster_version_mgr_;
 

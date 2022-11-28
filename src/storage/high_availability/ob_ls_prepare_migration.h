@@ -42,7 +42,7 @@ public:
 
   int64_t start_ts_;
   int64_t finish_ts_;
-  palf::SCN log_sync_scn_;
+  share::SCN log_sync_scn_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,

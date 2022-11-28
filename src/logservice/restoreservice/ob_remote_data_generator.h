@@ -26,7 +26,7 @@
 #include "logservice/palf/log_iterator_storage.h"   // MemoryStorage
 #include "logservice/palf/palf_iterator.h"          // MemPalfGroupBufferIterator
 #include "logservice/palf/lsn.h"                    // LSN
-#include "logservice/palf/scn.h"                    // SCN
+#include "share/scn.h"                    // SCN
 #include "ob_remote_log_source.h"                   // Parent
 #include "ob_log_restore_rpc_define.h"              // ObRemoteFetchLogResponse
 
@@ -73,7 +73,7 @@ public:
       const ObLSID &id,
       const LSN &start_lsn,
       const LSN &end_lsn,
-      const palf::SCN &end_scn);
+      const share::SCN &end_scn);
   virtual ~RemoteDataGenerator();
 
 public:
@@ -92,7 +92,7 @@ protected:
   ObLSID id_;
   LSN start_lsn_;
   LSN next_fetch_lsn_;
-  palf::SCN end_scn_;
+  share::SCN end_scn_;
   LSN end_lsn_;
   bool to_end_;
   LSN max_consumed_lsn_;
@@ -108,7 +108,7 @@ public:
       const ObLSID &id,
       const LSN &start_lsn,
       const LSN &end_lsn,
-      const palf::SCN &end_scn,
+      const share::SCN &end_scn,
       const ObAddr &server);
   virtual ~ServiceDataGenerator();
 
@@ -134,11 +134,11 @@ class LocationDataGenerator : public RemoteDataGenerator
   static const int64_t MAX_DATA_BUF_LEN = 128 * 1024 * 1024L;   // 128M
 public:
   LocationDataGenerator(const uint64_t tenant_id,
-      const palf::SCN &pre_scn,
+      const share::SCN &pre_scn,
       const ObLSID &id,
       const LSN &start_lsn,
       const LSN &end_lsn,
-      const palf::SCN &end_scn,
+      const share::SCN &end_scn,
       share::ObBackupDest *dest,
       ObLogArchivePieceContext *piece_context);
   ~LocationDataGenerator();
@@ -157,7 +157,7 @@ private:
       palf::LSN &lsn,
       share::ObBackupPath &piece_path);
 private:
-  palf::SCN pre_scn_;
+  share::SCN pre_scn_;
   palf::LSN base_lsn_;
   int64_t data_len_;
   char data_[MAX_DATA_BUF_LEN];
@@ -185,7 +185,7 @@ public:
       const LSN &start_lsn,
       const LSN &end_lsn,
       const DirArray &array,
-      const palf::SCN &end_scn,
+      const share::SCN &end_scn,
       const int64_t piece_index,
       const int64_t min_file_id,
       const int64_t max_file_id);

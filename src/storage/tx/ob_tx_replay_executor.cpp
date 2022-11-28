@@ -37,7 +37,7 @@ int ObTxReplayExecutor::execute(storage::ObLS *ls,
                                 const int64_t size,
                                 const int skip_pos,
                                 const palf::LSN &lsn,
-                                const palf::SCN &log_timestamp,
+                                const SCN &log_timestamp,
                                 const int64_t &replay_hint,
                                 const ObLSID &ls_id,
                                 const int64_t &tenant_id)
@@ -424,7 +424,7 @@ int ObTxReplayExecutor::replay_commit_()
   int ret = OB_SUCCESS;
   ObTxCommitLogTempRef temp_ref;
   ObTxCommitLog commit_log(temp_ref);
-  palf::SCN replay_compact_version = ls_tx_srv_->get_ls_weak_read_ts();
+  SCN replay_compact_version = ls_tx_srv_->get_ls_weak_read_ts();
   if (OB_FAIL(log_block_.deserialize_log_body(commit_log))) {
     TRANS_LOG(WARN, "[Replay Tx] deserialize log body error", K(ret), K(commit_log), K(lsn_),
               K(log_ts_ns_));

@@ -17,12 +17,12 @@
 #include "lib/hash/ob_linear_hash_map.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/thread/ob_thread_lease.h"
+#include "share/scn.h"
 #include "log_group_entry.h"
 #include "log_group_buffer.h"
 #include "log_checksum.h"
 #include "log_req.h"
 #include "lsn.h"
-#include "scn.h"
 #include "lsn_allocator.h"
 #include "log_task.h"
 #include "fixed_sliding_window.h"
@@ -110,7 +110,7 @@ public:
            const PalfBaseInfo &palf_base_info);
   virtual int sliding_cb(const int64_t sn, const FixedSlidingWindowSlot *data);
   virtual int64_t get_max_log_id() const;
-  virtual const SCN get_max_scn() const;
+  virtual const share::SCN get_max_scn() const;
   virtual LSN get_max_lsn() const;
   virtual int64_t get_start_id() const;
   virtual int get_committed_end_lsn(LSN &committed_end_lsn) const;
@@ -128,9 +128,9 @@ public:
   // ================= log sync part begin
   virtual int submit_log(const char *buf,
                  const int64_t buf_len,
-                 const SCN &ref_scn,
+                 const share::SCN &ref_scn,
                  LSN &lsn,
-                 SCN &scn);
+                 share::SCN &scn);
   virtual int submit_group_log(const LSN &lsn,
                        const char *buf,
                        const int64_t buf_len);
@@ -184,9 +184,9 @@ public:
   virtual int64_t get_last_submit_log_id_() const;
   virtual int get_last_submit_log_info(LSN &last_submit_lsn, int64_t &log_id, int64_t &log_proposal_id) const;
   virtual int get_last_slide_end_lsn(LSN &out_end_lsn) const;
-  virtual const SCN get_last_slide_scn() const;
+  virtual const share::SCN get_last_slide_scn() const;
   virtual int try_freeze_last_log();
-  virtual int inc_update_scn_base(const SCN &scn);
+  virtual int inc_update_scn_base(const share::SCN &scn);
   // location cache will be removed TODO by yunlong
   virtual int set_location_cache_cb(PalfLocationCacheCb *lc_cb);
   virtual int reset_location_cache_cb();
@@ -218,7 +218,7 @@ private:
   int get_prev_log_info_(const int64_t log_id,
                          LSN &prev_lsn,
                          LSN &prev_end_lsn,
-                         SCN &prev_log_iscn,
+                         share::SCN &prev_log_iscn,
                          int64_t &prev_log_pid,
                          int64_t &prev_log_accum_checksum);
   int inc_update_max_flushed_log_info_(const LSN &lsn,
@@ -230,13 +230,13 @@ private:
   void get_last_slide_end_lsn_(LSN &out_end_lsn) const;
   int64_t get_last_slide_log_id_() const;
   void get_last_slide_log_info_(int64_t &log_id,
-                                SCN &scn,
+                                share::SCN &scn,
                                 LSN &lsn,
                                 LSN &end_lsn,
                                 int64_t &log_proposal_id,
                                 int64_t &accum_checksum) const;
   int try_update_last_slide_log_info_(const int64_t log_id,
-                                      const SCN &scn,
+                                      const share::SCN &scn,
                                       const LSN &lsn,
                                       const LSN &end_lsn,
                                       const int64_t &proposal_id,
@@ -254,7 +254,7 @@ private:
   int try_freeze_last_log_(const int64_t expected_log_id, const LSN &expected_end_lsn, bool &is_need_handle);
   int generate_new_group_log_(const LSN &lsn,
                               const int64_t log_id,
-                              const SCN &scn,
+                              const share::SCN &scn,
                               const int64_t log_body_size,
                               const LogType &log_type,
                               const char *log_data,
@@ -262,7 +262,7 @@ private:
                               bool &is_need_handle);
   int append_to_group_log_(const LSN &lsn,
                            const int64_t log_id,
-                           const SCN &scn,
+                           const share::SCN &scn,
                            const int64_t log_entry_size,
                            const char *log_data,
                            const int64_t data_len,
@@ -288,7 +288,7 @@ private:
   int wait_group_buffer_ready_(const LSN &lsn, const int64_t data_len);
   int append_disk_log_to_sw_(const LSN &lsn, const LogGroupEntry &group_entry);
   int try_update_max_lsn_(const LSN &lsn, const LogGroupEntryHeader &header);
-  int truncate_lsn_allocator_(const LSN &last_lsn, const int64_t last_log_id, const SCN &last_scn);
+  int truncate_lsn_allocator_(const LSN &last_lsn, const int64_t last_log_id, const share::SCN &last_scn);
   bool is_all_committed_log_slided_out_(LSN &prev_lsn, int64_t &prev_log_id, LSN &committed_end_lsn) const;
   void get_last_fetch_info_(LSN &last_fetch_end_lsn,
                             LSN &last_committed_end_lsn,
@@ -307,7 +307,7 @@ private:
   int get_min_scn_from_buf_(const LogGroupEntryHeader &group_entry_header,
                                   const char *buf,
                                   const int64_t buf_len,
-                                  SCN &min_scn);
+                                  share::SCN &min_scn);
   int leader_get_committed_log_info_(const LSN &committed_end_lsn,
                                      int64_t &log_id,
                                      int64_t &log_proposal_id);
@@ -385,7 +385,7 @@ private:
   // last_slide_log_pid_: it is used for forward checking when receive log.
   mutable common::ObSpinLock last_slide_info_lock_;
   int64_t last_slide_log_id_;   // used by clean log
-  SCN last_slide_scn_;
+  share::SCN last_slide_scn_;
   LSN last_slide_lsn_;
   LSN last_slide_end_lsn_;
   int64_t last_slide_log_pid_;

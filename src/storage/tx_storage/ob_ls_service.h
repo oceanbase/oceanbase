@@ -157,7 +157,7 @@ private:
                        const ObReplicaType replica_type,
                        const ObMigrationStatus &migration_status,
                        const share::ObLSRestoreStatus &restore_status,
-                       const palf::SCN &create_scn,
+                       const share::SCN &create_scn,
                        ObLS *&ls);
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);

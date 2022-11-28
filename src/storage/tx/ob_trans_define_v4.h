@@ -193,7 +193,7 @@ typedef ObPair<share::ObLSID, int64_t> ObTxLSEpochPair;
 // internal core snapshot for read data
 struct ObTxSnapshot
 {
-  palf::SCN version_;
+  share::SCN version_;
   ObTransID tx_id_;
   int64_t scn_;
   bool elr_;
@@ -223,8 +223,8 @@ struct ObTxReadSnapshot
   int64_t uncertain_bound_; // for source_ GLOBAL
   ObSEArray<ObTxLSEpochPair, 1> parts_;
 
-  void init_weak_read(const palf::SCN snapshot);
-  void init_special_read(const palf::SCN snapshot);
+  void init_weak_read(const share::SCN snapshot);
+  void init_special_read(const share::SCN snapshot);
   void init_none_read() { valid_ = true; source_ = SRC::NONE; }
   void init_ls_read(const share::ObLSID &ls_id, const ObTxSnapshot &core);
   void wait_consistency();
@@ -329,7 +329,7 @@ protected:
   ObXATransID xid_;                    // xa info if participant in XA
   ObTxIsolationLevel isolation_;       // isolation level
   ObTxAccessMode access_mode_;         // READ_ONLY | READ_WRITE
-  palf::SCN snapshot_version_;           // snapshot for RR | SERIAL Isolation
+  share::SCN snapshot_version_;           // snapshot for RR | SERIAL Isolation
   int64_t snapshot_uncertain_bound_;   // uncertain bound of @snapshot_version_
   int64_t snapshot_scn_;               // the time of acquire @snapshot_version_
   uint32_t sess_id_;                   // sesssion id
@@ -397,7 +397,7 @@ protected:
   share::ObLSID coord_id_;           // coordinator ID
   int64_t commit_expire_ts_;         // commit operation deadline
   share::ObLSArray commit_parts_;    // participants to do commit
-  palf::SCN commit_version_;         // Tx commit version
+  share::SCN commit_version_;         // Tx commit version
   int commit_out_;                   // the commit result
   /* internal abort cause */
   int16_t abort_cause_;              // Tx Aborted cause
@@ -498,7 +498,7 @@ public:
   bool is_rdonly() const { return access_mode_ == ObTxAccessMode::RD_ONLY; }
   int64_t get_op_sn() const { return op_sn_; }
   int inc_op_sn() { return ++op_sn_; }
-  palf::SCN get_commit_version() const { return commit_version_; }
+  share::SCN get_commit_version() const { return commit_version_; }
   bool contain_savepoint(const ObString &sp);
   bool is_tx_end() {
     return is_committed() || is_rollbacked();
@@ -625,7 +625,7 @@ protected:
   ObTransID tx_id_;
   ObTxIsolationLevel isolation_;
   ObTxAccessMode access_mode_;
-  palf::SCN snapshot_version_;
+  share::SCN snapshot_version_;
   int64_t snapshot_uncertain_bound_;
   uint64_t op_sn_;
   int64_t alloc_ts_;

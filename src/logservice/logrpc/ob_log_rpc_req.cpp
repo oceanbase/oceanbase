@@ -14,6 +14,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace logservice
 {
 
@@ -167,7 +168,7 @@ OB_SERIALIZE_MEMBER(LogGetPalfStatReq, src_, palf_id_);
 
 // ============= LogGetPalfStatResp begin ===========
 LogGetPalfStatResp::LogGetPalfStatResp(
-    const palf::SCN &max_scn)
+    const SCN &max_scn)
   : max_scn_(max_scn) { }
 
 LogGetPalfStatResp::~LogGetPalfStatResp()

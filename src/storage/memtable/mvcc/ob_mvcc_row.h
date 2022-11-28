@@ -45,32 +45,32 @@ struct ObMvccTransNode
 public:
   ObMvccTransNode()
   : tx_id_(),
-    trans_version_(palf::SCN::min_scn()),
-    scn_(palf::SCN::max_scn()),
+    trans_version_(share::SCN::min_scn()),
+    scn_(share::SCN::max_scn()),
     seq_no_(0),
-    tx_end_scn_(palf::SCN::max_scn()),
+    tx_end_scn_(share::SCN::max_scn()),
     prev_(NULL),
     next_(NULL),
     modify_count_(0),
     acc_checksum_(0),
     version_(0),
-    snapshot_version_barrier_(palf::SCN::min_scn()),
+    snapshot_version_barrier_(share::SCN::min_scn()),
     type_(NDT_NORMAL),
     flag_(0) {}
 
   ~ObMvccTransNode() {}
 
   transaction::ObTransID tx_id_;
-  palf::SCN trans_version_;
-  palf::SCN scn_;
+  share::SCN trans_version_;
+  share::SCN scn_;
   int64_t seq_no_;
-  palf::SCN tx_end_scn_;
+  share::SCN tx_end_scn_;
   ObMvccTransNode *prev_;
   ObMvccTransNode *next_;
   uint32_t modify_count_;
   uint32_t acc_checksum_;
   int64_t version_;
-  palf::SCN snapshot_version_barrier_;
+  share::SCN snapshot_version_barrier_;
   uint8_t type_;
   uint8_t flag_;
   char buf_[0];
@@ -86,9 +86,9 @@ public:
 
   // trans_commit/abort commit/abort the tx node
   // fill in the version and set committed flag
-  void trans_commit(const palf::SCN commit_version, const palf::SCN tx_end_scn);
+  void trans_commit(const share::SCN commit_version, const share::SCN tx_end_scn);
   // set aborted flag
-  void trans_abort(const palf::SCN tx_end_scn);
+  void trans_abort(const share::SCN tx_end_scn);
 
   // remove the callback
   void remove_callback();
@@ -101,7 +101,7 @@ public:
   void set_safe_read_barrier(const bool is_weak_consistent_read);
   void clear_safe_read_barrier();
   bool is_safe_read_barrier() const;
-  void set_snapshot_version_barrier(const palf::SCN version);
+  void set_snapshot_version_barrier(const share::SCN version);
 
   // ===================== ObMvccTransNode Flag Interface =====================
   void set_committed();
@@ -117,21 +117,21 @@ public:
 
   // ===================== ObMvccTransNode Setter/Getter =====================
   blocksstable::ObDmlFlag get_dml_flag() const;
-  int fill_trans_version(const palf::SCN version);
-  int fill_scn(const palf::SCN scn);
+  int fill_trans_version(const share::SCN version);
+  int fill_scn(const share::SCN scn);
   void get_trans_id_and_seq_no(transaction::ObTransID &trans_id, int64_t &seq_no);
   int64_t get_seq_no() const { return seq_no_; }
   transaction::ObTransID get_tx_id() const { return tx_id_; }
   void set_seq_no(const int64_t seq_no) { seq_no_ = seq_no; }
   int is_lock_node(bool &is_lock) const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
-  void set_tx_end_scn(const palf::SCN tx_end_scn)
+  void set_tx_end_scn(const share::SCN tx_end_scn)
   {
-    if (palf::SCN::max_scn() != tx_end_scn) {
+    if (share::SCN::max_scn() != tx_end_scn) {
       tx_end_scn_ = tx_end_scn;
     }
   }
-  palf::SCN get_tx_end_scn() { return tx_end_scn_; }
+  share::SCN get_tx_end_scn() { return tx_end_scn_; }
 
 private:
   static const uint8_t F_INIT;
@@ -192,9 +192,9 @@ struct ObMvccRow
   blocksstable::ObDmlFlag last_dml_flag_;
   ObMvccTransNode *list_head_;
   transaction::ObTransID max_trans_id_;
-  palf::SCN max_trans_version_;
+  share::SCN max_trans_version_;
   transaction::ObTransID max_elr_trans_id_;
-  palf::SCN max_elr_trans_version_;
+  share::SCN max_elr_trans_version_;
   ObMvccTransNode *latest_compact_node_;
   // using for optimizing inserting trans node when replaying
   ObMvccRowIndex *index_;
@@ -216,7 +216,7 @@ struct ObMvccRow
   // is_new_locked returns whether node represents the first lock for the operation
   // conflict_tx_id if write failed this field indicate the txn-id which hold the lock of current row
   int mvcc_write(ObIMemtableCtx &ctx,
-                 const palf::SCN snapshot_version,
+                 const share::SCN snapshot_version,
                  ObMvccTransNode &node,
                  ObMvccWriteResult &res);
 
@@ -255,11 +255,11 @@ struct ObMvccRow
   // node_alloc is the allocator for compact node allocation
   int row_compact(ObMemtable *memtable,
                   const bool for_replay,
-                  const palf::SCN snapshot_version,
+                  const share::SCN snapshot_version,
                   common::ObIAllocator *node_alloc);
 
   int elr(const transaction::ObTransID &tx_id,
-          const palf::SCN elr_commit_version,
+          const share::SCN elr_commit_version,
           const ObTabletID &tablet_id,
           const ObMemtableKey* key);
 
@@ -269,7 +269,7 @@ struct ObMvccRow
   // - max_elr_trans_version
   // - first_dml
   // - last_dml
-  int trans_commit(const palf::SCN commit_version,
+  int trans_commit(const share::SCN commit_version,
                    ObMvccTransNode &node);
 
   // remove_callback remove the tx node in the row
@@ -285,7 +285,7 @@ struct ObMvccRow
   // TODO(handora.qc): handle it properly
   bool is_del(const int64_t version) const;
   // is_transaction_set_violation check the tsc problem for the row
-  bool is_transaction_set_violation(const palf::SCN snapshot_version);
+  bool is_transaction_set_violation(const share::SCN snapshot_version);
 
   // ===================== ObMvccRow Getter Interface =====================
   // need_compact checks whether the compaction is necessary
@@ -303,11 +303,11 @@ struct ObMvccRow
   blocksstable::ObDmlFlag get_first_dml_flag() const { return first_dml_flag_; }
 
   // max_trans_version/max_elr_trans_version is the max (elr) version on the row
-  palf::SCN get_max_trans_version() const;
+  share::SCN get_max_trans_version() const;
   int64_t get_max_trans_id() const { return max_trans_id_; }
-  void update_max_trans_version(const palf::SCN max_trans_version,
+  void update_max_trans_version(const share::SCN max_trans_version,
                                 const transaction::ObTransID &tx_id);
-  void update_max_elr_trans_version(const palf::SCN max_trans_version,
+  void update_max_elr_trans_version(const share::SCN max_trans_version,
                                     const transaction::ObTransID &tx_id);
   int64_t get_total_trans_node_cnt() const { return total_trans_node_cnt_; }
   int64_t get_last_compact_cnt() const { return last_compact_cnt_; }
@@ -334,12 +334,12 @@ struct ObMvccRow
   // ===================== ObMvccRow Private Function =====================
   int mvcc_write_(ObIMemtableCtx &ctx,
                   ObMvccTransNode &node,
-                  const palf::SCN snapshot_version,
+                  const share::SCN snapshot_version,
                   ObMvccWriteResult &res);
 
   // ===================== ObMvccRow Protection Code =====================
   // check double insert
-  int check_double_insert_(const palf::SCN snapshot_version,
+  int check_double_insert_(const share::SCN snapshot_version,
                            ObMvccTransNode &node,
                            ObMvccTransNode *prev);
 };

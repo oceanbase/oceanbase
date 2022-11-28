@@ -30,6 +30,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 using namespace sql;
 using namespace storage;
 using namespace memtable;
@@ -292,7 +293,7 @@ void ObElrTransInfo::reset()
   ctx_id_ = 0;
 }
 
-int ObElrTransInfo::init(const ObTransID &trans_id, uint32_t ctx_id, const palf::SCN commit_version)
+int ObElrTransInfo::init(const ObTransID &trans_id, uint32_t ctx_id, const SCN commit_version)
 {
   int ret = OB_SUCCESS;
 

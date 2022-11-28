@@ -68,7 +68,7 @@ private:
 
 private:
   ArchiveKey            key_;
-  palf::SCN             round_start_scn_;
+  share::SCN             round_start_scn_;
   bool                  compatible_;            // 该轮次兼容性处理
   ObArchiveRoundState   log_archive_state_;
   share::ObBackupDest   backup_dest_;

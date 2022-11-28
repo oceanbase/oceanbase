@@ -1031,7 +1031,6 @@ static const NonReservedKeyword Mysql_sql_keywords_in_pl[] =
   {"function", FUNCTION},
   {"get", GET},
   {"grant", GRANT},
-  {"hosts", HOSTS},
   {"index", INDEX},
   {"insert", INSERT},
   {"install", INSTALL},

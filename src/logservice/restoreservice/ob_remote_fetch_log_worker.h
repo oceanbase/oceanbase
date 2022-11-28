@@ -25,11 +25,15 @@ namespace storage
 class ObLSService;
 }
 
+namespace share
+{
+class SCN;
+}
+
 namespace palf
 {
 struct LSN;
 class LogGroupEntry;
-class SCN;
 }
 
 namespace logservice
@@ -65,12 +69,12 @@ private:
   void run1();
   void do_thread_task_();
   int handle(ObFetchLogTask &task);
-  int get_upper_limit_scn_(const ObLSID &id, palf::SCN &scn);
-  int submit_entries_(const ObLSID &id, const palf::SCN &upper_limit_scn, ObRemoteLogIterator &iter, palf::SCN &max_submit_scn);
-  int cut_group_log_(const ObLSID &id, const LSN &lsn, const palf::SCN &cut_scn, palf::LogGroupEntry &entry);
+  int get_upper_limit_scn_(const ObLSID &id, share::SCN &scn);
+  int submit_entries_(const ObLSID &id, const share::SCN &upper_limit_scn, ObRemoteLogIterator &iter, share::SCN &max_submit_scn);
+  int cut_group_log_(const ObLSID &id, const LSN &lsn, const share::SCN &cut_scn, palf::LogGroupEntry &entry);
   int get_pre_accum_checksum_(const ObLSID &id, const LSN &lsn, int64_t &pre_accum_checksum);
   int submit_log_(const ObLSID &id, const LSN &lsn, char *buf, const int64_t buf_size);
-  void mark_if_to_end_(ObFetchLogTask &task, const palf::SCN &upper_limit_scn, const palf::SCN &scn);
+  void mark_if_to_end_(ObFetchLogTask &task, const share::SCN &upper_limit_scn, const share::SCN &scn);
   int try_retire_(ObFetchLogTask *&task);
   void try_update_location_info_(const ObFetchLogTask &task, ObRemoteLogIterator &iter);
 

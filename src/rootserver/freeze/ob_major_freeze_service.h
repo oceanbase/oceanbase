@@ -15,7 +15,7 @@
 
 #include "share/ob_ls_id.h"
 #include "logservice/ob_log_base_type.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "lib/lock/ob_recursive_mutex.h"
 
 namespace oceanbase
@@ -38,18 +38,18 @@ public:
 
   int init(uint64_t tenant_id);
 
-  int flush(palf::SCN &rec_scn)
+  int flush(share::SCN &rec_scn)
   {
     UNUSED(rec_scn);
     return OB_SUCCESS;
   }
-  palf::SCN get_rec_scn() override { return palf::SCN::max_scn(); }
+  share::SCN get_rec_scn() override { return share::SCN::max_scn(); }
  
   // for replay, do nothing
   int replay(const void *buffer,
              const int64_t buf_size,
              const palf::LSN &lsn,
-             const palf::SCN &scn)
+             const share::SCN &scn)
   { 
     UNUSED(buffer);
     UNUSED(buf_size);

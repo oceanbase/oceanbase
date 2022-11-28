@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ddl_struct.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
@@ -136,8 +136,8 @@ ObDDLKV::ObDDLKV()
     max_scn_(), pending_cnt_(0), cluster_version_(0), ref_cnt_(0),
     sstable_index_builder_(nullptr), index_block_rebuilder_(nullptr), is_rebuilder_closed_(false)
 {
-  min_scn_ = palf::SCN::max_scn();
-  freeze_scn_ = palf::SCN::max_scn();
+  min_scn_ = SCN::max_scn();
+  freeze_scn_ = SCN::max_scn();
 }
 
 ObDDLKV::~ObDDLKV()
@@ -147,9 +147,9 @@ ObDDLKV::~ObDDLKV()
 
 int ObDDLKV::init(const share::ObLSID &ls_id,
                   const common::ObTabletID &tablet_id,
-                  const palf::SCN &ddl_start_scn,
+                  const SCN &ddl_start_scn,
                   const int64_t snapshot_version,
-                  const palf::SCN &last_freezed_scn,
+                  const SCN &last_freezed_scn,
                   const int64_t cluster_version)
 
 {
@@ -244,6 +244,7 @@ int ObDDLKV::set_macro_block(const ObDDLMacroBlock &macro_block)
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id_;
     param.tablet_id_ = tablet_id_;
+    param.start_scn_ = ddl_start_scn_;
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       LOG_WARN("try schedule ddl merge dag failed when ddl kv is full ",
@@ -273,15 +274,15 @@ int ObDDLKV::set_macro_block(const ObDDLMacroBlock &macro_block)
     } else if (OB_FAIL(ddl_blocks_.push_back(macro_block.block_handle_))) {
       LOG_WARN("push back block handle failed", K(ret), K(macro_block.block_handle_));
     } else {
-      min_scn_ = palf::SCN::min(min_scn_, macro_block.scn_);
-      max_scn_ = palf::SCN::max(max_scn_, macro_block.scn_);
+      min_scn_ = SCN::min(min_scn_, macro_block.scn_);
+      max_scn_ = SCN::max(max_scn_, macro_block.scn_);
       LOG_INFO("succeed to set macro block into ddl kv", K(macro_block));
     }
   }
   return ret;
 }
 
-int ObDDLKV::freeze(const palf::SCN &freeze_scn)
+int ObDDLKV::freeze(const SCN &freeze_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -373,7 +374,7 @@ int ObDDLKV::wait_pending()
   } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls handle failed", K(ret), K(ls_id_));
   } else {
-    palf::SCN max_decided_scn;
+    SCN max_decided_scn;
     bool wait_ls_ts = true;
     bool wait_ddl_redo = true;
     const int64_t abs_timeout_ts = ObTimeUtility::fast_current_time() + 1000L * 1000L * 10L;
@@ -383,7 +384,7 @@ int ObDDLKV::wait_pending()
           LOG_WARN("get max decided log ts failed", K(ret), K(ls_id_));
         } else {
           // max_decided_scn is the left border scn - 1
-          wait_ls_ts = palf::SCN::plus(max_decided_scn, 1) < freeze_scn_;
+          wait_ls_ts = SCN::plus(max_decided_scn, 1) < freeze_scn_;
         }
       }
       if (OB_SUCC(ret)) {
@@ -509,7 +510,7 @@ int ObDDLKVsHandle::get_ddl_kv(const int64_t idx, ObDDLKV *&kv)
   return ret;
 }
 
-ObDDLKVPendingGuard::ObDDLKVPendingGuard(ObTablet *tablet, const palf::SCN &scn)
+ObDDLKVPendingGuard::ObDDLKVPendingGuard(ObTablet *tablet, const SCN &scn)
   : tablet_(tablet), kv_handle_(), ret_(OB_SUCCESS)
 {
   int ret = OB_SUCCESS;

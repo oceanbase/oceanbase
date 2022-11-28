@@ -372,7 +372,8 @@ public:
                        K_(new_row),
                        K_(view_check_exprs),
                        K_(is_primary_index),
-                       K_(is_heap_table));
+                       K_(is_heap_table),
+                       K_(has_instead_of_trigger));
 
   ObDMLOpType dml_type_;
   ExprFixedArray check_cst_exprs_;
@@ -393,6 +394,7 @@ public:
   ExprFixedArray view_check_exprs_;
   bool is_primary_index_;
   bool is_heap_table_;
+  bool has_instead_of_trigger_;
 protected:
   ObDMLBaseCtDef(common::ObIAllocator &alloc,
                  ObDASDMLBaseCtDef &das_base_ctdef,
@@ -408,7 +410,8 @@ protected:
       error_logging_ctdef_(alloc),
       view_check_exprs_(alloc),
       is_primary_index_(false),
-      is_heap_table_(false)
+      is_heap_table_(false),
+      has_instead_of_trigger_(false)
   { }
 };
 

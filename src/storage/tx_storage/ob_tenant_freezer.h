@@ -99,7 +99,8 @@ public:
                                int64_t &total_memstore_used,
                                int64_t &memstore_freeze_trigger,
                                int64_t &memstore_limit,
-                               int64_t &freeze_cnt);
+                               int64_t &freeze_cnt,
+                               const bool force_refresh = true);
   // get the tenant memstore limit.
   int get_tenant_memstore_limit(int64_t &mem_limit);
   // this is used to check if the tenant's memstore is out.
@@ -127,6 +128,7 @@ public:
   ObServerConfig *get_config() { return config_; }
   bool exist_ls_freezing();
 private:
+  int ls_freeze_(ObLS *ls);
   int64_t get_freeze_trigger_percentage_() const;
   int post_freeze_request_(const storage::ObFreezeType freeze_type,
                            const int64_t try_frozen_version);

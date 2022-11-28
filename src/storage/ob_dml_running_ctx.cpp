@@ -26,6 +26,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 using namespace blocksstable;
 namespace storage
 {
@@ -128,7 +129,7 @@ int ObDMLRunningCtx::prepare_column_desc(
 int ObDMLRunningCtx::prepare_relative_table(
     const share::schema::ObTableSchemaParam &schema,
     ObTabletHandle &tablet_handle,
-    const palf::SCN &read_snapshot)
+    const SCN &read_snapshot)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(relative_table_.init(&schema, tablet_handle.get_obj()->get_tablet_meta().tablet_id_,

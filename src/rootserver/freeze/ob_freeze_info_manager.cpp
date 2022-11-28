@@ -441,8 +441,8 @@ int ObFreezeInfoManager::get_freeze_info(
   ObRecursiveMutexGuard guard(lock_);
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (palf::SCN::base_scn() == frozen_scn) {
-    frozen_status.frozen_scn_ = palf::SCN::base_scn();
+  } else if (SCN::base_scn() == frozen_scn) {
+    frozen_status.frozen_scn_ = SCN::base_scn();
   } else if (OB_FAIL(freeze_info_.get_frozen_status(frozen_scn, frozen_status))) {
     LOG_WARN("fail to get frozen status", KR(ret), K(frozen_scn), K_(freeze_info));
   }
@@ -475,6 +475,7 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
   int64_t affected_rows = 0;
   ObMySQLTransaction trans;
   ObRecursiveMutexGuard guard(lock_);
+  int64_t max_stale_time_ns = transaction::ObWeakReadUtil::default_max_stale_time_for_weak_consistency() * 1000;
   
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner error", KR(ret));
@@ -485,11 +486,12 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
     LOG_WARN("fail to select snapshot_gc_scn for update", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(get_gts(cur_gts_scn))) {
     LOG_WARN("fail to get_gts", KR(ret));
-  } else if (FALSE_IT(new_snapshot_gc_scn = SCN::minus(cur_gts_scn, WEAK_TS_NS))) {
+  } else if (FALSE_IT(new_snapshot_gc_scn = SCN::minus(cur_gts_scn, max_stale_time_ns))) {
+    LOG_WARN("fail to calc new snapshot_gc_scn", KR(ret), K(cur_gts_scn));
   } else if ((new_snapshot_gc_scn <= freeze_info_.latest_snapshot_gc_scn_)
              || (cur_snapshot_gc_scn >= new_snapshot_gc_scn)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid snaptshot gc time", KR(ret), K(cur_snapshot_gc_scn), K(new_snapshot_gc_scn), 
+    LOG_WARN("invalid snaptshot gc time", KR(ret), K(cur_snapshot_gc_scn), K(new_snapshot_gc_scn),
       K(freeze_info_.latest_snapshot_gc_scn_));
   } else if (OB_FAIL(ObGlobalStatProxy::update_snapshot_gc_scn(trans, tenant_id_, new_snapshot_gc_scn,
       affected_rows))) {
@@ -518,7 +520,7 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
   return ret;
 }
 
-int ObFreezeInfoManager::get_gts(palf::SCN &gts_scn) const
+int ObFreezeInfoManager::get_gts(SCN &gts_scn) const
 {
   int ret = OB_SUCCESS;
   bool is_external_consistent = true;
@@ -551,17 +553,20 @@ int ObFreezeInfoManager::try_gc_freeze_info()
   ObRecursiveMutexGuard guard(lock_);
   int ret = OB_SUCCESS;
 
-  const uint64_t MAX_KEEP_INTERVAL_NS =  30 * 24 * 60 * 60 * 1000L * 1000L * 1000L; // 30 day
+  const int64_t MAX_KEEP_INTERVAL_NS =  30 * 24 * 60 * 60 * 1000L * 1000L * 1000L; // 30 day
   const int64_t MIN_REMAINED_VERSION_COUNT = 32;
-  SCN min_frozen_scn;
   SCN cur_gts_scn;
-  SCN cur_snapshot_gc_scn;
+  if (OB_FAIL(get_gts(cur_gts_scn))) {
+    LOG_WARN("fail to get_gts", KR(ret));
+  }
+  SCN min_frozen_scn = SCN::minus(cur_gts_scn, MAX_KEEP_INTERVAL_NS);
 
   ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
   ObMySQLTransaction trans;
   ObArray<ObSimpleFrozenStatus> all_frozen_status;
+  SCN cur_snapshot_gc_scn;
 
-  if (OB_FAIL(check_inner_stat())) {
+  if (FAILEDx(check_inner_stat())) {
     LOG_WARN("inner stat error", K(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
     LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id));
@@ -569,9 +574,6 @@ int ObFreezeInfoManager::try_gc_freeze_info()
     LOG_WARN("fail to select snapshot_gc_scn for update", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(freeze_info_proxy.get_all_freeze_info(trans, all_frozen_status))) {
     LOG_WARN("fail to get all freeze info", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(get_gts(cur_gts_scn))) {
-    LOG_WARN("fail to get gts", KR(ret));
-  } else if (FALSE_IT(min_frozen_scn = SCN::minus(cur_gts_scn, MAX_KEEP_INTERVAL_NS))) {
   } else {
     const int64_t frozen_status_cnt = all_frozen_status.count();
     if (frozen_status_cnt > MIN_REMAINED_VERSION_COUNT) {
@@ -615,20 +617,33 @@ int ObFreezeInfoManager::try_update_zone_info(const int64_t expected_epoch)
 int ObFreezeInfoManager::check_snapshot_gc_scn()
 {
   int ret = OB_SUCCESS;
+  SCN cur_gts_scn;
+  SCN snapshot_gc_scn;
+  int64_t delay = 0;
 
   ObRecursiveMutexGuard guard(lock_);
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(get_gts(cur_gts_scn))) {
+    LOG_WARN("fail to get_gts", KR(ret));
   } else {
-    const uint64_t snapshot_gc_ts = freeze_info_.latest_snapshot_gc_scn_.convert_to_ts();
-    const uint64_t delay = ((snapshot_gc_ts == 0) ? 0 : (ObTimeUtility::current_time() - snapshot_gc_ts));
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      if (delay > SNAPSHOT_GC_TS_ERROR) {
-        LOG_ERROR("rs_monitor_check : snapshot_gc_ts delay for a long time",
-                  K(snapshot_gc_ts), K(delay), K_(tenant_id));
-      } else if (delay > SNAPSHOT_GC_TS_WARN) {
-        LOG_WARN("rs_monitor_check : snapshot_gc_ts delay for a long time",
-                 K(snapshot_gc_ts), K(delay), K_(tenant_id));
+    snapshot_gc_scn = freeze_info_.latest_snapshot_gc_scn_;
+    if (snapshot_gc_scn > cur_gts_scn) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to check snapshot_gc_scn, snapshot_gc_scn is larger than cur_gts_scn",
+               KR(ret), K(snapshot_gc_scn), K(cur_gts_scn), K_(tenant_id));
+    } else {
+      const int64_t snapshot_gc_time_us = freeze_info_.latest_snapshot_gc_scn_.convert_to_ts();
+      const int64_t delay = ((snapshot_gc_time_us == 0) ? 0 : (ObTimeUtility::current_time() - snapshot_gc_time_us));
+
+      if (TC_REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+        if (delay > SNAPSHOT_GC_TS_ERROR) {
+          LOG_ERROR("rs_monitor_check : snapshot_gc_ts delay for a long time",
+                    K(snapshot_gc_time_us), K(delay), K_(tenant_id));
+        } else if (delay > SNAPSHOT_GC_TS_WARN) {
+          LOG_WARN("rs_monitor_check : snapshot_gc_ts delay for a long time",
+                  K(snapshot_gc_time_us), K(delay), K_(tenant_id));
+        }
       }
     }
   }

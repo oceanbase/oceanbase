@@ -23,7 +23,7 @@
 #include "share/ob_ddl_checksum.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_rpc_client.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -313,7 +313,7 @@ int ObDDLRedefinitionTask::hold_snapshot(const int64_t snapshot_version)
   int ret = OB_SUCCESS;
   ObRootService *root_service = GCTX.root_service_;
   ObSEArray<ObTabletID, 1> tablet_ids;
-  palf::SCN snapshot_scn;
+  SCN snapshot_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));

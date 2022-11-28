@@ -33,7 +33,7 @@ class ObReCheckTxNodeForLockForReadOperation
 public:
   ObReCheckTxNodeForLockForReadOperation(memtable::ObMvccTransNode &tnode,
                                          bool &can_read,
-                                         palf::SCN &trans_version,
+                                         share::SCN &trans_version,
                                          bool &is_determined_state)
     : tnode_(tnode),
     can_read_(can_read),
@@ -45,7 +45,7 @@ private:
   memtable::ObMvccTransNode &tnode_;
   bool &can_read_;
   bool &is_determined_state_;
-  palf::SCN &trans_version_;
+  share::SCN &trans_version_;
 };
 
 class ObReCheckNothingOperation
@@ -134,17 +134,17 @@ public:
 class GetTxStateWithSCNFunctor : public ObITxDataCheckFunctor
 {
 public:
-  GetTxStateWithSCNFunctor(const palf::SCN scn,
+  GetTxStateWithSCNFunctor(const share::SCN scn,
                              int64_t &state,
-                             palf::SCN &trans_version)
+                             share::SCN &trans_version)
     : scn_(scn), state_(state), trans_version_(trans_version) {}
   virtual ~GetTxStateWithSCNFunctor() {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
   TO_STRING_KV(K(scn_), K(state_), K(trans_version_));
 public:
-  const palf::SCN scn_;
+  const share::SCN scn_;
   int64_t &state_;
-  palf::SCN &trans_version_;
+  share::SCN &trans_version_;
 };
 
 // the txn READ_TRANS_ID use SNAPSHOT_VERSION to read the data,
@@ -158,7 +158,7 @@ class LockForReadFunctor : public ObITxDataCheckFunctor
 public:
   LockForReadFunctor(const transaction::ObLockForReadArg &lock_for_read_arg,
                      bool &can_read,
-                     palf::SCN &trans_version,
+                     share::SCN &trans_version,
                      bool &is_determined_state,
                      const ObCleanoutOp &cleanout_op = ObCleanoutNothingOperation(),
                      const ObReCheckOp &recheck_op = ObReCheckNothingOperation())
@@ -180,7 +180,7 @@ public:
   const transaction::ObLockForReadArg &lock_for_read_arg_;
   bool &can_read_;
   bool &is_determined_state_;
-  palf::SCN &trans_version_;
+  share::SCN &trans_version_;
   // Cleanout the tx node if necessary
   ObCleanoutOp cleanout_op_;
   // ReCheck whether tx node is valid.

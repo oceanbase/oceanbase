@@ -24,7 +24,7 @@
 
 namespace oceanbase
 {
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -82,7 +82,7 @@ public:
                          const bool read_latest,
                          const int64_t lock_timeout,
                          ObStoreCtx &store_ctx) const;
-  int get_read_store_ctx(const palf::SCN &snapshot_version,
+  int get_read_store_ctx(const share::SCN &snapshot_version,
                          const int64_t lock_timeout,
                          ObStoreCtx &store_ctx) const;
   int get_write_store_ctx(transaction::ObTxDesc &tx,
@@ -128,16 +128,16 @@ public:
   // get the obj lock op iterator from tx of this ls.
   int iterate_tx_obj_lock_op(transaction::tablelock::ObLockOpIterator &iter) const;
 public:
-  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const palf::SCN &scn);
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn);
 
-  int replay_start_working_log(const transaction::ObTxStartWorkingLog &log, palf::SCN &log_ts_ns);
+  int replay_start_working_log(const transaction::ObTxStartWorkingLog &log, share::SCN &log_ts_ns);
   void switch_to_follower_forcedly();
   int switch_to_leader();
   int switch_to_follower_gracefully();
   int resume_leader();
 
-  palf::SCN get_rec_scn() override;
-  int flush(palf::SCN &recycle_scn) override;
+  share::SCN get_rec_scn() override;
+  int flush(share::SCN &recycle_scn) override;
 
   int get_common_checkpoint_info(
     ObIArray<checkpoint::ObCommonCheckpointVTInfo> &common_checkpoint_array);
@@ -154,7 +154,7 @@ public:
                                    const checkpoint::ObCommonCheckpoint* common_checkpoint);
   // undertake dump
   int traversal_flush();
-  virtual palf::SCN get_ls_weak_read_ts();
+  virtual share::SCN get_ls_weak_read_ts();
   int check_in_leader_serving_state(bool& bool_ret);
 
   transaction::ObTxRetainCtxMgr *get_retain_ctx_mgr();

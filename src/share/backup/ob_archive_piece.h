@@ -16,7 +16,7 @@
 #include "lib/ob_define.h"                 // int64_t..
 #include "lib/utility/ob_print_utils.h"    // print
 #include <cstdint>
-#include "logservice/palf/scn.h"    //SCN
+#include "share/scn.h"    //SCN
 
 namespace oceanbase
 {
@@ -52,15 +52,15 @@ public:
 
 public:
   ObArchivePiece();
-  ObArchivePiece(const palf::SCN &scn, const int64_t interval_us, const palf::SCN &genesis_scn, const int64_t base_piece_id);
+  ObArchivePiece(const SCN &scn, const int64_t interval_us, const SCN &genesis_scn, const int64_t base_piece_id);
   ~ObArchivePiece();
 
 public:
   int64_t get_piece_id() const { return piece_id_; }
-  int get_piece_lower_limit(palf::SCN &scn);
+  int get_piece_lower_limit(share::SCN &scn);
   bool is_valid() const;
   void reset();
-  int set(const int64_t piece_id, const int64_t interval_us, const palf::SCN &genesis_scn, const int64_t base_piece_id);
+  int set(const int64_t piece_id, const int64_t interval_us, const SCN &genesis_scn, const int64_t base_piece_id);
   void inc();
   ObArchivePiece &operator=(const ObArchivePiece &other);
   ObArchivePiece &operator++();       // 前置++
@@ -71,7 +71,7 @@ public:
 
 private:
   int64_t        interval_us_;    // piece时间长度
-  palf::SCN      genesis_scn_;  // 归档基准SCN
+  SCN      genesis_scn_;  // 归档基准SCN
   int64_t        base_piece_id_; // 基准piece id
   int64_t        piece_id_;    // piece目录
 };

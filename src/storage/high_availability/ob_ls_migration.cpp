@@ -1081,7 +1081,7 @@ int ObStartMigrationTask::choose_src_()
     const share::ObLSID &ls_id = ctx_->arg_.ls_id_;
     ObStorageHASrcInfo src_info;
     obrpc::ObCopyLSInfo ls_info;
-    palf::SCN local_clog_checkpoint_scn = palf::SCN::min_scn();
+    SCN local_clog_checkpoint_scn = SCN::min_scn();
     if (OB_FAIL(get_local_ls_checkpoint_scn_(local_clog_checkpoint_scn))) {
       LOG_WARN("failed to get local ls checkpoint ts", K(ret));
     } else if (OB_FAIL(src_provider.init(tenant_id, ctx_->arg_.type_, storage_rpc_))) {
@@ -1134,7 +1134,7 @@ int ObStartMigrationTask::fetch_ls_info_(const uint64_t tenant_id, const share::
   return ret;
 }
 
-int ObStartMigrationTask::get_local_ls_checkpoint_scn_(palf::SCN &local_checkpoint_scn)
+int ObStartMigrationTask::get_local_ls_checkpoint_scn_(SCN &local_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   local_checkpoint_scn.set_min();

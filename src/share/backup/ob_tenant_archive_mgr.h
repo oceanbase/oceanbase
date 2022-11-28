@@ -39,27 +39,27 @@ public:
 
   // piece op
   static int decide_piece_id(
-      const palf::SCN &piece_start_scn,
+      const SCN &piece_start_scn,
       const int64_t start_piece_id, 
       const int64_t piece_switch_interval, 
-      const palf::SCN &scn,
+      const SCN &scn,
       int64_t &piece_id);
   static int decide_piece_start_scn(
-      const palf::SCN & piece_start_scn,
+      const SCN & piece_start_scn,
       const int64_t start_piece_id, 
       const int64_t piece_switch_interval, 
       const int64_t piece_id, 
-      palf::SCN &start_scn);
+      SCN &start_scn);
   static int decide_piece_end_scn(
-      const palf::SCN &piece_start_scn,
+      const SCN &piece_start_scn,
       const int64_t start_piece_id, 
       const int64_t piece_switch_interval, 
       const int64_t piece_id, 
-      palf::SCN &end_scn);
+      SCN &end_scn);
   static int decide_first_piece_start_scn(
-      const palf::SCN &start_scn,
+      const SCN &start_scn,
       const int64_t piece_switch_interval, 
-      palf::SCN &piece_start_scn);
+      SCN &piece_start_scn);
   // 'ts' must be with unit us.
   static int timestamp_to_day(const int64_t ts, int64_t &day);
 };

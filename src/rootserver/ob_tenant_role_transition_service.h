@@ -28,12 +28,9 @@ namespace common
 class ObMySQLProxy;
 class ObMySQLTransaction;
 }
-namespace palf
-{
-class SCN;
-}
 namespace share
 {
+class SCN;
 struct ObAllTenantInfo;
 }
 
@@ -91,12 +88,12 @@ private:
                              const share::ObTenantRole &target_tenant_role);
   int try_create_abort_ls_(const share::ObTenantSwitchoverStatus &status);
   int change_ls_access_mode_(palf::AccessMode target_access_mode,
-                             const palf::SCN &ref_scn);
+                             const share::SCN &ref_scn);
   int update_tenant_stat_info_();
   int get_ls_access_mode_(ObIArray<LSAccessModeInfo> &ls_access_info);
   int do_change_ls_access_mode_(const ObIArray<LSAccessModeInfo> &ls_access_info,
                                 palf::AccessMode target_access_mode,
-                                const palf::SCN &ref_scn);
+                                const share::SCN &ref_scn);
 private:
   uint64_t tenant_id_;
   common::ObMySQLProxy *sql_proxy_;

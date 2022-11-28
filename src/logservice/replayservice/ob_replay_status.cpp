@@ -21,6 +21,7 @@ namespace oceanbase
 {
 using namespace common;
 using namespace palf;
+using namespace share;
 namespace logservice
 {
 //---------------ObReplayServiceTask---------------//
@@ -94,7 +95,7 @@ bool ObReplayServiceTask::need_replay_immediately() const
 
 //---------------ObReplayServiceSubmitTask---------------//
 int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
-                                    const palf::SCN &base_scn,
+                                    const SCN &base_scn,
                                     PalfHandle *palf_handle,
                                     ObReplayStatus *replay_status)
 {

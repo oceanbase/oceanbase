@@ -5166,7 +5166,7 @@ int ObTableLocation::get_full_leader_table_loc(ObIAllocator &allocator,
       OX(tablet_loc = new(tablet_buf) ObDASTabletLoc());
       OX(tablet_loc->loc_meta_ = loc_meta);
       OZ(ObDASLocationRouter::get_leader(tenant_id, tablet_ids.at(i), *tablet_loc, expire_renew_time));
-      OZ(table_loc->tablet_locs_.push_back(tablet_loc));
+      OZ(table_loc->add_tablet_loc(tablet_loc));
     }
   }
 

@@ -22,6 +22,7 @@ namespace oceanbase
 {
 
 using namespace blocksstable;
+using namespace share;
 
 namespace storage
 {
@@ -242,7 +243,7 @@ ObDDLPrepareLog::ObDDLPrepareLog()
 }
 
 int ObDDLPrepareLog::init(const ObITable::TableKey &table_key,
-                         const palf::SCN &start_scn)
+                         const SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   if (!table_key.is_valid() || !start_scn.is_valid()) {
@@ -263,8 +264,8 @@ ObDDLCommitLog::ObDDLCommitLog()
 }
 
 int ObDDLCommitLog::init(const ObITable::TableKey &table_key,
-                         const palf::SCN &start_scn,
-                         const palf::SCN &prepare_scn)
+                         const SCN &start_scn,
+                         const SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
   if (!table_key.is_valid() || !start_scn.is_valid() || !prepare_scn.is_valid()) {

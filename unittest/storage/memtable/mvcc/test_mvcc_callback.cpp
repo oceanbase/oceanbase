@@ -34,7 +34,7 @@ public:
   ObMockTxCallback(ObMemtable *mt,
                    bool need_submit_log = true,
                    bool need_fill_redo = true,
-                   palf::SCN scn = palf::SCN::max_scn(),
+                   share::SCN scn = share::SCN::max_scn(),
                    int64_t seq_no = INT64_MAX)
     : ObITransCallback(need_fill_redo, need_submit_log),
       mt_(mt), seq_no_(seq_no) { scn_ = scn; }
@@ -43,7 +43,7 @@ public:
   virtual int64_t get_seq_no() const override { return seq_no_; }
   virtual int checkpoint_callback() override;
   virtual int rollback_callback() override;
-  virtual int calc_checksum(const palf::SCN checksum_scn,
+  virtual int calc_checksum(const share::SCN checksum_scn,
                             ObBatchChecksum *checksumer) override;
 
   ObMemtable *mt_;
@@ -138,7 +138,7 @@ public:
   ObMockTxCallback *create_callback(ObMemtable *mt,
                                     bool need_submit_log = true,
                                     bool need_fill_redo = true,
-                                    palf::SCN scn = palf::SCN::max_scn())
+                                    share::SCN scn = share::SCN::max_scn())
   {
     int64_t seq_no = ++seq_counter_;
     ObMockTxCallback *cb = new ObMockTxCallback(mt,
@@ -152,7 +152,7 @@ public:
   void create_and_append_callback(ObMemtable *mt,
                                   bool need_submit_log = true,
                                   bool need_fill_redo = true,
-                                  palf::SCN scn = palf::SCN::max_scn())
+                                  share::SCN scn = share::SCN::max_scn())
   {
     ObMockTxCallback *cb = create_callback(mt,
                                            need_submit_log,
@@ -215,7 +215,7 @@ int ObMockTxCallback::rollback_callback()
   return OB_SUCCESS;
 }
 
-int ObMockTxCallback::calc_checksum(const palf::SCN checksum_scn,
+int ObMockTxCallback::calc_checksum(const share::SCN checksum_scn,
                                     ObBatchChecksum *)
 {
   if (checksum_scn <= scn_) {
@@ -230,8 +230,8 @@ int ObMockTxCallback::calc_checksum(const palf::SCN checksum_scn,
 TEST_F(TestTxCallbackList, remove_callback_by_tx_commit)
 {
   ObMemtable *memtable = create_memtable();
-  palf::SCN scn_1;
-  scn_1.convert_for_lsn_allocator(1);
+  share::SCN scn_1;
+  scn_1.convert_for_logservice(1);
 
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
@@ -257,8 +257,8 @@ TEST_F(TestTxCallbackList, remove_callback_by_tx_commit)
 TEST_F(TestTxCallbackList, remove_callback_by_tx_abort)
 {
   ObMemtable *memtable = create_memtable();
-  palf::SCN scn_1;
-  scn_1.convert_for_lsn_allocator(1);
+  share::SCN scn_1;
+  scn_1.convert_for_logservice(1);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
@@ -284,12 +284,12 @@ TEST_F(TestTxCallbackList, remove_callback_by_release_memtable)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  palf::SCN scn_100;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
-  scn_100.convert_for_lsn_allocator(100);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  share::SCN scn_100;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
+  scn_100.convert_for_logservice(100);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
@@ -352,14 +352,14 @@ TEST_F(TestTxCallbackList, remove_callback_by_fast_commit)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  palf::SCN scn_3;
-  palf::SCN scn_100;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
-  scn_3.convert_for_lsn_allocator(3);
-  scn_100.convert_for_lsn_allocator(100);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  share::SCN scn_3;
+  share::SCN scn_100;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
+  scn_3.convert_for_logservice(3);
+  scn_100.convert_for_logservice(100);
 
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
@@ -430,12 +430,12 @@ TEST_F(TestTxCallbackList, remove_callback_by_rollback_to)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  palf::SCN scn_3;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
-  scn_3.convert_for_lsn_allocator(3);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  share::SCN scn_3;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
+  scn_3.convert_for_logservice(3);
 
   int64_t savepoint0 = get_seq_no();
   create_and_append_callback(memtable1,
@@ -500,12 +500,12 @@ TEST_F(TestTxCallbackList, remove_callback_by_clean_unlog_callbacks)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  palf::SCN scn_3;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
-  scn_3.convert_for_lsn_allocator(3);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  share::SCN scn_3;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
+  scn_3.convert_for_logservice(3);
 
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
@@ -554,14 +554,14 @@ TEST_F(TestTxCallbackList, remove_callback_by_replay_fail)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  palf::SCN scn_3;
-  palf::SCN scn_4;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
-  scn_3.convert_for_lsn_allocator(3);
-  scn_4.convert_for_lsn_allocator(4);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  share::SCN scn_3;
+  share::SCN scn_4;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
+  scn_3.convert_for_logservice(3);
+  scn_4.convert_for_logservice(4);
 
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
@@ -628,18 +628,18 @@ TEST_F(TestTxCallbackList, checksum_leader_tx_end_basic)
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
 
   EXPECT_EQ(true, is_checksum_equal(3, checksum_));
-  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
+  EXPECT_EQ(share::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_follower_tx_end)
 {
   ObMemtable *memtable = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  palf::SCN scn_3;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
-  scn_3.convert_for_lsn_allocator(3);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  share::SCN scn_3;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
+  scn_3.convert_for_logservice(3);
 
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
@@ -659,17 +659,17 @@ TEST_F(TestTxCallbackList, checksum_follower_tx_end)
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
 
   EXPECT_EQ(true, is_checksum_equal(3, checksum_));
-  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
+  EXPECT_EQ(share::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_leader_tx_end_harder)
 {
   TRANS_LOG(INFO, "CASE: checksum_leader_tx_end_harder");
   ObMemtable *memtable = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
 
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
@@ -695,17 +695,17 @@ TEST_F(TestTxCallbackList, checksum_leader_tx_end_harder)
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
 
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
+  EXPECT_EQ(share::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_leader_tx_end_harderer)
 {
   TRANS_LOG(INFO, "CASE: checksum_leader_tx_end_harderer");
   ObMemtable *memtable = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
 
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
@@ -735,7 +735,7 @@ TEST_F(TestTxCallbackList, checksum_leader_tx_end_harderer)
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
 
   EXPECT_EQ(true, is_checksum_equal(6, checksum_));
-  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
+  EXPECT_EQ(share::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_remove_memtable_and_tx_end)
@@ -744,12 +744,12 @@ TEST_F(TestTxCallbackList, checksum_remove_memtable_and_tx_end)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  palf::SCN scn_3;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
-  scn_3.convert_for_lsn_allocator(3);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  share::SCN scn_3;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
+  scn_3.convert_for_logservice(3);
 
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
@@ -802,7 +802,7 @@ TEST_F(TestTxCallbackList, checksum_remove_memtable_and_tx_end)
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
   EXPECT_EQ(true, is_checksum_equal(9, checksum_));
-  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
+  EXPECT_EQ(share::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 
@@ -812,14 +812,14 @@ TEST_F(TestTxCallbackList, checksum_fast_commit_and_tx_end)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  palf::SCN scn_3;
-  palf::SCN scn_4;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
-  scn_3.convert_for_lsn_allocator(3);
-  scn_4.convert_for_lsn_allocator(4);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  share::SCN scn_3;
+  share::SCN scn_4;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
+  scn_3.convert_for_logservice(3);
+  scn_4.convert_for_logservice(4);
 
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
@@ -879,7 +879,7 @@ TEST_F(TestTxCallbackList, checksum_fast_commit_and_tx_end)
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
   EXPECT_EQ(true, is_checksum_equal(9, checksum_));
-  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
+  EXPECT_EQ(share::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
@@ -888,14 +888,14 @@ TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
-  palf::SCN scn_1;
-  palf::SCN scn_2;
-  palf::SCN scn_3;
-  palf::SCN scn_4;
-  scn_1.convert_for_lsn_allocator(1);
-  scn_2.convert_for_lsn_allocator(2);
-  scn_3.convert_for_lsn_allocator(3);
-  scn_4.convert_for_lsn_allocator(4);
+  share::SCN scn_1;
+  share::SCN scn_2;
+  share::SCN scn_3;
+  share::SCN scn_4;
+  scn_1.convert_for_logservice(1);
+  scn_2.convert_for_logservice(2);
+  scn_3.convert_for_logservice(3);
+  scn_4.convert_for_logservice(4);
 
   int64_t savepoint0 = get_seq_no();
   create_and_append_callback(memtable1,
@@ -954,7 +954,7 @@ TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
+  EXPECT_EQ(share::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
@@ -994,7 +994,7 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
         i++;
         it->need_submit_log_ = false;
         it->need_fill_redo_ = false;
-        it->scn_.convert_for_lsn_allocator(cur_log);
+        it->scn_.convert_for_logservice(cur_log);
         enable = true;
         need_submit_head = it;
         my_calculate.add_bit(it->get_seq_no());
@@ -1130,7 +1130,7 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
   } else {
     callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
     ensure_checksum_(functor.get_checksum_last_scn());
-    has_remove = palf::SCN::min_scn() != functor.get_checksum_last_scn();
+    has_remove = share::SCN::min_scn() != functor.get_checksum_last_scn();
     if (has_remove) {
       TRANS_LOG(INFO, "remove callbacks for fast commit", K(functor), K(*this));
     }

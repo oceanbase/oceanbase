@@ -14,7 +14,7 @@
 #define OCEANBASE_STORAGE_OB_TX_DATA_DEFINE
 
 #include "lib/allocator/ob_slice_alloc.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/tx/ob_committer_define.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/ob_i_table.h"
@@ -195,14 +195,14 @@ class ObTxCCCtx
 {
 public:
   // For Tx Ctx Table
-  ObTxCCCtx(transaction::ObTxState state, palf::SCN prepare_version)
+  ObTxCCCtx(transaction::ObTxState state, share::SCN prepare_version)
     : state_(state), prepare_version_(prepare_version) {}
   // For Tx Data Table
   ObTxCCCtx() : state_(transaction::ObTxState::MAX), prepare_version_() {}
   TO_STRING_KV(K_(state),  K_(prepare_version));
 public:
   transaction::ObTxState state_;
-  palf::SCN prepare_version_;
+  share::SCN prepare_version_;
 };
 
 class ObTxCommitData
@@ -232,9 +232,9 @@ public:
   transaction::ObTransID tx_id_;
   int32_t state_;
   bool is_in_tx_data_table_;
-  palf::SCN commit_version_;
-  palf::SCN start_scn_;
-  palf::SCN end_scn_;
+  share::SCN commit_version_;
+  share::SCN start_scn_;
+  share::SCN end_scn_;
 };
 
 class ObTxData : public ObTxCommitData, public TxDataHashValue

@@ -15,7 +15,7 @@
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_ls_adapter.h"
 #include "logservice/palf/palf_env.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/ob_thread_mgr.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
@@ -572,7 +572,7 @@ int ObLogReplayService::is_replay_done(const share::ObLSID &id,
   return ret;
 }
 
-int ObLogReplayService::get_min_unreplayed_scn(const share::ObLSID &id, palf::SCN &scn)
+int ObLogReplayService::get_min_unreplayed_scn(const share::ObLSID &id, SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObReplayStatus *replay_status = NULL;
@@ -728,7 +728,8 @@ bool ObLogReplayService::is_tenant_out_of_memory_() const
                                                                 total_memstore_used,
                                                                 memstore_freeze_trigger,
                                                                 memstore_limit,
-                                                                freeze_cnt)))) {
+                                                                freeze_cnt,
+                                                                false)))) {
     CLOG_LOG(WARN, "get_tenant_memstore_cond failed", K(ret));
   } else {
     // Estimate the size of memstore based on 16 times expansion
@@ -907,13 +908,9 @@ int ObLogReplayService::check_can_submit_log_replay_task_(ObLogReplayTask *repla
     } else {
       is_wait_barrier = true;
     }
-  } else if (replay_status->need_check_memstore(replay_task->lsn_)) {
-    if (OB_UNLIKELY(is_tenant_out_of_memory_())) {
-      ret = OB_EAGAIN;
-      is_tenant_out_of_mem = true;
-    } else {
-      replay_status->set_last_check_memstore_lsn(replay_task->lsn_);
-    }
+  } else if (OB_UNLIKELY(is_tenant_out_of_memory_())) {
+    ret = OB_EAGAIN;
+    is_tenant_out_of_mem = true;
   }
   if (OB_EAGAIN == ret && REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
     CLOG_LOG(INFO, "submit replay task need retry", K(ret), KPC(replay_status), KPC(replay_task), K(current_replayable_point),

@@ -103,14 +103,14 @@ void MockTxLogAdapter::handle(void *task)
 
 int MockTxLogAdapter::submit_log(const char *buf,
                                  const int64_t size,
-                                 const palf::SCN base_ts,
+                                 const share::SCN base_ts,
                                  ObTxBaseLogCb *cb,
                                  const bool need_nonblock)
 {
   int ret = OB_SUCCESS;
   int64_t ts = 0;
   palf::LSN lsn;
-  palf::SCN scn;
+  share::SCN scn;
   UNUSED(need_nonblock);
   if (ATOMIC_LOAD(&is_running_)) {
 

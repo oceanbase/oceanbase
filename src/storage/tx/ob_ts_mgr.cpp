@@ -14,6 +14,7 @@
 #include "share/ob_errno.h"
 #include "share/ob_define.h"
 #include "share/ob_cluster_version.h"
+#include "share/scn.h"
 #include "ob_trans_event.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_getter_guard.h"
@@ -724,7 +725,7 @@ int ObTsMgr::update_gts(const uint64_t tenant_id, const int64_t gts, bool &updat
   return ret;
 }
 
-int ObTsMgr::get_gts(const uint64_t tenant_id, ObTsCbTask *task, palf::SCN &scn)
+int ObTsMgr::get_gts(const uint64_t tenant_id, ObTsCbTask *task, SCN &scn)
 {
   int ret = OB_SUCCESS;
   int64_t gts = 0;//need be invalid value for SCN
@@ -778,7 +779,7 @@ int ObTsMgr::get_gts(const uint64_t tenant_id, ObTsCbTask *task, palf::SCN &scn)
 int ObTsMgr::get_gts(const uint64_t tenant_id,
                      const MonotonicTs stc,
                      ObTsCbTask *task,
-                     palf::SCN &scn,
+                     SCN &scn,
                      MonotonicTs &receive_gts_ts)
 {
   int ret = OB_SUCCESS;
@@ -834,7 +835,7 @@ int ObTsMgr::get_gts(const uint64_t tenant_id,
 
 int ObTsMgr::get_ts_sync(const uint64_t tenant_id,
                          const int64_t timeout_us,
-                         palf::SCN &scn,
+                         SCN &scn,
                          bool &is_external_consistent)
 {
   int ret = OB_SUCCESS;
@@ -993,7 +994,7 @@ bool ObTsMgr::is_external_consistent(const uint64_t tenant_id)
   return bool_ret;
 }
 
-int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn,
+int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const SCN &scn,
     ObTsCbTask *task, bool &need_wait)
 {
   const int64_t start = ObTimeUtility::fast_current_time();
@@ -1045,7 +1046,7 @@ int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn,
   return ret;
 }
 
-int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn)
+int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const SCN &scn)
 {
   int ret = OB_SUCCESS;
 

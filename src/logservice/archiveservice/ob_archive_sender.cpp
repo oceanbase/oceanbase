@@ -39,7 +39,7 @@
 #include "ob_archive_io.h"           // ObArchiveIO
 #include "share/backup/ob_backup_path.h"   // ObBackupPath
 #include "share/backup/ob_archive_path.h"   // ObArchivePathUtil
-#include "logservice/palf/scn.h"   // ObArchivePathUtil
+#include "share/scn.h"   // ObArchivePathUtil
 
 namespace oceanbase
 {

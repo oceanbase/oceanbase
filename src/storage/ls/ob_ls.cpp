@@ -76,7 +76,7 @@ int ObLS::init(const share::ObLSID &ls_id,
                const ObReplicaType replica_type,
                const ObMigrationStatus &migration_status,
                const ObLSRestoreStatus &restore_status,
-               const palf::SCN &create_scn,
+               const SCN &create_scn,
                observer::ObIMetaReport *reporter)
 {
   int ret = OB_SUCCESS;
@@ -206,7 +206,7 @@ int ObLS::init(const share::ObLSID &ls_id,
 }
 
 int ObLS::create_ls_inner_tablet(const lib::Worker::CompatMode compat_mode,
-                                 const palf::SCN &create_scn)
+                                 const SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(tx_table_.create_tablet(compat_mode, create_scn))) {
@@ -944,12 +944,12 @@ int ObLS::finish_slog_replay()
 }
 
 int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
-                            const palf::SCN &scn,
+                            const SCN &scn,
                             ObTabletHandle &handle) const
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_meta_.ls_id_, tablet_id);
-  const palf::SCN tablet_change_checkpoint_scn = ls_meta_.get_tablet_change_checkpoint_scn();
+  const SCN tablet_change_checkpoint_scn = ls_meta_.get_tablet_change_checkpoint_scn();
   ObTabletHandle tablet_handle;
 
   if (IS_NOT_INIT) {
@@ -1205,8 +1205,8 @@ int ObLS::flush_if_need(const bool need_flush)
 int ObLS::flush_if_need_(const bool need_flush)
 {
   int ret = OB_SUCCESS;
-  palf::SCN clog_checkpoint_scn = get_clog_checkpoint_scn();
-  palf::SCN invalid_scn;
+  SCN clog_checkpoint_scn = get_clog_checkpoint_scn();
+  SCN invalid_scn;
   if ((!need_flush && !checkpoint_executor_.need_flush()) || checkpoint_executor_.is_wait_advance_checkpoint()) {
     STORAGE_LOG(INFO, "the ls no need flush to advance_checkpoint", K(get_ls_id()));
   } else if (OB_FAIL(checkpoint_executor_.advance_checkpoint_by_flush(invalid_scn))) {
@@ -1267,7 +1267,7 @@ int ObLS::try_update_uppder_trans_version()
   return ret;
 }
 
-int ObLS::set_tablet_change_checkpoint_scn(const palf::SCN &scn)
+int ObLS::set_tablet_change_checkpoint_scn(const SCN &scn)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKLS;
@@ -1285,7 +1285,7 @@ int ObLS::set_tablet_change_checkpoint_scn(const palf::SCN &scn)
 
 int ObLS::update_id_meta_with_writing_slog(const int64_t service_type,
                                            const int64_t limited_id,
-                                           const palf::SCN &latest_scn)
+                                           const SCN &latest_scn)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKLS;
@@ -1312,7 +1312,7 @@ int ObLS::update_id_meta_with_writing_slog(const int64_t service_type,
 
 int ObLS::update_id_meta_without_writing_slog(const int64_t service_type,
                                               const int64_t limited_id,
-                                              const palf::SCN &latest_scn)
+                                              const SCN &latest_scn)
 {
   int ret = OB_SUCCESS;
 

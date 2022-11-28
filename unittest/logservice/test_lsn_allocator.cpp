@@ -15,7 +15,7 @@
 #include <string>
 #include <pthread.h>
 
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #define private public
 #include "logservice/palf/lsn_allocator.h"
 #undef private
@@ -75,7 +75,7 @@ void init_size_array()
 void init_offset_allocator()
 {
   LSN start_lsn(0);
-  EXPECT_EQ(OB_SUCCESS, golbal_lsn_allocator.init(0, SCN::base_scn(), start_lsn));
+  EXPECT_EQ(OB_SUCCESS, golbal_lsn_allocator.init(0, share::SCN::base_scn(), start_lsn));
 }
 
 TEST_F(TestLSNAllocator, test_struct_field_value_upper_bound)
@@ -153,7 +153,7 @@ TEST_F(TestLSNAllocator, test_lsn_allocator_init)
 {
   LSN start_lsn;
   int64_t initial_log_id = OB_INVALID_LOG_ID;
-  SCN initial_scn;
+  share::SCN initial_scn;
   EXPECT_EQ(OB_INVALID_ARGUMENT, lsn_allocator_.init(initial_log_id, initial_scn, start_lsn));
   initial_log_id = 0;
   EXPECT_EQ(OB_INVALID_ARGUMENT, lsn_allocator_.init(initial_log_id, initial_scn, start_lsn));
@@ -168,16 +168,16 @@ TEST_F(TestLSNAllocator, test_lsn_allocator_alloc_lsn_scn)
 {
   LSN start_lsn;
   int64_t initial_log_id = OB_INVALID_LOG_ID;
-  SCN initial_scn = SCN::min_scn();
+  share::SCN initial_scn = share::SCN::min_scn();
   initial_log_id = 0;
   start_lsn.val_ = 0;
 
-  SCN b_scn;
-  b_scn.convert_for_lsn_allocator(1000);
+  share::SCN b_scn;
+  b_scn.convert_for_logservice(1000);
   int64_t size = 1000000;
   LSN lsn;
   int64_t log_id;
-  SCN scn;
+  share::SCN scn;
   bool is_new_log = false;
   bool need_gen_padding_entry = false;
   int64_t padding_len = 0;
@@ -199,30 +199,30 @@ TEST_F(TestLSNAllocator, test_lsn_allocator_truncate)
   LSN start_lsn;
   int64_t initial_log_id = OB_INVALID_LOG_ID;
   initial_log_id = 0;
-  SCN initial_scn = SCN::min_scn();
+  share::SCN initial_scn = share::SCN::min_scn();
   start_lsn.val_ = 0;
 
   LSN tmp_lsn;
   int64_t tmp_log_id = 9999;
-  SCN tmp_scn;
-  tmp_scn.convert_for_lsn_allocator(55555);
+  share::SCN tmp_scn;
+  tmp_scn.convert_for_logservice(55555);
 
   LSN end_lsn;
   int64_t end_log_id = OB_INVALID_LOG_ID;
 
-  SCN b_scn;
-  b_scn.convert_for_lsn_allocator(1000);
+  share::SCN b_scn;
+  b_scn.convert_for_logservice(1000);
   int64_t size = 1000000;
   LSN lsn;
   int64_t log_id;
-  SCN scn;
+  share::SCN scn;
   bool is_new_log = false;
   bool need_gen_padding_entry = false;
   int64_t padding_len = 0;
 
   // test truncate()
-  SCN new_scn;
-  new_scn.convert_for_lsn_allocator(10);
+  share::SCN new_scn;
+  new_scn.convert_for_logservice(10);
   const int64_t truncate_log_id = 1024;
   EXPECT_EQ(OB_NOT_INIT, lsn_allocator_.truncate(tmp_lsn, truncate_log_id, new_scn));
   EXPECT_EQ(OB_NOT_INIT, lsn_allocator_.inc_update_last_log_info(tmp_lsn, tmp_log_id, tmp_scn));
@@ -281,11 +281,11 @@ TEST_F(TestLSNAllocator, test_alloc_offset_single_thread)
       int64_t idx = rand() % LOG_LOG_CNT;
     const int64_t begin_ts = ObTimeUtility::current_time_ns();
     for (int i = 0; i < 1000000; i++) {
-      SCN b_scn = SCN::base_scn();
+      share::SCN b_scn = share::SCN::base_scn();
       int64_t size = log_size_array[idx];
       LSN ret_offset;
       int64_t ret_log_id;
-      SCN ret_scn;
+      share::SCN ret_scn;
       bool is_new_log = false;
       bool need_gen_padding_entry = false;
       int64_t padding_len = 0;
@@ -327,11 +327,11 @@ public:
 
   static void* routine(void *arg) {
     TestThread *test_thread = static_cast<TestThread*>(arg);
-    SCN scn = SCN::base_scn();
+    share::SCN scn = share::SCN::base_scn();
     int64_t size = test_thread->log_size_;
     LSN ret_offset;
     int64_t ret_log_id;
-    SCN ret_scn;
+    share::SCN ret_scn;
     bool is_new_log = false;
     bool need_gen_padding_entry = false;
     int64_t padding_len = 0;

@@ -19,7 +19,7 @@
 #include "ob_archive_define.h"             // DEFAULT_THREAD_RUN_INTERVAL
 #include "share/ob_ls_id.h"        // ObLSID
 #include "logservice/palf/lsn.h"           // LSN
-#include "logservice/palf/scn.h"           // SCN
+#include "share/scn.h"           // SCN
 #include <cstdint>
 
 namespace oceanbase
@@ -100,7 +100,7 @@ private:
   ObArchiveLSMgr               *ls_mgr_;
   ObArchiveRoundMgr            *round_mgr_;
   // 全部日志流最小定序任务scn
-  palf::SCN                      min_scn_;
+  share::SCN                      min_scn_;
 
   // 添加开启归档/日志流归档任务/以及消费LogFetchTask唤醒sequencer
   common::ObCond               seq_cond_;
@@ -121,7 +121,7 @@ public:
     min_scn_(),
     id_() {}
   bool operator()(const ObLSID &id, ObLSArchiveTask *ls_archive_task);
-  void get_min_log_info(ObLSID &id, palf::SCN &min_scn);
+  void get_min_log_info(ObLSID &id, share::SCN &min_scn);
   TO_STRING_KV(K_(incarnation), K_(round), K_(succ_count), K_(total_count), K_(min_scn), K_(id));
 
 private:
@@ -129,7 +129,7 @@ private:
   int64_t round_;
   int64_t succ_count_;
   int64_t total_count_;
-  palf::SCN min_scn_;
+  share::SCN min_scn_;
   //MaxLogFileInfo  min_log_info_;
   ObLSID id_;
 };

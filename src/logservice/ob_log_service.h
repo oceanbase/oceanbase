@@ -51,6 +51,7 @@ namespace share
 {
 class ObLSID;
 class ObLocationService;
+class SCN;
 }
 
 namespace palf
@@ -59,7 +60,6 @@ class PalfHandleGuard;
 class PalfRoleChangeCb;
 class PalfDiskOptions;
 class PalfEnv;
-class SCN;
 }
 namespace storage
 {
@@ -101,7 +101,7 @@ public:
   int create_ls(const share::ObLSID &id,
                 const common::ObReplicaType &replica_type,
                 const share::ObTenantRole &tenant_role,
-                const palf::SCN &create_scn,
+                const share::SCN &create_scn,
                 const bool allow_log_sync,
                 ObLogHandler &log_handler,
                 ObLogRestoreHandler &restore_handler);
@@ -150,7 +150,7 @@ public:
                     common::ObRole &role,
                     int64_t &proposal_id);
 
-  int update_replayable_point(const palf::SCN &replayable_point);
+  int update_replayable_point(const share::SCN &replayable_point);
   int get_palf_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte);
   int update_palf_disk_options(const palf::PalfDiskOptions &disk_options);
   // why we need update 'log_disk_size_' and 'log_disk_util_threshold' separately.

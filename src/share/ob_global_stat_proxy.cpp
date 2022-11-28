@@ -31,7 +31,7 @@ const char *ObGlobalStatProxy::TENANT_ID_CNAME = "tenant_id";
 int ObGlobalStatProxy::set_init_value(const int64_t core_schema_version,
                                       const int64_t baseline_schema_version,
                                       const int64_t rootservice_epoch,
-                                      const palf::SCN &snapshot_gc_scn,
+                                      const SCN &snapshot_gc_scn,
                                       const int64_t gc_schema_version)
 {
   int ret = OB_SUCCESS;
@@ -58,7 +58,7 @@ int ObGlobalStatProxy::set_init_value(const int64_t core_schema_version,
 int ObGlobalStatProxy::set_tenant_init_global_stat(
     const int64_t core_schema_version,
     const int64_t baseline_schema_version,
-    const palf::SCN &snapshot_gc_scn)
+    const SCN &snapshot_gc_scn)
 {
   int ret = OB_SUCCESS;
   if (!is_valid() || core_schema_version <= 0 || baseline_schema_version < OB_INVALID_VERSION
@@ -114,7 +114,7 @@ int ObGlobalStatProxy::set_baseline_schema_version(const int64_t baseline_schema
   return ret;
 }
 
-int ObGlobalStatProxy::set_snapshot_gc_scn(const palf::SCN &snapshot_gc_scn)
+int ObGlobalStatProxy::set_snapshot_gc_scn(const SCN &snapshot_gc_scn)
 {
   int ret = OB_SUCCESS;
   if (!is_valid() || !snapshot_gc_scn.is_valid()) {
@@ -130,7 +130,7 @@ int ObGlobalStatProxy::set_snapshot_gc_scn(const palf::SCN &snapshot_gc_scn)
   return ret;
 }
 
-int ObGlobalStatProxy::get_snapshot_gc_scn(palf::SCN &snapshot_gc_scn)
+int ObGlobalStatProxy::get_snapshot_gc_scn(SCN &snapshot_gc_scn)
 {
   int ret = OB_SUCCESS;
   ObGlobalStatItem::ItemList list;
@@ -347,7 +347,7 @@ int ObGlobalStatProxy::get(ObGlobalStatItem::ItemList &list)
 int ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    palf::SCN &snapshot_gc_scn)
+    SCN &snapshot_gc_scn)
 {
   int ret = OB_SUCCESS;
   uint64_t snapshot_gc_scn_val = 0;
@@ -411,7 +411,7 @@ int ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
 int ObGlobalStatProxy::update_snapshot_gc_scn(
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    const palf::SCN &snapshot_gc_scn,
+    const SCN &snapshot_gc_scn,
     int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;

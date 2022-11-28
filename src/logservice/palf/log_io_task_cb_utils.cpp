@@ -16,6 +16,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
 FlushLogCbCtx::FlushLogCbCtx()

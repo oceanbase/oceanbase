@@ -385,58 +385,10 @@ int ObDMLService::process_after_stmt_trigger(const ObDMLBaseCtDef &dml_ctdef,
   return ret;
 }
 
-int ObDMLService::process_instead_of_trigger_delete(
-  const ObDelCtDef &del_ctdef,
-  ObDelRtDef &del_rtdef,
-  ObTableModifyOp &dml_op)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(TriggerHandle::init_param_old_row(
-      dml_op.get_eval_ctx(), del_ctdef.trig_ctdef_, del_rtdef.trig_rtdef_))) {
-    LOG_WARN("failed to handle before trigger", K(ret));
-  } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
-      dml_op, del_ctdef.das_base_ctdef_, del_ctdef.trig_ctdef_, del_rtdef.trig_rtdef_))) {
-    LOG_WARN("failed to handle before trigger", K(ret));
-  }
-  return ret;
-}
-
-int ObDMLService::process_instead_of_trigger_update(
-  const ObUpdCtDef &upd_ctdef,
-  ObUpdRtDef &upd_rtdef,
-  ObTableModifyOp &dml_op)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(TriggerHandle::init_param_rows(
-      dml_op.get_eval_ctx(), upd_ctdef.trig_ctdef_, upd_rtdef.trig_rtdef_))) {
-    LOG_WARN("failed to handle before trigger", K(ret));
-  } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
-      dml_op, upd_ctdef.das_base_ctdef_, upd_ctdef.trig_ctdef_, upd_rtdef.trig_rtdef_))) {
-    LOG_WARN("failed to handle before trigger", K(ret));
-  }
-  return ret;
-}
-
-int ObDMLService::process_instead_of_trigger_insert(
-  const ObInsCtDef &ins_ctdef,
-  ObInsRtDef &ins_rtdef,
-  ObTableModifyOp &dml_op)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(TriggerHandle::init_param_new_row(
-      dml_op.get_eval_ctx(), ins_ctdef.trig_ctdef_, ins_rtdef.trig_rtdef_))) {
-    LOG_WARN("failed to handle before trigger", K(ret));
-  } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
-      dml_op, ins_ctdef.das_base_ctdef_, ins_ctdef.trig_ctdef_, ins_rtdef.trig_rtdef_))) {
-    LOG_WARN("failed to handle before trigger", K(ret));
-  }
-  return ret;
-}
-
 int ObDMLService::init_heap_table_pk_for_ins(const ObInsCtDef &ins_ctdef, ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
-  if (ins_ctdef.is_primary_index_ && ins_ctdef.is_heap_table_) {
+  if (ins_ctdef.is_primary_index_ && ins_ctdef.is_heap_table_ && !ins_ctdef.has_instead_of_trigger_) {
     ObExpr *auto_inc_expr = ins_ctdef.new_row_.at(0);
     if (OB_ISNULL(auto_inc_expr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -465,7 +417,7 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
     ObEvalCtx &eval_ctx = dml_op.get_eval_ctx();
     uint64_t ref_table_id = ins_ctdef.das_base_ctdef_.index_tid_;
     ObSQLSessionInfo *my_session = NULL;
-
+    bool has_instead_of_trg = ins_ctdef.has_instead_of_trigger_;
     //first, check insert value whether matched column type
     if (OB_FAIL(check_column_type(ins_ctdef.new_row_,
                                   ins_rtdef.cur_row_num_,
@@ -483,6 +435,10 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
     } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
         dml_op, ins_ctdef.das_base_ctdef_, ins_ctdef.trig_ctdef_, ins_rtdef.trig_rtdef_))) {
       LOG_WARN("failed to handle before trigger", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (has_instead_of_trg) {
+      is_skipped = true;
     } else if (OB_FAIL(check_row_null(ins_ctdef.new_row_,
                                       dml_op.get_eval_ctx(),
                                       ins_rtdef.cur_row_num_,
@@ -514,7 +470,7 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
       }
     }
 
-    if (OB_FAIL(ret) && dml_op.is_error_logging_ && should_catch_err(ret)) {
+    if (OB_FAIL(ret) && dml_op.is_error_logging_ && should_catch_err(ret) && !has_instead_of_trg) {
       dml_op.err_log_rt_def_.first_err_ret_ = ret;
       // cover the err_ret  by design
       ret = OB_SUCCESS;
@@ -568,13 +524,14 @@ int ObDMLService::process_delete_row(const ObDelCtDef &del_ctdef,
   if (del_ctdef.is_primary_index_) {
     uint64_t ref_table_id = del_ctdef.das_base_ctdef_.index_tid_;
     ObSQLSessionInfo *my_session = NULL;
+    bool has_instead_of_trg = del_ctdef.has_instead_of_trigger_;
     if (OB_ISNULL(my_session = dml_op.get_exec_ctx().get_my_session())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is NULL", K(ret));
     } else if (OB_FAIL(check_nested_sql_legality(dml_op.get_exec_ctx(), del_ctdef.das_ctdef_.index_tid_))) {
       LOG_WARN("failed to check stmt table", K(ret), K(ref_table_id));
     }
-    if (OB_SUCC(ret) && del_ctdef.need_check_filter_null_) {
+    if (OB_SUCC(ret) && del_ctdef.need_check_filter_null_ && !has_instead_of_trg) {
       bool is_null = false;
       if (OB_FAIL(check_rowkey_is_null(del_ctdef.old_row_,
                                        del_ctdef.das_ctdef_.rowkey_cnt_,
@@ -585,7 +542,7 @@ int ObDMLService::process_delete_row(const ObDelCtDef &del_ctdef,
         is_skipped = true;
       }
     }
-    if (OB_SUCC(ret) && !is_skipped) {
+    if (OB_SUCC(ret) && !is_skipped && !has_instead_of_trg) {
       bool is_distinct = false;
       if (OB_FAIL(check_rowkey_whether_distinct(del_ctdef.distinct_key_,
                                                 del_ctdef.distinct_key_.count(),
@@ -601,7 +558,7 @@ int ObDMLService::process_delete_row(const ObDelCtDef &del_ctdef,
       }
     }
     if (OB_SUCC(ret) && !is_skipped) {
-      if (OB_FAIL(ForeignKeyHandle::do_handle(dml_op, del_ctdef, del_rtdef))) {
+      if (!has_instead_of_trg && OB_FAIL(ForeignKeyHandle::do_handle(dml_op, del_ctdef, del_rtdef))) {
         LOG_WARN("do handle old row for delete op failed", K(ret), K(del_ctdef), K(del_rtdef));
       } else if (OB_FAIL(TriggerHandle::init_param_old_row(
         dml_op.get_eval_ctx(), del_ctdef.trig_ctdef_, del_rtdef.trig_rtdef_))) {
@@ -612,10 +569,12 @@ int ObDMLService::process_delete_row(const ObDelCtDef &del_ctdef,
       } else if (OB_SUCC(ret) && OB_FAIL(TriggerHandle::do_handle_after_row(
           dml_op, del_ctdef.trig_ctdef_, del_rtdef.trig_rtdef_, ObTriggerEvents::get_delete_event()))) {
         LOG_WARN("failed to handle before trigger", K(ret));
+      } else if (has_instead_of_trg) {
+        is_skipped = true;
       }
     }
     // here only catch foreign key execption
-    if (OB_FAIL(ret) && dml_op.is_error_logging_ && should_catch_err(ret)) {
+    if (OB_FAIL(ret) && dml_op.is_error_logging_ && should_catch_err(ret) && !has_instead_of_trg) {
       dml_op.err_log_rt_def_.first_err_ret_ = ret;
     }
 
@@ -633,6 +592,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
 {
   int ret = OB_SUCCESS;
   is_skipped = false;
+  bool has_instead_of_trg = upd_ctdef.has_instead_of_trigger_;
   if (upd_ctdef.is_primary_index_) {
     uint64_t ref_table_id = upd_ctdef.das_base_ctdef_.index_tid_;
     ObSQLSessionInfo *my_session = NULL;
@@ -641,7 +601,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
       LOG_WARN("fail to copy heap table hidden pk", K(ret), K(upd_ctdef));
     }
 
-    if (OB_SUCC(ret) && upd_ctdef.need_check_filter_null_) {
+    if (OB_SUCC(ret) && upd_ctdef.need_check_filter_null_ && !has_instead_of_trg) {
       bool is_null = false;
       if (OB_FAIL(check_rowkey_is_null(upd_ctdef.old_row_,
                                        upd_ctdef.dupd_ctdef_.rowkey_cnt_,
@@ -652,7 +612,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
         is_skipped = true;
       }
     }
-    if (OB_SUCC(ret) && !is_skipped) {
+    if (OB_SUCC(ret) && !is_skipped && !has_instead_of_trg) {
       bool is_distinct = false;
       if (OB_FAIL(check_rowkey_whether_distinct(upd_ctdef.distinct_key_,
                                                 upd_ctdef.distinct_key_.count(),
@@ -686,12 +646,16 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
       } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
           dml_op, upd_ctdef.das_base_ctdef_, upd_ctdef.trig_ctdef_, upd_rtdef.trig_rtdef_))) {
         LOG_WARN("failed to handle before trigger", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (has_instead_of_trg) {
+        is_skipped = true;
       } else if (OB_FAIL(check_row_null(upd_ctdef.new_row_,
-                                 dml_op.get_eval_ctx(),
-                                 upd_rtdef.cur_row_num_,
-                                 upd_ctdef.assign_columns_,
-                                 upd_ctdef.dupd_ctdef_.is_ignore_,
-                                 dml_op))) {
+                                        dml_op.get_eval_ctx(),
+                                        upd_rtdef.cur_row_num_,
+                                        upd_ctdef.assign_columns_,
+                                        upd_ctdef.dupd_ctdef_.is_ignore_,
+                                        dml_op))) {
         LOG_WARN("check row null failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else if (OB_FAIL(check_row_whether_changed(upd_ctdef, upd_rtdef, dml_op.get_eval_ctx()))) {
         LOG_WARN("check row whether changed failed", K(ret), K(upd_ctdef), K(upd_rtdef));
@@ -724,7 +688,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
     }
   }
 
-  if (OB_FAIL(ret) && dml_op.is_error_logging_ && should_catch_err(ret)) {
+  if (OB_FAIL(ret) && dml_op.is_error_logging_ && should_catch_err(ret) && !has_instead_of_trg) {
     dml_op.err_log_rt_def_.first_err_ret_ = ret;
     // cover the err_ret  by design
     ret = OB_SUCCESS;

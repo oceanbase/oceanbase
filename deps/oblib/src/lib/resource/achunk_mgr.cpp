@@ -130,7 +130,7 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
   void *ptr = nullptr;
   huge_page_used = false;
   const int prot = PROT_READ | PROT_WRITE;
-  const int flags = MAP_PRIVATE | MAP_ANONYMOUS | (SANITY_BOOL_EXPR(alloc_shadow) ? MAP_FIXED : 0);
+  int flags = MAP_PRIVATE | MAP_ANONYMOUS | (SANITY_BOOL_EXPR(alloc_shadow) ? MAP_FIXED : 0);
   int huge_flags = flags;
 #ifdef MAP_HUGETLB
   if (OB_LIKELY(can_use_huge_page)) {
@@ -143,8 +143,11 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
   if (SANITY_BOOL_EXPR(alloc_shadow)) {
     int64_t new_addr = ATOMIC_FAA(&global_canonical_addr, size);
     if (!SANITY_ADDR_IN_RANGE((void*)new_addr)) {
-      LOG_ERROR("sanity address exhausted", K(errno), KP(new_addr));
+      LOG_WARN("sanity address exhausted", K(errno), KP(new_addr));
+      ATOMIC_FAA(&global_canonical_addr, -size);
       ptr = NULL; // let it goon, it means no shadow, same as out of checker!
+      // in aarch64, mmap will return EPERM error when NULL address and MAP_FIXED are privided at the same time
+      flags &= ~MAP_FIXED;
     } else {
       ptr = (void*)new_addr;
     }

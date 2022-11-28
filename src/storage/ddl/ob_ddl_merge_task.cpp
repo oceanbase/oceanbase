@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 
 #include "storage/ddl/ob_ddl_merge_task.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/schema/ob_table_schema.h"
@@ -107,6 +107,9 @@ int ObDDLTableMergeDag::create_first_task()
     LOG_WARN("get tablet failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv mgr failed", K(ret), K(ddl_param_));
+  } else if (ddl_param_.start_scn_ < ddl_kv_mgr_handle.get_obj()->get_start_scn()) {
+    ret = OB_TASK_EXPIRED;
+    LOG_WARN("ddl task expired, skip it", K(ret), K(ddl_param_), "new_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv())) {
     LOG_WARN("ddl kv manager try freeze failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(true/*frozen_only*/, ddl_kvs_handle))) {
@@ -203,7 +206,7 @@ ObDDLTableDumpTask::~ObDDLTableDumpTask()
 
 int ObDDLTableDumpTask::init(const share::ObLSID &ls_id,
                              const ObTabletID &tablet_id,
-                             const palf::SCN &freeze_scn)
+                             const SCN &freeze_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -340,6 +343,8 @@ int ObDDLTableMergeTask::process()
       LOG_INFO("tablet me says with major but no major, meaning its a migrated deleted tablet, skip");
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_param(ddl_param))) {
       LOG_WARN("get tablet ddl param failed", K(ret));
+    } else if (merge_param_.start_scn_ > SCN::min_scn() && merge_param_.start_scn_ < ddl_param.start_scn_) {
+      LOG_INFO("ddl merge task expired, do nothing", K(merge_param_), "new_start_scn", ddl_param.start_scn_);
     } else if (merge_param_.is_commit_ && OB_FAIL(check_data_integrity(ddl_sstable_handles,
                                                                        ddl_param.start_scn_,
                                                                        merge_param_.rec_scn_,
@@ -381,8 +386,6 @@ int ObDDLTableMergeTask::process()
                                                           merge_param_.ddl_task_id_,
                                                           sstable->get_meta().get_col_checksum()))) {
         LOG_WARN("report ddl column checksum failed", K(ret), K(merge_param_));
-      } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_checksums_task(tenant_id, merge_param_.ls_id_, merge_param_.tablet_id_))) {
-        LOG_WARN("fail to submit tablet checksums task", K(ret), K(tenant_id), K(merge_param_));
       } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(tenant_id, merge_param_.ls_id_, merge_param_.tablet_id_))) {
         LOG_WARN("fail to submit tablet update task", K(ret), K(tenant_id), K(merge_param_));
       }
@@ -398,8 +401,8 @@ int ObDDLTableMergeTask::process()
 }
 
 int ObDDLTableMergeTask::check_data_integrity(const ObTablesHandleArray &ddl_sstables,
-                                              const palf::SCN &start_scn,
-                                              const palf::SCN &prepare_scn,
+                                              const SCN &start_scn,
+                                              const SCN &prepare_scn,
                                               bool &is_data_complete)
 {
   int ret = OB_SUCCESS;
@@ -416,7 +419,7 @@ int ObDDLTableMergeTask::check_data_integrity(const ObTablesHandleArray &ddl_sst
       LOG_INFO("prepare log ts not match", K(last_ddl_sstable->get_key()), K(prepare_scn));
     } else {
       is_data_complete = true;
-      palf::SCN last_end_scn = first_ddl_sstable->get_end_scn();
+      SCN last_end_scn = first_ddl_sstable->get_end_scn();
       for (int64_t i = 1; OB_SUCC(ret) && i < ddl_sstables.get_count(); ++i) {
         const ObSSTable *cur_ddl_sstable = static_cast<const ObSSTable *>(ddl_sstables.get_tables().at(i));
         if (cur_ddl_sstable->get_start_scn() != last_end_scn) {

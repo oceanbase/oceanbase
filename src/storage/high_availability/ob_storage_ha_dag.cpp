@@ -14,7 +14,7 @@
 #include "ob_storage_ha_dag.h"
 #include "observer/ob_server.h"
 #include "share/rc/ob_tenant_base.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
@@ -685,8 +685,8 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
     } else if (OB_FAIL(ddl_sstable_array.get_table(param.table_key_, table_handle))) {
       LOG_WARN("failed to get table", K(ret), K(param), K(ddl_sstable_array));
     } else if (!table_handle.is_valid()) {
-      const palf::SCN start_scn = ddl_sstable_array.get_table(0)->get_start_scn();
-      const palf::SCN end_scn = ddl_sstable_array.get_table(ddl_sstable_array.count() - 1)->get_end_scn();
+      const SCN start_scn = ddl_sstable_array.get_table(0)->get_start_scn();
+      const SCN end_scn = ddl_sstable_array.get_table(ddl_sstable_array.count() - 1)->get_end_scn();
       if (param.table_key_.scn_range_.start_scn_ >= start_scn
           && param.table_key_.scn_range_.end_scn_ <= end_scn) {
         need_copy = false;

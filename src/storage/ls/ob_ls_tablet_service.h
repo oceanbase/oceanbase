@@ -113,7 +113,7 @@ private:
       const void *buffer,
       const int64_t nbytes,
       const palf::LSN &lsn,
-      const palf::SCN &scn) override;
+      const share::SCN &scn) override;
 
   // for role change
   virtual void switch_to_follower_forcedly() override;
@@ -122,8 +122,8 @@ private:
   virtual int resume_leader() override;
 
   // for checkpoint
-  virtual int flush(palf::SCN &recycle_scn) override;
-  virtual palf::SCN get_rec_scn() override;
+  virtual int flush(share::SCN &recycle_scn) override;
+  virtual share::SCN get_rec_scn() override;
 
 public:
   int prepare_for_safe_destroy();
@@ -131,7 +131,7 @@ public:
   // tablet operation
   int batch_create_tablets(
       const obrpc::ObBatchCreateTabletArg &arg,
-      const palf::SCN &create_scn,
+      const share::SCN &create_scn,
       const bool is_replay_clog = false);
   int batch_remove_tablets(
       const obrpc::ObBatchRemoveTabletArg &arg,
@@ -141,10 +141,10 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const int64_t memstore_version,
-      const palf::SCN &frozen_timestamp,
+      const share::SCN &frozen_timestamp,
       const share::schema::ObTableSchema &table_schema,
       const lib::Worker::CompatMode &compat_mode,
-      const palf::SCN &create_scn);
+      const share::SCN &create_scn);
   int remove_ls_inner_tablet(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);
@@ -187,7 +187,7 @@ public:
       ObTabletHandle &handle,
       const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
   int remove_tablets(const common::ObIArray<common::ObTabletID> &tablet_id_array);
-  int get_ls_min_end_scn_in_old_tablets(palf::SCN &end_scn);
+  int get_ls_min_end_scn_in_old_tablets(share::SCN &end_scn);
   int get_tx_data_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
   int get_tx_ctx_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
   int get_lock_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
@@ -436,7 +436,7 @@ private:
   int create_tablet(
       const share::ObLSID &ls_id,
       const obrpc::ObBatchCreateTabletArg &arg,
-      const palf::SCN &create_scn,
+      const share::SCN &create_scn,
       const obrpc::ObCreateTabletInfo &info,
       common::ObIArray<ObTabletHandle> &tablet_handle_array,
       NonLockedHashSet &data_tablet_id_set);
@@ -445,8 +445,8 @@ private:
       const common::ObTabletID &tablet_id,
       const common::ObTabletID &data_tablet_id,
       const common::ObIArray<common::ObTabletID> &index_tablet_array,
-      const palf::SCN &create_scn,
-      const palf::SCN &snapshot_version,
+      const share::SCN &create_scn,
+      const share::SCN &snapshot_version,
       const share::schema::ObTableSchema &table_schema,
       const lib::Worker::CompatMode &compat_mode,
       const common::ObTabletID &lob_meta_tablet_id,
@@ -455,7 +455,7 @@ private:
   int build_single_data_tablet(
       const share::ObLSID &ls_id,
       const obrpc::ObBatchCreateTabletArg &arg,
-      const palf::SCN &create_scn,
+      const share::SCN &create_scn,
       const obrpc::ObCreateTabletInfo &info,
       common::ObIArray<ObTabletHandle> &tablet_handle_array);
   static int build_batch_create_tablet_arg(
@@ -468,7 +468,7 @@ private:
       common::ObIArray<ObTabletHandle> &tablet_handle_array);
   int do_batch_create_tablets(
       const obrpc::ObBatchCreateTabletArg &arg,
-      const palf::SCN &create_scn,
+      const share::SCN &create_scn,
       const bool is_replay_clog,
       common::ObTimeGuard &time_guard,
       NonLockedHashSet &data_tablet_id_set);
@@ -498,6 +498,12 @@ private:
       const ObMigrationTabletParam &mig_tablet_param,
       ObTabletHandle &handle);
   int delete_all_tablets();
+  int choose_msd(
+      const ObUpdateTableStoreParam &param,
+      const ObTablet &old_tablet,
+      const ObTabletTxMultiSourceDataUnit *&tx_data,
+      const ObTabletBindingInfo *&binding_info,
+      const share::ObTabletAutoincSeq *&auto_inc_seq);
   static int build_create_sstable_param_for_migration(
       const blocksstable::ObMigrationSSTableParam &migrate_sstable_param,
       ObTabletCreateSSTableParam &create_sstable_param);

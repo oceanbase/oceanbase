@@ -153,7 +153,7 @@ public:
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_type(ObDASOpType op_type) { op_type_ = op_type; }
-  ObDASOpType get_type() { return op_type_; }
+  ObDASOpType get_type() const { return op_type_; }
   void set_trans_desc(transaction::ObTxDesc *trans_desc) { trans_desc_ = trans_desc; }
   transaction::ObTxDesc *get_trans_desc() { return trans_desc_; }
   void set_snapshot(transaction::ObTxReadSnapshot *snapshot) { snapshot_ = snapshot; }

@@ -34,7 +34,8 @@ public:
       dist_aggr_group_idxes_(alloc),
       aggr_code_idx_(OB_INVALID_INDEX_INT64),
       aggr_code_expr_(nullptr),
-      by_pass_enabled_(false)
+      by_pass_enabled_(false),
+      support_fast_single_row_agg_(false)
   {
   }
   DECLARE_VIRTUAL_TO_STRING;
@@ -55,6 +56,8 @@ public:
   int64_t aggr_code_idx_;
   ObExpr *aggr_code_expr_;
   bool by_pass_enabled_;
+  // COUNT/SUM/MIN/MAX can use fast single row agg
+  bool support_fast_single_row_agg_;
 };
 
 //modifiable

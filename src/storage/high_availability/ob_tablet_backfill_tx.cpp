@@ -26,7 +26,7 @@ namespace storage
 ObBackfillTXCtx::ObBackfillTXCtx()
   : task_id_(),
     ls_id_(),
-    log_sync_scn_(palf::SCN::min_scn()),
+    log_sync_scn_(SCN::min_scn()),
     lock_(),
     tablet_id_index_(0),
     tablet_id_array_()
@@ -85,7 +85,7 @@ int ObBackfillTXCtx::get_tablet_id(ObTabletID &tablet_id)
 int ObBackfillTXCtx::build_backfill_tx_ctx(
     const share::ObTaskId &task_id,
     const share::ObLSID &ls_id,
-    const palf::SCN log_sync_scn,
+    const SCN log_sync_scn,
     const common::ObIArray<common::ObTabletID> &tablet_id_array)
 {
   int ret = OB_SUCCESS;
@@ -945,7 +945,7 @@ int64_t ObFinishBackfillTXDag::hash() const
 int ObFinishBackfillTXDag::init(
     const share::ObTaskId &task_id,
     const share::ObLSID &ls_id,
-    const palf::SCN log_sync_scn,
+    const SCN log_sync_scn,
     ObIHADagNetCtx *ha_dag_net_ctx)
 {
   int ret = OB_SUCCESS;
@@ -968,7 +968,7 @@ int ObFinishBackfillTXDag::init(
 int ObFinishBackfillTXDag::prepare_backfill_tx_ctx_(
     const share::ObTaskId &task_id,
     const share::ObLSID &ls_id,
-    const palf::SCN log_sync_scn)
+    const SCN log_sync_scn)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;

@@ -415,7 +415,7 @@ bool ObBackupPath::operator ==(const ObBackupPath &path) const
 int ObBackupPathUtil::get_tenant_data_backup_set_placeholder_path_(
     const uint64_t backup_set_id,
     const ObBackupType backup_type,
-    const palf::SCN &min_restore_scn,
+    const SCN &min_restore_scn,
     const ObString &suffix, 
     ObBackupPath &path) 
 {
@@ -471,7 +471,7 @@ int ObBackupPathUtil::get_backup_set_placeholder_start_path(
 
 int ObBackupPathUtil::get_backup_set_placeholder_end_success_path(
     const share::ObBackupDest &backup_tenant_dest, const share::ObBackupSetDesc &backup_set_desc,  
-    const palf::SCN &min_restore_scn, share::ObBackupPath &backup_path)
+    const SCN &min_restore_scn, share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
   ObString suffix("end_success");
@@ -486,7 +486,7 @@ int ObBackupPathUtil::get_backup_set_placeholder_end_success_path(
 
 int ObBackupPathUtil::get_backup_set_placeholder_end_failed_path(
     const share::ObBackupDest &backup_tenant_dest, const share::ObBackupSetDesc &backup_set_desc, 
-    const palf::SCN &min_restore_scn, share::ObBackupPath &backup_path)
+    const SCN &min_restore_scn, share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
   ObString suffix("end_failed");
@@ -545,7 +545,7 @@ int ObBackupPathUtil::get_backup_set_inner_placeholder_prefix(
 // file:///obbackup/backup_set_1_full/backup_set_1_full_xxxx_xxxxx
 int ObBackupPathUtil::get_backup_set_inner_placeholder(
     const share::ObBackupDest &backup_set_dest, const share::ObBackupSetDesc &backup_set_desc, 
-    const palf::SCN &replay_scn, const palf::SCN &min_restore_scn,
+    const SCN &replay_scn, const SCN &min_restore_scn,
     share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;

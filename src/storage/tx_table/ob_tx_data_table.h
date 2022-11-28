@@ -184,12 +184,12 @@ public:  // ObTxDataTable
   /**
    * @brief See ObTxTable::get_recycle_scn
    */
-  int get_recycle_scn(palf::SCN &recycle_scn);
+  int get_recycle_scn(share::SCN &recycle_scn);
 
   /**
    * @brief see ObTxTable::get_upper_trans_version_before_given_scn()
    */
-  int get_upper_trans_version_before_given_scn(const palf::SCN sstable_end_scn, palf::SCN &upper_trans_version);
+  int get_upper_trans_version_before_given_scn(const share::SCN sstable_end_scn, share::SCN &upper_trans_version);
 
   /**
    * @brief see ObTxTable::supplement_undo_actions_if_exist
@@ -206,7 +206,7 @@ public:  // ObTxDataTable
   /**
    * @brief see ObTxTable::get_start_tx_scn
    */
-  int get_start_tx_scn(palf::SCN &start_tx_scn);
+  int get_start_tx_scn(share::SCN &start_tx_scn);
 
   void reuse_memtable_handles_cache();
 
@@ -232,7 +232,7 @@ public: // getter and setter
 private:
   virtual ObTxDataMemtableMgr *get_memtable_mgr_() { return memtable_mgr_; }
 
-  int get_ls_min_end_scn_in_latest_tablets_(palf::SCN &min_end_ts);
+  int get_ls_min_end_scn_in_latest_tablets_(share::SCN &min_end_ts);
 
   int init_sstable_cache_();
 
@@ -251,7 +251,7 @@ private:
   int insert_into_memtable_(ObTxDataMemtable *tx_data_memtable, ObTxData *&tx_data);
 
   // free the whole undo status list allocated by slice allocator
-  int get_min_end_scn_from_single_tablet_(ObTabletHandle &tablet_handle, palf::SCN &end_scn);
+  int get_min_end_scn_from_single_tablet_(ObTabletHandle &tablet_handle, share::SCN &end_scn);
 
   int deep_copy_undo_status_list_(ObUndoStatusList &in_list, ObUndoStatusList &out_list);
   int init_tx_data_read_schema_();
@@ -260,7 +260,7 @@ private:
 
   int update_calc_upper_trans_version_cache_(ObITable *table);
 
-  int calc_upper_trans_scn_(const palf::SCN sstable_end_scn, palf::SCN &upper_trans_version);
+  int calc_upper_trans_scn_(const share::SCN sstable_end_scn, share::SCN &upper_trans_version);
 
   int update_freeze_trigger_threshold_();
   
@@ -276,7 +276,7 @@ private:
   int dump_tx_data_in_memtable_2_text_(const transaction::ObTransID tx_id, FILE *fd);
   int dump_tx_data_in_sstable_2_text_(const transaction::ObTransID tx_id, FILE *fd);
 
-  bool skip_this_sstable_end_scn_(palf::SCN sstable_end_scn);
+  bool skip_this_sstable_end_scn_(share::SCN sstable_end_scn);
 
   void print_alloc_size_for_test_();
 
@@ -308,7 +308,7 @@ private:
   static const int64_t LS_TX_DATA_SCHEMA_COLUMN_CNT = 5;
   bool is_inited_;
   bool is_started_;
-  palf::SCN min_start_scn_in_ctx_;
+  share::SCN min_start_scn_in_ctx_;
   int64_t last_update_ts_;
   ObTabletID tablet_id_;
   ObMemAttr mem_attr_;

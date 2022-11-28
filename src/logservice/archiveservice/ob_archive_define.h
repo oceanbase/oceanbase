@@ -19,11 +19,11 @@
 #include "share/backup/ob_archive_piece.h"  // ObArchivePiece
 #include "share/backup/ob_backup_struct.h"  // ObBackupPathString
 #include "logservice/palf/lsn.h"            // LSN
-#include "logservice/palf/scn.h"            // SCN
+#include "share/scn.h"            // share::SCN
 
 namespace oceanbase
 {
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -88,7 +88,7 @@ class LogFileTuple
 {
 public:
   LogFileTuple();
-  LogFileTuple(const LSN &lsn, const palf::SCN &scn, const ObArchivePiece &piece);
+  LogFileTuple(const LSN &lsn, const share::SCN &scn, const ObArchivePiece &piece);
   ~LogFileTuple();
 
 public:
@@ -98,14 +98,14 @@ public:
   LogFileTuple &operator=(const LogFileTuple &other);
 
   const LSN &get_lsn() const { return offset_; }
-  const palf::SCN &get_scn() const { return scn_; }
+  const share::SCN &get_scn() const { return scn_; }
   const ObArchivePiece &get_piece() const { return piece_; };
   void compensate_piece();
   TO_STRING_KV(K_(offset), K_(scn), K_(piece));
 
 private:
   LSN offset_;            // 文件内偏移
-  palf::SCN scn_;        // 最大log scn
+  share::SCN scn_;        // 最大log scn
   ObArchivePiece piece_;  // 所属piece
 };
 

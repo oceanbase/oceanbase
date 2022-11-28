@@ -20,7 +20,7 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "logservice/ob_log_base_header.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -112,7 +112,7 @@ int ObLSDDLLogHandler::online()
 int ObLSDDLLogHandler::replay(const void *buffer,
                               const int64_t buf_size,
                               const palf::LSN &lsn,
-                              const palf::SCN &log_scn)
+                              const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader base_header;
@@ -205,7 +205,7 @@ int ObLSDDLLogHandler::resume_leader()
   return ret;
 }
 
-int ObLSDDLLogHandler::flush(palf::SCN &rec_scn)
+int ObLSDDLLogHandler::flush(SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
   ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
@@ -236,10 +236,13 @@ int ObLSDDLLogHandler::flush(palf::SCN &rec_scn)
           ObDDLTableMergeDagParam param;
           param.ls_id_ = ls_->get_ls_id();
           param.tablet_id_ = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
+          param.start_scn_ = ddl_kv_mgr_handle.get_obj()->get_start_scn();
           param.rec_scn_ = rec_scn;
           if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
             if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
               LOG_WARN("failed to schedule ddl kv merge dag", K(ret));
+            } else {
+              ret = OB_SUCCESS;
             }
           }
         }
@@ -249,18 +252,18 @@ int ObLSDDLLogHandler::flush(palf::SCN &rec_scn)
   return OB_SUCCESS;
 }
 
-palf::SCN ObLSDDLLogHandler::get_rec_scn()
+SCN ObLSDDLLogHandler::get_rec_scn()
 {
   int ret = OB_SUCCESS;
   ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
-  palf::SCN rec_scn = palf::SCN::max_scn();
+  SCN rec_scn = SCN::max_scn();
   bool has_ddl_kv = false;
   if (OB_FAIL(ls_->get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     LOG_WARN("failed to build ls tablet iter", K(ret), K(ls_));
   } else {
     while (OB_SUCC(ret)) {
       ObDDLKvMgrHandle ddl_kv_mgr_handle;
-      palf::SCN min_scn = palf::SCN::max_scn();
+      SCN min_scn = SCN::max_scn();
       if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -277,18 +280,18 @@ palf::SCN ObLSDDLLogHandler::get_rec_scn()
         if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kv_min_scn(min_scn))) {
           LOG_WARN("fail to get ddl kv min log ts", K(ret));
         } else {
-          rec_scn = palf::SCN::min(rec_scn, min_scn);
+          rec_scn = SCN::min(rec_scn, min_scn);
         }
       }
     }
   }
-  return OB_SUCC(ret) ? rec_scn : palf::SCN::max_scn();
+  return OB_SUCC(ret) ? rec_scn : SCN::max_scn();
 }
 
 int ObLSDDLLogHandler::replay_ddl_redo_log_(const char *log_buf,
                                             const int64_t buf_size,
                                             int64_t pos,
-                                            const palf::SCN &log_scn)
+                                            const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   ObDDLRedoLog log;
@@ -306,7 +309,7 @@ int ObLSDDLLogHandler::replay_ddl_redo_log_(const char *log_buf,
 int ObLSDDLLogHandler::replay_ddl_prepare_log_(const char *log_buf,
                                                const int64_t buf_size,
                                                int64_t pos,
-                                               const palf::SCN &log_scn)
+                                               const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   ObDDLPrepareLog log;
@@ -324,7 +327,7 @@ int ObLSDDLLogHandler::replay_ddl_prepare_log_(const char *log_buf,
 int ObLSDDLLogHandler::replay_ddl_commit_log_(const char *log_buf,
                                               const int64_t buf_size,
                                               int64_t pos,
-                                              const palf::SCN &log_scn)
+                                              const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   ObDDLCommitLog log;
@@ -342,7 +345,7 @@ int ObLSDDLLogHandler::replay_ddl_commit_log_(const char *log_buf,
 int ObLSDDLLogHandler::replay_ddl_tablet_schema_version_change_log_(const char *log_buf,
                                                                     const int64_t buf_size,
                                                                     int64_t pos,
-                                                                    const palf::SCN &log_scn)
+                                                                    const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   ObTabletSchemaVersionChangeLog log;
@@ -362,7 +365,7 @@ int ObLSDDLLogHandler::replay_ddl_tablet_schema_version_change_log_(const char *
 int ObLSDDLLogHandler::replay_ddl_start_log_(const char *log_buf,
                                              const int64_t buf_size,
                                              int64_t pos,
-                                             const palf::SCN &log_scn)
+                                             const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   ObDDLStartLog log;

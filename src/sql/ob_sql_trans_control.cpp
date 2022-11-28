@@ -575,7 +575,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   auto cl = plan_ctx->get_consistency_level();
   auto &snapshot = das_ctx.get_snapshot();
   if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
-    palf::SCN snapshot_version = palf::SCN::min_scn();
+    SCN snapshot_version = SCN::min_scn();
     if (OB_FAIL(txs->get_weak_read_snapshot_version(snapshot_version))) {
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
     } else {

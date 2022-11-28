@@ -31,7 +31,7 @@
 #include "ob_tenant_freeze_info_mgr.h"
 #include "ob_tenant_compaction_progress.h"
 #include "ob_server_compaction_event_history.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -348,6 +348,26 @@ int ObTenantTabletScheduler::update_upper_trans_version_and_gc_sstable()
   return ret;
 }
 
+int ObTenantTabletScheduler::wait_ls_compaction_finish(const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  bool exist = false;
+  if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id));
+  }
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(MTL(ObTenantDagScheduler*)->check_ls_compaction_dag_exist(ls_id, exist))) {
+      LOG_WARN("failed to check ls compaction dag", K(ret), K(ls_id));
+    } else if (!exist) {
+      break;
+    } else {
+      ob_usleep(100 * 1000); // 100ms
+    }
+  }
+  return ret;
+}
+
 int ObTenantTabletScheduler::schedule_build_bloomfilter(
     const uint64_t table_id,
     const blocksstable::MacroBlockId &macro_id,
@@ -452,7 +472,7 @@ bool ObTenantTabletScheduler::check_weak_read_ts_ready(
     ObLS &ls)
 {
   bool is_ready_for_compaction = false;
-  palf::SCN weak_read_scn;
+  SCN weak_read_scn;
 
   if (FALSE_IT(weak_read_scn = ls.get_ls_wrs_handler()->get_ls_weak_read_ts())) {
   } else if (weak_read_scn.get_val_for_tx() < merge_version) {
@@ -508,11 +528,11 @@ int64_t ObTenantTabletScheduler::get_frozen_version() const
   return frozen_version_;
 }
 
-bool ObTenantTabletScheduler::check_tx_table_ready(ObLS &ls, const palf::SCN &check_scn)
+bool ObTenantTabletScheduler::check_tx_table_ready(ObLS &ls, const SCN &check_scn)
 {
   int ret = OB_SUCCESS;
   bool tx_table_ready = false;
-  palf::SCN max_decided_scn;
+  SCN max_decided_scn;
   if (OB_FAIL(ls.get_max_decided_scn(max_decided_scn))) {
     LOG_WARN("failed to get max decided log_ts", K(ret), "ls_id", ls.get_ls_id());
   } else if (check_scn <= max_decided_scn) {
@@ -529,6 +549,8 @@ int ObTenantTabletScheduler::check_ls_state(ObLS &ls, bool &need_merge)
   need_merge = false;
   if (ls.is_deleted()) {
     LOG_INFO("ls is deleted", K(ret), K(ls));
+  } else if (ls.is_offline()) {
+    LOG_INFO("ls is offline", K(ret), K(ls));
   } else {
     need_merge = true;
   }
@@ -659,9 +681,7 @@ int ObTenantTabletScheduler::schedule_tablet_major_merge(
   }
 
   if (OB_SUCC(ret) && tablet_merge_finish && tablet.get_tablet_meta().report_status_.need_report()) {
-    if (OB_TMP_FAIL(GCTX.ob_service_->submit_tablet_checksums_task(MTL_ID(), ls_id, tablet_id))) {
-      LOG_WARN("failed to submit tablet checksums task to report", K(tmp_ret), K(MTL_ID()), K(tablet_id));
-    } else if (OB_TMP_FAIL(GCTX.ob_service_->submit_tablet_update_task(MTL_ID(), ls_id, tablet_id))) {
+    if (OB_TMP_FAIL(GCTX.ob_service_->submit_tablet_update_task(MTL_ID(), ls_id, tablet_id))) {
       LOG_WARN("failed to submit tablet update task to report", K(tmp_ret), K(MTL_ID()), K(tablet_id));
     } else if (OB_TMP_FAIL(ls.get_tablet_svr()->update_tablet_report_status(tablet_id))) {
       LOG_WARN("failed to update tablet report status", K(tmp_ret), K(MTL_ID()), K(tablet_id));

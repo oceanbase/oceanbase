@@ -15,7 +15,7 @@
 #include "storage/tx_storage/ob_ls_freeze_thread.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/task/ob_timer.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -51,7 +51,7 @@ public:
   // smaller than this one.
   int add_ls_freeze_task(
       ObDataCheckpoint *data_checkpoint,
-      palf::SCN rec_scn);
+      share::SCN rec_scn);
 
   int do_minor_freeze();
 

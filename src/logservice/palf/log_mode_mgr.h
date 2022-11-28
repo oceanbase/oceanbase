@@ -57,7 +57,7 @@ public:
   virtual void reset_status();
   virtual int get_access_mode(AccessMode &access_mode) const;
   virtual int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const;
-  virtual int get_ref_scn(int64_t &mode_version, SCN &ref_scn) const;
+  virtual int get_ref_scn(int64_t &mode_version, share::SCN &ref_scn) const;
   bool can_append() const;
   bool can_raw_write() const;
   bool is_in_pending_state() const;
@@ -68,7 +68,7 @@ public:
   virtual int reconfirm_mode_meta();
   virtual int change_access_mode(const int64_t mode_version,
                                  const AccessMode &access_mode,
-                                 const SCN &ref_scn);
+                                 const share::SCN &ref_scn);
   virtual int handle_prepare_response(const common::ObAddr &server,
                                       const int64_t msg_proposal_id,
                                       const int64_t accept_log_proposal_id,
@@ -95,7 +95,7 @@ private:
   bool can_finish_change_mode_() const;
   bool is_need_retry_() const;
   int switch_state_(const AccessMode &access_mode,
-                    const SCN &ref_scn,
+                    const share::SCN &ref_scn,
                     const bool is_reconfirm);
   int submit_prepare_req_(const bool need_inc_pid, const bool need_send_and_handle_prepare);
   int submit_accept_req_(const int64_t proposal_id, const LogModeMeta &mode_meta);

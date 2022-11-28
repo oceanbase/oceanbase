@@ -17,6 +17,7 @@
 #include "ob_tenant_weak_read_server_version_mgr.h"
 
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 namespace oceanbase
 {
 namespace transaction
@@ -31,9 +32,9 @@ ObTenantWeakReadServerVersionMgr::ObTenantWeakReadServerVersionMgr() :
 ObTenantWeakReadServerVersionMgr::~ObTenantWeakReadServerVersionMgr()
 {}
 
-palf::SCN ObTenantWeakReadServerVersionMgr::get_version() const
+SCN ObTenantWeakReadServerVersionMgr::get_version() const
 {
-  palf::SCN ret_version;
+  SCN ret_version;
   ServerVersion sv;
 
   get_version(sv);
@@ -42,7 +43,7 @@ palf::SCN ObTenantWeakReadServerVersionMgr::get_version() const
   return ret_version;
 }
 
-palf::SCN ObTenantWeakReadServerVersionMgr::get_version(int64_t &total_part_count,
+SCN ObTenantWeakReadServerVersionMgr::get_version(int64_t &total_part_count,
 	int64_t &valid_part_count) const
 {
   ServerVersion sv;
@@ -68,7 +69,7 @@ int ObTenantWeakReadServerVersionMgr::update_with_part_info(const uint64_t tenan
     const int64_t epoch_tstamp,
     const bool need_skip,
     const bool is_user_part,
-    const palf::SCN version)
+    const SCN version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(epoch_tstamp <= 0)
@@ -85,7 +86,7 @@ int ObTenantWeakReadServerVersionMgr::update_with_part_info(const uint64_t tenan
 
 int ObTenantWeakReadServerVersionMgr::generate_new_version(const uint64_t tenant_id,
     const int64_t epoch_tstamp,
-    const palf::SCN base_version_when_no_valid_partition,
+    const SCN base_version_when_no_valid_partition,
     const bool need_print_status)
 {
   int ret = OB_SUCCESS;
@@ -128,7 +129,7 @@ int ObTenantWeakReadServerVersionMgr::generate_new_version(const uint64_t tenant
 void ObTenantWeakReadServerVersionMgr::ServerVersionInner::update_with_part_info(const int64_t epoch_tstamp,
     const bool need_skip,
     const bool is_user_part,
-    const palf::SCN version)
+    const SCN version)
 {
   if (epoch_tstamp != epoch_tstamp_) {
     // new epoch statistic start
@@ -137,7 +138,7 @@ void ObTenantWeakReadServerVersionMgr::ServerVersionInner::update_with_part_info
   }
 
   if (! need_skip) {
-    palf::SCN &target_version = version_;
+    SCN &target_version = version_;
     int64_t &target_valid_count = is_user_part ? valid_user_part_count_ : valid_inner_part_count_;
     // update target version
     if (!target_version.is_valid()) {
@@ -159,7 +160,7 @@ void ObTenantWeakReadServerVersionMgr::ServerVersionInner::update_with_part_info
 // generate weak read version for tenant without partitions in local server
 int ObTenantWeakReadServerVersionMgr::ServerVersionInner::amend(const uint64_t tenant_id,
     const int64_t new_epoch_tstamp,
-    const palf::SCN base_version_when_no_valid_partition)
+    const SCN base_version_when_no_valid_partition)
 {
   int ret = OB_SUCCESS;
   static const int64_t PRINT_INTERVAL = 10 * 1000 * 1000;
@@ -214,7 +215,7 @@ int ObTenantWeakReadServerVersionMgr::ServerVersionInner::update(const ServerVer
     valid_user_part_count_ = new_version.valid_user_part_count_;
 
     // version should incease monotonically
-    version_ = palf::SCN::max(new_version.version_, version_);
+    version_ = SCN::max(new_version.version_, version_);
   }
   return ret;
 }

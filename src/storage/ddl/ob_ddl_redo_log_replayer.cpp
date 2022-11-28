@@ -23,6 +23,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
+using namespace oceanbase::share;
 
 ObDDLRedoLogReplayer::ObDDLRedoLogReplayer()
   : is_inited_(false), ls_(nullptr), allocator_()
@@ -51,7 +52,7 @@ int ObDDLRedoLogReplayer::init(ObLS *ls)
   return ret;
 }
 
-int ObDDLRedoLogReplayer::replay_start(const ObDDLStartLog &log, const palf::SCN &scn)
+int ObDDLRedoLogReplayer::replay_start(const ObDDLStartLog &log, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -84,7 +85,7 @@ int ObDDLRedoLogReplayer::replay_start(const ObDDLStartLog &log, const palf::SCN
   return ret;
 }
 
-int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const palf::SCN &scn)
+int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   const ObDDLMacroBlockRedoInfo &redo_info = log.get_redo_info();
@@ -147,7 +148,7 @@ int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const palf::SCN &
   return ret;
 }
 
-int ObDDLRedoLogReplayer::replay_prepare(const ObDDLPrepareLog &log, const palf::SCN &scn)
+int ObDDLRedoLogReplayer::replay_prepare(const ObDDLPrepareLog &log, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -185,7 +186,7 @@ int ObDDLRedoLogReplayer::replay_prepare(const ObDDLPrepareLog &log, const palf:
   return ret;
 }
 
-int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const palf::SCN &scn)
+int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -227,8 +228,8 @@ int ObDDLRedoLogReplayer::replay_commit(const ObDDLCommitLog &log, const palf::S
 }
 
 int ObDDLRedoLogReplayer::check_need_replay_ddl_log(const ObITable::TableKey &table_key,
-                                                    const palf::SCN &ddl_start_scn,
-                                                    const palf::SCN &scn,
+                                                    const SCN &ddl_start_scn,
+                                                    const SCN &scn,
                                                     bool &need_replay,
                                                     ObTabletHandle &tablet_handle)
 {

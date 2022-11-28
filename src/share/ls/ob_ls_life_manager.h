@@ -20,10 +20,6 @@
 
 namespace oceanbase
 {
-namespace palf
-{
-class SCN;
-}
 namespace common
 {
 class ObMySQLTransaction;
@@ -35,6 +31,7 @@ class ObMySQLResult;
 }
 namespace share
 {
+class SCN;
 struct ObLSStatusInfo;
 class ObLSID;
 /*
@@ -74,7 +71,7 @@ public:
    * @param[in]zone_priority: the primary_zone of OB_ALL_LS_ELECTION_REFERENCE_INFO
    * */
   int create_new_ls(const ObLSStatusInfo &ls_info,
-                    const palf::SCN &create_ls_scn,
+                    const SCN &create_ls_scn,
                     const common::ObString &zone_priority);
   /*
    * description: for primary cluster and GC of standby, delete ls from each inner_table
@@ -92,7 +89,7 @@ public:
   int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
-                      const palf::SCN &drop_scn);
+                      const SCN &drop_scn);
   /*
    * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference 
    * @param[in] tenant_id: tenant_id
@@ -111,7 +108,7 @@ public:
    * description: for standby cluster, create new ls
    */
   int create_new_ls_in_trans(const ObLSStatusInfo &ls_info,
-                            const palf::SCN &create_ls_scn,
+                            const SCN &create_ls_scn,
                             const common::ObString &zone_priority,
                             ObMySQLTransaction &trans);
   /*
@@ -126,7 +123,7 @@ public:
   int set_ls_offline_in_trans(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
-                      const palf::SCN &drop_scn,
+                      const SCN &drop_scn,
                       ObMySQLTransaction &trans);
 
 private:

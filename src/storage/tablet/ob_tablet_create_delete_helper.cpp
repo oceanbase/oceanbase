@@ -31,7 +31,7 @@
 #include "storage/tablet/ob_tablet_status.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -96,7 +96,7 @@ int ObTabletCreateDeleteHelper::prepare_create_tablets(
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_.get_ls_id();
   const ObTransID &tx_id = trans_flags.tx_id_;
-  const palf::SCN scn = trans_flags.scn_;
+  const SCN scn = trans_flags.scn_;
   const bool is_clog_replaying = trans_flags.for_replay_;
   const int64_t create_begin_ts = ObTimeUtility::current_monotonic_time();
   ObTabletBindingPrepareCtx binding_ctx;
@@ -845,12 +845,11 @@ int ObTabletCreateDeleteHelper::roll_back_remove_tablet(
     } else {
       LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_id));
     }
-  } else if (trans_flags.for_replay_) {
-    // for replay, no need to dec ref for memtable
   } else {
     ObTablet *tablet = tablet_handle.get_obj();
     ObTabletMemtableMgr *memtable_mgr = static_cast<ObTabletMemtableMgr*>(tablet->get_memtable_mgr());
     ObSEArray<ObTableHandleV2, MAX_MEMSTORE_CNT> memtable_handle_array;
+    bool need_dec = false;
     if (OB_FAIL(memtable_mgr->get_all_memtables(memtable_handle_array))) {
       LOG_WARN("failed to get all memtables", K(ret), K(ls_id), K(tablet_id));
     } else if (memtable_handle_array.empty()) {
@@ -869,8 +868,10 @@ int ObTabletCreateDeleteHelper::roll_back_remove_tablet(
       } else if (!last_memtable->has_multi_source_data_unit(MultiSourceDataUnitType::TABLET_TX_DATA)) {
         LOG_INFO("last memtable does not have msd, do nothing", K(ret), K(ls_id), K(tablet_id), K(cnt));
       } else if (OB_FAIL(tablet->get_tx_data(tx_data))) {
-        LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, ObScnRange::MAX_SCN,
+        LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id), K(cnt));
+      } else if (OB_FAIL(ObTabletBindingHelper::check_need_dec_cnt_for_abort(tx_data, need_dec))) {
+        LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(trans_flags));
+      } else if (need_dec && OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, ObScnRange::MAX_SCN,
           trans_flags.for_replay_, MemtableRefOp::DEC_REF, true/*is_callback*/))) {
         LOG_WARN("failed to save msd", K(ret), K(ls_id), K(tablet_id), K(cnt));
       } else {
@@ -912,7 +913,7 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablet(
     // replaying procedure, clog ts is smaller than tx log ts, just skip
     LOG_INFO("skip abort create tablet", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
   } else if (OB_UNLIKELY(!trans_flags.for_replay_
-                         && tx_data.tx_scn_ != palf::SCN::max_scn()
+                         && tx_data.tx_scn_ != SCN::max_scn()
                          && trans_flags.scn_ <= tx_data.tx_scn_)) {
     // If tx log ts equals SCN::max_scn(), it means redo callback has not been called.
     // Thus, we should handle this situation
@@ -991,11 +992,6 @@ int ObTabletCreateDeleteHelper::prepare_remove_tablets(
 
         if (OB_FAIL(ObTabletBindingHelper::lock_and_set_tx_data(tablet_handle, tx_data, trans_flags.for_replay_))) {
           LOG_WARN("failed to lock tablet binding", K(ret), K(key), K(tx_data));
-          // TODO(bowen.gbw): temproarily swallow 4200 error while prepare remove tablets
-          if (trans_flags.for_replay_ && OB_HASH_EXIST == ret) {
-            ret = OB_SUCCESS;
-            LOG_INFO("swallow 4200 error", K(ret), K(key), K(tx_data), K(trans_flags));
-          }
         }
       }
     }
@@ -1060,7 +1056,7 @@ int ObTabletCreateDeleteHelper::redo_remove_tablets(
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_.get_ls_id();
   const bool is_clog_replaying = trans_flags.for_replay_;
-  const palf::SCN scn = trans_flags.scn_;
+  const SCN scn = trans_flags.scn_;
 
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1241,7 +1237,7 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
   } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret), K(key));
   } else if (OB_UNLIKELY(!trans_flags.for_replay_
-                         && trans_flags.scn_ != palf::SCN::invalid_scn()
+                         && trans_flags.scn_ != SCN::invalid_scn()
                          && trans_flags.scn_ <= tx_data.tx_scn_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log ts is smaller than tx log ts", K(ret), K(key), K(trans_flags), K(tx_data));
@@ -1252,11 +1248,10 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
     is_valid = false;
     LOG_INFO("tablet status is not DELETING", K(ret), K(key), K(trans_flags), K(tx_data));
   } else {
-    if (trans_flags.for_replay_) {
-    } else if (trans_flags.is_redo_synced()) {
-      // on redo cb has been called
-      // do nothing(on redo cb has already done DEC_REF)
-    } else {
+    bool need_dec = false;
+    if (OB_FAIL(ObTabletBindingHelper::check_need_dec_cnt_for_abort(tx_data, need_dec))) {
+      LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(trans_flags));
+    } else if (need_dec) {
       ref_op = MemtableRefOp::DEC_REF;
     }
   }
@@ -2247,7 +2242,7 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
   const ObTransID &tx_id = trans_flags.tx_id_;
   const bool for_replay = trans_flags.for_replay_;
   MemtableRefOp ref_op = for_replay ? MemtableRefOp::NONE : MemtableRefOp::INC_REF;
-  SCN scn = trans_flags.for_replay_ ? trans_flags.scn_ : palf::SCN::max_scn();
+  SCN scn = trans_flags.for_replay_ ? trans_flags.scn_ : SCN::max_scn();
   SCN create_scn = trans_flags.scn_;
   ObMetaDiskAddr mem_addr;
   ObTabletTableStoreFlag table_store_flag;

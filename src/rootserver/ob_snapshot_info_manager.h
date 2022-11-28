@@ -15,7 +15,7 @@
 
 #include "share/ob_snapshot_table_proxy.h"
 #include "lib/net/ob_addr.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 namespace oceanbase
 {
 namespace common
@@ -25,9 +25,6 @@ class ObMySQLProxy;
 namespace share
 {
 class ObSnapshotInfo;
-}
-namespace palf
-{
   class SCN;
 }
 namespace rootserver
@@ -53,7 +50,7 @@ public:
   int get_snapshot(common::ObMySQLProxy &proxy,
                    const uint64_t tenant_id,
                    share::ObSnapShotType snapshot_type,
-                   const palf::SCN &snapshot_scn,
+                   const share::SCN &snapshot_scn,
                    share::ObSnapshotInfo &snapshot_info);
 
   int check_restore_point(common::ObMySQLProxy &proxy,
@@ -69,7 +66,7 @@ public:
       share::ObSnapShotType snapshot_type,
       const uint64_t tenant_id,
       const int64_t schema_version,
-      const palf::SCN &snapshot_scn,
+      const share::SCN &snapshot_scn,
       const char *comment,
       const common::ObIArray<ObTabletID> &tablet_ids);
   int batch_release_snapshot_in_trans(
@@ -77,7 +74,7 @@ public:
       share::ObSnapShotType snapshot_type,
       const uint64_t tenant_id,
       const int64_t schema_version,
-      const palf::SCN &snapshot_scn,
+      const share::SCN &snapshot_scn,
       const common::ObIArray<ObTabletID> &tablet_ids);
 
 private:

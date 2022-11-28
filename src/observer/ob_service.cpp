@@ -62,7 +62,7 @@
 #include "storage/ls/ob_ls.h"
 #include "logservice/ob_log_service.h"        // ObLogService
 #include "logservice/palf_handle_guard.h"     // PalfHandleGuard
-#include "logservice/palf/scn.h"     // PalfHandleGuard
+#include "share/scn.h"     // PalfHandleGuard
 #include "storage/backup/ob_backup_handler.h"
 #include "storage/backup/ob_ls_backup_clean_mgr.h"
 #include "storage/ob_file_system_router.h"
@@ -166,7 +166,7 @@ ObService::ObService(const ObGlobalContext &gctx)
     lease_state_mgr_(), heartbeat_process_(gctx, schema_updater_, lease_state_mgr_),
     gctx_(gctx), server_trace_task_(), schema_release_task_(),
     schema_status_task_(), remote_master_rs_update_task_(gctx), ls_table_updater_(),
-    tablet_table_updater_(), tablet_checksum_updater_(), meta_table_checker_()
+    tablet_table_updater_(), meta_table_checker_()
   {
   }
 
@@ -207,8 +207,6 @@ int ObService::init(common::ObMySQLProxy &sql_proxy,
     FLOG_WARN("init tablet table updater failed", KR(ret));
   } else if (OB_FAIL(ls_table_updater_.init())) {
     FLOG_WARN("init log stream table updater failed", KR(ret));
-  } else if (OB_FAIL(tablet_checksum_updater_.init(*this))) {
-    FLOG_WARN("init tablet checksum updater failed", KR(ret));
   } else if (OB_FAIL(meta_table_checker_.init(
       gctx_.lst_operator_,
       gctx_.tablet_operator_,
@@ -302,10 +300,6 @@ void ObService::stop()
     tablet_table_updater_.stop();
     FLOG_INFO("tablet table updater stopped");
 
-    FLOG_INFO("begin to stop tablet checksum updater");
-    tablet_checksum_updater_.stop();
-    FLOG_INFO("tablet checksum updater stopped");
-
     FLOG_INFO("begin to stop meta table checker");
     meta_table_checker_.stop();
     FLOG_INFO("meta table checker stopped");
@@ -330,10 +324,6 @@ void ObService::wait()
     FLOG_INFO("begin to wait tablet table updater");
     tablet_table_updater_.wait();
     FLOG_INFO("wait tablet table updater success");
-
-    FLOG_INFO("begin to wait tablet checksum updater");
-    tablet_checksum_updater_.wait();
-    FLOG_INFO("wait tablet checksum updater success");
 
     FLOG_INFO("begin to wait meta table checker");
     meta_table_checker_.wait();
@@ -432,23 +422,6 @@ int ObService::submit_tablet_update_task(
   return ret;
 }
 
-int ObService::submit_tablet_checksums_task(
-    const uint64_t tenant_id,
-    const ObLSID &ls_id,
-    const ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (!ls_id.is_valid_with_tenant(tenant_id) || !tablet_id.is_valid_with_tenant(tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(tablet_checksum_updater_.async_update(tenant_id, ls_id, tablet_id))) {
-    LOG_WARN("fail to async update tablet checksum", KR(ret), K(tenant_id), K(ls_id), K(tablet_id));
-  }
-  return ret;
-}
 
 int ObService::submit_async_refresh_schema_task(
     const uint64_t tenant_id,
@@ -474,7 +447,7 @@ int ObService::check_frozen_scn(const obrpc::ObCheckFrozenScnArg &arg)
 {
   LOG_INFO("receive check frozen SCN request", K(arg));
   int ret = OB_SUCCESS;
-  palf::SCN last_merged_scn = palf::SCN::min_scn();
+  SCN last_merged_scn = SCN::min_scn();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -664,8 +637,8 @@ int ObService::backup_completing_log(const obrpc::ObBackupComplLogArg &arg)
   ObBackupSetDesc backup_set_desc;
   backup_set_desc.backup_set_id_ = arg.backup_set_id_;
   backup_set_desc.backup_type_.type_ = arg.backup_type_;
-  palf::SCN start_scn = arg.start_scn_;
-  palf::SCN end_scn = arg.end_scn_;
+  SCN start_scn = arg.start_scn_;
+  SCN end_scn = arg.end_scn_;
   ObLSID ls_id = arg.ls_id_;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (!arg.is_valid() || OB_ISNULL(sql_proxy)) {
@@ -743,7 +716,7 @@ int ObService::backup_meta(const obrpc::ObBackupMetaArg &arg)
   const ObLSID &ls_id = arg.ls_id_;
   const int64_t turn_id = arg.turn_id_;
   const int64_t retry_id = arg.retry_id_;
-  const palf::SCN start_scn = arg.start_scn_;
+  const SCN start_scn = arg.start_scn_;
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (!arg.is_valid() || OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1034,7 +1007,7 @@ int ObService::check_modify_time_elapsed(
   } else {
     MTL_SWITCH(arg.tenant_id_) {
       ObLSHandle ls_handle;
-      palf::SCN tmp_scn;
+      SCN tmp_scn;
       transaction::ObTransService *txs = MTL(transaction::ObTransService *);
       ObLSService *ls_service = MTL(ObLSService *);
       if (OB_FAIL(ls_service->get_ls(ObLSID(arg.ls_id_), ls_handle, ObLSGetMod::OBSERVER_MOD))) {
@@ -1946,11 +1919,13 @@ int ObService::write_ddl_sstable_commit_log(const ObDDLWriteSSTableCommitLogArg 
   return ret;
 }
 
-int ObService::inner_fill_tablet_replica_(
+int ObService::inner_fill_tablet_info_(
     const int64_t tenant_id,
     const ObTabletID &tablet_id,
     storage::ObLS *ls,
-    ObTabletReplica &tablet_replica)
+    ObTabletReplica &tablet_replica,
+    share::ObTabletReplicaChecksumItem &tablet_checksum,
+    const bool need_checksum)
 {
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
@@ -1982,9 +1957,9 @@ int ObService::inner_fill_tablet_replica_(
     const ObLSID &ls_id = ls->get_ls_id();
     int64_t data_size = 0;
     int64_t required_size = 0;
-    ObArray<int64_t> column_checksums; // param palceholder
+    ObArray<int64_t> column_checksums;
     if (OB_FAIL(tablet_handle.get_obj()->get_tablet_report_info(column_checksums, data_size,
-        required_size, false/*need_checksum*/))) {
+        required_size, need_checksum))) {
       LOG_WARN("fail to get tablet report info from tablet", KR(ret), K(tenant_id), K(tablet_id));
     } else if (OB_FAIL(tablet_replica.init(
         tenant_id,
@@ -1996,70 +1971,30 @@ int ObService::inner_fill_tablet_replica_(
         required_size))) {
       LOG_WARN("fail to init a tablet replica", KR(ret), K(tenant_id),
           K(tablet_id), K(tablet_replica));
-    }
-  }
-  return ret;
-}
-
-int ObService::inner_fill_tablet_replica_checksum_item_(
-    const int64_t tenant_id,
-    const ObTabletID &tablet_id,
-    storage::ObLS *ls,
-    share::ObTabletReplicaChecksumItem &item)
-{
-  int ret = OB_SUCCESS;
-  ObTabletHandle tablet_handle;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not inited", KR(ret));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid())
-             || OB_INVALID_TENANT_ID == tenant_id
-             || OB_ISNULL(ls)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument or nullptr", KR(ret), K(tablet_id), K(tenant_id));
-  } else if (OB_ISNULL(ls->get_tablet_svr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get_tablet_svr is null", KR(ret), K(tenant_id), K(tablet_id));
-  } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(
-      tablet_id,
-      tablet_handle,
-      ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
-    if (OB_TABLET_NOT_EXIST != ret) {
-      LOG_WARN("get tablet failed", KR(ret), K(tenant_id), K(tablet_id));
-    }
-  } else if (OB_ISNULL(gctx_.config_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("gctx_.config_ is null", KR(ret), K(tenant_id), K(tablet_id));
-  } else {
-    item.tenant_id_ = tenant_id;
-    item.ls_id_ = ls->get_ls_id();
-    item.tablet_id_ = tablet_id;
-    item.server_ = gctx_.self_addr();
-    item.row_count_ = tablet_handle.get_obj()->get_tablet_meta().report_status_.row_count_;
-    item.data_checksum_ = tablet_handle.get_obj()->get_tablet_meta().report_status_.data_checksum_;
-    const uint64_t compaction_scn_val = (uint64_t)(
-      tablet_handle.get_obj()->get_tablet_meta().report_status_.merge_snapshot_version_);
-    if (OB_FAIL(item.compaction_scn_.convert_for_inner_table_field(compaction_scn_val))) {
-      LOG_WARN("fail to convert val to SCN", KR(ret), K(compaction_scn_val));
-    }
-
-    int64_t data_size = 0;
-    int64_t required_size = 0;
-    ObArray<int64_t> column_checksums;
-    if (FAILEDx(tablet_handle.get_obj()->get_tablet_report_info(column_checksums, data_size, required_size))) {
-      LOG_WARN("fail to get column checksums from tablet", KR(ret), K(tenant_id), K(tablet_id), K(item));
-    } else if (OB_FAIL(item.column_meta_.init(column_checksums))) {
+    } else if (!need_checksum) {
+    } else if (OB_FAIL(tablet_checksum.column_meta_.init(column_checksums))) {
       LOG_WARN("fail to init report column meta with column_checksums", KR(ret), K(column_checksums));
+    } else if (OB_FAIL(tablet_checksum.compaction_scn_.convert_for_tx(snapshot_version))) {
+      LOG_WARN("failed to convert scn", KR(ret), K(snapshot_version));
+    } else {
+      tablet_checksum.tenant_id_ = tenant_id;
+      tablet_checksum.ls_id_ = ls->get_ls_id();
+      tablet_checksum.tablet_id_ = tablet_id;
+      tablet_checksum.server_ = gctx_.self_addr();
+      tablet_checksum.row_count_ = tablet_handle.get_obj()->get_tablet_meta().report_status_.row_count_;
+      tablet_checksum.data_checksum_ = tablet_handle.get_obj()->get_tablet_meta().report_status_.data_checksum_;
     }
   }
   return ret;
 }
 
-int ObService::fill_tablet_replica(
+int ObService::fill_tablet_report_info(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
     const ObTabletID &tablet_id,
-    ObTabletReplica &tablet_replica)
+    ObTabletReplica &tablet_replica,
+    share::ObTabletReplicaChecksumItem &tablet_checksum,
+    const bool need_checksum)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -2085,62 +2020,18 @@ int ObService::fill_tablet_replica(
           LOG_TRACE("log stream not exist in this tenant", KR(ret), K(tenant_id), K(ls_id));
         }
       } else if (FALSE_IT(ls = ls_handle.get_ls())) {
-      } else if (OB_FAIL(inner_fill_tablet_replica_(tenant_id,
-                                                    tablet_id,
-                                                    ls,
-                                                    tablet_replica))) {
+      } else if (OB_FAIL(inner_fill_tablet_info_(tenant_id,
+                                                 tablet_id,
+                                                 ls,
+                                                 tablet_replica,
+                                                 tablet_checksum,
+                                                 need_checksum))) {
         if (OB_TABLET_NOT_EXIST != ret) {
           LOG_WARN("fail to inner fill tenant's tablet replica", KR(ret),
-                    K(tenant_id), K(tablet_id), K(ls), K(tablet_replica));
+                    K(tenant_id), K(tablet_id), K(ls), K(tablet_replica), K(tablet_checksum), K(need_checksum));
         } else {
           LOG_TRACE("tablet not exist in this log stream", KR(ret),
-                    K(tenant_id), K(tablet_id), K(ls), K(tablet_replica));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObService::fill_tablet_replica_checksum_item(
-    const uint64_t tenant_id,
-    const share::ObLSID &ls_id,
-    const ObTabletID &tablet_id,
-    share::ObTabletReplicaChecksumItem &item)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("service not inited", KR(ret));
-  } else if (!tablet_id.is_valid() || !ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tablet_id), K(ls_id), K(tenant_id));
-  } else {
-    MTL_SWITCH(tenant_id) {
-      ObTabletHandle tablet_handle;
-      ObLSHandle ls_handle;
-      storage::ObLS *ls = nullptr;
-      ObLSService* ls_svr = nullptr;
-      if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-        if (OB_LS_NOT_EXIST != ret) {
-          LOG_WARN("fail to get log_stream's ls_handle", KR(ret), K(tenant_id), K(ls_id));
-        } else {
-          LOG_TRACE("log stream not exist in this tenant", KR(ret), K(tenant_id), K(ls_id));
-        }
-      } else if (FALSE_IT(ls = ls_handle.get_ls())) {
-      } else if (OB_FAIL(inner_fill_tablet_replica_checksum_item_(tenant_id,
-                                                                  tablet_id,
-                                                                  ls,
-                                                                  item))) {
-        if (OB_TABLET_NOT_EXIST != ret) {
-          LOG_WARN("fail to inner fill tenant's tablet checksum item", KR(ret),
-                    K(tenant_id), K(tablet_id), K(ls), K(item));
-        } else {
-          LOG_TRACE("tablet not exist in this log stream", KR(ret),
-                    K(tenant_id), K(tablet_id), K(ls), K(item));
+                    K(tenant_id), K(tablet_id), K(ls), K(tablet_replica), K(tablet_checksum), K(need_checksum));
         }
       }
     }

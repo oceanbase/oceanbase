@@ -445,16 +445,16 @@ int ObPartTransCtx::merge_prepare_log_info_(const ObLSLogInfo &prepare_info)
   return ret;
 }
 
-int ObPartTransCtx::update_2pc_prepare_version_(const palf::SCN &prepare_version)
+int ObPartTransCtx::update_2pc_prepare_version_(const SCN &prepare_version)
 {
   int ret = OB_SUCCESS;
 
-  exec_info_.prepare_version_ = palf::SCN::max(prepare_version, exec_info_.prepare_version_);
+  exec_info_.prepare_version_ = SCN::max(prepare_version, exec_info_.prepare_version_);
 
   return ret;
 }
 
-int ObPartTransCtx::set_2pc_commit_version_(const palf::SCN &commit_version)
+int ObPartTransCtx::set_2pc_commit_version_(const SCN &commit_version)
 {
   int ret = OB_SUCCESS;
 

@@ -2589,7 +2589,7 @@ ObCheckFrozenScnArg::ObCheckFrozenScnArg()
 
 bool ObCheckFrozenScnArg::is_valid() const
 {
-  return frozen_scn_.is_valid() && frozen_scn_ > palf::SCN::min_scn();
+  return frozen_scn_.is_valid() && frozen_scn_ > SCN::min_scn();
 }
 
 void ObCreateTabletBatchRes::reset()
@@ -3830,7 +3830,8 @@ ObUpgradeJobArg::ObUpgradeJobArg()
 {}
 bool ObUpgradeJobArg::is_valid() const
 {
-  return INVALID_ACTION != action_ && version_ > 0;
+  return INVALID_ACTION != action_
+          && (UPGRADE_POST_ACTION != action_ || version_ > 0);
 }
 int ObUpgradeJobArg::assign(const ObUpgradeJobArg &other)
 {
@@ -3840,6 +3841,41 @@ int ObUpgradeJobArg::assign(const ObUpgradeJobArg &other)
   return ret;
 }
 OB_SERIALIZE_MEMBER(ObUpgradeJobArg, action_, version_);
+
+int ObUpgradeTableSchemaArg::init(
+    const uint64_t tenant_id,
+    const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  ObDDLArg::reset();
+  exec_tenant_id_ = tenant_id;
+  tenant_id_ = tenant_id;
+  table_id_ = table_id;
+  return ret;
+}
+
+bool ObUpgradeTableSchemaArg::is_valid() const
+{
+  return common::OB_INVALID_TENANT_ID != exec_tenant_id_
+         && common::OB_INVALID_TENANT_ID != tenant_id_
+         /*index、lob table will be created with related system table*/
+         && is_system_table(table_id_);
+}
+
+int ObUpgradeTableSchemaArg::assign(const ObUpgradeTableSchemaArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ObDDLArg", KR(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    table_id_ = other.table_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObUpgradeTableSchemaArg, ObDDLArg), tenant_id_, table_id_);
 
 int ObAdminFlushCacheArg::assign(const ObAdminFlushCacheArg &other)
 {
@@ -5682,7 +5718,7 @@ int ObCreateLSArg::init(const int64_t tenant_id,
     const share::ObLSID &id,  const ObReplicaType replica_type,
     const common::ObReplicaProperty &replica_property,
     const share::ObAllTenantInfo &tenant_info,
-    const palf::SCN &create_scn,
+    const SCN &create_scn,
     const lib::Worker::CompatMode &mode,
     const bool create_with_palf,
     const palf::PalfBaseInfo &palf_base_info)
@@ -5828,7 +5864,7 @@ int ObLSAccessModeInfo::init(
     uint64_t tenant_id, const ObLSID &ls_id,
     const int64_t mode_version,
     const palf::AccessMode &access_mode,
-    const palf::SCN &ref_scn)
+    const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
@@ -6101,7 +6137,7 @@ int ObContextDDLArg::assign(const ObContextDDLArg &other)
   return ret;
 }
 
-int ObBatchCreateTabletArg::init_create_tablet(const share::ObLSID &id, const palf::SCN &major_frozen_scn)
+int ObBatchCreateTabletArg::init_create_tablet(const share::ObLSID &id, const SCN &major_frozen_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!id.is_valid() || !major_frozen_scn.is_valid())) {
@@ -6555,7 +6591,7 @@ ObRpcRemoteWriteDDLPrepareLogArg::ObRpcRemoteWriteDDLPrepareLogArg()
 int ObRpcRemoteWriteDDLPrepareLogArg::init(const uint64_t tenant_id,
                                           const share::ObLSID &ls_id,
                                           const storage::ObITable::TableKey &table_key,
-                                          const palf::SCN &start_scn,
+                                          const SCN &start_scn,
                                           const int64_t table_id,
                                           const int64_t execution_id,
                                           const int64_t ddl_task_id)
@@ -6588,8 +6624,8 @@ ObRpcRemoteWriteDDLCommitLogArg::ObRpcRemoteWriteDDLCommitLogArg()
 int ObRpcRemoteWriteDDLCommitLogArg::init(const uint64_t tenant_id,
                                           const share::ObLSID &ls_id,
                                           const storage::ObITable::TableKey &table_key,
-                                          const palf::SCN &start_scn,
-                                          const palf::SCN &prepare_scn)
+                                          const SCN &start_scn,
+                                          const SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || !start_scn.is_valid()

@@ -532,12 +532,12 @@ int TriggerHandle::do_handle_before_row(
             ret = OB_NOT_INIT;
             LOG_WARN("trigger row point params is not init", K(ret));
           } else {
+            const ObTableModifySpec &modify_spec = static_cast<const ObTableModifySpec&>(dml_op.get_spec());
             if (OB_FAIL(calc_before_row(dml_op, trig_rtdef, tg_arg.get_trigger_id()))) {
               LOG_WARN("failed to calc before row", K(ret));
             } else if ((ObTriggerEvents::is_update_event(tg_event) ||
                   ObTriggerEvents::is_insert_event(tg_event))) {
-                const ObTableModifySpec &modify_spec = static_cast<const ObTableModifySpec&>(dml_op.get_spec());
-                if (!modify_spec.has_instead_of_trigger_ &&
+                if (!trig_ctdef.all_tm_points_.has_instead_row() &&
                     OB_FAIL(check_and_update_new_row(&dml_op,
                                               trig_ctdef.trig_col_info_,
                                               dml_op.get_eval_ctx(),
@@ -545,6 +545,13 @@ int TriggerHandle::do_handle_before_row(
                                               trig_rtdef.new_record_,
                                               ObTriggerEvents::is_update_event(tg_event)))) {
                   LOG_WARN("failed to check updated new row", K(ret));
+              }
+            }
+            if (OB_SUCC(ret) && trig_ctdef.all_tm_points_.has_instead_row()) {
+              GET_PHY_PLAN_CTX(dml_op.get_exec_ctx())->add_affected_rows(1);
+              if (ObTriggerEvents::is_update_event(tg_event)) {
+                GET_PHY_PLAN_CTX(dml_op.get_exec_ctx())->add_row_matched_count(1);
+                GET_PHY_PLAN_CTX(dml_op.get_exec_ctx())->add_row_duplicated_count(1);
               }
             }
             LOG_DEBUG("TRIGGER calc before row", K(need_fire), K(i));

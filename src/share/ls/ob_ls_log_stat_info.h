@@ -17,7 +17,7 @@
 #include "lib/net/ob_addr.h"     // ObAddr
 #include "common/ob_role.h"      // ObRole
 #include "share/ls/ob_ls_info.h" // MemberList
-#include "logservice/palf/scn.h" // SCN
+#include "share/scn.h" // SCN
 
 namespace oceanbase
 {

@@ -80,7 +80,7 @@ void ObStoreCtx::reset()
 int ObStoreCtx::init_for_read(const ObLSID &ls_id,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
-                              const palf::SCN &snapshot_version)
+                              const SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_svr = MTL(ObLSService*);
@@ -96,7 +96,7 @@ int ObStoreCtx::init_for_read(const ObLSID &ls_id,
 int ObStoreCtx::init_for_read(const ObLSHandle &ls_handle,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
-                              const palf::SCN &snapshot_version)
+                              const SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -130,7 +130,7 @@ void ObStoreCtx::force_print_trace_log()
 void ObStoreRowLockState::reset()
 {
   is_locked_ = false;
-  trans_version_ = palf::SCN::min_scn();
+  trans_version_ = SCN::min_scn();
   lock_trans_id_.reset();
   lock_data_sequence_ = 0;
   is_delayed_cleanout_ = false;

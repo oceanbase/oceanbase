@@ -25,7 +25,7 @@ namespace storage
 {
 
 using namespace oceanbase::transaction;
-using namespace oceanbase::palf;
+using namespace oceanbase::share;
 
 int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
                            SliceAllocator *slice_allocator,
@@ -424,7 +424,7 @@ bool ObTxDataMemtable::ready_for_flush()
     set_snapshot_version(min_tx_scn_);
     bool_ret = true;
   } else {
-    const palf::SCN &freeze_scn = key_.scn_range_.end_scn_;
+    const SCN &freeze_scn = key_.scn_range_.end_scn_;
     STORAGE_LOG(INFO, "tx data metmable is not ready for flush",
                 K(max_consequent_callbacked_scn), K(freeze_scn));
   }

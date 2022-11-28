@@ -21,13 +21,14 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 using namespace storage;
 using namespace transaction::tablelock;
 using namespace blocksstable;
 namespace memtable
 {
 
-void ObIMvccCtx::before_prepare(const palf::SCN version)
+void ObIMvccCtx::before_prepare(const SCN version)
 {
 #ifdef TRANS_ERROR
   const int random = (int)ObRandom::rand(1, 1000);
@@ -38,8 +39,8 @@ void ObIMvccCtx::before_prepare(const palf::SCN version)
 
 bool ObIMvccCtx::is_prepared() const
 {
-  const palf::SCN prepare_version = trans_version_.atomic_get();
-  return (prepare_version >= palf::SCN::min_scn() && palf::SCN::max_scn() != prepare_version);
+  const SCN prepare_version = trans_version_.atomic_get();
+  return (prepare_version >= SCN::min_scn() && SCN::max_scn() != prepare_version);
 }
 
 int ObIMvccCtx::inc_pending_log_size(const int64_t size)
@@ -100,7 +101,7 @@ int ObIMvccCtx::register_row_replay_cb(
     const int64_t data_size,
     ObMemtable *memtable,
     const int64_t seq_no,
-    const palf::SCN scn)
+    const SCN scn)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = true;
@@ -193,7 +194,7 @@ int ObIMvccCtx::register_table_lock_cb(
 int ObIMvccCtx::register_table_lock_replay_cb(
     ObLockMemtable *memtable,
     ObMemCtxLockOpLinkNode *lock_op,
-    const palf::SCN scn)
+    const SCN scn)
 {
   int ret = OB_SUCCESS;
   ObOBJLockCallback *cb = nullptr;

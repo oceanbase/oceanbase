@@ -18,15 +18,18 @@
 #include "lib/thread/ob_thread_lease.h"
 #include "logservice/palf/palf_callback.h"
 #include "logservice/palf/palf_handle.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/ob_ls_id.h"
 
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace palf
 {
 class PalfEnv;
-class SCN;
 }
 namespace logservice
 {
@@ -163,7 +166,7 @@ public:
   int unregister_file_size_cb();
   void close_palf_handle();
   //最大连续回调位点
-  int get_min_unapplied_scn(palf::SCN &scn);
+  int get_min_unapplied_scn(share::SCN &scn);
   int stat(LSApplyStat &stat) const;
   int handle_drop_cb();
   TO_STRING_KV(K(ls_id_),
@@ -174,7 +177,7 @@ public:
                K(max_applied_cb_scn_));
 private:
   int submit_task_to_apply_service_(ObApplyServiceTask &task);
-  int check_and_update_max_applied_scn_(const palf::SCN scn);
+  int check_and_update_max_applied_scn_(const share::SCN scn);
   int update_last_check_scn_();
   int handle_drop_cb_queue_(ObApplyServiceQueueTask &cb_queue);
   int switch_to_follower_();
@@ -185,7 +188,7 @@ private:
                      int64_t &cb_first_handle_time,
                      int64_t &cb_start_time);
   void statistics_cb_cost_(const palf::LSN &lsn,
-                           const palf::SCN &scn,
+                           const share::SCN &scn,
                            const int64_t append_start_time,
                            const int64_t append_finish_time,
                            const int64_t cb_first_handle_time,
@@ -209,8 +212,8 @@ private:
   palf::LSN palf_committed_end_lsn_;
   //LSN standy_committed_end_lsn_;
   //palf::LSN min_committed_end_lsn_;
-  palf::SCN last_check_scn_; //当前待确认的最大连续回调位点
-  palf::SCN max_applied_cb_scn_; //该位点前的cb保证都已经回调完成
+  share::SCN last_check_scn_; //当前待确认的最大连续回调位点
+  share::SCN max_applied_cb_scn_; //该位点前的cb保证都已经回调完成
   ObApplyServiceSubmitTask submit_task_;
   ObApplyServiceQueueTask cb_queues_[APPLY_TASK_QUEUE_SIZE];
   palf::PalfEnv *palf_env_;
@@ -249,7 +252,7 @@ public:
                     palf::LSN &end_lsn);
   int switch_to_leader(const share::ObLSID &id, const int64_t proposal_id);
   int switch_to_follower(const share::ObLSID &id);
-  int get_min_unapplied_scn(const share::ObLSID &id, palf::SCN &scn);
+  int get_min_unapplied_scn(const share::ObLSID &id, share::SCN &scn);
   int push_task(ObApplyServiceTask *task);
   int wait_append_sync(const share::ObLSID &ls_id);
   int stat_for_each(const common::ObFunction<int (const ObApplyStatus &)> &func);

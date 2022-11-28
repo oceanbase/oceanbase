@@ -60,7 +60,7 @@ namespace observer
 {
 class ObIMetaReport;
 }
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -117,9 +117,9 @@ struct ObLSVTInfo
   common::ObRole ls_state_;
   ObMigrationStatus migrate_status_;
   int64_t tablet_count_;
-  palf::SCN weak_read_scn_;
+  share::SCN weak_read_scn_;
   bool need_rebuild_;
-  palf::SCN checkpoint_scn_;
+  share::SCN checkpoint_scn_;
   //TODO SCN
   int64_t checkpoint_lsn_;
 };
@@ -155,7 +155,7 @@ public:
            const ObReplicaType replica_type,
            const ObMigrationStatus &migration_status,
            const share::ObLSRestoreStatus &restore_status,
-           const palf::SCN &create_scn,
+           const share::SCN &create_scn,
            observer::ObIMetaReport *reporter);
   // I am ready to work now.
   int start();
@@ -164,6 +164,7 @@ public:
   void destroy();
   int offline();
   int online();
+  bool is_offline() const { return false; } // mock function, TODO(@yanyuan)
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
   ObLockTable *get_lock_table() { return &lock_table_; }
@@ -234,7 +235,7 @@ public:
   int remove_ls();
   // create all the inner tablet.
   int create_ls_inner_tablet(const lib::Worker::CompatMode compat_mode,
-                             const palf::SCN &create_scn);
+                             const share::SCN &create_scn);
   // load all the inner tablet.
   int load_ls_inner_tablet();
 
@@ -271,7 +272,7 @@ public:
 
   // get tablet while replaying clog
   int replay_get_tablet(const common::ObTabletID &tablet_id,
-                        const palf::SCN &scn,
+                        const share::SCN &scn,
                         ObTabletHandle &handle) const;
 
   int flush_if_need(const bool need_flush);
@@ -289,21 +290,21 @@ public:
   // ObLSMeta interface:
   int update_id_meta_with_writing_slog(const int64_t service_type,
                                        const int64_t limited_id,
-                                       const palf::SCN &latest_scn);
+                                       const share::SCN &latest_scn);
   int update_id_meta_without_writing_slog(const int64_t service_type,
                                           const int64_t limited_id,
-                                          const palf::SCN &latest_scn);
+                                          const share::SCN &latest_scn);
   // int set_ls_rebuild();
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_ls_rebuild);
   // protect in ls lock
   // int set_gc_state(const logservice::LSGCState &gc_state);
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_gc_state);
   // int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
-  //                         const palf::SCN &clog_checkpoint_scn,
+  //                         const share::SCN &clog_checkpoint_scn,
   //                         const bool write_slog = true);
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_clog_checkpoint);
   UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, set_clog_checkpoint);
-  CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_scn, palf::SCN);
+  CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_scn, share::SCN);
   DELEGATE_WITH_RET(ls_meta_, get_clog_base_lsn, palf::LSN &);
   DELEGATE_WITH_RET(ls_meta_, get_saved_info, int);
   // int build_saved_info();
@@ -317,7 +318,7 @@ public:
   //                                 const ObLSMeta &src_ls_meta);
   UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, update_ls_meta);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_rebuild_seq, int64_t);
-  CONST_DELEGATE_WITH_RET(ls_meta_, get_tablet_change_checkpoint_scn, palf::SCN);
+  CONST_DELEGATE_WITH_RET(ls_meta_, get_tablet_change_checkpoint_scn, share::SCN);
   // set restore status
   // @param [in] restore status.
   // int set_restore_status(const share::ObLSRestoreStatus &status);
@@ -350,7 +351,7 @@ public:
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_offline_scn);
   // get offline ts
   // @param [in] offline ts.
-  // int get_offline_scn(const SCN &offline_scn);
+  // int get_offline_scn(const share::SCN &offline_scn);
   DELEGATE_WITH_RET(ls_meta_, get_offline_scn, int);
   // update replayable point
   // @param [in] replayable point.
@@ -362,7 +363,7 @@ public:
   DELEGATE_WITH_RET(ls_meta_, get_ls_replayable_point, int);
   // set tablet_change_checkpoint_scn, add write lock of LSLOCKLOGMETA.
   // @param [in] scn
-  int set_tablet_change_checkpoint_scn(const palf::SCN &scn);
+  int set_tablet_change_checkpoint_scn(const share::SCN &scn);
   // get ls_meta_package and unsorted tablet_ids, add read lock of LSLOCKLOGMETA.
   // @param [out] meta_package
   // @param [out] tablet_ids
@@ -479,7 +480,7 @@ public:
   // WARNING: must has ls read lock and log write lock.
   int disable_replay_without_lock();
   // @brief, get max decided log scn considering both apply and replay.
-  // @param[out] palf::SCN&, max decided log scn.
+  // @param[out] share::SCN&, max decided log scn.
   DELEGATE_WITH_RET(log_handler_, get_max_decided_scn, int);
   // @breif, check request server is in self member list
   // @param[in] const common::ObAddr, request server.
@@ -599,8 +600,6 @@ public:
   // ObFreezer interface:
   // logstream freeze
   // @param [in] null
-  // int logstream_freeze();
-  // DELEGATE_WITH_RET(ls_freezer_, logstream_freeze, int);
   int logstream_freeze();
   // tablet freeze
   // @param [in] tablet_id

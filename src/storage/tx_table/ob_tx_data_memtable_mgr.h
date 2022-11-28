@@ -70,7 +70,7 @@ public:  // ObTxDataMemtableMgr
    * freeze().
    * @param[in] schema_version  schema_version, not used
    */
-  virtual int create_memtable(const palf::SCN clog_checkpoint_scn,
+  virtual int create_memtable(const share::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
                               const bool for_replay=false) override;
   /**
@@ -94,9 +94,9 @@ public:  // ObTxDataMemtableMgr
   int get_memtable_range(int64_t &memtable_head, int64_t &memtable_tail);
 
   // ================ INHERITED FROM ObCommonCheckpoint ===============
-  virtual palf::SCN get_rec_scn() override;
+  virtual share::SCN get_rec_scn() override;
 
-  virtual int flush(palf::SCN recycle_scn, bool need_freeze = true) override;
+  virtual int flush(share::SCN recycle_scn, bool need_freeze = true) override;
 
   virtual ObTabletID get_tablet_id() const override;
 
@@ -120,7 +120,7 @@ protected:
                                      const bool force);
 
 private:  // ObTxDataMemtableMgr
-  int create_memtable_(const palf::SCN clog_checkpoint_scn, const int64_t schema_version);
+  int create_memtable_(const share::SCN clog_checkpoint_scn, const int64_t schema_version);
 
   int freeze_();
 

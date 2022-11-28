@@ -17,6 +17,7 @@
 
 namespace oceanbase {
 namespace blocksstable {
+using namespace share;
 
 ObMicroBlockRowLockChecker::ObMicroBlockRowLockChecker(common::ObIAllocator &allocator) :
     ObMicroBlockRowScanner(allocator),
@@ -76,7 +77,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
 
         STORAGE_LOG(DEBUG, "check row lock", K(ret), KPC_(range), K(read_trans_id), K(trans_id),
                     K(sql_sequence), KPC_(lock_state));
-        if (palf::SCN::min_scn() != lock_state_->trans_version_ || // trans is commit
+        if (SCN::min_scn() != lock_state_->trans_version_ || // trans is commit
             lock_state_->is_locked_) {
           break;
         }

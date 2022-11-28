@@ -47,7 +47,7 @@ struct ObRestoreBaseInfo
       K_(backup_dest),
       K_(backup_set_list));
 
-  palf::SCN restore_scn_;
+  share::SCN restore_scn_;
   int64_t backup_cluster_version_;
   share::ObBackupDest backup_dest_;
   common::ObArray<share::ObRestoreBackupSetBriefInfo> backup_set_list_;

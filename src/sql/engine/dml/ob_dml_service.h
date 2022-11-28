@@ -65,15 +65,6 @@ public:
                                         ObDMLBaseRtDef &dml_rtdef,
                                         ObDMLRtCtx &dml_rtctx,
                                         const ObDmlEventType &dml_event);
-  static int process_instead_of_trigger_insert(const ObInsCtDef &ins_ctdef,
-                                                ObInsRtDef &ins_rtdef,
-                                                ObTableModifyOp &dml_op);
-  static int process_instead_of_trigger_delete(const ObDelCtDef &del_ctdef,
-                                              ObDelRtDef &del_rtdef,
-                                              ObTableModifyOp &dml_op);
-  static int process_instead_of_trigger_update(const ObUpdCtDef &upd_ctdef,
-                                              ObUpdRtDef &upd_rtdef,
-                                              ObTableModifyOp &dml_op);
   static int process_delete_row(const ObDelCtDef &del_ctdef,
                                 ObDelRtDef &del_rtdef,
                                 bool &is_skipped,

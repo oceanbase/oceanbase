@@ -23,7 +23,7 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_tx_retain_ctx_mgr.h"
 #include "logservice/ob_log_base_header.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -137,7 +137,7 @@ int ObLSTxService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   return ret;
 }
 
-int ObLSTxService::get_read_store_ctx(const palf::SCN &snapshot,
+int ObLSTxService::get_read_store_ctx(const SCN &snapshot,
                                       const int64_t lock_timeout,
                                       ObStoreCtx &store_ctx) const
 {
@@ -304,7 +304,7 @@ int ObLSTxService::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
 int ObLSTxService::replay(const void *buffer,
                           const int64_t nbytes,
                           const palf::LSN &lsn,
-                          const palf::SCN &scn)
+                          const SCN &scn)
 {
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader base_header;
@@ -334,7 +334,7 @@ ObTxLSLogWriter *ObLSTxService::get_tx_ls_log_writer() { return mgr_->get_ls_log
 
 ObITxLogAdapter *ObLSTxService::get_tx_ls_log_adapter() { return mgr_->get_ls_log_adapter(); }
 
-int ObLSTxService::replay_start_working_log(const ObTxStartWorkingLog &log, palf::SCN &log_ts_ns)
+int ObLSTxService::replay_start_working_log(const ObTxStartWorkingLog &log, SCN &log_ts_ns)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mgr_)) {
@@ -415,14 +415,14 @@ void get_min_rec_scn_common_checkpoint_type_by_index_(int index,
   }
 }
 
-palf::SCN ObLSTxService::get_rec_scn()
+SCN ObLSTxService::get_rec_scn()
 {
-  palf::SCN min_rec_scn = palf::SCN::max_scn();
+  SCN min_rec_scn = SCN::max_scn();
   int min_rec_scn_common_checkpoint_type_index = 0;
   char common_checkpoint_type[common::MAX_CHECKPOINT_TYPE_BUF_LENGTH];
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     if (OB_NOT_NULL(common_checkpoints_[i])) {
-      palf::SCN rec_scn = common_checkpoints_[i]->get_rec_scn();
+      SCN rec_scn = common_checkpoints_[i]->get_rec_scn();
       if (rec_scn.is_valid() && rec_scn < min_rec_scn) {
         min_rec_scn = rec_scn;
         min_rec_scn_common_checkpoint_type_index = i;
@@ -440,7 +440,7 @@ palf::SCN ObLSTxService::get_rec_scn()
   return min_rec_scn;
 }
 
-int ObLSTxService::flush(palf::SCN &recycle_scn)
+int ObLSTxService::flush(SCN &recycle_scn)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -540,7 +540,7 @@ int ObLSTxService::traversal_flush()
   int tmp_ret = OB_SUCCESS;
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     if (OB_NOT_NULL(common_checkpoints_[i]) &&
-        OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(palf::SCN::max_scn(), false))) {
+        OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(SCN::max_scn(), false))) {
       TRANS_LOG(WARN, "obCommonCheckpoint flush failed", K(tmp_ret), KP(common_checkpoints_[i]));
     }
   }
@@ -553,7 +553,7 @@ void ObLSTxService::reset_() {
   }
 }
 
-palf::SCN ObLSTxService::get_ls_weak_read_ts() {
+SCN ObLSTxService::get_ls_weak_read_ts() {
   return parent_->get_ls_wrs_handler()->get_ls_weak_read_ts();
 }
 

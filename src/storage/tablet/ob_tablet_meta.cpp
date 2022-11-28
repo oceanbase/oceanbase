@@ -17,7 +17,7 @@
 #include "lib/ob_define.h"
 #include "lib/utility/serialization.h"
 #include "share/schema/ob_table_schema.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -26,7 +26,7 @@ using namespace blocksstable;
 using namespace palf;
 namespace storage
 {
-const palf::SCN ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN = palf::SCN::base_scn();
+const SCN ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN = SCN::base_scn();
 
 ObTabletMeta::ObTabletMeta()
   : version_(TABLET_META_VERSION),
@@ -68,7 +68,7 @@ int ObTabletMeta::init(
     const common::ObTabletID &data_tablet_id,
     const common::ObTabletID &lob_meta_tablet_id,
     const common::ObTabletID &lob_piece_tablet_id,
-    const palf::SCN create_scn,
+    const SCN create_scn,
     const int64_t snapshot_version,
     const lib::Worker::CompatMode compat_mode,
     const ObTabletTableStoreFlag &table_store_flag,
@@ -113,6 +113,8 @@ int ObTabletMeta::init(
     report_status_.data_checksum_ = 0;
     report_status_.row_count_ = 0;
 
+    ddl_data_.snapshot_version_ = OB_INVALID_VERSION;
+    ddl_data_.schema_version_ = OB_INVALID_VERSION;
     ddl_data_.lob_meta_tablet_id_ = lob_meta_tablet_id;
     ddl_data_.lob_piece_tablet_id_ = lob_piece_tablet_id;
 
@@ -138,9 +140,9 @@ int ObTabletMeta::init(
     const ObTabletBindingInfo &ddl_data,
     const ObTabletAutoincSeq &autoinc_seq,
     const int64_t max_sync_storage_schema_version,
-    const palf::SCN clog_checkpoint_scn,
-    const palf::SCN ddl_checkpoint_scn,
-    const palf::SCN ddl_start_scn,
+    const SCN clog_checkpoint_scn,
+    const SCN ddl_checkpoint_scn,
+    const SCN ddl_start_scn,
     const int64_t ddl_snapshot_version)
 {
   int ret = OB_SUCCESS;
@@ -164,8 +166,8 @@ int ObTabletMeta::init(
     ref_tablet_id_ = old_tablet_meta.ref_tablet_id_;
     create_scn_ = old_tablet_meta.create_scn_;
     start_scn_ = old_tablet_meta.start_scn_;
-    ddl_start_scn_ = palf::SCN::max(ddl_start_scn, old_tablet_meta.ddl_start_scn_);
-    clog_checkpoint_scn_ = palf::SCN::max(clog_checkpoint_scn, old_tablet_meta.clog_checkpoint_scn_);
+    ddl_start_scn_ = SCN::max(ddl_start_scn, old_tablet_meta.ddl_start_scn_);
+    clog_checkpoint_scn_ = SCN::max(clog_checkpoint_scn, old_tablet_meta.clog_checkpoint_scn_);
     compat_mode_ = old_tablet_meta.compat_mode_;
     ha_status_ = old_tablet_meta.ha_status_;
     report_status_ = old_tablet_meta.report_status_;
@@ -175,7 +177,7 @@ int ObTabletMeta::init(
     tx_data_ = tx_data;
     table_store_flag_ = old_tablet_meta.table_store_flag_;
     max_sync_storage_schema_version_ = max_sync_storage_schema_version;
-    ddl_checkpoint_scn_ = palf::SCN::max(old_tablet_meta.ddl_checkpoint_scn_, ddl_checkpoint_scn);
+    ddl_checkpoint_scn_ = SCN::max(old_tablet_meta.ddl_checkpoint_scn_, ddl_checkpoint_scn);
     ddl_snapshot_version_ = MAX(old_tablet_meta.ddl_snapshot_version_, ddl_snapshot_version);
     is_inited_ = true;
   }
@@ -635,7 +637,7 @@ int ObTabletMeta::update(const ObMigrationTabletParam &param)
   return ret;
 }
 
-int ObTabletMeta::update_create_scn(const palf::SCN create_scn)
+int ObTabletMeta::update_create_scn(const SCN create_scn)
 {
   int ret = OB_SUCCESS;
 

@@ -24,6 +24,19 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
+bool DasRefKey::operator==(const DasRefKey &other) const
+{
+  return (tablet_loc_ == other.tablet_loc_ && op_type_ == other.op_type_);
+}
+
+uint64_t DasRefKey::hash() const
+{
+  uint64_t hash = 0;
+  hash = murmurhash(&tablet_loc_, sizeof(tablet_loc_), hash);
+  hash = murmurhash(&op_type_, sizeof(op_type_), hash);
+  return hash;
+}
+
 ObDASRef::ObDASRef(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx)
   : das_alloc_(exec_ctx.get_allocator()),
     reuse_alloc_(nullptr),
@@ -34,6 +47,9 @@ ObDASRef::ObDASRef(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx)
     frozen_op_node_(nullptr),
     expr_frame_info_(nullptr),
     wild_datum_info_(eval_ctx),
+    lookup_cnt_(0),
+    task_cnt_(0),
+    task_map_(),
     flags_(0)
 {
 }
@@ -45,20 +61,89 @@ DASOpResultIter ObDASRef::begin_result_iter()
 
 ObIDASTaskOp* ObDASRef::find_das_task(const ObDASTabletLoc *tablet_loc, ObDASOpType op_type)
 {
+  int ret = OB_SUCCESS;
   ObIDASTaskOp *das_task = nullptr;
   if (nullptr == frozen_op_node_) {
     frozen_op_node_ = batched_tasks_.get_header_node();
   }
-  DASTaskIter task_iter(frozen_op_node_->get_next(), batched_tasks_.get_header_node());
-  for (; nullptr == das_task && !task_iter.is_end(); ++task_iter) {
-    ObIDASTaskOp *tmp_task = *task_iter;
-    if (tmp_task != nullptr &&
-        tmp_task->get_tablet_loc() == tablet_loc &&
-        tmp_task->get_type() == op_type) {
-      das_task = tmp_task;
+  lookup_cnt_++;
+  if (task_map_.created()) {
+    DasRefKey key(tablet_loc, op_type);
+    if (OB_FAIL(task_map_.get_refactored(key, das_task))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("look up from hash map failed", KR(ret), KP(tablet_loc), K(op_type));
+      }
     }
   }
+  if (OB_SUCC(ret) && NULL != das_task) {
+    // found in hash map
+  } else if (OB_HASH_NOT_EXIST == ret) {
+    // key not found
+  } else {
+    DASTaskIter task_iter(frozen_op_node_->get_next(), batched_tasks_.get_header_node());
+    for (; nullptr == das_task && !task_iter.is_end(); ++task_iter) {
+      ObIDASTaskOp *tmp_task = *task_iter;
+      if (tmp_task != nullptr &&
+          tmp_task->get_tablet_loc() == tablet_loc &&
+          tmp_task->get_type() == op_type) {
+        das_task = tmp_task;
+      }
+    }
+  }
+  if (OB_FAIL(ret) || task_map_.created()) {
+    // do nothing
+  } else if (lookup_cnt_ > DAS_REF_TASK_LOOKUP_THRESHOLD
+             && task_cnt_ > DAS_REF_TASK_SIZE_THRESHOLD
+             && OB_FAIL(create_task_map())) {
+    LOG_WARN("create task hash map failed", KR(ret));
+  }
   return das_task;
+}
+
+int ObDASRef::create_task_map()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(task_map_.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("task map was already created", KR(ret), K(task_map_.created()));
+  } else if (OB_FAIL(task_map_.create(DAS_REF_MAP_BUCKET_SIZE, ObModIds::OB_HASH_BUCKET))) {
+    LOG_WARN("create task map failed", KR(ret));
+  } else {
+    DASTaskIter task_iter(frozen_op_node_->get_next(), batched_tasks_.get_header_node());
+    for (; OB_SUCC(ret) && !task_iter.is_end(); ++task_iter) {
+      ObIDASTaskOp *task = *task_iter;
+      if (OB_ISNULL(task)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task is null", KR(ret), KP(task));
+      } else {
+        DasRefKey key(task->get_tablet_loc(), task->get_type());
+        if (OB_FAIL(task_map_.set_refactored(key, task))) {
+          LOG_WARN("insert into task map failed", KR(ret), K(key), KP(task));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      task_map_.destroy();
+    }
+  }
+  return ret;
+}
+
+int ObDASRef::add_batched_task(ObIDASTaskOp *das_task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(batched_tasks_.store_obj(das_task))) {
+    LOG_WARN("store das task failed", KR(ret));
+  } else if (task_map_.created()) {
+    DasRefKey key(das_task->get_tablet_loc(), das_task->get_type());
+    if (OB_FAIL(task_map_.set_refactored(key, das_task))) {
+      LOG_WARN("insert into task map failed", KR(ret), K(key), KP(das_task));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    task_cnt_++;
+  }
+  return ret;
 }
 
 void ObDASRef::print_all_das_task()
@@ -148,6 +233,11 @@ int ObDASRef::execute_all_task()
 void ObDASRef::set_frozen_node()
 {
   frozen_op_node_ = batched_tasks_.get_last_node();
+  lookup_cnt_ = 0;
+  task_cnt_ = 0;
+  if (task_map_.created()) {
+    task_map_.clear();
+  }
 }
 
 int ObDASRef::close_all_task()
@@ -187,6 +277,9 @@ int ObDASRef::close_all_task()
       session->get_trans_result().set_incomplete();
     }
     batched_tasks_.destroy();
+    if (task_map_.created()) {
+      task_map_.destroy();
+    }
   }
   return ret;
 }
@@ -203,8 +296,6 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
     LOG_WARN("get das task id failed", KR(ret));
   } else if (OB_FAIL(das_factory.create_das_task_op(op_type, task_op))) {
     LOG_WARN("create das task op failed", K(ret), KPC(task_op));
-  } else if (OB_FAIL(add_batched_task(task_op))) {
-    LOG_WARN("add batched task failed", K(ret), KPC(task_op));
   } else {
     task_op->set_trans_desc(session->get_tx_desc());
     task_op->set_snapshot(&get_exec_ctx().get_das_ctx().get_snapshot());
@@ -218,6 +309,9 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
       LOG_WARN("init task info failed", K(ret));
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(add_batched_task(task_op))) {
+    LOG_WARN("add batched task failed", KR(ret), KPC(task_op));
+  }
   return ret;
 }
 
@@ -225,6 +319,11 @@ void ObDASRef::reset()
 {
   das_factory_.cleanup();
   batched_tasks_.destroy();
+  lookup_cnt_ = 0;
+  task_cnt_ = 0;
+  if (task_map_.created()) {
+    task_map_.destroy();
+  }
   flags_ = false;
   frozen_op_node_ = nullptr;
   expr_frame_info_ = nullptr;
@@ -238,6 +337,11 @@ void ObDASRef::reuse()
 {
   das_factory_.cleanup();
   batched_tasks_.destroy();
+  lookup_cnt_ = 0;
+  task_cnt_ = 0;
+  if (task_map_.created()) {
+    task_map_.destroy();
+  }
   frozen_op_node_ = nullptr;
   if (reuse_alloc_ != nullptr) {
     reuse_alloc_->reset_remain_one_page();

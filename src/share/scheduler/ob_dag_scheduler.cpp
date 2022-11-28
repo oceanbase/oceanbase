@@ -2029,6 +2029,27 @@ int ObTenantDagScheduler::get_all_compaction_dag_info(
   return ret;
 }
 
+int ObTenantDagScheduler::check_ls_compaction_dag_exist(const ObLSID &ls_id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  compaction::ObTabletMergeDag *dag = nullptr;
+  ObThreadCondGuard guard(scheduler_sync_);
+  for (int64_t i = 0; i < ObIDag::MergeDagPrioCnt; ++i) {
+    ObIDag *head = dag_list_[READY_DAG_LIST].get_head(ObIDag::MergeDagPrio[i]);
+    ObIDag *cur = head->get_next();
+    while (head != cur) {
+      dag = static_cast<compaction::ObTabletMergeDag *>(cur);
+      if (ls_id == dag->get_ctx().param_.ls_id_) {
+        exist = true;
+        break;
+      }
+      cur = cur->get_next();
+    }
+  }
+  return ret;
+}
+
 // get max estimated_finish_time to update server_progress
 int ObTenantDagScheduler::get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time)
 {

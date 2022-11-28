@@ -17,12 +17,15 @@
 #include "lib/ob_replica_define.h"
 #include "common/ob_store_range.h"
 #include "common/ob_member_list.h"
+#include "share/ob_tablet_autoincrement_param.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_schema.h"
 #include "storage/ob_i_table.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
+#include "storage/tablet/ob_tablet_multi_source_data.h"
+#include "storage/tablet/ob_tablet_binding_helper.h"
 
 namespace oceanbase
 {
@@ -39,14 +42,14 @@ class ObMigrationTabletParam;
 typedef common::ObSEArray<common::ObStoreRowkey, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> GetRowkeyArray;
 typedef common::ObSEArray<common::ObStoreRange, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> ScanRangeArray;
 
-static const int64_t EXIST_READ_SNAPSHOT_VERSION = palf::OB_MAX_SCN_TS_NS - 1;
-static const int64_t MERGE_READ_SNAPSHOT_VERSION = palf::OB_MAX_SCN_TS_NS - 2;
+static const int64_t EXIST_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 1;
+static const int64_t MERGE_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 2;
 // static const int64_t MV_LEFT_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 3;
 // static const int64_t MV_RIGHT_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 4;
 // static const int64_t MV_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 5;
 // static const int64_t BUILD_INDEX_READ_SNAPSHOT_VERSION = INT64_MAX - 6;
 // static const int64_t WARM_UP_READ_SNAPSHOT_VERSION = INT64_MAX - 7;
-static const int64_t GET_BATCH_ROWS_READ_SNAPSHOT_VERSION = palf::OB_MAX_SCN_TS_NS - 8;
+static const int64_t GET_BATCH_ROWS_READ_SNAPSHOT_VERSION = share::OB_MAX_SCN_TS_NS - 8;
 // static const int64_t GET_SCAN_COST_READ_SNAPSHOT_VERSION = INT64_MAX - 9;
 
 
@@ -225,9 +228,9 @@ public:
   ~ObPartitionBarrierLogState() = default;
   ObPartitionBarrierLogStateEnum &get_state() { return state_; }
   int64_t get_log_id() { return log_id_; }
-  palf::SCN get_scn() { return scn_; }
+  share::SCN get_scn() { return scn_; }
   int64_t get_schema_version() { return schema_version_; }
-  void set_log_info(const ObPartitionBarrierLogStateEnum state, const int64_t log_id, const palf::SCN &scn, const int64_t schema_version);
+  void set_log_info(const ObPartitionBarrierLogStateEnum state, const int64_t log_id, const share::SCN &scn, const int64_t schema_version);
   NEED_SERIALIZE_AND_DESERIALIZE;
   TO_STRING_KV(K_(state));
 private:
@@ -235,7 +238,7 @@ private:
 private:
   ObPartitionBarrierLogStateEnum state_;
   int64_t log_id_;
-  palf::SCN scn_;
+  share::SCN scn_;
   int64_t schema_version_;
 };
 
@@ -301,7 +304,7 @@ struct ObUpdateTableStoreParam
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
     const bool need_report = false,
-    const palf::SCN clog_checkpoint_scn = palf::SCN::min_scn(),
+    const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
     const bool need_check_sstable = false);
 
   ObUpdateTableStoreParam( // for ddl merge task only
@@ -316,11 +319,12 @@ struct ObUpdateTableStoreParam
   bool is_valid() const;
   TO_STRING_KV(K_(table_handle), K_(snapshot_version), K_(clog_checkpoint_scn), K_(multi_version_start),
                K_(keep_old_ddl_sstable), K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
-               K_(need_check_sstable), K_(ddl_checkpoint_scn), K_(ddl_start_scn), K_(ddl_snapshot_version));
+               K_(need_check_sstable), K_(ddl_checkpoint_scn), K_(ddl_start_scn), K_(ddl_snapshot_version),
+               K_(tx_data), K_(binding_info), K_(auto_inc_seq));
 
   ObTableHandleV2 table_handle_;
   int64_t snapshot_version_;
-  palf::SCN clog_checkpoint_scn_;
+  share::SCN clog_checkpoint_scn_;
   int64_t multi_version_start_;
   bool keep_old_ddl_sstable_;
   bool need_report_;
@@ -328,9 +332,14 @@ struct ObUpdateTableStoreParam
   int64_t rebuild_seq_;
   bool update_with_major_flag_;
   bool need_check_sstable_;
-  palf::SCN ddl_checkpoint_scn_;
-  palf::SCN ddl_start_scn_;
+  share::SCN ddl_checkpoint_scn_;
+  share::SCN ddl_start_scn_;
   int64_t ddl_snapshot_version_;
+
+  // msd
+  ObTabletTxMultiSourceDataUnit tx_data_;
+  ObTabletBindingInfo binding_info_;
+  share::ObTabletAutoincSeq auto_inc_seq_;
 };
 
 struct ObBatchUpdateTableStoreParam final
@@ -340,7 +349,7 @@ struct ObBatchUpdateTableStoreParam final
   bool is_valid() const;
   void reset();
   int assign(const ObBatchUpdateTableStoreParam &param);
-  int get_max_clog_checkpoint_scn(palf::SCN &clog_checkpoint_scn) const;
+  int get_max_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn) const;
 
   TO_STRING_KV(K_(tables_handle), K_(snapshot_version), K_(multi_version_start), K_(need_report),
       K_(rebuild_seq), K_(update_logical_minor_sstable), K_(start_scn), KP_(tablet_meta));
@@ -351,7 +360,7 @@ struct ObBatchUpdateTableStoreParam final
   bool need_report_;
   int64_t rebuild_seq_;
   bool update_logical_minor_sstable_;
-  palf::SCN start_scn_;
+  share::SCN start_scn_;
   const ObMigrationTabletParam *tablet_meta_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);

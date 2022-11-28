@@ -202,7 +202,7 @@ int get_ls_read_snapshot(ObTxDesc &tx,
  * OB_TIMEOUT - if expire_ts hit
  */
 int get_read_snapshot_version(const int64_t expire_ts,
-                              palf::SCN &snapshot_version);
+                              share::SCN &snapshot_version);
 
 /**
  * get_ls_read_snapshot_version - get a read snapshot of specified
@@ -222,7 +222,7 @@ int get_read_snapshot_version(const int64_t expire_ts,
  * OB_TIMEOUT    - if expire_ts hit
  */
 int get_ls_read_snapshot_version(const share::ObLSID &local_ls_id,
-                                 palf::SCN &snapshot_version);
+                                 share::SCN &snapshot_version);
 /**
  * get_weak_read_snapshot_version - get snapshot version for weak read
  *
@@ -232,7 +232,7 @@ int get_ls_read_snapshot_version(const share::ObLSID &local_ls_id,
  * OB_SUCCESS              - OK
  * OB_REPLICA_NOT_READABLE - snapshot is too stale
  */
-int get_weak_read_snapshot_version(palf::SCN &snapshot_version);
+int get_weak_read_snapshot_version(share::SCN &snapshot_version);
 /*
  * release_snapshot - release snapshot
  *

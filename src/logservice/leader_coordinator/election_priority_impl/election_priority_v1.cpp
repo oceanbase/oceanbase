@@ -28,6 +28,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace logservice
 {
 namespace coordinator
@@ -79,7 +80,7 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
   #undef PRINT_WRAPPER
 }
 
-int PriorityV1::get_scn_(const share::ObLSID &ls_id, palf::SCN &scn)
+int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
 {
   #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(ls_id), K(*this)
   int ret = OB_SUCCESS;
@@ -94,7 +95,7 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, palf::SCN &scn)
   } else {
     common::ObRole role;
     int64_t unused_pid = -1;
-    palf::SCN min_unreplay_scn;
+    SCN min_unreplay_scn;
     if (OB_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
       COORDINATOR_LOG_(WARN, "get_role failed");
     } else if (OB_FAIL(palf_handle_guard.get_max_scn(scn))) {
@@ -105,9 +106,9 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, palf::SCN &scn)
         ret = OB_SUCCESS;
       } else if (!min_unreplay_scn.is_valid_and_not_min()) {
         scn.set_min();
-      } else if (palf::SCN::minus(min_unreplay_scn, 1) < scn) {
+      } else if (SCN::minus(min_unreplay_scn, 1) < scn) {
         // For restore case, min_unreplay_scn may be larger than max_ts.
-        scn = palf::SCN::minus(min_unreplay_scn, 1) ;
+        scn = SCN::minus(min_unreplay_scn, 1) ;
       } else {}
     } else {}
     COORDINATOR_LOG_(TRACE, "get_scn_ finished", K(role), K(min_unreplay_scn), K(scn));
@@ -127,7 +128,7 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
   ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
   ObFailureDetector* detector = MTL(ObFailureDetector*);
   LsElectionReferenceInfo election_reference_info;
-  palf::SCN scn = palf::SCN::min_scn();
+  SCN scn = SCN::min_scn();
   if (OB_ISNULL(coordinator) || OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(ERROR, "unexpected nullptr");

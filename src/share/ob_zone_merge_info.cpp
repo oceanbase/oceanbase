@@ -23,7 +23,6 @@ namespace oceanbase
 {
 namespace share
 {
-using namespace oceanbase::palf;
 
 template <typename T>
 T first_param_percnetage(const T first, const T second)
@@ -286,6 +285,11 @@ bool ObGlobalMergeInfo::is_in_merge() const
 bool ObGlobalMergeInfo::is_merge_error() const
 {
   return (is_merge_error_.get_value() > 0);
+}
+
+bool ObGlobalMergeInfo::is_in_verifying_status() const
+{
+  return (ObZoneMergeInfo::MERGE_STATUS_VERIFYING == merge_status_.get_value());
 }
 
 bool ObGlobalMergeInfo::is_valid() const

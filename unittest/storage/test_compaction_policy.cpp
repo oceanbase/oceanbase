@@ -32,7 +32,7 @@
 #include "storage/test_dml_common.h"
 #include "storage/mockcontainer/mock_ob_iterator.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 
 namespace oceanbase
@@ -42,6 +42,7 @@ using namespace storage;
 using namespace blocksstable;
 using namespace memtable;
 using namespace share::schema;
+using namespace share;
 using namespace compaction;
 
 namespace memtable
@@ -283,7 +284,7 @@ int TestCompactionPolicy::mock_memtable(
   ObITable::TableKey table_key;
   int64_t end_border = -1;
   if (0 == end_scn || INT64_MAX == end_scn) {
-    end_border = palf::OB_MAX_SCN_TS_NS;
+    end_border = OB_MAX_SCN_TS_NS;
   } else {
     end_border = end_scn;
   }
@@ -304,8 +305,8 @@ int TestCompactionPolicy::mock_memtable(
   } else if (OB_FAIL(memtable->add_to_data_checkpoint(mt_mgr->freezer_->get_data_checkpoint()))) {
     LOG_WARN("add to data_checkpoint failed", K(ret), KPC(memtable));
     mt_mgr->clean_tail_memtable_();
-  } else if (palf::OB_MAX_SCN_TS_NS != end_border) { // frozen memtable
-    palf::SCN snapshot_scn;
+  } else if (OB_MAX_SCN_TS_NS != end_border) { // frozen memtable
+    SCN snapshot_scn;
     snapshot_scn.convert_for_tx(snapshot_version);
     memtable->snapshot_version_ = snapshot_scn;
     memtable->write_ref_cnt_ = 0;
@@ -357,11 +358,11 @@ int TestCompactionPolicy::mock_tablet(
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (OB_FAIL(tablet->init(ls_id, tablet_id, tablet_id, empty_tablet_id, empty_tablet_id,
-      palf::SCN::min_scn(), snapshot_version, table_schema, compat_mode, table_store_flag, table_handle, ls_handle.get_ls()->get_freezer()))) {
+      SCN::min_scn(), snapshot_version, table_schema, compat_mode, table_store_flag, table_handle, ls_handle.get_ls()->get_freezer()))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
               K(table_schema), K(compat_mode));
   } else {
-    tablet->tablet_meta_.clog_checkpoint_scn_.convert_for_lsn_allocator(clog_checkpoint_ts);
+    tablet->tablet_meta_.clog_checkpoint_scn_.convert_for_logservice(clog_checkpoint_ts);
     tablet->tablet_meta_.snapshot_version_ = snapshot_version;
   }
   return ret;
@@ -535,7 +536,7 @@ int TestCompactionPolicy::prepare_freeze_info(
   int ret = OB_SUCCESS;
   ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
   bool changed = false;
-  palf::SCN min_major_snapshot = palf::SCN::max_scn();
+  SCN min_major_snapshot = SCN::max_scn();
 
   if (OB_ISNULL(mgr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -726,7 +727,7 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, result.handle_.get_count());
 
-  tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_scn_.convert_for_lsn_allocator(300);
+  tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_scn_.convert_for_logservice(300);
   tablet_handle_.get_obj()->tablet_meta_.snapshot_version_ = 300;
   result.reset();
   ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
@@ -751,7 +752,7 @@ TEST_F(TestCompactionPolicy, check_minor_merge_basic)
 
   common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
   common::ObArray<share::ObSnapshotInfo> snapshots;
-  palf::SCN scn;
+  SCN scn;
   scn.convert_for_tx(1);
   ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
 
@@ -786,7 +787,7 @@ TEST_F(TestCompactionPolicy, check_no_need_minor_merge)
 
   common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
   common::ObArray<share::ObSnapshotInfo> snapshots;
-  palf::SCN scn;
+  SCN scn;
   scn.convert_for_tx(1);
   ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
   scn.convert_for_tx(320);
@@ -825,7 +826,7 @@ TEST_F(TestCompactionPolicy, check_major_merge_basic)
 
   common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
   common::ObArray<share::ObSnapshotInfo> snapshots;
-  palf::SCN scn;
+  SCN scn;
   scn.convert_for_tx(1);
   ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
   scn.convert_for_tx(340);
@@ -863,7 +864,7 @@ TEST_F(TestCompactionPolicy, check_no_need_major_merge)
 
   common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
   common::ObArray<share::ObSnapshotInfo> snapshots;
-  palf::SCN scn;
+  SCN scn;
   scn.convert_for_tx(1);
   ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
   scn.convert_for_tx(340);

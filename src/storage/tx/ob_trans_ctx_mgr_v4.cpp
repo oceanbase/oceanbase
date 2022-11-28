@@ -581,7 +581,7 @@ int ObLSTxCtxMgr::remove_callback_for_uncommited_tx(ObMemtable* mt)
   return ret;
 }
 
-int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, palf::SCN start_working_ts)
+int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, SCN start_working_ts)
 {
   int ret = OB_SUCCESS;
   UNUSED(log);
@@ -595,7 +595,7 @@ int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, palf:
   return ret;
 }
 
-int ObLSTxCtxMgr::on_start_working_log_cb_succ(palf::SCN start_working_ts)
+int ObLSTxCtxMgr::on_start_working_log_cb_succ(SCN start_working_ts)
 {
   int ret = OB_SUCCESS;
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
@@ -649,7 +649,7 @@ int ObLSTxCtxMgr::on_start_working_log_cb_fail()
 int ObLSTxCtxMgr::submit_start_working_log_()
 {
   int ret = OB_SUCCESS;
-  palf::SCN scn;
+  SCN scn;
   const int64_t fake_epoch = 0xbaba;
   if (OB_FAIL(ls_log_writer_.submit_start_working_log(fake_epoch, scn))) {
     TRANS_LOG(WARN, "submit start working log failed", KR(ret), K(*this));
@@ -702,7 +702,7 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
 {
   int ret = OB_SUCCESS;
   if (!is_leader_serving_) {
-    palf::SCN gts;
+    SCN gts;
     MonotonicTs receive_gts_ts(0);
 
     if (OB_FAIL(ts_mgr_->get_gts(tenant_id_,
@@ -968,7 +968,7 @@ int ObLSTxCtxMgr::online()
   return ret;
 }
 
-int ObLSTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(palf::SCN &min_prepare_version)
+int ObLSTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(SCN &min_prepare_version)
 {
   int ret = OB_SUCCESS;
 
@@ -986,7 +986,7 @@ int ObLSTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(palf::SCN &min_prepare_
   return ret;
 }
 
-int ObLSTxCtxMgr::get_min_undecided_scn(palf::SCN &scn)
+int ObLSTxCtxMgr::get_min_undecided_scn(SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObGetMinUndecidedLogTsFunctor fn;
@@ -1235,7 +1235,7 @@ int ObLSTxCtxMgr::check_with_tx_data(const ObTransID& tx_id, ObITxDataCheckFunct
   return ret;
 }
 
-int ObLSTxCtxMgr::get_rec_scn(palf::SCN &rec_scn)
+int ObLSTxCtxMgr::get_rec_scn(SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -1254,8 +1254,8 @@ int ObLSTxCtxMgr::get_rec_scn(palf::SCN &rec_scn)
     } else if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
       TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
     } else {
-      palf::SCN aggre_rec_scn = get_aggre_rec_scn_();
-      rec_scn = palf::SCN::min(fn.get_rec_log_ts(), aggre_rec_scn);
+      SCN aggre_rec_scn = get_aggre_rec_scn_();
+      rec_scn = SCN::min(fn.get_rec_log_ts(), aggre_rec_scn);
       TRANS_LOG(INFO, "succ to get rec scn", K(*this), K(aggre_rec_scn));
     }
   }
@@ -1290,7 +1290,7 @@ int ObLSTxCtxMgr::on_tx_ctx_table_flushed()
   return ret;
 }
 
-int ObLSTxCtxMgr::get_min_start_scn(palf::SCN &min_start_scn)
+int ObLSTxCtxMgr::get_min_start_scn(SCN &min_start_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -1304,11 +1304,11 @@ int ObLSTxCtxMgr::get_min_start_scn(palf::SCN &min_start_scn)
   return ret;
 }
 
-palf::SCN ObLSTxCtxMgr::get_aggre_rec_scn_()
+SCN ObLSTxCtxMgr::get_aggre_rec_scn_()
 {
-  palf::SCN ret;
-  palf::SCN prev_aggre_rec_scn = prev_aggre_rec_scn_.atomic_get();
-  palf::SCN aggre_rec_scn = aggre_rec_scn_.atomic_get();
+  SCN ret;
+  SCN prev_aggre_rec_scn = prev_aggre_rec_scn_.atomic_get();
+  SCN aggre_rec_scn = aggre_rec_scn_.atomic_get();
 
   // Before the checkpoint of the tx ctx table is succeed, we should still use
   // the prev_aggre_log_ts. And after successfully checkpointed, we can use the
@@ -1335,8 +1335,8 @@ int ObLSTxCtxMgr::refresh_aggre_rec_scn()
   if (!prev_aggre_rec_scn_.is_valid()) {
     // We should remember the rec_log_ts before the tx ctx table is successfully
     // checkpointed
-    palf::SCN old_v;
-    palf::SCN new_v;
+    SCN old_v;
+    SCN new_v;
     do {
       old_v = aggre_rec_scn_;
       new_v.reset();
@@ -1350,7 +1350,7 @@ int ObLSTxCtxMgr::refresh_aggre_rec_scn()
   return ret;
 }
 
-int ObLSTxCtxMgr::update_aggre_log_ts_wo_lock(palf::SCN rec_scn)
+int ObLSTxCtxMgr::update_aggre_log_ts_wo_lock(SCN rec_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -1358,8 +1358,8 @@ int ObLSTxCtxMgr::update_aggre_log_ts_wo_lock(palf::SCN rec_scn)
     // we cannot lock here, because the lock order must be
     // ObLSTxCtxMgr -> ObPartTransCtx, otherwise we may be
     // deadlocked
-    palf::SCN old_v;
-    palf::SCN new_v;
+    SCN old_v;
+    SCN new_v;
     do {
       old_v = aggre_rec_scn_;
       if (!old_v.is_valid()) {
@@ -1945,7 +1945,7 @@ int ObTxCtxMgr::iterate_tx_ctx_mgr_stat(const ObAddr &addr,
   return ret;
 }
 
-int ObTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(const ObLSID &ls_id, palf::SCN &min_prepare_version)
+int ObTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(const ObLSID &ls_id, SCN &min_prepare_version)
 {
   int ret = OB_SUCCESS;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
@@ -1972,7 +1972,7 @@ int ObTxCtxMgr::get_ls_min_uncommit_tx_prepare_version(const ObLSID &ls_id, palf
   return ret;
 }
 
-int ObTxCtxMgr::get_min_undecided_scn(const ObLSID &ls_id, palf::SCN &scn)
+int ObTxCtxMgr::get_min_undecided_scn(const ObLSID &ls_id, SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;

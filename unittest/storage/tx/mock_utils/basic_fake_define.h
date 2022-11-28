@@ -215,7 +215,7 @@ public:
   int get_gts(const uint64_t tenant_id,
               const MonotonicTs stc,
               ObTsCbTask *task,
-              palf::SCN &scn,
+              share::SCN &scn,
               MonotonicTs &receive_gts_ts)
   {
     int ret = OB_SUCCESS;
@@ -235,13 +235,13 @@ public:
     return ret;
   }
 
-  int get_gts(const uint64_t tenant_id, ObTsCbTask *task, palf::SCN &scn) {
+  int get_gts(const uint64_t tenant_id, ObTsCbTask *task, share::SCN &scn) {
     if (get_gts_error_) { return get_gts_error_; }
     return OB_SUCCESS;
   }
   int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
-                  palf::SCN &scn, bool &is_external_consistent) { return OB_SUCCESS; }
-  int wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn, ObTsCbTask *task,
+                  share::SCN &scn, bool &is_external_consistent) { return OB_SUCCESS; }
+  int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn, ObTsCbTask *task,
                       bool &need_wait)
   {
     TRANS_LOG(INFO, "wait_gts_elapse begin", K(gts_), K(scn));
@@ -257,7 +257,7 @@ public:
     return ret;
   }
 
-  int wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn)
+  int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn)
   {
     int ret = OB_SUCCESS;
     if (scn.get_val_for_gts() > gts_) {
@@ -296,7 +296,7 @@ public:
       ObLink *task = elapse_queue_.pop();
       if (task) {
         const MonotonicTs srr(MonotonicTs::current_time());
-        palf::SCN ts;
+        share::SCN ts;
         ts.convert_for_gts(gts_);
         const MonotonicTs receive_gts_ts(gts_);
         const ObGTSCacheTaskType task_type = WAIT_GTS_ELAPSING;
@@ -313,7 +313,7 @@ public:
       ObLink *task = get_gts_waiting_queue_.pop();
       if (task) {
         const MonotonicTs srr(MonotonicTs::current_time());
-        palf::SCN ts;
+        share::SCN ts;
         ts.convert_for_gts(gts_);
         const MonotonicTs receive_gts_ts(gts_);
         const ObGTSCacheTaskType task_type = GET_GTS;
@@ -420,7 +420,7 @@ public:
 
   int submit_log(const char *buf,
                  const int64_t size,
-                 const palf::SCN base_ts,
+                 const share::SCN base_ts,
                  ObTxBaseLogCb *cb,
                  const bool need_nonblock)
   {
@@ -432,7 +432,7 @@ public:
     } else {
       const int64_t replay_hint = base_header.get_replay_hint();
       const int64_t ts = MAX(base_ts.get_val_for_gts(), ts_) + 1;
-      palf::SCN scn;
+      share::SCN scn;
       scn.convert_for_gts(ts);
       int64_t queue_idx = replay_hint % TASK_QUEUE_CNT;
       if (!ATOMIC_LOAD(&log_drop_)) {
@@ -516,7 +516,7 @@ public:
   ObFakeTxReplayExecutor(storage::ObLS *ls,
                          storage::ObLSTxService *ls_tx_srv,
                          const palf::LSN &lsn,
-                         const palf::SCN &log_timestamp)
+                         const share::SCN &log_timestamp)
       : ObTxReplayExecutor(ls, ls_tx_srv, lsn, log_timestamp) {memtable_ = nullptr;}
 
   ~ObFakeTxReplayExecutor() {}
@@ -534,7 +534,7 @@ public:
                      memtable::ObMemtable* memtable)
   {
     int ret = OB_SUCCESS;
-    palf::SCN log_scn;
+    share::SCN log_scn;
     log_scn.convert_for_gts(log_timestamp);
     ObFakeTxReplayExecutor replay_executor(ls, ls_tx_srv, lsn, log_scn);
     if (OB_ISNULL(ls) || OB_ISNULL(ls_tx_srv) || OB_ISNULL(buf) || size <= 0
@@ -602,8 +602,8 @@ class ObFakeLSTxService : public ObLSTxService
 public:
   ObFakeLSTxService(ObLS *parent) : ObLSTxService(parent) { }
   ~ObFakeLSTxService() {}
-  virtual palf::SCN get_ls_weak_read_ts() override {
-    return palf::SCN::min_scn();
+  virtual share::SCN get_ls_weak_read_ts() override {
+    return share::SCN::min_scn();
   }
 };
 

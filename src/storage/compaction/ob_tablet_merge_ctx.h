@@ -21,7 +21,7 @@
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_handle.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -206,7 +206,7 @@ struct ObTabletMergeCtx
   // 2. filled in ObPartitionStore::get_merge_tables
   ObVersionRange sstable_version_range_;// version range for new sstable
   share::ObScnRange scn_range_;
-  palf::SCN merge_scn_;
+  share::SCN merge_scn_;
   int64_t create_snapshot_version_;
 
   storage::ObTablesHandleArray tables_handle_;

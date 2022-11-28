@@ -59,7 +59,7 @@ public:
   bool is_valid() const override;
   INHERIT_TO_STRING_KV("ObExternBackupDataDesc", ObExternBackupDataDesc, K(backup_scn_), K_(ls_attr_array));
 public:
-  palf::SCN backup_scn_;
+  SCN backup_scn_;
   ObSArray<ObLSAttr> ls_attr_array_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSAttrDesc);
@@ -97,7 +97,7 @@ public:
   bool is_valid() const override;
   INHERIT_TO_STRING_KV("ObExternBackupDataDesc", ObExternBackupDataDesc, K_(backup_scn), K_(tablet_to_ls));
 public:
-  palf::SCN backup_scn_;
+  SCN backup_scn_;
   ObSArray<ObBackupDataTabletToLSInfo> tablet_to_ls_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataTabletToLSDesc);
@@ -279,7 +279,7 @@ public:
 
   // write backup set place holder
   int write_backup_set_placeholder(const bool is_inner, const bool is_start, const bool is_succeed, 
-      const palf::SCN &replay_scn, const palf::SCN &min_restore_scn);
+      const SCN &replay_scn, const SCN &min_restore_scn);
 
   // write and read tenant locality info
   int write_tenant_locality_info(const ObExternTenantLocalityInfoDesc &locality_info);
@@ -293,8 +293,8 @@ public:
   int write_backup_set_info(const ObExternBackupSetInfoDesc &backup_set_info);
   int read_backup_set_info(ObExternBackupSetInfoDesc &backup_set_info);
 
-  int get_backup_set_array(const common::ObString &passwd_array, const palf::SCN &restore_scn,
-      palf::SCN &restore_start_scn, common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
+  int get_backup_set_array(const common::ObString &passwd_array, const SCN &restore_scn,
+      SCN &restore_start_scn, common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
   int get_max_sys_ls_retry_id(const share::ObBackupPath &backup_path, const ObLSID &ls_id, int64_t &retry_id);
 
   TO_STRING_KV(K_(backup_desc));
@@ -312,11 +312,11 @@ public:
     }
   };
 private:
-  int do_get_backup_set_array_(const common::ObString &passwd_array, const palf::SCN &restore_scn,
+  int do_get_backup_set_array_(const common::ObString &passwd_array, const SCN &restore_scn,
       const ObBackupSetFilter &op, common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 
-      int64_t &cur_max_backup_set_id, palf::SCN &restore_start_scn);
+      int64_t &cur_max_backup_set_id, SCN &restore_start_scn);
   int get_backup_set_placeholder_path_(const bool is_inner, const bool is_start, const bool is_succeed, 
-      const palf::SCN &replay_scn, const palf::SCN &min_restore_scn, share::ObBackupPath &path);
+      const SCN &replay_scn, const SCN &min_restore_scn, share::ObBackupPath &path);
 private:
   share::ObBackupSetDesc backup_desc_;
   share::ObBackupDest backup_set_dest_;

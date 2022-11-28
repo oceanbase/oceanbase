@@ -28,6 +28,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 using namespace palf;
 namespace storage
 {
@@ -106,7 +107,7 @@ void ObCheckPointService::wait()
 
 int ObCheckPointService::add_ls_freeze_task(
     ObDataCheckpoint *data_checkpoint,
-    palf::SCN rec_scn)
+    SCN rec_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(freeze_thread_.add_task(data_checkpoint, rec_scn))) {
@@ -358,7 +359,7 @@ int ObCheckPointService::do_minor_freeze()
       ObCheckpointExecutor *checkpoint_executor = nullptr;
       if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
         STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
-      } else if (OB_SUCCESS != (tmp_ret = (checkpoint_executor->advance_checkpoint_by_flush(palf::SCN::max_scn())))) {
+      } else if (OB_SUCCESS != (tmp_ret = (checkpoint_executor->advance_checkpoint_by_flush(SCN::max_scn())))) {
         STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", K(tmp_ret), K(ls->get_ls_id()));
       }
     }

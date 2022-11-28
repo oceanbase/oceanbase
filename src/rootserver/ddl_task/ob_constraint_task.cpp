@@ -18,7 +18,7 @@
 #include "share/ob_ddl_common.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_snapshot_info_manager.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -601,7 +601,7 @@ int ObConstraintTask::hold_snapshot(const int64_t snapshot_version)
   int ret = OB_SUCCESS;
   ObDDLService &ddl_service = root_service_->get_ddl_service();
   ObSEArray<ObTabletID, 1> tablet_ids;
-  palf::SCN snapshot_scn;
+  SCN snapshot_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObConstraintTask has not been inited", K(ret));

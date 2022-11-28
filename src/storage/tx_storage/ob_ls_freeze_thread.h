@@ -15,7 +15,7 @@
 
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/thread/thread_mgr_interface.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -35,12 +35,12 @@ class ObLSFreezeTask
 public:
   void set_task(ObLSFreezeThread *host,
                 checkpoint::ObDataCheckpoint *data_checkpoint,
-                palf::SCN rec_scn);
+                share::SCN rec_scn);
 
   void handle();
 
 private:
-  palf::SCN rec_scn_;
+  share::SCN rec_scn_;
   ObLSFreezeThread *host_;
   checkpoint::ObDataCheckpoint *data_checkpoint_;
 };
@@ -60,7 +60,7 @@ public:
   int init(int tg_id);
   void destroy();
 
-  int add_task(checkpoint::ObDataCheckpoint *data_checkpoint, palf::SCN rec_scn);
+  int add_task(checkpoint::ObDataCheckpoint *data_checkpoint, share::SCN rec_scn);
   void handle(void *task);
   int get_tg_id() { return tg_id_; }
 

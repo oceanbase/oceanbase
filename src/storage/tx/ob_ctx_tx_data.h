@@ -46,14 +46,14 @@ public:
   void get_tx_table(storage::ObTxTable *&tx_table);
 
   int set_state(int32_t state);
-  int set_commit_version(const palf::SCN &commit_version);
-  int set_start_log_ts(const palf::SCN &start_ts);
-  int set_end_log_ts(const palf::SCN &end_ts);
+  int set_commit_version(const share::SCN &commit_version);
+  int set_start_log_ts(const share::SCN &start_ts);
+  int set_end_log_ts(const share::SCN &end_ts);
 
   int32_t get_state() const;
-  const palf::SCN get_commit_version() const;
-  const palf::SCN get_start_log_ts() const;
-  const palf::SCN get_end_log_ts() const;
+  const share::SCN get_commit_version() const;
+  const share::SCN get_start_log_ts() const;
+  const share::SCN get_end_log_ts() const;
 
   ObTransID get_tx_id() const;
 
@@ -68,12 +68,12 @@ public:
 
   TO_STRING_KV(KP(ctx_mgr_), KPC(tx_data_), K(tx_commit_data_), K(read_only_));
 public:
-  class Guard {
+  class Guard { // TODO(yunxing.cyx): remove it
     friend class ObCtxTxData;
-    Guard(ObCtxTxData &host) : host_(host) { host_.lock_.rdlock(); }
+    Guard(ObCtxTxData &host) : host_(host) { }
     ObCtxTxData &host_;
   public:
-    ~Guard() { host_.lock_.unlock(); }
+    ~Guard() { }
     int get_tx_data(const storage::ObTxData *&tx_data) const;
   };
   Guard get_tx_data() { return Guard(*this); }

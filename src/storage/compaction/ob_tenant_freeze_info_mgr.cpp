@@ -43,7 +43,6 @@ using namespace share;
 using namespace share::schema;
 
 using common::hash::ObHashSet;
-using palf::SCN;
 
 namespace storage
 {
@@ -131,9 +130,9 @@ void ObTenantFreezeInfoMgr::destroy()
   TG_DESTROY(tg_id_);
 }
 
-palf::SCN ObTenantFreezeInfoMgr::get_latest_frozen_scn()
+SCN ObTenantFreezeInfoMgr::get_latest_frozen_scn()
 {
-  palf::SCN frozen_scn = palf::SCN::min_scn();
+  SCN frozen_scn = SCN::min_scn();
   RLockGuard lock_guard(lock_);
   ObIArray<FreezeInfo> &info_list = info_list_[cur_idx_];
 
@@ -153,6 +152,7 @@ int ObTenantFreezeInfoMgr::get_min_dependent_freeze_info(FreezeInfo &freeze_info
     idx = info_list.count() - MIN_DEPENDENT_FREEZE_INFO_GAP;
   }
   ret = get_info_nolock(idx, freeze_info);
+  LOG_INFO("get min dependent freeze info", K(ret), K(freeze_info)); // diagnose code for issue 45841468
   return ret;
 }
 
@@ -490,7 +490,7 @@ int ObTenantFreezeInfoMgr::diagnose_min_reserved_snapshot(
         ret = OB_SUCCESS;
       }
     }
-    snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L);
+    snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L * 1000L);
     snapshot_from_type = "undo_retention";
     if (freeze_info.freeze_scn.get_val_for_tx() < snapshot_version) {
       snapshot_version = freeze_info.freeze_scn.get_val_for_tx();
@@ -561,7 +561,7 @@ int ObTenantFreezeInfoMgr::get_reserve_points(
 //   return ret;
 // }
 
-int ObTenantFreezeInfoMgr::get_latest_freeze_scn(palf::SCN &freeze_scn)
+int ObTenantFreezeInfoMgr::get_latest_freeze_scn(SCN &freeze_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -582,7 +582,7 @@ int ObTenantFreezeInfoMgr::get_latest_freeze_scn(palf::SCN &freeze_scn)
   return ret;
 }
 
-int ObTenantFreezeInfoMgr::prepare_new_info_list(const palf::SCN &min_major_snapshot)
+int ObTenantFreezeInfoMgr::prepare_new_info_list(const SCN &min_major_snapshot)
 {
   int ret = OB_SUCCESS;
 
@@ -591,7 +591,7 @@ int ObTenantFreezeInfoMgr::prepare_new_info_list(const palf::SCN &min_major_snap
   snapshots_[next_idx].reset();
 
   for (int64_t i = 0; i < info_list_[cur_idx_].count() && OB_SUCC(ret); ++i) {
-    if (palf::SCN::max_scn() == min_major_snapshot || // no garbage collection is necessary
+    if (SCN::max_scn() == min_major_snapshot || // no garbage collection is necessary
         // or version is bigger or equal than the smallest major version currently
         info_list_[cur_idx_].at(i).freeze_scn >= min_major_snapshot) {
       if (OB_FAIL(info_list_[next_idx].push_back(info_list_[cur_idx_].at(i)))) {
@@ -654,7 +654,7 @@ int ObTenantFreezeInfoMgr::update_info(
     const int64_t snapshot_gc_ts,
     const ObIArray<FreezeInfo> &info_list,
     const ObIArray<ObSnapshotInfo> &snapshots,
-    const palf::SCN &min_major_snapshot,
+    const SCN &min_major_snapshot,
     bool& gc_snapshot_ts_changed)
 {
   int ret = OB_SUCCESS;
@@ -721,7 +721,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::get_global_info(int64_t &snapshot_gc_ts)
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
   ObGlobalStatProxy stat_proxy(*sql_proxy_, tenant_id);
-  palf::SCN snapshot_gc_scn;
+  SCN snapshot_gc_scn;
   if (OB_FAIL(stat_proxy.get_snapshot_gc_scn(snapshot_gc_scn))) {
     if (OB_TENANT_NOT_EXIST != ret) {
       STORAGE_LOG(WARN, "fail to get global info", K(ret), K(tenant_id));
@@ -735,12 +735,12 @@ int ObTenantFreezeInfoMgr::ReloadTask::get_global_info(int64_t &snapshot_gc_ts)
 }
 
 int ObTenantFreezeInfoMgr::ReloadTask::get_freeze_info(
-    palf::SCN &min_major_version,
+    SCN &min_major_version,
     ObIArray<FreezeInfo> &freeze_info)
 {
   int ret = OB_SUCCESS;
 
-  palf::SCN freeze_scn = palf::SCN::min_scn();
+  SCN freeze_scn = SCN::min_scn();
   min_major_version.set_max();
   ObSEArray<ObSimpleFrozenStatus, 8> tmp;
   ObFreezeInfoProxy freeze_info_proxy(MTL_ID());
@@ -840,7 +840,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::try_update_info()
     ObSEArray<ObSnapshotInfo, 4> snapshots;
     bool changed = false;
     observer::ObService *ob_service = GCTX.ob_service_;
-    palf::SCN min_major_snapshot = palf::SCN::max_scn();
+    SCN min_major_snapshot = SCN::max_scn();
 
     if (OB_FAIL(get_global_info(snapshot_gc_ts))) {
       if (OB_TENANT_NOT_EXIST != ret) {

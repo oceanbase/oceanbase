@@ -17,7 +17,7 @@
 #include "storage/ob_storage_schema.h"
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_sstable_meta_info.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -57,9 +57,9 @@ public:
   }
   OB_INLINE int64_t get_upper_trans_version() const { return ATOMIC_LOAD(&upper_trans_version_); }
   OB_INLINE int64_t get_max_merged_trans_version() const { return max_merged_trans_version_; }
-  OB_INLINE palf::SCN get_ddl_scn() const { return ddl_scn_; }
+  OB_INLINE share::SCN get_ddl_scn() const { return ddl_scn_; }
   OB_INLINE int64_t get_create_snapshot_version() const { return create_snapshot_version_; }
-  OB_INLINE palf::SCN get_filled_tx_scn() const { return filled_tx_scn_; }
+  OB_INLINE share::SCN get_filled_tx_scn() const { return filled_tx_scn_; }
   OB_INLINE int16_t get_data_index_tree_height() const { return data_index_tree_height_; }
 
   int set_upper_trans_version(const int64_t upper_trans_version);
@@ -103,8 +103,8 @@ public:
   int64_t max_merged_trans_version_;
   // recycle_version only avaliable for minor sstable, recored recycled multi version start
   int64_t recycle_version_;
-  palf::SCN ddl_scn_; // only used in DDL SSTable, all MB in DDL SSTable should have the same scn(start_scn)
-  palf::SCN filled_tx_scn_; // only for rebuild
+  share::SCN ddl_scn_; // only used in DDL SSTable, all MB in DDL SSTable should have the same scn(start_scn)
+  share::SCN filled_tx_scn_; // only for rebuild
   int16_t data_index_tree_height_;
   share::schema::ObTableMode table_mode_;
   uint8_t status_;

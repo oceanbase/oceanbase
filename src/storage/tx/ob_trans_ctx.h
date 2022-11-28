@@ -196,7 +196,7 @@ protected:
   void set_stc_by_now_();
   MonotonicTs get_stc_();
   ObITsMgr *get_ts_mgr_();
-  int defer_commit_callback_(const int ret, const palf::SCN commit_version);
+  int defer_commit_callback_(const int ret, const share::SCN commit_version);
   int64_t get_remaining_wait_interval_us_()
   {
     return trans_need_wait_wrap_.get_remaining_wait_interval_us();

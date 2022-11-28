@@ -178,7 +178,7 @@ int ObConstDecoder::batch_decode(
   } else if (OB_FAIL(extract_ref_and_null_count(row_ids, row_cap, datums, unused_null_cnt))) {
     LOG_WARN("Failed to extract refs",K(ret));
   } else if (OB_FAIL(dict_decoder_.batch_decode_dict(
-      ctx.obj_meta_.get_type(),
+      ctx.col_header_->get_store_obj_type(),
       cell_datas,
       row_cap,
       ctx.col_header_->length_ - meta_header_->offset_,

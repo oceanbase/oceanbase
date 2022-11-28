@@ -244,7 +244,7 @@ int ObLockMemtable::unlock_(
 int ObLockMemtable::check_lock_need_replay_(
     ObMemtableCtx *mem_ctx,
     const ObTableLockOp &lock_op,
-    const palf::SCN &scn,
+    const SCN &scn,
     bool &need_replay)
 {
   // 1. filter the lock/unlock op that has been dumped at lock memtable.
@@ -268,7 +268,7 @@ int ObLockMemtable::check_lock_need_replay_(
 int ObLockMemtable::replay_lock_(
     ObMemtableCtx *mem_ctx,
     const ObTableLockOp &lock_op,
-    const palf::SCN &scn)
+    const SCN &scn)
 {
   int ret = OB_SUCCESS;
   bool need_replay = true;
@@ -498,8 +498,8 @@ void ObLockMemtable::remove_lock_record(const ObTableLockOp &lock_op)
 
 int ObLockMemtable::update_lock_status(
     const ObTableLockOp &op_info,
-    const palf::SCN &commit_version,
-    const palf::SCN &commit_scn,
+    const SCN &commit_version,
+    const SCN &commit_scn,
     const ObTableLockOpStatus status)
 {
   int ret = OB_SUCCESS;
@@ -735,7 +735,7 @@ int ObLockMemtable::get_frozen_schema_version(int64_t &schema_version) const
   return OB_NOT_SUPPORTED;
 }
 
-palf::SCN ObLockMemtable::get_rec_scn()
+SCN ObLockMemtable::get_rec_scn()
 {
   // no need lock because rec_scn_ aesc except INT64_MAX
   LOG_INFO("rec_scn of ObLockMemtable is ", K(rec_scn_), K(flushed_scn_),
@@ -794,14 +794,14 @@ bool ObLockMemtable::is_active_memtable() const
   return !ATOMIC_LOAD(&is_frozen_);
 }
 
-int ObLockMemtable::flush(palf::SCN recycle_scn,
+int ObLockMemtable::flush(SCN recycle_scn,
                           bool need_freeze)
 {
   int ret = OB_SUCCESS;
   UNUSED(need_freeze);
   {
     WLockGuard guard(flush_lock_);
-    palf::SCN rec_scn = get_rec_scn();
+    SCN rec_scn = get_rec_scn();
     if (rec_scn >= recycle_scn) {
       LOG_INFO("lock memtable no need to flush", K(rec_scn), K(recycle_scn),
                K(is_frozen_), K(ls_id_));
@@ -895,7 +895,7 @@ int ObLockMemtable::replay_row(
 int ObLockMemtable::replay_lock(
     ObMemtableCtx *mem_ctx,
     const ObTableLockOp &lock_op,
-    const palf::SCN &scn)
+    const SCN &scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

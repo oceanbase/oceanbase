@@ -33,6 +33,7 @@
 namespace oceanbase
 {
 using namespace storage;
+using namespace share;
 using namespace transaction;
 using namespace common;
 using namespace share;
@@ -129,7 +130,7 @@ bool ObMvccTransNode::is_safe_read_barrier() const
           || (flag & F_STRONG_CONSISTENT_READ_BARRIER));
 }
 
-void ObMvccTransNode::set_snapshot_version_barrier(const palf::SCN version)
+void ObMvccTransNode::set_snapshot_version_barrier(const SCN version)
 {
   snapshot_version_barrier_ = version;
 }
@@ -204,19 +205,19 @@ bool ObMvccTransNode::is_delayed_cleanout() const
   return ATOMIC_LOAD(&flag_) & F_DELAYED_CLEANOUT;
 }
 
-int ObMvccTransNode::fill_trans_version(const palf::SCN version)
+int ObMvccTransNode::fill_trans_version(const SCN version)
 {
   trans_version_ = version;
   return OB_SUCCESS;
 }
 
-int ObMvccTransNode::fill_scn(const palf::SCN scn)
+int ObMvccTransNode::fill_scn(const SCN scn)
 {
   scn_ = scn;
   return OB_SUCCESS;
 }
 
-void ObMvccTransNode::trans_commit(const palf::SCN commit_version, const palf::SCN tx_end_scn)
+void ObMvccTransNode::trans_commit(const SCN commit_version, const SCN tx_end_scn)
 {
   // NB: we need set commit version before set committed
   fill_trans_version(commit_version);
@@ -224,7 +225,7 @@ void ObMvccTransNode::trans_commit(const palf::SCN commit_version, const palf::S
   set_tx_end_scn(tx_end_scn);
 }
 
-void ObMvccTransNode::trans_abort(const palf::SCN tx_end_scn)
+void ObMvccTransNode::trans_abort(const SCN tx_end_scn)
 {
   set_aborted();
   set_tx_end_scn(tx_end_scn);
@@ -323,8 +324,8 @@ void ObMvccRow::reset()
   first_dml_flag_ = ObDmlFlag::DF_NOT_EXIST;
   last_dml_flag_ = ObDmlFlag::DF_NOT_EXIST;
   list_head_ = NULL;
-  max_trans_version_ = palf::SCN::min_scn();
-  max_elr_trans_version_ = palf::SCN::min_scn();
+  max_trans_version_ = SCN::min_scn();
+  max_elr_trans_version_ = SCN::min_scn();
   latest_compact_node_ = NULL;
   latest_compact_ts_ = 0;
   index_ = NULL;
@@ -549,7 +550,7 @@ bool ObMvccRow::need_compact(const bool for_read, const bool for_replay)
 
 int ObMvccRow::row_compact(ObMemtable *memtable,
                            const bool for_replay,
-                           const palf::SCN snapshot_version,
+                           const SCN snapshot_version,
                            ObIAllocator *node_alloc)
 {
   int ret = OB_SUCCESS;
@@ -692,14 +693,14 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
   return ret;
 }
 
-bool ObMvccRow::is_transaction_set_violation(const palf::SCN snapshot_version)
+bool ObMvccRow::is_transaction_set_violation(const SCN snapshot_version)
 {
   return max_trans_version_ > snapshot_version
          || max_elr_trans_version_ > snapshot_version;
 }
 
 int ObMvccRow::elr(const ObTransID &tx_id,
-                   const palf::SCN elr_commit_version,
+                   const SCN elr_commit_version,
                    const ObTabletID &tablet_id,
                    const ObMemtableKey* key)
 {
@@ -712,7 +713,7 @@ int ObMvccRow::elr(const ObTransID &tx_id,
     while (NULL != iter && OB_SUCC(ret)) {
       if (tx_id != iter->tx_id_) {
         break;
-      } else if (palf::SCN::max_scn() != iter->trans_version_ && iter->trans_version_ > elr_commit_version) {
+      } else if (SCN::max_scn() != iter->trans_version_ && iter->trans_version_ > elr_commit_version) {
         // leader revoke
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "unexected transaction version", K(*iter), K(elr_commit_version));
@@ -762,28 +763,28 @@ void ObMvccRow::mvcc_write_end(ObIMemtableCtx &ctx, int64_t ret) const
   }
 }
 
-palf::SCN ObMvccRow::get_max_trans_version() const
+SCN ObMvccRow::get_max_trans_version() const
 {
-  const palf::SCN max_elr_commit_version = max_elr_trans_version_.atomic_get();
-  const palf::SCN max_trans_version = max_trans_version_.atomic_get();
+  const SCN max_elr_commit_version = max_elr_trans_version_.atomic_get();
+  const SCN max_trans_version = max_trans_version_.atomic_get();
   return MAX(max_elr_commit_version, max_trans_version);
 }
 
-void ObMvccRow::update_max_trans_version(const palf::SCN max_trans_version,
+void ObMvccRow::update_max_trans_version(const SCN max_trans_version,
                                          const transaction::ObTransID &tx_id)
 {
-  palf::SCN v = max_trans_version_.inc_update(max_trans_version);
+  SCN v = max_trans_version_.inc_update(max_trans_version);
   if (v == max_trans_version) { max_trans_id_ = tx_id; }
 }
 
-void ObMvccRow::update_max_elr_trans_version(const palf::SCN max_trans_version,
+void ObMvccRow::update_max_elr_trans_version(const SCN max_trans_version,
                                              const transaction::ObTransID &tx_id)
 {
-  palf::SCN v = max_elr_trans_version_.inc_update(max_trans_version);
+  SCN v = max_elr_trans_version_.inc_update(max_trans_version);
   if (v == max_trans_version) { max_elr_trans_id_ = tx_id; }
 }
 
-int ObMvccRow::trans_commit(const palf::SCN commit_version, ObMvccTransNode &node)
+int ObMvccRow::trans_commit(const SCN commit_version, ObMvccTransNode &node)
 {
   int ret = OB_SUCCESS;
 
@@ -878,7 +879,7 @@ int ObMvccRow::wakeup_waiter(const ObTabletID &tablet_id,
 
 int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
                            ObMvccTransNode &writer_node,
-                           const palf::SCN snapshot_version,
+                           const SCN snapshot_version,
                            ObMvccWriteResult &res)
 {
   int ret = OB_SUCCESS;
@@ -1007,7 +1008,7 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
   return ret;
 }
 
-int ObMvccRow::check_double_insert_(const palf::SCN snapshot_version,
+int ObMvccRow::check_double_insert_(const SCN snapshot_version,
                                     ObMvccTransNode &node,
                                     ObMvccTransNode *prev)
 {
@@ -1044,7 +1045,7 @@ void ObMvccRow::mvcc_undo()
 }
 
 int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
-                          const palf::SCN snapshot_version,
+                          const SCN snapshot_version,
                           ObMvccTransNode &node,
                           ObMvccWriteResult &res)
 {

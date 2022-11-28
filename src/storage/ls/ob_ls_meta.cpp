@@ -57,7 +57,7 @@ ObLSMeta::ObLSMeta()
     offline_scn_(),
     restore_status_(ObLSRestoreStatus::LS_RESTORE_STATUS_MAX),
     replayable_point_(),
-    tablet_change_checkpoint_scn_(palf::SCN::min_scn()),
+    tablet_change_checkpoint_scn_(SCN::min_scn()),
     all_id_meta_(),
     saved_info_()
 {
@@ -120,7 +120,7 @@ void ObLSMeta::reset()
   offline_scn_.reset();
   restore_status_ = ObLSRestoreStatus::LS_RESTORE_STATUS_MAX;
   replayable_point_.reset();
-  tablet_change_checkpoint_scn_ = palf::SCN::min_scn();
+  tablet_change_checkpoint_scn_ = SCN::min_scn();
   saved_info_.reset();
 }
 
@@ -158,13 +158,13 @@ int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
   return ret;
 }
 
-palf::SCN ObLSMeta::get_tablet_change_checkpoint_scn() const
+SCN ObLSMeta::get_tablet_change_checkpoint_scn() const
 {
   ObSpinLockTimeGuard guard(lock_);
 	return tablet_change_checkpoint_scn_;
 }
 
-int ObLSMeta::set_tablet_change_checkpoint_scn(const palf::SCN &tablet_change_checkpoint_scn)
+int ObLSMeta::set_tablet_change_checkpoint_scn(const SCN &tablet_change_checkpoint_scn)
 {
   ObSpinLockTimeGuard guard(lock_);
   int ret = OB_SUCCESS;
@@ -286,7 +286,7 @@ int ObLSMeta::get_gc_state(logservice::LSGCState &gc_state)
   return ret;
 }
 
-int ObLSMeta::set_offline_scn(const palf::SCN &offline_scn)
+int ObLSMeta::set_offline_scn(const SCN &offline_scn)
 {
   // 不主动写slog
   int ret = OB_SUCCESS;
@@ -295,7 +295,7 @@ int ObLSMeta::set_offline_scn(const palf::SCN &offline_scn)
   return ret;
 }
 
-int ObLSMeta::get_offline_scn(palf::SCN &offline_scn)
+int ObLSMeta::get_offline_scn(SCN &offline_scn)
 {
   int ret = OB_SUCCESS;
   ObSpinLockTimeGuard guard(lock_);
@@ -344,7 +344,7 @@ int ObLSMeta::get_restore_status(ObLSRestoreStatus &restore_status) const
   return ret;
 }
 
-int ObLSMeta::update_ls_replayable_point(const palf::SCN &replayable_point)
+int ObLSMeta::update_ls_replayable_point(const SCN &replayable_point)
 {
   int ret = OB_SUCCESS;
   ObSpinLockTimeGuard guard(lock_);
@@ -578,7 +578,7 @@ int ObLSMeta::init(
     const ObReplicaType &replica_type,
     const ObMigrationStatus &migration_status,
     const share::ObLSRestoreStatus &restore_status,
-    const palf::SCN &create_scn)
+    const SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()
@@ -610,7 +610,7 @@ void ObLSMeta::set_write_slog_func_(WriteSlog write_slog)
 
 int ObLSMeta::update_id_meta(const int64_t service_type,
                              const int64_t limited_id,
-                             const palf::SCN &latest_scn,
+                             const SCN &latest_scn,
                              const bool write_slog)
 {
   int ret = OB_SUCCESS;

@@ -21,7 +21,7 @@
 #include "ob_sstable_meta.h"
 #include "share/ob_encryption_util.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase {
 namespace storage {
@@ -63,7 +63,7 @@ struct ObDataStoreDesc
   ObSSTableIndexBuilder *sstable_index_builder_;
   ObCompressorType compressor_type_;
   int64_t snapshot_version_;
-  palf::SCN end_scn_;
+  share::SCN end_scn_;
   int64_t progressive_merge_round_;
   int64_t encrypt_id_;
   bool need_prebuild_bloomfilter_;

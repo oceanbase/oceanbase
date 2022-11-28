@@ -16,9 +16,12 @@
 #include "log_iterator_storage.h"        // LogIteratorStorage
 namespace oceanbase
 {
-namespace palf
+namespace share
 {
 class SCN;
+}
+namespace palf
+{
 template <class PalfIteratorStorage, class LogEntryType>
 class PalfIterator
 {
@@ -88,7 +91,7 @@ public:
     }
     return ret;
   }
-  int get_entry(const char *&buffer, int64_t &nbytes, SCN &scn, LSN &lsn, bool &is_raw_write)
+  int get_entry(const char *&buffer, int64_t &nbytes, share::SCN &scn, LSN &lsn, bool &is_raw_write)
   {
     int ret = OB_SUCCESS;
     LogEntryType entry;
@@ -105,7 +108,7 @@ public:
     }
     return ret;
   }
-  int get_entry(const char *&buffer, int64_t &nbytes, SCN &scn, LSN &lsn)
+  int get_entry(const char *&buffer, int64_t &nbytes, share::SCN &scn, LSN &lsn)
   {
     int ret = OB_SUCCESS;
     LogEntryType entry;

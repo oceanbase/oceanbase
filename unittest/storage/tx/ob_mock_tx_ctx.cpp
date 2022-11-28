@@ -400,7 +400,7 @@ int MockObTxCtx::handle_all()
   return mailbox_.handle_all();
 }
 
-int MockObTxCtx::get_gts_(palf::SCN &gts)
+int MockObTxCtx::get_gts_(share::SCN &gts)
 {
   // TODO(handora.qc): get gts failed
   gts.convert_for_gts(ObTimeUtility::current_time_ns());
@@ -413,13 +413,13 @@ int MockObTxCtx::wait_gts_elapse_commit_version_(bool &need_wait)
   return OB_SUCCESS;
 }
 
-int MockObTxCtx::get_local_max_read_version_(palf::SCN &local_max_read_version)
+int MockObTxCtx::get_local_max_read_version_(share::SCN &local_max_read_version)
 {
   local_max_read_version.convert_for_gts(ObTimeUtility::current_time());
   return OB_SUCCESS;
 }
 
-int MockObTxCtx::update_local_max_commit_version_(const palf::SCN &)
+int MockObTxCtx::update_local_max_commit_version_(const share::SCN &)
 {
   return OB_SUCCESS;
 }

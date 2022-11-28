@@ -110,7 +110,7 @@ int ObBackupSetTaskMgr::advance_status_(
     ObMySQLTransaction &trans,
     const ObBackupStatus &next_status, 
     const int result,
-    const palf::SCN &scn,
+    const SCN &scn,
     const int64_t end_ts)
 {
   int ret = OB_SUCCESS;
@@ -544,7 +544,7 @@ int ObBackupSetTaskMgr::merge_tablet_to_ls_info_(const ObIArray<ObBackupLSTaskAt
   ObHashMap<ObLSID, const ObBackupLSTaskAttr *> ls_map;
   share::ObBackupDataTabletToLSDesc tablet_to_ls_desc;
   const int64_t OB_BACKUP_MAX_LS_BUCKET = 1024;
-  palf::SCN max_backup_scn;
+  SCN max_backup_scn;
   if (ls_tasks.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(ls_tasks));
@@ -566,7 +566,7 @@ int ObBackupSetTaskMgr::merge_tablet_to_ls_info_(const ObIArray<ObBackupLSTaskAt
       const ObLSID &ls_id = iter->first;
       const int64_t retry_id = iter->second->retry_id_;
       share::ObBackupDataTabletToLSInfo tablet_to_ls_info;
-      palf::SCN backup_scn = palf::SCN::min_scn();
+      SCN backup_scn = SCN::min_scn();
       ObArray<ObTabletID> latest_tablet_id;
       if (OB_FAIL(get_extern_tablet_info_(ls_id, retry_id, tablet_to_ls_info, backup_scn))) {
         LOG_WARN("fail to get extern tablet info", K(ret), K(ls_id), K(retry_id));
@@ -605,7 +605,7 @@ int ObBackupSetTaskMgr::merge_tablet_to_ls_info_(const ObIArray<ObBackupLSTaskAt
 int ObBackupSetTaskMgr::get_extern_tablet_info_(
     const share::ObLSID &ls_id, const int64_t &retry_cnt, 
     share::ObBackupDataTabletToLSInfo &tablet_to_ls_info, 
-    palf::SCN &backup_scn)
+    SCN &backup_scn)
 {
   int ret = OB_SUCCESS;
   share::ObBackupSetDesc backup_set_desc;
@@ -640,7 +640,7 @@ int ObBackupSetTaskMgr::check_tablets_match_(
     const ObLSID &ls_id,
     const ObIArray<ObTabletID> &cur_tablet_ids, 
     const ObIArray<ObTabletID> &user_tablet_ids, 
-    const palf::SCN &backup_scn)
+    const SCN &backup_scn)
 {
   int ret = OB_SUCCESS;
   ObHashSet<ObTabletID> tablet_set;
@@ -686,7 +686,7 @@ int ObBackupSetTaskMgr::check_tablets_match_(
 int ObBackupSetTaskMgr::do_check_inc_tablets_(
     const ObLSID &ls_id, 
     const ObIArray<ObTabletID> &inc_tablets, 
-    const palf::SCN &backup_scn)
+    const SCN &backup_scn)
 {
   int ret = OB_SUCCESS;
   ObAddr dst_server;
@@ -854,7 +854,7 @@ int ObBackupSetTaskMgr::backup_data_()
   } else if (OB_FAIL(do_backup_data_(ls_task, finish_cnt, build_index_attr))) {
     LOG_WARN("[DATA_BACKUP]failed to do backup ls task", K(ret), K(ls_task));
   } else if (ls_task.count() == finish_cnt) {
-    palf::SCN end_scn = palf::SCN::min_scn();
+    SCN end_scn = SCN::min_scn();
     bool need_change_turn = false;
     bool finish_build_index = false;
     ObSArray<share::ObBackupDataTabletToLSInfo> tablets_to_ls;
@@ -1566,17 +1566,17 @@ int ObBackupSetTaskMgr::write_backup_set_info_(
   return ret;
 }
 
-int ObBackupSetTaskMgr::calculate_start_replay_scn_(palf::SCN &start_replay_scn)
+int ObBackupSetTaskMgr::calculate_start_replay_scn_(SCN &start_replay_scn)
 {
   int ret = OB_SUCCESS;
   ObBackupLSMetaInfosDesc ls_meta_infos;
-  palf::SCN tmp_start_replay_scn = set_task_attr_.start_scn_;
+  SCN tmp_start_replay_scn = set_task_attr_.start_scn_;
   if (OB_FAIL(store_.read_ls_meta_infos(ls_meta_infos))) {
     LOG_WARN("fail to read ls meta infos", K(ret));
   } else {
     ARRAY_FOREACH_X(ls_meta_infos.ls_meta_packages_, i, cnt, OB_SUCC(ret)) {
       const palf::PalfBaseInfo &palf_base_info = ls_meta_infos.ls_meta_packages_.at(i).palf_meta_;
-      tmp_start_replay_scn = palf::SCN::min(tmp_start_replay_scn, palf_base_info.prev_log_info_.scn_);
+      tmp_start_replay_scn = SCN::min(tmp_start_replay_scn, palf_base_info.prev_log_info_.scn_);
     }
     if (OB_SUCC(ret)) {
       start_replay_scn = tmp_start_replay_scn;
@@ -1640,8 +1640,8 @@ int ObBackupSetTaskMgr::write_extern_diagnose_info_(
 int ObBackupSetTaskMgr::write_backup_set_placeholder(const bool is_start) 
 {
   int ret = OB_SUCCESS;
-  palf::SCN start_replay_scn = job_attr_->plus_archivelog_ ? set_task_attr_.end_scn_ : set_task_attr_.start_scn_;
-  palf::SCN min_restore_scn = set_task_attr_.end_scn_;
+  SCN start_replay_scn = job_attr_->plus_archivelog_ ? set_task_attr_.end_scn_ : set_task_attr_.start_scn_;
+  SCN min_restore_scn = set_task_attr_.end_scn_;
   bool is_inner = is_start ? false : true;
   bool is_success = OB_SUCCESS == job_attr_->result_ ? true : false;
   if (is_start) {

@@ -24,10 +24,11 @@ namespace storage
 {
 
 using namespace checkpoint;
+using namespace share;
 
 void ObLSFreezeTask::set_task(ObLSFreezeThread *host,
                               ObDataCheckpoint *data_checkpoint,
-                              palf::SCN rec_scn)
+                              SCN rec_scn)
 {
   host_ = host;
   rec_scn_ = rec_scn;
@@ -109,7 +110,7 @@ int ObLSFreezeThread::init(int tg_id)
 }
 
 int ObLSFreezeThread::add_task(ObDataCheckpoint *data_checkpoint,
-                               palf::SCN rec_scn)
+                               SCN rec_scn)
 {
   int ret = OB_SUCCESS;
   ObLSFreezeTask *task = NULL;

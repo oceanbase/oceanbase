@@ -7,24 +7,18 @@
 #ifndef OCEANBASE_SHARE_OB_TABLE_RANGE_H_
 #define OCEANBASE_SHARE_OB_TABLE_RANGE_H_
 
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
-namespace palf
-{
-  class SCN;
-}
-
 namespace share
 {
-
 struct ObScnRange
 {
   OB_UNIS_VERSION(1);
 public:
-  static const palf::SCN MIN_SCN;
-  static const palf::SCN MAX_SCN;
+  static const SCN MIN_SCN;
+  static const SCN MAX_SCN;
 
   ObScnRange();
   int64_t hash() const;
@@ -56,7 +50,7 @@ public:
     return !this->operator==(range);
   }
 
-  OB_INLINE bool contain(const palf::SCN &scn) const
+  OB_INLINE bool contain(const SCN &scn) const
   {
     return is_valid() && start_scn_ < scn
       && end_scn_ >= scn;
@@ -64,8 +58,8 @@ public:
   TO_STRING_KV(K_(start_scn), K_(end_scn));
 
 public:
-  palf::SCN start_scn_;
-  palf::SCN end_scn_;
+  SCN start_scn_;
+  SCN end_scn_;
 };
 
 

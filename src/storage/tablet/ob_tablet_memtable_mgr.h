@@ -54,7 +54,7 @@ public:
 
   bool has_active_memtable();
   int64_t get_memtable_count() const;
-  virtual int get_memtable_for_replay(palf::SCN replay_scn,
+  virtual int get_memtable_for_replay(share::SCN replay_scn,
                                       ObTableHandleV2 &handle) override;
   memtable::ObMemtable *get_last_frozen_memtable() const;
   memtable::ObMemtable *get_last_frozen_memtable_() const;
@@ -66,7 +66,7 @@ public:
       memtable::ObMemtable *&memtable,
       const memtable::MultiSourceDataUnitType type) const override;
   int release_tail_memtable(memtable::ObIMemtable *memtable);
-  int create_memtable(const palf::SCN clog_checkpoint_scn,
+  int create_memtable(const share::SCN clog_checkpoint_scn,
                       const int64_t schema_version,
                       const bool for_replay);
   int get_memtables(
@@ -83,8 +83,8 @@ public:
   int get_memtables_nolock(ObTableHdlArray &handle);
   int get_first_frozen_memtable(ObTableHandleV2 &handle) const;
   int resolve_left_boundary_for_active_memtable(memtable::ObIMemtable *memtable,
-                                                palf::SCN start_scn,
-                                                palf::SCN snapshot_version);
+                                                share::SCN start_scn,
+                                                share::SCN snapshot_version);
   int unset_logging_blocked_for_active_memtable(memtable::ObIMemtable *memtable);
   int set_is_tablet_freeze_for_active_memtable(memtable::ObIMemtable *&memtable,
                                                bool is_force_freeze = false);

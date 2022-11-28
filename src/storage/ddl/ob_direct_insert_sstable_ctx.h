@@ -137,6 +137,7 @@ private:
   int64_t task_finish_count_;
   blocksstable::ObSSTableIndexBuilder *index_builder_;
   int64_t task_id_;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle_; // for keeping ddl kv mgr alive
 };
 
 struct ObSSTableInsertTableParam final

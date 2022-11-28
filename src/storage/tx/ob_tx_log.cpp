@@ -459,7 +459,7 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
                                palf::block_id_t block_id,
                                palf::LSN lsn,
                                int64_t tx_id,
-                               palf::SCN scn,
+                               SCN scn,
                                bool &has_dumped_tx_id)
 {
   int ret = OB_SUCCESS;

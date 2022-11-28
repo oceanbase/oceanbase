@@ -17,6 +17,7 @@
 namespace oceanbase
 {
 using namespace palf;
+using namespace share;
 namespace logservice
 {
 ObReplayHandler::ObReplayHandler(storage::ObLS *ls)

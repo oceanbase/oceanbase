@@ -24,6 +24,7 @@
 namespace oceanbase
 {
 using namespace storage;
+using namespace share;
 using namespace rootserver;
 namespace obrpc
 {
@@ -121,7 +122,7 @@ int ObTenantFreezerP::do_major_freeze_()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
-  palf::SCN frozen_scn;
+  SCN frozen_scn;
 
   if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
     LOG_WARN("get_frozen_scn failed", KR(ret));

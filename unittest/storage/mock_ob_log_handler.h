@@ -14,7 +14,7 @@
 #include "logservice/palf/palf_handle.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/palf/palf_env.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "logservice/ob_log_base_type.h"
 
 #ifndef MOCK_OB_LOG_HANDLER_H_
@@ -34,11 +34,11 @@ public:
   virtual bool is_valid() const { return true; }
   virtual int append(const void *buffer,
                      const int64_t nbytes,
-                     const palf::SCN &ref_scn,
+                     const share::SCN &ref_scn,
                      const bool need_nonblock,
                      logservice::AppendCb *cb,
                      palf::LSN &lsn,
-                     palf::SCN &scn)
+                     share::SCN &scn)
   {
     UNUSED(need_nonblock);
     UNUSED(buffer);
@@ -84,7 +84,7 @@ public:
 
   virtual int change_access_mode(const int64_t mode_version,
                                  const AccessMode &access_mode,
-                                 const palf::SCN &ref_scn)
+                                 const share::SCN &ref_scn)
   {
     UNUSED(mode_version);
     UNUSED(access_mode);
@@ -118,7 +118,7 @@ public:
     UNUSED(iter);
     return OB_SUCCESS;
   };
-  int seek(const palf::SCN &start_scn,
+  int seek(const share::SCN &start_scn,
            palf::PalfGroupBufferIterator &iter)
   {
     UNUSED(start_scn);
@@ -146,7 +146,7 @@ public:
     UNUSEDx(member_list, arb_replica, paxos_replica_num);
     return OB_SUCCESS;
   }
-  int get_end_scn(palf::SCN &scn) const
+  int get_end_scn(share::SCN &scn) const
   {
     UNUSED(scn);
     return OB_SUCCESS;
@@ -172,7 +172,7 @@ public:
     UNUSED(lsn);
     return OB_SUCCESS;
   }
-  int get_max_scn(palf::SCN &scn) const
+  int get_max_scn(share::SCN &scn) const
   {
     UNUSED(scn);
     return OB_SUCCESS;
@@ -182,7 +182,7 @@ public:
     UNUSED(ts_ns);
     return OB_SUCCESS;
   }
-  int locate_by_scn_coarsely(const palf::SCN &scn, LSN &result_lsn)
+  int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn)
   {
     LSN tmp(scn.get_val_for_inner_table_field());
     result_lsn = tmp;
@@ -201,7 +201,7 @@ public:
     return OB_SUCCESS;
   }
 
-  int locate_by_lsn_coarsely(const palf::LSN &lsn, palf::SCN &result_scn)
+  int locate_by_lsn_coarsely(const palf::LSN &lsn, share::SCN &result_scn)
   {
     result_scn = result_scn_;
     return OB_SUCCESS;
@@ -375,9 +375,9 @@ public:
 
   LSN base_lsn_;
   int64_t result_ts_ns_;
-  palf::SCN result_scn_;
+  share::SCN result_scn_;
   int enable_replay(const palf::LSN &initial_lsn,
-                    const palf::SCN &initial_scn)
+                    const share::SCN &initial_scn)
   {
     UNUSED(initial_lsn);
     UNUSED(initial_scn);
@@ -394,7 +394,7 @@ public:
   {
     return OB_SUCCESS;
   }
-  int get_max_decided_scn(palf::SCN &scn)
+  int get_max_decided_scn(share::SCN &scn)
   {
     scn.set_max();
     return OB_SUCCESS;

@@ -100,7 +100,7 @@ int ObKeepAliveLSHandler::try_submit_log()
 {
   int ret = OB_SUCCESS;
   palf::LSN lsn;
-  palf::SCN scn = palf::SCN::min_scn();
+  SCN scn = SCN::min_scn();
 
   if (OB_ISNULL(log_handler_ptr_)) {
     stat_info_.other_error_cnt += 1;
@@ -152,8 +152,8 @@ void ObKeepAliveLSHandler::print_stat_info()
 bool ObKeepAliveLSHandler::check_gts_()
 {
   bool need_submit = true;
-  palf::SCN gts;
-  palf::SCN max_scn;
+  SCN gts;
+  SCN max_scn;
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(log_handler_ptr_)) {

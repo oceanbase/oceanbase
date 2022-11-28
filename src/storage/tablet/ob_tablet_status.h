@@ -28,7 +28,7 @@ namespace transaction
 {
 class ObTransID;
 }
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -111,7 +111,7 @@ public:
   int check(const uint64_t time_us);
   int wake_up(
       ObTabletTxMultiSourceDataUnit &tx_data,
-      const palf::SCN &memtable_scn,
+      const share::SCN &memtable_scn,
       const bool for_replay,
       const memtable::MemtableRefOp ref_op);
 private:

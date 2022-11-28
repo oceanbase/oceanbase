@@ -51,7 +51,7 @@ int ObTenantMajorMergeStrategy::filter_merging_zones(common::ObIArray<common::Ob
     LOG_WARN("not init", KR(ret), K_(tenant_id));
   } else {
     HEAP_VAR(ObZoneMergeInfo, merge_info) {
-      palf::SCN global_broadcast_scn;
+      SCN global_broadcast_scn;
       if (OB_FAIL(zone_merge_mgr_->get_global_broadcast_scn(global_broadcast_scn))) {
         LOG_WARN("fail to get get_global_broadcast_scn", KR(ret), K_(tenant_id));
       }

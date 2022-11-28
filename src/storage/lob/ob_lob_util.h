@@ -58,7 +58,7 @@ struct ObLobAccessParam {
   int64_t byte_size_;
   int64_t handle_size_;
   int64_t timeout_;
-  palf::SCN fb_snapshot_;
+  share::SCN fb_snapshot_;
   bool scan_backward_;
   bool asscess_ptable_;
   uint64_t offset_; // is_char为true时 offset代表字符长度

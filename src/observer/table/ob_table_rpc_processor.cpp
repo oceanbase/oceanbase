@@ -411,7 +411,7 @@ int ObTableApiProcessorBase::setup_tx_snapshot_(transaction::ObTxDesc &trans_des
       LOG_WARN("fail to get global read snapshot", K(ret));
     }
   } else {
-    palf::SCN weak_read_snapshot;
+    SCN weak_read_snapshot;
     if (OB_FAIL(txs->get_weak_read_snapshot_version(weak_read_snapshot))) {
       LOG_WARN("fail to get weak read snapshot", K(ret));
     } else {

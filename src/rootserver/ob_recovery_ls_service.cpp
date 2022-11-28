@@ -20,7 +20,7 @@
 #include "logservice/ob_log_handler.h"              //ObLogHandler
 #include "logservice/palf/log_entry.h"              //LogEntry
 #include "logservice/palf/log_define.h"
-#include "logservice/palf/scn.h"//SCN
+#include "share/scn.h"//SCN
 #include "logservice/ob_garbage_collector.h"//ObGCLSLog
 #include "logservice/restoreservice/ob_log_restore_handler.h"//ObLogRestoreHandler
 #include "observer/ob_server_struct.h"              //GCTX

@@ -15,7 +15,7 @@
 #include "ob_storage_ha_reader.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "share/rc/ob_tenant_base.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
@@ -555,7 +555,7 @@ int ObCopyMacroBlockObProducer::init(
     const ObITable::TableKey &table_key,
     const ObCopyMacroRangeInfo &copy_macro_range_info,
     const int64_t data_version,
-    const palf::SCN backfill_tx_scn)
+    const SCN backfill_tx_scn)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -1014,7 +1014,7 @@ int ObCopyTabletInfoObProducer::build_deleted_tablet_info_(
     tablet_info.param_.multi_version_start_ = 0;
     tablet_info.param_.snapshot_version_ = 0;
     tablet_info.param_.tx_data_.tablet_status_ = ObTabletStatus::DELETING;
-    tablet_info.param_.tx_data_.tx_scn_ = palf::SCN::min_scn();
+    tablet_info.param_.tx_data_.tx_scn_ = SCN::min_scn();
 
     if (OB_FAIL(tablet_info.param_.ha_status_.set_restore_status(restore_status))) {
       LOG_WARN("failed to set restore status", K(ret), K(restore_status));
@@ -1586,8 +1586,8 @@ int ObCopySSTableInfoObProducer::check_need_copy_sstable_(
         need_copy_sstable = true;
       }
     } else if (sstable->is_ddl_sstable()) {
-      const palf::SCN ddl_sstable_start_scn = tablet_sstable_info_.ddl_sstable_scn_range_.start_scn_;
-      const palf::SCN ddl_sstable_end_scn = tablet_sstable_info_.ddl_sstable_scn_range_.end_scn_;
+      const SCN ddl_sstable_start_scn = tablet_sstable_info_.ddl_sstable_scn_range_.start_scn_;
+      const SCN ddl_sstable_end_scn = tablet_sstable_info_.ddl_sstable_scn_range_.end_scn_;
       if (tablet_sstable_info_.ddl_sstable_scn_range_.is_empty()) {
         need_copy_sstable = false;
       } else if (sstable->get_key().scn_range_.start_scn_ >= ddl_sstable_end_scn) {

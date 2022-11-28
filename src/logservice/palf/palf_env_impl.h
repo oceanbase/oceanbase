@@ -22,6 +22,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/utility.h"
 #include "share/ob_occam_timer.h"
+#include "share/scn.h"
 #include "fetch_log_engine.h"
 #include "log_loop_thread.h"
 #include "log_define.h"
@@ -32,7 +33,6 @@
 #include "palf_handle_impl.h"
 #include "log_io_worker.h"
 #include "block_gc_timer_task.h"
-#include "scn.h"
 namespace oceanbase
 {
 namespace common
@@ -253,12 +253,12 @@ private:
     bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
     int64_t id_;
     block_id_t min_block_id_;
-    SCN min_block_id_scn_;
+    share::SCN min_block_max_scn_;
     block_id_t min_using_block_id_;
     int64_t oldest_palf_id_;
-    SCN oldest_block_scn_;
+    share::SCN oldest_block_scn_;
     int ret_code_;
-    TO_STRING_KV(K_(id), K_(min_block_id_scn), K_(min_block_id), K_(min_using_block_id), K_(oldest_palf_id), K_(oldest_block_scn), K_(ret_code));
+    TO_STRING_KV(K_(id), K_(min_block_max_scn), K_(min_block_id), K_(min_using_block_id), K_(oldest_palf_id), K_(oldest_block_scn), K_(ret_code));
   };
   struct GetTotalUsedDiskSpace
   {
@@ -283,7 +283,7 @@ private:
   int get_disk_usage_(int64_t &used_size_byte,
                       int64_t &palf_id,
                       int64_t &maximum_used_size);
-  int recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, SCN &oldest_scn);
+  int recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, share::SCN &oldest_scn);
   int wait_until_reference_count_to_zero_(const int64_t palf_id);
   // check the diskspace whether is enough to hold a new palf instance.
   bool check_can_create_palf_handle_impl_() const;

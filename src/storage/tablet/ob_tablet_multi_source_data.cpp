@@ -20,7 +20,7 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;
-using namespace oceanbase::palf;
+using namespace oceanbase::share;
 
 namespace oceanbase
 {
@@ -205,7 +205,7 @@ int64_t ObTabletTxMultiSourceDataUnit::get_serialize_size() const
   return size;
 }
 
-int ObTabletTxMultiSourceDataUnit::set_scn(const palf::SCN &scn)
+int ObTabletTxMultiSourceDataUnit::set_scn(const SCN &scn)
 {
   tx_scn_ = scn;
 

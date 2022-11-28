@@ -17,6 +17,7 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/charset/ob_charset.h"
+#include "src/sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -169,7 +170,6 @@ int ObHashGroupByOp::inner_open()
     int64_t est_hash_mem_size = 0;
     int64_t estimate_mem_size = 0;
     int64_t init_size = 0;
-    int64_t init_bkt_size = INIT_BKT_SIZE_FOR_ADAPTIVE_GBY;
     ObMemAttr attr(ctx_.get_my_session()->get_effective_tenant_id(),
                    ObModIds::OB_HASH_NODE_GROUP_ROWS,
                    ObCtxIds::WORK_AREA);
@@ -196,7 +196,7 @@ int ObHashGroupByOp::inner_open()
     } else if (FALSE_IT(init_size = std::max((int64_t)MIN_GROUP_HT_INIT_SIZE, init_size))) {
     } else if (FALSE_IT(init_size = std::min((int64_t)MAX_GROUP_HT_INIT_SIZE, init_size))) {
     } else if (FALSE_IT(init_size = MY_SPEC.by_pass_enabled_ ?
-                                    std::min(init_size, init_bkt_size) : init_size)) {
+                                    std::min(init_size, (int64_t)INIT_BKT_SIZE_FOR_ADAPTIVE_GBY) : init_size)) {
     } else if (OB_FAIL(append(dup_groupby_exprs_, MY_SPEC.group_exprs_))) {
       LOG_WARN("failed to append groupby exprs", K(ret));
     } else if (OB_FAIL(append(all_groupby_exprs_, dup_groupby_exprs_))) {
@@ -529,11 +529,6 @@ int ObHashGroupByOp::inner_get_next_row()
     } else if (bypass_ctrl_.by_passing()) {
       if (OB_FAIL(load_one_row())) {
         LOG_WARN("failed to load one row", K(ret));
-      } else if (OB_ISNULL(by_pass_group_row_) || OB_ISNULL(by_pass_group_row_->group_row_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get group row", K(ret));
-      } else if (OB_FAIL(aggr_processor_.collect_group_row(by_pass_group_row_->group_row_))) {
-        LOG_WARN("failed to collect group by row", K(ret));
       }
     } else if (OB_FAIL(restore_groupby_datum())) {
       LOG_WARN("failed to restore_groupby_datum", K(ret));
@@ -2431,32 +2426,22 @@ int ObHashGroupByOp::init_by_pass_group_row_item()
 int ObHashGroupByOp::init_by_pass_group_batch_item()
 {
   int ret = OB_SUCCESS;
-  char *group_item_buf = nullptr;
   const int64_t group_id = 0;
   if (by_pass_batch_size_ <= 0) {
     if (OB_ISNULL(by_pass_group_batch_ =
-        static_cast<ObGroupRowItem **> (mem_context_->get_arena_allocator()
-                                        .alloc(sizeof(ObGroupRowItem *) * MY_SPEC.max_batch_size_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory", K(ret));
-    } else if (OB_ISNULL(group_item_buf =
-        static_cast<char *> (mem_context_->get_arena_allocator()
-                             .alloc(sizeof(ObGroupRowItem) * MY_SPEC.max_batch_size_)))) {
+        static_cast<ObAggregateProcessor::GroupRow **> (mem_context_->get_arena_allocator()
+                                        .alloc(sizeof(ObAggregateProcessor::GroupRow *) * MY_SPEC.max_batch_size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret));
     } else {
-      for (int64_t i = 0; i < MY_SPEC.max_batch_size_; ++i) {
-        by_pass_group_batch_[i] = new (group_item_buf) ObGroupRowItem();
-        group_item_buf += sizeof(ObGroupRowItem);
-      }
       by_pass_batch_size_ = MY_SPEC.max_batch_size_;
     }
   }
   CK (by_pass_batch_size_ > 0);
   for (int64_t i = 0; OB_SUCC(ret) && i < by_pass_batch_size_; ++i) {
-    if (OB_FAIL(aggr_processor_.generate_group_row(by_pass_group_batch_[i]->group_row_, group_id))) {
+    if (OB_FAIL(aggr_processor_.generate_group_row(by_pass_group_batch_[i], group_id))) {
       LOG_WARN("generate group row failed", K(ret));
-    } else if (OB_ISNULL(by_pass_group_batch_[i]->group_row_)) {
+    } else if (OB_ISNULL(by_pass_group_batch_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("generate wrong group row", K(ret), K(i));
     }
@@ -2506,11 +2491,10 @@ int ObHashGroupByOp::load_one_row()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("by pass group row is not init", K(ret));
   } else {
-    by_pass_group_row_->group_row_->reuse();
     ++agged_row_cnt_;
     ++agged_group_cnt_;
-    if (OB_FAIL(aggr_processor_.prepare(*by_pass_group_row_->group_row_))) {
-      LOG_WARN("failed to prepare group row", K(ret));
+    if (OB_FAIL(aggr_processor_.single_row_agg(*by_pass_group_row_->group_row_, eval_ctx_))) {
+      LOG_WARN("failed to do single row agg", K(ret));
     }
   }
   return ret;
@@ -2552,30 +2536,16 @@ int ObHashGroupByOp::by_pass_prepare_one_batch(const int64_t batch_size)
              || by_pass_batch_size_ <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("by pass group row is not init", K(ret), K(by_pass_batch_size_));
+  } else if (OB_FAIL(aggr_processor_.eval_aggr_param_batch(*by_pass_child_brs_))) {
+    LOG_WARN("fail to eval aggr param batch", K(ret), K(*by_pass_child_brs_));
   } else {
-    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
-    batch_info_guard.set_batch_size(by_pass_child_brs_->size_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < by_pass_child_brs_->size_; ++i) {
-      if (by_pass_child_brs_->skip_->at(i)) {
-        continue;
-      }
-      if (OB_ISNULL(by_pass_group_batch_[i]->group_row_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("group row is not init", K(ret), K(i));
-      } else {
-        by_pass_group_batch_[i]->group_row_->reuse();
-        ++agged_row_cnt_;
-        ++agged_group_cnt_;
-        batch_info_guard.set_batch_idx(i);
-        if (OB_FAIL(aggr_processor_.prepare(*by_pass_group_batch_[i]->group_row_))) {
-          LOG_WARN("failed to prepare group row", K(ret));
-        } else if (OB_ISNULL(by_pass_group_batch_[i]) || OB_ISNULL(by_pass_group_batch_[i]->group_row_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to get group row", K(ret));
-        } else if (OB_FAIL(aggr_processor_.collect_group_row(by_pass_group_batch_[i]->group_row_))) {
-          LOG_WARN("failed to collect group by row", K(ret));
-        }
-      }
+    if (OB_FAIL(aggr_processor_.single_row_agg_batch(by_pass_group_batch_, eval_ctx_,
+                                                     by_pass_child_brs_->size_, by_pass_child_brs_->skip_))) {
+      LOG_WARN("failed to single row agg", K(ret));
+    } else {
+      int64_t aggr_cnt = by_pass_child_brs_->size_ - by_pass_child_brs_->skip_->accumulate_bit_cnt(by_pass_child_brs_->size_);
+      agged_row_cnt_ += aggr_cnt;
+      agged_group_cnt_ += aggr_cnt;
     }
   }
   if (OB_SUCC(ret)) {
@@ -2650,6 +2620,7 @@ int ObHashGroupByOp::init_by_pass_op()
   int ret = OB_SUCCESS;
   int err_sim = 0;
   void *store_row_buf = nullptr;
+  aggr_processor_.set_support_fast_single_row_agg(MY_SPEC.support_fast_single_row_agg_);
   bypass_ctrl_.open_by_pass_ctrl();
   uint64_t cut_ratio = 0;
   uint64_t default_cut_ratio = ObAdaptiveByPassCtrl::INIT_CUT_RATIO;

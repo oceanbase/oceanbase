@@ -32,7 +32,7 @@
 #include "share/restore/ob_log_archive_source_mgr.h"
 #include "share/ls/ob_ls_recovery_stat_operator.h"//ObLSRecoveryStatOperator
 #include "logservice/palf/log_define.h"//scn
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 
 namespace oceanbase

@@ -75,7 +75,7 @@ ObRemoteLogIterator::~ObRemoteLogIterator()
 
 int ObRemoteLogIterator::init(const uint64_t tenant_id,
     const ObLSID &id,
-    const palf::SCN &pre_scn,
+    const SCN &pre_scn,
     const LSN &start_lsn,
     const LSN &end_lsn)
 {

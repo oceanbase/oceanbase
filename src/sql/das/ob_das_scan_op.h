@@ -123,7 +123,7 @@ public:
   bool force_refresh_lc_;
   bool need_check_output_datum_;
   int64_t frozen_version_;
-  palf::SCN fb_snapshot_;
+  share::SCN fb_snapshot_;
   int64_t timeout_ts_;
   int64_t tx_lock_timeout_;
   ObSQLMode sql_mode_;

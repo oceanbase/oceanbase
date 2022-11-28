@@ -18,7 +18,7 @@
 #include "share/config/ob_server_config.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/string/ob_sql_string.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 namespace oceanbase
 {
 namespace common
@@ -65,7 +65,7 @@ public:
   virtual ~ObLSLifeIAgent () {} 
   //create new ls
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
-                            const palf::SCN &create_scn,
+                            const SCN &create_scn,
                             const common::ObString &zone_priority,
                             ObMySQLTransaction &trans) = 0;
   //drop ls
@@ -76,7 +76,7 @@ public:
   virtual int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const share::ObLSStatus &ls_status,
-                      const palf::SCN &drop_scn,
+                      const SCN &drop_scn,
                       ObMySQLTransaction &trans) = 0;
   //update ls primary zone
   virtual int update_ls_primary_zone(

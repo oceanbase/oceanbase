@@ -120,7 +120,7 @@ int ObArchivePathUtil::get_pieces_dir_path(const ObBackupDest &dest, ObBackupPat
 
 // // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000
 int ObArchivePathUtil::get_piece_start_file_path(const ObBackupDest &dest, const int64_t dest_id, 
-    const int64_t round_id, const int64_t piece_id, const palf::SCN &start_scn,
+    const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
     ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -141,7 +141,7 @@ int ObArchivePathUtil::get_piece_start_file_path(const ObBackupDest &dest, const
 
 // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_end_20220601T120000
 int ObArchivePathUtil::get_piece_end_file_path(const ObBackupDest &dest, const int64_t dest_id, 
-    const int64_t round_id, const int64_t piece_id, const palf::SCN &end_scn,
+    const int64_t round_id, const int64_t piece_id, const SCN &end_scn,
     ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -223,7 +223,7 @@ int ObArchivePathUtil::get_piece_checkpoint_file_path(const ObBackupDest &dest, 
 
 // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000
 int ObArchivePathUtil::get_piece_inner_placeholder_file_path(const ObBackupDest &dest, const int64_t dest_id, 
-    const int64_t round_id, const int64_t piece_id, const palf::SCN &start_scn, const palf::SCN &end_scn, ObBackupPath &path)
+    const int64_t round_id, const int64_t piece_id, const SCN &start_scn, const SCN &end_scn, ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;

@@ -18,7 +18,7 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "logservice/ob_log_base_type.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/ob_autoincrement_param.h"
 #include "share/ob_autoincrement_service.h"
 #include "share/ob_gais_msg.h"
@@ -142,7 +142,7 @@ public:
   int replay(const void *buffer,
              const int64_t nbytes,
              const palf::LSN &lsn,
-             const palf::SCN &scn) override final
+             const SCN &scn) override final
   {
     int ret = OB_SUCCESS;
     UNUSED(buffer);
@@ -153,12 +153,12 @@ public:
   }
 
   // for checkpoint, do nothing
-  palf::SCN get_rec_scn() override final
+  SCN get_rec_scn() override final
   {
-    return palf::SCN::max_scn();;
+    return share::SCN::max_scn();;
   }
 
-  int flush(palf::SCN &scn) override final
+  int flush(share::SCN &scn) override final
   {
     int ret = OB_SUCCESS;
     UNUSED(scn);

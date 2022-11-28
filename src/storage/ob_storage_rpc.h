@@ -93,7 +93,7 @@ public:
   share::ObLSID ls_id_;
   storage::ObITable::TableKey table_key_;
   int64_t data_version_;
-  palf::SCN backfill_tx_scn_;
+  share::SCN backfill_tx_scn_;
   storage::ObCopyMacroRangeInfo copy_macro_range_info_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockRangeArg);
 };

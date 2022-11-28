@@ -27,6 +27,7 @@
 namespace oceanbase
 {
 using namespace storage;
+using namespace share;
 using namespace transaction;
 using namespace common;
 using namespace blocksstable;
@@ -43,10 +44,10 @@ ObMultiVersionValueIterator::ObMultiVersionValueIterator()
       version_iter_(NULL),
       multi_version_iter_(NULL),
       max_committed_trans_version_(-1),
-      cur_trans_version_(palf::SCN::min_scn()),
+      cur_trans_version_(SCN::min_scn()),
       is_node_compacted_(false),
       has_multi_commit_trans_(false),
-      merge_scn_(palf::SCN::max_scn())
+      merge_scn_(SCN::max_scn())
 {
 }
 
@@ -131,7 +132,7 @@ void ObMultiVersionValueIterator::print_cur_status()
 int ObMultiVersionValueIterator::get_next_uncommitted_node(
     const void *&tnode,
     transaction::ObTransID &trans_id,
-    palf::SCN &trans_version,
+    SCN &trans_version,
     int64_t &sql_sequence)
 {
   int ret = OB_SUCCESS;
@@ -145,7 +146,7 @@ int ObMultiVersionValueIterator::get_next_uncommitted_node(
     while (OB_SUCC(ret) && OB_ISNULL(tnode)) {
       if (OB_ISNULL(version_iter_)) {
         ret = OB_ITER_END;
-      } else if (palf::SCN::max_scn() == version_iter_->scn_) {
+      } else if (SCN::max_scn() == version_iter_->scn_) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "current trans node has not submit clog yet", K(ret), KPC_(version_iter));
       } else if (NDT_COMPACT == version_iter_->type_) { // ignore compact node
@@ -166,7 +167,7 @@ int ObMultiVersionValueIterator::get_next_uncommitted_node(
             TRANS_LOG(WARN, "trans_id is invalid", K(ret), K(trans_id), KPC(version_iter_), K(merge_scn_));
           } else {
             tnode = static_cast<const void *>(version_iter_);
-            trans_version = palf::SCN::max_scn();
+            trans_version = SCN::max_scn();
             sql_sequence = version_iter_->seq_no_;
             version_iter_ = version_iter_->prev_;
           }
@@ -355,7 +356,7 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
   } else if (OB_ISNULL(multi_version_iter_)) {
     ret = OB_ITER_END;
   } else {
-    const palf::SCN cur_trans_version = multi_version_iter_->trans_version_;
+    const SCN cur_trans_version = multi_version_iter_->trans_version_;
     ObMvccTransNode *record_node = nullptr;
     while (OB_SUCC(ret) && OB_NOT_NULL(multi_version_iter_) && OB_ISNULL(record_node)) {
       if (multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) {
@@ -434,7 +435,7 @@ void ObMultiVersionValueIterator::reset()
   version_iter_ = NULL;
   multi_version_iter_ = NULL;
   max_committed_trans_version_ = -1;
-  cur_trans_version_ = palf::SCN::min_scn();
+  cur_trans_version_ = SCN::min_scn();
   is_node_compacted_ = false;
   has_multi_commit_trans_ = false;
   ctx_ = NULL;

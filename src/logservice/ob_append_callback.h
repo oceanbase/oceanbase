@@ -13,8 +13,8 @@
 #ifndef OCEANBASE_LOGSERVICE_OB_APPEND_CALLBACK_
 #define OCEANBASE_LOGSERVICE_OB_APPEND_CALLBACK_
 #include "palf/lsn.h"
-#include "palf/scn.h"
 #include "lib/utility/utility.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -35,15 +35,15 @@ public:
   void __reset() { __start_lsn_.reset(); __next_ = NULL; __scn_.reset();}
   const palf::LSN &__get_lsn() const { return __start_lsn_; }
   void __set_lsn(const palf::LSN &lsn) { __start_lsn_ = lsn; }
-  const palf::SCN& __get_scn() const { return __scn_; }
-  void __set_scn(const palf::SCN& scn) { __scn_ = scn; }
+  const share::SCN& __get_scn() const { return __scn_; }
+  void __set_scn(const share::SCN& scn) { __scn_ = scn; }
   static AppendCb* __get_class_address(ObLink *ptr);
   static ObLink* __get_member_address(AppendCb *ptr);
   ObLink *__next_;
   VIRTUAL_TO_STRING_KV(KP(__next_), K(__start_lsn_), K(__scn_));
 private:
   palf::LSN __start_lsn_;
-  palf::SCN __scn_;
+  share::SCN __scn_;
 };
 
 class AppendCb : public AppendCbBase

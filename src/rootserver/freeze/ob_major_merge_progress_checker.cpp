@@ -22,7 +22,7 @@
 #include "share/ls/ob_ls_table_operator.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
 #include "share/ob_freeze_info_proxy.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -64,7 +64,7 @@ int ObMajorMergeProgressChecker::init(
 
 int ObMajorMergeProgressChecker::check_merge_progress(
     const volatile bool &stop,
-    const palf::SCN &global_broadcast_scn,
+    const SCN &global_broadcast_scn,
     ObAllZoneMergeProgress &all_progress)
 {
   int ret = OB_SUCCESS;
@@ -155,7 +155,7 @@ int ObMajorMergeProgressChecker::check_tablet(
     const ObTabletInfo &tablet,
     const common::hash::ObHashMap<ObTabletID, uint64_t> &tablet_map,
     ObAllZoneMergeProgress &all_progress,
-    const palf::SCN &global_broadcast_scn,
+    const SCN &global_broadcast_scn,
     ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
@@ -209,7 +209,7 @@ int ObMajorMergeProgressChecker::check_tablet(
 
 int ObMajorMergeProgressChecker::check_tablet_data_version(
     ObAllZoneMergeProgress &all_progress,
-    const palf::SCN &global_broadcast_scn,
+    const SCN &global_broadcast_scn,
     const ObTabletInfo &tablet,
     const share::ObLSInfo &ls_info)
 {
@@ -230,11 +230,11 @@ int ObMajorMergeProgressChecker::check_tablet_data_version(
             || (REPLICA_TYPE_ENCRYPTION_LOGONLY == ls_r->get_replica_type())) {
           // logonly replica no need check
         } else {
-          palf::SCN rep_snapshot_scn;
+          SCN rep_snapshot_scn;
           if (OB_FAIL(rep_snapshot_scn.convert_for_tx(r->get_snapshot_version()))) {
             LOG_WARN("fail to convert val to SCN", KR(ret), "snapshot_version", r->get_snapshot_version());
           } else {
-            if ((p->smallest_snapshot_scn_ <= palf::SCN::min_scn())
+            if ((p->smallest_snapshot_scn_ <= SCN::min_scn())
                 || (p->smallest_snapshot_scn_ > rep_snapshot_scn)) {
               p->smallest_snapshot_scn_ = rep_snapshot_scn;
             }

@@ -60,7 +60,7 @@ public:
 public:
   int submit_log(const char *buf,
                  const int64_t size,
-                 const palf::SCN base_ts,
+                 const share::SCN base_ts,
                  ObTxBaseLogCb *cb,
                  const bool need_block);
   int get_role(bool &is_leader, int64_t &epoch);

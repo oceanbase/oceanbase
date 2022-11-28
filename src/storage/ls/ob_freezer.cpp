@@ -26,6 +26,7 @@
 namespace oceanbase
 {
 using namespace logservice;
+using namespace share;
 using namespace compaction;
 namespace storage
 {
@@ -40,8 +41,8 @@ ObFrozenMemtableInfo::ObFrozenMemtableInfo()
 {}
 
 ObFrozenMemtableInfo::ObFrozenMemtableInfo(const ObTabletID &tablet_id,
-                                           const palf::SCN &start_scn,
-                                           const palf::SCN &end_scn,
+                                           const SCN &start_scn,
+                                           const SCN &end_scn,
                                            const int64_t write_ref_cnt,
                                            const int64_t unsubmitted_cnt,
                                            const int64_t unsynced_cnt,
@@ -72,8 +73,8 @@ void ObFrozenMemtableInfo::reset()
 }
 
 void ObFrozenMemtableInfo::set(const ObTabletID &tablet_id,
-                               const palf::SCN &start_scn,
-                               const palf::SCN &end_scn,
+                               const SCN &start_scn,
+                               const SCN &end_scn,
                                const int64_t write_ref_cnt,
                                const int64_t unsubmitted_cnt,
                                const int64_t unsynced_cnt,
@@ -131,8 +132,8 @@ bool ObFreezerStat::is_valid()
 }
 
 int ObFreezerStat::add_memtable_info(const ObTabletID &tablet_id,
-                                     const palf::SCN &start_scn,
-                                     const palf::SCN &end_scn,
+                                     const SCN &start_scn,
+                                     const SCN &end_scn,
                                      const int64_t write_ref_cnt,
                                      const int64_t unsubmitted_cnt,
                                      const int64_t unsynced_cnt,
@@ -301,8 +302,8 @@ int ObFreezer::init(ObLSWRSHandler *ls_loop_worker,
 int ObFreezer::logstream_freeze()
 {
   int ret = OB_SUCCESS;
-  palf::SCN freeze_snapshot_version;
-  palf::SCN max_decided_scn;
+  SCN freeze_snapshot_version;
+  SCN max_decided_scn;
   FLOG_INFO("[Freezer] logstream_freeze start", K(ret), K_(ls_id));
   stat_.reset();
   stat_.start_time_ = ObTimeUtility::current_time();
@@ -350,7 +351,7 @@ int ObFreezer::inner_logstream_freeze()
   uint32_t freeze_clock = get_freeze_clock();
   TRANS_LOG(INFO, "[Freezer] freeze_clock", K(ret), K_(ls_id), K(freeze_clock));
 
-  if (OB_FAIL(data_checkpoint_->ls_freeze(palf::SCN::max_scn()))) {
+  if (OB_FAIL(data_checkpoint_->ls_freeze(SCN::max_scn()))) {
     // move memtables from active_list to frozen_list
     TRANS_LOG(WARN, "[Freezer] data_checkpoint freeze failed", K(ret), K_(ls_id));
     stat_.add_diagnose_info("data_checkpoint freeze failed");
@@ -382,7 +383,7 @@ int ObFreezer::tablet_freeze(const ObTabletID &tablet_id)
   ObTablet *tablet = nullptr;
   ObTabletMemtableMgr *memtable_mgr = nullptr;
   memtable::ObIMemtable *imemtable = nullptr;
-  palf::SCN freeze_snapshot_version;
+  SCN freeze_snapshot_version;
   FLOG_INFO("[Freezer] tablet_freeze start", K(ret), K_(ls_id), K(tablet_id));
   stat_.reset();
   stat_.start_time_ = ObTimeUtility::current_time();
@@ -456,7 +457,7 @@ int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
   ObTablet *tablet = nullptr;
   ObTabletMemtableMgr *memtable_mgr = nullptr;
   memtable::ObIMemtable *imemtable = nullptr;
-  palf::SCN freeze_snapshot_version;
+  SCN freeze_snapshot_version;
   FLOG_INFO("[Freezer] force_tablet_freeze start", K(ret), K_(ls_id), K(tablet_id));
   stat_.reset();
   stat_.start_time_ = ObTimeUtility::current_time();
@@ -774,7 +775,7 @@ bool ObFreezer::is_freeze(uint32_t freeze_flag) const
 }
 
 /* other public functions */
-int ObFreezer::decide_max_decided_scn(palf::SCN &max_decided_scn)
+int ObFreezer::decide_max_decided_scn(SCN &max_decided_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -797,7 +798,7 @@ int ObFreezer::decide_max_decided_scn(palf::SCN &max_decided_scn)
   return ret;
 }
 
-int ObFreezer::get_max_consequent_callbacked_scn(palf::SCN &max_consequent_callbacked_scn)
+int ObFreezer::get_max_consequent_callbacked_scn(SCN &max_consequent_callbacked_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -816,7 +817,7 @@ int ObFreezer::get_max_consequent_callbacked_scn(palf::SCN &max_consequent_callb
   return ret;
 }
 
-int ObFreezer::get_ls_weak_read_scn(palf::SCN &weak_read_scn)
+int ObFreezer::get_ls_weak_read_scn(SCN &weak_read_scn)
 {
   int ret = OB_SUCCESS;
   weak_read_scn.reset();
@@ -833,7 +834,7 @@ int ObFreezer::get_ls_weak_read_scn(palf::SCN &weak_read_scn)
 }
 
 int ObFreezer::get_newest_clog_checkpoint_scn(const ObTabletID &tablet_id,
-                                              palf::SCN &clog_checkpoint_scn)
+                                              SCN &clog_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle handle;
@@ -855,7 +856,7 @@ int ObFreezer::get_newest_clog_checkpoint_scn(const ObTabletID &tablet_id,
 }
 
 int ObFreezer::get_newest_snapshot_version(const ObTabletID &tablet_id,
-                                           palf::SCN &snapshot_version)
+                                           SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle handle;

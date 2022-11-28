@@ -319,7 +319,7 @@ public:
   inline bool not_empty() const { return INT64_MAX != get_protection_clock(); };
   void set_max_schema_version(const int64_t schema_version);
   virtual int64_t get_max_schema_version() const override;
-  int row_compact(ObMvccRow *value, const bool for_replay, const palf::SCN snapshot_version);
+  int row_compact(ObMvccRow *value, const bool for_replay, const share::SCN snapshot_version);
   int64_t get_hash_item_count() const;
   int64_t get_hash_alloc_memory() const;
   int64_t get_btree_item_count() const;
@@ -330,12 +330,12 @@ public:
   virtual bool is_active_memtable() const override;
   virtual bool is_inner_tablet() const { return key_.tablet_id_.is_inner_tablet(); }
   ObTabletID get_tablet_id() const { return key_.tablet_id_; }
-  int set_snapshot_version(const palf::SCN snapshot_version);
+  int set_snapshot_version(const share::SCN snapshot_version);
   int64_t get_memtable_state() const { return state_; }
   int64_t get_freeze_state() const { return freeze_state_; }
   int64_t get_protection_clock() const { return local_allocator_.get_protection_clock(); }
   int64_t get_retire_clock() const { return local_allocator_.get_retire_clock(); }
-  int get_current_right_boundary(palf::SCN &current_right_boundary);
+  int get_current_right_boundary(share::SCN &current_right_boundary);
 
   inline bool& get_read_barrier() { return read_barrier_; }
   inline void set_write_barrier() { write_barrier_ = true; }
@@ -374,15 +374,15 @@ public:
   virtual bool ready_for_flush() override;
   void print_ready_for_flush();
   virtual int flush(share::ObLSID ls_id) override;
-  palf::SCN get_rec_scn() { return rec_scn_.atomic_get(); }
+  share::SCN get_rec_scn() { return rec_scn_.atomic_get(); }
   virtual bool is_frozen_checkpoint() const override { return is_frozen_memtable();}
   virtual bool is_active_checkpoint() const override { return is_active_memtable();}
 
-  virtual OB_INLINE palf::SCN get_end_scn() const
+  virtual OB_INLINE share::SCN get_end_scn() const
   {
     return key_.scn_range_.end_scn_;
   }
-  virtual OB_INLINE palf::SCN get_start_scn() const
+  virtual OB_INLINE share::SCN get_start_scn() const
   {
     return key_.scn_range_.start_scn_;
   }
@@ -392,14 +392,14 @@ public:
       share::ObScnRange::MIN_SCN == get_max_end_scn();
   }
   int resolve_right_boundary();
-  void resolve_left_boundary(palf::SCN end_scn);
+  void resolve_left_boundary(share::SCN end_scn);
   int resolve_snapshot_version_();
   int resolve_max_end_scn_();
-  palf::SCN get_max_end_scn() const { return max_end_scn_.atomic_get(); }
-  int set_rec_scn(palf::SCN rec_scn);
-  int set_start_scn(const palf::SCN start_ts);
-  int set_end_scn(const palf::SCN freeze_ts);
-  int set_max_end_scn(const palf::SCN scn);
+  share::SCN get_max_end_scn() const { return max_end_scn_.atomic_get(); }
+  int set_rec_scn(share::SCN rec_scn);
+  int set_start_scn(const share::SCN start_ts);
+  int set_end_scn(const share::SCN freeze_ts);
+  int set_max_end_scn(const share::SCN scn);
   inline int set_logging_blocked()
   {
     logging_blocked_start_time = common::ObTimeUtility::current_time();
@@ -438,7 +438,7 @@ public:
 
   template<class T>
   int save_multi_source_data_unit(const T *const multi_source_data_unit,
-                                  const palf::SCN scn,
+                                  const share::SCN scn,
                                   const bool for_replay,
                                   const MemtableRefOp ref_op = MemtableRefOp::NONE,
                                   const bool is_callback = false);
@@ -525,9 +525,9 @@ private:
   int64_t logging_blocked_start_time; // record the start time of logging blocked
   bool unset_active_memtable_logging_blocked_;
   bool resolve_active_memtable_left_boundary_;
-  palf::SCN freeze_scn_;
-  palf::SCN max_end_scn_;
-  palf::SCN rec_scn_;
+  share::SCN freeze_scn_;
+  share::SCN max_end_scn_;
+  share::SCN rec_scn_;
   int64_t state_;
   int64_t freeze_state_;
   int64_t timestamp_;
@@ -546,7 +546,7 @@ private:
 
 template<class T>
 int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_unit,
-                                            const palf::SCN scn,
+                                            const share::SCN scn,
                                             const bool for_replay,
                                             const MemtableRefOp ref_op,
                                             const bool is_callback)
@@ -590,7 +590,7 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
         } else if (OB_FAIL(set_rec_scn(scn))) {
           TRANS_LOG(WARN, "failed to set rec_scn", K(ret), K(scn), KPC(this));
         }
-      } else if (palf::SCN::invalid_scn() != scn && share::ObScnRange::MAX_SCN != scn) {
+      } else if (share::SCN::invalid_scn() != scn && share::ObScnRange::MAX_SCN != scn) {
         ret = common::OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "invalid scn", K(ret), K(scn), KPC(this));
       }

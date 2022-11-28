@@ -17,7 +17,7 @@
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_print_utils.h"
 #include "logservice/palf/lsn.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_ls_id.h"
 #include "ob_log_restore_define.h"
@@ -47,7 +47,7 @@ public:
 
   void reset();
 
-  int get_piece(const palf::SCN &pre_scn,
+  int get_piece(const share::SCN &pre_scn,
       const palf::LSN &start_lsn,
       int64_t &dest_id,
       int64_t &round_id,
@@ -101,14 +101,14 @@ private:
 
     State state_;
     int64_t round_id_;
-    palf::SCN start_scn_;              // 该轮次最小日志SCN
-    palf::SCN end_scn_;                // 该轮次最大日志SCN, 非STOP状态该时间为SCN_MAX
+    share::SCN start_scn_;              // 该轮次最小日志SCN
+    share::SCN end_scn_;                // 该轮次最大日志SCN, 非STOP状态该时间为SCN_MAX
     int64_t min_piece_id_;          // 该round最小piece, 随着归档数据回收, 该值可能增大
     int64_t max_piece_id_;          // 该round最大piece, ACTIVE round该值可能增大
 
     int64_t base_piece_id_;
     int64_t piece_switch_interval_;//us
-    palf::SCN base_piece_scn_;
+    share::SCN base_piece_scn_;
 
     RoundContext() { reset(); }
     ~RoundContext() { reset(); }
@@ -169,7 +169,7 @@ private:
   };
 
 private:
-  int get_piece_(const palf::SCN &scn,
+  int get_piece_(const share::SCN &scn,
       const palf::LSN &lsn,
       const int64_t file_id,
       int64_t &dest_id,
@@ -185,10 +185,10 @@ private:
   virtual int get_round_range_();
 
   // 根据时间戳定位round
-  virtual int get_round_(const palf::SCN &scn);
+  virtual int get_round_(const share::SCN &scn);
 
   // 如果round不满足数据需求, 支持切round
-  int switch_round_if_need_(const palf::SCN &scn, const palf::LSN &lsn);
+  int switch_round_if_need_(const share::SCN &scn, const palf::LSN &lsn);
 
   void check_if_switch_round_(const palf::LSN &lsn, RoundOp &op);
   bool is_max_round_done_(const palf::LSN &lsn) const;
@@ -210,11 +210,11 @@ private:
   int backward_round_();
 
   // 当piece不匹配, 需要切piece
-  int switch_piece_if_need_(const int64_t file_id, const palf::SCN &scn, const palf::LSN &lsn);
+  int switch_piece_if_need_(const int64_t file_id, const share::SCN &scn, const palf::LSN &lsn);
   void check_if_switch_piece_(const int64_t file_id, const palf::LSN &lsn, PieceOp &op);
 
   // load当前piece信息, 包括piece内文件范围, LSN范围
-  int get_cur_piece_info_(const palf::SCN &scn, const palf::LSN &lsn);
+  int get_cur_piece_info_(const share::SCN &scn, const palf::LSN &lsn);
   virtual int get_piece_meta_info_(const int64_t piece_id);
   int get_ls_inner_piece_info_(const share::ObLSID &id, const int64_t dest_id, const int64_t round_id,
       const int64_t piece_id, palf::LSN &min_lsn, palf::LSN &max_lsn, bool &exist);
@@ -222,9 +222,9 @@ private:
 
   int forward_piece_();
   int backward_piece_();
-  int cal_load_piece_id_(const palf::SCN &scn, int64_t &piece_id);
+  int cal_load_piece_id_(const share::SCN &scn, int64_t &piece_id);
 
-  int64_t cal_piece_id_(const palf::SCN &scn) const;
+  int64_t cal_piece_id_(const share::SCN &scn) const;
   virtual int get_min_lsn_in_piece_();
   int64_t cal_archive_file_id_(const palf::LSN &lsn) const;
 

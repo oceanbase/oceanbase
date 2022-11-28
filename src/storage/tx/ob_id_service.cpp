@@ -21,7 +21,7 @@
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "logservice/ob_log_base_header.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "sql/das/ob_das_id_service.h"
 
@@ -128,7 +128,7 @@ int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
   } else {
     ObPresistIDLog ls_log(last_id, limited_id);
     palf::LSN lsn;
-    palf::SCN log_ts, base_scn;
+    SCN log_ts, base_scn;
     int64_t base_ts = 0;
     if (TimestampService == service_type_) {
       if (ATOMIC_LOAD(&tmp_last_id_) != 0) {
@@ -161,7 +161,7 @@ int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
   return ret;
 }
 
-int ObIDService::handle_submit_callback(const bool success, const int64_t limited_id, const palf::SCN log_ts)
+int ObIDService::handle_submit_callback(const bool success, const int64_t limited_id, const SCN log_ts)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
@@ -190,7 +190,7 @@ int ObIDService::handle_submit_callback(const bool success, const int64_t limite
 }
 
 int ObIDService::replay(const void *buffer, const int64_t buf_size,
-                        const palf::LSN &lsn, const palf::SCN &log_scn)
+                        const palf::LSN &lsn, const SCN &log_scn)
 {
   //TODO(scn)
   int ret = OB_SUCCESS;
@@ -211,7 +211,7 @@ int ObIDService::replay(const void *buffer, const int64_t buf_size,
   return ret;
 }
 
-int ObIDService::handle_replay_result(const int64_t last_id, const int64_t limited_id, const palf::SCN log_ts)
+int ObIDService::handle_replay_result(const int64_t last_id, const int64_t limited_id, const SCN log_ts)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
@@ -257,17 +257,17 @@ int ObIDService::update_ls_id_meta(const bool write_slog)
   return ret;
 }
 
-int ObIDService::flush(palf::SCN &rec_scn)
+int ObIDService::flush(SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
-  palf::SCN latest_rec_log_ts = rec_log_ts_.atomic_get();
+  SCN latest_rec_log_ts = rec_log_ts_.atomic_get();
   if (latest_rec_log_ts <= rec_scn) {
     latest_rec_log_ts = rec_log_ts_.atomic_get();
     if (OB_FAIL(update_ls_id_meta(true))) {
       TRANS_LOG(WARN, "update id meta of ls meta fail", K(ret), K(service_type_));
     } else {
-      rec_log_ts_.atomic_bcas(latest_rec_log_ts, palf::SCN::max_scn());
+      rec_log_ts_.atomic_bcas(latest_rec_log_ts, SCN::max_scn());
     }
     TRANS_LOG(INFO, "flush", K(ret), K(service_type_), K(rec_log_ts_), K(limited_id_));
   }
@@ -294,9 +294,9 @@ int ObIDService::check_leader(bool &leader)
   return ret;
 }
 
-palf::SCN ObIDService::get_rec_scn()
+SCN ObIDService::get_rec_scn()
 {
-  const palf::SCN rec_log_ts = rec_log_ts_.atomic_get();
+  const SCN rec_log_ts = rec_log_ts_.atomic_get();
   TRANS_LOG(INFO, "get rec log scn", K(service_type_), K(rec_log_ts));
   return rec_log_ts;
 }
@@ -385,8 +385,8 @@ int ObIDService::get_number(const int64_t range, const int64_t base_id, int64_t 
 	return ret;
 }
 
-void ObIDService::get_virtual_info(int64_t &last_id, int64_t &limited_id, palf::SCN &rec_log_ts,
-                                   palf::SCN &latest_log_ts, int64_t &pre_allocated_range,
+void ObIDService::get_virtual_info(int64_t &last_id, int64_t &limited_id, SCN &rec_log_ts,
+                                   SCN &latest_log_ts, int64_t &pre_allocated_range,
                                    int64_t &submit_log_ts, bool &is_master)
 {
   int ret = OB_SUCCESS;
@@ -432,7 +432,7 @@ int ObIDService::get_id_service(const int64_t id_service_type, ObIDService *&id_
   return ret;
 }
 
-void ObIDService::update_limited_id(const int64_t limited_id, const palf::SCN latest_log_ts)
+void ObIDService::update_limited_id(const int64_t limited_id, const SCN latest_log_ts)
 {
   WLockGuard guard(rwlock_);
   (void)inc_update(&last_id_, limited_id);
@@ -670,7 +670,7 @@ int ObAllIDMeta::update_id_service()
 
 void ObAllIDMeta::update_id_meta(const int64_t service_type,
                                  const int64_t limited_id,
-                                 const palf::SCN latest_log_ts)
+                                 const SCN latest_log_ts)
 {
   (void)inc_update(&id_meta_[service_type].limited_id_, limited_id);
   id_meta_[service_type].latest_log_ts_.inc_update(latest_log_ts);

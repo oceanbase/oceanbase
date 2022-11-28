@@ -15,6 +15,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
 const int64_t LSNAllocator::LOG_ID_DELTA_UPPER_BOUND;
@@ -54,7 +55,7 @@ int LSNAllocator::init(const int64_t log_id,
     PALF_LOG(WARN, "invalid arguments", K(ret), K(log_id), K(scn), K(start_lsn));
   } else {
     log_id_base_ = log_id;
-    scn_base_ = scn.get_val_for_lsn_allocator();
+    scn_base_ = scn.get_val_for_logservice();
     lsn_ts_meta_.v128_.lo = 0;
     lsn_ts_meta_.lsn_val_ = start_lsn.val_;
     lsn_ts_meta_.is_need_cut_ = 1;
@@ -88,7 +89,7 @@ int LSNAllocator::truncate(const LSN &lsn, const int64_t log_id, const SCN &scn)
       next.is_need_cut_ = 1;
       if (CAS128(&lsn_ts_meta_, last, next)) {
         log_id_base_ = log_id;
-        scn_base_ = scn.get_val_for_lsn_allocator();
+        scn_base_ = scn.get_val_for_logservice();
         PALF_LOG(INFO, "truncate success", K(lsn), K(log_id), K(scn));
         break;
       } else {
@@ -126,7 +127,7 @@ int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id,
         break;
       } else if (CAS128(&lsn_ts_meta_, last, next)) {
         log_id_base_ = log_id;
-        scn_base_ = scn.get_val_for_lsn_allocator();
+        scn_base_ = scn.get_val_for_logservice();
         PALF_LOG(TRACE, "inc_update_last_log_info success", K(lsn), K(scn), K(log_id));
         break;
       } else {
@@ -148,7 +149,7 @@ int LSNAllocator::inc_update_scn_base(const SCN &ref_scn)
   } else {
     LSNTsMeta last;
     LSNTsMeta next;
-    const uint64_t scn = ref_scn.get_val_for_lsn_allocator();
+    const uint64_t scn = ref_scn.get_val_for_logservice();
     while (true) {
       WLockGuard guard(lock_);
       LOAD128(last, &lsn_ts_meta_);
@@ -194,8 +195,8 @@ SCN LSNAllocator::get_max_scn() const
     LOAD128(last, &lsn_ts_meta_);
     max_scn = scn_base_ + last.scn_delta_;
     int ret = OB_SUCCESS;
-    if (OB_FAIL(result.convert_for_lsn_allocator(max_scn))) {
-      PALF_LOG(ERROR, "failed to convert_for_lsn_allocator", K(max_scn),
+    if (OB_FAIL(result.convert_for_logservice(max_scn))) {
+      PALF_LOG(ERROR, "failed to convert_for_logservice", K(max_scn),
                K(scn_base_), K(last.scn_delta_));
     }
   }
@@ -313,7 +314,7 @@ int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
         LOAD128(last, &lsn_ts_meta_);
         const int64_t last_log_id = log_id_base_ + last.log_id_delta_;
         const uint64_t last_scn = scn_base_ + last.scn_delta_;
-        const uint64_t new_scn = std::max(base_scn.get_val_for_lsn_allocator(), last_scn);
+        const uint64_t new_scn = std::max(base_scn.get_val_for_logservice(), last_scn);
 
         log_id_base_ = last_log_id;
         scn_base_ = new_scn;
@@ -339,7 +340,7 @@ int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
         LOAD128(last, &lsn_ts_meta_);
         const int64_t last_log_id = log_id_base_ + last.log_id_delta_;
         const uint64_t last_scn = scn_base_ + last.scn_delta_;
-        const uint64_t tmp_next_scn = std::max(base_scn.get_val_for_lsn_allocator(), last_scn + 1);
+        const uint64_t tmp_next_scn = std::max(base_scn.get_val_for_logservice(), last_scn + 1);
 
         if ((tmp_next_scn + 1) - scn_base_ >= LOG_TS_DELTA_UPPER_BOUND) {
           // 对于可能生成的padding log, 也会占用一个scn
@@ -456,7 +457,7 @@ int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
           }
 
           uint64_t scn_val = scn_base_ + output_next_scn_delta;
-          if (OB_FAIL(scn.convert_for_lsn_allocator(scn_val))) {
+          if (OB_FAIL(scn.convert_for_logservice(scn_val))) {
             PALF_LOG(ERROR, "failed to convert scn", K(ret), K(base_scn), K(scn));
           }
 

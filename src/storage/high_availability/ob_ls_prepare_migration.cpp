@@ -30,7 +30,7 @@ ObLSPrepareMigrationCtx::ObLSPrepareMigrationCtx()
     task_id_(),
     start_ts_(0),
     finish_ts_(0),
-    log_sync_scn_(palf::SCN::min_scn())
+    log_sync_scn_(SCN::min_scn())
 {
 }
 
@@ -812,8 +812,8 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
   logservice::ObLogService *log_service = nullptr;
   bool wait_log_replay_success = false;
   bool is_cancel = false;
-  palf::SCN current_replay_scn;
-  palf::SCN last_replay_scn;
+  SCN current_replay_scn;
+  SCN last_replay_scn;
   const int64_t OB_CHECK_LOG_SYNC_INTERVAL = 200 * 1000; // 200ms
   const int64_t CLOG_IN_SYNC_DELAY_TIMEOUT = 30 * 60 * 1000 * 1000L; // 30 min
   ObLSSavedInfo saved_info;
@@ -1001,7 +1001,7 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_scn_push_()
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   checkpoint::ObCheckpointExecutor *checkpoint_executor = NULL;
-  palf::SCN checkpoint_scn;
+  SCN checkpoint_scn;
   const int64_t MAX_WAIT_INTERVAL_BY_CHECKPOINT_BY_FLUSH = GCONF._advance_checkpoint_timeout;
   const int64_t MAX_SLEEP_INTERVAL_MS = 5 * 1000 * 1000; //5s
   bool is_cancel = false;

@@ -15,7 +15,7 @@
 
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -29,13 +29,13 @@ public:
 public:
   int generate_header(const char *log_data,
                       const int64_t data_len,
-                      const SCN &scn);
+                      const share::SCN &scn);
   LogEntryHeader& operator=(const LogEntryHeader &header);
   void reset();
   bool is_valid() const;
   bool check_integrity(const char *buf, const int64_t buf_len) const;
   int32_t get_data_len() const { return log_size_; }
-  const SCN get_scn() const { return scn_; }
+  const share::SCN get_scn() const { return scn_; }
   int64_t get_data_checksum() const { return data_checksum_; }
   bool check_header_integrity() const;
   NEED_SERIALIZE_AND_DESERIALIZE;
@@ -58,7 +58,7 @@ private:
   int16_t magic_;
   int16_t version_;
   int32_t log_size_;
-  SCN scn_;
+  share::SCN scn_;
   int64_t data_checksum_;
   // The lowest bit is used for parity check.
   int64_t flag_;

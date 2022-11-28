@@ -20,6 +20,7 @@
 namespace oceanbase
 {
 using namespace share::schema;
+using namespace share;
 using namespace common;
 using namespace memtable;
 using namespace storage;
@@ -94,7 +95,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
 {
   int ret = OB_SUCCESS;
   ObSSTable *sstable = nullptr;
-  palf::SCN snapshot_version;
+  SCN snapshot_version;
   if (OB_UNLIKELY(nullptr == column_ids_ || nullptr == table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null column_ids", K(ret), KPC(this));

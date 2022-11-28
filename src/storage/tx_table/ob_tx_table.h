@@ -74,7 +74,7 @@ public:
   int start();
   void stop();
   void destroy();
-  int create_tablet(const lib::Worker::CompatMode compat_mode, const palf::SCN &create_scn);
+  int create_tablet(const lib::Worker::CompatMode compat_mode, const share::SCN &create_scn);
   int remove_tablet();
   int load_tx_table();
   int prepare_offline();
@@ -151,10 +151,10 @@ public:
    * @param[out] trans_version
    */
   int get_tx_state_with_scn(const transaction::ObTransID &data_trans_id,
-                               const palf::SCN scn,
+                               const share::SCN scn,
                                const int64_t read_epoch,
                                int64_t &state,
-                               palf::SCN &trans_version);
+                               share::SCN &trans_version);
 
   /**
    * @brief Try to get a tx data from tx_data_table. This function used in special situation when the trans service do
@@ -168,7 +168,7 @@ public:
   int try_get_tx_state(const transaction::ObTransID tx_id,
                        const int64_t read_epoch,
                        int64_t &state,
-                       palf::SCN &trans_version);
+                       share::SCN &trans_version);
 
   /**
    * @brief the txn READ_TRANS_ID use SNAPSHOT_VERSION to read the data, and check whether the data is locked, readable or unreadable by txn DATA_TRANS_ID. READ_LATEST is used to check whether read the data belong to the same txn
@@ -183,7 +183,7 @@ public:
   int lock_for_read(const transaction::ObLockForReadArg &lock_for_read_arg,
                     const int64_t read_epoch,
                     bool &can_read,
-                    palf::SCN &trans_version,
+                    share::SCN &trans_version,
                     bool &is_determined_state,
                     const ObCleanoutOp &cleanout_op = ObCleanoutNothingOperation(),
                     const ObReCheckOp &recheck_op = ObReCheckNothingOperation());
@@ -212,7 +212,7 @@ public:
    * @param[out] recycle_scn the tx data whose end_scn is smaller or equals to the recycle_scn can
    * be cleared.
    */
-  int get_recycle_scn(palf::SCN &recycle_scn);
+  int get_recycle_scn(share::SCN &recycle_scn);
 
   /**
    * @brief Get the upper trans version for each given end_scn
@@ -220,7 +220,7 @@ public:
    * @param[in] sstable_end_scn the end_scn of the data sstable which is waitting to get the upper_trans_version
    * @param[out] upper_trans_version the upper_trans_version
    */
-  int get_upper_trans_version_before_given_scn(const palf::SCN sstable_end_scn, palf::SCN &upper_trans_version);
+  int get_upper_trans_version_before_given_scn(const share::SCN sstable_end_scn, share::SCN &upper_trans_version);
 
   /**
    * @brief When a transaction is replayed in the middle, it will read tx data from tx data sstable
@@ -241,7 +241,7 @@ public:
    *
    * @param[out] start_tx_scn
    */
-  int get_start_tx_scn(palf::SCN &start_tx_scn);
+  int get_start_tx_scn(share::SCN &start_tx_scn);
 
   int dump_single_tx_data_2_text(const int64_t tx_id_int, const char *fname);
 
@@ -263,12 +263,12 @@ private:
       const uint64_t tenant_id,
       const share::ObLSID ls_id,
       const lib::Worker::CompatMode compat_mode,
-      const palf::SCN &create_scn);
+      const share::SCN &create_scn);
   int create_ctx_tablet_(
       const uint64_t tenant_id,
       const share::ObLSID ls_id,
       const lib::Worker::CompatMode compat_mode,
-      const palf::SCN &create_scn);
+      const share::SCN &create_scn);
   int remove_tablet_(const common::ObTabletID &tablet_id);
   int remove_data_tablet_();
   int remove_ctx_tablet_();
@@ -295,7 +295,7 @@ private:
   int load_tx_data_table_();
   int offline_tx_ctx_table_();
   int offline_tx_data_table_();
-  int get_max_tablet_clog_checkpoint_(palf::SCN &max_tablet_clog_checkpoint);
+  int get_max_tablet_clog_checkpoint_(share::SCN &max_tablet_clog_checkpoint);
 
   void check_state_and_epoch_(const transaction::ObTransID tx_id,
                               const int64_t read_epoch,
@@ -308,7 +308,7 @@ private:
   static const int64_t LS_TX_CTX_SCHEMA_COLUMN_CNT = 3;
   bool is_inited_;
   int64_t epoch_ CACHE_ALIGNED;
-  palf::SCN max_tablet_clog_checkpoint_;
+  share::SCN max_tablet_clog_checkpoint_;
   int64_t prepare_online_ts_;
   TxTableState state_ CACHE_ALIGNED;
   ObLS *ls_;

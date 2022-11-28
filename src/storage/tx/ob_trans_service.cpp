@@ -305,7 +305,7 @@ void ObTransService::destroy()
 }
 
 int ObTransService::get_gts_(
-    palf::SCN &snapshot_version,
+    SCN &snapshot_version,
     MonotonicTs &receive_gts_ts,
     const int64_t trans_expired_time,
     const int64_t stmt_expire_time,
@@ -316,7 +316,7 @@ int ObTransService::get_gts_(
   // and only get gts once during transaction lifecyle
   const MonotonicTs request_ts = MonotonicTs::current_time();
   const int64_t WAIT_GTS_US = 500;
-  palf::SCN gts;
+  SCN gts;
   MonotonicTs tmp_receive_gts_ts;
   if (OB_ISNULL(ts_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -339,8 +339,8 @@ int ObTransService::get_gts_(
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "invalid gts, unexpected error", KR(ret), K(gts));
       } else {
-        const palf::SCN max_commit_ts = tx_version_mgr_.get_max_commit_ts(true);
-        snapshot_version = palf::SCN::max(max_commit_ts, gts);
+        const SCN max_commit_ts = tx_version_mgr_.get_max_commit_ts(true);
+        snapshot_version = SCN::max(max_commit_ts, gts);
         receive_gts_ts = tmp_receive_gts_ts;
       }
     } while (OB_EAGAIN == ret);
@@ -511,7 +511,7 @@ void ObTransService::handle(void *task)
   UNUSED(ret); //make compiler happy
 }
 
-int ObTransService::get_ls_min_uncommit_prepare_version(const ObLSID &ls_id, palf::SCN &min_prepare_version)
+int ObTransService::get_ls_min_uncommit_prepare_version(const ObLSID &ls_id, SCN &min_prepare_version)
 {
   int ret = OB_SUCCESS;
 
@@ -535,7 +535,7 @@ int ObTransService::get_ls_min_uncommit_prepare_version(const ObLSID &ls_id, pal
   return ret;
 }
 
-int ObTransService::get_min_undecided_log_ts(const ObLSID &ls_id, palf::SCN &log_ts)
+int ObTransService::get_min_undecided_log_ts(const ObLSID &ls_id, SCN &log_ts)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -597,7 +597,7 @@ int ObTransService::remove_callback_for_uncommited_txn(memtable::ObMemtable* mt)
  * @pkey : not NULL if this is a single local partition stmt,
  *         will try local publish version
  */
-int ObTransService::get_weak_read_snapshot(const uint64_t tenant_id, palf::SCN &snapshot_version)
+int ObTransService::get_weak_read_snapshot(const uint64_t tenant_id, SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObIWeakReadService *wrs = GCTX.weak_read_service_;
@@ -680,8 +680,8 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_desc), K(ls_id), K(type), KP(buf),
               K(buf_len));
   } else if (!tx_desc.is_tx_active()) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "txn must in active for register", K(ret));
+    ret = OB_TRANS_IS_EXITING;
+    TRANS_LOG(WARN, "txn must in active for register", K(ret));
   } else if (OB_ISNULL(rpc_proxy_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "rpc proxy not inited", KR(ret), K(tx_desc), K(ls_id), K(type));
@@ -847,7 +847,7 @@ int ObTransService::register_mds_into_ctx(ObTxDesc &tx_desc,
   return ret;
 }
 
-int ObTransService::get_max_commit_version(palf::SCN &commit_version) const
+int ObTransService::get_max_commit_version(SCN &commit_version) const
 {
  int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {

@@ -76,7 +76,7 @@ void ObWeakReadService::wait()
   LOG_INFO("[WRS] weak read service thread wait");
 }
 
-int ObWeakReadService::get_server_version(const uint64_t tenant_id, palf::SCN &version) const
+int ObWeakReadService::get_server_version(const uint64_t tenant_id, SCN &version) const
 {
   int ret = OB_SUCCESS;
   // switch tenant
@@ -104,7 +104,7 @@ int ObWeakReadService::get_server_version(const uint64_t tenant_id, palf::SCN &v
   return ret;
 }
 
-int ObWeakReadService::get_cluster_version(const uint64_t tenant_id, palf::SCN &version)
+int ObWeakReadService::get_cluster_version(const uint64_t tenant_id, SCN &version)
 {
   int ret = OB_SUCCESS;
   // switch tenant
@@ -164,7 +164,7 @@ void ObWeakReadService::process_get_cluster_version_rpc(const uint64_t tenant_id
     obrpc::ObWrsGetClusterVersionResponse &res)
 {
   int ret = OB_SUCCESS;
-  palf::SCN version;
+  SCN version;
 
   MTL_SWITCH(tenant_id) {
     ObTenantWeakReadService *twrs = NULL;

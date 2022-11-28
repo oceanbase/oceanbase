@@ -7136,7 +7136,7 @@ int ObPLResolver::add_pl_integer_checker_expr(ObRawExprFactory &expr_factory,
   if (OB_SUCC(ret)) {
     // 对于溢出的检查只关心双目运算符的计算
     if (2 == expr->get_param_count() && !IS_COMMON_COMPARISON_OP(expr->get_expr_type())
-             && !LOGIC_EXPR(expr) && CHECK_RES_TYPE(expr)) {
+             && !LOGIC_EXPR(expr) && expr->get_expr_type() != T_FUN_SYS_POWER && CHECK_RES_TYPE(expr)) {
       const ObRawExpr *left = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(0));
       const ObRawExpr *right = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(1));
       ObPLIntegerType left_pl_integer = PL_INTEGER_INVALID, right_pl_integer = PL_INTEGER_INVALID;

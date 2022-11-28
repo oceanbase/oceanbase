@@ -532,7 +532,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
       if (OB_FAIL(check_inner_stat())) {
         LOG_WARN("schema history recycler is stopped", KR(ret));
       } else {
-        palf::SCN spec_frozen_scn;
+        SCN spec_frozen_scn;
         for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
           const uint64_t tenant_id = tenant_ids.at(i);
           ObFreezeInfoProxy freeze_info_proxy(tenant_id);

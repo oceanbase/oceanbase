@@ -10,14 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include <gtest/gtest.h>
 #include <cstdint>
 
 namespace oceanbase
 {
 using namespace common;
-using namespace palf;
+using namespace share;
 
 namespace unittest
 {
@@ -51,18 +51,18 @@ TEST(TestSCN, test_scn)
 
   scn1.reset();
   scn2.reset();
-  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_lsn_allocator(0));
+  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_logservice(0));
   EXPECT_TRUE(scn1.is_valid());
   scn1.reset();
-  EXPECT_EQ(OB_INVALID_ARGUMENT, scn1.convert_for_lsn_allocator(4611686018427387904));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, scn1.convert_for_logservice(4611686018427387904));
   EXPECT_FALSE(scn1.is_valid());
   scn1.reset();
-  EXPECT_EQ(OB_INVALID_ARGUMENT, scn1.convert_for_lsn_allocator(-1));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, scn1.convert_for_logservice(-1));
   EXPECT_FALSE(scn1.is_valid());
   scn1.reset();
-  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_lsn_allocator(4611686018427387903));
+  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_logservice(4611686018427387903));
   EXPECT_TRUE(scn1.is_valid());
-  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_lsn_allocator(100000));
+  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_logservice(100000));
   EXPECT_TRUE(scn1.is_valid());
 
   scn1.reset();
@@ -162,9 +162,9 @@ TEST(TestSCN, test_update)
   SCN scn_invalid;
 
   //test inc_update and dec_update
-  EXPECT_EQ(OB_SUCCESS, self.convert_for_lsn_allocator(100));
-  EXPECT_EQ(OB_SUCCESS, bigger.convert_for_lsn_allocator(200));
-  EXPECT_EQ(OB_SUCCESS, smaller.convert_for_lsn_allocator(1));
+  EXPECT_EQ(OB_SUCCESS, self.convert_for_logservice(100));
+  EXPECT_EQ(OB_SUCCESS, bigger.convert_for_logservice(200));
+  EXPECT_EQ(OB_SUCCESS, smaller.convert_for_logservice(1));
 
   result = self.inc_update(scn_invalid);
   EXPECT_EQ(result, self);
@@ -209,7 +209,7 @@ TEST(TestSCN, test_serialize)
   int64_t pos3 = 0;
   int64_t pos4 = 0;
 
-  EXPECT_EQ(OB_SUCCESS, scn.convert_for_lsn_allocator(100));
+  EXPECT_EQ(OB_SUCCESS, scn.convert_for_logservice(100));
   EXPECT_EQ(scn.get_fixed_serialize_size(), max.get_fixed_serialize_size());
   EXPECT_EQ(OB_SUCCESS, scn.fixed_serialize(buf1, BUF_LEN, pos1));
   EXPECT_EQ(OB_SUCCESS, max.fixed_serialize(buf2, BUF_LEN, pos2));

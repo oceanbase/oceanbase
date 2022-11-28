@@ -104,6 +104,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       next_tx_isolation_(transaction::ObTxIsolationLevel::INVALID),
       log_id_level_map_valid_(false),
       cur_phy_plan_(NULL),
+      plan_id_(0),
       capability_(),
       proxy_capability_(),
       client_mode_(OB_MIN_CLIENT_MODE),
@@ -374,6 +375,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   log_id_level_map_valid_ = false;
   log_id_level_map_.reset_level();
   cur_phy_plan_ = NULL;
+  plan_id_ = 0;
   capability_.capability_ = 0;
   proxy_capability_.capability_ = 0;
   client_mode_ = OB_MIN_CLIENT_MODE;
@@ -1927,6 +1929,7 @@ int ObBasicSessionInfo::sys_variable_exists(const ObString &var, bool &is_exists
   return ret;
 }
 
+// for query and DML
 int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
 {
   int ret = OB_SUCCESS;
@@ -1935,6 +1938,7 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
     LOG_WARN("current physical plan is NULL", K(lbt()), K(ret));
   } else {
     cur_phy_plan_ = cur_phy_plan;
+    plan_id_ = cur_phy_plan->get_plan_id();
     int64_t len = cur_phy_plan->stat_.sql_id_.length();
     MEMCPY(sql_id_, cur_phy_plan->stat_.sql_id_.ptr(), len);
     sql_id_[len] = '\0';
@@ -1942,6 +1946,7 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
   return ret;
 }
 
+// for cmd only
 void ObBasicSessionInfo::set_cur_sql_id(char *sql_id)
 {
   if (nullptr == sql_id) {

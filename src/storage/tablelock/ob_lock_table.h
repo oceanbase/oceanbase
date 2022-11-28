@@ -76,7 +76,7 @@ public:
   int offline();
   int online();
   // create lock table tablet.
-  int create_tablet(const lib::Worker::CompatMode compat_mode, const palf::SCN &create_scn);
+  int create_tablet(const lib::Worker::CompatMode compat_mode, const share::SCN &create_scn);
   // remove lock table tablet.
   int remove_tablet();
   // load lock for tablet.

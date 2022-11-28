@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "ob_tenant_role_transition_service.h"
 #include "logservice/palf/log_define.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "logservice/ob_log_service.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"//ObChangeLSAccessModeProxy
 #include "share/ob_rpc_struct.h"//ObLSAccessModeInfo
@@ -313,7 +313,7 @@ int ObTenantRoleTransitionService::update_tenant_stat_info_()
 }
 
 int ObTenantRoleTransitionService::change_ls_access_mode_(palf::AccessMode target_access_mode,
-                             const palf::SCN &ref_scn)
+                             const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
@@ -488,7 +488,7 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(ObIArray<LSAccessModeInfo
 }
 
 int ObTenantRoleTransitionService::do_change_ls_access_mode_(const ObIArray<LSAccessModeInfo> &ls_access_info,
-                                palf::AccessMode target_access_mode, const palf::SCN &ref_scn)
+                                palf::AccessMode target_access_mode, const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;

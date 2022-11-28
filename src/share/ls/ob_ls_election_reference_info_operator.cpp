@@ -21,7 +21,7 @@
 #include "common/ob_timeout_ctx.h"
 #include "share/ob_share_util.h"
 #include "share/ls/ob_ls_status_operator.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -31,7 +31,7 @@ namespace share
 using namespace common;
 
 int ObLsElectionReferenceInfoOperator::create_new_ls(const ObLSStatusInfo &ls_info,
-                                                     const palf::SCN &create_ls_scn,
+                                                     const SCN &create_ls_scn,
                                                      const common::ObString &zone_priority,
                                                      ObMySQLTransaction &trans)
 {
@@ -80,7 +80,7 @@ int ObLsElectionReferenceInfoOperator::drop_ls(const uint64_t &tenant_id,
 int ObLsElectionReferenceInfoOperator::set_ls_offline(const uint64_t &,
                                                       const share::ObLSID &,
                                                       const ObLSStatus &,
-                                                      const palf::SCN &,
+                                                      const SCN &,
                                                       ObMySQLTransaction &) { return OB_SUCCESS; }
 
 

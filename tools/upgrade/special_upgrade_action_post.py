@@ -194,7 +194,7 @@ def get_max_used_job_id(cur):
 def check_can_run_upgrade_job(cur, version):
   try:
     sql = """select job_status from oceanbase.__all_rootservice_job
-             where job_type = 'RUN_UPGRADE_POST_JOB' and extra_info = '{0}'
+             where job_type = 'UPGRADE_POST_ACTION' and extra_info = '{0}'
              order by job_id desc limit 1""".format(version)
     results = query(cur, sql)
 

@@ -21,6 +21,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
 LogTaskHeaderInfo& LogTaskHeaderInfo::operator=(const LogTaskHeaderInfo &rval)

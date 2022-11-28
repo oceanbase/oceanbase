@@ -553,17 +553,17 @@ class ObBitMapMetaReader
 public:
   static int read(const char *buf, const int64_t row_count,
       const bool bit_packing, const int64_t row_id, const int64_t len,
-      int64_t &ref, common::ObObj &cell, const common::ObObjMeta type);
+      int64_t &ref, common::ObObj &cell, const common::ObObjType type);
 
   OB_INLINE static int read_exc_cell(const char *buf, const ObBitMapMetaHeader *meta,
     const bool bit_packing, const int64_t ref, const int64_t len,
-    common::ObObj &cell, const uint64_t integer_mask, const common::ObObjMeta type);
+    common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type);
 };
 
 template <ObObjTypeStoreClass StoreClass>
 int ObBitMapMetaReader<StoreClass>::read(const char *buf, const int64_t row_count,
     const bool bit_packing, const int64_t row_id, const int64_t len,
-    int64_t &ref, common::ObObj &cell, const common::ObObjMeta type)
+    int64_t &ref, common::ObObj &cell, const common::ObObjType type)
 {
   int ret = common::OB_SUCCESS;
   if (OB_ISNULL(buf)
@@ -592,8 +592,8 @@ int ObBitMapMetaReader<StoreClass>::read(const char *buf, const int64_t row_coun
       }
       // read data
       uint64_t integer_mask = 0;
-      if (common::ObIntTC == ob_obj_type_class(type.get_type())) {
-        integer_mask = ~INTEGER_MASK_TABLE[get_type_size_map()[type.get_type()]];
+      if (common::ObIntTC == ob_obj_type_class(type)) {
+        integer_mask = ~INTEGER_MASK_TABLE[get_type_size_map()[type]];
       }
       if (OB_FAIL(ret)) {
       } else if (STORED_NOT_EXT != ext_val) {
@@ -610,7 +610,7 @@ int ObBitMapMetaReader<StoreClass>::read(const char *buf, const int64_t row_coun
 template <ObObjTypeStoreClass StoreClass>
 OB_INLINE int ObBitMapMetaReader<StoreClass>::read_exc_cell(const char *buf,
     const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
-    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjMeta type)
+    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type)
 {
   UNUSED(type);
   int ret = common::OB_SUCCESS;
@@ -637,7 +637,7 @@ OB_INLINE int ObBitMapMetaReader<StoreClass>::read_exc_cell(const char *buf,
 template <>
 OB_INLINE int ObBitMapMetaReader<ObNumberSC>::read_exc_cell(const char *buf,
     const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
-    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjMeta type)
+    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type)
 {
   int ret = common::OB_SUCCESS;
   UNUSEDx(bit_packing, integer_mask, type);
@@ -664,7 +664,7 @@ OB_INLINE int ObBitMapMetaReader<ObNumberSC>::read_exc_cell(const char *buf,
 template <>
 OB_INLINE int ObBitMapMetaReader<ObStringSC>::read_exc_cell(const char *buf,
     const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
-    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjMeta type)
+    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type)
 {
   int ret = common::OB_SUCCESS;
   UNUSEDx(bit_packing, integer_mask, type);
@@ -698,7 +698,7 @@ OB_INLINE int ObBitMapMetaReader<ObStringSC>::read_exc_cell(const char *buf,
 template <>
 OB_INLINE int ObBitMapMetaReader<ObOTimestampSC>::read_exc_cell(const char *buf,
     const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
-    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjMeta type)
+    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type)
 {
   int ret = common::OB_SUCCESS;
   UNUSEDx(bit_packing, integer_mask);
@@ -719,12 +719,14 @@ OB_INLINE int ObBitMapMetaReader<ObOTimestampSC>::read_exc_cell(const char *buf,
 
   if (OB_SUCC(ret)) {
     ObStorageDatum tmp_datum; // TODO: remove
+    ObObjMeta tmp_obj_meta;
+    tmp_obj_meta.set_type(type);
 
-    ObObjDatumMapType datum_type = ObDatum::get_obj_datum_map_type(type.get_type());
+    ObObjDatumMapType datum_type = ObDatum::get_obj_datum_map_type(type);
     const uint32_t size = ObDatum::get_reserved_size(datum_type);
     MEMCPY(const_cast<char *>(tmp_datum.ptr_), buf + meta->data_offset_ + offset, size);
     tmp_datum.len_ = size;
-    if (OB_FAIL(tmp_datum.to_obj(cell, type))) {
+    if (OB_FAIL(tmp_datum.to_obj(cell, tmp_obj_meta))) {
       STORAGE_LOG(WARN, "Failed to read datum", K(ret));
     }
   }
@@ -734,7 +736,7 @@ OB_INLINE int ObBitMapMetaReader<ObOTimestampSC>::read_exc_cell(const char *buf,
 template <>
 OB_INLINE int ObBitMapMetaReader<ObIntervalSC>::read_exc_cell(const char *buf,
     const ObBitMapMetaHeader *meta, const bool bit_packing, const int64_t ref,
-    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjMeta type)
+    const int64_t len, common::ObObj &cell, const uint64_t integer_mask, const common::ObObjType type)
 {
   int ret = common::OB_SUCCESS;
   UNUSEDx(bit_packing, integer_mask);
@@ -755,12 +757,14 @@ OB_INLINE int ObBitMapMetaReader<ObIntervalSC>::read_exc_cell(const char *buf,
 
   if (OB_SUCC(ret)) {
     ObStorageDatum tmp_datum; // TODO: remove
+    ObObjMeta tmp_obj_meta;
+    tmp_obj_meta.set_type(type);
 
-    ObObjDatumMapType datum_type = ObDatum::get_obj_datum_map_type(type.get_type());
+    ObObjDatumMapType datum_type = ObDatum::get_obj_datum_map_type(type);
     const uint32_t size = ObDatum::get_reserved_size(datum_type);
     MEMCPY(const_cast<char *>(tmp_datum.ptr_), buf + meta->data_offset_ + offset, size);
     tmp_datum.len_ = size;
-    if (OB_FAIL(tmp_datum.to_obj(cell, type))) {
+    if (OB_FAIL(tmp_datum.to_obj(cell, tmp_obj_meta))) {
       STORAGE_LOG(WARN, "Failed to read datum", K(ret));
     }
   }

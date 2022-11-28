@@ -266,7 +266,7 @@ ObVTableScanParam() :
   ObIAllocator *scan_allocator_;
   ObTableScanStatistic main_table_scan_stat_;
   ObTableScanStatistic idx_table_scan_stat_;
-  palf::SCN fb_snapshot_;
+  share::SCN fb_snapshot_;
   bool is_get_;
   bool force_refresh_lc_;
 

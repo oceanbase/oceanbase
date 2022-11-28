@@ -27,6 +27,7 @@
 #define USING_LOG_PREFIX TRANS
 namespace oceanbase
 {
+using namespace oceanbase::share;
 namespace transaction
 {
 ObTxIsolationLevel tx_isolation_from_str(const ObString &s)
@@ -839,7 +840,7 @@ int ObTxReadSnapshot::assign(const ObTxReadSnapshot &from)
   return ret;
 }
 
-void ObTxReadSnapshot::init_weak_read(const palf::SCN snapshot)
+void ObTxReadSnapshot::init_weak_read(const SCN snapshot)
 {
   core_.version_ = snapshot;
   core_.tx_id_.reset();
@@ -850,7 +851,7 @@ void ObTxReadSnapshot::init_weak_read(const palf::SCN snapshot)
   valid_ = true;
 }
 
-void ObTxReadSnapshot::init_special_read(const palf::SCN snapshot)
+void ObTxReadSnapshot::init_special_read(const SCN snapshot)
 {
   core_.version_ = snapshot;
   core_.tx_id_.reset();

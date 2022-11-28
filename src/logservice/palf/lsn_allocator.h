@@ -16,8 +16,8 @@
 #include "lib/atomic/atomic128.h"
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "share/scn.h"
 #include "lsn.h"
-#include "scn.h"
 
 namespace oceanbase
 {
@@ -29,7 +29,7 @@ public:
   LSNAllocator();
   ~LSNAllocator();
 public:
-  int init(const int64_t log_id, const SCN &scn, const LSN &start_lsn);
+  int init(const int64_t log_id, const share::SCN &scn, const LSN &start_lsn);
   void reset();
   int get_log_block_size(const uint64_t block_id, int64_t &block_size) const
   {
@@ -40,7 +40,7 @@ public:
     return OB_SUCCESS;
   }
   int64_t get_max_log_id() const;
-  SCN get_max_scn() const;
+  share::SCN get_max_scn() const;
   int get_curr_end_lsn(LSN &curr_end_lsn) const;
   int try_freeze_by_time(LSN &last_lsn, int64_t &last_log_id);
   int try_freeze(LSN &last_lsn, int64_t &last_log_id);
@@ -55,20 +55,20 @@ public:
   // @param [out] need_gen_padding_entry: 是否需要在本条日志之前生成padding_entry
   // @param [out] padding_len: padding部分的总长度
   //
-  int alloc_lsn_scn(const SCN &base_scn,
+  int alloc_lsn_scn(const share::SCN &base_scn,
                     const int64_t size,
                     LSN &lsn,
                     int64_t &log_id,
-                    SCN &scn,
+                    share::SCN &scn,
                     bool &is_new_log,
                     bool &need_gen_padding_entry,
                     int64_t &padding_len);
   // 更新last_lsn和log_timestamp
   // receive_log/append_disk_log 时调用
-  int inc_update_last_log_info(const LSN &lsn, const int64_t log_id, const SCN &scn);
+  int inc_update_last_log_info(const LSN &lsn, const int64_t log_id, const share::SCN &scn);
   // inc update scn base, called by change access mode and to leader active
-  int inc_update_scn_base(const SCN &scn);
-  int truncate(const LSN &lsn, const int64_t log_id, const SCN &scn);
+  int inc_update_scn_base(const share::SCN &scn);
+  int truncate(const LSN &lsn, const int64_t log_id, const share::SCN &scn);
   // 获取last_lsn和log_timestamp
   TO_STRING_KV("max_log_id", get_max_log_id(), "max_lsn", lsn_ts_meta_.lsn_val_,
       "max_scn", get_max_scn());

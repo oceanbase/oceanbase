@@ -16,7 +16,7 @@
 #include "lib/list/ob_dlist.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/allocator/ob_mod_define.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase
@@ -391,8 +391,8 @@ public:
   ObTableLockOpType op_type_;
   ObTableLockOpStatus lock_op_status_;
   int64_t lock_seq_no_;
-  palf::SCN commit_version_;
-  palf::SCN commit_scn_;
+  share::SCN commit_version_;
+  share::SCN commit_scn_;
   // used to check whether a trans modify before a schema_version or timestamp.
   int64_t create_timestamp_;
   int64_t create_schema_version_;
@@ -407,7 +407,7 @@ public:
   void reset();
   TO_STRING_KV(K_(table_lock_ops), K_(max_durable_scn));
   ObTableLockOpArray table_lock_ops_;
-  palf::SCN max_durable_scn_;
+  share::SCN max_durable_scn_;
 };
 
 static inline

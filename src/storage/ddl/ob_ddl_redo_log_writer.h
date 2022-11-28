@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_DDL_REDO_LOG_WRITER_H
 #define OCEANBASE_STORAGE_OB_DDL_REDO_LOG_WRITER_H
 #include "common/ob_tablet_id.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/ob_ls_id.h"
 #include "storage/ddl/ob_ddl_clog.h"
 #include "storage/ddl/ob_ddl_struct.h"
@@ -166,7 +166,7 @@ public:
   bool is_valid() const { return nullptr != cb_  && scn_.is_valid(); }
 public:
   ObDDLMacroBlockClogCb *cb_;
-  palf::SCN scn_;
+  share::SCN scn_;
 };
 
 class ObDDLCommitLogHandle final
@@ -176,10 +176,10 @@ public:
   ~ObDDLCommitLogHandle();
   int wait(const int64_t timeout = ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT);
   void reset();
-  palf::SCN get_commit_scn() const { return commit_scn_; }
+  share::SCN get_commit_scn() const { return commit_scn_; }
 public:
   ObDDLClogCb *cb_;
-  palf::SCN commit_scn_;
+  share::SCN commit_scn_;
 };
 
 class ObDDLRedoLogWriter final
@@ -193,7 +193,7 @@ public:
             const blocksstable::MacroBlockId &macro_block_id,
             char *buffer,
             ObDDLRedoLogHandle &handle);
-  int write_ddl_start_log(const ObDDLStartLog &log, logservice::ObLogHandler *log_handler, palf::SCN &start_scn);
+  int write_ddl_start_log(const ObDDLStartLog &log, logservice::ObLogHandler *log_handler, share::SCN &start_scn);
   template <typename T>
   int write_ddl_finish_log(const T &log,
                           const ObDDLClogType clog_type,
@@ -237,7 +237,7 @@ public:
   ObDDLSSTableRedoWriter();
   ~ObDDLSSTableRedoWriter();
   int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
-  int start_ddl_redo(const ObITable::TableKey &table_key);
+  int start_ddl_redo(const ObITable::TableKey &table_key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int write_redo_log(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                      const blocksstable::MacroBlockId &macro_block_id);
   int wait_redo_log_finish(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
@@ -246,18 +246,18 @@ public:
                         const int64_t table_id,
                         const int64_t execution_id,
                         const int64_t ddl_task_id,
-                        palf::SCN &prepare_scn);
+                        share::SCN &prepare_scn);
   int write_commit_log(const ObITable::TableKey &table_key,
-                       const palf::SCN &prepare_scn);
-  OB_INLINE void set_start_scn(const palf::SCN &start_scn) { start_scn_.atomic_set(start_scn); }
-  OB_INLINE palf::SCN get_start_scn() const { return start_scn_.atomic_get(); }
+                       const share::SCN &prepare_scn);
+  OB_INLINE void set_start_scn(const share::SCN &start_scn) { start_scn_.atomic_set(start_scn); }
+  OB_INLINE share::SCN get_start_scn() const { return start_scn_.atomic_get(); }
 private:
   bool need_remote_write(int ret_code);
   int switch_to_remote_write();
 private:
   bool is_inited_;
   bool remote_write_;
-  palf::SCN start_scn_;
+  share::SCN start_scn_;
   ObLSHandle ls_handle_;
   ObTabletHandle tablet_handle_;
   ObDDLRedoLogHandle ddl_redo_handle_;

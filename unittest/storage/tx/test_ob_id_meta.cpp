@@ -40,7 +40,7 @@ public:
   void init()
   {
     for (int i=0; i<count_; i++) {
-      id_meta_[i].latest_log_ts_ = palf::SCN::base_scn();
+      id_meta_[i].latest_log_ts_ = share::SCN::base_scn();
       id_meta_[i].limited_id_ = i + count_;
     }
   }
@@ -61,7 +61,7 @@ public:
   void init()
   {
     for (int i=0; i<count_; i++) {
-      id_meta_[i].latest_log_ts_ = palf::SCN::base_scn();
+      id_meta_[i].latest_log_ts_ = share::SCN::base_scn();
       id_meta_[i].limited_id_ = i + TestObAllIDMeta::type_count;
     }
   }

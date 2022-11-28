@@ -16,7 +16,7 @@
 #include "ob_log_service.h"
 #include "ob_switch_leader_adapter.h"
 #include "archiveservice/ob_archive_service.h"
-#include "palf/scn.h"
+#include "share/scn.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "storage/high_availability/ob_storage_ha_struct.h"
 #include "storage/ls/ob_ls.h"
@@ -430,9 +430,9 @@ int ObGCHandler::replay(const void *buffer,
   return ret;
 }
 
-palf::SCN ObGCHandler::get_rec_scn()
+SCN ObGCHandler::get_rec_scn()
 {
-  return palf::SCN::max_scn();
+  return SCN::max_scn();
 }
 
 int ObGCHandler::flush(SCN &scn)

@@ -28,6 +28,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 using namespace palf::election;
 namespace palf
 {
@@ -301,14 +302,13 @@ int PalfHandleImpl::get_begin_scn(SCN &scn)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not init", K(ret), KPC(this));
-  } else if (OB_FAIL(log_engine_.get_min_block_id_and_min_scn(unused_block_id, scn))) {
-    PALF_LOG(WARN, "LogEngine get_min_block_id_and_min_scn failed", K(ret), KPC(this));
+  } else if (OB_FAIL(log_engine_.get_min_block_info(unused_block_id, scn))) {
+    PALF_LOG(WARN, "LogEngine get_min_block_info failed", K(ret), KPC(this));
   }
   return ret;
 }
 
-int PalfHandleImpl::get_base_info(const LSN &base_lsn,
-                                  PalfBaseInfo &base_info)
+int PalfHandleImpl::get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info)
 {
   int ret = OB_SUCCESS;
   LSN curr_end_lsn = get_end_lsn();
@@ -1595,13 +1595,16 @@ int PalfHandleImpl::locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn)
   return ret;
 }
 
-int PalfHandleImpl::get_min_block_id_min_scn(block_id_t &block_id, SCN &scn)
+int PalfHandleImpl::get_min_block_info_for_gc(block_id_t &min_block_id, SCN &max_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(log_engine_.get_min_block_id_and_min_scn(block_id, scn))) {
-    PALF_LOG(WARN, "get_min_block_id_and_min_scn failed", K(ret), KPC(this));
+//  if (false == end_lsn.is_valid()) {
+//    ret = OB_ENTRY_NOT_EXIST;
+//  }
+  if (OB_FAIL(log_engine_.get_min_block_info_for_gc(min_block_id, max_scn))) {
+    PALF_LOG(WARN, "get_min_block_info_for_gc failed", K(ret), KPC(this));
   } else {
-    PALF_LOG(TRACE, "get_min_block_id_and_min_scn success", K(ret), KPC(this), K(block_id), K(scn));
+    PALF_LOG(TRACE, "get_min_block_info_for_gc success", K(ret), KPC(this), K(min_block_id), K(max_scn));
   }
   return ret;
 }
@@ -3482,7 +3485,7 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     palf_stat.allow_vote_ = state_mgr_.is_allow_vote();
     palf_stat.replica_type_ = state_mgr_.get_replica_type();
     palf_stat.base_lsn_ = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
-    (void)log_engine_.get_min_block_id_and_min_scn(min_block_id, min_block_min_scn);
+    (void)log_engine_.get_min_block_info(min_block_id, min_block_min_scn);
     palf_stat.begin_lsn_ = LSN(min_block_id * PALF_BLOCK_SIZE);
     palf_stat.begin_scn_ = min_block_min_scn;
     palf_stat.end_lsn_ = get_end_lsn();

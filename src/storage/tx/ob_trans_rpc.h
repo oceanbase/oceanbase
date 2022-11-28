@@ -62,7 +62,7 @@ private:
   int64_t send_timestamp_;
 public:
   // for ObTxCommitReqMsg, it is commit version
-  palf::SCN private_data_;
+  share::SCN private_data_;
 };
 
 struct ObTxRpcRollbackSPResult
@@ -203,7 +203,7 @@ int handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                               const int status,
                               const ObAddr &receiver_addr,
                               const int64_t request_id,
-                              const palf::SCN &private_data);
+                              const share::SCN &private_data);
 
 int handle_sp_rollback_resp(const share::ObLSID &receiver_ls_id,
                             const int64_t epoch,
