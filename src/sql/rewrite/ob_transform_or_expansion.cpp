@@ -1010,8 +1010,6 @@ int ObTransformOrExpansion::check_basic_validity(const ObDMLStmt &stmt, bool &is
   bool has_odd_func = false;
   bool check_status = true;
   is_valid = false;
-  ObSEArray<ObRawExpr *, 4> sel_exprs;
-  bool has_lob = false;
   if (reached_max_times_for_or_expansion()) {
     is_valid = false;
     LOG_TRACE("reached max times for or expansion.", K(is_valid));
@@ -1027,15 +1025,8 @@ int ObTransformOrExpansion::check_basic_validity(const ObDMLStmt &stmt, bool &is
     /*do nothing */
   } else if (OB_FAIL(has_odd_function(stmt, has_odd_func))) {
     LOG_WARN("failed to check has odd function", K(ret));
-  } else if (has_odd_func) {
+} else if (has_odd_func) {
     /*do nothing */
-  } else if (stmt.is_select_stmt() && OB_FAIL(static_cast<const ObSelectStmt &>(stmt).get_select_exprs(sel_exprs))) {
-    LOG_WARN("get select exprs failed", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::check_exprs_contain_lob_type(sel_exprs, has_lob))) {
-    LOG_WARN("check exprs contain lob failed", K(ret));
-  } else if (has_lob) {
-    //do nothing
-    //  } else {
   } else {
     is_valid = true;
   }
