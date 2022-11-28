@@ -331,14 +331,14 @@ int ObMvccRowIterator::init(
   if (OB_FAIL(query_engine.scan(
       range.start_key_,  !range.border_flag_.inclusive_start(),
       range.end_key_,    !range.border_flag_.inclusive_end(),
-      ctx.snapshot_.version_.get_val_for_lsn_allocator(),
+      ctx.snapshot_.version_.get_val_for_tx(),
       query_engine_iter_))) {
     TRANS_LOG(WARN, "query engine scan fail", K(ret));
   } else {
     ctx_ = &ctx;
     query_flag_ = query_flag;
     query_engine_ = &query_engine;
-    query_engine_iter_->set_version(ctx.snapshot_.version_.get_val_for_lsn_allocator());
+    query_engine_iter_->set_version(ctx.snapshot_.version_.get_val_for_tx());
     is_inited_ = true;
   }
   return ret;
@@ -431,7 +431,7 @@ int ObMvccRowIterator::try_purge(const ObTxSnapshot &snapshot_info,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(query_engine_->check_and_purge(key,
                                                     row,
-                                                    snapshot_info.version_.get_val_for_lsn_allocator(),
+                                                    snapshot_info.version_.get_val_for_tx(),
                                                     purged))) {
     STORAGE_LOG(ERROR, "check_and_purge", K(ret), K(key), K(row), K(snapshot_info));
   } else if (purged) {
@@ -447,7 +447,7 @@ int ObMvccRowIterator::get_end_gap_key(const ObTxSnapshot &snapshot_info, const 
   bool is_reverse = iter->is_reverse_scan();
   return query_engine_->skip_gap(iter->get_key(),
                                  key,
-                                 snapshot_info.version_.get_val_for_lsn_allocator(),
+                                 snapshot_info.version_.get_val_for_tx(),
                                  is_reverse,
                                  size);
 }

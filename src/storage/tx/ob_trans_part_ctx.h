@@ -199,7 +199,6 @@ public:
   bool need_update_schema_version(const int64_t log_id,
                                   const palf::SCN log_ts);
 
-  void set_trans_table_status(const obrpc::ObTrxToolArg &arg);
   share::ObLSID get_ls_id() const { return ls_id_; }
 
   // for elr

@@ -779,7 +779,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
     ls_info.tablet_count_ = ls_tablet_svr_.get_tablet_count();
     ls_info.weak_read_scn_ = ls_wrs_handler_.get_ls_weak_read_ts();
     ls_info.need_rebuild_ = is_need_rebuild;
-    ls_info.checkpoint_ts_ = ls_meta_.get_clog_checkpoint_ts();
+    ls_info.checkpoint_scn_ = ls_meta_.get_clog_checkpoint_scn();
     ls_info.checkpoint_lsn_ = ls_meta_.get_clog_base_lsn().val_;
   }
   return ret;

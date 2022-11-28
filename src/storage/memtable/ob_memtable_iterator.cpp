@@ -1132,8 +1132,7 @@ void ObMemtableMultiVersionScanIterator::set_flag_and_version_for_compacted_row(
 {
   const bool is_committed = reinterpret_cast<const ObMvccTransNode*>(tnode)->is_committed();
   const int64_t trans_version = is_committed
-    ? reinterpret_cast<const ObMvccTransNode*>(tnode)->trans_version_.get_val_for_lsn_allocator()
-    : INT64_MAX;
+    ? reinterpret_cast<const ObMvccTransNode*>(tnode)->trans_version_.get_val_for_tx() : INT64_MAX;
   row.snapshot_version_ = std::max(trans_version, row.snapshot_version_);
   STORAGE_LOG(DEBUG, "row snapshot version", K(row.snapshot_version_));
 }
@@ -1276,7 +1275,7 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
       if (row.row_flag_.is_not_exist()) {
         row.row_flag_.set_flag(mtd->dml_flag_);
       }
-      compare_trans_version = reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_.get_val_for_lsn_allocator();
+      compare_trans_version = reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_.get_val_for_tx();
       if (compare_trans_version <= version_range.base_version_) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "trans version smaller than base version", K(compare_trans_version), K(version_range.base_version_));
@@ -1362,7 +1361,7 @@ OB_INLINE int ObReadRow::iterate_row_value_(
       TRANS_LOG(WARN, "transa node value is null", K(ret), KP(tnode), KP(mtd));
     } else {
       const bool is_committed = reinterpret_cast<const ObMvccTransNode *>(tnode)->is_committed();
-      const int64_t trans_version = is_committed ? reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_.get_val_for_lsn_allocator() : INT64_MAX;
+      const int64_t trans_version = is_committed ? reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_.get_val_for_tx() : INT64_MAX;
       if (row.row_flag_.is_not_exist()) {
         if (ObDmlFlag::DF_DELETE == mtd->dml_flag_) {
           row.row_flag_.set_flag(ObDmlFlag::DF_DELETE);

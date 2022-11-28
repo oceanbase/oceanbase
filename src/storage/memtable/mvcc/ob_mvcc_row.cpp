@@ -475,7 +475,7 @@ bool ObMvccRow::is_partial(const int64_t version) const
     //        by the version
     bool_ret = false;
   } else if (FALSE_IT(is_locked = !(last->is_committed() || last->is_aborted()))) {
-  } else if (!is_locked && version > max_trans_version_.get_val_for_lsn_allocator()) {
+  } else if (!is_locked && version > max_trans_version_.get_val_for_tx()) {
     // Case2: no data is locked on the memtable row and the max version on the
     //        row is smaller than the version , so the row is completed by the
     //        version
@@ -484,7 +484,7 @@ bool ObMvccRow::is_partial(const int64_t version) const
     // Case3: if row is locked or the max trans version on the row is larger
     //        than the version, we mark it as partial, otherwise we mark it as
     //        completed
-    bool_ret = is_locked || (last->trans_version_.get_val_for_lsn_allocator() > version);
+    bool_ret = is_locked || (last->trans_version_.get_val_for_tx() > version);
   }
 
   return bool_ret;
@@ -510,7 +510,7 @@ bool ObMvccRow::is_del(const int64_t version) const
     // Case3: data on the memtable row is not locked while the last node is not
     //        delete node so the row is not deleted by the version
     bool_ret = false;
-  } else if (last->trans_version_.get_val_for_lsn_allocator() > version) {
+  } else if (last->trans_version_.get_val_for_tx() > version) {
     // Case3: data on the memtable row is not locked, the last node is delete
     //        node while the trans version of the last node is larger than the
     //        version so the row may not deleted by the version

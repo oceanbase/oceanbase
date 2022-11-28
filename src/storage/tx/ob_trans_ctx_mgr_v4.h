@@ -469,11 +469,11 @@ public:
   int64_t get_state() { return get_state_(); }
 
   // Switch the prev_aggre_log_ts and aggre_log_ts during dump starts
-  int refresh_aggre_rec_log_ts();
+  int refresh_aggre_rec_scn();
 
   // Update aggre_log_ts without lock, because we canot lock using the order of
   // ObPartTransCtx -> ObLSTxCtxMgr, It will be a deadlock with normal order.
-  int update_aggre_log_ts_wo_lock(int64_t rec_log_ts);
+  int update_aggre_log_ts_wo_lock(palf::SCN rec_log_ts);
 
   TO_STRING_KV(KP(this),
                K_(ls_id),
@@ -482,8 +482,8 @@ public:
                State::state_str(state_),
                K_(total_tx_ctx_count),
                K_(ls_retain_ctx_mgr),
-               K_(aggre_rec_log_ts),
-               K_(prev_aggre_rec_log_ts),
+               K_(aggre_rec_scn),
+               K_(prev_aggre_rec_scn),
                "uref",
                (!is_inited_ ? -1 : get_uref()));
 private:
@@ -706,8 +706,8 @@ private:
   // remembered while must be released soon, in the ctx_mgr.
   //
   // [1]: It you are interested in rec_log_ts, you can see ARIES paper.
-  int64_t aggre_rec_log_ts_;
-  int64_t prev_aggre_rec_log_ts_;
+  palf::SCN aggre_rec_scn_;
+  palf::SCN prev_aggre_rec_scn_;
 
   // Online timestamp for ObLSTxCtxMgr
   int64_t online_ts_;

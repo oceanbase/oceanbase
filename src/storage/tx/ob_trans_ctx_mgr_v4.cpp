@@ -189,8 +189,8 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     lock_table_ = lock_table;
     txs_ = txs;
     ts_mgr_ = ts_mgr;
-    aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
-    prev_aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
+    aggre_rec_scn_.reset();
+    prev_aggre_rec_scn_.reset();
     online_ts_ = 0;
     TRANS_LOG(INFO, "ObLSTxCtxMgr inited success", KP(this), K(ls_id));
   }
@@ -218,8 +218,8 @@ void ObLSTxCtxMgr::reset()
   total_tx_ctx_count_ = 0;
   leader_takeover_ts_.reset();
   max_replay_commit_version_.reset();
-  aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
-  prev_aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
+  aggre_rec_scn_.reset();
+  prev_aggre_rec_scn_.reset();
   online_ts_ = 0;
   txs_ = NULL;
   ts_mgr_ = NULL;
@@ -232,8 +232,8 @@ void ObLSTxCtxMgr::reset()
 
 int ObLSTxCtxMgr::offline()
 {
-  aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
-  prev_aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
+  aggre_rec_scn_.reset();
+  prev_aggre_rec_scn_.reset();
 
   return OB_SUCCESS;
 }
@@ -1286,8 +1286,8 @@ int ObLSTxCtxMgr::on_tx_ctx_table_flushed()
     } else if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
       TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
     } else {
-      // To mark the checkpoint is succeed, we reset the prev_aggre_rec_log_ts
-      prev_aggre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
+      // To mark the checkpoint is succeed, we reset the prev_aggre_rec_scn
+      prev_aggre_rec_scn_.reset();
       TRANS_LOG(INFO, "succ to on tx ctx table flushed", K(*this));
     }
   }
@@ -1311,50 +1311,43 @@ int ObLSTxCtxMgr::get_min_start_scn(palf::SCN &min_start_scn)
 
 palf::SCN ObLSTxCtxMgr::get_aggre_rec_scn_()
 {
-  // Default means no necessary to recover
-  palf::SCN ret = palf::SCN::max_scn();
-  int64_t prev_aggre_rec_log_ts = ATOMIC_LOAD(&prev_aggre_rec_log_ts_);
-  int64_t aggre_rec_log_ts = ATOMIC_LOAD(&aggre_rec_log_ts_);
-  int64_t ret_ts = INT64_MAX;
-
+  palf::SCN ret;
+  palf::SCN prev_aggre_rec_scn = prev_aggre_rec_scn_.atomic_get();
+  palf::SCN aggre_rec_scn = aggre_rec_scn_.atomic_get();
 
   // Before the checkpoint of the tx ctx table is succeed, we should still use
   // the prev_aggre_log_ts. And after successfully checkpointed, we can use the
-  // new aggre_rec_log_ts if exist
-  if (OB_INVALID_TIMESTAMP != prev_aggre_rec_log_ts &&
-      OB_INVALID_TIMESTAMP != aggre_rec_log_ts) {
-    ret_ts = MIN(prev_aggre_rec_log_ts, aggre_rec_log_ts);
-  } else if (OB_INVALID_TIMESTAMP != prev_aggre_rec_log_ts) {
-    ret_ts = prev_aggre_rec_log_ts;
-  } else if (OB_INVALID_TIMESTAMP != aggre_rec_log_ts) {
-    ret_ts = aggre_rec_log_ts;
-  }
-  if (INT64_MAX != ret_ts) {
-    ret.convert_for_lsn_allocator(ret_ts);
-  }
-  if (!ret.is_valid()) {
-    TRANS_LOG(WARN, "convert for lsn fail", K(ret_ts), K(ret));
+  // new aggre_rec_scn if exist
+  if (prev_aggre_rec_scn.is_valid() &&
+      aggre_rec_scn.is_valid()) {
+    ret = MIN(prev_aggre_rec_scn, aggre_rec_scn);
+  } else if (prev_aggre_rec_scn.is_valid()) {
+    ret = prev_aggre_rec_scn;
+  } else if (aggre_rec_scn.is_valid()) {
+    ret = aggre_rec_scn;
+  } else {
+    ret.set_max();
   }
 
   return ret;
 }
 
-int ObLSTxCtxMgr::refresh_aggre_rec_log_ts()
+int ObLSTxCtxMgr::refresh_aggre_rec_scn()
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
 
-  if (OB_INVALID_TIMESTAMP == prev_aggre_rec_log_ts_) {
+  if (!prev_aggre_rec_scn_.is_valid()) {
     // We should remember the rec_log_ts before the tx ctx table is successfully
     // checkpointed
-    int64_t old_v = 0;
-    int64_t new_v = 0;
+    palf::SCN old_v;
+    palf::SCN new_v;
     do {
-      old_v = aggre_rec_log_ts_;
-      new_v = OB_INVALID_TIMESTAMP;
-    } while (ATOMIC_CAS(&aggre_rec_log_ts_, old_v, new_v) != old_v);
+      old_v = aggre_rec_scn_;
+      new_v.reset();
+    } while (aggre_rec_scn_.atomic_vcas(old_v, new_v) != old_v);
 
-    prev_aggre_rec_log_ts_ = old_v;
+    prev_aggre_rec_scn_ = old_v;
   } else {
     TRANS_LOG(WARN, "Concurrent merge may be because of previous failure", K(*this));
   }
@@ -1362,24 +1355,24 @@ int ObLSTxCtxMgr::refresh_aggre_rec_log_ts()
   return ret;
 }
 
-int ObLSTxCtxMgr::update_aggre_log_ts_wo_lock(int64_t rec_log_ts)
+int ObLSTxCtxMgr::update_aggre_log_ts_wo_lock(palf::SCN rec_scn)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_INVALID_TIMESTAMP != rec_log_ts) {
+  if (rec_scn.is_valid()) {
     // we cannot lock here, because the lock order must be
     // ObLSTxCtxMgr -> ObPartTransCtx, otherwise we may be
     // deadlocked
-    int64_t old_v = 0;
-    int64_t new_v = 0;
+    palf::SCN old_v;
+    palf::SCN new_v;
     do {
-      old_v = aggre_rec_log_ts_;
-      if (OB_INVALID_TIMESTAMP == old_v) {
-        new_v = rec_log_ts;
+      old_v = aggre_rec_scn_;
+      if (!old_v.is_valid()) {
+        new_v = rec_scn;
       } else {
-        new_v = MIN(old_v, rec_log_ts);
+        new_v = MIN(old_v, rec_scn);
       }
-    } while (ATOMIC_CAS(&aggre_rec_log_ts_, old_v, new_v) != old_v);
+    } while (aggre_rec_scn_.atomic_vcas(old_v, new_v) != old_v);
   }
 
   return ret;

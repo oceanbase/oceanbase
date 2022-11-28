@@ -154,9 +154,8 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case OB_APP_MIN_COLUMN_ID + 9:
-          //TODO: SCN
           // clog_checkpoint_ts
-          cur_row_.cells_[i].set_uint64(ls_info.checkpoint_ts_ < 0 ? 0 : ls_info.checkpoint_ts_);
+          cur_row_.cells_[i].set_uint64(!ls_info.checkpoint_scn_.is_valid() ? 0 : ls_info.checkpoint_scn_.get_val_for_tx());
           break;
         case OB_APP_MIN_COLUMN_ID + 10:
           // clog_checkpoint_lsn

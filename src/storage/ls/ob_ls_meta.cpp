@@ -136,12 +136,6 @@ SCN ObLSMeta::get_clog_checkpoint_scn() const
 	return clog_checkpoint_scn_;
 }
 
-int64_t ObLSMeta::get_clog_checkpoint_ts() const
-{
-  ObSpinLockTimeGuard guard(lock_);
-	return clog_checkpoint_scn_.get_val_for_lsn_allocator();
-}
-
 int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
                                   const SCN &clog_checkpoint_scn,
                                   const bool write_slog)

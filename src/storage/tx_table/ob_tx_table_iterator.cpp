@@ -890,7 +890,7 @@ int ObTxCtxMemtableScanIterator::init(ObTxCtxMemtable *tx_ctx_memtable)
     STORAGE_LOG(WARN, "Failed to reserve tx ctx meta buffer", K(ret));
     // NB: We must first prepare the rec_scn for ObLSTxCtxMgr and then
     // prepare the rec_scn for tx ctx
-  } else if (OB_FAIL(ls_tx_ctx_mgr->refresh_aggre_rec_log_ts())) {
+  } else if (OB_FAIL(ls_tx_ctx_mgr->refresh_aggre_rec_scn())) {
     STORAGE_LOG(WARN, "Failed to prepare for dump tx ctx", K(ret));
   } else if (OB_FAIL(ls_tx_ctx_iter_.set_ready(ls_tx_ctx_mgr))) {
     STORAGE_LOG(WARN, "ls_tx_ctx_iter set_ready failed", K(ret));

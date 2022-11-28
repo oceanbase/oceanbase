@@ -191,19 +191,18 @@ public:
   common::SpinRWLock lock_;
 };
 
-// TODO: Redefine it
 class ObTxCCCtx
 {
 public:
   // For Tx Ctx Table
-  ObTxCCCtx(transaction::ObTxState state, int64_t prepare_version)
+  ObTxCCCtx(transaction::ObTxState state, palf::SCN prepare_version)
     : state_(state), prepare_version_(prepare_version) {}
   // For Tx Data Table
-  ObTxCCCtx() : state_(transaction::ObTxState::MAX), prepare_version_(-1) {}
+  ObTxCCCtx() : state_(transaction::ObTxState::MAX), prepare_version_(palf::SCN::invalid_scn()) {}
   TO_STRING_KV(K_(state),  K_(prepare_version));
 public:
   transaction::ObTxState state_;
-  int64_t prepare_version_;
+  palf::SCN prepare_version_;
 };
 
 class ObTxCommitData
