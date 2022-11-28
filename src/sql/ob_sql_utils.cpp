@@ -1648,7 +1648,7 @@ int ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
       }
     }
     cast_mode |= CM_FORMAT_NUMBER_WITH_LIMIT;
-    LOG_DEBUG("in get_defalut_cast_mode", K(ret), K(is_explicit_cast),
+    LOG_DEBUG("in get_default_cast_mode", K(ret), K(is_explicit_cast),
         K(result_flag), K(session->get_stmt_type()), K(cast_mode));
   }
   return ret;
