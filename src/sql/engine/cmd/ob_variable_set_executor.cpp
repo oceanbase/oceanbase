@@ -414,25 +414,17 @@ int ObVariableSetExecutor::execute_subquery_expr(ObExecContext &ctx,
         LOG_WARN("failed to get obj", K(ret), K(idx));
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_NOT_NULL(conn) && OB_NOT_NULL(sql_proxy) &&
-               OB_FAIL(sql_proxy->close(conn, true))) {
-      LOG_WARN("failed to close connection", K(ret));
-    } else if (tmp_value.need_deep_copy()) {
-      char *copy_data = NULL;
-      int64_t copy_size = tmp_value.get_deep_copy_size();
-      int64_t copy_pos = 0;
-      if (OB_ISNULL(copy_data = static_cast<char *>(ctx.get_allocator().alloc(copy_size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("memory allocate failed", K(ret));
-      } else if (OB_FAIL(value_obj.deep_copy(tmp_value, copy_data, copy_size, copy_pos))) {
-        LOG_WARN("obj deep copy failed", K(ret));
-      }
-      LOG_TRACE("succeed to deep copy current value", K(ret));
-    } else {
-      value_obj = tmp_value;
+    if (OB_SUCC(ret) && (OB_FAIL(ob_write_obj(ctx.get_allocator(), tmp_value, value_obj)))) {
+      LOG_WARN("failed to write value", K(ret));
     }
     LOG_TRACE("succ to calculate value by executing inner sql", K(ret), K(value_obj), K(subquery_expr));
+  }
+  if (OB_NOT_NULL(conn) && OB_NOT_NULL(sql_proxy)) {
+    int tmp_ret = sql_proxy->close(conn, true);
+    if (OB_UNLIKELY(tmp_ret != OB_SUCCESS)) {
+      LOG_WARN("failed to close sql connection", K(tmp_ret));
+    }
+    ret = ret == OB_SUCCESS ? tmp_ret : ret;
   }
   return ret;
 }

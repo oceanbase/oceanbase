@@ -210,9 +210,8 @@ public:
   virtual int on_memtable_flushed() { return common::OB_SUCCESS; }
   virtual bool can_be_minor_merged() { return false; }
   void set_snapshot_version(const palf::SCN snapshot_version) { snapshot_version_  = snapshot_version; }
-  // TODO: remove get_snapshot_version() and use get_snapshot_version_scn() instead of it
   virtual int64_t get_snapshot_version() const override { return snapshot_version_.get_val_for_tx(); }
-  virtual palf::SCN get_snapshot_version_scn() const override { return snapshot_version_; }
+  virtual palf::SCN get_snapshot_version_scn() const { return snapshot_version_; }
   virtual int64_t get_upper_trans_version() const override
   { return OB_NOT_SUPPORTED; }
   virtual int64_t get_max_merged_trans_version() const override

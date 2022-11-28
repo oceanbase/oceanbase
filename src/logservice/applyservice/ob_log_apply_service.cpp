@@ -129,7 +129,8 @@ ObApplyServiceQueueTask::ObApplyServiceQueueTask()
   : ObApplyServiceTask(),
     total_submit_cb_cnt_(0),
     last_check_submit_cb_cnt_(0),
-    total_apply_cb_cnt_(0)
+    total_apply_cb_cnt_(0),
+    idx_(-1)
 {
   type_ = ObApplyServiceTaskType::APPLY_LOG_TASK;
 }
@@ -149,21 +150,24 @@ void ObApplyServiceQueueTask::reset()
   total_submit_cb_cnt_ = 0;
   last_check_submit_cb_cnt_ = 0;
   total_apply_cb_cnt_ = 0;
+  idx_ = -1;
 }
 
-int ObApplyServiceQueueTask::init(ObApplyStatus *apply_status)
+int ObApplyServiceQueueTask::init(ObApplyStatus *apply_status,
+                                  const int64_t idx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(apply_status)) {
+  if (OB_ISNULL(apply_status) || idx < 0) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(type_), K(apply_status), K(ret));
+    CLOG_LOG(WARN, "invalid argument", K(type_), K(apply_status), K(idx), K(ret));
   } else {
     apply_status_ = apply_status;
     type_ = ObApplyServiceTaskType::APPLY_LOG_TASK;
     total_submit_cb_cnt_ = 0;
     last_check_submit_cb_cnt_ = 0;
     total_apply_cb_cnt_ = 0;
-    CLOG_LOG(INFO, "ObApplyServiceQueueTask init success", K(type_), K(apply_status));
+    idx_ = idx;
+    CLOG_LOG(INFO, "ObApplyServiceQueueTask init success", K(type_), K(apply_status), K(idx_));
   }
   return ret;
 }
@@ -236,6 +240,11 @@ int ObApplyServiceQueueTask::is_apply_done(bool &is_done)
   return ret;
 }
 
+int64_t ObApplyServiceQueueTask::idx() const
+{
+  return idx_;
+}
+
 //---------------ObApplyStatus---------------//
 ObApplyStatus::ObApplyStatus()
     : is_inited_(false),
@@ -285,7 +294,7 @@ int ObApplyStatus::init(const share::ObLSID &id,
     CLOG_LOG(WARN, "failed to init submit_task", K(ret), K(id));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < APPLY_TASK_QUEUE_SIZE; ++i) {
-      if (OB_FAIL(cb_queues_[i].init(this))) {
+      if (OB_FAIL(cb_queues_[i].init(this, i))) {
         CLOG_LOG(WARN, "failed to init cb_queues", K(ret), K(id));
       }
     }
@@ -451,6 +460,7 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
     int64_t append_finish_time = OB_INVALID_TIMESTAMP;
     int64_t cb_first_handle_time = OB_INVALID_TIMESTAMP;
     int64_t cb_start_time = OB_INVALID_TIMESTAMP;
+    int64_t idx = cb_queue->idx();
     RLockGuard guard(lock_);
     do {
       ObLink *link = NULL;
@@ -476,7 +486,7 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
             ret = OB_SUCCESS;
           }
           statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
-                              cb_first_handle_time, cb_start_time);
+                              cb_first_handle_time, cb_start_time, idx);
           cb_queue->inc_total_apply_cb_cnt();
         }
       } else if (FOLLOWER == role_) {
@@ -492,7 +502,7 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
             ret = OB_SUCCESS;
           }
           statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
-                              cb_first_handle_time, cb_start_time);
+                              cb_first_handle_time, cb_start_time, idx);
           cb_queue->inc_total_apply_cb_cnt();
         }
       } else {
@@ -814,6 +824,7 @@ int ObApplyStatus::handle_drop_cb_queue_(ObApplyServiceQueueTask &cb_queue)
   int64_t append_finish_time = OB_INVALID_TIMESTAMP;
   int64_t cb_first_handle_time = OB_INVALID_TIMESTAMP;
   int64_t cb_start_time = OB_INVALID_TIMESTAMP;
+  int64_t idx = cb_queue.idx();
   do {
     ObLink *link = NULL;
     AppendCb *cb = NULL;
@@ -836,7 +847,7 @@ int ObApplyStatus::handle_drop_cb_queue_(ObApplyServiceQueueTask &cb_queue)
         ret = OB_SUCCESS;
       }
       statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
-                          cb_first_handle_time, cb_start_time);
+                          cb_first_handle_time, cb_start_time, idx);
       cb_queue.inc_total_apply_cb_cnt();
     }
   } while (OB_SUCC(ret) && (!is_queue_empty));
@@ -867,7 +878,8 @@ void ObApplyStatus::statistics_cb_cost_(const LSN &lsn,
                                         const int64_t append_start_time,
                                         const int64_t append_finish_time,
                                         const int64_t cb_first_handle_time,
-                                        const int64_t cb_start_time)
+                                        const int64_t cb_start_time,
+                                        const int64_t idx)
 {
   // no need to print debug log when config [default value is true] is false;
   if (GCONF.enable_record_trace_log) {
@@ -882,7 +894,7 @@ void ObApplyStatus::statistics_cb_cost_(const LSN &lsn,
     cb_wait_commit_stat_.stat(cb_wait_commit_time);
     cb_execute_stat_.stat(cb_cost_time);
     if (total_cost_time > 1000 * 1000) { //1s
-      CLOG_LOG(WARN, "cb cost too much time", K(lsn), K(scn), K(total_cost_time), K(append_cost_time),
+      CLOG_LOG(WARN, "cb cost too much time", K(lsn), K(scn), K(idx), K(total_cost_time), K(append_cost_time),
                K(cb_wait_thread_time), K(cb_wait_commit_time), K(cb_cost_time), K(append_start_time), K(append_finish_time),
                K(cb_first_handle_time), K(cb_first_handle_time), K(cb_finish_time));
     }

@@ -52,10 +52,6 @@ public:
     int64_t cluster_version;
 
     FreezeInfo() : freeze_scn(), schema_version(-1), cluster_version(0) {}
-    FreezeInfo(const int64_t scn, const int64_t schema_ver, const int64_t cluster_ver)
-      : freeze_scn(), schema_version(schema_ver), cluster_version(cluster_ver) {
-      freeze_scn.convert_for_tx(scn);
-    }
     FreezeInfo(const palf::SCN &scn, const int64_t schema_ver, const int64_t cluster_ver)
       : freeze_scn(scn), schema_version(schema_ver), cluster_version(cluster_ver) {}
     FreezeInfo &operator =(const FreezeInfo &o)

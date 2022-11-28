@@ -13,20 +13,21 @@
 #include "ob_log_request_handler.h"
 #include "ob_log_rpc_req.h"
 #include "logservice/ob_log_service.h"
+#include "logservice/palf/log_define.h"
 
 namespace oceanbase
 {
 namespace logservice
 {
-
-
-LogRequestHandler::LogRequestHandler(palf::PalfHandle *palf_handle) : palf_handle_(palf_handle)
+LogRequestHandler::LogRequestHandler(palf::PalfHandle *palf_handle) : palf_handle_(palf_handle),
+                                                                      handle_request_print_time_(OB_INVALID_TIMESTAMP)
 {
 }
 
 LogRequestHandler::~LogRequestHandler()
 {
   palf_handle_ = NULL;
+  handle_request_print_time_ = OB_INVALID_TIMESTAMP;
 }
 
 template <>
@@ -43,6 +44,7 @@ int LogRequestHandler::handle_sync_request<LogConfigChangeCmd, LogConfigChangeCm
   } else {
     ConfigChangeCmdHandler cmd_handler(palf_handle_);
     if (OB_FAIL(cmd_handler.handle_config_change_cmd(req))) {
+      if (palf::palf_reach_time_interval(100 * 1000, handle_request_print_time_))
       PALF_LOG(WARN, "handle_config_change_cmd failed", K(ret), K(palf_id), K(server), K(req), KPC(palf_handle_));
     } else {
       PALF_LOG(INFO, "handle_config_change_cmd success", K(ret), K(palf_id), K(server), K(req), K(resp), KPC(palf_handle_));

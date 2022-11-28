@@ -1841,12 +1841,12 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
              T_FUN_SYS_ROWNUM == expr->get_expr_type() ||
              T_LEVEL == expr->get_expr_type()) {
     is_not_null = true;
-  } else if (OB_FAIL(!expr->is_const_raw_expr() &&
-                     is_general_expr_not_null(ctx, expr, is_not_null, constraints))) {
+  } else if (!expr->is_const_raw_expr() &&
+             OB_FAIL(is_general_expr_not_null(ctx, expr, is_not_null, constraints))) {
     LOG_WARN("failed to check compound expr", K(ret));
   } else if (is_not_null) {
     // do nothing
-  } else if (expr->is_static_const_expr()) {
+  } else if (expr->is_static_scalar_const_expr()) {
     if (OB_FAIL(is_const_expr_not_null(ctx, expr, is_not_null))) {
       LOG_WARN("failed to check calculable expr not null", K(ret));
     } else if (is_not_null && !expr->is_const_raw_expr() && 
@@ -9482,7 +9482,8 @@ int ObTransformUtils::add_param_bool_constraint(ObTransformerCtx *ctx,
 }
 
 int ObTransformUtils::get_all_child_stmts(ObDMLStmt *stmt,
-                                          ObIArray<ObSelectStmt*> &child_stmts)
+                                          ObIArray<ObSelectStmt*> &child_stmts,
+                                          hash::ObHashMap<uint64_t, ObDMLStmt *> *parent_map)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 8> temp_stmts;
@@ -9506,25 +9507,20 @@ int ObTransformUtils::get_all_child_stmts(ObDMLStmt *stmt,
       LOG_WARN("failed to push back stmt", K(ret));
     }
   }
-  if (OB_SUCC(ret) && !temp_stmts.empty()) {
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(append(child_stmts, temp_stmts))) {
-      LOG_WARN("failed to append stmts", K(ret));
-    } else if (OB_FAIL(SMART_CALL(get_all_child_stmts(temp_stmts,
-                                                      child_stmts)))) {
-      LOG_WARN("failed to get all child stmt", K(ret));
+      LOG_WARN("failed to append temp stmts", K(ret));
     }
   }
-  return ret;
-}
-
-int ObTransformUtils::get_all_child_stmts(ObIArray<ObSelectStmt*> &stmts,
-                                          ObIArray<ObSelectStmt*> &child_stmts)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); ++i) {
-    if (OB_FAIL(get_all_child_stmts(stmts.at(i),
-                                    child_stmts))) {
-      LOG_WARN("failed to get all child stmt", K(ret));
+  for (int64_t i = 0; OB_SUCC(ret)&& i < temp_stmts.count(); ++i) {
+    uint64_t key = reinterpret_cast<uint64_t>(temp_stmts.at(i));
+    if (OB_ISNULL(temp_stmts.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("temp stmt is null", K(ret));
+    } else if (parent_map != NULL && OB_FAIL(parent_map->set_refactored(key, stmt))) {
+      LOG_WARN("failed to add parent child relation", K(ret));
+    } else if (OB_FAIL(SMART_CALL(get_all_child_stmts(temp_stmts.at(i), child_stmts, parent_map)))) {
+      LOG_WARN("failed to get all child stmts", K(ret));
     }
   }
   return ret;

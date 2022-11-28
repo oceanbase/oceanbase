@@ -196,7 +196,7 @@ struct ObTabletMergeCtx
   int64_t get_compaction_scn() const {
     return
         is_multi_version_minor_merge(param_.merge_type_) ?
-            scn_range_.end_scn_.get_val_for_inner_table_field() : sstable_version_range_.snapshot_version_;
+            scn_range_.end_scn_.get_val_for_tx() : sstable_version_range_.snapshot_version_;
   }
 
   // 1. init in dag

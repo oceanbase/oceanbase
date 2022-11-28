@@ -57,7 +57,7 @@ struct RedoDataNode
   uint32_t modify_count_;
   uint32_t acc_checksum_;
   int64_t version_;
-  int32_t flag_;
+  int32_t flag_; // currently, unused
   int64_t seq_no_;
   ObITransCallback *callback_;
   common::ObTabletID tablet_id_;

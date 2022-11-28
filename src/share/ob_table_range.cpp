@@ -16,10 +16,6 @@ namespace share
 const palf::SCN ObScnRange::MIN_SCN = palf::SCN::min_scn();
 const palf::SCN ObScnRange::MAX_SCN = palf::SCN::max_scn();
 
-const int64_t ObScnRange::MIN_TS = palf::OB_MIN_SCN_TS_NS;
-const int64_t ObScnRange::MAX_TS = palf::OB_MAX_SCN_TS_NS;
-const int64_t ObScnRange::OLD_MAX_TS = INT64_MAX;
-
 ObScnRange::ObScnRange()
   : start_scn_(MIN_SCN),
     end_scn_(MIN_SCN)

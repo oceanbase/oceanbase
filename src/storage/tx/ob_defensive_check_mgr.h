@@ -13,6 +13,7 @@
 #ifndef OB_DEFENSIVE_CHECK_MGR_H_
 #define OB_DEFENSIVE_CHECK_MGR_H_
 #include "storage/blocksstable/ob_fuse_row_cache.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -25,7 +26,7 @@ struct ObDefensiveCheckRecordExtend
   ~ObDefensiveCheckRecordExtend() { reset(); }
   void reset()
   {
-    fist_access_table_start_log_ts_ = 0;
+    fist_access_table_start_scn_.set_min();
     total_table_handle_cnt_ = 0;
     start_access_table_idx_ = INT64_MAX;
     end_access_table_idx_ = INT64_MAX;
@@ -33,7 +34,7 @@ struct ObDefensiveCheckRecordExtend
     is_all_data_from_memtable_ = false;
     query_flag_.reset();
   }
-  TO_STRING_KV(K_(fist_access_table_start_log_ts),
+  TO_STRING_KV(K_(fist_access_table_start_scn),
                K_(total_table_handle_cnt),
                K_(start_access_table_idx),
                K_(end_access_table_idx),
@@ -41,7 +42,7 @@ struct ObDefensiveCheckRecordExtend
                K_(is_all_data_from_memtable),
                K_(query_flag));
 public:
-  int64_t fist_access_table_start_log_ts_;
+  palf::SCN fist_access_table_start_scn_;
   int64_t total_table_handle_cnt_;
   int64_t start_access_table_idx_;
   int64_t end_access_table_idx_;
@@ -59,14 +60,16 @@ public:
   void destroy() { reset(); }
   int deep_copy(const blocksstable::ObDatumRow &row,
                 const blocksstable::ObDatumRowkey &rowkey,
-                const ObDefensiveCheckRecordExtend &extend_info);
+                const ObDefensiveCheckRecordExtend &extend_info,
+                const ObTabletID &tablet_id);
 
-  TO_STRING_KV(K_(row), K_(generate_ts), K_(rowkey), K_(extend_info));
+  TO_STRING_KV(K_(row), K_(generate_ts), K_(rowkey), K_(tablet_id), K_(extend_info));
 
   blocksstable::ObDatumRow row_;
   int64_t generate_ts_;
   ObArenaAllocator allocator_;
   blocksstable::ObDatumRowkey rowkey_;
+  ObTabletID tablet_id_;
   ObDefensiveCheckRecordExtend extend_info_;
 };
 
@@ -77,15 +80,15 @@ class ObSingleTabletDefensiveCheckInfo : public ObTransHashLink<ObSingleTabletDe
 public:
   ObSingleTabletDefensiveCheckInfo() { }
   ~ObSingleTabletDefensiveCheckInfo() { reset(); }
-  int init(const ObTabletID &tablet_id);
+  int init(const ObTransID &tx_id);
   void reset();
   void destroy() { reset(); }
-  bool contain(const ObTabletID &tablet_id) { return tablet_id_ == tablet_id; }
+  bool contain(const ObTransID &tx_id) { return tx_id_ == tx_id; }
   int add_record(SingleRowDefensiveRecord *record);
   ObSingleRowDefensiveRecordArray &get_record_arr() { return record_arr_; }
-  const ObTabletID &get_tablet_id() const { return tablet_id_; }
+  const ObTransID &get_tx_id() const { return tx_id_; }
 private:
-  ObTabletID tablet_id_;
+  ObTransID tx_id_;
   ObSingleRowDefensiveRecordArray record_arr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSingleTabletDefensiveCheckInfo);
@@ -109,10 +112,10 @@ public:
   }
 };
 
-typedef ObTransHashMap<ObTabletID,
+typedef ObTransHashMap<ObTransID,
                        ObSingleTabletDefensiveCheckInfo,
                        ObSingleTabletDefensiveCheckInfoAlloc,
-                       common::SpinRWLock, 64 /*bucket_num*/> ObTxDefensiveCheckInfoMap;
+                       common::SpinRWLock, 2 << 16 /*bucket_num*/> ObTxDefensiveCheckInfoMap;
 
 class ObDefensiveCheckMgr
 {
@@ -123,10 +126,12 @@ public:
   void reset();
   void destroy() { reset(); }
   int put(const ObTabletID &tablet_id,
+          const ObTransID &tx_id,
           const blocksstable::ObDatumRow &row,
           const blocksstable::ObDatumRowkey &rowkey,
           const ObDefensiveCheckRecordExtend &extend_info);
-  void dump(const ObTabletID &tablet_id);
+  void del(const ObTransID &tx_id);
+  void dump(const ObTransID &tx_id);
 private:
   static int64_t max_record_cnt_;
   typedef ObSmallSpinLockGuard<common::ObByteLock> Guard;

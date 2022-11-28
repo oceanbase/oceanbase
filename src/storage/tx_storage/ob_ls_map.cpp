@@ -122,6 +122,11 @@ void ObLSMap::reset()
     ls_buckets_ = NULL;
   }
   if (OB_NOT_NULL(buckets_lock_)) {
+    for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
+      if (OB_NOT_NULL(buckets_lock_ + i)) {
+        (buckets_lock_ + i)->~ObQSyncLock();
+      }
+    }
     ob_free(buckets_lock_);
     buckets_lock_ = nullptr;
   }
@@ -174,6 +179,11 @@ int ObLSMap::init(const int64_t tenant_id, ObIAllocator *ls_allocator)
   }
 
   return ret;
+}
+
+void ObLSMap::destroy()
+{
+  reset();
 }
 
 int ObLSMap::add_ls(

@@ -114,6 +114,13 @@ STAT_EVENT_ADD_DEF(HA_GTS_HANDLE_GET_REQUEST_COUNT, "ha gts handle get request c
 STAT_EVENT_ADD_DEF(HA_GTS_SEND_GET_RESPONSE_COUNT, "ha gts send get response count", ObStatClassIds::TRANS, "ha gts send get response count", 30070, true, true)
 STAT_EVENT_ADD_DEF(HA_GTS_HANDLE_PING_REQUEST_COUNT, "ha gts handle ping request count", ObStatClassIds::TRANS, "ha gts handle ping request count", 30071, true, true)
 STAT_EVENT_ADD_DEF(HA_GTS_HANDLE_PING_RESPONSE_COUNT, "ha gts handle ping response count", ObStatClassIds::TRANS, "ha gts handle ping response count", 30072, true, true)
+STAT_EVENT_ADD_DEF(HA_GTS_SOURCE_REQUEST_COUNT, "ha gts source request count", ObStatClassIds::TRANS, "ha gts source request count", 30073, true, true)
+STAT_EVENT_ADD_DEF(HA_GTS_SOURCE_REQUEST_COST_TIME, "ha gts source request cost time", ObStatClassIds::TRANS, "ha gts source request cost time", 30074, true, true)
+STAT_EVENT_ADD_DEF(HA_GTS_CACHE_HIT_COUNT, "ha gts cache hit count", ObStatClassIds::TRANS, "ha gts cache hit count", 30075, true, true)
+STAT_EVENT_ADD_DEF(HA_GTS_CACHE_MISS_COUNT, "ha gts cache miss count", ObStatClassIds::TRANS, "ha gts cache miss count", 30076, true, true)
+STAT_EVENT_ADD_DEF(TRANS_ELR_ENABLE_COUNT, "trans early lock release enable count", ObStatClassIds::TRANS, "trans early lock releaes enable count", 30077, true, true)
+STAT_EVENT_ADD_DEF(TRANS_ELR_UNABLE_COUNT, "trans early lock release unable count", ObStatClassIds::TRANS, "trans early lock releaes unable count", 30078, true, true)
+STAT_EVENT_ADD_DEF(READ_ELR_ROW_COUNT, "read elr row count", ObStatClassIds::TRANS, "read elr row count", 30079, true, true)
 
 // SQL
 //STAT_EVENT_ADD_DEF(PLAN_CACHE_HIT, "PLAN_CACHE_HIT", SQL, "PLAN_CACHE_HIT")

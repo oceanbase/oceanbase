@@ -120,7 +120,7 @@ public:
       const blocksstable::MacroBlockId &macro_id,
       const int64_t prefix_len);
   int schedule_load_bloomfilter(const blocksstable::MacroBlockId &macro_id);
-  static bool check_tx_table_ready(ObLS &ls, const int64_t check_log_ts);
+  static bool check_tx_table_ready(ObLS &ls, const palf::SCN &check_scn);
   static int check_ls_state(ObLS &ls, bool &need_merge);
   static int schedule_tablet_minor_merge(const share::ObLSID ls_id, ObTablet &tablet);
   static int schedule_tablet_major_merge(

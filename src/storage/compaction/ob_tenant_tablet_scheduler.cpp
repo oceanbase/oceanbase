@@ -508,16 +508,16 @@ int64_t ObTenantTabletScheduler::get_frozen_version() const
   return frozen_version_;
 }
 
-bool ObTenantTabletScheduler::check_tx_table_ready(ObLS &ls, const int64_t check_log_ts)
+bool ObTenantTabletScheduler::check_tx_table_ready(ObLS &ls, const palf::SCN &check_scn)
 {
   int ret = OB_SUCCESS;
   bool tx_table_ready = false;
   palf::SCN max_decided_scn;
   if (OB_FAIL(ls.get_max_decided_scn(max_decided_scn))) {
     LOG_WARN("failed to get max decided log_ts", K(ret), "ls_id", ls.get_ls_id());
-  } else if (check_log_ts <= max_decided_scn.get_val_for_lsn_allocator()) {
+  } else if (check_scn <= max_decided_scn) {
     tx_table_ready = true;
-    LOG_INFO("tx table ready", "sstable_end_log_ts", check_log_ts, K(max_decided_scn));
+    LOG_INFO("tx table ready", "sstable_end_scn", check_scn, K(max_decided_scn));
   }
 
   return tx_table_ready;

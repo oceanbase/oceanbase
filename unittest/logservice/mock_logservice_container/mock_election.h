@@ -43,6 +43,12 @@ public:
     UNUSED(new_member_list);
     return ret;
   }
+  int revoke(const RoleChangeReason &reason)
+  {
+    UNUSED(reason);
+    int ret = OB_SUCCESS;
+    return ret;
+  }
   int set_priority(ElectionPriority *) override final { return  OB_SUCCESS; }
   int reset_priority() override final { return  OB_SUCCESS; }
   // 获取选举当前的角色

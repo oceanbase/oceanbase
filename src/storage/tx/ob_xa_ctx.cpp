@@ -51,7 +51,6 @@ void ObXACtx::reset()
   is_exiting_ = false;
   trans_id_.reset();
   is_executing_ = false;
-  has_submited_ = false;
   is_xa_end_trans_ = false;
   is_xa_readonly_ = false;
   xa_trans_state_ = ObXATransState::UNKNOWN;
@@ -143,7 +142,7 @@ int ObXACtx::handle_timeout(const int64_t delay)
     } else if (is_terminated_) {
       ret = OB_TRANS_IS_EXITING;
       TRANS_LOG(WARN, "xa trans has terminated", K(ret));
-    } else if (has_submited_) {
+    } else if (ObXATransState::has_submitted(xa_trans_state_)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "xa trans has entered commit phase, unexpected", K(ret), K(*this));
     } else {
@@ -2037,7 +2036,6 @@ int ObXACtx::one_phase_end_trans_(const bool is_rollback, const int64_t timeout_
     } else {
       xa_trans_state_ = ObXATransState::COMMITTING;
     }
-    has_submited_ = true;
   }
 
   if (OB_FAIL(ret)) {
@@ -2117,6 +2115,8 @@ int ObXACtx::try_heartbeat()
   const int64_t now = ObTimeUtility::current_time();
   if (original_sche_addr_ != GCTX.self_addr()) {
     // temproray scheduler, do nothing
+  } else if (OB_ISNULL(xa_branch_info_) && xa_trans_state_ > ObXATransState::IDLE) {
+    // do nothing
   } else if (OB_ISNULL(xa_branch_info_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "unexpected branch count", K(ret), K(*this));
@@ -2252,7 +2252,7 @@ int ObXACtx::check_for_execution_(const ObXATransID &xid, const bool is_new_bran
     } else {
       ret = OB_TRANS_IS_EXITING;
     }
-  } else if (has_submited_) {
+  } else if (ObXATransState::has_submitted(xa_trans_state_)) {
     ret = OB_TRANS_XA_PROTO;
     TRANS_LOG(WARN, "xa trans has entered into commit phase", K(ret), K(*this));
   } else if (is_tightly_coupled_) {
@@ -2422,7 +2422,6 @@ int ObXACtx::drive_prepare_(const ObXATransID &xid, const int64_t timeout_us)
   const bool is_readonly = false;
   // TODO, get a sche ctx (may be newly created), and use sche ctx to drive commit
   // first update coordinator into inner table
-  has_submited_ = true;
   if (OB_FAIL(MTL(ObTransService*)->prepare_tx(*tx_desc_, timeout_us, end_trans_cb_))) {
     if (OB_LIKELY(!is_exiting_)) {
       is_exiting_ = true;

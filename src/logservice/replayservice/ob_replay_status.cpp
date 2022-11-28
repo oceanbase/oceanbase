@@ -551,7 +551,8 @@ ObReplayStatus::ObReplayStatus():
     palf_handle_(),
     fs_cb_(),
     get_log_info_debug_time_(OB_INVALID_TIMESTAMP),
-    try_wrlock_debug_time_(OB_INVALID_TIMESTAMP)
+    try_wrlock_debug_time_(OB_INVALID_TIMESTAMP),
+    check_enable_debug_time_(OB_INVALID_TIMESTAMP)
 {
 }
 
@@ -580,6 +581,7 @@ int ObReplayStatus::init(const share::ObLSID &id,
     ls_id_ = id;
     get_log_info_debug_time_ = OB_INVALID_TIMESTAMP;
     try_wrlock_debug_time_ = OB_INVALID_TIMESTAMP;
+    check_enable_debug_time_ = OB_INVALID_TIMESTAMP;
     palf_env_ = palf_env;
     rp_sv_ = rp_sv;
     fs_cb_ = ObReplayFsCb(this);
@@ -628,6 +630,7 @@ void ObReplayStatus::destroy()
     fs_cb_.destroy();
     get_log_info_debug_time_ = OB_INVALID_TIMESTAMP;
     try_wrlock_debug_time_ = OB_INVALID_TIMESTAMP;
+    check_enable_debug_time_ = OB_INVALID_TIMESTAMP;
     palf_env_ = NULL;
     rp_sv_ = NULL;
   }
@@ -864,7 +867,9 @@ int ObReplayStatus::update_end_offset(const LSN &lsn)
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "replay status is not init", K(ls_id_), K(lsn), K(ret));
   } else if (!is_enabled_) {
-    CLOG_LOG(INFO, "replay status is not enabled", K(this), K(ret), K(lsn));
+    if (palf_reach_time_interval(100 * 1000, check_enable_debug_time_)) {
+      CLOG_LOG(INFO, "replay status is not enabled", K(this), K(ret), K(lsn));
+    }
   } else if (OB_UNLIKELY(!lsn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "invalid arguments", K(ls_id_), K(lsn), K(ret));

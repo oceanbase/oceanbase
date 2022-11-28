@@ -688,7 +688,7 @@ int64_t ElectionProposer::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
-int ElectionProposer::revoke()
+int ElectionProposer::revoke(const RoleChangeReason &reason)
 {
   ELECT_TIME_GUARD(500_ms);
   #define PRINT_WRAPPER K(*this)
@@ -698,7 +698,7 @@ int ElectionProposer::revoke()
     LOG_NONE(WARN, "i am not leader, but someone ask me to revoke", K(lbt()));
   }
   leader_lease_and_epoch_.reset();
-  if (!leader_revoke_if_lease_expired_(RoleChangeReason::AskToRevoke)) {
+  if (!leader_revoke_if_lease_expired_(reason)) {
     LOG_NONE(WARN, "somethig wrong when revoke", K(lbt()));
   }
   return ret;

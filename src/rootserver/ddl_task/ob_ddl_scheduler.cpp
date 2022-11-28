@@ -315,6 +315,8 @@ void ObDDLScheduler::run1()
     ObDDLTask *first_retry_task = nullptr;
     (void)prctl(PR_SET_NAME, "DDLTaskExecutor", 0, 0, 0);
     while (!has_set_stop()) {
+      THIS_WORKER.set_worker_level(1);
+      THIS_WORKER.set_curr_request_level(1);
       while (!has_set_stop()) {
         if (OB_FAIL(task_queue_.get_next_task(task))) {
           if (common::OB_ENTRY_NOT_EXIST == ret) {

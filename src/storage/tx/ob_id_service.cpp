@@ -137,8 +137,9 @@ int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
         base_ts = ATOMIC_LOAD(&last_id_);
       }
     }
-    base_scn.convert_for_gts(base_ts);
-    if (OB_FAIL(cb_.serialize_ls_log(ls_log, service_type_))) {
+    if (OB_FAIL(base_scn.convert_for_gts(base_ts))) {
+      TRANS_LOG(ERROR, "failed to convert scn", KR(ret), K(base_ts));
+    } else if (OB_FAIL(cb_.serialize_ls_log(ls_log, service_type_))) {
       TRANS_LOG(WARN, "serialize ls log error", KR(ret), K(cb_));
     } else {
       cb_.set_srv_type(service_type_);

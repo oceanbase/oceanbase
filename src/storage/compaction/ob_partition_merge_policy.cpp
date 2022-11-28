@@ -72,7 +72,9 @@ int ObPartitionMergePolicy::get_neighbour_freeze_info(
     freeze_info.reset();
     freeze_info.next.freeze_scn.set_max();
     if (OB_NOT_NULL(last_major)) {
-      freeze_info.prev.freeze_scn.convert_for_tx(last_major->get_snapshot_version());
+      if (OB_FAIL(freeze_info.prev.freeze_scn.convert_for_tx(last_major->get_snapshot_version()))) {
+        LOG_WARN("failed to convert scn", K(ret), K(last_major));
+      }
     }
   } else {
     LOG_WARN("Failed to get neighbour major freeze info", K(ret), K(snapshot_version));

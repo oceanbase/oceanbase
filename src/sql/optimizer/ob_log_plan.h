@@ -1287,10 +1287,6 @@ public:
 
   common::ObIArray<int64_t> &get_alloc_sfu_list() { return alloc_sfu_list_; }
 
-  int allocate_for_update_for_semi_anti_join(JoinPath *join_path, ObLogJoin *join_op);
-
-  int recursive_collect_sfu_table_ids(const Path *path, ObIArray<uint64_t> &sfu_table_list);
-
   int merge_same_sfu_table_list(uint64_t target_id,
                                 int64_t begin_idx,
                                 ObIArray<uint64_t> &src_table_list,

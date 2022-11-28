@@ -41,9 +41,10 @@ public:
   {
     reset();
   }
-  ~ObLSMap() { reset(); }
+  ~ObLSMap() { destroy(); }
   void reset();
   int init(const int64_t tenant_id, common::ObIAllocator *ls_allocator);
+  void destroy();
   // allow_multi_true is used during replay
   int add_ls(ObLS &ls);
   int del_ls(const share::ObLSID &ls_id);

@@ -556,6 +556,8 @@ private:
       ObObj &obj,
       ObLobAccessParam *del_param,
       ObLobCommon *lob_common);
+  static int check_lob_tablet_valid(
+      ObTabletHandle &data_tablet);
   static int insert_lob_tablet_row(
       ObTabletHandle &data_tablet,
       ObDMLRunningCtx &run_ctx,

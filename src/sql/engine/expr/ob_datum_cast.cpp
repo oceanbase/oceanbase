@@ -250,7 +250,7 @@ int ObDatumHexUtils::hex(const ObExpr &expr, const ObString &in_str, ObEvalCtx &
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret), K(alloc_length));
       } else {
-        static const char *HEXCHARS = upper_case ? "0123456789ABCDEF" : "0123456789abcdef";
+        const char *HEXCHARS = upper_case ? "0123456789ABCDEF" : "0123456789abcdef";
         int32_t pos = 0;
         for (int32_t i = 0; i < in_str.length(); ++i) {
           buf[pos++] = HEXCHARS[in_str[i] >> 4 & 0xF];

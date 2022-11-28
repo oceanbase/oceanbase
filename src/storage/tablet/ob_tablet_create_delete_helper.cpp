@@ -914,7 +914,7 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablet(
   } else if (OB_UNLIKELY(!trans_flags.for_replay_
                          && tx_data.tx_scn_ != palf::SCN::max_scn()
                          && trans_flags.scn_ <= tx_data.tx_scn_)) {
-    // If tx log ts equals ObScnRange::MAX_TS, it means redo callback has not been called.
+    // If tx log ts equals SCN::max_scn(), it means redo callback has not been called.
     // Thus, we should handle this situation
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log ts is smaller than tx log ts", K(ret), K(tablet_id), K(trans_flags), K(tx_data));

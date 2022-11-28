@@ -184,6 +184,12 @@ void ObPartTransCtx::destroy()
   if (OB_LIKELY(is_inited_)) {
     TRANS_LOG(DEBUG, "part_ctx_destroy", K(*this));
 
+#ifdef ENABLE_DEBUG_LOG
+    if (NULL != trans_service_->get_defensive_check_mgr()) {
+      trans_service_->get_defensive_check_mgr()->del(trans_id_);
+    }
+#endif
+
     // Defensive Check 1 : earse ctx id descriptor
     mt_ctx_.reset();
 
@@ -467,24 +473,9 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
     TRANS_LOG(INFO,
               "handle timeout",
               K(ret),
-              KP(this),
-              K_(ls_id),
-              K(trans_id_),
+              K(*this),
               K(tx_expired),
               K(commit_expired),
-              K(upstream_state_),
-              K(exec_info_.state_),
-              K(start_replay_ts_),
-              K(start_working_log_ts_),
-              K(rec_log_ts_),
-              K(prev_rec_log_ts_),
-              K(is_exiting_),
-              K(part_trans_action_),
-              K(is_incomplete_replay_ctx_),
-              "is_logging",
-              is_logging_(),
-              "ctx_ref",
-              get_ref(),
               K(delay));
     if (busy_cbs_.get_size() > 0) {
       TRANS_LOG(INFO, "trx is waiting log_cb", K(busy_cbs_.get_size()), KPC(busy_cbs_.get_first()),
@@ -2140,7 +2131,9 @@ int ObPartTransCtx::submit_redo_log_(ObTxLogBlock &log_block,
     log_cb = NULL;
     helper.reset();
 
-    if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
+    if (OB_FAIL(exec_info_.redo_lsns_.reserve(exec_info_.redo_lsns_.count() + 1))) {
+      TRANS_LOG(WARN, "reserve memory for redo lsn failed", K(ret));
+    } else if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
       if (OB_UNLIKELY(OB_TX_NOLOGCB != ret)) {
         TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
       }
@@ -4980,7 +4973,9 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
     ObTxMDSRange range;
     while (OB_SUCC(ret)) {
       log.reset();
-      if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
+      if (OB_FAIL(exec_info_.redo_lsns_.reserve(exec_info_.redo_lsns_.count() + 1))) {
+        TRANS_LOG(WARN, "reserve memory for redo lsn failed", K(ret));
+      } else if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
         if (OB_UNLIKELY(OB_TX_NOLOGCB != ret)) {
           TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
         }
@@ -5002,9 +4997,8 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
         // enough to hold multi source data, if not, take it as an error.
         TRANS_LOG(WARN, "add new log failed", KR(ret), K(*this));
       } else if (need_pre_replay_barrier
-                 && OB_FAIL(
-                     log_block.rewrite_barrier_log_block(trans_id_.get_id(),
-                                                         logservice::ObReplayBarrierType::PRE_BARRIER))) {
+                 && OB_FAIL(log_block.rewrite_barrier_log_block(
+                     trans_id_.get_id(), logservice::ObReplayBarrierType::PRE_BARRIER))) {
 
         TRANS_LOG(WARN, "rewrite multi data source log barrier failed", K(ret));
         return_log_cb_(log_cb);
@@ -5638,7 +5632,9 @@ int ObPartTransCtx::rollback_to_savepoint_(const int64_t from_scn,
   return ret;
 }
 
-int ObPartTransCtx::submit_rollback_to_log_(const int64_t from_scn, const int64_t to_scn, ObTxData *tx_data)
+int ObPartTransCtx::submit_rollback_to_log_(const int64_t from_scn,
+                                            const int64_t to_scn,
+                                            ObTxData *tx_data)
 {
   int ret = OB_SUCCESS;
   ObTxLogBlock log_block;
@@ -5646,11 +5642,12 @@ int ObPartTransCtx::submit_rollback_to_log_(const int64_t from_scn, const int64_
   ObTxRollbackToLog log(from_scn, to_scn);
   ObTxLogCb *log_cb = NULL;
 
-  ObTxLogBlockHeader
-    log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_);
+  ObTxLogBlockHeader log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_);
 
   if (OB_FAIL(log_block.init(replay_hint, log_block_header))) {
     TRANS_LOG(WARN, "init log block fail", K(ret), KPC(this));
+  } else if (OB_FAIL(exec_info_.redo_lsns_.reserve(exec_info_.redo_lsns_.count() + 1))) {
+    TRANS_LOG(WARN, "reserve memory for redo lsn failed", K(ret));
   } else if (OB_FAIL(get_log_cb_(!NEED_FINAL_CB, log_cb))) {
     TRANS_LOG(WARN, "get log_cb fail", K(ret), KPC(this));
   } else if (OB_FAIL(log_block.add_new_log(log))) {
@@ -5660,11 +5657,9 @@ int ObPartTransCtx::submit_rollback_to_log_(const int64_t from_scn, const int64_
     TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
     return_log_cb_(log_cb);
     log_cb = NULL;
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()
-                                   ->submit_log(log_block.get_buf(),
-                                                log_block.get_size(), palf::SCN::min_scn(),
-                                                log_cb, false /*nonblock on EAGAIN*/
-                                                ))) {
+  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->submit_log(
+                 log_block.get_buf(), log_block.get_size(), palf::SCN::min_scn(), log_cb, false /*nonblock on EAGAIN*/
+                 ))) {
     TRANS_LOG(WARN, "submit log fail", K(ret), K(log_block), KPC(this));
     return_log_cb_(log_cb);
   } else if (OB_FAIL(acquire_ctx_ref())) {
@@ -5674,12 +5669,9 @@ int ObPartTransCtx::submit_rollback_to_log_(const int64_t from_scn, const int64_
   } else {
     log_cb->set_tx_data(tx_data);
   }
-  REC_TRANS_TRACE_EXT(tlog_, submit_rollback_log,
-                      OB_ID(ret), ret,
-                      OB_ID(from), from_scn,
-                      OB_ID(to), to_scn);
-  TRANS_LOG(INFO, "RollbackToLog submit", K(ret), K(from_scn), K(to_scn),
-            KP(log_cb), KPC(this));
+  REC_TRANS_TRACE_EXT(tlog_, submit_rollback_log, OB_ID(ret), ret, OB_ID(from), from_scn, OB_ID(to),
+                      to_scn);
+  TRANS_LOG(INFO, "RollbackToLog submit", K(ret), K(from_scn), K(to_scn), KP(log_cb), KPC(this));
   return ret;
 }
 

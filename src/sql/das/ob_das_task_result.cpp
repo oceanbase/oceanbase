@@ -361,7 +361,11 @@ int ObDASTaskResultMgr::iterator_task_result(int64_t task_id,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("das tcb is null", KR(ret), K(task_id));
   } else if (tcb->is_exiting_) {
-    ret = OB_INVALID_ARGUMENT;
+    // The background GC thread is already cleaning up this tcb,
+    // and it will be removed from the hash map shortly.
+    // This happens when the task result has expired meaning the
+    // SQL has timed out.
+    ret = OB_TIMEOUT;
     LOG_WARN("das tcb is exiting", KR(ret), K(task_id));
   } else if (tcb->is_reading_) {
     ret = OB_EAGAIN;

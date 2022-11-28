@@ -551,7 +551,6 @@ int ObSendBloomFilterP::process_px_bloom_filter_data()
         phase_end))) {
       LOG_WARN("fail to process recieve count", K(ret));
     }
-    (void)filter->dec_merge_filter_count();
   }
 
   if (OB_SUCC(ret) && phase_end && arg_.is_first_phase() && !arg_.next_peer_addrs_.empty()) {
@@ -583,6 +582,9 @@ int ObSendBloomFilterP::process_px_bloom_filter_data()
         }
       }
     }
+  }
+  if (OB_NOT_NULL(filter)) {
+    (void)filter->dec_merge_filter_count();
   }
   return ret;
 }

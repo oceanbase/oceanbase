@@ -1892,11 +1892,16 @@ int ObFastParserMysql::process_string(const char quote)
       }
     } // end while
     if (OB_SUCC(ret)) {
+      // in ansi_quotes sql_mode, the "" is treated as `, shouldn't parameterize it.
+      bool is_ansi_quotes = false;
+      IS_ANSI_QUOTES(sql_mode_, is_ansi_quotes);
       raw_sql_.scan();
       if (!is_quote_end) {
         cur_token_type_ = IGNORE_TOKEN;
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
+      } else if (is_ansi_quotes && quote == '"') {
+        cur_token_type_ = IGNORE_TOKEN;
       } else {
         char *buf = nullptr;
         cur_token_type_ = PARAM_TOKEN;

@@ -617,8 +617,8 @@ int ObSortOpImpl::init(
         default_block_size))) {
       LOG_WARN("init row store failed", K(ret));
     } else if (batch_size > 0
-               && NULL == (stored_rows_ = static_cast<ObChunkDatumStore::StoredRow **>(
-                       mem_context_->get_arena_allocator().alloc(
+               && OB_ISNULL(stored_rows_ = static_cast<ObChunkDatumStore::StoredRow **>(
+                       mem_context_->get_malloc_allocator().alloc(
                            sizeof(*stored_rows_) * batch_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
@@ -698,6 +698,10 @@ void ObSortOpImpl::reset()
       ems_heap_->~EMSHeap();
       mem_context_->get_malloc_allocator().free(ems_heap_);
       ems_heap_ = NULL;
+    }
+    if (NULL != stored_rows_) {
+      mem_context_->get_malloc_allocator().free(stored_rows_);
+      stored_rows_ = NULL;
     }
     if (NULL != buckets_) {
       mem_context_->get_malloc_allocator().free(buckets_);

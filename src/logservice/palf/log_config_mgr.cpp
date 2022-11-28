@@ -48,6 +48,7 @@ LogConfigMgr::LogConfigMgr()
       persistent_config_version_(),
       barrier_print_log_time_(OB_INVALID_TIMESTAMP),
       last_check_state_ts_us_(OB_INVALID_TIMESTAMP),
+      check_config_print_time_(OB_INVALID_TIMESTAMP),
       parent_lock_(),
       register_time_us_(OB_INVALID_TIMESTAMP),
       parent_(),
@@ -771,8 +772,10 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
           if (args.type_ == ADD_MEMBER_AND_NUM || new_replica_num == paxos_replica_num_) {
             // config change has finished successfully, do not need change again
             is_already_finished = true;
-            PALF_LOG(INFO, "member already exists, don't need add_member/replace_member", KR(ret), K_(palf_id), K_(self),
-                K_(log_ms_meta), K(member), K(new_replica_num), K_(paxos_replica_num));
+            if (palf_reach_time_interval(100 * 1000, check_config_print_time_)) {
+              PALF_LOG(INFO, "member already exists, don't need add_member/replace_member", KR(ret), K_(palf_id), K_(self),
+                  K_(log_ms_meta), K(member), K(new_replica_num), K_(paxos_replica_num));
+            }
           } else {
             ret = OB_INVALID_ARGUMENT;
             PALF_LOG(INFO, "member already exists, but new_replica_num not equal to curr val", KR(ret), K_(palf_id), K_(self),

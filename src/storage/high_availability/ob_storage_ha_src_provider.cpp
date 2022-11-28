@@ -18,13 +18,18 @@
 namespace oceanbase {
 namespace storage {
 
-ObStorageHASrcProvider::ObStorageHASrcProvider() : is_inited_(false), tenant_id_(OB_INVALID_ID), storage_rpc_(nullptr)
+ObStorageHASrcProvider::ObStorageHASrcProvider()
+  : is_inited_(false),
+    tenant_id_(OB_INVALID_ID),
+    type_(ObMigrationOpType::MAX_LS_OP),
+    storage_rpc_(nullptr)
 {}
 
 ObStorageHASrcProvider::~ObStorageHASrcProvider()
 {}
 
-int ObStorageHASrcProvider::init(const uint64_t tenant_id, storage::ObStorageRpc *storage_rpc)
+int ObStorageHASrcProvider::init(const uint64_t tenant_id, const ObMigrationOpType::TYPE &type,
+    storage::ObStorageRpc *storage_rpc)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -35,6 +40,7 @@ int ObStorageHASrcProvider::init(const uint64_t tenant_id, storage::ObStorageRpc
     LOG_WARN("get invalid argument", K(ret), K(tenant_id), K(ls_id), KP(storage_rpc));
   } else {
     tenant_id_ = tenant_id;
+    type_ = type;
     storage_rpc_ = storage_rpc;
     is_inited_ = true;
   }
@@ -62,8 +68,27 @@ int ObStorageHASrcProvider::choose_ob_src(const share::ObLSID &ls_id, const palf
   } else {
     src_info.src_addr_ = chosen_src_addr;
     src_info.cluster_id_ = GCONF.cluster_id;
-    SERVER_EVENT_ADD(
-        "storage_ha", "choose_src", "tenant_id", tenant_id_, "ls_id", ls_id.id(), "src_addr", chosen_src_addr);
+#ifdef ERRSIM
+    if (ObMigrationOpType::ADD_LS_OP == type_ || ObMigrationOpType::MIGRATE_LS_OP == type_) {
+      const ObString &errsim_server = GCONF.errsim_migration_src_server_addr.str();
+      if (!errsim_server.empty()) {
+        common::ObAddr tmp_errsim_addr;
+        if (OB_FAIL(tmp_errsim_addr.parse_from_string(errsim_server))) {
+          LOG_WARN("failed to parse from string", K(ret), K(errsim_server));
+        } else {
+          src_info.src_addr_ = tmp_errsim_addr;
+          src_info.cluster_id_ = GCONF.cluster_id;
+          LOG_INFO("storage ha choose errsim src", K(tmp_errsim_addr));
+        }
+      }
+    }
+#endif
+    SERVER_EVENT_ADD("storage_ha", "choose_src",
+                     "tenant_id", tenant_id_,
+                     "ls_id", ls_id.id(),
+                     "src_addr", src_info.src_addr_,
+                     "op_type", ObMigrationOpType::get_str(type_));
+
   }
   return ret;
 }

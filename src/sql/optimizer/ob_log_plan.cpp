@@ -5231,10 +5231,6 @@ int ObLogPlan::create_plan_tree_from_path(Path *path,
       JoinPath *join_path = static_cast<JoinPath *>(path);
       if (OB_FAIL(allocate_join_path(join_path, op))) {
         LOG_WARN("failed to allocate join path", K(ret));
-      } else if (lib::is_mysql_mode() &&
-                 OB_FAIL(allocate_for_update_for_semi_anti_join(join_path,
-                                                                static_cast<ObLogJoin*>(op)))) {
-        LOG_WARN("failed to allocate allocate for update for semi anti join", K(ret));
       } else {/* do nothing */ }
     } else if (path->is_subquery_path()) {
       SubQueryPath *subquery_path = static_cast<SubQueryPath *>(path);
@@ -11754,78 +11750,6 @@ int ObLogPlan::generate_column_expr(ObRawExprFactory &expr_factory,
       LOG_WARN("failed to push column item", K(ret));
     }
   }
-  return ret;
-}
-
-int ObLogPlan::allocate_for_update_for_semi_anti_join(JoinPath *join_path,
-                                                      ObLogJoin *join_op)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(join_path) || OB_ISNULL(join_op)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(join_path), K(join_op));
-  } else if (IS_SEMI_ANTI_JOIN(join_path->join_type_)) {
-    const Path *left_path = join_path->left_path_;
-    const Path *right_path = join_path->right_path_;
-    ObLogicalOperator *left_child = join_op->get_left_table();
-    ObLogicalOperator *right_child = join_op->get_right_table();
-    if (OB_ISNULL(left_path) || OB_ISNULL(right_path)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(left_path), K(right_path));
-    } else if (IS_LEFT_SEMI_ANTI_JOIN(join_path->join_type_)) {
-      //for update need allocate before rigth table which in left semi/anti join becauese
-      //it isn't pk preserving.
-      ObSEArray<uint64_t, 1> sfu_table_list;
-      if (OB_FAIL(recursive_collect_sfu_table_ids(right_path, sfu_table_list))) {
-        LOG_WARN("failed to recursive collect sfu table ids", K(ret));
-      } else if (sfu_table_list.empty()) {
-        //do nothing
-      } else if (OB_FAIL(allocate_for_update_as_top(right_child, sfu_table_list))) {
-        LOG_WARN("failed to allocate for update as top", K(ret));
-      } else {
-        join_op->set_right_child(right_child);
-      }
-    } else if (IS_RIGHT_SEMI_ANTI_JOIN(join_path->join_type_)) {
-      //for update need allocate before left table which in right semi/anti join becauese
-      //it isn't pk preserving.
-      ObSEArray<uint64_t, 1> sfu_table_list;
-      if (OB_FAIL(recursive_collect_sfu_table_ids(left_path, sfu_table_list))) {
-        LOG_WARN("failed to recursive collect sfu table ids", K(ret));
-      } else if (sfu_table_list.empty()) {
-        //do nothing
-      } else if (OB_FAIL(allocate_for_update_as_top(left_child, sfu_table_list))) {
-        LOG_WARN("failed to allocate for update as top", K(ret));
-      } else {
-        join_op->set_left_child(left_child);
-      }
-    } else {/*do nothing*/}
-  }
-  return ret;
-}
-
-int ObLogPlan::recursive_collect_sfu_table_ids(const Path *path, ObIArray<uint64_t> &sfu_table_list)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(path)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpecpted null", K(ret), K(path));
-  } else if (path->is_access_path()) {
-    const AccessPath* access_path = static_cast<const AccessPath*>(path);
-    if (access_path->for_update_ && !table_is_allocated_for_update(access_path->table_id_)) {
-      if (OB_FAIL(sfu_table_list.push_back(access_path->table_id_))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else {/*do nothing*/}
-    }
-  } else if (path->is_join_path()) {
-    const JoinPath *join_path = static_cast<const JoinPath *>(path);
-    if (OB_FAIL(SMART_CALL(recursive_collect_sfu_table_ids(join_path->left_path_,
-                                                           sfu_table_list)))) {
-      LOG_WARN("failed to recursive collect sfu table ids", K(ret));
-    } else if (OB_FAIL(SMART_CALL(recursive_collect_sfu_table_ids(join_path->right_path_,
-                                                                  sfu_table_list)))) {
-      LOG_WARN("failed to recursive collect sfu table ids", K(ret));
-    } else {/*do nothing*/}
-  } else {/*do nothing*/}
   return ret;
 }
 

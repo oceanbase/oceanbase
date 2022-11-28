@@ -265,23 +265,26 @@ int ObTxCtxMemtable::flush(palf::SCN recycle_scn, bool need_freeze)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(flush_lock_);
-  
+
   if (need_freeze) {
     SCN rec_scn = get_rec_scn();
     if (rec_scn >= recycle_scn) {
       TRANS_LOG(INFO, "no need to freeze", K(rec_scn), K(recycle_scn));
     } else if (is_active_memtable()) {
-      int64_t cur_ts = common::ObClockGenerator::getClock();
+      int64_t cur_time_us = ObTimeUtility::current_time();
       ObScnRange scn_range;
-      scn_range.start_scn_.convert_for_gts(1);
-      scn_range.end_scn_.convert_for_gts(cur_ts);
-      set_scn_range(scn_range);
-      set_snapshot_version(scn_range.end_scn_);
-      ATOMIC_STORE(&is_frozen_, true);
+      scn_range.start_scn_.set_base();
+      if (OB_FAIL(scn_range.end_scn_.convert_from_ts(cur_time_us))) {
+        TRANS_LOG(WARN, "failed to convert_from_ts", K(ret), K(cur_time_us));
+      } else {
+        set_scn_range(scn_range);
+        set_snapshot_version(scn_range.end_scn_);
+        ATOMIC_STORE(&is_frozen_, true);
+      }
     }
   }
 
-  if (is_frozen_memtable()) {
+  if (OB_SUCC(ret) && is_frozen_memtable()) {
     compaction::ObTabletMergeDagParam param;
     param.ls_id_ = ls_id_;
     param.tablet_id_ = LS_TX_CTX_TABLET;

@@ -628,9 +628,6 @@ int ObJsonObject::add(const common::ObString &key, ObJsonNode *value)
   if (OB_ISNULL(value)) { // check param
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param value is NULL", K(ret));
-  } else if (key.empty()) {
-    ret = OB_ERR_JSON_DOCUMENT_NULL_KEY;
-    LOG_WARN("key is NULL", K(ret));
   } else {
     value->set_parent(this);
     ObJsonObjectPair pair(key, value);

@@ -194,6 +194,7 @@ int ObSnapshotTableProxy::batch_add_snapshot(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(schema_version), K(snapshot_scn), K(tablet_id_array));
   } else {
+    palf::SCN snapshot_gc_scn = palf::SCN::min_scn();
     int64_t report_idx = 0;
     const int64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     ObSnapshotInfo info;
@@ -203,6 +204,9 @@ int ObSnapshotTableProxy::batch_add_snapshot(
     info.snapshot_scn_ = snapshot_scn;
     info.schema_version_ = schema_version;
     info.comment_ = comment;
+    if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(trans, tenant_id, snapshot_gc_scn))) {
+      LOG_WARN("fail to select gc timstamp for update", KR(ret), K(info), K(tenant_id));
+    }
     while (OB_SUCC(ret) && report_idx < tablet_id_array.count()) {
       sql.reuse();
       columns.reuse();
@@ -211,7 +215,7 @@ int ObSnapshotTableProxy::batch_add_snapshot(
       for (int64_t i = 0; OB_SUCC(ret) && i < cur_batch_cnt; ++i) {
         info.tablet_id_ = tablet_id_array.at(report_idx + i).id();
         dml.reuse();
-        if (OB_FAIL(check_snapshot_valid(trans, info.tenant_id_, info, is_valid))) {
+        if (OB_FAIL(check_snapshot_valid(snapshot_gc_scn, info, is_valid))) {
           LOG_WARN("fail to check snapshot valid", KR(ret), K(info), K(tenant_id));
         } else if (!is_valid) {
           ret = OB_SNAPSHOT_DISCARDED;
@@ -428,19 +432,15 @@ int ObSnapshotTableProxy::get_all_snapshots(
 }
 
 int ObSnapshotTableProxy::check_snapshot_valid(
-    ObISQLClient &client,
-    const uint64_t tenant_id,
+    const palf::SCN &snapshot_gc_scn,
     const ObSnapshotInfo &info,
-    bool &is_valid)
+    bool &is_valid) const
 {
   int ret = OB_SUCCESS;
-  palf::SCN snapshot_gc_scn;
   is_valid = false;
   if (!info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(info));
-  } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(client, tenant_id, snapshot_gc_scn))) {
-    LOG_WARN("fail to select gc timstamp for update", KR(ret), K(info), K(tenant_id));
   } else if (info.snapshot_scn_ <= snapshot_gc_scn) {
     is_valid = false;
     LOG_WARN("invalid snapshot info", KR(ret), K(info), K(snapshot_gc_scn));

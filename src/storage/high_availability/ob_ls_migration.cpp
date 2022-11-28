@@ -1084,8 +1084,8 @@ int ObStartMigrationTask::choose_src_()
     palf::SCN local_clog_checkpoint_scn = palf::SCN::min_scn();
     if (OB_FAIL(get_local_ls_checkpoint_scn_(local_clog_checkpoint_scn))) {
       LOG_WARN("failed to get local ls checkpoint ts", K(ret));
-    } else if (OB_FAIL(src_provider.init(tenant_id, storage_rpc_))) {
-      LOG_WARN("failed to init src provider", K(ret), K(tenant_id));
+    } else if (OB_FAIL(src_provider.init(tenant_id, ctx_->arg_.type_, storage_rpc_))) {
+      LOG_WARN("failed to init src provider", K(ret), K(tenant_id), "type", ctx_->arg_.type_);
     } else if (OB_FAIL(src_provider.choose_ob_src(ls_id, local_clog_checkpoint_scn, src_info))) {
       LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn));
     } else if (OB_FAIL(fetch_ls_info_(tenant_id, ls_id, src_info.src_addr_, ls_info))) {

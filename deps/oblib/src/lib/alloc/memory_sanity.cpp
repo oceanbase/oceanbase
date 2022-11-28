@@ -49,13 +49,16 @@ void sanity_set_whitelist(const char *str)
 
 void memory_sanity_abort()
 {
+  if ('\0' == whitelist[0]) {
+    abort();
+  }
   void *addrs[128];
   int n_addr = backtrace(addrs, sizeof(addrs)/sizeof(addrs[0]));
   void *vip_addr = NULL;
   for (int i = 0; NULL == vip_addr && i < n_addr; i++) {
-    for (int j = 0; NULL == vip_addr && j < 8; j++) {
+    for (int j = 0; NULL == vip_addr && j < sizeof(vips)/sizeof(vips[0]); j++) {
       t_vip *vip = &vips[j];
-      if (0 == strlen(vip->func_)) {
+      if ('\0' == vip->func_[0]) {
         break;
       } else if (0 == vip->min_addr_ || 0 == vip->max_addr_) {
         continue;
@@ -81,9 +84,9 @@ void memory_sanity_abort()
       if (real_len < buf_len - pos) {
         pos += real_len;
       }
-      for (int i = 0; i < 8; i++) {
+      for (int i = 0; i < sizeof(vips)/sizeof(vips[0]); i++) {
         t_vip *vip = &vips[i];
-        if (0 == strlen(vip->func_)) {
+        if ('\0' == vip->func_[0]) {
           break;
         } else if (strstr(func_name, vip->func_) != NULL) {
           strncpy(vip_func, func_name, sizeof(vip_func));

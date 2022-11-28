@@ -148,10 +148,9 @@ public:
                          int64_t &count);
 private:
   int gen_event_ts(int64_t &event_ts);
-  int check_snapshot_valid(common::ObISQLClient &client,
-                           const uint64_t tenant_id,
+  int check_snapshot_valid(const palf::SCN &snapshot_gc_scn,
                            const ObSnapshotInfo &info,
-                           bool &is_valid);
+                           bool &is_valid) const;
   int fill_snapshot_item(const ObSnapshotInfo &info,
       share::ObDMLSqlSplicer &dml);
 

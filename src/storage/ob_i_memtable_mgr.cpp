@@ -109,7 +109,7 @@ int ObIMemtableMgr::get_newest_snapshot_version(palf::SCN &snapshot_version)
   return ret;
 }
 
-int ObIMemtableMgr::release_memtables(const int64_t log_ts)
+int ObIMemtableMgr::release_memtables(const palf::SCN &scn)
 {
   SpinWLockGuard lock_guard(lock_);
   int ret = OB_SUCCESS;
@@ -117,9 +117,9 @@ int ObIMemtableMgr::release_memtables(const int64_t log_ts)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (OB_UNLIKELY(log_ts < 0)) {
+  } else if (OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid log ts", K(ret), K(log_ts));
+    STORAGE_LOG(WARN, "invalid log ts", K(ret), K(scn));
   } else {
     for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
       // memtable that cannot be released will block memtables behind it
@@ -132,13 +132,13 @@ int ObIMemtableMgr::release_memtables(const int64_t log_ts)
             && memtable->is_empty()
             && !memtable->get_is_force_freeze()) {
           break;
-        } else if (memtable->get_end_scn().get_val_for_tx() <= log_ts
+        } else if (memtable->get_end_scn() <= scn
             && memtable->can_be_minor_merged()) {
           if (OB_FAIL(release_head_memtable_(memtable))) {
             STORAGE_LOG(WARN, "fail to release memtable", K(ret), KPC(memtable));
             break;
           } else {
-            STORAGE_LOG(INFO, "succeed to release memtable", K(ret), K(i), K(log_ts));
+            STORAGE_LOG(INFO, "succeed to release memtable", K(ret), K(i), K(scn));
           }
         } else {
           break;

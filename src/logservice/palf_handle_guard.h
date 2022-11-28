@@ -211,6 +211,7 @@ public:
   DELEGATE_WITH_RET(palf_handle_, switch_learner_to_acceptor, int);
   DELEGATE_WITH_RET(palf_handle_, switch_acceptor_to_learner, int);
   DELEGATE_WITH_RET(palf_handle_, set_region, int);
+  DELEGATE_WITH_RET(palf_handle_, set_location_cache_cb, int);
   DELEGATE_WITH_RET(palf_handle_, change_access_mode, int);
   DELEGATE_WITH_RET(palf_handle_, get_access_mode, int);
 private:

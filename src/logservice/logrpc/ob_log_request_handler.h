@@ -34,6 +34,7 @@ public:
                           RespType &resp);
 private:
   palf::PalfHandle *palf_handle_;
+  int64_t handle_request_print_time_;
 };
 
 class ConfigChangeCmdHandler{

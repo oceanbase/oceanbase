@@ -80,7 +80,7 @@ public:
   // @param[in] convert for tx: INT64_MAX may convert to MAX_SCN
   int convert_for_tx(int64_t commit_trans_version);
 
-  // change val_ from  ObScnRange::OLD_MAX_TS to OB_MAX_SCN_TS_NS for compitibility in
+  // change val_ from INT64_MAX to OB_MAX_SCN_TS_NS for compitibility in
   // deserialization
   void transform_max();
 

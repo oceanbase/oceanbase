@@ -243,6 +243,7 @@ public:
                          bool in_warning,
                          bool signal);
   int raise_exception(jit::ObLLVMValue &exception,
+                      jit::ObLLVMValue &error_code,
                       jit::ObLLVMValue &sql_staten,
                       jit::ObLLVMBasicBlock &normal,
                       bool in_notfound,

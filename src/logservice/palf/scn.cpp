@@ -317,7 +317,7 @@ int SCN::convert_for_sql(uint64_t value)
 
 void SCN::transform_max()
 {
-  if (share::ObScnRange::OLD_MAX_TS  == val_) {
+  if (INT64_MAX  == val_) {
     this->set_max();
   }
 }

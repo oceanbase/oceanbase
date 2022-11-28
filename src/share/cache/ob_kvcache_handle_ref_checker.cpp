@@ -12,21 +12,27 @@
 
 #include "share/cache/ob_kvcache_handle_ref_checker.h"
 #include "share/cache/ob_kv_storecache.h"
+
+
 namespace oceanbase
 {
 namespace common
 {
+
 /*
  * ---------------------------------------------- ObKVCacheHandleRefChecker::Key ----------------------------------------------
  */
+
 ObKVCacheHandleRefChecker::Key::Key()
   : handle_(nullptr)
 {
 }
+
 ObKVCacheHandleRefChecker::Key::Key(const ObKVCacheHandle &cache_handle)
   : handle_(&cache_handle)
 {
 }
+
 uint64_t ObKVCacheHandleRefChecker::Key::hash() const
 {
   uint64_t hash = 0;
@@ -35,13 +41,16 @@ uint64_t ObKVCacheHandleRefChecker::Key::hash() const
   }
   return hash;
 }
+
 bool ObKVCacheHandleRefChecker::Key::operator== (const Key &other) const
 {
   return handle_ == other.handle_;
 }
+
 /*
  * ---------------------------------------------- ObKVCacheHandleRefChecker::Value ----------------------------------------------
  */
+
 ObKVCacheHandleRefChecker::Value::Value()
   : tenant_id_(OB_INVALID_TENANT_ID),
     cache_id_(INVALID_CACHE_ID),
@@ -49,20 +58,24 @@ ObKVCacheHandleRefChecker::Value::Value()
 {
   MEMSET(bt_, 0, sizeof(bt_));
 }
+
 ObKVCacheHandleRefChecker::Value::Value(const Value &other)
 {
   *this = other;
 }
+
 uint64_t ObKVCacheHandleRefChecker::Value::hash() const
 {
   uint64_t hash = 0;
   hash = murmurhash(bt_, sizeof(bt_), hash);
   return hash;
 }
+
 bool ObKVCacheHandleRefChecker::Value::operator== (const Value &other) const
 {
   return (tenant_id_ == other.tenant_id_) && (cache_id_ == other.cache_id_) && (0 == STRNCMP(bt_, other.bt_, sizeof(bt_)));
 }
+
 ObKVCacheHandleRefChecker::Value & ObKVCacheHandleRefChecker::Value::operator= (const Value &other)
 {
   if (this != &other) {
@@ -72,10 +85,13 @@ ObKVCacheHandleRefChecker::Value & ObKVCacheHandleRefChecker::Value::operator= (
   }
   return *this;
 }
+
 /*
  * ---------------------------------------------- ObKVCacheHandleRefChecker ----------------------------------------------
  */
+
 const char ObKVCacheHandleRefChecker::ALL_CACHE_NAME[MAX_CACHE_NAME_LENGTH] = "all_cache";
+
 ObKVCacheHandleRefChecker::ObKVCacheHandleRefChecker()
   : cache_id_(INVALID_CACHE_ID),
     handle_ref_bt_info_(),
@@ -88,21 +104,25 @@ ObKVCacheHandleRefChecker::ObKVCacheHandleRefChecker()
     is_inited_ = true;
   }
 }
+
 ObKVCacheHandleRefChecker::~ObKVCacheHandleRefChecker()
 {
   reset();
 }
+
 ObKVCacheHandleRefChecker &ObKVCacheHandleRefChecker::get_instance()
 {
   static ObKVCacheHandleRefChecker cache_handle_ref_checker_;
   return cache_handle_ref_checker_;
 }
+
 void ObKVCacheHandleRefChecker::reset()
 {
   cache_id_ = INVALID_CACHE_ID;
   handle_ref_bt_info_.reuse();
   is_inited_ = false;
 }
+
 void ObKVCacheHandleRefChecker::handle_ref_inc(const ObKVCacheHandle &cache_handle)
 {
   INIT_SUCC(ret);
@@ -122,6 +142,7 @@ void ObKVCacheHandleRefChecker::handle_ref_inc(const ObKVCacheHandle &cache_hand
     }
   }
 }
+
 void ObKVCacheHandleRefChecker::handle_ref_de(const ObKVCacheHandle &cache_handle)
 {
   INIT_SUCC(ret);
@@ -138,6 +159,7 @@ void ObKVCacheHandleRefChecker::handle_ref_de(const ObKVCacheHandle &cache_handl
     }
   }
 }
+
 int ObKVCacheHandleRefChecker::set_cache_id(const int64_t cache_id)
 {
   INIT_SUCC(ret);
@@ -153,6 +175,7 @@ int ObKVCacheHandleRefChecker::set_cache_id(const int64_t cache_id)
   }
   return ret;
 }
+
 int ObKVCacheHandleRefChecker::get_aggregate_bt_info(hash::ObHashMap<Value, int64_t> &bt_info)
 {
   INIT_SUCC(ret);
@@ -186,5 +209,7 @@ int ObKVCacheHandleRefChecker::get_aggregate_bt_info(hash::ObHashMap<Value, int6
   }
   return ret;
 }
+
+
 }  // common
 }  // oceanbase

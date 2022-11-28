@@ -90,8 +90,9 @@ int ObLockMemtableMgr::create_memtable(const palf::SCN clog_checkpoint_scn,
 
   table_key.table_type_ = ObITable::LOCK_MEMTABLE;
   table_key.tablet_id_ = LS_LOCK_TABLET;
-  table_key.scn_range_.start_scn_.convert_for_gts(1); // fake
-  table_key.scn_range_.end_scn_.convert_for_gts(2); // fake
+
+  table_key.scn_range_.start_scn_ = palf::SCN::base_scn();//fake
+  table_key.scn_range_.end_scn_ = palf::SCN::plus(table_key.scn_range_.start_scn_, 1);//fake
 
   if (get_memtable_count_() > 0) {
     ret = OB_ERR_UNEXPECTED;

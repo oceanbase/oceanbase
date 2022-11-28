@@ -2284,19 +2284,36 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
       ObLLVMValue unwindException = generator_.get_saved_exception();
       ObLLVMValue ob_error_code = generator_.get_saved_ob_error();
       ObLLVMType unwind_exception_type, unwind_exception_pointer_type;
+      ObLLVMValue unwind_exception_header;
+      ObLLVMType condition_type;
+      ObLLVMType condition_pointer_type;
+      ObLLVMValue condition;
+      ObLLVMValue sql_state;
+      ObLLVMValue error_code;
       CK (OB_NOT_NULL(generator_.get_saved_exception().get_v()));
       CK (OB_NOT_NULL(generator_.get_saved_ob_error().get_v()));
       OZ (generator_.extract_status_from_context(generator_.get_vars().at(generator_.CTX_IDX), status));
       OZ (generator_.get_helper().create_store(ob_error_code, status));
       OZ (generator_.get_adt_service().get_unwind_exception(unwind_exception_type));
       OZ (unwind_exception_type.get_pointer_to(unwind_exception_pointer_type));
+      OZ (generator_.get_helper().create_const_gep1_64(ObString("extract_unwind_exception_header"),
+                                                       unwindException,
+                                                       generator_.get_eh_service().pl_exception_base_offset_,
+                                                       unwind_exception_header));
+      OZ (generator_.get_adt_service().get_pl_condition_value(condition_type));
+      OZ (condition_type.get_pointer_to(condition_pointer_type));
+      OZ (generator_.get_helper().create_pointer_cast(ObString("cast_header"),
+                                                      unwind_exception_header,
+                                                      condition_pointer_type,
+                                                      condition));
+      OZ (generator_.extract_name_from_condition_value(condition, sql_state));
+      OZ (generator_.extract_code_from_condition_value(condition, error_code));
       OZ (generator_.get_helper().create_pointer_cast(
           ObString("cast_unwind_exception"), unwindException,
           unwind_exception_pointer_type, unwindException));
       OZ (generator_.get_helper().create_block(ObString("normal"), generator_.get_func(), normal));
-      OZ (generator_.raise_exception(unwindException, null_sql_state, normal,
-                                     s.get_block()->in_notfound(), s.get_block()->in_warning(),
-                                     true/*is signal*/));
+      OZ (generator_.raise_exception(unwindException, error_code, sql_state, normal,
+                                     s.get_block()->in_notfound(), s.get_block()->in_warning(), true));
       OZ (generator_.set_current(normal));
     } else {
       ObLLVMValue type, ob_err_code, err_code, sql_state, str_len, is_signal, stmt_id, loc;
@@ -6509,7 +6526,7 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
         if (OB_FAIL(helper_.create_call(ObString("create_exception"), get_eh_service().eh_create_exception_, args, exception))) {
           LOG_WARN("failed to create_call", K(ret));
         } else {
-          OZ (raise_exception(exception, sql_state, normal, in_notfound, in_warning, signal));
+          OZ (raise_exception(exception, error_code, sql_state, normal, in_notfound, in_warning, signal));
         }
       }
     }
@@ -6518,6 +6535,7 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
 }
 
 int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
+                                       ObLLVMValue &error_code,
                                        ObLLVMValue &sql_state,
                                        ObLLVMBasicBlock &normal,
                                        bool in_notfound,
@@ -6587,26 +6605,33 @@ int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
     }
   }
   if (OB_SUCC(ret)) {
-    ObLLVMValue exception_class;
-    ObLLVMSwitch switch_inst;
-    ObLLVMValue int_value;
     OZ (set_current(current));
-    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+    if (OB_FAIL(ret)) {
+    } else if (lib::is_oracle_mode()) {
       OZ (helper_.create_br(raise_exception));
-    }
-    if (OB_SUCC(ret) && lib::is_mysql_mode()) {
-      if (signal && OB_ISNULL(sql_state.get_v())) {
-        // resignal
-        // TODO: SQL_WARNING错误的resignal需要特别处理
-        OZ (helper_.create_br(raise_exception));
-      } else {
-        OZ (helper_.create_call(ObString("get_exception_class"), get_eh_service().eh_classify_exception, sql_state, exception_class));
-        OZ (helper_.create_switch(exception_class, raise_exception, switch_inst));
-        OZ (helper_.get_int64(SQL_WARNING, int_value));
-        OZ (switch_inst.add_case(int_value, in_warning ? raise_exception : normal));
-        OZ (helper_.get_int64(NOT_FOUND, int_value));
-        OZ (switch_inst.add_case(int_value, signal || in_notfound ? raise_exception : normal));
-      }
+    } else if (lib::is_mysql_mode()) {
+      ObLLVMBasicBlock normal_raise_block;
+      ObLLVMValue exception_class;
+      ObLLVMSwitch switch_inst1;
+      ObLLVMSwitch switch_inst2;
+      ObLLVMValue int_value;
+
+      OZ (helper_.create_block(ObString("normal_raise_block"), get_func(), normal_raise_block));
+      OZ (helper_.create_switch(error_code, normal_raise_block, switch_inst1));
+      OZ (helper_.get_int64(ER_WARN_TOO_MANY_RECORDS, int_value));
+      OZ (switch_inst1.add_case(int_value, raise_exception));
+      OZ (helper_.get_int64(WARN_DATA_TRUNCATED, int_value));
+      OZ (switch_inst1.add_case(int_value, raise_exception));
+      OZ (helper_.get_int64(ER_SIGNAL_WARN, int_value));
+      OZ (switch_inst1.add_case(int_value, raise_exception));
+
+      OZ (set_current(normal_raise_block));
+      OZ (helper_.create_call(ObString("get_exception_class"), get_eh_service().eh_classify_exception, sql_state, exception_class));
+      OZ (helper_.create_switch(exception_class, raise_exception, switch_inst2));
+      OZ (helper_.get_int64(SQL_WARNING, int_value));
+      OZ (switch_inst2.add_case(int_value, in_warning ? raise_exception : normal));
+      OZ (helper_.get_int64(NOT_FOUND, int_value));
+      OZ (switch_inst2.add_case(int_value, signal || in_notfound ? raise_exception : normal));
     }
   }
   return ret;

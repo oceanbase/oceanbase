@@ -131,11 +131,16 @@ public:
   int batch_set_tablet_autoinc_seq(
       const obrpc::ObBatchSetTabletAutoincSeqArg &arg,
       obrpc::ObBatchSetTabletAutoincSeqRes &res);
+  int replay_update_tablet_autoinc_seq(
+      const ObLS *ls,
+      const ObTabletID &tablet_id,
+      const uint64_t autoinc_seq,
+      const palf::SCN &replay_scn);
 private:
   ObTabletAutoincSeqRpcHandler();
   ~ObTabletAutoincSeqRpcHandler();
 private:
-  static const int64_t BUCKET_LOCK_BUCKET_CNT = 100;
+  static const int64_t BUCKET_LOCK_BUCKET_CNT = 10243L;
   bool is_inited_;
   common::ObBucketLock bucket_lock_;
 };

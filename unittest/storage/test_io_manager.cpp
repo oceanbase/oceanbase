@@ -283,6 +283,7 @@ TEST_F(TestIOStruct, IOAllocator)
 TEST_F(TestIOStruct, IORequest)
 {
   ObTenantIOManager tenant_io_mgr;
+  tenant_io_mgr.inc_ref();
   ASSERT_SUCC(tenant_io_mgr.io_allocator_.init(TEST_TENANT_ID, IO_MEMORY_LIMIT));
   ObRefHolder<ObTenantIOManager> holder(&tenant_io_mgr);
   ObIOFd fd;

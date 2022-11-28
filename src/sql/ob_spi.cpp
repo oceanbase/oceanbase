@@ -1032,22 +1032,41 @@ int ObSPIService::set_variable(ObPLExecCtx *ctx,
                                               tmp_pos,
                                               print_params))) {
             if (OB_SIZE_OVERFLOW == ret) {
-              ret = OB_SUCCESS;
-              new_buf = static_cast<char*>(allocator.alloc(OB_MAX_SQL_LENGTH));
-              if (OB_ISNULL(new_buf)) {
-                ret = OB_ALLOCATE_MEMORY_FAILED;
-                LOG_WARN("failed to alloc memory for set sql", K(ret), K(OB_MAX_SQL_LENGTH));
-              } else {
-                tmp_pos = 0;
-                MEMCPY(new_buf, buf, pos);
-                if (OB_FAIL(value.print_sql_literal(new_buf + pos,
-                                                    OB_MAX_SQL_LENGTH - pos,
-                                                    tmp_pos,
-                                                    print_params))) {
-                  LOG_WARN("failed to print_plain_str_literal",
-                           K(buf), K(new_buf), K(pos), K(tmp_pos), K(ret));
+              int64_t alloc_len = OB_MAX_SQL_LENGTH;
+              while (OB_SIZE_OVERFLOW == ret) {
+                ret = OB_SUCCESS;
+                if (OB_ISNULL(new_buf)) {
+                  new_buf = static_cast<char*>(allocator.alloc(alloc_len));
                 } else {
-                  sql = new_buf;
+                  if (alloc_len < (1L << 20)) {
+                    alloc_len *= 2;
+                    allocator.free(new_buf);
+                    new_buf = NULL;
+                    new_buf = static_cast<char*>(allocator.alloc(alloc_len));
+                  } else {
+                    ret = OB_SIZE_OVERFLOW;
+                    LOG_WARN("failed to print_plain_str_literal",
+                              K(buf), K(new_buf), K(pos), K(tmp_pos), K(ret));
+                    break;
+                  }
+                }
+                if (OB_ISNULL(new_buf)) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("failed to alloc memory for set sql", K(ret), K(OB_MAX_SQL_LENGTH));
+                } else {
+                  tmp_pos = 0;
+                  MEMCPY(new_buf, buf, pos);
+                  if (OB_FAIL(value.print_sql_literal(new_buf + pos,
+                                                      alloc_len - pos,
+                                                      tmp_pos,
+                                                      print_params))) {
+                    if (OB_SIZE_OVERFLOW != ret) {
+                      LOG_WARN("failed to print_plain_str_literal",
+                            K(buf), K(new_buf), K(pos), K(tmp_pos), K(ret));
+                    }
+                  } else {
+                    sql = new_buf;
+                  }
                 }
               }
             } else {

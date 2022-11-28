@@ -485,9 +485,6 @@ public:
   // for deadlock detect.
   void set_table_lock_killed() { lock_mem_ctx_.set_killed(); }
   bool is_table_lock_killed() const { return lock_mem_ctx_.is_killed(); }
-#ifdef ENABLE_DEBUG_LOG
-  transaction::ObDefensiveCheckMgr *get_defensive_check_mgr() { return defensive_check_mgr_; }
-#endif
 private:
   int do_trans_end(
       const bool commit,
@@ -560,9 +557,6 @@ private:
   common::ObArray<transaction::ObTransID> conflict_trans_ids_;
   // table lock mem ctx.
   transaction::tablelock::ObLockMemCtx lock_mem_ctx_;
-#ifdef ENABLE_DEBUG_LOG
-  transaction::ObDefensiveCheckMgr *defensive_check_mgr_;
-#endif
   bool is_inited_;
 };
 

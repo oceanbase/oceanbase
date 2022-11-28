@@ -668,7 +668,7 @@ int ObTabletMergeCtx::inner_init_for_major()
   } else if (get_merge_table_result.handle_.get_count() > 1
       && !ObTenantTabletScheduler::check_tx_table_ready(
       *ls_handle_.get_ls(),
-      get_merge_table_result.scn_range_.end_scn_.get_val_for_tx())) {
+      get_merge_table_result.scn_range_.end_scn_)) {
     ret = OB_EAGAIN;
     LOG_INFO("tx table is not ready. waiting for max_decided_log_ts ...",
              KR(ret), "merge_scn", get_merge_table_result.scn_range_.end_scn_);
@@ -728,7 +728,7 @@ int ObTabletMergeCtx::inner_init_for_minor(bool &skip_rest_operation)
     }
   } else if (!ObTenantTabletScheduler::check_tx_table_ready(
       *ls_handle_.get_ls(),
-      get_merge_table_result.scn_range_.end_scn_.get_val_for_tx())) {
+      get_merge_table_result.scn_range_.end_scn_)) {
     ret = OB_EAGAIN;
     LOG_INFO("tx table is not ready. waiting for max_decided_log_ts ...",
              KR(ret), "merge_scn", get_merge_table_result.scn_range_.end_scn_);
