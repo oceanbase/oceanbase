@@ -206,7 +206,8 @@ int ObRawExprInfoExtractor::add_const(ObRawExpr &expr)
           || T_FUN_SYS_TO_BLOB == expr.get_expr_type()
           || not_calculable_expr(expr)
           || (T_FUN_UDF == expr.get_expr_type()
-             && !static_cast<ObUDFRawExpr&>(expr).is_deterministic()))) {
+             && !static_cast<ObUDFRawExpr&>(expr).is_deterministic())
+          || T_FUN_SYS_REMOVE_CONST == expr.get_expr_type())) {
      is_const_expr = false;
   }
   if (OB_SUCC(ret) && T_OP_GET_USER_VAR == expr.get_expr_type()) {

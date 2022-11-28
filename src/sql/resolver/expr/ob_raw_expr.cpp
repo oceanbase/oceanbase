@@ -219,7 +219,8 @@ bool ObRawExpr::is_vectorize_result() const
       || has_flag(CNT_RAND_FUNC)
       || has_flag(CNT_SO_UDF)
       || has_flag(CNT_PRIOR)
-      || has_flag(CNT_OP_PSEUDO_COLUMN);
+      || has_flag(CNT_OP_PSEUDO_COLUMN)
+      || has_flag(CNT_VOLATILE_CONST);
 
   // Cant be const expr, const expr's evaluate flag is not cleared in execution.
   // E.g.:

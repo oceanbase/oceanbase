@@ -1057,6 +1057,8 @@ int ObSelectLogPlan::generate_merge_group_sort_keys(ObLogicalOperator *top,
       if (OB_ISNULL(expr = rollup_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
+      } else if (T_FUN_SYS_REMOVE_CONST == expr->get_expr_type()) {
+        // do nothing
       } else if (OB_FAIL(ObOptimizerUtil::is_const_expr(expr,
                                                         top->get_output_const_exprs(),
                                                         is_const))) {
