@@ -25,9 +25,6 @@ struct ObScnRange
 public:
   static const palf::SCN MIN_SCN;
   static const palf::SCN MAX_SCN;
-  static const int64_t MIN_TS;
-  static const int64_t MAX_TS;
-  static const int64_t OLD_MAX_TS;
 
   ObScnRange();
   int64_t hash() const;

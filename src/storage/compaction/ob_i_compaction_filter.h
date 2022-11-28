@@ -83,17 +83,21 @@ public:
   ObTransStatusFilter()
     : ObICompactionFilter(true),
       is_inited_(false),
-      filter_val_(INT64_MAX),
+      filter_val_(),
       filter_col_idx_(0),
-      max_filtered_end_scn_(0) {}
+      max_filtered_end_scn_()
+  {
+    filter_val_.set_max();
+    max_filtered_end_scn_.set_min();
+  }
   ~ObTransStatusFilter() {}
-  int init(const int64_t filter_val, const int64_t filter_col_idx);
+  int init(const palf::SCN &filter_val, const int64_t filter_col_idx);
   OB_INLINE virtual void reset() override
   {
     ObICompactionFilter::reset();
-    filter_val_ = INT64_MAX;
+    filter_val_.set_max();
     filter_col_idx_ = 0;
-    max_filtered_end_scn_ = 0;
+    max_filtered_end_scn_.set_min();
     is_inited_ = false;
   }
 
@@ -103,17 +107,14 @@ public:
       K_(filter_col_idx), K_(max_filtered_end_scn));
 
 public:
-  // TODO(scn): change scn of int64_t type to palf::SCN
-  int64_t get_max_filtered_end_scn_v0() { return max_filtered_end_scn_; }
-  palf::SCN get_max_filtered_end_scn() { palf::SCN tmp_scn; tmp_scn.convert_for_tx(max_filtered_end_scn_); return tmp_scn; }
-  int64_t get_recycle_scn_v0() { return filter_val_; }
-  palf::SCN get_recycle_scn() { palf::SCN tmp_scn; tmp_scn.convert_for_tx(filter_val_); return tmp_scn; }
+  palf::SCN get_max_filtered_end_scn() { return max_filtered_end_scn_; }
+  palf::SCN get_recycle_scn() { return filter_val_; }
 
 private:
   bool is_inited_;
-  int64_t filter_val_;
+  palf::SCN filter_val_;
   int64_t filter_col_idx_;
-  int64_t max_filtered_end_scn_;
+  palf::SCN max_filtered_end_scn_;
 };
 
 } // namespace compaction

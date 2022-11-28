@@ -286,7 +286,6 @@ struct ObVersionRange
   OB_UNIS_VERSION(1);
 public:
   static const int64_t MIN_VERSION = 0;
-  static const int64_t MAX_VERSION = INT64_MAX;
 
   ObVersionRange();
   OB_INLINE void reset();
@@ -310,7 +309,6 @@ struct ObNewVersionRange
   OB_UNIS_VERSION(1);
 public:
   static const int64_t MIN_VERSION = 0;
-  static const int64_t MAX_VERSION = INT64_MAX;
 
   ObNewVersionRange();
   OB_INLINE void reset();

@@ -198,7 +198,7 @@ public:
   ObTxCCCtx(transaction::ObTxState state, palf::SCN prepare_version)
     : state_(state), prepare_version_(prepare_version) {}
   // For Tx Data Table
-  ObTxCCCtx() : state_(transaction::ObTxState::MAX), prepare_version_(palf::SCN::invalid_scn()) {}
+  ObTxCCCtx() : state_(transaction::ObTxState::MAX), prepare_version_() {}
   TO_STRING_KV(K_(state),  K_(prepare_version));
 public:
   transaction::ObTxState state_;

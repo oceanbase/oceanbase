@@ -937,6 +937,31 @@ int LogEngine::submit_learner_keepalive_resp(const common::ObAddr &server,
   return ret;
 }
 
+int LogEngine::submit_committed_info_req(
+      const common::ObAddr &server,
+      const int64_t &msg_proposal_id,
+      const int64_t prev_log_id,
+      const int64_t &prev_log_proposal_id,
+      const LSN &committed_end_lsn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogEngine not init", K(ret), KPC(this));
+  } else if (OB_FAIL(log_net_service_.submit_committed_info_req(
+        server, msg_proposal_id,
+        prev_log_id, prev_log_proposal_id, committed_end_lsn))) {
+    PALF_LOG(ERROR, "LogNetService submit_committed_info_req failed", K(ret),
+        KPC(this), K(server),
+        K(prev_log_id), K(prev_log_proposal_id), K(committed_end_lsn));
+  } else {
+    PALF_LOG(TRACE, "submit_committed_info_req success", K(ret), KPC(this),
+        K(server), K(msg_proposal_id), K(prev_log_id),
+        K(prev_log_proposal_id), K(committed_end_lsn));
+  }
+  return ret;
+}
+
 LogMeta LogEngine::get_log_meta() const
 {
   ObSpinLockGuard guard(log_meta_lock_);

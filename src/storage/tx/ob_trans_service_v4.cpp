@@ -1108,7 +1108,6 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
 {
   int ret = OB_SUCCESS;
   bool existed = false;
-  int64_t epoch = 0;
   ObTxCreateArg arg(tx.can_elr_,  /* can_elr */
                     false,  /* for_replay */
                     tx.tenant_id_,
@@ -1379,7 +1378,6 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
                                             palf::SCN &snapshot)
 {
   int ret = OB_SUCCESS;
-  int64_t epoch = 0;
   bool leader = false;
   palf::SCN snapshot0;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
@@ -1487,19 +1485,14 @@ int ObTransService::batch_post_tx_msg_(ObTxRollbackSPMsg &msg,
 {
   int ret = OB_SUCCESS;
   int last_ret = OB_SUCCESS;
-  const ObTxDesc *tx_ptr = msg.tx_ptr_;
   ARRAY_FOREACH_NORET(list, idx) {
     auto &p = list.at(idx);
     msg.receiver_ = p.left_;
     msg.epoch_ = p.right_;
-    if (msg.epoch_ > 0) {
-      msg.tx_ptr_ = NULL;
-    }
     if (OB_FAIL(rpc_->post_msg(p.left_, msg))) {
       TRANS_LOG(WARN, "post msg falied", K(ret), K(msg), K(p));
       last_ret = ret;
     }
-    msg.tx_ptr_ = tx_ptr;
   }
   return last_ret;
 }
@@ -1684,22 +1677,45 @@ int ObTransService::handle_trans_abort_request(ObTxAbortMsg &abort_req, ObTransR
   return ret;
 }
 
+int ObTransService::create_tx_ctx_(ObTxRollbackSPMsg &msg, ObPartTransCtx *&ctx)
+{
+  int ret = OB_SUCCESS;
+  bool existed = false;
+  ObTxCreateArg arg(msg.can_elr_,  /* can_elr */
+                    false,  /* for_replay */
+                    msg.tenant_id_,
+                    msg.tx_id_,
+                    msg.receiver_,
+                    msg.cluster_id_,
+                    msg.cluster_version_,
+                    msg.session_id_, /*session_id*/
+                    msg.tx_addr_,
+                    msg.tx_expire_ts_,
+                    this);
+  ret = tx_ctx_mgr_.create_tx_ctx(arg, existed, ctx);
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(msg), K(arg));
+    ctx = NULL;
+  }
+  TRANS_LOG(TRACE, "create tx ctx for savepoint rollback", K(ret), K(msg), K(arg));
+  return ret;
+}
+
 int ObTransService::handle_sp_rollback_request(ObTxRollbackSPMsg &msg,
                                                obrpc::ObTxRpcRollbackSPResult &result)
 {
   int ret = OB_SUCCESS;
   int64_t ctx_born_epoch = -1;
+  ObFunction<int(ObPartTransCtx*&)> create_tx_ctx_func = [this, &msg](ObPartTransCtx *&ctx) -> int {
+    return this->create_tx_ctx_(msg, ctx);
+  };
   ret = ls_rollback_to_savepoint_(msg.tx_id_,
                                   msg.receiver_,
                                   msg.epoch_,
                                   msg.op_sn_,
                                   msg.savepoint_,
                                   ctx_born_epoch,
-                                  msg.tx_ptr_);
-  if (OB_NOT_NULL(msg.tx_ptr_)) {
-    ob_free((void*)msg.tx_ptr_);
-    msg.tx_ptr_ = NULL;
-  }
+                                  create_tx_ctx_func);
   result.status_ = ret;
   result.addr_ = self_;
   result.born_epoch_ = ctx_born_epoch;
@@ -1778,6 +1794,10 @@ int ObTransService::handle_tx_batch_req(int msg_type,
     } else if (!leader) {                                               \
       ret = OB_NOT_MASTER;                                              \
       TRANS_LOG(WARN, "ls not master", K(ret), K(msg));                 \
+    } else if (ctx->is_exiting()) {                                     \
+      ret = OB_TRANS_CTX_NOT_EXIST;                                     \
+      TRANS_LOG(INFO, "tx context is exiting",K(ret),K(msg));           \
+      handle_orphan_2pc_msg_(msg, false);                               \
     } else if (OB_FAIL(ctx->msg_handler__(msg))) {                      \
         TRANS_LOG(WARN, "handle 2pc request fail", K(ret), K(msg));     \
     }                                                                   \

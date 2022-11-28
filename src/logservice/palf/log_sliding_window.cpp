@@ -69,6 +69,7 @@ LogSlidingWindow::LogSlidingWindow()
     cannot_fetch_log_warn_time_(OB_INVALID_TIMESTAMP),
     cannot_freeze_log_warn_time_(OB_INVALID_TIMESTAMP),
     larger_log_warn_time_(OB_INVALID_TIMESTAMP),
+    log_life_long_warn_time_(OB_INVALID_TIMESTAMP),
     lc_cb_get_warn_time_(OB_INVALID_TIMESTAMP),
     fetch_dst_invalid_warn_time_(OB_INVALID_TIMESTAMP),
     commit_log_handling_lease_(),
@@ -1769,8 +1770,10 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       log_submit_to_slide_cost_stat_.stat(fs_cb_begin_ts - log_submit_ts);
 
       if (log_life_time > 100 * 1000) {
-        PALF_LOG(WARN, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
-            K(fs_cb_begin_ts), K(log_life_time));
+        if (palf_reach_time_interval(10 * 1000, log_life_long_warn_time_)) {
+          PALF_LOG(WARN, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
+              K(fs_cb_begin_ts), K(log_life_time));
+        }
       }
 
       if (OB_FAIL(checksum_.verify_accum_checksum(log_task_header.data_checksum_,
@@ -2470,7 +2473,9 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
         "start_id", get_start_id());
   } else if (OB_FAIL(guard.get_log_task(log_id, log_task))) {
     if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
-      PALF_LOG(WARN, "this log has slide out, no need receive", K(ret), K(log_id), K_(palf_id), K_(self));
+      if (REACH_TIME_INTERVAL(100 * 1000)) {
+        PALF_LOG(WARN, "this log has slide out, no need receive", K(ret), K(log_id), K_(palf_id), K_(self));
+      }
     } else {
       PALF_LOG(ERROR, "get_log_task failed", K(ret), K(log_id), K_(palf_id), K_(self), K(group_entry_header));
     }
@@ -3273,7 +3278,60 @@ int LogSlidingWindow::try_update_match_lsn_map_(const common::ObAddr &server, co
   return ret;
 }
 
-int LogSlidingWindow::leader_broadcast_committed_info_(const LSN &committed_end_lsn)
+int LogSlidingWindow::try_send_committed_info(const common::ObAddr &server,
+                                               const LSN &log_lsn,
+                                               const LSN &log_end_lsn,
+                                               const int64_t &log_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  LSN committed_end_lsn;
+  get_committed_end_lsn_(committed_end_lsn);
+  const int64_t curr_proposal_id = state_mgr_->get_proposal_id();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!log_lsn.is_valid() || !log_end_lsn.is_valid() || INVALID_PROPOSAL_ID == log_proposal_id) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (state_mgr_->is_leader_active()) {
+    // Leader
+    int64_t last_log_id = OB_INVALID_LOG_ID;
+    int64_t last_log_proposal_id = INVALID_PROPOSAL_ID;
+    if (OB_FAIL(leader_get_committed_log_info_(committed_end_lsn, last_log_id, last_log_proposal_id))
+        || OB_INVALID_LOG_ID == last_log_id) {
+      // no need send committed_info
+    } else if (OB_FAIL(log_engine_->submit_committed_info_req(server, curr_proposal_id,
+                last_log_id, log_proposal_id, committed_end_lsn))) {
+      PALF_LOG(WARN, "submit_committed_info_req failed", K(ret), K_(palf_id), K_(self), K(server));
+    }
+  } else {
+    // Follower
+    int64_t last_slide_log_id = OB_INVALID_LOG_ID;
+    SCN last_slide_scn;
+    LSN last_slide_lsn;
+    LSN last_slide_end_lsn;
+    int64_t last_slide_log_pid = INVALID_PROPOSAL_ID;
+    int64_t last_slide_accum_checksum = -1;
+    get_last_slide_log_info_(last_slide_log_id, last_slide_scn, last_slide_lsn, \
+        last_slide_end_lsn, last_slide_log_pid, last_slide_accum_checksum);
+    if (log_lsn == last_slide_lsn
+        && log_proposal_id == last_slide_log_pid
+        && committed_end_lsn == log_end_lsn) {
+      // If arg log does match with last slide log, follower can send committed_info to server.
+      OB_ASSERT(log_end_lsn == last_slide_end_lsn);
+      if (OB_FAIL(log_engine_->submit_committed_info_req(server, curr_proposal_id,
+            last_slide_log_id, log_proposal_id, committed_end_lsn))) {
+        PALF_LOG(WARN, "submit_committed_info_req failed", K(ret), K_(palf_id), K_(self), K(server));
+      } else {
+        PALF_LOG(TRACE, "follower try_send_committed_info success", K(ret), K_(palf_id), K_(self),
+            K(last_slide_log_id), K(log_proposal_id), K(committed_end_lsn));
+      }
+    }
+  }
+  return ret;
+}
+
+int LogSlidingWindow::leader_get_committed_log_info_(const LSN &committed_end_lsn,
+                                                     int64_t &log_id,
+                                                     int64_t &log_proposal_id)
 {
   int ret = OB_SUCCESS;
   const int64_t max_log_id = get_max_log_id();
@@ -3289,25 +3347,38 @@ int LogSlidingWindow::leader_broadcast_committed_info_(const LSN &committed_end_
     // log_task is invalid or not freezed, that means there is maybe new log after committed_end_lsn.
     // No need broadcast commonitted_info.
   } else {
-    int64_t log_proposal_id = INVALID_PROPOSAL_ID;
     LSN log_end_lsn;
     log_task->lock();
     log_proposal_id = log_task->get_proposal_id();
     log_end_lsn = log_task->get_begin_lsn() + LogGroupEntryHeader::HEADER_SER_SIZE + log_task->get_data_len();
     log_task->unlock();
     if (log_end_lsn == committed_end_lsn) {
-      ObMemberList dst_member_list;
-      const int64_t curr_proposal_id = state_mgr_->get_proposal_id();
-      if (OB_FAIL(mm_->get_curr_member_list(dst_member_list))) {
-        PALF_LOG(WARN, "get_curr_member_list failed", K(ret), K_(palf_id), K_(self));
-      } else if (OB_FAIL(dst_member_list.remove_server(self_))) {
-        PALF_LOG(WARN, "dst_member_list remove_server failed", K(ret), K_(palf_id), K_(self));
-      } else if (dst_member_list.is_valid()
-                 && OB_FAIL(log_engine_->submit_committed_info_req(dst_member_list, curr_proposal_id,
-                    max_log_id, log_proposal_id, committed_end_lsn))) {
-      } else {}
+      log_id = max_log_id;
     }
-    PALF_LOG(TRACE, "leader_broadcast_committed_info_", K(ret), K_(palf_id), K_(self), K(max_log_id));
+  }
+  return ret;
+}
+
+int LogSlidingWindow::leader_broadcast_committed_info_(const LSN &committed_end_lsn)
+{
+  int ret = OB_SUCCESS;
+  const int64_t curr_proposal_id = state_mgr_->get_proposal_id();
+  int64_t log_id = OB_INVALID_LOG_ID;
+  int64_t log_proposal_id = INVALID_PROPOSAL_ID;
+  ObMemberList dst_member_list;
+  if (OB_FAIL(leader_get_committed_log_info_(committed_end_lsn, log_id, log_proposal_id))
+      || OB_INVALID_LOG_ID == log_id) {
+    // no need send committed_info
+  } else if (OB_FAIL(mm_->get_curr_member_list(dst_member_list))) {
+    PALF_LOG(WARN, "get_curr_member_list failed", K(ret), K_(palf_id), K_(self));
+  } else if (OB_FAIL(dst_member_list.remove_server(self_))) {
+    PALF_LOG(WARN, "dst_member_list remove_server failed", K(ret), K_(palf_id), K_(self));
+  } else if (dst_member_list.is_valid()
+             && OB_FAIL(log_engine_->submit_committed_info_req(dst_member_list, curr_proposal_id,
+                log_id, log_proposal_id, committed_end_lsn))) {
+    PALF_LOG(WARN, "submit_committed_info_req failed", K(ret), K_(palf_id), K_(self), K(log_id));
+  } else {
+    PALF_LOG(TRACE, "leader_broadcast_committed_info_", K(ret), K_(palf_id), K_(self), K(log_id));
   }
   return ret;
 }

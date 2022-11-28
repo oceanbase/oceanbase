@@ -180,7 +180,8 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), target_exprs))) {
     LOG_WARN("failed to remove condition exprs", K(ret));
   } else if (is_root_table) {
-    if (right_table->is_joined_table() &&
+    if ((right_table->is_joined_table() ||
+        (lib::is_mysql_mode() && right_table->has_for_update())) &&
         OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
                                                          ctx_,
                                                          right_table,
@@ -194,7 +195,14 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
   } else {
     TableItem *table = joined_table;
     ObDMLStmt *ref_query = NULL;
-    if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
+    TableItem *view_table_for_update = NULL;
+    if (lib::is_mysql_mode() && right_table->has_for_update() &&
+        OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
+                                                         ctx_,
+                                                         right_table,
+                                                         view_table_for_update))) {
+      LOG_WARN("failed to create semi view", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
                                                          ctx_,
                                                          table,
                                                          view_table))) {
@@ -295,6 +303,7 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
       ObRawExpr *from_expr = NULL;
       ObRawExpr *to_expr = NULL;
       ObSysFunRawExpr *cast_expr = NULL;
+      ObCastMode cm;
       if (OB_ISNULL(col_item = stmt->get_column_item(i)) ||
           OB_ISNULL(from_expr = col_item->expr_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -304,12 +313,23 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
       } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_,
                                                          to_expr))) {
         LOG_WARN("failed to build null expr", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_,
-                                                          to_expr,
-                                                          from_expr->get_result_type(),
-                                                          cast_expr,
-                                                          ctx_->session_info_))) {
-        LOG_WARN("failed to create cast expr", K(ret));
+      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(true,/* explicit_cast */
+                                                            0,    /* result_flag */
+                                                            ctx_->session_info_, cm))) {
+        LOG_WARN("fail to get default cast mode", K(ret));
+      } else if (is_mysql_mode() &&
+                  OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_,
+                                                            to_expr,
+                                                            from_expr->get_result_type(),
+                                                            cast_expr, ctx_->session_info_,
+                                                            false, cm))) {
+          LOG_WARN("failed to cast expr", K(ret), K(*from_expr), K(*to_expr));
+        } else if (is_oracle_mode() &&
+                   OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_,
+                                                            to_expr,
+                                                            from_expr->get_result_type(),
+                                                            cast_expr, ctx_->session_info_))) {
+          LOG_WARN("failed to cast expr", K(ret), K(*from_expr), K(*to_expr));
       } else if (OB_ISNULL(to_expr = cast_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null cast expr", K(ret));

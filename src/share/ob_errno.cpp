@@ -10725,6 +10725,18 @@ static const _error _error_OB_DDL_SCHEMA_VERSION_NOT_MATCH = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -5403, ddl schema version not match",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5403, ddl schema version not match"
 };
+static const _error _error_OB_ERR_COLUMN_GROUP_DUPLICATE = {
+      .error_name            = "OB_ERR_COLUMN_GROUP_DUPLICATE",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = ER_DUP_FIELDNAME,
+      .sqlstate              = "42S21",
+      .str_error             = "Duplicate column group name",
+      .str_user_error        = "Duplicate column group name '%.*s'",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5404, Duplicate column group name",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5404, Duplicate column group name '%.*s'"
+};
 static const _error _error_OB_ERR_INVALID_JSON_TEXT = {
       .error_name            = "OB_ERR_INVALID_JSON_TEXT",
       .error_cause           = "Internal Error",
@@ -22856,6 +22868,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED] = &_error_OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED;
     _errors[-OB_ERR_GET_STACKED_DIAGNOSTICS] = &_error_OB_ERR_GET_STACKED_DIAGNOSTICS;
     _errors[-OB_DDL_SCHEMA_VERSION_NOT_MATCH] = &_error_OB_DDL_SCHEMA_VERSION_NOT_MATCH;
+    _errors[-OB_ERR_COLUMN_GROUP_DUPLICATE] = &_error_OB_ERR_COLUMN_GROUP_DUPLICATE;
     _errors[-OB_ERR_INVALID_JSON_TEXT] = &_error_OB_ERR_INVALID_JSON_TEXT;
     _errors[-OB_ERR_INVALID_JSON_TEXT_IN_PARAM] = &_error_OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
     _errors[-OB_ERR_INVALID_JSON_BINARY_DATA] = &_error_OB_ERR_INVALID_JSON_BINARY_DATA;

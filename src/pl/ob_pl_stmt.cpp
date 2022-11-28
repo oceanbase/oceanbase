@@ -1200,6 +1200,10 @@ int ObPLBlockNS::check_dup_symbol(const ObString &name, const ObPLDataType &type
           is_dup = true;
           ObPLVar *pl_var = const_cast<ObPLVar *>(symbol_table_->get_symbol(symbols_.at(i)));
           pl_var->set_dup_declare(is_dup);
+          if (pl_var->is_referenced()) {
+            ret = OB_ERR_DECL_MORE_THAN_ONCE;
+            LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, name.length(), name.ptr());
+          }
         }
       } else { /*do nothing*/ }
     }
@@ -2371,11 +2375,13 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
          && OB_INVALID_INDEX == var_idx
          && OB_INVALID_INDEX == parent_id
          && i < get_symbols().count(); ++i) {
-      const ObPLVar *pl_var = symbol_table_->get_symbol(get_symbols().at(i));
+      ObPLVar *pl_var = const_cast<ObPLVar *>(symbol_table_->get_symbol(get_symbols().at(i)));
       if (OB_ISNULL(pl_var)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("PL var ns is null", K(i), K(get_symbols().at(i)), K(ret));
       } else if (ObCharset::case_compat_mode_equal(var_name, pl_var->get_name())) {
+        bool is_referenced = true;
+        pl_var->set_is_referenced(is_referenced);
         if (pl_var->is_dup_declare()) {
           ret = OB_ERR_DECL_MORE_THAN_ONCE;
           LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, var_name.length(), var_name.ptr());

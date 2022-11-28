@@ -92,9 +92,10 @@ int ObMultiVersionValueIterator::init_multi_version_iter()
   max_committed_trans_version_ = (NULL != version_iter_) ? version_iter_->trans_version_.get_val_for_tx() : -1;
   // NB: It will assign -1 to cur_trans_version_, while it will not
   // cause any wrong logic, but take care of it
-  cur_trans_version_.convert_for_tx(max_committed_trans_version_);
   multi_version_iter_ = iter;
-  if (max_committed_trans_version_ <= version_range_.multi_version_start_) {
+  if (OB_FAIL(cur_trans_version_.convert_for_tx(max_committed_trans_version_))) {
+    TRANS_LOG(ERROR, "failed to convert scn", K(ret), K_(max_committed_trans_version));
+  } else if (max_committed_trans_version_ <= version_range_.multi_version_start_) {
     //如果多版本的开始版本大于等于当前以提交的最大版本
     //则只迭代出所有trans node compact结果
   } else {

@@ -1942,7 +1942,7 @@ int ObPartitionMergeDumper::generate_dump_table_name(const char *dir_name,
     STORAGE_LOG(WARN, "table is null", K(ret));
   } else {
     int64_t pret = snprintf(
-                       file_name, OB_MAX_FILE_NAME_LENGTH, "%s/%s.%s.%ld.%s.%d.%s.%ld.%s.%ld",
+                       file_name, OB_MAX_FILE_NAME_LENGTH, "%s/%s.%s.%ld.%s.%d.%s.%lu.%s.%lu",
                        dir_name,
                        table->is_memtable() ? "dump_memtable" : "dump_sstable",
                        "tablet_id", table->get_key().tablet_id_.id(),

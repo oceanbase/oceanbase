@@ -398,13 +398,13 @@ int ElectionImpl::send_(const ElectionChangeLeaderMsg &msg) const
   #undef PRINT_WRAPPER
 }
 
-int ElectionImpl::revoke()
+int ElectionImpl::revoke(const RoleChangeReason &reason)
 {
   ELECT_TIME_GUARD(500_ms);
   int ret = OB_SUCCESS;
   LockGuard lock_guard(lock_);
   CHECK_ELECTION_INIT();
-  ret = proposer_.revoke();
+  ret = proposer_.revoke(reason);
   return ret;
 }
 

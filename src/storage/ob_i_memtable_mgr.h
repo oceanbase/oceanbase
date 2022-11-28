@@ -94,7 +94,7 @@ public:
       memtable::ObMemtable *&memtable,
       const memtable::MultiSourceDataUnitType type) const;
 
-  int release_memtables(const int64_t log_ts);
+  int release_memtables(const palf::SCN &scn);
   // force release all memtables
   // WARNING: this will release all the ref of memtable, make sure you will not use it again.
   int release_memtables();

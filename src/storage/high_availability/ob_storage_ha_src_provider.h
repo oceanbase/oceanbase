@@ -24,7 +24,7 @@ class ObStorageHASrcProvider {
 public:
   ObStorageHASrcProvider();
   virtual ~ObStorageHASrcProvider();
-  int init(const uint64_t tenant_id, storage::ObStorageRpc *storage_rpc);
+  int init(const uint64_t tenant_id, const ObMigrationOpType::TYPE &type, storage::ObStorageRpc *storage_rpc);
   int choose_ob_src(const share::ObLSID &ls_id, const palf::SCN &local_clog_checkpoint_scn,
       ObStorageHASrcInfo &src_info);
 
@@ -41,6 +41,7 @@ private:
 private:
   bool is_inited_;
   uint64_t tenant_id_;
+  ObMigrationOpType::TYPE type_;
   storage::ObStorageRpc *storage_rpc_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHASrcProvider);
 };

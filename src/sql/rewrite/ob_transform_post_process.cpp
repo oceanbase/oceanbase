@@ -1046,12 +1046,17 @@ int ObTransformPostProcess::extract_onetime_subquery(ObRawExpr *&expr,
         !expr->has_flag(CNT_ALIAS);
 
     if (is_valid) {
+      int64_t ref_count = 0;
       if (OB_FAIL(is_non_correlated_exists_for_onetime(expr, 
-                    is_valid_non_correlated_exists))) {
+                    is_valid_non_correlated_exists,
+                    ref_count))) {
         LOG_WARN("failed to check non correlated exist for one time", K(ret));
-      } else if (is_valid_non_correlated_exists &&
-                OB_FAIL(onetime_list.push_back(expr))) {
+      } else if (!is_valid_non_correlated_exists) {
+        // do nothing
+      } else if (OB_FAIL(onetime_list.push_back(expr))) {
         LOG_WARN("failed to push back non-correlated exists", K(ret));
+      } else if (ref_count > 1) {
+        is_valid = false;
       }
     }
   }
@@ -1165,7 +1170,8 @@ int ObTransformPostProcess::create_onetime_param(ObDMLStmt *stmt,
 }
 
 int ObTransformPostProcess::is_non_correlated_exists_for_onetime(ObRawExpr *expr,
-                                                                 bool &is_non_correlated_exists_for_onetime)
+                                                                 bool &is_non_correlated_exists_for_onetime,
+                                                                 int64_t &ref_count)
 {
   int ret = OB_SUCCESS;
   is_non_correlated_exists_for_onetime = false;
@@ -1181,6 +1187,7 @@ int ObTransformPostProcess::is_non_correlated_exists_for_onetime(ObRawExpr *expr
       LOG_WARN("failed to check subquery has ref assign user var", K(ret));
     } else if (!has_ref_assign_user_var && query_ref_expr->get_param_count() == 0) {
       is_non_correlated_exists_for_onetime = true;
+      ref_count = query_ref_expr->get_ref_count();
     }
   }
   return ret;

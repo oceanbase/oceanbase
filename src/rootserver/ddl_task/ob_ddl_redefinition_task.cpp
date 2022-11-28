@@ -1847,7 +1847,9 @@ int ObSyncTabletAutoincSeqCtx::sync()
           LOG_WARN("failed to call and process", K(ret));
         }
       }
-      is_synced_ = true;
+      if (OB_SUCC(ret)) {
+        is_synced_ = true;
+      }
     }
   }
   return ret;

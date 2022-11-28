@@ -25,6 +25,7 @@
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -1020,6 +1021,14 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
 
 {
   int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("storage_ddl", "before_write_prepare_log",
+                        "table_key", table_key,
+                        "table_id", table_id,
+                        "execution_id", execution_id,
+                        "ddl_task_id", ddl_task_id);
+  DEBUG_SYNC(BEFORE_DDL_WRITE_PREPARE_LOG);
+#endif
   prepare_scn.reset();
   ObLS *ls = nullptr;
   ObDDLPrepareLog log;

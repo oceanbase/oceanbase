@@ -751,7 +751,9 @@ TEST_F(TestCompactionPolicy, check_minor_merge_basic)
 
   common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
   common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
+  palf::SCN scn;
+  scn.convert_for_tx(1);
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
 
   ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -784,9 +786,13 @@ TEST_F(TestCompactionPolicy, check_no_need_minor_merge)
 
   common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
   common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(320, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(400, 1, 0)));
+  palf::SCN scn;
+  scn.convert_for_tx(1);
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
+  scn.convert_for_tx(320);
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
+  scn.convert_for_tx(400);
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
 
   ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -819,8 +825,11 @@ TEST_F(TestCompactionPolicy, check_major_merge_basic)
 
   common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
   common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(340, 1, 0)));
+  palf::SCN scn;
+  scn.convert_for_tx(1);
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
+  scn.convert_for_tx(340);
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
 
   ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -854,8 +863,11 @@ TEST_F(TestCompactionPolicy, check_no_need_major_merge)
 
   common::ObArray<ObTenantFreezeInfoMgr::FreezeInfo> freeze_info;
   common::ObArray<share::ObSnapshotInfo> snapshots;
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(1, 1, 0)));
-  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(340, 1, 0)));
+  palf::SCN scn;
+  scn.convert_for_tx(1);
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
+  scn.convert_for_tx(340);
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(ObTenantFreezeInfoMgr::FreezeInfo(scn, 1, 0)));
 
   ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info, snapshots);
   ASSERT_EQ(OB_SUCCESS, ret);

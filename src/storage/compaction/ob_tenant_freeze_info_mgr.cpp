@@ -446,14 +446,14 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
       }
     }
     snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L *1000L);
-    snapshot_version = std::min(snapshot_version, static_cast<int64_t>(freeze_info.freeze_scn.get_val_for_tx()));
+    snapshot_version = std::min(snapshot_version, freeze_info.freeze_scn.get_val_for_tx());
     for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
       bool related = false;
       const ObSnapshotInfo &snapshot = snapshots.at(i);
       if (OB_FAIL(is_snapshot_related_to_tablet(tablet_id, snapshot, related))) {
         STORAGE_LOG(WARN, "fail to check snapshot relation", K(ret), K(tablet_id), K(snapshot));
       } else if (related) {
-        snapshot_version = std::min(snapshot_version, (int64_t)snapshot.snapshot_scn_.get_val_for_tx());
+        snapshot_version = std::min(snapshot_version, snapshot.snapshot_scn_.get_val_for_tx());
       }
     }
   }

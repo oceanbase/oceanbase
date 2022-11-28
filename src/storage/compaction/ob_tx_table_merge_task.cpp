@@ -76,7 +76,7 @@ int ObTxTableMergeDag::init_by_param(const ObIDagInitParam *param)
       LOG_WARN("tx table guard is invalid", K(tmp_ret), KPC(merge_param), K(guard));
     } else if (OB_TMP_FAIL(guard.get_tx_table()->get_recycle_scn(recycle_scn))) {
       LOG_WARN("failed to get recycle ts", K(tmp_ret), KPC(merge_param));
-    } else if (OB_TMP_FAIL(compaction_filter_.init(recycle_scn.get_val_for_tx(), ObTxTable::get_filter_col_idx()))) {
+    } else if (OB_TMP_FAIL(compaction_filter_.init(recycle_scn, ObTxTable::get_filter_col_idx()))) {
       LOG_WARN("failed to get init compaction filter", K(tmp_ret), KPC(merge_param), K(recycle_scn));
     } else {
       ctx_->compaction_filter_ = &compaction_filter_;

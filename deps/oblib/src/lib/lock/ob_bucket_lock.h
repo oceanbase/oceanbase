@@ -68,7 +68,7 @@ private:
 class ObBucketRLockGuard final
 {
 public:
-  ObBucketRLockGuard(ObBucketLock &lock, const uint64_t bucket_index)
+  [[nodiscard]] ObBucketRLockGuard(ObBucketLock &lock, const uint64_t bucket_index)
      : lock_(lock),
        index_(bucket_index),
        ret_(OB_SUCCESS),
@@ -109,7 +109,7 @@ private:
 class ObBucketWLockGuard final
 {
 public:
-  ObBucketWLockGuard(ObBucketLock &lock, const uint64_t bucket_index)
+  [[nodiscard]] ObBucketWLockGuard(ObBucketLock &lock, const uint64_t bucket_index)
      : lock_(lock),
        index_(bucket_index),
        ret_(OB_SUCCESS),
@@ -150,7 +150,7 @@ private:
 class ObBucketWLockAllGuard final
 {
 public:
-  ObBucketWLockAllGuard(ObBucketLock &lock)
+  [[nodiscard]] ObBucketWLockAllGuard(ObBucketLock &lock)
      : lock_(lock),
        ret_(OB_SUCCESS),
        lock_start_ts_(0)
@@ -189,7 +189,7 @@ private:
 class ObBucketTryWLockAllGuard final
 {
 public:
-  ObBucketTryWLockAllGuard(ObBucketLock &lock)
+  [[nodiscard]] ObBucketTryWLockAllGuard(ObBucketLock &lock)
      : lock_(lock),
        ret_(OB_SUCCESS),
        lock_start_ts_(0)
@@ -234,7 +234,7 @@ private:
 class ObBucketTryRLockAllGuard final
 {
 public:
-  ObBucketTryRLockAllGuard(ObBucketLock &lock)
+  [[nodiscard]] ObBucketTryRLockAllGuard(ObBucketLock &lock)
      : lock_(lock),
        ret_(OB_SUCCESS),
        lock_start_ts_(0)
@@ -279,7 +279,7 @@ private:
 class ObMultiBucketLockGuard final
 {
 public:
-  ObMultiBucketLockGuard(ObBucketLock &lock, const bool is_write_lock);
+  [[nodiscard]] ObMultiBucketLockGuard(ObBucketLock &lock, const bool is_write_lock);
   ~ObMultiBucketLockGuard();
   int lock_multi_buckets(ObIArray<uint64_t> &hash_array);
 private:
@@ -293,7 +293,7 @@ private:
 class ObBucketHashRLockGuard final
 {
 public:
-  ObBucketHashRLockGuard(ObBucketLock &lock, const uint64_t hash_value)
+  [[nodiscard]] ObBucketHashRLockGuard(ObBucketLock &lock, const uint64_t hash_value)
     : guard_(lock, lock.get_bucket_idx(hash_value))
   {
   }
@@ -307,7 +307,7 @@ private:
 class ObBucketHashWLockGuard final
 {
 public:
-  ObBucketHashWLockGuard(ObBucketLock &lock, const uint64_t hash_value)
+  [[nodiscard]] ObBucketHashWLockGuard(ObBucketLock &lock, const uint64_t hash_value)
     : guard_(lock, lock.get_bucket_idx(hash_value))
   {
   }

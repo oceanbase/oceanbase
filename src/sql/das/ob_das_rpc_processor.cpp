@@ -168,7 +168,14 @@ int ObDASSyncFetchP::process()
   } else if (OB_FAIL(das->get_task_res_mgr().iterator_task_result(task_id,
                                                                   datum_store,
                                                                   has_more))) {
-    LOG_WARN("get task result failed", KR(ret), K(res));
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST == ret)) {
+      // After server reboot, the hash map containing task results was gone.
+      // We need to retry for such cases.
+      LOG_WARN("task result was gone due to server reboot, will retry", KR(ret), K(res));
+      ret = OB_RPC_SEND_ERROR;
+    } else {
+      LOG_WARN("get task result failed", KR(ret), K(res));
+    }
   } else {
     res.set_has_more(has_more);
   }

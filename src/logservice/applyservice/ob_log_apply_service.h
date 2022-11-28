@@ -107,7 +107,8 @@ public:
 public:
   ObApplyServiceQueueTask();
   ~ObApplyServiceQueueTask();
-  int init(ObApplyStatus *apply_status);
+  int init(ObApplyStatus *apply_status,
+           const int64_t idx);
   void reset() override;
 public:
   Link *top();
@@ -120,15 +121,18 @@ public:
   void set_snapshot_check_submit_cb_cnt();
   int is_snapshot_apply_done(bool &is_done);
   int is_apply_done(bool &is_done);
+  int64_t idx() const;
   INHERIT_TO_STRING_KV("ObApplyServiceQueueTask", ObApplyServiceTask,
                        K(total_submit_cb_cnt_),
                        K(last_check_submit_cb_cnt_),
-                       K(total_apply_cb_cnt_));
+                       K(total_apply_cb_cnt_),
+                       K(idx_));
 private:
   int64_t total_submit_cb_cnt_;
   int64_t last_check_submit_cb_cnt_;
   int64_t total_apply_cb_cnt_;
   common::ObSpLinkQueue queue_;
+  int64_t idx_;
 };
 
 class ObApplyStatus
@@ -185,7 +189,8 @@ private:
                            const int64_t append_start_time,
                            const int64_t append_finish_time,
                            const int64_t cb_first_handle_time,
-                           const int64_t cb_start_time);
+                           const int64_t cb_start_time,
+                           const int64_t idx);
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;

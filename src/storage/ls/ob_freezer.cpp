@@ -867,7 +867,7 @@ int ObFreezer::get_newest_snapshot_version(const ObTabletID &tablet_id,
   } else if (OB_FAIL(ls_tablet_svr_->get_tablet(tablet_id,
       handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     TRANS_LOG(WARN, "[Freezer] fail to get tablet", K(ret), K_(ls_id), K(tablet_id));
-  } else if (OB_FAIL(snapshot_version.convert_for_lsn_allocator(handle.get_obj()->get_snapshot_version()))) {
+  } else if (OB_FAIL(snapshot_version.convert_for_tx(handle.get_obj()->get_snapshot_version()))) {
     TRANS_LOG(WARN, "[Freezer] fail to convert from ts", K(ret), K_(ls_id), K(tablet_id));
   } else {
     TRANS_LOG(TRACE, "[Freezer] get_snapshot_version", K(ret), K_(ls_id), K(tablet_id), K(snapshot_version));

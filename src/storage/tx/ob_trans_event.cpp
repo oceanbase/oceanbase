@@ -129,6 +129,22 @@ void ObTransStatistic::add_trans_total_used_time(const uint64_t tenant_id, const
   //trans_total_used_time_stat_.add(value);
 }
 
+void ObTransStatistic::add_elr_enable_trans_count(const uint64_t tenant_id, const int64_t value)
+{
+  common::ObTenantStatEstGuard guard(tenant_id);
+  EVENT_ADD(TRANS_ELR_ENABLE_COUNT, value);
+}
+void ObTransStatistic::add_elr_unable_trans_count(const uint64_t tenant_id, const int64_t value)
+{
+  common::ObTenantStatEstGuard guard(tenant_id);
+  EVENT_ADD(TRANS_ELR_UNABLE_COUNT, value);
+}
+void ObTransStatistic::add_read_elr_row_count(const uint64_t tenant_id, const int64_t value)
+{
+  common::ObTenantStatEstGuard guard(tenant_id);
+  EVENT_ADD(READ_ELR_ROW_COUNT, value);
+}
+
 void ObTransStatistic::add_local_stmt_count(const uint64_t tenant_id, const int64_t value)
 {
   UNUSED(value);

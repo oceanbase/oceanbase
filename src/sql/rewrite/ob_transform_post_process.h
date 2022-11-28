@@ -142,7 +142,8 @@ private:
                               const int64_t stmt_level);
 
   int is_non_correlated_exists_for_onetime(ObRawExpr *expr,
-                                           bool &is_non_correlated_exists_for_onetime);
+                                           bool &is_non_correlated_exists_for_onetime,
+                                           int64_t &ref_count);
 
   DISALLOW_COPY_AND_ASSIGN(ObTransformPostProcess);
 };

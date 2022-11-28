@@ -121,8 +121,10 @@ public:
     msg.request_id_ = op_sn_;
     msg.savepoint_ = 1;
     msg.op_sn_ = op_sn_;
-    msg.branch_id_ = 1;
-    msg.tx_ptr_ = tx;
+    msg.can_elr_ = true;
+    msg.session_id_ = 202;
+    msg.tx_addr_ = ObAddr(ObAddr::VER::IPV4, "127.1.1.2", 8919);
+    msg.tx_expire_ts_ = 120000;
   }
   void build_tx_keepalive_msg(ObTxKeepaliveMsg &msg)
   {
@@ -432,11 +434,10 @@ TEST_F(TestObTxMsg, trans_rollback_sp_msg)
   EXPECT_EQ(msg.cluster_id_, msg1.cluster_id_);
   EXPECT_EQ(msg.savepoint_, msg1.savepoint_);
   EXPECT_EQ(msg.op_sn_, msg1.op_sn_);
-  EXPECT_EQ(msg.branch_id_, msg1.branch_id_);
-  EXPECT_EQ(msg.tx_ptr_->parts_[0].id_, msg1.tx_ptr_->parts_[0].id_);
-  if (OB_NOT_NULL(msg.tx_ptr_)) {
-    msg.tx_ptr_ = NULL;
-  }
+  EXPECT_EQ(msg.can_elr_, msg1.can_elr_);
+  EXPECT_EQ(msg.session_id_, msg1.session_id_);
+  EXPECT_EQ(msg.tx_addr_, msg1.tx_addr_);
+  EXPECT_EQ(msg.tx_expire_ts_, msg1.tx_expire_ts_);
 }
 
 TEST_F(TestObTxMsg, trans_keepalive_msg)

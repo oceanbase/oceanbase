@@ -707,6 +707,8 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
             // set current time before do pre calculation
           } else if (FALSE_IT(phy_plan_ctx.set_cur_time(ObTimeUtility::current_time(), *session))) {
             // do nothing
+          } else if (FALSE_IT(phy_plan_ctx.set_last_trace_id(session->get_last_trace_id()))) {
+            // do nothing
           } else if (OB_FAIL(ObPlanCacheObject::pre_calculation(false,
                                                                 *pre_calc_frame,
                                                                 exec_ctx))) {

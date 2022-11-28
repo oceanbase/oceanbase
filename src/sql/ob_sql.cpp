@@ -2409,6 +2409,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
           if (phy_plan->get_fetch_cur_time() && !pctx->has_cur_time()) {
             pctx->set_cur_time(ObTimeUtility::current_time(), *(sql_ctx.session_info_));
           }
+          pctx->set_last_trace_id(sql_ctx.session_info_->get_last_trace_id());
         }
 
         if (OB_FAIL(ret)) {

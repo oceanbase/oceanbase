@@ -3715,8 +3715,9 @@ bool ObPhysicalRestoreTenantArg::is_valid() const
          && uri_.length() < share::OB_MAX_RESTORE_DEST_LENGTH
          && !restore_option_.empty()
          && restore_option_.length() < common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH
-         && restore_scn_.is_valid();
+         && (!with_restore_scn_ || restore_scn_.is_valid());
 }
+
 OB_SERIALIZE_MEMBER((ObPhysicalRestoreTenantArg, ObCmdArg),
                     tenant_name_,
                     uri_,

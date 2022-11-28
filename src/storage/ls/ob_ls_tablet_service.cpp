@@ -3266,6 +3266,39 @@ int ObLSTabletService::insert_lob_col(
   return ret;
 }
 
+int ObLSTabletService::check_lob_tablet_valid(ObTabletHandle &data_tablet)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid_aux_lob_table = false;
+  ObTabletBindingInfo ddl_data;
+  if (OB_FAIL(data_tablet.get_obj()->get_ddl_data(ddl_data))) {
+    LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet));
+  } else {
+    is_valid_aux_lob_table = ddl_data.lob_meta_tablet_id_.is_valid() && ddl_data.lob_piece_tablet_id_.is_valid();
+    if (!is_valid_aux_lob_table) {
+      ObTabletTxMultiSourceDataUnit tx_data;
+      if (OB_FAIL(data_tablet.get_obj()->get_tx_data(tx_data))) {
+        LOG_WARN("fail to get tx data", K(ret), K(data_tablet));
+      } else if (tx_data.is_in_tx()) {
+        ret = OB_SCHEMA_EAGAIN;
+        LOG_WARN("do retry for data tablet is in tx, maybe wait for lob tablet finish", K(ret), K(ddl_data));
+      } else {
+        // maybe has committed, refresh binding info and check once
+        if (OB_FAIL(data_tablet.get_obj()->get_ddl_data(ddl_data))) {
+          LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet));
+        } else {
+          is_valid_aux_lob_table = ddl_data.lob_meta_tablet_id_.is_valid() && ddl_data.lob_piece_tablet_id_.is_valid();
+          if (!is_valid_aux_lob_table) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("aux lob table must valid when lob column exist", K(ret), K(ddl_data));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSTabletService::insert_lob_tablet_row(
     ObTabletHandle &data_tablet,
     ObDMLRunningCtx &run_ctx,
@@ -3274,7 +3307,7 @@ int ObLSTabletService::insert_lob_tablet_row(
   int ret = OB_SUCCESS;
   int64_t col_cnt = run_ctx.col_descs_->count();
   ObLobManager *lob_mngr = MTL(ObLobManager*);
-  bool check_ddl_data = false;
+  bool check_lob = false;
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]failed to get lob manager handle.", K(ret));
@@ -3282,27 +3315,20 @@ int ObLSTabletService::insert_lob_tablet_row(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]column count invalid", K(ret), K(col_cnt), K(row.row_val_.count_));
   } else {
-    bool is_valid_aux_lob_table = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
       const ObColDesc &column = run_ctx.col_descs_->at(i);
-      if (column.col_type_.is_lob_v2()) {
-        if (!check_ddl_data) {
-          ObTabletBindingInfo ddl_data;
-          if (OB_FAIL(data_tablet.get_obj()->get_ddl_data(ddl_data))) {
-            LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet));
+      ObObj &obj = row.row_val_.get_cell(i);
+      if (!column.col_type_.is_lob_v2() || obj.is_null() || obj.is_nop_value()) {
+        // do nothing
+      } else {
+        if (!check_lob) {
+          if (OB_FAIL(check_lob_tablet_valid(data_tablet))) {
+            LOG_WARN("failed to check_lob_tablet_valid", K(ret), K(data_tablet));
           } else {
-            check_ddl_data = true;
-            const common::ObTabletID &data_tablet_id = data_tablet.get_obj()->tablet_meta_.tablet_id_;
-            const common::ObTabletID &lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
-            const common::ObTabletID &lob_piece_tablet_id = ddl_data.lob_piece_tablet_id_;
-            is_valid_aux_lob_table = lob_meta_tablet_id.is_valid() && lob_piece_tablet_id.is_valid();
+            check_lob = true;
           }
         }
-        ObObj &obj = row.row_val_.get_cell(i);
         if (OB_FAIL(ret)) {
-        } else if (!is_valid_aux_lob_table) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("aux lob table must valid when lob column exist", K(ret), K(data_tablet));
         } else if(OB_FAIL(insert_lob_col(run_ctx, column, obj, nullptr, nullptr))) {
           LOG_WARN("[STORAGE_LOB]failed to insert lob col.", K(ret), K(row), K(i));
         }
@@ -3541,8 +3567,7 @@ int ObLSTabletService::process_lob_row(
     ObStoreRow &new_row)
 {
   int ret = OB_SUCCESS;
-  bool is_valid_aux_lob_table = false;
-  bool check_ddl_data = false;
+  bool check_lob = false;
   if (OB_UNLIKELY(old_row.row_val_.get_count() != new_row.row_val_.get_count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[STORAGE_LOB]invalid args", K(old_row), K(new_row), K(ret));
@@ -3565,20 +3590,12 @@ int ObLSTabletService::process_lob_row(
           ObLobCommon *lob_common = nullptr;
           ObLobAccessParam lob_param;
           lob_param.update_len_ = new_obj.get_string_len();
-          if (!check_ddl_data) {
+          if (!check_lob) {
             ObTabletBindingInfo ddl_data;
-            if (OB_FAIL(tablet_handle.get_obj()->get_ddl_data(ddl_data))) {
-              LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
+            if (OB_FAIL(check_lob_tablet_valid(tablet_handle))) {
+              LOG_WARN("failed to check_lob_tablet_valid", K(ret), K(tablet_handle));
             } else {
-              check_ddl_data = true;
-              const common::ObTabletID &data_tablet_id = tablet_handle.get_obj()->tablet_meta_.tablet_id_;
-              const common::ObTabletID &lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
-              const common::ObTabletID &lob_piece_tablet_id = ddl_data.lob_piece_tablet_id_;
-              is_valid_aux_lob_table = lob_meta_tablet_id.is_valid() && lob_piece_tablet_id.is_valid();
-              if (!is_valid_aux_lob_table) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("aux lob table must valid when lob column exist", K(ret), K(lob_meta_tablet_id), K(lob_piece_tablet_id));
-              }
+              check_lob = true;
             }
           }
           if (OB_FAIL(ret)) {
@@ -4708,9 +4725,12 @@ void ObLSTabletService::dump_diag_info_for_old_row_loss(
     }
 #ifdef ENABLE_DEBUG_LOG
     // print single row check info
-    if (NULL != store_ctx.mvcc_acc_ctx_.get_mem_ctx()
-        && NULL != store_ctx.mvcc_acc_ctx_.get_mem_ctx()->get_defensive_check_mgr()) {
-      (void)store_ctx.mvcc_acc_ctx_.get_mem_ctx()->get_defensive_check_mgr()->dump(access_param.iter_param_.tablet_id_);
+    if (store_ctx.mvcc_acc_ctx_.tx_id_.is_valid()) {
+      transaction::ObTransService *trx = MTL(transaction::ObTransService *);
+      if (OB_NOT_NULL(trx)
+          && NULL != trx->get_defensive_check_mgr()) {
+        (void)trx->get_defensive_check_mgr()->dump(store_ctx.mvcc_acc_ctx_.tx_id_);
+      }
     }
 #endif
   }

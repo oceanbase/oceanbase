@@ -23,7 +23,7 @@ template <class T>
 class ObLockGuardBase
 {
 public:
-  ObLockGuardBase(const T& lock, bool block = true) : lock_(lock)
+  [[nodiscard]] ObLockGuardBase(const T& lock, bool block = true) : lock_(lock)
   {
     acquired_ = !(block ? lock_.lock() : lock_.trylock());
   }
@@ -87,7 +87,7 @@ private:
 class ObRLockGuard
 {
 public:
-  ObRLockGuard(const ObRWLock& rwlock, bool block = true) : guard_((*rwlock.rlock()), block) {}
+  [[nodiscard]] ObRLockGuard(const ObRWLock& rwlock, bool block = true) : guard_((*rwlock.rlock()), block) {}
   ~ObRLockGuard(){}
   bool acquired() { return guard_.acquired(); }
 private:
@@ -97,7 +97,7 @@ private:
 class ObWLockGuard
 {
 public:
-  ObWLockGuard(const ObRWLock& rwlock, bool block = true) : guard_((*rwlock.wlock()), block) {}
+  [[nodiscard]] ObWLockGuard(const ObRWLock& rwlock, bool block = true) : guard_((*rwlock.wlock()), block) {}
   ~ObWLockGuard(){}
   bool acquired() { return guard_.acquired(); }
 private:

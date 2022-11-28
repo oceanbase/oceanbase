@@ -66,8 +66,6 @@ public:
   int64_t get_meta_size() const { return meta_size_; }
   int64_t get_data_size() const { return data_size_; }
   bool is_row_start() const;
-  int set_savepoint(const uint32_t is_savepoint);
-  uint32_t get_savepoint() const;
 
 public:
   int64_t get_serialize_size() const;
@@ -87,7 +85,7 @@ private:
   uint32_t data_crc_;
   uint32_t data_size_;
   uint32_t row_count_;
-  uint32_t have_rollback_to_savepoint_;
+  uint32_t unused_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMemtableMutatorMeta);
 };
@@ -190,7 +188,7 @@ public:
                           share::ObEncryptMeta &final_encrypt_meta,
                           share::ObCLogEncryptStatMap &encrypt_stat_map,
                           const bool is_big_row = false);
-  uint32_t get_savepoint_flag() const { return flag_; };
+  uint32_t get_flag() const { return flag_; };
 
   TO_STRING_KV(K_(row_size),
                K_(table_id),
@@ -212,7 +210,7 @@ public:
   ObRowData old_row_;
   uint32_t acc_checksum_;
   int64_t version_;
-  int32_t flag_; // savepoint flag
+  int32_t flag_; // currently, unused
   uint8_t rowid_version_;
 };
 

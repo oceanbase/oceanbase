@@ -1632,7 +1632,7 @@ int ObTablet::release_memtables(const palf::SCN scn)
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(memtable_mgr->release_memtables(scn.get_val_for_tx()))) {
+  } else if (OB_FAIL(memtable_mgr->release_memtables(scn))) {
     LOG_WARN("failed to release memtables", K(ret), K(scn));
   }
 
@@ -2111,9 +2111,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
       ret = OB_TIMEOUT;
       LOG_WARN("submit sync tablet seq log timeout", K(ret));
     } else if (cb->is_failed()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("submit sync tablet seq log failed", K(ret));
-    } else if (OB_FAIL(cb->get_ret_code())) {
+      ret = cb->get_ret_code();
       LOG_WARN("submit sync tablet seq log failed", K(ret));
     } else {
       int64_t wait_time = ObTimeUtility::fast_current_time() - start_time;

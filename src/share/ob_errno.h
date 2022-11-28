@@ -763,6 +763,7 @@ constexpr int OB_ERR_OBJECT_STRING_DOES_NOT_EXIST = -5400;
 constexpr int OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED = -5401;
 constexpr int OB_ERR_GET_STACKED_DIAGNOSTICS = -5402;
 constexpr int OB_DDL_SCHEMA_VERSION_NOT_MATCH = -5403;
+constexpr int OB_ERR_COLUMN_GROUP_DUPLICATE = -5404;
 constexpr int OB_SQL_RETRY_SPM = -5434;
 constexpr int OB_OUTLINE_NOT_REPRODUCIBLE = -5435;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
@@ -2491,6 +2492,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__USER_ERROR_MSG "resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__USER_ERROR_MSG "GET STACKED DIAGNOSTICS when handler not active"
 #define OB_DDL_SCHEMA_VERSION_NOT_MATCH__USER_ERROR_MSG "ddl schema version not match"
+#define OB_ERR_COLUMN_GROUP_DUPLICATE__USER_ERROR_MSG "Duplicate column group name '%.*s'"
 #define OB_ERR_INVALID_JSON_TEXT__USER_ERROR_MSG "Invalid JSON text."
 #define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__USER_ERROR_MSG "Invalid JSON text in argument."
 #define OB_ERR_INVALID_JSON_BINARY_DATA__USER_ERROR_MSG "The JSON binary value contains invalid data."
@@ -4322,6 +4324,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-54004: resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5402, GET STACKED DIAGNOSTICS when handler not active"
 #define OB_DDL_SCHEMA_VERSION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5403, ddl schema version not match"
+#define OB_ERR_COLUMN_GROUP_DUPLICATE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5404, Duplicate column group name '%.*s'"
 #define OB_ERR_INVALID_JSON_TEXT__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON text."
 #define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON text in argument."
 #define OB_ERR_INVALID_JSON_BINARY_DATA__ORA_USER_ERROR_MSG "ORA-00600: The JSON binary value contains invalid data."

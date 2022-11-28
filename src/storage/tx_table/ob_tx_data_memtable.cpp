@@ -424,9 +424,9 @@ bool ObTxDataMemtable::ready_for_flush()
     set_snapshot_version(min_tx_scn_);
     bool_ret = true;
   } else {
-    int64_t freeze_ts = key_.scn_range_.end_scn_.get_val_for_inner_table_field();
+    const palf::SCN &freeze_scn = key_.scn_range_.end_scn_;
     STORAGE_LOG(INFO, "tx data metmable is not ready for flush",
-                K(max_consequent_callbacked_scn), K(freeze_ts));
+                K(max_consequent_callbacked_scn), K(freeze_scn));
   }
 
   return bool_ret;

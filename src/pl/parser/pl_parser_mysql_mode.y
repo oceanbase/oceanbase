@@ -1137,7 +1137,12 @@ sp_create_chistic:
 ;
 
 sp_chistic:
-    COMMENT STRING { }
+    COMMENT STRING
+  {
+    malloc_terminal_node($$, parse_ctx->mem_pool_, T_COMMENT);
+    $$->str_value_ = $2->str_value_;
+    $$->str_len_ = $2->str_len_;
+  }
   | LANGUAGE SQL { /* Just parse it, we only have one language for now. */ $$ = NULL; }
   | NO SQL {}
   | CONTAINS SQL {}

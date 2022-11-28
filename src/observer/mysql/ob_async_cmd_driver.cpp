@@ -68,7 +68,7 @@ int ObAsyncCmdDriver::response_result(ObMySQLResultSet &result)
       LOG_WARN("close result set fail", K(close_ret));
     }
     if (!result.is_async_end_trans_submitted()) {
-      retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
+      retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret, is_prexecute_);
       LOG_WARN("result set open failed, check if need retry",
                K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
       ret = cli_ret;

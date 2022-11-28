@@ -144,6 +144,7 @@ int ObPlanSet::match_params_info(const ParamStore *params,
       } else if (fetch_cur_time_ && FALSE_IT(plan_ctx->set_cur_time(
                                 ObClockGenerator::getClock(), *session))) {
         // never reach
+      } else if (FALSE_IT(plan_ctx->set_last_trace_id(session->get_last_trace_id()))) {
       } else if (params->count() != params_info_.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param info count is different", K(params_info_), K(*params), K(ret));

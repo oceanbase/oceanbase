@@ -26,6 +26,7 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable_context.h"
 #include "storage/tx/ob_trans_ctx.h"
+#include "storage/tx/ob_trans_event.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
 #include "storage/blocksstable/ob_datum_row.h"
 
@@ -991,6 +992,14 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
 
         res.tx_node_ = &writer_node;
         total_trans_node_cnt_++;
+      }
+      if (ctx.is_can_elr()
+          && NULL != writer_node.prev_
+          && writer_node.prev_->is_elr()) {
+        ObMemtableCtx &mt_ctx = static_cast<ObMemtableCtx &>(ctx);
+        if (NULL != mt_ctx.get_trans_ctx()) {
+          TX_STAT_READ_ELR_ROW_COUNT_INC(mt_ctx.get_trans_ctx()->get_tenant_id());
+        }
       }
     }
   }

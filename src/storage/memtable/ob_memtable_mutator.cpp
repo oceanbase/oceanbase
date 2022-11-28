@@ -39,7 +39,7 @@ ObMemtableMutatorMeta::ObMemtableMutatorMeta():
     data_crc_(0),
     data_size_(0),
     row_count_(0),
-    have_rollback_to_savepoint_(1)
+    unused_(0)
 {
 }
 
@@ -159,31 +159,14 @@ int64_t ObMemtableMutatorMeta::to_string(char *buffer, const int64_t length) con
 {
   int64_t pos = 0;
   common::databuff_printf(buffer, length, pos,
-                          "%p data_crc=%x meta_size=%d data_size=%d row_count=%d have_rollback_to_savepoint=%d",
-                          this, data_crc_, meta_size_, data_size_, row_count_, have_rollback_to_savepoint_);
+                          "%p data_crc=%x meta_size=%d data_size=%d row_count=%d",
+                          this, data_crc_, meta_size_, data_size_, row_count_);
   return pos;
 }
 
 bool ObMemtableMutatorMeta::is_row_start() const
 {
   return ObTransRowFlag::is_row_start(flags_);
-}
-
-int ObMemtableMutatorMeta::set_savepoint(const uint32_t flag) {
-  int ret = OB_SUCCESS;
-
-  if (flag != 0 && flag != 1) {
-    TRANS_LOG(WARN, "invalid argument", K(flag));
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    have_rollback_to_savepoint_ = flag;
-  }
-
-  return ret;
-}
-
-uint32_t ObMemtableMutatorMeta::get_savepoint() const {
-  return have_rollback_to_savepoint_;
 }
 
 //only meta_crc is newly generated here, other information will keep unchanged
@@ -863,7 +846,6 @@ int ObMutatorWriter::append_row_kv(
   const ObMemtableKey *mtk = &redo.key_;
   uint64_t cluster_version = 0;
   bool is_with_head = true;
-  uint32 have_rollback_to_savepoint = redo.flag_;
   if (OB_ISNULL(redo.callback_)) {
     is_with_head = false;
   } else if (OB_FAIL(redo.callback_->get_cluster_version(cluster_version))) {
@@ -918,9 +900,6 @@ int ObMutatorWriter::append_row_kv(
       }
     } else if (OB_FAIL(meta_.inc_row_count())) {
       TRANS_LOG(WARN, "meta inc_row_count failed", K(ret));
-    } else if (have_rollback_to_savepoint == 1 &&
-               OB_FAIL(meta_.set_savepoint(have_rollback_to_savepoint))) {
-      TRANS_LOG(WARN, "set savepoint flag failed", K(ret));
     } else {
       buf_.get_position() = tmp_pos;
     }
@@ -938,7 +917,6 @@ int ObMutatorWriter::append_row(
     const bool is_with_head)
 {
   int ret = OB_SUCCESS;
-  uint32 have_rollback_to_savepoint = row.get_savepoint_flag();
   ObMutatorRowHeader row_header;
   row_header.mutator_type_ = MutatorType::MUTATOR_ROW;
   //TODO replace pkey with tablet_id for clog_encrypt_info 
@@ -964,9 +942,6 @@ int ObMutatorWriter::append_row(
       }
     } else if (OB_FAIL(meta_.inc_row_count())) {
       TRANS_LOG(WARN, "meta inc_row_count failed", K(ret));
-    } else if (have_rollback_to_savepoint == 1 &&
-               OB_FAIL(meta_.set_savepoint(have_rollback_to_savepoint))) {
-      TRANS_LOG(WARN, "set savepoint flag failed", K(ret));
     } else {
       buf_.get_position() = tmp_pos;
     }
