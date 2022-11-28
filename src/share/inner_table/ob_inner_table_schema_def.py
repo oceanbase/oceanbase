@@ -11020,8 +11020,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15270', all_def_ke
 # 15271: __all_virtual_switchover_checkpoint
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15272', all_def_keywords['__all_virtual_ls_replica_task'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15273', all_def_keywords['__all_virtual_ls_replica_task_plan'])))
-
 # 15274: __all_virtual_show_trace
+# 15275: __all_virtaul_database_privilege
 
 ################################################################################
 # System View (20000,30000]
@@ -23039,6 +23039,10 @@ def_table_schema(
     'TUESDAY_WINDOW', 'WEDNESDAY_WINDOW', 'THURSDAY_WINDOW', 'FRIDAY_WINDOW', 'SATURDAY_WINDOW', 'SUNDAY_WINDOW')
   """.replace("\n", " ")
 )
+# 21336: DBA_OB_USERS;
+# 21337: CDB_OB_USERS;
+# 21338: DBA_OB_DATABASE_PRIVILEGE
+# 21339: CDB_OB_DATABASE_PRIVILEGE
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -39571,7 +39575,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition ="""SELECT * FROM SYS.ALL_SCHEDULER_WINDOWS""".replace("\n", " "),
 )
-
+#25207: DBA_OB_DATABASE_PRIVILEGE
 #### End Data Dictionary View
 ################################################################################
 

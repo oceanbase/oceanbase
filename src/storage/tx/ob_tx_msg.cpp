@@ -38,6 +38,7 @@ OB_SERIALIZE_MEMBER_INHERIT(ObTxCommitMsg, ObTxMsg, expire_ts_, parts_, app_trac
 OB_SERIALIZE_MEMBER_INHERIT(ObTxCommitRespMsg, ObTxMsg, ret_, commit_version_);
 OB_SERIALIZE_MEMBER_INHERIT(ObTxAbortMsg, ObTxMsg, reason_);
 OB_SERIALIZE_MEMBER_INHERIT(ObTxKeepaliveMsg, ObTxMsg, status_);
+OB_SERIALIZE_MEMBER_INHERIT(ObTxKeepaliveRespMsg, ObTxMsg, status_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareReqMsg, ObTxMsg, upstream_, app_trace_info_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPreCommitReqMsg, ObTxMsg, commit_version_);
@@ -217,6 +218,15 @@ bool ObTxKeepaliveMsg::is_valid() const
 {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == KEEPALIVE) {
+    ret = true;
+  }
+  return ret;
+}
+
+bool ObTxKeepaliveRespMsg::is_valid() const
+{
+  bool ret = false;
+  if (ObTxMsg::is_valid() && type_ == KEEPALIVE_RESP) {
     ret = true;
   }
   return ret;

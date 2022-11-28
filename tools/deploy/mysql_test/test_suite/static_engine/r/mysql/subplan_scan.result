@@ -17,10 +17,10 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |HASH GROUP BY  |    |5        |48  |
-|1 | SUBPLAN SCAN  |x   |5        |47  |
-|2 |  HASH DISTINCT|    |5        |47  |
-|3 |   TABLE SCAN  |t1  |5        |46  |
+|0 |HASH GROUP BY  |    |5        |5   |
+|1 | SUBPLAN SCAN  |x   |5        |4   |
+|2 |  HASH DISTINCT|    |5        |4   |
+|3 |   TABLE SCAN  |t1  |5        |2   |
 ========================================
 
 Outputs & filters: 
@@ -48,10 +48,10 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |HASH GROUP BY  |    |5        |48  |
-|1 | SUBPLAN SCAN  |x   |5        |47  |
-|2 |  HASH DISTINCT|    |5        |47  |
-|3 |   TABLE SCAN  |t1  |5        |46  |
+|0 |HASH GROUP BY  |    |5        |5   |
+|1 | SUBPLAN SCAN  |x   |5        |4   |
+|2 |  HASH DISTINCT|    |5        |4   |
+|3 |   TABLE SCAN  |t1  |5        |2   |
 ========================================
 
 Outputs & filters: 
@@ -79,10 +79,10 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |HASH GROUP BY  |    |5        |48  |
-|1 | SUBPLAN SCAN  |x   |5        |47  |
-|2 |  HASH DISTINCT|    |5        |47  |
-|3 |   TABLE SCAN  |t1  |5        |46  |
+|0 |HASH GROUP BY  |    |5        |5   |
+|1 | SUBPLAN SCAN  |x   |5        |4   |
+|2 |  HASH DISTINCT|    |5        |4   |
+|3 |   TABLE SCAN  |t1  |5        |2   |
 ========================================
 
 Outputs & filters: 
@@ -110,7 +110,7 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |1        |46  |
+|0 |TABLE SCAN|t1  |1        |2   |
 ===================================
 
 Outputs & filters: 

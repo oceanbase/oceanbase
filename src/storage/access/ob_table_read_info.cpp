@@ -69,9 +69,10 @@ int ObTableReadInfo::init(
   } else if (OB_UNLIKELY(0 > schema_rowkey_cnt ||
                          out_cols_cnt < schema_rowkey_cnt ||
                          out_cols_cnt > OB_ROW_MAX_COLUMNS_COUNT ||
-                         (nullptr != storage_cols_index && storage_cols_index->count() != cols_desc.count()))) {
+                         (nullptr != storage_cols_index && storage_cols_index->count() != cols_desc.count()) ||
+                         (nullptr != cols_param && cols_param->count() != cols_desc.count()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(schema_rowkey_cnt), K(cols_desc.count()), KPC(storage_cols_index));
+    LOG_WARN("Invalid argument", K(ret), K(schema_rowkey_cnt), K(cols_desc.count()), KPC(storage_cols_index), KPC(cols_param));
   } else {
     int16_t extra_rowkey_cnt = storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     cols_param_.set_allocator(&allocator);

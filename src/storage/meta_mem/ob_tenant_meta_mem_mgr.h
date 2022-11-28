@@ -318,6 +318,7 @@ private:
   friend class ObT3mTabletMapIterator;
   friend class GetWashTabletCandidate;
   friend class TableGCTask;
+  friend class ObTabletPointer;
   static const int64_t DEFAULT_BUCKET_NUM = 10243L;
   static const int64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;

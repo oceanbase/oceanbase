@@ -1430,7 +1430,6 @@ int ObTabletTableStore::combin_ha_minor_sstables_(
           found = true;
           param_table_index = i;
         } else if (new_table->get_start_scn() >= checkpoint_scn) {
-          // TODO(yanfeng) fix this situation
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("[MIGRATION ERROR] table's start log scn must be less than checkpoint scn",
               K(ret), KPC(this), KPC(tablet_ptr_));

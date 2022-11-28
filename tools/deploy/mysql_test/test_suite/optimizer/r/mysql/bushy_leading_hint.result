@@ -33,12 +33,12 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |140 |
-|1 | HASH JOIN     |    |2        |140 |
-|2 |  TABLE SCAN   |c   |11       |46  |
-|3 |  HASH JOIN    |    |2        |93  |
-|4 |   TABLE SCAN  |b   |11       |46  |
-|5 |   TABLE SCAN  |a   |2        |46  |
+|0 |SCALAR GROUP BY|    |1        |11  |
+|1 | HASH JOIN     |    |2        |11  |
+|2 |  TABLE SCAN   |c   |11       |3   |
+|3 |  HASH JOIN    |    |2        |7   |
+|4 |   TABLE SCAN  |b   |11       |3   |
+|5 |   TABLE SCAN  |a   |2        |3   |
 ========================================
 
 Outputs & filters: 
@@ -68,12 +68,12 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |140 |
-|1 | HASH JOIN     |    |2        |140 |
-|2 |  TABLE SCAN   |c   |11       |46  |
-|3 |  HASH JOIN    |    |2        |93  |
-|4 |   TABLE SCAN  |b   |11       |46  |
-|5 |   TABLE SCAN  |a   |2        |46  |
+|0 |SCALAR GROUP BY|    |1        |11  |
+|1 | HASH JOIN     |    |2        |11  |
+|2 |  TABLE SCAN   |c   |11       |3   |
+|3 |  HASH JOIN    |    |2        |7   |
+|4 |   TABLE SCAN  |b   |11       |3   |
+|5 |   TABLE SCAN  |a   |2        |3   |
 ========================================
 
 Outputs & filters: 
@@ -104,14 +104,14 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |187 |
-|1 | HASH JOIN     |    |2        |187 |
-|2 |  HASH JOIN    |    |11       |94  |
-|3 |   TABLE SCAN  |c   |11       |46  |
-|4 |   TABLE SCAN  |d   |11       |46  |
-|5 |  HASH JOIN    |    |2        |92  |
-|6 |   TABLE SCAN  |a   |2        |46  |
-|7 |   TABLE SCAN  |b   |11       |46  |
+|0 |SCALAR GROUP BY|    |1        |16  |
+|1 | HASH JOIN     |    |2        |16  |
+|2 |  HASH JOIN    |    |11       |8   |
+|3 |   TABLE SCAN  |c   |11       |3   |
+|4 |   TABLE SCAN  |d   |11       |3   |
+|5 |  HASH JOIN    |    |2        |6   |
+|6 |   TABLE SCAN  |a   |2        |3   |
+|7 |   TABLE SCAN  |b   |11       |3   |
 ========================================
 
 Outputs & filters: 
@@ -148,14 +148,14 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |190 |
-|1 | HASH JOIN     |    |11       |189 |
-|2 |  HASH JOIN    |    |11       |94  |
-|3 |   TABLE SCAN  |c   |11       |46  |
-|4 |   TABLE SCAN  |d   |11       |46  |
-|5 |  HASH JOIN    |    |11       |94  |
-|6 |   TABLE SCAN  |a   |11       |46  |
-|7 |   TABLE SCAN  |b   |11       |46  |
+|0 |SCALAR GROUP BY|    |1        |19  |
+|1 | HASH JOIN     |    |11       |18  |
+|2 |  HASH JOIN    |    |11       |8   |
+|3 |   TABLE SCAN  |c   |11       |3   |
+|4 |   TABLE SCAN  |d   |11       |3   |
+|5 |  HASH JOIN    |    |11       |8   |
+|6 |   TABLE SCAN  |a   |11       |3   |
+|7 |   TABLE SCAN  |b   |11       |3   |
 ========================================
 
 Outputs & filters: 
@@ -193,14 +193,14 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |185 |
-|1 | HASH JOIN     |    |1        |185 |
-|2 |  TABLE SCAN   |c   |11       |46  |
-|3 |  HASH JOIN    |    |2        |138 |
-|4 |   HASH JOIN   |    |2        |92  |
-|5 |    TABLE SCAN |a   |2        |46  |
-|6 |    TABLE SCAN |d   |1        |46  |
-|7 |   TABLE SCAN  |b   |11       |46  |
+|0 |SCALAR GROUP BY|    |1        |14  |
+|1 | HASH JOIN     |    |1        |14  |
+|2 |  TABLE SCAN   |c   |11       |3   |
+|3 |  HASH JOIN    |    |2        |9   |
+|4 |   HASH JOIN   |    |2        |6   |
+|5 |    TABLE SCAN |a   |2        |3   |
+|6 |    TABLE SCAN |d   |1        |3   |
+|7 |   TABLE SCAN  |b   |11       |3   |
 ========================================
 
 Outputs & filters: 
@@ -238,12 +238,12 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |142 |
-|1 | HASH JOIN     |    |1        |142 |
-|2 |  TABLE SCAN   |c   |11       |46  |
-|3 |  HASH JOIN    |    |11       |94  |
-|4 |   TABLE SCAN  |d   |11       |46  |
-|5 |   TABLE SCAN  |b   |11       |46  |
+|0 |SCALAR GROUP BY|    |1        |14  |
+|1 | HASH JOIN     |    |1        |14  |
+|2 |  TABLE SCAN   |c   |11       |3   |
+|3 |  HASH JOIN    |    |11       |8   |
+|4 |   TABLE SCAN  |d   |11       |3   |
+|5 |   TABLE SCAN  |b   |11       |3   |
 ========================================
 
 Outputs & filters: 
@@ -279,24 +279,24 @@ Query Plan
 =========================================
 |ID|OPERATOR        |NAME|EST. ROWS|COST|
 -----------------------------------------
-|0 |SCALAR GROUP BY |    |1        |420 |
-|1 | HASH JOIN      |    |1        |420 |
-|2 |  HASH JOIN     |    |1        |278 |
-|3 |   HASH JOIN    |    |1        |184 |
-|4 |    HASH JOIN   |    |1        |137 |
-|5 |     TABLE SCAN |t2  |2        |46  |
-|6 |     HASH JOIN  |    |1        |92  |
-|7 |      TABLE SCAN|t1  |1        |46  |
-|8 |      TABLE SCAN|t3  |1        |46  |
-|9 |    TABLE SCAN  |t7  |11       |46  |
-|10|   HASH JOIN    |    |11       |94  |
-|11|    TABLE SCAN  |t8  |11       |46  |
-|12|    TABLE SCAN  |t9  |11       |46  |
-|13|  HASH JOIN     |    |11       |142 |
-|14|   HASH JOIN    |    |11       |94  |
-|15|    TABLE SCAN  |t4  |11       |46  |
-|16|    TABLE SCAN  |t5  |11       |46  |
-|17|   TABLE SCAN   |t6  |11       |46  |
+|0 |SCALAR GROUP BY |    |1        |33  |
+|1 | HASH JOIN      |    |1        |33  |
+|2 |  HASH JOIN     |    |1        |19  |
+|3 |   HASH JOIN    |    |1        |11  |
+|4 |    HASH JOIN   |    |1        |8   |
+|5 |     TABLE SCAN |t2  |2        |3   |
+|6 |     HASH JOIN  |    |1        |5   |
+|7 |      TABLE SCAN|t1  |1        |3   |
+|8 |      TABLE SCAN|t3  |1        |3   |
+|9 |    TABLE SCAN  |t7  |11       |3   |
+|10|   HASH JOIN    |    |11       |7   |
+|11|    TABLE SCAN  |t8  |11       |3   |
+|12|    TABLE SCAN  |t9  |11       |3   |
+|13|  HASH JOIN     |    |11       |13  |
+|14|   HASH JOIN    |    |11       |7   |
+|15|    TABLE SCAN  |t4  |11       |3   |
+|16|    TABLE SCAN  |t5  |11       |3   |
+|17|   TABLE SCAN   |t6  |11       |3   |
 =========================================
 
 Outputs & filters: 
@@ -358,25 +358,25 @@ Query Plan
 =======================================================
 |ID|OPERATOR                      |NAME|EST. ROWS|COST|
 -------------------------------------------------------
-|0 |SCALAR GROUP BY               |    |1        |576 |
-|1 | HASH JOIN                    |    |1        |576 |
-|2 |  HASH JOIN                   |    |11       |465 |
-|3 |   HASH JOIN                  |    |11       |142 |
-|4 |    HASH JOIN                 |    |11       |94  |
-|5 |     TABLE SCAN               |t1  |11       |46  |
-|6 |     TABLE SCAN               |t2  |11       |46  |
-|7 |    TABLE SCAN                |t3  |11       |46  |
-|8 |   NESTED-LOOP JOIN CARTESIAN |    |1331     |199 |
-|9 |    NESTED-LOOP JOIN CARTESIAN|    |121      |97  |
-|10|     TABLE SCAN               |t4  |11       |46  |
-|11|     MATERIAL                 |    |11       |46  |
-|12|      TABLE SCAN              |t5  |11       |46  |
-|13|    MATERIAL                  |    |11       |46  |
-|14|     TABLE SCAN               |t6  |11       |46  |
-|15|  NESTED-LOOP JOIN CARTESIAN  |    |121      |97  |
-|16|   TABLE SCAN                 |t7  |11       |46  |
-|17|   MATERIAL                   |    |11       |46  |
-|18|    TABLE SCAN                |t8  |11       |46  |
+|0 |SCALAR GROUP BY               |    |1        |219 |
+|1 | HASH JOIN                    |    |1        |219 |
+|2 |  HASH JOIN                   |    |11       |193 |
+|3 |   HASH JOIN                  |    |11       |14  |
+|4 |    HASH JOIN                 |    |11       |8   |
+|5 |     TABLE SCAN               |t1  |11       |3   |
+|6 |     TABLE SCAN               |t2  |11       |3   |
+|7 |    TABLE SCAN                |t3  |11       |3   |
+|8 |   NESTED-LOOP JOIN CARTESIAN |    |1331     |44  |
+|9 |    NESTED-LOOP JOIN CARTESIAN|    |121      |8   |
+|10|     TABLE SCAN               |t4  |11       |3   |
+|11|     MATERIAL                 |    |11       |3   |
+|12|      TABLE SCAN              |t5  |11       |3   |
+|13|    MATERIAL                  |    |11       |3   |
+|14|     TABLE SCAN               |t6  |11       |3   |
+|15|  NESTED-LOOP JOIN CARTESIAN  |    |121      |9   |
+|16|   TABLE SCAN                 |t7  |11       |3   |
+|17|   MATERIAL                   |    |11       |4   |
+|18|    TABLE SCAN                |t8  |11       |3   |
 =======================================================
 
 Outputs & filters: 
@@ -434,15 +434,15 @@ Query Plan
 =====================================================
 |ID|OPERATOR                    |NAME|EST. ROWS|COST|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY             |    |1        |186 |
-|1 | HASH JOIN                  |    |2        |186 |
-|2 |  TABLE SCAN                |c   |11       |46  |
-|3 |  NESTED-LOOP JOIN CARTESIAN|    |13       |138 |
-|4 |   TABLE SCAN               |d   |11       |46  |
-|5 |   MATERIAL                 |    |2        |92  |
-|6 |    HASH JOIN               |    |2        |92  |
-|7 |     TABLE SCAN             |a   |2        |46  |
-|8 |     TABLE SCAN             |b   |11       |46  |
+|0 |SCALAR GROUP BY             |    |1        |14  |
+|1 | HASH JOIN                  |    |2        |14  |
+|2 |  TABLE SCAN                |c   |11       |3   |
+|3 |  NESTED-LOOP JOIN CARTESIAN|    |13       |9   |
+|4 |   TABLE SCAN               |d   |11       |3   |
+|5 |   MATERIAL                 |    |2        |6   |
+|6 |    HASH JOIN               |    |2        |6   |
+|7 |     TABLE SCAN             |a   |2        |3   |
+|8 |     TABLE SCAN             |b   |11       |3   |
 =====================================================
 
 Outputs & filters: 
@@ -482,24 +482,24 @@ Query Plan
 ============================================
 |ID|OPERATOR           |NAME|EST. ROWS|COST|
 --------------------------------------------
-|0 |SCALAR GROUP BY    |    |1        |426 |
-|1 | HASH JOIN         |    |1        |426 |
-|2 |  TABLE SCAN       |t2  |11       |46  |
-|3 |  HASH JOIN        |    |1        |379 |
-|4 |   TABLE SCAN      |t1  |11       |46  |
-|5 |   HASH JOIN       |    |1        |331 |
-|6 |    TABLE SCAN     |t3  |1        |46  |
-|7 |    HASH JOIN      |    |11       |285 |
-|8 |     TABLE SCAN    |t7  |11       |46  |
-|9 |     HASH JOIN     |    |11       |237 |
-|10|      TABLE SCAN   |t8  |11       |46  |
-|11|      HASH JOIN    |    |11       |189 |
-|12|       TABLE SCAN  |t9  |11       |46  |
-|13|       HASH JOIN   |    |11       |142 |
-|14|        TABLE SCAN |t4  |11       |46  |
-|15|        HASH JOIN  |    |11       |94  |
-|16|         TABLE SCAN|t5  |11       |46  |
-|17|         TABLE SCAN|t6  |11       |46  |
+|0 |SCALAR GROUP BY    |    |1        |40  |
+|1 | HASH JOIN         |    |1        |40  |
+|2 |  TABLE SCAN       |t2  |11       |3   |
+|3 |  HASH JOIN        |    |1        |36  |
+|4 |   TABLE SCAN      |t1  |11       |3   |
+|5 |   HASH JOIN       |    |1        |32  |
+|6 |    TABLE SCAN     |t3  |1        |3   |
+|7 |    HASH JOIN      |    |11       |28  |
+|8 |     TABLE SCAN    |t7  |11       |3   |
+|9 |     HASH JOIN     |    |11       |23  |
+|10|      TABLE SCAN   |t8  |11       |3   |
+|11|      HASH JOIN    |    |11       |18  |
+|12|       TABLE SCAN  |t9  |11       |3   |
+|13|       HASH JOIN   |    |11       |13  |
+|14|        TABLE SCAN |t4  |11       |3   |
+|15|        HASH JOIN  |    |11       |8   |
+|16|         TABLE SCAN|t5  |11       |3   |
+|17|         TABLE SCAN|t6  |11       |3   |
 ============================================
 
 Outputs & filters: 
@@ -561,21 +561,21 @@ Query Plan
 =======================================================
 |ID|OPERATOR                      |NAME|EST. ROWS|COST|
 -------------------------------------------------------
-|0 |SCALAR GROUP BY               |    |1        |465 |
-|1 | HASH JOIN                    |    |1        |465 |
-|2 |  HASH JOIN                   |    |1        |356 |
-|3 |   TABLE SCAN                 |t1  |11       |46  |
-|4 |   NESTED-LOOP JOIN CARTESIAN |    |1331     |200 |
-|5 |    NESTED-LOOP JOIN CARTESIAN|    |121      |97  |
-|6 |     TABLE SCAN               |t2  |11       |46  |
-|7 |     MATERIAL                 |    |11       |46  |
-|8 |      TABLE SCAN              |t3  |11       |46  |
-|9 |    MATERIAL                  |    |11       |46  |
-|10|     TABLE SCAN               |t4  |11       |46  |
-|11|  NESTED-LOOP JOIN CARTESIAN  |    |121      |97  |
-|12|   TABLE SCAN                 |t5  |11       |46  |
-|13|   MATERIAL                   |    |11       |46  |
-|14|    TABLE SCAN                |t6  |11       |46  |
+|0 |SCALAR GROUP BY               |    |1        |193 |
+|1 | HASH JOIN                    |    |1        |193 |
+|2 |  HASH JOIN                   |    |1        |171 |
+|3 |   TABLE SCAN                 |t1  |11       |3   |
+|4 |   NESTED-LOOP JOIN CARTESIAN |    |1331     |45  |
+|5 |    NESTED-LOOP JOIN CARTESIAN|    |121      |8   |
+|6 |     TABLE SCAN               |t2  |11       |3   |
+|7 |     MATERIAL                 |    |11       |3   |
+|8 |      TABLE SCAN              |t3  |11       |3   |
+|9 |    MATERIAL                  |    |11       |4   |
+|10|     TABLE SCAN               |t4  |11       |3   |
+|11|  NESTED-LOOP JOIN CARTESIAN  |    |121      |8   |
+|12|   TABLE SCAN                 |t5  |11       |3   |
+|13|   MATERIAL                   |    |11       |3   |
+|14|    TABLE SCAN                |t6  |11       |3   |
 =======================================================
 
 Outputs & filters: 
@@ -626,16 +626,16 @@ Query Plan
 ======================================================
 |ID|OPERATOR                     |NAME|EST. ROWS|COST|
 ------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1        |356 |
-|1 | HASH JOIN                   |    |1        |356 |
-|2 |  TABLE SCAN                 |t1  |11       |46  |
-|3 |  NESTED-LOOP JOIN CARTESIAN |    |1331     |200 |
-|4 |   NESTED-LOOP JOIN CARTESIAN|    |121      |97  |
-|5 |    TABLE SCAN               |t2  |11       |46  |
-|6 |    MATERIAL                 |    |11       |46  |
-|7 |     TABLE SCAN              |t3  |11       |46  |
-|8 |   MATERIAL                  |    |11       |46  |
-|9 |    TABLE SCAN               |t4  |11       |46  |
+|0 |SCALAR GROUP BY              |    |1        |171 |
+|1 | HASH JOIN                   |    |1        |171 |
+|2 |  TABLE SCAN                 |t1  |11       |3   |
+|3 |  NESTED-LOOP JOIN CARTESIAN |    |1331     |45  |
+|4 |   NESTED-LOOP JOIN CARTESIAN|    |121      |8   |
+|5 |    TABLE SCAN               |t2  |11       |3   |
+|6 |    MATERIAL                 |    |11       |3   |
+|7 |     TABLE SCAN              |t3  |11       |3   |
+|8 |   MATERIAL                  |    |11       |4   |
+|9 |    TABLE SCAN               |t4  |11       |3   |
 ======================================================
 
 Outputs & filters: 
@@ -675,13 +675,13 @@ Query Plan
 ===========================================
 |ID|OPERATOR          |NAME|EST. ROWS|COST|
 -------------------------------------------
-|0 |SCALAR GROUP BY   |    |1        |144 |
-|1 | HASH JOIN        |    |1        |144 |
-|2 |  TABLE SCAN      |t1  |11       |46  |
-|3 |  NESTED-LOOP JOIN|    |11       |95  |
-|4 |   TABLE SCAN     |t2  |11       |46  |
-|5 |   MATERIAL       |    |11       |46  |
-|6 |    TABLE SCAN    |t3  |11       |46  |
+|0 |SCALAR GROUP BY   |    |1        |14  |
+|1 | HASH JOIN        |    |1        |14  |
+|2 |  TABLE SCAN      |t1  |11       |3   |
+|3 |  NESTED-LOOP JOIN|    |11       |8   |
+|4 |   TABLE SCAN     |t2  |11       |3   |
+|5 |   MATERIAL       |    |11       |4   |
+|6 |    TABLE SCAN    |t3  |11       |3   |
 ===========================================
 
 Outputs & filters: 
@@ -724,26 +724,25 @@ Query Plan
 =========================================================
 |ID|OPERATOR                       |NAME |EST. ROWS|COST|
 ---------------------------------------------------------
-|0 |SCALAR GROUP BY                |     |1        |393 |
-|1 | HASH JOIN                     |     |11       |392 |
-|2 |  HASH JOIN                    |     |11       |345 |
-|3 |   HASH SEMI JOIN              |     |11       |297 |
-|4 |    TABLE SCAN                 |c    |11       |46  |
-|5 |    SUBPLAN SCAN               |VIEW1|121      |241 |
-|6 |     NESTED-LOOP JOIN CARTESIAN|     |121      |240 |
-|7 |      HASH JOIN                |     |11       |141 |
-|8 |       HASH JOIN               |     |11       |94  |
-|9 |        TABLE SCAN             |z    |11       |46  |
-|10|        TABLE SCAN             |y    |11       |46  |
-|11|       TABLE SCAN              |x    |11       |46  |
-|12|      MATERIAL                 |     |11       |94  |
-|13|       MERGE JOIN              |     |11       |94  |
-|14|        SORT                   |     |11       |47  |
-|15|         TABLE SCAN            |y2   |11       |46  |
-|16|        SORT                   |     |11       |47  |
-|17|         TABLE SCAN            |y3   |11       |46  |
-|18|   TABLE SCAN                  |b    |11       |46  |
-|19|  TABLE SCAN                   |a    |11       |46  |
+|0 |SCALAR GROUP BY                |     |1        |47  |
+|1 | HASH JOIN                     |     |11       |47  |
+|2 |  HASH JOIN                    |     |11       |42  |
+|3 |   HASH SEMI JOIN              |     |11       |37  |
+|4 |    TABLE SCAN                 |c    |11       |3   |
+|5 |    SUBPLAN SCAN               |VIEW1|121      |22  |
+|6 |     NESTED-LOOP JOIN CARTESIAN|     |121      |22  |
+|7 |      HASH JOIN                |     |11       |13  |
+|8 |       HASH JOIN               |     |11       |8   |
+|9 |        TABLE SCAN             |z    |11       |3   |
+|10|        TABLE SCAN             |y    |11       |3   |
+|11|       TABLE SCAN              |x    |11       |3   |
+|12|      MATERIAL                 |     |11       |7   |
+|13|       NESTED-LOOP JOIN        |     |11       |7   |
+|14|        TABLE SCAN             |y2   |11       |3   |
+|15|        MATERIAL               |     |11       |3   |
+|16|         TABLE SCAN            |y3   |11       |3   |
+|17|   TABLE SCAN                  |b    |11       |3   |
+|18|  TABLE SCAN                   |a    |11       |3   |
 =========================================================
 
 Outputs & filters: 
@@ -774,16 +773,15 @@ Outputs & filters:
       access([x.c2], [x.c1]), partitions(p0)
   12 - output(nil), filter(nil), rowset=256
   13 - output(nil), filter(nil), rowset=256, 
-      equal_conds([y2.c1 = y3.c1]), other_conds(nil)
-  14 - output([y2.c1]), filter(nil), rowset=256, sort_keys([y2.c1, ASC])
-  15 - output([y2.c1]), filter(nil), rowset=256,
+      conds([y2.c1 = y3.c1]), nl_params_(nil)
+  14 - output([y2.c1]), filter(nil), rowset=256,
       access([y2.c1]), partitions(p0)
-  16 - output([y3.c1]), filter(nil), rowset=256, sort_keys([y3.c1, ASC])
-  17 - output([y3.c1]), filter(nil), rowset=256,
+  15 - output([y3.c1]), filter(nil), rowset=256
+  16 - output([y3.c1]), filter(nil), rowset=256,
       access([y3.c1]), partitions(p0)
-  18 - output([b.d1], [b.d2]), filter(nil), rowset=256,
+  17 - output([b.d1], [b.d2]), filter(nil), rowset=256,
       access([b.d1], [b.d2]), partitions(p0)
-  19 - output([a.c1]), filter(nil), rowset=256,
+  18 - output([a.c1]), filter(nil), rowset=256,
       access([a.c1]), partitions(p0)
 
 SELECT count(*), sum(b.d1) from
@@ -811,21 +809,21 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                      |NAME        |EST. ROWS|COST|
 ---------------------------------------------------------------
-|0 |TEMP TABLE TRANSFORMATION     |            |2        |321 |
-|1 | TEMP TABLE INSERT            |TEMP1       |11       |320 |
-|2 |  HASH JOIN                   |            |11       |320 |
-|3 |   HASH JOIN                  |            |121      |249 |
-|4 |    HASH JOIN                 |            |11       |142 |
-|5 |     TABLE SCAN               |t6          |11       |46  |
-|6 |     HASH JOIN                |            |11       |94  |
-|7 |      TABLE SCAN              |t5          |11       |46  |
-|8 |      TABLE SCAN              |t4          |11       |46  |
-|9 |    NESTED-LOOP JOIN CARTESIAN|            |121      |97  |
-|10|     TABLE SCAN               |t3          |11       |46  |
-|11|     MATERIAL                 |            |11       |46  |
-|12|      TABLE SCAN              |t1          |11       |46  |
-|13|   TABLE SCAN                 |t2          |11       |46  |
-|14| UNION ALL                    |            |2        |1   |
+|0 |TEMP TABLE TRANSFORMATION     |            |2        |79  |
+|1 | TEMP TABLE INSERT            |TEMP1       |11       |78  |
+|2 |  HASH JOIN                   |            |11       |76  |
+|3 |   HASH JOIN                  |            |121      |36  |
+|4 |    HASH JOIN                 |            |11       |15  |
+|5 |     TABLE SCAN               |t6          |11       |3   |
+|6 |     HASH JOIN                |            |11       |9   |
+|7 |      TABLE SCAN              |t5          |11       |3   |
+|8 |      TABLE SCAN              |t4          |11       |3   |
+|9 |    NESTED-LOOP JOIN CARTESIAN|            |121      |9   |
+|10|     TABLE SCAN               |t3          |11       |3   |
+|11|     MATERIAL                 |            |11       |3   |
+|12|      TABLE SCAN              |t1          |11       |3   |
+|13|   TABLE SCAN                 |t2          |11       |3   |
+|14| UNION ALL                    |            |2        |2   |
 |15|  SCALAR GROUP BY             |            |1        |1   |
 |16|   TEMP TABLE ACCESS          |VIEW1(TEMP1)|10       |1   |
 |17|  SCALAR GROUP BY             |            |1        |1   |
@@ -904,24 +902,24 @@ Query Plan
 ==========================================
 |ID|OPERATOR         |NAME|EST. ROWS|COST|
 ------------------------------------------
-|0 |SCALAR GROUP BY  |    |1        |416 |
-|1 | HASH JOIN       |    |1        |416 |
-|2 |  HASH JOIN      |    |1        |371 |
-|3 |   HASH JOIN     |    |1        |280 |
-|4 |    TABLE SCAN   |t9  |11       |46  |
-|5 |    HASH JOIN    |    |1        |233 |
-|6 |     HASH JOIN   |    |1        |186 |
-|7 |      HASH JOIN  |    |1        |94  |
-|8 |       TABLE SCAN|t8  |11       |46  |
-|9 |       TABLE SCAN|t7  |11       |46  |
-|10|      HASH JOIN  |    |1        |93  |
-|11|       TABLE SCAN|t6  |11       |46  |
-|12|       TABLE SCAN|t5  |1        |46  |
-|13|     TABLE SCAN  |t4  |11       |46  |
-|14|   HASH JOIN     |    |1        |91  |
-|15|    TABLE SCAN   |t3  |1        |46  |
-|16|    TABLE SCAN   |t1  |1        |46  |
-|17|  TABLE SCAN     |t2  |1        |46  |
+|0 |SCALAR GROUP BY  |    |1        |30  |
+|1 | HASH JOIN       |    |1        |30  |
+|2 |  HASH JOIN      |    |1        |28  |
+|3 |   HASH JOIN     |    |1        |23  |
+|4 |    TABLE SCAN   |t9  |11       |3   |
+|5 |    HASH JOIN    |    |1        |19  |
+|6 |     HASH JOIN   |    |1        |15  |
+|7 |      HASH JOIN  |    |1        |8   |
+|8 |       TABLE SCAN|t8  |11       |3   |
+|9 |       TABLE SCAN|t7  |11       |3   |
+|10|      HASH JOIN  |    |1        |7   |
+|11|       TABLE SCAN|t6  |11       |3   |
+|12|       TABLE SCAN|t5  |1        |3   |
+|13|     TABLE SCAN  |t4  |11       |3   |
+|14|   HASH JOIN     |    |1        |5   |
+|15|    TABLE SCAN   |t3  |1        |3   |
+|16|    TABLE SCAN   |t1  |1        |3   |
+|17|  TABLE SCAN     |t2  |1        |3   |
 ==========================================
 
 Outputs & filters: 
@@ -995,16 +993,16 @@ Query Plan
 ==========================================
 |ID|OPERATOR         |NAME|EST. ROWS|COST|
 ------------------------------------------
-|0 |SCALAR GROUP BY  |    |1        |192 |
-|1 | HASH JOIN       |    |11       |192 |
-|2 |  TABLE SCAN     |a   |11       |46  |
-|3 |  HASH JOIN      |    |11       |144 |
-|4 |   SUBPLAN SCAN  |c   |11       |48  |
-|5 |    HASH GROUP BY|    |11       |48  |
-|6 |     TABLE SCAN  |cc  |11       |46  |
-|7 |   HASH JOIN     |    |11       |94  |
-|8 |    TABLE SCAN   |nn2 |11       |46  |
-|9 |    TABLE SCAN   |d   |11       |46  |
+|0 |SCALAR GROUP BY  |    |1        |21  |
+|1 | HASH JOIN       |    |11       |21  |
+|2 |  TABLE SCAN     |a   |11       |3   |
+|3 |  HASH JOIN      |    |11       |16  |
+|4 |   SUBPLAN SCAN  |c   |11       |6   |
+|5 |    HASH GROUP BY|    |11       |6   |
+|6 |     TABLE SCAN  |cc  |11       |3   |
+|7 |   HASH JOIN     |    |11       |8   |
+|8 |    TABLE SCAN   |nn2 |11       |3   |
+|9 |    TABLE SCAN   |d   |11       |3   |
 ==========================================
 
 Outputs & filters: 
@@ -1046,15 +1044,15 @@ Query Plan
 ======================================================
 |ID|OPERATOR                     |NAME|EST. ROWS|COST|
 ------------------------------------------------------
-|0 |SCALAR GROUP BY              |    |1        |202 |
-|1 | HASH JOIN                   |    |11       |202 |
-|2 |  TABLE SCAN                 |a   |11       |46  |
-|3 |  HASH JOIN                  |    |11       |154 |
-|4 |   TABLE SCAN                |c   |11       |46  |
-|5 |   NESTED-LOOP JOIN CARTESIAN|    |121      |97  |
-|6 |    TABLE SCAN               |b   |11       |46  |
-|7 |    MATERIAL                 |    |11       |46  |
-|8 |     TABLE SCAN              |d   |11       |46  |
+|0 |SCALAR GROUP BY              |    |1        |29  |
+|1 | HASH JOIN                   |    |11       |29  |
+|2 |  TABLE SCAN                 |a   |11       |3   |
+|3 |  HASH JOIN                  |    |11       |24  |
+|4 |   TABLE SCAN                |c   |11       |3   |
+|5 |   NESTED-LOOP JOIN CARTESIAN|    |121      |8   |
+|6 |    TABLE SCAN               |b   |11       |3   |
+|7 |    MATERIAL                 |    |11       |3   |
+|8 |     TABLE SCAN              |d   |11       |3   |
 ======================================================
 
 Outputs & filters: 
@@ -1094,17 +1092,17 @@ Query Plan
 ======================================================
 |ID|OPERATOR                     |NAME|EST. ROWS|COST|
 ------------------------------------------------------
-|0 |SUBPLAN FILTER               |    |1        |247 |
-|1 | SCALAR GROUP BY             |    |1        |46  |
-|2 |  TABLE SCAN                 |x   |11       |46  |
-|3 | HASH JOIN                   |    |1        |202 |
-|4 |  TABLE SCAN                 |a   |11       |46  |
-|5 |  HASH JOIN                  |    |11       |154 |
-|6 |   TABLE SCAN                |c   |11       |46  |
-|7 |   NESTED-LOOP JOIN CARTESIAN|    |121      |97  |
-|8 |    TABLE SCAN               |b   |11       |46  |
-|9 |    MATERIAL                 |    |11       |46  |
-|10|     TABLE SCAN              |d   |11       |46  |
+|0 |SUBPLAN FILTER               |    |1        |31  |
+|1 | SCALAR GROUP BY             |    |1        |3   |
+|2 |  TABLE SCAN                 |x   |11       |3   |
+|3 | HASH JOIN                   |    |1        |29  |
+|4 |  TABLE SCAN                 |a   |11       |3   |
+|5 |  HASH JOIN                  |    |11       |24  |
+|6 |   TABLE SCAN                |c   |11       |3   |
+|7 |   NESTED-LOOP JOIN CARTESIAN|    |121      |8   |
+|8 |    TABLE SCAN               |b   |11       |3   |
+|9 |    MATERIAL                 |    |11       |3   |
+|10|     TABLE SCAN              |d   |11       |3   |
 ======================================================
 
 Outputs & filters: 
@@ -1148,21 +1146,21 @@ Query Plan
 =====================================================
 |ID|OPERATOR                   |NAME |EST. ROWS|COST|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY            |     |1        |280 |
-|1 | NESTED-LOOP JOIN CARTESIAN|     |2        |280 |
-|2 |  TABLE SCAN               |t3   |2        |46  |
-|3 |  MATERIAL                 |     |1        |234 |
-|4 |   HASH JOIN               |     |1        |234 |
-|5 |    HASH JOIN              |     |1        |188 |
-|6 |     SUBPLAN SCAN          |VIEW1|1        |142 |
-|7 |      SCALAR GROUP BY      |     |1        |142 |
-|8 |       HASH JOIN           |     |11       |142 |
-|9 |        TABLE SCAN         |x    |11       |46  |
-|10|        HASH JOIN          |     |11       |94  |
-|11|         TABLE SCAN        |y    |11       |46  |
-|12|         TABLE SCAN        |z    |11       |46  |
-|13|     TABLE SCAN            |t1   |11       |46  |
-|14|    TABLE SCAN             |t2   |11       |46  |
+|0 |SCALAR GROUP BY            |     |1        |22  |
+|1 | NESTED-LOOP JOIN CARTESIAN|     |2        |22  |
+|2 |  TABLE SCAN               |t3   |2        |3   |
+|3 |  MATERIAL                 |     |1        |19  |
+|4 |   HASH JOIN               |     |1        |19  |
+|5 |    NESTED-LOOP JOIN       |     |1        |16  |
+|6 |     SUBPLAN SCAN          |VIEW1|1        |13  |
+|7 |      SCALAR GROUP BY      |     |1        |13  |
+|8 |       HASH JOIN           |     |11       |13  |
+|9 |        TABLE SCAN         |x    |11       |3   |
+|10|        HASH JOIN          |     |11       |8   |
+|11|         TABLE SCAN        |y    |11       |3   |
+|12|         TABLE SCAN        |z    |11       |3   |
+|13|     TABLE SCAN            |t1   |11       |3   |
+|14|    TABLE SCAN             |t2   |11       |3   |
 =====================================================
 
 Outputs & filters: 
@@ -1177,7 +1175,7 @@ Outputs & filters:
   4 - output([t1.c1]), filter(nil), rowset=256, 
       equal_conds([t2.c2 = t1.c2]), other_conds(nil)
   5 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, 
-      equal_conds([t1.c1 = VIEW1.count(*)]), other_conds(nil)
+      conds([t1.c1 = VIEW1.count(*)]), nl_params_(nil)
   6 - output([VIEW1.count(*)]), filter(nil), rowset=256, 
       access([VIEW1.count(*)])
   7 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256, 
@@ -1213,15 +1211,15 @@ Query Plan
 =====================================================
 |ID|OPERATOR                    |NAME|EST. ROWS|COST|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY             |    |1        |211 |
-|1 | HASH JOIN                  |    |121      |210 |
-|2 |  NESTED-LOOP JOIN CARTESIAN|    |121      |144 |
-|3 |   HASH JOIN                |    |11       |94  |
-|4 |    TABLE SCAN              |d   |11       |46  |
-|5 |    TABLE SCAN              |c   |11       |46  |
-|6 |   MATERIAL                 |    |11       |46  |
-|7 |    TABLE SCAN              |b   |11       |46  |
-|8 |  TABLE SCAN                |a   |11       |46  |
+|0 |SCALAR GROUP BY             |    |1        |45  |
+|1 | HASH JOIN                  |    |121      |40  |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |121      |13  |
+|3 |   HASH JOIN                |    |11       |8   |
+|4 |    TABLE SCAN              |d   |11       |3   |
+|5 |    TABLE SCAN              |c   |11       |3   |
+|6 |   MATERIAL                 |    |11       |3   |
+|7 |    TABLE SCAN              |b   |11       |3   |
+|8 |  TABLE SCAN                |a   |11       |3   |
 =====================================================
 
 Outputs & filters: 
@@ -1258,15 +1256,15 @@ Query Plan
 =====================================================
 |ID|OPERATOR                    |NAME|EST. ROWS|COST|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY             |    |1        |213 |
-|1 | HASH JOIN                  |    |121      |211 |
-|2 |  NESTED-LOOP JOIN CARTESIAN|    |121      |144 |
-|3 |   HASH JOIN                |    |11       |94  |
-|4 |    TABLE SCAN              |d   |11       |46  |
-|5 |    TABLE SCAN              |c   |11       |46  |
-|6 |   MATERIAL                 |    |11       |46  |
-|7 |    TABLE SCAN              |b   |11       |46  |
-|8 |  TABLE SCAN                |a   |11       |46  |
+|0 |SCALAR GROUP BY             |    |1        |48  |
+|1 | HASH JOIN                  |    |121      |44  |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |121      |13  |
+|3 |   HASH JOIN                |    |11       |8   |
+|4 |    TABLE SCAN              |d   |11       |3   |
+|5 |    TABLE SCAN              |c   |11       |3   |
+|6 |   MATERIAL                 |    |11       |3   |
+|7 |    TABLE SCAN              |b   |11       |3   |
+|8 |  TABLE SCAN                |a   |11       |3   |
 =====================================================
 
 Outputs & filters: 
@@ -1303,15 +1301,15 @@ Query Plan
 =====================================================
 |ID|OPERATOR                    |NAME|EST. ROWS|COST|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY             |    |1        |211 |
-|1 | HASH JOIN                  |    |121      |210 |
-|2 |  NESTED-LOOP JOIN CARTESIAN|    |121      |144 |
-|3 |   TABLE SCAN               |b   |11       |46  |
-|4 |   MATERIAL                 |    |11       |94  |
-|5 |    HASH JOIN               |    |11       |94  |
-|6 |     TABLE SCAN             |c   |11       |46  |
-|7 |     TABLE SCAN             |d   |11       |46  |
-|8 |  TABLE SCAN                |a   |11       |46  |
+|0 |SCALAR GROUP BY             |    |1        |44  |
+|1 | HASH JOIN                  |    |121      |40  |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |121      |13  |
+|3 |   TABLE SCAN               |b   |11       |3   |
+|4 |   MATERIAL                 |    |11       |8   |
+|5 |    HASH JOIN               |    |11       |8   |
+|6 |     TABLE SCAN             |c   |11       |3   |
+|7 |     TABLE SCAN             |d   |11       |3   |
+|8 |  TABLE SCAN                |a   |11       |3   |
 =====================================================
 
 Outputs & filters: 
@@ -1348,15 +1346,15 @@ Query Plan
 ====================================================
 |ID|OPERATOR                   |NAME|EST. ROWS|COST|
 ----------------------------------------------------
-|0 |SCALAR GROUP BY            |    |1        |194 |
-|1 | NESTED-LOOP JOIN CARTESIAN|    |121      |192 |
-|2 |  HASH JOIN                |    |11       |94  |
-|3 |   TABLE SCAN              |a   |11       |46  |
-|4 |   TABLE SCAN              |b   |11       |46  |
-|5 |  MATERIAL                 |    |11       |94  |
-|6 |   HASH JOIN               |    |11       |94  |
-|7 |    TABLE SCAN             |d   |11       |46  |
-|8 |    TABLE SCAN             |c   |11       |46  |
+|0 |SCALAR GROUP BY            |    |1        |23  |
+|1 | NESTED-LOOP JOIN CARTESIAN|    |121      |19  |
+|2 |  HASH JOIN                |    |11       |8   |
+|3 |   TABLE SCAN              |a   |11       |3   |
+|4 |   TABLE SCAN              |b   |11       |3   |
+|5 |  MATERIAL                 |    |11       |8   |
+|6 |   HASH JOIN               |    |11       |8   |
+|7 |    TABLE SCAN             |d   |11       |3   |
+|8 |    TABLE SCAN             |c   |11       |3   |
 ====================================================
 
 Outputs & filters: 
@@ -1395,20 +1393,20 @@ Query Plan
 ==========================================
 |ID|OPERATOR         |NAME|EST. ROWS|COST|
 ------------------------------------------
-|0 |SCALAR GROUP BY  |    |1        |328 |
-|1 | HASH JOIN       |    |1        |328 |
-|2 |  HASH JOIN      |    |1        |282 |
-|3 |   HASH JOIN     |    |1        |235 |
-|4 |    HASH JOIN    |    |1        |189 |
-|5 |     HASH JOIN   |    |11       |142 |
-|6 |      HASH JOIN  |    |11       |94  |
-|7 |       TABLE SCAN|t2  |11       |46  |
-|8 |       TABLE SCAN|t1  |11       |46  |
-|9 |      TABLE SCAN |t4  |11       |46  |
-|10|     TABLE SCAN  |t3  |1        |46  |
-|11|    TABLE SCAN   |t5  |11       |46  |
-|12|   TABLE SCAN    |t6  |11       |46  |
-|13|  TABLE SCAN     |t7  |11       |46  |
+|0 |SCALAR GROUP BY  |    |1        |28  |
+|1 | HASH JOIN       |    |1        |28  |
+|2 |  HASH JOIN      |    |1        |25  |
+|3 |   HASH JOIN     |    |1        |21  |
+|4 |    HASH JOIN    |    |1        |18  |
+|5 |     HASH JOIN   |    |11       |13  |
+|6 |      HASH JOIN  |    |11       |7   |
+|7 |       TABLE SCAN|t2  |11       |3   |
+|8 |       TABLE SCAN|t1  |11       |3   |
+|9 |      TABLE SCAN |t4  |11       |3   |
+|10|     TABLE SCAN  |t3  |1        |3   |
+|11|    TABLE SCAN   |t5  |11       |3   |
+|12|   TABLE SCAN    |t6  |11       |3   |
+|13|  TABLE SCAN     |t7  |11       |3   |
 ==========================================
 
 Outputs & filters: 
@@ -1460,22 +1458,22 @@ Query Plan
 ========================================================
 |ID|OPERATOR                       |NAME|EST. ROWS|COST|
 --------------------------------------------------------
-|0 |SCALAR GROUP BY                |    |1        |388 |
-|1 | HASH OUTER JOIN               |    |67       |388 |
-|2 |  HASH JOIN                    |    |67       |330 |
-|3 |   NESTED-LOOP JOIN CARTESIAN  |    |121      |263 |
-|4 |    HASH JOIN                  |    |11       |165 |
-|5 |     NESTED-LOOP JOIN CARTESIAN|    |121      |97  |
-|6 |      TABLE SCAN               |t4  |11       |46  |
-|7 |      MATERIAL                 |    |11       |46  |
-|8 |       TABLE SCAN              |t6  |11       |46  |
-|9 |     TABLE SCAN                |t5  |11       |46  |
-|10|    MATERIAL                   |    |11       |94  |
-|11|     HASH OUTER JOIN           |    |11       |94  |
-|12|      TABLE SCAN               |t1  |11       |46  |
-|13|      TABLE SCAN               |t2  |11       |46  |
-|14|   TABLE SCAN                  |t3  |7        |46  |
-|15|  TABLE SCAN                   |t7  |11       |46  |
+|0 |SCALAR GROUP BY                |    |1        |103 |
+|1 | HASH OUTER JOIN               |    |67       |100 |
+|2 |  HASH JOIN                    |    |67       |82  |
+|3 |   NESTED-LOOP JOIN CARTESIAN  |    |121      |51  |
+|4 |    HASH JOIN                  |    |11       |40  |
+|5 |     NESTED-LOOP JOIN CARTESIAN|    |121      |8   |
+|6 |      TABLE SCAN               |t4  |11       |3   |
+|7 |      MATERIAL                 |    |11       |3   |
+|8 |       TABLE SCAN              |t6  |11       |3   |
+|9 |     TABLE SCAN                |t5  |11       |3   |
+|10|    MATERIAL                   |    |11       |8   |
+|11|     HASH OUTER JOIN           |    |11       |8   |
+|12|      TABLE SCAN               |t1  |11       |3   |
+|13|      TABLE SCAN               |t2  |11       |3   |
+|14|   TABLE SCAN                  |t3  |7        |3   |
+|15|  TABLE SCAN                   |t7  |11       |3   |
 ========================================================
 
 Outputs & filters: 
@@ -1529,14 +1527,14 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |185 |
-|1 | HASH JOIN     |    |1        |185 |
-|2 |  TABLE SCAN   |c   |11       |46  |
-|3 |  HASH JOIN    |    |1        |138 |
-|4 |   TABLE SCAN  |a   |2        |46  |
-|5 |   HASH JOIN   |    |1        |92  |
-|6 |    TABLE SCAN |d   |1        |46  |
-|7 |    TABLE SCAN |b   |11       |46  |
+|0 |SCALAR GROUP BY|    |1        |14  |
+|1 | HASH JOIN     |    |1        |14  |
+|2 |  TABLE SCAN   |c   |11       |3   |
+|3 |  HASH JOIN    |    |1        |9   |
+|4 |   TABLE SCAN  |a   |2        |3   |
+|5 |   HASH JOIN   |    |1        |6   |
+|6 |    TABLE SCAN |d   |1        |3   |
+|7 |    TABLE SCAN |b   |11       |3   |
 ========================================
 
 Outputs & filters: 
@@ -1598,24 +1596,24 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |424 |
-|1 | HASH JOIN     |    |1        |424 |
-|2 |  HASH JOIN    |    |1        |282 |
-|3 |   HASH JOIN   |    |1        |140 |
-|4 |    TABLE SCAN |t2  |11       |46  |
-|5 |    HASH JOIN  |    |1        |93  |
-|6 |     TABLE SCAN|t1  |11       |46  |
-|7 |     TABLE SCAN|t3  |1        |46  |
-|8 |   HASH JOIN   |    |11       |141 |
-|9 |    TABLE SCAN |t7  |11       |46  |
-|10|    HASH JOIN  |    |11       |94  |
-|11|     TABLE SCAN|t8  |11       |46  |
-|12|     TABLE SCAN|t9  |11       |46  |
-|13|  HASH JOIN    |    |11       |142 |
-|14|   HASH JOIN   |    |11       |94  |
-|15|    TABLE SCAN |t4  |11       |46  |
-|16|    TABLE SCAN |t5  |11       |46  |
-|17|   TABLE SCAN  |t6  |11       |46  |
+|0 |SCALAR GROUP BY|    |1        |38  |
+|1 | HASH JOIN     |    |1        |38  |
+|2 |  HASH JOIN    |    |1        |24  |
+|3 |   HASH JOIN   |    |1        |11  |
+|4 |    TABLE SCAN |t2  |11       |3   |
+|5 |    HASH JOIN  |    |1        |7   |
+|6 |     TABLE SCAN|t1  |11       |3   |
+|7 |     TABLE SCAN|t3  |1        |3   |
+|8 |   HASH JOIN   |    |11       |12  |
+|9 |    TABLE SCAN |t7  |11       |3   |
+|10|    HASH JOIN  |    |11       |7   |
+|11|     TABLE SCAN|t8  |11       |3   |
+|12|     TABLE SCAN|t9  |11       |3   |
+|13|  HASH JOIN    |    |11       |13  |
+|14|   HASH JOIN   |    |11       |8   |
+|15|    TABLE SCAN |t4  |11       |3   |
+|16|    TABLE SCAN |t5  |11       |3   |
+|17|   TABLE SCAN  |t6  |11       |3   |
 ========================================
 
 Outputs & filters: 
@@ -1672,24 +1670,24 @@ Query Plan
 ==========================================
 |ID|OPERATOR         |NAME|EST. ROWS|COST|
 ------------------------------------------
-|0 |SCALAR GROUP BY  |    |1        |421 |
-|1 | HASH JOIN       |    |1        |421 |
-|2 |  HASH JOIN      |    |1        |375 |
-|3 |   HASH JOIN     |    |1        |328 |
-|4 |    HASH JOIN    |    |1        |282 |
-|5 |     HASH JOIN   |    |1        |140 |
-|6 |      TABLE SCAN |t2  |11       |46  |
-|7 |      HASH JOIN  |    |1        |93  |
-|8 |       TABLE SCAN|t1  |11       |46  |
-|9 |       TABLE SCAN|t3  |1        |46  |
-|10|     HASH JOIN   |    |11       |141 |
-|11|      TABLE SCAN |t7  |11       |46  |
-|12|      HASH JOIN  |    |11       |94  |
-|13|       TABLE SCAN|t8  |11       |46  |
-|14|       TABLE SCAN|t9  |11       |46  |
-|15|    TABLE SCAN   |t6  |11       |46  |
-|16|   TABLE SCAN    |t4  |11       |46  |
-|17|  TABLE SCAN     |t5  |11       |46  |
+|0 |SCALAR GROUP BY  |    |1        |34  |
+|1 | HASH JOIN       |    |1        |34  |
+|2 |  HASH JOIN      |    |1        |31  |
+|3 |   HASH JOIN     |    |1        |27  |
+|4 |    HASH JOIN    |    |1        |24  |
+|5 |     HASH JOIN   |    |1        |11  |
+|6 |      TABLE SCAN |t2  |11       |3   |
+|7 |      HASH JOIN  |    |1        |7   |
+|8 |       TABLE SCAN|t1  |11       |3   |
+|9 |       TABLE SCAN|t3  |1        |3   |
+|10|     HASH JOIN   |    |11       |12  |
+|11|      TABLE SCAN |t7  |11       |3   |
+|12|      HASH JOIN  |    |11       |7   |
+|13|       TABLE SCAN|t8  |11       |3   |
+|14|       TABLE SCAN|t9  |11       |3   |
+|15|    TABLE SCAN   |t6  |11       |3   |
+|16|   TABLE SCAN    |t4  |11       |3   |
+|17|  TABLE SCAN     |t5  |11       |3   |
 ==========================================
 
 Outputs & filters: 
@@ -1749,24 +1747,24 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |423 |
-|1 | HASH JOIN     |    |1        |423 |
-|2 |  HASH JOIN    |    |1        |283 |
-|3 |   HASH JOIN   |    |1        |141 |
-|4 |    HASH JOIN  |    |11       |94  |
-|5 |     TABLE SCAN|t2  |11       |46  |
-|6 |     TABLE SCAN|t1  |11       |46  |
-|7 |    TABLE SCAN |t3  |1        |46  |
-|8 |   HASH JOIN   |    |11       |141 |
-|9 |    TABLE SCAN |t4  |11       |46  |
-|10|    HASH JOIN  |    |11       |94  |
-|11|     TABLE SCAN|t5  |11       |46  |
-|12|     TABLE SCAN|t6  |11       |46  |
-|13|  HASH JOIN    |    |4        |140 |
-|14|   TABLE SCAN  |t8  |4        |46  |
-|15|   HASH JOIN   |    |11       |94  |
-|16|    TABLE SCAN |t9  |11       |46  |
-|17|    TABLE SCAN |t7  |11       |46  |
+|0 |SCALAR GROUP BY|    |1        |36  |
+|1 | HASH JOIN     |    |1        |36  |
+|2 |  HASH JOIN    |    |1        |25  |
+|3 |   HASH JOIN   |    |1        |12  |
+|4 |    HASH JOIN  |    |11       |7   |
+|5 |     TABLE SCAN|t2  |11       |3   |
+|6 |     TABLE SCAN|t1  |11       |3   |
+|7 |    TABLE SCAN |t3  |1        |3   |
+|8 |   HASH JOIN   |    |11       |12  |
+|9 |    TABLE SCAN |t4  |11       |3   |
+|10|    HASH JOIN  |    |11       |7   |
+|11|     TABLE SCAN|t5  |11       |3   |
+|12|     TABLE SCAN|t6  |11       |3   |
+|13|  HASH JOIN    |    |4        |12  |
+|14|   TABLE SCAN  |t8  |4        |3   |
+|15|   HASH JOIN   |    |11       |7   |
+|16|    TABLE SCAN |t9  |11       |3   |
+|17|    TABLE SCAN |t7  |11       |3   |
 ========================================
 
 Outputs & filters: 
@@ -1826,24 +1824,24 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |424 |
-|1 | HASH JOIN     |    |1        |424 |
-|2 |  HASH JOIN    |    |1        |282 |
-|3 |   HASH JOIN   |    |1        |140 |
-|4 |    TABLE SCAN |t2  |11       |46  |
-|5 |    HASH JOIN  |    |1        |93  |
-|6 |     TABLE SCAN|t1  |11       |46  |
-|7 |     TABLE SCAN|t3  |1        |46  |
-|8 |   HASH JOIN   |    |11       |142 |
-|9 |    HASH JOIN  |    |11       |94  |
-|10|     TABLE SCAN|t7  |11       |46  |
-|11|     TABLE SCAN|t8  |11       |46  |
-|12|    TABLE SCAN |t9  |11       |46  |
-|13|  HASH JOIN    |    |11       |142 |
-|14|   HASH JOIN   |    |11       |94  |
-|15|    TABLE SCAN |t4  |11       |46  |
-|16|    TABLE SCAN |t5  |11       |46  |
-|17|   TABLE SCAN  |t6  |11       |46  |
+|0 |SCALAR GROUP BY|    |1        |39  |
+|1 | HASH JOIN     |    |1        |39  |
+|2 |  HASH JOIN    |    |1        |25  |
+|3 |   HASH JOIN   |    |1        |11  |
+|4 |    TABLE SCAN |t2  |11       |3   |
+|5 |    HASH JOIN  |    |1        |7   |
+|6 |     TABLE SCAN|t1  |11       |3   |
+|7 |     TABLE SCAN|t3  |1        |3   |
+|8 |   HASH JOIN   |    |11       |14  |
+|9 |    HASH JOIN  |    |11       |8   |
+|10|     TABLE SCAN|t7  |11       |3   |
+|11|     TABLE SCAN|t8  |11       |3   |
+|12|    TABLE SCAN |t9  |11       |3   |
+|13|  HASH JOIN    |    |11       |13  |
+|14|   HASH JOIN   |    |11       |7   |
+|15|    TABLE SCAN |t4  |11       |3   |
+|16|    TABLE SCAN |t5  |11       |3   |
+|17|   TABLE SCAN  |t6  |11       |3   |
 ========================================
 
 Outputs & filters: 
@@ -1903,24 +1901,24 @@ Query Plan
 =========================================
 |ID|OPERATOR        |NAME|EST. ROWS|COST|
 -----------------------------------------
-|0 |SCALAR GROUP BY |    |1        |423 |
-|1 | HASH JOIN      |    |1        |423 |
-|2 |  HASH JOIN     |    |1        |376 |
-|3 |   HASH JOIN    |    |1        |330 |
-|4 |    HASH JOIN   |    |1        |140 |
-|5 |     TABLE SCAN |t1  |11       |46  |
-|6 |     HASH JOIN  |    |1        |93  |
-|7 |      TABLE SCAN|t2  |11       |46  |
-|8 |      TABLE SCAN|t3  |1        |46  |
-|9 |    HASH JOIN   |    |11       |189 |
-|10|     HASH JOIN  |    |11       |94  |
-|11|      TABLE SCAN|t4  |11       |46  |
-|12|      TABLE SCAN|t5  |11       |46  |
-|13|     HASH JOIN  |    |11       |94  |
-|14|      TABLE SCAN|t6  |11       |46  |
-|15|      TABLE SCAN|t7  |11       |46  |
-|16|   TABLE SCAN   |t9  |11       |46  |
-|17|  TABLE SCAN    |t8  |11       |46  |
+|0 |SCALAR GROUP BY |    |1        |37  |
+|1 | HASH JOIN      |    |1        |37  |
+|2 |  HASH JOIN     |    |1        |33  |
+|3 |   HASH JOIN    |    |1        |29  |
+|4 |    HASH JOIN   |    |1        |11  |
+|5 |     TABLE SCAN |t1  |11       |3   |
+|6 |     HASH JOIN  |    |1        |7   |
+|7 |      TABLE SCAN|t2  |11       |3   |
+|8 |      TABLE SCAN|t3  |1        |3   |
+|9 |    HASH JOIN   |    |11       |18  |
+|10|     HASH JOIN  |    |11       |8   |
+|11|      TABLE SCAN|t4  |11       |3   |
+|12|      TABLE SCAN|t5  |11       |3   |
+|13|     HASH JOIN  |    |11       |7   |
+|14|      TABLE SCAN|t6  |11       |3   |
+|15|      TABLE SCAN|t7  |11       |3   |
+|16|   TABLE SCAN   |t9  |11       |3   |
+|17|  TABLE SCAN    |t8  |11       |3   |
 =========================================
 
 Outputs & filters: 
@@ -1979,24 +1977,24 @@ Query Plan
 ===========================================
 |ID|OPERATOR          |NAME|EST. ROWS|COST|
 -------------------------------------------
-|0 |SCALAR GROUP BY   |    |1        |424 |
-|1 | HASH JOIN        |    |1        |424 |
-|2 |  HASH JOIN       |    |1        |378 |
-|3 |   HASH JOIN      |    |1        |331 |
-|4 |    HASH JOIN     |    |1        |285 |
-|5 |     HASH JOIN    |    |11       |237 |
-|6 |      TABLE SCAN  |t2  |11       |46  |
-|7 |      HASH JOIN   |    |11       |189 |
-|8 |       HASH JOIN  |    |11       |94  |
-|9 |        TABLE SCAN|t7  |11       |46  |
-|10|        TABLE SCAN|t1  |11       |46  |
-|11|       HASH JOIN  |    |11       |94  |
-|12|        TABLE SCAN|t8  |11       |46  |
-|13|        TABLE SCAN|t9  |11       |46  |
-|14|     TABLE SCAN   |t3  |1        |46  |
-|15|    TABLE SCAN    |t4  |11       |46  |
-|16|   TABLE SCAN     |t5  |11       |46  |
-|17|  TABLE SCAN      |t6  |11       |46  |
+|0 |SCALAR GROUP BY   |    |1        |39  |
+|1 | HASH JOIN        |    |1        |39  |
+|2 |  HASH JOIN       |    |1        |36  |
+|3 |   HASH JOIN      |    |1        |32  |
+|4 |    HASH JOIN     |    |1        |29  |
+|5 |     HASH JOIN    |    |11       |23  |
+|6 |      TABLE SCAN  |t2  |11       |3   |
+|7 |      HASH JOIN   |    |11       |18  |
+|8 |       HASH JOIN  |    |11       |7   |
+|9 |        TABLE SCAN|t7  |11       |3   |
+|10|        TABLE SCAN|t1  |11       |3   |
+|11|       HASH JOIN  |    |11       |8   |
+|12|        TABLE SCAN|t8  |11       |3   |
+|13|        TABLE SCAN|t9  |11       |3   |
+|14|     TABLE SCAN   |t3  |1        |3   |
+|15|    TABLE SCAN    |t4  |11       |3   |
+|16|   TABLE SCAN     |t5  |11       |3   |
+|17|  TABLE SCAN      |t6  |11       |3   |
 ===========================================
 
 Outputs & filters: 
@@ -2055,16 +2053,16 @@ Query Plan
 =====================================================
 |ID|OPERATOR                    |NAME|EST. ROWS|COST|
 -----------------------------------------------------
-|0 |SCALAR GROUP BY             |    |1        |229 |
-|1 | HASH JOIN                  |    |11       |229 |
-|2 |  NESTED-LOOP JOIN CARTESIAN|    |121      |97  |
-|3 |   TABLE SCAN               |t1  |11       |46  |
-|4 |   MATERIAL                 |    |11       |46  |
-|5 |    TABLE SCAN              |t4  |11       |46  |
-|6 |  NESTED-LOOP JOIN CARTESIAN|    |121      |97  |
-|7 |   TABLE SCAN               |t2  |11       |46  |
-|8 |   MATERIAL                 |    |11       |46  |
-|9 |    TABLE SCAN              |t3  |11       |46  |
+|0 |SCALAR GROUP BY             |    |1        |63  |
+|1 | HASH JOIN                  |    |11       |63  |
+|2 |  NESTED-LOOP JOIN CARTESIAN|    |121      |9   |
+|3 |   TABLE SCAN               |t1  |11       |3   |
+|4 |   MATERIAL                 |    |11       |4   |
+|5 |    TABLE SCAN              |t4  |11       |3   |
+|6 |  NESTED-LOOP JOIN CARTESIAN|    |121      |9   |
+|7 |   TABLE SCAN               |t2  |11       |3   |
+|8 |   MATERIAL                 |    |11       |4   |
+|9 |    TABLE SCAN              |t3  |11       |3   |
 =====================================================
 
 Outputs & filters: 
@@ -2107,34 +2105,34 @@ Query Plan
 =======================================================
 |ID|OPERATOR                     |NAME |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |SORT                         |     |11       |47  |
-|1 | SUBPLAN FILTER              |     |11       |46  |
-|2 |  TABLE SCAN                 |x    |11       |46  |
-|3 |  LIMIT                      |     |1        |369 |
-|4 |   NESTED-LOOP JOIN CARTESIAN|     |1        |369 |
-|5 |    SUBPLAN SCAN             |VIEW5|1        |185 |
-|6 |     LIMIT                   |     |1        |185 |
-|7 |      UNION ALL              |     |1        |185 |
-|8 |       LIMIT                 |     |1        |93  |
-|9 |        HASH JOIN            |     |1        |93  |
-|10|         TABLE SCAN          |a    |11       |46  |
-|11|         TABLE SCAN          |b    |1        |46  |
-|12|       LIMIT                 |     |1        |92  |
-|13|        HASH JOIN            |     |1        |92  |
-|14|         TABLE SCAN          |a    |1        |46  |
-|15|         TABLE SCAN          |b    |11       |46  |
-|16|    MATERIAL                 |     |1        |185 |
-|17|     SUBPLAN SCAN            |VIEW6|1        |185 |
-|18|      LIMIT                  |     |1        |185 |
-|19|       UNION ALL             |     |1        |185 |
-|20|        LIMIT                |     |1        |92  |
-|21|         HASH JOIN           |     |1        |92  |
-|22|          TABLE SCAN         |a    |1        |46  |
-|23|          TABLE SCAN         |b    |11       |46  |
-|24|        LIMIT                |     |1        |93  |
-|25|         HASH JOIN           |     |1        |93  |
-|26|          TABLE SCAN         |b    |11       |46  |
-|27|          TABLE SCAN         |a    |2        |46  |
+|0 |SORT                         |     |11       |5   |
+|1 | SUBPLAN FILTER              |     |11       |3   |
+|2 |  TABLE SCAN                 |x    |11       |3   |
+|3 |  LIMIT                      |     |1        |23  |
+|4 |   NESTED-LOOP JOIN CARTESIAN|     |1        |23  |
+|5 |    SUBPLAN SCAN             |VIEW5|1        |12  |
+|6 |     LIMIT                   |     |1        |12  |
+|7 |      UNION ALL              |     |1        |12  |
+|8 |       LIMIT                 |     |1        |6   |
+|9 |        HASH JOIN            |     |1        |6   |
+|10|         TABLE SCAN          |a    |11       |3   |
+|11|         TABLE SCAN          |b    |1        |2   |
+|12|       LIMIT                 |     |1        |6   |
+|13|        HASH JOIN            |     |1        |6   |
+|14|         TABLE SCAN          |a    |1        |3   |
+|15|         TABLE SCAN          |b    |11       |3   |
+|16|    MATERIAL                 |     |1        |12  |
+|17|     SUBPLAN SCAN            |VIEW6|1        |12  |
+|18|      LIMIT                  |     |1        |12  |
+|19|       UNION ALL             |     |1        |12  |
+|20|        LIMIT                |     |1        |6   |
+|21|         HASH JOIN           |     |1        |6   |
+|22|          TABLE SCAN         |a    |1        |3   |
+|23|          TABLE SCAN         |b    |11       |3   |
+|24|        LIMIT                |     |1        |6   |
+|25|         HASH JOIN           |     |1        |6   |
+|26|          TABLE SCAN         |b    |11       |3   |
+|27|          TABLE SCAN         |a    |2        |2   |
 =======================================================
 
 Outputs & filters: 
@@ -2215,34 +2213,34 @@ Query Plan
 =======================================================
 |ID|OPERATOR                     |NAME |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |SORT                         |     |11       |47  |
-|1 | SUBPLAN FILTER              |     |11       |46  |
-|2 |  TABLE SCAN                 |x    |11       |46  |
-|3 |  LIMIT                      |     |1        |369 |
-|4 |   NESTED-LOOP JOIN CARTESIAN|     |1        |369 |
-|5 |    SUBPLAN SCAN             |VIEW5|1        |185 |
-|6 |     LIMIT                   |     |1        |185 |
-|7 |      UNION ALL              |     |1        |185 |
-|8 |       LIMIT                 |     |1        |93  |
-|9 |        HASH JOIN            |     |1        |93  |
-|10|         TABLE SCAN          |a    |11       |46  |
-|11|         TABLE SCAN          |b    |1        |46  |
-|12|       LIMIT                 |     |1        |92  |
-|13|        HASH JOIN            |     |1        |92  |
-|14|         TABLE SCAN          |a    |1        |46  |
-|15|         TABLE SCAN          |b    |11       |46  |
-|16|    MATERIAL                 |     |1        |185 |
-|17|     SUBPLAN SCAN            |VIEW6|1        |185 |
-|18|      LIMIT                  |     |1        |185 |
-|19|       UNION ALL             |     |1        |185 |
-|20|        LIMIT                |     |1        |92  |
-|21|         HASH JOIN           |     |1        |92  |
-|22|          TABLE SCAN         |a    |1        |46  |
-|23|          TABLE SCAN         |b    |11       |46  |
-|24|        LIMIT                |     |1        |93  |
-|25|         HASH JOIN           |     |1        |93  |
-|26|          TABLE SCAN         |b    |11       |46  |
-|27|          TABLE SCAN         |a    |2        |46  |
+|0 |SORT                         |     |11       |5   |
+|1 | SUBPLAN FILTER              |     |11       |3   |
+|2 |  TABLE SCAN                 |x    |11       |3   |
+|3 |  LIMIT                      |     |1        |23  |
+|4 |   NESTED-LOOP JOIN CARTESIAN|     |1        |23  |
+|5 |    SUBPLAN SCAN             |VIEW5|1        |12  |
+|6 |     LIMIT                   |     |1        |12  |
+|7 |      UNION ALL              |     |1        |12  |
+|8 |       LIMIT                 |     |1        |6   |
+|9 |        HASH JOIN            |     |1        |6   |
+|10|         TABLE SCAN          |a    |11       |3   |
+|11|         TABLE SCAN          |b    |1        |2   |
+|12|       LIMIT                 |     |1        |6   |
+|13|        HASH JOIN            |     |1        |6   |
+|14|         TABLE SCAN          |a    |1        |3   |
+|15|         TABLE SCAN          |b    |11       |3   |
+|16|    MATERIAL                 |     |1        |12  |
+|17|     SUBPLAN SCAN            |VIEW6|1        |12  |
+|18|      LIMIT                  |     |1        |12  |
+|19|       UNION ALL             |     |1        |12  |
+|20|        LIMIT                |     |1        |6   |
+|21|         HASH JOIN           |     |1        |6   |
+|22|          TABLE SCAN         |a    |1        |3   |
+|23|          TABLE SCAN         |b    |11       |3   |
+|24|        LIMIT                |     |1        |6   |
+|25|         HASH JOIN           |     |1        |6   |
+|26|          TABLE SCAN         |b    |11       |3   |
+|27|          TABLE SCAN         |a    |2        |2   |
 =======================================================
 
 Outputs & filters: 
@@ -2323,34 +2321,34 @@ Query Plan
 =======================================================
 |ID|OPERATOR                     |NAME |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |SORT                         |     |11       |47  |
-|1 | SUBPLAN FILTER              |     |11       |46  |
-|2 |  TABLE SCAN                 |x    |11       |46  |
-|3 |  LIMIT                      |     |1        |369 |
-|4 |   NESTED-LOOP JOIN CARTESIAN|     |1        |369 |
-|5 |    SUBPLAN SCAN             |VIEW5|1        |185 |
-|6 |     LIMIT                   |     |1        |185 |
-|7 |      UNION ALL              |     |1        |185 |
-|8 |       LIMIT                 |     |1        |93  |
-|9 |        HASH JOIN            |     |1        |93  |
-|10|         TABLE SCAN          |a    |11       |46  |
-|11|         TABLE SCAN          |b    |1        |46  |
-|12|       LIMIT                 |     |1        |92  |
-|13|        HASH JOIN            |     |1        |92  |
-|14|         TABLE SCAN          |a    |1        |46  |
-|15|         TABLE SCAN          |b    |11       |46  |
-|16|    MATERIAL                 |     |1        |185 |
-|17|     SUBPLAN SCAN            |VIEW6|1        |185 |
-|18|      LIMIT                  |     |1        |185 |
-|19|       UNION ALL             |     |1        |185 |
-|20|        LIMIT                |     |1        |92  |
-|21|         HASH JOIN           |     |1        |92  |
-|22|          TABLE SCAN         |a    |1        |46  |
-|23|          TABLE SCAN         |b    |11       |46  |
-|24|        LIMIT                |     |1        |93  |
-|25|         HASH JOIN           |     |1        |93  |
-|26|          TABLE SCAN         |b    |11       |46  |
-|27|          TABLE SCAN         |a    |2        |46  |
+|0 |SORT                         |     |11       |5   |
+|1 | SUBPLAN FILTER              |     |11       |3   |
+|2 |  TABLE SCAN                 |x    |11       |3   |
+|3 |  LIMIT                      |     |1        |23  |
+|4 |   NESTED-LOOP JOIN CARTESIAN|     |1        |23  |
+|5 |    SUBPLAN SCAN             |VIEW5|1        |12  |
+|6 |     LIMIT                   |     |1        |12  |
+|7 |      UNION ALL              |     |1        |12  |
+|8 |       LIMIT                 |     |1        |6   |
+|9 |        HASH JOIN            |     |1        |6   |
+|10|         TABLE SCAN          |a    |11       |3   |
+|11|         TABLE SCAN          |b    |1        |2   |
+|12|       LIMIT                 |     |1        |6   |
+|13|        HASH JOIN            |     |1        |6   |
+|14|         TABLE SCAN          |a    |1        |3   |
+|15|         TABLE SCAN          |b    |11       |3   |
+|16|    MATERIAL                 |     |1        |12  |
+|17|     SUBPLAN SCAN            |VIEW6|1        |12  |
+|18|      LIMIT                  |     |1        |12  |
+|19|       UNION ALL             |     |1        |12  |
+|20|        LIMIT                |     |1        |6   |
+|21|         HASH JOIN           |     |1        |6   |
+|22|          TABLE SCAN         |a    |1        |3   |
+|23|          TABLE SCAN         |b    |11       |3   |
+|24|        LIMIT                |     |1        |6   |
+|25|         HASH JOIN           |     |1        |6   |
+|26|          TABLE SCAN         |b    |11       |3   |
+|27|          TABLE SCAN         |a    |2        |2   |
 =======================================================
 
 Outputs & filters: 
@@ -2431,14 +2429,14 @@ Query Plan
 ========================================
 |ID|OPERATOR       |NAME|EST. ROWS|COST|
 ----------------------------------------
-|0 |SCALAR GROUP BY|    |1        |189 |
-|1 | HASH JOIN     |    |1        |189 |
-|2 |  HASH JOIN    |    |11       |94  |
-|3 |   TABLE SCAN  |t1  |11       |46  |
-|4 |   TABLE SCAN  |t2  |11       |46  |
-|5 |  HASH JOIN    |    |11       |94  |
-|6 |   TABLE SCAN  |t4  |11       |46  |
-|7 |   TABLE SCAN  |t5  |11       |46  |
+|0 |SCALAR GROUP BY|    |1        |18  |
+|1 | HASH JOIN     |    |1        |18  |
+|2 |  HASH JOIN    |    |11       |7   |
+|3 |   TABLE SCAN  |t1  |11       |3   |
+|4 |   TABLE SCAN  |t2  |11       |3   |
+|5 |  HASH JOIN    |    |11       |8   |
+|6 |   TABLE SCAN  |t4  |11       |3   |
+|7 |   TABLE SCAN  |t5  |11       |3   |
 ========================================
 
 Outputs & filters: 
@@ -2476,11 +2474,11 @@ Query Plan
 =================================================
 |ID|OPERATOR                |NAME|EST. ROWS|COST|
 -------------------------------------------------
-|0 |HASH JOIN               |    |1        |137 |
-|1 | HASH RIGHT ANTI JOIN NA|    |1        |91  |
-|2 |  TABLE SCAN            |t2  |1        |46  |
-|3 |  TABLE SCAN            |t1  |1        |46  |
-|4 | TABLE SCAN             |t3  |1        |46  |
+|0 |HASH JOIN               |    |1        |6   |
+|1 | HASH RIGHT ANTI JOIN NA|    |1        |4   |
+|2 |  TABLE SCAN            |t2  |1        |2   |
+|3 |  TABLE SCAN            |t1  |1        |2   |
+|4 | TABLE SCAN             |t3  |1        |2   |
 =================================================
 
 Outputs & filters: 
@@ -2501,11 +2499,11 @@ Query Plan
 =================================================
 |ID|OPERATOR                |NAME|EST. ROWS|COST|
 -------------------------------------------------
-|0 |HASH JOIN               |    |1        |137 |
-|1 | HASH RIGHT ANTI JOIN NA|    |1        |91  |
-|2 |  TABLE SCAN            |t2  |1        |46  |
-|3 |  TABLE SCAN            |t1  |1        |46  |
-|4 | TABLE SCAN             |t3  |1        |46  |
+|0 |HASH JOIN               |    |1        |6   |
+|1 | HASH RIGHT ANTI JOIN NA|    |1        |4   |
+|2 |  TABLE SCAN            |t2  |1        |2   |
+|3 |  TABLE SCAN            |t1  |1        |2   |
+|4 | TABLE SCAN             |t3  |1        |2   |
 =================================================
 
 Outputs & filters: 
@@ -2526,11 +2524,11 @@ Query Plan
 ==========================================
 |ID|OPERATOR         |NAME|EST. ROWS|COST|
 ------------------------------------------
-|0 |HASH ANTI JOIN NA|    |1        |137 |
-|1 | HASH JOIN       |    |1        |91  |
-|2 |  TABLE SCAN     |t3  |1        |46  |
-|3 |  TABLE SCAN     |t1  |1        |46  |
-|4 | TABLE SCAN      |t2  |1        |46  |
+|0 |HASH ANTI JOIN NA|    |1        |6   |
+|1 | HASH JOIN       |    |1        |4   |
+|2 |  TABLE SCAN     |t3  |1        |2   |
+|3 |  TABLE SCAN     |t1  |1        |2   |
+|4 | TABLE SCAN      |t2  |1        |2   |
 ==========================================
 
 Outputs & filters: 
@@ -2551,11 +2549,11 @@ Query Plan
 ===========================================
 |ID|OPERATOR          |NAME|EST. ROWS|COST|
 -------------------------------------------
-|0 |HASH JOIN         |    |1        |137 |
-|1 | HASH ANTI JOIN NA|    |1        |91  |
-|2 |  TABLE SCAN      |t1  |1        |46  |
-|3 |  TABLE SCAN      |t2  |1        |46  |
-|4 | TABLE SCAN       |t3  |1        |46  |
+|0 |HASH JOIN         |    |1        |6   |
+|1 | HASH ANTI JOIN NA|    |1        |4   |
+|2 |  TABLE SCAN      |t1  |1        |2   |
+|3 |  TABLE SCAN      |t2  |1        |2   |
+|4 | TABLE SCAN       |t3  |1        |2   |
 ===========================================
 
 Outputs & filters: 

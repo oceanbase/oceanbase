@@ -103,7 +103,7 @@ int ObTabletMeta::init(
     snapshot_version_ = snapshot_version;
     multi_version_start_ = snapshot_version;
     table_store_flag_ = table_store_flag;
-    ddl_start_scn_.set_min();
+    ddl_start_scn_.set_base();
     ddl_snapshot_version_ = 0;
     max_sync_storage_schema_version_ = max_sync_storage_schema_version;
 
@@ -171,7 +171,7 @@ int ObTabletMeta::init(
     snapshot_version_ = snapshot_version;
     multi_version_start_ = snapshot_version;
     table_store_flag_ = table_store_flag;
-    ddl_start_scn_.set_min();
+    ddl_start_scn_.set_base();
     ddl_snapshot_version_ = 0;
     max_sync_storage_schema_version_ = max_sync_storage_schema_version;
 
@@ -223,6 +223,7 @@ int ObTabletMeta::init(
   } else if (OB_FAIL(autoinc_seq_.assign(autoinc_seq))) {
     LOG_WARN("failed to assign autoinc seq", K(ret));
   } else if (OB_FAIL(ddl_start_scn_.convert_for_gts(MAX(old_tablet_meta.ddl_start_scn_.get_val_for_gts(), ddl_start_scn)))) {
+    // TODO yiren, Do not forget to use palf::SCN::max rather than MAX.
     LOG_WARN("fail to convert scn", K(ret), K(ddl_start_scn));
   } else if (OB_FAIL(clog_checkpoint_scn_.convert_for_gts(MAX(old_tablet_meta.clog_checkpoint_scn_.get_val_for_gts(), clog_checkpoint_ts)))) {
     LOG_WARN("fail to convert scn", K(ret), K(clog_checkpoint_ts));
@@ -273,9 +274,10 @@ int ObTabletMeta::init(
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!old_tablet_meta.is_valid())) {
+  } else if (OB_UNLIKELY(!old_tablet_meta.is_valid())
+      || OB_UNLIKELY(OB_INVALID_VERSION == max_sync_storage_schema_version)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(old_tablet_meta));
+    LOG_WARN("invalid args", K(ret), K(old_tablet_meta), K(max_sync_storage_schema_version));
   } else if (OB_FAIL(ddl_data_.assign(ddl_data))) {
     LOG_WARN("failed to assign ddl data", K(ret));
   } else if (OB_FAIL(autoinc_seq_.assign(autoinc_seq))) {
@@ -288,17 +290,18 @@ int ObTabletMeta::init(
     ref_tablet_id_ = old_tablet_meta.ref_tablet_id_;
     create_scn_ = old_tablet_meta.create_scn_;
     start_scn_ = old_tablet_meta.start_scn_;
-    ddl_start_scn_ = MAX(ddl_start_scn, old_tablet_meta.ddl_start_scn_);
-    clog_checkpoint_scn_ = MAX(clog_checkpoint_scn, old_tablet_meta.clog_checkpoint_scn_);
+    ddl_start_scn_ = palf::SCN::max(ddl_start_scn, old_tablet_meta.ddl_start_scn_);
+    clog_checkpoint_scn_ = palf::SCN::max(clog_checkpoint_scn, old_tablet_meta.clog_checkpoint_scn_);
     compat_mode_ = old_tablet_meta.compat_mode_;
     ha_status_ = old_tablet_meta.ha_status_;
     report_status_ = old_tablet_meta.report_status_;
+
     snapshot_version_ = MAX(snapshot_version, old_tablet_meta.snapshot_version_);
     multi_version_start_ = MIN(MAX(multi_version_start, old_tablet_meta.multi_version_start_), snapshot_version_);
     tx_data_ = tx_data;
     table_store_flag_ = old_tablet_meta.table_store_flag_;
     max_sync_storage_schema_version_ = max_sync_storage_schema_version;
-    ddl_checkpoint_scn_ = MAX(old_tablet_meta.ddl_checkpoint_scn_, ddl_checkpoint_scn);
+    ddl_checkpoint_scn_ = palf::SCN::max(old_tablet_meta.ddl_checkpoint_scn_, ddl_checkpoint_scn);
     ddl_snapshot_version_ = MAX(old_tablet_meta.ddl_snapshot_version_, ddl_snapshot_version);
     is_inited_ = true;
   }

@@ -396,12 +396,12 @@ private:
   private:
     common::ObIArray<common::ObTabletID> &tablet_ids_;
   };
-  class DestroyMemtableAndMgrOperator final
+  class DestroyMemtableAndMemberOperator final
   {
   public:
-    DestroyMemtableAndMgrOperator(ObLSTabletService *tablet_svr)
+    DestroyMemtableAndMemberOperator(ObLSTabletService *tablet_svr)
       : tablet_svr_(tablet_svr) {}
-    ~DestroyMemtableAndMgrOperator() = default;
+    ~DestroyMemtableAndMemberOperator() = default;
     int operator()(const common::ObTabletID &tablet_id);
     common::ObTabletID cur_tablet_id_;
     ObLSTabletService *tablet_svr_;

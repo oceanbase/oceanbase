@@ -3123,17 +3123,21 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
           LOG_WARN("fail calc task_id", K(location.tablet_id_), K(sqc), K(ret));
         }
       }
-      affinitize_rule.do_random(!sqc.get_partitions_info().empty());
-      const ObIArray<ObPxAffinityByRandom::TabletHashValue> &partition_worker_pairs =
-        affinitize_rule.get_result();
-      int64_t prefix_task_count = prefix_task_counts.at(idx);
-      ARRAY_FOREACH(partition_worker_pairs, idx) {
-        int64_t tablet_id = partition_worker_pairs.at(idx).tablet_id_;
-        int64_t task_id = partition_worker_pairs.at(idx).worker_id_;
-        OZ(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, task_id)));
-        LOG_DEBUG("debug push partition map", K(tablet_id), K(task_id));
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(affinitize_rule.do_random(!sqc.get_partitions_info().empty()))) {
+        LOG_WARN("failed to do random", K(ret));
+      } else {
+        const ObIArray<ObPxAffinityByRandom::TabletHashValue> &partition_worker_pairs =
+          affinitize_rule.get_result();
+        int64_t prefix_task_count = prefix_task_counts.at(idx);
+        ARRAY_FOREACH(partition_worker_pairs, idx) {
+          int64_t tablet_id = partition_worker_pairs.at(idx).tablet_id_;
+          int64_t task_id = partition_worker_pairs.at(idx).worker_id_;
+          OZ(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, task_id)));
+          LOG_DEBUG("debug push partition map", K(tablet_id), K(task_id));
+        }
+        LOG_DEBUG("Get all partition rows info", K(ret), K(sqc.get_partitions_info()));
       }
-      LOG_DEBUG("Get all partition rows info", K(ret), K(sqc.get_partitions_info()));
     }
   }
   return ret;
@@ -3497,9 +3501,11 @@ int ObExtraServerAliveCheck::do_check() const
               sqcs.at(j).set_need_report(false);
               sqcs.at(j).set_thread_finish(true);
               sqcs.at(j).set_server_not_alive();
-              ret = OB_RPC_CONNECT_ERROR;
-              LOG_WARN("server not in communication, maybe crashed.", K(ret),
-                        KPC(dfos.at(i)), K(sqcs.at(j)));
+              if (!sqcs.at(j).is_ignore_vtable_error()) {
+                ret = OB_RPC_CONNECT_ERROR;
+                LOG_WARN("server not in communication, maybe crashed.", K(ret),
+                          KPC(dfos.at(i)), K(sqcs.at(j)));
+              }
             }
           }
         }

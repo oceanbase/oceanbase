@@ -654,7 +654,7 @@ int ObBackupDataScheduler::get_scn(common::ObISQLClient &sql_proxy, const uint64
   if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &sql_proxy, for_update, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
   } else {
-    // TODO when yaoying provide the scn_to_str, remove this .
+    // TODO when provide the scn_to_str, remove this .
     // The conversion accuracy of SCN to time_stamp is inconsistent under MySQL mode and Oracle mode.
     // The conversion accuracy in ORALCE mode is nanosecond, but it is microsecond in mysql
     // for backup and restore, we keep the scn round up to microseconds that keep the conversion accuracy is consistent.

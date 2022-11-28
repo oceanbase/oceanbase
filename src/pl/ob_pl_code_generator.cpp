@@ -1185,7 +1185,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLForAllStmt &s)
   if (OB_SUCC(ret) && OB_NOT_NULL(generator_.get_current().get_v())) {
     const ObPLForLoopStmt& for_loop = static_cast<const ObPLForLoopStmt&>(s);
     if (OB_NOT_NULL(s.get_sql_stmt()) && !s.get_save_exception()) {
-      ObLLVMValue lower, upper, lower_obj, upper_obj, p_index_obj, count;
+      ObLLVMValue lower, upper, lower_obj, upper_obj, p_index_obj;
       ObLLVMValue ret_err, is_need_rollback;
       ObLLVMType ir_type;
       ObLLVMBasicBlock illegal_block, after_block, rollback_block, not_rollback_block;
@@ -1201,9 +1201,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLForAllStmt &s)
       OZ (generator_.get_helper().create_alloca(var->get_name(), ir_type, p_index_obj));
       OX (generator_.get_vars().at(s.get_ident() + generator_.USER_ARG_OFFSET) = p_index_obj);
       OZ (generator_.generate_bound_and_check(s, true, lower, upper, lower_obj, upper_obj, illegal_block));
-      OZ (generator_.get_helper().create_sub(upper, lower, count));
-      OZ (generator_.get_helper().create_inc(count, count));
-      OZ (generator_.generate_sql(*(s.get_sql_stmt()), ret_err, count));
+      OZ (generator_.generate_sql(*(s.get_sql_stmt()), ret_err));
       OZ (generator_.get_helper().create_icmp_eq(ret_err, OB_BATCHED_MULTI_STMT_ROLLBACK, is_need_rollback));
       OZ (generator_.get_helper().create_cond_br(is_need_rollback, rollback_block, not_rollback_block));
       OZ (generator_.set_current(not_rollback_block));
@@ -1560,9 +1558,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSqlStmt &s)
   } else if (OB_FAIL(generator_.generate_goto_label(s))) {
     LOG_WARN("failed to generate goto label", K(ret));
   } else {
-    ObLLVMValue ret_err, count;
-    OZ (generator_.get_helper().get_int32(0, count));
-    OZ (generator_.generate_sql(s, ret_err, count));
+    ObLLVMValue ret_err;
+    OZ (generator_.generate_sql(s, ret_err));
     OZ (generator_.generate_after_sql(s, ret_err));
   }
   return ret;
@@ -3359,8 +3356,6 @@ int ObPLCodeGenerator::init_spi_service()
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
-    } else if (OB_FAIL(arg_types.push_back(int32_type))) {
-      LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
       LOG_WARN("failed to get function type", K(ret));
     } else if (OB_FAIL(helper_.create_function(ObString("spi_execute"), ft, spi_service_.spi_execute_))) {
@@ -4941,7 +4936,7 @@ int ObPLCodeGenerator::generate_bound_and_check(const ObPLForLoopStmt &s,
   return ret;
 }
 
-int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err, ObLLVMValue &array_bind_count)
+int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_current().get_v())) {
@@ -5019,7 +5014,6 @@ int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err, 
         ObLLVMValue is_forall;
         OZ (get_helper().get_int8(static_cast<int64_t>(s.is_forall_sql()), is_forall));
         OZ (args.push_back(is_forall));
-        OZ (args.push_back(array_bind_count));
         OZ (get_helper().create_call(ObString("spi_execute"), get_spi_service().spi_execute_, args, ret_err));
       }
     }
@@ -5538,6 +5532,7 @@ int ObPLCodeGenerator::generate_set_extend(ObLLVMValue &p_obj,
 
   //init extend
   ObObj extend_obj(ObExtendType);
+  extend_obj.set_int_value(0);
   OZ (store_obj(extend_obj, p_obj));
 
   //set extend type

@@ -45,8 +45,7 @@ public:
   virtual int init(const common::ObTabletID &tablet_id,
                    const share::ObLSID &ls_id,
                    ObFreezer *freezer,
-                   ObTenantMetaMemMgr *t3m,
-                   ObTabletDDLKvMgr *ddl_kv_mgr) override;
+                   ObTenantMetaMemMgr *t3m) override;
 
   virtual int get_active_memtable(ObTableHandleV2 &handle) const override;
   virtual int get_all_memtables(ObTableHdlArray &handle) override;
@@ -95,16 +94,17 @@ public:
   {
     return schema_recorder_;
   }
-  DECLARE_VIRTUAL_TO_STRING;
-
-protected:
-  virtual int release_head_memtable_(memtable::ObIMemtable *memtable,
-                                     const bool force = false) override;
   virtual int init_storage_schema_recorder(
       const ObTabletID &tablet_id,
       const share::ObLSID &ls_id,
       const int64_t max_saved_schema_version,
       logservice::ObLogHandler *log_handler) override;
+  virtual int destroy_storage_schema_recorder() override;
+  DECLARE_VIRTUAL_TO_STRING;
+
+protected:
+  virtual int release_head_memtable_(memtable::ObIMemtable *memtable,
+                                     const bool force = false) override;
 
 private:
   //minor freeze
@@ -134,8 +134,8 @@ private:
   static const int64_t PRINT_READABLE_INFO_DURATION_US = 1000 * 1000 * 60 * 10L; //10min
 
 private:
-  ObLS *ls_;
-  ObStorageSchemaRecorder schema_recorder_;
+  ObLS *ls_; //8B
+  ObStorageSchemaRecorder schema_recorder_;// 136B
 };
 }
 }

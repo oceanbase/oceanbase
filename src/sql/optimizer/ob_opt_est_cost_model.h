@@ -220,6 +220,7 @@ struct ObCostTableScanInfo
   ObRangesArray ranges_;  // all the ranges
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> range_columns_; // all the range columns
   common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> access_column_items_; // all the access columns
+  common::ObSEArray<ColumnItem, 4, common::ModulePageAllocator, true> index_access_column_items_; // all the access columns
 
   //这几个filter的分类参考OptimizerUtil::classify_filters()
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> prefix_filters_; // filters match index prefix
@@ -583,15 +584,13 @@ class ObOptEstCostModel
 public:
   const static int64_t DEFAULT_LOCAL_ORDER_DEGREE;
   const static int64_t DEFAULT_MAX_STRING_WIDTH;
-  const static int64_t DEFAULT_WIDE_TABLE_ROWS_IN_ONE_BLOCK;
   const static int64_t DEFAULT_FIXED_OBJ_WIDTH;
 
   struct ObCostParams
   {
     explicit ObCostParams(
     const double DEFAULT_CPU_TUPLE_COST,
-    const double DEFAULT_TABLE_SCAN_CPU_TUPLE_COST_WIDE,
-    const double DEFAULT_TABLE_SCAN_CPU_TUPLE_COST_NARROW,
+    const double DEFAULT_TABLE_SCAN_CPU_TUPLE_COST,
     const double DEFAULT_MICRO_BLOCK_SEQ_COST,
     const double DEFAULT_MICRO_BLOCK_RND_COST,
     const double DEFAULT_PROJECT_COLUMN_SEQ_INT_COST,
@@ -639,8 +638,7 @@ public:
     const double DEFAULT_DELETE_CHECK_PER_ROW_COST
     )
     : CPU_TUPLE_COST(DEFAULT_CPU_TUPLE_COST),
-      TABLE_SCAN_CPU_TUPLE_COST_WIDE(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST_WIDE),
-      TABLE_SCAN_CPU_TUPLE_COST_NARROW(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST_NARROW),
+      TABLE_SCAN_CPU_TUPLE_COST(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST),
       MICRO_BLOCK_SEQ_COST(DEFAULT_MICRO_BLOCK_SEQ_COST),
       MICRO_BLOCK_RND_COST(DEFAULT_MICRO_BLOCK_RND_COST),
       PROJECT_COLUMN_SEQ_INT_COST(DEFAULT_PROJECT_COLUMN_SEQ_INT_COST),
@@ -689,10 +687,8 @@ public:
     {}
     /** 读取一行的CPU开销，基本上只包括get_next_row()操作 */
     double CPU_TUPLE_COST;
-    /** 存储层吐出一行宽表的代价 **/
-    double TABLE_SCAN_CPU_TUPLE_COST_WIDE;
-    /** 存储层吐出一行窄表的代价 **/
-    double TABLE_SCAN_CPU_TUPLE_COST_NARROW;
+    /** 存储层吐出一行的代价 **/
+    double TABLE_SCAN_CPU_TUPLE_COST;
     /** 顺序读取一个微块并反序列化的开销 */
     double MICRO_BLOCK_SEQ_COST;
     /** 随机读取一个微块并反序列化的开销 */
@@ -881,6 +877,8 @@ public:
 
   int cost_project(double rows, const ObIArray<ColumnItem> &columns, bool is_seq, double &cost);
 
+  int cost_full_table_scan_project(double rows, const ObCostTableScanInfo &est_cost_info, double &cost);
+
   double cost_quals(double rows, const ObIArray<ObRawExpr *> &quals, bool need_scale = true);
 
   double cost_hash(double rows, const ObIArray<ObRawExpr *> &hash_exprs);
@@ -918,7 +916,7 @@ public:
 								double &cost,
 								double &index_back_cost);
 
-private:
+protected:
   int cost_sort(const ObSortCostInfo &cost_info,
 								const common::ObIArray<ObExprResType> &order_col_types,
 								double &cost);
@@ -1003,11 +1001,11 @@ private:
 
   // @param[in] is_index_back 仅在对索引扫描的回表扫描进行估计时为true
   //estimate one batch table scan cost, truly estimation function
-  int cost_table_scan_one_batch_inner(double row_count,
-																			const ObCostTableScanInfo &est_cost_info,
-																			bool is_scan_index,
-																			double &res);
-private:
+  virtual int cost_table_scan_one_batch_inner(double row_count,
+                                              const ObCostTableScanInfo &est_cost_info,
+                                              bool is_scan_index,
+                                              double &res);
+protected:
   const double (&comparison_params_)[common::ObMaxTC + 1];
   const double (&hash_params_)[common::ObMaxTC + 1];
   const ObCostParams &cost_params_;

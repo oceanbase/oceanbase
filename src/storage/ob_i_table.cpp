@@ -722,7 +722,9 @@ int64_t ObTablesHandleArray::to_string(char *buf, const int64_t buf_len) const
   } else {
     J_OBJ_START();
     J_KV(KP(meta_mem_mgr_), KP(allocator_));
+    J_COMMA();
     J_KV("tablet_id", tablet_id_);
+    J_COMMA();
     J_KV("table_count", tables_.count());
     J_COMMA();
     J_ARRAY_START();

@@ -53,7 +53,7 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
   if (OB_ISNULL(ls) || OB_ISNULL(tx_ctx_table)) {
     ret = OB_ERR_NULL_VALUE;
     STORAGE_LOG(WARN, "ls tablet service or tx ctx table is nullptr", KR(ret));
-  } else if (OB_FAIL(slice_allocator_.init(TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE,
+  } else if (OB_FAIL(slice_allocator_.init(TX_DATA_SLICE_SIZE, OB_MALLOC_BIG_BLOCK_SIZE,
                                            common::default_blk_alloc, mem_attr_))) {
     STORAGE_LOG(ERROR, "slice_allocator_ init fail");
   } else if (FALSE_IT(ls_tablet_svr_ = ls->get_tablet_svr())) {
@@ -193,11 +193,33 @@ void ObTxDataTable::reset()
 
 int ObTxDataTable::prepare_for_safe_destroy()
 {
+  return clean_memtables_cache_();
+}
+
+int ObTxDataTable::offline()
+{
   int ret = OB_SUCCESS;
-  TCWLockGuard guard(memtables_cache_.lock_);
-  memtables_cache_.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "tx data table is not inited", KR(ret), KPC(this));
+  } else if (get_memtable_mgr_()->release_memtables()) {
+    STORAGE_LOG(WARN, "release memtables failed", KR(ret));
+  } else if (OB_FAIL(clean_memtables_cache_())) {
+    STORAGE_LOG(WARN, "clean memtables cache failed", KR(ret), KPC(this));
+  } else {
+    last_update_ts_ = 0;
+  }
   return ret;
 }
+
+int ObTxDataTable::clean_memtables_cache_()
+{
+  int ret = OB_SUCCESS;
+  TCWLockGuard guard(memtables_cache_.lock_);
+  memtables_cache_.reuse();
+  return ret;
+}
+
 void ObTxDataTable::destroy() { reset(); }
 
 int ObTxDataTable::alloc_tx_data(ObTxData *&tx_data)

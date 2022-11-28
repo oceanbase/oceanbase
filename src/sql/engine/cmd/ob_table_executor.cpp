@@ -69,7 +69,7 @@ int ObCreateTableExecutor::prepare_stmt(ObCreateTableStmt &stmt,
   char *buf = static_cast<char*>(allocator.alloc(buf_len));
   int64_t pos = 0;
   const int64_t session_id = my_session.get_sessid();
-  const int64_t timestamp = my_session.get_sess_create_time();
+  const int64_t timestamp = ObTimeUtility::current_time();
   obrpc::ObCreateTableArg &create_table_arg = stmt.get_create_table_arg();
   create_table_name = create_table_arg.schema_.get_table_name_str();
   if (OB_FAIL(databuff_printf(buf, buf_len, pos, "__ctas_%ld_%ld", session_id, timestamp))) {

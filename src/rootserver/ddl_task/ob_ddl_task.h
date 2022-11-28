@@ -51,7 +51,7 @@ public:
   ~ObDDLTaskRecord() {}
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(task_id), K_(parent_task_id), K_(ddl_type), K_(trace_id), K_(tenant_id), K_(object_id),
+  TO_STRING_KV(K_(task_id), K_(parent_task_id), K_(ddl_type), K_(trace_id), K_(task_status), K_(tenant_id), K_(object_id),
       K_(schema_version), K_(target_object_id), K_(snapshot_version), K_(message), K_(task_version));
 public:
   static const int64_t MAX_MESSAGE_LENGTH = 4096;
@@ -220,7 +220,7 @@ private:
       common::ObIArray<int> &ret_array,
       common::ObIArray<int64_t> &snapshot_array);
 private:
-  static const int64_t INDEX_SNAPSHOT_VERSION_DIFF = 100 * 1000; // 100ms
+  static const int64_t INDEX_SNAPSHOT_VERSION_DIFF = 100 * 1000 * 1000; // 100ms
   bool is_inited_;
   uint64_t tenant_id_;
   uint64_t table_id_;

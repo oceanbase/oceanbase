@@ -314,8 +314,8 @@ int ObLogMain::start()
   } else if (stop_flag_) {
     stop_flag_ = false;
 
-    if (NULL == (obcdc_instance_ = obcdc_factory_.construct_oblog())) {
-      LOG_ERROR("construct oblog fail");
+    if (NULL == (obcdc_instance_ = obcdc_factory_.construct_obcdc())) {
+      LOG_ERROR("construct obcdc fail");
       ret = OB_INIT_FAIL;
     } else {
       ObLogInstance *instance = (ObLogInstance *)obcdc_instance_;

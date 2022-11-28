@@ -193,7 +193,7 @@ int ObServerUtils::decide_disk_size(const struct statvfs& svfs,
   }
 
   if (disk_size > total_space) {
-    ret = OB_CS_OUTOF_DISK_SPACE;
+    ret = OB_SERVER_OUTOF_DISK_SPACE;
   }
   LOG_INFO("decide disk size finished",
         K(dir),

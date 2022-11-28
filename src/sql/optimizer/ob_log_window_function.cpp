@@ -14,6 +14,7 @@
 #include "ob_log_window_function.h"
 #include "ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "common/ob_smart_call.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -241,7 +242,7 @@ int ObLogWindowFunction::re_est_cost(EstimateCostInfo &param, double &card, doub
     if (is_block_op()) {
       param.need_row_count_ = -1; //reset need row count
     }
-    if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
+    if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est exchange cost", K(ret));
     } else if (OB_FAIL(ObOptEstCost::cost_window_function(child_card / parallel,
                                                           child->get_width(),

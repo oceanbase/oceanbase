@@ -919,6 +919,7 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
     param.data_block_ids_ = res.data_block_ids_;
     param.other_block_ids_ = res.other_block_ids_;
     param.rowkey_column_cnt_ = sstable_param_->basic_meta_.rowkey_column_count_;
+    param.ddl_scn_.set_min();
     MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     if (param.table_key_.is_major_sstable() || param.table_key_.is_ddl_sstable()) {
       if (OB_FAIL(res.fill_column_checksum(sstable_param_->column_default_checksums_,

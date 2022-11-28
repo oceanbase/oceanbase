@@ -52,6 +52,7 @@ using namespace omt;
 using namespace name;
 using namespace transaction;
 using namespace blocksstable;
+using namespace palf;
 
 namespace storage
 {
@@ -257,7 +258,6 @@ int ObComplementDataParam::get_hidden_table_key(ObITable::TableKey &table_key) c
 int ObComplementDataContext::init(const ObComplementDataParam &param, const ObDataStoreDesc &desc)
 {
   int ret = OB_SUCCESS;
-  ObITable::TableKey hidden_table_key;
   void *builder_buf = nullptr;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -270,11 +270,6 @@ int ObComplementDataContext::init(const ObComplementDataParam &param, const ObDa
     LOG_WARN("fail to init data sstable redo writer", K(ret), K(param));
   } else if (nullptr != index_builder_) {
     LOG_INFO("index builder is already exist", K(ret));
-  } else if (OB_FAIL(param.get_hidden_table_key(hidden_table_key))) {
-    LOG_WARN("fail to get hidden table key", K(ret));
-  } else if (OB_UNLIKELY(!hidden_table_key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table key", K(ret), K(hidden_table_key));
   } else if (OB_ISNULL(builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
@@ -283,8 +278,6 @@ int ObComplementDataContext::init(const ObComplementDataParam &param, const ObDa
     LOG_WARN("failed to new ObSSTableIndexBuilder", K(ret));
   } else if (OB_FAIL(index_builder_->init(desc))) {
     LOG_WARN("failed to init index builder", K(ret), K(desc));
-  } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(hidden_table_key))) {
-    LOG_WARN("fail write start log", K(ret), K(hidden_table_key), K(param));
   } else {
     concurrent_cnt_ = param.concurrent_cnt_;
     is_inited_ = true;
@@ -298,6 +291,29 @@ int ObComplementDataContext::init(const ObComplementDataParam &param, const ObDa
       allocator_.free(builder_buf);
       builder_buf = nullptr;
     }
+  }
+  return ret;
+}
+
+int ObComplementDataContext::write_start_log(const ObComplementDataParam &param)
+{
+  int ret = OB_SUCCESS;
+  ObITable::TableKey hidden_table_key;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObComplementDataContext not init", K(ret));
+  } else if (OB_UNLIKELY(!param.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(param));
+  } else if (OB_FAIL(param.get_hidden_table_key(hidden_table_key))) {
+    LOG_WARN("fail to get hidden table key", K(ret));
+  } else if (OB_UNLIKELY(!hidden_table_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table key", K(ret), K(hidden_table_key));
+  } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(hidden_table_key))) {
+    LOG_WARN("fail write start log", K(ret), K(hidden_table_key), K(param));
+  } else {
+    LOG_INFO("complement task start ddl redo success", K(hidden_table_key));
   }
   return ret;
 }
@@ -328,7 +344,6 @@ ObComplementDataDag::~ObComplementDataDag()
 int ObComplementDataDag::init(const ObDDLBuildSingleReplicaRequestArg &arg)
 {
   int ret = OB_SUCCESS;
-  ObDataStoreDesc data_desc;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObComplementDataDag has already been inited", K(ret));
@@ -337,6 +352,23 @@ int ObComplementDataDag::init(const ObDDLBuildSingleReplicaRequestArg &arg)
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(param_.init(arg))) {
     LOG_WARN("fail to init dag param", K(ret));
+  } else if (OB_UNLIKELY(!param_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected", K(ret), K(param_));
+  } else {
+    is_inited_ = true;
+  }
+  LOG_INFO("finish to init complement data dag", K(ret), K(param_));
+  return ret;
+}
+
+int ObComplementDataDag::prepare_context()
+{
+  int ret = OB_SUCCESS;
+  ObDataStoreDesc data_desc;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObComplementDataDag not init", K(ret));
   } else if (OB_UNLIKELY(!param_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected", K(ret), K(param_));
@@ -374,10 +406,8 @@ int ObComplementDataDag::init(const ObDDLBuildSingleReplicaRequestArg &arg)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(context_.init(param_, data_desc))) {
     LOG_WARN("fail to init context", K(ret), K(param_), K(data_desc));
-  } else {
-    is_inited_ = true;
   }
-  LOG_INFO("finish to init complement data dag", K(ret), K(param_), K(context_));
+  LOG_INFO("finish to prepare complement context", K(ret), K(param_), K(context_));
   return ret;
 }
 
@@ -528,6 +558,10 @@ int ObComplementPrepareTask::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag is invalid", K(ret), KP(tmp_dag));
   } else if (FALSE_IT(dag = static_cast<ObComplementDataDag *>(tmp_dag))) {
+  } else if (OB_FAIL(dag->prepare_context())) {
+    LOG_WARN("prepare complement context failed", K(ret));
+  } else if (OB_FAIL(context_->write_start_log(*param_))) {
+    LOG_WARN("write start log failed", K(ret), KPC(param_));
   } else if (OB_FAIL(generate_complement_write_task(dag, write_task))) {
     LOG_WARN("fail to generate complement write task", K(ret));
   } else if (OB_FAIL(generate_complement_merge_task(dag, write_task, merge_task))) {
@@ -927,8 +961,8 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
     } else if (OB_UNLIKELY(nullptr == static_cast<ObComplementDataDag *>(get_dag()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("the dag of this task is null", K(ret));
-    } else if (FALSE_IT(sstable_redo_writer.set_start_log_ts(
-        static_cast<ObComplementDataDag *>(get_dag())->get_context().data_sstable_redo_writer_.get_start_log_ts()))) {
+    } else if (FALSE_IT(sstable_redo_writer.set_start_scn(
+        static_cast<ObComplementDataDag *>(get_dag())->get_context().data_sstable_redo_writer_.get_start_scn()))) {
     } else if (OB_FAIL(callback.init(DDL_MB_DATA_TYPE, hidden_table_key, &sstable_redo_writer))) {
       LOG_WARN("fail to init data callback", K(ret), K(hidden_table_key));
     } else if (OB_FAIL(writer.open(data_desc, macro_start_seq, &callback))) {
@@ -1110,7 +1144,7 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
   ObTablet *tablet = nullptr;
   ObTabletHandle tablet_handle;
   ObITable::TableKey hidden_table_key;
-  int64_t prepare_log_ts = 0;
+  palf::SCN prepare_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementMergetask has not been inited", K(ret));
@@ -1142,31 +1176,33 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
                                                                            param_->hidden_table_schema_->get_table_id(),
                                                                            1/*execution_id*/,
                                                                            param_->task_id_,
-                                                                           prepare_log_ts))) {
+                                                                           prepare_scn))) {
     LOG_WARN("fail write ddl prepare log", K(ret), K(hidden_table_key));
   } else {
     ObTabletHandle new_tablet_handle; // no use here
-    ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
+    ObDDLKvMgrHandle ddl_kv_mgr_handle;
     const ObLSID &ls_id = param_->ls_id_;
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    const int64_t ddl_start_log_ts = static_cast<ObComplementDataDag *>(get_dag())->get_context().data_sstable_redo_writer_.get_start_log_ts();
-    if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr))) {
+    const palf::SCN &ddl_start_scn = static_cast<ObComplementDataDag *>(get_dag())->get_context().data_sstable_redo_writer_.get_start_scn();
+    if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       LOG_WARN("get ddl kv manager failed", K(ret));
-    } else if (OB_FAIL(ddl_kv_mgr->ddl_prepare(ddl_start_log_ts,
-                                               prepare_log_ts,
-                                               param_->hidden_table_schema_->get_table_id(),
-                                               1/*execution_id*/,
-                                               param_->task_id_))) {
-      LOG_WARN("prepare ddl log failed", K(ret), K(ddl_start_log_ts), K(prepare_log_ts), K(hidden_table_key));
-    } else if (OB_FAIL(ddl_kv_mgr->wait_ddl_commit(ddl_start_log_ts, prepare_log_ts))) {
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_scn,
+                                                                prepare_scn,
+                                                                param_->hidden_table_schema_->get_table_id(),
+                                                                1/*execution_id*/,
+                                                                param_->task_id_))) {
+      LOG_WARN("commit ddl log failed", K(ret), K(ddl_start_scn), K(prepare_scn), K(hidden_table_key));
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_scn, prepare_scn))) {
       if (OB_TASK_EXPIRED == ret) {
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("wait ddl commit failed", K(ret), K(ddl_start_log_ts), K(hidden_table_key));
+        LOG_WARN("wait ddl commit failed", K(ret), K(ddl_start_scn), K(hidden_table_key));
       }
     } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_commit_log(hidden_table_key,
-                                                                            prepare_log_ts))) {
+                                                                            prepare_scn))) {
       LOG_WARN("fail write ddl commit log", K(ret), K(hidden_table_key));
+    } else {
+      tablet_handle.get_obj()->remove_ddl_kv_mgr();
     }
   }
   return ret;
@@ -1252,8 +1288,6 @@ int ObLocalScan::init(
         LOG_WARN("fail to make default expr context ", K(ret));
       } else if (OB_FAIL(hidden_table_schema->get_orig_default_row(org_col_ids, default_row_))) {
         LOG_WARN("fail to get default row from table schema", K(ret));
-      } else if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, org_col_ids, default_row_))) {
-        LOG_WARN("fail to fill lob header for default row", K(ret));
       } else {
         is_inited_ = true;
       }
@@ -1340,6 +1374,10 @@ int ObLocalScan::table_scan(
     LOG_WARN("fail to construct range ctx", K(ret), K(query_flag));
   } else if (OB_FAIL(construct_multiple_scan_merge(table_iter, range))) {
     LOG_WARN("fail to construct multiple scan merge", K(ret), K(table_iter), K(range));
+  } else if (query_flag.is_skip_read_lob()) { // expected lob column should be with lob header
+    if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, extended_gc_.org_extended_col_ids_, default_row_))) {
+      LOG_WARN("fail to fill lob header for default row", K(ret));
+    }
   }
   return ret;
 }
@@ -1461,12 +1499,12 @@ int ObLocalScan::construct_range_ctx(ObQueryFlag &query_flag,
   trans_version_range.multi_version_start_ = snapshot_version_;
   trans_version_range.base_version_ = 0;
   palf::SCN tmp_scn;
-  if (OB_FAIL(tmp_scn.convert_for_lsn_allocator(snapshot_version_))) {
+  if (OB_FAIL(tmp_scn.convert_for_tx(snapshot_version_))) {
     LOG_WARN("convert fail", K(ret), K(ls_id), K_(snapshot_version));
   } else if (OB_FAIL(ctx_.init_for_read(ls_id,
-                                 INT64_MAX,
-                                 -1,
-                                 tmp_scn))) {
+                                        INT64_MAX,
+                                        -1,
+                                        tmp_scn))) {
     LOG_WARN("fail to init store ctx", K(ret), K(ls_id));
   } else if (FALSE_IT(ctx_.mvcc_acc_ctx_.tx_desc_ = tx_desc)) {
 

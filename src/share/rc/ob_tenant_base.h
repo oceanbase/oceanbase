@@ -153,6 +153,8 @@ namespace detector
       storage::ObStorageLogger*,                   \
       storage::ObTenantMetaMemMgr*,                  \
       transaction::ObTransService*,                  \
+      logservice::coordinator::ObLeaderCoordinator*, \
+      logservice::coordinator::ObFailureDetector*,   \
       logservice::ObLogService*,                     \
       storage::ObLSService*,                         \
       storage::ObTenantCheckpointSlogHandler*,       \
@@ -169,8 +171,6 @@ namespace detector
       rootserver::ObRecoveryLSService*,              \
       rootserver::ObRestoreService*,                 \
       storage::ObLSRestoreService*,                  \
-      logservice::coordinator::ObLeaderCoordinator*, \
-      logservice::coordinator::ObFailureDetector*,   \
       storage::ObTenantSSTableMergeInfoMgr*,         \
       storage::ObLobManager*,                        \
       share::ObGlobalAutoIncService*,                \
@@ -430,12 +430,20 @@ public:
   static void set_tenant(ObTenantBase *ctx);
   static inline ObTenantBase *&get_tenant()
   {
+#ifdef ENABLE_INITIAL_EXEC_TLS_MODEL
     static thread_local ObTenantBase* __attribute__((tls_model("initial-exec"))) ctx = nullptr;
+#else
+    static thread_local ObTenantBase* __attribute__((tls_model("local-dynamic"))) ctx = nullptr;
+#endif
     return ctx;
   }
   static inline ObTenantBase *get_tenant_local()
   {
+#ifdef ENABLE_INITIAL_EXEC_TLS_MODEL
     static thread_local ObTenantBase __attribute__((tls_model("initial-exec"))) ctx(OB_INVALID_TENANT_ID);
+#else
+    static thread_local ObTenantBase __attribute__((tls_model("local-dynamic"))) ctx(OB_INVALID_TENANT_ID);
+#endif
     return &ctx;
   }
   template<class T>

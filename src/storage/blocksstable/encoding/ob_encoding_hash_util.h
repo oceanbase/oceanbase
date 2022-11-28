@@ -287,8 +287,6 @@ private:
   static int equal(
       const ObDatum &lhs,
       const ObDatum &rhs,
-      const ObCmpFunc &cmp_func,
-      const bool need_binary,
       bool &is_equal);
   static uint64_t hash(const ObDatum &datum, const ObHashFunc &hash_func, const bool need_binary);
 

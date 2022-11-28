@@ -561,6 +561,7 @@ private:
   int try_deregister_rt_monitor_node();
   int submit_op_monitor_node();
   bool match_rt_monitor_condition(int64_t rows);
+  int check_stack_once();
 protected:
   const ObOpSpec &spec_;
   ObExecContext &ctx_;
@@ -620,6 +621,7 @@ protected:
   bool batch_reach_end_;
   bool row_reach_end_;
   int64_t output_batches_b4_rescan_;
+  bool check_stack_overflow_;
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
 

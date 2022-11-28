@@ -30,7 +30,6 @@
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "observer/ob_server_struct.h"
-#include "pl/ob_pl_warning.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "share/schema/ob_trigger_info.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
@@ -3812,7 +3811,10 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
         ret = OB_ERR_FORALL_DML_WITHOUT_BULK;
         LOG_WARN("PLS-00435: DML statement without BULK In-BIND cannot be used inside FORALL.", K(ret), K(params.count()));
       }
-      if (OB_SUCC(ret) && can_array_binding) {
+      if (OB_FAIL(ret)) {
+      } else if (stmt.is_values_bound() || stmt.is_indices_bound() || stmt.is_indices_with_between_bound()) {
+        stmt.set_binding_array(false);
+      } else if (can_array_binding) {
         stmt.set_binding_array(true);
       }
       if (OB_SUCC(ret) && StmtType::T_SELECT == sql_stmt->get_stmt_type()) {
@@ -3882,7 +3884,7 @@ int ObPLResolver::build_forall_index_expr(ObPLForAllStmt *stmt,
   OX (res_type.set_meta(data_type.get_data_type()->get_meta_type()));
   OX (res_type.set_accuracy(data_type.get_data_type()->get_accuracy()));
   OX (c_expr->set_result_type(res_type));
-  OX (c_expr->add_flag(IS_DYNAMIC_PARAM));
+  OZ (c_expr->add_flag(IS_DYNAMIC_PARAM));
   OZ (c_expr->extract_info());
   OX (expr = c_expr);
   return ret;
@@ -7234,6 +7236,7 @@ int ObPLResolver::resolve_condition_compile(
 
     OX (parse_result.is_for_trigger_ = is_for_trigger ? 1 : 0);
     OX (parse_result.is_dynamic_sql_ = is_for_dynamic ? 1 : 0);
+    parse_result.mysql_compatible_comment_ = 0;
     OZ (pl_parser.parse(new_sql, old_sql, parse_result, is_inner_parse));
     if (OB_SUCC(ret) && OB_NOT_NULL(is_include_old_new_in_trigger)) {
       *is_include_old_new_in_trigger = parse_result.is_include_old_new_in_trigger_;
@@ -8733,7 +8736,7 @@ do { \
                       type.set_ext();
                       question_expr->set_result_type(type);
                       OZ (question_expr->extract_info());
-                      OX (question_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
+                      OZ (question_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
                       OZ (obj_access_idents.at(idx_cnt - 1)
                             .params_.push_back(std::make_pair(question_expr, 0)));
                       OZ (func.add_expr(question_expr));
@@ -8750,7 +8753,7 @@ do { \
                   OZ (expr_factory_.create_raw_expr(T_NULL, null_expr));
                   CK (OB_NOT_NULL(null_expr));
                   OZ (null_expr->extract_info());
-                  OX (null_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
+                  OZ (null_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
                   OZ (obj_access_idents.at(idx_cnt - 1)
                         .params_.push_back(std::make_pair(null_expr, 0)));
                   if (OB_SUCC(ret) && 0 == self_param_pos) {
@@ -10950,7 +10953,7 @@ int ObPLResolver::make_var_from_access(const ObIArray<ObObjAccessIdx> &access_id
     }
     OX (c_expr->set_result_type(res_type));
     OX (c_expr->set_enum_set_values(access_idxs.at(pos).elem_type_.get_type_info()));
-    OX (c_expr->add_flag(IS_DYNAMIC_PARAM));
+    OZ (c_expr->add_flag(IS_DYNAMIC_PARAM));
     OZ (c_expr->extract_info());
     OX (expr = c_expr);
   } else if (ObObjAccessIdx::is_package_baisc_variable(access_idxs)
@@ -11427,7 +11430,8 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
                 && OB_ERR_SP_WRONG_ARG_NUM != ret
                 && OB_ERR_CALL_WRONG_ARG != ret
                 && OB_ERR_FUNC_DUP != ret
-                && OB_ERR_POSITIONAL_FOLLOW_NAME != ret) {
+                && OB_ERR_POSITIONAL_FOLLOW_NAME != ret
+                && OB_ALLOCATE_MEMORY_FAILED != ret) {
               ret = OB_ERR_SP_DOES_NOT_EXIST;
               if (pkg_name.empty()) {
                 db_name = db_name.empty() ? OB_NOT_NULL(session_info) ? session_info->get_database_name() : db_name : db_name;

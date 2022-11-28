@@ -59,6 +59,7 @@ public:
       const int64_t saved_schema_version,
       logservice::ObLogHandler *log_handler);
   void reset();
+  bool is_inited() const { return is_inited_; }
 
   // follower
   int replay_schema_log(const palf::SCN &scn, const char *buf, const int64_t size, int64_t &pos);

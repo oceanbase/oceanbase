@@ -272,6 +272,7 @@ void ObMicroBlockEncoder::dump_diagnose_info() const
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected encoding ctx", K_(ctx));
   } else {
+    print_micro_block_encoder_status();
     ObDatumRow datum_row;
     ObStoreRow store_row;
     int64_t orig_checksum = 0;
@@ -315,9 +316,9 @@ int ObMicroBlockEncoder::init_all_col_values(const ObMicroBlockEncodingCtx &ctx)
   return ret;
 }
 
-void ObMicroBlockEncoder::print_micro_block_encoder_status()
+void ObMicroBlockEncoder::print_micro_block_encoder_status() const
 {
-  FLOG_INFO("Build micro block failed, print encoder status: ",
+  FLOG_INFO("Build micro block failed, print encoder status: ", K_(ctx),
       K_(header), K_(estimate_size), K_(estimate_size_limit), K_(header_size),
       K_(expand_pct), K_(string_col_cnt), K_(estimate_base_store_size), K_(length));
   int64_t idx = 0;
@@ -354,7 +355,8 @@ void ObMicroBlockEncoder::update_estimate_size_limit(const ObMicroBlockEncodingC
 int ObMicroBlockEncoder::try_to_append_row(const int64_t &store_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(store_size + estimate_size_ > block_size_upper_bound_)) {
+  // header_size_ = micro_header_size + column_header_size
+  if (OB_UNLIKELY(store_size + estimate_size_ + header_size_ > block_size_upper_bound_)) {
     ret = OB_BUF_NOT_ENOUGH;
   }
   return ret;

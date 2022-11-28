@@ -1905,8 +1905,8 @@ static const _error _error_OB_BEYOND_THE_RANGE = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4183, Key out of range",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4183, Key out of range"
 };
-static const _error _error_OB_CS_OUTOF_DISK_SPACE = {
-      .error_name            = "OB_CS_OUTOF_DISK_SPACE",
+static const _error _error_OB_SERVER_OUTOF_DISK_SPACE = {
+      .error_name            = "OB_SERVER_OUTOF_DISK_SPACE",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
@@ -22109,7 +22109,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_ALREADY_EXISTS] = &_error_OB_ERR_ALREADY_EXISTS;
     _errors[-OB_SEARCH_NOT_FOUND] = &_error_OB_SEARCH_NOT_FOUND;
     _errors[-OB_BEYOND_THE_RANGE] = &_error_OB_BEYOND_THE_RANGE;
-    _errors[-OB_CS_OUTOF_DISK_SPACE] = &_error_OB_CS_OUTOF_DISK_SPACE;
+    _errors[-OB_SERVER_OUTOF_DISK_SPACE] = &_error_OB_SERVER_OUTOF_DISK_SPACE;
     _errors[-OB_COLUMN_GROUP_NOT_FOUND] = &_error_OB_COLUMN_GROUP_NOT_FOUND;
     _errors[-OB_CS_COMPRESS_LIB_ERROR] = &_error_OB_CS_COMPRESS_LIB_ERROR;
     _errors[-OB_ITEM_NOT_MATCH] = &_error_OB_ITEM_NOT_MATCH;

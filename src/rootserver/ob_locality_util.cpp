@@ -1665,6 +1665,7 @@ int ObLocalityDistribution::get_zone_replica_attr_array(
 {
   int ret = OB_SUCCESS;
   common::ObArray<share::ObZoneReplicaAttrSet> my_zone_replica_num_array;
+  common::ObArray<const share::ObZoneReplicaAttrSet*> sort_array;
   share::ObZoneReplicaAttrSet zone_replica_attr_set;
   for (int64_t i = 0; OB_SUCC(ret) && i < zone_set_replica_dist_array_.count(); ++i) {
     const ZoneSetReplicaDist &this_dist = zone_set_replica_dist_array_.at(i);
@@ -1686,11 +1687,18 @@ int ObLocalityDistribution::get_zone_replica_attr_array(
       LOG_WARN("fail to push back", K(ret), K(zone_replica_attr_set));
     } else {} // no more to do
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < my_zone_replica_num_array.count(); ++i) {
+    if (OB_FAIL(sort_array.push_back(&my_zone_replica_num_array.at(i)))) {
+      LOG_WARN("failed to push back", KR(ret), K(i));
+    }
+  }
   if (OB_SUCC(ret)) {
-    std::sort(my_zone_replica_num_array.begin(), my_zone_replica_num_array.end());
+    std::sort(sort_array.begin(), sort_array.end(), ObZoneReplicaAttrSet::sort_compare_less_than);
     zone_replica_num_array.reset();
-    if (OB_FAIL(zone_replica_num_array.assign(my_zone_replica_num_array))) {
-      LOG_WARN("fail to assign array", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < sort_array.count(); ++i) {
+      if (OB_FAIL(zone_replica_num_array.push_back(*sort_array.at(i)))) {
+        LOG_WARN("failed to push back zone replica set", KR(ret), K(i), K(sort_array));
+      }
     }
   }
   return ret;

@@ -1317,8 +1317,9 @@ int ObDMLStmt::update_table_item_id(const ObDMLStmt &other,
   if (OB_ISNULL(query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null query ctx", K(ret));
-  } else if (OB_FAIL(get_qb_name(new_item.qb_name_))) {
-    LOG_WARN("fail to get qb_name", K(ret), K(get_stmt_id()));
+  // } else if (OB_FAIL(get_qb_name(new_item.qb_name_))) {
+  //   LOG_WARN("fail to get qb_name", K(ret), K(get_stmt_id()));
+  // do not update table item qb name
   } else {
     uint64_t old_table_id = old_item.table_id_;
     uint64_t new_table_id = query_ctx_->available_tb_id_--;

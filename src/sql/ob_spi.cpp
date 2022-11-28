@@ -1209,8 +1209,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                                     const bool *exprs_not_null_flag,
                                     const int64_t *pl_integer_ranges,
                                     int64_t is_bulk,
-                                    bool is_forall,
-                                    int32_t array_binding_count)
+                                    bool is_forall)
 {
   int ret = OB_SUCCESS;
   ObWarningBuffer* wb = NULL;
@@ -1294,8 +1293,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                                     into_count,
                                     spi_result.get_mysql_result(),
                                     out_params,
-                                    is_forall,
-                                    array_binding_count))) {
+                                    is_forall))) {
                 LOG_WARN("failed to open", K(id), K(type), K(ret));
               } else if (OB_FAIL(inner_fetch(ctx,
                                             retry_ctrl,
@@ -1662,15 +1660,13 @@ int ObSPIService::spi_execute(ObPLExecCtx *ctx,
                               const bool *exprs_not_null_flag,
                               const int64_t *pl_integer_ranges,
                               bool is_bulk,
-                              bool is_forall,
-                              int32_t array_binding_count)
+                              bool is_forall)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_spi_execute);
   OZ (spi_inner_execute(ctx, NULL, id, type, param_exprs, param_count,
                         into_exprs, into_count, column_types, type_count,
-                        exprs_not_null_flag, pl_integer_ranges, is_bulk,
-                        is_forall, array_binding_count));
+                        exprs_not_null_flag, pl_integer_ranges, is_bulk, is_forall));
   return ret;
 }
 
@@ -4773,11 +4769,11 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                              int64_t into_count,
                              ObMySQLProxy::MySQLResult &mysql_result,
                              ObSPIOutParams &out_params,
-                             bool is_forall,
-                             int32_t array_binding_count)
+                             bool is_forall)
 {
   int ret = OB_SUCCESS;
   int64_t query_num = 0;
+  int64_t array_binding_count = 0;
   ParamStore exec_params( (ObWrapperAllocator(param_allocator)) );
   ParamStore *curr_params = &exec_params;
   ParamStore *batch_params = NULL;
@@ -4789,17 +4785,29 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
   }
 
   if (OB_SUCC(ret) && is_forall) {
-    if (array_binding_count <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("array_binding_count is wrong", K(array_binding_count), K(ret));
-    } else if (OB_FAIL(ObSQLUtils::transform_pl_ext_type(
-        exec_params, array_binding_count, param_allocator, batch_params))) {
-      LOG_WARN("transform failed", K(ret));
-    } else if (OB_ISNULL(batch_params)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else {
-      curr_params = batch_params;
+    for (int64_t i = 0; OB_SUCC(ret) && i < exec_params.count(); ++i) {
+      if (exec_params.at(i).is_ext()) {
+        pl::ObPLCollection *coll = NULL;
+        CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(exec_params.at(i).get_ext())));
+        if (OB_SUCC(ret)) {
+          array_binding_count = coll->get_actual_count();
+          break;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (array_binding_count <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("array_binding_count is wrong", K(array_binding_count), K(ret));
+      } else if (OB_FAIL(ObSQLUtils::transform_pl_ext_type(
+          exec_params, array_binding_count, param_allocator, batch_params))) {
+        LOG_WARN("transform failed", K(ret));
+      } else if (OB_ISNULL(batch_params)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        curr_params = batch_params;
+      }
     }
   }
 

@@ -23,7 +23,7 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |7        |46  |
+|0 |TABLE SCAN|t1  |7        |3   |
 ===================================
 
 Outputs & filters: 
@@ -48,7 +48,7 @@ Query Plan
 ==========================================
 |ID|OPERATOR  |NAME       |EST. ROWS|COST|
 ------------------------------------------
-|0 |TABLE SCAN|t1(Reverse)|7        |46  |
+|0 |TABLE SCAN|t1(Reverse)|7        |3   |
 ==========================================
 
 Outputs & filters: 
@@ -73,7 +73,7 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |3        |46  |
+|0 |TABLE SCAN|t1  |3        |3   |
 ===================================
 
 Outputs & filters: 
@@ -95,7 +95,7 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |2        |46  |
+|0 |TABLE SCAN|t1  |2        |2   |
 ===================================
 
 Outputs & filters: 
@@ -116,7 +116,7 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |2        |46  |
+|0 |TABLE SCAN|t1  |2        |2   |
 ===================================
 
 Outputs & filters: 
@@ -136,7 +136,7 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |4        |46  |
+|0 |TABLE SCAN|t1  |4        |2   |
 ===================================
 
 Outputs & filters: 
@@ -158,7 +158,7 @@ Query Plan
 ==================================
 |ID|OPERATOR |NAME|EST. ROWS|COST|
 ----------------------------------
-|0 |TABLE GET|t1  |3        |46  |
+|0 |TABLE GET|t1  |3        |8   |
 ==================================
 
 Outputs & filters: 
@@ -179,7 +179,7 @@ Query Plan
 =====================================
 |ID|OPERATOR  |NAME  |EST. ROWS|COST|
 -------------------------------------
-|0 |TABLE SCAN|t1(i1)|1        |91  |
+|0 |TABLE SCAN|t1(i1)|1        |4   |
 =====================================
 
 Outputs & filters: 
@@ -200,7 +200,7 @@ Query Plan
 =====================================
 |ID|OPERATOR  |NAME  |EST. ROWS|COST|
 -------------------------------------
-|0 |TABLE SCAN|t1(i1)|3        |46  |
+|0 |TABLE SCAN|t1(i1)|3        |2   |
 =====================================
 
 Outputs & filters: 
@@ -246,7 +246,7 @@ Query Plan
 ======================================
 |ID|OPERATOR  |NAME   |EST. ROWS|COST|
 --------------------------------------
-|0 |TABLE SCAN|t1(idx)|1        |91  |
+|0 |TABLE SCAN|t1(idx)|1        |4   |
 ======================================
 
 Outputs & filters: 
@@ -269,7 +269,7 @@ Query Plan
 ======================================
 |ID|OPERATOR  |NAME   |EST. ROWS|COST|
 --------------------------------------
-|0 |TABLE SCAN|t1(idx)|1        |91  |
+|0 |TABLE SCAN|t1(idx)|1        |18  |
 ======================================
 
 Outputs & filters: 
@@ -290,7 +290,7 @@ Query Plan
 ======================================
 |ID|OPERATOR  |NAME   |EST. ROWS|COST|
 --------------------------------------
-|0 |TABLE SCAN|t1(idx)|2        |91  |
+|0 |TABLE SCAN|t1(idx)|2        |8   |
 ======================================
 
 Outputs & filters: 

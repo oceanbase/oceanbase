@@ -100,7 +100,7 @@ int ObKeepAliveLSHandler::try_submit_log()
 {
   int ret = OB_SUCCESS;
   palf::LSN lsn;
-  palf::SCN ts_ns;
+  palf::SCN scn = palf::SCN::min_scn();
 
   if (OB_ISNULL(log_handler_ptr_)) {
     stat_info_.other_error_cnt += 1;
@@ -120,13 +120,13 @@ int ObKeepAliveLSHandler::try_submit_log()
       ATOMIC_STORE(&is_busy_, false);
       TRANS_LOG(INFO, "ls hash stopped", K(ret));
     } else if (OB_FAIL(log_handler_ptr_->append(submit_buf_, submit_buf_pos_, last_gts_, true, this,
-                                                lsn, ts_ns))) {
+                                                lsn, scn))) {
       stat_info_.other_error_cnt += 1;
       ATOMIC_STORE(&is_busy_, false);
       TRANS_LOG(WARN, "[Keep Alive] submit keep alive log failed", K(ret), K(ls_id_));
     } else {
       stat_info_.submit_succ_cnt += 1;
-      stat_info_.last_log_ts_ = ts_ns;
+      stat_info_.last_log_ts_ = scn;
       stat_info_.last_lsn_ = lsn;
     }
   }

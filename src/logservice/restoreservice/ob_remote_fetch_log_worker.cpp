@@ -316,7 +316,7 @@ int ObRemoteFetchWorker::get_upper_limit_scn_(const ObLSID &id, SCN &scn)
   } else if (OB_FAIL(restore_handler->get_upper_limit_scn(scn))) {
     LOG_WARN("get upper limit scn failed", K(ret), K(id));
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObRemoteFetchWorker::submit_entries_(const ObLSID &id,

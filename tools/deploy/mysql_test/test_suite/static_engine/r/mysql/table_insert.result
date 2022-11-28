@@ -26,7 +26,7 @@ Query Plan
 ===================================
 |ID|OPERATOR  |NAME|EST. ROWS|COST|
 -----------------------------------
-|0 |TABLE SCAN|t1  |4        |46  |
+|0 |TABLE SCAN|t1  |4        |4   |
 ===================================
 
 Outputs & filters: 

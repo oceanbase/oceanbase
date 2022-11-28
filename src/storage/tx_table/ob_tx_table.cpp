@@ -121,27 +121,12 @@ int ObTxTable::offline_tx_ctx_table_()
 int ObTxTable::offline_tx_data_table_()
 {
   int ret = OB_SUCCESS;
-  ObTabletHandle handle;
-  ObTablet *tablet;
-  ObLSTabletService *ls_tablet_svr = ls_->get_tablet_svr();
-
-  if (NULL == ls_tablet_svr) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("get ls tablet svr failed", K(ret));
-  } else if (OB_FAIL(ls_tablet_svr->get_tablet(LS_TX_DATA_TABLET,
-                                               handle))) {
-    LOG_WARN("get tablet failed", K(ret));
-    if (OB_TABLET_NOT_EXIST == ret) {
-      // a ls that of migrate does not have tx ctx tablet
-      ret = OB_SUCCESS;
-    }
-  } else if (FALSE_IT(tablet = handle.get_obj())) {
-  } else if (OB_FAIL(tablet->release_memtables())) {
-    LOG_WARN("failed to release memtables", K(ret), KPC(ls_));
-  } else {
-    // do nothing
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "tx table is not init", KR(ret));
+  } else if (OB_FAIL(tx_data_table_.offline())) {
+    STORAGE_LOG(WARN, "tx data table offline failed", KR(ret), "ls_id", ls_->get_ls_id());
   }
-
   return ret;
 }
 

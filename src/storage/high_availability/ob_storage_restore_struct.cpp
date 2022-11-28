@@ -214,27 +214,6 @@ int ObTabletRestoreAction::trans_restore_action_to_restore_status(
 }
 
 /******************ObRestoreUtils*********************/
-bool ObRestoreUtils::is_need_retry_error(const int err)
-{
-  //TODO(yanfeng) here same with migration, need use one
-  bool bret = true;
-  switch (err) {
-    case OB_NOT_INIT :
-    case OB_INVALID_ARGUMENT :
-    case OB_ERR_UNEXPECTED :
-    case OB_ERR_SYS :
-    case OB_INIT_TWICE :
-    case OB_SRC_DO_NOT_ALLOWED_MIGRATE :
-    case OB_CANCELED :
-    case OB_NOT_SUPPORTED :
-    case OB_CS_OUTOF_DISK_SPACE :
-      bret = false;
-      break;
-    default:
-      break;
-  }
-  return bret;
-}
 
 int ObRestoreUtils::get_backup_data_type(
     const ObITable::TableKey &table_key,

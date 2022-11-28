@@ -78,8 +78,10 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   lock_memtable_handle.set_table(&lock_memtable_, &t3m_, ObITable::LOCK_MEMTABLE);
   fake_lock_table_.is_inited_ = true;
   fake_lock_table_.parent_ = &fake_ls_;
-  fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.add_memtable_(lock_memtable_handle);
   lock_memtable_.key_.table_type_ = ObITable::LOCK_MEMTABLE;
+  fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.t3m_ = &t3m_;
+  fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.table_type_ = ObITable::TableType::LOCK_MEMTABLE;
+  fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.add_memtable_(lock_memtable_handle);
   fake_tenant_freezer_.is_inited_ = true;
   fake_tenant_freezer_.tenant_info_.is_loaded_ = true;
   fake_tenant_freezer_.tenant_info_.mem_memstore_limit_ = INT64_MAX;
@@ -340,6 +342,7 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
   TX_MSG_HANDLER__(TX_COMMIT_RESP, ObTxCommitRespMsg, handle_trans_commit_response);
   TX_MSG_HANDLER__(TX_ABORT, ObTxAbortMsg, handle_trans_abort_request);
   TX_MSG_HANDLER__(KEEPALIVE, ObTxKeepaliveMsg, handle_trans_keepalive);
+  TX_MSG_HANDLER__(KEEPALIVE_RESP, ObTxKeepaliveRespMsg, handle_trans_keepalive_response);
 #undef TX_MSG_HANDLER__
   case ROLLBACK_SAVEPOINT:
     {
@@ -489,7 +492,7 @@ int ObTxNode::write(ObTxDesc &tx,
   row.capacity_ = 2;
   row.row_val_.cells_ = cols;
   row.row_val_.count_ = 2;
-  row.flag_ = blocksstable::ObDmlFlag::DF_INSERT;
+  row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
   row.trans_id_.reset();
   OZ(memtable_->set(write_store_ctx, 1, read_info, columns_, row));
   OZ(txs_.revert_store_ctx(write_store_ctx));

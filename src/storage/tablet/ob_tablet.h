@@ -29,6 +29,7 @@
 #include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/tx/ob_trans_define.h"
 #include "logservice/palf/scn.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase
 {
@@ -238,7 +239,7 @@ public:
   // force release all memtables
   // just for rebuild or migrate retry.
   int release_memtables();
-  int destroy_memtable_mgr();
+  int destroy_storage_related_member();
 
   // multi-source data operation
   int check_tx_data(bool &is_valid) const;
@@ -313,11 +314,9 @@ public:
   int get_active_ddl_kv(ObDDLKVHandle &ddl_kvs_handle);
   int get_or_create_active_ddl_kv(ObDDLKVHandle &ddl_kvs_handle);
   int check_has_effective_ddl_kv(bool &has_ddl_kv);
-  int release_ddl_kvs(const int64_t end_log_ts);
-  int get_ddl_kv_min_log_ts(int64_t &min_log_ts);
-  int release_ddl_kvs(const palf::SCN &scn);
-  int get_ddl_kv_min_scn(palf::SCN &scn);
-  int freeze_ddl_kv();
+  int get_ddl_kv_min_scn(palf::SCN &min_scn);
+  int get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_create = false);
+  void remove_ddl_kv_mgr();
   int start_ddl_if_need();
   int get_ddl_sstable_handles(ObTablesHandleArray &ddl_sstable_handles);
   int get_migration_sstable_size(int64_t &data_size);
@@ -342,7 +341,6 @@ public:
   const ObTabletPointerHandle &get_pointer_handle() { return pointer_hdl_; }
   const compaction::ObMediumCompactionInfoList &get_medium_compaction_info_list() const { return medium_info_list_; }
 
-  int get_ddl_kv_mgr(ObTabletDDLKvMgr *&ddl_kv_mgr) const;
 
   int assign_pointer_handle(const ObTabletPointerHandle &ptr_hdl);
 
@@ -399,15 +397,13 @@ private:
       const common::ObTabletID &tablet_id,
       const int64_t max_saved_schema_version,
       ObFreezer *freezer);
-  int init_memtable_mgr(
+  int init_storage_related_member(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const int64_t max_saved_schema_version,
-      ObFreezer *freezer);
+      const int64_t max_saved_schema_version);
   int build_read_info(common::ObIAllocator &allocator);
   int create_memtable(const int64_t schema_version, const bool for_replay=false);
   int try_update_start_scn();
-  int try_update_clog_checkpoint_scn();
   int try_update_ddl_checkpoint_scn();
   int try_update_table_store_flag(const ObUpdateTableStoreParam &param);
   int try_update_storage_schema(

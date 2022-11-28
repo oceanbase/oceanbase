@@ -21,6 +21,7 @@
 #include "ob_log_exchange.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "common/ob_smart_call.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::sql::log_op_def;
@@ -131,7 +132,7 @@ int ObLogLimit::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
+    } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to est child cost", K(ret));
     } else if (OB_FAIL(inner_est_cost(child_card, child_cost, false, card, op_cost))) {
       LOG_WARN("failed to est count cost", K(ret));

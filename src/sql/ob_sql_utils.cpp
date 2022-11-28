@@ -4392,7 +4392,7 @@ int ObSQLUtils::create_multi_stmt_param_store(common::ObIAllocator &allocator,
   return ret;
 }
 
-int ObSQLUtils::get_one_group_params(int64_t pos, ParamStore &src, ParamStore &obj_params)
+int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, ParamStore &obj_params)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); ++i) {
@@ -4403,10 +4403,19 @@ int ObSQLUtils::get_one_group_params(int64_t pos, ParamStore &src, ParamStore &o
       OZ (obj_params.push_back(obj));
     } else {
       CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
-      CK (coll->get_count() > pos);
+      CK (coll->get_count() > actual_pos);
       CK (1 == coll->get_column_count());
       CK (OB_NOT_NULL(data = reinterpret_cast<ObObj*>(coll->get_data())));
-      OX (obj_params.push_back(*(data + pos)));
+      if (OB_SUCC(ret)) {
+        bool is_del = true;
+        for (; OB_SUCC(ret) && is_del;) {
+          OZ (coll->is_elem_deleted(actual_pos, is_del));
+          if (is_del) {
+            ++actual_pos;
+          }
+        }
+        OX (obj_params.push_back(*(data + actual_pos)));
+      }
     }
   }
   return ret;
@@ -4477,12 +4486,13 @@ int ObSQLUtils::transform_pl_ext_type(
     ObArenaAllocator tmp_alloc;
     ParamStore temp_obj_params((ObWrapperAllocator(tmp_alloc)));
     int64_t N = src.count();
-    for (int64_t query_pos = 0; OB_SUCC(ret) && query_pos < array_binding_size; ++query_pos) {
+    int64_t actual_pos = 0;
+    for (int64_t query_pos = 0; OB_SUCC(ret) && query_pos < array_binding_size; ++query_pos, ++actual_pos) {
       temp_obj_params.reuse();
       if (OB_FAIL(temp_obj_params.reserve(N))) {
         LOG_WARN("fail to reverse params_store", K(ret));
-      } else if (OB_FAIL(get_one_group_params(query_pos, src, temp_obj_params))) {
-        LOG_WARN("get one group params failed", K(ret), K(query_pos));
+      } else if (OB_FAIL(get_one_group_params(actual_pos, src, temp_obj_params))) {
+        LOG_WARN("get one group params failed", K(ret), K(actual_pos));
       } else if (OB_FAIL(copy_params_to_array_params(query_pos, temp_obj_params, *dst))) {
         LOG_WARN("copy params to array params failed", K(ret), K(query_pos));
       } else if (query_pos == 0) {

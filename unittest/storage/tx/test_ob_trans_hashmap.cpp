@@ -110,7 +110,7 @@ TEST_F(TestObTrans, hashmap_init_invalid)
 
   // init hashmap
   TestHashMap map;
-  map.init();
+  map.init(lib::ObMemAttr(OB_SERVER_TENANT_ID, "TestObTrans"));
   ObAddr observer(TestObTrans::IP_TYPE, TestObTrans::LOCAL_IP, TestObTrans::PORT);
 
   TRANS_LOG(INFO, "case1");

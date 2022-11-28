@@ -46,8 +46,7 @@ public:  // ObTxDataMemtableMgr
   int init(const common::ObTabletID &tablet_id,
            const share::ObLSID &ls_id,
            ObFreezer *freezer,
-           ObTenantMetaMemMgr *t3m,
-           ObTabletDDLKvMgr *ddl_kv_mgr) override;
+           ObTenantMetaMemMgr *t3m) override;
   virtual void destroy() override;
   /**
    * @brief This function do the following operations:

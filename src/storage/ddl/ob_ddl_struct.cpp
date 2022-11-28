@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_ddl_struct.h"
+#include "logservice/palf/scn.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
@@ -86,7 +87,7 @@ int ObDDLMacroHandle::reset_macro_block_ref()
 }
 
 ObDDLMacroBlock::ObDDLMacroBlock()
-  : block_handle_(), logic_id_(), block_type_(DDL_MB_INVALID_TYPE), ddl_start_log_ts_(0), log_ts_(0), buf_(nullptr), size_(0)
+  : block_handle_(), logic_id_(), block_type_(DDL_MB_INVALID_TYPE), ddl_start_scn_(), log_scn_(), buf_(nullptr), size_(0)
 {
 }
 
@@ -111,8 +112,8 @@ int ObDDLMacroBlock::deep_copy(ObDDLMacroBlock &dst_block, common::ObIAllocator 
     dst_block.block_type_ = block_type_;
     dst_block.block_handle_ = block_handle_;
     dst_block.logic_id_ = logic_id_;
-    dst_block.ddl_start_log_ts_ = ddl_start_log_ts_;
-    dst_block.log_ts_ = log_ts_;
+    dst_block.ddl_start_scn_ = ddl_start_scn_;
+    dst_block.log_scn_ = log_scn_;
   }
   return ret;
 }
@@ -122,20 +123,21 @@ bool ObDDLMacroBlock::is_valid() const
   return block_handle_.get_block_id().is_valid()
     && logic_id_.is_valid()
     && DDL_MB_INVALID_TYPE != block_type_
-    && ddl_start_log_ts_ > 0
-    && log_ts_ > 0
+    && ddl_start_scn_.is_valid()
+    && log_scn_.is_valid()
     && nullptr != buf_
     && size_ > 0;
 }
 
 
 ObDDLKV::ObDDLKV()
-  : is_inited_(false), ls_id_(), tablet_id_(), ddl_start_log_ts_(0), snapshot_version_(0),
-    lock_(), allocator_("DDL_KV"), is_freezed_(false), is_closed_(false),
-    last_freezed_log_ts_(0), min_log_ts_(INT64_MAX), max_log_ts_(0), freeze_log_ts_(INT64_MAX),
-    pending_cnt_(0), cluster_version_(0), ref_cnt_(0),
+  : is_inited_(false), ls_id_(), tablet_id_(), ddl_start_scn_(), snapshot_version_(0),
+    lock_(), allocator_("DDL_KV"), is_freezed_(false), is_closed_(false), last_freezed_scn_(),
+    max_scn_(), pending_cnt_(0), cluster_version_(0), ref_cnt_(0),
     sstable_index_builder_(nullptr), index_block_rebuilder_(nullptr), is_rebuilder_closed_(false)
 {
+  min_scn_ = palf::SCN::max_scn();
+  freeze_scn_ = palf::SCN::max_scn();
 }
 
 ObDDLKV::~ObDDLKV()
@@ -145,9 +147,9 @@ ObDDLKV::~ObDDLKV()
 
 int ObDDLKV::init(const share::ObLSID &ls_id,
                   const common::ObTabletID &tablet_id,
-                  const int64_t ddl_start_log_ts,
+                  const palf::SCN &ddl_start_scn,
                   const int64_t snapshot_version,
-                  const int64_t last_freezed_log_ts,
+                  const palf::SCN &last_freezed_scn,
                   const int64_t cluster_version)
 
 {
@@ -157,12 +159,12 @@ int ObDDLKV::init(const share::ObLSID &ls_id,
     LOG_WARN("ObDDLKV has been inited twice", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid()
         || !tablet_id.is_valid()
-        || ddl_start_log_ts <= 0
+        || !ddl_start_scn.is_valid()
         || snapshot_version <= 0
-        || last_freezed_log_ts <= 0
+        || !last_freezed_scn.is_valid()
         || cluster_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(ddl_start_log_ts), K(snapshot_version), K(last_freezed_log_ts), K(cluster_version));
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(ddl_start_scn), K(snapshot_version), K(last_freezed_scn), K(cluster_version));
   } else {
     ObTabletDDLParam ddl_param;
     ddl_param.tenant_id_ = MTL_ID();
@@ -171,7 +173,7 @@ int ObDDLKV::init(const share::ObLSID &ls_id,
     ddl_param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
     ddl_param.table_key_.version_range_.base_version_ = 0;
     ddl_param.table_key_.version_range_.snapshot_version_ = snapshot_version;
-    ddl_param.start_log_ts_ = ddl_start_log_ts;
+    ddl_param.start_scn_ = ddl_start_scn;
     ddl_param.snapshot_version_ = snapshot_version;
     ddl_param.cluster_version_ = cluster_version;
     if (OB_FAIL(ObTabletDDLUtil::prepare_index_builder(ddl_param, allocator_, sstable_index_builder_, index_block_rebuilder_))) {
@@ -179,12 +181,12 @@ int ObDDLKV::init(const share::ObLSID &ls_id,
     } else {
       ls_id_ = ls_id;
       tablet_id_ = tablet_id;
-      ddl_start_log_ts_ = ddl_start_log_ts;
+      ddl_start_scn_ = ddl_start_scn;
       snapshot_version_ = snapshot_version;
-      last_freezed_log_ts_ = last_freezed_log_ts;
+      last_freezed_scn_ = last_freezed_scn;
       cluster_version_ = cluster_version;
       is_inited_ = true;
-      LOG_INFO("ddl kv init success", K(ls_id_), K(tablet_id_), K(ddl_start_log_ts_), K(snapshot_version_), K(last_freezed_log_ts_), K(cluster_version_));
+      LOG_INFO("ddl kv init success", K(ls_id_), K(tablet_id_), K(ddl_start_scn_), K(snapshot_version_), K(last_freezed_scn_), K(cluster_version_));
     }
   }
   return ret;
@@ -209,13 +211,30 @@ int ObDDLKV::set_macro_block(const ObDDLMacroBlock &macro_block)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_DDL_BLOCK_COUNT = 10L * 1024L * 1024L * 1024L / OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  int64_t freeze_block_count = MAX_DDL_BLOCK_COUNT;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl kv is not init", K(ret));
   } else if (OB_UNLIKELY(!macro_block.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(macro_block));
-  } else if (ddl_blocks_.count() >= MAX_DDL_BLOCK_COUNT) {
+  } else {
+    const uint64_t tenant_id = MTL_ID();
+    ObUnitInfoGetter::ObTenantConfig unit;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(GCTX.omt_->get_tenant_unit(tenant_id, unit))) {
+      LOG_WARN("get tenant unit failed", K(tmp_ret), K(tenant_id));
+    } else {
+      const int64_t log_allowed_block_count = unit.config_.log_disk_size() * 0.2 / OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      if (log_allowed_block_count <= 0) {
+        tmp_ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid macro block count by log disk size", K(tmp_ret), K(tenant_id), K(unit.config_));
+      } else {
+        freeze_block_count = min(freeze_block_count, log_allowed_block_count);
+      }
+    }
+  }
+  if (OB_SUCC(ret) && ddl_blocks_.count() >= freeze_block_count) {
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id_;
     param.tablet_id_ = tablet_id_;
@@ -229,34 +248,34 @@ int ObDDLKV::set_macro_block(const ObDDLMacroBlock &macro_block)
     ObDataMacroBlockMeta *data_macro_meta = nullptr;
     ObArenaAllocator meta_allocator;
     TCWLockGuard guard(lock_);
-    if (macro_block.ddl_start_log_ts_ != ddl_start_log_ts_) {
-      if (macro_block.ddl_start_log_ts_ > ddl_start_log_ts_) {
+    if (macro_block.ddl_start_scn_ != ddl_start_scn_) {
+      if (macro_block.ddl_start_scn_ > ddl_start_scn_) {
         ret = OB_EAGAIN;
         LOG_INFO("ddl start log ts too large, retry", K(ret),
-            K(ls_id_), K(tablet_id_), K(ddl_start_log_ts_), K(macro_block));
+            K(ls_id_), K(tablet_id_), K(ddl_start_scn_), K(macro_block));
       } else {
         // filter out and do nothing
         LOG_INFO("ddl start log ts too small, maybe from old build task, ignore", K(ret),
-            K(ls_id_), K(tablet_id_), K(ddl_start_log_ts_), K(macro_block));
+            K(ls_id_), K(tablet_id_), K(ddl_start_scn_), K(macro_block));
       }
-    } else if (macro_block.log_ts_ > freeze_log_ts_) {
+    } else if (macro_block.log_scn_ > freeze_scn_) {
       ret = OB_EAGAIN;
-      LOG_INFO("this ddl kv is freezed, retry other ddl kv", K(ret), K(ls_id_), K(tablet_id_), K(macro_block), K(freeze_log_ts_));
+      LOG_INFO("this ddl kv is freezed, retry other ddl kv", K(ret), K(ls_id_), K(tablet_id_), K(macro_block), K(freeze_scn_));
     } else if (OB_FAIL(index_block_rebuilder_->append_macro_row(
             macro_block.buf_, macro_block.size_, macro_block.get_block_id()))) {
       LOG_WARN("append macro meta failed", K(ret), K(macro_block));
     } else if (OB_FAIL(ddl_blocks_.push_back(macro_block.block_handle_))) {
       LOG_WARN("push back block handle failed", K(ret), K(macro_block.block_handle_));
     } else {
-      min_log_ts_ = MIN(min_log_ts_, macro_block.log_ts_);
-      max_log_ts_ = MAX(max_log_ts_, macro_block.log_ts_);
+      min_scn_ = palf::SCN::min(min_scn_, macro_block.log_scn_);
+      max_scn_ = palf::SCN::max(max_scn_, macro_block.log_scn_);
       LOG_INFO("succeed to set macro block into ddl kv", K(macro_block));
     }
   }
   return ret;
 }
 
-int ObDDLKV::freeze(const int64_t freeze_log_ts)
+int ObDDLKV::freeze(const palf::SCN &freeze_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -267,10 +286,10 @@ int ObDDLKV::freeze(const int64_t freeze_log_ts)
     if (is_freezed_) {
       // do nothing
     } else {
-      if (freeze_log_ts > 0) {
-        freeze_log_ts_ = freeze_log_ts;
-      } else if (max_log_ts_ > 0) {
-        freeze_log_ts_ = max_log_ts_;
+      if (freeze_scn.is_valid()) {
+        freeze_scn_ = freeze_scn;
+      } else if (max_scn_.is_valid()) {
+        freeze_scn_ = max_scn_;
       } else {
         ret = OB_EAGAIN;
         LOG_INFO("ddl kv not freezed, try again", K(ret), K(ls_id_), K(tablet_id_), K(ddl_blocks_.count()));
@@ -309,9 +328,9 @@ int ObDDLKV::close()
     ddl_param.ls_id_ = ls_id_;
     ddl_param.table_key_.tablet_id_ = tablet_id_;
     ddl_param.table_key_.table_type_ = ObITable::TableType::KV_DUMP_SSTABLE;
-    ddl_param.table_key_.scn_range_.start_scn_.convert_for_gts(last_freezed_log_ts_);
-    ddl_param.table_key_.scn_range_.end_scn_.convert_for_gts(freeze_log_ts_);
-    ddl_param.start_log_ts_ = ddl_start_log_ts_;
+    ddl_param.table_key_.scn_range_.start_scn_ = last_freezed_scn_;
+    ddl_param.table_key_.scn_range_.end_scn_ = freeze_scn_;
+    ddl_param.start_scn_ = ddl_start_scn_;
     ddl_param.snapshot_version_ = snapshot_version_;
     ddl_param.cluster_version_ = cluster_version_;
     if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(sstable_index_builder_, ddl_param, table_handle))) {
@@ -348,17 +367,17 @@ int ObDDLKV::wait_pending()
   } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls handle failed", K(ret), K(ls_id_));
   } else {
-    int64_t max_decided_log_ts = 0;
+    palf::SCN max_decided_scn;
     bool wait_ls_ts = true;
     bool wait_ddl_redo = true;
     const int64_t abs_timeout_ts = ObTimeUtility::fast_current_time() + 1000L * 1000L * 10L;
     while (OB_SUCC(ret)) {
       if (wait_ls_ts) {
-        if (OB_FAIL(ls_handle.get_ls()->get_max_decided_log_ts_ns(max_decided_log_ts))) {
+        if (OB_FAIL(ls_handle.get_ls()->get_max_decided_scn(max_decided_scn))) {
           LOG_WARN("get max decided log ts failed", K(ret), K(ls_id_));
         } else {
-          // max_decided_log_ts is the left border log_ts - 1
-          wait_ls_ts = max_decided_log_ts + 1 < freeze_log_ts_;
+          // max_decided_scn is the left border log_scn - 1
+          wait_ls_ts = palf::SCN::plus(max_decided_scn, 1) < freeze_scn_;
         }
       }
       if (OB_SUCC(ret)) {
@@ -368,7 +387,7 @@ int ObDDLKV::wait_pending()
         if (wait_ls_ts || wait_ddl_redo) {
           if (ObTimeUtility::fast_current_time() > abs_timeout_ts) {
             ret = OB_TIMEOUT;
-            LOG_WARN("wait pending ddl kv timeout", K(ret), K(*this), K(max_decided_log_ts), K(wait_ls_ts), K(wait_ddl_redo));
+            LOG_WARN("wait pending ddl kv timeout", K(ret), K(*this), K(max_decided_scn), K(wait_ls_ts), K(wait_ddl_redo));
           } else {
             ob_usleep(1L * 1000L); // 1 ms
           }
@@ -484,18 +503,18 @@ int ObDDLKVsHandle::get_ddl_kv(const int64_t idx, ObDDLKV *&kv)
   return ret;
 }
 
-ObDDLKVPendingGuard::ObDDLKVPendingGuard(ObTablet *tablet, const int64_t log_ts)
-  : tablet_(tablet), log_ts_(log_ts), kv_handle_(), ret_(OB_SUCCESS)
+ObDDLKVPendingGuard::ObDDLKVPendingGuard(ObTablet *tablet, const palf::SCN &log_scn)
+  : tablet_(tablet), kv_handle_(), ret_(OB_SUCCESS)
 {
   int ret = OB_SUCCESS;
   ObDDLKV *curr_kv = nullptr;
-  ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
-  if (OB_UNLIKELY(nullptr == tablet || log_ts <= 0)) {
+  ObDDLKvMgrHandle ddl_kv_mgr_handle;
+  if (OB_UNLIKELY(nullptr == tablet || !log_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(tablet), K(log_ts));
-  } else if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr))) {
+    LOG_WARN("invalid arguments", K(ret), KP(tablet), K(log_scn));
+  } else if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     LOG_WARN("get ddl kv mgr failed", K(ret));
-  } else if (OB_FAIL(ddl_kv_mgr->get_or_create_ddl_kv(log_ts, kv_handle_))) {
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_or_create_ddl_kv(log_scn, kv_handle_))) {
     LOG_WARN("acquire ddl kv failed", K(ret));
   } else if (OB_FAIL(kv_handle_.get_ddl_kv(curr_kv))) {
     LOG_WARN("fail to get ddl kv", K(ret));
@@ -503,6 +522,7 @@ ObDDLKVPendingGuard::ObDDLKVPendingGuard(ObTablet *tablet, const int64_t log_ts)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, active ddl kv must not be nullptr", K(ret));
   } else {
+    log_scn_ = log_scn;
     curr_kv->inc_pending_cnt();
   }
   if (OB_FAIL(ret)) {
@@ -548,7 +568,7 @@ int ObDDLKVPendingGuard::set_macro_block(ObTablet *tablet, const ObDDLMacroBlock
     int64_t try_count = 0;
     while ((OB_SUCCESS == ret || OB_EAGAIN == ret) && try_count < MAX_RETRY_COUNT) {
       ObDDLKV *ddl_kv = nullptr;
-      ObDDLKVPendingGuard guard(tablet, macro_block.log_ts_);
+      ObDDLKVPendingGuard guard(tablet, macro_block.log_scn_);
       if (OB_FAIL(guard.get_ddl_kv(ddl_kv))) {
         LOG_WARN("get ddl kv failed", K(ret));
       } else if (OB_FAIL(ddl_kv->set_macro_block(macro_block))) {

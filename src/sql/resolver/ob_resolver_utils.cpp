@@ -2102,6 +2102,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
             const int CharConvertFactorNum = 4;
             int32_t buf_len = str.length() * CharConvertFactorNum;
             uint32_t result_len = 0;
+            uint32_t incomplete_len = 0;
             if (0 == buf_len) {
               //do nothing
             } else if (CS_TYPE_INVALID == target_collation) {
@@ -2111,8 +2112,9 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_ERROR("alloc memory failed", K(ret), K(buf_len));
             } else {
+              bool trim_incomplete_tail = !(lib::is_oracle_mode());
               ret = ObCharset::charset_convert(connection_collation, str.ptr(),
-                    str.length(), target_collation, buf, buf_len, result_len);
+                    str.length(), target_collation, buf, buf_len, result_len, trim_incomplete_tail);
               if (OB_SUCCESS != ret) {
                 int32_t str_offset = 0;
                 int64_t buf_offset = 0;
@@ -2123,7 +2125,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                   ret = ObCharset::charset_convert(connection_collation, str.ptr() + str_offset,
                     offset, target_collation, buf + buf_offset, buf_len - buf_offset, result_len);
                   str_offset += offset;
-                  if (OB_SUCCESS == ret) {
+                  if (OB_SUCCESS == ret && result_len > 0) {
                     buf_offset += result_len;
                   } else {
                     //在Oracle转换失败的字符都是用'?'代替，这里做兼容

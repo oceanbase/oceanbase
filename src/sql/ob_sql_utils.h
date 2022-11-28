@@ -537,7 +537,7 @@ public:
                                            int64_t param_num,
                                            ParamStore &param_store);
   static int transform_pl_ext_type(ParamStore &src, int64_t array_binding_size, ObIAllocator &alloc, ParamStore *&dst);
-  static int get_one_group_params(int64_t pos, ParamStore &src, ParamStore &obj_params);
+  static int get_one_group_params(int64_t &pos, ParamStore &src, ParamStore &obj_params);
   static int copy_params_to_array_params(int64_t query_pos, ParamStore &src, ParamStore &dst);
   static int init_elements_info(ParamStore &src, ParamStore &dst);
   /*-----------------------

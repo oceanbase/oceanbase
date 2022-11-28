@@ -400,14 +400,13 @@ int ObCtxTxData::add_undo_action(ObUndoAction &undo_action)
   return ret;
 }
 
-int ObCtxTxData::get_tx_data(const ObTxData *&tx_data) const
+int ObCtxTxData::Guard::get_tx_data(const ObTxData *&tx_data) const
 {
-  RLockGuard guard(lock_);
   int ret = OB_SUCCESS;
-  if (NULL == tx_data_) {
+  if (NULL == host_.tx_data_) {
     ret = OB_TRANS_CTX_NOT_EXIST;
   } else {
-    tx_data = tx_data_;
+    tx_data = host_.tx_data_;
   }
   return ret;
 }

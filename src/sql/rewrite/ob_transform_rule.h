@@ -189,6 +189,9 @@ struct ObParentDMLStmt
 // use to keep view name/stmt id/qb name stable after copy stmt and try transform
 struct ObTryTransHelper
 {
+  ObTryTransHelper() : available_tb_id_(0), subquery_count_(0), temp_table_count_(0)
+  {}
+
   int fill_helper(const ObQueryCtx *query_ctx);
   int recover(ObQueryCtx *query_ctx);
   int is_filled() const { return !qb_name_counts_.empty(); }
@@ -379,7 +382,8 @@ private:
                          ObDMLStmt *&stmt);
   int adjust_transformed_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                               ObDMLStmt *stmt,
-                              ObDMLStmt *&transformed_stmt);
+                              ObDMLStmt *&orgin_stmt,
+                              ObDMLStmt *&root_stmt);
 
   int deep_copy_temp_table(ObDMLStmt &stmt,
                            ObStmtFactory &stmt_factory,

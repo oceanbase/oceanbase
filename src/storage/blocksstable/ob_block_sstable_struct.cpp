@@ -18,6 +18,7 @@
 #include "lib/utility/ob_serialization_helper.h"
 #include "lib/utility/serialization.h"
 #include "lib/utility/utility.h"
+#include "logservice/palf/scn.h"
 #include "ob_block_manager.h"
 #include "ob_data_buffer.h"
 #include "share/config/ob_server_config.h"
@@ -792,14 +793,14 @@ int ObRecordHeaderV3::deserialize(const char *buf, int64_t buf_len, int64_t &pos
 }
 
 ObDDLMacroBlockRedoInfo::ObDDLMacroBlockRedoInfo()
-  : table_key_(), data_buffer_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE), start_scn_(palf::SCN::min_scn())
+  : table_key_(), data_buffer_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE), start_scn_()
 {
 }
 
 bool ObDDLMacroBlockRedoInfo::is_valid() const
 {
   return table_key_.is_valid() && data_buffer_.ptr() != nullptr && block_type_ != ObDDLMacroBlockType::DDL_MB_INVALID_TYPE
-         && logic_id_.is_valid() && start_scn_.is_valid() && !start_scn_.is_min();
+         && logic_id_.is_valid() && start_scn_.is_valid();
 }
 
 OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo, table_key_, data_buffer_, block_type_, logic_id_, start_scn_);

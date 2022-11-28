@@ -123,6 +123,7 @@ public:  // ObTxDataTable
   virtual void stop();
   virtual void reset();
   virtual void destroy();
+  int offline();
 
   /**
    * @brief Allocate tx data with slice allocator
@@ -199,6 +200,7 @@ public:  // ObTxDataTable
 
   int update_memtables_cache();
 
+
   int prepare_for_safe_destroy();
 
   /**
@@ -268,6 +270,8 @@ private:
                                       ObTableHandleV2 &src_memtable_handle,
                                       ObTxDataGuard &tx_data_guard,
                                       bool &find);
+
+  int clean_memtables_cache_();
 
   int dump_tx_data_in_memtable_2_text_(const transaction::ObTransID tx_id, FILE *fd);
   int dump_tx_data_in_sstable_2_text_(const transaction::ObTransID tx_id, FILE *fd);

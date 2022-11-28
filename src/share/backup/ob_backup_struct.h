@@ -110,7 +110,6 @@ static const int64_t OB_MAX_BACKUP_META_TIMEOUT = 30 * 60 * 1000 * 1000; // 30 m
 static constexpr const int64_t MAX_FAKE_PROVIDE_ITEM_COUNT = 128;
 static constexpr const int64_t DEFAULT_FAKE_BATCH_COUNT = 32;
 static constexpr const int64_t FAKE_MAX_FILE_ID = MAX_FAKE_PROVIDE_ITEM_COUNT / DEFAULT_FAKE_BATCH_COUNT - 1;
-static constexpr const int64_t FAKE_PROVIDER_VERSION = 1;  // TODO(yangyi.yyy): retry related
 
 static constexpr const int64_t DEFAULT_ARCHIVE_FILE_SIZE = 64 << 20; // 64MB
 
@@ -916,27 +915,6 @@ struct ObBackupInfoStatus final
   void set_backup_status_cancel() { status_ = CANCEL; }
   TO_STRING_KV(K_(status), "status_str", get_status_str(status_));
   BackupStatus status_;
-};
-
-//TODO(yanfeng) backup use lib backupdevicetype, fix it later
-struct ObBackupDeviceType final
-{
-  enum BackupDeviceType
-  {
-    NFS = 0,
-    OSS = 1,
-    OFS = 2,
-    COS = 3,
-    MAX,
-  };
-  ObBackupDeviceType() : type_(MAX) {}
-  virtual ~ObBackupDeviceType() = default;
-  void reset() { type_ = MAX; }
-  const char* get_backup_device_str() const;
-  int set_backup_device_type(const char *buf);
-  TO_STRING_KV(K_(type));
-
-  BackupDeviceType type_;
 };
 
 struct ObBaseBackupInfoStruct

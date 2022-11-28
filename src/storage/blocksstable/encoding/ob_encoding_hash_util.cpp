@@ -116,16 +116,11 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
         "row_count", col_datums.count());
   } else {
     ObObjTypeStoreClass store_class = get_store_class_map()[col_desc.col_type_.get_type_class()];
-    const bool need_binary_equal =
-        (store_class != ObNumberSC && store_class != ObOTimestampSC && store_class != ObIntervalSC);
     const bool need_binary_hash =
         (store_class == ObTextSC || store_class == ObJsonSC || store_class == ObLobSC);
     sql::ObExprBasicFuncs *basic_funcs = ObDatumFuncs::get_basic_func(
         col_desc.col_type_.get_type(), col_desc.col_type_.get_collation_type());
-    ObCmpFunc cmp_func;
     ObHashFunc hash_func;
-    cmp_func.cmp_func_ = lib::is_oracle_mode()
-        ? basic_funcs->null_last_cmp_ : basic_funcs->null_first_cmp_;
     hash_func.hash_func_ = basic_funcs->murmur_hash_;
     const uint64_t mask = (bucket_num_ - 1);
     for (int64_t row_id = 0;
@@ -145,7 +140,7 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
         NodeList *list = buckets_[pos];
         while (OB_SUCC(ret) && nullptr != list) {
           bool is_equal = false;
-          if (OB_FAIL(equal(*list->header_->datum_, datum, cmp_func, need_binary_equal, is_equal))) {
+          if (OB_FAIL(equal(*list->header_->datum_, datum, is_equal))) {
             LOG_WARN("check datum equality failed", K(ret), K(datum), KPC(list->header_->datum_), K(col_desc));
           } else if (is_equal) {
             add_to_list(*list, nodes_[row_id], datum);
@@ -192,19 +187,14 @@ void ObEncodingHashTableBuilder::add_to_list(NodeList &list, HashNode &node, con
 int ObEncodingHashTableBuilder::equal(
     const ObDatum &lhs,
     const ObDatum &rhs,
-    const ObCmpFunc &cmp_func,
-    const bool need_binary,
     bool &is_equal)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(lhs.is_ext() || rhs.is_ext())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected ext datum in encoding hash table", K(ret), K(lhs), K(rhs));
-  } else if (need_binary) {
-    is_equal = ObDatum::binary_equal(lhs, rhs);
   } else {
-    int cmp_ret = cmp_func.cmp_func_(lhs, rhs);
-    is_equal = cmp_ret == 0;
+    is_equal = ObDatum::binary_equal(lhs, rhs);
   }
   return ret;
 }

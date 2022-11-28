@@ -292,11 +292,11 @@ int ObTabletBindingHelper::modify_tablet_binding_for_create(
         }
       } else if (tablet_ids_as_aux_tablets) {
         if (OB_FAIL(add_tablet_binding(arg, info, handle, info.tablet_ids_, empty_array, trans_flags))) {
-          LOG_WARN("failed to modify tablet binding", K(ret));
+          LOG_WARN("failed to modify tablet binding", K(ret), K(info));
         }
       } else {
         if (OB_FAIL(add_tablet_binding(arg, info, handle, empty_array, info.tablet_ids_, trans_flags))) {
-          LOG_WARN("failed to modify tablet binding", K(ret));
+          LOG_WARN("failed to modify tablet binding", K(ret), K(info));
         }
       }
     }

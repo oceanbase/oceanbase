@@ -491,7 +491,7 @@ int ObBackupSetFileOperator::get_candidate_obsolete_backup_sets(
   return ret;
 }
 
-// TODO(yangyi.yyy): consider if need fetch this later
+// TODO(yangyi.yyy): consider if need fetch this later in 4.1
 int ObBackupSetFileOperator::get_all_backup_set_between(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,

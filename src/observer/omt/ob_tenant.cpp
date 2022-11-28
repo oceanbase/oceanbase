@@ -952,7 +952,7 @@ int64_t ObTenant::worker_count_bound() const
   // node's workers too.
   int64_t bound = 0;
   if (OB_UNLIKELY(id_ == OB_DATA_TENANT_ID)) {
-    bound = INT64_MAX; // 509 tenant no bound
+    bound = 128;
   } else {
     bound = static_cast<int64_t>(
       unit_max_cpu_ * static_cast<int>(times_of_workers_));
@@ -1285,7 +1285,7 @@ void ObTenant::handle_retry_req()
 
 void ObTenant::calibrate_token_count()
 {
-  if (dynamic_modify_token_ && OB_DATA_TENANT_ID != id_) { // 509 tenant has it independent thread num
+  if (dynamic_modify_token_ || OB_DATA_TENANT_ID == id_) {
     int ret = OB_SUCCESS;
     const auto current_time = ObTimeUtility::current_time();
     if (current_time - last_calibrate_token_ts_ > CALIBRATE_TOKEN_INTERVAL &&

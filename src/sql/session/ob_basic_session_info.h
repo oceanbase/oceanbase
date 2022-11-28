@@ -499,8 +499,6 @@ public:
     return common::OB_SUCCESS;
   }
   common::ObConsistencyLevel get_consistency_level() const { return consistency_level_; };
-  void set_last_consistency_level(common::ObConsistencyLevel level) { last_consistency_level_ = level; }
-  common::ObConsistencyLevel get_last_consistency_level() const { return last_consistency_level_; }
   bool is_zombie() const { return SESSION_KILLED == get_session_state();}
   bool is_query_killed() const;
   bool is_valid() const { return is_valid_; };
@@ -1974,10 +1972,6 @@ private:
   ObQueryRetryInfo retry_info_;
   // 处理的上个query包的trace_id，用于判断是否为重试query的包。这里只关心query，不管其他类型的包（比如init db等）。
   common::ObCurTraceId::TraceId last_query_trace_id_;
-  // this field is used to remember last stmt's consistency level
-  // in order to detect in txn stmt change its consistency level
-  // and then warning the user
-  common::ObConsistencyLevel last_consistency_level_;
 protected:
   //this should be used by subclass, so need be protected
   MultiThreadData thread_data_;

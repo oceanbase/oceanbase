@@ -24,6 +24,12 @@ set(CPACK_PACKAGE_VERSION_MINOR "${OceanBase_CE_VERSION_MINOR}")
 set(CPACK_PACKAGE_VERSION_PATCH "${OceanBase_CE_VERSION_PATCH}")
 set(CPACK_RPM_PACKAGE_URL "${OceanBase_CE_HOMEPAGE_URL}")
 set(CPACK_RPM_PACKAGE_RELEASE_DIST ON)
+## set relocation path install prefix for each component
+set(CPACK_RPM_DEVEL_PACKAGE_PREFIX /usr)
+set(CPACK_RPM_UTILS_PACKAGE_PREFIX /usr)
+list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home")
+list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin")
+list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin/oceanbase")
 set(CPACK_RPM_PACKAGE_GROUP "Applications/Databases")
 set(CPACK_RPM_PACKAGE_DESCRIPTION "OceanBase is a distributed relational database")
 set(CPACK_RPM_PACKAGE_LICENSE "Mulan PubL v2.")
@@ -33,8 +39,12 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
   "%global _missing_build_ids_terminate_build 0
 %global _find_debuginfo_opts -g
 %define __strip ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-strip
+%undefine __brp_mangle_shebangs
 %define __debug_install_post %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}
-%debug_package")
+%if \\\"%name\\\" != \\\"oceanbase-ce-sql-parser\\\" && \\\"%name\\\" != \\\"oceanbase-sql-parser\\\"
+%debug_package
+%endif
+")
 
 ## TIPS
 #

@@ -105,6 +105,7 @@ int handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                               const int64_t request_id,
                               const palf::SCN &private_data);
 int handle_trans_keepalive(const ObTxKeepaliveMsg &msg, obrpc::ObTransRpcResult &result);
+int handle_trans_keepalive_response(const ObTxKeepaliveRespMsg &msg, obrpc::ObTransRpcResult &result);
 int handle_tx_batch_req(int type, const char* buf, int32_t size, const bool need_check_leader = true);
 int refresh_location_cache(const share::ObLSID ls);
 int handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay);

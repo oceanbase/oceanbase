@@ -309,6 +309,7 @@ int ObExprValuesOp::get_real_batch_obj_type(ObDatumMeta &src_meta,
 {
   int ret = OB_SUCCESS;
   if (MY_SPEC.ins_values_batch_opt_
+      && T_QUESTIONMARK == src_expr->type_
       && (src_expr->frame_idx_
        < spec_.plan_->get_expr_frame_info().const_frame_.count()
           + spec_.plan_->get_expr_frame_info().param_frame_.count())) {

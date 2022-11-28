@@ -120,9 +120,10 @@ int ObInsertStmt::replace_inner_stmt_expr(const ObIArray<ObRawExpr*> &other_expr
   return ret;
 }
 
-bool ObInsertStmt::check_table_be_modified(uint64_t ref_table_id) const
+int ObInsertStmt::check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const
 {
-  return table_info_.ref_table_id_ == ref_table_id;
+  is_modified = table_info_.ref_table_id_ == ref_table_id;
+  return OB_SUCCESS;
 }
 
 int64_t ObInsertStmt::to_string(char *buf, const int64_t buf_len) const

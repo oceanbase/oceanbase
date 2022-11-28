@@ -120,8 +120,7 @@ protected:
     EXPECT_EQ(OB_SUCCESS, ctx_mt_mgr_->init(tablet_id_,
                                             ls_id_,
                                             &freezer_,
-                                            &t3m_,
-                                            (ObTabletDDLKvMgr*)(0x01)));
+                                            &t3m_));
     mt_mgr_ = ctx_mt_mgr_;
 
     // tenant_base_.set(t3m_);
@@ -391,7 +390,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     //    // do nothing
     //  }
     //}
-    if (OB_FAIL(ls_tx_ctx_map_.init())) {
+    if (OB_FAIL(ls_tx_ctx_map_.init(lib::ObMemAttr(tenant_id, "LSTxCtxMgr")))) {
       TRANS_LOG(WARN, "ls_tx_ctx_map_ init fail", KR(ret));
     } else {
       is_inited_ = true;

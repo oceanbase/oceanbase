@@ -133,10 +133,10 @@ int ObDDLMacroBlockClogCb::on_success()
     } else {
       macro_block.block_type_ = redo_info_.block_type_;
       macro_block.logic_id_ = redo_info_.logic_id_;
-      macro_block.log_ts_ = __get_scn().get_val_for_inner_table_field();
+      macro_block.log_scn_ = __get_scn();
       macro_block.buf_ = redo_info_.data_buffer_.ptr();
       macro_block.size_ = redo_info_.data_buffer_.length();
-      macro_block.ddl_start_log_ts_ = redo_info_.start_scn_.get_val_for_lsn_allocator();
+      macro_block.ddl_start_scn_ = redo_info_.start_scn_;
       if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle.get_obj(), macro_block))) {
         LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle), K(macro_block));
       }
@@ -237,48 +237,48 @@ int ObDDLRedoLog::init(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info)
 OB_SERIALIZE_MEMBER(ObDDLRedoLog, redo_info_);
 
 ObDDLPrepareLog::ObDDLPrepareLog()
-  : table_key_(), start_log_ts_(0)
+  : table_key_(), start_scn_()
 {
 }
 
 int ObDDLPrepareLog::init(const ObITable::TableKey &table_key,
-                         const int64_t start_log_ts)
+                         const palf::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
-  if (!table_key.is_valid() || start_log_ts < 0) {
+  if (!table_key.is_valid() || !start_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_log_ts));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn));
   } else {
     table_key_ = table_key;
-    start_log_ts_ = start_log_ts;
+    start_scn_ = start_scn;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLPrepareLog, table_key_, start_log_ts_);
+OB_SERIALIZE_MEMBER(ObDDLPrepareLog, table_key_, start_scn_);
 
 ObDDLCommitLog::ObDDLCommitLog()
-  : table_key_(), start_log_ts_(0), prepare_log_ts_(0)
+  : table_key_(), start_scn_(), prepare_scn_()
 {
 }
 
 int ObDDLCommitLog::init(const ObITable::TableKey &table_key,
-                         const int64_t start_log_ts,
-                         const int64_t prepare_log_ts)
+                         const palf::SCN &start_scn,
+                         const palf::SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
-  if (!table_key.is_valid() || start_log_ts <= 0 || prepare_log_ts <= 0) {
+  if (!table_key.is_valid() || !start_scn.is_valid() || !prepare_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_log_ts), K(prepare_log_ts));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(prepare_scn));
   } else {
     table_key_ = table_key;
-    start_log_ts_ = start_log_ts;
-    prepare_log_ts_ = prepare_log_ts;
+    start_scn_ = start_scn;
+    prepare_scn_ = prepare_scn;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_log_ts_, prepare_log_ts_);
+OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_scn_, prepare_scn_);
 
 ObTabletSchemaVersionChangeLog::ObTabletSchemaVersionChangeLog()
   : tablet_id_(), schema_version_(-1)

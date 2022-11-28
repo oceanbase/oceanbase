@@ -314,7 +314,7 @@ struct ObUpdateTableStoreParam
   bool is_valid() const;
   TO_STRING_KV(K_(table_handle), K_(snapshot_version), K_(clog_checkpoint_ts), K_(multi_version_start),
                K_(keep_old_ddl_sstable), K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
-               K_(need_check_sstable), K_(ddl_checkpoint_scn), K_(ddl_start_log_ts), K_(ddl_snapshot_version));
+               K_(need_check_sstable), K_(ddl_checkpoint_scn), K_(ddl_start_scn), K_(ddl_snapshot_version));
 
   ObTableHandleV2 table_handle_;
   int64_t snapshot_version_;
@@ -327,7 +327,7 @@ struct ObUpdateTableStoreParam
   bool update_with_major_flag_;
   bool need_check_sstable_;
   palf::SCN ddl_checkpoint_scn_;
-  int64_t ddl_start_log_ts_;
+  palf::SCN ddl_start_scn_;
   int64_t ddl_snapshot_version_;
 };
 

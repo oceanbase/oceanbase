@@ -1812,7 +1812,7 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
         TRANS_LOG(ERROR, "unknown log type", K(ret), K(*this));
       }
     }
-    REC_TRANS_TRACE_EXT(tlog_, iter_cb,
+    REC_TRANS_TRACE_EXT(tlog_, log_sync_succ_cb,
                                OB_ID(ret), ret,
                                Y(log_type),
                                OB_ID(t), log_ts,
@@ -2668,14 +2668,18 @@ int ObPartTransCtx::submit_commit_log_()
                              coord_prepare_info_arr_);
     ObTxLogCb *log_cb = NULL;
     bool redo_log_submitted = false;
-    const ObTxData *tx_data = NULL;
+
+    if (OB_SUCC(ret)) {
+      const ObTxData *tx_data = NULL;
+      auto guard = ctx_tx_data_.get_tx_data();
+      if (OB_FAIL(guard.get_tx_data(tx_data))) {
+        TRANS_LOG(WARN, "get tx data failed", K(ret));
+      } else if (OB_FAIL(commit_log.init_tx_data_backup(tx_data))) {
+        TRANS_LOG(WARN, "init tx data backup failed", K(ret));
+      }
+    }
 
     if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(ctx_tx_data_.get_tx_data(tx_data))) {
-      TRANS_LOG(WARN, "get tx data failed", K(ret));
-    } else if (OB_FAIL(commit_log.init_tx_data_backup(tx_data))) {
-      TRANS_LOG(WARN, "init tx data backup failed", K(ret));
     } else if (OB_FAIL(log_block.add_new_log(commit_log))) {
       if (OB_BUF_NOT_ENOUGH == ret) {
         TRANS_LOG(WARN, "buf not enough", K(ret), K(commit_log));
@@ -2803,18 +2807,23 @@ int ObPartTransCtx::submit_abort_log_()
   ObTxLogBlockHeader
     log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_);
 
-  const ObTxData *tx_data = NULL;
-  if (OB_FAIL(ctx_tx_data_.get_tx_data(tx_data))) {
-    TRANS_LOG(WARN, "get tx data failed", K(ret));
-  } else if (OB_FAIL(gen_final_mds_array_(tmp_array, false))) {
+  if (OB_FAIL(gen_final_mds_array_(tmp_array, false))) {
     TRANS_LOG(WARN, "gen abort mds array failed", K(ret));
   }
 
   ObTxAbortLog abort_log(tmp_array);
 
+  if (OB_SUCC(ret)) {
+    const ObTxData *tx_data = NULL;
+    auto guard = ctx_tx_data_.get_tx_data();
+    if (OB_FAIL(guard.get_tx_data(tx_data))) {
+      TRANS_LOG(WARN, "get tx data failed", K(ret));
+    } else if (OB_FAIL(abort_log.init_tx_data_backup(tx_data))) {
+      TRANS_LOG(WARN, "init tx data backup failed", K(ret));
+    }
+  }
+
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(abort_log.init_tx_data_backup(tx_data))) {
-    TRANS_LOG(WARN, "init tx data backup failed", K(ret));
   } else if (OB_FAIL(log_block.init(replay_hint, log_block_header))) {
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
   } else if (OB_FAIL(log_block.add_new_log(abort_log))) {
@@ -4662,8 +4671,8 @@ int ObPartTransCtx::check_with_tx_data(ObITxDataCheckFunctor &fn)
   // NB: You need notice the lock is not acquired during check
   int ret = OB_SUCCESS;
   const ObTxData *tx_data_ptr = NULL;
-
-  if (OB_FAIL(ctx_tx_data_.get_tx_data(tx_data_ptr))) {
+  auto guard = ctx_tx_data_.get_tx_data();
+  if (OB_FAIL(guard.get_tx_data(tx_data_ptr))) {
   } else {
     // const ObTxData &tx_data = *tx_data_ptr;
     // NB: we must read the state then the version without lock. If you are interested in the
@@ -4772,20 +4781,22 @@ int ObPartTransCtx::refresh_rec_log_ts_()
 int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
 {
   int ret = OB_SUCCESS;
-  const ObTxData *tx_data = NULL;
-  const ObTxCommitData *tx_commit_data = NULL;
-
-  if (OB_FAIL(ctx_tx_data_.get_tx_data(tx_data))) {
-    TRANS_LOG(WARN, "get tx data failed", K(ret));
-    // rewrite ret
-    ret = OB_SUCCESS;
-    if (OB_FAIL(ctx_tx_data_.get_tx_commit_data(tx_commit_data))) {
-    TRANS_LOG(WARN, "get tx commit data failed", K(ret));
+  {
+    const ObTxData *tx_data = NULL;
+    const ObTxCommitData *tx_commit_data = NULL;
+    auto guard = ctx_tx_data_.get_tx_data();
+    if (OB_FAIL(guard.get_tx_data(tx_data))) {
+      TRANS_LOG(WARN, "get tx data failed", K(ret));
+      // rewrite ret
+      ret = OB_SUCCESS;
+      if (OB_FAIL(ctx_tx_data_.get_tx_commit_data(tx_commit_data))) {
+        TRANS_LOG(WARN, "get tx commit data failed", K(ret));
+      } else {
+        info.state_info_ = *tx_commit_data;
+      }
     } else {
-      info.state_info_ = *tx_commit_data;
+      info.state_info_ = *tx_data;
     }
-  } else {
-    info.state_info_ = *tx_data;
   }
 
   if (OB_SUCC(ret)) {
@@ -5989,8 +6000,8 @@ int ObPartTransCtx::dump_2_text(FILE *fd)
 
   fprintf(fd, "********** ObPartTransCtx ***********\n\n");
   fprintf(fd, "%s\n", buf);
-
-  if (OB_FAIL(ctx_tx_data_.get_tx_data(tx_data_ptr))) {
+  auto guard = ctx_tx_data_.get_tx_data();
+  if (OB_FAIL(guard.get_tx_data(tx_data_ptr))) {
   } else if (OB_ISNULL(tx_data_ptr)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected nullptr", KR(ret));

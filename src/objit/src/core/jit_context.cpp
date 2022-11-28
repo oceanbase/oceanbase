@@ -35,25 +35,14 @@ int JitContext::InitializeModule(ObOrcJit &jit)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for LLVM Builder", K(ret));
   } else {
-    // Open a new module.
     TheContext = &TheJIT->getContext();
     TheModule->setDataLayout(TheJIT->getDataLayout());
-
-    // Create a new builder for the module.
     Builder = std::make_unique<IRBuilder<>>(*TheContext);
-
-    // Create a new pass manager attached to it.
     TheFPM = std::make_unique<legacy::FunctionPassManager>(TheModule.get());
-
-    // Do simple "peephole" optimizations and bit-twiddling optzns.
     TheFPM->add(createInstructionCombiningPass());
-    // Reassociate expressions.
     TheFPM->add(createReassociatePass());
-    // Eliminate Common SubExpressions.
     TheFPM->add(createGVNPass());
-    // Simplify the control flow graph (deleting unreachable blocks, etc).
     TheFPM->add(createCFGSimplificationPass());
-
     TheFPM->doInitialization();
   }
 

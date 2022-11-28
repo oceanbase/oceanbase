@@ -2647,7 +2647,7 @@ int ObIOTracer::trace_request(const ObIORequest *req, const char *msg, const Tra
   } else if (ObIOTracer::TraceType::IS_FIRST == trace_type) {
     TraceInfo trace_info;
     char *bt_str = lbt();
-    strncpy(trace_info.bt_str_, bt_str, sizeof(trace_info.bt_str_));
+    strncpy(trace_info.bt_str_, bt_str, sizeof(trace_info.bt_str_) - 1);
     trace_info.ref_log_.click(msg);
     if (OB_FAIL(trace_map_.set_refactored(reinterpret_cast<int64_t>(req), trace_info))) {
       LOG_WARN("add trace failed", K(ret));

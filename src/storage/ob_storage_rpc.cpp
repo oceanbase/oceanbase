@@ -973,7 +973,6 @@ int ObFetchTabletInfoP::process()
     } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
       LOG_WARN("failed to log stream get migration status", K(ret), K(migration_status));
     } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
-      //TODO(yanfeng) get src migrate status and check it
       ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
       STORAGE_LOG(WARN, "src migrate status do not allow migrate out", K(ret), K(migration_status));
     } else if (OB_FAIL(producer.init(arg_.tenant_id_, arg_.ls_id_, arg_.tablet_id_list_))) {

@@ -175,6 +175,7 @@ int ObTransformSubqueryCoalesce::transform_same_exprs(ObDMLStmt *stmt,
       }
     }
     if (OB_SUCC(ret) && coalesce_happened) {
+      is_happened = true;
       if (OB_FAIL(ObOptimizerUtil::remove_item(conds, remove_exprs))) {
         LOG_WARN("failed to remove exprs", K(ret));
       }

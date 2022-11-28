@@ -582,8 +582,12 @@ public:
   int get_child_table_id_count_recurseive(int64_t &object_ids_cnt,
       const int64_t object_limit_count = common::OB_MAX_TABLE_NUM_PER_STMT) const;
 
-  virtual bool check_table_be_modified(uint64_t ref_table_id) const
-  { UNUSED(ref_table_id); return false; }
+  virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const
+  {
+    UNUSED(ref_table_id);
+    is_modified = false;
+    return OB_SUCCESS;
+  }
 
   virtual int copy_and_replace_stmt_expr(ObRawExprCopier &copier);
 

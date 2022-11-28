@@ -37,6 +37,7 @@ void assign(T2 &dst, const T1 &src)
 void assign(TStr &dst, const TStr &src)
 {
   STRNCPY(dst, src, sizeof(dst));
+  dst[sizeof(dst) - 1] = '\0';
 }
 
 void assign(int64_t &dst, const RLInt &src)

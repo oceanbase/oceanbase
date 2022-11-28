@@ -202,6 +202,8 @@ ObFreezer::ObFreezer()
     ls_id_(),
     stat_(),
     empty_memtable_cnt_(0),
+    high_priority_freeze_cnt_(0),
+    low_priority_freeze_cnt_(0),
     is_inited_(false)
 {}
 
@@ -222,6 +224,8 @@ ObFreezer::ObFreezer(ObLSWRSHandler *ls_loop_worker,
     ls_id_(ls_id),
     stat_(),
     empty_memtable_cnt_(0),
+    high_priority_freeze_cnt_(0),
+    low_priority_freeze_cnt_(0),
     is_inited_(false)
 {}
 
@@ -264,6 +268,8 @@ void ObFreezer::reset()
   ls_id_.reset();
   stat_.reset();
   empty_memtable_cnt_ = 0;
+  high_priority_freeze_cnt_ = 0;
+  low_priority_freeze_cnt_ = 0;
   is_inited_ = false;
 }
 
@@ -302,6 +308,7 @@ int ObFreezer::logstream_freeze()
   stat_.start_time_ = ObTimeUtility::current_time();
   stat_.state_ = ObFreezeState::NOT_SET_FREEZE_FLAG;
 
+  ObLSFreezeGuard guard(*this);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[Freezer] not inited", K(ret), K_(ls_id));
@@ -382,9 +389,14 @@ int ObFreezer::tablet_freeze(const ObTabletID &tablet_id)
   stat_.state_ = ObFreezeState::NOT_SET_FREEZE_FLAG;
   stat_.tablet_id_ = tablet_id;
 
+  ObTabletFreezeGuard guard(*this, true /* try guard */);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K_(ls_id), K(tablet_id));
+  } else if (OB_FAIL(guard.try_set_tablet_freeze_begin())) {
+    // no need freeze now, a ls freeze is running or will be running
+    ret = OB_SUCCESS;
+    FLOG_INFO("[Freezer] ls freeze is running, no need freeze again", K(ret), K_(ls_id), K(tablet_id));
   } else if (OB_FAIL(set_freeze_flag_without_inc_freeze_clock())) {
     ret = OB_SUCCESS;
     FLOG_INFO("[Freezer] freeze is running", K(ret), K_(ls_id), K(tablet_id));
@@ -452,6 +464,7 @@ int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
   stat_.tablet_id_ = tablet_id;
   stat_.is_force_ = true;
 
+  ObTabletFreezeGuard guard(*this);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K_(ls_id), K(tablet_id));
@@ -885,6 +898,103 @@ void ObFreezer::print_freezer_statistics()
     TRANS_LOG(INFO, "[Freezer] empty table statistics: ", K_(ls_id), K(get_empty_memtable_cnt()));
     clear_empty_memtable_cnt();
   }
+}
+
+int ObFreezer::try_set_tablet_freeze_begin_()
+{
+  int ret = OB_SUCCESS;
+  if (ATOMIC_LOAD(&high_priority_freeze_cnt_) != 0) {
+    // high priority freeze waiting now, can not do tablet freeze now.
+    ret = OB_EAGAIN;
+  } else {
+    ATOMIC_INC(&low_priority_freeze_cnt_);
+    // double check
+    if (ATOMIC_LOAD(&high_priority_freeze_cnt_) != 0) {
+      ret = OB_EAGAIN;
+      ATOMIC_DEC(&low_priority_freeze_cnt_);
+    }
+  }
+  return ret;
+}
+
+void ObFreezer::set_tablet_freeze_begin_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t SLEEP_INTERVAL = 100 * 1000; // 100 ms
+  int64_t retry_times = 0;
+  while (OB_FAIL(try_set_tablet_freeze_begin_())) {
+    retry_times++;
+    ob_usleep(SLEEP_INTERVAL);
+    if (retry_times % 100 == 0) { // 10 s
+      LOG_WARN("wait high priority freeze finish cost too much time",
+               K(ret), K(high_priority_freeze_cnt_), K(retry_times));
+    }
+  }
+}
+
+void ObFreezer::set_tablet_freeze_end_()
+{
+  ATOMIC_DEC(&low_priority_freeze_cnt_);
+}
+
+void ObFreezer::set_ls_freeze_begin_()
+{
+  const int64_t SLEEP_INTERVAL = 100 * 1000; // 100 ms
+  int64_t retry_times = 0;
+  ATOMIC_INC(&high_priority_freeze_cnt_);
+  while (ATOMIC_LOAD(&low_priority_freeze_cnt_) != 0) {
+    retry_times++;
+    ob_usleep(SLEEP_INTERVAL);
+    if (retry_times % 100 == 0) { // 10 s
+      LOG_WARN("wait low priority freeze finish cost too much time",
+               K(low_priority_freeze_cnt_), K(retry_times));
+    }
+  }
+}
+
+void ObFreezer::set_ls_freeze_end_()
+{
+  ATOMIC_DEC(&high_priority_freeze_cnt_);
+}
+
+ObFreezer::ObLSFreezeGuard::ObLSFreezeGuard(ObFreezer &parent)
+  : parent_(parent)
+{
+  parent_.set_ls_freeze_begin_();
+}
+
+ObFreezer::ObLSFreezeGuard::~ObLSFreezeGuard()
+{
+  parent_.set_ls_freeze_end_();
+}
+
+ObFreezer::ObTabletFreezeGuard::ObTabletFreezeGuard(ObFreezer &parent, const bool try_guard)
+  : need_release_(!try_guard),
+    parent_(parent)
+{
+  if (!try_guard) {
+    parent_.set_tablet_freeze_begin_();
+  }
+}
+
+ObFreezer::ObTabletFreezeGuard::~ObTabletFreezeGuard()
+{
+  if (need_release_) {
+    parent_.set_tablet_freeze_end_();
+  }
+}
+
+int ObFreezer::ObTabletFreezeGuard::try_set_tablet_freeze_begin()
+{
+  int ret = OB_SUCCESS;
+  if (need_release_) {
+    // this is not a try guard or has try succeed, just return success.
+  } else if (OB_FAIL(parent_.try_set_tablet_freeze_begin_())) {
+    LOG_WARN("try set tablet freeze failed", K(ret));
+  } else {
+    need_release_ = true;
+  }
+  return ret;
 }
 
 } // namespace storage

@@ -640,8 +640,7 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
       OZ (package_info.set_source(package_body_block), package_body_block);
 
       if (OB_SUCC(ret)) {
-        if (OB_UNLIKELY(OB_SYS_TENANT_ID == session_info_->get_effective_tenant_id()
-                        && lib::is_oracle_mode())) {
+        if (OB_UNLIKELY(OB_SYS_TENANT_ID == session_info_->get_effective_tenant_id())) {
           // 系统租户在创建系统包, 环境变量使用Oracle租户默认的环境变量
           // sql_mode = "PIPES_AS_CONCAT,STRICT_ALL_TABLES,PAD_CHAR_TO_FULL_LENGTH"
           OZ (package_info.set_exec_env(ObString("2151677954,45,46,46,")));

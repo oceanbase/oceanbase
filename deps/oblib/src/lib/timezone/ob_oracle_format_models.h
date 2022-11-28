@@ -400,6 +400,7 @@ struct ObDFMElem
 
   ObDFMElem(): elem_flag_(ObDFMFlag::INVALID_FLAG),
     offset_(OB_INVALID_INDEX_INT64),
+    len_(0),
     is_single_dot_before_(false),
     upper_case_mode_(UpperCaseMode::NON_CHARACTER)
   {}

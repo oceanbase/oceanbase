@@ -79,7 +79,6 @@ int ObDDLErrorMessageTableOperator::get_index_task_id(
   ObSqlString sql_string;
   const uint64_t tenant_id = index_schema.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  // TODO yiren (2022-05-31), do not use extract_pure_id after merge of object-id.
   const uint64_t target_object_id = index_schema.get_table_id();
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult *result = NULL;

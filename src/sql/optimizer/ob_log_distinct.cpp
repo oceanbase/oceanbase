@@ -22,6 +22,7 @@
 #include "ob_select_log_plan.h"
 #include "ob_optimizer_util.h"
 #include "ob_opt_selectivity.h"
+#include "common/ob_smart_call.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -169,7 +170,7 @@ int ObLogDistinct::re_est_cost(EstimateCostInfo &param, double &card, double &co
       child_ndv = param.need_row_count_;
       param.need_row_count_ = child_card * (1 - std::pow((1 - child_ndv / total_ndv_), total_ndv_ / child_card));
     }
-    if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
+    if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est child cost", K(ret));
     } else if (OB_FAIL(inner_est_cost(child_card, child_ndv, distinct_cost))) {
       LOG_WARN("failed to est distinct cost", K(ret));

@@ -1378,9 +1378,12 @@ bool ObObjAccessIdx::is_get_variable(const common::ObIArray<ObObjAccessIdx> &acc
 bool ObObjAccessIdx::is_local_baisc_variable(
     const common::ObIArray<ObObjAccessIdx> &access_idxs)
 {
+  int64_t local_idx = get_local_variable_idx(access_idxs);
   return is_local_variable(access_idxs)
-          && (access_idxs.count() - 1) == get_local_variable_idx(access_idxs)
-          && access_idxs.at(get_local_variable_idx(access_idxs)).elem_type_.is_obj_type();
+          && (access_idxs.count() - 1) == local_idx
+          && local_idx >= 0
+          && local_idx < access_idxs.count()
+          && access_idxs.at(local_idx).elem_type_.is_obj_type();
 }
 
 bool ObObjAccessIdx::is_subprogram_basic_variable(

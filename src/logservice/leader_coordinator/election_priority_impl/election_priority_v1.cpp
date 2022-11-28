@@ -81,7 +81,7 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
 
 int PriorityV1::get_scn_(const share::ObLSID &ls_id, palf::SCN &scn)
 {
-  #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(*this)
+  #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(ls_id), K(*this)
   int ret = OB_SUCCESS;
   palf::PalfHandleGuard palf_handle_guard;
   palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
@@ -99,19 +99,18 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, palf::SCN &scn)
     palf::SCN min_unreplay_scn;
     if (OB_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
       COORDINATOR_LOG_(WARN, "get_role failed");
-    } else if (LEADER == role) {
-      // return max_ts_ns for leader
-      if (OB_FAIL(palf_handle_guard.get_max_scn(scn))) {
-        COORDINATOR_LOG_(WARN, "get_max_ts_ns failed");
-      }
-    } else {
-      // Generate scn from replay_service for follower
+    } else if (OB_FAIL(palf_handle_guard.get_max_scn(scn))) {
+      COORDINATOR_LOG_(WARN, "get_max_scn failed");
+    } else if (FOLLOWER == role) {
       if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_log_scn(ls_id, min_unreplay_scn))) {
         COORDINATOR_LOG_(WARN, "failed to get_min_unreplayed_scn");
         ret = OB_SUCCESS;
-      }
-      scn = min_unreplay_scn > SCN::base_scn() ? SCN::scn_dec(min_unreplay_scn) : SCN::min_scn();
-    }
+      } else if (SCN::minus(min_unreplay_scn, 1) < scn) {
+        // For restore case, min_unreplay_scn may be larger than max_ts.
+        scn = SCN::minus(min_unreplay_scn, 1) ;
+      } else {}
+    } else {}
+    COORDINATOR_LOG_(TRACE, "get_scn_ finished", K(role), K(min_unreplay_scn), K(scn));
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -148,7 +147,7 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
     is_primary_region_ = election_reference_info.element<6>();
     is_observer_stopped_ = (observer::ObServer::get_instance().is_stopped()
         || observer::ObServer::get_instance().is_prepare_stopped());
-    scn_ = scn;
+    scn_.value_ = scn;
   }
   return ret;
   #undef PRINT_WRAPPERd
@@ -312,9 +311,9 @@ int PriorityV1::compare_scn_(int &ret, const PriorityV1&rhs) const
 {
   int compare_result = 0;
   if (OB_SUCC(ret)) {
-    if (std::max(scn_, rhs.scn_).convert_to_ts() - std::min(scn_, rhs.scn_).convert_to_ts() <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_US) {
+    if (std::max(scn_.value_, rhs.scn_.value_).convert_to_ts() - std::min(scn_.value_, rhs.scn_.value_).convert_to_ts() <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_US) {
       compare_result = 0;
-    } else if (std::max(scn_, rhs.scn_) == scn_) {
+    } else if (std::max(scn_.value_, rhs.scn_.value_) == scn_.value_) {
       compare_result = 1;
     } else {
       compare_result = -1;

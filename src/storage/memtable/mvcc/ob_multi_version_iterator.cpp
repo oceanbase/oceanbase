@@ -65,10 +65,6 @@ int ObMultiVersionValueIterator::init(ObMvccAccessCtx *ctx,
   UNUSEDx(key);
   if (OB_ISNULL(value)) {
     is_inited_ = true;
-  //TODO(yanfeng) 这个防御会导致死锁的问题
-  //具体看https://aone.alibaba-inc.com/issue/15488200
-  //} else if (OB_FAIL(value->lock_for_read(key, const_cast<ObIMvccCtx&>(ctx)))) {
-  //  TRANS_LOG(WARN, "wait row lock fail", K(ret), K(ctx), KP(value), K(*value));
   } else {
     //多版本开始转储时，需要先等已经提交的事务都已经apply到memtable中，然后指定冻结版本来读取
     //多版本，读取时不用再判断行锁，在遍历trans_node链表时，需要从指定的trans_version开始读取，

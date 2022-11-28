@@ -191,7 +191,7 @@ int ObLSRemoveMemberDag::create_first_task()
 
 /******************ObLSRemoveMemberTask*********************/
 ObLSRemoveMemberTask::ObLSRemoveMemberTask()
-  : ObITask(TASK_TYPE_MIGRATE_PREPARE), //TODO(yanfeng) change task type
+  : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
     ctx_(nullptr)
 {

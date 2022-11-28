@@ -712,7 +712,7 @@ int ObLocalDevice::alloc_block(const common::ObIODOpts *opts, ObIOFd &block_id)
     ret = OB_NOT_INIT;
     SHARE_LOG(WARN, "The ObLocalDevice is not ready, ", K(ret), K(is_inited_), K(is_marked_));
   } else if (OB_UNLIKELY(free_block_cnt_ <= 0)) {
-    ret = OB_CS_OUTOF_DISK_SPACE;
+    ret = OB_SERVER_OUTOF_DISK_SPACE;
     SHARE_LOG(ERROR, "Fail to alloc block, ", K(ret), K(free_block_cnt_), K(total_block_cnt_));
   } else {
     block_idx = free_block_array_[free_block_pop_pos_];
@@ -749,9 +749,9 @@ int ObLocalDevice::alloc_blocks(
     blocks.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       ObIOFd tmp_fd;
-      if (OB_FAIL(alloc_block(opts, tmp_fd)) && OB_CS_OUTOF_DISK_SPACE != ret) {
+      if (OB_FAIL(alloc_block(opts, tmp_fd)) && OB_SERVER_OUTOF_DISK_SPACE != ret) {
         SHARE_LOG(WARN, "Alloc block fail", K(ret));
-      } else if (OB_CS_OUTOF_DISK_SPACE == ret) {
+      } else if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
         ret = OB_SUCCESS;
         break;
       } else if (OB_FAIL(blocks.push_back(tmp_fd))) {
@@ -1310,7 +1310,7 @@ int ObLocalDevice::check_space_full(const int64_t required_size) const
     const int64_t used_percent = 100 - 100 * free_count / total_block_cnt_;
     if (GCONF.data_disk_usage_limit_percentage != NO_LIMIT_PERCENT
         && used_percent >= GCONF.data_disk_usage_limit_percentage) {
-      ret = OB_CS_OUTOF_DISK_SPACE;
+      ret = OB_SERVER_OUTOF_DISK_SPACE;
       if (REACH_TIME_INTERVAL(24 * 3600LL * 1000 * 1000 /* 24h */)) {
         SHARE_LOG(ERROR, "disk is almost full", K(ret), K(required_size),
             K(required_count), K(free_count), K(used_percent));
@@ -1354,7 +1354,7 @@ int ObLocalDevice::get_block_file_size(
     free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
     block_file_size = suggest_file_size > 0 ? suggest_file_size : total_space * disk_percentage / 100;
     if (block_file_size > old_block_file_size + free_space) {
-      ret = OB_CS_OUTOF_DISK_SPACE;
+      ret = OB_SERVER_OUTOF_DISK_SPACE;
       SHARE_LOG(ERROR, "data file size is too large, ", K(ret), K(block_file_size_), K(total_space),
           K(free_space), K(reserved_size), K(old_block_file_size), K(block_file_size));
     } else if (block_file_size <= block_size) {

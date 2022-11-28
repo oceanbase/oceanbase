@@ -61,11 +61,20 @@ public:
                            storage::ObTxData *&tmp_ctx_tx_data,
                            storage::ObTxData *&tmp_tx_data_table_tx_data);
   int add_undo_action(ObUndoAction &undo_action);
-  int get_tx_data(const storage::ObTxData *&tx_data) const;
+
   int get_tx_commit_data(const storage::ObTxCommitData *&tx_commit_data) const;
 
   TO_STRING_KV(KP(ctx_mgr_), KPC(tx_data_), K(tx_commit_data_), K(read_only_));
-
+public:
+  class Guard {
+    friend class ObCtxTxData;
+    Guard(ObCtxTxData &host) : host_(host) { host_.lock_.rdlock(); }
+    ObCtxTxData &host_;
+  public:
+    ~Guard() { host_.lock_.unlock(); }
+    int get_tx_data(const storage::ObTxData *&tx_data) const;
+  };
+  Guard get_tx_data() { return Guard(*this); }
 public:
   //only for unittest
   void test_init(storage::ObTxData &tx_data, ObLSTxCtxMgr *ctx_mgr)

@@ -123,13 +123,13 @@ char *parse_str_convert_utf8(const struct ObCharsetInfo* src_cs, const char *str
       || OB_ISNULL(out_len)
       || OB_ISNULL(extra_errno)) {
   } else {
-    uint errors;
+    uint errors = 0;
     size_t str_len = STRLEN(str);
     size_t dst_len = str_len * 4;
     if (OB_ISNULL(out_str = static_cast<char *>(parse_malloc(dst_len + 1, malloc_pool)))) {
     } else {
       *out_len = static_cast<int64_t>(
-        ob_convert(out_str, dst_len, &ob_charset_utf8mb4_general_ci, str, str_len, src_cs, '?', &errors));
+        ob_convert(out_str, dst_len, &ob_charset_utf8mb4_general_ci, str, str_len, src_cs, false, '?', &errors));
       out_str[*out_len] = '\0';
       if (0 != errors) {
         *extra_errno = OB_PARSER_ERR_ILLEGAL_NAME;

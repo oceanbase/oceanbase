@@ -130,6 +130,7 @@ TX_Process(CommitResp, handle_trans_commit_response);
 TX_Process(Abort, handle_trans_abort_request);
 TX_Process(RollbackSP, handle_sp_rollback_request);
 TX_Process(Keepalive, handle_trans_keepalive);
+TX_Process(KeepaliveResp, handle_trans_keepalive_response);
 TX_Process(SubPrepare, handle_sub_prepare_request);
 TX_Process(SubPrepareResp, handle_sub_prepare_response);
 TX_Process(SubCommit, handle_sub_commit_request);
@@ -165,6 +166,8 @@ int ObTransRpc::init(ObTransService *trans_service,
   } else if (OB_SUCCESS != (ret = tx_rollback_sp_cb_.init())) {
     TRANS_LOG(WARN, "transaction callback init error", KR(ret));
   } else if (OB_SUCCESS != (ret = tx_keepalive_cb_.init())) {
+    TRANS_LOG(WARN, "transaction callback init error", KR(ret));
+  } else if (OB_SUCCESS != (ret = tx_keepalive_resp_cb_.init())) {
     TRANS_LOG(WARN, "transaction callback init error", KR(ret));
   } else if (OB_SUCCESS != (ret = tx_sub_prepare_cb_.init())) {
     TRANS_LOG(WARN, "transaction callback init error", KR(ret));
@@ -295,6 +298,12 @@ int ObTransRpc::post_(const ObAddr &server, ObTxMsg &msg)
               post_keep_alive_msg(static_cast<ObTxKeepaliveMsg &>(msg), &tx_keepalive_cb_);
       break;
     }
+    case KEEPALIVE_RESP:
+    {
+      ret = rpc_proxy_.to(server).by(tenant_id).timeout(GCONF._ob_trans_rpc_timeout).
+              post_keep_alive_resp_msg(static_cast<ObTxKeepaliveRespMsg &>(msg), &tx_keepalive_resp_cb_);
+      break;
+    }
     case TX_COMMIT:
     case TX_COMMIT_RESP:
     case TX_ABORT:
@@ -395,7 +404,7 @@ int ObTransRpc::post_msg(const ObLSID &p, ObTxMsg &msg)
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)) || OB_UNLIKELY(!msg.is_valid())) {
     TRANS_LOG(WARN, "invalid argument", K(tenant_id), K(msg));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(trans_service_->get_location_adapter()->get_leader(cluster_id, tenant_id, p, server))) {
+  } else if (OB_FAIL(trans_service_->get_location_adapter()->nonblock_get_leader(cluster_id, tenant_id, p, server))) {
     TRANS_LOG(WARN, "get leader failed", KR(ret), K(msg), K(cluster_id), K(p));
   } else if (ObTxMsgTypeChecker::is_2pc_msg_type(msg.get_msg_type())) {
     // 2pc msg optimization

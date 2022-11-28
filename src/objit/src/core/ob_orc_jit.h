@@ -34,6 +34,14 @@ namespace jit {
 namespace core {
 using namespace llvm;
 
+typedef ::llvm::LLVMContext ObLLVMContext;
+typedef ::llvm::orc::ExecutionSession ObExecutionSession;
+typedef ::llvm::orc::SymbolResolver ObSymbolResolver;
+typedef ::llvm::TargetMachine ObTargetMachine;
+typedef ::llvm::DataLayout ObDataLayout;
+typedef ::llvm::orc::VModuleKey ObVModuleKey;
+typedef ::llvm::JITSymbol ObJITSymbol;
+
 class ObNotifyLoaded
 {
 public:
@@ -42,7 +50,7 @@ public:
       : Allocator(Allocator), DebugBuf(DebugBuf), DebugLen(DebugLen) {}
   virtual ~ObNotifyLoaded() {}
 
-  void operator()(llvm::orc::VModuleKey Key,
+  void operator()(ObVModuleKey Key,
                   const object::ObjectFile &Obj,
                   const RuntimeDyld::LoadedObjectInfo &Info);
 private:
@@ -56,46 +64,43 @@ private:
 class ObOrcJit
 {
 public:
-  using ObjLayerT = llvm::orc::LegacyRTDyldObjectLinkingLayer;
-  using CompileLayerT = llvm::orc::LegacyIRCompileLayer<ObjLayerT, llvm::orc::SimpleCompiler>;
+  using ObObjLayerT = llvm::orc::LegacyRTDyldObjectLinkingLayer;
+  using ObCompileLayerT = llvm::orc::LegacyIRCompileLayer<ObObjLayerT, llvm::orc::SimpleCompiler>;
 
   explicit ObOrcJit(common::ObIAllocator &Allocator);
   virtual ~ObOrcJit() {};
 
-  llvm::orc::VModuleKey addModule(std::unique_ptr<Module> M);
-  JITSymbol lookup(const std::string Name);
+  ObVModuleKey addModule(std::unique_ptr<Module> M);
+  ObJITSymbol lookup(const std::string Name);
   uint64_t get_function_address(const std::string Name);
 
-  LLVMContext &getContext() { return TheContext; }
-  const DataLayout &getDataLayout() const { return DL; }
+  ObLLVMContext &getContext() { return TheContext; }
+  const ObDataLayout &getDataLayout() const { return ObDL; }
 
   char* get_debug_info_data() { return DebugBuf; }
   int64_t get_debug_info_size() { return DebugLen; }
 
 private:
-  std::string mangle(const std::string &Name) {
-    std::string MangledName;
-    {
+  std::string mangle(const std::string &Name)
+  {
+    std::string MangledName; {
       raw_string_ostream MangledNameStream(MangledName);
-      Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
+      Mangler::getNameWithPrefix(MangledNameStream, Name, ObDL);
     }
     return MangledName;
   }
 
-  JITSymbol findMangledSymbol(const std::string &Name) {
+  ObJITSymbol findMangledSymbol(const std::string &Name)
+  {
     const bool ExportedSymbolsOnly = true;
-
-    // Search modules in reverse order: from last added to first added.
-    // This is the opposite of the usual search order for dlsym, but makes more
-    // sense in a REPL where we want to bind to the newest available definition.
-    for (auto H : make_range(ModuleKeys.rbegin(), ModuleKeys.rend()))
-      if (auto Sym = CompileLayer.findSymbolIn(H, Name, ExportedSymbolsOnly))
+    for (auto H : make_range(ObModuleKeys.rbegin(), ObModuleKeys.rend())) {
+      if (auto Sym = ObCompileLayer.findSymbolIn(H, Name, ExportedSymbolsOnly)) {
         return Sym;
-
-    // If we can't find the symbol in the JIT, try looking in the host process.
-    if (auto SymAddr = RTDyldMemoryManager::getSymbolAddressInProcess(Name))
-      return JITSymbol(SymAddr, JITSymbolFlags::Exported);
-
+      }
+    }
+    if (auto SymAddr = RTDyldMemoryManager::getSymbolAddressInProcess(Name)) {
+      return ObJITSymbol(SymAddr, JITSymbolFlags::Exported);
+    }
     return nullptr;
   }
 
@@ -106,14 +111,14 @@ private:
   ObJitAllocator JITAllocator;
   ObNotifyLoaded NotifyLoaded;
 
-  LLVMContext TheContext;
-  llvm::orc::ExecutionSession ES;
-  std::shared_ptr<llvm::orc::SymbolResolver> Resolver;
-  std::unique_ptr<TargetMachine> TM;
-  const DataLayout DL;
-  ObjLayerT ObjectLayer;
-  CompileLayerT CompileLayer;
-  std::vector<llvm::orc::VModuleKey> ModuleKeys;
+  ObLLVMContext TheContext;
+  ObExecutionSession ObES;
+  std::shared_ptr<ObSymbolResolver> ObResolver;
+  std::unique_ptr<ObTargetMachine> ObTM;
+  const ObDataLayout ObDL;
+  ObObjLayerT ObObjectLayer;
+  ObCompileLayerT ObCompileLayer;
+  std::vector<ObVModuleKey> ObModuleKeys;
 };
 
 #else
@@ -121,7 +126,7 @@ class ObOrcJit
 {
 public:
   explicit ObOrcJit(
-    common::ObIAllocator &Allocator, llvm::orc::JITTargetMachineBuilder JTMB, DataLayout DL);
+    common::ObIAllocator &Allocator, llvm::orc::JITTargetMachineBuilder JTMB, ObDataLayout ObDL);
   virtual ~ObOrcJit() {};
 
   Error addModule(std::unique_ptr<Module> M);
@@ -135,16 +140,16 @@ public:
     if (!JTMB)
       return nullptr;
 
-    auto DL = JTMB->getDefaultDataLayoutForTarget();
-    if (!DL)
+    auto ObDL = JTMB->getDefaultDataLayoutForTarget();
+    if (!ObDL)
       return nullptr;
 
-    return OB_NEWx(ObOrcJit, (&allocator), allocator, std::move(*JTMB), std::move(*DL));
+    return OB_NEWx(ObOrcJit, (&allocator), allocator, std::move(*JTMB), std::move(*ObDL));
   }
 
-  LLVMContext &getContext() { return *Ctx.getContext(); }
+  ObLLVMContext &getContext() { return *Ctx.getContext(); }
 
-  const DataLayout &getDataLayout() const { return DL; }
+  const ObDataLayout &getDataLayout() const { return ObDL; }
 
   char* get_debug_info_data() { return DebugBuf; }
   int64_t get_debug_info_size() { return DebugLen; }
@@ -156,11 +161,11 @@ private:
   ObJitAllocator JITAllocator;
   ObNotifyLoaded NotifyLoaded;
 
-  llvm::orc::ExecutionSession ES;
-  llvm::orc::RTDyldObjectLinkingLayer ObjectLayer;
-  llvm::orc::IRCompileLayer CompileLayer;
+  llvm::orc::ObExecutionSession ObES;
+  llvm::orc::RTDyldObjectLinkingLayer ObObjectLayer;
+  llvm::orc::IRCompileLayer ObCompileLayer;
 
-  llvm::DataLayout DL;
+  llvm::ObDataLayout ObDL;
   llvm::orc::MangleAndInterner Mangle;
   llvm::orc::ThreadSafeContext Ctx;
 

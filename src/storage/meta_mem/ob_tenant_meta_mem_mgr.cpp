@@ -44,7 +44,7 @@ ObTenantMetaMemStatus::ObTenantMetaMemStatus()
     free_obj_cnt_(0),
     each_obj_size_(0)
 {
-  MEMSET(name_, 0x0, sizeof(name_));
+  name_[0] = '\0';
 }
 
 void ObTenantMetaMemMgr::TableGCTask::runTimerTask()
@@ -863,7 +863,6 @@ int ObTenantMetaMemMgr::create_tablet(
 {
   int ret = OB_SUCCESS;
   ObMemtableMgrHandle memtable_mgr_hdl;
-  ObDDLKvMgrHandle ddl_kv_mgr_hdl;
   ObLS *ls = ls_handle.get_ls();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -871,8 +870,6 @@ int ObTenantMetaMemMgr::create_tablet(
   } else if (OB_UNLIKELY(!key.is_valid() || !ls_handle.is_valid() || !tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key), K(ls_handle), K(tablet_handle));
-  } else if (OB_FAIL(acquire_tablet_ddl_kv_mgr(ddl_kv_mgr_hdl))) {
-    LOG_WARN("fail to acquire tablet ddl kv mgr", K(ret));
   } else if (key.tablet_id_.is_ls_tx_data_tablet()) {
     if (OB_FAIL(ls->get_tablet_svr()->get_tx_data_memtable_mgr(memtable_mgr_hdl))) {
       LOG_WARN("fail to get tx data memtable mgr", K(ret));
@@ -890,7 +887,7 @@ int ObTenantMetaMemMgr::create_tablet(
   }
   if (OB_SUCC(ret)) {
     ObTabletPointerHandle ptr_handle(tablet_map_);
-    ObTabletPointer tablet_ptr(ls_handle, ddl_kv_mgr_hdl, memtable_mgr_hdl);
+    ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
     ObMetaDiskAddr addr;
     addr.set_none_addr();
     tablet_ptr.set_addr_with_reset_obj(addr);

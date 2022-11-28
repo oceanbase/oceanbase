@@ -429,7 +429,6 @@ class ObTxDataMemtableWriteGuard
 public:
   ObTxDataMemtableWriteGuard() : size_(0)
   {
-    MEMSET(handles_, 0, MAX_TX_DATA_MEMTABLE_CNT * sizeof(ObTableHandleV2));
   }
   ~ObTxDataMemtableWriteGuard() { reset(); }
 

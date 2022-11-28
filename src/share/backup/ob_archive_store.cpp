@@ -1208,6 +1208,7 @@ int ObArchiveStore::get_piece_paths_in_range(const palf::SCN &start_scn, const p
     // no piece exist
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("no piece is found", K(ret), K(start_scn), K(end_scn));
+    LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
   } else if (OB_FAIL(piece_whole_info.his_frozen_pieces_.push_back(piece_whole_info.current_piece_))) {
      LOG_WARN("failed to push backup piece", K(ret));
   } else {
@@ -1247,16 +1248,26 @@ int ObArchiveStore::get_piece_paths_in_range(const palf::SCN &start_scn, const p
         const ObTenantArchivePieceAttr &prev = piece_whole_info.his_frozen_pieces_.at(last_piece_idx);
         if (prev.checkpoint_scn_ != cur.start_scn_) {
           // piece not continous
-          ret = OB_ENTRY_NOT_EXIST;
+          pieces.reset();
           LOG_WARN("pieces are not continous", K(ret), K(prev), K(cur), K(start_scn), K(end_scn));
-          break;
-        } else if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
+        }
+
+        if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
           LOG_WARN("failed to get piece path", K(ret), K(dest), K(cur));
         } else if (OB_FAIL(pieces.push_back(piece_path))) {
           LOG_WARN("fail to push back path", K(ret), K(piece_path));
         } else {
           last_piece_idx = i;
         }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      const ObTenantArchivePieceAttr &last_piece = piece_whole_info.his_frozen_pieces_.at(last_piece_idx);
+      if (last_piece.checkpoint_scn_ < end_scn) {
+        ret = OB_ENTRY_EXIST;
+        LOG_WARN("no enough log for restore", K(ret), K(last_piece), K(end_scn));
+        LOG_USER_ERROR(OB_ENTRY_EXIST, "No enough log for restore");
       }
     }
   }

@@ -726,7 +726,6 @@ int ObTsMgr::update_gts(const uint64_t tenant_id, const int64_t gts, bool &updat
 
 int ObTsMgr::get_gts(const uint64_t tenant_id, ObTsCbTask *task, palf::SCN &scn)
 {
-  const int64_t start = ObTimeUtility::fast_current_time();
   int ret = OB_SUCCESS;
   int64_t gts = 0;//need be invalid value for SCN
   if (OB_UNLIKELY(!is_inited_)) {
@@ -766,11 +765,8 @@ int ObTsMgr::get_gts(const uint64_t tenant_id, ObTsCbTask *task, palf::SCN &scn)
       }
     } while (OB_SUCCESS == ret);
   }
-  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
-  //如果gts获取失败，需要注册wait task，此时先不用统计gts acquire的total time
+
   if (OB_SUCC(ret)) {
-    const int64_t end = ObTimeUtility::fast_current_time();
-    ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
     if (OB_FAIL(scn.convert_for_gts(gts))) {
       TRANS_LOG(WARN, "failed to convert_for_gts", K(ret), K(tenant_id), K(gts));
     }
@@ -785,7 +781,6 @@ int ObTsMgr::get_gts(const uint64_t tenant_id,
                      palf::SCN &scn,
                      MonotonicTs &receive_gts_ts)
 {
-  const int64_t start = ObTimeUtility::fast_current_time();
   int ret = OB_SUCCESS;
   int64_t gts = 0;//need be invalid value for SCN
 
@@ -828,16 +823,12 @@ int ObTsMgr::get_gts(const uint64_t tenant_id,
       }
     } while (OB_SUCCESS == ret);
   }
-  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
-  //如果gts获取失败，需要注册wait task，此时先不用统计gts acquire的total time
+
   if (OB_SUCC(ret)) {
-    const int64_t end = ObTimeUtility::fast_current_time();
-    ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
     if (OB_FAIL(scn.convert_for_gts(gts))) {
       TRANS_LOG(WARN, "failed to convert_for_gts", K(ret), K(tenant_id), K(gts));
     }
   }
-
   return ret;
 }
 
@@ -901,12 +892,6 @@ int ObTsMgr::get_ts_sync(const uint64_t tenant_id,
         PAUSE();
       }
     } while (OB_SUCCESS == ret);
-  }
-  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
-  //如果gts获取失败，需要注册wait task，此时先不用统计gts acquire的total time
-  if (OB_SUCC(ret)) {
-    const int64_t end = ObTimeUtility::current_time();
-    ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
   }
 
   return ret;

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_tablet_ddl_kv_mgr.h"
+#include "logservice/palf/scn.h"
 #include "share/ob_force_print_log.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
@@ -23,11 +24,12 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::palf;
 using namespace oceanbase::storage;
 
 ObTabletDDLKvMgr::ObTabletDDLKvMgr()
   : is_inited_(false), is_commit_success_(false), ls_id_(), tablet_id_(), table_key_(), cluster_version_(0),
-    start_log_ts_(0), max_freeze_log_ts_(0),
+    start_scn_(), max_freeze_scn_(),
     table_id_(0), execution_id_(0), head_(0), tail_(0), lock_(), ref_cnt_(0)
 {
   MEMSET(ddl_kvs_, 0, MAX_DDL_KV_CNT_IN_STORAGE * sizeof(ddl_kvs_[0]));
@@ -41,7 +43,7 @@ ObTabletDDLKvMgr::~ObTabletDDLKvMgr()
 void ObTabletDDLKvMgr::destroy()
 {
   if (is_started()) {
-    LOG_INFO("start destroy ddl kv manager", K(ls_id_), K(tablet_id_), K(start_log_ts_), K(head_), K(tail_), K(lbt()));
+    LOG_INFO("start destroy ddl kv manager", K(ls_id_), K(tablet_id_), K(start_scn_), K(head_), K(tail_), K(lbt()));
   }
   TCWLockGuard guard(lock_);
   ATOMIC_STORE(&ref_cnt_, 0);
@@ -56,8 +58,8 @@ void ObTabletDDLKvMgr::destroy()
   tablet_id_.reset();
   table_key_.reset();
   cluster_version_ = 0;
-  start_log_ts_ = 0;
-  max_freeze_log_ts_ = 0;
+  start_scn_.reset();
+  max_freeze_scn_.reset();
   table_id_ = 0;
   execution_id_ = 0;
   is_commit_success_ = false;
@@ -86,30 +88,30 @@ int ObTabletDDLKvMgr::init(const share::ObLSID &ls_id, const common::ObTabletID 
 // ddl start from checkpoint
 //    keep ddl sstable table
 
-int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key, const int64_t start_log_ts, const int64_t cluster_version, const int64_t checkpoint_log_ts)
+int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key, const palf::SCN &start_scn, const int64_t cluster_version, const palf::SCN &checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   bool is_brand_new = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || start_log_ts <= 0 || cluster_version < 0
-        || (checkpoint_log_ts > 0 && checkpoint_log_ts < start_log_ts))) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn.is_valid() || cluster_version < 0
+        || (checkpoint_scn.is_valid() && checkpoint_scn < start_scn))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_log_ts), K(cluster_version), K(checkpoint_log_ts));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(cluster_version), K(checkpoint_scn));
   } else if (table_key.get_tablet_id() != tablet_id_) {
     ret = OB_ERR_SYS;
     LOG_WARN("tablet id not same", K(ret), K(table_key), K(tablet_id_));
-  } else if (0 != start_log_ts_) {
-    if (start_log_ts > start_log_ts_) {
-      LOG_INFO("start log ts changed, need cleanup", K(ls_id_), K(tablet_id_), K(start_log_ts_), K(start_log_ts));
+  } else if (start_scn_.is_valid()) {
+    if (start_scn > start_scn_) {
+      LOG_INFO("start log ts changed, need cleanup", K(ls_id_), K(tablet_id_), K(start_scn_), K(start_scn));
       if (OB_FAIL(cleanup())) {
         LOG_WARN("clean up start log failed", K(ret));
       } else {
         is_brand_new = true;
       }
     } else {
-      LOG_INFO("ddl start ignored", K(ls_id_), K(tablet_id_), K(start_log_ts_), K(start_log_ts));
+      LOG_INFO("ddl start ignored", K(ls_id_), K(tablet_id_), K(start_scn_), K(start_scn));
     }
   } else {
     is_brand_new = true;
@@ -117,21 +119,21 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key, const int64
   if (OB_SUCC(ret) && is_brand_new) {
     table_key_ = table_key;
     cluster_version_ = cluster_version;
-    start_log_ts_ = start_log_ts;
-    max_freeze_log_ts_ = max(start_log_ts, checkpoint_log_ts);
+    start_scn_ = start_scn;
+    max_freeze_scn_ = palf::SCN::max(start_scn, checkpoint_scn);
   }
-  if (OB_SUCC(ret) && checkpoint_log_ts <= 0) {
+  if (OB_SUCC(ret) && !checkpoint_scn.is_valid()) {
     // remove ddl sstable if exists and flush ddl start log ts and snapshot version into tablet meta
-    if (OB_FAIL(update_tablet(start_log_ts_, table_key_.get_snapshot_version(), start_log_ts_))) {
+    if (OB_FAIL(update_tablet(start_scn_, table_key_.get_snapshot_version(), start_scn_))) {
       LOG_WARN("clean up ddl sstable failed", K(ret), K(ls_id_), K(tablet_id_));
     }
   }
-  LOG_INFO("start ddl finished", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts), K(table_key_), K(checkpoint_log_ts));
+  FLOG_INFO("start ddl kv mgr finished", K(ret), K(is_brand_new), K(start_scn), K(checkpoint_scn), K(*this));
   return ret;
 }
 
-int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
-                                  const int64_t prepare_log_ts,
+int ObTabletDDLKvMgr::ddl_prepare(const palf::SCN &start_scn,
+                                  const palf::SCN &prepare_scn,
                                   const uint64_t table_id,
                                   const int64_t execution_id,
                                   const int64_t ddl_task_id)
@@ -144,10 +146,10 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
   } else if (!is_started()) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl not started", K(ret));
-  } else if (start_log_ts < start_log_ts_) {
-    LOG_INFO("skip ddl prepare log", K(start_log_ts), K(start_log_ts_), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(freeze_ddl_kv(prepare_log_ts))) {
-    LOG_WARN("freeze ddl kv failed", K(ret), K(prepare_log_ts));
+  } else if (start_scn < start_scn_) {
+    LOG_INFO("skip ddl prepare log", K(start_scn), K(start_scn_), K(ls_id_), K(tablet_id_));
+  } else if (OB_FAIL(freeze_ddl_kv(prepare_scn))) {
+    LOG_WARN("freeze ddl kv failed", K(ret), K(prepare_scn));
   } else {
     table_id_ = table_id;
     execution_id_ = execution_id;
@@ -156,7 +158,7 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id_;
     param.tablet_id_ = tablet_id_;
-    param.rec_log_ts_ = prepare_log_ts;
+    param.rec_scn_ = prepare_scn;
     param.is_commit_ = true;
     param.table_id_ = table_id;
     param.execution_id_ = execution_id_;
@@ -170,12 +172,12 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
           ret = OB_SUCCESS;
           ob_usleep(10L * 1000L);
           if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
-            LOG_INFO("retry schedule ddl commit task", K(ls_id_), K(table_key_), K(prepare_log_ts), K(max_freeze_log_ts_),
+            LOG_INFO("retry schedule ddl commit task", K(ls_id_), K(table_key_), K(prepare_scn), K(max_freeze_scn_),
                 "wait_elpased_s", (ObTimeUtility::fast_current_time() - start_ts) / 1000000L);
           }
         }
       } else {
-        LOG_INFO("schedule ddl commit task success", K(ls_id_), K(tablet_id_), K(prepare_log_ts));
+        LOG_INFO("schedule ddl commit task success", K(ls_id_), K(tablet_id_), K(prepare_scn));
         break;
       }
     }
@@ -183,7 +185,7 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
   return ret;
 }
 
-int ObTabletDDLKvMgr::ddl_commit(const int64_t start_log_ts, const int64_t prepare_log_ts, const bool is_replay)
+int ObTabletDDLKvMgr::ddl_commit(const palf::SCN &start_scn, const palf::SCN &prepare_scn, const bool is_replay)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -192,15 +194,15 @@ int ObTabletDDLKvMgr::ddl_commit(const int64_t start_log_ts, const int64_t prepa
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (is_commit_success_) {
     LOG_INFO("ddl commit already succeed", K(ls_id_), K(tablet_id_), K(table_id_));
-  } else if (start_log_ts < start_log_ts_) {
-    LOG_INFO("skip ddl commit log", K(start_log_ts), K(start_log_ts_), K(ls_id_), K(tablet_id_));
+  } else if (start_scn < start_scn_) {
+    LOG_INFO("skip ddl commit log", K(start_scn), K(start_scn_), K(ls_id_), K(tablet_id_));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else {
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id_;
     param.tablet_id_ = tablet_id_;
-    param.rec_log_ts_ = prepare_log_ts;
+    param.rec_scn_ = prepare_scn;
     param.is_commit_ = true;
     param.table_id_ = table_id_;
     param.execution_id_ = execution_id_;
@@ -220,7 +222,7 @@ int ObTabletDDLKvMgr::ddl_commit(const int64_t start_log_ts, const int64_t prepa
         ret = OB_SUCCESS; // think as succcess for replay
       } else {
         if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
-          LOG_INFO("replay ddl commit", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(prepare_log_ts), K(max_freeze_log_ts_));
+          LOG_INFO("replay ddl commit", K(ret), K(ls_id_), K(tablet_id_), K(start_scn_), K(prepare_scn), K(max_freeze_scn_));
         }
         ret = OB_EAGAIN; // retry by replay service
       }
@@ -229,39 +231,39 @@ int ObTabletDDLKvMgr::ddl_commit(const int64_t start_log_ts, const int64_t prepa
   return ret;
 }
 
-int ObTabletDDLKvMgr::wait_ddl_commit(const int64_t start_log_ts, const int64_t prepare_log_ts)
+int ObTabletDDLKvMgr::wait_ddl_commit(const palf::SCN &start_scn, const palf::SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(start_log_ts <= 0 || prepare_log_ts <= 0)) {
+  } else if (OB_UNLIKELY(!start_scn.is_valid() || !prepare_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(start_log_ts), K(prepare_log_ts));
+    LOG_WARN("invalid argument", K(ret), K(start_scn), K(prepare_scn));
   } else if (!is_started()) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl not started", K(ret));
-  } else if (start_log_ts < start_log_ts_) {
+  } else if (start_scn < start_scn_) {
     ret = OB_TASK_EXPIRED;
-    LOG_INFO("task expired, skip ddl commit log", K(start_log_ts), K(start_log_ts_), K(ls_id_), K(tablet_id_));
-  } else if (start_log_ts > start_log_ts_) {
+    LOG_INFO("task expired, skip ddl commit log", K(start_scn), K(start_scn_), K(ls_id_), K(tablet_id_));
+  } else if (start_scn > start_scn_) {
     ret = OB_ERR_SYS;
-    LOG_WARN("start log ts not match", K(ret), K(start_log_ts), K(start_log_ts_), K(ls_id_), K(tablet_id_));
+    LOG_WARN("start log ts not match", K(ret), K(start_scn), K(start_scn_), K(ls_id_), K(tablet_id_));
   } else {
     const int64_t wait_start_ts = ObTimeUtility::fast_current_time();
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(ddl_commit(start_log_ts, prepare_log_ts, false/*is_replay*/))) {
+      if (OB_FAIL(ddl_commit(start_scn, prepare_scn, false/*is_replay*/))) {
         if (OB_EAGAIN == ret) {
           ob_usleep(10L * 1000L);
           ret = OB_SUCCESS; // retry
         } else {
-          LOG_WARN("commit ddl log failed", K(ret), K(start_log_ts), K(prepare_log_ts), K(ls_id_), K(tablet_id_));
+          LOG_WARN("commit ddl log failed", K(ret), K(start_scn), K(prepare_scn), K(ls_id_), K(tablet_id_));
         }
       } else {
         break;
       }
       if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
-        LOG_INFO("wait build ddl sstable", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(prepare_log_ts), K(max_freeze_log_ts_),
+        LOG_INFO("wait build ddl sstable", K(ret), K(ls_id_), K(tablet_id_), K(start_scn_), K(prepare_scn), K(max_freeze_scn_),
             "wait_elpased_s", (ObTimeUtility::fast_current_time() - wait_start_ts) / 1000000L);
       }
     }
@@ -298,8 +300,8 @@ int ObTabletDDLKvMgr::cleanup()
     MEMSET(ddl_kvs_, 0, sizeof(ddl_kvs_));
     table_key_.reset();
     cluster_version_ = 0;
-    start_log_ts_ = 0;
-    max_freeze_log_ts_ = 0;
+    start_scn_.reset();
+    max_freeze_scn_.reset();
     table_id_ = 0;
     execution_id_ = 0;
     is_commit_success_ = false;
@@ -307,7 +309,7 @@ int ObTabletDDLKvMgr::cleanup()
   return ret;
 }
 
-int ObTabletDDLKvMgr::update_tablet(const int64_t start_log_ts, const int64_t snapshot_version, const int64_t ddl_checkpoint_ts)
+int ObTabletDDLKvMgr::update_tablet(const palf::SCN &start_scn, const int64_t snapshot_version, const palf::SCN &ddl_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -315,9 +317,9 @@ int ObTabletDDLKvMgr::update_tablet(const int64_t start_log_ts, const int64_t sn
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(start_log_ts <= 0 || snapshot_version <= 0 || ddl_checkpoint_ts <= 0)) {
+  } else if (OB_UNLIKELY(!start_scn.is_valid() || snapshot_version <= 0 || !ddl_checkpoint_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(start_log_ts), K(snapshot_version), K(ddl_checkpoint_ts));
+    LOG_WARN("invalid argument", K(ret), K(start_scn), K(snapshot_version), K(ddl_checkpoint_scn));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
@@ -333,14 +335,13 @@ int ObTabletDDLKvMgr::update_tablet(const int64_t start_log_ts, const int64_t sn
                                   &tablet_handle.get_obj()->get_storage_schema(),
                                   rebuild_seq);
     param.keep_old_ddl_sstable_ = false;
-    param.ddl_start_log_ts_ = start_log_ts;
+    param.ddl_start_scn_ = start_scn;
     param.ddl_snapshot_version_ = snapshot_version;
-    if (OB_FAIL(param.ddl_checkpoint_scn_.convert_for_lsn_allocator(ddl_checkpoint_ts))) {
-      LOG_WARN("failed to convert for scn", K(ret));
-    } else if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
+    param.ddl_checkpoint_scn_ = ddl_checkpoint_scn;
+    if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(ls_id_), K(tablet_id_), K(param));
     } else {
-      LOG_INFO("update tablet success", K(ls_id_), K(tablet_id_), K(param), K(start_log_ts), K(snapshot_version), K(ddl_checkpoint_ts));
+      LOG_INFO("update tablet success", K(ls_id_), K(tablet_id_), K(param), K(start_scn), K(snapshot_version), K(ddl_checkpoint_scn));
     }
   }
   return ret;
@@ -356,18 +357,18 @@ int ObTabletDDLKvMgr::get_ddl_param(ObTabletDDLParam &ddl_param)
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl not started", K(ret));
   } else {
+    ddl_param.snapshot_version_ = table_key_.get_snapshot_version();
     ddl_param.tenant_id_ = MTL_ID();
     ddl_param.ls_id_ = ls_id_;
     ddl_param.table_key_ = table_key_;
-    ddl_param.start_log_ts_ = start_log_ts_;
-    ddl_param.snapshot_version_ = table_key_.get_snapshot_version();
+    ddl_param.start_scn_ = start_scn_;
     ddl_param.cluster_version_ = cluster_version_;
   }
 
   return ret;
 }
 
-int ObTabletDDLKvMgr::get_freezed_ddl_kv(const int64_t freeze_log_ts, ObDDLKVHandle &kv_handle)
+int ObTabletDDLKvMgr::get_freezed_ddl_kv(const palf::SCN &freeze_scn, ObDDLKVHandle &kv_handle)
 {
   int ret = OB_SUCCESS;
   kv_handle.reset();
@@ -383,7 +384,7 @@ int ObTabletDDLKvMgr::get_freezed_ddl_kv(const int64_t freeze_log_ts, ObDDLKVHan
       if (OB_ISNULL(cur_kv)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(cur_kv), K(i), K(head_), K(tail_));
-      } else if (freeze_log_ts == cur_kv->get_freeze_log_ts()) {
+      } else if (freeze_scn == cur_kv->get_freeze_scn()) {
         found = true;
         if (OB_FAIL(kv_handle.set_ddl_kv(cur_kv))) {
           LOG_WARN("hold ddl kv failed", K(ret));
@@ -392,7 +393,7 @@ int ObTabletDDLKvMgr::get_freezed_ddl_kv(const int64_t freeze_log_ts, ObDDLKVHan
     }
     if (OB_SUCC(ret) && !found) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("freezed ddl kv with given freeze log ts is not found", K(ret), K(freeze_log_ts));
+      LOG_WARN("freezed ddl kv with given freeze log scn is not found", K(ret), K(freeze_scn));
     }
   }
   return ret;
@@ -429,7 +430,7 @@ int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle)
   return ret;
 }
 
-int ObTabletDDLKvMgr::get_or_create_ddl_kv(const int64_t log_ts, ObDDLKVHandle &kv_handle)
+int ObTabletDDLKvMgr::get_or_create_ddl_kv(const palf::SCN &log_scn, ObDDLKVHandle &kv_handle)
 {
   int ret = OB_SUCCESS;
   kv_handle.reset();
@@ -437,12 +438,12 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(const int64_t log_ts, ObDDLKVHandle &
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
-  } else if (log_ts <= 0) {
+  } else if (!log_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(log_ts));
+    LOG_WARN("invalid argument", K(ret), K(log_scn));
   } else {
     TCRLockGuard guard(lock_);
-    try_get_ddl_kv_unlock(log_ts, kv);
+    try_get_ddl_kv_unlock(log_scn, kv);
     if (nullptr != kv) {
       // increase or decrease the reference count must be under the lock
       if (OB_FAIL(kv_handle.set_ddl_kv(kv))) {
@@ -452,7 +453,7 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(const int64_t log_ts, ObDDLKVHandle &
   }
   if (OB_SUCC(ret) && nullptr == kv) {
     TCWLockGuard guard(lock_);
-    try_get_ddl_kv_unlock(log_ts, kv);
+    try_get_ddl_kv_unlock(log_scn, kv);
     if (nullptr != kv) {
       // do nothing
     } else if (OB_FAIL(alloc_ddl_kv(kv))) {
@@ -468,7 +469,7 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(const int64_t log_ts, ObDDLKVHandle &
   return ret;
 }
 
-void ObTabletDDLKvMgr::try_get_ddl_kv_unlock(const int64_t log_ts, ObDDLKV *&kv)
+void ObTabletDDLKvMgr::try_get_ddl_kv_unlock(const palf::SCN &log_scn, ObDDLKV *&kv)
 {
   int ret = OB_SUCCESS;
   if (get_count() > 0) {
@@ -477,7 +478,7 @@ void ObTabletDDLKvMgr::try_get_ddl_kv_unlock(const int64_t log_ts, ObDDLKV *&kv)
       if (OB_ISNULL(tmp_kv)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(tmp_kv), K(i), K(head_), K(tail_));
-      } else if (log_ts <= tmp_kv->get_freeze_log_ts()) {
+      } else if (log_scn <= tmp_kv->get_freeze_scn()) {
         kv = tmp_kv;
         break;
       }
@@ -485,7 +486,7 @@ void ObTabletDDLKvMgr::try_get_ddl_kv_unlock(const int64_t log_ts, ObDDLKV *&kv)
   }
 }
 
-int ObTabletDDLKvMgr::freeze_ddl_kv(const int64_t freeze_log_ts)
+int ObTabletDDLKvMgr::freeze_ddl_kv(const palf::SCN &freeze_scn)
 {
   int ret = OB_SUCCESS;
   ObDDLKVHandle kv_handle;
@@ -505,29 +506,29 @@ int ObTabletDDLKvMgr::freeze_ddl_kv(const int64_t freeze_log_ts)
       ret = OB_SUCCESS;
     }
   }
-  if (OB_SUCC(ret) && nullptr == kv && freeze_log_ts > max_freeze_log_ts_) {
-    // freeze_log_ts > 0 only occured when ddl prepare
+  if (OB_SUCC(ret) && nullptr == kv && freeze_scn > max_freeze_scn_) {
+    // freeze_scn > 0 only occured when ddl prepare
     // assure there is an alive ddl kv, for waiting pre-logs
     if (OB_FAIL(alloc_ddl_kv(kv))) {
       LOG_WARN("create ddl kv failed", K(ret));
     }
   }
   if (OB_SUCC(ret) && nullptr != kv) {
-    if (OB_FAIL(kv->freeze(freeze_log_ts))) {
+    if (OB_FAIL(kv->freeze(freeze_scn))) {
       if (OB_EAGAIN != ret) {
         LOG_WARN("fail to freeze active ddl kv", K(ret));
       } else {
         ret = OB_SUCCESS;
       }
     } else {
-      max_freeze_log_ts_ = MAX(max_freeze_log_ts_, kv->get_freeze_log_ts());
+      max_freeze_scn_ = palf::SCN::max(max_freeze_scn_, kv->get_freeze_scn());
       LOG_INFO("freeze ddl kv", "kv", *kv);
     }
   }
   return ret;
 }
 
-int ObTabletDDLKvMgr::release_ddl_kvs(const int64_t end_log_ts)
+int ObTabletDDLKvMgr::release_ddl_kvs(const palf::SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_RELEASE_DDL_KV);
@@ -539,7 +540,7 @@ int ObTabletDDLKvMgr::release_ddl_kvs(const int64_t end_log_ts)
     for (int64_t i = head_; OB_SUCC(ret) && i < tail_; ++i) {
       const int64_t idx = get_idx(head_);
       ObDDLKV *kv = ddl_kvs_[idx];
-      LOG_INFO("try release ddl kv", K(end_log_ts), KPC(kv));
+      LOG_INFO("try release ddl kv", K(end_scn), KPC(kv));
 #ifdef ERRSIM
           if (OB_SUCC(ret)) {
             ret = E(EventTable::EN_DDL_RELEASE_DDL_KV_FAIL) OB_SUCCESS;
@@ -552,22 +553,22 @@ int ObTabletDDLKvMgr::release_ddl_kvs(const int64_t end_log_ts)
       } else if (OB_ISNULL(kv)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(kv), K(i), K(head_), K(tail_));
-      } else if (kv->is_closed() && kv->get_freeze_log_ts() <= end_log_ts) {
-        const int64_t freeze_log_ts = kv->get_freeze_log_ts();
+      } else if (kv->is_closed() && kv->get_freeze_scn() <= end_scn) {
+        const palf::SCN &freeze_scn = kv->get_freeze_scn();
         free_ddl_kv(idx);
         ++head_;
-        LOG_INFO("succeed to release ddl kv", K(ls_id_), K(tablet_id_), K(freeze_log_ts));
+        LOG_INFO("succeed to release ddl kv", K(ls_id_), K(tablet_id_), K(freeze_scn));
       }
     }
   }
   return ret;
 }
 
-int ObTabletDDLKvMgr::get_ddl_kv_min_log_ts(int64_t &min_log_ts)
+int ObTabletDDLKvMgr::get_ddl_kv_min_scn(palf::SCN &min_scn)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard guard(lock_);
-  min_log_ts = INT64_MAX;
+  min_scn = SCN::max_scn();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
@@ -579,7 +580,7 @@ int ObTabletDDLKvMgr::get_ddl_kv_min_log_ts(int64_t &min_log_ts)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(kv), K(i), K(head_), K(tail_));
       } else {
-        min_log_ts = MIN(min_log_ts, kv->get_min_log_ts());
+        min_scn = palf::SCN::min(min_scn, kv->get_min_scn());
       }
     }
   }
@@ -642,12 +643,12 @@ int ObTabletDDLKvMgr::alloc_ddl_kv(ObDDLKV *&kv)
     LOG_WARN("fail to allocate memory", K(ret));
   } else if (OB_FAIL(kv->init(ls_id_,
                               tablet_id_,
-                              start_log_ts_,
+                              start_scn_,
                               table_key_.get_snapshot_version(),
-                              max_freeze_log_ts_,
+                              max_freeze_scn_,
                               cluster_version_))) {
     LOG_WARN("fail to init ddl kv", K(ret), K(ls_id_), K(tablet_id_),
-        K(start_log_ts_), K(table_key_), K(max_freeze_log_ts_), K(cluster_version_));
+        K(start_scn_), K(table_key_), K(max_freeze_scn_), K(cluster_version_));
   } else {
     const int64_t idx = get_idx(tail_);
     tail_++;

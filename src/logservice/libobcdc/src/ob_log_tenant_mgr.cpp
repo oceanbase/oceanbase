@@ -352,6 +352,10 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
     }
   }
 
+
+  // del tenant_start_ddl_info if exists regardless of ret(in case of tenant already dropped etc.)
+  try_del_tenant_start_ddl_info_(tenant_id);
+
   if (OB_SUCCESS == ret) {
     ISTAT("[ADD_TENANT]", K(tenant_id), K(tenant_name), K(is_new_created_tenant), K(is_new_tenant_by_restore),
         K(is_tenant_served), K(start_tstamp_ns), K(tenant_start_serve_ts_ns), K(sys_schema_version),
@@ -1482,6 +1486,20 @@ int ObLogTenantMgr::get_min_add_tenant_start_ddl_commit_version_(int64_t &commit
   }
 
   return ret;
+}
+
+void ObLogTenantMgr::try_del_tenant_start_ddl_info_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  TenantID tid(tenant_id);
+  if (OB_FAIL(add_tenant_start_ddl_info_map_.del(tid))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("try_del_tenant_start_ddl_info_ failed, ignore", KR(ret), K(tenant_id));
+    } else {
+      LOG_INFO("add_tenant_start_ddl_info is not found, ignore", KR(ret), K(tenant_id));
+    }
+    // no need return error code.
+  }
 }
 
 bool ObLogTenantMgr::SetDataStartSchemaVersionFunc::operator()(const TenantID &tid, ObLogTenant *tenant)

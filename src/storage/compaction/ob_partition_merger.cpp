@@ -1967,7 +1967,7 @@ int ObPartitionMergeDumper::check_disk_free_space(const char *dir_name)
   if (OB_FAIL(FileDirectoryUtils::get_disk_space(dir_name, total_space, free_space))) {
     STORAGE_LOG(WARN, "Failed to get disk space ", K(ret), K(dir_name));
   } else if (free_space < ObPartitionMergeDumper::DUMP_TABLE_DISK_FREE_PERCENTAGE * total_space) {
-    ret = OB_CS_OUTOF_DISK_SPACE;
+    ret = OB_SERVER_OUTOF_DISK_SPACE;
   }
   return ret;
 }
@@ -1988,13 +1988,13 @@ int ObPartitionMergeDumper::judge_disk_free_space(const char *dir_name, ObITable
           - static_cast<ObSSTable *>(table)->get_meta().get_basic_meta().get_total_macro_block_count() *
           OB_DEFAULT_MACRO_BLOCK_SIZE
           < ObPartitionMergeDumper::DUMP_TABLE_DISK_FREE_PERCENTAGE * total_space) {
-        ret = OB_CS_OUTOF_DISK_SPACE;
+        ret = OB_SERVER_OUTOF_DISK_SPACE;
         STORAGE_LOG(WARN, "disk space is not enough", K(ret), K(free_space), K(total_space), KPC(table));
       }
     } else if (free_space
                - static_cast<ObMemtable *>(table)->get_occupied_size() * MEMTABLE_DUMP_SIZE_PERCENTAGE
                < ObPartitionMergeDumper::DUMP_TABLE_DISK_FREE_PERCENTAGE * total_space) {
-      ret = OB_CS_OUTOF_DISK_SPACE;
+      ret = OB_SERVER_OUTOF_DISK_SPACE;
       STORAGE_LOG(WARN, "disk space is not enough", K(ret), K(free_space), K(total_space), KPC(table));
     }
   }
@@ -2053,7 +2053,7 @@ void ObPartitionMergeDumper::print_error_info(const int err_no,
         STORAGE_LOG(WARN, "The store is NULL", K(idx), K(tables));
       } else if (OB_FAIL(compaction::ObPartitionMergeDumper::judge_disk_free_space(dump_table_dir,
                          table))) {
-        if (OB_CS_OUTOF_DISK_SPACE != ret) {
+        if (OB_SERVER_OUTOF_DISK_SPACE != ret) {
           STORAGE_LOG(WARN, "failed to judge disk space", K(ret), K(dump_table_dir));
         }
       } else if (OB_FAIL(generate_dump_table_name(dump_table_dir, table, file_name))) {
@@ -2062,7 +2062,7 @@ void ObPartitionMergeDumper::print_error_info(const int err_no,
       } else if (table->is_sstable()) {
         if (OB_FAIL(static_cast<ObSSTable *>(table)->dump2text(dump_table_dir, *ctx.schema_ctx_.table_schema_,
                                                                file_name))) {
-          if (OB_CS_OUTOF_DISK_SPACE != ret) {
+          if (OB_SERVER_OUTOF_DISK_SPACE != ret) {
             STORAGE_LOG(WARN, "failed to dump sstable", K(ret), K(file_name));
           }
         } else {

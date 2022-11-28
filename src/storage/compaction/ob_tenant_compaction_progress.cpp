@@ -265,15 +265,17 @@ int ObTenantCompactionProgressMgr::add_progress(const int64_t major_snapshot_ver
 int ObTenantCompactionProgressMgr::finish_progress_(ObTenantCompactionProgress &progress)
 {
   int ret = OB_SUCCESS;
-  int64_t occupy_size = 0;
-  progress.unfinished_data_size_ = 0;
-  progress.estimated_finish_time_ = ObTimeUtility::fast_current_time();
-  progress.unfinished_tablet_cnt_ = 0;
-  progress.status_ = share::ObIDag::DAG_STATUS_FINISH;
+  if (share::ObIDag::DAG_STATUS_FINISH != progress.status_) {
+    int64_t occupy_size = 0;
+    progress.unfinished_data_size_ = 0;
+    progress.estimated_finish_time_ = ObTimeUtility::fast_current_time();
+    progress.unfinished_tablet_cnt_ = 0;
+    progress.status_ = share::ObIDag::DAG_STATUS_FINISH;
 
-  int64_t unused_cnt = 0;
-  if (OB_FAIL(loop_major_sstable_(progress.merge_version_, true/*equal_flag*/,unused_cnt, progress.data_size_))) {
-    LOG_WARN("failed to get sstable info", K(ret));
+    int64_t unused_cnt = 0;
+    if (OB_FAIL(loop_major_sstable_(progress.merge_version_, true/*equal_flag*/,unused_cnt, progress.data_size_))) {
+      LOG_WARN("failed to get sstable info", K(ret));
+    }
   }
   return ret;
 }

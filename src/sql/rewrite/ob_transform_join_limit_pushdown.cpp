@@ -74,6 +74,19 @@ bool ObTransformJoinLimitPushDown::LimitPushDownHelper::is_table_lazy_join(Table
   return ret;
 }
 
+uint64_t ObTransformJoinLimitPushDown::LimitPushDownHelper::get_max_table_id() const
+{
+  uint64_t max_table_id = OB_INVALID_ID;
+  const TableItem *table = NULL;
+  for (int64_t i = 0; i < pushdown_tables_.count(); ++i) {
+    if (OB_NOT_NULL(table = pushdown_tables_.at(i))
+        && (max_table_id < table->table_id_ || OB_INVALID_ID == max_table_id)) {
+      max_table_id = table->table_id_;
+    }
+  }
+  return max_table_id;
+}
+
 int ObTransformJoinLimitPushDown::UnionFind::init() 
 {
   int ret = OB_SUCCESS;
@@ -195,6 +208,10 @@ int ObTransformJoinLimitPushDown::transform_one_stmt(common::ObIArray<ObParentDM
     // do nothing
   } else if (OB_FAIL(check_stmt_validity(stmt, helpers, is_valid))) {
     LOG_WARN("failed to check stmt validity", K(ret));
+  } else if (!is_valid) {
+    // do nothing
+  } else if (OB_FAIL(sort_pushdown_helpers(helpers))) {
+    LOG_WARN("failed to sort pushdown helpers", K(ret));
   } else if (is_valid) {
     LOG_TRACE("start to pushdown limit into join", K(helpers));
   }
@@ -222,6 +239,20 @@ int ObTransformJoinLimitPushDown::transform_one_stmt(common::ObIArray<ObParentDM
       helpers.at(i) = NULL;
     }
   }
+  return ret;
+}
+
+int ObTransformJoinLimitPushDown::sort_pushdown_helpers(ObSEArray<LimitPushDownHelper*, 4> &helpers)
+{
+  int ret = OB_SUCCESS;
+  auto cmp_func = [](LimitPushDownHelper* l_helper, LimitPushDownHelper* r_helper) {
+    if (OB_ISNULL(l_helper) || OB_ISNULL(r_helper)) {
+      return false;
+    } else {
+      return l_helper->get_max_table_id() > r_helper->get_max_table_id();
+    }
+  };
+  std::sort(helpers.begin(), helpers.end(), cmp_func);
   return ret;
 }
 

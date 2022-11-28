@@ -92,6 +92,48 @@ OB_SERIALIZE_MEMBER_TEMP(inline, PriorityV0, is_valid_, port_number_);
 // 适用于[4_0_0, latest]
 struct PriorityV1 : public AbstractPriority
 {
+/**********************this is for some strange compact reason***********************/
+  struct SCN_WRAPPER {
+    SCN_WRAPPER() {value_.set_min();}
+    SCN_WRAPPER(const palf::SCN &scn) : value_(scn) {}
+    SCN_WRAPPER &operator=(const palf::SCN &scn) {
+      value_ = scn;
+      return *this;
+    }
+    int serialize(char *buf, const int64_t buf_len, int64_t &pos) const {
+      int ret = OB_SUCCESS;
+      int64_t new_pos = pos;
+      if (NULL == buf && buf_len <= 0) {
+        ret = OB_INVALID_ARGUMENT;
+      } else if (OB_FAIL(value_.fixed_serialize(buf, buf_len, new_pos))) {
+        ret = OB_BUF_NOT_ENOUGH;
+      } else {
+        pos = new_pos;
+      }
+      return ret;
+    }
+    int deserialize(const char *buf, const int64_t data_len, int64_t &pos)
+    {
+      int ret = OB_SUCCESS;
+      int64_t new_pos = pos;
+      if (NULL == buf && data_len <= 0) {
+        ret = OB_INVALID_ARGUMENT;
+      } else if (OB_FAIL(value_.fixed_deserialize(buf, data_len, new_pos))) {
+        ret = OB_BUF_NOT_ENOUGH;
+      } else {
+        pos = new_pos;
+      }
+      return ret;
+    }
+    int64_t get_serialize_size() const
+    {
+      int64_t size = 0 ;
+      size += value_.get_fixed_serialize_size();
+      return size;
+    }
+    palf::SCN value_;
+  };
+/*********************************************************************************/
   static constexpr int64_t MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_US = 2 * 1000 * 1000L;
   friend class unittest::TestElectionPriority;
   OB_UNIS_VERSION(1);
@@ -106,7 +148,7 @@ public:
   // int assign(const PriorityV1 &rhs);
   TO_STRING_KV(K_(is_valid), K_(is_observer_stopped), K_(is_server_stopped), K_(is_zone_stopped),
                K_(fatal_failures), K_(is_primary_region), K_(serious_failures), K_(is_in_blacklist),
-               K_(in_blacklist_reason), K_(scn), K_(is_manual_leader), K_(zone_priority));
+               K_(in_blacklist_reason), K_(scn_.value), K_(is_manual_leader), K_(zone_priority));
 protected:
   // 刷新优先级的方法
   virtual int refresh_(const share::ObLSID &ls_id) override;
@@ -129,7 +171,7 @@ private:
   common::ObSArray<FailureEvent> fatal_failures_;// negative infos
   bool is_primary_region_;
   common::ObSArray<FailureEvent> serious_failures_;// negative infos
-  palf::SCN scn_;
+  SCN_WRAPPER scn_;
   bool is_in_blacklist_;
   common::ObStringHolder in_blacklist_reason_;
   bool is_manual_leader_;

@@ -30,12 +30,12 @@
 #include "observer/ob_server_struct.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_service.h"
-#include "pl/ob_pl_warning.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "ob_nls_system_variable.h"
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
+
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -2324,18 +2324,8 @@ int ObSysVarOnCheckFuncs::check_and_convert_plsql_warnings(sql::ObExecContext &c
                                                  const common::ObObj &in_val,
                                                  common::ObObj &out_val)
 {
-  UNUSED(ctx);
-  UNUSED(set_var);
-  UNUSED(sys_var);
   int ret = OB_SUCCESS;
-
-  if (OB_FAIL(pl::PlCompilerWarningCategory::verify_warning_settings(in_val.get_string(), NULL))) {
-    ret = OB_ERR_PARAM_VALUE_INVALID;
-    LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
-  } else {
-    out_val = in_val;
-  }
-
+  UNUSEDx(ctx, set_var, sys_var, in_val, out_val);
   return ret;
 }
 

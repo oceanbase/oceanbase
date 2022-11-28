@@ -88,16 +88,16 @@ w3 as (order by c_customer_sk)
 ) v
 where rn = 1;
 c_birth_month	c_birth_year	c_customer_sk	c_first_name	group_concat(c_customer_sk) over w2	nv	rn
-12	1925	6	Brunilda	6	2	1
-6	1991	26	Monique	41,24,35,12,49,31,4,26	6	1
 12	1936	1	Javier	6,44,16,1	1	1
-4	1990	46	Jane	2,7,46	10	1
-5	1956	21	Naomi	23,5,21	5	1
+12	1925	6	Brunilda	6	2	1
+12	1963	11	Betty	6,44,16,1,8,39,11	3	1
 12	1933	16	Margie	6,44,16	4	1
-6	1939	41	Maxine	41	9	1
+5	1956	21	Naomi	23,5,21	5	1
+6	1991	26	Monique	41,24,35,12,49,31,4,26	6	1
 6	1964	31	William	41,24,35,12,49,31	7	1
 11	1968	36	Anthony	50,36	8	1
-12	1963	11	Betty	6,44,16,1,8,39,11	3	1
+6	1939	41	Maxine	41	9	1
+4	1990	46	Jane	2,7,46	10	1
 select c_birth_month, c_birth_year, c_customer_sk, c_first_name,
 count(1) over w,
 max(c_birth_year) over w,
@@ -119,6 +119,23 @@ from customer
 window w as (partition by c_birth_month),
 w2 as (w order by c_birth_year, c_customer_sk);
 c_birth_month	c_birth_year	c_customer_sk	c_first_name	count(1) over w	max(c_birth_year) over w	min(c_birth_year) over w	cast(avg(c_birth_year) over w as number(10, 4))	sum(c_birth_month) over w	row_number() over w2	rank() over w2	dense_rank() over w2	cast(percent_rank() over w2 as number(10, 4))	cast(cume_dist() over w2 as number(10, 4))	first_value(c_first_name) over w2	last_value(c_first_name) over w2	nth_value(c_first_name, 1) over w2	ntile(10) over w2	lead(c_first_name, 2) over w2	lag(c_first_name, 2) over w2
+NULL	NULL	34	NULL	3	1942	1942	1942.0000	NULL	1	1	1	0.0000	0.3333	NULL	NULL	NULL	1	Jacqueline	NULL
+NULL	NULL	45	NULL	3	1942	1942	1942.0000	NULL	2	2	2	0.5000	0.6667	NULL	NULL	NULL	2	NULL	NULL
+NULL	1942	40	Jacqueline	3	1942	1942	1942.0000	NULL	3	3	3	1.0000	1.0000	NULL	Jacqueline	NULL	3	NULL	NULL
+1	1949	37	Dwight	2	1950	1949	1949.5000	2	1	1	1	0.0000	0.5000	Dwight	Dwight	Dwight	1	NULL	NULL
+1	1950	42	Deborah	2	1950	1949	1949.5000	2	2	2	2	1.0000	1.0000	Dwight	Deborah	Dwight	2	NULL	NULL
+3	1937	14	Jack	5	1972	1937	1955.2000	15	1	1	1	0.0000	0.2000	Jack	Jack	Jack	1	Donna	NULL
+3	1939	38	Ha	5	1972	1937	1955.2000	15	2	2	2	0.2500	0.4000	Jack	Ha	Jack	2	Rosalinda	NULL
+3	1958	33	Donna	5	1972	1937	1955.2000	15	3	3	3	0.5000	0.6000	Jack	Donna	Jack	3	Shawn	Jack
+3	1970	13	Rosalinda	5	1972	1937	1955.2000	15	4	4	4	0.7500	0.8000	Jack	Rosalinda	Jack	4	NULL	Ha
+3	1972	27	Shawn	5	1972	1937	1955.2000	15	5	5	5	1.0000	1.0000	Jack	Shawn	Jack	5	NULL	Donna
+4	1966	2	Amy	3	1990	1966	1980.3333	12	1	1	1	0.0000	0.3333	Amy	Amy	Amy	1	Jane	NULL
+4	1985	7	Fonda	3	1990	1966	1980.3333	12	2	2	2	0.5000	0.6667	Amy	Fonda	Amy	2	NULL	NULL
+4	1990	46	Jane	3	1990	1966	1980.3333	12	3	3	3	1.0000	1.0000	Amy	Jane	Amy	3	NULL	Amy
+5	NULL	23	NULL	4	1976	1956	1962.6667	20	1	1	1	0.0000	0.2500	NULL	NULL	NULL	1	Naomi	NULL
+5	1956	5	Robert	4	1976	1956	1962.6667	20	2	2	2	0.3333	0.5000	NULL	Robert	NULL	2	Stanton	NULL
+5	1956	21	Naomi	4	1976	1956	1962.6667	20	3	3	3	0.6667	0.7500	NULL	Naomi	NULL	3	NULL	NULL
+5	1976	20	Stanton	4	1976	1956	1962.6667	20	4	4	4	1.0000	1.0000	NULL	Stanton	NULL	4	NULL	Robert
 6	1939	41	Maxine	8	1991	1939	1962.2500	48	1	1	1	0.0000	0.1250	Maxine	Maxine	Maxine	1	Marie	NULL
 6	1951	24	Paul	8	1991	1939	1962.2500	48	2	2	2	0.1429	0.2500	Maxine	Paul	Maxine	2	Margaret	NULL
 6	1953	35	Marie	8	1991	1939	1962.2500	48	3	3	3	0.2857	0.3750	Maxine	Marie	Maxine	3	Steven	Maxine
@@ -127,31 +144,19 @@ c_birth_month	c_birth_year	c_customer_sk	c_first_name	count(1) over w	max(c_birt
 6	1964	31	William	8	1991	1939	1962.2500	48	6	6	6	0.7143	0.7500	Maxine	William	Maxine	6	Monique	Margaret
 6	1983	4	Michael	8	1991	1939	1962.2500	48	7	7	7	0.8571	0.8750	Maxine	Michael	Maxine	7	NULL	Steven
 6	1991	26	Monique	8	1991	1939	1962.2500	48	8	8	8	1.0000	1.0000	Maxine	Monique	Maxine	8	NULL	William
-NULL	NULL	34	NULL	3	1942	1942	1942.0000	NULL	1	1	1	0.0000	0.3333	NULL	NULL	NULL	1	Jacqueline	NULL
-NULL	NULL	45	NULL	3	1942	1942	1942.0000	NULL	2	2	2	0.5000	0.6667	NULL	NULL	NULL	2	NULL	NULL
-NULL	1942	40	Jacqueline	3	1942	1942	1942.0000	NULL	3	3	3	1.0000	1.0000	NULL	Jacqueline	NULL	3	NULL	NULL
-1	1949	37	Dwight	2	1950	1949	1949.5000	2	1	1	1	0.0000	0.5000	Dwight	Dwight	Dwight	1	NULL	NULL
-1	1950	42	Deborah	2	1950	1949	1949.5000	2	2	2	2	1.0000	1.0000	Dwight	Deborah	Dwight	2	NULL	NULL
+7	1956	30	Pamela	1	1956	1956	1956.0000	7	1	1	1	0.0000	1.0000	Pamela	Pamela	Pamela	1	NULL	NULL
+8	1927	32	Kenneth	3	1973	1927	1953.0000	24	1	1	1	0.0000	0.3333	Kenneth	Kenneth	Kenneth	1	Margaret	NULL
+8	1959	28	Edith	3	1973	1927	1953.0000	24	2	2	2	0.5000	0.6667	Kenneth	Edith	Kenneth	2	NULL	NULL
+8	1973	29	Margaret	3	1973	1927	1953.0000	24	3	3	3	1.0000	1.0000	Kenneth	Margaret	Kenneth	3	NULL	Kenneth
+9	1950	18	Brad	3	1979	1950	1963.3333	27	1	1	1	0.0000	0.3333	Brad	Brad	Brad	1	Latisha	NULL
+9	1961	48	Jill	3	1979	1950	1963.3333	27	2	2	2	0.5000	0.6667	Brad	Jill	Brad	2	NULL	NULL
+9	1979	3	Latisha	3	1979	1950	1963.3333	27	3	3	3	1.0000	1.0000	Brad	Latisha	Brad	3	NULL	Brad
 10	1966	9	Karl	4	1978	1966	1972.5000	40	1	1	1	0.0000	0.2500	Karl	Karl	Karl	1	Nancy	NULL
 10	1973	10	Albert	4	1978	1966	1972.5000	40	2	2	2	0.3333	0.5000	Karl	Albert	Karl	2	Andre	NULL
 10	1973	25	Nancy	4	1978	1966	1972.5000	40	3	3	3	0.6667	0.7500	Karl	Nancy	Karl	3	NULL	Karl
 10	1978	19	Andre	4	1978	1966	1972.5000	40	4	4	4	1.0000	1.0000	Karl	Andre	Karl	4	NULL	Albert
 11	1965	50	Christopher	2	1968	1965	1966.5000	22	1	1	1	0.0000	0.5000	Christopher	Christopher	Christopher	1	NULL	NULL
 11	1968	36	Anthony	2	1968	1965	1966.5000	22	2	2	2	1.0000	1.0000	Christopher	Anthony	Christopher	2	NULL	NULL
-5	NULL	23	NULL	4	1976	1956	1962.6667	20	1	1	1	0.0000	0.2500	NULL	NULL	NULL	1	Naomi	NULL
-5	1956	5	Robert	4	1976	1956	1962.6667	20	2	2	2	0.3333	0.5000	NULL	Robert	NULL	2	Stanton	NULL
-5	1956	21	Naomi	4	1976	1956	1962.6667	20	3	3	3	0.6667	0.7500	NULL	Naomi	NULL	3	NULL	NULL
-5	1976	20	Stanton	4	1976	1956	1962.6667	20	4	4	4	1.0000	1.0000	NULL	Stanton	NULL	4	NULL	Robert
-4	1966	2	Amy	3	1990	1966	1980.3333	12	1	1	1	0.0000	0.3333	Amy	Amy	Amy	1	Jane	NULL
-4	1985	7	Fonda	3	1990	1966	1980.3333	12	2	2	2	0.5000	0.6667	Amy	Fonda	Amy	2	NULL	NULL
-4	1990	46	Jane	3	1990	1966	1980.3333	12	3	3	3	1.0000	1.0000	Amy	Jane	Amy	3	NULL	Amy
-9	1950	18	Brad	3	1979	1950	1963.3333	27	1	1	1	0.0000	0.3333	Brad	Brad	Brad	1	Latisha	NULL
-9	1961	48	Jill	3	1979	1950	1963.3333	27	2	2	2	0.5000	0.6667	Brad	Jill	Brad	2	NULL	NULL
-9	1979	3	Latisha	3	1979	1950	1963.3333	27	3	3	3	1.0000	1.0000	Brad	Latisha	Brad	3	NULL	Brad
-7	1956	30	Pamela	1	1956	1956	1956.0000	7	1	1	1	0.0000	1.0000	Pamela	Pamela	Pamela	1	NULL	NULL
-8	1927	32	Kenneth	3	1973	1927	1953.0000	24	1	1	1	0.0000	0.3333	Kenneth	Kenneth	Kenneth	1	Margaret	NULL
-8	1959	28	Edith	3	1973	1927	1953.0000	24	2	2	2	0.5000	0.6667	Kenneth	Edith	Kenneth	2	NULL	NULL
-8	1973	29	Margaret	3	1973	1927	1953.0000	24	3	3	3	1.0000	1.0000	Kenneth	Margaret	Kenneth	3	NULL	Kenneth
 12	1925	6	Brunilda	12	1991	1925	1954.7500	144	1	1	1	0.0000	0.0833	Brunilda	Brunilda	Brunilda	1	Margie	NULL
 12	1932	44	Mabel	12	1991	1925	1954.7500	144	2	2	2	0.0909	0.1667	Brunilda	Mabel	Brunilda	1	Javier	NULL
 12	1933	16	Margie	12	1991	1925	1954.7500	144	3	3	3	0.1818	0.2500	Brunilda	Margie	Brunilda	2	Ollie	Brunilda
@@ -164,9 +169,4 @@ NULL	1942	40	Jacqueline	3	1942	1942	1942.0000	NULL	3	3	3	1.0000	1.0000	NULL	Jacq
 12	1972	17	Lee	12	1991	1925	1954.7500	144	10	10	10	0.8182	0.8333	Brunilda	Lee	Brunilda	8	Victor	William
 12	1982	47	Luis	12	1991	1925	1954.7500	144	11	11	11	0.9091	0.9167	Brunilda	Luis	Brunilda	9	NULL	Tonya
 12	1991	22	Victor	12	1991	1925	1954.7500	144	12	12	12	1.0000	1.0000	Brunilda	Victor	Brunilda	10	NULL	Lee
-3	1937	14	Jack	5	1972	1937	1955.2000	15	1	1	1	0.0000	0.2000	Jack	Jack	Jack	1	Donna	NULL
-3	1939	38	Ha	5	1972	1937	1955.2000	15	2	2	2	0.2500	0.4000	Jack	Ha	Jack	2	Rosalinda	NULL
-3	1958	33	Donna	5	1972	1937	1955.2000	15	3	3	3	0.5000	0.6000	Jack	Donna	Jack	3	Shawn	Jack
-3	1970	13	Rosalinda	5	1972	1937	1955.2000	15	4	4	4	0.7500	0.8000	Jack	Rosalinda	Jack	4	NULL	Ha
-3	1972	27	Shawn	5	1972	1937	1955.2000	15	5	5	5	1.0000	1.0000	Jack	Shawn	Jack	5	NULL	Donna
 drop database if exists farm;

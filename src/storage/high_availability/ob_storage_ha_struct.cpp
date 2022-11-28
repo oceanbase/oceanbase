@@ -555,7 +555,7 @@ bool ObMigrationUtils::is_need_retry_error(const int err)
     case OB_SRC_DO_NOT_ALLOWED_MIGRATE :
     case OB_CANCELED :
     case OB_NOT_SUPPORTED :
-    case OB_CS_OUTOF_DISK_SPACE : //TODO(yanfeng) change error name
+    case OB_SERVER_OUTOF_DISK_SPACE :
     case OB_LOG_NOT_SYNC :
     case OB_INVALID_DATA :
     case OB_CHECKSUM_ERROR :
@@ -617,7 +617,7 @@ bool ObCopyTableKeyInfo::operator ==(const ObCopyTableKeyInfo &other) const
 OB_SERIALIZE_MEMBER(ObCopyTableKeyInfo, src_table_key_, dest_table_key_);
 
 /******************ObCopyMacroRangeInfo*********************/
-//TODO(yanfeng) check endkey
+//TODO(yanfeng) check endkey in 4.1
 ObCopyMacroRangeInfo::ObCopyMacroRangeInfo()
   : start_macro_block_id_(),
     end_macro_block_id_(),

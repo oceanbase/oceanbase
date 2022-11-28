@@ -1697,6 +1697,11 @@ struct NullAwareAntiJoinInfo {
                                        const Path& right_path,
                                        ObIArray<JoinFilterInfo> &join_filter_infos);
 
+    int calc_join_filter_selectivity(const Path& left_path,
+                                    const Path& right_path,
+                                    JoinFilterInfo& info,
+                                    double &join_filter_selectivity);
+
     int find_shuffle_join_filter(const Path& path, bool &find);
 
     int check_partition_join_filter_valid(const DistAlgo join_dist_algo,

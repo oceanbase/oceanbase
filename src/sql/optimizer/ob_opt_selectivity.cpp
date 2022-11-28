@@ -3603,7 +3603,8 @@ int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
                                          const OptSelectivityCtx &ctx,
                                          const ObIArray<ObRawExpr*>& exprs,
                                          const double origin_rows,
-                                         double &rows)
+                                         double &rows,
+                                         const bool need_refine)
 {
   int ret = OB_SUCCESS;
   rows = 1;
@@ -3632,7 +3633,7 @@ int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
       rows *= ndv / std::sqrt(2);
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && need_refine) {
     rows = std::min(rows, origin_rows);
     LOG_TRACE("succeed to calculate distinct", K(origin_rows), K(rows), K(exprs));
   }
@@ -3654,50 +3655,51 @@ int ObOptSelectivity::filter_column_by_equal_set(const OptTableMetas &table_meta
       LOG_WARN("failed to append filtered exprs", K(ret));
     }
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < equal_sets->count(); i++) {
-      int64_t min_idx = OB_INVALID_INDEX_INT64;
-      double min_ndv = 0;
-      ObRawExprSet *equal_set = equal_sets->at(i);
-      if (OB_ISNULL(equal_set)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get null equal set", K(ret));
-      }
-      // find a column in equal set with minimal ndv
-      for (int64_t j = 0; OB_SUCC(ret) && j < equal_set->count(); j++) {
-        int64_t idx = OB_INVALID_INDEX_INT64;
-        if (ObOptimizerUtil::find_item(column_exprs, equal_set->at(j), &idx)) {
-          double ndv = 0;
-          if (OB_FAIL(col_added.add_member(idx))) {
-            LOG_WARN("failed to add member", K(idx), K(ret));
-          } else if (OB_ISNULL(column_exprs.at(idx))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+      bool find = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find && j < equal_sets->count(); ++j) {
+        ObRawExprSet *equal_set = equal_sets->at(j);
+        if (OB_ISNULL(equal_set)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null equal set", K(ret));
+        } else if (!ObOptimizerUtil::find_item(*equal_set, column_exprs.at(i))) {
+          //do nothing
+        } else {
+          find = true;
+          int64_t min_idx = OB_INVALID_INDEX_INT64;
+          double min_ndv = 0;
+          for (int64_t k = 0; OB_SUCC(ret) && k < equal_set->count(); ++k) {
+            double ndv = 0;
+            if (OB_ISNULL(equal_set->at(k))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("failed to get column exprs", K(ret));
+            } else if (!equal_set->at(k)->is_column_ref_expr()) {
+              //do nothing
+            } else if (OB_FAIL(get_column_basic_info(table_metas,
+                                                     ctx,
+                                                     *equal_set->at(k),
+                                                     &ndv,
+                                                     NULL,
+                                                     NULL,
+                                                     NULL))) {
+              LOG_WARN("failed to get var basic sel", K(ret));
+            } else if (OB_INVALID_INDEX_INT64 == min_idx || ndv < min_ndv) {
+              min_idx = k;
+              min_ndv = ndv;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (min_idx < 0 || min_idx >= equal_set->count()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to get column exprs", K(ret));
-          } else if (OB_FAIL(get_column_basic_info(table_metas, ctx, *column_exprs.at(idx),
-                                                   &ndv, NULL, NULL, NULL))) {
-            LOG_WARN("failed to get var basic sel", K(ret));
-          } else if (OB_INVALID_INDEX_INT64 == min_idx || ndv < min_ndv) {
-            min_idx = idx;
-            min_ndv = ndv;
+            LOG_WARN("unexpect idx", K(min_idx), K(ret));
+          } else if (OB_FAIL(filtered_exprs.push_back(equal_set->at(min_idx)))) {
+            LOG_WARN("failed to push back expr", K(ret));
           }
         }
       }
-
-      if (OB_SUCC(ret) && OB_INVALID_INDEX_INT64 != min_idx ) {
-        if (OB_UNLIKELY(min_idx >= column_exprs.count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("wrong number of idx", K(ret));
-        } else if (add_var_to_array_no_dup(filtered_exprs, column_exprs.at(min_idx))) {
-          LOG_WARN("failed to add var to array no dup");
-        }
-      }
-    }
-
-    // add all column expr not exists in equal set
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); i++) {
-      if (col_added.has_member(i)) {
-        // do nothing
+      if (OB_FAIL(ret) || find) {
       } else if (OB_FAIL(filtered_exprs.push_back(column_exprs.at(i)))) {
-        LOG_WARN("failed to push back filtered expr", K(ret));
+        LOG_WARN("failed to push back expr", K(ret));
       }
     }
   }

@@ -492,7 +492,7 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr *mgr,
                      || TABLEGROUP_SCHEMA == schema_type
                      || DATABASE_SCHEMA == schema_type)) {
         ObSchemaType fetch_schema_type = TABLE_SIMPLE_SCHEMA == schema_type ? TABLE_SCHEMA : schema_type;
-        VersionHisKey key(fetch_schema_type, schema_id);
+        VersionHisKey key(fetch_schema_type, tenant_id, schema_id);
         VersionHisVal val;
         if (OB_FAIL(get_schema_version_history(schema_status, tenant_id, schema_version,
                                                key, val, not_exist))) {
@@ -1585,7 +1585,7 @@ int ObMultiVersionSchemaService::retry_get_schema_guard(
                  K(ret), K(tenant_id), K(table_id), K(schema_version));
       } else {
         // try use version_his_map
-        VersionHisKey key(TABLE_SCHEMA, table_id);
+        VersionHisKey key(TABLE_SCHEMA, tenant_id, table_id);
         VersionHisVal val;
         int ret = version_his_map_.get_refactored(key, val);
         if (OB_SUCCESS != ret && OB_HASH_NOT_EXIST != ret) {

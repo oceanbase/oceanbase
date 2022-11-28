@@ -13,7 +13,10 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include<gtest/gtest.h>
+#define protected public
 #include "storage/blocksstable/encoding/ob_encoding_query_util.h"
+#include "storage/blocksstable/encoding/ob_encoding_hash_util.h"
+#include "lib/timezone/ob_timezone_info.h"
 
 namespace oceanbase
 {
@@ -53,12 +56,61 @@ TEST(ObMultiDimArray_T, multi_dimension_array)
   ASSERT_EQ(6, test_product);
 }
 
+TEST(ObMultiDimArray_T, timestamp_with_time_zone)
+{
+  // for timestamp with time zone, we need use binary_equal to build encoding hash table.
+  ObEncodingHashTableBuilder hash_builder;
+  ASSERT_EQ(OB_SUCCESS, hash_builder.create(8, 8));
+  ObColDatums time_arr;
+  ObStorageDatum t1, t2;
+
+  ObTimeZoneInfo time_zone_info1, time_zone_info2;
+  time_zone_info1.set_timezone("+00:00");
+  time_zone_info2.set_timezone("+8:00");
+  ObTimeConvertCtx time_convert_ctx1(&time_zone_info1,
+                                      ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT,
+                                      true);
+  ObTimeConvertCtx time_convert_ctx2(&time_zone_info2,
+                                      ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT,
+                                      true);
+  ObOTimestampData otime_data1, otime_data2;
+  ObScale scale;
+  ASSERT_EQ(OB_SUCCESS, ObTimeConverter::str_to_otimestamp("2020-02-24 00:37:25",
+                                                          time_convert_ctx1,
+                                                          ObTimestampTZType,
+                                                          otime_data1,
+                                                          scale));
+  ASSERT_EQ(OB_SUCCESS, ObTimeConverter::str_to_otimestamp("2020-02-24 08:37:25",
+                                                          time_convert_ctx2,
+                                                          ObTimestampTZType,
+                                                          otime_data2,
+                                                          scale));
+  ObObj obj1, obj2;
+  obj1.set_timestamp_tz(otime_data1);
+  obj2.set_timestamp_tz(otime_data2);
+  t1.from_obj(obj1);
+  t2.from_obj(obj2);
+  ASSERT_EQ(OB_SUCCESS, time_arr.push_back(t1));
+  ASSERT_EQ(OB_SUCCESS, time_arr.push_back(t2));
+
+  ObColDesc col_desc;
+  col_desc.col_id_ = OB_APP_MIN_COLUMN_ID + 1;
+  col_desc.col_type_.set_type(ObObjType::ObTimestampTZType);
+  col_desc.col_type_.set_collation_type(CS_TYPE_BINARY);
+
+  ASSERT_EQ(OB_SUCCESS, hash_builder.build(time_arr, col_desc));
+  ASSERT_EQ(2, hash_builder.list_cnt_);
+}
+
+
 }
 }
 
 int main(int argc, char **argv)
 {
+  system("rm -f test_encoding_util.log*");
   OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_file_name("test_encoding_util.log", true);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

@@ -111,6 +111,7 @@ public:
   ~ObComplementDataContext() { destroy(); }
   int init(const ObComplementDataParam &param, const ObDataStoreDesc &desc);
   void destroy();
+  int write_start_log(const ObComplementDataParam &param);
   TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder));
 public:
   bool is_inited_;
@@ -131,6 +132,7 @@ public:
   ObComplementDataDag();
   ~ObComplementDataDag();
   int init(const ObDDLBuildSingleReplicaRequestArg &arg);
+  int prepare_context();
   int64_t hash() const;
   bool operator ==(const share::ObIDag &other) const;
   bool is_inited() const { return is_inited_; }

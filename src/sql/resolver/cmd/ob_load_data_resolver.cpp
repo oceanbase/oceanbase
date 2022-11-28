@@ -1146,6 +1146,7 @@ int ObLoadDataResolver::resolve_string_node(const ParseNode &node, ObString &tar
     case T_OPTIONALLY_CLOSED_STR:
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "optionally enclosed string");
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("node type must be varchar or ?", K(ret), K(node.type_));

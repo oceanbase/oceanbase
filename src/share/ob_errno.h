@@ -93,7 +93,7 @@ constexpr int OB_OLD_SCHEMA_VERSION = -4177;
 constexpr int OB_RELEASE_SCHEMA_ERROR = -4178;
 constexpr int OB_NO_EMPTY_ENTRY = -4180;
 constexpr int OB_BEYOND_THE_RANGE = -4183;
-constexpr int OB_CS_OUTOF_DISK_SPACE = -4184;
+constexpr int OB_SERVER_OUTOF_DISK_SPACE = -4184;
 constexpr int OB_COLUMN_GROUP_NOT_FOUND = -4185;
 constexpr int OB_CS_COMPRESS_LIB_ERROR = -4186;
 constexpr int OB_SCHEDULER_TASK_CNT_MISMATCH = -4188;
@@ -1755,7 +1755,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ALREADY_EXISTS__USER_ERROR_MSG "Already exist"
 #define OB_SEARCH_NOT_FOUND__USER_ERROR_MSG "Value not found"
 #define OB_BEYOND_THE_RANGE__USER_ERROR_MSG "Key out of range"
-#define OB_CS_OUTOF_DISK_SPACE__USER_ERROR_MSG "Server out of disk space"
+#define OB_SERVER_OUTOF_DISK_SPACE__USER_ERROR_MSG "Server out of disk space"
 #define OB_COLUMN_GROUP_NOT_FOUND__USER_ERROR_MSG "Column group not found"
 #define OB_CS_COMPRESS_LIB_ERROR__USER_ERROR_MSG "Server failed to get compress library"
 #define OB_ITEM_NOT_MATCH__USER_ERROR_MSG "Item not match"
@@ -3585,7 +3585,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4181, Already exist"
 #define OB_SEARCH_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4182, Value not found"
 #define OB_BEYOND_THE_RANGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4183, Key out of range"
-#define OB_CS_OUTOF_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4184, Server out of disk space"
+#define OB_SERVER_OUTOF_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4184, Server out of disk space"
 #define OB_COLUMN_GROUP_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4185, Column group not found"
 #define OB_CS_COMPRESS_LIB_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4186, Server failed to get compress library"
 #define OB_ITEM_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4187, Item not match"

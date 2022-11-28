@@ -565,7 +565,7 @@ void ObServerLogBlockMgr::run_loop_()
     int64_t log_disk_percentage = 0;
     if (OB_FAIL(observer::ObServerUtils::get_log_disk_info_in_config(log_disk_size,
                                                                      log_disk_percentage))) {
-      if (OB_CS_OUTOF_DISK_SPACE == ret) {
+      if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
         CLOG_LOG(ERROR, "log disk size is too large", K(ret), KPC(this),
             K(log_disk_size), K(log_disk_percentage));
       } else {

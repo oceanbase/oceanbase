@@ -660,7 +660,9 @@ void ObPLContext::destory(
     } else {
       if (!in_nested_sql_ctrl() &&
           lib::is_mysql_mode() && is_function_or_trigger_ &&
-          OB_SUCCESS == ret && session_info.is_in_transaction()) {
+          OB_SUCCESS == ret &&
+          reset_autocommit_ &&
+          session_info.is_in_transaction()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not supported cmd execute udf which has dml stmt", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "use cmd stmt execute udf which has dml stmt");
@@ -1295,6 +1297,13 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
         // unprepare it.
         if (stack_ctx.is_inited()) {
           stack_ctx.destory(*(ctx.get_my_session()), ctx, ret);
+        }
+        if (NULL != routine) {
+          routine->~ObPLFunction();
+        }
+        if (NULL != mem_context) {
+          DESTROY_CONTEXT(mem_context);
+          mem_context = NULL;
         }
         throw;
       }

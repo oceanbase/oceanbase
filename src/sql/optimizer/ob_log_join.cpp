@@ -309,13 +309,13 @@ int ObLogJoin::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
                                                        left_param, 
                                                        right_param))) {
     LOG_WARN("failed to get re estimate param", K(ret));
-  } else if (OB_FAIL(left_child->re_est_cost(left_param,
+  } else if (OB_FAIL(SMART_CALL(left_child->re_est_cost(left_param,
                                               left_output_rows,
-                                              left_cost))) {
+                                              left_cost)))) {
     LOG_WARN("failed to re estimate cost", K(ret));
-  } else if (OB_FAIL(right_child->re_est_cost(right_param,
+  } else if (OB_FAIL(SMART_CALL(right_child->re_est_cost(right_param,
                                               right_output_rows,
-                                              right_cost))) {
+                                              right_cost)))) {
     LOG_WARN("failed to re estimate cost", K(ret));
   } else if (OB_FAIL(join_path_->re_estimate_rows(left_output_rows, 
                                                  right_output_rows, 

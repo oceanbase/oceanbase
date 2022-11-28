@@ -371,12 +371,13 @@ int ObCgroupCtrl::get_cpu_shares(int32_t &cpu_shares, const uint64_t tenant_id, 
     LOG_WARN("init tenant cgroup dir failed", K(ret), K(group_path), K(tenant_id));
   } else {
     char cpu_shares_path[PATH_BUFSIZE];
-    char cpu_shares_value[VALUE_BUFSIZE];
+    char cpu_shares_value[VALUE_BUFSIZE + 1];
     snprintf(cpu_shares_path, PATH_BUFSIZE, "%s/cpu.shares", group_path);
     if(OB_FAIL(get_string_from_file_(cpu_shares_path, cpu_shares_value))) {
       LOG_WARN("get cpu shares failed",
           K(ret), K(cpu_shares_path), K(cpu_shares_value), K(tenant_id));
     } else {
+      cpu_shares_value[VALUE_BUFSIZE] = '\0';
       cpu_shares = atoi(cpu_shares_value);
     }
   }
@@ -441,11 +442,12 @@ int ObCgroupCtrl::get_cpu_cfs_quota(int32_t &cfs_quota_us, const uint64_t tenant
     LOG_WARN("init tenant cgroup dir failed", K(ret), K(group_path), K(tenant_id));
   } else {
     char cfs_path[PATH_BUFSIZE];
-    char cfs_value[VALUE_BUFSIZE];
+    char cfs_value[VALUE_BUFSIZE +1];
     snprintf(cfs_path, PATH_BUFSIZE, "%s/cpu.cfs_quota_us", group_path);
     if(OB_FAIL(get_string_from_file_(cfs_path, cfs_value))) {
       LOG_WARN("get cpu cfs quota failed", K(ret), K(cfs_path), K(cfs_value), K(tenant_id));
     } else {
+      cfs_value[VALUE_BUFSIZE] = '\0';
       cfs_quota_us = atoi(cfs_value);
     }
   }
@@ -461,12 +463,13 @@ int ObCgroupCtrl::get_cpu_cfs_period(const uint64_t tenant_id,
   UNUSED(level);
   int ret = OB_SUCCESS;
   char cfs_path[PATH_BUFSIZE];
-  char cfs_value[VALUE_BUFSIZE];
+  char cfs_value[VALUE_BUFSIZE + 1];
   snprintf(cfs_path, PATH_BUFSIZE, "%s/tenant_%04lu/%.*s/cpu.cfs_period_us",
            root_cgroup_, tenant_id, group.length(), group.ptr());
   if(OB_FAIL(get_string_from_file_(cfs_path, cfs_value))) {
     LOG_WARN("get cpu cfs quota failed", K(ret), K(cfs_path), K(cfs_value), K(tenant_id));
   } else {
+    cfs_value[VALUE_BUFSIZE] = '\0';
     cfs_period_us = atoi(cfs_value);
   }
   return ret;
@@ -485,11 +488,12 @@ int ObCgroupCtrl::get_cpu_cfs_period(int32_t &cfs_period_us, const uint64_t tena
     LOG_WARN("init tenant cgroup dir failed", K(ret), K(group_path), K(tenant_id));
   } else {
     char cfs_path[PATH_BUFSIZE];
-    char cfs_value[VALUE_BUFSIZE];
+    char cfs_value[VALUE_BUFSIZE + 1];
     snprintf(cfs_path, PATH_BUFSIZE, "%s/cpu.cfs_period_us", group_path);
     if(OB_FAIL(get_string_from_file_(cfs_path, cfs_value))) {
       LOG_WARN("get cpu cfs quota failed", K(ret), K(cfs_path), K(cfs_value), K(tenant_id));
     } else {
+      cfs_value[VALUE_BUFSIZE] = '\0';
       cfs_period_us = atoi(cfs_value);
     }
   }
@@ -503,12 +507,13 @@ int ObCgroupCtrl::get_cpu_usage(const uint64_t tenant_id, int32_t &cpu_usage)
   int64_t cur_usage = 0;
 
   char usage_path[PATH_BUFSIZE];
-  char usage_value[VALUE_BUFSIZE];
+  char usage_value[VALUE_BUFSIZE + 1];
   snprintf(usage_path, PATH_BUFSIZE, "%s/tenant_%04lu/cpuacct.usage", root_cgroup_, tenant_id);
   if(OB_FAIL(get_string_from_file_(usage_path, usage_value))) {
     LOG_WARN("get cpu usage failed",
         K(ret), K(usage_path), K(usage_value), K(tenant_id));
   } else {
+    usage_value[VALUE_BUFSIZE] = '\0';
     cur_usage = std::stoull(usage_value);
   }
 
@@ -527,13 +532,14 @@ int ObCgroupCtrl::get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time)
   int ret = OB_SUCCESS;
 
   char usage_path[PATH_BUFSIZE];
-  char usage_value[VALUE_BUFSIZE];
+  char usage_value[VALUE_BUFSIZE + 1];
   snprintf(usage_path, PATH_BUFSIZE, "%s/tenant_%lu/cpuacct.usage", root_cgroup_, tenant_id);
   MEMSET(usage_value, 0, VALUE_BUFSIZE);
   if(OB_FAIL(get_string_from_file_(usage_path, usage_value))) {
     LOG_WARN("get cpu usage failed",
         K(ret), K(usage_path), K(usage_value), K(tenant_id));
   } else {
+    usage_value[VALUE_BUFSIZE] = '\0';
     cpu_time = std::stoull(usage_value) / 1000;
   }
   return ret;

@@ -674,7 +674,15 @@ int ObTransService::get_ls_read_snapshot_version(const share::ObLSID &local_ls_i
 int ObTransService::get_weak_read_snapshot_version(palf::SCN &snapshot)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(GCTX.weak_read_service_->get_cluster_version(tenant_id_, snapshot))) {
+  bool monotinic_read = true;;
+    // server weak read version
+  if (!ObWeakReadUtil::enable_monotonic_weak_read(tenant_id_)) {
+    if (OB_FAIL(GCTX.weak_read_service_->get_server_version(tenant_id_, snapshot))) {
+      TRANS_LOG(WARN, "get server read snapshot fail", K(ret), KPC(this));
+    }
+    monotinic_read = false;
+    // wrs cluster version
+  } else if (OB_FAIL(GCTX.weak_read_service_->get_cluster_version(tenant_id_, snapshot))) {
     TRANS_LOG(WARN, "get weak read snapshot fail", K(ret), KPC(this));
   } else {
     const int64_t snapshot_barrier = ObTimeUtility::current_time() -
@@ -685,7 +693,7 @@ int ObTransService::get_weak_read_snapshot_version(palf::SCN &snapshot)
       ret = OB_REPLICA_NOT_READABLE;
     }
   }
-  TRANS_LOG(TRACE, "get weak-read snapshot", K(ret), K(snapshot));
+  TRANS_LOG(TRACE, "get weak-read snapshot", K(ret), K(snapshot), K(monotinic_read));
   return ret;
 }
 

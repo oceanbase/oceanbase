@@ -18,8 +18,8 @@
 namespace obutil
 {
 template<class T> class ObMonitor;
-class Mutex;
-
+class ObUtilMutex;
+typedef ObUtilMutex Mutex;
 class Cond
 {
 public:

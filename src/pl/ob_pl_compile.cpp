@@ -235,9 +235,9 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
     // 设置默认数据库
     CHECK_COMPATIBILITY_MODE(&session_info_);
 
+    CK (OB_UNLIKELY(OB_NOT_NULL(proc)));
     OZ (schema_guard_.get_database_schema(proc->get_tenant_id(), proc->get_database_id(), db));
     CK (OB_UNLIKELY(OB_NOT_NULL(db)));
-    CK (OB_UNLIKELY(OB_NOT_NULL(proc)));
     if (OB_SUCC(ret)
         && !proc->is_invoker_right()
         && proc->get_database_id() != old_db_id) {
@@ -620,35 +620,11 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
 {
   int ret = OB_SUCCESS;
   bool saved_trigger_flag = session_info_.is_for_trigger_package();
-  session_info_.set_for_trigger_package(package_info.is_for_trigger());
-  ObExecEnv old_exec_env;
-  ObExecEnv env;
-  ObSqlString old_db_name;
-  uint64_t old_db_id = OB_INVALID_ID;
-  bool need_reset_exec_env = false;
-  bool need_reset_default_database = false;
   ObString source;
-  // 设置环境变量
-  OZ (old_exec_env.load(session_info_));
-  OZ (env.init(package_info.get_exec_env()));
-  if (OB_SUCC(ret) && old_exec_env != env) {
-    OZ (env.store(session_info_));
-    OX (need_reset_exec_env = true);
-  }
-  // 设置默认数据库
-  if (OB_SUCC(ret)
-      && !package_info.is_invoker_right()
-      && package_info.get_database_id() != session_info_.get_database_id()) {
-    const share::schema::ObDatabaseSchema *db_schema = NULL;
-    old_db_id = session_info_.get_database_id();
-    OZ (old_db_name.append(session_info_.get_database_name()));
-    OZ (schema_guard_.get_database_schema(package_info.get_tenant_id(),
-        package_info.get_database_id(), db_schema));
-    CK (OB_NOT_NULL(db_schema));
-    OZ (session_info_.set_default_database(db_schema->get_database_name_str()));
-    OX (session_info_.set_database_id(db_schema->get_database_id()));
-    OX (need_reset_default_database = true);
-  }
+  bool use_jitted_expr = false;
+
+  ObPLCompilerEnvGuard guard(package_info, session_info_, schema_guard_, ret);
+  session_info_.set_for_trigger_package(package_info.is_for_trigger());
   if (OB_SUCC(ret) && package_info.is_invoker_right()) {
     OZ (package_ast.get_compile_flag().add_invoker_right());
   }
@@ -714,25 +690,6 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
       if (OB_FAIL(error_info.delete_error(&package_info))) {
         LOG_WARN("delete error info failed", K(ret));
       }
-    }
-  }
-  int tmp_ret = OB_SUCCESS;
-  // 恢复环境变量
-  if (need_reset_exec_env) {
-    if ((tmp_ret = old_exec_env.store(session_info_)) != OB_SUCCESS) {
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
-      LOG_WARN("failed to store exec_env in package compiler",
-              K(ret), K(old_exec_env), K(tmp_ret));
-    }
-  }
-  // 恢复默认数据库
-  if (need_reset_default_database) {
-    if ((tmp_ret = session_info_.set_default_database(old_db_name.string())) != OB_SUCCESS) {
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
-      LOG_WARN("failed to reset default database",
-               K(ret), K(old_db_name));
-    } else {
-      session_info_.set_database_id(old_db_id);
     }
   }
   return ret;
@@ -1200,6 +1157,69 @@ int ObPLCompiler::format_object_name(ObSchemaGetterGuard &schema_guard,
     }
   }
   return ret;
+}
+
+ObPLCompilerEnvGuard::ObPLCompilerEnvGuard(const ObPackageInfo &info,
+                                           ObSQLSessionInfo &session_info,
+                                           share::schema::ObSchemaGetterGuard &schema_guard,
+                                           int &ret)
+  : ret_(ret), session_info_(session_info)
+{
+  init(info, session_info, schema_guard, ret);
+}
+
+ObPLCompilerEnvGuard::ObPLCompilerEnvGuard(const ObRoutineInfo &info,
+                                           ObSQLSessionInfo &session_info,
+                                           share::schema::ObSchemaGetterGuard &schema_guard,
+                                           int &ret)
+  : ret_(ret), session_info_(session_info)
+{
+  init(info, session_info, schema_guard, ret);
+}
+
+template<class Info>
+void ObPLCompilerEnvGuard::init(const Info &info, ObSQLSessionInfo &session_info, share::schema::ObSchemaGetterGuard &schema_guard, int &ret)
+{
+  ObExecEnv env;
+  OX (need_reset_exec_env_ = false);
+  OX (need_reset_default_database_ = false);
+  OZ (old_exec_env_.load(session_info_));
+  OZ (env.init(info.get_exec_env()));
+  if (OB_SUCC(ret) && old_exec_env_ != env) {
+    OZ (env.store(session_info_));
+    OX (need_reset_exec_env_ = true);
+  }
+  if (OB_SUCC(ret)
+      && !info.is_invoker_right()
+      && info.get_database_id() != session_info_.get_database_id()) {
+    const share::schema::ObDatabaseSchema *db_schema = NULL;
+    old_db_id_ = session_info_.get_database_id();
+    OZ (old_db_name_.append(session_info_.get_database_name()));
+    OZ (schema_guard.get_database_schema(info.get_tenant_id(), info.get_database_id(), db_schema));
+    CK (OB_NOT_NULL(db_schema));
+    OZ (session_info_.set_default_database(db_schema->get_database_name_str()));
+    OX (session_info_.set_database_id(db_schema->get_database_id()));
+    OX (need_reset_default_database_ = true);
+  }
+}
+
+ObPLCompilerEnvGuard::~ObPLCompilerEnvGuard()
+{
+  int ret = OB_SUCCESS;
+  if (need_reset_exec_env_) {
+    if ((ret = old_exec_env_.store(session_info_)) != OB_SUCCESS) {
+      ret_ = OB_SUCCESS == ret_ ? ret : ret_;
+      LOG_WARN("failed to restore exec env in pl env guard", K(ret), K(ret_), K(old_exec_env_));
+    }
+  }
+  if (need_reset_default_database_) {
+    if ((ret = session_info_.set_default_database(old_db_name_.string())) != OB_SUCCESS) {
+      ret_ = OB_SUCCESS == ret_ ? ret : ret_;
+      LOG_WARN("failed to reset default database in pl env guard", K(ret), K(ret_), K(old_db_name_));
+    } else {
+      session_info_.set_database_id(old_db_id_);
+    }
+  }
 }
 
 } //end namespace pl

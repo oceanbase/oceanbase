@@ -32,7 +32,7 @@ public:
   int wrlock();
   void wrunlock();
 private:
-  int64_t write_flag_;
+  int64_t write_flag_ CACHE_ALIGNED;
   common::ObDynamicQSync qsync_;
 };
 

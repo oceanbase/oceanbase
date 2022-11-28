@@ -217,32 +217,6 @@ ObLLVMType ObLLVMValue::get_type() const
 {
   return ObLLVMType(NULL == get_v() ? ObLLVMType() : get_v()->getType());
 }
-/*! LLVM11 Type ID
-enum TypeID {
-  // PrimitiveTypes
-  HalfTyID = 0,  ///< 16-bit floating point type
-  BFloatTyID,    ///< 16-bit floating point type (7-bit significand)
-  FloatTyID,     ///< 32-bit floating point type
-  DoubleTyID,    ///< 64-bit floating point type
-  X86_FP80TyID,  ///< 80-bit floating point type (X87)
-  FP128TyID,     ///< 128-bit floating point type (112-bit significand)
-  PPC_FP128TyID, ///< 128-bit floating point type (two 64-bits, PowerPC)
-  VoidTyID,      ///< type with no size
-  LabelTyID,     ///< Labels
-  MetadataTyID,  ///< Metadata
-  X86_MMXTyID,   ///< MMX vectors (64 bits, X86 specific)
-  TokenTyID,     ///< Tokens
-
-  // Derived types... see DerivedTypes.h file.
-  IntegerTyID,       ///< Arbitrary bit width integers
-  FunctionTyID,      ///< Functions
-  PointerTyID,       ///< Pointers
-  StructTyID,        ///< Structures
-  ArrayTyID,         ///< Arrays
-  FixedVectorTyID,   ///< Fixed width SIMD vector type
-  ScalableVectorTyID ///< Scalable SIMD vector type
-};
-*/
 
 int64_t ObLLVMValue::get_type_id() const
 {

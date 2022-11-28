@@ -289,16 +289,16 @@ int ObDASScanOp::release_op()
         LOG_WARN("revert scan iterator failed", K(ret));
       } else if (OB_FAIL(lookup_op->revert_iter())) {
         LOG_WARN("revert lookup iterator failed", K(ret));
+      } else {
+        result_ = nullptr;
       }
     } else {
       if (OB_FAIL(tsc_service.revert_scan_iter(result_))) {
         LOG_WARN("revert scan iterator failed", K(ret));
+      } else {
+        result_ = nullptr;
       }
     }
-  }
-
-  if (OB_SUCC(ret) && result_ != nullptr) {
-      result_ = nullptr;
   }
   //need to clear the flag:need_switch_param_
   //otherwise table_rescan will jump to the switch iterator path in retry

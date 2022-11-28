@@ -99,7 +99,7 @@ int ObMemtableCtx::init(const uint64_t tenant_id)
     } else if (NULL == (defensive_check_mgr_ = op_alloc(ObDefensiveCheckMgr))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(ERROR, "memory alloc failed", K(ret), KP(defensive_check_mgr_));
-    } else if (OB_FAIL(defensive_check_mgr_->init())) {
+    } else if (OB_FAIL(defensive_check_mgr_->init(lib::ObMemAttr(tenant_id, "MemtableCtx")))) {
       TRANS_LOG(ERROR, "defensive check mgr init failed", K(ret), KP(defensive_check_mgr_));
       op_free(defensive_check_mgr_);
       defensive_check_mgr_ = NULL;
@@ -687,8 +687,12 @@ int ObMemtableCtx::sync_log_succ(const palf::SCN scn, const ObCallbackScope &cal
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(log_gen_.sync_log_succ(scn, callbacks))) {
-    TRANS_LOG(WARN, "sync log failed", K(ret));
+  if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
+    if (OB_FAIL(log_gen_.sync_log_succ(scn, callbacks))) {
+      TRANS_LOG(WARN, "sync log failed", K(ret));
+    }
+  } else {
+    TRANS_LOG(INFO, "No memtable callbacks because of trans_end", K(end_code_), KPC(ctx_));
   }
 
   return ret;
@@ -699,7 +703,12 @@ void ObMemtableCtx::sync_log_fail(const ObCallbackScope &callbacks)
   if (!callbacks.is_empty()) {
     set_partial_rollbacked_();
   }
-  return log_gen_.sync_log_fail(callbacks);
+  if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
+    log_gen_.sync_log_fail(callbacks);
+  } else {
+    TRANS_LOG(INFO, "No memtable callbacks because of trans_end", K(end_code_), KPC(ctx_));
+  }
+  return;
 }
 
 uint64_t ObMemtableCtx::calc_checksum_all()

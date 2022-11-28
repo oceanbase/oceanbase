@@ -197,8 +197,8 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
       if (OB_ISNULL(top_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("top stmt should not be null", K(ret));
-      } else {
-        is_dml_table = top_stmt->check_table_be_modified(ref_table_id);
+      } else if (OB_FAIL(top_stmt->check_table_be_modified(ref_table_id, is_dml_table))) {
+        LOG_WARN("failed to check table be modified", K(ret));
       }
     }
 
@@ -299,7 +299,7 @@ int ObJoinOrder::compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &ac
                                                           *path->table_partition_info_,
                                                           path->strong_sharding_))) {
             LOG_WARN("failed to calc sharding info", K(ret));
-          } else if (!path->use_das_ &&
+          } else if (!path->use_das_ && (1 < access_paths.count() || path->is_inner_path_) &&
                      (path->is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) && 
                      !is_virtual_table(path->ref_table_id_) &&
                      !ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), path->ref_table_id_) &&
@@ -342,6 +342,7 @@ int ObJoinOrder::compute_sharding_info_for_base_path(const bool use_das,
   const TableItem *table_item = NULL;
   sharding_info = NULL;
   bool hint_need_partition_info;
+  bool is_modified = false;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(session_info = opt_ctx->get_session_info()) ||
@@ -369,12 +370,14 @@ int ObJoinOrder::compute_sharding_info_for_base_path(const bool use_das,
                                        allocator_->alloc(sizeof(ObShardingInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to allocate memory", K(ret));
+  } else if (OB_FAIL(stmt->check_table_be_modified(table_partition_info.get_ref_table_id(), is_modified))) {
+    LOG_WARN("failed to check table be modified", K(ret));
   } else {
     const ObCandiTableLoc &phy_tbl_info = table_partition_info.get_phy_tbl_location_info();
     bool can_reselect_replica = (phy_tbl_info.is_duplicate_table_not_in_dml() &&
         (1 == phy_tbl_info.get_phy_part_loc_info_list().count())
         && !session_info->get_is_in_retry_for_dup_tbl()
-        && !stmt->check_table_be_modified(table_partition_info.get_ref_table_id()));
+        && !is_modified);
     int64_t parallel = opt_ctx->get_parallel();
     if (opt_ctx->is_use_table_dop()) {
       parallel = table_schema->get_dop();
@@ -1323,6 +1326,15 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
         LOG_WARN("failed to fill query range info", K(ret));
       } else { /*do nothing*/ }
     } else { /*do nothing*/ }
+
+    for (int i = 0; OB_SUCC(ret) && i < ap->est_cost_info_.range_columns_.count(); ++i) {
+      ColumnItem &col = ap->est_cost_info_.range_columns_.at(i);
+      if (NULL == get_plan()->get_stmt()->get_column_expr_by_id(col.table_id_, col.column_id_)) {
+        //do nothing
+      } else if (OB_FAIL(ap->est_cost_info_.index_access_column_items_.push_back(col))) {
+        LOG_WARN("failed to push back column item", K(ret));
+      }
+    }
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(fill_filters(ap->filter_,
@@ -2978,7 +2990,8 @@ int ObJoinOrder::compute_const_exprs_for_join(const ObJoinOrder* left_tree,
       LOG_WARN("failed to append const exprs", K(ret));
     } else if (OB_FAIL(append(output_const_exprs_, right_tree->get_output_const_exprs()))) {
       LOG_WARN("failed to append const exprs", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
+    } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(join_info_->where_conditions_,
+                                                            output_const_exprs_))) {
       LOG_WARN("failed to compute const exprs", K(ret));
     } else {/*do nothing*/}
   } else if (IS_OUTER_JOIN(join_type)) {
@@ -3004,6 +3017,11 @@ int ObJoinOrder::compute_const_exprs_for_join(const ObJoinOrder* left_tree,
       if (OB_FAIL(append(output_const_exprs_, right_tree->get_output_const_exprs()))) {
         LOG_WARN("failed to append const exprs", K(ret));
       }
+    }
+    if (OB_SUCC(ret) && IS_SEMI_JOIN(join_type)
+        && OB_FAIL(ObOptimizerUtil::compute_const_exprs(join_info_->where_conditions_,
+                                                        output_const_exprs_))) {
+      LOG_WARN("failed to compute const exprs for semi join", K(ret));
     }
   } else if (CONNECT_BY_JOIN == join_type) {
     if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
@@ -3902,6 +3920,7 @@ int AccessPath::re_estimate_cost(EstimateCostInfo &param, double &card, double &
   double table_filter_sel = est_cost_info_.table_filter_sel_;
   index_back_cost = 0.0;
   card = get_path_output_rows();
+  est_cost_info_.join_filter_sel_ = 1.0;
   if (OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(parent_), K(ret));
@@ -3912,6 +3931,7 @@ int AccessPath::re_estimate_cost(EstimateCostInfo &param, double &card, double &
       const JoinFilterInfo &info = param.join_filter_infos_.at(i);
       if (info.table_id_ == table_id_) {
         table_filter_sel *= info.join_filter_selectivity_;
+        est_cost_info_.join_filter_sel_ *= info.join_filter_selectivity_;
         card *= info.join_filter_selectivity_;
       }
     }
@@ -4767,6 +4787,7 @@ int JoinPath::estimate_cost()
       LOG_WARN("failed to cost merge join", K(*this), K(ret));
     }
   } else if(HASH_JOIN == join_algo_) {
+    double left_output_rows = left_path_->get_path_output_rows();
     double right_output_rows = right_path_->get_path_output_rows();
     double right_cost = right_path_->get_cost();
     if (!join_filter_infos_.empty()) {
@@ -5141,7 +5162,7 @@ int JoinPath::cost_merge_join(double left_output_rows,
       left_rows /= in_parallel;
       right_rows /= in_parallel;
     }
-    ObCostMergeJoinInfo est_join_info(left_output_rows,
+    ObCostMergeJoinInfo est_join_info(left_rows,
                                       left_join_order->get_output_row_size(),
                                       right_rows,
                                       right_join_order->get_output_row_size(),
@@ -8048,7 +8069,6 @@ int ObJoinOrder::check_normal_join_filter_valid(const Path& left_path,
   ObLogPlan *plan = get_plan();
   ObJoinOrder* left_tree = NULL;
   const ObDMLStmt *stmt = NULL;
-  ObRelIds table_set;
   bool left_find = false;
   bool right_find = false;
   bool cur_dfo_has_shuffle_bf = false;
@@ -8066,33 +8086,66 @@ int ObJoinOrder::check_normal_join_filter_valid(const Path& left_path,
   }
   for (int i = 0; OB_SUCC(ret) && i < join_filter_infos.count(); ++i) {
     JoinFilterInfo &info = join_filter_infos.at(i);
-    double left_distinct_card = 0;
-    double right_distinct_card = 0;
-    table_set.reuse();
+    double join_filter_sel = 1.0;
     if (!info.in_current_dfo_ && cur_dfo_has_shuffle_bf) {
       info.can_use_join_filter_ = false;
     } else if (!info.can_use_join_filter_ || info.lexprs_.empty()) {
       info.can_use_join_filter_ = false;
-    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
-                                                            plan->get_selectivity_ctx(),
-                                                            info.lexprs_,
-                                                            left_tree->get_output_rows(),
-                                                            left_distinct_card))) {
-      LOG_WARN("failed to calc distinct", K(ret));
-    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
-                                                            plan->get_selectivity_ctx(),
-                                                            info.rexprs_,
-                                                            info.row_count_,
-                                                            right_distinct_card))) {
-      LOG_WARN("failed to calc distinct", K(ret));
+    } else if (OB_FAIL(calc_join_filter_selectivity(left_path,
+                                                    right_path,
+                                                    info,
+                                                    join_filter_sel))) {
+      LOG_WARN("failed to calc join filter sel", K(ret));
     } else {
-      double rate = 1 - left_distinct_card / right_distinct_card;
-      rate = rate < 0.0 ? 0.0 : rate;
-      rate = rate > 0.9 ? 0.9 : rate;
-      info.join_filter_selectivity_ = 1 - rate;
-      info.can_use_join_filter_ = rate >= (info.in_current_dfo_ ? 0.9 : 0.6)
-                                  || NULL != info.force_filter_;
+      double rate = 1 - join_filter_sel;
+      double threshold = 0.6;
+      if (info.in_current_dfo_) {
+        threshold = 0.9;
+      }
+      info.join_filter_selectivity_ = join_filter_sel;
+      info.can_use_join_filter_ = rate >= threshold || NULL != info.force_filter_;
+      LOG_TRACE("succeed to check normal join filter", K(info));
     }
+  }
+  return ret;
+}
+
+int ObJoinOrder::calc_join_filter_selectivity(const Path& left_path,
+                                              const Path& right_path,
+                                              JoinFilterInfo& info,
+                                              double &join_filter_selectivity)
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *plan = get_plan();
+  double left_distinct_card = 1.0;
+  double right_distinct_card = 1.0;
+  join_filter_selectivity = 1.0;
+  if (OB_ISNULL(plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null plan", K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
+                                                          plan->get_selectivity_ctx(),
+                                                          info.rexprs_,
+                                                          info.row_count_,
+                                                          right_distinct_card,
+                                                          false))) {
+    LOG_WARN("failed to calc distinct", K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
+                                                          plan->get_selectivity_ctx(),
+                                                          info.lexprs_,
+                                                          left_path.get_path_output_rows(),
+                                                          left_distinct_card,
+                                                          false))) {
+    LOG_WARN("failed to calc distinct", K(ret));
+  } else {
+    join_filter_selectivity = left_distinct_card / right_distinct_card;
+    if (join_filter_selectivity < 0) {
+      join_filter_selectivity = 0;
+    } else if (join_filter_selectivity > 0.9) {
+      join_filter_selectivity = 0.9;
+    }
+    LOG_TRACE("succeed to calc join filter selectivity", K(join_filter_selectivity),
+                                      K(left_distinct_card), K(right_distinct_card));
   }
   return ret;
 }
@@ -10793,6 +10846,11 @@ int ObJoinOrder::generate_inner_base_paths(const ObIArray<ObRawExpr *> &join_con
     }
   } else {
     // todo: @guoping.wgp support join type in future
+  }
+
+  if (OB_UNLIKELY(OB_ERR_NO_PATH_GENERATED == ret && !inner_path_info.force_inner_nl_)) {
+    ret = OB_SUCCESS;
+    LOG_TRACE("OPT: generate no inner path" , K(right_tree.get_type()), K(inner_path_info));
   }
   return ret;
 }

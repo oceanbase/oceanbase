@@ -56,8 +56,7 @@ int validate_uri_type(const common::ObString &uri)
 {
   int ret = OB_SUCCESS;
   if (!uri.prefix_match(OB_OSS_PREFIX) &&
-      !uri.prefix_match(OB_FILE_PREFIX) &&
-      !uri.prefix_match(OB_COS_PREFIX) ) {
+      !uri.prefix_match(OB_FILE_PREFIX)) {
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(ERROR, "invlaid backup uri", K(ret), K(uri));
   }
@@ -73,8 +72,6 @@ int get_storage_type_from_path(const common::ObString &uri, ObStorageType &type)
     type = OB_STORAGE_OSS;
   } else if (uri.prefix_match(OB_FILE_PREFIX)) {
     type = OB_STORAGE_FILE;
-  } else if (uri.prefix_match(OB_COS_PREFIX)) {
-    type = OB_STORAGE_COS;
   } else {
     ret = OB_INVALID_BACKUP_DEST;
     STORAGE_LOG(ERROR, "invlaid backup uri", K(ret), K(uri));
@@ -116,9 +113,15 @@ int get_storage_type_from_name(const char *type_str, ObStorageType &type)
  * ------------------------------ObStorageGlobalIns---------------------
  */
 ObStorageGlobalIns::ObStorageGlobalIns() 
-  :ObSingleton<ObStorageGlobalIns>(), io_prohibited_(false)
+  :io_prohibited_(false)
 {
 
+}
+
+ObStorageGlobalIns& ObStorageGlobalIns::get_instance()
+{
+  static ObStorageGlobalIns instance;
+  return instance;
 }
 
 int ObStorageGlobalIns::init() 
@@ -199,8 +202,6 @@ int ObStorageUtil::open(void* obj_base, int device_type)
     STORAGE_LOG(WARN, "double init the storage util", K(ret), K(device_type));
   } else if (OB_STORAGE_OSS == device_type) {
     util_ = &oss_util_;
-  } else if (OB_STORAGE_COS == device_type) {
-    util_ = &cos_util_;
   } else if (OB_STORAGE_FILE == device_type) {
     util_ = &file_util_;
   } else {
@@ -539,7 +540,6 @@ ObStorageReader::ObStorageReader()
     reader_(NULL),
     file_reader_(),
     oss_reader_(),
-    cos_reader_(),
     start_ts_(0)
 {
   uri_[0] = '\0';
@@ -577,8 +577,6 @@ int ObStorageReader::open(const common::ObString &uri, void* obj_base_info)
     reader_ = &oss_reader_;
   } else if (OB_STORAGE_FILE == type) {
     reader_ = &file_reader_;
-  } else if (OB_STORAGE_COS == type) {
-    reader_ = &cos_reader_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -663,7 +661,6 @@ ObStorageWriter::ObStorageWriter()
   : writer_(NULL),
     file_writer_(),
     oss_writer_(),
-    cos_writer_(),
     start_ts_(0)
 {
     uri_[0] = '\0';
@@ -701,8 +698,6 @@ int ObStorageWriter::open(const common::ObString &uri, void* obj_base_info)
     writer_ = &oss_writer_;
   } else if (OB_STORAGE_FILE == type) {
     writer_ = &file_writer_;
-  } else if (OB_STORAGE_COS == type) {
-    writer_ = &cos_writer_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));
@@ -790,7 +785,6 @@ ObStorageAppender::ObStorageAppender(StorageOpenMode mode)
   : appender_(NULL),
     file_appender_(mode),
     oss_appender_(),
-    cos_appender_(),
     start_ts_(0),
     is_opened_(false),
     storage_info_(NULL)
@@ -839,19 +833,6 @@ int ObStorageAppender::open(
     }
   } else if (OB_STORAGE_FILE == type) {
     appender_ = &file_appender_;
-  } else if (OB_STORAGE_COS == type) {
-    if (OB_APPEND_USE_SLICE_PUT == param.strategy_) {
-      ObCosContainer::Option option;
-      option.open_version = param.version_param_.open_object_version_;
-      option.version = param.version_param_.version_;
-      // get slice size from cluster conf
-      option.threshold = qcloud_cos::ObCosEnv::get_instance().get_slice_size();
-      cos_appender_.set_obj_type(ObCosObjectType::COS_OBJECT_CONTAINER);
-      cos_appender_.set_container_option(option);
-    } else {
-      cos_appender_.set_obj_type(ObCosObjectType::COS_OBJECT_NORMAL);
-    }
-    appender_ = &cos_appender_;
   } else {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "unkown storage type", K(ret), K(uri));

@@ -561,7 +561,9 @@ void ob_hash_sort_mb_bin(const ObCharsetInfo *cs __attribute__((unused)),
 
 uint32 ob_convert(char *to, uint32 to_length, const ObCharsetInfo *to_cs,
                   const char *from, uint32 from_length,
-                  const ObCharsetInfo *from_cs, const ob_wc_t replaced_char, uint *errors);
+                  const ObCharsetInfo *from_cs,
+                  bool trim_incomplete_tail,
+                  const ob_wc_t replaced_char, uint *errors);
 
 size_t ob_strnxfrm_unicode_full_bin(const ObCharsetInfo *cs,
                              uchar *dst, size_t dstlen, uint nweights,

@@ -187,6 +187,7 @@ struct ObTabletMergeCtx
   int generate_macro_id_list(char *buf, const int64_t buf_len) const;
   void collect_running_info();
   int update_tablet_directly(const ObGetMergeTablesResult &get_merge_table_result);
+  int update_tablet_or_release_memtable(const ObGetMergeTablesResult &get_merge_table_result);
 
   OB_INLINE int64_t get_concurrent_cnt() const { return parallel_merge_ctx_.get_concurrent_cnt(); }
   ObITable::TableType get_merged_table_type() const;

@@ -1314,9 +1314,7 @@ int ObMemtable::inc_unsubmitted_cnt()
   TRANS_LOG(DEBUG, "inc_unsubmitted_cnt", K(ls_id), KPC(this), K(lbt()));
 
   if (ATOMIC_LOAD(&unset_active_memtable_logging_blocked_)) {
-    TRANS_LOG(ERROR, "cannot inc unsubmitted_cnt", K(unsubmitted_cnt), K(ls_id), KPC(this));
-    // TODO(jingyan.kfy) : remove it later
-    ob_abort();
+    TRANS_LOG(WARN, "cannot inc unsubmitted_cnt", K(unsubmitted_cnt), K(ls_id), KPC(this));
   }
 
   return ret;

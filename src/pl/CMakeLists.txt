@@ -1,3 +1,13 @@
+execute_process(
+  COMMAND bash gen_parser.sh
+  RESULT_VARIABLE RET
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/pl/parser
+  OUTPUT_FILE _gen_pl_parser.output
+  ERROR_FILE _gen_parser.error)
+if(RET AND NOT RET EQUAL 0)
+  message(FATAL_ERROR "Generate pl parser failed and check error in ${PROJECT_SOURCE_DIR}/src/pl/parser/_gen_parser.error")
+endif()
+
 ob_set_subtarget(ob_pl ALONE
   parser/ob_pl_parser.cpp
   parser/pl_non_reserved_keywords_mysql_mode.c
@@ -13,10 +23,8 @@ ob_set_subtarget(ob_pl common
   ob_pl_code_generator.cpp
   ob_pl_compile.cpp
   ob_pl_di_adt_service.cpp
-  ob_pl_error_log.cpp
   ob_pl_exception_handling.cpp
   ob_pl_interface_pragma.cpp
-  ob_pl_lock.cpp
   ob_pl_package.cpp
   ob_pl_package_manager.cpp
   ob_pl_package_state.cpp
@@ -26,7 +34,6 @@ ob_set_subtarget(ob_pl common
   ob_pl_stmt.cpp
   ob_pl_type.cpp
   ob_pl_user_type.cpp
-  ob_pl_warning.cpp
 )
 
 

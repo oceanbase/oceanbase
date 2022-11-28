@@ -776,9 +776,8 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
     LOG_WARN("failed to get role", K(ret), "arg", ctx_->arg_);
   } else if (is_strong_leader(role)) {
     if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
-      //TODO(yanfeng) need turn off rebuild flag
-      ret = OB_NO_NEED_REBUILD;
-      LOG_WARN("leader can not as rebuild dst", K(ret), K(role), "myaddr", MYADDR, "arg", ctx_->arg_);
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("leader can not as rebuild dst", K(ret), K(role), "myaddr", MYADDR, "arg", ctx_->arg_);
     } else if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_
         || ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_
         || ObMigrationOpType::CHANGE_LS_OP == ctx_->arg_.type_) {
@@ -841,7 +840,6 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
         STORAGE_LOG(WARN, "group task has error, cancel subtask", K(ret));
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
         STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
-        //TODO(yanfeng) cancel dag should cancel dag net
       } else if (is_cancel) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
@@ -1032,7 +1030,6 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_scn_push_()
         STORAGE_LOG(WARN, "ls migration task is failed, cancel wait ls check point ts push", K(ret));
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
         STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
-      //TODO(yanfeng) cancel dag should cancel dag net
       } else if (is_cancel) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));

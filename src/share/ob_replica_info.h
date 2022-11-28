@@ -284,6 +284,7 @@ struct ObZoneReplicaAttrSet
     return (!(*this == that));
   }
   bool operator<(const ObZoneReplicaAttrSet &that);
+  static bool sort_compare_less_than(const ObZoneReplicaAttrSet *lset, const ObZoneReplicaAttrSet *rset);
   int64_t get_full_replica_num() const {return replica_attr_set_.get_full_replica_num();}
   int64_t get_logonly_replica_num() const {return replica_attr_set_.get_logonly_replica_num();}
   int64_t get_readonly_replica_num() const {return replica_attr_set_.get_readonly_replica_num();}

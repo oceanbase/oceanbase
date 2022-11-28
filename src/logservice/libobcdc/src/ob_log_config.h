@@ -208,6 +208,7 @@ public:
 
   DEF_INT(log_clean_cycle_time_in_hours, OB_CLUSTER_PARAMETER, "24", "[0,]",
       "clean log cycle time in hours, 0 means not to clean log");
+  DEF_INT(max_log_file_count, OB_CLUSTER_PARAMETER, "40", "[0,]", "max log file count, 0 means no limit");
 
   T_DEF_BOOL(skip_dirty_data, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 

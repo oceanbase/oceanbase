@@ -50,7 +50,12 @@ SCN SCN::atomic_vcas(const SCN &old_v, const SCN &new_val)
 
 bool SCN::is_valid() const
 {
-  return ((OB_INVALID_SCN_VAL != val_) && (SCN_VERSION == v_));
+  return (SCN_VERSION == v_);
+}
+
+bool SCN::is_valid_and_not_min() const
+{
+  return ((SCN_VERSION == v_) && (OB_MIN_SCN_TS_NS != val_));
 }
 
 void SCN::set_invalid()
