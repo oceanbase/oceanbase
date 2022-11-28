@@ -5,41 +5,23 @@ OceanBase Database is a native distributed relational database. It is developed 
 ## Core features
 
 - Scalable OLTP
-  
   - Linear scalability by adding nodes to the cluster
-
   - Partition-level leader distribution and transparent data shuffling
-
   - Optimized performance for distributed transaction through "table group" technology
-
   - High concurrency updates on hot row through early lock release (ELR)
-
   - 80000+ connections per node and unlimited connections in one instance through multi threads and coroutines
-
   - Prevent silent data corruption (SDC) through multidimensional data consistency checksum
-
   - No.1 in TPC-C benchmark with 707 million tpmC
-
 - Operational OLAP
-
   - Process analytical tasks in one engine, no need to migrate data to OLAP engine
-
   - Analyze large amounts of data on multiple nodes in one OceanBase cluster with MPP architecture
-
   - Advanced SQL engine with CBO optimizer, distributed execution scheduler and global index
-
   - Fast data loading through parallel DML, and with only 50% storage cost under compression
-
   - Broke world record with 15.26 million QphH in TPC-H 30TB benchmark in 2021
-
 - Multi-tenant
-
   - Create multiple tenants (instances) in one OceanBase cluster with isolated resource and access
-
   - Multidimensional and transparently scale up/out for each tenant, and scaling up takes effect immediately
-
   - Database consolidation: multi-tenant and flexible scaling can achieve resource pooling and improve utilization
-
   - Improve management efficiency and reduce costs without compromising performance and availability
 
 ## Quick start
@@ -71,9 +53,6 @@ OceanBase Database is under [MulanPubL - 2.0](http://license.coscl.org.cn/MulanP
 ## Community
 
 - [oceanbase.slack](https://oceanbase.slack.com/)
-
 - [Forum (Simplified Chinese)](https://ask.oceanbase.com/)
-
 - [DingTalk 33254054 (Simplified Chinese)](https://h5.dingtalk.com/circle/healthCheckin.html?corpId=ding12cfbe0afb058f3cde5ce625ff4abdf6&53108=bb418&cbdbhh=qwertyuiop&origin=1)
-
 - [WeChat (Simplified Chinese)](https://gw.alipayobjects.com/zos/oceanbase/0a69627f-8005-4c46-be1f-aac7a2b85c13/image/2022-03-01/85d42796-4e22-463a-9658-57402d7b9bc3.png)
