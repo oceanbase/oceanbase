@@ -59,9 +59,6 @@ public:
       ObFreezer *freezer,
       ObTenantMetaMemMgr *t3m,
       ObTabletDDLKvMgr *ddl_kv_mgr);
-  virtual int create_memtable(const int64_t clog_checkpoint_ts,
-                              const int64_t schema_version,
-                              const bool for_replay=false) = 0;
   virtual int create_memtable(const palf::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
                               const bool for_replay = false)

@@ -63,9 +63,9 @@ public:
                    storage::ObTabletDDLKvMgr *ddl_kv_mgr) override;
   virtual void destroy() override;
 
-  virtual int create_memtable(const int64_t last_replay_log_ts,
+  virtual int create_memtable(const palf::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
-                              const bool for_replay=false) override;
+                              const bool for_replay = false) override;
 
   DECLARE_TO_STRING;
 private:

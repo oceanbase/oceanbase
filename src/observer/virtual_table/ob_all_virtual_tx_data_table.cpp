@@ -125,10 +125,10 @@ int ObAllVirtualTxDataTable::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(row_data.tx_data_count_);
           break;
         case MIN_TX_SCN_COL:
-          cur_row_.cells_[i].set_uint64(row_data.min_tx_scn_.get_val_for_lsn_allocator());
+          cur_row_.cells_[i].set_uint64(row_data.min_tx_scn_.get_val_for_inner_table_field());
           break;
         case MAX_TX_SCN_COL:
-          cur_row_.cells_[i].set_uint64(row_data.max_tx_scn_.get_val_for_lsn_allocator());
+          cur_row_.cells_[i].set_uint64(row_data.max_tx_scn_.get_val_for_inner_table_field());
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

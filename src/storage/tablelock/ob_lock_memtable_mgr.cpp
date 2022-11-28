@@ -77,12 +77,11 @@ void ObLockMemtableMgr::reset()
   is_inited_ = false;
 }
 
-int ObLockMemtableMgr::create_memtable(
-    const int64_t last_replay_log_ts,
-    const int64_t schema_version,
-    const bool for_replay)
+int ObLockMemtableMgr::create_memtable(const palf::SCN clog_checkpoint_scn,
+                                       const int64_t schema_version,
+                                       const bool for_replay)
 {
-  UNUSED(last_replay_log_ts);
+  UNUSED(clog_checkpoint_scn);
   UNUSED(schema_version);
   UNUSED(for_replay);
 

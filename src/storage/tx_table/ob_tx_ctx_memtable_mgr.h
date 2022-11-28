@@ -58,7 +58,7 @@ public:
   virtual void destroy() override;
 
   // create_memtable is used for creating the only memtable for CheckpointMgr
-  virtual int create_memtable(const int64_t last_replay_log_ts,
+  virtual int create_memtable(const palf::SCN last_replay_scn,
                               const int64_t schema_version,
                               const bool for_replay=false) override;
 

@@ -70,7 +70,6 @@ public:
   virtual int flush(palf::SCN recycle_scn, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const override;
-
   virtual bool is_flushing() const override;
 
   // ================ NOT SUPPORTED INTERFACE ===============

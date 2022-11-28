@@ -20,6 +20,9 @@
 
 namespace oceanbase
 {
+
+using namespace palf;
+
 namespace storage
 {
 
@@ -88,7 +91,7 @@ int CheckRowLockedFunctor::operator() (const ObTxData &tx_data, ObTxCCCtx *tx_cc
     // Case 1: data is committed, so the lock is locked by the data and we
     // also need return the commit version for tsc check
     lock_state_.is_locked_ = false;
-    lock_state_.trans_version_ = tx_data.commit_scn_;
+    lock_state_.trans_version_ = tx_data.commit_version_;
     break;
   }
   case ObTxData::RUNNING: {
@@ -128,7 +131,7 @@ int CheckRowLockedFunctor::operator() (const ObTxData &tx_data, ObTxCCCtx *tx_cc
 }
 
 
-int GetTxStateWithLogTSFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx)
+int GetTxStateWithSCNFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx)
 {
   UNUSED(tx_cc_ctx);
   int ret = OB_SUCCESS;
@@ -140,22 +143,22 @@ int GetTxStateWithLogTSFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *t
     // Case 1: data is during execution, so we return the running state with
     // INT64_MAX as version
     state_ = ObTxData::RUNNING;
-    trans_version_ = INT64_MAX;
-  } else if (log_ts_ < tx_data.end_scn_.get_val_for_lsn_allocator()) {
+    trans_version_ = SCN::max_scn();
+  } else if (scn_ < tx_data.end_scn_) {
     // Case 2: data is decided while the required state is before the merge log
     // ts, so we return the running state with INT64_MAX as txn version
     state_ = ObTxData::RUNNING;
-    trans_version_ = INT64_MAX;
+    trans_version_ = SCN::max_scn();
   } else if (ObTxData::COMMIT == tx_data.state_) {
     // Case 3: data is committed and the required state is after the merge log
     // ts, so we return the commit state with commit version as txn version
     state_ = ObTxData::COMMIT;
-    trans_version_ = tx_data.commit_scn_.get_val_for_lsn_allocator();
+    trans_version_ = tx_data.commit_version_;
   } else if (ObTxData::ABORT == tx_data.state_) {
     // Case 4: data is aborted and the required state is after the merge log
     // ts, so we return the abort state with 0 as txn version
     state_ = ObTxData::ABORT;
-    trans_version_ = 0;
+    trans_version_ = SCN::min_scn();
   } else {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected transaction state_", K(ret), K(tx_data));
@@ -169,7 +172,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
 {
   int ret = OB_SUCCESS;
   can_read_ = false;
-  trans_version_ = OB_INVALID_VERSION;
+  trans_version_ = SCN::invalid_scn();
   is_determined_state_ = false;
   auto &snapshot = lock_for_read_arg_.mvcc_acc_ctx_.snapshot_;
   auto snapshot_version = snapshot.version_;
@@ -186,13 +189,13 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
       // depends on whether undo status contains the data. Then we return the commit
       // version as data version.
       can_read_ = !tx_data.undo_status_list_.is_contain(data_sql_sequence);
-      trans_version_ = tx_data.commit_scn_.get_val_for_lsn_allocator();
+      trans_version_ = tx_data.commit_version_;
       is_determined_state_ = true;
       break;
     }
     case ObTxData::ELR_COMMIT: {
       can_read_ = !tx_data.undo_status_list_.is_contain(data_sql_sequence);
-      trans_version_ = tx_data.commit_scn_.get_val_for_lsn_allocator();
+      trans_version_ = tx_data.commit_version_;
       is_determined_state_ = false;
       break;
     }
@@ -201,7 +204,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
       if (read_latest && reader_tx_id == data_tx_id) {
         // Case 2.0: read the latest written of current txn
         can_read_ = !tx_data.undo_status_list_.is_contain(data_sql_sequence);
-        trans_version_ = 0;
+        trans_version_ = SCN::min_scn();
       } else if (snapshot_tx_id == data_tx_id) {
         // Case 2.1: data is owned by the read txn
         bool tmp_can_read = false;
@@ -219,7 +222,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
         can_read_ = tmp_can_read &&
           !tx_data.undo_status_list_.is_contain(data_sql_sequence);
         // Tip 2.1.2: trans version is unnecessary for the running txn
-        trans_version_ = 0;
+        trans_version_ = SCN::min_scn();
       } else {
         // Case 2.2: data is not owned by the read txn
         // NB: we need pay attention to the choice condition when issuing the
@@ -234,7 +237,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
           // snapshot version, so we cannot read it and trans version is
           // unnecessary for the running txn
           can_read_ = false;
-          trans_version_ = 0;
+          trans_version_ = SCN::min_scn();
         } else if (tx_cc_ctx->prepare_version_ > snapshot_version.get_val_for_lsn_allocator()) {
           // Case 2.2.2: data is at least in prepare state and the prepare
           // version is bigger than the read txn's snapshot version, then the
@@ -242,7 +245,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
           // version, so we cannot read it and trans version is unnecessary for
           // the running txn
           can_read_ = false;
-          trans_version_ = 0;
+          trans_version_ = SCN::min_scn();
         } else {
           // Case 2.2.3: data is in prepare state and the prepare version is
           // smaller than the read txn's snapshot version, then the data's
@@ -264,7 +267,7 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
       // Case 3: data is aborted, so the state is decided, then we can not read
       // the data and the trans version is unnecessary for the aborted txn
       can_read_ = false;
-      trans_version_ = 0;
+      trans_version_ = SCN::min_scn();
       is_determined_state_ = true;
       break;
     }
@@ -331,7 +334,7 @@ bool ObReCheckTxNodeForLockForReadOperation::operator()()
 
   if (tnode_.is_aborted()) {
     can_read_ = false;
-    trans_version_ = 0;
+    trans_version_ = SCN::min_scn();
     is_determined_state_ = true;
     ret = true;
   }
@@ -381,9 +384,9 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxData &tx_data, ObTxCCCtx *tx
         }
       } else if (ObTxData::COMMIT == tx_data.state_) {
         // Case 4: data is committed, so we should write back the commit state
-        if (OB_FAIL(value_.trans_commit(tx_data.commit_scn_, tnode_))) {
+        if (OB_FAIL(value_.trans_commit(tx_data.commit_version_, tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K(value_), K(tnode_));
-        } else if (FALSE_IT(tnode_.trans_commit(tx_data.commit_scn_, tx_data.end_scn_))) {
+        } else if (FALSE_IT(tnode_.trans_commit(tx_data.commit_version_, tx_data.end_scn_))) {
         } else if (blocksstable::ObDmlFlag::DF_LOCK == tnode_.get_dml_flag()
                    && OB_FAIL(value_.unlink_trans_node(tnode_))) {
           TRANS_LOG(WARN, "unlink lock node failed", K(ret), K(value_), K(tnode_));

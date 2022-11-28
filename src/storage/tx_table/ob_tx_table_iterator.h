@@ -90,7 +90,7 @@ public:
     : is_inited_(false),
       iter_param_(iter_param),
       dump_tx_data_done_(false),
-      cur_max_commit_scn_(),
+      cur_max_commit_version_(),
       pre_start_scn_(),
       tx_data_row_cnt_(0),
       pre_tx_data_(nullptr),
@@ -157,7 +157,7 @@ private:
                               const palf::SCN start_scn_limit,
                               const palf::SCN recycle_scn,
                               const ObIArray<ObCommitSCNsArray::Node> &data_arr,
-                              palf::SCN &max_commit_scn,
+                              palf::SCN &max_commit_version,
                               ObIArray<ObCommitSCNsArray::Node> &merged_arr);
 
   int set_row_with_merged_commit_scns_(ObCommitSCNsArray &merged_commit_scns,
@@ -179,7 +179,7 @@ private:
   bool is_inited_;
   const ObTableIterParam &iter_param_;
   bool dump_tx_data_done_;
-  palf::SCN cur_max_commit_scn_;
+  palf::SCN cur_max_commit_version_;
   palf::SCN pre_start_scn_;
   int64_t tx_data_row_cnt_;
   ObTxData *pre_tx_data_;

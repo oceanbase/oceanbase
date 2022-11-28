@@ -280,7 +280,7 @@ int ObCtxTxData::set_commit_version(const palf::SCN &commit_version)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->commit_scn_ = commit_version;
+    tx_data_->commit_version_ = commit_version;
   }
 
   return ret;
@@ -324,7 +324,7 @@ int32_t ObCtxTxData::get_state() const
 const palf::SCN ObCtxTxData::get_commit_version() const
 {
   RLockGuard guard(lock_);
-  SCN commit_version = (NULL != tx_data_ ? tx_data_->commit_scn_ : tx_commit_data_.commit_scn_);
+  SCN commit_version = (NULL != tx_data_ ? tx_data_->commit_version_ : tx_commit_data_.commit_version_);
   return commit_version;
 }
 

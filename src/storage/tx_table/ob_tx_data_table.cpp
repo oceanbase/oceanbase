@@ -179,7 +179,7 @@ void ObTxDataTable::stop()
 void ObTxDataTable::reset()
 {
   min_start_scn_in_ctx_.reset();
-  last_update_min_start_scn_ts_ = 0;
+  last_update_ts_ = 0;
   tablet_id_ = 0;
   ls_ = nullptr;
   ls_tablet_svr_ = nullptr;
@@ -383,7 +383,7 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
   tg.click();
 
   // If this tx data can not be inserted into all memtables, check if it should be filtered.
-  // We use the start log ts of the first memtable as the filtering time stamp
+  // We use the start scn of the first memtable as the filtering time stamp
   if (OB_SUCC(ret) && OB_NOT_NULL(tx_data) && OB_NOT_NULL(tx_data_memtable)) {
     SCN clog_checkpoint_scn = tx_data_memtable->get_key().get_start_scn();
     if (tx_data->end_scn_ <= clog_checkpoint_scn) {
@@ -407,7 +407,7 @@ int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write
   return ret;
 }
 
-// A tx data with lesser end_log_ts may be inserted after a tx data with greater end_log_ts due to
+// A tx data with lesser end_scn may be inserted after a tx data with greater end_scn due to
 // the out-of-order callback of log. This function will retain the newer tx data and delete the
 // older one.
 int ObTxDataTable::insert_into_memtable_(ObTxDataMemtable *tx_data_memtable, ObTxData *&tx_data)
@@ -438,7 +438,7 @@ int ObTxDataTable::insert_into_memtable_(ObTxDataMemtable *tx_data_memtable, ObT
         // successfully remove
       }
     } else {
-      // The end_log_ts of tx data in memtable is greater than or equal to the end_log_ts of current
+      // The end_scn of tx data in memtable is greater than or equal to the end_scn of current
       // tx data, which means the tx data waiting to insert is an older one. So we set need_insert =
       // false to skip inserting this tx data
       need_insert = false;
@@ -735,7 +735,7 @@ int ObTxDataTable::get_ls_min_end_scn_in_latest_tablets_(SCN &min_end_scn)
     while (OB_SUCC(iterator.get_next_tablet(tablet_handle))) {
       SCN end_scn_from_single_tablet = SCN::max_scn();
       if (OB_FAIL(get_min_end_scn_from_single_tablet_(tablet_handle, end_scn_from_single_tablet))) {
-        STORAGE_LOG(WARN, "get min end_log_ts from a single tablet failed.", KR(ret));
+        STORAGE_LOG(WARN, "get min end_scn from a single tablet failed.", KR(ret));
       } else if (end_scn_from_single_tablet < min_end_scn) {
         min_end_scn = end_scn_from_single_tablet;
       }
@@ -792,27 +792,13 @@ int ObTxDataTable::self_freeze_task()
   return ret;
 }
 
-// The main steps in calculating upper_trans_scn. For more details, see :
+// The main steps in calculating upper_trans_version. For more details, see :
 // https://yuque.antfin-inc.com/ob/transaction/lurtok
-int ObTxDataTable::get_upper_trans_version_before_given_log_ts(const int64_t sstable_end_log_ts,
-                                                               int64_t &upper_trans_version)
-{
-  int ret = OB_SUCCESS;
-  SCN sstable_end_scn;
-  sstable_end_scn.convert_for_lsn_allocator(sstable_end_log_ts);
-  SCN tmp_upper_trans_version;
-  if (OB_FAIL(get_upper_trans_scn_before_given_scn(sstable_end_scn, tmp_upper_trans_version))) {
-  } else {
-    upper_trans_version = tmp_upper_trans_version.get_val_for_lsn_allocator();
-  }
-  return ret;
-}
-
-int ObTxDataTable::get_upper_trans_scn_before_given_scn(const SCN sstable_end_scn, SCN &upper_trans_scn)
+int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn, SCN &upper_trans_version)
 {
   int ret = OB_SUCCESS;
   bool skip_calc = false;
-  upper_trans_scn.set_max();
+  upper_trans_version.set_max();
 
   STORAGE_LOG(DEBUG, "start get upper trans version", K(get_ls_id()));
 
@@ -820,9 +806,9 @@ int ObTxDataTable::get_upper_trans_scn_before_given_scn(const SCN sstable_end_sc
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The tx data table is not inited.", KR(ret));
   } else if (true == (skip_calc = skip_this_sstable_end_scn_(sstable_end_scn))) {
-    // there is a start_log_ts of running transactions is smaller than the sstable_end_log_ts
+    // there is a start_scn of running transactions is smaller than the sstable_end_scn
   } else {
-    TCWLockGuard lock_guard(calc_upper_trans_scn_cache_.lock_);
+    TCWLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
     if (OB_FAIL(update_cache_if_needed_(skip_calc))) {
       STORAGE_LOG(WARN, "update cache failed.", KR(ret));
     }
@@ -830,14 +816,14 @@ int ObTxDataTable::get_upper_trans_scn_before_given_scn(const SCN sstable_end_sc
 
   if (OB_FAIL(ret)) {
   } else if (skip_calc) {
-  } else if (0 == calc_upper_trans_scn_cache_.commit_scns_.array_.count()) {
-    STORAGE_LOG(ERROR, "Unexpected empty array.", K(calc_upper_trans_scn_cache_));
+  } else if (0 == calc_upper_trans_version_cache_.commit_scns_.array_.count()) {
+    STORAGE_LOG(ERROR, "Unexpected empty array.", K(calc_upper_trans_version_cache_));
   } else {
-    TCRLockGuard lock_guard(calc_upper_trans_scn_cache_.lock_);
-    if (!calc_upper_trans_scn_cache_.commit_scns_.is_valid()) {
+    TCRLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
+    if (!calc_upper_trans_version_cache_.commit_scns_.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "invalid cache for upper trans version calculation", KR(ret));
-    } else if (OB_FAIL(calc_upper_trans_scn_(sstable_end_scn, upper_trans_scn))) {
+    } else if (OB_FAIL(calc_upper_trans_scn_(sstable_end_scn, upper_trans_version))) {
       STORAGE_LOG(WARN, "calc upper trans version failed", KR(ret), "ls_id", get_ls_id());
     } else {
       FLOG_INFO("get upper trans version finish.",
@@ -845,7 +831,7 @@ int ObTxDataTable::get_upper_trans_scn_before_given_scn(const SCN sstable_end_sc
                 K(skip_calc),
                 "ls_id", get_ls_id(),
                 K(sstable_end_scn),
-                K(upper_trans_scn));
+                K(upper_trans_version));
     }
   }
   return ret;
@@ -855,20 +841,20 @@ int ObTxDataTable::get_upper_trans_scn_before_given_scn(const SCN sstable_end_sc
 // calculation.
 //
 // 1. Accuracy :
-// If there are some running transactions with start_log_ts which is less than or equal to
-// sstable_end_log_ts, we skip this upper_trans_version calculation because it is currently
+// If there are some running transactions with start_scn which is less than or equal to
+// sstable_end_scn, we skip this upper_trans_version calculation because it is currently
 // undetermined.
 //
 // 2. Performance :
-// If there are some commited transactions with start_log_ts which is less than or equal to
-// sstable_end_log_ts stil in tx data memtable, we skip this upper_trans_version calculation because
+// If there are some commited transactions with start_scn which is less than or equal to
+// sstable_end_scn stil in tx data memtable, we skip this upper_trans_version calculation because
 // calculating upper_trans_version in tx data memtable is very slow.
 bool ObTxDataTable::skip_this_sstable_end_scn_(SCN sstable_end_scn)
 {
   int ret = OB_SUCCESS;
   bool need_skip = false;
   int64_t cur_ts = common::ObTimeUtility::fast_current_time();
-  int64_t tmp_update_ts = ATOMIC_LOAD(&last_update_min_start_scn_ts_);
+  int64_t tmp_update_ts = ATOMIC_LOAD(&last_update_ts_);
   SCN min_start_scn_in_tx_data_memtable = SCN::max_scn();
   SCN max_decided_scn = SCN::min_scn();
 
@@ -880,13 +866,13 @@ bool ObTxDataTable::skip_this_sstable_end_scn_(SCN sstable_end_scn)
     STORAGE_LOG(INFO, "skip calc upper trans version once", K(max_decided_scn), K(sstable_end_scn));
   }
 
-  // If the min_start_log_ts_in_ctx has not been updated for more than 30 seconds,
+  // If the min_start_scn_in_ctx has not been updated for more than 30 seconds,
   if (need_skip) {
   } else if (cur_ts - tmp_update_ts > 30_s
-      && tmp_update_ts == ATOMIC_CAS(&last_update_min_start_scn_ts_, tmp_update_ts, cur_ts)) {
-    // update last_update_min_start_log_ts
+      && tmp_update_ts == ATOMIC_CAS(&last_update_ts_, tmp_update_ts, cur_ts)) {
+    // update last_update_min_start_scn
     if (OB_FAIL(tx_ctx_table_->get_min_start_scn(min_start_scn_in_ctx_))) {
-      STORAGE_LOG(WARN, "get min start log ts from tx ctx table failed.", KR(ret));
+      STORAGE_LOG(WARN, "get min start scn from tx ctx table failed.", KR(ret));
     }
   }
 
@@ -894,7 +880,7 @@ bool ObTxDataTable::skip_this_sstable_end_scn_(SCN sstable_end_scn)
   } else if (OB_FAIL(ret)) {
     need_skip = true;
   } else if (min_start_scn_in_ctx_ <= sstable_end_scn) {
-    // skip this sstable end log ts calculation
+    // skip this sstable end scn calculation
     need_skip = true;
   } else if (OB_FAIL(update_memtables_cache())) {
     STORAGE_LOG(WARN, "update memtables fail.", KR(ret));
@@ -918,7 +904,7 @@ bool ObTxDataTable::skip_this_sstable_end_scn_(SCN sstable_end_scn)
                           = std::min(min_start_scn_in_tx_data_memtable,
                                      tx_data_memtable->get_min_start_scn()))) {
       } else if (sstable_end_scn >= min_start_scn_in_tx_data_memtable) {
-        // there is a min_start_log_ts in tx_data_memtable less than sstable_end_log_ts, skip this
+        // there is a min_start_scn in tx_data_memtable less than sstable_end_scn, skip this
         // calculation
         need_skip = true;
         break;
@@ -949,13 +935,13 @@ int ObTxDataTable::update_cache_if_needed_(bool &skip_calc)
 
     if (nullptr == table) {
       skip_calc = true;
-    } else if (!calc_upper_trans_scn_cache_.is_inited_ ||
-               calc_upper_trans_scn_cache_.cache_version_scn_.get_val_for_lsn_allocator() < table->get_end_log_ts()) {
-      ret = update_calc_upper_trans_scn_cache_(table);
-    } else if (calc_upper_trans_scn_cache_.cache_version_scn_.get_val_for_lsn_allocator() > table->get_end_log_ts()) {
+    } else if (!calc_upper_trans_version_cache_.is_inited_ ||
+               calc_upper_trans_version_cache_.cache_version_ < table->get_end_scn()) {
+      ret = update_calc_upper_trans_version_cache_(table);
+    } else if (calc_upper_trans_version_cache_.cache_version_ > table->get_end_scn()) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR,
-                  "the end log ts of the latest sstable is unexpected smaller",
+                  "the end scn of the latest sstable is unexpected smaller",
                   KR(ret),
                   KPC(tablet_handle.get_obj()),
                   KPC(table));
@@ -965,7 +951,7 @@ int ObTxDataTable::update_cache_if_needed_(bool &skip_calc)
   return ret;
 }
 
-int ObTxDataTable::update_calc_upper_trans_scn_cache_(ObITable *table)
+int ObTxDataTable::update_calc_upper_trans_version_cache_(ObITable *table)
 {
   int ret = OB_SUCCESS;
   STORAGE_LOG(DEBUG, "update calc upper trans version cache once.");
@@ -982,26 +968,26 @@ int ObTxDataTable::update_calc_upper_trans_scn_cache_(ObITable *table)
     LOG_WARN("invalid tablet handle", KR(ret), K(tablet_handle), K(tablet_id_));
   } else {
     ObCommitVersionsGetter getter(iter_param, table);
-    if (OB_FAIL(getter.get_next_row(calc_upper_trans_scn_cache_.commit_scns_))) {
+    if (OB_FAIL(getter.get_next_row(calc_upper_trans_version_cache_.commit_scns_))) {
       STORAGE_LOG(WARN, "update calc_upper_trans_trans_version_cache failed.", KR(ret), KPC(table));
     } else {
-      calc_upper_trans_scn_cache_.is_inited_ = true;
-      calc_upper_trans_scn_cache_.cache_version_scn_.convert_for_lsn_allocator(table->get_end_log_ts());
+      calc_upper_trans_version_cache_.is_inited_ = true;
+      calc_upper_trans_version_cache_.cache_version_ = table->get_end_scn();
       // update calc_upper_trans_scn_cache succeed.
     }
   }
   return ret;
 }
 
-int ObTxDataTable::calc_upper_trans_scn_(const SCN sstable_end_scn, SCN &upper_trans_scn)
+int ObTxDataTable::calc_upper_trans_scn_(const SCN sstable_end_scn, SCN &upper_trans_version)
 {
   int ret = OB_SUCCESS;
 
-  const auto &array = calc_upper_trans_scn_cache_.commit_scns_.array_;
+  const auto &array = calc_upper_trans_version_cache_.commit_scns_.array_;
   int l = 0;
   int r = array.count() - 1;
 
-  // Binary find the first start_log_ts that is greater than or equal to sstable_end_log_ts
+  // Binary find the first start_scn that is greater than or equal to sstable_end_scn
   while (l < r) {
     int mid = (l + r) >> 1;
     if (array.at(mid).start_scn_ < sstable_end_scn) {
@@ -1011,21 +997,21 @@ int ObTxDataTable::calc_upper_trans_scn_(const SCN sstable_end_scn, SCN &upper_t
     }
   }
 
-  // Check if the start_log_ts is greater than or equal to the sstable_end_log_ts. If not, delay the
+  // Check if the start_scn is greater than or equal to the sstable_end_scn. If not, delay the
   // upper_trans_version calculation to the next time.
-  if (0 == array.count() || !array.at(l).commit_scn_.is_valid()) {
-    upper_trans_scn.set_max();
+  if (0 == array.count() || !array.at(l).commit_version_.is_valid()) {
+    upper_trans_version.set_max();
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected array count or commit version", KR(ret), K(array.count()), K(array.at(l)));
   } else {
-    upper_trans_scn = array.at(l).commit_scn_;
+    upper_trans_version = array.at(l).commit_version_;
   }
 
   STORAGE_LOG(INFO,
               "calculate upper trans version finish",
               K(sstable_end_scn),
-              K(upper_trans_scn),
-              K(calc_upper_trans_scn_cache_),
+              K(upper_trans_version),
+              K(calc_upper_trans_version_cache_),
               "ls_id", get_ls_id(),
               "array_count", array.count(),
               "chose_idx", l);

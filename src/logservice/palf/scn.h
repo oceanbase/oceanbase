@@ -78,6 +78,7 @@ public:
   //only for gts use
   uint64_t get_val_for_gts() const;
   uint64_t get_val_for_lsn_allocator() const;
+  uint64_t get_val_for_row_cell() const;
 
   // @param[in] convert for tx
   int convert_for_tx(int64_t commit_trans_version);

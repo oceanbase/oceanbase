@@ -24,6 +24,8 @@
 namespace oceanbase
 {
 using namespace storage;
+using namespace palf;
+
 namespace blocksstable
 {
 ObIMicroBlockRowScanner::ObIMicroBlockRowScanner(common::ObIAllocator &allocator)
@@ -1272,9 +1274,12 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
   int ret = OB_SUCCESS;
   auto &tx_table_guard = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guard();
   int64_t read_epoch = tx_table_guard.epoch();
+  SCN scn_trans_version = SCN::invalid_scn();
   if (OB_FAIL(tx_table_guard.get_tx_table()->lock_for_read(
-        lock_for_read_arg, read_epoch, can_read, trans_version, is_determined_state))) {
+        lock_for_read_arg, read_epoch, can_read, scn_trans_version, is_determined_state))) {
     LOG_WARN("failed to check transaction status", K(ret));
+  } else {
+    trans_version = scn_trans_version.get_val_for_tx();
   }
   return ret;
 }
@@ -1989,12 +1994,16 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::get_trans_state(
 {
   int ret = OB_SUCCESS;
   //get trans status & committed_trans_version_
-  commit_trans_version = INT64_MAX;
+  SCN scn_commit_trans_version = SCN::max_scn();
+  SCN merge_scn;
+  merge_scn.convert_for_lsn_allocator(context_->merge_log_ts_);
   auto &tx_table_guard = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guard();
   int64_t read_epoch = tx_table_guard.epoch();;
-  if (OB_FAIL(tx_table_guard.get_tx_table()->get_tx_state_with_log_ts(
-      trans_id, context_->merge_log_ts_, read_epoch, state, commit_trans_version))) {
+  if (OB_FAIL(tx_table_guard.get_tx_table()->get_tx_state_with_scn(
+      trans_id, merge_scn, read_epoch, state, scn_commit_trans_version))) {
     LOG_WARN("get transaction status failed", K(ret), K(trans_id), K(state));
+  } else {
+    commit_trans_version = scn_commit_trans_version.get_val_for_tx();
   }
   return ret;
 }

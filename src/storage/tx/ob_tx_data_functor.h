@@ -33,7 +33,7 @@ class ObReCheckTxNodeForLockForReadOperation
 public:
   ObReCheckTxNodeForLockForReadOperation(memtable::ObMvccTransNode &tnode,
                                          bool &can_read,
-                                         int64_t &trans_version,
+                                         palf::SCN &trans_version,
                                          bool &is_determined_state)
     : tnode_(tnode),
     can_read_(can_read),
@@ -45,7 +45,7 @@ private:
   memtable::ObMvccTransNode &tnode_;
   bool &can_read_;
   bool &is_determined_state_;
-  int64_t &trans_version_;
+  palf::SCN &trans_version_;
 };
 
 class ObReCheckNothingOperation
@@ -127,24 +127,24 @@ public:
   ObStoreRowLockState &lock_state_;
 };
 
-// fetch the state of txn DATA_TRANS_ID when replaying to LOG_TS
+// fetch the state of txn DATA_TRANS_ID when replaying to SCN
 // the requirement can be seen from https://yuque.antfin-inc.com/ob/storage/adk6yx
 // return the txn state and commit version if committed, INT64_MAX if running
 // and 0 if rollbacked when replaying to LOG_ID
-class GetTxStateWithLogTSFunctor : public ObITxDataCheckFunctor
+class GetTxStateWithSCNFunctor : public ObITxDataCheckFunctor
 {
 public:
-  GetTxStateWithLogTSFunctor(const int64_t log_ts,
+  GetTxStateWithSCNFunctor(const palf::SCN scn,
                              int64_t &state,
-                             int64_t &trans_version)
-    : log_ts_(log_ts), state_(state), trans_version_(trans_version) {}
-  virtual ~GetTxStateWithLogTSFunctor() {}
+                             palf::SCN &trans_version)
+    : scn_(scn), state_(state), trans_version_(trans_version) {}
+  virtual ~GetTxStateWithSCNFunctor() {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
-  TO_STRING_KV(K(log_ts_), K(state_), K(trans_version_));
+  TO_STRING_KV(K(scn_), K(state_), K(trans_version_));
 public:
-  const int64_t log_ts_;
+  const palf::SCN scn_;
   int64_t &state_;
-  int64_t &trans_version_;
+  palf::SCN &trans_version_;
 };
 
 // the txn READ_TRANS_ID use SNAPSHOT_VERSION to read the data,
@@ -158,7 +158,7 @@ class LockForReadFunctor : public ObITxDataCheckFunctor
 public:
   LockForReadFunctor(const transaction::ObLockForReadArg &lock_for_read_arg,
                      bool &can_read,
-                     int64_t &trans_version,
+                     palf::SCN &trans_version,
                      bool &is_determined_state,
                      const ObCleanoutOp &cleanout_op = ObCleanoutNothingOperation(),
                      const ObReCheckOp &recheck_op = ObReCheckNothingOperation())
@@ -180,7 +180,7 @@ public:
   const transaction::ObLockForReadArg &lock_for_read_arg_;
   bool &can_read_;
   bool &is_determined_state_;
-  int64_t &trans_version_;
+  palf::SCN &trans_version_;
   // Cleanout the tx node if necessary
   ObCleanoutOp cleanout_op_;
   // ReCheck whether tx node is valid.

@@ -239,7 +239,6 @@ public: /* derived from ObIMemtable */
                    const blocksstable::ObDatumRowkey &rowkey) override;
 
 public:  // checkpoint
-  int64_t get_rec_log_ts();
   palf::SCN get_rec_scn();
 
   // int freeze();
@@ -277,7 +276,6 @@ public:  // getter && setter
   void reset_is_iterating() { ATOMIC_STORE(&is_iterating_, false); }
 
 
-  // FIXME : @gengli remove
   palf::SCN get_end_scn() { return key_.scn_range_.end_scn_;}
 
 
@@ -309,13 +307,13 @@ private:  // ObTxDataMemtable
   bool is_iterating_;
   bool has_constructed_list_;
 
-  // the minimum log ts of commit_scn in this tx data memtable
+  // the minimum scn of commit_version in this tx data memtable
   palf::SCN min_tx_scn_;
 
-  // the maximum log ts in this tx data memtable
+  // the maximum scn in this tx data memtable
   palf::SCN max_tx_scn_;
 
-  // the minimum start log ts in this tx data memtable
+  // the minimum start scn in this tx data memtable
   palf::SCN min_start_scn_;
 
   int64_t inserted_cnt_;
@@ -380,15 +378,15 @@ public:
     UNUSED(key);
     // printf basic info
     fprintf(fd_,
-            "ObTxData : tx_id=%-19ld is_in_memtable=%-3d state=%-8s start_scn=%-19ld "
-            "end_scn=%-19ld "
-            "commit_scn=%-19ld ",
+            "ObTxData : tx_id=%-19ld is_in_memtable=%-3d state=%-8s start_scn=%-19s "
+            "end_scn=%-19s "
+            "commit_version=%-19s ",
             tx_data->tx_id_.get_id(),
             tx_data->is_in_tx_data_table_,
             ObTxData::get_state_string(tx_data->state_),
-            tx_data->start_scn_.get_val_for_lsn_allocator(),
-            tx_data->end_scn_.get_val_for_lsn_allocator(),
-            tx_data->commit_scn_.get_val_for_lsn_allocator());
+            to_cstring(tx_data->start_scn_),
+            to_cstring(tx_data->end_scn_),
+            to_cstring(tx_data->commit_version_));
 
     // printf undo status list
     fprintf(fd_, "Undo Actions : {");
@@ -408,17 +406,6 @@ public:
 private:
   FILE *fd_;
 };
-
-
-OB_INLINE int64_t ObTxDataMemtable::get_rec_log_ts()
-{
-  // TODO : @gengli
-  // rec_scn changes constantly. The rec_scn obtained by checkpoint mgr
-  // may be greater than the actual checkpoint of tx_data_memtable because the
-  // callback functions are not sequential. The checkpoint is determined both on
-  // the max-sequential callback point of the log and the rec_scn.
-  return min_tx_scn_.get_val_for_lsn_allocator();
-}
 
 OB_INLINE palf::SCN ObTxDataMemtable::get_rec_scn()
 {

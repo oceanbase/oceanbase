@@ -48,9 +48,6 @@ public:
                    ObTenantMetaMemMgr *t3m,
                    ObTabletDDLKvMgr *ddl_kv_mgr) override;
 
-  virtual int create_memtable(const int64_t clog_checkpoint_ts,
-                              const int64_t schema_version,
-                              const bool for_replay=false) override;
   virtual int get_active_memtable(ObTableHandleV2 &handle) const override;
   virtual int get_all_memtables(ObTableHdlArray &handle) override;
   virtual void destroy() override;
@@ -70,6 +67,9 @@ public:
       memtable::ObMemtable *&memtable,
       const memtable::MultiSourceDataUnitType type) const override;
   int release_tail_memtable(memtable::ObIMemtable *memtable);
+  int create_memtable(const palf::SCN clog_checkpoint_scn,
+                      const int64_t schema_version,
+                      const bool for_replay);
   int get_memtables(
       ObTableHdlArray &handle,
       const bool reset_handle = true,

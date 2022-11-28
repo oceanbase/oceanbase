@@ -63,13 +63,10 @@ public:  // ObTxDataMemtableMgr
    * @brief Using to create a new active tx data memtable
    *
    * @param[in] clog_checkpoint_ts clog_checkpoint_ts, using to init multiversion_start,
-   * base_version and start_log_ts. The start_log_ts will be modified if this function is called by
+   * base_version and start_scn. The start_scn will be modified if this function is called by
    * freeze().
    * @param[in] schema_version  schema_version, not used
    */
-  virtual int create_memtable(const int64_t clog_checkpoint_ts,
-                              const int64_t schema_version,
-                              const bool for_replay=false) override;
   virtual int create_memtable(const palf::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
                               const bool for_replay=false) override;

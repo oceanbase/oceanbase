@@ -198,18 +198,18 @@ private:
 public:
   struct Node {
     palf::SCN start_scn_;
-    palf::SCN commit_scn_;
+    palf::SCN commit_version_;
 
-    Node() : start_scn_(), commit_scn_() {}
+    Node() : start_scn_(), commit_version_() {}
 
-    Node(const palf::SCN start_scn, const palf::SCN commit_scn)
-      : start_scn_(start_scn), commit_scn_(commit_scn) {}
+    Node(const palf::SCN start_scn, const palf::SCN commit_version)
+      : start_scn_(start_scn), commit_version_(commit_version) {}
 
     bool operator==(const Node &rhs) const 
     {
       bool is_equal = true;
       if (this->start_scn_ != rhs.start_scn_
-          || this->commit_scn_ != rhs.commit_scn_) {
+          || this->commit_version_ != rhs.commit_version_) {
         is_equal = false;
       }
       return is_equal;
@@ -243,9 +243,9 @@ public:
       if (i % 3 == 0) {
         fprintf(stderr, "\n        ");
       }
-      fprintf(stderr, "(start_log_ts=%-20ld, commit_version=%-20ld) ",
-              commit_versions.array_.at(i).start_scn_.get_val_for_lsn_allocator(),
-              commit_versions.array_.at(i).commit_scn_.get_val_for_lsn_allocator());
+      fprintf(stderr, "(start_scn=%-20s, commit_version=%-20s) ",
+              to_cstring(commit_versions.array_.at(i).start_scn_),
+              to_cstring(commit_versions.array_.at(i).commit_version_));
     }
     fprintf(stderr, "\npre-process data end.\n");
   }
@@ -264,22 +264,22 @@ public:
 class CalcUpperTransSCNCache
 {
 public:
-  CalcUpperTransSCNCache() : is_inited_(false), cache_version_scn_(), commit_scns_() {}
+  CalcUpperTransSCNCache() : is_inited_(false), cache_version_(), commit_scns_() {}
 
   void reset()
   {
     is_inited_ = false;
-    cache_version_scn_.reset();
+    cache_version_.reset();
     commit_scns_.reset();
   }
 
-  TO_STRING_KV(K_(is_inited), K_(cache_version_scn), K_(commit_scns));
+  TO_STRING_KV(K_(is_inited), K_(cache_version), K_(commit_scns));
 
 public:
   bool is_inited_;
 
-  // The end_log_ts of the sstable will be used as the cache_version
-  palf::SCN cache_version_scn_;
+  // The end_scn of the sstable will be used as the cache_version
+  palf::SCN cache_version_;
   
   mutable common::TCRWLock lock_;
 

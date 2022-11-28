@@ -1108,9 +1108,11 @@ int ObTablet::update_upper_trans_version(ObLS &ls, bool &is_updated)
         LOG_WARN("sstable must not be null", K(ret), K(i), K(minor_tables));
       } else if (INT64_MAX == sstable->get_upper_trans_version()) {
         int64_t max_trans_version = INT64_MAX;
-        if (OB_FAIL(ls.get_upper_trans_version_before_given_log_ts(
-            sstable->get_end_log_ts(), max_trans_version))) {
+        SCN tmp_scn = SCN::max_scn();
+        if (OB_FAIL(ls.get_upper_trans_version_before_given_scn(
+            sstable->get_end_scn(), tmp_scn))) {
           LOG_WARN("failed to get upper trans version before given log ts", K(ret), KPC(sstable));
+        } else if (FALSE_IT(max_trans_version = tmp_scn.is_max() ? INT64_MAX : tmp_scn.get_val_for_lsn_allocator())) {
         } else if (0 == max_trans_version) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("max trans version should not be 0", KPC(sstable));
@@ -1641,7 +1643,7 @@ int ObTablet::inner_create_memtable(
     LOG_WARN("invalid args", K(ret), K(clog_checkpoint_scn), K(schema_version));
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(memtable_mgr->create_memtable(clog_checkpoint_scn.get_val_for_gts(), schema_version, for_replay))) {
+  } else if (OB_FAIL(memtable_mgr->create_memtable(clog_checkpoint_scn, schema_version, for_replay))) {
     if (OB_ENTRY_EXIST != ret && OB_MINOR_FREEZE_NOT_ALLOW != ret) {
       LOG_WARN("failed to create memtable for tablet", K(ret),
           K(clog_checkpoint_scn), K(schema_version), K(for_replay));

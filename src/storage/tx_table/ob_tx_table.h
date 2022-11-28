@@ -54,15 +54,16 @@ public:
   ObTxTable()
       : is_inited_(false),
         epoch_(INVALID_READ_EPOCH),
-        max_tablet_clog_checkpoint_(0),
+        max_tablet_clog_checkpoint_(),
         prepare_online_ts_(0),
         state_(OFFLINE),
         ls_(nullptr),
         tx_data_table_(default_tx_data_table_) {}
+
   ObTxTable(ObTxDataTable &tx_data_table)
       : is_inited_(false),
         epoch_(INVALID_READ_EPOCH),
-        max_tablet_clog_checkpoint_(0),
+        max_tablet_clog_checkpoint_(),
         prepare_online_ts_(0),
         state_(OFFLINE),
         ls_(nullptr),
@@ -144,16 +145,16 @@ public:
    * https://yuque.antfin-inc.com/ob/storage/adk6yx
    *
    * @param[in] data_trans_id
-   * @param[in] log_ts
+   * @param[in] scn
    * @param[in] read_epoch
    * @param[out] state
    * @param[out] trans_version
    */
-  int get_tx_state_with_log_ts(const transaction::ObTransID &data_trans_id,
-                               const int64_t log_ts,
+  int get_tx_state_with_scn(const transaction::ObTransID &data_trans_id,
+                               const palf::SCN scn,
                                const int64_t read_epoch,
                                int64_t &state,
-                               int64_t &trans_version);
+                               palf::SCN &trans_version);
 
   /**
    * @brief Try to get a tx data from tx_data_table. This function used in special situation when the trans service do
@@ -167,7 +168,7 @@ public:
   int try_get_tx_state(const transaction::ObTransID tx_id,
                        const int64_t read_epoch,
                        int64_t &state,
-                       int64_t &trans_version);
+                       palf::SCN &trans_version);
 
   /**
    * @brief the txn READ_TRANS_ID use SNAPSHOT_VERSION to read the data, and check whether the data is locked, readable or unreadable by txn DATA_TRANS_ID. READ_LATEST is used to check whether read the data belong to the same txn
@@ -182,7 +183,7 @@ public:
   int lock_for_read(const transaction::ObLockForReadArg &lock_for_read_arg,
                     const int64_t read_epoch,
                     bool &can_read,
-                    int64_t &trans_version,
+                    palf::SCN &trans_version,
                     bool &is_determined_state,
                     const ObCleanoutOp &cleanout_op = ObCleanoutNothingOperation(),
                     const ObReCheckOp &recheck_op = ObReCheckNothingOperation());
@@ -208,7 +209,7 @@ public:
    * @brief The tx data sstables need to be cleared periodically. This function returns a recycle_scn
    * to decide which tx data should be cleared.
    *
-   * @param[out] recycle_scn the tx data whose end_log_ts is smaller or equals to the recycle_scn can
+   * @param[out] recycle_scn the tx data whose end_scn is smaller or equals to the recycle_scn can
    * be cleared.
    */
   int get_recycle_scn(palf::SCN &recycle_scn);
@@ -222,12 +223,12 @@ public:
   }
 
   /**
-   * @brief Get the upper trans version for each given end_log_ts
+   * @brief Get the upper trans version for each given end_scn
    *
-   * @param[in] sstable_end_log_ts the end_log_ts of the data sstable which is waitting to get the upper_trans_version
+   * @param[in] sstable_end_scn the end_scn of the data sstable which is waitting to get the upper_trans_version
    * @param[out] upper_trans_version the upper_trans_version
    */
-  int get_upper_trans_version_before_given_log_ts(const int64_t sstable_end_log_ts, int64_t &upper_trans_version);
+  int get_upper_trans_version_before_given_scn(const palf::SCN sstable_end_scn, palf::SCN &upper_trans_version);
 
   /**
    * @brief When a transaction is replayed in the middle, it will read tx data from tx data sstable
@@ -248,7 +249,6 @@ public:
    *
    * @param[out] start_tx_scn
    */
-  int get_start_tx_log_ts(int64_t &start_log_ts);
   int get_start_tx_scn(palf::SCN &start_tx_scn);
 
   int dump_single_tx_data_2_text(const int64_t tx_id_int, const char *fname);
@@ -303,7 +303,7 @@ private:
   int load_tx_data_table_();
   int offline_tx_ctx_table_();
   int offline_tx_data_table_();
-  int get_max_tablet_clog_checkpoint_(int64_t &max_tablet_clog_checkpoint);
+  int get_max_tablet_clog_checkpoint_(palf::SCN &max_tablet_clog_checkpoint);
 
   void check_state_and_epoch_(const transaction::ObTransID tx_id,
                               const int64_t read_epoch,
@@ -316,7 +316,7 @@ private:
   static const int64_t LS_TX_CTX_SCHEMA_COLUMN_CNT = 3;
   bool is_inited_;
   int64_t epoch_ CACHE_ALIGNED;
-  int64_t max_tablet_clog_checkpoint_;
+  palf::SCN max_tablet_clog_checkpoint_;
   int64_t prepare_online_ts_;
   TxTableState state_ CACHE_ALIGNED;
   ObLS *ls_;
