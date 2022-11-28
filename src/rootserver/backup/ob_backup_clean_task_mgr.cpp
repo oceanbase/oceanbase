@@ -805,16 +805,19 @@ int ObBackupCleanTaskMgr::delete_backup_set_inner_placeholder_()
   int ret = OB_SUCCESS;
   ObBackupPath path;
   ObBackupSetDesc desc;
-  share::ObBackupDest backup_set_dest;
   desc.backup_set_id_ = backup_set_info_.backup_set_id_;
   desc.backup_type_ = backup_set_info_.backup_type_;
-  if (OB_FAIL(ObBackupPathUtil::construct_backup_set_dest(backup_dest_, desc, backup_set_dest))) {
-    LOG_WARN("fail to construct backup set dest", K(ret));
-  } else if (OB_FAIL(ObBackupPathUtil::get_backup_set_inner_placeholder(
-      backup_set_dest, desc, backup_set_info_.start_replay_scn_, backup_set_info_.min_restore_scn_, path))) {
-    LOG_WARN("failed to get backup set end placeholder path", K(ret));
-  } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_file(path, backup_dest_.get_storage_info()))) {
-    LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+  char placeholder_prefix[OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH] = { 0 };
+  ObBackupIoAdapter util;
+  ObBackupPrefixDeleteFileOp prefix_delete_op;
+  if (OB_FAIL(ObBackupPathUtil::get_backup_set_dir_path(backup_dest_, desc, path))) {
+    LOG_WARN("failed to get tenant data backup set dir", K(ret), K_(backup_dest));
+  } else if (OB_FAIL(ObBackupPathUtil::get_backup_set_inner_placeholder_prefix(desc, placeholder_prefix, sizeof(placeholder_prefix)))) {
+    LOG_WARN("failed to get backup set inner placeholder prefix", K(ret));
+  } else if (OB_FAIL(prefix_delete_op.init(placeholder_prefix, strlen(placeholder_prefix), path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to init prefix delete", K(ret), K(placeholder_prefix));
+  } else if (OB_FAIL(util.list_files(path.get_obstr(), backup_dest_.get_storage_info(), prefix_delete_op))) {
+    LOG_WARN("failed to list files", K(ret), K(path), K(placeholder_prefix));
   }
   return ret;
 }

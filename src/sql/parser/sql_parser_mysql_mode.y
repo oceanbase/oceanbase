@@ -166,7 +166,7 @@ COALESCE_SQ NO_COALESCE_SQ COUNT_TO_EXISTS NO_COUNT_TO_EXISTS LEFT_TO_ANTI NO_LE
 ELIMINATE_JOIN NO_ELIMINATE_JOIN PUSH_LIMIT NO_PUSH_LIMIT PULLUP_EXPR NO_PULLUP_EXPR
 WIN_MAGIC NO_WIN_MAGIC 
 // optimize hint
-INDEX_HINT FULL_HINT NO_INDEX_HINT LEADING_HINT ORDERED
+INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT LEADING_HINT ORDERED
 USE_NL USE_MERGE USE_HASH NO_USE_HASH NO_USE_MERGE NO_USE_NL
 USE_NL_MATERIALIZATION NO_USE_NL_MATERIALIZATION
 USE_HASH_AGGREGATION NO_USE_HASH_AGGREGATION 
@@ -474,7 +474,7 @@ END_P SET_VAR DELIMITER
 %type <node> optimize_stmt
 %type <node> dump_memory_stmt
 %type <node> create_savepoint_stmt rollback_savepoint_stmt release_savepoint_stmt
-%type <node> opt_qb_name parallel_hint
+%type <node> opt_qb_name parallel_hint pq_set_hint_desc
 %type <node> create_tablespace_stmt drop_tablespace_stmt tablespace rotate_master_key_stmt
 %type <node> alter_tablespace_stmt
 %type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action opt_force_purge
@@ -6389,31 +6389,37 @@ REDUNDANT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 1;
+  $$->is_hidden_const_ = 1;
 }
 | COMPACT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 2;
+  $$->is_hidden_const_ = 1;
 }
 | DYNAMIC
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 3;
+  $$->is_hidden_const_ = 1;
 }
 | COMPRESSED
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 4;
+  $$->is_hidden_const_ = 1;
 }
 | CONDENSED
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 5;
+  $$->is_hidden_const_ = 1;
 }
 | DEFAULT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 3;
+  $$->is_hidden_const_ = 1;
 }
 ;
 /*****************************************************************************
@@ -8482,6 +8488,14 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FULL_HINT, 2, $3, $4);
 }
+| USE_DAS_HINT '(' qb_name_option relation_factor_in_hint ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_USE_DAS_HINT, 2, $3, $4);
+}
+| NO_USE_DAS_HINT '(' qb_name_option relation_factor_in_hint ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_DAS_HINT, 2, $3, $4);
+}
 | LEADING_HINT '(' qb_name_option relation_factor_in_leading_hint_list ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LEADING, 2, $3, $4);
@@ -8576,6 +8590,10 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
   (void)($7);               /* unused */
   malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE, 4, $3, $4, $6, $8);
 }
+| PQ_DISTRIBUTE '(' qb_name_option relation_factor_in_pq_hint ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE, 4, $3, $4, NULL, NULL);
+}
 | PQ_MAP '(' qb_name_option relation_factor_in_hint ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_MAP, 2, $3, $4);
@@ -8587,11 +8605,9 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
   merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE_WINDOW, 2, $3, method_list);
 }
-| PQ_SET '(' qb_name_option distribute_method_list ')'
+| PQ_SET '(' pq_set_hint_desc ')'
 {
-  ParseNode *method_list = NULL;
-  merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 2, $3, method_list);
+  $$ = $3;
 }
 | GBY_PUSHDOWN opt_qb_name
 {
@@ -8632,6 +8648,29 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 | NO_USE_DISTRIBUTED_DML opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_DISTRIBUTED_DML, 1, $2);
+}
+;
+
+pq_set_hint_desc:
+'@' qb_name_string qb_name_string distribute_method_list
+{
+  ParseNode *method_list = NULL;
+  merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 3, $2, $3, method_list);
+}
+| '@' qb_name_string distribute_method_list
+{
+  ParseNode *method_list = NULL;
+  merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 3, $2, NULL, method_list);
+}
+| '@' qb_name_string qb_name_string
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 3, $2, $3, NULL);
+}
+| '@' qb_name_string
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 3, $2, NULL, NULL);
 }
 ;
 

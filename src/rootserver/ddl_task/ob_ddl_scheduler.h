@@ -113,6 +113,7 @@ public:
       const common::ObTabletID &tablet_id,
       const ObDDLTaskKey &task_key,
       const int64_t snapshot_version,
+      const int64_t execution_id,
       const int ret_code);
 
   int on_ddl_task_finish(

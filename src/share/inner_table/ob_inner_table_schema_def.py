@@ -9150,7 +9150,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'lj229669',
+  owner = 'adou.ly',
   table_name    = '__all_virtual_open_cursor',
   table_id      = '12187',
   table_type = 'VIRTUAL_TABLE',
@@ -9171,6 +9171,9 @@ def_table_schema(
     ('SQL_TEXT', 'varchar:60'),
     ('LAST_SQL_ACTIVE_TIME', 'timestamp'),
     ('SQL_EXEC_ID', 'int'),
+    ('CURSOR_TYPE', 'varchar:30'),
+    ('CHILD_ADDRESS', 'varchar:30'),
+    ('CON_ID', 'int'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -41085,60 +41088,52 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-#FIXME: This view will be supported later
-#def_table_schema(
-#  owner = 'lj229669',
-#  table_name      = 'GV$OPEN_CURSOR',
-#  name_postfix    = '_ORA',
-#  database_id     = 'OB_ORA_SYS_DATABASE_ID',
-#  table_id        = '28064',
-#  table_type      = 'SYSTEM_VIEW',
-#  rowkey_columns  = [],
-#  normal_columns  = [],
-#  gm_columns      = [],
-#  in_tenant_space = True,
-#  view_definition = """
-#    SELECT
-#      SVR_IP,
-#      SVR_PORT,
-#      SADDR,
-#      SID,
-#      USER_NAME,
-#      ADDRESS,
-#      HASH_VALUE,
-#      SQL_ID,
-#      SQL_TEXT,
-#      CAST(LAST_SQL_ACTIVE_TIME as DATE) LAST_SQL_ACTIVE_TIME,
-#      SQL_EXEC_ID FROM SYS.ALL_VIRTUAL_OPEN_CURSOR
-#  """.replace("\n", " ")
-#)
+def_table_schema(
+  owner = 'adou.ly',
+  table_name      = 'GV$OPEN_CURSOR',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28064',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      SVR_IP,
+      SVR_PORT,
+      CAST(SADDR AS VARCHAR2(8)) SADDR,
+      CAST(SID AS NUMBER) SID,
+      CAST(USER_NAME AS VARCHAR2(30)) USER_NAME,
+      CAST(ADDRESS AS VARCHAR2(8)) ADDRESS,
+      CAST(HASH_VALUE AS NUMBER) HASH_VALUE,
+      CAST(SQL_ID AS VARCHAR2(32)) SQL_ID,
+      CAST(SQL_TEXT AS VARCHAR2(60)) SQL_TEXT,
+      CAST(LAST_SQL_ACTIVE_TIME as DATE) LAST_SQL_ACTIVE_TIME,
+      CAST(SQL_EXEC_ID AS NUMBER) SQL_EXEC_ID,
+      CAST(CURSOR_TYPE AS VARCHAR2(30)) CURSOR_TYPE,
+      CAST(CHILD_ADDRESS AS VARCHAR2(30)) CHILD_ADDRESS,
+      CAST(CON_ID AS NUMBER) CON_ID FROM SYS.ALL_VIRTUAL_OPEN_CURSOR
+  """.replace("\n", " ")
+)
 
-#FIXME: This view will be supported later
-#def_table_schema(
-#  owner = 'lj229669',
-#  table_name      = 'V$OPEN_CURSOR',
-#  name_postfix    = '_ORA',
-#  database_id     = 'OB_ORA_SYS_DATABASE_ID',
-#  table_id        = '28065',
-#  table_type      = 'SYSTEM_VIEW',
-#  rowkey_columns  = [],
-#  normal_columns  = [],
-#  gm_columns      = [],
-#  in_tenant_space = True,
-#  view_definition = """
-#    SELECT
-#      SADDR,
-#      SID,
-#      USER_NAME,
-#      ADDRESS,
-#      HASH_VALUE,
-#      SQL_ID,
-#      SQL_TEXT,
-#      LAST_SQL_ACTIVE_TIME,
-#      SQL_EXEC_ID FROM SYS.GV$OPEN_CURSOR
-#      WHERE svr_ip = host_ip() AND svr_port = rpc_port()
-#  """.replace("\n", " ")
-#)
+def_table_schema(
+  owner = 'adou.ly',
+  table_name      = 'V$OPEN_CURSOR',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28065',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT * FROM SYS.GV$OPEN_CURSOR
+      WHERE svr_ip = host_ip() AND svr_port = rpc_port()
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'dachuan.sdc',

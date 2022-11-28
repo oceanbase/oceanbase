@@ -518,6 +518,7 @@ int ObJoinFilterOp::mark_rpc_filter()
     filter_data->bloom_filter_count_ = 0;
     ctx_.get_bf_ctx().filter_data_ = filter_data;
     ctx_.get_bf_ctx().filter_ready_ = true;
+    ctx_.get_bf_ctx().filter_id_ = MY_SPEC.filter_id_;
     ctx_.get_bf_ctx().ch_set_.reset();
     ctx_.get_bf_ctx().ch_provider_ptr_ = filter_input_->share_info_.ch_provider_ptr_;
   }

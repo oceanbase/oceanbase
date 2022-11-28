@@ -109,14 +109,17 @@ int ObTxDataTable::init_tx_data_read_schema_()
   share::schema::ObColDesc total_row_cnt;
   total_row_cnt.col_id_ = TOTAL_ROW_CNT;
   total_row_cnt.col_type_.set_int();
+  total_row_cnt.col_order_ = ObOrderType::ASC;
 
   share::schema::ObColDesc end_ts;
   end_ts.col_id_ = END_LOG_TS;
   end_ts.col_type_.set_int();
+  end_ts.col_order_ = ObOrderType::ASC;
 
   share::schema::ObColDesc value;
   value.col_id_ = VALUE;
   value.col_type_.set_binary();
+  value.col_order_ = ObOrderType::ASC;
 
   iter_param.table_id_ = 1;
   iter_param.tablet_id_ = LS_TX_DATA_TABLET;
@@ -329,7 +332,7 @@ int ObTxDataTable::insert(ObTxData *&tx_data)
     STORAGE_LOG(WARN, "get all memtables for write fail.", KR(ret), KPC(get_memtable_mgr_()));
   } else if (FALSE_IT(tg.click())) {
     // do nothing
-  } else if (OB_FAIL(insert_(tx_data, write_guard.handles_))) {
+  } else if (OB_FAIL(insert_(tx_data, write_guard))) {
     STORAGE_LOG(WARN, "insert tx data failed.", KR(ret), KPC(tx_data), KP(this), K(tablet_id_));
   } else {
     // STORAGE_LOG(DEBUG, "insert tx data succeed.", KPC(tx_data));
@@ -345,22 +348,23 @@ int ObTxDataTable::insert(ObTxData *&tx_data)
 // In order to support the commit log without undo actions, the tx data related to a single
 // transaction may be inserted multiple times. For more details, see
 // https://yuque.antfin.com/ob/transaction/cdn5ez
-int ObTxDataTable::insert_(ObTxData *&tx_data, ObIArray<ObTableHandleV2> &memtable_handles)
+int ObTxDataTable::insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write_guard)
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard tg("tx_data_table::insert_", 100 * 1000);
   ObTxDataMemtable *tx_data_memtable = nullptr;
+  ObTableHandleV2 (&memtable_handles)[MAX_TX_DATA_MEMTABLE_CNT] = write_guard.handles_;
 
-  for (int i = memtable_handles.count() - 1; OB_SUCC(ret) && OB_NOT_NULL(tx_data) && i >= 0; i--) {
+  for (int i = write_guard.size_ - 1; OB_SUCC(ret) && OB_NOT_NULL(tx_data) && i >= 0; i--) {
     tx_data_memtable = nullptr;
-    if (OB_FAIL(memtable_handles.at(i).get_tx_data_memtable(tx_data_memtable))) {
+    if (OB_FAIL(memtable_handles[i].get_tx_data_memtable(tx_data_memtable))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "get tx data memtable from table handles fail.", KR(ret), KP(this),
-                  K(tablet_id_), K(memtable_handles.at(i)));
+                  K(tablet_id_), K(memtable_handles[i]));
     } else if (OB_ISNULL(tx_data_memtable)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "tx data memtable is nullptr.", KR(ret), KP(this), K(tablet_id_),
-                  K(memtable_handles.at(i)));
+                  K(memtable_handles[i]));
     } else if (OB_UNLIKELY(ObTxDataMemtable::State::RELEASED == tx_data_memtable->get_state())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR,

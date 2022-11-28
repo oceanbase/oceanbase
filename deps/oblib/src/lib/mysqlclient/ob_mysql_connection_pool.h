@@ -207,7 +207,6 @@ private:
   int get_server_pool_(const ObAddr &addr, ObServerConnectionPool *&pool);
   int purge_tenant_server_pool_map_(const ObIArray<uint64_t> &tenant_array);
 protected:
-  static const int64_t OB_MAX_PASS_WORD_LENGTH = 64;
   static const int MAX_SERVER_GONE_INTERVAL = 1000 * 1000 * 1; // 1 sec
 
   bool is_updated_;
@@ -221,7 +220,7 @@ protected:
   volatile int64_t busy_conn_count_;
 
   char db_user_[OB_MAX_USER_NAME_BUF_LENGTH];
-  char db_pass_[OB_MAX_PASS_WORD_LENGTH];
+  char db_pass_[OB_MAX_PASSWORD_BUF_LENGTH];
   char db_name_[OB_MAX_DATABASE_NAME_BUF_LENGTH];
   char init_sql_[OB_MAX_SQL_LENGTH];
   ObConnPoolConfigParam config_;

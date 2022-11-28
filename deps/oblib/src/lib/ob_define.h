@@ -309,6 +309,7 @@ const int64_t OB_SERVER_TYPE_LENGTH = 64;
 const int64_t OB_MAX_HOSTNAME_LENGTH = 60;
 const int64_t OB_MAX_USERNAME_LENGTH = 32;
 const int64_t OB_MAX_PASSWORD_LENGTH = 128;
+const int64_t OB_MAX_PASSWORD_BUF_LENGTH = OB_MAX_PASSWORD_LENGTH + 1;
 // After each sha1 is 41 characters, the incremental backup is up to 64 times, and the maximum password required for recovery is 64*(41+1)=2,688
 const int64_t OB_MAX_PASSWORD_ARRAY_LENGTH = 4096;
 const int64_t OB_MAX_ERROR_MSG_LEN = 512;

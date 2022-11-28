@@ -621,7 +621,8 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
         LOG_WARN("[DATA_BACKUP]failed to update backup type", K(ret), K(new_job_attr));
       } else if (OB_FAIL(new_job_attr.executor_tenant_id_.push_back(new_job_attr.tenant_id_))) {
         LOG_WARN("[DATA_BACKUP]failed to push back tenant id", K(ret));
-      } else if (OB_FALSE_IT(new_job_attr.initiator_job_id_ = new_job_attr.job_id_)) {
+      } else if (OB_FALSE_IT(new_job_attr.initiator_job_id_ = new_job_attr.tenant_id_ == new_job_attr.initiator_tenant_id_ ?
+          0/*no parent job*/ : new_job_attr.initiator_job_id_)) {
       } else if (OB_FAIL(lease_service_->check_lease())) {
         LOG_WARN("fail to check leader", K(ret));
       } else if (OB_FAIL(ObBackupJobOperator::insert_job(trans, new_job_attr))) {

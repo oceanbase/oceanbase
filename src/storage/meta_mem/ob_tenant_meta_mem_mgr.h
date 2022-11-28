@@ -145,12 +145,14 @@ public:
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
       ObLSHandle &ls_handle,
-      ObTabletHandle &tablet_handle);
+      ObTabletHandle &tablet_handle,
+      const bool only_acquire);
   int acquire_tablet(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
       common::ObIAllocator &allocator,
-      ObTabletHandle &tablet_handle);
+      ObTabletHandle &tablet_handle,
+      const bool only_acquire);
   int get_tablet(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,

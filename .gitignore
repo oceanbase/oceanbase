@@ -323,3 +323,4 @@ tools/deploy/single.yaml
 tools/ob-configserver/bin/*
 tools/ob-configserver/tests/*.log
 tools/ob-configserver/tests/*.out
+.history/*

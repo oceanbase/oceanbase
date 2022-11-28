@@ -138,7 +138,7 @@ int ObLSTabletService::offline()
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    CleanMemtableOperator clean_mem_op(this);
+    DestroyMemtableAndMgrOperator clean_mem_op(this);
     if (OB_FAIL(tablet_id_set_.foreach(clean_mem_op))) {
       LOG_WARN("fail to clean memtables", K(ret), K(clean_mem_op.cur_tablet_id_));
     }
@@ -884,7 +884,7 @@ int ObLSTabletService::rebuild_tablet_with_old(
 
   if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(key));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle))) {
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle, true/*only acquire*/))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
   } else if (OB_FAIL(new_tablet->init(mig_tablet_param, true/*is_update*/, freezer))) {
@@ -920,7 +920,7 @@ int ObLSTabletService::migrate_update_tablet(
 
   if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(key));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle))) {
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle, true/*only acquire*/))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
   } else if (OB_FAIL(new_tablet->init(mig_tablet_param, true/*is_update*/, freezer))) {
@@ -1006,7 +1006,7 @@ int ObLSTabletService::update_tablet_table_store(
   } else if (OB_UNLIKELY(!tablet_id.is_valid() || !param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(param));
-  } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle))) {
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle, true/*only acquire*/))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else {
     new_tablet = new_tablet_handle.get_obj();
@@ -1448,7 +1448,7 @@ int ObLSTabletService::inner_table_scan(
      //check schema_version with ref_table_id, because schema_version of scan_param is from ref table
      LOG_WARN("check schema version for bounded staleness read fail", K(ret), K(param));
      //need to get store ctx of PG, cur_key_ saves the real partition
-   } else if (0 == param.fb_snapshot_) {
+   } else if (param.fb_snapshot_.is_min()) {
      ret = OB_SNAPSHOT_DISCARDED;
   } else if (OB_FAIL(ObTabletBindingHelper::check_snapshot_readable(
                        tablet_handle,
@@ -2818,7 +2818,7 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
       LOG_WARN("failed to get tx data from old tablet", K(ret), K(tablet_id));
     } else if (OB_FAIL(old_tablet->get_latest_autoinc_seq(autoinc_seq))) {
       LOG_WARN("failed to get autoinc seq from old tablet", K(ret));
-    } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle))) {
+    } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tablet(key, new_tablet_handle, true/*only acquire*/))) {
       LOG_WARN("failed to acquire tablet", K(ret), K(key));
     } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
     } else if (OB_FAIL(new_tablet->init(param, *old_tablet, tx_data, ddl_data, autoinc_seq))) {
@@ -5389,7 +5389,7 @@ int ObLSTabletService::GetAllTabletIDOperator::operator()(const common::ObTablet
   return ret;
 }
 
-int ObLSTabletService::CleanMemtableOperator::operator()(const common::ObTabletID &tablet_id)
+int ObLSTabletService::DestroyMemtableAndMgrOperator::operator()(const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -5411,8 +5411,8 @@ int ObLSTabletService::CleanMemtableOperator::operator()(const common::ObTabletI
     }
   } else if (OB_FAIL(handle.get_obj()->release_memtables())) {
     LOG_WARN("failed to release memtables", K(tenant_id), K(tablet_id));
-  } else {
-    // do nothing
+  } else if (OB_FAIL(handle.get_obj()->destroy_memtable_mgr())) {
+    LOG_WARN("failed to destroy shared_params", K(ret), K(tenant_id), K(tablet_id));
   }
   return ret;
 }

@@ -99,13 +99,15 @@ OB_SERIALIZE_MEMBER((ObPxFifoReceiveSpec, ObPxReceiveSpec));
 OB_SERIALIZE_MEMBER((ObPxReceiveSpec, ObReceiveSpec),
                     child_exprs_,
                     repartition_table_id_,
-                    dynamic_const_exprs_);
+                    dynamic_const_exprs_,
+                    bloom_filter_id_array_);
 
 ObPxReceiveSpec::ObPxReceiveSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
   : ObReceiveSpec(alloc, type),
     child_exprs_(alloc),
     repartition_table_id_(OB_INVALID_ID),
-    dynamic_const_exprs_(alloc)
+    dynamic_const_exprs_(alloc),
+    bloom_filter_id_array_(alloc)
 {
   repartition_table_id_ = 0;
 }
@@ -625,7 +627,7 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
   ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   if (OB_FAIL(try_link_channel())) {
     LOG_WARN("failed to init channel", K(ret));
-  } else if (ctx_.get_bf_ctx().filter_ready_ && OB_FAIL(ObPxMsgProc::mark_rpc_filter(ctx_))) {
+  } else if (need_send_bloom_filter() && OB_FAIL(ObPxMsgProc::mark_rpc_filter(ctx_))) {
     LOG_WARN("fail to send rpc bloom filter", K(ret));
   } else if (OB_FAIL(try_send_bloom_filter())) {
     LOG_WARN("fail to try send bloom filter", K(ret));

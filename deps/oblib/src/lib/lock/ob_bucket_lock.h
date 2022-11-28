@@ -34,8 +34,8 @@ public:
   void destroy();
   int try_rdlock(const uint64_t bucket_idx);
   int try_wrlock(const uint64_t bucket_idx);
-  int rdlock(const uint64_t bucket_idx);
-  int wrlock(const uint64_t bucket_idx);
+  int rdlock(const uint64_t bucket_idx, const int64_t abs_timeout_us = INT64_MAX);
+  int wrlock(const uint64_t bucket_idx, const int64_t abs_timeout_us = INT64_MAX);
   int unlock(const uint64_t bucket_idx);
   int try_wrlock_all();
   int try_rdlock_all();

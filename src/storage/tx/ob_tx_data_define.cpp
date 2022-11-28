@@ -653,13 +653,15 @@ DEF_TO_STRING(ObUndoStatusNode)
 
 void ObTxDataMemtableWriteGuard::reset()
 {
-  for (int i = 0; i < handles_.count(); i++) {
-    if (handles_.at(i).is_valid()) {
+  for (int i = 0; i < MAX_TX_DATA_MEMTABLE_CNT; i++) {
+    if (handles_[i].is_valid()) {
       ObTxDataMemtable *tx_data_memtable = nullptr;
-      handles_.at(i).get_tx_data_memtable(tx_data_memtable);
+      handles_[i].get_tx_data_memtable(tx_data_memtable);
       tx_data_memtable->dec_write_ref();
     }
+    handles_[i].reset();
   }
+  size_ = 0;
 }
 
 }  // namespace storage

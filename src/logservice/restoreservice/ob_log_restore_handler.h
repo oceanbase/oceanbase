@@ -111,7 +111,7 @@ public:
   int get_restore_sync_scn(const share::ObLSID &id, palf::SCN &log_scn);
   void mark_error(share::ObTaskId &trace_id, const int ret_code);
   int get_restore_error(share::ObTaskId &trace_id, int &ret_code, bool &error_exist);
-  TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KPC_(parent), K_(context));
+  TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context));
 
 private:
   bool is_valid() const;

@@ -186,26 +186,6 @@ struct ObParentDMLStmt
                K_(stmt));
 };
 
-#define APPLY_RULE_IF_NEEDED(t, c)                                  \
-  do {                                                              \
-     if (OB_SUCC(ret) && ObTransformerImpl::is_type_needed(needed_types & needed_transform_types_, t)) {                        \
-      c trans(ctx_);                                                \
-      trans.set_transformer_type(t);                                \
-      if (OB_FAIL(THIS_WORKER.check_status())) {                    \
-        LOG_WARN("check status fail", K(ret));                      \
-      } else if (OB_FAIL(trans.transform(stmt, needed_transform_types_))) {    \
-        LOG_WARN("failed to transform a rewrite rule", "class", (#c), K(ret)); \
-      } else if (OB_FAIL(collect_trans_stat(trans))) {                    \
-        LOG_WARN("failed to collect transform stat", K(ret));             \
-      } else {                                                            \
-        trans_happened |= trans.get_trans_happened();                     \
-        LOG_TRACE("succeed to transform a rewrite rule", "class", (#c), K(trans.get_trans_happened()), K(ret)); \
-      }                                                                    \
-    }  else {           \
-      LOG_TRACE("skip tranform a rewrite rule", "class", (#c)); \
-    } \
-  } while (0);
-
 // use to keep view name/stmt id/qb name stable after copy stmt and try transform
 struct ObTryTransHelper
 {

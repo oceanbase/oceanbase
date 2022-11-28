@@ -1539,6 +1539,8 @@ public:
   static int gv_sql_plan_monitor_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_sql_plan_monitor_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_sql_monitor_statname_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_open_cursor_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_open_cursor_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_timezone_names_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_global_transaction_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_global_transaction_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -3371,6 +3373,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::gv_sql_plan_monitor_ora_schema,
   ObInnerTableSchema::v_sql_plan_monitor_ora_schema,
   ObInnerTableSchema::v_sql_monitor_statname_ora_schema,
+  ObInnerTableSchema::gv_open_cursor_ora_schema,
+  ObInnerTableSchema::v_open_cursor_ora_schema,
   ObInnerTableSchema::v_timezone_names_ora_schema,
   ObInnerTableSchema::gv_global_transaction_ora_schema,
   ObInnerTableSchema::v_global_transaction_ora_schema,
@@ -4456,6 +4460,8 @@ const uint64_t tenant_space_tables [] = {
   OB_GV_SQL_PLAN_MONITOR_ORA_TID,
   OB_V_SQL_PLAN_MONITOR_ORA_TID,
   OB_V_SQL_MONITOR_STATNAME_ORA_TID,
+  OB_GV_OPEN_CURSOR_ORA_TID,
+  OB_V_OPEN_CURSOR_ORA_TID,
   OB_V_TIMEZONE_NAMES_ORA_TID,
   OB_GV_GLOBAL_TRANSACTION_ORA_TID,
   OB_V_GLOBAL_TRANSACTION_ORA_TID,
@@ -6147,6 +6153,8 @@ const char* const tenant_space_table_names [] = {
   OB_GV_SQL_PLAN_MONITOR_ORA_TNAME,
   OB_V_SQL_PLAN_MONITOR_ORA_TNAME,
   OB_V_SQL_MONITOR_STATNAME_ORA_TNAME,
+  OB_GV_OPEN_CURSOR_ORA_TNAME,
+  OB_V_OPEN_CURSOR_ORA_TNAME,
   OB_V_TIMEZONE_NAMES_ORA_TNAME,
   OB_GV_GLOBAL_TRANSACTION_ORA_TNAME,
   OB_V_GLOBAL_TRANSACTION_ORA_TNAME,
@@ -8775,10 +8783,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 212;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 549;
-const int64_t OB_SYS_VIEW_COUNT = 596;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1362;
+const int64_t OB_SYS_VIEW_COUNT = 598;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1364;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1365;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1367;
 
 } // end namespace share
 } // end namespace oceanbase

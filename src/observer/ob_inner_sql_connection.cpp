@@ -949,7 +949,8 @@ int ObInnerSQLConnection::execute(ParamStore &params,
                                   ObVirtualTableIteratorFactory *vt_iter_factory,
                                   bool is_from_pl,
                                   bool is_dynamic,
-                                  bool is_forall)
+                                  bool is_forall,
+                                  int64_t array_binding_count)
 {
   int ret = OB_SUCCESS;
   ObExecRecord exec_record;
@@ -1037,15 +1038,9 @@ int ObInnerSQLConnection::execute(ParamStore &params,
         if (enable_sql_audit) {
           exec_record.record_start();
         }
-        if (is_forall) {
-          const ObSqlArrayObj *array_obj = NULL;
-          CK (params.count() > 0);
-          CK (params.at(0).is_ext_sql_array());
-          CK (OB_NOT_NULL(array_obj = reinterpret_cast<const ObSqlArrayObj*>(params.at(0).get_ext())));
-          if (OB_SUCC(ret)) {
-            res.sql_ctx().multi_stmt_item_.set_ps_mode(true);
-            res.sql_ctx().multi_stmt_item_.set_ab_cnt(array_obj->count_);
-          }
+        if (OB_SUCC(ret) && is_forall) {
+          res.sql_ctx().multi_stmt_item_.set_ps_mode(true);
+          res.sql_ctx().multi_stmt_item_.set_ab_cnt(array_binding_count);
         }
 
         const uint64_t tenant_id = get_session().get_effective_tenant_id();
@@ -2259,7 +2254,8 @@ int ObInnerSQLConnection::execute(const uint64_t tenant_id,
                                   ObISQLClient::ReadResult &res,
                                   bool is_from_pl,
                                   bool is_dynamic,
-                                  bool is_forall)
+                                  bool is_forall,
+                                  int64_t array_binding_count)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute);
@@ -2301,7 +2297,7 @@ int ObInnerSQLConnection::execute(const uint64_t tenant_id,
     get_session().store_query_string(ps_info->get_ps_sql());
 
     if (OB_FAIL(execute(params, read_ctx->get_result(), &read_ctx->get_vt_iter_factory(),
-                        is_from_pl, is_dynamic, is_forall))) {
+                        is_from_pl, is_dynamic, is_forall, array_binding_count))) {
       LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(stmt_id));
     }
   }
@@ -2493,8 +2489,6 @@ int ObInnerSQLConnection::get_session_variable(const ObString &name, int64_t &va
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (0 == name.case_compare("ob_read_snapshot_version")) { //fake system variable
-    val = get_session().get_read_snapshot_version();
   } else if (0 == name.case_compare("tx_isolation")) {
     // 隔离级别是一个varchar值
     ObObj obj;
@@ -2516,11 +2510,6 @@ int ObInnerSQLConnection::set_session_variable(const ObString &name, int64_t val
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (0 == name.case_compare("ob_read_snapshot_version")) { //fake system variable
-    if (val > 0) {
-      LOG_INFO("inner sql with read snapshot version", K(name), K(val));
-    }
-    (void)get_session().set_read_snapshot_version(val);
   } else if (0 == name.case_compare("ob_check_sys_variable")) { // fake system variable
     if (0 == val) {
       LOG_TRACE("disable inner sql check sys variable");

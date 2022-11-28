@@ -872,9 +872,9 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf("\tob_admin dump_backup -f/home/admin/macro_block_1.0 -o1024 -l2048\n");
   printf("  dump data with -s: \n");
   printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' "
-         "-s'host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&access_key=222'\n");
+         "-s'host=xxx.com&access_id=111&access_key=222'\n");
   printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
-         "-s'host=http://cos.ap-nanjing.myqcloud.com&access_id=111&access_key=222&appid=333'\n");
+         "-s'host=xxx.com&access_id=111&access_key=222&appid=333'\n");
   return ret;
 }
 

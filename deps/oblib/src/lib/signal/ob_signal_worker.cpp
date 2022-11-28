@@ -135,6 +135,9 @@ void iter_task(Func &&cb, int exclude_tid, Args && ... args)
       }
     } while (nread > 0);
   }
+  if (fd >= 0) {
+    ::close(fd);
+  }
 }
 
 ObSignalWorker::ObSignalWorker()

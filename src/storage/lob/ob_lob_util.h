@@ -35,7 +35,7 @@ struct ObLobAccessParam {
       main_tablet_param_(nullptr), meta_tablet_param_(nullptr), piece_tablet_param_(nullptr),
       ls_id_(), tablet_id_(), coll_type_(common::ObCollationType::CS_TYPE_BINARY), lob_common_(nullptr),
       lob_data_(nullptr), byte_size_(0), handle_size_(0), timeout_(0),
-      fb_snapshot_(transaction::ObTransVersion::INVALID_TRANS_VERSION),
+      fb_snapshot_(),
       scan_backward_(false), asscess_ptable_(false), offset_(0), len_(0),
       seq_no_st_(-1), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0)
   {}
@@ -58,7 +58,7 @@ struct ObLobAccessParam {
   int64_t byte_size_;
   int64_t handle_size_;
   int64_t timeout_;
-  int64_t fb_snapshot_;
+  palf::SCN fb_snapshot_;
   bool scan_backward_;
   bool asscess_ptable_;
   uint64_t offset_; // is_char为true时 offset代表字符长度

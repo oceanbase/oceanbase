@@ -713,7 +713,6 @@ int ObCDCPartTransResolver::handle_commit_(
   transaction::ObTxCommitLogTempRef tmp_ref;
   transaction::ObTxCommitLog commit_log(tmp_ref);
   PartTransTask *part_trans_task = NULL;
-  PartTransTask::CDCTransType trans_type = PartTransTask::CDCTransType::UNKNOWN;
   int64_t trans_commit_version = OB_INVALID_VERSION;
   bool is_redo_complete = false;
   is_served = false;
@@ -725,7 +724,7 @@ int ObCDCPartTransResolver::handle_commit_(
         KR(ret), K_(tls_id), K(tx_id), K(lsn), K(missing_info));
   } else if (OB_FAIL(tx_log_block.deserialize_log_body(commit_log))) {
     LOG_ERROR("deserialize_log_body failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(commit_log));
-  } else if (OB_UNLIKELY(!is_valid_trans_type_(commit_log.get_trans_type(), trans_type))) {
+  } else if (OB_UNLIKELY(!is_valid_trans_type_(commit_log.get_trans_type()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid trans_type", KR(ret), K_(tls_id), K(tx_id), K(commit_log), K(lsn));
   } else if (OB_UNLIKELY(OB_INVALID_VERSION ==
@@ -734,7 +733,7 @@ int ObCDCPartTransResolver::handle_commit_(
     LOG_ERROR("invalid trans_commit_version", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(submit_ts), K(commit_log));
   } else if (!serve_info.is_served(trans_commit_version)) {
     LOG_WARN("found trans not served", K_(tls_id), K(tx_id), K(lsn),
-        K(commit_log), K(trans_type), K(serve_info));
+        K(commit_log), K(serve_info));
     if (OB_FAIL(part_trans_dispatcher_.remove_task(tls_id_.is_sys_log_stream(), tx_id))) {
       LOG_ERROR("handle unserverd PartTransTask failed", KR(ret), K_(tls_id), K(tx_id));
     }
@@ -783,7 +782,7 @@ int ObCDCPartTransResolver::handle_commit_(
     LOG_ERROR("unexpected found redo log entry not complete if have read commit_info log", KR(ret),
         K_(tls_id), K(tx_id), K(commit_log), K(lsn), KPC(part_trans_task));
   } else if (OB_UNLIKELY(part_trans_task->is_sys_ls_not_serve_trans())
-      && PartTransTask::CDCTransType::SINGLE_LS_TRANS == trans_type) {
+      && transaction::TransType::SP_TRANS == commit_log.get_trans_type()) {
     // remove part_trans_task if is single_sys_logstream trans but not has valid MultiDataSourceInfo(means not DDL/LS_TABLE_CHANGE/TABLET_CHANGE)
     LOG_DEBUG("[FILTER_PART_TRANS] sys_ls_trans without valid multi_data_source_info(not ddl/ls_table or tablet_change)",
         K_(tls_id), K(tx_id), K(commit_log), KPC(part_trans_task));
@@ -791,16 +790,16 @@ int ObCDCPartTransResolver::handle_commit_(
       LOG_ERROR("handle unserverd single CommitLog(commit_log with invalid prev_log_lsn in dist_trans) failed",
           KR(ret), K_(tls_id), K(tx_id), K(commit_log), K(lsn));
     }
-  } else if (PartTransTask::CDCTransType::SINGLE_LS_TRANS == trans_type
+  } else if (transaction::TransType::SP_TRANS == commit_log.get_trans_type()
       && OB_FAIL(part_trans_task->prepare(lsn, submit_ts, part_trans_dispatcher_))) {
     // prepare single_ls_trans while resolving its commit_log.
-    LOG_ERROR("prepare part_trans_task for single_ls_trans failed", KR(ret), K_(tls_id), K(tx_id), K(trans_type),
+    LOG_ERROR("prepare part_trans_task for single_ls_trans failed", KR(ret), K_(tls_id), K(tx_id),
         K(lsn), K(submit_ts), K(commit_log), KPC(part_trans_task));
   } else if (OB_FAIL(part_trans_task->commit(
       cluster_id,
       tx_id,
       trans_commit_version,
-      trans_type,
+      (transaction::TransType)commit_log.get_trans_type(),
       commit_log.get_ls_log_info_arr(),
       lsn,
       submit_ts))) {
@@ -945,23 +944,6 @@ int ObCDCPartTransResolver::check_redo_log_list_(
   }
 
   return ret;
-}
-
-bool ObCDCPartTransResolver::is_valid_trans_type_(
-    const int32_t trans_type_int,
-    PartTransTask::CDCTransType &trans_type) const
-{
-  bool b_ret = false;
-
-  if (transaction::TransType::SP_TRANS == trans_type_int) {
-    b_ret = true;
-    trans_type = PartTransTask::CDCTransType::SINGLE_LS_TRANS;
-  } else if (transaction::TransType::DIST_TRANS == trans_type_int) {
-    b_ret = true;
-    trans_type = PartTransTask::CDCTransType::DIST_TRANS;
-  }
-
-  return b_ret;
 }
 
 } // end namespace cdc

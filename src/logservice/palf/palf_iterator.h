@@ -37,7 +37,7 @@ public:
     } else if (OB_FAIL(iterator_impl_.init(&iterator_storage_))) {
       PALF_LOG(WARN, "PalfIterator init failed", K(ret));
     } else {
-      PALF_LOG(INFO, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
+      PALF_LOG(TRACE, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
       is_inited_ = true;
     }
     return ret;

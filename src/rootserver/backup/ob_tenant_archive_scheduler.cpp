@@ -26,6 +26,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ls/ob_ls_i_life_manager.h"
 #include "logservice/palf/scn.h"
+#include "share/ob_debug_sync.h"
 
 using namespace oceanbase;
 using namespace rootserver;
@@ -586,14 +587,20 @@ int ObArchiveHandler::checkpoint_(ObTenantArchiveRoundAttr &round_info)
     case ObArchiveRoundState::Status::INTERRUPTED:
       break;
     case ObArchiveRoundState::Status::PREPARE: {
+      DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_PREPARE);
       if (OB_FAIL(start_archive_(round_info))) {
         LOG_WARN("failed to prepare archive", K(ret), K(round_info));
       }
     }
       break;
-    case ObArchiveRoundState::Status::BEGINNING:
-    case ObArchiveRoundState::Status::DOING:
+    case ObArchiveRoundState::Status::BEGINNING: {
+      DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_BEGINNING);
+    }
+    case ObArchiveRoundState::Status::DOING: {
+      DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_DOING);
+    }
     case ObArchiveRoundState::Status::STOPPING: {
+      DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_STOPPING);
       if (OB_FAIL(do_checkpoint_(round_info))) {
         LOG_WARN("failed to checkpoint", K(ret), K(round_info));
       }

@@ -716,13 +716,6 @@ struct TransCommitInfo;
 class PartTransTask : public TransTaskBase<PartTransTask>, public ObLogResourceRecycleTask, public ObILogCallback
 {
 public:
-  // TODO, 需要替换为事务层统一定义的结构
-  enum CDCTransType
-  {
-    UNKNOWN = -1,
-    SINGLE_LS_TRANS = 0,
-    DIST_TRANS = 1
-  };
   enum TaskType
   {
     TASK_TYPE_UNKNOWN = 0,
@@ -817,7 +810,7 @@ public:
       const uint64_t cluster_id,
       const transaction::ObTransID &tx_id,
       const int64_t trans_commit_version,
-      const CDCTransType &trans_type,
+      const transaction::TransType &trans_type,
       const transaction::ObLSLogInfoArray &ls_info_array,
       const palf::LSN &commit_log_lsn,
       const int64_t commit_log_submit_ts);
@@ -1017,8 +1010,8 @@ public:
   const ObString &get_part_trans_info() const { return part_trans_info_str_; }
 
   bool is_served() const { return SERVED == serve_state_; }
-  bool is_single_ls_trans() const { return CDCTransType::SINGLE_LS_TRANS == trans_type_; }
-  bool is_dist_trans() const { return CDCTransType::DIST_TRANS == trans_type_; }
+  bool is_single_ls_trans() const { return transaction::TransType::SP_TRANS == trans_type_; }
+  bool is_dist_trans() const { return transaction::TransType::DIST_TRANS == trans_type_; }
   void is_part_trans_sort_finish() const { sorted_redo_list_.is_dml_stmt_iter_end(); }
   bool is_part_dispatch_finish() const { return sorted_redo_list_.is_dispatch_finish(); }
   void inc_sorted_br() { ATOMIC_INC(&output_br_count_by_turn_); }
@@ -1089,7 +1082,7 @@ public:
       K_(exec_tenant_id),
       K_(tls_id),
       K_(trans_id),
-      K_(trans_type),
+      "trans_type", transaction::trans_type_to_cstr(trans_type_),
       K_(is_xa_or_dup),
       K_(is_trans_committed),
       K_(trans_commit_version),
@@ -1188,7 +1181,7 @@ private:
   palf::LSN               prepare_log_lsn_;       // PrepareLog LSN(same with commit_log_lsn_ if SINGLE_LS_TRANS)
   int64_t                 commit_ts_;             // Transaction timestamp, usually set to the Commit log timestamp
   palf::LSN               commit_log_lsn_;        // CommitLog LSN
-  CDCTransType            trans_type_;
+  transaction::TransType  trans_type_;
   bool                    is_xa_or_dup_;          // true if xa dist trans or duplicate table trans.
 
   int64_t                   participant_count_;

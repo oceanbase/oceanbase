@@ -877,6 +877,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 }
 <hint>INDEX { return INDEX_HINT; }
 <hint>NO_INDEX { return NO_INDEX_HINT; }
+<hint>USE_DAS { return USE_DAS_HINT; }
+<hint>NO_USE_DAS { return NO_USE_DAS_HINT; }
 <hint>USE_NL { return USE_NL; }
 <hint>NO_USE_NL { return NO_USE_NL; }
 <hint>USE_NL_MATERIALIZATION { return USE_NL_MATERIALIZATION; }

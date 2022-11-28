@@ -21,6 +21,7 @@
 #include "logservice/palf/lsn.h"                    // LSN
 #include "logservice/palf/scn.h"                    // LSN
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/ob_debug_sync.h"
 
 namespace oceanbase
 {
@@ -265,6 +266,7 @@ void ObArchiveService::do_check_switch_archive_()
 
 int ObArchiveService::load_archive_round_attr_(ObTenantArchiveRoundAttr &attr)
 {
+  DEBUG_SYNC(BEFORE_LOAD_ARCHIVE_ROUND);
   return persist_mgr_.load_archive_round_attr(attr);
 }
 

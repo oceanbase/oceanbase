@@ -44,7 +44,7 @@ public:
   // 1. nfs example
   // file:///data/1/
   // 2. oss example
-  // oss://backup_dir/?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&access_key=222
+  // oss://backup_dir/?host=xxx.com&access_id=111&access_key=222
   // 3. cos example
   int add_location_source(const palf::SCN &recovery_until_scn, const ObString &archive_dest);
   // add source with raw pieces

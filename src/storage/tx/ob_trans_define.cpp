@@ -1061,5 +1061,24 @@ bool ObMulSourceDataNotifyArg::is_redo_confirmed() const
 
 bool ObMulSourceDataNotifyArg::is_redo_synced() const { return redo_synced_; }
 
+const char *trans_type_to_cstr(const TransType &trans_type)
+{
+  const char *str;
+  switch (trans_type) {
+    case TransType::UNKNOWN_TRANS:
+      str = "UNKNOWN";
+      break;
+    case TransType::SP_TRANS:
+      str = "SP";
+      break;
+    case TransType::DIST_TRANS:
+      str = "DIST";
+      break;
+    default:
+      str = "TX_TYPE_UNKNOWN";
+      break;
+  }
+  return str;
+}
 } // transaction
 } // oceanbase

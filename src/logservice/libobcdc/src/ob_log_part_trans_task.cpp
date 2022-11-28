@@ -2028,7 +2028,7 @@ PartTransTask::PartTransTask() :
     prepare_log_lsn_(),
     commit_ts_(OB_INVALID_TIMESTAMP),
     commit_log_lsn_(),
-    trans_type_(CDCTransType::UNKNOWN),
+    trans_type_(transaction::TransType::UNKNOWN_TRANS),
     is_xa_or_dup_(false),
     participant_count_(0),
     participants_(NULL),
@@ -2162,7 +2162,7 @@ void PartTransTask::reset()
   prepare_log_lsn_.reset();
   commit_ts_ = OB_INVALID_TIMESTAMP;
   commit_log_lsn_.reset();
-  trans_type_ = CDCTransType::UNKNOWN;
+  trans_type_ = transaction::TransType::UNKNOWN_TRANS;
   is_xa_or_dup_ = false;
   participant_count_ = 0;
   participants_ = NULL;
@@ -2723,7 +2723,7 @@ int PartTransTask::commit(
     const uint64_t cluster_id,
     const transaction::ObTransID &tx_id,
     const int64_t trans_commit_version,
-    const CDCTransType &trans_type,
+    const transaction::TransType &trans_type,
     const transaction::ObLSLogInfoArray &ls_info_array,
     const palf::LSN &commit_log_lsn,
     const int64_t commit_log_submit_ts)

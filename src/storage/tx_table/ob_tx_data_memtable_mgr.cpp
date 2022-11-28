@@ -176,6 +176,9 @@ int ObTxDataMemtableMgr::create_memtable_(const palf::SCN clog_checkpoint_scn, i
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "table is nullptr", KR(ret), K(handle), KPC(this));
   } else if (FALSE_IT(tx_data_memtable = dynamic_cast<ObTxDataMemtable *>(table))) {
+  } else if (OB_ISNULL(tx_data_memtable)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "dynamic cast failed", KR(ret), KPC(this));
   } else if (OB_FAIL(tx_data_memtable->init(table_key, slice_allocator_, this))) {
     STORAGE_LOG(WARN, "memtable init fail.", KR(ret), KPC(tx_data_memtable));
   } else if (OB_FAIL(add_memtable_(handle))) {
@@ -227,7 +230,7 @@ int ObTxDataMemtableMgr::freeze_()
   int64_t schema_version = 1;
 
   // FIXME : @gengli remove this condition after upper_trans_version is not needed
-  if (get_memtable_count_() >= 2) {
+  if (get_memtable_count_() >= MAX_TX_DATA_MEMTABLE_CNT) {
     ret = OB_EAGAIN;
     STORAGE_LOG(INFO, "There is a freezed memetable existed. Try freeze after flushing it.", KR(ret), KPC(this));
   } else if (get_memtable_count_() >= MAX_MEMSTORE_CNT) {
@@ -354,8 +357,10 @@ int ObTxDataMemtableMgr::get_all_memtables_for_write(ObTxDataMemtableWriteGuard 
   int ret = OB_SUCCESS;
   TCRLockGuard lock_guard(lock_);
   for (int i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; i++) {
-    auto real_idx = get_memtable_idx_(i);
-    write_guard.handles_.push_back(memtables_[real_idx]);
+    int64_t real_idx = get_memtable_idx_(i);
+    write_guard.handles_[i - memtable_head_].reset();
+    write_guard.handles_[i - memtable_head_] = memtables_[real_idx];
+    write_guard.size_++;
     ObTxDataMemtable *tx_data_memtable = nullptr;
     if (OB_FAIL(memtables_[real_idx].get_tx_data_memtable(tx_data_memtable))) {
       STORAGE_LOG(ERROR, "get tx data memtable from memtable handle failed", KR(ret), KPC(this));

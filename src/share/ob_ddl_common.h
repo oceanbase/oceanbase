@@ -228,6 +228,8 @@ public:
       const int64_t dest_table_id,
       const int64_t schema_version,
       const int64_t snapshot_version,
+      const int64_t execution_id,
+      const int64_t task_id,
       const int64_t parallelism,
       const bool use_heap_table_ddl_plan,
       const bool use_schema_version_hint_for_src_table,
@@ -259,23 +261,6 @@ public:
   {
     return OB_TRY_LOCK_ROW_CONFLICT == ret || OB_NOT_MASTER == ret || OB_TIMEOUT == ret
            || OB_EAGAIN == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret;
-  }
-
-  template<typename F>
-  static int retry_with_ddl_schema_hint(F func) {
-    int ret = OB_SUCCESS;
-    int64_t retry_cnt = 10;
-    while (OB_SUCC(ret) && retry_cnt > 0) {
-      if (OB_FAIL(func())) {
-        if (OB_DDL_SCHEMA_VERSION_NOT_MATCH == ret && retry_cnt > 1) {
-          ret = OB_SUCCESS;
-          retry_cnt -= 1;
-        }
-      } else {
-        retry_cnt = 0;
-      }
-    }
-    return ret;
   }
 
 private:

@@ -130,7 +130,9 @@ void close_socket_fd()
     }
     DLOG(INFO, "[CLOSEFD], close socket fd finish");
   }
-
+  if (NULL != dir) {
+    closedir(dir);
+  }
 }
 
 

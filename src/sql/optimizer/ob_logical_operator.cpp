@@ -5102,7 +5102,6 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
         join_filter_use->set_is_create_filter(false);
         join_filter_create->set_filter_id(filter_id);
         join_filter_use->set_filter_id(filter_id);
-        filter_id++;
         join_filter_create->set_child(first_child, get_child(first_child));
         get_child(first_child)->set_parent(join_filter_create);
         join_filter_create->set_parent(this);
@@ -5124,6 +5123,9 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           if (right_has_exchange) {
             join_filter_create->set_is_use_filter_shuffle(true);
             join_filter_use->set_is_use_filter_shuffle(true);
+            if (OB_FAIL(mark_bloom_filter_id_to_receive_op(join_filter_use, filter_id))) {
+              LOG_WARN("failed to mark bloom filter id to receive op", K(filter_id), K(join_filter_use));
+            }
           }
           if ((is_partition_wise_ && !right_has_exchange) || DIST_PARTITION_NONE == join_dist_algo) {
             join_filter_create->set_is_non_shared_join_filter();
@@ -5135,7 +5137,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           OZ(join_filter_create->compute_property());
           OZ(join_filter_use->compute_property());
         }
-
+        filter_id++;
         for (int j = 0; j < info.lexprs_.count() && OB_SUCC(ret); ++j) {
           ObRawExpr *lexpr = info.lexprs_.at(j);
           ObRawExpr *rexpr = info.rexprs_.at(j);
@@ -5145,6 +5147,29 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
         }
         OZ(push_down_bloom_filter_expr(node, join_filter_use, info.join_filter_selectivity_));
       }
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::mark_bloom_filter_id_to_receive_op(ObLogicalOperator *filter_use, int64_t filter_id)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *parent = NULL;
+  if (OB_ISNULL(filter_use)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret));
+  } else if (FALSE_IT(parent = filter_use->get_parent())) {
+  } else if (NULL != parent) {
+    if (log_op_def::LOG_EXCHANGE == parent->get_type() &&
+        static_cast<ObLogExchange *>(parent)->is_consumer()) {
+      if (OB_FAIL(static_cast<ObLogExchange *>(parent)->get_bloom_filter_ids().push_back(filter_id))) {
+        LOG_WARN("ObLogExchange failed to record bloom filter id", K(parent), K(filter_id), K(ret));
+      } else {
+        LOG_DEBUG("ObLogExchange succ to record bloom filter id", K(parent), K(filter_id));
+      }
+    } else if (OB_FAIL(SMART_CALL(mark_bloom_filter_id_to_receive_op(parent, filter_id)))) {
+      LOG_WARN("mark bloom filter id to receive op failed", K(ret));
     }
   }
   return ret;

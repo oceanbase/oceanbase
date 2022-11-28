@@ -30,13 +30,15 @@ public:
       const int64_t dest_table_id,
       const int64_t schema_version,
       const int64_t snapshot_version,
+      const int64_t execution_id,
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
       obrpc::ObCreateIndexArg *create_index_arg,
       ObRootService *root_service)
       : task_id_(task_id), tenant_id_(tenant_id), data_table_id_(data_table_id), dest_table_id_(dest_table_id),
-        schema_version_(schema_version), snapshot_version_(snapshot_version), trace_id_(trace_id),
-        parallelism_(parallelism), create_index_arg_(create_index_arg), root_service_(root_service)
+        schema_version_(schema_version), snapshot_version_(snapshot_version), execution_id_(execution_id),
+        trace_id_(trace_id), parallelism_(parallelism), create_index_arg_(create_index_arg),
+        root_service_(root_service)
   {
     set_retry_times(0);
   }
@@ -45,7 +47,8 @@ public:
   virtual int process() override;
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
-  TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version), K_(trace_id), K_(parallelism));
+  TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
+               K_(execution_id), K_(trace_id), K_(parallelism));
 
 private:
   int64_t task_id_;
@@ -54,6 +57,7 @@ private:
   int64_t dest_table_id_;
   int64_t schema_version_;
   int64_t snapshot_version_;
+  int64_t execution_id_;
   common::ObCurTraceId::TraceId trace_id_;
   int64_t parallelism_;
   obrpc::ObCreateIndexArg *create_index_arg_;
@@ -85,6 +89,7 @@ public:
   int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version,
+      const int64_t execution_id,
       const int ret_code);
   virtual int process() override;
   virtual bool is_valid() const override;
@@ -93,7 +98,7 @@ public:
   virtual int64_t get_serialize_param_size() const override;
   static int deep_copy_index_arg(common::ObIAllocator &allocator, const obrpc::ObCreateIndexArg &source_arg, obrpc::ObCreateIndexArg &dest_arg);
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K(index_table_id_),K(snapshot_held_), K(is_sstable_complete_task_submitted_),
-      K(sstable_complete_ts_), K(check_unique_snapshot_), K(create_index_arg_));
+      K(sstable_complete_ts_), K(check_unique_snapshot_), K_(redefinition_execution_id), K(create_index_arg_));
 private:
   int prepare();
   int wait_trans_end();
@@ -108,7 +113,6 @@ private:
   int update_index_status_in_schema(
       const share::schema::ObTableSchema &index_schema,
       const share::schema::ObIndexStatus new_status);
-  int get_execution_id(uint64_t &execution_id);
   int check_health();
   int send_build_single_replica_request();
   int check_build_single_replica(bool &is_end);
@@ -133,6 +137,7 @@ private:
   int64_t check_unique_snapshot_;
   ObDDLWaitColumnChecksumCtx wait_column_checksum_ctx_;
   int64_t complete_sstable_job_ret_code_;
+  int64_t redefinition_execution_id_;
   obrpc::ObCreateIndexArg create_index_arg_; // this is not a valid arg, only has nls formats for now
 };
 

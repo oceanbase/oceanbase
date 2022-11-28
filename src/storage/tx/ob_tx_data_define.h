@@ -122,6 +122,7 @@ static const int TX_DATA_OFFSET_BETWEEN_DATA_AND_SORT_NODE
   = TX_DATA_SLICE_SIZE - TX_DATA_HASH_NODE_SIZE - TX_DATA_SORT_LIST_NODE_SIZE;
 // Reserve 5KB to store the fields in tx data except undo_status
 static const int OB_MAX_TX_SERIALIZE_SIZE = OB_MAX_USER_ROW_LENGTH - 5120;
+static const int MAX_TX_DATA_MEMTABLE_CNT = 2;
 
 using TxDataHashNode = common::LinkHashNode<transaction::ObTransID>;
 using TxDataHashValue = common::LinkHashValue<transaction::ObTransID>;
@@ -428,14 +429,19 @@ private:
 class ObTxDataMemtableWriteGuard
 {
 public:
-  ObTxDataMemtableWriteGuard() { handles_.reset(); }
+  ObTxDataMemtableWriteGuard() : size_(0)
+  {
+    MEMSET(handles_, 0, MAX_TX_DATA_MEMTABLE_CNT * sizeof(ObTableHandleV2));
+  }
   ~ObTxDataMemtableWriteGuard() { reset(); }
 
   void reset();
 
+  TO_STRING_KV(K(size_), K(handles_[0]), K(handles_[1]));
+
 public:
-  // reserve one slot because there is only one tx data memtable at most of time
-  ObSEArray<ObTableHandleV2, 1> handles_;
+  int64_t size_;
+  ObTableHandleV2 handles_[MAX_TX_DATA_MEMTABLE_CNT];
 };
 
 

@@ -99,6 +99,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     is_direct_local_plan_(false),
     sqc_handler_(nullptr),
     px_task_id_(-1),
+    px_sqc_id_(-1),
     bf_ctx_(),
     frames_(NULL),
     frame_cnt_(0),

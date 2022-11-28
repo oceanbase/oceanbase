@@ -388,6 +388,8 @@ public:
   void set_sqc_handler(ObPxSqcHandler *sqc_handler) { sqc_handler_ = sqc_handler; }
   void set_px_task_id(const int64_t task_id) { px_task_id_ = task_id; }
   int64_t get_px_task_id() const { return px_task_id_; }
+  void set_px_sqc_id(const int64_t sqc_id) { px_sqc_id_ = sqc_id; }
+  int64_t get_px_sqc_id() const { return px_sqc_id_; }
 
   ObJoinFilterDataCtx &get_bf_ctx() { return bf_ctx_; }
 
@@ -553,6 +555,7 @@ protected:
 
   // for ddl sstable insert
   int64_t px_task_id_;
+  int64_t px_sqc_id_;
 
   //bloom filter ctx
   ObJoinFilterDataCtx bf_ctx_;

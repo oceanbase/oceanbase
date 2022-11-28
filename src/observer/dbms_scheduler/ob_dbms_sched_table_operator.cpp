@@ -194,6 +194,21 @@ int ObDBMSSchedTableOperator::check_job_timeout(ObDBMSSchedJobInfo &job_info)
   return ret;
 }
 
+int ObDBMSSchedTableOperator::check_auto_drop(ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  if (job_info.is_running()) {
+    // running job not check
+  } else if (ObTimeUtility::current_time() > (job_info.end_date_) &&
+             (true == job_info.auto_drop_)) {
+    OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, NULL));
+    LOG_WARN("auto drop miss out job", K(job_info), K(ObTimeUtility::current_time()));
+  } else {
+    LOG_DEBUG("job no need to drop", K(job_info));
+  }
+  return ret;
+}
+
 int ObDBMSSchedTableOperator::check_job_can_running(int64_t tenant_id, bool &can_running)
 {
   int ret = OB_SUCCESS;

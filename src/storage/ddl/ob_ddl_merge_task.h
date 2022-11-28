@@ -43,21 +43,23 @@ public:
       rec_log_ts_(0),
       is_commit_(false),
       table_id_(0),
-      schema_version_(0)
+      execution_id_(0),
+      ddl_task_id_(0)
   {}
   bool is_valid() const
   {
     return ls_id_.is_valid() && tablet_id_.is_valid();
   }
   virtual ~ObDDLTableMergeDagParam() = default;
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_log_ts), K_(is_commit), K_(table_id), K_(schema_version));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_log_ts), K_(is_commit), K_(table_id), K_(execution_id), K_(ddl_task_id));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   int64_t rec_log_ts_;
   bool is_commit_;
   uint64_t table_id_; // used for report ddl checksum
-  int64_t schema_version_; // used for report ddl checksum
+  int64_t execution_id_; // used for report ddl checksum
+  int64_t ddl_task_id_; // used for report ddl checksum
 };
 
 class ObDDLTableMergeDag : public share::ObIDag
@@ -162,7 +164,8 @@ public:
   static int report_ddl_checksum(const share::ObLSID &ls_id,
                                  const ObTabletID &tablet_id,
                                  const uint64_t table_id,
-                                 const int64_t schema_version,
+                                 const int64_t execution_id,
+                                 const int64_t ddl_task_id,
                                  const ObIArray<int64_t> &column_checksums);
   static int check_if_major_sstable_exist(const share::ObLSID &ls_id,
                                           const ObTabletID &tablet_id,

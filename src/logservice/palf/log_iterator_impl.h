@@ -177,7 +177,7 @@ int LogIteratorImpl<ENTRY>::init(IteratorStorage *log_storage)
     log_storage_ = log_storage;
     curr_entry_size_ = 0;
     is_inited_ = true;
-    PALF_LOG(INFO, "LogIteratorImpl init success", K(ret), KPC(this));
+    PALF_LOG(TRACE, "LogIteratorImpl init success", K(ret), KPC(this));
   }
   return ret;
 }

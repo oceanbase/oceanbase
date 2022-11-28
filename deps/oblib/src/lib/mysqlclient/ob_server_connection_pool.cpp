@@ -202,7 +202,6 @@ int ObServerConnectionPool::init_dblink(uint64_t dblink_id, const ObAddr &server
                     cluster_str.length(), cluster_str.ptr());
     }
     (void)snprintf(db_pass_, sizeof(db_pass_), "%.*s", db_pass.length(), db_pass.ptr());
-    // https://baike.baidu.com/item/mysql_real_connect/4007597
     // if db is NULL, the default database is used.
     if (!db_name.empty()) {
       (void)snprintf(db_name_, sizeof(db_name_), "%.*s", db_name.length(), db_name.ptr());

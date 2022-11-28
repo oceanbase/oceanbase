@@ -762,7 +762,8 @@ int ObTenantMetaMemMgr::acquire_tablet(
     const WashTabletPriority &priority,
     const ObTabletMapKey &key,
     ObLSHandle &ls_handle,
-    ObTabletHandle &tablet_handle)
+    ObTabletHandle &tablet_handle,
+    const bool only_acquire)
 {
   int ret = OB_SUCCESS;
   ObMetaObj<ObTablet> meta_obj;
@@ -787,7 +788,7 @@ int ObTenantMetaMemMgr::acquire_tablet(
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
     if (OB_FAIL(has_tablet(key, is_exist))) {
       LOG_WARN("fail to check tablet existence", K(ret), K(key));
-    } else if (is_exist) {
+    } else if (is_exist || only_acquire) {
       ObTabletPointerHandle ptr_handle(tablet_map_);
       if (OB_FAIL(tablet_map_.set_attr_for_obj(key, tablet_handle))) {
         LOG_WARN("fail to set attribute for tablet", K(ret), K(key), K(tablet_handle));
@@ -813,7 +814,8 @@ int ObTenantMetaMemMgr::acquire_tablet(
     const WashTabletPriority &priority,
     const ObTabletMapKey &key,
     common::ObIAllocator &allocator,
-    ObTabletHandle &tablet_handle)
+    ObTabletHandle &tablet_handle,
+    const bool only_acquire)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
@@ -834,7 +836,7 @@ int ObTenantMetaMemMgr::acquire_tablet(
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
     if (OB_FAIL(has_tablet(key, is_exist))) {
       LOG_WARN("fail to check tablet existence", K(ret), K(key));
-    } else if (is_exist) {
+    } else if (is_exist || only_acquire) {
       ObTabletPointerHandle ptr_handle(tablet_map_);
       if (OB_FAIL(tablet_map_.set_attr_for_obj(key, tablet_handle))) {
         LOG_WARN("fail to set attribute for tablet", K(ret), K(key), K(tablet_handle));
@@ -927,7 +929,7 @@ int ObTenantMetaMemMgr::get_tablet(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key));
   } else if (OB_FAIL(tablet_map_.get_meta_obj(key, allocator_, handle))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
+    if (OB_ENTRY_NOT_EXIST != ret && OB_ITEM_NOT_SETTED != ret) {
       LOG_WARN("fail to get tablet", K(ret), K(key));
     }
   } else if (OB_ISNULL(handle.get_obj())) {
@@ -1071,9 +1073,6 @@ int ObTenantMetaMemMgr::del_tablet(const ObTabletMapKey &key)
     LOG_WARN("fail to erase tablet pointer", K(ret), K(key));
   } else if (OB_FAIL(erase_pinned_tablet(key))) {
     LOG_WARN("failed to erase from pinned tablet set", K(ret), K(key));
-  } else {
-    // TODO(@bowen.gbw): temproarily for debug
-    FLOG_INFO("succeeded to del tablet", K(ret), K(key), K(lbt()));
   }
   return ret;
 }
@@ -1433,7 +1432,7 @@ int64_t ObTenantMetaMemMgr::calc_wash_tablet_cnt() const
 {
   const int64_t used_tablet_cnt = tablet_pool_.get_used_obj_cnt();
   const double variable_mem_fragment_ratio = std::round(((allocator_.total() * 1.0) / allocator_.used()) * 10000) / 10000;
-  const int64_t wash_cnt = variable_mem_fragment_ratio > 3.75 ? INT64_MAX : static_cast<int64_t>(used_tablet_cnt * 0.2);
+  const int64_t wash_cnt = min(variable_mem_fragment_ratio > 3.75 ? INT64_MAX : static_cast<int64_t>(used_tablet_cnt * 0.2), 30000);
   FLOG_INFO("calculate wash tablet count", K(wash_cnt), K(variable_mem_fragment_ratio), K(used_tablet_cnt));
   return wash_cnt;
 }
@@ -1611,7 +1610,7 @@ int ObTenantMetaMemMgr::erase_pinned_tablet(const ObTabletMapKey &key)
     LOG_WARN("invalid args", K(ret), K(key));
   } else if (OB_FAIL(pinned_tablet_set_.erase_refactored(key))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      LOG_WARN("tablet does not exist in t3m pinned set", K(ret), K(key));
+      LOG_DEBUG("tablet does not exist in t3m pinned set", K(ret), K(key));
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to erase from hash set", K(ret), K(key));
@@ -1620,7 +1619,6 @@ int ObTenantMetaMemMgr::erase_pinned_tablet(const ObTabletMapKey &key)
 
   return ret;
 }
-
 
 ObTenantMetaMemMgr::MinMinorSSTableInfo::MinMinorSSTableInfo(
     const share::ObLSID &ls_id,

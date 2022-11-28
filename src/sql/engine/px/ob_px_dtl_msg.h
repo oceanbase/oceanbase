@@ -491,7 +491,7 @@ public:
 struct ObJoinFilterDataCtx
 {
   ObJoinFilterDataCtx()
-    : ch_set_(), ch_set_info_(), filter_ready_(false), filter_data_(NULL), ch_provider_ptr_(0),
+    : ch_set_(), ch_set_info_(), filter_ready_(false), filter_data_(NULL), ch_provider_ptr_(0), filter_id_(common::OB_INVALID_ID),
       compressor_type_(common::ObCompressorType::NONE_COMPRESSOR) {}
   ~ObJoinFilterDataCtx() = default;
   ObPxBloomFilterChSet ch_set_;
@@ -499,6 +499,7 @@ struct ObJoinFilterDataCtx
   bool filter_ready_;
   ObPxBloomFilterData *filter_data_;
   uint64_t ch_provider_ptr_;
+  int64_t filter_id_;
   common::ObCompressorType compressor_type_;
 };
 

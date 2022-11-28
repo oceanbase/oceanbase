@@ -157,8 +157,12 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
     const bool has_memstore = (unit.replica_type_ != REPLICA_TYPE_LOGONLY);
     const int64_t create_timestamp = ObTimeUtility::current_time();
     basic_tenant_unit.unit_status_ = ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL;
+    const int64_t create_tenant_timeout_ts = THIS_WORKER.get_timeout_ts();
 
-    if (OB_FAIL(basic_tenant_unit.init(tenant_id,
+    if (create_tenant_timeout_ts < create_timestamp) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("notify_create_tenant has timeout", K(ret), K(create_timestamp), K(create_tenant_timeout_ts));
+    } else if (OB_FAIL(basic_tenant_unit.init(tenant_id,
                                        unit.unit_id_,
                                        ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL,
                                        unit.unit_config_,
@@ -170,19 +174,19 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
     } else if (is_user_tenant(tenant_id)
         && OB_FAIL(basic_tenant_unit.divide_meta_tenant(meta_tenant_unit))) {
       LOG_WARN("divide meta tenant failed", KR(ret), K(unit), K(basic_tenant_unit));
-    } else if (OB_FAIL(check_new_tenant(basic_tenant_unit))) {
-      LOG_WARN("failed to create new tenant", KR(ret), K(basic_tenant_unit));
+    } else if (OB_FAIL(check_new_tenant(basic_tenant_unit, create_tenant_timeout_ts))) {
+      LOG_WARN("failed to create new tenant", KR(ret), K(basic_tenant_unit), K(create_tenant_timeout_ts));
     } else {
       ret = OB_SUCCESS;
-      LOG_INFO("succ to create new user tenant", KR(ret), K(unit), K(basic_tenant_unit));
+      LOG_INFO("succ to create new user tenant", KR(ret), K(unit), K(basic_tenant_unit), K(create_tenant_timeout_ts));
     }
     // create meta tenant
     if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
-      if (OB_FAIL(check_new_tenant(meta_tenant_unit))) {
-        LOG_WARN("failed to create meta tenant", KR(ret), K(meta_tenant_unit));
+      if (OB_FAIL(check_new_tenant(meta_tenant_unit, create_tenant_timeout_ts))) {
+        LOG_WARN("failed to create meta tenant", KR(ret), K(meta_tenant_unit), K(create_tenant_timeout_ts));
       } else {
         ret = OB_SUCCESS;
-        LOG_INFO("succ to create meta tenant", KR(ret), K(meta_tenant_unit));
+        LOG_INFO("succ to create meta tenant", KR(ret), K(meta_tenant_unit), K(create_tenant_timeout_ts));
       }
     }
   }
@@ -305,7 +309,7 @@ int ObTenantNodeBalancer::check_new_tenants(TenantUnits &units)
   return ret;
 }
 
-int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfig &unit)
+int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfig &unit, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
 
@@ -318,7 +322,7 @@ int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfi
   if (OB_SYS_TENANT_ID == tenant_id) {
     if (OB_SUCC(omt_->get_tenant(tenant_id, tenant))) {
       if (tenant->is_hidden()) {
-        if (OB_FAIL(omt_->convert_hidden_to_real_sys_tenant(unit))) {
+        if (OB_FAIL(omt_->convert_hidden_to_real_sys_tenant(unit, abs_timeout_us))) {
           LOG_WARN("fail to create real sys tenant", K(unit));
         }
       } else { // is real sys tenant
@@ -357,7 +361,7 @@ int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfi
           ObTenantSuperBlock super_block(tenant_id, false/*is_hidden*/); // empty super block
           if (OB_FAIL(tenant_meta.build(unit, super_block))) {
             LOG_WARN("fail to build tenant meta", K(ret));
-          } else if (OB_FAIL(omt_->create_tenant(tenant_meta, true/* write_slog */))) {
+          } else if (OB_FAIL(omt_->create_tenant(tenant_meta, true/* write_slog */, abs_timeout_us))) {
             LOG_WARN("fail to create new tenant", K(ret), K(tenant_id));
           }
         } else if (OB_FAIL(omt_->update_tenant_unit(unit))) {

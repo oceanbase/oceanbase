@@ -701,14 +701,16 @@ int ObLogJoin::print_join_hint_outline(const ObDMLStmt &stmt,
   char *buf = plan_text.buf;
   int64_t &buf_len = plan_text.buf_len;
   int64_t &pos = plan_text.pos;
+  const char* algo_str = T_PQ_DISTRIBUTE == hint_type
+                         ? ObJoinHint::get_dist_algo_str(get_dist_method())
+                         : NULL;
   if (OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\" ", ObQueryHint::get_outline_indent(plan_text.is_oneline_),
                                             ObHint::get_hint_name(hint_type),
                                             qb_name.length(), qb_name.ptr()))) {
     LOG_WARN("fail to print pq map hint head", K(ret));
   } else if (OB_FAIL(print_join_tables_in_hint(stmt, plan_text, table_set))) {
     LOG_WARN("fail to print join tables", K(ret));
-  } else if (T_PQ_DISTRIBUTE == hint_type &&
-             OB_FAIL(BUF_PRINTF(" %s", ObJoinHint::get_dist_algo_str(get_dist_method())))) {
+  } else if (NULL != algo_str && OB_FAIL(BUF_PRINTF(" %s", algo_str))) {
     LOG_WARN("fail to print distribute method", K(ret));
   } else if (OB_FAIL(BUF_PRINTF(")"))) {
   } else { /* do nothing */ }
@@ -1161,6 +1163,16 @@ int ObLogJoin::set_use_batch(ObLogicalOperator* root)
     }
     if(OB_FAIL(SMART_CALL(set_use_batch(root->get_child(first_child))))) {
       LOG_WARN("failed to check use batch nlj", K(ret));
+    }
+  } else if (log_op_def::LOG_SET == root->get_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < root->get_num_of_child(); ++i) {
+      ObLogicalOperator *child = root->get_child(i);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid child", K(ret));
+      } else if(OB_FAIL(SMART_CALL(set_use_batch(child)))) {
+        LOG_WARN("failed to check use batch nlj", K(ret));
+      }
     }
   } else { /*do nothing*/ }
   return ret;

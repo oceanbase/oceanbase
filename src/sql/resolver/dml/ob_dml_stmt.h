@@ -678,6 +678,9 @@ public:
   int hint_table_may_used(ObCollationType cs_type,
                                      const ObTableInHint &hint_table,
                                      bool &may_appear) const;
+  int check_hint_table_matched_table_item(ObCollationType cs_type,
+                                          const ObTableInHint &hint_table,
+                                          bool &matched) const;
   virtual bool has_subquery() const;
   inline bool has_order_by() const { return (get_order_item_size() > 0); }
   int add_joined_table(JoinedTable *joined_table) { return joined_tables_.push_back(joined_table); }

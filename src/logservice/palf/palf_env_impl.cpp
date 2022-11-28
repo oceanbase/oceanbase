@@ -718,14 +718,9 @@ int PalfEnvImpl::try_recycle_blocks()
       }
     }
 
-    // step3. notify each palf instance stop writing when reach limit usage threshold.
+    // step3. reset diskspace_enough_.
     if (diskspace_enough_ != curr_diskspace_enough) {
-      if (OB_FAIL(notify_diskspace_enough_(curr_diskspace_enough))) {
-        PALF_LOG(WARN, "notify_diskspace_enough_ failed", K(ret), KPC(this),
-                 K(usable_disk_limit_size_to_stop_writing), K(total_used_size_byte));
-      } else {
-        diskspace_enough_ = curr_diskspace_enough;
-      }
+      ATOMIC_STORE(&diskspace_enough_, curr_diskspace_enough);
     }
     if ((true == need_recycle && false == has_recycled && false == is_shrinking) || false == diskspace_enough_) {
       PALF_LOG(ERROR, "clog disk space is almost full",
@@ -747,26 +742,7 @@ int PalfEnvImpl::try_recycle_blocks()
 
 bool PalfEnvImpl::check_disk_space_enough()
 {
-  int ret = OB_SUCCESS;
-  bool bool_ret = true;
-  int64_t total_used_disk_space = 0;
-  int64_t total_size_byte = 0;
-  if (OB_FAIL(get_disk_usage(total_used_disk_space, total_size_byte))) {
-    PALF_LOG(WARN, "get_disk_usage failed", K(ret), KPC(this));
-  } else {
-    PalfDiskOptions disk_opts_for_stopping_writing;
-    PalfDiskOptions disk_opts_for_recycling_blocks;
-    PalfDiskOptionsWrapper::Status status = PalfDiskOptionsWrapper::Status::INVALID_STATUS;
-    disk_options_wrapper_.get_disk_opts(disk_opts_for_stopping_writing,
-                                        disk_opts_for_recycling_blocks,
-                                        status);
-    const int64_t usable_limit_disk_size =
-      total_size_byte * disk_opts_for_stopping_writing.log_disk_utilization_limit_threshold_ / 100LL;
-    if (usable_limit_disk_size < total_used_disk_space) {
-      bool_ret = false;
-    }
-  }
-  return bool_ret;
+  return true == ATOMIC_LOAD(&diskspace_enough_);
 }
 
 // TODO by yunlong
@@ -799,25 +775,6 @@ bool PalfEnvImpl::GetTotalUsedDiskSpace::operator() (const LSKey &ls_key, PalfHa
     }
     total_used_disk_space_ += palf_handle_impl->get_total_used_disk_space();
     PALF_LOG(TRACE, "get_total_used_disk_space success", K(ls_key), "total_used_disk_space(MB):", total_used_disk_space_/MB);
-  }
-  return bool_ret;
-}
-
-PalfEnvImpl::NotifyDiskEnough::NotifyDiskEnough(const bool diskspace_enough)
-    : diskspace_enough_(diskspace_enough),
-      ret_code_(OB_SUCCESS) {}
-
-PalfEnvImpl::NotifyDiskEnough::~NotifyDiskEnough() {}
-
-bool PalfEnvImpl::NotifyDiskEnough::operator()(const LSKey &palf_id, PalfHandleImpl *palf_handle_impl)
-{
-  bool bool_ret = true;
-  if (NULL == palf_handle_impl) {
-    ret_code_ = OB_ERR_UNEXPECTED;
-    bool_ret = false;
-  } else {
-    (void) palf_handle_impl->set_diskspace_enough(diskspace_enough_);
-    PALF_LOG(WARN, "NotifyDiskEnough execute", K(palf_id), K(palf_handle_impl));
   }
   return bool_ret;
 }
@@ -1047,18 +1004,6 @@ int PalfEnvImpl::recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, SC
     }
     oldest_palf_id = functor.oldest_palf_id_;
     oldest_scn = functor.oldest_block_scn_;
-  }
-  return ret;
-}
-
-int PalfEnvImpl::notify_diskspace_enough_(const bool diskspace_enough)
-{
-  int ret = OB_SUCCESS;
-  NotifyDiskEnough functor(diskspace_enough);
-  if (OB_FAIL(palf_handle_impl_map_.for_each(functor))) {
-    PALF_LOG(WARN, "palf_handle_impl_map_ for_each failed", K(ret), K(functor));
-  } else {
-    PALF_LOG(INFO, "notify_diskspace_enough_ success", K(ret), K(diskspace_enough), KPC(this));
   }
   return ret;
 }

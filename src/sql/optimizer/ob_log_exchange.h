@@ -140,6 +140,7 @@ public:
   bool is_rollup_hybrid() { return is_rollup_hybrid_; }
   log_op_def::ObLogOpType get_px_batch_op_type() { return px_batch_op_type_;}
   common::ObIArray<ObTableLocation> &get_pruning_table_locations() { return table_locations_; }
+  common::ObIArray<int64_t> &get_bloom_filter_ids() { return filter_id_array_; }
   int gen_px_pruning_table_locations();
   int allocate_startup_expr_post()override;
   void set_old_unblock_mode(bool old_unblock_mode) { is_old_unblock_mode_ = old_unblock_mode; }
@@ -228,6 +229,7 @@ private:
   ObRawExpr *random_expr_;
 
   common::ObSEArray<ObTableLocation, 4, common::ModulePageAllocator, true> table_locations_;
+  common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> filter_id_array_;
   // new shuffle method for non-preserved side in naaj
   // broadcast 1st line && null join key
   bool need_null_aware_shuffle_;

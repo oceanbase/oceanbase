@@ -122,7 +122,7 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
 
       if ((++traverse_count & 0xFFFFF) == 0) {
         TRANS_LOG(WARN, "memtable fifo callback too long",
-                  K(traverse_count), KPC(iter), K(functor));
+                  K(traverse_count), K(functor));
       }
     }
   }

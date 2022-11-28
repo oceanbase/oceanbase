@@ -60,9 +60,7 @@ int ObDASBatchScanOp::open_op()
   if (OB_FAIL(init_scan_param())) {
     LOG_WARN("init scan param failed", K(ret));
   } else if (OB_FAIL(tsc_service.table_scan(scan_param_, batch_result_))) {
-    if (OB_SNAPSHOT_DISCARDED == ret
-        && transaction::ObTransVersion::INVALID_TRANS_VERSION !=
-            scan_param_.fb_snapshot_) {
+    if (OB_SNAPSHOT_DISCARDED == ret && scan_param_.fb_snapshot_.is_valid()) {
       ret = OB_INVALID_QUERY_TIMESTAMP;
     } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(scan_param_), K(ret));

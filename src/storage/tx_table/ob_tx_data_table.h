@@ -217,9 +217,6 @@ public:  // ObTxDataTable
                K_(is_started),
                K_(min_start_scn_in_ctx),
                K_(last_update_min_start_scn_ts),
-               K_(self_freeze_min_limit_cnt),
-               K_(self_freeze_max_limit_cnt),
-               K_(self_freeze_tenant_remain_limit_size),
                K_(tablet_id),
                KP_(ls),
                KP_(ls_tablet_svr),
@@ -249,7 +246,7 @@ private:
 
   int get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData *&tx_data);
 
-  int insert_(ObTxData *&tx_data, ObIArray<ObTableHandleV2> &memtable_handles);
+  int insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write_guard);
 
   int insert_into_memtable_(ObTxDataMemtable *tx_data_memtable, ObTxData *&tx_data);
 
@@ -320,9 +317,6 @@ private:
   bool is_started_;
   palf::SCN min_start_scn_in_ctx_;
   int64_t last_update_min_start_scn_ts_;
-  int64_t self_freeze_min_limit_cnt_;
-  int64_t self_freeze_max_limit_cnt_;
-  int64_t self_freeze_tenant_remain_limit_size_;
   ObTabletID tablet_id_;
   ObMemAttr mem_attr_;
   // Allocator to allocate ObTxData and ObUndoStatus

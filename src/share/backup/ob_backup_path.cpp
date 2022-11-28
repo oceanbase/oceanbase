@@ -524,7 +524,25 @@ int ObBackupPathUtil::get_backup_set_dir_path(const share::ObBackupDest &backup_
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full_20211231/log_stream_1/
+int ObBackupPathUtil::get_backup_set_inner_placeholder_prefix(
+    const share::ObBackupSetDesc &backup_set_desc,
+    char *placeholder_prefix,
+    int64_t length)
+{
+  int ret = OB_SUCCESS;
+  const char *backup_type_str = backup_set_desc.backup_type_.is_full_backup() ? "full" : "inc";
+  if (OB_ISNULL(placeholder_prefix)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("placeholder_prefix is null", K(ret));
+  } else if (OB_FAIL(databuff_printf(placeholder_prefix, length,
+      "backup_set_%lu_%s_", backup_set_desc.backup_set_id_, backup_type_str))) {
+    LOG_WARN("failed to format backup set placeholder prefix", K(ret), K(backup_set_desc));
+  }
+
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/backup_set_1_full_xxxx_xxxxx
 int ObBackupPathUtil::get_backup_set_inner_placeholder(
     const share::ObBackupDest &backup_set_dest, const share::ObBackupSetDesc &backup_set_desc, 
     const palf::SCN &replay_scn, const palf::SCN &min_restore_scn,

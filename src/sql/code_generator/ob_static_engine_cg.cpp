@@ -2556,6 +2556,8 @@ int ObStaticEngineCG::generate_basic_receive_spec(ObLogExchange &op, ObPxReceive
     spec.repartition_table_id_ = op.get_repartition_table_id();
     if (OB_FAIL(spec.child_exprs_.init(spec.get_child()->output_.count()))) {
       LOG_WARN("failed to init child exprs", K(ret));
+    } else if (spec.bloom_filter_id_array_.assign(op.get_bloom_filter_ids())) {
+      LOG_WARN("failed to append bloom filter ids", K(ret));
     } else if (OB_FAIL(spec.child_exprs_.assign(spec.get_child()->output_))) {
       LOG_WARN("failed to append child exprs", K(ret));
     } else if (OB_FAIL(init_recieve_dynamic_exprs(spec.get_child()->output_, spec))) {
@@ -2945,6 +2947,7 @@ int ObStaticEngineCG::get_is_distributed(ObLogTempTableAccess &op, bool &is_dist
 {
   int ret = OB_SUCCESS;
   is_distributed = false;
+  ObLogicalOperator *parent = NULL;
   ObLogPlan *log_plan = op.get_plan();
   const uint64_t temp_table_id = op.get_temp_table_id();
   if (OB_ISNULL(log_plan)) {
@@ -2954,14 +2957,26 @@ int ObStaticEngineCG::get_is_distributed(ObLogTempTableAccess &op, bool &is_dist
     ObIArray<ObSqlTempTableInfo*> &temp_tables = log_plan->get_optimizer_context().get_temp_table_infos();
     bool find = false;
     for (int64_t i = 0; OB_SUCC(ret) && !find && i < temp_tables.count(); ++i) {
-      if (OB_ISNULL(temp_tables.at(i))) {
+      if (OB_ISNULL(temp_tables.at(i)) || OB_ISNULL(temp_tables.at(i)->table_plan_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected null", K(ret));
       } else if (temp_table_id != temp_tables.at(i)->temp_table_id_) {
         /* do nothing */
+      } else if (OB_ISNULL(parent = temp_tables.at(i)->table_plan_->get_parent())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
       } else {
         find = true;
-        is_distributed = !temp_tables.at(i)->is_local_;
+        while (OB_NOT_NULL(parent)) {
+          if (log_op_def::LOG_EXCHANGE == parent->get_type()) {
+            is_distributed = true;
+            break;
+          } else if (log_op_def::LOG_TEMP_TABLE_TRANSFORMATION == parent->get_type()) {
+            break;
+          } else {
+            parent = parent->get_parent();
+          }
+        }
       }
     }
     if (OB_SUCC(ret) && !find) {
@@ -5953,8 +5968,15 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
         if (log_plan.get_stmt()->get_table_items().count() > 0) {
           const TableItem *insert_table_item = log_plan.get_stmt()->get_table_item(0);
           if (nullptr != insert_table_item) {
+            int64_t ddl_execution_id = 0;
+            int64_t ddl_task_id = 0;
+            const ObOptParamHint *opt_params = &log_plan.get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
+            OZ(opt_params->get_integer_opt_param(ObOptParamHint::DDL_EXECUTION_ID, ddl_execution_id));
+            OZ(opt_params->get_integer_opt_param(ObOptParamHint::DDL_TASK_ID, ddl_task_id));
             phy_plan.set_ddl_schema_version(insert_table_item->ddl_schema_version_);
             phy_plan.set_ddl_table_id(insert_table_item->ddl_table_id_);
+            phy_plan.set_ddl_execution_id(ddl_execution_id);
+            phy_plan.set_ddl_task_id(ddl_task_id);
           }
         }
       }

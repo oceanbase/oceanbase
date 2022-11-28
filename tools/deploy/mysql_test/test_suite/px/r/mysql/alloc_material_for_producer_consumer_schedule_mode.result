@@ -63,113 +63,102 @@ Outputs & filters:
 
 explain select /*+ use_px parallel(2) use_merge(a b) */ b.c2, sum(a.c3) from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1 group by 1;
 Query Plan
-======================================================================
-|ID|OPERATOR                                 |NAME    |EST. ROWS|COST|
-----------------------------------------------------------------------
-|0 |PX COORDINATOR                           |        |1        |49  |
-|1 | EXCHANGE OUT DISTR                      |:EX10003|1        |49  |
-|2 |  HASH GROUP BY                          |        |1        |49  |
-|3 |   EXCHANGE IN DISTR                     |        |2        |49  |
-|4 |    EXCHANGE OUT DISTR (HASH)            |:EX10002|2        |48  |
-|5 |     MATERIAL                            |        |2        |48  |
-|6 |      HASH GROUP BY                      |        |2        |48  |
-|7 |       MERGE JOIN                        |        |1        |47  |
-|8 |        EXCHANGE IN MERGE SORT DISTR     |        |1        |25  |
-|9 |         EXCHANGE OUT DISTR (BROADCAST)  |:EX10001|1        |24  |
-|10|          MATERIAL                       |        |1        |24  |
-|11|           SUBPLAN SCAN                  |a       |1        |24  |
-|12|            MERGE GROUP BY               |        |1        |24  |
-|13|             EXCHANGE IN MERGE SORT DISTR|        |2        |24  |
-|14|              EXCHANGE OUT DISTR (HASH)  |:EX10000|2        |24  |
-|15|               MERGE GROUP BY            |        |2        |23  |
-|16|                SORT                     |        |1        |23  |
-|17|                 PX BLOCK ITERATOR       |        |1        |23  |
-|18|                  TABLE SCAN             |t1      |1        |23  |
-|19|        SORT                             |        |1        |23  |
-|20|         PX BLOCK ITERATOR               |        |1        |23  |
-|21|          TABLE SCAN                     |b       |1        |23  |
-======================================================================
+==================================================================
+|ID|OPERATOR                             |NAME    |EST. ROWS|COST|
+------------------------------------------------------------------
+|0 |PX COORDINATOR                       |        |1        |49  |
+|1 | EXCHANGE OUT DISTR                  |:EX10003|1        |49  |
+|2 |  HASH GROUP BY                      |        |1        |48  |
+|3 |   EXCHANGE IN DISTR                 |        |2        |48  |
+|4 |    EXCHANGE OUT DISTR (HASH)        |:EX10002|2        |48  |
+|5 |     HASH GROUP BY                   |        |2        |47  |
+|6 |      SUBPLAN SCAN                   |VIEW1   |1        |47  |
+|7 |       MERGE GROUP BY                |        |1        |47  |
+|8 |        SORT                         |        |1        |47  |
+|9 |         MERGE JOIN                  |        |1        |47  |
+|10|          SORT                       |        |1        |24  |
+|11|           EXCHANGE IN DISTR         |        |1        |24  |
+|12|            EXCHANGE OUT DISTR (HASH)|:EX10000|1        |24  |
+|13|             PX BLOCK ITERATOR       |        |1        |23  |
+|14|              TABLE SCAN             |b       |1        |23  |
+|15|          SORT                       |        |1        |24  |
+|16|           EXCHANGE IN DISTR         |        |1        |24  |
+|17|            EXCHANGE OUT DISTR (HASH)|:EX10001|1        |24  |
+|18|             PX BLOCK ITERATOR       |        |1        |23  |
+|19|              TABLE SCAN             |t1      |1        |23  |
+==================================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(b.c2, T_FUN_SUM(T_FUN_SUM(a.c3)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(b.c2, T_FUN_SUM(T_FUN_SUM(a.c3)))]), filter(nil), rowset=256, dop=2
-  2 - output([b.c2], [T_FUN_SUM(T_FUN_SUM(a.c3))]), filter(nil), rowset=256,
-      group([b.c2]), agg_func([T_FUN_SUM(T_FUN_SUM(a.c3))])
-  3 - output([b.c2], [T_FUN_SUM(a.c3)]), filter(nil), rowset=256
-  4 - (#keys=1, [b.c2]), output([b.c2], [T_FUN_SUM(a.c3)]), filter(nil), rowset=256, dop=2
-  5 - output([b.c2], [T_FUN_SUM(a.c3)]), filter(nil), rowset=256
-  6 - output([b.c2], [T_FUN_SUM(a.c3)]), filter(nil), rowset=256,
-      group([b.c2]), agg_func([T_FUN_SUM(a.c3)])
-  7 - output([b.c2], [a.c3]), filter(nil), rowset=256,
-      equal_conds([a.c1 = b.c1]), other_conds(nil)
-  8 - output([a.c1], [a.c3]), filter(nil), rowset=256, sort_keys([a.c1, ASC])
-  9 - output([a.c1], [a.c3]), filter(nil), rowset=256, dop=2
-  10 - output([a.c1], [a.c3]), filter(nil), rowset=256
-  11 - output([a.c1], [a.c3]), filter(nil), rowset=256,
-      access([a.c1], [a.c3])
-  12 - output([t1.c1], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256,
-      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
-  13 - output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256, sort_keys([t1.c1, ASC], [t1.c2, ASC])
-  14 - (#keys=2, [t1.c1], [t1.c2]), output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256, dop=2
-  15 - output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256,
-      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT(*)])
-  16 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, sort_keys([t1.c1, ASC], [t1.c2, ASC])
-  17 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
-  18 - output([t1.c1], [t1.c2]), filter(nil), rowset=256,
+  0 - output([INTERNAL_FUNCTION(VIEW1.b.c2, T_FUN_SUM(T_FUN_SUM(VIEW1.a.c3)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(VIEW1.b.c2, T_FUN_SUM(T_FUN_SUM(VIEW1.a.c3)))]), filter(nil), rowset=256, dop=2
+  2 - output([VIEW1.b.c2], [T_FUN_SUM(T_FUN_SUM(VIEW1.a.c3))]), filter(nil), rowset=256,
+      group([VIEW1.b.c2]), agg_func([T_FUN_SUM(T_FUN_SUM(VIEW1.a.c3))])
+  3 - output([VIEW1.b.c2], [T_FUN_SUM(VIEW1.a.c3)]), filter(nil), rowset=256
+  4 - (#keys=1, [VIEW1.b.c2]), output([VIEW1.b.c2], [T_FUN_SUM(VIEW1.a.c3)]), filter(nil), rowset=256, dop=2
+  5 - output([VIEW1.b.c2], [T_FUN_SUM(VIEW1.a.c3)]), filter(nil), rowset=256,
+      group([VIEW1.b.c2]), agg_func([T_FUN_SUM(VIEW1.a.c3)])
+  6 - output([VIEW1.b.c2], [VIEW1.a.c3]), filter(nil), rowset=256,
+      access([VIEW1.b.c2], [VIEW1.a.c3])
+  7 - output([b.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256,
+      group([b.__pk_increment], [t1.c2]), agg_func([T_FUN_COUNT(*)])
+  8 - output([b.__pk_increment], [t1.c2], [b.c2]), filter(nil), rowset=256, sort_keys([b.__pk_increment, ASC], [t1.c2, ASC])
+  9 - output([b.__pk_increment], [t1.c2], [b.c2]), filter(nil), rowset=256,
+      equal_conds([t1.c1 = b.c1]), other_conds(nil)
+  10 - output([b.__pk_increment], [b.c2], [b.c1]), filter(nil), rowset=256, sort_keys([b.c1, ASC])
+  11 - output([b.__pk_increment], [b.c2], [b.c1]), filter(nil), rowset=256
+  12 - (#keys=1, [b.c1]), output([b.__pk_increment], [b.c2], [b.c1]), filter(nil), rowset=256, dop=2
+  13 - output([b.__pk_increment], [b.c1], [b.c2]), filter(nil), rowset=256
+  14 - output([b.__pk_increment], [b.c1], [b.c2]), filter(nil), rowset=256,
+      access([b.__pk_increment], [b.c1], [b.c2]), partitions(p0)
+  15 - output([t1.c2], [t1.c1]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
+  16 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
+  17 - (#keys=1, [t1.c1]), output([t1.c2], [t1.c1]), filter(nil), rowset=256, dop=2
+  18 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  19 - output([t1.c1], [t1.c2]), filter(nil), rowset=256,
       access([t1.c1], [t1.c2]), partitions(p0)
-  19 - output([b.c2], [b.c1]), filter(nil), rowset=256, sort_keys([b.c1, ASC])
-  20 - output([b.c1], [b.c2]), filter(nil), rowset=256
-  21 - output([b.c1], [b.c2]), filter(nil), rowset=256,
-      access([b.c1], [b.c2]), partitions(p0)
 
 explain select /*+ use_px parallel(2) use_merge(a b) */ * from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1;
 Query Plan
-=================================================================
-|ID|OPERATOR                            |NAME    |EST. ROWS|COST|
------------------------------------------------------------------
-|0 |PX COORDINATOR                      |        |1        |50  |
-|1 | EXCHANGE OUT DISTR                 |:EX10002|1        |49  |
-|2 |  MERGE JOIN                        |        |1        |48  |
-|3 |   EXCHANGE IN MERGE SORT DISTR     |        |1        |25  |
-|4 |    EXCHANGE OUT DISTR (BROADCAST)  |:EX10001|1        |25  |
-|5 |     MATERIAL                       |        |1        |25  |
-|6 |      SUBPLAN SCAN                  |a       |1        |25  |
-|7 |       MERGE GROUP BY               |        |1        |25  |
-|8 |        EXCHANGE IN MERGE SORT DISTR|        |2        |25  |
-|9 |         EXCHANGE OUT DISTR (HASH)  |:EX10000|2        |24  |
-|10|          MERGE GROUP BY            |        |2        |23  |
-|11|           SORT                     |        |1        |23  |
-|12|            PX BLOCK ITERATOR       |        |1        |23  |
-|13|             TABLE SCAN             |t1      |1        |23  |
-|14|   SORT                             |        |1        |23  |
-|15|    PX BLOCK ITERATOR               |        |1        |23  |
-|16|     TABLE SCAN                     |b       |1        |23  |
-=================================================================
+=============================================================
+|ID|OPERATOR                        |NAME    |EST. ROWS|COST|
+-------------------------------------------------------------
+|0 |PX COORDINATOR                  |        |1        |49  |
+|1 | EXCHANGE OUT DISTR             |:EX10002|1        |48  |
+|2 |  MERGE GROUP BY                |        |1        |47  |
+|3 |   SORT                         |        |1        |47  |
+|4 |    MERGE JOIN                  |        |1        |47  |
+|5 |     SORT                       |        |1        |24  |
+|6 |      EXCHANGE IN DISTR         |        |1        |24  |
+|7 |       EXCHANGE OUT DISTR (HASH)|:EX10000|1        |24  |
+|8 |        PX BLOCK ITERATOR       |        |1        |23  |
+|9 |         TABLE SCAN             |b       |1        |23  |
+|10|     SORT                       |        |1        |24  |
+|11|      EXCHANGE IN DISTR         |        |1        |24  |
+|12|       EXCHANGE OUT DISTR (HASH)|:EX10001|1        |24  |
+|13|        PX BLOCK ITERATOR       |        |1        |23  |
+|14|         TABLE SCAN             |t1      |1        |23  |
+=============================================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(a.c1, a.c2, a.c3, b.c1, b.c2, b.c3)]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(a.c1, a.c2, a.c3, b.c1, b.c2, b.c3)]), filter(nil), rowset=256, dop=2
-  2 - output([a.c1], [b.c1], [a.c2], [a.c3], [b.c2], [b.c3]), filter(nil), rowset=256,
-      equal_conds([a.c1 = b.c1]), other_conds(nil)
-  3 - output([a.c1], [a.c2], [a.c3]), filter(nil), rowset=256, sort_keys([a.c1, ASC])
-  4 - output([a.c1], [a.c2], [a.c3]), filter(nil), rowset=256, dop=2
-  5 - output([a.c1], [a.c2], [a.c3]), filter(nil), rowset=256
-  6 - output([a.c1], [a.c2], [a.c3]), filter(nil), rowset=256,
-      access([a.c1], [a.c2], [a.c3])
-  7 - output([t1.c1], [t1.c2], [T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256,
-      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
-  8 - output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256, sort_keys([t1.c1, ASC], [t1.c2, ASC])
-  9 - (#keys=2, [t1.c1], [t1.c2]), output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256, dop=2
-  10 - output([t1.c1], [t1.c2], [T_FUN_COUNT(*)]), filter(nil), rowset=256,
-      group([t1.c1], [t1.c2]), agg_func([T_FUN_COUNT(*)])
-  11 - output([t1.c1], [t1.c2]), filter(nil), rowset=256, sort_keys([t1.c1, ASC], [t1.c2, ASC])
-  12 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
-  13 - output([t1.c1], [t1.c2]), filter(nil), rowset=256,
+  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, T_FUN_COUNT(*), b.c1, b.c2, b.c3)]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, T_FUN_COUNT(*), b.c1, b.c2, b.c3)]), filter(nil), rowset=256, dop=2
+  2 - output([t1.c2], [T_FUN_COUNT(*)], [t1.c1], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256,
+      group([b.__pk_increment], [t1.c2]), agg_func([T_FUN_COUNT(*)])
+  3 - output([t1.c2], [b.__pk_increment], [t1.c1], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256, sort_keys([b.__pk_increment, ASC], [t1.c2, ASC])
+  4 - output([t1.c2], [b.__pk_increment], [t1.c1], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256,
+      equal_conds([t1.c1 = b.c1]), other_conds(nil)
+  5 - output([b.__pk_increment], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256, sort_keys([b.c1, ASC])
+  6 - output([b.__pk_increment], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256
+  7 - (#keys=1, [b.c1]), output([b.__pk_increment], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256, dop=2
+  8 - output([b.__pk_increment], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256
+  9 - output([b.__pk_increment], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256,
+      access([b.__pk_increment], [b.c1], [b.c2], [b.c3]), partitions(p0)
+  10 - output([t1.c2], [t1.c1]), filter(nil), rowset=256, sort_keys([t1.c1, ASC])
+  11 - output([t1.c2], [t1.c1]), filter(nil), rowset=256
+  12 - (#keys=1, [t1.c1]), output([t1.c2], [t1.c1]), filter(nil), rowset=256, dop=2
+  13 - output([t1.c1], [t1.c2]), filter(nil), rowset=256
+  14 - output([t1.c1], [t1.c2]), filter(nil), rowset=256,
       access([t1.c1], [t1.c2]), partitions(p0)
-  14 - output([b.c1], [b.c2], [b.c3]), filter(nil), rowset=256, sort_keys([b.c1, ASC])
-  15 - output([b.c1], [b.c2], [b.c3]), filter(nil), rowset=256
-  16 - output([b.c1], [b.c2], [b.c3]), filter(nil), rowset=256,
-      access([b.c1], [b.c2], [b.c3]), partitions(p0)
 

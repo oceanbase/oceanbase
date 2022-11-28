@@ -204,7 +204,7 @@ ObVTableScanParam() :
       for_update_wait_timeout_(-1),
       frozen_version_(-1),
       scan_allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
-      fb_snapshot_(transaction::ObTransVersion::INVALID_TRANS_VERSION),
+      fb_snapshot_(),
       is_get_(false),
       force_refresh_lc_(false),
       output_exprs_(NULL),
@@ -266,7 +266,7 @@ ObVTableScanParam() :
   ObIAllocator *scan_allocator_;
   ObTableScanStatistic main_table_scan_stat_;
   ObTableScanStatistic idx_table_scan_stat_;
-  int64_t fb_snapshot_;
+  palf::SCN fb_snapshot_;
   bool is_get_;
   bool force_refresh_lc_;
 

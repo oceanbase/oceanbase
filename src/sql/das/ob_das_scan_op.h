@@ -92,7 +92,7 @@ public:
       force_refresh_lc_(false),
       need_check_output_datum_(false),
       frozen_version_(-1),
-      fb_snapshot_(transaction::ObTransVersion::INVALID_TRANS_VERSION),
+      fb_snapshot_(),
       timeout_ts_(-1),
       tx_lock_timeout_(-1),
       sql_mode_(SMO_DEFAULT),
@@ -123,7 +123,7 @@ public:
   bool force_refresh_lc_;
   bool need_check_output_datum_;
   int64_t frozen_version_;
-  int64_t fb_snapshot_;
+  palf::SCN fb_snapshot_;
   int64_t timeout_ts_;
   int64_t tx_lock_timeout_;
   ObSQLMode sql_mode_;

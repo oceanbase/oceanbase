@@ -40,7 +40,7 @@ using namespace oceanbase::omt;
 
 ObUniqueIndexChecker::ObUniqueIndexChecker()
   : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), tablet_id_(),
-    index_schema_(NULL), data_table_schema_(NULL), execution_id_(0), snapshot_version_(0),
+    index_schema_(NULL), data_table_schema_(NULL), execution_id_(0), snapshot_version_(0), task_id_(0),
     is_scan_index_(false)
 {
 }
@@ -52,6 +52,7 @@ int ObUniqueIndexChecker::init(
     const bool is_scan_index,
     const ObTableSchema *data_table_schema,
     const ObTableSchema *index_schema,
+    const int64_t task_id,
     const uint64_t execution_id,
     const int64_t snapshot_version)
 {
@@ -61,9 +62,10 @@ int ObUniqueIndexChecker::init(
     LOG_WARN("ObUniqueIndexChecker has already been inited", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid()
       || NULL == data_table_schema
-      || NULL == index_schema)) {
+      || NULL == index_schema
+      || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), KPC(data_table_schema), KPC(index_schema));
+    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), KPC(data_table_schema), KPC(index_schema), K(task_id));
   } else {
     is_inited_ = true;
     tenant_id_ = tenant_id;
@@ -71,6 +73,7 @@ int ObUniqueIndexChecker::init(
     tablet_id_ = tablet_id;
     data_table_schema_ = data_table_schema;
     index_schema_ = index_schema;
+    task_id_ = task_id;
     execution_id_ = execution_id;
     snapshot_version_ = snapshot_version;
     is_scan_index_ = is_scan_index;
@@ -477,7 +480,7 @@ int ObUniqueIndexChecker::report_column_checksum(
         item.execution_id_ = execution_id_;
         item.tenant_id_ = tenant_id_;
         item.table_id_ = report_table_id;
-        item.tablet_id_ = tablet_id_.id(); // TODO(cangdi): replace this with tablet_id
+        item.ddl_task_id_ = task_id_;
         item.column_id_ = column_ids.at(i).col_id_;
         item.task_id_ = -1;
         item.checksum_ = column_checksum.at(i);
@@ -609,6 +612,7 @@ int ObUniqueCheckingDag::init(
     const bool is_scan_index,
     const uint64_t index_table_id,
     const int64_t schema_version,
+    const int64_t task_id,
     const uint64_t execution_id,
     const int64_t snapshot_version)
 {
@@ -618,11 +622,11 @@ int ObUniqueCheckingDag::init(
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObUniqueCheckingDag has already been inited", K(ret));
   } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_valid()
-      || OB_INVALID_ID == index_table_id || schema_version < 0
+      || OB_INVALID_ID == index_table_id || schema_version < 0 || task_id <= 0
       || execution_id < 0 || snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), K(tenant_id), K(ls_id), K(tablet_id),
-        K(index_table_id), K(schema_version), K(execution_id), K(snapshot_version));
+        K(index_table_id), K(schema_version), K(task_id), K(execution_id), K(snapshot_version));
   } else {
     MTL_SWITCH(tenant_id) {
       if (OB_ISNULL(schema_service = MTL(ObTenantSchemaService *)->get_schema_service())) {
@@ -653,6 +657,7 @@ int ObUniqueCheckingDag::init(
         schema_service_ = schema_service;
         execution_id_ = execution_id;
         snapshot_version_ = snapshot_version;
+        task_id_ = task_id;
       }
     } else {
       LOG_WARN("switch to tenant failed", K(ret), K(index_table_id), K(tenant_id));
@@ -894,8 +899,15 @@ int ObSimpleUniqueCheckingTask::init(
     if (OB_UNLIKELY(!tablet_id_.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "invalid arguments", K(ret), K(tablet_id_));
-    } else if (OB_FAIL(unique_checker_.init(tenant_id_, dag->get_ls_id(), tablet_id_, dag->get_is_scan_index(), data_table_schema, index_schema,
-            dag->get_execution_id(), dag->get_snapshot_version()))) {
+    } else if (OB_FAIL(unique_checker_.init(tenant_id_,
+                                            dag->get_ls_id(),
+                                            tablet_id_,
+                                            dag->get_is_scan_index(),
+                                            data_table_schema,
+                                            index_schema,
+                                            dag->get_task_id(),
+                                            dag->get_execution_id(),
+                                            dag->get_snapshot_version()))) {
       STORAGE_LOG(WARN, "fail to init unique index checker", K(ret));
     } else {
       index_schema_ = index_schema;

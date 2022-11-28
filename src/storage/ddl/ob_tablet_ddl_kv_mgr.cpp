@@ -28,7 +28,7 @@ using namespace oceanbase::storage;
 ObTabletDDLKvMgr::ObTabletDDLKvMgr()
   : is_inited_(false), is_commit_success_(false), ls_id_(), tablet_id_(), table_key_(), cluster_version_(0),
     start_log_ts_(0), max_freeze_log_ts_(0),
-    table_id_(0), schema_version_(0), head_(0), tail_(0), lock_(), ref_cnt_(0)
+    table_id_(0), execution_id_(0), head_(0), tail_(0), lock_(), ref_cnt_(0)
 {
   MEMSET(ddl_kvs_, 0, MAX_DDL_KV_CNT_IN_STORAGE * sizeof(ddl_kvs_[0]));
 }
@@ -59,7 +59,7 @@ void ObTabletDDLKvMgr::destroy()
   start_log_ts_ = 0;
   max_freeze_log_ts_ = 0;
   table_id_ = 0;
-  schema_version_ = 0;
+  execution_id_ = 0;
   is_commit_success_ = false;
   is_inited_ = false;
 }
@@ -130,7 +130,11 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key, const int64
   return ret;
 }
 
-int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts, const int64_t prepare_log_ts, const uint64_t table_id, const int64_t schema_version)
+int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts,
+                                  const int64_t prepare_log_ts,
+                                  const uint64_t table_id,
+                                  const int64_t execution_id,
+                                  const int64_t ddl_task_id)
 {
   int ret = OB_SUCCESS;
   ObDDLKVHandle kv_handle;
@@ -146,7 +150,8 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts, const int64_t prep
     LOG_WARN("freeze ddl kv failed", K(ret), K(prepare_log_ts));
   } else {
     table_id_ = table_id;
-    schema_version_ = schema_version;
+    execution_id_ = execution_id;
+    ddl_task_id_ = ddl_task_id;
 
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id_;
@@ -154,7 +159,8 @@ int ObTabletDDLKvMgr::ddl_prepare(const int64_t start_log_ts, const int64_t prep
     param.rec_log_ts_ = prepare_log_ts;
     param.is_commit_ = true;
     param.table_id_ = table_id;
-    param.schema_version_ = schema_version;
+    param.execution_id_ = execution_id_;
+    param.ddl_task_id_ = ddl_task_id_;
     const int64_t start_ts = ObTimeUtility::fast_current_time();
     while (OB_SUCC(ret) && is_started()) {
       if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
@@ -197,7 +203,8 @@ int ObTabletDDLKvMgr::ddl_commit(const int64_t start_log_ts, const int64_t prepa
     param.rec_log_ts_ = prepare_log_ts;
     param.is_commit_ = true;
     param.table_id_ = table_id_;
-    param.schema_version_ = schema_version_;
+    param.execution_id_ = execution_id_;
+    param.ddl_task_id_ = ddl_task_id_;
     // retry submit dag in case of the previous dag failed
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       if (OB_SIZE_OVERFLOW == ret || OB_EAGAIN == ret) {
@@ -294,7 +301,7 @@ int ObTabletDDLKvMgr::cleanup()
     start_log_ts_ = 0;
     max_freeze_log_ts_ = 0;
     table_id_ = 0;
-    schema_version_ = 0;
+    execution_id_ = 0;
     is_commit_success_ = false;
   }
   return ret;

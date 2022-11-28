@@ -33,19 +33,7 @@ using namespace oceanbase::logservice;
 using namespace oceanbase::share;
 using namespace oceanbase::blocksstable;
 
-int ObDDLCtrlSpeedHandleItem::assign(const ObDDLCtrlSpeedHandleItem &speed_handle_item)
-{
-  int ret = OB_SUCCESS;
-  is_inited_ = speed_handle_item.is_inited_;
-  ls_id_ = speed_handle_item.ls_id_;
-  next_available_write_ts_ = speed_handle_item.next_available_write_ts_;
-  write_speed_ = speed_handle_item.write_speed_;
-  disk_used_stop_write_threshold_ = speed_handle_item.disk_used_stop_write_threshold_;
-  need_stop_write_ = speed_handle_item.need_stop_write_;
-  return ret;
-}
-
-int ObDDLCtrlSpeedHandleItem::init(const share::ObLSID &ls_id)
+int ObDDLCtrlSpeedItem::init(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -61,7 +49,7 @@ int ObDDLCtrlSpeedHandleItem::init(const share::ObLSID &ls_id)
       LOG_WARN("fail to init write speed and clog disk used threshold", K(ret));
     } else {
       is_inited_ = true;
-      LOG_INFO("succeed to init ObDDLCtrlSpeedHandleItem", K(ret), K(is_inited_), K(ls_id_),
+      LOG_INFO("succeed to init ObDDLCtrlSpeedItem", K(ret), K(is_inited_), K(ls_id_),
         K(next_available_write_ts_), K(write_speed_), K(disk_used_stop_write_threshold_));
     }
   }
@@ -69,7 +57,7 @@ int ObDDLCtrlSpeedHandleItem::init(const share::ObLSID &ls_id)
 }
 
 // refrese ddl clog write speed and disk used threshold on tenant level.
-int ObDDLCtrlSpeedHandleItem::refresh()
+int ObDDLCtrlSpeedItem::refresh()
 {
   int ret = OB_SUCCESS;
   int64_t archive_speed;
@@ -120,7 +108,7 @@ int ObDDLCtrlSpeedHandleItem::refresh()
 }
 
 // calculate the sleep time for the input bytes, and return next available write timestamp.
-int ObDDLCtrlSpeedHandleItem::cal_limit(const int64_t bytes, int64_t &next_available_ts)
+int ObDDLCtrlSpeedItem::cal_limit(const int64_t bytes, int64_t &next_available_ts)
 {
   int ret = OB_SUCCESS;
   next_available_ts = 0;
@@ -145,7 +133,7 @@ int ObDDLCtrlSpeedHandleItem::cal_limit(const int64_t bytes, int64_t &next_avail
   return ret;
 }
 
-int ObDDLCtrlSpeedHandleItem::do_sleep(
+int ObDDLCtrlSpeedItem::do_sleep(
   const int64_t next_available_ts,
   int64_t &real_sleep_us)
 {
@@ -159,8 +147,13 @@ int ObDDLCtrlSpeedHandleItem::do_sleep(
     LOG_WARN("invalid argument.", K(ret), K(next_available_ts));
   } else if (OB_UNLIKELY(need_stop_write_)) /*clog disk used exceeds threshold*/ {
     while (OB_SUCC(ret) && need_stop_write_) {
+      // TODO YIREN (FIXME-20221017), exit when task is canceled, etc.
       ob_usleep(SLEEP_INTERVAL);
-      LOG_INFO("stop write ddl clog", K(ret), K(disk_used_stop_write_threshold_));
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+        ObTaskController::get().allow_next_syslog();
+        FLOG_INFO("stop write ddl clog", K(ret), K(ls_id_),
+          K(write_speed_), K(need_stop_write_), K(ref_cnt_), K(disk_used_stop_write_threshold_));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -171,7 +164,7 @@ int ObDDLCtrlSpeedHandleItem::do_sleep(
 }
 
 // calculate the sleep time for the input bytes, sleep.
-int ObDDLCtrlSpeedHandleItem::limit_and_sleep(
+int ObDDLCtrlSpeedItem::limit_and_sleep(
   const int64_t bytes,
   int64_t &real_sleep_us)
 {
@@ -202,16 +195,55 @@ int ObDDLCtrlSpeedHandleItem::limit_and_sleep(
   return ret;
 }
 
+int ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedItemHandle::set_ctrl_speed_item(
+    ObDDLCtrlSpeedItem *item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected err, item is nullptr", K(ret));
+  } else {
+    item->inc_ref();
+    item_ = item;
+  }
+  return ret;
+}
+
+int ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedItemHandle::get_ctrl_speed_item(
+    ObDDLCtrlSpeedItem *&item) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(item_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, speed handle item is nullptr", K(ret));
+  } else {
+    item = item_;
+  }
+  return ret;
+}
+
+void ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedItemHandle::reset()
+{
+  if (nullptr != item_) {
+    if (0 == item_->dec_ref()) {
+      item_->~ObDDLCtrlSpeedItem();
+    }
+    item_ = nullptr;
+  }
+}
+
 ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedHandle()
-  : is_inited_(false), speed_handle_map_(), refreshTimerTask_()
+  : is_inited_(false), speed_handle_map_(), allocator_("DDLClogCtrl"), bucket_lock_(), refreshTimerTask_()
 {
 }
 
 ObDDLCtrlSpeedHandle::~ObDDLCtrlSpeedHandle()
 {
+  bucket_lock_.destroy();
   if (speed_handle_map_.created()) {
     speed_handle_map_.destroy();
   }
+  allocator_.reset();
 }
 
 ObDDLCtrlSpeedHandle &ObDDLCtrlSpeedHandle::get_instance()
@@ -229,6 +261,8 @@ int ObDDLCtrlSpeedHandle::init()
   } else if (OB_UNLIKELY(speed_handle_map_.created())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, speed handle map is created", K(ret));
+  } else if (OB_FAIL(bucket_lock_.init(MAP_BUCKET_NUM))) {
+    LOG_WARN("init bucket lock failed", K(ret));
   } else if (OB_FAIL(speed_handle_map_.create(MAP_BUCKET_NUM, "DDLSpeedCtrl"))) {
     LOG_WARN("fail to create speed handle map", K(ret));
   } else {
@@ -249,7 +283,9 @@ int ObDDLCtrlSpeedHandle::limit_and_sleep(
 {
   int ret = OB_SUCCESS;
   SpeedHandleKey speed_handle_key;
-  ObDDLCtrlSpeedHandleItem speed_handle_item;
+  ObDDLCtrlSpeedItem *speed_handle_item = nullptr;
+  ObDDLCtrlSpeedItemHandle item_handle;
+  item_handle.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -261,21 +297,31 @@ int ObDDLCtrlSpeedHandle::limit_and_sleep(
   } else if (OB_UNLIKELY(!speed_handle_map_.created())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("speed handle map is not created", K(ret));
-  } else if (OB_FAIL(ObDDLCtrlSpeedHandle::get_instance().add_speed_handle_item(speed_handle_key))) {
-    LOG_WARN("fail to add speed handle item", K(ret), K(ls_id));
-  } else if (OB_FAIL(speed_handle_map_.get_refactored(speed_handle_key, speed_handle_item))) {
-    LOG_WARN("fail to get refactored", K(ret), K(speed_handle_key));
-  } else if (OB_FAIL(speed_handle_item.limit_and_sleep(bytes,
-                                                       real_sleep_us))) {
+  } else if (OB_FAIL(add_ctrl_speed_item(speed_handle_key, item_handle))) {
+    LOG_WARN("add speed item failed", K(ret));
+  } else if (OB_FAIL(item_handle.get_ctrl_speed_item(speed_handle_item))) {
+    LOG_WARN("get speed handle item failed", K(ret));
+  } else if (OB_ISNULL(speed_handle_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected err, ctrl speed item is nullptr", K(ret), K(speed_handle_key));
+  } else if (OB_FAIL(speed_handle_item->limit_and_sleep(bytes,
+                                                        real_sleep_us))) {
     LOG_WARN("fail to limit and sleep", K(ret), K(bytes), K(real_sleep_us));
   }
   return ret;
 }
 
-int ObDDLCtrlSpeedHandle::add_speed_handle_item(const SpeedHandleKey &speed_handle_key)
+// add entry in speed_handle_map if it does not exist.
+// set entry in ctrl_speed_item_handle.
+int ObDDLCtrlSpeedHandle::add_ctrl_speed_item(
+    const SpeedHandleKey &speed_handle_key,
+    ObDDLCtrlSpeedItemHandle &item_handle)
 {
   int ret = OB_SUCCESS;
-  ObDDLCtrlSpeedHandleItem speed_handle_item;
+  common::ObBucketHashWLockGuard guard(bucket_lock_, speed_handle_key.hash());
+  char *buf = nullptr;
+  ObDDLCtrlSpeedItem *speed_handle_item = nullptr;
+  item_handle.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -286,11 +332,77 @@ int ObDDLCtrlSpeedHandle::add_speed_handle_item(const SpeedHandleKey &speed_hand
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected, speed handle map is not created", K(ret));
   } else if (nullptr != speed_handle_map_.get(speed_handle_key)) {
-    // do nothing, speed handle item already exist.
-  } else if (OB_FAIL(speed_handle_item.init(speed_handle_key.ls_id_))) {
-    LOG_WARN("fail to init new speed handle item", K(ret), K(speed_handle_key));
-  } else if (OB_FAIL(speed_handle_map_.set_refactored(speed_handle_key, speed_handle_item))) {
-    LOG_WARN("fail to add speed handle item", K(ret), K(speed_handle_key));
+    // do nothing, speed handle item has already exist.
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(sizeof(ObDDLCtrlSpeedItem))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory", K(ret));
+  } else {
+    speed_handle_item = new (buf) ObDDLCtrlSpeedItem();
+    if (OB_ISNULL(speed_handle_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else if (OB_FAIL(speed_handle_item->init(speed_handle_key.ls_id_))) {
+        LOG_WARN("fail to init new speed handle item", K(ret), K(speed_handle_key));
+    } else if (OB_FAIL(speed_handle_map_.set_refactored(speed_handle_key, speed_handle_item))) {
+      LOG_WARN("fail to add speed handle item", K(ret), K(speed_handle_key));
+    } else {
+      speed_handle_item->inc_ref();
+    }
+  }
+
+  // set entry for ctrl_speed_item_handle.
+  if (OB_SUCC(ret)) {
+    ObDDLCtrlSpeedItem *curr_speed_handle_item = nullptr;
+    if (OB_FAIL(speed_handle_map_.get_refactored(speed_handle_key, curr_speed_handle_item))) {
+      LOG_WARN("get refactored failed", K(ret), K(speed_handle_key));
+    } else if (OB_ISNULL(curr_speed_handle_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err, speed handle item is nullptr", K(ret), K(speed_handle_key));
+    } else if (OB_FAIL(item_handle.set_ctrl_speed_item(curr_speed_handle_item))) {
+      LOG_WARN("set ctrl speed item failed", K(ret), K(speed_handle_key));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (nullptr != speed_handle_item) {
+      speed_handle_item->~ObDDLCtrlSpeedItem();
+      speed_handle_item = nullptr;
+    }
+    if (nullptr != buf) {
+      allocator_.free(buf);
+      buf = nullptr;
+    }
+  }
+  return ret;
+}
+
+// remove entry from speed_handle_map.
+int ObDDLCtrlSpeedHandle::remove_ctrl_speed_item(const SpeedHandleKey &speed_handle_key)
+{
+  int ret = OB_SUCCESS;
+  common::ObBucketHashWLockGuard guard(bucket_lock_, speed_handle_key.hash());
+  char *buf = nullptr;
+  ObDDLCtrlSpeedItem *speed_handle_item = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!speed_handle_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ls id is invalid", K(ret), K(speed_handle_key));
+  } else if (OB_UNLIKELY(!speed_handle_map_.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected, speed handle map is not created", K(ret));
+  } else if (OB_FAIL(speed_handle_map_.get_refactored(speed_handle_key, speed_handle_item))) {
+    LOG_WARN("get refactored failed", K(ret), K(speed_handle_key));
+  } else if (OB_FAIL(speed_handle_map_.erase_refactored(speed_handle_key))) {
+    LOG_WARN("fail to erase_refactored", K(ret), K(speed_handle_key));
+  } else if (OB_ISNULL(speed_handle_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, speed handle item is nullptr", K(ret), K(speed_handle_key));
+  } else {
+    if (0 == speed_handle_item->dec_ref()) {
+      speed_handle_item->~ObDDLCtrlSpeedItem();
+      speed_handle_item = nullptr;
+    }
   }
   return ret;
 }
@@ -302,7 +414,7 @@ int ObDDLCtrlSpeedHandle::refresh()
 {
   int ret = OB_SUCCESS;
   // 1. remove speed_handle_item whose ls/tenant does not exist;
-  for (hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedHandleItem>::const_iterator iter = speed_handle_map_.begin();
+  for (hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedItem*>::const_iterator iter = speed_handle_map_.begin();
       OB_SUCC(ret) && iter != speed_handle_map_.end(); ++iter) {
     bool erase = false;
     const SpeedHandleKey &speed_handle_key = iter->first;
@@ -330,8 +442,8 @@ int ObDDLCtrlSpeedHandle::refresh()
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (erase && OB_FAIL(speed_handle_map_.erase_refactored(speed_handle_key))) {
-      LOG_WARN("fail to erase_refactored", K(ret), K(speed_handle_key));
+    } else if (erase && OB_FAIL(remove_ctrl_speed_item(speed_handle_key))) {
+      LOG_WARN("remove speed handle item failed", K(ret), K(speed_handle_key));
     }
   }
 
@@ -347,15 +459,24 @@ int ObDDLCtrlSpeedHandle::refresh()
 
 // UpdateSpeedHandleItemFn update ddl clog write speed and disk used config
 int ObDDLCtrlSpeedHandle::UpdateSpeedHandleItemFn::operator() (
-    hash::HashMapPair<SpeedHandleKey, ObDDLCtrlSpeedHandleItem> &entry)
+    hash::HashMapPair<SpeedHandleKey, ObDDLCtrlSpeedItem*> &entry)
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(entry.first.tenant_id_) {
-    if (OB_FAIL(entry.second.refresh())) {
+    if (OB_ISNULL(entry.second)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nulptr", K(ret), K(entry.first));
+    } else if (OB_FAIL(entry.second->refresh())) {
       LOG_WARN("refresh speed and disk config failed", K(ret), K(entry));
     }
   } else if (OB_TENANT_NOT_IN_SERVER == ret || OB_IN_STOP_STATE == ret) { // tenant deleted or on deleting
-    ret = OB_SUCCESS;
+    if (OB_ISNULL(entry.second)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nulptr", K(ret), K(entry.first));
+    } else {
+      entry.second->reset_need_stop_write();
+      ret = OB_SUCCESS;
+    }
   } else {
     LOG_WARN("switch tenant id failed", K(ret), K(MTL_ID()), K(entry));
   }
@@ -891,8 +1012,10 @@ int ObDDLSSTableRedoWriter::wait_redo_log_finish(const ObDDLMacroBlockRedoInfo &
 
 int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_key,
                                               const int64_t table_id,
-                                              const int64_t schema_version,
+                                              const int64_t execution_id,
+                                              const int64_t ddl_task_id,
                                               int64_t &prepare_log_ts)
+
 {
   int ret = OB_SUCCESS;
   prepare_log_ts = 0;
@@ -929,7 +1052,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
     ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
     obrpc::ObRpcRemoteWriteDDLPrepareLogArg arg;
     obrpc::Int64 log_ts;
-    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_log_ts(), table_id, schema_version))) {
+    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_log_ts(), table_id, execution_id, ddl_task_id))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLPrepareLogArg", K(ret));
     } else if (OB_ISNULL(srv_rpc_proxy)) {
       ret = OB_ERR_SYS;

@@ -119,7 +119,7 @@ public:
                                       const common::ObIArray<OrderItem> &ordering,
                                       const EqualSets &equal_sets,
                                       const common::ObIArray<ObRawExpr*> &const_exprs,
-                                      bool &ordering_used,
+                                      int64_t &prefix_count,
                                       bool &ordering_all_used,
                                       common::ObIArray<ObOrderDirection> &directions,
                                       common::ObIArray<int64_t> *match_map = NULL);
@@ -620,6 +620,13 @@ public:
                                const EqualSets &equal_sets,
                                ObIArray<ObRawExpr *> &exprs,
                                ObIArray<ObRawExpr *> &child_exprs);
+
+  static int is_expr_is_determined(const ObIArray<ObRawExpr *> &exprs,
+                                   const ObFdItemSet &fd_item_set,
+                                   const EqualSets &equal_sets,
+                                   const ObIArray<ObRawExpr *> &const_exprs,
+                                   const ObRawExpr *expr,
+                                   bool &is_determined);
 
   static int is_exprs_contain_fd_parent(const ObIArray<ObRawExpr *> &exprs,
                                         const ObFdItem &fd_item,

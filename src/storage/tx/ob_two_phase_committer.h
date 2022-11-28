@@ -343,7 +343,7 @@ private:
   int decide_downstream_msg_type_(ObTwoPhaseCommitMsgType &msg_type);
   int retransmit_downstream_msg_();
   int retransmit_downstream_msg_(const uint8_t participant);
-  int retransmit_upstream_msg_();
+  int retransmit_upstream_msg_(const ObTxState state);
 
   // Because the submit_log may fail, we need retry to submit the log under
   // exception.

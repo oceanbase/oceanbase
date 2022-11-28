@@ -272,6 +272,7 @@ int ObQueryHint::check_ddl_schema_version_from_hint(const ObDMLStmt &stmt,
              OB_UNLIKELY(ddlSchemaVersionHint.schema_version_ != item->ddl_schema_version_)) {
     ret = OB_DDL_SCHEMA_VERSION_NOT_MATCH;
     LOG_USER_ERROR(OB_DDL_SCHEMA_VERSION_NOT_MATCH);
+    LOG_WARN("failed to check ddl schema version", K(ret), K(item->ddl_schema_version_), K(ddlSchemaVersionHint.schema_version_));
   }
   return ret;
 }
@@ -1088,26 +1089,27 @@ int ObStmtHint::init_stmt_hint(const ObDMLStmt &stmt,
   set_query_hint(&query_hint);
   ObString qb_name;
   const ObHints *qb_hints = NULL;
-  const ObHints *stmt_id_hints = use_stmt_id_hints
-                                 ? query_hint.get_stmt_id_hints(stmt.get_stmt_id())
-                                 : NULL;
-  if (OB_FAIL(query_hint.get_qb_name(stmt.get_stmt_id(), qb_name))) {
-    LOG_WARN("failed to get qb name", K(ret), K(stmt.get_stmt_id()), K(qb_name));
-  } else if (OB_FALSE_IT(qb_hints = query_hint.get_qb_hints(qb_name))) {
-  } else if (NULL == qb_hints && NULL == stmt_id_hints) {
+  ObSEArray<ObHint*, 16> all_hints;
+  if (OB_FAIL(stmt.get_qb_name(qb_name))) {
+    LOG_WARN("failed to get qb name", K(ret));
+  } else if (NULL != (qb_hints = query_hint.get_qb_hints(qb_name))
+             && OB_FAIL(all_hints.assign(qb_hints->hints_))) {
+    LOG_WARN("failed to assign hints", K(ret));
+  } else if (use_stmt_id_hints
+             && NULL != (qb_hints = query_hint.get_stmt_id_hints(stmt.get_stmt_id()))
+             && OB_FAIL(append(all_hints, qb_hints->hints_))) {
+    LOG_WARN("failed to append hints", K(ret));
+  } else if (all_hints.empty()) {
     /* do nothing */
   } else {
-    const int64_t M = NULL == qb_hints ? 0 : qb_hints->hints_.count();
-    const int64_t N = NULL == stmt_id_hints ? M : M + stmt_id_hints->hints_.count();
     ObHint *hint = NULL;
     bool may_used = false;
     ObSEArray<ObTableInHint*, 8> all_tables;
     ObSEArray<ObItemType, 4> conflict_hints;
-    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-      hint = i < M ? qb_hints->hints_.at(i) : stmt_id_hints->hints_.at(i - M);
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_hints.count(); ++i) {
       may_used = false;
       all_tables.reuse();
-      if (OB_ISNULL(hint)) {
+      if (OB_ISNULL(hint = all_hints.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(hint));
       } else if (OB_FAIL(hint->get_all_table_in_hint(all_tables))) {
@@ -1455,17 +1457,28 @@ int ObStmtHint::reset_explicit_trans_hint(ObItemType hint_type)
   return ret;
 }
 
-int64_t ObStmtHint::get_max_table_parallel() const
+int ObStmtHint::get_max_table_parallel(const ObDMLStmt &stmt, int64_t &max_table_parallel) const
 {
-  int64_t max_table_parallel = ObGlobalHint::UNSET_PARALLEL;
+  int ret = OB_SUCCESS;
+  max_table_parallel = ObGlobalHint::UNSET_PARALLEL;
   const ObHint *hint = NULL;
-  for (int64_t i = 0; i < other_opt_hints_.count(); ++i) {
+  bool matched = false;
+  if (OB_ISNULL(query_hint_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(query_hint_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < other_opt_hints_.count(); ++i) {
     if (OB_NOT_NULL(hint = other_opt_hints_.at(i)) && hint->is_table_parallel_hint()) {
-      max_table_parallel = std::max(max_table_parallel,
+      if (OB_FAIL(stmt.check_hint_table_matched_table_item(query_hint_->cs_type_,
+                      static_cast<const ObTableParallelHint*>(hint)->get_table(), matched))) {
+        LOG_WARN("failed to check hint table matched table item", K(ret));
+      } else if (matched) {
+        max_table_parallel = std::max(max_table_parallel,
                                     static_cast<const ObTableParallelHint*>(hint)->get_parallel());
+      }
     }
   }
-  return max_table_parallel;
+  return ret;
 }
 
 bool ObStmtHint::has_enable_hint(ObItemType hint_type) const
@@ -1604,6 +1617,10 @@ int ObLogPlanHint::add_index_hint(const ObDMLStmt &stmt,
     LOG_WARN("failed to get log table hint by hint", K(ret));
   } else if (NULL == log_table_hint) {
     /* do nothing */
+  } else if (T_USE_DAS_HINT == index_hint.get_hint_type()) {
+    if (NULL == log_table_hint->use_das_hint_ || index_hint.is_enable_hint()) {
+      log_table_hint->use_das_hint_ = &index_hint;
+    }
   } else if (OB_FAIL(log_table_hint->index_hints_.push_back(&index_hint))) {
     LOG_WARN("failed to push back", K(ret));
   }
@@ -1779,6 +1796,22 @@ const ObTableParallelHint *ObLogPlanHint::get_parallel_hint(uint64_t table_id) c
   return NULL == log_table_hint ? NULL : log_table_hint->parallel_hint_;
 }
 
+int ObLogPlanHint::check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const
+{
+  int ret = OB_SUCCESS;
+  force_das = false;
+  force_no_das = false;
+  const LogTableHint *log_table_hint = get_log_table_hint(table_id);
+  const ObHint *hint = NULL == log_table_hint ? NULL : log_table_hint->use_das_hint_;
+  if (NULL != hint) {
+    force_das = hint->is_enable_hint();
+    force_no_das = hint->is_disable_hint();
+  } else if (is_outline_data_) {
+    force_no_das = true;
+  }
+  return ret;
+}
+
 int ObLogPlanHint::check_use_join_filter(uint64_t filter_table_id,
                                          const ObRelIds &left_tables,
                                          bool part_join_filter,
@@ -1845,6 +1878,45 @@ DistAlgo ObLogPlanHint::get_valid_set_dist_algo(int64_t *random_none_idx /* defa
     }
   }
   return set_dist_algo;
+}
+
+int ObLogPlanHint::check_valid_set_left_branch(const ObSelectStmt *select_stmt,
+                                               bool &hint_valid,
+                                               bool &need_swap) const
+{
+  int ret = OB_SUCCESS;
+  hint_valid = false;
+  need_swap = false;
+  const ObPQSetHint *pq_set_hint = NULL;
+  ObString left_child;
+  ObString right_child;
+  if (OB_UNLIKELY(!select_stmt->is_set_stmt()
+                  || !select_stmt->is_set_distinct()
+                  || 2 > select_stmt->get_set_query().count())
+      || OB_ISNULL(select_stmt->get_set_query(0))
+      || OB_ISNULL(select_stmt->get_set_query(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected set_op stmt", K(ret), K(select_stmt));
+  } else if (NULL == (pq_set_hint = static_cast<const ObPQSetHint*>(get_normal_hint(T_PQ_SET)))) {
+    hint_valid = is_outline_data_;
+    need_swap = false;
+  } else if (pq_set_hint->get_left_branch().empty()) {
+    hint_valid = true;
+    need_swap = false;
+  } else if (OB_FAIL(select_stmt->get_set_query(0)->get_qb_name(left_child))
+             || OB_FAIL(select_stmt->get_set_query(1)->get_qb_name(right_child))) {
+    LOG_WARN("failed to get qb name", K(ret));
+  } else if (0 == pq_set_hint->get_left_branch().case_compare(left_child)) {
+    hint_valid = true;
+    need_swap = false;
+  } else if (0 == pq_set_hint->get_left_branch().case_compare(right_child)) {
+    hint_valid = true;
+    need_swap = true;
+  } else {
+    hint_valid = false;
+    need_swap = false;
+  }
+  return ret;
 }
 
 // generate spm evolution plan, throw a error code when can not get valid hint
@@ -2128,6 +2200,7 @@ int LogTableHint::assign(const LogTableHint &other)
   table_ = other.table_;
   index_type_ = other.index_type_;
   parallel_hint_ = other.parallel_hint_;
+  use_das_hint_ = other.use_das_hint_;
   if (OB_FAIL(index_list_.assign(other.index_list_))) {
     LOG_WARN("failed to assign index list", K(ret));
   } else if (OB_FAIL(index_hints_.assign(other.index_hints_))) {

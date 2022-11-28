@@ -104,8 +104,6 @@ int ObRowsInfo::init(
     STORAGE_LOG(WARN, "ObRowsinfo init twice", K(ret));
   } else if (OB_FAIL(exist_helper_.init(table, store_ctx, full_read_info, scan_mem_allocator_))) {
     STORAGE_LOG(WARN, "Failed to init exist helper", K(ret));
-  } else if (OB_FAIL(rowkeys_.prepare_allocate(DEFAULT_ROW_KEY_ARR_SIZE))) {
-    STORAGE_LOG(WARN, "Failed to prepare_allocate rowkey", K(ret));
   } else {
     datum_utils_ = &full_read_info.get_datum_utils();
     table_id_ = table.get_table_id();

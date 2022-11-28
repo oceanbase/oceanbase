@@ -851,7 +851,7 @@ int ObTransformSemiToInner::construct_transform_hint(ObDMLStmt &stmt, void *tran
       if (OB_ISNULL(table_item = trans_right_table_items->at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(table_item));
-      } else if (OB_FALSE_IT(table_hint.reset(*table_item))) {
+      } else if (OB_FALSE_IT(table_hint.set_table(*table_item))) {
       } else if (OB_FAIL(hint->get_tables().push_back(table_hint))) {
         LOG_WARN("failed to push back table hint", K(ret));
       } else if (OB_FAIL(ctx_->add_src_hash_val(table_item->get_table_name()))) {

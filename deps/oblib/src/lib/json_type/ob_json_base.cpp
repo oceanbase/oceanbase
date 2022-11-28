@@ -1936,7 +1936,7 @@ int ObIJsonBase::to_number(ObIAllocator *allocator, number::ObNumber &number) co
 int ObIJsonBase::to_datetime(int64_t &value) const
 {
   INIT_SUCC(ret);
-  int64_t datetime;
+  int64_t datetime = 0;
 
   switch (json_type()) {
     case ObJsonNodeType::J_DATETIME:
@@ -1985,7 +1985,7 @@ int ObIJsonBase::to_datetime(int64_t &value) const
 int ObIJsonBase::to_date(int32_t &value) const
 {
   INIT_SUCC(ret);
-  int32_t date;
+  int32_t date = 0;
 
   switch (json_type()) {
     case ObJsonNodeType::J_DATETIME:
@@ -2032,7 +2032,7 @@ int ObIJsonBase::to_date(int32_t &value) const
 int ObIJsonBase::to_time(int64_t &value) const
 {
   INIT_SUCC(ret);
-  int64_t time;
+  int64_t time = 0;
 
   switch (json_type()) {
     case ObJsonNodeType::J_TIME: {
@@ -2077,7 +2077,7 @@ int ObIJsonBase::to_time(int64_t &value) const
 int ObIJsonBase::to_bit(uint64_t &value) const
 {
   INIT_SUCC(ret);
-  uint64_t bit;
+  uint64_t bit = 0;
   const ObJsonNodeType j_type = json_type();
   ObDTMode dt_mode = 0;
 

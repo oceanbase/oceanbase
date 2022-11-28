@@ -576,7 +576,6 @@ public:
   // ==================== Callback end ========================
   virtual int revoke_leader(const int64_t proposal_id) = 0;
   virtual int stat(PalfStat &palf_stat) = 0;
-  virtual void set_diskspace_enough(const bool diskspace_enough) = 0;
   virtual int get_palf_epoch(int64_t &palf_epoch) const = 0;
 };
 
@@ -842,7 +841,6 @@ public:
                                   const LogCandidateList &candidate_list,
                                   const RegisterReturn reg_ret) override final;
   int handle_learner_req(const LogLearner &server, const LogLearnerReqType req_type) override final;
-  void set_diskspace_enough(const bool diskspace_enough) override final;
   int get_palf_epoch(int64_t &palf_epoch) const;
   TO_STRING_KV(K_(palf_id), K_(self), K_(has_set_deleted));
 private:
@@ -1006,7 +1004,6 @@ private:
   // NB: only set has_set_deleted_ to true when this palf_handle has been deleted.
   bool has_set_deleted_;
   PalfEnvImpl *palf_env_impl_;
-  bool diskspace_enough_;
   ObMiniStat::ObStatItem append_cost_stat_;
   ObMiniStat::ObStatItem flush_cb_cost_stat_;
   // a spin lock for read/write replica_meta mutex

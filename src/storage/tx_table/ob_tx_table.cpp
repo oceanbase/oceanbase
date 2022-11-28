@@ -740,10 +740,12 @@ int ObTxTable::restore_tx_ctx_table_(ObITable &trans_sstable)
   share::schema::ObColDesc meta;
   meta.col_id_ = common::OB_APP_MIN_COLUMN_ID + 1;
   meta.col_type_.set_binary();
+  meta.col_order_ = ObOrderType::ASC;
 
   share::schema::ObColDesc value;
   value.col_id_ = common::OB_APP_MIN_COLUMN_ID + 2;
   value.col_type_.set_binary();
+  value.col_order_ = ObOrderType::ASC;
 
   ObTableIterParam iter_param;
   iter_param.tablet_id_ = LS_TX_CTX_TABLET;

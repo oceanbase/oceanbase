@@ -71,6 +71,9 @@ public:
   int check_job_can_running(int64_t tenant_id, bool &can_running);
 
   int check_job_timeout(ObDBMSSchedJobInfo &job_info);
+
+  int check_auto_drop(ObDBMSSchedJobInfo &job_info);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedTableOperator);
 

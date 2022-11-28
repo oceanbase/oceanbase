@@ -5070,7 +5070,22 @@ int ObTableSchema::get_generated_column_ids(ObIArray<uint64_t> &column_ids) cons
   }
   return ret;
 }
-
+bool ObTableSchema::has_generated_and_partkey_column() const
+{
+  bool result = false;
+  if (has_generated_column() && is_partitioned_table() ) {
+    for (int64_t i = 0; i < generated_columns_.bit_count() && !result; ++i) {
+      if (generated_columns_.has_member(i)) {
+        uint64_t generated_column_id = i + OB_APP_MIN_COLUMN_ID;
+        const ObColumnSchemaV2 *generated_column = get_column_schema(generated_column_id);
+        if (generated_column->is_tbl_part_key_column()) {
+          result = true;
+        }
+      }
+    }
+  }
+  return result;
+}
 // Because there are too many places to call this function, you must be careful when modifying this function,
 // and it is recommended not to modify
 // If you must modify this function, pay attention to whether the location of calling this function also depends on the error code

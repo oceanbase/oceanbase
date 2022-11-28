@@ -96,8 +96,6 @@ function mirror_create {
 ## generate config
 function generate_config {
   app_name=$task.$USER.$HOST
-  ocp_config_server='http://ocp-cfg.alibaba.net:8080/services?User_ID=alibaba&UID=test'
-  proxy_cfg_url=${ocp_config_server}\&Action=GetObProxyConfig\&ObRegionGroup=$app_name
 
   port_num=$port_gen
   mysql_port=$port_num && port_num=$((port_num+1))
@@ -118,7 +116,6 @@ function generate_config {
   proxy_conf=${proxy_conf//'{{%% LISTEN_PORT %%}}'/$listen_port}
   proxy_conf=${proxy_conf//'{{%% PROMETHEUS_LISTEN_PORT %%}}'/$prometheus_listen_port}
   proxy_conf=${proxy_conf//'{{%% OBPORXY_HOME_PATH %%}}'/"$DATA_PATH"/obproxy}
-  proxy_conf=${proxy_conf//'{{%% OBPROXY_CONFIG_SERVER_URL %%}}'/$proxy_cfg_url}
 
 
   base_template=${base_template//"{{%% COMPONENT %%}}"/$COMPONENT}
@@ -126,7 +123,6 @@ function generate_config {
   base_template=${base_template//"{{%% DEPLOY_PATH %%}}"/$DEPLOY_PATH}
   base_template=${base_template//"{{%% TOOLS_PATH %%}}"/$BASE_DIR/tools}
   base_template=${base_template//"{{%% MINI_SIZE %%}}"/$mem}
-  base_template=${base_template//"{{%% OBCONFIG_URL %%}}"/$ocp_config_server}
   base_template=${base_template//"{{%% APPNAME %%}}"/$app_name}
   base_template=${base_template//"{{%% EXTRA_PARAM %%}}"/}
 

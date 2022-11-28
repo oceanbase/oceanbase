@@ -111,7 +111,7 @@ DEFINE_ERROR_DEP(OB_ITEM_NOT_SETTED, -4022, -1, "HY000", "Item not set");
 DEFINE_ERROR_DEP(OB_EAGAIN, -4023, -1, "HY000", "Try again");
 DEFINE_ERROR_DEP(OB_BUF_NOT_ENOUGH, -4024, -1, "HY000", "Buffer not enough");
 DEFINE_ERROR(OB_PARTIAL_FAILED, -4025, -1, "HY000", "Partial failed");
-DEFINE_ORACLE_ERROR_DEP(OB_READ_NOTHING, -4026, -1, "02000", "Nothing to read", 1403, "no data found");
+DEFINE_ORACLE_ERROR_DEP(OB_READ_NOTHING, -4026, ER_SP_FETCH_NO_DATA, "02000", "No data - zero rows fetched, selected, or processed", 1403, "no data found");
 DEFINE_ERROR_DEP(OB_FILE_NOT_EXIST, -4027, ER_FILE_NOT_FOUND, "HY000", "File not exist");
 DEFINE_ERROR_DEP(OB_DISCONTINUOUS_LOG, -4028, -1, "HY000", "Log entry not continuous");
 DEFINE_ERROR(OB_SCHEMA_ERROR, -4029, -1, "HY000", "Schema error");
@@ -2010,7 +2010,6 @@ DEFINE_ORACLE_ERROR(OB_ERR_STATEMENT_STRING_IN_EXECUTE_IMMEDIATE_IS_NULL_OR_ZERO
 DEFINE_ORACLE_ERROR(OB_ERR_MISSING_INTO_KEYWORD, -9712, -1, "HY000", "missing INTO keyword", 925, "missing INTO keyword");
 DEFINE_ORACLE_ERROR(OB_ERR_CLAUSE_RETURN_ILLEGAL, -9713, -1, "HY000", "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements", 6547, "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements");
 DEFINE_ORACLE_ERROR(OB_ERR_NAME_HAS_TOO_MANY_PARTS, -9714, -1, "HY000", "name has too many parts", 6563, "name has too many parts");
-DEFINE_ERROR(OB_ERR_SP_FETCH_NO_DATA, -9715, ER_SP_FETCH_NO_DATA, "HY000", "No data - zero rows fetched, selected, or processed");
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!

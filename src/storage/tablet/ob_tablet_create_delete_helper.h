@@ -124,7 +124,8 @@ public:
       const int64_t timeout_us);
   static int acquire_tablet(
       const ObTabletMapKey &key,
-      ObTabletHandle &handle);
+      ObTabletHandle &handle,
+      const bool only_acquire = false);
   static int check_need_create_empty_major_sstable(
       const share::schema::ObTableSchema &table_schema,
       bool &need_create_sstable);

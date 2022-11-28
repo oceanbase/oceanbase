@@ -407,24 +407,13 @@ public:
     return blk_size;
   }
   
-  static ObFixedClassAllocator<T> *get(const lib::ObLabel &label = common::ObModIds::OB_CONCURRENCY_OBJ_POOL)
+  static ObFixedClassAllocator<T> *get(const char* label = "ConcurObjPool")
   {
-    ObFixedClassAllocator<T> *instance = NULL;
-    while (OB_UNLIKELY(once_ < 2)) {
-      if (ATOMIC_BCAS(&once_, 0, 1)) {
-        instance = new (std::nothrow) ObFixedClassAllocator(sizeof(T),
-                                      ObMemAttr(common::OB_SERVER_TENANT_ID, label),
-                                      choose_blk_size(sizeof(T)),
-                                      common::get_cpu_count());
-        if (OB_LIKELY(NULL != instance)) {
-          instance_ = instance;
-          (void)ATOMIC_BCAS(&once_, 1, 2);
-        } else {
-          (void)ATOMIC_BCAS(&once_, 1, 0);
-        }
-      }
-    }
-    return (ObFixedClassAllocator<T> *)instance_;
+    static ObFixedClassAllocator<T> instance(sizeof(T),
+                                             ObMemAttr(common::OB_SERVER_TENANT_ID, label),
+                                             choose_blk_size(sizeof(T)),
+                                             common::get_cpu_count());
+    return &instance;
   }
 
   void *alloc()
@@ -440,10 +429,6 @@ public:
       ptr = NULL;
     }
   }
-
-protected:
-  static volatile int64_t once_;
-  static volatile ObFixedClassAllocator<T> *instance_;
 
 private:
   ObSliceAlloc allocator_;
@@ -735,10 +720,6 @@ template<class T>
 volatile int64_t ObClassAllocator<T>::once_ = 0;
 template<class T>
 volatile ObClassAllocator<T> *ObClassAllocator<T>::instance_ = NULL;
-template<class T>
-volatile int64_t ObFixedClassAllocator<T>::once_ = 0;
-template<class T>
-volatile ObFixedClassAllocator<T> *ObFixedClassAllocator<T>::instance_ = NULL;
 
 template <class T>
 struct OPNum
@@ -832,7 +813,7 @@ inline void call_destructor(T *ptr) {
   ({ \
     type *ret = NULL; \
     common::ObFixedClassAllocator<type> *instance = \
-      common::ObFixedClassAllocator<type>::get(common::OPNum<type>::LABEL); \
+      common::ObFixedClassAllocator<type>::get(#type); \
     if (OB_LIKELY(NULL != instance)) { \
       void *tmp = instance->alloc(); \
       if (OB_LIKELY(NULL != tmp)) { \
@@ -847,7 +828,7 @@ inline void call_destructor(T *ptr) {
     OLD_STATIC_ASSERT((std::is_default_constructible<type>::value), "type is not default constructible"); \
     type *ret = NULL; \
     common::ObFixedClassAllocator<type> *instance = \
-      common::ObFixedClassAllocator<type>::get(common::OPNum<type>::LABEL); \
+      common::ObFixedClassAllocator<type>::get(#type); \
     if (OB_LIKELY(NULL != instance)) { \
       void *tmp = instance->alloc(); \
       if (OB_LIKELY(NULL != tmp)) { \
@@ -860,7 +841,7 @@ inline void call_destructor(T *ptr) {
 #define op_free(ptr) \
   ({ \
     common::ObFixedClassAllocator<__typeof__(*ptr)> *instance = \
-      common::ObFixedClassAllocator<__typeof__(*ptr)>::get(common::OPNum<__typeof__(*ptr)>::LABEL); \
+      common::ObFixedClassAllocator<__typeof__(*ptr)>::get(); \
     if (OB_LIKELY(NULL != instance)) { \
       instance->free(ptr); \
     } \

@@ -65,6 +65,7 @@ public:
   virtual int get_view_check_exprs(ObIArray<ObRawExpr*>& view_check_exprs) const override;
   virtual int64_t get_instead_of_trigger_column_count() const override;
   virtual int remove_table_item_dml_info(const TableItem* table) override;
+  int remove_invalid_assignment();
 
   TO_STRING_KV(N_STMT_TYPE, stmt_type_,
       N_TABLE, table_items_,

@@ -7091,7 +7091,7 @@ struct ObDDLBuildSingleReplicaRequestArg final
   OB_UNIS_VERSION(1);
 public:
   ObDDLBuildSingleReplicaRequestArg() : tenant_id_(OB_INVALID_ID), ls_id_(), source_tablet_id_(), dest_tablet_id_(), source_table_id_(OB_INVALID_ID),
-                                        dest_schema_id_(OB_INVALID_ID), schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0) {}
+                                        dest_schema_id_(OB_INVALID_ID), schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0), execution_id_(0) {}
   bool is_valid() const {
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
            && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_ && schema_version_ > 0 && snapshot_version_ > 0
@@ -7099,7 +7099,7 @@ public:
   }
   int assign(const ObDDLBuildSingleReplicaRequestArg &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(source_tablet_id), K_(dest_tablet_id),
-    K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(snapshot_version), K_(task_id), K_(parallelism));
+    K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -7112,6 +7112,7 @@ public:
   int64_t ddl_type_;
   int64_t task_id_;
   int64_t parallelism_;
+  int64_t execution_id_;
 };
 
 struct ObDDLBuildSingleReplicaRequestResult final
@@ -7133,12 +7134,15 @@ struct ObDDLBuildSingleReplicaResponseArg final
   OB_UNIS_VERSION(1);
 public:
   ObDDLBuildSingleReplicaResponseArg()
-    : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), source_table_id_(), dest_schema_id_(OB_INVALID_ID), ret_code_(OB_SUCCESS), snapshot_version_(0), schema_version_(0), task_id_(0)
+    : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), source_table_id_(), dest_schema_id_(OB_INVALID_ID),
+      ret_code_(OB_SUCCESS), snapshot_version_(0), schema_version_(0), task_id_(0), execution_id_(0)
   {}
   ~ObDDLBuildSingleReplicaResponseArg() = default;
-  bool is_valid() const { return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid() && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_ && snapshot_version_ > 0 && schema_version_ > 0 && task_id_ > 0; }
+  bool is_valid() const { return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid()
+                          && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_
+                          && snapshot_version_ > 0 && schema_version_ > 0 && task_id_ > 0 && execution_id_ > 0; }
   int assign(const ObDDLBuildSingleReplicaResponseArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(source_table_id), K_(dest_schema_id), K_(ret_code), K_(snapshot_version), K_(schema_version), K_(task_id));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(source_table_id), K_(dest_schema_id), K_(ret_code), K_(snapshot_version), K_(schema_version), K_(task_id), K_(execution_id));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -7149,6 +7153,7 @@ public:
   int64_t snapshot_version_;
   int64_t schema_version_;
   int64_t task_id_;
+  int64_t execution_id_;
 };
 
 struct ObLogReqLoadProxyRequest
@@ -7418,21 +7423,23 @@ public:
            const storage::ObITable::TableKey &table_key,
            const int64_t start_log_ts,
            const int64_t table_id,
-           const int64_t schema_version);
+           const int64_t execution_id,
+           const int64_t ddl_task_id);
   bool is_valid() const
   {
     return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && start_log_ts_ > 0
-           && table_id_ > 0 && schema_version_ > 0;
+           && table_id_ > 0 && execution_id_ > 0 && ddl_task_id_ > 0;
   }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_log_ts), K_(table_id),
-               K_(schema_version));
+               K_(execution_id), K_(ddl_task_id));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   storage::ObITable::TableKey table_key_;
   int64_t start_log_ts_;
   int64_t table_id_;
-  int64_t schema_version_;
+  int64_t execution_id_;
+  int64_t ddl_task_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLPrepareLogArg);
 };

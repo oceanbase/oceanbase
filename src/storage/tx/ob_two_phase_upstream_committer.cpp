@@ -172,7 +172,7 @@ int ObTxCycleTwoPhaseCommitter::handle_timeout()
     TRANS_LOG(WARN, "retransmit downstream msg failed", KR(tmp_ret));
   }
 
-  if (!is_root() && OB_TMP_FAIL(retransmit_upstream_msg_())) {
+  if (!is_root() && OB_TMP_FAIL(retransmit_upstream_msg_(get_downstream_state()))) {
     TRANS_LOG(WARN, "retransmit upstream msg failed", KR(tmp_ret));
   }
 
@@ -269,16 +269,13 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_response(const uint8_t partic
 
   switch (get_upstream_state()) {
     case ObTxState::INIT:
-    case ObTxState::REDO_COMPLETE:
-      if (OB_FAIL(do_prepare(no_need_submit_log))) {
-        TRANS_LOG(WARN, "do prepare failed", K(ret), K(*this));
-      } else {
-        set_upstream_state(ObTxState::PREPARE);
-        collected_.reset();
+    case ObTxState::REDO_COMPLETE: {
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
         TRANS_LOG(INFO, "recv prepare resp when coord state is init or redo complete",
                   KR(ret), K(participant), K(*this));
       }
-      // go through
+      break;
+    }
     // Because we want to reduce the latency at all costs, we need to handle
     // prepare response before prepare log successfully synchronized.
     case ObTxState::PREPARE: {
@@ -356,13 +353,11 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_commit_response(const uint8_t partici
       // and post commit req to all participants. after that root crashed, and
       // coord_state_ is set to PREPARE(the same as state_), and participants'
       // commit responses arrive.
-      if (OB_FAIL(do_commit())) {
-        TRANS_LOG(WARN, "do commit failed", K(ret), K(*this));
-      } else {
-        set_upstream_state(ObTxState::COMMIT);
-        collected_.reset();
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+        TRANS_LOG(INFO, "recv commit resp when upstream state is prepare or pre_commit",
+                  KR(ret), K(participant), K(*this));
       }
-      // go through
+      break;
     }
     case ObTxState::COMMIT: {
       if (OB_FAIL(handle_2pc_ack_response_impl_(participant))) {
@@ -546,10 +541,11 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_pre_commit_response(const uint8_t par
       // and post pre commit req to all participants. after that root crashed, and
       // coord_state_ is set to PREPARE(the same as state_), and participants'
       // pre_commit responses
-      if (OB_FAIL(try_enter_pre_commit_state())) {
-        TRANS_LOG(WARN, "try enter pre commit state failed", K(ret), K(*this));
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+        TRANS_LOG(INFO, "recv pre_commit resp when upstream state is prepare",
+                  KR(ret), K(participant), K(*this));
       }
-      // go through
+      break;
     }
     case ObTxState::PRE_COMMIT: {
       if (OB_FAIL(handle_2pc_pre_commit_response_impl_(participant))) {
