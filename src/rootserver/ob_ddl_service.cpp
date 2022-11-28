@@ -10001,7 +10001,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("array count is unexpected" , K(orig_table_schemas), K(new_table_schemas),
                      K(inc_table_schemas), K(del_table_schemas), KR(ret));
-          } else if (alter_table_arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_succ(trans, tenant_id, alter_table_arg.task_id_))) {
+          } else if (alter_table_arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(trans, tenant_id, alter_table_arg.task_id_))) {
             LOG_WARN("update ddl task status failed", K(ret));
           }
         }
@@ -10252,11 +10252,17 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                 LOG_WARN("fail to push ddl task", K(ret), K(task_record));
               } else {
                 res.task_id_ = task_record.task_id_;
+                ObDDLRes ddl_res;
+                ddl_res.tenant_id_ = tenant_id;
+                ddl_res.schema_id_ = create_index_arg->index_schema_.get_schema_version();
+                ddl_res.task_id_ = task_record.task_id_;
                 obrpc::ObAlterTableResArg arg(TABLE_SCHEMA,		
                                               create_index_arg->index_schema_.get_table_id(),		
                                               create_index_arg->index_schema_.get_schema_version());		
                 if (OB_FAIL(res.res_arg_array_.push_back(arg))) {		
                   LOG_WARN("push back to res_arg_array failed", K(ret), K(arg));		
+                } else if (OB_FAIL(res.ddl_res_array_.push_back(ddl_res))) {
+                  LOG_WARN("failed to push back ddl res array", K(ret));
                 }
               }
             }
@@ -12789,7 +12795,7 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_succ(trans, tenant_id, arg.task_id_))) {
+    } else if (arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(trans, tenant_id, arg.task_id_))) {
       LOG_WARN("update ddl task status failed", K(ret));
     }
     if (trans.is_started()) {
@@ -18353,7 +18359,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
     // drop table and update ddl task status should be done in single trans.
     if (OB_FAIL(ret)) {
     } else if (drop_table_arg.task_id_ > 0
-      && OB_FAIL(ObDDLRetryTask::update_task_status_succ(trans, tenant_id, drop_table_arg.task_id_))) {
+      && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(trans, tenant_id, drop_table_arg.task_id_))) {
       LOG_WARN("update task status of drop table failed", K(ret));
     }
     //no matter success or not, we should publish schema
@@ -22538,7 +22544,7 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_succ(
+      } else if (arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(
           OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans, tenant_id, arg.task_id_))) {
         LOG_WARN("update ddl task status to success failed", K(ret));
       }

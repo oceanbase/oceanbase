@@ -335,14 +335,11 @@ int ObDDLRetryTask::drop_schema(const ObDDLTaskStatus next_task_status)
       case ObDDLType::DDL_DROP_SUB_PARTITION:
       case ObDDLType::DDL_TRUNCATE_PARTITION:
       case ObDDLType::DDL_TRUNCATE_SUB_PARTITION: {
-        obrpc::ObAlterTableRes alter_table_res;
         obrpc::ObAlterTableArg *arg = static_cast<obrpc::ObAlterTableArg *>(ddl_arg_);
         arg->is_add_to_scheduler_ = false;
         arg->task_id_ = task_id_;
-        if (OB_FAIL(common_rpc_proxy.alter_table(*arg, alter_table_res))) {
+        if (OB_FAIL(common_rpc_proxy.alter_table(*arg, alter_table_res_))) {
           LOG_WARN("fail to alter table", K(ret));
-        } else if (OB_FAIL(wait_alter_table(*arg, alter_table_res))) {
-          LOG_WARN("failed to wait alter table", K(ret));
         }
         break;
       }
@@ -373,29 +370,63 @@ int ObDDLRetryTask::drop_schema(const ObDDLTaskStatus next_task_status)
   return ret;
 }
 
-int ObDDLRetryTask::wait_alter_table(const ObAlterTableArg &alter_table_arg, const ObAlterTableRes &res)
+int ObDDLRetryTask::wait_alter_table(const ObDDLTaskStatus new_status)
 {
   int ret = OB_SUCCESS;
-  const static int CHECK_INTERVAL = 100 * 1000; // 100ms
-  const uint64_t tenant_id = alter_table_arg.exec_tenant_id_;
-  if (alter_table_arg.is_update_global_indexes_
-      && (ObAlterTableArg::DROP_PARTITION == alter_table_arg.alter_part_type_
-      || ObAlterTableArg::DROP_SUB_PARTITION == alter_table_arg.alter_part_type_
-      || ObAlterTableArg::TRUNCATE_PARTITION == alter_table_arg.alter_part_type_
-      || ObAlterTableArg::TRUNCATE_SUB_PARTITION == alter_table_arg.alter_part_type_)) {
-    const common::ObSArray<ObAlterTableResArg> &res_array = res.res_arg_array_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < res_array.size(); ++i) {
-      bool is_finish = false;
-      while (OB_SUCC(ret) && !is_finish) {
-        if (OB_FAIL(sql::ObDDLExecutorUtil::wait_build_index_finish(tenant_id, res.task_id_, is_finish))) {
-          LOG_WARN("wait build index finish failed", K(ret), K(tenant_id), K(res.task_id_));
-        } else if (!is_finish) {
-          ob_usleep(CHECK_INTERVAL);
-          LOG_INFO("index status is not final", K(res));
+  bool finish = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRetryTask has not been inited", K(ret));
+  } else if (OB_ISNULL(root_service_)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_ISNULL(ddl_arg_) || lib::Worker::CompatMode::INVALID == compat_mode_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), KP(ddl_arg_), K(compat_mode_));
+  } else {
+    switch (task_type_) {
+    case ObDDLType::DDL_DROP_DATABASE:
+    case ObDDLType::DDL_DROP_TABLE:
+    case ObDDLType::DDL_TRUNCATE_TABLE: {
+      finish = true;
+      break;
+    }
+    case ObDDLType::DDL_DROP_PARTITION:
+    case ObDDLType::DDL_DROP_SUB_PARTITION:
+    case ObDDLType::DDL_TRUNCATE_PARTITION:
+    case ObDDLType::DDL_TRUNCATE_SUB_PARTITION: {
+      obrpc::ObAlterTableArg *arg = static_cast<obrpc::ObAlterTableArg *>(ddl_arg_);
+      const uint64_t tenant_id = arg->exec_tenant_id_;
+      common::ObSArray<ObDDLRes> &res_array = alter_table_res_.ddl_res_array_;
+      while (OB_SUCC(ret) && res_array.count() > 0) {
+        const int64_t task_id = res_array.at(res_array.count() - 1).task_id_;
+        bool is_finish = false;
+        if (OB_FAIL(sql::ObDDLExecutorUtil::wait_build_index_finish(tenant_id, task_id, is_finish))) {
+          LOG_WARN("wait build index finish failed", K(ret), K(tenant_id), K(task_id));
+        } else if (is_finish) {
+          res_array.pop_back();
+          LOG_INFO("index status is final", K(ret), K(task_id));
         } else {
-          LOG_INFO("index status is final", K(ret), K(res));
+          LOG_INFO("index status is not final", K(task_id));
+          break;
         }
       }
+      if (OB_SUCC(ret) && res_array.count() == 0) {
+        finish = true;
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected ddl type", K(ret), K(task_type_));
+      break;
+    }
+    }
+  }
+
+  if (OB_FAIL(ret) || finish) {
+    if (OB_FAIL(switch_status(new_status, ret))) {
+      LOG_WARN("fail to switch task status", K(ret));
     }
   }
   return ret;
@@ -476,8 +507,14 @@ int ObDDLRetryTask::process()
         break;
       }
       case ObDDLTaskStatus::DROP_SCHEMA: {
-        if (OB_FAIL(drop_schema(ObDDLTaskStatus::SUCCESS))) {
+        if (OB_FAIL(drop_schema(ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH))) {
           LOG_WARN("fail to write barrier log", K(ret));
+        }
+        break;
+      }
+      case ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH: {
+        if (OB_FAIL(wait_alter_table(ObDDLTaskStatus::SUCCESS))) {
+          LOG_WARN("failed to wait child task", K(ret));
         }
         break;
       }
@@ -574,7 +611,7 @@ int64_t ObDDLRetryTask::get_serialize_param_size() const
   return serialize_param_size;
 }
 
-int ObDDLRetryTask::update_task_status_succ(
+int ObDDLRetryTask::update_task_status_wait_child_task_finish(
     common::ObMySQLTransaction &trans,
     const uint64_t tenant_id,
     const int64_t task_id)
@@ -584,7 +621,7 @@ int ObDDLRetryTask::update_task_status_succ(
   ObSqlString sql_string;
   int64_t curr_task_status = 0;
   int64_t execution_id = 0; /*unused*/
-  const int64_t new_task_status = ObDDLTaskStatus::SUCCESS;
+  const int64_t new_task_status = ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
