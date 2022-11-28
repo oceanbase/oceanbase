@@ -4057,7 +4057,7 @@ int ObSql::calc_pre_calculable_exprs(const ObDMLStmt &stmt,
     } else if (OB_FAIL(ObPlanCacheObject::pre_calculation(is_ignore_stmt,
                                                           *pre_calc_frame, exec_ctx,
                                                           calc_types))) {
-      LOG_WARN("failde to pre calculate exprs", K(ret));
+      LOG_WARN("failed to pre calculate exprs", K(ret));
     } else if (OB_UNLIKELY(PRE_CALC_DEFAULT == calc_types &&
                    !phy_plan.get_pre_calc_frames().add_last(pre_calc_frame))) {
       ret = OB_ERR_UNEXPECTED;
