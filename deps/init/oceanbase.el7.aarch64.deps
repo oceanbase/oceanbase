@@ -17,7 +17,6 @@ repo=http://yum.tbsite.net/taobao/7/aarch64/test/ob-deploy/
 devdeps-gtest-1.8.0-132022101316.el7.aarch64.rpm
 devdeps-isa-l-static-2.22.0-22022092915.el7.aarch64.rpm
 devdeps-libcurl-static-7.29.0-32022093010.el7.aarch64.rpm
-devdeps-libunwind-static-1.6.2-222022100410.el7.aarch64.rpm
 devdeps-mariadb-connector-c-3.1.12-12022100422.el7.aarch64.rpm
 devdeps-libaio-0.3.112-12022092915.el7.aarch64.rpm
 devdeps-rapidjson-1.1.0-12022100410.el7.aarch64.rpm

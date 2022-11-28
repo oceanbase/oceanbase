@@ -340,10 +340,10 @@ int ObBatchUpdateTableStoreParam::assign(
   return ret;
 }
 
-int ObBatchUpdateTableStoreParam::get_max_clog_checkpoint_ts(int64_t &clog_checkpoint_ts) const
+int ObBatchUpdateTableStoreParam::get_max_clog_checkpoint_scn(palf::SCN &clog_checkpoint_scn) const
 {
   int ret = OB_SUCCESS;
-  clog_checkpoint_ts = 0;
+  clog_checkpoint_scn.set_min();
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("batch update table store param is invalid", K(ret), KPC(this));
@@ -356,7 +356,7 @@ int ObBatchUpdateTableStoreParam::get_max_clog_checkpoint_ts(int64_t &clog_check
       } else if (!table->is_multi_version_minor_sstable()) {
         //do nothing
       } else {
-        clog_checkpoint_ts = std::max(clog_checkpoint_ts, table->get_end_scn().get_val_for_tx());
+        clog_checkpoint_scn = std::max(clog_checkpoint_scn, table->get_end_scn());
       }
     }
   }

@@ -1962,7 +1962,7 @@ int ObTabletCreateDeleteHelper::build_batch_create_tablet_arg(
   if (OB_FAIL(ret)) {
   } else {
     new_arg.id_ = old_arg.id_;
-    new_arg.frozen_timestamp_ = old_arg.frozen_timestamp_;
+    new_arg.major_frozen_scn_ = old_arg.major_frozen_scn_;
 
     if (new_arg.get_tablet_count() > 0 && OB_FAIL(new_arg.table_schemas_.assign(old_arg.table_schemas_))) {
       LOG_WARN("failed to assign table schemas", K(ret), K(old_arg));
@@ -2249,7 +2249,6 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  SCN snapshot_version;
   const ObLSID &ls_id = arg.id_;
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTablet *tablet = nullptr;
@@ -2265,9 +2264,7 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
   ObMetaDiskAddr mem_addr;
   ObTabletTableStoreFlag table_store_flag;
   table_store_flag.set_with_major_sstable();
-  if (OB_FAIL(snapshot_version.convert_tmp(arg.frozen_timestamp_))) {
-    LOG_WARN("fail to convert scn", K(ret), K(arg.frozen_timestamp_));
-  } else if (OB_FAIL(mem_addr.set_mem_addr(0, sizeof(ObTablet)))) {
+  if (OB_FAIL(mem_addr.set_mem_addr(0, sizeof(ObTablet)))) {
     LOG_WARN("fail to set memory address", K(ret));
   } else if (OB_FAIL(acquire_tablet(key, tablet_handle, false/*only acquire*/))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
@@ -2276,9 +2273,9 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
   } else if (!need_create_empty_major_sstable) {
     table_store_flag.set_without_major_sstable();
     LOG_INFO("no need to create sstable", K(ls_id), K(tablet_id), K(table_schema));
-  } else if (OB_FAIL(build_create_sstable_param(table_schema, tablet_id, snapshot_version, param))) {
+  } else if (OB_FAIL(build_create_sstable_param(table_schema, tablet_id, arg.major_frozen_scn_, param))) {
     LOG_WARN("failed to build create sstable param", K(ret), K(tablet_id),
-        K(table_schema), K(snapshot_version), K(param));
+        K(table_schema), K(arg), K(param));
   } else if (OB_FAIL(create_sstable(param, table_handle))) {
     LOG_WARN("failed to create sstable", K(ret), K(param));
   }
@@ -2288,10 +2285,10 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, tablet is NULL", K(ret), K(tablet_handle));
   } else if (OB_FAIL(tablet->init(ls_id, tablet_id, data_tablet_id, lob_meta_tablet_id, lob_piece_tablet_id,
-      create_scn, snapshot_version, table_schema, compat_mode, table_store_flag, table_handle, freezer))) {
+      create_scn, arg.major_frozen_scn_, table_schema, compat_mode, table_store_flag, table_handle, freezer))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(lob_meta_tablet_id), K(lob_piece_tablet_id), K(index_tablet_array),
-        K(snapshot_version), K(create_scn), K(table_schema), K(compat_mode), K(table_store_flag));
+        K(arg), K(create_scn), K(table_schema), K(compat_mode), K(table_store_flag));
   } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, mem_addr, tablet_handle, tablet_handle))) {
     LOG_WARN("failed to compare and swap tablet", K(ret), K(key), K(mem_addr), K(tablet_handle));
   } else {
@@ -2554,7 +2551,7 @@ int64_t ObSimpleBatchCreateTabletArg::to_string(char *buf, const int64_t buf_len
     J_NAME("ObSimpleBatchCreateTabletArg");
     J_COLON();
     J_KV("id", arg_.id_,
-         "frozen_timestamp", arg_.frozen_timestamp_,
+         "major_frozen_scn", arg_.major_frozen_scn_,
          "total_tablet_cnt", arg_.get_tablet_count());
     J_COMMA();
 

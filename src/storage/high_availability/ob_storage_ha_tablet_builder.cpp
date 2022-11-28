@@ -1468,8 +1468,8 @@ int ObStorageHATableInfoMgr::check_tablet_table_info_exist(
       } else {
         LOG_WARN("failed to get tablet table info mgr", K(ret), K(tablet_id));
       }
-    } else {
-      is_exist = true;
+    } else if (OB_FAIL(tablet_table_info_mgr->check_copy_tablet_exist(is_exist))) {
+      LOG_WARN("failed to check copy tablet exist", K(ret), K(tablet_id));
     }
   }
   return ret;

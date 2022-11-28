@@ -119,21 +119,6 @@ public:
     size_ = 0;
   }
 
-  int shrink_size(int64_t size)
-  {
-    LockGuard guard(lock_);
-    int ret = OB_SUCCESS;
-    if (size <= 0 || size > capacity_) {
-      ret = OB_INVALID_ARGUMENT;
-      COMMON_LOG(WARN, "invalid argument", K(size), K_(capacity));
-    } else if (size * 2 <= capacity_) {
-      capacity_ = size * 2;
-    } else {
-      capacity_ = size;
-    }
-    return ret;
-  }
-
   void print() const
   {
     COMMON_LOG(INFO, "array_hash dump begin:", K(this));

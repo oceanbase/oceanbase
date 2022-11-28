@@ -308,7 +308,6 @@ int TestLobCommon::build_lob_tablet_arg(
   ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> tablet_id_array;
   ObArray<int64_t> tablet_schema_index_array;
-  int64_t frozen_timestamp = 0;
   share::schema::ObTableSchema table_schema;
   build_data_table_schema(tenant_id, table_schema);
   share::schema::ObTableSchema lob_meta_schema;
@@ -333,8 +332,8 @@ int TestLobCommon::build_lob_tablet_arg(
       lib::get_compat_mode(), false/*is_create_bind_hidden_tablets*/))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, frozen_timestamp))) {
-    STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id), K(frozen_timestamp));
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, palf::SCN::min_scn()))) {
+    STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     STORAGE_LOG(WARN, "failed to push back table schema", K(ret), K(table_schema));
   } else if (OB_FAIL(arg.table_schemas_.push_back(lob_meta_schema))) {

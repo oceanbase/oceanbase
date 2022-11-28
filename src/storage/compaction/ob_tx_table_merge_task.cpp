@@ -67,20 +67,20 @@ int ObTxTableMergeDag::init_by_param(const ObIDagInitParam *param)
   } else if (merge_param->tablet_id_.is_ls_tx_data_tablet() && merge_param->is_minor_merge()) {
     // init compaction filter for minor merge in TxDataTable
     ObTxTableGuard guard;
-    int64_t recycle_ts = 0;
+    palf::SCN recycle_scn = palf::SCN::min_scn();
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(ctx_->ls_handle_.get_ls()->get_tx_table_guard(guard))) {
       LOG_WARN("failed to get tx table", K(tmp_ret), KPC(merge_param));
     } else if (OB_UNLIKELY(!guard.is_valid())) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tx table guard is invalid", K(tmp_ret), KPC(merge_param), K(guard));
-    } else if (OB_TMP_FAIL(guard.get_tx_table()->get_recycle_ts(recycle_ts))) {
+    } else if (OB_TMP_FAIL(guard.get_tx_table()->get_recycle_scn(recycle_scn))) {
       LOG_WARN("failed to get recycle ts", K(tmp_ret), KPC(merge_param));
-    } else if (OB_TMP_FAIL(compaction_filter_.init(recycle_ts, ObTxTable::get_filter_col_idx()))) {
-      LOG_WARN("failed to get init compaction filter", K(tmp_ret), KPC(merge_param), K(recycle_ts));
+    } else if (OB_TMP_FAIL(compaction_filter_.init(recycle_scn.get_val_for_tx(), ObTxTable::get_filter_col_idx()))) {
+      LOG_WARN("failed to get init compaction filter", K(tmp_ret), KPC(merge_param), K(recycle_scn));
     } else {
       ctx_->compaction_filter_ = &compaction_filter_;
-      FLOG_INFO("success to init compaction filter", K(tmp_ret), K(recycle_ts));
+      FLOG_INFO("success to init compaction filter", K(tmp_ret), K(recycle_scn));
     }
   }
   return ret;

@@ -78,7 +78,6 @@ int gen_create_tablet_arg(const int64_t tenant_id,
   obrpc::ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> index_tablet_ids;
   ObArray<int64_t> index_tablet_schema_idxs;
-  int64_t frozen_timestamp = 0;
   uint64_t table_id = 12345;
   arg.reset();
   share::schema::ObTableSchema table_schema_obj;
@@ -110,10 +109,8 @@ int gen_create_tablet_arg(const int64_t tenant_id,
           false))) {
     STORAGE_LOG(WARN, "failed to init tablet info", KR(ret), K(index_tablet_ids),
         K(tablet_id), K(index_tablet_schema_idxs));
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id,
-                                            frozen_timestamp))) {
-    STORAGE_LOG(WARN, "failed to init create tablet", KR(ret), K(tenant_id), K(ls_id),
-        K(frozen_timestamp));
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, palf::SCN::min_scn()))) {
+    STORAGE_LOG(WARN, "failed to init create tablet", KR(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     STORAGE_LOG(WARN, "failed to push back table schema", KR(ret), K(table_schema));
   } else if (OB_FAIL(arg.tablets_.push_back(tablet_info))) {
