@@ -145,7 +145,7 @@ int ObTableScanIterator::prepare_table_context()
     ObVersionRange trans_version_range;
     trans_version_range.multi_version_start_ = 0;
     trans_version_range.base_version_ = 0;
-    trans_version_range.snapshot_version_ = ctx_guard_.get_store_ctx().mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator();
+    trans_version_range.snapshot_version_ = ctx_guard_.get_store_ctx().mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
     if (OB_UNLIKELY(!trans_version_range.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "trans version range is not valid", K(ret), K(trans_version_range));
@@ -377,7 +377,7 @@ int ObTableScanIterator::open_iter()
           if (nullptr == scan_merge_ && OB_FAIL(init_scan_iter(scan_merge_))) {
             STORAGE_LOG(WARN, "Failed to init scanmerge", K(ret));
           } else if (OB_FAIL(get_table_param_.tablet_iter_.tablet_handle_.get_obj()->get_read_tables(
-                        main_table_ctx_.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator(),
+                        main_table_ctx_.store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
                         get_table_param_.tablet_iter_,
                         false /*allow_not_ready*/ ))) {
             STORAGE_LOG(WARN, "Fail to read tables", K(ret));

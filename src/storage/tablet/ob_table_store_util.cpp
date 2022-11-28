@@ -587,7 +587,7 @@ int ObMemtableArray::rebuild(common::ObIArray<ObTableHandleV2> &handle_array)
     LOG_ERROR("ObMemtableArray not inited", K(ret), KPC(this), K(handle_array));
   } else {
     ObITable *last_memtable = get_table(count() - 1);
-    int64_t end_log_ts = (NULL == last_memtable) ? 0 : last_memtable->get_end_log_ts();
+    palf::SCN end_scn = (NULL == last_memtable) ? palf::SCN::min_scn() : last_memtable->get_end_scn();
 
     for (int64_t i = 0; OB_SUCC(ret) && i < handle_array.count(); ++i) {
       memtable::ObMemtable *memtable = nullptr;
@@ -598,8 +598,8 @@ int ObMemtableArray::rebuild(common::ObIArray<ObTableHandleV2> &handle_array)
       } else if (FALSE_IT(memtable = reinterpret_cast<memtable::ObMemtable *>(table))) {
       } else if (memtable->is_empty()) {
         FLOG_INFO("Empty memtable discarded", KPC(memtable));
-      } else if (table->get_end_log_ts() < end_log_ts) {
-      } else if (table->get_end_log_ts() == end_log_ts && table == last_memtable) { //fix issue 41996395
+      } else if (table->get_end_scn() < end_scn) {
+      } else if (table->get_end_scn() == end_scn && table == last_memtable) { //fix issue 41996395
       } else if (OB_FAIL(add_table(table))) {
         LOG_WARN("failed to add memtable to curr memtables", K(ret), KPC(this));
       }
@@ -941,13 +941,13 @@ void ObPrintTableStoreIterator::table_to_string(
       ? (static_cast<ObSSTable *>(table)->get_meta().get_basic_meta().contain_uncommitted_row_ ? "true" : "false")
       : "unused";
 
-    BUF_PRINTF(" %-10s %-19p %-19lu %-19lu %-19lu %-19lu %-4ld %-16s ",
+    BUF_PRINTF(" %-10s %-19p %-19lu %-19lu %-19s %-19s %-4ld %-16s ",
       table_name,
       reinterpret_cast<const void *>(table),
       table->get_upper_trans_version(),
       table->get_max_merged_trans_version(),
-      table->get_start_scn().get_val_for_inner_table_field(),
-      table->get_end_scn().get_val_for_inner_table_field(),
+      to_cstring(table->get_start_scn()),
+      to_cstring(table->get_end_scn()),
       table->get_ref(),
       uncommit_row);
   } else {

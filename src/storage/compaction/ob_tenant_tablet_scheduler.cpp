@@ -451,12 +451,12 @@ bool ObTenantTabletScheduler::check_weak_read_ts_ready(
     ObLS &ls)
 {
   bool is_ready_for_compaction = false;
-  palf::SCN weak_read_ts;
+  palf::SCN weak_read_scn;
 
-  if (FALSE_IT(weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts())) {
-  } else if (weak_read_ts.get_val_for_lsn_allocator() < merge_version) {
+  if (FALSE_IT(weak_read_scn = ls.get_ls_wrs_handler()->get_ls_weak_read_ts())) {
+  } else if (weak_read_scn.get_val_for_tx() < merge_version) {
     FLOG_INFO("current slave_read_ts is smaller than freeze_ts, try later",
-              "ls_id", ls.get_ls_id(), K(merge_version), K(weak_read_ts));
+              "ls_id", ls.get_ls_id(), K(merge_version), K(weak_read_scn));
   } else {
     is_ready_for_compaction = true;
   }

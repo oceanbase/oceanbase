@@ -970,7 +970,7 @@ int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
                                   update_storage_schema,
                                   ctx.rebuild_seq_,
                                   ctx.param_.is_major_merge(),
-                                  clog_checkpoint_scn.get_val_for_inner_table_field(),
+                                  clog_checkpoint_scn,
                                   ctx.param_.is_mini_minor_merge());
     ObTablet *old_tablet = ctx.tablet_handle_.get_obj();
     ObTabletHandle new_tablet_handle;

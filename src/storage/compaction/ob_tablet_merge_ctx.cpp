@@ -657,10 +657,10 @@ int ObTabletMergeCtx::inner_init_for_major()
   } else if (get_merge_table_result.handle_.get_count() > 1
       && !ObTenantTabletScheduler::check_tx_table_ready(
       *ls_handle_.get_ls(),
-      get_merge_table_result.scn_range_.end_scn_.get_val_for_inner_table_field())) {
+      get_merge_table_result.scn_range_.end_scn_.get_val_for_tx())) {
     ret = OB_EAGAIN;
     LOG_INFO("tx table is not ready. waiting for max_decided_log_ts ...",
-             KR(ret), "merge_log_ts", get_merge_table_result.scn_range_.end_scn_.get_val_for_inner_table_field());
+             KR(ret), "merge_scn", get_merge_table_result.scn_range_.end_scn_);
   } else if (OB_FAIL(get_basic_info_from_result(get_merge_table_result))) {
     LOG_WARN("failed to set basic info to ctx", K(ret), K(get_merge_table_result), KPC(this));
   } else if (OB_FAIL(get_table_schema_to_merge())) {
@@ -718,10 +718,10 @@ int ObTabletMergeCtx::inner_init_for_minor(bool &skip_rest_operation)
     }
   } else if (!ObTenantTabletScheduler::check_tx_table_ready(
       *ls_handle_.get_ls(),
-      get_merge_table_result.scn_range_.end_scn_.get_val_for_inner_table_field())) {
+      get_merge_table_result.scn_range_.end_scn_.get_val_for_tx())) {
     ret = OB_EAGAIN;
     LOG_INFO("tx table is not ready. waiting for max_decided_log_ts ...",
-             KR(ret), "merge_log_ts", get_merge_table_result.scn_range_.end_scn_.get_val_for_inner_table_field());
+             KR(ret), "merge_scn", get_merge_table_result.scn_range_.end_scn_);
   } else if (OB_FAIL(get_storage_schema_to_merge(get_merge_table_result.handle_, true/*get_schema_on_memtable*/))) {
     LOG_ERROR("Fail to get storage schema", K(ret), KPC(this));
   } else if (OB_FAIL(get_basic_info_from_result(get_merge_table_result))) {
@@ -778,7 +778,7 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
       schema_ctx_.storage_schema_,
       rebuild_seq,
       param_.is_major_merge(),
-      0/*clog_checkpoint_ts*/);
+      palf::SCN::min_scn()/*clog_checkpoint_scn*/);
   ObTabletHandle new_tablet_handle;
   if (OB_FAIL(ls_handle_.get_ls()->update_tablet_table_store(
       param_.tablet_id_, param, new_tablet_handle))) {
@@ -1127,15 +1127,15 @@ int ObTabletMergeCtx::generate_participant_table_info(char *buf, const int64_t b
         "[MAJOR]scn", tables_handle_.get_table(0)->get_snapshot_version());
     if (tables_handle_.get_count() > 1) {
       ADD_COMPACTION_INFO_PARAM(buf, buf_len,
-          "[MINI]start_scn", tables_handle_.get_table(1)->get_start_scn().get_val_for_inner_table_field(),
-          "end_scn", tables_handle_.get_table(tables_handle_.get_count() - 1)->get_end_scn().get_val_for_inner_table_field());
+          "[MINI]start_scn", tables_handle_.get_table(1)->get_start_scn().get_val_for_tx(),
+          "end_scn", tables_handle_.get_table(tables_handle_.get_count() - 1)->get_end_scn().get_val_for_tx());
     }
   } else {
     if (tables_handle_.get_count() > 0) {
       ADD_COMPACTION_INFO_PARAM(buf, buf_len,
           "table_cnt", tables_handle_.get_count(),
-          "start_scn", tables_handle_.get_table(0)->get_start_scn().get_val_for_inner_table_field(),
-          "end_scn", tables_handle_.get_table(tables_handle_.get_count() - 1)->get_end_scn().get_val_for_inner_table_field());
+          "start_scn", tables_handle_.get_table(0)->get_start_scn().get_val_for_tx(),
+          "end_scn", tables_handle_.get_table(tables_handle_.get_count() - 1)->get_end_scn().get_val_for_tx());
     }
   }
   return ret;

@@ -299,7 +299,7 @@ struct ObUpdateTableStoreParam
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
     const bool need_report = false,
-    const int64_t clog_checkpoint_ts = 0,
+    const palf::SCN clog_checkpoint_scn = palf::SCN::min_scn(),
     const bool need_check_sstable = false);
 
   ObUpdateTableStoreParam( // for ddl merge task only
@@ -312,13 +312,13 @@ struct ObUpdateTableStoreParam
     const bool need_report = false);
 
   bool is_valid() const;
-  TO_STRING_KV(K_(table_handle), K_(snapshot_version), K_(clog_checkpoint_ts), K_(multi_version_start),
+  TO_STRING_KV(K_(table_handle), K_(snapshot_version), K_(clog_checkpoint_scn), K_(multi_version_start),
                K_(keep_old_ddl_sstable), K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
                K_(need_check_sstable), K_(ddl_checkpoint_scn), K_(ddl_start_scn), K_(ddl_snapshot_version));
 
   ObTableHandleV2 table_handle_;
   int64_t snapshot_version_;
-  int64_t clog_checkpoint_ts_;
+  palf::SCN clog_checkpoint_scn_;
   int64_t multi_version_start_;
   bool keep_old_ddl_sstable_;
   bool need_report_;

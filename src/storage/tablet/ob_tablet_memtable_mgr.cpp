@@ -481,9 +481,7 @@ int ObTabletMemtableMgr::get_memtable_for_replay(palf::SCN replay_scn,
         handle.reset();
         LOG_WARN("fail to get data memtable", K(ret));
       } else {
-        int64_t start_log_ts = memtable->get_start_log_ts();
-        int64_t end_log_ts = memtable->get_end_log_ts();
-        if (replay_scn.get_val_for_lsn_allocator() > start_log_ts && replay_scn.get_val_for_lsn_allocator() <= end_log_ts) {
+        if (replay_scn > memtable->get_start_scn() && replay_scn <= memtable->get_end_scn()) {
           break;
         } else {
           handle.reset();
@@ -820,12 +818,12 @@ int ObTabletMemtableMgr::find_start_pos_(const int64_t start_log_ts,
     if (OB_ISNULL(memtable)) {
       ret = OB_ERR_SYS;
       LOG_ERROR("memtable must not null", K(ret));
-    } else if (memtable->get_end_log_ts() == start_log_ts) {
+    } else if (memtable->get_end_scn().get_val_for_tx() == start_log_ts) {
       if (memtable->get_snapshot_version() > start_snapshot_version) {
         start_pos = i;
         break;
       }
-    } else if (memtable->get_end_log_ts() > start_log_ts) {
+    } else if (memtable->get_end_scn().get_val_for_tx() > start_log_ts) {
       start_pos = i;
       break;
     }

@@ -261,7 +261,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
       if (table_idx == tables_.count() - 1) {
         access_ctx_->defensive_check_record_.start_access_table_idx_ = table_idx;
         access_ctx_->defensive_check_record_.total_table_handle_cnt_ = tables_.count();
-        access_ctx_->defensive_check_record_.fist_access_table_start_log_ts_ = table->get_start_log_ts();
+        access_ctx_->defensive_check_record_.fist_access_table_start_log_ts_ = table->get_start_scn().get_val_for_tx();
       }
 #endif
       }

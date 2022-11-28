@@ -226,8 +226,8 @@ void TestCompactionPolicy::generate_table_key(
     table_key.version_range_.base_version_ = start_scn;
     table_key.version_range_.snapshot_version_ = end_scn;
   } else {
-    table_key.scn_range_.start_scn_.convert_for_gts(start_scn);
-    table_key.scn_range_.end_scn_.convert_for_gts(end_scn);
+    table_key.scn_range_.start_scn_.convert_for_tx(start_scn);
+    table_key.scn_range_.end_scn_.convert_for_tx(end_scn);
   }
 }
 
@@ -306,7 +306,7 @@ int TestCompactionPolicy::mock_memtable(
     mt_mgr->clean_tail_memtable_();
   } else if (palf::OB_MAX_SCN_TS_NS != end_border) { // frozen memtable
     palf::SCN snapshot_scn;
-    snapshot_scn.convert_for_lsn_allocator(snapshot_version);
+    snapshot_scn.convert_for_tx(snapshot_version);
     memtable->snapshot_version_ = snapshot_scn;
     memtable->write_ref_cnt_ = 0;
     memtable->unsynced_cnt_ = 0;
@@ -733,13 +733,13 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(result.update_tablet_directly_, true);
 
-  tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_scn_.convert_for_lsn_allocator(280);
+  tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_scn_.convert_for_tx(280);
   tablet_handle_.get_obj()->tablet_meta_.snapshot_version_ = 280;
   result.reset();
   ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(3, result.handle_.get_count());
-  ASSERT_EQ(300, result.scn_range_.end_scn_.get_val_for_lsn_allocator());
+  ASSERT_EQ(300, result.scn_range_.end_scn_.get_val_for_tx());
   ASSERT_EQ(result.update_tablet_directly_, true);
 }
 
