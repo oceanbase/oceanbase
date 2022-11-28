@@ -17,6 +17,7 @@
 #include "lib/ob_define.h"
 #include "lib/utility/serialization.h"
 #include "share/schema/ob_table_schema.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {

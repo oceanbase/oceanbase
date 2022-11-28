@@ -187,7 +187,7 @@ private:
   bool is_inited_;
   ObLSHandle ls_handle_;
   ObLSCompleteMigrationCtx *ctx_;
-  int64_t log_sync_scn_;
+  palf::SCN log_sync_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObStartCompleteMigrationTask);
 };
 

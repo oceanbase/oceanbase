@@ -49,6 +49,7 @@ public:
   int check_has_effective_ddl_kv(bool &has_ddl_kv); // used in ddl log handler for checkpoint
   int get_ddl_kv_min_log_ts(int64_t &min_log_ts); // for calculate rec_log_ts of ls
   int64_t get_start_log_ts() const { return start_log_ts_; }
+
   bool is_started() const { return 0 != start_log_ts_; }
   int set_commit_success();
   bool is_commit_success() const { return is_commit_success_; }

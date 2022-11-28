@@ -1564,7 +1564,7 @@ int ObTabletTableStore::update_ha_minor_sstables_(
   ObArray<ObITable *> new_minor_tables;
   const ObSSTableArray &old_minor_tables = old_store.get_minor_sstables();
 
-  if (param.start_scn_ >= tablet_ptr_->get_clog_checkpoint_ts()) {
+  if (param.start_scn_ >= tablet_ptr_->get_clog_checkpoint_scn()) {
     //no need keep local minor sstable
     LOG_INFO("start scn is bigger than clog checkpoint ts, no need keep local minor sstable", K(old_store));
   } else {
@@ -1572,7 +1572,7 @@ int ObTabletTableStore::update_ha_minor_sstables_(
     bool found = false;
     for (int64_t i = 0; i < old_minor_tables.count_; ++i) {
       const ObITable *table = old_minor_tables[i];
-      if (table->get_start_log_ts() <= param.start_scn_ && table->get_end_log_ts() > param.start_scn_) {
+      if (table->get_start_scn() <= param.start_scn_ && table->get_end_scn() > param.start_scn_) {
         index = i;
         found = true;
         break;
@@ -1593,7 +1593,7 @@ int ObTabletTableStore::update_ha_minor_sstables_(
         ObSSTable *sstable = static_cast<ObSSTable *>(table);
         share::ObScnRange new_scn_range;
         share::ObScnRange original_scn_range = sstable->get_scn_range();
-        new_scn_range.start_scn_.convert_for_gts(param.start_scn_); //TODO(SCN) fix start_scn with SCN
+        new_scn_range.start_scn_ = param.start_scn_;
         new_scn_range.end_scn_ = table->get_end_scn();
         sstable->set_scn_range(new_scn_range);
         LOG_INFO("cut ha remote logical sstable log ts range", KPC(sstable), K(new_scn_range), K(original_scn_range));

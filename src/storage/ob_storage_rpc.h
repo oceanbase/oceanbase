@@ -88,12 +88,12 @@ public:
   bool is_valid() const;
   int assign(const ObCopyMacroBlockRangeArg &arg);
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(data_version), K_(backfill_tx_log_ts), K_(copy_macro_range_info));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(data_version), K_(backfill_tx_scn), K_(copy_macro_range_info));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   storage::ObITable::TableKey table_key_;
   int64_t data_version_;
-  int64_t backfill_tx_log_ts_;
+  palf::SCN backfill_tx_scn_;
   storage::ObCopyMacroRangeInfo copy_macro_range_info_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockRangeArg);
 };

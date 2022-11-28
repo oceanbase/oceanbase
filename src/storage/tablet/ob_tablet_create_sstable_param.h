@@ -97,7 +97,7 @@ public:
   int64_t original_size_;
   int64_t max_merged_trans_version_;
   int64_t ddl_log_ts_;
-  int64_t filled_tx_log_ts_;
+  palf::SCN filled_tx_scn_;
   bool contain_uncommitted_row_;
   common::ObCompressorType compressor_type_;
   int64_t encrypt_id_;

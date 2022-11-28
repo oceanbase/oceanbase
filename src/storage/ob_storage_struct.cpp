@@ -219,7 +219,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     rebuild_seq_(rebuild_seq),
     update_with_major_flag_(false),
     need_check_sstable_(false),
-    ddl_checkpoint_ts_(0),
+    ddl_checkpoint_scn_(palf::SCN::min_scn()),
     ddl_start_log_ts_(0),
     ddl_snapshot_version_(0)
 {
@@ -244,7 +244,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     rebuild_seq_(rebuild_seq),
     update_with_major_flag_(false),
     need_check_sstable_(need_check_sstable),
-    ddl_checkpoint_ts_(0),
+    ddl_checkpoint_scn_(palf::SCN::min_scn()),
     ddl_start_log_ts_(0),
     ddl_snapshot_version_(0)
 {
@@ -268,7 +268,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     rebuild_seq_(rebuild_seq),
     update_with_major_flag_(update_with_major_flag),
     need_check_sstable_(false),
-    ddl_checkpoint_ts_(0),
+    ddl_checkpoint_scn_(palf::SCN::min_scn()),
     ddl_start_log_ts_(0),
     ddl_snapshot_version_(0)
 {
@@ -293,7 +293,7 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
     need_report_(false),
     rebuild_seq_(OB_INVALID_VERSION),
     update_logical_minor_sstable_(false),
-    start_scn_(0)
+    start_scn_(palf::SCN::min_scn())
 {
 }
 
@@ -305,7 +305,7 @@ void ObBatchUpdateTableStoreParam::reset()
   need_report_ = false;
   rebuild_seq_ = OB_INVALID_VERSION;
   update_logical_minor_sstable_ = false;
-  start_scn_ = 0;
+  start_scn_.set_min();
 }
 
 bool ObBatchUpdateTableStoreParam::is_valid() const
@@ -314,7 +314,7 @@ bool ObBatchUpdateTableStoreParam::is_valid() const
       && multi_version_start_ >= 0
       && OB_NOT_NULL(storage_schema_)
       && rebuild_seq_ > OB_INVALID_VERSION
-      && (!update_logical_minor_sstable_ || (update_logical_minor_sstable_ && start_scn_ > 0));
+      && (!update_logical_minor_sstable_ || (update_logical_minor_sstable_ && start_scn_ > palf::SCN::min_scn()));
 }
 
 int ObBatchUpdateTableStoreParam::assign(

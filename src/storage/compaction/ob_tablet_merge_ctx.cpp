@@ -193,7 +193,14 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObTabletMergeCtx &ctx,
       table_key.scn_range_ = ctx.scn_range_;
     }
     param.table_key_ = table_key;
-    param.filled_tx_log_ts_ = ctx.merge_scn_;
+    // TODO(scn):
+    if (INT64_MAX == ctx.merge_scn_) {
+      param.filled_tx_scn_.set_max();
+    } else {
+      if (OB_FAIL(param.filled_tx_scn_.convert_for_lsn_allocator(ctx.merge_scn_))) {
+        LOG_WARN("failed to convert for gts", K(ret), K(ctx));
+      }
+    }
 
     param.table_mode_ = ctx.schema_ctx_.merge_schema_->get_table_mode_struct();
     param.index_type_ = ctx.schema_ctx_.merge_schema_->get_index_type();
@@ -234,7 +241,7 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObTabletMergeCtx &ctx,
     param.other_block_ids_ = res.other_block_ids_;
     MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     if (ctx.param_.is_major_merge()) {
-      if (OB_FAIL(res.fill_column_checksum(ctx.schema_ctx_.table_schema_, param.column_checksums_))) {
+      if (FAILEDx(res.fill_column_checksum(ctx.schema_ctx_.table_schema_, param.column_checksums_))) {
         LOG_WARN("fail to fill column checksum", K(ret), K(res));
       }
     }
@@ -250,7 +257,7 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObTabletMergeCtx &c
 {
   int ret = OB_SUCCESS;
   // set INT64_MAX for invalid check
-  param.filled_tx_log_ts_ = INT64_MAX;
+  param.filled_tx_scn_.set_max();
 
   if (ctx.param_.is_mini_merge()) {
     // when this merge is MINI_MERGE, use the start_scn of the oldest tx data memtable as start_tx_scn
@@ -262,18 +269,18 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObTabletMergeCtx &c
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("table ptr is unexpected nullptr", KR(ret), K(ctx));
     } else {
-      param.filled_tx_log_ts_ = tx_data_memtable->get_start_log_ts();
+      param.filled_tx_scn_ = tx_data_memtable->get_start_scn();
     }
   } else if (ctx.param_.is_minor_merge()) {
     // when this merege is MINOR_MERGE or MINI_MINOR_MERGE, use max_filtered_end_scn in filter if filtered some tx data
     ObTransStatusFilter *compaction_filter_ = (ObTransStatusFilter*)ctx.compaction_filter_;
     if (OB_ISNULL(compaction_filter_)) {
       // This minor merge do not filter any tx data
-      param.filled_tx_log_ts_ = ctx.scn_range_.start_scn_.get_val_for_inner_table_field();
-    } else if (compaction_filter_->get_max_filtered_end_scn() > 0) {
-      param.filled_tx_log_ts_ = compaction_filter_->get_max_filtered_end_scn();
+      param.filled_tx_scn_ = ctx.scn_range_.start_scn_;
+    } else if (compaction_filter_->get_max_filtered_end_scn() > palf::SCN::min_scn()) {
+      param.filled_tx_scn_ = compaction_filter_->get_max_filtered_end_scn();
     } else {
-      param.filled_tx_log_ts_ = compaction_filter_->get_recycle_scn();
+      param.filled_tx_scn_ = compaction_filter_->get_recycle_scn();
     }
   } else {
     ret = OB_ERR_UNEXPECTED;

@@ -115,7 +115,7 @@ ObCopyMacroBlockRangeArg::ObCopyMacroBlockRangeArg()
     ls_id_(),
     table_key_(),
     data_version_(0),
-    backfill_tx_log_ts_(0),
+    backfill_tx_scn_(palf::SCN::min_scn()),
     copy_macro_range_info_()
 {
 }
@@ -126,7 +126,7 @@ void ObCopyMacroBlockRangeArg::reset()
   ls_id_.reset();
   table_key_.reset();
   data_version_ = 0;
-  backfill_tx_log_ts_ = 0;
+  backfill_tx_scn_.set_min();
   copy_macro_range_info_.reset();
 }
 
@@ -136,7 +136,7 @@ bool ObCopyMacroBlockRangeArg::is_valid() const
       && ls_id_.is_valid()
       && table_key_.is_valid()
       && data_version_ >= 0
-      && backfill_tx_log_ts_ >= 0
+      && backfill_tx_scn_ >= palf::SCN::min_scn()
       && copy_macro_range_info_.is_valid();
 }
 
@@ -153,13 +153,13 @@ int ObCopyMacroBlockRangeArg::assign(const ObCopyMacroBlockRangeArg &arg)
     ls_id_ = arg.ls_id_;
     table_key_ = arg.table_key_;
     data_version_ = arg.data_version_;
-    backfill_tx_log_ts_ = arg.backfill_tx_log_ts_;
+    backfill_tx_scn_ = arg.backfill_tx_scn_;
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, data_version_,
-    backfill_tx_log_ts_, copy_macro_range_info_);
+    backfill_tx_scn_, copy_macro_range_info_);
 
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),
@@ -269,7 +269,7 @@ void ObCopyTabletSSTableInfoArg::reset()
 {
   tablet_id_.reset();
   max_major_sstable_snapshot_ = 0;
-  minor_sstable_scn_range_ .reset();
+  minor_sstable_scn_range_.reset();
   ddl_sstable_scn_range_.reset();
 }
 
@@ -892,7 +892,7 @@ int ObHAFetchMacroBlockP::process()
 
       SMART_VAR(storage::ObCopyMacroBlockObProducer, producer) {
         if (OB_FAIL(producer.init(arg_.tenant_id_, arg_.ls_id_, arg_.table_key_, arg_.copy_macro_range_info_,
-            arg_.data_version_, arg_.backfill_tx_log_ts_))) {
+            arg_.data_version_, arg_.backfill_tx_scn_))) {
           LOG_WARN("failed to init macro block producer", K(ret), K(arg_));
         } else {
 

@@ -121,12 +121,9 @@ public:
   {
     return meta_.basic_meta_.recycle_version_;
   }
-
   palf::SCN get_filled_tx_scn() const
   {
-    palf::SCN tmp_scn;
-    tmp_scn.convert_for_lsn_allocator(meta_.basic_meta_.filled_tx_log_ts_);
-    return tmp_scn;
+    return meta_.basic_meta_.filled_tx_scn_;
   }
 
   virtual int get_frozen_schema_version(int64_t &schema_version) const override;

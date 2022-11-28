@@ -2407,7 +2407,7 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
     param.data_checksum_ = 0;
     param.occupy_size_ = 0;
     param.ddl_log_ts_ = 0;
-    param.filled_tx_log_ts_ = 0;
+    param.filled_tx_scn_.set_min();
     param.original_size_ = 0;
     param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
     if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_,
@@ -2465,7 +2465,7 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
     param.data_checksum_ = 0;
     param.occupy_size_ = 0;
     param.ddl_log_ts_ = 0;
-    param.filled_tx_log_ts_ = 0;
+    param.filled_tx_scn_.set_min();
     param.original_size_ = 0;
     param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
     if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_,

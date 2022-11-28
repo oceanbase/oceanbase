@@ -40,6 +40,7 @@ public:
   static SCN max_scn();
   static SCN min_scn();
   static SCN base_scn();
+  bool is_base_scn() const { return *this == base_scn(); }
   static SCN max(const SCN &left, const SCN &right);
   static SCN min(const SCN &left, const SCN &right);
   static SCN plus(const SCN &ref, uint64_t delta);

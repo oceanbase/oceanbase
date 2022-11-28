@@ -523,6 +523,7 @@ public:
   DELEGATE_WITH_RET(log_handler_, replace_member, int);
   DELEGATE_WITH_RET(log_handler_, is_in_sync, int);
   DELEGATE_WITH_RET(log_handler_, get_end_ts_ns, int);
+  DELEGATE_WITH_RET(log_handler_, get_end_scn, int);
   DELEGATE_WITH_RET(log_handler_, disable_sync, int);
   DELEGATE_WITH_RET(log_handler_, change_replica_num, int);
   DELEGATE_WITH_RET(log_handler_, get_end_lsn, int);

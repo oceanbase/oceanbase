@@ -15,6 +15,7 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "share/schema/ob_table_param.h"
+#include "logservice/palf/scn.h"
 namespace oceanbase
 {
 namespace blocksstable
@@ -102,8 +103,11 @@ public:
       K_(filter_col_idx), K_(max_filtered_end_scn));
 
 public:
-  int64_t get_max_filtered_end_scn() { return max_filtered_end_scn_; }
-  int64_t get_recycle_scn() { return filter_val_; }
+  // TODO(scn): change scn of int64_t type to palf::SCN
+  int64_t get_max_filtered_end_scn_v0() { return max_filtered_end_scn_; }
+  palf::SCN get_max_filtered_end_scn() { palf::SCN tmp_scn; tmp_scn.convert_for_lsn_allocator(max_filtered_end_scn_); return tmp_scn; }
+  int64_t get_recycle_scn_v0() { return filter_val_; }
+  palf::SCN get_recycle_scn() { palf::SCN tmp_scn; tmp_scn.convert_for_lsn_allocator(filter_val_); return tmp_scn; }
 
 private:
   bool is_inited_;
