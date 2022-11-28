@@ -672,7 +672,6 @@ ObRootService::ObRootService()
     rs_status_(),
     fail_count_(0),
     schema_history_recycler_(),
-    restore_point_service_(),
     backup_lease_service_(),
     disaster_recovery_task_executor_(),
     disaster_recovery_task_mgr_(),
@@ -926,8 +925,6 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("fail to init schema history recycler failed", KR(ret));
   } else if (OB_FAIL(backup_lease_service_.start())) {
     FLOG_WARN("start backup lease task failed", KR(ret));
-  } else if (OB_FAIL(restore_point_service_.init(ddl_service_))) {
-    FLOG_WARN("init restore point service failed", KR(ret));
   } else if (OB_FAIL(dbms_job::ObDBMSJobMaster::get_instance().init(&server_manager_,
                                                                     &sql_proxy_,
                                                                     schema_service_))) {
@@ -9332,49 +9329,17 @@ int ObRootService::send_physical_restore_result(const obrpc::ObPhysicalRestoreRe
 
 int ObRootService::create_restore_point(const obrpc::ObCreateRestorePointArg &arg)
 {
-  int ret = OB_SUCCESS;
-
-  ObSchemaGetterGuard schema_guard;
-  ObArray<uint64_t> index_ids;
-  uint64_t tenant_id = arg.tenant_id_;
-
-  LOG_DEBUG("receive create restore point arg", K(arg));
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (!arg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
-                     tenant_id, schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_tenant_unavailable_index(tenant_id, index_ids))) {
-    LOG_WARN("fail to get tenant unavailable index", K(ret), K(tenant_id));
-  } else if (0 != index_ids.count()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("unavailable index exists, cannot create restore point", KR(ret), K(index_ids));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "unavailable index exists, create restore point");
-  } else if (OB_FAIL(restore_point_service_.create_restore_point(arg.tenant_id_,
-      arg.name_.ptr()))) {
-    LOG_WARN("failed to create restore point", K(ret), K(arg));
-  }
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(arg);
+  LOG_WARN("craete restpre point is not supported now", K(ret));
   return ret;
 }
 
 int ObRootService::drop_restore_point(const obrpc::ObDropRestorePointArg &arg)
 {
-  int ret = OB_SUCCESS;
-  LOG_DEBUG("receive drop restore point arg", K(arg));
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (!arg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(restore_point_service_.drop_restore_point(arg.tenant_id_,
-      arg.name_.ptr()))) {
-    LOG_WARN("failed to drop restore point", K(ret), K(arg));
-  }
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(arg);
+  LOG_WARN("drop restpre point is not supported now", K(ret));
   return ret;
 }
 

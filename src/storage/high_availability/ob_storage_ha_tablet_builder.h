@@ -21,6 +21,11 @@
 
 namespace oceanbase
 {
+
+namespace palf
+{
+class SCN;
+}
 namespace storage
 {
 
@@ -97,9 +102,9 @@ private:
       const ObTablet *tablet,
       const ObSSTableArray &ddl_sstable_array,
       share::ObScnRange &scn_range);
-  int get_ddl_sstable_min_start_log_ts_(
+  int get_ddl_sstable_max_start_scn_(
       const ObSSTableArray &ddl_sstable_array,
-      int64_t &min_start_log_ts);
+      palf::SCN &max_start_scn);
   int hold_local_reuse_sstable_(
       const common::ObTabletID &tablet_id,
       ObTablesHandleArray &tables_handle);
