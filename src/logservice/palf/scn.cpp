@@ -20,7 +20,7 @@ namespace palf
 
 void SCN::reset()
 {
-  ATOMIC_SET(&val_, OB_INVALID_SCN_VAL);
+  val_ = OB_INVALID_SCN_VAL;
 }
 
 SCN SCN::atomic_get() const
@@ -277,14 +277,6 @@ int SCN::convert_for_gts(int64_t ts_ns)
     v_ = SCN_VERSION;
   }
   return ret;
-}
-
-// TODO(SCN):yaoying.yyy
-int SCN::convert_tmp(int64_t ts_ns)
-{
-  ts_ns_ = ts_ns;
-  v_ = SCN_VERSION;
-  return OB_SUCCESS;
 }
 
 int SCN::convert_for_lsn_allocator(uint64_t scn_val)

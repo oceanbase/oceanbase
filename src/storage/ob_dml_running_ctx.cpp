@@ -86,7 +86,7 @@ int ObDMLRunningCtx::init(
   } else if (OB_FAIL(prepare_relative_table(
       dml_param_.table_param_->get_data_table(),
       tablet_handle,
-      store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator()))) {
+      store_ctx_.mvcc_acc_ctx_.get_snapshot_version()))) {
     LOG_WARN("failed to get relative table", K(ret), K(dml_param_));
   } else if (NULL != column_ids && OB_FAIL(prepare_column_info(*column_ids))) {
     LOG_WARN("fail to get column descriptions and column map", K(ret), K(*column_ids));
@@ -128,7 +128,7 @@ int ObDMLRunningCtx::prepare_column_desc(
 int ObDMLRunningCtx::prepare_relative_table(
     const share::schema::ObTableSchemaParam &schema,
     ObTabletHandle &tablet_handle,
-    const int64_t read_snapshot)
+    const palf::SCN &read_snapshot)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(relative_table_.init(&schema, tablet_handle.get_obj()->get_tablet_meta().tablet_id_,
@@ -136,7 +136,7 @@ int ObDMLRunningCtx::prepare_relative_table(
     LOG_WARN("fail to init relative_table_", K(ret), K(tablet_handle), K(schema.get_index_status()));
   } else if (FALSE_IT(relative_table_.tablet_iter_.tablet_handle_ = tablet_handle)) {
   } else if (OB_FAIL(tablet_handle.get_obj()->get_read_tables(
-      read_snapshot, relative_table_.tablet_iter_, relative_table_.allow_not_ready()))) {
+      read_snapshot.get_val_for_tx(), relative_table_.tablet_iter_, relative_table_.allow_not_ready()))) {
     LOG_WARN("failed to get relative table read tables", K(ret));
   }
   return ret;

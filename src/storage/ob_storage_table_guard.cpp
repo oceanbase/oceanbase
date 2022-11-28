@@ -21,7 +21,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
-#include "storage/tx_storage/ob_tenant_freezer.h"   
+#include "storage/tx_storage/ob_tenant_freezer.h"
 
 namespace oceanbase
 {
@@ -67,7 +67,7 @@ ObStorageTableGuard::~ObStorageTableGuard()
     reset();
     int tmp_ret = OB_SUCCESS;
     bool has_sleep = false;
-    
+
     while ((left_interval > 0) && need_sleep) {
       //because left_interval and SLEEP_INTERVAL_PER_TIME both are greater than
       //zero, so it's safe to convert to uint32_t, be careful with comparation between int and uint

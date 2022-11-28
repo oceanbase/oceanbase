@@ -337,7 +337,7 @@ int ObTabletCreateDeleteHelper::set_scn(
       } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
       } else if (OB_TMP_FAIL(tablet->set_tx_scn(tx_id, scn, for_replay))) {
         LOG_WARN("failed to set tx log ts", K(tmp_ret), K(key), K(scn));
-      } else if (OB_TMP_FAIL(tablet->tablet_meta_.update_create_scn(scn.get_val_for_inner_table_field()))) {
+      } else if (OB_TMP_FAIL(tablet->tablet_meta_.update_create_scn(scn))) {
         LOG_WARN("failed to update create scn", K(tmp_ret), K(scn));
       }
     }
@@ -352,7 +352,7 @@ int ObTabletCreateDeleteHelper::set_scn(
       } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
       } else if (OB_TMP_FAIL(tablet->set_tx_scn(tx_id, scn, for_replay))) {
         LOG_WARN("failed to set tx log ts", K(tmp_ret), K(key), K(scn));
-      } else if (OB_TMP_FAIL(tablet->tablet_meta_.update_create_scn(scn.get_val_for_inner_table_field()))) {
+      } else if (OB_TMP_FAIL(tablet->tablet_meta_.update_create_scn(scn))) {
         LOG_WARN("failed to update create scn", K(tmp_ret), K(scn));
       }
     }
@@ -367,7 +367,7 @@ int ObTabletCreateDeleteHelper::set_scn(
       } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
       } else if (OB_TMP_FAIL(tablet->set_tx_scn(tx_id, scn, for_replay))) {
         LOG_WARN("failed to set tx log ts", K(tmp_ret), K(key), K(scn));
-      } else if (OB_TMP_FAIL(tablet->tablet_meta_.update_create_scn(scn.get_val_for_inner_table_field()))) {
+      } else if (OB_TMP_FAIL(tablet->tablet_meta_.update_create_scn(scn))) {
         LOG_WARN("failed to update create scn", K(tmp_ret), K(scn));
       }
     }
@@ -383,7 +383,7 @@ int ObTabletCreateDeleteHelper::set_scn(
       } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
       } else if (OB_TMP_FAIL(tablet->set_tx_scn(tx_id, scn, for_replay))) {
         LOG_WARN("failed to set tx log ts", K(tmp_ret), K(key), K(scn));
-      } else if (OB_TMP_FAIL(tablet->tablet_meta_.update_create_scn(scn.get_val_for_inner_table_field()))) {
+      } else if (OB_TMP_FAIL(tablet->tablet_meta_.update_create_scn(scn))) {
         LOG_WARN("failed to update create scn", K(tmp_ret), K(scn));
       }
       if (OB_SUCC(ret) && OB_TMP_FAIL(tmp_ret)) {
@@ -634,13 +634,10 @@ int ObTabletCreateDeleteHelper::do_commit_create_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is not CREATING", K(ret), K(key), K(trans_flags), K(tx_data));
   } else {
-    const int64_t tx_log_ts = trans_flags.scn_.get_val_for_lsn_allocator();
-    const int64_t memtable_log_ts = trans_flags.scn_.get_val_for_lsn_allocator();
-
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::NORMAL,
-        tx_log_ts, memtable_log_ts, trans_flags.for_replay_))) {
+        trans_flags.scn_, trans_flags.scn_, trans_flags.for_replay_))) {
       LOG_WARN("failed to set tablet status to NORMAL", K(ret), K(tablet_handle),
-          K(tx_log_ts), K(memtable_log_ts), K(trans_flags));
+          K(trans_flags.scn_), K(trans_flags));
     } else if (OB_FAIL(t3m->erase_pinned_tablet(key))) {
       LOG_ERROR("failed to erase tablet handle", K(ret), K(key));
       ob_usleep(1000 * 1000);
@@ -928,13 +925,10 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is not CREATING", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
   } else {
-    const int64_t tx_log_ts = trans_flags.scn_.get_val_for_inner_table_field();
-    const int64_t memtable_log_ts = trans_flags.scn_.get_val_for_inner_table_field();
-
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::DELETED,
-        tx_log_ts, memtable_log_ts, trans_flags.for_replay_))) {
+        trans_flags.scn_, trans_flags.scn_, trans_flags.for_replay_))) {
       LOG_WARN("failed to set tablet status to DELETED", K(ret), K(tablet_handle),
-          K(tx_log_ts), K(memtable_log_ts), K(trans_flags));
+          K(trans_flags.scn_), K(trans_flags));
     } else if (OB_FAIL(t3m->erase_pinned_tablet(key))) {
       LOG_ERROR("failed to erase tablet handle", K(ret), K(key));
       ob_usleep(1000 * 1000);
@@ -1162,13 +1156,10 @@ int ObTabletCreateDeleteHelper::do_commit_remove_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is not DELETING", K(ret), K(key), K(trans_flags), K(tx_data));
   } else {
-    const int64_t tx_log_ts = trans_flags.scn_.get_val_for_inner_table_field();
-    const int64_t memtable_log_ts = trans_flags.scn_.get_val_for_inner_table_field();
-
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::DELETED,
-        tx_log_ts, memtable_log_ts, trans_flags.for_replay_))) {
+        trans_flags.scn_, trans_flags.scn_, trans_flags.for_replay_))) {
       LOG_WARN("failed to set tablet status to DELETED", K(ret), K(tablet_handle),
-          K(tx_log_ts), K(memtable_log_ts), K(trans_flags));
+          K(trans_flags.scn_), K(trans_flags));
     } else if (OB_FAIL(t3m->erase_pinned_tablet(key))) {
       LOG_ERROR("failed to erase tablet handle", K(ret), K(key));
       ob_usleep(1000 * 1000);
@@ -1292,15 +1283,12 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
       LOG_INFO("tablet is no valid but do nothing", K(ret), K(key), K(trans_flags));
     }
   } else {
-    const int64_t tx_log_ts = tx_data.tx_scn_.get_val_for_inner_table_field();
-    const int64_t memtable_log_ts = (palf::SCN::invalid_scn() == trans_flags.scn_)
-      ? share::ObScnRange::MAX_TS
-      : trans_flags.scn_.get_val_for_inner_table_field();
+    const SCN memtable_scn = (SCN::invalid_scn() == trans_flags.scn_) ? SCN::max_scn() : trans_flags.scn_;
 
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::NORMAL,
-        tx_log_ts, memtable_log_ts, trans_flags.for_replay_, ref_op))) {
+        tx_data.tx_scn_, memtable_scn, trans_flags.for_replay_, ref_op))) {
       LOG_WARN("failed to set tablet status to NORMAL", K(ret), K(tablet_handle),
-          K(tx_log_ts), K(memtable_log_ts), K(trans_flags), K(ref_op));
+          K(tx_data.tx_scn_), K(memtable_scn), K(trans_flags), K(ref_op));
     } else if (OB_FAIL(t3m->erase_pinned_tablet(key))) {
       LOG_ERROR("failed to erase tablet handle", K(ret), K(key));
       ob_usleep(1000 * 1000);
@@ -2273,7 +2261,8 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
   } else if (!need_create_empty_major_sstable) {
     table_store_flag.set_without_major_sstable();
     LOG_INFO("no need to create sstable", K(ls_id), K(tablet_id), K(table_schema));
-  } else if (OB_FAIL(build_create_sstable_param(table_schema, tablet_id, arg.major_frozen_scn_, param))) {
+  } else if (OB_FAIL(build_create_sstable_param(
+      table_schema, tablet_id, arg.major_frozen_scn_.get_val_for_tx(), param))) {
     LOG_WARN("failed to build create sstable param", K(ret), K(tablet_id),
         K(table_schema), K(arg), K(param));
   } else if (OB_FAIL(create_sstable(param, table_handle))) {
@@ -2285,7 +2274,7 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, tablet is NULL", K(ret), K(tablet_handle));
   } else if (OB_FAIL(tablet->init(ls_id, tablet_id, data_tablet_id, lob_meta_tablet_id, lob_piece_tablet_id,
-      create_scn, arg.major_frozen_scn_, table_schema, compat_mode, table_store_flag, table_handle, freezer))) {
+      create_scn, arg.major_frozen_scn_.get_val_for_tx(), table_schema, compat_mode, table_store_flag, table_handle, freezer))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(lob_meta_tablet_id), K(lob_piece_tablet_id), K(index_tablet_array),
         K(arg), K(create_scn), K(table_schema), K(compat_mode), K(table_store_flag));
@@ -2384,69 +2373,11 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
   return ret;
 }
 
-int ObTabletCreateDeleteHelper::build_create_sstable_param(
-    const ObTableSchema &table_schema,
-    const ObTabletID &tablet_id,
-    const SCN snapshot_version,
-    ObTabletCreateSSTableParam &param)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!table_schema.is_valid()
-      || !tablet_id.is_valid()
-      || !snapshot_version.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(table_schema), K(snapshot_version));
-  } else if (OB_FAIL(table_schema.get_encryption_id(param.encrypt_id_))) {
-    LOG_WARN("fail to get_encryption_id", K(ret), K(table_schema));
-  } else {
-    param.master_key_id_ = table_schema.get_master_key_id();
-    MEMCPY(param.encrypt_key_, table_schema.get_encrypt_key_str(), table_schema.get_encrypt_key_len());
-
-    const int64_t multi_version_col_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    param.table_key_.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
-    param.table_key_.tablet_id_ = tablet_id;
-    param.table_key_.version_range_.snapshot_version_ = snapshot_version.get_val_for_gts();
-    param.max_merged_trans_version_ = snapshot_version.get_val_for_gts();
-
-    param.schema_version_ = table_schema.get_schema_version();
-    param.create_snapshot_version_ = 0;
-    param.progressive_merge_round_ = table_schema.get_progressive_merge_round();
-    param.progressive_merge_step_ = 0;
-
-    param.table_mode_ = table_schema.get_table_mode_struct();
-    param.index_type_ = table_schema.get_index_type();
-    param.rowkey_column_cnt_ = table_schema.get_rowkey_column_num()
-            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    param.root_block_addr_.set_none_addr();
-    param.data_block_macro_meta_addr_.set_none_addr();
-    param.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-    param.data_index_tree_height_ = 0;
-    param.index_blocks_cnt_ = 0;
-    param.data_blocks_cnt_ = 0;
-    param.micro_block_cnt_ = 0;
-    param.use_old_macro_block_count_ = 0;
-    param.column_cnt_ = table_schema.get_column_count() + multi_version_col_cnt;
-    param.data_checksum_ = 0;
-    param.occupy_size_ = 0;
-    param.ddl_scn_.set_min();
-    param.filled_tx_scn_.set_min();
-    param.original_size_ = 0;
-    param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-    if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_,
-        param.column_checksums_))) {
-      LOG_WARN("fail to fill column checksum for empty major", K(ret), K(param));
-    }
-  }
-
-  return ret;
-}
-
 int ObTabletCreateDeleteHelper::set_tablet_final_status(
     ObTabletHandle &tablet_handle,
     const ObTabletStatus::Status status,
-    const int64_t tx_log_ts,
-    const int64_t memtable_log_ts,
+    const SCN &tx_scn,
+    const SCN &memtable_scn,
     const bool for_replay,
     const MemtableRefOp ref_op)
 {
@@ -2468,15 +2399,14 @@ int ObTabletCreateDeleteHelper::set_tablet_final_status(
   } else {
     tx_data.tx_id_ = ObTabletCommon::FINAL_TX_ID;
     tx_data.tablet_status_ = status;
+    tx_data.tx_scn_ = tx_scn;
 
-    if (OB_FAIL(tx_data.tx_scn_.convert_tmp(tx_log_ts))) {
-      LOG_WARN("failed to convert tmp", K(tx_log_ts), KPC(tablet), K(status));
-    } else if (OB_FAIL(checker.wake_up(tx_data, memtable_log_ts, for_replay, ref_op))) {
+    if (OB_FAIL(checker.wake_up(tx_data, memtable_scn, for_replay, ref_op))) {
       LOG_WARN("failed to wake up", K(ret), KPC(tablet), K(status),
-          K(tx_log_ts), K(memtable_log_ts), K(for_replay), K(ref_op));
+          K(tx_scn), K(memtable_scn), K(for_replay), K(ref_op));
     } else {
       LOG_INFO("succeeded to set tablet final status", K(ret), K(ls_id), K(tablet_id), K(status),
-          K(tx_log_ts), K(memtable_log_ts), K(for_replay), K(ref_op));
+          K(tx_scn), K(memtable_scn), K(for_replay), K(ref_op));
     }
   }
 

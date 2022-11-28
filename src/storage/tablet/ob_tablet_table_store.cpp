@@ -1750,13 +1750,13 @@ void ObPrintTableStore::table_to_string(
       ? (static_cast<ObSSTable *>(table)->get_meta().get_basic_meta().contain_uncommitted_row_ ? "true" : "false")
       : "unused";
 
-    BUF_PRINTF(" %-10s %-10s %-19lu %-19lu %-19lu %-19lu %-4ld %-16s ",
+    BUF_PRINTF(" %-10s %-10s %-19lu %-19lu %-10s %-10s %-4ld %-16s ",
       table_arr,
       table_name,
       table->get_upper_trans_version(),
       table->get_max_merged_trans_version(),
-      table->get_start_scn().get_val_for_inner_table_field(),
-      table->get_end_scn().get_val_for_inner_table_field(),
+      to_cstring(table->get_start_scn()),
+      to_cstring(table->get_end_scn()),
       table->get_ref(),
       uncommit_row);
   }

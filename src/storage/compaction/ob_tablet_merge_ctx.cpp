@@ -716,9 +716,8 @@ int ObTabletMergeCtx::inner_init_for_minor(bool &skip_rest_operation)
     } else if (is_mini_merge(param_.merge_type_)) { // OB_NO_NEED_MERGE && mini merge
       int tmp_ret = OB_SUCCESS;
       // then release memtable
-      const int64_t clog_checkpoint_log_ts = tablet->get_tablet_meta().clog_checkpoint_scn_.get_val_for_gts();
-      if (OB_TMP_FAIL(tablet->release_memtables(clog_checkpoint_log_ts))) {
-        LOG_WARN("failed to release memtable", K(tmp_ret), K(clog_checkpoint_log_ts));
+      if (OB_TMP_FAIL(tablet->release_memtables(tablet->get_tablet_meta().clog_checkpoint_scn_))) {
+        LOG_WARN("failed to release memtable", K(tmp_ret), K(tablet->get_tablet_meta().clog_checkpoint_scn_));
       }
     }
   } else if (FALSE_IT(time_guard_.click(ObCompactionTimeGuard::COMPACTION_POLICY))) {

@@ -58,37 +58,11 @@ public:
       const common::ObTabletID &data_tablet_id,
       const common::ObTabletID &lob_meta_tablet_id,
       const common::ObTabletID &lob_piece_tablet_id,
-      const int64_t create_scn,
-      const int64_t snapshot_version,
-      const lib::Worker::CompatMode compat_mode,
-      const ObTabletTableStoreFlag &table_store_flag,
-      const int64_t max_sync_storage_schema_version);
-  int init(
-      common::ObIAllocator &allocator,
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const common::ObTabletID &data_tablet_id,
-      const common::ObTabletID &lob_meta_tablet_id,
-      const common::ObTabletID &lob_piece_tablet_id,
       const palf::SCN create_scn,
       const int64_t snapshot_version,
       const lib::Worker::CompatMode compat_mode,
       const ObTabletTableStoreFlag &table_store_flag,
       const int64_t max_sync_storage_schema_version);
-  int init(
-      common::ObIAllocator &allocator,
-      const ObTabletMeta &old_tablet_meta,
-      const int64_t snapshot_version,
-      const int64_t multi_version_start,
-      const ObTabletTxMultiSourceDataUnit &tx_data,
-      const ObTabletBindingInfo &ddl_data,
-      const share::ObTabletAutoincSeq &autoinc_seq,
-      const int64_t max_sync_storage_schema_version,
-      const int64_t clog_checkpoint_scn = 0,
-      const int64_t ddl_checkpoint_scn = 0,
-      const int64_t ddl_start_scn = 0,
-      const int64_t ddl_snapshot_version = 0);
-
   int init(
       common::ObIAllocator &allocator,
       const ObTabletMeta &old_tablet_meta,
@@ -126,7 +100,6 @@ public:
   int64_t get_serialize_size() const;
 
   int update(const ObMigrationTabletParam &param);
-  int update_create_scn(const int64_t create_scn);
   int update_create_scn(const palf::SCN create_scn);
 public:
   static int deserialize_id(

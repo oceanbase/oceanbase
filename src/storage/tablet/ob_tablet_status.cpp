@@ -155,23 +155,6 @@ int ObTabletStatusChecker::wake_up(
   return ret;
 }
 
-int ObTabletStatusChecker::wake_up(
-    ObTabletTxMultiSourceDataUnit &tx_data,
-    const int64_t memtable_log_ts,
-    const bool for_replay,
-    const memtable::MemtableRefOp ref_op)
-{
-  int ret = OB_SUCCESS;
-  SCN memtable_scn;
-  if (OB_FAIL(memtable_scn.convert_tmp(memtable_log_ts))) {
-    LOG_WARN("failed to convert scn", K(memtable_log_ts), K(ret));
-  } else if (OB_FAIL(wake_up(tx_data, memtable_scn, for_replay, ref_op))) {
-    LOG_WARN("failed to wake up", K(ret));
-  }
-
-  return ret;
-}
-
 int ObTabletStatusChecker::do_wait(common::ObThreadCond &cond, const uint64_t time_us)
 {
   int ret = OB_SUCCESS;
