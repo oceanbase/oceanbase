@@ -1590,8 +1590,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_
 DEFINE_ERROR(OB_OBJ_LOCK_NOT_COMPLETED, -6275, -1, "HY000", "object lock not completed, and can not unlock.");
 DEFINE_ERROR(OB_OBJ_UNLOCK_CONFLICT, -6276, -1, "HY000", "there is an unlock operation doing, unlock conflict.");
 
-// for memtable log_ts
-DEFINE_ERROR(OB_LOG_TS_OUT_OF_BOUND, -6277, -1, "HY000", "log_ts is out of bounds of memtable");
+// for memtable scn
+DEFINE_ERROR(OB_SCN_OUT_OF_BOUND, -6277, -1, "HY000", "scn is out of bounds of memtable");
 
 DEFINE_ORACLE_ERROR(OB_TRANS_IDLE_TIMEOUT, -6278, 6002, "25000", "Transaction idle timeout occurred, please rollback the transaction, set the variable ob_trx_idle_timeout to a larger value and then restart the transaction", 24761, "transaction rolled back: transaction idle timeout");
 
