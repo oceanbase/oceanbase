@@ -1466,7 +1466,7 @@ int ObMemtable::set_rec_scn(palf::SCN rec_scn)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", K(ret), K(rec_scn));
   } else if (rec_scn <= get_start_scn()) {
-    ret = OB_LOG_TS_OUT_OF_BOUND;
+    ret = OB_SCN_OUT_OF_BOUND;
     TRANS_LOG(ERROR, "cannot set freeze log ts smaller to start log ts", K(ret), K(rec_scn), K(ls_id), KPC(this));
   } else {
     palf::SCN old_rec_scn;
@@ -1496,7 +1496,7 @@ int ObMemtable::set_start_scn(const palf::SCN start_scn)
   } else if (start_scn >= get_end_scn()
              || (max_end_scn_ != palf::SCN::min_scn() && start_scn >= max_end_scn_)
              || start_scn >= rec_scn_) {
-    ret = OB_LOG_TS_OUT_OF_BOUND;
+    ret = OB_SCN_OUT_OF_BOUND;
     TRANS_LOG(ERROR, "cannot set start ts now", K(ret), K(start_scn), K(ls_id), KPC(this));
   } else {
     key_.scn_range_.start_scn_ = start_scn;
@@ -1517,7 +1517,7 @@ int ObMemtable::set_end_scn(const palf::SCN freeze_scn)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", K(ret), K(freeze_scn));
   } else if (freeze_scn < get_start_scn()) {
-    ret = OB_LOG_TS_OUT_OF_BOUND;
+    ret = OB_SCN_OUT_OF_BOUND;
     TRANS_LOG(ERROR, "cannot set freeze log ts smaller to start log ts",
               K(ret), K(freeze_scn), K(ls_id), KPC(this));
   } else {
@@ -1549,7 +1549,7 @@ int ObMemtable::set_max_end_scn(const palf::SCN scn)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", K(ret), K(scn));
   } else if (scn <= get_start_scn() || scn > get_end_scn()) {
-    ret = OB_LOG_TS_OUT_OF_BOUND;
+    ret = OB_SCN_OUT_OF_BOUND;
     TRANS_LOG(WARN, "cannot set max end log ts smaller to start log ts",
               K(ret), K(scn), K(ls_id), KPC(this));
   } else {

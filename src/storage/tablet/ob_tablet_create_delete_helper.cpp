@@ -686,11 +686,6 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablets(
   ObTabletMapKey key;
   key.ls_id_ = ls_.get_ls_id();
 
-  // TODO: fix it after multi source data refactor
-  // if (OB_UNLIKELY(trans_flags.log_ts_ < OB_INVALID_TIMESTAMP)) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   LOG_WARN("invalid log ts", K(ret), K(trans_flags));
-  // } else
   if (!trans_flags.is_redo_synced()) {
     // on redo cb has not been called
     // just remove tablets directly

@@ -17397,17 +17397,17 @@ static const _error _error_OB_OBJ_UNLOCK_CONFLICT = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -6276, there is an unlock operation doing, unlock conflict.",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -6276, there is an unlock operation doing, unlock conflict."
 };
-static const _error _error_OB_LOG_TS_OUT_OF_BOUND = {
-      .error_name            = "OB_LOG_TS_OUT_OF_BOUND",
+static const _error _error_OB_SCN_OUT_OF_BOUND = {
+      .error_name            = "OB_SCN_OUT_OF_BOUND",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
-      .str_error             = "log_ts is out of bounds of memtable",
-      .str_user_error        = "log_ts is out of bounds of memtable",
+      .str_error             = "scn is out of bounds of memtable",
+      .str_user_error        = "scn is out of bounds of memtable",
       .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -6277, log_ts is out of bounds of memtable",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -6277, log_ts is out of bounds of memtable"
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -6277, scn is out of bounds of memtable",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -6277, scn is out of bounds of memtable"
 };
 static const _error _error_OB_TRANS_IDLE_TIMEOUT = {
       .error_name            = "OB_TRANS_IDLE_TIMEOUT",
@@ -23400,7 +23400,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS] = &_error_OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS;
     _errors[-OB_OBJ_LOCK_NOT_COMPLETED] = &_error_OB_OBJ_LOCK_NOT_COMPLETED;
     _errors[-OB_OBJ_UNLOCK_CONFLICT] = &_error_OB_OBJ_UNLOCK_CONFLICT;
-    _errors[-OB_LOG_TS_OUT_OF_BOUND] = &_error_OB_LOG_TS_OUT_OF_BOUND;
+    _errors[-OB_SCN_OUT_OF_BOUND] = &_error_OB_SCN_OUT_OF_BOUND;
     _errors[-OB_TRANS_IDLE_TIMEOUT] = &_error_OB_TRANS_IDLE_TIMEOUT;
     _errors[-OB_LOG_ID_NOT_FOUND] = &_error_OB_LOG_ID_NOT_FOUND;
     _errors[-OB_LSR_THREAD_STOPPED] = &_error_OB_LSR_THREAD_STOPPED;

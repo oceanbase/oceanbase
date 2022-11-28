@@ -1237,7 +1237,7 @@ constexpr int OB_ERR_INTERVAL_CANNOT_BE_ZERO = -6273;
 constexpr int OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS = -6274;
 constexpr int OB_OBJ_LOCK_NOT_COMPLETED = -6275;
 constexpr int OB_OBJ_UNLOCK_CONFLICT = -6276;
-constexpr int OB_LOG_TS_OUT_OF_BOUND = -6277;
+constexpr int OB_SCN_OUT_OF_BOUND = -6277;
 constexpr int OB_TRANS_IDLE_TIMEOUT = -6278;
 constexpr int OB_LOG_ID_NOT_FOUND = -6301;
 constexpr int OB_LSR_THREAD_STOPPED = -6302;
@@ -3046,7 +3046,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS__USER_ERROR_MSG "partitioning key maps to a partition outside maximum permitted number of partitions"
 #define OB_OBJ_LOCK_NOT_COMPLETED__USER_ERROR_MSG "object lock not completed, and can not unlock."
 #define OB_OBJ_UNLOCK_CONFLICT__USER_ERROR_MSG "there is an unlock operation doing, unlock conflict."
-#define OB_LOG_TS_OUT_OF_BOUND__USER_ERROR_MSG "log_ts is out of bounds of memtable"
+#define OB_SCN_OUT_OF_BOUND__USER_ERROR_MSG "scn is out of bounds of memtable"
 #define OB_TRANS_IDLE_TIMEOUT__USER_ERROR_MSG "Transaction idle timeout occurred, please rollback the transaction, set the variable ob_trx_idle_timeout to a larger value and then restart the transaction"
 #define OB_LOG_ID_NOT_FOUND__USER_ERROR_MSG "log id not found"
 #define OB_LSR_THREAD_STOPPED__USER_ERROR_MSG "log scan runnable thread stop"
@@ -4876,7 +4876,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_PARTITIONING_KEY_MAPS_TO_A_PARTITION_OUTSIDE_MAXIMUM_PERMITTED_NUMBER_OF_PARTITIONS__ORA_USER_ERROR_MSG "ORA-14300: partitioning key maps to a partition outside maximum permitted number of partitions"
 #define OB_OBJ_LOCK_NOT_COMPLETED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6275, object lock not completed, and can not unlock."
 #define OB_OBJ_UNLOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6276, there is an unlock operation doing, unlock conflict."
-#define OB_LOG_TS_OUT_OF_BOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6277, log_ts is out of bounds of memtable"
+#define OB_SCN_OUT_OF_BOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6277, scn is out of bounds of memtable"
 #define OB_TRANS_IDLE_TIMEOUT__ORA_USER_ERROR_MSG "ORA-24761: transaction rolled back: transaction idle timeout"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"
 #define OB_LSR_THREAD_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6302, log scan runnable thread stop"
