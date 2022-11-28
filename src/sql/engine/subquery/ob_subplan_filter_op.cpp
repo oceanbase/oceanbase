@@ -602,7 +602,6 @@ int ObSubPlanFilterOp::handle_next_row()
         }
       }
       save_last_row_ = false;
-      set_param_null();
       while (OB_SUCC(ret) && batch_count--) {
         clear_evaluated_flag();
         set_param_null();

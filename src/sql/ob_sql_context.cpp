@@ -275,6 +275,7 @@ void ObSqlCtx::reset()
   clear();
   flashback_query_expr_ = nullptr;
   stmt_type_ = stmt::T_NONE;
+  cur_stmt_ = nullptr;
   cur_plan_ = nullptr;
   is_execute_call_stmt_ = false;
 }
@@ -289,7 +290,6 @@ void ObSqlCtx::clear()
   non_strict_constraints_.reset();
   multi_stmt_rowkey_pos_.reset();
   spm_ctx_.bl_key_.reset();
-  cur_stmt_ = nullptr;
 }
 
 OB_SERIALIZE_MEMBER(ObSqlCtx, stmt_type_);

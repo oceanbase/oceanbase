@@ -123,13 +123,13 @@ char *parse_str_convert_utf8(const struct ObCharsetInfo* src_cs, const char *str
       || OB_ISNULL(out_len)
       || OB_ISNULL(extra_errno)) {
   } else {
-    uint errors = 0;
+    uint errors;
     size_t str_len = STRLEN(str);
     size_t dst_len = str_len * 4;
     if (OB_ISNULL(out_str = static_cast<char *>(parse_malloc(dst_len + 1, malloc_pool)))) {
     } else {
       *out_len = static_cast<int64_t>(
-        ob_convert(out_str, dst_len, &ob_charset_utf8mb4_general_ci, str, str_len, src_cs, false, '?', &errors));
+        ob_convert(out_str, dst_len, &ob_charset_utf8mb4_general_ci, str, str_len, src_cs, '?', &errors));
       out_str[*out_len] = '\0';
       if (0 != errors) {
         *extra_errno = OB_PARSER_ERR_ILLEGAL_NAME;
@@ -267,24 +267,27 @@ char *parse_strdup_with_replace_multi_byte_char(const char *str, int *connection
 }
 
 bool check_real_escape(const ObCharsetInfo *cs, char *str, int64_t str_len,
-                       int64_t last_escape_check_pos)
+                       int64_t *last_well_formed_len)
 {
   bool is_real_escape = true;
-  if (NULL != cs && cs->escape_with_backslash_is_dangerous) {
+  if (NULL != cs && NULL != last_well_formed_len && cs->escape_with_backslash_is_dangerous) {
     char *cur_pos = str + str_len;
-    char *last_check_pos = str + last_escape_check_pos;
+    char *last_check_pos = str + *last_well_formed_len;
     int error = 0;
     size_t expected_well_formed_len = cur_pos - last_check_pos;
-    while (last_check_pos < cur_pos) {
-      size_t real_well_formed_len = cs->cset->well_formed_len(
-                  cs, last_check_pos, cur_pos, UINT64_MAX, &error);
-      last_check_pos += (real_well_formed_len + ((error != 0) ? 1 : 0));
-    }
-    if (error != 0) { //the final well-formed result
+    size_t real_well_formed_len = cs->cset->well_formed_len(
+                cs, last_check_pos, cur_pos, UINT64_MAX, &error);
+    if (error != 0) {
       *cur_pos = '\\';
-      if (cs->cset->ismbchar(cs, cur_pos - 1, cur_pos + 1)) {
+      if (real_well_formed_len == expected_well_formed_len - 1
+          && cs->cset->ismbchar(cs, cur_pos - 1, cur_pos + 1)) {
         is_real_escape = false;
+        *last_well_formed_len = str_len + 1;
+      } else {
+        *last_well_formed_len = str_len;
       }
+    } else {
+      *last_well_formed_len = str_len;
     }
   }
   return is_real_escape;

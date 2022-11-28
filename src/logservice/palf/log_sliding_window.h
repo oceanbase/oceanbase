@@ -22,6 +22,7 @@
 #include "log_checksum.h"
 #include "log_req.h"
 #include "lsn.h"
+#include "scn.h"
 #include "lsn_allocator.h"
 #include "log_task.h"
 #include "fixed_sliding_window.h"
@@ -70,12 +71,6 @@ enum TruncateType
   TRUNCATE_LOG = 2,
 };
 
-enum FreezeMode
-{
-  PERIOD_FREEZE_MODE = 0,
-  FEEDBACK_FREEZE_MODE,
-};
-
 struct TruncateLogInfo
 {
   TruncateType truncate_type_;
@@ -115,7 +110,7 @@ public:
            const PalfBaseInfo &palf_base_info);
   virtual int sliding_cb(const int64_t sn, const FixedSlidingWindowSlot *data);
   virtual int64_t get_max_log_id() const;
-  virtual int64_t get_max_log_ts() const;
+  virtual const SCN get_max_log_scn() const;
   virtual LSN get_max_lsn() const;
   virtual int64_t get_start_id() const;
   virtual int get_committed_end_lsn(LSN &committed_end_lsn) const;
@@ -133,9 +128,9 @@ public:
   // ================= log sync part begin
   virtual int submit_log(const char *buf,
                  const int64_t buf_len,
-                 const int64_t ref_ts_ns,
+                 const SCN &ref_scn,
                  LSN &lsn,
-                 int64_t &log_timestamp);
+                 SCN &log_scn);
   virtual int submit_group_log(const LSN &lsn,
                        const char *buf,
                        const int64_t buf_len);
@@ -187,25 +182,19 @@ public:
   virtual int to_leader_active();
   virtual int try_advance_committed_end_lsn(const LSN &end_lsn);
   virtual int64_t get_last_submit_log_id_() const;
-  virtual void get_last_submit_end_lsn_(LSN &end_lsn) const;
   virtual int get_last_submit_log_info(LSN &last_submit_lsn, int64_t &log_id, int64_t &log_proposal_id) const;
   virtual int get_last_slide_end_lsn(LSN &out_end_lsn) const;
-  virtual int64_t get_last_slide_log_ts() const;
-  virtual int check_and_switch_freeze_mode();
-  virtual int period_freeze_last_log();
-  virtual int inc_update_log_ts_base(const int64_t log_ts);
+  virtual const SCN get_last_slide_log_scn() const;
+  virtual int try_freeze_last_log();
+  virtual int inc_update_log_scn_base(const SCN &log_scn);
   // location cache will be removed TODO by yunlong
   virtual int set_location_cache_cb(PalfLocationCacheCb *lc_cb);
   virtual int reset_location_cache_cb();
   virtual int advance_reuse_lsn(const LSN &flush_log_end_lsn);
-  virtual int try_send_committed_info(const common::ObAddr &server,
-                                      const LSN &log_lsn,
-                                      const LSN &log_end_lsn,
-                                      const int64_t &log_proposal_id);
   TO_STRING_KV(K_(palf_id), K_(self), K_(lsn_allocator), K_(group_buffer),                         \
   K_(last_submit_lsn), K_(last_submit_end_lsn), K_(last_submit_log_id), K_(last_submit_log_pid),   \
   K_(max_flushed_lsn), K_(max_flushed_end_lsn), K_(max_flushed_log_pid), K_(committed_end_lsn),    \
-  K_(last_slide_log_id), K_(last_slide_log_ts), K_(last_slide_lsn), K_(last_slide_end_lsn),        \
+  K_(last_slide_log_id), K_(last_slide_log_scn), K_(last_slide_lsn), K_(last_slide_end_lsn),        \
   K_(last_slide_log_pid), K_(last_slide_log_accum_checksum), K_(last_fetch_end_lsn),               \
   K_(last_fetch_max_log_id), K_(last_fetch_committed_end_lsn), K_(last_truncate_lsn), KP(this));
 private:
@@ -225,7 +214,7 @@ private:
   int get_prev_log_info_(const int64_t log_id,
                          LSN &prev_lsn,
                          LSN &prev_end_lsn,
-                         int64_t &prev_log_ts,
+                         SCN &prev_log_iscn,
                          int64_t &prev_log_pid,
                          int64_t &prev_log_accum_checksum);
   int inc_update_max_flushed_log_info_(const LSN &lsn,
@@ -237,13 +226,13 @@ private:
   void get_last_slide_end_lsn_(LSN &out_end_lsn) const;
   int64_t get_last_slide_log_id_() const;
   void get_last_slide_log_info_(int64_t &log_id,
-                                int64_t &log_ts,
+                                SCN &log_scn,
                                 LSN &lsn,
                                 LSN &end_lsn,
                                 int64_t &log_proposal_id,
                                 int64_t &accum_checksum) const;
   int try_update_last_slide_log_info_(const int64_t log_id,
-                                      const int64_t log_ts,
+                                      const SCN &log_scn,
                                       const LSN &lsn,
                                       const LSN &end_lsn,
                                       const int64_t &proposal_id,
@@ -258,11 +247,10 @@ private:
                                 const int64_t log_id,
                                 const int64_t &log_proposal_id);
   int try_freeze_prev_log_(const int64_t next_log_id, const LSN &lsn, bool &is_need_handle);
-  int feedback_freeze_last_log_();
-  int try_freeze_last_log_task_(const int64_t expected_log_id, const LSN &expected_end_lsn, bool &is_need_handle);
+  int try_freeze_last_log_(const int64_t expected_log_id, const LSN &expected_end_lsn, bool &is_need_handle);
   int generate_new_group_log_(const LSN &lsn,
                               const int64_t log_id,
-                              const int64_t log_ts,
+                              const SCN &log_scn,
                               const int64_t log_body_size,
                               const LogType &log_type,
                               const char *log_data,
@@ -270,7 +258,7 @@ private:
                               bool &is_need_handle);
   int append_to_group_log_(const LSN &lsn,
                            const int64_t log_id,
-                           const int64_t log_ts,
+                           const SCN &log_scn,
                            const int64_t log_entry_size,
                            const char *log_data,
                            const int64_t data_len,
@@ -296,16 +284,13 @@ private:
   int wait_group_buffer_ready_(const LSN &lsn, const int64_t data_len);
   int append_disk_log_to_sw_(const LSN &lsn, const LogGroupEntry &group_entry);
   int try_update_max_lsn_(const LSN &lsn, const LogGroupEntryHeader &header);
-  int truncate_lsn_allocator_(const LSN &last_lsn, const int64_t last_log_id, const int64_t last_log_ts);
+  int truncate_lsn_allocator_(const LSN &last_lsn, const int64_t last_log_id, const SCN &last_log_scn);
   bool is_all_committed_log_slided_out_(LSN &prev_lsn, int64_t &prev_log_id, LSN &committed_end_lsn) const;
   void get_last_fetch_info_(LSN &last_fetch_end_lsn,
                             LSN &last_committed_end_lsn,
                             int64_t &last_fetch_max_log_id) const;
   void try_reset_last_fetch_log_info_(const LSN &expected_end_lsn, const int64_t log_id);
-  void try_update_committed_lsn_for_fetch_(const LSN &expected_end_lsn,
-      const int64_t &expected_log_id,
-      const LSN &log_committed_end_lsn,
-      bool &is_need_fetch);
+  void try_update_committed_lsn_for_fetch_(const LSN &expected_end_lsn, const int64_t &expected_log_id);
   void try_fetch_log_streamingly_(const LSN &log_end_lsn);
   int do_fetch_log_(const FetchTriggerType &trigger_type,
                     const common::ObAddr &dest,
@@ -315,13 +300,10 @@ private:
                     const int64_t fetch_start_log_id);
   int freeze_pending_log_(LSN &last_lsn);
   int check_all_log_task_freezed_(bool &is_all_freezed);
-  int get_min_log_ts_ns_from_buf_(const LogGroupEntryHeader &group_entry_header,
+  int get_min_log_scn_from_buf_(const LogGroupEntryHeader &group_entry_header,
                                   const char *buf,
                                   const int64_t buf_len,
-                                  int64_t &min_log_ts_ns);
-  int leader_get_committed_log_info_(const LSN &committed_end_lsn,
-                                     int64_t &log_id,
-                                     int64_t &log_proposal_id);
+                                  SCN &min_log_scn);
   int leader_broadcast_committed_info_(const LSN &committed_end_lsn);
   int submit_push_log_resp_(const common::ObAddr &server, const int64_t &msg_proposal_id, const LSN &lsn);
   inline int try_push_log_to_paxos_follower_(const int64_t curr_proposal_id,
@@ -337,9 +319,6 @@ private:
 public:
   typedef common::ObLinearHashMap<common::ObAddr, LSN> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
-  static const int64_t APPEND_CNT_ARRAY_SIZE = 32;   // append次数统计数组的size
-  static const uint64_t APPEND_CNT_ARRAY_MASK = APPEND_CNT_ARRAY_SIZE - 1;
-  static const int64_t APPEND_CNT_LB_FOR_PERIOD_FREEZE = 130000;   // 切为PERIOD_FREEZE_MODE的append count下界
 private:
   struct LogTaskGuard
   {
@@ -399,7 +378,7 @@ private:
   // last_slide_log_pid_: it is used for forward checking when receive log.
   mutable common::ObSpinLock last_slide_info_lock_;
   int64_t last_slide_log_id_;   // used by clean log
-  int64_t last_slide_log_ts_;
+  SCN last_slide_log_scn_;
   LSN last_slide_lsn_;
   LSN last_slide_end_lsn_;
   int64_t last_slide_log_pid_;
@@ -433,7 +412,6 @@ private:
   mutable int64_t cannot_fetch_log_warn_time_;
   mutable int64_t cannot_freeze_log_warn_time_;
   mutable int64_t larger_log_warn_time_;
-  mutable int64_t log_life_long_warn_time_;
   mutable int64_t lc_cb_get_warn_time_;
   mutable int64_t fetch_dst_invalid_warn_time_;
   common::ObThreadLease commit_log_handling_lease_;  // thread lease for handling committed logs
@@ -460,8 +438,6 @@ private:
   int64_t accum_log_cnt_;
   int64_t accum_group_log_size_;
   int64_t last_record_group_log_id_;
-  int64_t append_cnt_array_[APPEND_CNT_ARRAY_SIZE];
-  FreezeMode freeze_mode_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(LogSlidingWindow);

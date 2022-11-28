@@ -310,8 +310,7 @@ struct EstimateCostInfo {
       phy_plan_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
       location_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
       contain_fake_cte_(false),
-      contain_pw_merge_op_(false),
-      contain_match_all_fake_cte_(false),
+      contain_merge_op_(false),
       contain_das_op_(false),
       parallel_(1),
       server_cnt_(1)
@@ -336,8 +335,7 @@ struct EstimateCostInfo {
         phy_plan_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
         location_type_(ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED),
         contain_fake_cte_(false),
-        contain_pw_merge_op_(false),
-        contain_match_all_fake_cte_(false),
+        contain_merge_op_(false),
         contain_das_op_(false),
         parallel_(1),
         server_cnt_(1),
@@ -411,8 +409,7 @@ struct EstimateCostInfo {
     virtual int re_estimate_cost(EstimateCostInfo &info, double &card, double &cost);
     double get_path_output_rows() const;
     bool contain_fake_cte() const { return contain_fake_cte_; }
-    bool contain_pw_merge_op() const { return contain_pw_merge_op_; }
-    bool contain_match_all_fake_cte() const { return contain_match_all_fake_cte_; }
+    bool contain_merge_op() const { return contain_merge_op_; }
     bool is_pipelined_path() const { return is_pipelined_path_; }
     bool is_nl_style_pipelined_path() const { return is_nl_style_pipelined_path_; }
     virtual int compute_pipeline_info();
@@ -483,8 +480,7 @@ struct EstimateCostInfo {
     ObPhyPlanType phy_plan_type_;
     ObPhyPlanType location_type_;
     bool contain_fake_cte_;
-    bool contain_pw_merge_op_;
-    bool contain_match_all_fake_cte_;
+    bool contain_merge_op_;
     bool contain_das_op_;
     // remember the parallel info to get this sharding
     int64_t parallel_;
@@ -1460,7 +1456,9 @@ struct NullAwareAntiJoinInfo {
     int generate_base_table_paths(PathHelper &helper);
 
     int compute_base_table_property(uint64_t table_id,
-                                    uint64_t ref_table_id);
+                                    uint64_t ref_table_id,
+                                    PathHelper &helper,
+                                    ObIArray<AccessPath *> &access_paths);
 
     /**
      * @brief generate_subquery_path
@@ -1485,9 +1483,7 @@ struct NullAwareAntiJoinInfo {
     int estimate_size_for_inner_subquery_path(double root_card,
                                               const ObIArray<ObRawExpr*> &filters,
                                               double &output_card);
-    
-    int create_one_cte_table_path(const TableItem* table_item, 
-                                  ObShardingInfo * sharding);
+
     int generate_cte_table_paths();
     int generate_function_table_paths();
 
@@ -1700,11 +1696,6 @@ struct NullAwareAntiJoinInfo {
     int check_normal_join_filter_valid(const Path& left_path,
                                        const Path& right_path,
                                        ObIArray<JoinFilterInfo> &join_filter_infos);
-
-    int calc_join_filter_selectivity(const Path& left_path,
-                                    const Path& right_path,
-                                    JoinFilterInfo& info,
-                                    double &join_filter_selectivity);
 
     int find_shuffle_join_filter(const Path& path, bool &find);
 

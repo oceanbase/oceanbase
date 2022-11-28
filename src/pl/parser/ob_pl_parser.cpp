@@ -122,7 +122,7 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
   return ret;
 }
 
-int ObPLParser::parse_routine_body(const ObString &routine_body, ObStmtNodeTree *&routine_stmt, bool is_for_trigger)
+int ObPLParser::parse_routine_body(const ObString &routine_body, ObStmtNodeTree *&routine_stmt)
 {
   ObActiveSessionGuard::get_stat().in_pl_parse_ = true;
   int ret = OB_SUCCESS;
@@ -153,7 +153,6 @@ int ObPLParser::parse_routine_body(const ObString &routine_body, ObStmtNodeTree 
     parse_ctx.orig_stmt_str_ = buf;
     parse_ctx.orig_stmt_len_ = routine_body.length() + prefix_len;
     parse_ctx.is_inner_parse_ = 1;
-    parse_ctx.is_for_trigger_ = is_for_trigger ? 1 : 0;
     parse_ctx.comp_mode_ = lib::is_oracle_mode();
     parse_ctx.charset_info_ = ObCharset::get_charset(connection_collation_);
     parse_ctx.is_not_utf8_connection_ = ObCharset::is_valid_collation(connection_collation_) ?

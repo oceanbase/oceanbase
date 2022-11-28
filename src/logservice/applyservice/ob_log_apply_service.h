@@ -18,6 +18,7 @@
 #include "lib/thread/ob_thread_lease.h"
 #include "logservice/palf/palf_callback.h"
 #include "logservice/palf/palf_handle.h"
+#include "logservice/palf/scn.h"
 #include "share/ob_ls_id.h"
 
 namespace oceanbase
@@ -25,6 +26,7 @@ namespace oceanbase
 namespace palf
 {
 class PalfEnv;
+class SCN;
 }
 namespace logservice
 {
@@ -56,12 +58,6 @@ struct LSApplyStat
                K(proposal_id_),
                K(end_lsn_),
                K(pending_cnt_));
-};
-
-struct ApplyDiagnoseInfo
-{
-  int64_t max_applied_scn_;
-  TO_STRING_KV(K(max_applied_scn_));
 };
 
 class ObApplyFsCb : public palf::PalfFSCb
@@ -111,8 +107,7 @@ public:
 public:
   ObApplyServiceQueueTask();
   ~ObApplyServiceQueueTask();
-  int init(ObApplyStatus *apply_status,
-           const int64_t idx);
+  int init(ObApplyStatus *apply_status);
   void reset() override;
 public:
   Link *top();
@@ -125,18 +120,15 @@ public:
   void set_snapshot_check_submit_cb_cnt();
   int is_snapshot_apply_done(bool &is_done);
   int is_apply_done(bool &is_done);
-  int64_t idx() const;
   INHERIT_TO_STRING_KV("ObApplyServiceQueueTask", ObApplyServiceTask,
                        K(total_submit_cb_cnt_),
                        K(last_check_submit_cb_cnt_),
-                       K(total_apply_cb_cnt_),
-                       K(idx_));
+                       K(total_apply_cb_cnt_));
 private:
   int64_t total_submit_cb_cnt_;
   int64_t last_check_submit_cb_cnt_;
   int64_t total_apply_cb_cnt_;
   common::ObSpLinkQueue queue_;
-  int64_t idx_;
 };
 
 class ObApplyStatus
@@ -167,42 +159,19 @@ public:
   int unregister_file_size_cb();
   void close_palf_handle();
   //最大连续回调位点
-  int get_min_unapplied_log_ts_ns(int64_t &log_ts);
+  int get_min_unapplied_log_scn(palf::SCN &log_scn);
   int stat(LSApplyStat &stat) const;
   int handle_drop_cb();
-  int diagnose(ApplyDiagnoseInfo &diagnose_info);
-  // offline相关
-  //
-  // The constraint between palf and apply: 
-  //
-  // Palf guarantee that switch apply to follower only when there is not
-  // any uncommitted logs in previous LEADER, therefore, apply only update 
-  // 'palf_committed_end_lsn_' when 'proposal_id_' is as same as current 
-  // proposal_id of palf. 
-  //
-  // To increase robustness, apply assums that update 'palf_committed_end_lsn_'
-  // when the role of apply is LEADER execpet above constraints. otherwise,
-  // apply consider it as unexpected error.
-  //
-  // However, in rebuild scenario, apply will be reset to FOLLOWER even if there 
-  // are logs to be committed when 'proposal_id_' is as same as current proposal_id
-  // of palf.
-  //
-  // To solve above problem, add an interface which used to reset 'proposal_id_' of
-  // apply.
-  //
-  // NB: this interface only can be used in 'ObLogHandler::offline'.
-  void reset_proposal_id();
   TO_STRING_KV(K(ls_id_),
                K(role_),
                K(proposal_id_),
                K(palf_committed_end_lsn_),
-               K(last_check_log_ts_ns_),
-               K(max_applied_cb_ts_ns_));
+               K(last_check_log_scn_),
+               K(max_applied_cb_scn_));
 private:
   int submit_task_to_apply_service_(ObApplyServiceTask &task);
-  int check_and_update_max_applied_log_ts_(const int64_t log_ts);
-  int update_last_check_log_ts_ns_();
+  int check_and_update_max_applied_log_scn_(const palf::SCN scn);
+  int update_last_check_log_scn_();
   int handle_drop_cb_queue_(ObApplyServiceQueueTask &cb_queue);
   int switch_to_follower_();
   //从cb中获取打点信息
@@ -212,12 +181,11 @@ private:
                      int64_t &cb_first_handle_time,
                      int64_t &cb_start_time);
   void statistics_cb_cost_(const palf::LSN &lsn,
-                           const int64_t log_ts,
+                           const palf::SCN &scn,
                            const int64_t append_start_time,
                            const int64_t append_finish_time,
                            const int64_t cb_first_handle_time,
-                           const int64_t cb_start_time,
-                           const int64_t idx);
+                           const int64_t cb_start_time);
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
@@ -236,8 +204,8 @@ private:
   palf::LSN palf_committed_end_lsn_;
   //LSN standy_committed_end_lsn_;
   //palf::LSN min_committed_end_lsn_;
-  int64_t last_check_log_ts_ns_; //当前待确认的最大连续回调位点
-  int64_t max_applied_cb_ts_ns_; //该位点前的cb保证都已经回调完成
+  palf::SCN last_check_log_scn_; //当前待确认的最大连续回调位点
+  palf::SCN max_applied_cb_scn_; //该位点前的cb保证都已经回调完成
   ObApplyServiceSubmitTask submit_task_;
   ObApplyServiceQueueTask cb_queues_[APPLY_TASK_QUEUE_SIZE];
   palf::PalfEnv *palf_env_;
@@ -276,11 +244,10 @@ public:
                     palf::LSN &end_lsn);
   int switch_to_leader(const share::ObLSID &id, const int64_t proposal_id);
   int switch_to_follower(const share::ObLSID &id);
-  int get_min_unapplied_log_ts_ns(const share::ObLSID &id, int64_t &log_ts);
+  int get_min_unapplied_log_scn(const share::ObLSID &id, palf::SCN &log_scn);
   int push_task(ObApplyServiceTask *task);
   int wait_append_sync(const share::ObLSID &ls_id);
   int stat_for_each(const common::ObFunction<int (const ObApplyStatus &)> &func);
-  int diagnose(const share::ObLSID &id, ApplyDiagnoseInfo &diagnose_info);
 public:
   class GetApplyStatusFunctor
   {

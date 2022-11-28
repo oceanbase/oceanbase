@@ -44,8 +44,8 @@ public:
   using ObISQLClient::write;
 
   int connect(const uint64_t tenant_id, ObISQLClient *sql_client);
+  sqlclient::ObISQLConnection *get_connection() { return conn_; }
   virtual sqlclient::ObISQLConnectionPool *get_pool() override { return pool_; }
-  virtual sqlclient::ObISQLConnection *get_connection() override { return conn_; }
 
   virtual bool is_oracle_mode() const override { return oracle_mode_; }
   // in some situation, it allows continuation of SQL execution after failure in transaction,

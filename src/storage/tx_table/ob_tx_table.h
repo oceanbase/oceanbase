@@ -73,7 +73,7 @@ public:
   int start();
   void stop();
   void destroy();
-  int create_tablet(const lib::Worker::CompatMode compat_mode, const int64_t create_scn);
+  int create_tablet(const lib::Worker::CompatMode compat_mode, const palf::SCN &create_scn);
   int remove_tablet();
   int load_tx_table();
   int prepare_offline();
@@ -205,13 +205,21 @@ public:
                        const bool need_row_latch);
 
   /**
-   * @brief The tx data sstables need to be cleared periodically. This function returns a recycle_ts
+   * @brief The tx data sstables need to be cleared periodically. This function returns a recycle_scn
    * to decide which tx data should be cleared.
    *
-   * @param[out] recycle_ts the tx data whose end_log_ts is smaller or equals to the recycle_ts can
+   * @param[out] recycle_scn the tx data whose end_log_ts is smaller or equals to the recycle_scn can
    * be cleared.
    */
-  int get_recycle_ts(int64_t &recycle_ts);
+  int get_recycle_scn(palf::SCN &recycle_scn);
+  int get_recycle_ts(int64_t &recycle_ts)
+  {
+    int ret = OB_SUCCESS;
+    palf::SCN recycle_scn = palf::SCN::min_scn();
+    ret = get_recycle_scn(recycle_scn);
+    recycle_ts = recycle_scn.get_val_for_lsn_allocator();
+    return ret;
+  }
 
   /**
    * @brief Get the upper trans version for each given end_log_ts
@@ -240,7 +248,8 @@ public:
    *
    * @param[out] start_tx_scn
    */
-  int get_start_tx_scn(int64_t &start_tx_scn);
+  int get_start_tx_log_ts(int64_t &start_log_ts);
+  int get_start_tx_scn(palf::SCN &start_tx_scn);
 
   int dump_single_tx_data_2_text(const int64_t tx_id_int, const char *fname);
 
@@ -262,12 +271,12 @@ private:
       const uint64_t tenant_id,
       const share::ObLSID ls_id,
       const lib::Worker::CompatMode compat_mode,
-      const int64_t create_scn);
+      const palf::SCN &create_scn);
   int create_ctx_tablet_(
       const uint64_t tenant_id,
       const share::ObLSID ls_id,
       const lib::Worker::CompatMode compat_mode,
-      const int64_t create_scn);
+      const palf::SCN &create_scn);
   int remove_tablet_(const common::ObTabletID &tablet_id);
   int remove_data_tablet_();
   int remove_ctx_tablet_();
@@ -300,6 +309,7 @@ private:
                               const int64_t read_epoch,
                               const bool need_log_error,
                               int &ret);
+
 private:
   static const int64_t LS_TX_CTX_SCHEMA_VERSION = 0;
   static const int64_t LS_TX_CTX_SCHEMA_ROWKEY_CNT = 1;

@@ -56,7 +56,7 @@ public:
 
   void set_has_handle_error(bool has_handle);
   TO_STRING_KV(K_(key),
-               K_(round_start_ts),
+               K_(round_start_scn),
                K_(compatible),
                K_(log_archive_state),
                K_(backup_dest));
@@ -68,7 +68,7 @@ private:
 
 private:
   ArchiveKey            key_;
-  int64_t               round_start_ts_;
+  palf::SCN             round_start_scn_;
   bool                  compatible_;            // 该轮次兼容性处理
   ObArchiveRoundState   log_archive_state_;
   share::ObBackupDest   backup_dest_;

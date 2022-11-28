@@ -158,7 +158,13 @@ int ObTenantResolver<T>::resolve_tenant_option(T *stmt, ParseNode *node,
           SQL_LOG(WARN, "set tenant primary_zone DEFAULT is not allowed now", K(ret));
           LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set tenant primary_zone DEFAULT");
         } else if (T_RANDOM == option_node->children_[0]->type_) {
-          stmt->set_primary_zone(common::ObString(common::OB_RANDOM_PRIMARY_ZONE));
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
+            ret = OB_OP_NOT_ALLOW;
+            SQL_RESV_LOG(WARN, "set primary_zone RANDOM is not allowed now", K(ret));
+            LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone RANDOM");
+          } else {
+            stmt->set_primary_zone(common::ObString(common::OB_RANDOM_PRIMARY_ZONE));
+          }
         } else if (T_OP_GET_USER_VAR == option_node->children_[0]->type_) {
           ObObj var_value;
           if (OB_FAIL(ObResolverUtils::get_user_var_value(option_node->children_[0],
@@ -180,7 +186,8 @@ int ObTenantResolver<T>::resolve_tenant_option(T *stmt, ParseNode *node,
           common::ObString primary_zone;
           primary_zone.assign_ptr(const_cast<char *>(option_node->children_[0]->str_value_),
                                   static_cast<int32_t>(option_node->children_[0]->str_len_));
-          if (primary_zone.empty()) {
+          if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2000
+              && primary_zone.empty()) {
             ret = OB_OP_NOT_ALLOW;
             SQL_RESV_LOG(WARN, "set primary_zone empty is not allowed now", K(ret));
             LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone empty");

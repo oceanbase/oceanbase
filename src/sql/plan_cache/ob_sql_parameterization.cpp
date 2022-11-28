@@ -784,7 +784,7 @@ int ObSqlParameterization::check_and_generate_param_info(const ObIArray<ObPCPara
       // do nothing
     }
     else {
-      ret = OB_NOT_SUPPORTED;
+      ret = OB_ERR_UNEXPECTED;
       SQL_PC_LOG(ERROR, "const number of fast parse and normal parse is different",
             "fast_parse_const_num", raw_params.count(),
             "normal_parse_const_num", sql_info.total_);

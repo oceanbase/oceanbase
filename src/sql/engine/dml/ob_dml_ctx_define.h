@@ -282,7 +282,6 @@ public:
     : ref_action_(share::schema::ACTION_INVALID),
       database_name_(),
       table_name_(),
-      table_id_(0),
       columns_(),
       is_self_ref_(false)
   {}
@@ -291,7 +290,6 @@ public:
     : ref_action_(share::schema::ACTION_INVALID),
       database_name_(),
       table_name_(),
-      table_id_(0),
       columns_(alloc),
       is_self_ref_(false)
   {}
@@ -300,7 +298,6 @@ public:
     ref_action_ = share::schema::ACTION_INVALID;
     database_name_.reset();
     table_name_.reset();
-    table_id_ = 0;
     columns_.reset();
   }
   TO_STRING_KV(K_(ref_action), K_(database_name), K_(table_name), K_(columns), K_(is_self_ref));
@@ -308,7 +305,6 @@ public:
   share::schema::ObReferenceAction ref_action_;
   common::ObString database_name_;
   common::ObString table_name_;
-  uint64_t table_id_;
   common::ObFixedArray<ObForeignKeyColumn, common::ObIAllocator> columns_;
   bool is_self_ref_;
 };
@@ -376,8 +372,7 @@ public:
                        K_(new_row),
                        K_(view_check_exprs),
                        K_(is_primary_index),
-                       K_(is_heap_table),
-                       K_(has_instead_of_trigger));
+                       K_(is_heap_table));
 
   ObDMLOpType dml_type_;
   ExprFixedArray check_cst_exprs_;
@@ -398,7 +393,6 @@ public:
   ExprFixedArray view_check_exprs_;
   bool is_primary_index_;
   bool is_heap_table_;
-  bool has_instead_of_trigger_;
 protected:
   ObDMLBaseCtDef(common::ObIAllocator &alloc,
                  ObDASDMLBaseCtDef &das_base_ctdef,
@@ -414,8 +408,7 @@ protected:
       error_logging_ctdef_(alloc),
       view_check_exprs_(alloc),
       is_primary_index_(false),
-      is_heap_table_(false),
-      has_instead_of_trigger_(false)
+      is_heap_table_(false)
   { }
 };
 
@@ -750,7 +743,7 @@ public:
   virtual ~ObDelRtDef()
   {
     if (se_rowkey_dist_ctx_ != nullptr) {
-      // se_rowkey_dist_ctx_->destroy();
+      se_rowkey_dist_ctx_->destroy();
       se_rowkey_dist_ctx_ = nullptr;
     }
   }
@@ -761,6 +754,7 @@ public:
   DASDelRtDefArray related_rtdefs_;
   SeRowkeyDistCtx *se_rowkey_dist_ctx_;
 };
+
 struct ObMergeCtDef
 {
   OB_UNIS_VERSION(1);

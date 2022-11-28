@@ -275,7 +275,7 @@ int ObTransformCountToExists::get_trans_type(ObRawExpr *expr, ObRawExpr *&val_pa
     if (OB_ISNULL(first_param) || OB_ISNULL(second_param)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(first_param), K(second_param));
-    } else if (first_param->is_static_scalar_const_expr() && second_param->is_query_ref_expr()) {
+    } else if (first_param->is_const_expr() && second_param->is_query_ref_expr()) {
       val_param = first_param;
       subquery_param = second_param;
       switch (expr->get_expr_type()) {
@@ -289,7 +289,7 @@ int ObTransformCountToExists::get_trans_type(ObRawExpr *expr, ObRawExpr *&val_pa
         default:
           break;
       }
-    } else if (first_param->is_query_ref_expr() && second_param->is_static_scalar_const_expr()) {
+    } else if (first_param->is_query_ref_expr() && second_param->is_const_expr()) {
       subquery_param = first_param;
       val_param = second_param;
       switch (expr->get_expr_type()) {
@@ -325,6 +325,9 @@ int ObTransformCountToExists::check_sel_expr_valid(ObRawExpr *select_expr,
     } else if (OB_ISNULL(param = select_expr->get_param_expr(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
+    } else if (param->is_const_expr()) {
+      // count(const)
+      is_sel_expr_valid = true;
     } else if (!param->has_flag(CNT_SUB_QUERY)) {
       is_sel_expr_valid = true;
       count_param = param;
@@ -401,21 +404,10 @@ int ObTransformCountToExists::do_transform(ObDMLStmt *stmt,
           // ->
           // select * from t1 where exists (select 1 from t1 where to_char(c1, '') is not null);
           ObRawExpr *not_null_cond = NULL;
-          bool is_not_null = true;
-          ObArray<ObRawExpr *> constraints;
-          if (OB_FAIL(ObTransformUtils::is_expr_not_null(ctx_, subquery, trans_param.count_param_,
-                                                         NULLABLE_SCOPE::NS_WHERE,
-                                                         is_not_null,
-                                                         &constraints))) {
-            LOG_WARN("failed to check whether expr is nullable", K(ret));
-          } else if (is_not_null) {
-            if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
-              LOG_WARN("failed to add param not null constraint", K(ret));
-            }
-          } else if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx_->expr_factory_,
-                                                                    trans_param.count_param_,
-                                                                    true,
-                                                                    not_null_cond))) {
+          if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx_->expr_factory_,
+                                                             trans_param.count_param_,
+                                                             true,
+                                                             not_null_cond))) {
             LOG_WARN("failed to build is not null expr", K(ret));
           } else if (OB_FAIL(subquery->get_condition_exprs().push_back(not_null_cond))) {
             LOG_WARN("failed to append not null cond expr", K(ret));

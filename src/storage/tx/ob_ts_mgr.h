@@ -24,6 +24,7 @@
 #include "share/ob_errno.h"
 #include "share/ob_thread_pool.h"
 #include "share/lock/ob_qsync_lock.h"
+#include "logservice/palf/scn.h"
 #include "ob_gts_source.h"
 #include "ob_gts_define.h"
 #include "ob_ts_worker.h"
@@ -53,6 +54,10 @@ namespace frame
 class ObReqTransport;
 }
 }
+namespace palf
+{
+class SCN;
+}
 namespace transaction
 {
 class ObLocationAdapter;
@@ -66,8 +71,8 @@ public:
   ObTsCbTask() {}
   virtual ~ObTsCbTask() {}
   virtual int gts_callback_interrupted(const int errcode) = 0;
-  virtual int get_gts_callback(const MonotonicTs srr, const int64_t ts, const MonotonicTs receive_gts_ts) = 0;
-  virtual int gts_elapse_callback(const MonotonicTs srr, const int64_t ts) = 0;
+  virtual int get_gts_callback(const MonotonicTs srr, const palf::SCN &gts, const MonotonicTs receive_gts_ts) = 0;
+  virtual int gts_elapse_callback(const MonotonicTs srr, const palf::SCN &gts) = 0;
   virtual MonotonicTs get_stc() const = 0;
   virtual uint64_t hash() const = 0;
   virtual uint64_t get_tenant_id() const = 0;
@@ -84,11 +89,11 @@ public:
   virtual int get_gts(const uint64_t tenant_id,
                       const MonotonicTs stc,
                       ObTsCbTask *task,
-                      int64_t &gts,
+                      palf::SCN &scn,
                       MonotonicTs &receive_gts_ts) = 0;
-  virtual int get_gts(const uint64_t tenant_id, ObTsCbTask *task, int64_t &gts) = 0;
+  virtual int get_gts(const uint64_t tenant_id, ObTsCbTask *task, palf::SCN &scn) = 0;
   virtual int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
-      int64_t &ts, bool &is_external_consistent) = 0;
+      palf::SCN &scn, bool &is_external_consistent) = 0;
   /*
   virtual int get_local_trans_version(const uint64_t tenant_id,
                                       const MonotonicTs stc,
@@ -99,14 +104,12 @@ public:
                                       ObTsCbTask *task,
                                       int64_t &gts) = 0;
                                       */
-  virtual int wait_gts_elapse(const uint64_t tenant_id, const int64_t ts, ObTsCbTask *task,
+  virtual int wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn, ObTsCbTask *task,
                               bool &need_wait) = 0;
-  virtual int wait_gts_elapse(const uint64_t tenant_id, const int64_t ts) = 0;
+  virtual int wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn) = 0;
   virtual int update_base_ts(const int64_t base_ts) = 0;
   virtual int get_base_ts(int64_t &base_ts) = 0;
   virtual bool is_external_consistent(const uint64_t tenant_id) = 0;
-  virtual int get_gts_and_type(const uint64_t tenant_id, const MonotonicTs stc, int64_t &gts,
-                               int64_t &ts_type) = 0;
 public:
   VIRTUAL_TO_STRING_KV("", "");
 };
@@ -348,18 +351,19 @@ public:
   /*
   int update_local_trans_version(const uint64_t tenant_id, const int64_t version, bool &update);
   */
+
   //根据stc获取合适的gts值，如果条件不满足需要注册gts task，等异步回调
   int get_gts(const uint64_t tenant_id,
               const MonotonicTs stc,
               ObTsCbTask *task,
-              int64_t &gts,
+              palf::SCN &scn,
               MonotonicTs &receive_gts_ts);
   //仅仅获取本地gts cache的最新值，但可能会失败，失败之后处理逻辑如下:
   //1. 如果task == NULL，说明调用者不需要异步回调，直接返回报错，由调用者处理
   //2. 如果task != NULL，需要注册异步回调任务
-  int get_gts(const uint64_t tenant_id, ObTsCbTask *task, int64_t &gts);
+  int get_gts(const uint64_t tenant_id, ObTsCbTask *task, palf::SCN &scn);
   int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
-      int64_t &ts, bool &is_external_consistent);
+      palf::SCN &scn, bool &is_external_consistent);
   /*
   int get_local_trans_version(const uint64_t tenant_id,
                               const MonotonicTs stc,
@@ -370,13 +374,12 @@ public:
                               ObTsCbTask *task,
                               int64_t &gts);
                               */
-  int wait_gts_elapse(const uint64_t tenant_id, const int64_t ts, ObTsCbTask *task,
+  int wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn, ObTsCbTask *task,
       bool &need_wait);
-  int wait_gts_elapse(const uint64_t tenant_id, const int64_t ts);
+  int wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn);
   int update_base_ts(const int64_t base_ts);
   int get_base_ts(int64_t &base_ts);
   bool is_external_consistent(const uint64_t tenant_id);
-  int get_gts_and_type(const uint64_t tenant_id, const MonotonicTs stc, int64_t &gts, int64_t &ts_type);
   static int get_cur_ts_type(const uint64_t tenant_id, int64_t &cur_ts_type);
   int refresh_gts_location(const uint64_t tenant_id);
 public:

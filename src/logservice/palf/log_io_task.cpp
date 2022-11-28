@@ -106,7 +106,7 @@ int LogIOFlushLogTask::do_task(int tg_id, PalfEnvImpl *palf_env_impl)
     PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
              K(flush_log_cb_ctx_));
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_append_log(
-                 flush_log_cb_ctx_.lsn_, write_buf_, flush_log_cb_ctx_.log_ts_))) {
+                 flush_log_cb_ctx_.lsn_, write_buf_, flush_log_cb_ctx_.log_scn_))) {
     PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), K(write_buf_));
     // Advance reuse lsn for group_buffer firstly, then callback asynchronous.
   } else if (OB_FAIL(guard.get_palf_handle_impl()->advance_reuse_lsn(flush_log_end_lsn))) {
@@ -443,7 +443,7 @@ void LogIOTruncatePrefixBlocksTask::free_this(PalfEnvImpl *palf_env_impl)
 BatchLogIOFlushLogTask::BatchLogIOFlushLogTask()
     : io_task_array_(),
       log_write_buf_array_(),
-      log_ts_array_(),
+      scn_array_(),
       lsn_array_(),
       palf_id_(INVALID_PALF_ID),
       is_inited_(false)
@@ -459,7 +459,7 @@ int BatchLogIOFlushLogTask::init(const int64_t batch_depth, ObIAllocator *alloca
   int ret = OB_SUCCESS;
   io_task_array_.set_allocator(allocator);
   log_write_buf_array_.set_allocator(allocator);
-  log_ts_array_.set_allocator(allocator);
+  scn_array_.set_allocator(allocator);
   lsn_array_.set_allocator(allocator);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -468,8 +468,8 @@ int BatchLogIOFlushLogTask::init(const int64_t batch_depth, ObIAllocator *alloca
     PALF_LOG(ERROR, "BatchIOTaskArray init failed", K(ret));
   } else if (OB_FAIL(log_write_buf_array_.init(batch_depth))) {
     PALF_LOG(ERROR, "log_write_buf_array_ init failed", K(ret));
-  } else if (OB_FAIL(log_ts_array_.init(batch_depth))) {
-    PALF_LOG(ERROR, "log_ts_array_ init failed", K(ret));
+  } else if (OB_FAIL(scn_array_.init(batch_depth))) {
+    PALF_LOG(ERROR, "scn_array_ init failed", K(ret));
   } else if (OB_FAIL(lsn_array_.init(batch_depth))) {
     PALF_LOG(ERROR, "lsn_array_ init failed", K(ret));
   } else {
@@ -485,7 +485,7 @@ void BatchLogIOFlushLogTask::reuse()
 {
   io_task_array_.clear();
   log_write_buf_array_.clear();
-  log_ts_array_.clear();
+  scn_array_.clear();
   lsn_array_.clear();
   palf_id_ = INVALID_PALF_ID;
 }
@@ -495,7 +495,7 @@ void BatchLogIOFlushLogTask::destroy()
   is_inited_ = false;
   io_task_array_.destroy();
   log_write_buf_array_.destroy();
-  log_ts_array_.destroy();
+  scn_array_.destroy();
   lsn_array_.destroy();
   palf_id_ = INVALID_PALF_ID;
 }
@@ -590,7 +590,7 @@ int BatchLogIOFlushLogTask::do_task_(int tg_id, PalfEnvImpl *palf_env_impl)
       } else if (OB_FAIL(log_write_buf_array_.push_back(&io_task->write_buf_))) {
         PALF_LOG(ERROR, "log_write_buf_array_ push_back failed, unexpected error!!!", K(ret),
                  KPC(this));
-      } else if (OB_FAIL(log_ts_array_.push_back(io_task->flush_log_cb_ctx_.log_ts_))) {
+      } else if (OB_FAIL(scn_array_.push_back(io_task->flush_log_cb_ctx_.log_scn_))) {
         PALF_LOG(ERROR, "flush_log_cb_ctx_array_ push_back failed, unexpected error!!!", K(ret),
                  KPC(this), KPC(io_task));
       } else if (OB_FAIL(lsn_array_.push_back(io_task->flush_log_cb_ctx_.lsn_))) {
@@ -603,7 +603,7 @@ int BatchLogIOFlushLogTask::do_task_(int tg_id, PalfEnvImpl *palf_env_impl)
     }
     if (OB_SUCC(ret) && true == has_valid_data) {
       if (OB_FAIL(guard.get_palf_handle_impl()->inner_append_log(lsn_array_, log_write_buf_array_,
-                                                                 log_ts_array_))) {
+                                                                 scn_array_))) {
         PALF_LOG(ERROR, "inner_append_log failed", K(ret), KPC(this));
       } else if (OB_FAIL(guard.get_palf_handle_impl()->advance_reuse_lsn(flushed_log_end_lsn))) {
         PALF_LOG(ERROR, "advance_reuse_lsn failed", K(ret), K(flushed_log_end_lsn));

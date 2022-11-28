@@ -90,8 +90,8 @@ public:
     : is_inited_(false),
       iter_param_(iter_param),
       dump_tx_data_done_(false),
-      cur_max_commit_version_(0),
-      pre_start_log_ts_(0),
+      cur_max_commit_scn_(),
+      pre_start_scn_(),
       tx_data_row_cnt_(0),
       pre_tx_data_(nullptr),
       arena_allocator_(),
@@ -125,62 +125,62 @@ public:
 private:
   int get_next_tx_data_row_(const blocksstable::ObDatumRow *&row);
 
-  int get_next_commit_version_row_(const blocksstable::ObDatumRow *&row);
+  int get_next_commit_scn_row_(const blocksstable::ObDatumRow *&row);
 
-  int prepare_commit_version_list_();
+  int prepare_commit_scn_list_();
 
-  int periodical_get_next_commit_version_(ObCommitVersionsArray::Node &node);
+  int periodical_get_next_commit_scn_(ObCommitSCNsArray::Node &node);
 
-  int fill_in_cur_commit_versions_(ObCommitVersionsArray &cur_commit_versions);
+  int fill_in_cur_commit_scns_(ObCommitSCNsArray &cur_commit_scns);
 
-  int get_past_commit_versions_(ObCommitVersionsArray &past_commit_versions);
+  int get_past_commit_scns_(ObCommitSCNsArray &past_commit_scns);
 
-  int deserialize_commit_versions_array_from_row_(const blocksstable::ObDatumRow *row, ObCommitVersionsArray &past_commit_versions);
+  int deserialize_commit_scns_array_from_row_(const blocksstable::ObDatumRow *row, ObCommitSCNsArray &past_commit_scns);
 
 
-  int merge_cur_and_past_commit_verisons_(const int64_t recycle_ts,
-                                          ObCommitVersionsArray &cur_commit_versions,
-                                          ObCommitVersionsArray &past_commit_versions,
-                                          ObCommitVersionsArray &merged_commit_versions);
+  int merge_cur_and_past_commit_verisons_(const palf::SCN recycle_scn,
+                                          ObCommitSCNsArray &cur_commit_scns,
+                                          ObCommitSCNsArray &past_commit_scns,
+                                          ObCommitSCNsArray &merged_commit_scns);
 
   /**
    * @brief get node from data_arr and push_back it to merged_arr
    *
    * @param[in] step_len to control serialize size of commit versions array
    * @param[in] start_scn_limit to drop some nodes in past commit versions array
-   * @param[in] recycle_ts to recycle some nodes
+   * @param[in] recycle_scn to recycle some nodes
    * @param[in] data_arr the source data to be merged
    * @param[out] max_commit_version to record current max commit version
    * @param[out] merged_arr the target array to be dumped
    */
   int merge_pre_process_node_(const int64_t step_len,
-                              const int64_t start_scn_limit,
-                              const int64_t recycle_ts,
-                              const ObIArray<ObCommitVersionsArray::Node> &data_arr,
-                              int64_t &max_commit_version,
-                              ObIArray<ObCommitVersionsArray::Node> &merged_arr);
+                              const palf::SCN start_scn_limit,
+                              const palf::SCN recycle_scn,
+                              const ObIArray<ObCommitSCNsArray::Node> &data_arr,
+                              palf::SCN &max_commit_scn,
+                              ObIArray<ObCommitSCNsArray::Node> &merged_arr);
 
-  int set_row_with_merged_commit_versions_(ObCommitVersionsArray &merged_commit_versions,
+  int set_row_with_merged_commit_scns_(ObCommitSCNsArray &merged_commit_scns,
                                            const blocksstable::ObDatumRow *&row);
 
-  int DEBUG_check_past_and_cur_arr(ObCommitVersionsArray &cur_commit_versions,
-                                   ObCommitVersionsArray &past_commit_versions);
+  int DEBUG_check_past_and_cur_arr(ObCommitSCNsArray &cur_commit_versions,
+                                   ObCommitSCNsArray &past_commit_versions);
 
-  int DEBUG_try_calc_upper_and_check_(ObCommitVersionsArray &merged_commit_versions);
+  int DEBUG_try_calc_upper_and_check_(ObCommitSCNsArray &merged_commit_versions);
 
-  int DEBUG_fake_calc_upper_trans_version(const int64_t sstable_end_log_ts,
-                                          int64_t &upper_trans_version,
-                                          ObCommitVersionsArray &merged_commit_versions);
+  int DEBUG_fake_calc_upper_trans_version(const palf::SCN sstable_end_scn,
+                                          palf::SCN &upper_trans_version,
+                                          ObCommitSCNsArray &merged_commit_versions);
 
   void DEBUG_print_start_scn_list_();
-  void DEBUG_print_merged_commit_versions_(ObCommitVersionsArray &merged_commit_versions);
+  void DEBUG_print_merged_commit_versions_(ObCommitSCNsArray &merged_commit_versions);
 
 private:
   bool is_inited_;
   const ObTableIterParam &iter_param_;
   bool dump_tx_data_done_;
-  int64_t cur_max_commit_version_;
-  int64_t pre_start_log_ts_;
+  palf::SCN cur_max_commit_scn_;
+  palf::SCN pre_start_scn_;
   int64_t tx_data_row_cnt_;
   ObTxData *pre_tx_data_;
   ObArenaAllocator arena_allocator_;
@@ -190,7 +190,7 @@ private:
   ObTxDataMemtable *tx_data_memtable_;
   blocksstable::ObStorageDatum key_datum_;
   int64_t DEBUG_iter_commit_ts_cnt_;
-  int64_t DEBUG_last_start_log_ts_;
+  palf::SCN DEBUG_last_start_scn_;
 };
 
 /**
@@ -239,7 +239,7 @@ public:
       : iter_param_(iter_param), table_(table), key_datums_() {}
   virtual ~ObCommitVersionsGetter() {}
 
-  int get_next_row(ObCommitVersionsArray &commit_versions);
+  int get_next_row(ObCommitSCNsArray &commit_scns);
 
 private:
   const ObTableIterParam &iter_param_;

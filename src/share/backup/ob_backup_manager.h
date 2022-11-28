@@ -130,6 +130,17 @@ public:
       common::ObMySQLProxy &proxy);
 
   bool is_inited() { return inited_; }
+  int get_tenant_count(int64_t &tenant_count) const;
+  int get_backup_info(const uint64_t tenant_id, ObBaseBackupInfo &info); //get backup info with tenant_id
+  int get_backup_info(ObBaseBackupInfo &info); //get backup info with info
+  int get_backup_info(const ObBackupInfoStatus::BackupStatus &status, common::ObIArray<ObBaseBackupInfo> &infos);
+  int get_backup_info(const ObLogArchiveStatus::STATUS &status, common::ObIArray<ObBaseBackupInfo> &infos);
+  int get_backup_info(common::ObIArray<ObBaseBackupInfo> &infos);
+  int get_backup_info(common::ObIArray<ObBaseBackupInfoStruct> &infos);
+  int get_backup_info(const uint64_t tenant_id, ObBackupItemTransUpdater &updater,
+      ObBaseBackupInfoStruct &info);
+  int update_backup_info(const uint64_t tenant_id, const ObBaseBackupInfoStruct &info,
+      ObBackupItemTransUpdater &updater);
   int get_tenant_ids(common::ObIArray<uint64_t> &tenant_ids);
   int add_backup_info(const ObBaseBackupInfo &info);
   int add_backup_info(const uint64_t tenant_id);
@@ -137,6 +148,24 @@ public:
   int check_can_update(
       const ObBaseBackupInfoStruct &src_info,
       const ObBaseBackupInfoStruct &dest_info);
+  int get_backup_info_without_trans(
+      const uint64_t tenant_id,
+      ObBaseBackupInfoStruct &info);
+  int get_detected_region(
+      const uint64_t tenant_id,
+      common::ObIArray<ObBackupRegion> &detected_region);
+  int get_backup_status(
+      const uint64_t tenant_id,
+      common::ObISQLClient &trans,
+      ObBackupInfoStatus &status);
+  int get_backup_backup_dest(
+      const uint64_t tenant_id,
+      common::ObISQLClient &trans,
+      ObBaseBackupInfoStruct::BackupDest &backup_dest);
+  int update_backup_backup_dest(
+      const uint64_t tenant_id,
+      common::ObISQLClient &trans,
+      const ObBaseBackupInfoStruct::BackupDest &backup_dest);
   int get_backup_scheduler_leader(
       const uint64_t tenant_id,
       common::ObISQLClient &trans,
@@ -149,15 +178,36 @@ public:
   int clean_backup_scheduler_leader(
       const uint64_t tenant_id,
       const common::ObAddr &scheduler_leader);
+  int insert_restore_tenant_base_backup_version(
+      const uint64_t tenant_id,
+      const int64_t major_version);
   int get_job_id(int64_t& job_id);
+  int get_base_backup_version(
+      const uint64_t tenant_id,
+      common::ObISQLClient &trans,
+      int64_t &base_backup_version);
+  int is_backup_started(bool &is_started);
+  int get_enable_auto_backup_archivelog(
+      const uint64_t tenant_id,
+      common::ObISQLClient &trans,
+      bool &is_enable);
+  int update_enable_auto_backup_archivelog(
+      const uint64_t tenant_id,
+      const bool is_enable,
+      common::ObISQLClient &trans);
 
 private:
   int convert_info_to_struct(const ObBaseBackupInfo &info, ObBaseBackupInfoStruct &info_struct);
+  int convert_struct_to_info(const ObBaseBackupInfoStruct &info_struct, ObBaseBackupInfo &info);
   int find_tenant_id(const uint64_t tenant_id);
   int get_backup_info(
       const uint64_t tenant_id,
       ObBackupItemTransUpdater &updater,
       ObBaseBackupInfo &info);
+  int update_backup_info(
+      const uint64_t tenant_id,
+      const ObBaseBackupInfo &info,
+      ObBackupItemTransUpdater &updater);
   int check_can_update_(
       const ObBackupInfoStatus::BackupStatus &src_status,
       const ObBackupInfoStatus::BackupStatus &dest_status);

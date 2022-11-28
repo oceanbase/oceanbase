@@ -80,19 +80,15 @@ public:
   }
   virtual void reset() override
   {
-    if (allocator_.used() > 0) {
-      allocator_.reset();
-    }
     pos_ = 0;
     buf_[0] = '\0';
+    allocator_.reset();
   }
   virtual void reuse() override
   {
-	  if (allocator_.used() > 0) {
-      allocator_.reuse();
-    }
     pos_ = 0;
     buf_[0] = '\0';
+    allocator_.reuse();
   }
 
   virtual void set_attr(const ObMemAttr &attr) { UNUSED(attr); }

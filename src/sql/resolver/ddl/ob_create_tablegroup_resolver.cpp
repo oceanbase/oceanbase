@@ -89,6 +89,11 @@ int ObCreateTablegroupResolver::resolve(const ParseNode &parse_tree)
     //nothing todo
   } else if (OB_ISNULL(node->children_[TABLEGROUP_OPTION])) {
     //nothing todo
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
+    //在1.x升级到2.0过程中，为避免新server向旧rs发create tablegroup请求时，
+    //丢失table option，此处需要做预防
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_WARN("not support to set tablegroup option while cluster is upgrading", K(ret));
   } else {
     if (OB_FAIL(resolve_tablegroup_option(create_tablegroup_stmt,
                                           node->children_[TABLEGROUP_OPTION]))) {

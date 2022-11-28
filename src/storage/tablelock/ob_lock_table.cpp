@@ -106,7 +106,10 @@ int ObLockTable::restore_lock_table_(ObITable &sstable)
   } else if (OB_FAIL(handle.get_lock_memtable(memtable))) {
     LOG_WARN("get_lock_memtable_ fail.", KR(ret));
   } else {
-    memtable->set_flushed_log_ts(sstable.get_end_log_ts());
+    // TODO: cxf remove this
+    palf::SCN tmp;
+    tmp.convert_for_lsn_allocator(sstable.get_end_log_ts());
+    memtable->set_flushed_scn(tmp);
     while (OB_SUCC(ret)) {
       if (OB_FAIL(row_iter->get_next_row(row))) {
         if (OB_ITER_END != ret) {
@@ -356,7 +359,7 @@ int ObLockTable::online()
   return ret;
 }
 
-int ObLockTable::create_tablet(const lib::Worker::CompatMode compat_mode, const int64_t create_scn)
+int ObLockTable::create_tablet(const lib::Worker::CompatMode compat_mode, const palf::SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = parent_->get_tenant_id();

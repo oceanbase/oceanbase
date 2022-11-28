@@ -193,7 +193,16 @@ DEFINE_DESERIALIZE(ObDesExecContext)
   if (OB_SUCC(ret) && !OB_ISNULL(my_session_) && !OB_ISNULL(GCTX.sql_engine_)) {
     ObPCMemPctConf pc_mem_conf;
     if (OB_FAIL(my_session_->get_pc_mem_conf(pc_mem_conf))) {
-      LOG_WARN("failed to get pc mem conf", K(ret));
+      if (OB_ENTRY_NOT_EXIST == ret && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
+        /**
+         * ignore OB_ENTRY_NOT_EXIST if in upgrade process, this session must come from
+         * 1470 or 2000, they can not generate remote / distributed plan with foreign
+         * key operation.
+         */
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get pc mem conf", K(ret));
+      }
     } else {
       my_session_->set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager());
     }
@@ -207,7 +216,6 @@ DEFINE_DESERIALIZE(ObDesExecContext)
       LOG_WARN("init exec context expr op failed", K(ret));
     }
   }
-  use_temp_expr_ctx_cache_ = true;
   return ret;
 }
 }/* ns sql*/

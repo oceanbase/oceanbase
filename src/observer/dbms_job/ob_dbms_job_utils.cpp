@@ -363,9 +363,7 @@ int ObDBMSJobUtils::get_dbms_job_infos_in_tenant(
       } else if (OB_NOT_NULL(result.get_result())) {
         do {
           if (OB_FAIL(result.get_result()->next())) {
-            if (ret != OB_ITER_END) {
-              LOG_WARN("failed to get result from result", K(ret));
-            }
+            LOG_WARN("failed to get result", K(ret));
           } else {
             ObDBMSJobInfo job_info;
             OZ (extract_info(*(result.get_result()), allocator, job_info));

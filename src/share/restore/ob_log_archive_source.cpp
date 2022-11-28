@@ -25,7 +25,7 @@ static const char* LogArchiveSourceTypeArray[static_cast<int64_t>(ObLogArchiveSo
 
 bool ObLogArchiveSourceItem::is_valid() const
 {
-  return id_ > 0 && is_valid_log_source_type(type_) && !value_.empty() && until_ts_ > 0;
+  return id_ > 0 && is_valid_log_source_type(type_) && !value_.empty() && until_scn_.is_valid();
 }
 
 ObLogArchiveSourceType ObLogArchiveSourceItem::get_source_type(const ObString &type_str)
@@ -56,7 +56,7 @@ int ObLogArchiveSourceItem::deep_copy(ObLogArchiveSourceItem &other)
   tenant_id_ = other.tenant_id_;
   id_ = other.id_;
   type_ = other.type_;
-  until_ts_ = other.until_ts_;
+  until_scn_ = other.until_scn_;
   OZ (ob_write_string(allocator_, other.value_, value_));
   return ret;
 }

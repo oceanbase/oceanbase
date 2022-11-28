@@ -28,6 +28,10 @@ namespace transaction
 {
 class ObTransID;
 }
+namespace palf
+{
+class SCN;
+}
 
 namespace storage
 {
@@ -105,6 +109,11 @@ public:
   ObTabletStatusChecker &operator=(const ObTabletStatusChecker&) = delete;
 public:
   int check(const uint64_t time_us);
+  int wake_up(
+      ObTabletTxMultiSourceDataUnit &tx_data,
+      const palf::SCN &memtable_scn,
+      const bool for_replay,
+      const memtable::MemtableRefOp ref_op);
   int wake_up(
       ObTabletTxMultiSourceDataUnit &tx_data,
       const int64_t memtable_log_ts,

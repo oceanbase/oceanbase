@@ -31,6 +31,7 @@
 #include "storage/tx/ob_trans_result.h"
 #include "storage/tx/ob_xa_define.h"
 #include "ob_multi_data_source.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -429,8 +430,6 @@ enum TransType : int32_t
   DIST_TRANS = 2
 };
 
-const char *trans_type_to_cstr(const TransType &trans_type);
-
 // class TransType
 // {
 // public:
@@ -565,7 +564,7 @@ public:
 };
 
 // transaction parameter
-class ObStartTransParam
+class ObStartTransParam  // unreferenced, need remove
 {
   OB_UNIS_VERSION(1);
 public:
@@ -685,7 +684,7 @@ public:
   void destroy() {}
 };
 
-class ObStmtInfo
+class ObStmtInfo  // unreferenced, need remove
 {
   OB_UNIS_VERSION(1);
 public:
@@ -706,7 +705,7 @@ private:
   int64_t end_stmt_cnt_;
 };
 
-class ObTaskInfo
+class ObTaskInfo // unreferenced, need remove
 {
   OB_UNIS_VERSION(1);
 public:
@@ -729,7 +728,7 @@ public:
   int64_t seq_no_;
 };
 
-class ObTransTaskInfo
+class ObTransTaskInfo //unreferenced, need remove
 {
   OB_UNIS_VERSION(1);
 public:
@@ -750,7 +749,7 @@ private:
   common::ObSEArray<ObTaskInfo, 1> tasks_;
 };
 
-class ObTransStmtInfo
+class ObTransStmtInfo //unused, to be removed
 {
   OB_UNIS_VERSION(1);
 public:
@@ -903,7 +902,7 @@ private:
   int64_t need_wait_interval_us_;
 };
 
-class ObTransSnapInfo
+class ObTransSnapInfo //unused , to be removed
 {
   OB_UNIS_VERSION(1);
 public:
@@ -946,7 +945,7 @@ private:
   bool is_cursor_or_nested_;
 };
 
-class ObStmtPair
+class ObStmtPair //unused , to be removed
 {
   OB_UNIS_VERSION(1);
 public:
@@ -963,7 +962,7 @@ private:
   int64_t to_;
 };
 
-class ObStmtRollbackInfo
+class ObStmtRollbackInfo //unused , to be removed
 {
   OB_UNIS_VERSION(1);
 public:
@@ -1258,10 +1257,10 @@ class ObElrTransInfo final
 public:
   ObElrTransInfo() { reset(); }
   void reset();
-  int init(const ObTransID &trans_id, uint32_t ctx_id, const int64_t commit_version);
+  int init(const ObTransID &trans_id, uint32_t ctx_id, const palf::SCN commit_version);
   const ObTransID &get_trans_id() const { return trans_id_; }
   uint32_t get_ctx_id() const { return ctx_id_; }
-  int64_t get_commit_version() const { return commit_version_; }
+  palf::SCN get_commit_version() const { return commit_version_; }
   int set_result(const int result) { result_ = result; return common::OB_SUCCESS; }
   uint64_t hash() const { return trans_id_.hash(); }
   int get_result() const { return ATOMIC_LOAD(&result_); }
@@ -1269,7 +1268,7 @@ public:
   TO_STRING_KV(K_(trans_id), K_(commit_version), K_(result), K_(ctx_id));
 private:
   ObTransID trans_id_;
-  int64_t commit_version_;
+  palf::SCN commit_version_;
   int result_;
   uint32_t ctx_id_;
 };
@@ -1741,11 +1740,11 @@ public:
   ObTxBufferNodeArray multi_data_source_;
   // check
   common::ObAddr scheduler_;
-  int64_t prepare_version_;
+  palf::SCN prepare_version_;
   int64_t trans_type_;
   int64_t next_log_entry_no_;
-  int64_t max_applied_log_ts_;
-  int64_t max_applying_log_ts_;
+  palf::SCN max_applied_log_ts_;
+  palf::SCN max_applying_log_ts_;
   int64_t max_applying_part_log_no_; // start from 0 on follower and always be INT64_MAX on leader
   int64_t max_submitted_seq_no_; // maintains on Leader and transfer to Follower via ActiveInfoLog
   uint64_t checksum_;
@@ -1769,7 +1768,7 @@ struct ObMulSourceDataNotifyArg
   ObTransID tx_id_;
   int64_t log_ts_; // the log ts of current notify type
   // in case of abort transaction, trans_version_ is invalid
-  int64_t trans_version_;
+  palf::SCN trans_version_;
   bool for_replay_;
   NotifyType notify_type_;
 

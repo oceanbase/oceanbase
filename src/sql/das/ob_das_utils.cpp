@@ -59,6 +59,22 @@ int ObDASUtils::store_warning_msg(const ObWarningBuffer &wb, obrpc::ObRpcResultC
   return ret;
 }
 
+int ObDASUtils::get_tablet_loc_by_id(const ObTabletID &tablet_id,
+                                     ObDASTableLoc &table_loc,
+                                     ObDASTabletLoc *&tablet_loc)
+{
+  int ret = OB_SUCCESS;
+  tablet_loc = nullptr;
+  FOREACH(tmp_node, table_loc.tablet_locs_) {
+    ObDASTabletLoc *tmp_tablet_loc = *tmp_node;
+    if (tmp_tablet_loc->tablet_id_ == tablet_id) {
+      tablet_loc = tmp_tablet_loc;
+      break;
+    }
+  }
+  return ret;
+}
+
 int ObDASUtils::check_nested_sql_mutating(ObTableID ref_table_id, ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;

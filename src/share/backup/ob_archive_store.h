@@ -71,7 +71,7 @@ struct ObRoundStartDesc final : public ObExternArchiveDesc
 public:
   int64_t dest_id_;
   int64_t round_id_;
-  ARCHIVE_SCN_TYPE start_scn_; // archive start time of the round
+  palf::SCN start_scn_; // archive start time of the round
   int64_t base_piece_id_;
   int64_t piece_switch_interval_; // unit: us
 
@@ -92,8 +92,8 @@ struct ObRoundEndDesc final : public ObExternArchiveDesc
 public:
   int64_t dest_id_;
   int64_t round_id_;
-  ARCHIVE_SCN_TYPE start_scn_; // archive start time of the round
-  ARCHIVE_SCN_TYPE checkpoint_scn_;
+  palf::SCN start_scn_; // archive start time of the round
+  palf::SCN checkpoint_scn_;
   int64_t base_piece_id_;
   int64_t piece_switch_interval_; // unit: ns
 
@@ -121,7 +121,7 @@ public:
   int64_t dest_id_;
   int64_t round_id_;
   int64_t piece_id_;
-  ARCHIVE_SCN_TYPE start_scn_;
+  palf::SCN start_scn_;
 
   ObPieceStartDesc();
 
@@ -141,7 +141,7 @@ public:
   int64_t dest_id_;
   int64_t round_id_;
   int64_t piece_id_;
-  ARCHIVE_SCN_TYPE end_scn_;
+  palf::SCN end_scn_;
 
   ObPieceEndDesc();
 
@@ -167,8 +167,8 @@ public:
   int64_t incarnation_;
   int64_t dest_no_;
   ObArchiveCompatible compatible_;
-  ARCHIVE_SCN_TYPE start_scn_;
-  ARCHIVE_SCN_TYPE end_scn_;
+  palf::SCN start_scn_;
+  palf::SCN end_scn_;
   ObBackupPathString path_;
 
   // history frozen pieces, ordered by piece id desc.
@@ -223,10 +223,10 @@ public:
   int64_t incarnation_;
   ObArchiveCompatible compatible_;
   // TODO: scn type need provide serialize method which returns fixed length.
-  ARCHIVE_SCN_TYPE start_scn_; // archive start time of the round
-  ARCHIVE_SCN_TYPE checkpoint_scn_; // archive end time of the round
-  ARCHIVE_SCN_TYPE max_scn_;
-  ARCHIVE_SCN_TYPE end_scn_;
+  palf::SCN start_scn_; // archive start time of the round
+  palf::SCN checkpoint_scn_; // archive end time of the round
+  palf::SCN max_scn_;
+  palf::SCN end_scn_;
 
   int64_t reserved_[7];
 
@@ -249,8 +249,8 @@ public:
   int64_t dest_id_;
   int64_t round_id_;
   int64_t piece_id_;
-  ARCHIVE_SCN_TYPE start_scn_;
-  ARCHIVE_SCN_TYPE checkpoint_scn_;
+  palf::SCN start_scn_;
+  palf::SCN checkpoint_scn_;
 
   ObPieceInnerPlaceholderDesc();
 
@@ -282,8 +282,8 @@ public:
   int64_t round_id_;
   int64_t piece_id_;
   ObLSID ls_id_;
-  ARCHIVE_SCN_TYPE start_scn_;
-  ARCHIVE_SCN_TYPE checkpoint_scn_;
+  palf::SCN start_scn_;
+  palf::SCN checkpoint_scn_;
   uint64_t min_lsn_;
   uint64_t max_lsn_;
   ObSArray<OneFile> filelist_;
@@ -334,19 +334,19 @@ public:
 
   // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000
   int is_piece_start_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-      const int64_t create_timestamp, bool &is_exist) const;
+      const palf::SCN &create_scn, bool &is_exist) const;
   int read_piece_start(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-      const int64_t create_timestamp, ObPieceStartDesc &desc) const;
+      const palf::SCN &create_scn, ObPieceStartDesc &desc) const;
   int write_piece_start(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-      const int64_t create_timestamp, const ObPieceStartDesc &desc) const;
+      const palf::SCN &create_scn, const ObPieceStartDesc &desc) const;
 
   // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_end_20220601T120000
   int is_piece_end_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-      const int64_t create_timestamp, bool &is_exist) const;
+      const palf::SCN &create_scn, bool &is_exist) const;
   int read_piece_end(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-      const int64_t create_timestamp, ObPieceEndDesc &desc) const;
+      const palf::SCN &create_scn, ObPieceEndDesc &desc) const;
   int write_piece_end(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-      const int64_t create_timestamp, const ObPieceEndDesc &desc) const;
+      const palf::SCN &create_scn, const ObPieceEndDesc &desc) const;
 
   // oss://archive/d[dest_id]r[round_id]p[piece_id]/single_piece_info
   int is_single_piece_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, bool &is_exist) const;
@@ -359,10 +359,10 @@ public:
   int write_piece_checkpoint(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t file_id, const ObPieceCheckpointDesc &desc) const;
 
   // oss://archive/d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000
-  int is_piece_inner_placeholder_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t start_scn, 
-      const int64_t end_scn, bool &is_exist) const;
-  int read_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t start_scn, const int64_t end_scn, ObPieceInnerPlaceholderDesc &desc) const;
-  int write_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t start_scn, const int64_t end_scn, const ObPieceInnerPlaceholderDesc &desc) const;
+  int is_piece_inner_placeholder_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const palf::SCN &start_scn,
+      const palf::SCN &end_scn, bool &is_exist) const;
+  int read_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const palf::SCN &start_scn, const palf::SCN &end_scn, ObPieceInnerPlaceholderDesc &desc) const;
+  int write_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const palf::SCN &start_scn, const palf::SCN &end_scn, const ObPieceInnerPlaceholderDesc &desc) const;
 
   // oss://archive/d[dest_id]r[round_id]p[piece_id]/[ls_id]/ls_file_info
   int is_single_ls_info_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
@@ -383,7 +383,7 @@ public:
   int get_all_round_ids(const int64_t dest_id, ObIArray<int64_t> &roundid_array);
   // If end file not exist, set checkpoint_scn in ObRoundEndDesc to 0.
   int get_all_rounds(const int64_t dest_id, ObIArray<ObRoundEndDesc> &roundids);
-  int get_round_id(const int64_t dest_id, const ARCHIVE_SCN_TYPE &scn, int64_t &round_id);
+  int get_round_id(const int64_t dest_id, const palf::SCN &scn, int64_t &round_id);
   int get_round_range(const int64_t dest_id, int64_t &min_round_id, int64_t &max_round_id);
   int get_piece_range(const int64_t dest_id, const int64_t round_id, int64_t &min_piece_id, int64_t &max_piece_id);
 
@@ -399,7 +399,7 @@ public:
 
   // Get pieces needed in the specific interval indicated by 'start_scn' and 'end_scn'.
   // Return OB_ENTRY_NOT_EXIST if cannot find enough pieces.
-  int get_piece_paths_in_range(const int64_t start_scn, const int64_t end_scn, ObIArray<share::ObBackupPath> &pieces);
+  int get_piece_paths_in_range(const palf::SCN &start_scn, const palf::SCN &end_scn, ObIArray<share::ObBackupPath> &pieces);
 
   // Get archive file range in one piece
   // return OB_ENTRY_NOT_EXIST if no file exist
@@ -408,9 +408,9 @@ public:
   // Get each file id and size for specific log stream under piece.
   int get_file_list_in_piece(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObIArray<ObSingleLSInfoDesc::OneFile> &filelist) const;
 
-  int get_max_checkpoint_scn(const int64_t dest_id, int64_t &round_id, int64_t &piece_id, uint64_t &max_checkpoint_scn);
-  int get_round_max_checkpoint_scn(const int64_t dest_id, const int64_t round_id, int64_t &piece_id, uint64_t &max_checkpoint_scn);
-  int get_piece_max_checkpoint_scn(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, uint64_t &max_checkpoint_scn);
+  int get_max_checkpoint_scn(const int64_t dest_id, int64_t &round_id, int64_t &piece_id, palf::SCN &max_checkpoint_scn);
+  int get_round_max_checkpoint_scn(const int64_t dest_id, const int64_t round_id, int64_t &piece_id, palf::SCN &max_checkpoint_scn);
+  int get_piece_max_checkpoint_scn(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, palf::SCN &max_checkpoint_scn);
 
 private:
 
@@ -483,7 +483,7 @@ private:
   public:
     ObLocateRoundFilter();
     virtual ~ObLocateRoundFilter() {}
-    int init(ObArchiveStore *store, const ARCHIVE_SCN_TYPE &scn);
+    int init(ObArchiveStore *store, const palf::SCN &scn);
     int func(const dirent *entry) override;
 
     ObArray<int64_t> &result() { return rounds_; }
@@ -493,7 +493,7 @@ private:
   private:
     bool is_inited_;
     ObArchiveStore *store_;
-    ARCHIVE_SCN_TYPE scn_;
+    palf::SCN scn_;
 
     ObArray<int64_t> rounds_;
 

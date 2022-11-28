@@ -257,7 +257,11 @@ int ObSetPasswordResolver::resolve_resource_option_node(const ParseNode &resourc
 {
   int ret = OB_SUCCESS;
   ObSetPasswordStmt *set_pwd_stmt = static_cast<ObSetPasswordStmt *>(stmt_);
-  if (OB_ISNULL(set_pwd_stmt) || T_USER_RESOURCE_OPTIONS != resource_options.type_
+  if (OB_UNLIKELY(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter user set max connections not supported while upgrade", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter user set max connections while upgrade");
+  } else if (OB_ISNULL(set_pwd_stmt) || T_USER_RESOURCE_OPTIONS != resource_options.type_
       || OB_ISNULL(resource_options.children_)) {
     ret = common::OB_INVALID_ARGUMENT;
     LOG_WARN("invalid resource options argument", K(ret), K(set_pwd_stmt),

@@ -211,7 +211,7 @@ int ob_wildcmp_mb_impl(const ObCharsetInfo *cs,
       mb_len= ob_ismbchar(cs, wild_str, wild_end);
       INC_PTR(cs,wild_str,wild_end);		  
       cmp=likeconv(cs,cmp);
-      while (true) {
+      do {
         while (TRUE) {
           if (str >= str_end) {
             return -1;
@@ -235,12 +235,7 @@ int ob_wildcmp_mb_impl(const ObCharsetInfo *cs,
           if (tmp <= 0)
             return (tmp);
         }
-        if (str == str_end) {
-          return -1;
-        } else if (wild_str != wild_end && wild_str[0] == w_many) {
-          return -1;
-        }
-      }
+      } while (str != str_end && wild_str[0] != w_many);
       return(-1);
     }
   }

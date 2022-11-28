@@ -18,7 +18,6 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable_util.h"
 #include "storage/tablelock/ob_table_lock_callback.h"
-#include "storage/ls/ob_freezer.h"
 namespace oceanbase
 {
 using namespace common;
@@ -28,7 +27,7 @@ using namespace blocksstable;
 namespace memtable
 {
 
-void ObIMvccCtx::before_prepare(const int64_t version)
+void ObIMvccCtx::before_prepare(const palf::SCN version)
 {
 #ifdef TRANS_ERROR
   const int random = (int)ObRandom::rand(1, 1000);
@@ -39,8 +38,8 @@ void ObIMvccCtx::before_prepare(const int64_t version)
 
 bool ObIMvccCtx::is_prepared() const
 {
-  const int64_t prepare_version = ATOMIC_LOAD(&trans_version_);
-  return (prepare_version >= 0 && INT64_MAX != prepare_version);
+  const palf::SCN prepare_version = trans_version_.atomic_get();
+  return (prepare_version >= palf::SCN::min_scn() && palf::SCN::max_scn() != prepare_version);
 }
 
 int ObIMvccCtx::inc_pending_log_size(const int64_t size)
@@ -101,7 +100,7 @@ int ObIMvccCtx::register_row_replay_cb(
     const int64_t data_size,
     ObMemtable *memtable,
     const int64_t seq_no,
-    const int64_t log_ts)
+    const palf::SCN scn)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = true;
@@ -125,7 +124,7 @@ int ObIMvccCtx::register_row_replay_cb(
       cb->link_trans_node();
     }
 
-    cb->set_log_ts(log_ts);
+    cb->set_scn(scn);
     if (OB_FAIL(append_callback(cb))) {
       {
         ObRowLatchGuard guard(value->latch_);
@@ -194,7 +193,7 @@ int ObIMvccCtx::register_table_lock_cb(
 int ObIMvccCtx::register_table_lock_replay_cb(
     ObLockMemtable *memtable,
     ObMemCtxLockOpLinkNode *lock_op,
-    const int64_t log_ts)
+    const palf::SCN scn)
 {
   int ret = OB_SUCCESS;
   ObOBJLockCallback *cb = nullptr;
@@ -207,7 +206,7 @@ int ObIMvccCtx::register_table_lock_replay_cb(
                                              cb))) {
     TRANS_LOG(WARN, "register tablelock callback failed", K(ret), KPC(lock_op));
   } else {
-    cb->set_log_ts(log_ts);
+    cb->set_scn(scn);
     update_max_submitted_seq_no(cb->get_seq_no());
     TRANS_LOG(DEBUG, "replay register table lock callback", K(*cb));
   }
@@ -268,14 +267,10 @@ namespace memtable {
 ObMvccWriteGuard::~ObMvccWriteGuard()
 {
   if (NULL != ctx_) {
-    int ret = OB_SUCCESS;
     auto tx_ctx = ctx_->get_trans_ctx();
     ctx_->write_done();
-    if (OB_NOT_NULL(memtable_) && memtable_->is_frozen_memtable()) {
-      if (OB_FAIL(tx_ctx->submit_redo_log(true/*is_freeze*/))) {
-        TRANS_LOG(WARN, "failed to submit freeze log", K(ret), KPC(tx_ctx));
-        memtable_->get_freezer()->set_need_resubmit_log(true);
-      }
+    if (is_freeze_) {
+      (void)tx_ctx->submit_redo_log(is_freeze_);
     }
   }
 }

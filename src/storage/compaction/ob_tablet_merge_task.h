@@ -35,13 +35,6 @@ class ObITable;
 struct ObGetMergeTablesResult;
 class ObTablet;
 class ObTabletHandle;
-struct ObUpdateTableStoreParam;
-}
-
-namespace memtable
-{
-enum class MultiSourceDataUnitType;
-class ObIMultiSourceDataUnit;
 }
 
 namespace blocksstable
@@ -77,7 +70,7 @@ struct ObMergeParameter {
   const share::schema::ObMergeSchema *merge_schema_;
   blocksstable::ObDatumRange merge_range_;
   ObVersionRange version_range_;
-  common::ObLogTsRange log_ts_range_;
+  share::ObScnRange scn_range_;
   const ObTableReadInfo *full_read_info_; // full read info of old tablet
   bool is_full_merge_;               // full merge or increment merge, duplicated with merge_level
   bool is_sstable_cut_;              // only used for faked-flashback with restore or standby cluster
@@ -88,7 +81,7 @@ struct ObMergeParameter {
   OB_INLINE bool is_mini_merge() const { return storage::is_mini_merge(merge_type_); }
   OB_INLINE bool need_checksum() const { return storage::is_major_merge(merge_type_); }
   TO_STRING_KV(KPC_(tables_handle), K_(merge_type), K_(merge_level), KP_(table_schema),
-               KP_(merge_schema), K_(merge_range), K_(version_range), K_(log_ts_range), K_(is_full_merge), K_(is_sstable_cut));
+               KP_(merge_schema), K_(merge_range), K_(version_range), K_(scn_range), K_(is_full_merge), K_(is_sstable_cut));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeParameter);
 };
@@ -152,8 +145,6 @@ private:
   int get_merged_sstable(ObTabletMergeCtx &ctx, blocksstable::ObSSTable *&sstable);
   int add_sstable_for_merge(ObTabletMergeCtx &ctx);
   int try_schedule_compaction_after_mini(ObTabletMergeCtx &ctx, storage::ObTabletHandle &tablet_handle);
-  int read_msd_from_memtable(ObTabletMergeCtx &ctx, storage::ObUpdateTableStoreParam &param);
-  int traverse_all_memtables(ObTabletMergeCtx &ctx, memtable::ObIMultiSourceDataUnit *msd, const memtable::MultiSourceDataUnitType &type);
 private:
   bool is_inited_;
   ObBasicTabletMergeDag *merge_dag_;
@@ -194,8 +185,7 @@ public:
         || OB_TABLE_IS_DELETED == dag_ret_
         || OB_TENANT_HAS_BEEN_DROPPED == dag_ret_
         || OB_LS_NOT_EXIST == dag_ret_
-        || OB_TABLET_NOT_EXIST == dag_ret_
-        || OB_CANCELED == dag_ret_;
+        || OB_TABLET_NOT_EXIST == dag_ret_;
   }
   int get_tablet_and_compat_mode();
   virtual int64_t to_string(char* buf, const int64_t buf_len) const override;

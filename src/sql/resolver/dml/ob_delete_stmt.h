@@ -56,7 +56,7 @@ public:
   }
   virtual int replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &other_exprs,
                                       const common::ObIArray<ObRawExpr*> &new_exprs) override;
-  virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const override;
+  virtual bool check_table_be_modified(uint64_t ref_table_id) const override;
   int remove_delete_table_info(int64_t table_id);
   common::ObIArray<ObDeleteTableInfo*> &get_delete_table_info() { return table_info_; }
   const common::ObIArray<ObDeleteTableInfo*> &get_delete_table_info() const { return table_info_; }

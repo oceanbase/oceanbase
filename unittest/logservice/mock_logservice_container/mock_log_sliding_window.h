@@ -15,6 +15,7 @@
 
 #define private public
 #include "logservice/palf/log_sliding_window.h"
+#include "logservice/palf/scn.h"
 #undef private
 
 namespace oceanbase
@@ -306,7 +307,7 @@ public:
     int ret = OB_SUCCESS;
     return ret;
   }
-  int inc_update_log_ts_base(const int64_t log_ts)
+  int inc_update_log_scn_base(const palf::SCN &log_scn)
   {
     int ret = OB_SUCCESS;
     return ret;

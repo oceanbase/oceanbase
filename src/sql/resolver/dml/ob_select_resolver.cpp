@@ -856,30 +856,9 @@ int ObSelectResolver::check_group_by()
   // 1. select item/having/order item中的表达式树(子树)需要每个都在group by列中找到
   // 2. 递归查找是否在groupby列中，将在groupby的列的指针替换。
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(replace_stmt_expr_with_groupby_exprs(select_stmt, params_.query_ctx_))) {
+    if (ObTransformUtils::replace_stmt_expr_with_groupby_exprs(select_stmt)) {
       LOG_WARN("failed to replace stmt expr with groupby columns", K(ret));
     }
-  }
-  return ret;
-}
-
-int ObSelectResolver::replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
-                                                           ObQueryCtx *query_ctx)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObPCConstParamInfo, 4> pc_constraints;
-  ObSEArray<ObPCParamEqualInfo, 4> eq_constraints;
-  if (OB_ISNULL(query_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(query_ctx));
-  } else if (OB_FAIL(ObTransformUtils::inner_replace_stmt_expr_with_groupby_exprs(select_stmt, params_.param_list_, pc_constraints, eq_constraints))) {
-    LOG_WARN("failed to replace stmt expr with groupby columns", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(query_ctx->all_plan_const_param_constraints_, pc_constraints))) {
-    LOG_WARN("failed to append const param info", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(query_ctx->all_possible_const_param_constraints_, pc_constraints))) {
-    LOG_WARN("failed to append const param info", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(query_ctx->all_equal_param_constraints_, eq_constraints))) {
-    LOG_WARN("failed to append const param info", K(ret));
   }
   return ret;
 }
@@ -1580,8 +1559,6 @@ int ObSelectResolver::resolve_literal_order_item(const ParseNode &sort_node, ObR
   int ret = OB_SUCCESS;
   if (!is_oracle_mode()) {
     // nothing to do
-  } else if (T_OBJ_ACCESS_REF == sort_node.type_) {
-    //do nothing
   } else if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
@@ -5456,21 +5433,20 @@ int ObSelectResolver::resolve_alias_column_ref(
   }
   
   // subquery cannot ref parent aggr/window function alias
-  // SELECT SUM(c1) OVER () AS c, (SELECT c from t2)  FROM t1;
-  // SELECT SUM(c1) AS c, (SELECT c from t2)  FROM t1;
-  // SELECT SUM(c1) AS c FROM t1 having (SELECT SUM(c) from t2) > 0;
-  if(OB_SUCC(ret) && current_level_ < q_name.current_resolve_level_) {
+  // SELECT SUM(c1) OVER () AS c, (SELECT SUM(c) from t2)  FROM t1;
+  // SELECT SUM(c1) AS c, (SELECT SUM(c) from t2)  FROM t1;
+  if(OB_SUCC(ret) && current_level_ < q_name.current_resolve_level_ && T_FIELD_LIST_SCOPE == current_scope_) {
     bool cnt_aggr = false;
     if (OB_FAIL(ObRawExprUtils::cnt_current_level_aggr_expr(
                   real_ref_expr, current_level_, cnt_aggr))) {
       LOG_WARN("check cnt_current level aggr expr failed", K(ret));
     } else if (cnt_aggr) {
-      ret = OB_ILLEGAL_REFERENCE;
+      ret = OB_ERR_BAD_FIELD_ERROR;
     } else if (OB_FAIL(ObRawExprUtils::cnt_current_level_window_expr(
                   real_ref_expr, current_level_, cnt_aggr))) {
       LOG_WARN("check cnt_current level window expr failed", K(ret));
     } else if (cnt_aggr) {
-      ret = OB_ILLEGAL_REFERENCE;
+      ret = OB_ERR_BAD_FIELD_ERROR;
     }
   }
 
@@ -5796,8 +5772,6 @@ int ObSelectResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subq
     subquery_resolver.set_parent_namespace_resolver(this);
     subquery_resolver.set_current_view_level(current_view_level_);
     set_query_ref_expr(info.ref_expr_);
-    resolve_alias_for_subquery_ = !(T_FIELD_LIST_SCOPE == current_scope_
-                                   && info.parents_expr_info_.has_member(IS_AGG));
     if (OB_FAIL(subquery_resolver.add_parent_gen_col_exprs(gen_col_exprs_))) {
       LOG_WARN("failed to add parent gen col exprs", K(ret));
     }
@@ -5844,7 +5818,7 @@ int ObSelectResolver::resolve_column_ref_for_subquery(
   } else if (OB_FAIL(resolve_table_column_ref(q_name, real_ref_expr))) {
     LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve table column failed", K(ret), K(q_name));
   }
-  if (OB_ERR_BAD_FIELD_ERROR == ret && resolve_alias_for_subquery_) {
+  if (OB_ERR_BAD_FIELD_ERROR == ret) {
     if (OB_FAIL(resolve_alias_column_ref(q_name, real_ref_expr))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve alias column ref failed", K(ret), K(q_name));
     }

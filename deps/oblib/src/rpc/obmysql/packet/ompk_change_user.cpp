@@ -33,6 +33,7 @@ OMPKChangeUser::OMPKChangeUser() : cmd_(COM_CHANGE_USER),
 }
 
 // see com_change_user packet
+// http://imysql.com/mysql-internal-manual/com-change-user.html
 // for proxy, add session vars as connect attrs
 int64_t OMPKChangeUser::get_serialize_size() const
 {

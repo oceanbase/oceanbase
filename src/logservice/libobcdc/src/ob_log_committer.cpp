@@ -733,20 +733,16 @@ void ObLogCommitter::heartbeat_routine()
         }
       }
 
+      int64_t output_checkpoint = OB_INVALID_TIMESTAMP;
       // periodically send a heartbeat binlog record
       // checkpoint timestamp is invalid for the first time, here ensure that the heartbeat is sent as soon as the checkpoint timestamp is valid
-      if (OB_SUCC(ret)) {
-        if (REACH_TIME_INTERVAL(g_output_heartbeat_interval)) {
-          int64_t output_checkpoint = OB_INVALID_TIMESTAMP;
-
-          if (OB_FAIL(calculate_output_checkpoint_(output_checkpoint))) {
-            LOG_ERROR("calculate_output_checkpoint_ failed", KR(ret), K(output_checkpoint));
-          } else if (OB_INVALID_TIMESTAMP != output_checkpoint) {
-            if (OB_FAIL(dispatch_heartbeat_binlog_record_(output_checkpoint))) {
-              if (OB_IN_STOP_STATE != ret) {
-                LOG_ERROR("dispatch_heartbeat_binlog_record_ fail", KR(ret), K(output_checkpoint));
-              }
-            }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(calculate_output_checkpoint_(output_checkpoint))) {
+        LOG_ERROR("calculate_output_checkpoint_ failed", KR(ret), K(output_checkpoint));
+      } else if (OB_LIKELY(OB_INVALID_TIMESTAMP != output_checkpoint) && REACH_TIME_INTERVAL(g_output_heartbeat_interval)) {
+        if (OB_FAIL(dispatch_heartbeat_binlog_record_(output_checkpoint))) {
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("dispatch_heartbeat_binlog_record_ fail", KR(ret), K(output_checkpoint));
           }
         }
       }

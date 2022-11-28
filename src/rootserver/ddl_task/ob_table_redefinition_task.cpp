@@ -21,7 +21,6 @@
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ddl_task/ob_ddl_redefinition_task.h"
 #include "storage/tablelock/ob_table_lock_service.h"
-#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -97,24 +96,18 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     schema_version_ = schema_version;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
     snapshot_version_ = task_record.snapshot_version_;
-    execution_id_ = task_record.execution_id_;
     tenant_id_ = task_record.tenant_id_;
-    ret_code_ = task_record.ret_code_;
     alter_table_arg_.exec_tenant_id_ = tenant_id_;
     is_inited_ = true;
   }
   return ret;
 }
 
-int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
-                                                                const int64_t snapshot_version,
-                                                                const int64_t execution_id,
-                                                                const int ret_code)
+int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id, const int64_t snapshot_version, const int ret_code)
 {
   int ret = OB_SUCCESS;
   TCWLockGuard guard(lock_);
   UNUSED(tablet_id);
-  bool is_latest_execution_id = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
@@ -123,10 +116,6 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
   } else if (OB_UNLIKELY(snapshot_version_ != snapshot_version)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, snapshot version is not equal", K(ret), K(snapshot_version_), K(snapshot_version));
-  } else if (OB_FAIL(check_is_latest_execution_id(execution_id, is_latest_execution_id))) {
-    LOG_WARN("failed to check latest execution id", K(ret), K(execution_id));
-  } else if (!is_latest_execution_id) {
-    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(execution_id_));
   } else {
     complete_sstable_job_ret_code_ = ret_code;
     LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_));
@@ -161,7 +150,6 @@ int ObTableRedefinitionTask::send_build_replica_request()
         target_object_id_,
         schema_version_,
         snapshot_version_,
-        execution_id_,
         sql_mode,
         trace_id_,
         parallelism_,
@@ -187,7 +175,7 @@ int ObTableRedefinitionTask::check_build_replica_timeout()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
   } else if (build_replica_request_time_ > 0) {
-    const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
+    const int64_t timeout = GCONF.global_index_build_single_replica_timeout;
     const int64_t current_time = ObTimeUtility::current_time();
     if (build_replica_request_time_ + timeout < current_time) {
       ret = OB_TIMEOUT;
@@ -205,7 +193,7 @@ int ObTableRedefinitionTask::check_build_replica_end(bool &is_end)
     ret_code_ = complete_sstable_job_ret_code_;
     is_end = true;
     LOG_WARN("complete sstable job failed", K(ret_code_), K(object_id_), K(target_object_id_));
-    if (is_replica_build_need_retry(ret_code_)) {
+    if (ObIDDLTask::error_need_retry(ret_code_) || OB_REPLICA_NOT_READABLE == ret_code_ || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code_) {
       build_replica_request_time_ = 0;
       complete_sstable_job_ret_code_ = INT64_MAX;
       ret_code_ = OB_SUCCESS;
@@ -254,9 +242,7 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   }
 
   if (OB_SUCC(ret) && !is_build_replica_end && 0 == build_replica_request_time_) {
-    if (OB_FAIL(push_execution_id())) {
-      LOG_WARN("failed to push execution id", K(ret));
-    } else if (OB_FAIL(send_build_replica_request())) {
+    if (OB_FAIL(send_build_replica_request())) {
       LOG_WARN("fail to send build replica request", K(ret));
     } else {
       build_replica_request_time_ = ObTimeUtility::current_time();
@@ -278,7 +264,7 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   if (is_build_replica_end) {
     ret = complete_sstable_job_ret_code_;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_data_dest_tables_columns_checksum(execution_id_))) {
+      if (OB_FAIL(check_data_dest_tables_columns_checksum())) {
         LOG_WARN("fail to check the columns checksum of data table and destination table", K(ret));
       }
     }
@@ -337,10 +323,6 @@ int ObTableRedefinitionTask::copy_table_indexes()
       }
       DEBUG_SYNC(TABLE_REDEFINITION_COPY_TABLE_INDEXES);
       if (OB_SUCC(ret) && index_ids.count() > 0) {
-        ObSchemaGetterGuard new_schema_guard;
-        if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, new_schema_guard))) {
-          LOG_WARN("failed to refresh schema guard", K(ret));
-        }
         for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count(); ++i) {
           const uint64_t index_id = index_ids.at(i);	
           const ObTableSchema *index_schema = nullptr;
@@ -351,7 +333,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
             create_index_arg.nls_date_format_ = alter_table_arg_.nls_formats_[0];
             create_index_arg.nls_timestamp_format_ = alter_table_arg_.nls_formats_[1];
             create_index_arg.nls_timestamp_tz_format_ = alter_table_arg_.nls_formats_[2];
-            if (OB_FAIL(new_schema_guard.get_table_schema(tenant_id_, index_ids.at(i), index_schema))) {
+            if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_ids.at(i), index_schema))) {
               LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(index_ids.at(i)));
             } else if (OB_ISNULL(index_schema)) {
               ret = OB_ERR_SYS;
@@ -531,7 +513,6 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
   int ret = OB_SUCCESS;
   ObRootService *root_service = GCTX.root_service_;
   int64_t finished_task_cnt = 0;
-  bool state_finish = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
@@ -547,14 +528,10 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
       LOG_WARN("copy table constraints failed", K(ret));
     } else if (OB_FAIL(copy_table_foreign_keys())) {
       LOG_WARN("copy table foreign keys failed", K(ret));
-    } else {
-      // copy triggers(at current, not supported, skip it)
     }
-  }
 
-  if (OB_FAIL(ret)) {
-    state_finish = true;
-  } else {
+    // copy triggers(at current, not supported, skip it)
+
     // wait copy dependent objects to be finished
     ObAddr unused_addr;
     for (common::hash::ObHashMap<ObDDLTaskKey, DependTaskStatus>::const_iterator iter = dependent_task_result_map_.begin();
@@ -568,7 +545,7 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
         HEAP_VAR(ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage, error_message) {
           int64_t unused_user_msg_len = 0;
           if (OB_FAIL(ObDDLErrorMessageTableOperator::get_ddl_error_message(tenant_id_, child_task_id, target_object_id,
-                  unused_addr, false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, unused_user_msg_len))) {
+            unused_addr, false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, unused_user_msg_len))) {
             if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
               LOG_INFO("ddl task not finish", K(table_id), K(child_task_id), K(schema_version), K(target_object_id));
@@ -589,11 +566,8 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
         }
       }
     }
-    if (finished_task_cnt == dependent_task_result_map_.size()) {
-      state_finish = true;
-    }
   }
-  if (state_finish) {
+  if (finished_task_cnt == dependent_task_result_map_.size()) {
     if (OB_FAIL(switch_status(next_task_status, ret))) {
       LOG_WARN("fail to switch status", K(ret));
     }
@@ -604,13 +578,6 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
 int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
-#ifdef ERRSIM
-  SERVER_EVENT_ADD("ddl_task", "before_table_redefinition_task_effect",
-                   "tenant_id", tenant_id_,
-                   "object_id", object_id_,
-                   "target_object_id", target_object_id_);
-  DEBUG_SYNC(BEFORE_TABLE_REDEFINITION_TASK_EFFECT);
-#endif
   ObSArray<uint64_t> objs;
   alter_table_arg_.ddl_task_type_ = share::MAKE_DDL_TAKE_EFFECT_TASK;
   alter_table_arg_.table_id_ = object_id_;

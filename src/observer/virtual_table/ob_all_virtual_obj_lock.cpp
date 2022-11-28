@@ -264,8 +264,7 @@ int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
           break;
         }
         case TRANS_VERSION: {
-          //TODO:SCN
-          cur_row_.cells_[i].set_uint64(lock_op.commit_version_ < 0 ? 0 : lock_op.commit_version_);
+          cur_row_.cells_[i].set_uint64(lock_op.commit_version_.get_val_for_inner_table_field());
           break;
         }
         case CREATE_TIMESTAMP: {

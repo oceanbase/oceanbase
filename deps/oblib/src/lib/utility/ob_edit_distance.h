@@ -39,15 +39,14 @@ public:
 
   inline int divide()
   {
-    int ret = OB_SUCCESS;
     if (nullptr != str_) {
       const char *p = str_;
       int64_t word_length = 0;
       words_.reset();
       while(0 != *p) {
         if (' ' == *p) {
-          if (0 != word_length && OB_FAIL(words_.push_back(ObString(word_length, p - word_length)))) {
-            COMMON_LOG(WARN, "failed to push back word", K(ret), K(word_length));
+          if (0 != word_length) {
+            words_.push_back(ObString(word_length, p - word_length));
           }
           word_length = 0;
         } else {
@@ -55,12 +54,12 @@ public:
         }
         ++p;
       }
-      if (0 != word_length && OB_FAIL(words_.push_back(ObString(word_length, p - word_length)))) {
-        COMMON_LOG(WARN, "failed to push back word", K(ret), K(word_length));
+      if (0 != word_length) {
+        words_.push_back(ObString(word_length, p - word_length));
       }
     }
     count_ = words_.size();
-    return ret;
+    return OB_SUCCESS;
   }
   
   inline ObString &operator[](const int64_t idx) {return words_[idx];}

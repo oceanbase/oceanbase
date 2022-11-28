@@ -47,7 +47,7 @@ public:
 private:
   int check_need_broadcast(bool &need_broadcast);
   int try_broadcast_freeze_info(const int64_t expected_epoch);
-  int try_renew_snapshot_gc_ts();
+  int try_renew_snapshot_gc_scn();
   int try_minor_freeze();
   int try_update_zone_info(const int64_t expected_epoch);
 
@@ -58,7 +58,7 @@ private:
   static const int64_t UPDATER_INTERVAL_US = 10 * 1000 * 1000; // 10s
 
   bool is_inited_;
-  bool is_gc_ts_inited_;
+  bool is_gc_scn_inited_;
   int64_t last_gc_timestamp_;
   ObFreezeInfoManager *freeze_info_mgr_;
   ObThreadIdling *major_scheduler_idling_;

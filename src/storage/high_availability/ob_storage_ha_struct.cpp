@@ -12,9 +12,6 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_struct.h"
-#include "storage/ls/ob_ls_meta_package.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -558,7 +555,7 @@ bool ObMigrationUtils::is_need_retry_error(const int err)
     case OB_SRC_DO_NOT_ALLOWED_MIGRATE :
     case OB_CANCELED :
     case OB_NOT_SUPPORTED :
-    case OB_SERVER_OUTOF_DISK_SPACE :
+    case OB_CS_OUTOF_DISK_SPACE : //TODO(yanfeng) change error name
     case OB_LOG_NOT_SYNC :
     case OB_INVALID_DATA :
     case OB_CHECKSUM_ERROR :
@@ -583,31 +580,6 @@ int ObMigrationUtils::check_tablets_has_inner_table(
       has_inner_table = true;
       break;
     }
-  }
-  return ret;
-}
-
-int ObMigrationUtils::get_ls_rebuild_seq(const uint64_t tenant_id,
-    const share::ObLSID &ls_id, int64_t &rebuild_seq)
-{
-  int ret = OB_SUCCESS;
-  rebuild_seq = 0;
-  storage::ObLS *ls = NULL;
-  ObLSService *ls_service = NULL;
-  ObLSHandle handle;
-  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream service is NULL", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD))) {
-    LOG_WARN("failed to get log stream", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream not exist", K(ret), K(ls_id));
-  } else {
-    rebuild_seq = ls->get_rebuild_seq();
   }
   return ret;
 }
@@ -645,7 +617,7 @@ bool ObCopyTableKeyInfo::operator ==(const ObCopyTableKeyInfo &other) const
 OB_SERIALIZE_MEMBER(ObCopyTableKeyInfo, src_table_key_, dest_table_key_);
 
 /******************ObCopyMacroRangeInfo*********************/
-//TODO(yanfeng) check endkey in 4.1
+//TODO(yanfeng) check endkey
 ObCopyMacroRangeInfo::ObCopyMacroRangeInfo()
   : start_macro_block_id_(),
     end_macro_block_id_(),

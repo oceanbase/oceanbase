@@ -156,10 +156,6 @@ private:
   int check_column_in_part_key(const share::schema::ObTableSchema &table_schema,
                                const share::schema::ObColumnSchemaV2 &src_col_schema,
                                const share::schema::ObColumnSchemaV2 &dst_col_schema);
-  int alter_column_expr_in_part_expr(
-      const share::schema::ObColumnSchemaV2 &src_col_schema,
-      const share::schema::ObColumnSchemaV2 &dst_col_schema,
-      ObRawExpr *part_expr);
   int check_alter_part_key_allowed(const share::schema::ObTableSchema &table_schema,
                                    const share::schema::ObColumnSchemaV2 &src_col_schema,
                                    const share::schema::ObColumnSchemaV2 &dst_col_schema);

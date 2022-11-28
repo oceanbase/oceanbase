@@ -286,21 +286,6 @@ int ObLSPrepareMigrationDagNet::clear_dag_net_ctx()
   return ret;
 }
 
-int ObLSPrepareMigrationDagNet::deal_with_cancel()
-{
-  int ret = OB_SUCCESS;
-  const int32_t result = OB_CANCELED;
-  const bool need_retry = false;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls prepare migration dag net do not init", K(ret));
-  } else if (OB_FAIL(ctx_.set_result(result, need_retry))) {
-    LOG_WARN("failed to set result", K(ret), KPC(this));
-  }
-  return ret;
-}
-
 /******************ObPrepareMigrationDag*********************/
 ObPrepareMigrationDag::ObPrepareMigrationDag(const ObStorageHADagType sub_type)
   : ObStorageHADag(ObDagType::DAG_TYPE_MIGRATE, sub_type)
@@ -791,8 +776,9 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
     LOG_WARN("failed to get role", K(ret), "arg", ctx_->arg_);
   } else if (is_strong_leader(role)) {
     if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("leader can not as rebuild dst", K(ret), K(role), "myaddr", MYADDR, "arg", ctx_->arg_);
+      //TODO(yanfeng) need turn off rebuild flag
+      ret = OB_NO_NEED_REBUILD;
+      LOG_WARN("leader can not as rebuild dst", K(ret), K(role), "myaddr", MYADDR, "arg", ctx_->arg_);
     } else if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_
         || ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_
         || ObMigrationOpType::CHANGE_LS_OP == ctx_->arg_.type_) {
@@ -852,12 +838,10 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
     while (OB_SUCC(ret) && !wait_log_replay_success) {
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
-        STORAGE_LOG(WARN, "migration task has error, cancel subtask", K(ret));
-      } else if (ls->is_stopped()) {
-        ret = OB_NOT_RUNNING;
-        LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
+        STORAGE_LOG(WARN, "group task has error, cancel subtask", K(ret));
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
         STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
+        //TODO(yanfeng) cancel dag should cancel dag net
       } else if (is_cancel) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
@@ -927,19 +911,10 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
   ObBackfillTXCtx *backfill_tx_ctx = nullptr;
   ObTabletID tablet_id;
   ObStartPrepareMigrationDag *start_prepare_migration_dag = nullptr;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start prepare migration task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
-    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret), KP(ls));
-  } else if (ls->is_offline()) {
-    LOG_INFO("ls is in offline status, no need generate backfill dag", KPC(ls));
   } else if (OB_ISNULL(start_prepare_migration_dag = static_cast<ObStartPrepareMigrationDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("start prepare migration dag should not be NULL", K(ret), KP(start_prepare_migration_dag));
@@ -1046,17 +1021,18 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
     LOG_WARN("failed to get ls saved info", K(ret), KPC(ls), KPC(ctx_));
   } else if (!saved_info.is_empty()) {
     LOG_INFO("saved info is not empty, no need wait ls checkpoint ts push", K(saved_info), KPC(ctx_));
+  } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("checkpoint executor should not be NULL", K(ret), KPC(ctx_), KP(checkpoint_executor));
   } else {
     const int64_t wait_checkpoint_push_start_ts = ObTimeUtility::current_time();
     while (OB_SUCC(ret)) {
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "ls migration task is failed, cancel wait ls check point ts push", K(ret));
-      } else if (ls->is_stopped()) {
-        ret = OB_NOT_RUNNING;
-        LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
       } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
         STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
+      //TODO(yanfeng) cancel dag should cancel dag net
       } else if (is_cancel) {
         ret = OB_CANCELED;
         STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
@@ -1065,7 +1041,7 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_ts_push_()
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_checkpoint_push_start_ts;
         LOG_INFO("succeed wait clog checkpoint ts push", "cost", cost_ts, "ls_id", ctx_->arg_.ls_id_);
         break;
-      } else if (OB_FAIL(ls->advance_checkpoint_by_flush(ctx_->log_sync_scn_))) {
+      } else if (OB_FAIL(checkpoint_executor->advance_checkpoint_by_flush(ctx_->log_sync_scn_))) {
         if (OB_NO_NEED_UPDATE == ret) {
           ret = OB_SUCCESS;
         } else {

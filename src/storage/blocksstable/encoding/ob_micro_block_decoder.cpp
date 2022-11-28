@@ -541,7 +541,7 @@ int ObIEncodeBlockReader::add_decoder(const int64_t store_idx, const ObObjMeta &
     } else {
       const ObIColumnDecoder *decoder = nullptr;
       const ObIColumnDecoder *ref_decoder = nullptr;
-      if (OB_FAIL(acquire(store_idx, decoder))) {
+      if (OB_FAIL(acquire(obj_meta, store_idx, decoder))) {
         LOG_WARN("acquire decoder failed", K(ret), K(obj_meta), K(store_idx));
       } else {
         dest.decoder_ = decoder;
@@ -557,7 +557,7 @@ int ObIEncodeBlockReader::add_decoder(const int64_t store_idx, const ObObjMeta &
           }
         }
         if (OB_SUCC(ret) && ref_col_idx >= 0) {
-          if (OB_FAIL(acquire(ref_col_idx, ref_decoder))) {
+          if (OB_FAIL(acquire(obj_meta, ref_col_idx, ref_decoder))) {
             LOG_WARN("acquire decoder failed", K(ret), K(obj_meta), K(ref_col_idx));
           } else {
             dest.ctx_->ref_decoder_ = ref_decoder;
@@ -573,14 +573,15 @@ int ObIEncodeBlockReader::add_decoder(const int64_t store_idx, const ObObjMeta &
 
 // called before inited
 // performance critical, do not check parameters
-int ObIEncodeBlockReader::acquire(const int64_t store_idx, const ObIColumnDecoder *&decoder)
+int ObIEncodeBlockReader::acquire(const ObObjMeta &obj_meta, const int64_t store_idx,
+    const ObIColumnDecoder *&decoder)
 {
   int ret = OB_SUCCESS;
   if (NULL != cached_decocer_ && store_idx < cached_decocer_->count_) {
     decoder = &cached_decocer_->at(store_idx);
   } else {
     if (OB_FAIL(ObIEncodeBlockReader::acquire_funcs_[col_header_[store_idx].type_](
-        *allocator_, *header_, col_header_[store_idx], meta_data_, decoder))) {
+        *allocator_, obj_meta, *header_, col_header_[store_idx], meta_data_, decoder))) {
       LOG_WARN("acquire decoder failed", K(ret), K(store_idx), K(col_header_[store_idx]));
     } else {
       need_release_decoders_[need_release_decoder_cnt_++] = decoder;
@@ -603,6 +604,7 @@ int ObIEncodeBlockReader::setup_row(const uint64_t row_id, int64_t &row_len, con
 
 template <class Decoder>
 int ObIEncodeBlockReader::acquire_decoder(ObDecoderAllocator &allocator,
+                                 const ObObjMeta &obj_meta,
                                  const ObMicroBlockHeader &header,
                                  const ObColumnHeader &col_header,
                                  const char *meta_data,
@@ -612,10 +614,7 @@ int ObIEncodeBlockReader::acquire_decoder(ObDecoderAllocator &allocator,
   Decoder *d = nullptr;
   if (OB_FAIL(allocator.alloc(d))) {
     LOG_WARN("alloc failed", K(ret));
-  } else if (OB_UNLIKELY(!col_header.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid column header", K(ret), K(header), K(col_header));
-  } else if (OB_FAIL(d->init(header, col_header, meta_data))) {
+  } else if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
     LOG_WARN("init decoder failed", K(ret));
   } else {
     decoder = d;
@@ -887,17 +886,15 @@ ObMicroBlockDecoder::~ObMicroBlockDecoder()
 
 template <typename Allocator>
 int ObMicroBlockDecoder::acquire(
-    Allocator &allocator,
-    const ObMicroBlockHeader &header,
-    const ObColumnHeader &col_header,
-    const char *meta_data,
-    const ObIColumnDecoder *&decoder)
+    Allocator &allocator, const ObObjMeta &obj_meta,
+    const ObMicroBlockHeader &header, const ObColumnHeader &col_header,
+    const char *meta_data, const ObIColumnDecoder *&decoder)
 {
   int ret = OB_SUCCESS;
   decoder = NULL;
-  if (OB_UNLIKELY(!col_header.is_valid())) {
+  if (!obj_meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid column header", K(ret), K(col_header));
+    LOG_WARN("invalid obj_meta", K(ret), K(obj_meta));
   } else {
     switch (col_header.type_)
     {
@@ -905,7 +902,7 @@ int ObMicroBlockDecoder::acquire(
         ObRawDecoder *d = NULL;
         if (OB_FAIL(allocator.alloc(d))) {
           LOG_WARN("alloc failed", K(ret));
-        } else if (OB_FAIL(d->init(header, col_header, meta_data))) {
+        } else if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
           LOG_WARN("init raw decoder failed", K(ret));
         } else {
           decoder = d;
@@ -917,7 +914,7 @@ int ObMicroBlockDecoder::acquire(
         if (OB_FAIL(allocator.alloc(d))) {
           LOG_WARN("alloc failed", K(ret));
         } else {
-          if (OB_FAIL(d->init(header, col_header, meta_data))) {
+          if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
             LOG_WARN("init dict decoder failed", K(ret));
           } else {
             decoder = d;
@@ -930,7 +927,7 @@ int ObMicroBlockDecoder::acquire(
         if (OB_FAIL(allocator.alloc(d))) {
           LOG_WARN("alloc failed", K(ret));
         } else {
-          if (OB_FAIL(d->init(header, col_header, meta_data))) {
+          if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
             LOG_WARN("init integer base diff decoder failed", K(ret));
           } else {
             decoder = d;
@@ -942,7 +939,7 @@ int ObMicroBlockDecoder::acquire(
         ObStringDiffDecoder *d = NULL;
         if (OB_FAIL(allocator.alloc(d))) {
           LOG_WARN("alloc failed", K(ret));
-        } else if (OB_FAIL(d->init(header, col_header, meta_data))) {
+        } else if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
           LOG_WARN("init string diff decoder failed", K(ret));
         } else {
           decoder = d;
@@ -953,7 +950,7 @@ int ObMicroBlockDecoder::acquire(
         ObHexStringDecoder *d = NULL;
         if (OB_FAIL(allocator.alloc(d))) {
           LOG_WARN("alloc failed", K(ret));
-        } else if (OB_FAIL(d->init(header, col_header, meta_data))) {
+        } else if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
           LOG_WARN("init hex packing decoder failed", K(ret));
         } else {
           decoder = d;
@@ -964,7 +961,7 @@ int ObMicroBlockDecoder::acquire(
         ObRLEDecoder *d = NULL;
         if (OB_FAIL(allocator.alloc(d))) {
           LOG_WARN("alloc failed", K(ret));
-        } else if (OB_FAIL(d->init(header, col_header, meta_data))) {
+        } else if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
           LOG_WARN("init rle decoder failed", K(ret));
         } else {
           decoder = d;
@@ -975,7 +972,7 @@ int ObMicroBlockDecoder::acquire(
         ObConstDecoder *d = NULL;
         if (OB_FAIL(allocator.alloc(d))) {
           LOG_WARN("alloc failed", K(ret));
-        } else if (OB_FAIL(d->init(header, col_header, meta_data))) {
+        } else if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
           LOG_WARN("init const decoder failed", K(ret));
         } else {
           decoder = d;
@@ -986,7 +983,7 @@ int ObMicroBlockDecoder::acquire(
         ObStringPrefixDecoder *d = NULL;
         if (OB_FAIL(allocator.alloc(d))) {
           LOG_WARN("alloc failed", K(ret));
-        } else if (OB_FAIL(d->init(header, col_header, meta_data))) {
+        } else if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
           LOG_WARN("init string prefix decoder failed", K(ret));
         } else {
           decoder = d;
@@ -997,7 +994,7 @@ int ObMicroBlockDecoder::acquire(
         ObColumnEqualDecoder *d = NULL;
         if (OB_FAIL(allocator.alloc(d))) {
           LOG_WARN("alloc failed", K(ret));
-        } else if (OB_FAIL(d->init(header, col_header, meta_data))) {
+        } else if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
           LOG_WARN("init column equal decoder failed", K(ret));
         } else {
           decoder = d;
@@ -1008,7 +1005,7 @@ int ObMicroBlockDecoder::acquire(
         ObInterColSubStrDecoder *d = NULL;
         if (OB_FAIL(allocator.alloc(d))) {
           LOG_WARN("alloc failed", K(ret));
-        } else if (OB_FAIL(d->init(header, col_header, meta_data))) {
+        } else if (OB_FAIL(d->init(obj_meta, header, col_header, meta_data))) {
           LOG_WARN("init column substr decoder failed", K(ret));
         } else {
           decoder = d;
@@ -1029,13 +1026,17 @@ int ObMicroBlockDecoder::acquire(
 
 // called before inited
 // performance critical, do not check parameters
-int ObMicroBlockDecoder::acquire(const int64_t store_idx, const ObIColumnDecoder *&decoder)
+int ObMicroBlockDecoder::acquire(
+    const ObObjMeta &obj_meta,
+    const int64_t store_idx,
+    const ObIColumnDecoder *&decoder)
 {
   int ret = OB_SUCCESS;
   if (NULL != cached_decoder_ && store_idx < cached_decoder_->count_) {
     decoder = &cached_decoder_->at(store_idx);
   } else {
-    if (OB_FAIL(acquire(*allocator_, *header_, col_header_[store_idx], meta_data_, decoder))) {
+    if (OB_FAIL(acquire(*allocator_, obj_meta, *header_,
+        col_header_[store_idx], meta_data_, decoder))) {
       LOG_WARN("acquire decoder failed", K(ret), K(store_idx),
           "column_header", col_header_[store_idx]);
     } else if (OB_FAIL(need_release_decoders_.push_back(decoder))) {
@@ -1139,7 +1140,7 @@ int ObMicroBlockDecoder::add_decoder(const int64_t store_idx, const ObObjMeta &o
       dest.ctx_ = &none_exist_column_decoder_ctx_;
     } else {
       const ObIColumnDecoder *decoder = NULL;
-      if (OB_FAIL(acquire(store_idx, decoder))) {
+      if (OB_FAIL(acquire(obj_meta, store_idx, decoder))) {
         LOG_WARN("acquire decoder failed", K(ret), K(obj_meta), K(store_idx));
       } else {
         dest.decoder_ = decoder;
@@ -1156,7 +1157,7 @@ int ObMicroBlockDecoder::add_decoder(const int64_t store_idx, const ObObjMeta &o
         }
 
         if (OB_SUCC(ret) && ref_col_idx >= 0) {
-          if (OB_FAIL(acquire(ref_col_idx, decoder))) {
+          if (OB_FAIL(acquire(obj_meta, ref_col_idx, decoder))) {
             LOG_WARN("acquire decoder failed", K(ret), K(obj_meta), K(ref_col_idx));
           } else {
             dest.ctx_->ref_decoder_ = decoder;
@@ -1750,7 +1751,8 @@ int ObMicroBlockDecoder::cache_decoders(
       for (int64_t i = 0; OB_SUCC(ret) && i < h->count_; ++i) {
         const ObIColumnDecoder *d = nullptr;
         int64_t ref_col_idx = -1;
-        if (OB_FAIL(acquire(allocator, *header, col_header[i], meta_data, d))) {
+        ObObjMeta obj_meta = full_schema_cols.at(i).col_type_;
+        if (OB_FAIL(acquire(allocator, obj_meta, *header, col_header[i], meta_data, d))) {
           LOG_WARN("acquire allocator failed",
                    K(ret), "micro_block_header", *header, "col_header", col_header[i]);
         } else if (OB_FAIL(d->get_ref_col_idx(ref_col_idx))) {

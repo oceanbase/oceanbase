@@ -113,21 +113,25 @@ public:
   int init_lock_rtdef();
 
 protected:
+  int get_curr_part_key();
+  int lock_single_part();
+  int lock_multi_part();
+  int lock_multi_part_skip_locked();
+  int prepare_lock_row();
+  int get_next_row_from_child();
   OB_INLINE int get_next_batch_from_child(const int64_t max_row_cnt,
                                           const ObBatchRows *&child_brs);
   int lock_row_to_das();
-  int lock_batch_to_das(const ObBatchRows *child_brs);
+  int lock_batch_to_das(const ObBatchRows *child_brs, const bool skip_locked);
   int calc_tablet_loc(const ObLockCtDef &lock_ctdef,
                       ObLockRtDef &lock_rtdef,
                       ObDASTabletLoc *&tablet_loc);
-  int lock_one_row_post_proc();
-  virtual int write_rows_post_proc(int last_errno) override;
-  int submit_row_by_strategy();
+  int lock_one_row_post_proc(bool &need_get_next_row);
+  int lock_rows_post_proc(bool &need_get_next_row);
 
 protected:
   int64_t savepoint_no_;
   LockRtDef2DArray lock_rtdefs_;
-  bool need_return_row_;
 };
 
 } // end of sql

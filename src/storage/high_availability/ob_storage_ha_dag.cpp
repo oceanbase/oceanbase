@@ -14,6 +14,7 @@
 #include "ob_storage_ha_dag.h"
 #include "observer/ob_server.h"
 #include "share/rc/ob_tenant_base.h"
+#include "logservice/palf/scn.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
@@ -638,15 +639,40 @@ int ObStorageHATaskUtils::check_minor_sstable_need_copy_(
         LOG_WARN("minor sstable should not be NULL", K(ret), KP(table), K(minor_sstables));
       } else if (table->get_key() == param.table_key_) {
         const ObSSTable *sstable = static_cast<const ObSSTable *>(table);
-        found = true;
-        need_copy = true;
-        //TODO(muwei.ym) Fix it in 4.1.
-        //Need copy should be false and reuse local minor sstable.
+        if (OB_FAIL(ObSSTableMetaChecker::check_sstable_meta(param, sstable->get_meta()))) {
+          LOG_WARN("failed to check sstable meta", K(ret), K(param), KPC(sstable));
+        } else {
+          need_copy = false;
+          found = true;
+        }
       }
     }
 
     if (OB_SUCC(ret) && !found) {
-      need_copy = true;
+      const palf::SCN start_scn = minor_sstables.at(0)->get_start_scn();
+      const palf::SCN end_scn = minor_sstables.at(minor_sstables.count() - 1)->get_end_scn();
+      if (param.table_key_.scn_range_.start_scn_ >= start_scn
+          && param.table_key_.scn_range_.end_scn_ <= end_scn) {
+        need_copy = false;
+      } else {
+        need_copy = true;
+      }
+    }
+
+    if (OB_SUCC(ret) && !need_copy) {
+      const ObSSTableArray &minor_sstable_array = tablet->get_table_store().get_minor_sstables();
+      bool has_remote_logical_sstable = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < minor_sstable_array.count(); ++i) {
+        ObITable *table = minor_sstable_array.get_table(i);
+        if (OB_ISNULL(table)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table should not be NULL", K(ret), KP(table));
+        } else if (table->is_remote_logical_minor_sstable()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tablet still has remote logical minor sstable, cannot reuse local sstable",
+              K(ret), KPC(tablet), K(param));
+        }
+      }
     }
   }
   return ret;
@@ -680,10 +706,10 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
     } else if (OB_FAIL(ddl_sstable_array.get_table(param.table_key_, table_handle))) {
       LOG_WARN("failed to get table", K(ret), K(param), K(ddl_sstable_array));
     } else if (!table_handle.is_valid()) {
-      const int64_t start_log_ts = ddl_sstable_array.get_table(0)->get_start_log_ts();
-      const int64_t end_log_ts = ddl_sstable_array.get_table(ddl_sstable_array.count() - 1)->get_end_log_ts();
-      if (param.table_key_.log_ts_range_.start_log_ts_ >= start_log_ts
-          && param.table_key_.log_ts_range_.end_log_ts_ <= end_log_ts) {
+      const palf::SCN start_scn = ddl_sstable_array.get_table(0)->get_start_scn();
+      const palf::SCN end_scn = ddl_sstable_array.get_table(ddl_sstable_array.count() - 1)->get_end_scn();
+      if (param.table_key_.scn_range_.start_scn_ >= start_scn
+          && param.table_key_.scn_range_.end_scn_ <= end_scn) {
         need_copy = false;
       } else {
         need_copy = true;

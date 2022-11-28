@@ -54,11 +54,11 @@ int ObPxMultiPartSSTableInsertOp::get_tablet_id_from_row(const ObExprPtrIArray &
   tablet_id.reset();
   if (NO_PARTITION_ID_FLAG == part_id_idx) {
     ObDASTableLoc *table_loc = ins_rtdef_.das_rtdef_.table_loc_;
-    if (OB_ISNULL(table_loc) || table_loc->get_tablet_locs().size() != 1) {
+    if (OB_ISNULL(table_loc) || table_loc->tablet_locs_.size() != 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insert table location is invalid", K(ret), KPC(table_loc));
     } else {
-      tablet_id = table_loc->get_first_tablet_loc()->tablet_id_;
+      tablet_id = table_loc->tablet_locs_.get_first()->tablet_id_;
     }
   } else if (part_id_idx < 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -201,7 +201,6 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
       write_sstable_param.write_major_ = true;
       write_sstable_param.task_cnt_ = ctx_.get_sqc_handler()->get_sqc_ctx().get_task_count();
       write_sstable_param.schema_version_ = MY_SPEC.plan_->get_ddl_schema_version();
-      write_sstable_param.execution_id_ = MY_SPEC.plan_->get_ddl_execution_id();
       if (OB_FAIL(block_start_seq.set_parallel_degree(ddl_task_id_))) {
         LOG_WARN("set parallel index failed", K(ret), K(ddl_task_id_));
       }

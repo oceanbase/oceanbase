@@ -150,14 +150,6 @@ else()
     -Wl,-e,so_main
     easy
     )
-  set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmariadb")
-  if (OB_STATIC_LINK_LGPL_DEPS)
-    set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -l:libmariadbclient.a")
-  endif()
-  target_link_libraries(obcdc
-    PRIVATE
-    ${LGPL_DEPS}
-    )
   add_dependencies(obcdc obcdc_objects)
 endif()
 set_target_properties(obcdc PROPERTIES

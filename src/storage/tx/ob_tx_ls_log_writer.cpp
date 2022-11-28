@@ -15,7 +15,6 @@
 #include "storage/tx/ob_trans_id_service.h"
 #include "logservice/ob_log_base_header.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
-#include "lib/stat/ob_latch_define.h"
 
 namespace oceanbase
 {
@@ -161,7 +160,7 @@ int ObTxLSLogCb::alloc_log_buf_()
 //********************************************************
 
 //******************** ObTxLSLogWriter *******************
-ObTxLSLogWriter::ObTxLSLogWriter() : cbs_lock_(common::ObLatchIds::TX_LS_LOG_WRITER_LOCK) { reset(); }
+ObTxLSLogWriter::ObTxLSLogWriter() { reset(); }
 
 ObTxLSLogWriter::~ObTxLSLogWriter() { reset(); }
 
@@ -236,7 +235,7 @@ void ObTxLSLogWriter::destroy()
   destroy_cbs_(free_cbs_);
 }
 
-int ObTxLSLogWriter::submit_start_working_log(const int64_t &leader_epoch, int64_t &log_ts)
+int ObTxLSLogWriter::submit_start_working_log(const int64_t &leader_epoch, palf::SCN &log_ts)
 {
   int ret = OB_SUCCESS;
 

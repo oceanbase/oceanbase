@@ -132,13 +132,13 @@ int ObMySQLPreparedResult::get_int(const int64_t col_idx, int64_t &int_val) cons
   int ret = OB_SUCCESS;
   if (OB_LIKELY(col_idx >= 0) && OB_LIKELY(col_idx < result_column_count_)) {
     // currently not support auto type convertion
-    if (enum_field_types::MYSQL_TYPE_LONGLONG == bind_[col_idx].buffer_type) {
+    if (MYSQL_TYPE_LONGLONG == bind_[col_idx].buffer_type) {
       int_val = *(reinterpret_cast<int64_t *>(bind_[col_idx].buffer));
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid type, forget to call bind_type_and_buf() first",
                "real type", bind_[col_idx].buffer_type,
-               "expected type", enum_field_types::MYSQL_TYPE_LONGLONG, K(ret));
+               "expected type", MYSQL_TYPE_LONGLONG, K(ret));
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
@@ -152,14 +152,14 @@ int ObMySQLPreparedResult::get_varchar(const int64_t col_idx, ObString &varchar_
   int ret = OB_SUCCESS;
   if (OB_LIKELY(col_idx >= 0) && OB_LIKELY(col_idx < result_column_count_)) {
     // currently not support auto type convertion
-    if (enum_field_types::MYSQL_TYPE_VAR_STRING == bind_[col_idx].buffer_type) {
+    if (MYSQL_TYPE_VAR_STRING == bind_[col_idx].buffer_type) {
       varchar_val.assign(static_cast<char *>(bind_[col_idx].buffer),
                          static_cast<int32_t>(*bind_[col_idx].length));
     } else {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid type, forget to call bind_type_and_buf() first",
                "real type", bind_[col_idx].buffer_type,
-               "expected type", enum_field_types::MYSQL_TYPE_VAR_STRING, K(ret));
+               "expected type", MYSQL_TYPE_VAR_STRING, K(ret));
     }
   } else {
     ret = OB_INVALID_ARGUMENT;

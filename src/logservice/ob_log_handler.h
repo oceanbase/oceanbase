@@ -38,6 +38,7 @@ namespace palf
 {
 class PalfEnv;
 class LSN;
+class SCN;
 }
 namespace logservice
 {
@@ -45,19 +46,19 @@ class ObLogApplyService;
 class ObApplyStatus;
 class ObLogReplayService;
 class AppendCb;
-struct LogHandlerDiagnoseInfo {
-  common::ObRole log_handler_role_;
-  int64_t log_handler_proposal_id_;
-  TO_STRING_KV(K(log_handler_role_),
-               K(log_handler_proposal_id_));
-};
-
-class ObRoleChangeService;
 class ObILogHandler
 {
 public:
   virtual ~ObILogHandler() {}
   virtual bool is_valid() const = 0;
+  virtual int append(const void *buffer,
+                     const int64_t nbytes,
+                     const palf::SCN &ref_scn,
+                     const bool need_nonblock,
+                     AppendCb *cb,
+                     palf::LSN &lsn,
+                     palf::SCN &scn) = 0;
+
   virtual int append(const void *buffer,
                      const int64_t nbytes,
                      const int64_t ref_ts_ns,
@@ -66,12 +67,17 @@ public:
                      palf::LSN &lsn,
                      int64_t &ts_ns) = 0;
   virtual int get_role(common::ObRole &role, int64_t &proposal_id) const = 0;
+
+  virtual int change_access_mode(const int64_t mode_version,
+                                 const palf::AccessMode &access_mode,
+                                 const palf::SCN &ref_scn) = 0;
   virtual int get_access_mode(int64_t &mode_version, palf::AccessMode &access_mode) const = 0;
   virtual int change_access_mode(const int64_t mode_version,
                                  const palf::AccessMode &access_mode,
                                  const int64_t ref_ts_ns) = 0;
   virtual int seek(const palf::LSN &lsn, palf::PalfBufferIterator &iter) = 0;
   virtual int seek(const palf::LSN &lsn, palf::PalfGroupBufferIterator &iter) = 0;
+  virtual int seek(const palf::SCN &scn, palf::PalfGroupBufferIterator &iter) = 0;
   virtual int seek(const int64_t ts_ns, palf::PalfGroupBufferIterator &iter) = 0;
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
                                       const int64_t paxos_replica_num) = 0;
@@ -81,11 +87,17 @@ public:
   virtual int set_region(const common::ObRegion &region) = 0;
   virtual int set_election_priority(palf::election::ElectionPriority *priority) = 0;
   virtual int reset_election_priority() = 0;
+
+  virtual int locate_by_scn_coarsely(const palf::SCN &scn, palf::LSN &result_lsn) = 0;
   virtual int locate_by_ts_ns_coarsely(const int64_t ts_ns, palf::LSN &result_lsn) = 0;
+  virtual int locate_by_lsn_coarsely(const palf::LSN &lsn, palf::SCN &result_scn) = 0;
   virtual int locate_by_lsn_coarsely(const palf::LSN &lsn, int64_t &result_ts_ns) = 0;
   virtual int advance_base_lsn(const palf::LSN &lsn) = 0;
   virtual int get_end_lsn(palf::LSN &lsn) const = 0;
   virtual int get_max_lsn(palf::LSN &lsn) const = 0;
+
+  virtual int get_max_scn(palf::SCN &scn) const = 0;
+  virtual int get_end_scn(palf::SCN &scn) const = 0;
   virtual int get_max_ts_ns(int64_t &ts_ns) const = 0;
   virtual int get_end_ts_ns(int64_t &ts) const = 0;
   virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
@@ -126,19 +138,18 @@ public:
   virtual int advance_base_info(const palf::PalfBaseInfo &palf_base_info, const bool is_rebuild) = 0;
   virtual int is_valid_member(const common::ObAddr &addr, bool &is_valid) const = 0;
   virtual void wait_append_sync() = 0;
+  virtual int enable_replay(const palf::LSN &initial_lsn, const palf::SCN &initial_log_scn) = 0;
   virtual int enable_replay(const palf::LSN &initial_lsn, const int64_t &initial_log_ts) = 0;
   virtual int disable_replay() = 0;
+  virtual int get_max_decided_log_scn(palf::SCN &scn) = 0;
+  virtual int get_max_decided_log_ts_ns(int64_t &log_ts) = 0;
   virtual int pend_submit_replay_log() = 0;
   virtual int restore_submit_replay_log() = 0;
   virtual bool is_replay_enabled() const = 0;
-  virtual int get_max_decided_log_ts_ns(int64_t &log_ts) = 0;
   virtual int disable_vote() = 0;
   virtual int enable_vote() = 0;
   virtual int register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb) = 0;
   virtual int unregister_rebuild_cb() = 0;
-  virtual int offline() = 0;
-  virtual int online(const palf::LSN &lsn, const int64_t log_ts) = 0;
-  virtual bool is_offline() const = 0;
 };
 
 class ObLogHandler : public ObILogHandler, public ObLogHandlerBase
@@ -151,7 +162,6 @@ public:
            const common::ObAddr &self,
            ObLogApplyService *apply_service,
            ObLogReplayService *replay_service,
-           ObRoleChangeService *rc_service,
            palf::PalfHandle &palf_handle,
            palf::PalfEnv *palf_env,
            palf::PalfLocationCacheCb *lc_cb,
@@ -162,7 +172,7 @@ public:
   // @breif, wait cb append onto apply service all be called
   // is reentrant and should be called before destroy(),
   // protect cb will not be used when log handler destroyed
-  int safe_to_destroy(bool &is_safe_destroy);
+  int safe_to_destroy();
   // @brief append count bytes from the buffer starting at buf to the palf handle, return the LSN and timestamp
   // @param[in] const void *, the data buffer.
   // @param[in] const uint64_t, the length of data buffer.
@@ -176,6 +186,13 @@ public:
   //    OB_SUCCESS
   //    OB_NOT_MASTER, the prospoal_id of ObLogHandler is not same with PalfHandle.
   // NB: only support for primary(AccessMode::APPEND)
+  int append(const void *buffer,
+             const int64_t nbytes,
+             const palf::SCN &ref_scn,
+             const bool need_nonblock,
+             AppendCb *cb,
+             palf::LSN &lsn,
+             palf::SCN &scn) override final;
   int append(const void *buffer,
              const int64_t nbytes,
              const int64_t ref_ts_ns,
@@ -221,6 +238,9 @@ public:
   //      get 'mode_version' and pass it to 'change_access_mode'
   int change_access_mode(const int64_t mode_mode_version,
                          const palf::AccessMode &access_mode,
+                         const palf::SCN &ref_scn) override final;
+  int change_access_mode(const int64_t mode_mode_version,
+                         const palf::AccessMode &access_mode,
                          const int64_t ref_ts_ns) override final;
 
   // @brief alloc PalfBufferIterator, this iterator will get something append by caller.
@@ -236,6 +256,8 @@ public:
   // @brief alloc PalfBufferIterator, this iterator will get something append by caller.
   // @param[in] const int64_t, the start ts of iterator.
   // @param[out] PalfBufferIterator &, log_ts of first log in this iterator must be higher than/equal to start_ts_ns.
+  int seek(const palf::SCN &scn,
+           palf::PalfGroupBufferIterator &iter) override final;
   int seek(const int64_t ts_ns,
            palf::PalfGroupBufferIterator &iter) override final;
   // @brief set the initial member list of paxos group
@@ -271,6 +293,7 @@ public:
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
   // - OB_ERR_OUT_OF_LOWER_BOUND: ts_ns is too old, log files may have been recycled
   // - others: bug
+  int locate_by_scn_coarsely(const palf::SCN &scn, palf::LSN &result_lsn) override final;
   int locate_by_ts_ns_coarsely(const int64_t ts_ns, palf::LSN &result_lsn) override final;
 
   // @desc: query coarse ts by lsn, that means there is a log in disk,
@@ -282,6 +305,7 @@ public:
   // - OB_INVALID_ARGUMENT
   // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
   // - others: bug
+  int locate_by_lsn_coarsely(const palf::LSN &lsn, palf::SCN &result_scn) override final;
   int locate_by_lsn_coarsely(const palf::LSN &lsn, int64_t &result_ts_ns) override final;
   // @brief, set the recycable lsn, palf will ensure that the data before recycable lsn readable.
   // @param[in] const LSN&, recycable lsn.
@@ -292,9 +316,11 @@ public:
   int get_max_lsn(palf::LSN &lsn) const override final;
   // @brief, get max log ts.
   // @param[out] int64_t&, max log ts.
+  int get_max_scn(palf::SCN &scn) const override final;
   int get_max_ts_ns(int64_t &ts_ns) const override final;
   // @brief, get timestamp of end lsn.
   // @param[out] int64_t, timestamp.
+  int get_end_scn(palf::SCN &scn) const override final;
   int get_end_ts_ns(int64_t &ts) const override final;
   // @brief, get paxos member list of this paxos group
   // @param[out] common::ObMemberList&
@@ -491,6 +517,8 @@ public:
   // @param[in] const palf::LSN &initial_lsn: replay new start lsn.
   // @param[in] const int64_t &initial_log_ts: replay new start ts.
   int enable_replay(const palf::LSN &initial_lsn,
+                    const palf::SCN &initial_log_scn) override final;
+  int enable_replay(const palf::LSN &initial_lsn,
                     const int64_t &initial_log_ts) override final;
   // @brief, disable replay for current ls.
   int disable_replay() override final;
@@ -503,6 +531,7 @@ public:
   bool is_replay_enabled() const override final;
   // @brief, get max decided log ts considering both apply and replay.
   // @param[out] int64_t&, max decided log ts ns.
+  int get_max_decided_log_scn(palf::SCN &scn) override final;
   int get_max_decided_log_ts_ns(int64_t &log_ts) override final;
   // @brief: store a persistent flag which means this paxos replica
   // can not reply ack when receiving logs.
@@ -514,15 +543,10 @@ public:
   int enable_vote() override final;
   int register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb) override final;
   int unregister_rebuild_cb() override final;
-  int diagnose(LogHandlerDiagnoseInfo &diagnose_info) const;
-  int diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const;
   TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_env_), K(is_in_stop_state_), K(is_inited_));
-  int offline() override final;
-  int online(const palf::LSN &lsn, const int64_t log_ts) override final;
-  bool is_offline() const override final;
 private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
-  int get_leader_max_ts_ns_(int64_t &max_ts_ns) const;
+  int get_leader_max_scn_(palf::SCN &max_scn) const;
   DISALLOW_COPY_AND_ASSIGN(ObLogHandler);
 private:
   common::ObAddr self_;
@@ -530,7 +554,6 @@ private:
   ObApplyStatus *apply_status_;
   ObLogApplyService *apply_service_;
   ObLogReplayService *replay_service_;
-  ObRoleChangeService *rc_service_;
   ObSpinLock deps_lock_;
   mutable palf::PalfLocationCacheCb *lc_cb_;
   mutable obrpc::ObLogServiceRpcProxy *rpc_proxy_;
@@ -540,7 +563,6 @@ private:
   mutable int64_t last_check_sync_ts_;
   mutable int64_t last_renew_loc_ts_;
   bool is_in_stop_state_;
-  bool is_offline_;
   bool is_inited_;
   mutable int64_t get_max_decided_log_ts_ns_debug_time_;
 };

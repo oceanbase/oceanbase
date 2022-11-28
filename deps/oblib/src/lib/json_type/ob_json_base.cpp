@@ -63,8 +63,6 @@ int ObIJsonBase::add_if_missing(ObJsonBaseSortedVector &dup, ObJsonBaseVector &r
     if (OB_FAIL(res.push_back(this))) {
       LOG_WARN("fail to push_back value into result", K(ret), K(res.size()));
     }
-  } else if (ret == OB_CONFLICT_VALUE) {
-    ret = OB_SUCCESS; // confilict means found duplicated nodes, it is not an error.
   }
 
   return ret;
@@ -239,9 +237,7 @@ int ObIJsonBase::find_child(const JsonPathIterator &cur_node, const JsonPathIter
   // If the path expression is already at the end, the current DOM is the res,
   // and it is added to the res
   if (cur_node == last_node) {
-    if (OB_FAIL(add_if_missing(dup, res))) {
-      LOG_WARN("fail to add node.", K(ret));
-    }
+    add_if_missing(dup, res);
   } else {
     ObJsonPathBasicNode *path_node = static_cast<ObJsonPathBasicNode *>(*cur_node);
     SMART_VAR (JsonPathIterator, next_node) {
@@ -1940,7 +1936,7 @@ int ObIJsonBase::to_number(ObIAllocator *allocator, number::ObNumber &number) co
 int ObIJsonBase::to_datetime(int64_t &value) const
 {
   INIT_SUCC(ret);
-  int64_t datetime = 0;
+  int64_t datetime;
 
   switch (json_type()) {
     case ObJsonNodeType::J_DATETIME:
@@ -1989,7 +1985,7 @@ int ObIJsonBase::to_datetime(int64_t &value) const
 int ObIJsonBase::to_date(int32_t &value) const
 {
   INIT_SUCC(ret);
-  int32_t date = 0;
+  int32_t date;
 
   switch (json_type()) {
     case ObJsonNodeType::J_DATETIME:
@@ -2036,7 +2032,7 @@ int ObIJsonBase::to_date(int32_t &value) const
 int ObIJsonBase::to_time(int64_t &value) const
 {
   INIT_SUCC(ret);
-  int64_t time = 0;
+  int64_t time;
 
   switch (json_type()) {
     case ObJsonNodeType::J_TIME: {
@@ -2081,7 +2077,7 @@ int ObIJsonBase::to_time(int64_t &value) const
 int ObIJsonBase::to_bit(uint64_t &value) const
 {
   INIT_SUCC(ret);
-  uint64_t bit = 0;
+  uint64_t bit;
   const ObJsonNodeType j_type = json_type();
   ObDTMode dt_mode = 0;
 

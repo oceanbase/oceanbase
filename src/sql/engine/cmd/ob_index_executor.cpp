@@ -291,21 +291,12 @@ int ObDropIndexExecutor::wait_drop_index_finish(
     int64_t unused_user_msg_len = 0;
     const int64_t retry_interval = 100 * 1000;
     while (OB_SUCC(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      bool is_tenant_dropped = false;
       if (OB_SUCCESS == share::ObDDLErrorMessageTableOperator::get_ddl_error_message(
           tenant_id, task_id, -1 /* target_object_id */, unused_addr, false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, unused_user_msg_len)) {
         ret = error_message.ret_code_;
         if (OB_SUCCESS != ret) {
           FORWARD_USER_ERROR(ret, error_message.user_message_);
         }
-        break;
-      } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
-                               tenant_id, is_tenant_dropped))) {
-        LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id));
-      } else if (is_tenant_dropped) {
-        ret = OB_TENANT_HAS_BEEN_DROPPED;
-        LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
         break;
       } else if (OB_FAIL(session.check_session_status())) {
         LOG_WARN("session exeception happened", K(ret));

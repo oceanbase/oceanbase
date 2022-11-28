@@ -46,7 +46,7 @@ struct ObRestoreBaseInfo
       K_(backup_dest),
       K_(backup_set_list));
 
-  uint64_t restore_scn_; 
+  palf::SCN restore_scn_;
   int64_t backup_cluster_version_;
   share::ObBackupDest backup_dest_;
   common::ObArray<share::ObRestoreBackupSetBriefInfo> backup_set_list_;
@@ -60,14 +60,12 @@ struct ObTabletRestoreAction
     RESTORE_TABLET_META = 1,
     RESTORE_MINOR = 2,
     RESTORE_MAJOR = 3,
-    RESTORE_NONE = 4,
     MAX,
   };
   static const char *get_action_str(const ACTION &action);
   static bool is_valid(const ACTION &action);
   static bool is_restore_minor(const ACTION &action);
   static bool is_restore_major(const ACTION &action);
-  static bool is_restore_none(const ACTION &action);
   static bool is_restore_all(const ACTION &action);
   static bool is_restore_tablet_meta(const ACTION &action);
   static int trans_restore_action_to_restore_status(
@@ -76,6 +74,7 @@ struct ObTabletRestoreAction
 
 struct ObRestoreUtils
 {
+  static bool is_need_retry_error(const int err);
   static int  get_backup_data_type(
       const ObITable::TableKey &table_key,
       share::ObBackupDataType &data_type);

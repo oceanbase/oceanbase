@@ -192,7 +192,7 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
                                        TEST_MAX_SUBMITTED_SEQ_NO,
                                        TEST_CLUSTER_VERSION);
   ObTxPrepareLog filll_prepare(TEST_LS_ARRAY, TEST_LOG_OFFSET);
-  ObTxCommitLog fill_commit(TEST_COMMIT_VERSION,
+  ObTxCommitLog fill_commit(palf::SCN::base_scn(),
                             TEST_CHECKSUM,
                             TEST_LS_ARRAY,
                             TEST_TX_BUFFER_NODE_ARRAY,
@@ -310,7 +310,7 @@ TEST_F(TestObTxLog, tx_log_body_redo)
                                        TEST_LS_ARRAY,
                                        TEST_CLUSTER_VERSION,
                                        TEST_XID);
-  ObTxCommitLog fill_commit(TEST_COMMIT_VERSION,
+  ObTxCommitLog fill_commit(palf::SCN::base_scn(),
                             TEST_CHECKSUM,
                             TEST_LS_ARRAY,
                             TEST_TX_BUFFER_NODE_ARRAY,
@@ -399,7 +399,7 @@ TEST_F(TestObTxLog, tx_log_body_redo)
   ObTxCommitLogTempRef commit_temp_ref;
   ObTxCommitLog replay_commit(commit_temp_ref);
   ASSERT_EQ(OB_SUCCESS, replay_block_2.deserialize_log_body(replay_commit));
-  EXPECT_EQ(TEST_COMMIT_VERSION, replay_commit.get_commit_version());
+  EXPECT_EQ(palf::SCN::base_scn(), replay_commit.get_commit_version());
 
 }
 

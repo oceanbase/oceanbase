@@ -237,10 +237,7 @@ int ObOptStatService::load_column_stat_and_put_cache(const uint64_t tenant_id,
         LOG_WARN("puts column stat into cache failed.", K(ret));
       } else if (OB_FAIL(handles.push_back(handle))) {
         LOG_WARN("failed to push back", K(ret));
-      } else {
-        key_column_stats.at(i).stat_->~ObOptColumnStat();
-        key_column_stats.at(i).stat_ = NULL;
-      }
+      } else {/*do nothing*/}
     }
   }
   return ret;

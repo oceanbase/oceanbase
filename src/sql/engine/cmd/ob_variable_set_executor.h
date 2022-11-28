@@ -90,7 +90,6 @@ private:
                               ObDDLStmt &stmt,
                               const share::ObSetVar &set_var,
                               const common::ObObj &value_obj);
-  int global_variable_timezone_formalize(ObExecContext &ctx, ObObj &val);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVariableSetExecutor);
 };

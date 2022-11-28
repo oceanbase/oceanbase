@@ -24,6 +24,7 @@ namespace common
 using namespace obutil;
 using namespace lib;
 
+const int32_t ObTimer::MAX_TASK_NUM;
 
 int ObTimer::init(const char* thread_name)
 {
@@ -31,23 +32,12 @@ int ObTimer::init(const char* thread_name)
   if (is_inited_) {
     ret = OB_INIT_TWICE;
   } else {
-    tokens_ = reinterpret_cast<Token*>(ob_malloc(sizeof(Token) * max_task_num_, "timer"));
-    if (nullptr == tokens_) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      OB_LOG(ERROR, "failed to alloc memory", K(ret));
-    } else {
-      for (int i = 0; i < max_task_num_; i++) {
-        new (&tokens_[i]) Token();
-      }
-      if (OB_SUCC(ret)) {
-        is_inited_ = true;
-        is_destroyed_ = false;
-        is_stopped_ = true;
-        has_running_repeat_task_ = false;
-        thread_name_ = thread_name;
-        ret = create();
-      }
-    }
+    is_inited_ = true;
+    is_destroyed_ = false;
+    is_stopped_ = true;
+    has_running_repeat_task_ = false;
+    thread_name_ = thread_name;
+    ret = create();
   }
   return ret;
 }
@@ -129,13 +119,6 @@ void ObTimer::destroy()
       }
       tasks_num_ = 0;
     }
-    if (nullptr != tokens_) {
-      for (int i = 0; i < max_task_num_; i++) {
-        tokens_[i].~Token();
-      }
-      ob_free(tokens_);
-      tokens_ = NULL;
-    }
     OB_LOG(INFO, "ObTimer destroy", KP(this), K_(thread_id));
   }
   ThreadPool::destroy();
@@ -189,9 +172,9 @@ int ObTimer::schedule_task(ObTimerTask &task, const int64_t delay, const bool re
   } else if (delay < 0) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), K(delay));
-  } else if (tasks_num_ >= max_task_num_) {
+  } else if (tasks_num_ >= MAX_TASK_NUM) {
     ret = OB_ERR_UNEXPECTED;
-    OB_LOG(WARN, "too much timer task", K(ret), K_(tasks_num), "max_task_num", max_task_num_);
+    OB_LOG(WARN, "too much timer task", K(ret), K_(tasks_num), "max_task_num", MAX_TASK_NUM);
   } else {
     int64_t time = ObSysTime::now(ObSysTime::Monotonic).toMicroSeconds();
     if(!is_scheduled_immediately) {
@@ -217,15 +200,15 @@ int ObTimer::schedule_task(ObTimerTask &task, const int64_t delay, const bool re
 int ObTimer::insert_token(const Token &token)
 {
   int ret = OB_SUCCESS;
-  int32_t max_task_num= max_task_num_;
+  int32_t max_task_num= MAX_TASK_NUM;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else {
     if (has_running_repeat_task_) {
-      max_task_num = max_task_num_ - 1;
+      max_task_num = MAX_TASK_NUM - 1;
     }
     if (tasks_num_ >= max_task_num) {
-      OB_LOG(WARN, "tasks_num_ exceed max_task_num", K_(tasks_num), "max_task_num", max_task_num_);
+      OB_LOG(WARN, "tasks_num_ exceed max_task_num", K_(tasks_num), "max_task_num", MAX_TASK_NUM);
       ret = OB_ERR_UNEXPECTED;
     } else {
       int64_t pos = 0;

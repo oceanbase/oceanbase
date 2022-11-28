@@ -592,39 +592,30 @@ int ObZoneReplicaAttrSet::append(const ObZoneReplicaAttrSet &that)
   return ret;
 }
 
-bool ObZoneReplicaAttrSet::sort_compare_less_than(const ObZoneReplicaAttrSet *lset, const ObZoneReplicaAttrSet *rset)
-{
-  bool bret = false;
-  if (OB_ISNULL(lset) || OB_ISNULL(rset)) {
-    LOG_ERROR("left or right is null", KP(lset), KP(rset));
-  } else {
-    if (lset->zone_set_.count() < rset->zone_set_.count()) {
-      bret = true;
-    } else if (lset->zone_set_.count() > rset->zone_set_.count()) {
-      bret = false;
-    } else {
-      for (int64_t i = 0; i < lset->zone_set_.count(); ++i) {
-        const common::ObZone &this_zone = lset->zone_set_.at(i);
-        const common::ObZone &that_zone = rset->zone_set_.at(i);
-        if (this_zone == that_zone) {
-          // go on next
-        } else if (this_zone < that_zone) {
-          bret = true;
-          break;
-        } else {
-          bret = false;
-          break;
-        }
-      }
-    }
-  }
-  return bret;
-}
-
 bool ObZoneReplicaAttrSet::operator<(
      const ObZoneReplicaAttrSet &that)
 {
-  return sort_compare_less_than(this, &that);  
+  bool bool_ret = false;
+  if (zone_set_.count() < that.zone_set_.count()) {
+    bool_ret = true;
+  } else if (zone_set_.count() > that.zone_set_.count()) {
+    bool_ret = false;
+  } else {
+    for (int64_t i = 0; i < zone_set_.count(); ++i) {
+      const common::ObZone &this_zone = zone_set_.at(i);
+      const common::ObZone &that_zone = that.zone_set_.at(i);
+      if (this_zone == that_zone) {
+        // go on next
+      } else if (this_zone < that_zone) {
+        bool_ret = true;
+        break;
+      } else {
+        bool_ret = false;
+        break;
+      }
+    }
+  }
+  return bool_ret;
 }
 
 int ObZoneReplicaAttrSet::assign(const ObZoneReplicaAttrSet &that)

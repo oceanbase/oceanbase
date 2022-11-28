@@ -354,9 +354,7 @@ int ObBackupCheckFile::generate_format_desc_(const share::ObBackupDest &dest, sh
   int ret = OB_SUCCESS;
   schema::ObSchemaGetterGuard schema_guard;
   const schema::ObTenantSchema *tenant_schema = nullptr;
-
-  // TODO: pass GCONF and GCTX to class.
-
+  // TODO: wangxiaohui.wxh, pass GCONF and GCTX to class.
   if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(GCTX.schema_service_));

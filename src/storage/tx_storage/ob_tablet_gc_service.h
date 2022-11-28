@@ -13,9 +13,10 @@
 #ifndef OCEABASE_STORAGE_OB_TABLET_GC_SERVICE_
 #define OCEABASE_STORAGE_OB_TABLET_GC_SERVICE_
 #include "storage/tx_storage/ob_ls_freeze_thread.h"
+#include "lib/lock/ob_spin_lock.h"
 #include "lib/task/ob_timer.h"
-#include "lib/lock/ob_rwlock.h"
 #include "common/ob_tablet_id.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -29,9 +30,7 @@ class ObTabletGCHandler
 {
 public:
   ObTabletGCHandler()
-    : ls_(NULL),
-      tablet_persist_trigger_(0),
-      update_enabled_(true),
+    : tablet_persist_trigger_(0),
       is_inited_(false)
   {}
   ~ObTabletGCHandler() { reset(); }
@@ -52,14 +51,11 @@ public:
   void set_tablet_gc_trigger();
   uint8_t get_tablet_persist_trigger_and_reset();
   int get_unpersist_tablet_ids(common::ObTabletIDArray &unpersist_create_tablet_ids,
-                               bool only_deleted = false,
-                               const int64_t checkpoint_ts = -1);
+                               const palf::SCN checkpoint_scn,
+                               bool only_deleted = false);
   int flush_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids,
-                                 const int64_t checkpoint_ts);
+                                 const palf::SCN checkpoint_scn);
   int gc_tablets(const common::ObTabletIDArray &tablet_ids);
-  bool check_stop() { return ATOMIC_LOAD(&update_enabled_) == false; }
-  int offline();
-  void online();
   TO_STRING_KV(K_(tablet_persist_trigger), K_(is_inited));
 
 private:
@@ -67,18 +63,11 @@ private:
   static const int64_t FLUSH_CHECK_INTERVAL;
   int freeze_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids);
   int wait_unpersist_tablet_ids_flushed(const common::ObTabletIDArray &unpersist_tablet_ids,
-                                        const int64_t checkpoint_ts);
-  bool is_finish() { obsys::ObWLockGuard lock(wait_lock_, false); return lock.acquired(); }
-  void set_stop() { ATOMIC_STORE(&update_enabled_, false); }
-  void set_start() { ATOMIC_STORE(&update_enabled_, true); }
-
-public:
-  obsys::ObRWLock wait_lock_;
+                                        const palf::SCN checkpoint_scn);
 
 private:
   storage::ObLS *ls_;
   uint8_t tablet_persist_trigger_;
-  bool update_enabled_;
   bool is_inited_;
 };
 

@@ -31,6 +31,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "logservice/palf/scn.h"
 
 #include <algorithm>
 
@@ -39,6 +40,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::storage;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::palf;
 
 namespace oceanbase {
 namespace backup {
@@ -222,8 +224,8 @@ int ObBackupUtils::check_tablet_minor_sstable_validity_(const storage::ObTabletH
   ObTablet *tablet = NULL;
   ObITable *last_table_ptr = NULL;
   ObTabletID tablet_id;
-  int64_t start_scn = 0;
-  int64_t clog_checkpoint_ts = 0;
+  SCN start_scn = SCN::min_scn();
+  SCN clog_checkpoint_scn = SCN::min_scn();
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
@@ -231,14 +233,14 @@ int ObBackupUtils::check_tablet_minor_sstable_validity_(const storage::ObTabletH
     const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
     tablet_id = tablet_meta.tablet_id_;
     start_scn = tablet_meta.start_scn_;
-    clog_checkpoint_ts = tablet_meta.clog_checkpoint_ts_;
+    clog_checkpoint_scn = tablet_meta.clog_checkpoint_scn_;
   }
 
   if (OB_FAIL(ret)) {
-  } else if ((minor_sstable_array.empty() && start_scn != clog_checkpoint_ts)
-      || (!minor_sstable_array.empty() && start_scn >= clog_checkpoint_ts)) {
+  } else if ((minor_sstable_array.empty() && start_scn != clog_checkpoint_scn)
+      || (!minor_sstable_array.empty() && start_scn >= clog_checkpoint_scn)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("clog checkpoint ts unexpected", K(tablet_id), K(clog_checkpoint_ts), K(start_scn));
+    LOG_WARN("clog checkpoint ts unexpected", K(tablet_id), K(clog_checkpoint_scn), K(start_scn));
   }
 
   if (OB_FAIL(ret)) {
@@ -252,9 +254,9 @@ int ObBackupUtils::check_tablet_minor_sstable_validity_(const storage::ObTabletH
     LOG_WARN("table ptr not correct", K(ret), KPC(last_table_ptr));
   } else {
     const ObITable::TableKey &table_key = last_table_ptr->get_key();
-    if (table_key.get_end_log_ts() < clog_checkpoint_ts) {
+    if (table_key.get_end_log_ts() != clog_checkpoint_scn.get_val_for_inner_table_field()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("tablet meta is not valid", K(ret), K(table_key), K(clog_checkpoint_ts));
+      LOG_ERROR("tablet meta is not valid", K(ret), K(table_key), K(clog_checkpoint_scn));
     }
   }
   return ret;
@@ -266,13 +268,13 @@ int ObBackupUtils::check_tablet_ddl_sstable_validity_(const storage::ObTabletHan
   int ret = OB_SUCCESS;
   ObTablet *tablet = NULL;
   ObITable *last_table_ptr = NULL;
-  int64_t tablet_ddl_checkpoint_ts = 0;
+  SCN tablet_ddl_checkpoint_scn = SCN::min_scn();
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
   } else {
     const ObTabletMeta &tablet_meta = tablet->get_tablet_meta();
-    tablet_ddl_checkpoint_ts = tablet_meta.ddl_checkpoint_ts_;
+    tablet_ddl_checkpoint_scn = tablet_meta.ddl_checkpoint_scn_;
   }
   if (OB_FAIL(ret)) {
   } else if (ddl_sstable_array.empty()) {
@@ -285,9 +287,9 @@ int ObBackupUtils::check_tablet_ddl_sstable_validity_(const storage::ObTabletHan
     LOG_WARN("table ptr not correct", K(ret), KPC(last_table_ptr));
   } else {
     const ObITable::TableKey &table_key = last_table_ptr->get_key();
-    if (table_key.get_end_log_ts() != tablet_ddl_checkpoint_ts) {
+    if (table_key.get_end_log_ts() != tablet_ddl_checkpoint_scn.get_val_for_inner_table_field()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("tablet meta is not valid", K(ret), K(table_key), K(tablet_ddl_checkpoint_ts));
+      LOG_ERROR("tablet meta is not valid", K(ret), K(table_key), K(tablet_ddl_checkpoint_scn));
     }
   }
   return ret;
@@ -1288,9 +1290,9 @@ bool ObBackupProviderItemCompare::operator()(const ObBackupProviderItem *left, c
       bret = true;
     } else if (left->get_item_type() > right->get_item_type()) {
       bret = false;
-    } else if (left->get_table_key().log_ts_range_.end_log_ts_ < right->get_table_key().log_ts_range_.end_log_ts_) {
+    } else if (left->get_table_key().scn_range_.end_scn_ < right->get_table_key().scn_range_.end_scn_) {
       bret = true;
-    } else if (left->get_table_key().log_ts_range_.end_log_ts_ > right->get_table_key().log_ts_range_.end_log_ts_) {
+    } else if (left->get_table_key().scn_range_.end_scn_ > right->get_table_key().scn_range_.end_scn_) {
       bret = false;
     } else if (left->get_logic_id() < right->get_logic_id()) {
       bret = true;
@@ -1608,11 +1610,7 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
-  } else if (OB_ISNULL(ls_backup_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls backup ctx should not be null", K(ret));
   } else {
-    const int64_t rebuild_seq = ls_backup_ctx_->rebuild_seq_;
     MTL_SWITCH(tenant_id) {
       ObLS *ls = NULL;
       ObLSHandle ls_handle;
@@ -1626,12 +1624,8 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("LS is null", K(ret));
-      } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, rebuild_seq))) {
-        LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
       } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, timeout_us))) {
         LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, rebuild_seq))) {
-        LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
       }
     }
   }

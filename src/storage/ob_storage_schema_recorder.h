@@ -58,16 +58,6 @@ public:
       const int64_t saved_schema_version,
       logservice::ObLogHandler *log_handler);
   void reset();
-  void destroy();
-  bool is_inited() const { return is_inited_; }
-  bool is_valid() const
-  {
-    return is_inited_
-        && ls_id_.is_valid()
-        && tablet_id_.is_valid()
-        && nullptr != log_handler_
-        && max_saved_table_version_ >= 0;
-  }
 
   // follower
   int replay_schema_log(const int64_t log_ts, const char *buf, const int64_t size, int64_t &pos);
@@ -81,7 +71,6 @@ public:
   ObStorageSchemaRecorder(const ObStorageSchemaRecorder&) = delete;
   ObStorageSchemaRecorder& operator=(const ObStorageSchemaRecorder&) = delete;
   int64_t get_max_sync_version() const { return ATOMIC_LOAD(&max_saved_table_version_); }
-  TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id));
 
 private:
   class ObStorageSchemaLogCb : public logservice::AppendCb
@@ -90,7 +79,7 @@ private:
     virtual int on_success() override;
     virtual int on_failure() override;
 
-    void set_table_version(const int64_t table_version);
+    int set_table_version(const int64_t table_version);
 
     ObStorageSchemaLogCb(ObStorageSchemaRecorder &recorder)
       : recorder_(recorder),

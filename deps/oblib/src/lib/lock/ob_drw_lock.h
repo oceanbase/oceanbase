@@ -34,7 +34,7 @@ public:
   class RDLockGuard
   {
   public:
-    [[nodiscard]] explicit RDLockGuard(DRWLock &rwlock): rwlock_(rwlock), ret_(OB_SUCCESS)
+    explicit RDLockGuard(DRWLock &rwlock): rwlock_(rwlock), ret_(OB_SUCCESS)
     {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.rdlock()))) {
         COMMON_LOG(WARN, "Fail to read lock, ", K_(ret));
@@ -58,7 +58,7 @@ public:
   class WRLockGuard
   {
   public:
-    [[nodiscard]] explicit WRLockGuard(DRWLock &rwlock): rwlock_(rwlock), ret_(OB_SUCCESS)
+    explicit WRLockGuard(DRWLock &rwlock): rwlock_(rwlock), ret_(OB_SUCCESS)
     {
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = rwlock_.wrlock()))) {
         COMMON_LOG(WARN, "Fail to write lock, ", K_(ret));

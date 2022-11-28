@@ -7404,6 +7404,13 @@ int ObUnitManager::determine_alter_unit_num_type(
       }
     }
   }
+  if (OB_SUCC(ret) && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1460) {
+    if (AUN_SHRINK == alter_unit_num_type || AUN_ROLLBACK_SHRINK == alter_unit_num_type) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("shrink pool unit num is not supported during upgrading to 1.4.6");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "shrink pool unit num during upgrading to 1.4.6");
+    }
+  }
   return ret;
 }
 

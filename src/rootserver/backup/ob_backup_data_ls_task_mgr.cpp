@@ -17,7 +17,6 @@
 #include "rootserver/backup/ob_backup_service.h"
 #include "share/ls/ob_ls_status_operator.h"
 #include "storage/backup/ob_backup_operator.h"
-#include "rootserver/ob_rs_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -120,12 +119,6 @@ int ObBackupDataLSTaskMgr::gen_and_add_task_()
     case ObBackupDataTaskType::Type::BACKUP_DATA_SYS:
     case ObBackupDataTaskType::Type::BACKUP_DATA_MINOR:
     case ObBackupDataTaskType::Type::BACKUP_DATA_MAJOR: {
-      if (ObBackupDataTaskType::Type::BACKUP_DATA_MAJOR == ls_attr_->task_type_.type_) {
-#ifdef ERRSIM
-        ROOTSERVICE_EVENT_ADD("backup", "before_backup_major_sstable");
-        DEBUG_SYNC(BEFORE_BACKUP_MAJOR_SSTABLE);
-#endif
-      }
       if (OB_FAIL(gen_and_add_backup_data_task_())) {
         LOG_WARN("[DATA_BACKUP]failed to gen and add backup data task", K(ret), K(*ls_attr_));
       }
@@ -342,7 +335,7 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
   if (OB_ISNULL(job_attr_) || OB_ISNULL(ls_attr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]attr should not be null", K(ret), KP_(job_attr), KP_(ls_attr));
-  } else if (OB_SUCCESS == ls_attr_->result_/* || OB_LS_NOT_EXIST == ls_attr_->result_*/) { // TODO(yangyi.yyy): change turn need use another error code in 4.1
+  } else if (OB_SUCCESS == ls_attr_->result_/* || OB_LS_NOT_EXIST == ls_attr_->result_*/) { // TODO(yangyi.yyy): change turn need use another error code
     finish_cnt++;
   } else {
     bool ls_can_retry = true;

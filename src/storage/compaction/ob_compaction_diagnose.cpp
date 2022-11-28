@@ -32,13 +32,6 @@ using namespace share;
 namespace compaction
 {
 
-int64_t ObScheduleSuspectInfo::hash() const
-{
-  int64_t hash_value = ObMergeDagHash::inner_hash();
-  hash_value = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_value);
-  return hash_value;
-}
-
 bool ObScheduleSuspectInfo::is_valid() const
 {
   bool bret = true;
@@ -52,20 +45,12 @@ bool ObScheduleSuspectInfo::is_valid() const
 
 ObScheduleSuspectInfo & ObScheduleSuspectInfo::operator = (const ObScheduleSuspectInfo &other)
 {
-  tenant_id_ = other.tenant_id_;
   merge_type_ = other.merge_type_;
   ls_id_ = other.ls_id_;
   tablet_id_ = other.tablet_id_;
   add_time_ = other.add_time_;
   strncpy(suspect_info_, other.suspect_info_, strlen(other.suspect_info_));
   return *this;
-}
-
-int64_t ObScheduleSuspectInfo::gen_hash(int64_t tenant_id, int64_t dag_hash)
-{
-  int64_t hash_value = dag_hash;
-  hash_value = common::murmurhash(&tenant_id, sizeof(tenant_id), hash_value);
-  return hash_value;
 }
 
 ObScheduleSuspectInfoMgr::ObScheduleSuspectInfoMgr()
@@ -335,14 +320,13 @@ int ObCompactionDiagnoseMgr::get_suspect_info(
     ObScheduleSuspectInfo &ret_info)
 {
   int ret = OB_SUCCESS;
-  ObScheduleSuspectInfo input_info;
-  input_info.tenant_id_ = MTL_ID();
-  input_info.merge_type_ = merge_type;
-  input_info.ls_id_ = ls_id;
-  input_info.tablet_id_ = tablet_id;
-  if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().get_suspect_info(input_info.hash(), ret_info))) {
+  compaction::ObMergeDagHash dag_hash;
+  dag_hash.merge_type_ = merge_type;
+  dag_hash.ls_id_ = ls_id;
+  dag_hash.tablet_id_ = tablet_id;
+  if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().get_suspect_info(dag_hash.inner_hash(), ret_info))) {
     if (OB_HASH_NOT_EXIST != ret) {
-      LOG_WARN("failed to get suspect info", K(ret), K(input_info));
+      LOG_WARN("failed to get suspect info", K(ret), K(dag_hash));
     }
   } else if (ret_info.add_time_ + SUSPECT_INFO_WARNING_THRESHOLD < ObTimeUtility::fast_current_time()) {
     ret = OB_ENTRY_NOT_EXIST;
@@ -389,7 +373,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
             LOG_WARN("failed to add dignose info about freeze_info", K(tmp_ret), K(merged_version));
           }
         } else {
-          compaction_scn = freeze_info.freeze_ts;
+          compaction_scn = freeze_info.freeze_scn.get_val_for_inner_table_field();
         }
       }
 
@@ -429,7 +413,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
             SET_DIAGNOSE_INFO(
                 info_array_[idx_++],
                 MINI_MERGE,
-                ret_info.tenant_id_,
+                MTL_ID(),
                 ls_id,
                 ObTabletID(INT64_MAX),
                 ObCompactionDiagnoseInfo::DIA_STATUS_FAILED,
@@ -497,7 +481,7 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_mini_merge(
         static_cast<ObSSTable*>(table_store.get_minor_sstables().get_boundary_table(true/*last*/)))) {
       diagnose_flag = true;
     } else {
-      if (latest_sstable->get_end_log_ts() < frozen_memtable->get_end_log_ts()
+      if (latest_sstable->get_end_scn() < frozen_memtable->get_end_scn()
           || tablet.get_snapshot_version() < frozen_memtable->get_snapshot_version()) { // not merge finish
         diagnose_flag = true;
       }
@@ -623,7 +607,7 @@ int ObCompactionDiagnoseMgr::get_suspect_and_warning_info(
 
   ObDagWarningInfo *warning_info = nullptr;
   bool add_schedule_info = false;
-  if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().get_suspect_info(ObScheduleSuspectInfo::gen_hash(MTL_ID(), dag.hash()), info))) {
+  if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().get_suspect_info(dag.hash(), info))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get suspect info", K(ret), K(ls_id), K(tablet_id));
     } else { // no schedule suspect info
@@ -647,7 +631,7 @@ int ObCompactionDiagnoseMgr::get_suspect_and_warning_info(
               "error_no", warning_info->dag_ret_,
               "last_error_time", warning_info->gmt_modified_,
               "error_trace", warning_info->task_id_,
-              "warning", warning_info->warning_info_))) {
+              "waring", warning_info->warning_info_))) {
         LOG_WARN("failed to add diagnose info", K(ret), K(ls_id), K(tablet_id), KPC(warning_info));
       }
     }

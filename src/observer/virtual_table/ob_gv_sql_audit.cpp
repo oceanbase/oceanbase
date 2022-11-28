@@ -921,8 +921,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         break;
       }
       case SNAPSHOT_VERSION: {
-        //TODO:SCN
-        uint64_t set_v = record.data_.get_snapshot_version() < 0 ? 0 : record.data_.get_snapshot_version();
+        uint64_t set_v = record.data_.get_snapshot_version().is_valid() ? record.data_.get_snapshot_version().get_val_for_inner_table_field() : 0;
         cells[cell_idx].set_uint64(set_v);
         break;
       }

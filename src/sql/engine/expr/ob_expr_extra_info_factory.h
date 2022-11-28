@@ -41,6 +41,26 @@ public:
            && NULL != ALLOC_FUNS_[type];
   }
 
+  // In the past, extra_ and extra_info_ were union structures in ObExpr. now move
+  // the extra_info_ in ObExpr from the union structure to the outer layer.
+  // therefore, in order to deal with upgrade compatibility issues, it is necessary to
+  // identify the type registered before moving extra_info_ to the outer layer.
+  // so, this function is used to determine whether the type is registered
+  // before moving extra_info_ to the outer layer of the union structure
+  // WARNING: It is forbidden to add new registration types to this function
+  inline static bool is_early_registered(const ObExprOperatorType &type)
+  {
+    return type == T_FUN_SYS_CALC_PARTITION_ID ||
+           type == T_FUN_SYS_CALC_TABLET_ID ||
+           type == T_FUN_SYS_CALC_PARTITION_TABLET_ID ||
+           type == T_FUN_ENUM_TO_STR ||
+           type == T_FUN_SET_TO_STR ||
+           type == T_FUN_ENUM_TO_INNER_TYPE ||
+           type == T_FUN_SET_TO_INNER_TYPE ||
+           type == T_FUN_COLUMN_CONV ||
+           type == T_FUN_NORMAL_UDF;
+  }
+
 private:
   template <typename T>
   static int alloc(common::ObIAllocator &alloc, ObIExprExtraInfo *&extra_info,

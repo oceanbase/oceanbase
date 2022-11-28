@@ -67,7 +67,6 @@ public:
         aggr_exprs_(),
         algo_(AGGREGATE_UNINITIALIZED),
         distinct_card_(0.0),
-        distinct_per_dop_(0.0),
         from_pivot_(false),
         is_push_down_(false),
         is_partition_gi_(false),
@@ -135,10 +134,7 @@ public:
   virtual int est_cost() override;
   virtual int est_width() override;
   virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-  int inner_est_cost(double child_card, 
-                     double &child_ndv, 
-                     double &per_dop_ndv,
-                     double &op_cost);
+  int inner_est_cost(double child_card, double &child_ndv, double &op_cost);
   int get_child_est_info(double &child_card, double &child_ndv, double &selectivity);
   int get_gby_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
   virtual bool is_block_op() const override
@@ -222,7 +218,6 @@ private:
   AggregateAlgo algo_;
   // used for the execution engine to set hash bucket size
   double distinct_card_;
-  double distinct_per_dop_;
   bool from_pivot_;
   bool is_push_down_;
   bool is_partition_gi_;

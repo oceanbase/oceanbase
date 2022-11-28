@@ -109,13 +109,12 @@ public:
   using ObISQLClient::read;
   // execute update sql
   virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override;
-  int write(const uint64_t tenant_id, const ObString sql, int64_t &affected_rows, int64_t compatibility_mode,
+  int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows, int64_t compatibility_mode,
         const ObSessionParam *session_param = nullptr);
   using ObISQLClient::write;
 
   bool is_inited() const { return NULL != pool_; }
-  virtual sqlclient::ObISQLConnectionPool *get_pool() override { return pool_; }
-  virtual sqlclient::ObISQLConnection *get_connection() override { return NULL; }
+  sqlclient::ObISQLConnectionPool *get_pool() override { return pool_; }
 
   // can only use assign() to copy to prevent passing ObCommonSqlProxy by value unintentionally.
   void assign(const ObCommonSqlProxy &proxy) { *this = proxy; }

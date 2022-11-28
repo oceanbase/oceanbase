@@ -97,30 +97,30 @@ DEFINE_RPC_PROCESSOR(LogRegisterParentRespP,
                      LogRegisterParentResp,
                      obrpc::OB_LOG_REGISTER_PARENT_RESP);
 
-DEFINE_ELECTION_RPC_PROCESSOR(ElectionPrepareRequestMsgP,
-                              obrpc::LogRpcProxyV2,
-                              election::ElectionPrepareRequestMsg,
-                              obrpc::OB_LOG_ELECTION_PREPARE_REQUEST);
+DEFINE_RPC_PROCESSOR(ElectionPrepareRequestMsgP,
+                     obrpc::LogRpcProxyV2,
+                     election::ElectionPrepareRequestMsg,
+                     obrpc::OB_LOG_ELECTION_PREPARE_REQUEST);
 
-DEFINE_ELECTION_RPC_PROCESSOR(ElectionPrepareResponseMsgP,
-                              obrpc::LogRpcProxyV2,
-                              election::ElectionPrepareResponseMsg,
-                              obrpc::OB_LOG_ELECTION_PREPARE_RESPONSE);
+DEFINE_RPC_PROCESSOR(ElectionPrepareResponseMsgP,
+                     obrpc::LogRpcProxyV2,
+                     election::ElectionPrepareResponseMsg,
+                     obrpc::OB_LOG_ELECTION_PREPARE_RESPONSE);
 
-DEFINE_ELECTION_RPC_PROCESSOR(ElectionAcceptRequestMsgP,
-                              obrpc::LogRpcProxyV2,
-                              election::ElectionAcceptRequestMsg,
-                              obrpc::OB_LOG_ELECTION_ACCEPT_REQUEST);
+DEFINE_RPC_PROCESSOR(ElectionAcceptRequestMsgP,
+                     obrpc::LogRpcProxyV2,
+                     election::ElectionAcceptRequestMsg,
+                     obrpc::OB_LOG_ELECTION_ACCEPT_REQUEST);
 
-DEFINE_ELECTION_RPC_PROCESSOR(ElectionAcceptResponseMsgP,
-                              obrpc::LogRpcProxyV2,
-                              election::ElectionAcceptResponseMsg,
-                              obrpc::OB_LOG_ELECTION_ACCEPT_RESPONSE);
+DEFINE_RPC_PROCESSOR(ElectionAcceptResponseMsgP,
+                     obrpc::LogRpcProxyV2,
+                     election::ElectionAcceptResponseMsg,
+                     obrpc::OB_LOG_ELECTION_ACCEPT_RESPONSE);
 
-DEFINE_ELECTION_RPC_PROCESSOR(ElectionChangeLeaderMsgP,
-                              obrpc::LogRpcProxyV2,
-                              election::ElectionChangeLeaderMsg,
-                              obrpc::OB_LOG_ELECTION_CHANGE_LEADER_REQUEST);
+DEFINE_RPC_PROCESSOR(ElectionChangeLeaderMsgP,
+                     obrpc::LogRpcProxyV2,
+                     election::ElectionChangeLeaderMsg,
+                     obrpc::OB_LOG_ELECTION_CHANGE_LEADER_REQUEST);
 
 DEFINE_RPC_PROCESSOR(CommittedInfoP,
                      obrpc::LogRpcProxyV2,

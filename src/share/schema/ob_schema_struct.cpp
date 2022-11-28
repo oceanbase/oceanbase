@@ -22,7 +22,6 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/number/ob_number_v2.h"
 #include "common/ob_zone_type.h"
-#include "share/ob_ddl_common.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/ob_primary_zone_util.h"
 #include "sql/ob_sql_utils.h"
@@ -220,7 +219,7 @@ int ObSysTableChecker::init_sys_table_name_map()
           } else if (OB_FAIL(sys_table_name_map_.set_refactored(key, value))) {
             LOG_WARN("fail to set table name array", K(ret), K(key), K(table));
           } else {
-            LOG_INFO("set tenant space table name", K(key), K(table), "strlen", table_name.length());
+            LOG_INFO("set tenant space table name", K(key), K(table));
           }
         } else if (OB_SUCCESS == ret) {
           if (OB_ISNULL(value)) {
@@ -304,6 +303,15 @@ int ObSysTableChecker::check_sys_table_name(
     LOG_WARN("table_name is empty", K(ret));
   } else if (!is_sys_database_id(database_id)) {
     is_system_table = false;
+  } else if (is_mysql_database_id(database_id)
+             && !is_sys_tenant(tenant_id)
+             && (0 == table_name.case_compare(OB_HELP_TOPIC_TNAME)
+                 || 0 == table_name.case_compare(OB_HELP_CATEGORY_TNAME)
+                 || 0 == table_name.case_compare(OB_HELP_KEYWORD_TNAME)
+                 || 0 == table_name.case_compare(OB_HELP_RELATION_TNAME))) {
+    // FIXME:(yanmu.ztl) Actually, we should build sys_table_name_map_ with `in_tenant_space` flag.
+    // bugfix: https://work.aone.alibaba-inc.com/issue/35660182
+    is_system_table = false;
   } else {
     ObNameCaseMode mode = OB_ORIGIN_AND_INSENSITIVE;
     const TableNameWrapper table(database_id, mode, table_name);
@@ -324,7 +332,7 @@ int ObSysTableChecker::check_sys_table_name(
         is_system_table = (value->at(i) == table);
       }
     }
-    LOG_TRACE("check sys table name", K(ret), K(key), K(table), "strlen", table_name.length());
+    LOG_TRACE("check sys table name", K(ret), K(key), K(table));
   }
   return ret;
 }
@@ -387,121 +395,69 @@ int ObSysTableChecker::check_inner_table_exist(
 /* -- hard code info for sys table indexes -- */
 bool ObSysTableChecker::is_sys_table_index_tid(const int64_t index_id)
 {
-  bool bret = false;
-  switch (index_id) {
-#define SYS_INDEX_TABLE_ID_SWITCH
-#include "share/inner_table/ob_inner_table_schema_misc.ipp"
-#undef SYS_INDEX_TABLE_ID_SWITCH
-    {
-      bret = true;
-      break;
-    }
-    default : {
-      bret = false;
-      break;
-    }
-  }
-  return bret;
+  const int64_t pure_index_id = index_id;
+  return (pure_index_id == OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID
+          || pure_index_id == OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID
+          || pure_index_id == OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID
+          || pure_index_id == OB_ALL_DDL_TASK_STATUS_IDX_TASK_KEY_TID);
 }
 
 bool ObSysTableChecker::is_sys_table_has_index(const int64_t table_id)
 {
-  bool bret = false;
-  switch (table_id) {
-#define SYS_INDEX_DATA_TABLE_ID_SWITCH
-#include "share/inner_table/ob_inner_table_schema_misc.ipp"
-#undef SYS_INDEX_DATA_TABLE_ID_SWITCH
-    {
-      bret = true;
-      break;
-    }
-    default : {
-      bret = false;
-      break;
-    }
+  bool has_index = false;
+  const int64_t pure_table_id = table_id;
+  if (OB_ALL_TABLE_HISTORY_TID == pure_table_id
+      || OB_ALL_BACKUP_SET_FILES_TID == pure_table_id
+      || OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID == pure_table_id
+      || OB_ALL_DDL_TASK_STATUS_TID == pure_table_id) {
+    has_index = true;
   }
-  return bret;
+  return has_index;
 }
 
-int ObSysTableChecker::fill_sys_index_infos(ObTableSchema &table)
+int64_t ObSysTableChecker::get_sys_table_index_tid(
+  const int64_t table_id)
+{
+  int64_t index_id = OB_INVALID_ID;
+  if (OB_ALL_TABLE_HISTORY_TID == table_id) {
+    index_id = OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID;
+  } else if (OB_ALL_BACKUP_SET_FILES_TID == table_id) {
+    index_id = OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID;
+  } else if (OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID == table_id) {
+    index_id = OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID;
+  } else if (OB_ALL_DDL_TASK_STATUS_TID == table_id) {
+    index_id = OB_ALL_DDL_TASK_STATUS_IDX_TASK_KEY_TID;
+  } else {
+    index_id = OB_INVALID_ID;
+  }
+  return index_id;
+}
+
+int ObSysTableChecker::get_sys_table_index_schema(
+    const int64_t data_table_id,
+    ObTableSchema &index_schema)
 {
   int ret = OB_SUCCESS;
-  const int64_t table_id = table.get_table_id();
-  if (ObSysTableChecker::is_sys_table_has_index(table_id)
-      && table.get_index_tid_count() <= 0) {
-    ObArray<uint64_t> index_tids;
-    if (OB_FAIL(get_sys_table_index_tids(table_id, index_tids))) {
-      LOG_WARN("fail to get index tids", KR(ret), K(table_id));
+  const int64_t pure_data_table_id = data_table_id;
+  if (OB_ALL_TABLE_HISTORY_TID == pure_data_table_id) {
+    if (OB_FAIL(ObInnerTableSchema::all_table_history_idx_data_table_id_schema(index_schema))) {
+      LOG_WARN("fail to create index schema", KR(ret), K(pure_data_table_id));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_tids.count(); i++) {
-      const int64_t index_id = index_tids.at(i);
-      if (OB_INVALID_ID == index_id) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid sys table's index_id", KR(ret), K(table_id));
-      } else if (OB_FAIL(table.add_simple_index_info(ObAuxTableMetaInfo(
-                         index_id,
-                         USER_INDEX,
-                         INDEX_TYPE_NORMAL_LOCAL)))) {
-        LOG_WARN("fail to add simple_index_info", KR(ret), K(table_id), K(index_id));
-      }
-    } // end for
-  }
-  return ret;
-}
-
-
-int ObSysTableChecker::get_sys_table_index_tids(
-    const int64_t table_id,
-    ObIArray<uint64_t> &index_tids)
-{
-  int ret = OB_SUCCESS;
-  index_tids.reset();
-  switch (table_id) {
-#define SYS_INDEX_DATA_TABLE_ID_TO_INDEX_IDS_SWITCH
-#include "share/inner_table/ob_inner_table_schema_misc.ipp"
-#undef SYS_INDEX_DATA_TABLE_ID_TO_INDEX_IDS_SWITCH
-    default : {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid data table id", KR(ret), K(table_id));
-      break;
+  } else if (OB_ALL_BACKUP_SET_FILES_TID == pure_data_table_id) {
+    if (OB_FAIL(ObInnerTableSchema::all_backup_set_files_idx_status_schema(index_schema))) {
+      LOG_WARN("fail to create index schema", KR(ret), K(pure_data_table_id));
     }
-  }
-  return ret;
-}
-
-int ObSysTableChecker::append_sys_table_index_schemas(
-    const uint64_t tenant_id,
-    const uint64_t data_table_id,
-    ObIArray<ObTableSchema> &tables)
-{
-  int ret = OB_SUCCESS;
-  if (ObSysTableChecker::is_sys_table_has_index(data_table_id)) {
-    HEAP_VAR(ObTableSchema, index_schema) {
-      switch (data_table_id) {
-#define SYS_INDEX_DATA_TABLE_ID_TO_INDEX_SCHEMAS_SWITCH
-#include "share/inner_table/ob_inner_table_schema_misc.ipp"
-#undef SYS_INDEX_DATA_TABLE_ID_TO_INDEX_SCHEMAS_SWITCH
-        default : {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("data table is invalid", KR(ret), K(data_table_id));
-          break;
-        }
-      }
-    } // end HEAP_VAR
-  }
-  return ret;
-}
-
-int ObSysTableChecker::append_table_(
-    const uint64_t tenant_id,
-    share::schema::ObTableSchema &index_schema,
-    common::ObIArray<share::schema::ObTableSchema> &tables)
-{
-  int ret = OB_SUCCESS;
-  if (!is_sys_tenant(tenant_id) && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, index_schema))) {
-    LOG_WARN("fail to construct full table", KR(ret), K(tenant_id), "data_table_id", index_schema.get_data_table_id());
-  } else if (OB_FAIL(tables.push_back(index_schema))) {
-    LOG_WARN("fail to push back index", KR(ret), K(tenant_id), "data_table_id", index_schema.get_data_table_id());
+  } else if (OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID == pure_data_table_id) {
+    if (OB_FAIL(ObInnerTableSchema::all_log_archive_piece_files_idx_status_schema(index_schema))) {
+      LOG_WARN("fail to create index schema", KR(ret), K(pure_data_table_id));
+    }
+  } else if (OB_ALL_DDL_TASK_STATUS_TID == pure_data_table_id) {
+    if (OB_FAIL(ObInnerTableSchema::all_ddl_task_status_idx_task_key_schema(index_schema))) {
+      LOG_WARN("fail to create index schema", KR(ret), K(pure_data_table_id));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("data table is invalid", KR(ret), K(pure_data_table_id));
   }
   return ret;
 }
@@ -514,9 +470,14 @@ int ObSysTableChecker::add_sys_table_index_ids(
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
-#define ADD_SYS_INDEX_ID
-#include "share/inner_table/ob_inner_table_schema_misc.ipp"
-#undef ADD_SYS_INDEX_ID
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID))) {
+    LOG_WARN("add index table id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID))) {
+    LOG_WARN("add index table id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID))) {
+    LOG_WARN("add index table id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_DDL_TASK_STATUS_IDX_TASK_KEY_TID))) {
+    LOG_WARN("add index table id failed", KR(ret), K(tenant_id));
   }
   return ret;
 }
@@ -2249,17 +2210,6 @@ bool ObSysVarSchema::is_equal_except_value(const ObSysVarSchema &other) const
       && 0 == min_val_.compare(other.min_val_)
       && 0 == max_val_.compare(other.max_val_)
       && 0 == info_.compare(other.info_)) {
-    bret = true;
-  }
-  return bret;
-}
-
-bool ObSysVarSchema::is_equal_for_add(const ObSysVarSchema &other) const
-{
-  bool bret = false;
-  if (is_equal_except_value(other)
-      && 0 == value_.compare(other.value_)
-      && zone_ == other.zone_) {
     bret = true;
   }
   return bret;
@@ -5201,7 +5151,6 @@ void ObBasePartition::reset()
   is_empty_partition_name_ = false;
   tablespace_id_ = OB_INVALID_ID;
   partition_type_ = PARTITION_TYPE_NORMAL;
-  name_.reset();
   ObSchema::reset();
 }
 
@@ -5399,72 +5348,6 @@ int ObBasePartition::set_high_bound_val_with_hex_str(
   } else if (OB_FAIL(high_bound_val_.deserialize(*allocator, serialize_buf, seri_length, pos))) {
     LOG_WARN("Failed to deserialize high bound val", K(ret));
   } else { }//do nothing
-  return ret;
-}
-
-int ObBasePartition::convert_character_for_range_columns_part(
-    const ObCollationType &to_collation)
-{
-  int ret = OB_SUCCESS;
-  ObIAllocator *allocator = get_allocator();
-  if (OB_ISNULL(allocator)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null allocator", K(ret));
-  } else if (low_bound_val_.get_obj_cnt() > 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("defensive code, unexpected error", K(ret), K(low_bound_val_));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < high_bound_val_.get_obj_cnt(); i++) {
-      ObObj &obj = high_bound_val_.get_obj_ptr()[i];
-      const ObObjMeta &obj_meta = obj.get_meta();
-      if (obj_meta.is_lob()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected err, lob column can not be part key", K(ret), K(obj_meta));
-      } else if (ObDDLUtil::check_can_convert_character(obj_meta)) {
-        ObString dst_string;
-        if (OB_FAIL(ObCharset::charset_convert(*allocator, obj.get_string(), obj.get_collation_type(),
-                                               to_collation, dst_string))) {
-          LOG_WARN("charset convert failed", K(ret), K(obj), K(to_collation));
-        } else {
-          obj.set_string(obj.get_type(), dst_string);
-          obj.set_collation_type(to_collation);
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObBasePartition::convert_character_for_list_columns_part(
-    const ObCollationType &to_collation)
-{
-  int ret = OB_SUCCESS;
-  ObIAllocator *allocator = get_allocator();
-  if (OB_ISNULL(allocator)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null allocator", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < list_row_values_.count(); i++) {
-      common::ObNewRow &row = list_row_values_.at(i);
-      for (int64_t j = 0; OB_SUCC(ret) && j < row.get_count(); j++) {
-        ObObj &obj = row.get_cell(j);
-        const ObObjMeta &obj_meta = obj.get_meta();
-        if (obj_meta.is_lob()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected err, lob column can not be part key", K(ret), K(obj_meta));
-        } else if (ObDDLUtil::check_can_convert_character(obj_meta)) {
-          ObString dst_string;
-          if (OB_FAIL(ObCharset::charset_convert(*allocator, obj.get_string(), obj.get_collation_type(),
-                                               to_collation, dst_string))) {
-          LOG_WARN("charset convert failed", K(ret), K(obj), K(to_collation));
-          } else {
-            obj.set_string(obj.get_type(), dst_string);
-            obj.set_collation_type(to_collation);
-          }
-        }
-      }
-    }
-  }
   return ret;
 }
 
@@ -7559,10 +7442,7 @@ int ObPartitionUtils::set_low_bound_val_by_interval_range_by_innersql(
     }
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        static int64_t ROW_KEY_CNT = 1;
-        ObObj obj_array[ROW_KEY_CNT];
-        obj_array[0].reset();
-        ObObj &low_bound = obj_array[0];
+        ObObj low_bound;
         common::sqlclient::ObMySQLResult *result = NULL;
         if (OB_FAIL(sql_proxy->read(res, p.get_tenant_id(), sql_string.ptr()))) {
           LOG_WARN("execute sql failed", KR(ret), K(sql_string.ptr()), K(p), K(interval_range_val),
@@ -7577,7 +7457,7 @@ int ObPartitionUtils::set_low_bound_val_by_interval_range_by_innersql(
         } else {
           ObRowkey low_bound_val;
           low_bound_val.reset();
-          low_bound_val.assign(obj_array, ROW_KEY_CNT);
+          low_bound_val.assign(&low_bound, 1);
           if (OB_FAIL(p.set_low_bound_val(low_bound_val))) {
             LOG_WARN("fail to set low bound val", K(p), KR(ret));
           }
@@ -11621,6 +11501,7 @@ int ObProfileSchema::set_default_values()
 int ObProfileSchema::set_default_values_v2()
 {
   int ret = OB_SUCCESS;
+  //GET_MIN_CLUSTER_VERSION() >=  CLUSTER_VERSION_2250
   for (int i = 0; OB_SUCC(ret) && i < MAX_PARAMS; ++i) {
     if (PASSWORD_VERIFY_FUNCTION == i) {
       password_verify_function_ = "DEFAULT";

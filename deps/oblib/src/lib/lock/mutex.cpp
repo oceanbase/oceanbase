@@ -14,7 +14,7 @@
 #include "lib/oblog/ob_log.h"
 namespace obutil
 {
-ObUtilMutex::ObUtilMutex()
+Mutex::Mutex()
 {
   const int rt = pthread_mutex_init(&_mutex, NULL);
 #ifdef _NO_EXCEPTION
@@ -29,7 +29,7 @@ ObUtilMutex::ObUtilMutex()
 #endif
 }
 
-ObUtilMutex::~ObUtilMutex()
+Mutex::~Mutex()
 {
   const int rt = pthread_mutex_destroy(&_mutex);
   assert(rt == 0);
@@ -38,7 +38,30 @@ ObUtilMutex::~ObUtilMutex()
   }
 }
 
-bool ObUtilMutex::trylock() const
+void Mutex::lock() const
+{
+  const int rt = pthread_mutex_lock(&_mutex);
+#ifdef _NO_EXCEPTION
+  assert( rt == 0 );
+  if ( rt != 0 ) {
+    if ( rt == EDEADLK ) {
+      _OB_LOG(ERROR,"%s","ThreadLockedException ");
+    } else {
+      _OB_LOG(ERROR,"%s","ThreadSyscallException");
+    }
+  }
+#else
+  if( rt != 0 ) {
+    if(rt == EDEADLK) {
+      throw ThreadLockedException(__FILE__, __LINE__);
+    } else {
+      throw ThreadSyscallException(__FILE__, __LINE__, rt);
+    }
+  }
+#endif
+}
+
+bool Mutex::trylock() const
 {
   const int rt = pthread_mutex_trylock(&_mutex);
 #ifdef _NO_EXCEPTION
@@ -62,34 +85,7 @@ bool ObUtilMutex::trylock() const
   return (rt == 0);
 }
 
-void ObUtilMutex::lock() const
-{
-  const int rt = pthread_mutex_lock(&_mutex);
-#ifdef _NO_EXCEPTION
-  assert( rt == 0 );
-  if ( rt != 0 ) {
-    if ( rt == EDEADLK ) {
-      _OB_LOG(ERROR,"%s","ThreadLockedException ");
-    } else {
-      _OB_LOG(ERROR,"%s","ThreadSyscallException");
-    }
-  }
-#else
-  if( rt != 0 ) {
-    if(rt == EDEADLK) {
-      throw ThreadLockedException(__FILE__, __LINE__);
-    } else {
-      throw ThreadSyscallException(__FILE__, __LINE__, rt);
-    }
-  }
-#endif
-}
-
-void ObUtilMutex::lock(LockState&) const
-{
-}
-
-void ObUtilMutex::unlock() const
+void Mutex::unlock() const
 {
   const int rt = pthread_mutex_unlock(&_mutex);
 #ifdef _NO_EXCEPTION
@@ -104,12 +100,16 @@ void ObUtilMutex::unlock() const
 #endif
 }
 
-void ObUtilMutex::unlock(LockState& state) const
+void Mutex::unlock(LockState& state) const
 {
   state.mutex = &_mutex;
 }
 
-bool ObUtilMutex::will_unlock() const
+void Mutex::lock(LockState&) const
+{
+}
+
+bool Mutex::will_unlock() const
 {
   return true;
 }

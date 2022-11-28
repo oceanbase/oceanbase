@@ -19,6 +19,7 @@ namespace oceanbase
 namespace rootserver
 {
 
+//not used in 4.0, SCN ignore this
 //TODO(cangjun) need change file name ob_recovery_point maybe better
 class ObRestorePointService
 {

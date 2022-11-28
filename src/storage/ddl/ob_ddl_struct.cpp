@@ -209,40 +209,16 @@ int ObDDLKV::set_macro_block(const ObDDLMacroBlock &macro_block)
 {
   int ret = OB_SUCCESS;
   const int64_t MAX_DDL_BLOCK_COUNT = 10L * 1024L * 1024L * 1024L / OB_SERVER_BLOCK_MGR.get_macro_block_size();
-  int64_t freeze_block_count = MAX_DDL_BLOCK_COUNT;
-#ifdef ERRSIM
-  if (0 != GCONF.errsim_max_ddl_block_count) {
-    freeze_block_count = GCONF.errsim_max_ddl_block_count;
-    LOG_INFO("ddl set macro block count", K(freeze_block_count));
-  }
-#endif
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl kv is not init", K(ret));
   } else if (OB_UNLIKELY(!macro_block.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(macro_block));
-  } else {
-    const uint64_t tenant_id = MTL_ID();
-    ObUnitInfoGetter::ObTenantConfig unit;
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(GCTX.omt_->get_tenant_unit(tenant_id, unit))) {
-      LOG_WARN("get tenant unit failed", K(tmp_ret), K(tenant_id));
-    } else {
-      const int64_t log_allowed_block_count = unit.config_.log_disk_size() * 0.2 / OB_SERVER_BLOCK_MGR.get_macro_block_size();
-      if (log_allowed_block_count <= 0) {
-        tmp_ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid macro block count by log disk size", K(tmp_ret), K(tenant_id), K(unit.config_));
-      } else {
-        freeze_block_count = min(freeze_block_count, log_allowed_block_count);
-      }
-    }
-  }
-  if (OB_SUCC(ret) && ddl_blocks_.count() >= freeze_block_count) {
+  } else if (ddl_blocks_.count() >= MAX_DDL_BLOCK_COUNT) {
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id_;
     param.tablet_id_ = tablet_id_;
-    param.start_log_ts_ = ddl_start_log_ts_;
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       LOG_WARN("try schedule ddl merge dag failed when ddl kv is full ",
@@ -333,8 +309,8 @@ int ObDDLKV::close()
     ddl_param.ls_id_ = ls_id_;
     ddl_param.table_key_.tablet_id_ = tablet_id_;
     ddl_param.table_key_.table_type_ = ObITable::TableType::KV_DUMP_SSTABLE;
-    ddl_param.table_key_.log_ts_range_.start_log_ts_ = last_freezed_log_ts_;
-    ddl_param.table_key_.log_ts_range_.end_log_ts_ = freeze_log_ts_;
+    ddl_param.table_key_.scn_range_.start_scn_.convert_for_gts(last_freezed_log_ts_);
+    ddl_param.table_key_.scn_range_.end_scn_.convert_for_gts(freeze_log_ts_);
     ddl_param.start_log_ts_ = ddl_start_log_ts_;
     ddl_param.snapshot_version_ = snapshot_version_;
     ddl_param.cluster_version_ = cluster_version_;
@@ -513,13 +489,13 @@ ObDDLKVPendingGuard::ObDDLKVPendingGuard(ObTablet *tablet, const int64_t log_ts)
 {
   int ret = OB_SUCCESS;
   ObDDLKV *curr_kv = nullptr;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
+  ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
   if (OB_UNLIKELY(nullptr == tablet || log_ts <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(tablet), K(log_ts));
-  } else if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+  } else if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr))) {
     LOG_WARN("get ddl kv mgr failed", K(ret));
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_or_create_ddl_kv(log_ts, kv_handle_))) {
+  } else if (OB_FAIL(ddl_kv_mgr->get_or_create_ddl_kv(log_ts, kv_handle_))) {
     LOG_WARN("acquire ddl kv failed", K(ret));
   } else if (OB_FAIL(kv_handle_.get_ddl_kv(curr_kv))) {
     LOG_WARN("fail to get ddl kv", K(ret));

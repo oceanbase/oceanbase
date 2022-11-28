@@ -24,7 +24,6 @@ namespace common
 {
 class ObMemLeakChecker
 {
-  static constexpr const char MOD_INFO_MAP_STR[] =  "leakInfoMap";
   struct PtrKey
   {
     void *ptr_;
@@ -60,26 +59,7 @@ class ObMemLeakChecker
   typedef hash::ObHashMap<PtrKey, Info> mod_alloc_info_t;
 
 public:
-
-  class mod_info_map_t
-  {
-    public:
-      typedef hash::ObHashMap<Info, std::pair<int64_t, int64_t>> hashmap;
-      int create(int64_t bucket_num)
-      {
-        ObMemAttr attr(common::OB_SERVER_TENANT_ID, MOD_INFO_MAP_STR, ObCtxIds::DEFAULT_CTX_ID,
-                      lib::OB_HIGH_ALLOC);
-        return map_.create(bucket_num, attr, attr);
-      }
-
-      hashmap *operator->()
-      {
-        return &map_;
-      }
-    private:
-      hashmap map_;
-  };
-
+  typedef hash::ObHashMap<Info, std::pair<int64_t, int64_t>> mod_info_map_t;
   using TCharArray = char[2 * lib::AOBJECT_LABEL_SIZE + 1];
 
   ObMemLeakChecker()
@@ -123,8 +103,6 @@ public:
     if (nullptr == str || 0 == STRLEN(str) || 0 == STRNCMP(str, "NONE", STRLEN("NONE"))) {
       origin_str_[0] = '\0';
       tmp_ct = NOCHECK;
-    } else if (0 == STRNCMP(str, MOD_INFO_MAP_STR, strlen(MOD_INFO_MAP_STR))) {
-       // ensure leak_mod is different from the mod_info_map's label
     } else {
       STRNCPY(origin_str_, str, sizeof(origin_str_));
       origin_str_[sizeof(origin_str_) - 1] = '\0';
@@ -200,7 +178,7 @@ public:
     }
   }
 
-  int load_leak_info_map(mod_info_map_t &info_map)
+  int load_leak_info_map(hash::ObHashMap<Info, std::pair<int64_t, int64_t>> &info_map)
   {
     int ret = OB_SUCCESS;
     using hashtable = mod_alloc_info_t::hashtable;
@@ -212,14 +190,14 @@ public:
       while (node_it != bucket_it->node_end()) {
         std::pair<int64_t, int64_t> item;
         //_OB_LOG(INFO, "hash value, bt=%s, hash=%lu", it->second.bt_, it->second.hash());
-        ret = info_map->get_refactored(node_it->second, item);
+        ret = info_map.get_refactored(node_it->second, item);
         if (OB_FAIL(ret) && OB_HASH_NOT_EXIST != ret) {
           _OB_LOG(INFO, "LEAK_CHECKER, ptr=%p bt=%s", node_it->first.ptr_, node_it->second.bt_);
         } else {
           if (OB_SUCC(ret)) {
             item.first += 1;
             item.second += node_it->second.bytes_;
-            if (OB_FAIL(info_map->set_refactored(node_it->second, item, 1, 0, 1))) {
+            if (OB_FAIL(info_map.set_refactored(node_it->second, item, 1, 0, 1))) {
               _OB_LOG(WARN, "failed to aggregate memory size, ret=%d", ret);
             } else {
               _OB_LOG(DEBUG, "LEAK_CHECKER hash updated");
@@ -227,7 +205,7 @@ public:
           } else {
             item.first = 1;
             item.second = node_it->second.bytes_;
-            if (OB_FAIL(info_map->set_refactored(node_it->second, item, 1, 0, 0))) {
+            if (OB_FAIL(info_map.set_refactored(node_it->second, item, 1, 0, 0))) {
               _OB_LOG(WARN, "failed to aggregate memory size, ret=%d", ret);
             } else {
               _OB_LOG(DEBUG, "LEAK_CHECKER hash inserted");
@@ -242,8 +220,11 @@ public:
   }
   void print()
   {
-    mod_info_map_t tmp_map;
-    int ret = tmp_map.create(10000);
+    ObMemAttr attr(common::OB_SERVER_TENANT_ID, "leakInfoMap", ObCtxIds::DEFAULT_CTX_ID,
+                   lib::OB_HIGH_ALLOC);
+    using Hash = hash::ObHashMap<Info, std::pair<int64_t, int64_t>>;
+    Hash tmp_map;
+    int ret = tmp_map.create(10000, attr, attr);
     if (OB_FAIL(ret)) {
       _OB_LOG(ERROR, "failed to create hashmap, err=%d", ret);
     } else if (OB_FAIL(load_leak_info_map(tmp_map))) {
@@ -251,8 +232,8 @@ public:
     } else {
       _OB_LOG(INFO, "######## LEAK_CHECKER (str = %s)########", origin_str_);
 
-      mod_info_map_t::hashmap::const_iterator jt = tmp_map->begin();
-      for (; jt != tmp_map->end(); ++jt)
+      Hash::const_iterator jt = tmp_map.begin();
+      for (; jt != tmp_map.end(); ++jt)
       {
         _OB_LOG(INFO, "[LC] bt=%s, count=%ld, bytes=%ld",
                 jt->first.bt_, jt->second.first, jt->second.second);

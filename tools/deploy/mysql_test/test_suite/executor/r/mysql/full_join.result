@@ -352,13 +352,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |12  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |11  |
-|2 |  SORT                    |        |1        |11  |
-|3 |   PX PARTITION ITERATOR  |        |1        |11  |
-|4 |    MERGE FULL OUTER JOIN |        |1        |11  |
-|5 |     TABLE SCAN           |t1      |1        |6   |
-|6 |     TABLE SCAN           |t2      |1        |6   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |275 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |275 |
+|2 |  SORT                    |        |1        |274 |
+|3 |   PX PARTITION ITERATOR  |        |1        |274 |
+|4 |    MERGE FULL OUTER JOIN |        |1        |274 |
+|5 |     TABLE SCAN           |t1      |1        |137 |
+|6 |     TABLE SCAN           |t2      |1        |137 |
 =======================================================
 
 Outputs & filters: 
@@ -412,13 +412,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |17  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |17  |
-|2 |  SORT                    |        |1        |17  |
-|3 |   PX PARTITION ITERATOR  |        |1        |17  |
-|4 |    MERGE FULL OUTER JOIN |        |1        |17  |
-|5 |     TABLE SCAN           |t1      |1        |9   |
-|6 |     TABLE SCAN           |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |456 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |456 |
+|2 |  SORT                    |        |1        |456 |
+|3 |   PX PARTITION ITERATOR  |        |1        |456 |
+|4 |    MERGE FULL OUTER JOIN |        |1        |456 |
+|5 |     TABLE SCAN           |t1      |1        |228 |
+|6 |     TABLE SCAN           |t2      |1        |228 |
 =======================================================
 
 Outputs & filters: 
@@ -460,13 +460,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |15  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |15  |
-|2 |  SORT                    |        |1        |14  |
-|3 |   PX PARTITION ITERATOR  |        |1        |14  |
-|4 |    MERGE FULL OUTER JOIN |        |1        |14  |
-|5 |     TABLE SCAN           |t1      |1        |7   |
-|6 |     TABLE SCAN           |t2      |1        |7   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |366 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |366 |
+|2 |  SORT                    |        |1        |365 |
+|3 |   PX PARTITION ITERATOR  |        |1        |365 |
+|4 |    MERGE FULL OUTER JOIN |        |1        |365 |
+|5 |     TABLE SCAN           |t1      |1        |183 |
+|6 |     TABLE SCAN           |t2      |1        |183 |
 =======================================================
 
 Outputs & filters: 
@@ -512,13 +512,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |17  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |17  |
-|2 |  SORT                    |        |1        |17  |
-|3 |   PX PARTITION ITERATOR  |        |1        |17  |
-|4 |    MERGE FULL OUTER JOIN |        |1        |17  |
-|5 |     TABLE SCAN           |t1      |1        |9   |
-|6 |     TABLE SCAN           |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |456 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |456 |
+|2 |  SORT                    |        |1        |456 |
+|3 |   PX PARTITION ITERATOR  |        |1        |456 |
+|4 |    MERGE FULL OUTER JOIN |        |1        |456 |
+|5 |     TABLE SCAN           |t1      |1        |228 |
+|6 |     TABLE SCAN           |t2      |1        |228 |
 =======================================================
 
 Outputs & filters: 
@@ -556,13 +556,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |12  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |11  |
-|2 |  SORT                    |        |1        |11  |
-|3 |   PX PARTITION ITERATOR  |        |1        |11  |
-|4 |    MERGE FULL OUTER JOIN |        |1        |11  |
-|5 |     TABLE SCAN           |t1      |1        |6   |
-|6 |     TABLE SCAN           |t2      |1        |6   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |275 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |275 |
+|2 |  SORT                    |        |1        |274 |
+|3 |   PX PARTITION ITERATOR  |        |1        |274 |
+|4 |    MERGE FULL OUTER JOIN |        |1        |274 |
+|5 |     TABLE SCAN           |t1      |1        |137 |
+|6 |     TABLE SCAN           |t2      |1        |137 |
 =======================================================
 
 Outputs & filters: 
@@ -616,13 +616,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |17  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |17  |
-|2 |  SORT                    |        |1        |17  |
-|3 |   PX PARTITION ITERATOR  |        |1        |17  |
-|4 |    MERGE FULL OUTER JOIN |        |1        |17  |
-|5 |     TABLE SCAN           |t1      |1        |9   |
-|6 |     TABLE SCAN           |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |456 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |456 |
+|2 |  SORT                    |        |1        |456 |
+|3 |   PX PARTITION ITERATOR  |        |1        |456 |
+|4 |    MERGE FULL OUTER JOIN |        |1        |456 |
+|5 |     TABLE SCAN           |t1      |1        |228 |
+|6 |     TABLE SCAN           |t2      |1        |228 |
 =======================================================
 
 Outputs & filters: 
@@ -664,13 +664,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |15  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |15  |
-|2 |  SORT                    |        |1        |14  |
-|3 |   PX PARTITION ITERATOR  |        |1        |14  |
-|4 |    MERGE FULL OUTER JOIN |        |1        |14  |
-|5 |     TABLE SCAN           |t1      |1        |7   |
-|6 |     TABLE SCAN           |t2      |1        |7   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |366 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |366 |
+|2 |  SORT                    |        |1        |365 |
+|3 |   PX PARTITION ITERATOR  |        |1        |365 |
+|4 |    MERGE FULL OUTER JOIN |        |1        |365 |
+|5 |     TABLE SCAN           |t1      |1        |183 |
+|6 |     TABLE SCAN           |t2      |1        |183 |
 =======================================================
 
 Outputs & filters: 
@@ -716,13 +716,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |17  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |17  |
-|2 |  SORT                    |        |1        |17  |
-|3 |   PX PARTITION ITERATOR  |        |1        |17  |
-|4 |    MERGE FULL OUTER JOIN |        |1        |17  |
-|5 |     TABLE SCAN           |t1      |1        |9   |
-|6 |     TABLE SCAN           |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |456 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |456 |
+|2 |  SORT                    |        |1        |456 |
+|3 |   PX PARTITION ITERATOR  |        |1        |456 |
+|4 |    MERGE FULL OUTER JOIN |        |1        |456 |
+|5 |     TABLE SCAN           |t1      |1        |228 |
+|6 |     TABLE SCAN           |t2      |1        |228 |
 =======================================================
 
 Outputs & filters: 
@@ -760,13 +760,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |12  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |12  |
-|2 |  SORT                    |        |1        |11  |
-|3 |   PX PARTITION ITERATOR  |        |1        |11  |
-|4 |    HASH FULL OUTER JOIN  |        |1        |11  |
-|5 |     TABLE SCAN           |t1      |1        |6   |
-|6 |     TABLE SCAN           |t2      |1        |6   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |275 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |275 |
+|2 |  SORT                    |        |1        |274 |
+|3 |   PX PARTITION ITERATOR  |        |1        |274 |
+|4 |    HASH FULL OUTER JOIN  |        |1        |274 |
+|5 |     TABLE SCAN           |t1      |1        |137 |
+|6 |     TABLE SCAN           |t2      |1        |137 |
 =======================================================
 
 Outputs & filters: 
@@ -820,13 +820,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |18  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |18  |
-|2 |  SORT                    |        |1        |18  |
-|3 |   PX PARTITION ITERATOR  |        |1        |18  |
-|4 |    HASH FULL OUTER JOIN  |        |1        |18  |
-|5 |     TABLE SCAN           |t1      |1        |9   |
-|6 |     TABLE SCAN           |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |456 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |456 |
+|2 |  SORT                    |        |1        |456 |
+|3 |   PX PARTITION ITERATOR  |        |1        |456 |
+|4 |    HASH FULL OUTER JOIN  |        |1        |456 |
+|5 |     TABLE SCAN           |t1      |1        |228 |
+|6 |     TABLE SCAN           |t2      |1        |228 |
 =======================================================
 
 Outputs & filters: 
@@ -868,13 +868,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |15  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |15  |
-|2 |  SORT                    |        |1        |14  |
-|3 |   PX PARTITION ITERATOR  |        |1        |14  |
-|4 |    HASH FULL OUTER JOIN  |        |1        |14  |
-|5 |     TABLE SCAN           |t1      |1        |7   |
-|6 |     TABLE SCAN           |t2      |1        |7   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |366 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |366 |
+|2 |  SORT                    |        |1        |365 |
+|3 |   PX PARTITION ITERATOR  |        |1        |365 |
+|4 |    HASH FULL OUTER JOIN  |        |1        |365 |
+|5 |     TABLE SCAN           |t1      |1        |183 |
+|6 |     TABLE SCAN           |t2      |1        |183 |
 =======================================================
 
 Outputs & filters: 
@@ -920,13 +920,13 @@ Query Plan
 =======================================================
 |ID|OPERATOR                  |NAME    |EST. ROWS|COST|
 -------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1        |18  |
-|1 | EXCHANGE OUT DISTR       |:EX10000|1        |18  |
-|2 |  SORT                    |        |1        |18  |
-|3 |   PX PARTITION ITERATOR  |        |1        |18  |
-|4 |    HASH FULL OUTER JOIN  |        |1        |18  |
-|5 |     TABLE SCAN           |t1      |1        |9   |
-|6 |     TABLE SCAN           |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT |        |1        |456 |
+|1 | EXCHANGE OUT DISTR       |:EX10000|1        |456 |
+|2 |  SORT                    |        |1        |456 |
+|3 |   PX PARTITION ITERATOR  |        |1        |456 |
+|4 |    HASH FULL OUTER JOIN  |        |1        |456 |
+|5 |     TABLE SCAN           |t1      |1        |228 |
+|6 |     TABLE SCAN           |t2      |1        |228 |
 =======================================================
 
 Outputs & filters: 
@@ -965,16 +965,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
-|2 |  SORT                        |        |1        |15  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
-|4 |    EXCHANGE IN DISTR         |        |1        |6   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
-|6 |      PX PARTITION ITERATOR   |        |1        |6   |
-|7 |       TABLE SCAN             |t1      |1        |6   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |367 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |366 |
+|2 |  SORT                        |        |1        |366 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |366 |
+|4 |    EXCHANGE IN DISTR         |        |1        |138 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |138 |
+|6 |      PX PARTITION ITERATOR   |        |1        |137 |
+|7 |       TABLE SCAN             |t1      |1        |137 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -1031,16 +1031,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |15  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
-|2 |  SORT                        |        |1        |15  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |6   |
-|9 |     TABLE SCAN               |t2      |1        |6   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |366 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |366 |
+|2 |  SORT                        |        |1        |366 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |366 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |137 |
+|9 |     TABLE SCAN               |t2      |1        |137 |
 ===========================================================
 
 Outputs & filters: 
@@ -1085,16 +1085,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |17  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |17  |
-|2 |  SORT                        |        |1        |16  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
-|4 |    EXCHANGE IN DISTR         |        |1        |8   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
-|6 |      PX PARTITION ITERATOR   |        |1        |7   |
-|7 |       TABLE SCAN             |t1      |1        |7   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |412 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |412 |
+|2 |  SORT                        |        |1        |411 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |411 |
+|4 |    EXCHANGE IN DISTR         |        |1        |183 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |183 |
+|6 |      PX PARTITION ITERATOR   |        |1        |183 |
+|7 |       TABLE SCAN             |t1      |1        |183 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -1151,16 +1151,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |16  |
-|2 |  SORT                        |        |1        |16  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |7   |
-|9 |     TABLE SCAN               |t2      |1        |7   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |411 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |411 |
+|2 |  SORT                        |        |1        |411 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |411 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |183 |
+|9 |     TABLE SCAN               |t2      |1        |183 |
 ===========================================================
 
 Outputs & filters: 
@@ -1205,16 +1205,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
-|2 |  SORT                        |        |1        |13  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
-|4 |    EXCHANGE IN DISTR         |        |1        |6   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
-|6 |      PX PARTITION ITERATOR   |        |1        |6   |
-|7 |       TABLE SCAN             |t1      |1        |6   |
-|8 |    PX PARTITION ITERATOR     |        |1        |7   |
-|9 |     TABLE SCAN               |t2      |1        |7   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |321 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |321 |
+|2 |  SORT                        |        |1        |320 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |320 |
+|4 |    EXCHANGE IN DISTR         |        |1        |138 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |138 |
+|6 |      PX PARTITION ITERATOR   |        |1        |137 |
+|7 |       TABLE SCAN             |t1      |1        |137 |
+|8 |    PX PARTITION ITERATOR     |        |1        |183 |
+|9 |     TABLE SCAN               |t2      |1        |183 |
 ===========================================================
 
 Outputs & filters: 
@@ -1271,16 +1271,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
-|2 |  SORT                        |        |1        |18  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |456 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |456 |
+|2 |  SORT                        |        |1        |456 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |456 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -1325,16 +1325,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
-|2 |  SORT                        |        |1        |13  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
-|4 |    EXCHANGE IN DISTR         |        |1        |8   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
-|6 |      PX PARTITION ITERATOR   |        |1        |7   |
-|7 |       TABLE SCAN             |t1      |1        |7   |
-|8 |    PX PARTITION ITERATOR     |        |1        |6   |
-|9 |     TABLE SCAN               |t2      |1        |6   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |321 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |321 |
+|2 |  SORT                        |        |1        |320 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |320 |
+|4 |    EXCHANGE IN DISTR         |        |1        |183 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |183 |
+|6 |      PX PARTITION ITERATOR   |        |1        |183 |
+|7 |       TABLE SCAN             |t1      |1        |183 |
+|8 |    PX PARTITION ITERATOR     |        |1        |137 |
+|9 |     TABLE SCAN               |t2      |1        |137 |
 ===========================================================
 
 Outputs & filters: 
@@ -1391,16 +1391,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
-|2 |  SORT                        |        |1        |18  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |456 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |456 |
+|2 |  SORT                        |        |1        |456 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |456 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -1445,16 +1445,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
-|2 |  SORT                        |        |1        |15  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
-|4 |    EXCHANGE IN DISTR         |        |1        |6   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
-|6 |      PX PARTITION ITERATOR   |        |1        |6   |
-|7 |       TABLE SCAN             |t1      |1        |6   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |367 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |366 |
+|2 |  SORT                        |        |1        |366 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |366 |
+|4 |    EXCHANGE IN DISTR         |        |1        |138 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |138 |
+|6 |      PX PARTITION ITERATOR   |        |1        |137 |
+|7 |       TABLE SCAN             |t1      |1        |137 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -1511,16 +1511,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |15  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
-|2 |  SORT                        |        |1        |15  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |6   |
-|9 |     TABLE SCAN               |t2      |1        |6   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |366 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |366 |
+|2 |  SORT                        |        |1        |366 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |366 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |137 |
+|9 |     TABLE SCAN               |t2      |1        |137 |
 ===========================================================
 
 Outputs & filters: 
@@ -1565,16 +1565,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |17  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |17  |
-|2 |  SORT                        |        |1        |16  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
-|4 |    EXCHANGE IN DISTR         |        |1        |8   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
-|6 |      PX PARTITION ITERATOR   |        |1        |7   |
-|7 |       TABLE SCAN             |t1      |1        |7   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |412 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |412 |
+|2 |  SORT                        |        |1        |411 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |411 |
+|4 |    EXCHANGE IN DISTR         |        |1        |183 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |183 |
+|6 |      PX PARTITION ITERATOR   |        |1        |183 |
+|7 |       TABLE SCAN             |t1      |1        |183 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -1631,16 +1631,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |16  |
-|2 |  SORT                        |        |1        |16  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |7   |
-|9 |     TABLE SCAN               |t2      |1        |7   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |411 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |411 |
+|2 |  SORT                        |        |1        |411 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |411 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |183 |
+|9 |     TABLE SCAN               |t2      |1        |183 |
 ===========================================================
 
 Outputs & filters: 
@@ -1685,16 +1685,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
-|2 |  SORT                        |        |1        |13  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
-|4 |    EXCHANGE IN DISTR         |        |1        |6   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
-|6 |      PX PARTITION ITERATOR   |        |1        |6   |
-|7 |       TABLE SCAN             |t1      |1        |6   |
-|8 |    PX PARTITION ITERATOR     |        |1        |7   |
-|9 |     TABLE SCAN               |t2      |1        |7   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |321 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |321 |
+|2 |  SORT                        |        |1        |320 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |320 |
+|4 |    EXCHANGE IN DISTR         |        |1        |138 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |138 |
+|6 |      PX PARTITION ITERATOR   |        |1        |137 |
+|7 |       TABLE SCAN             |t1      |1        |137 |
+|8 |    PX PARTITION ITERATOR     |        |1        |183 |
+|9 |     TABLE SCAN               |t2      |1        |183 |
 ===========================================================
 
 Outputs & filters: 
@@ -1751,16 +1751,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
-|2 |  SORT                        |        |1        |18  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |456 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |456 |
+|2 |  SORT                        |        |1        |456 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |456 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -1805,16 +1805,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
-|2 |  SORT                        |        |1        |13  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
-|4 |    EXCHANGE IN DISTR         |        |1        |8   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
-|6 |      PX PARTITION ITERATOR   |        |1        |7   |
-|7 |       TABLE SCAN             |t1      |1        |7   |
-|8 |    PX PARTITION ITERATOR     |        |1        |6   |
-|9 |     TABLE SCAN               |t2      |1        |6   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |321 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |321 |
+|2 |  SORT                        |        |1        |320 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |320 |
+|4 |    EXCHANGE IN DISTR         |        |1        |183 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |183 |
+|6 |      PX PARTITION ITERATOR   |        |1        |183 |
+|7 |       TABLE SCAN             |t1      |1        |183 |
+|8 |    PX PARTITION ITERATOR     |        |1        |137 |
+|9 |     TABLE SCAN               |t2      |1        |137 |
 ===========================================================
 
 Outputs & filters: 
@@ -1871,16 +1871,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
-|2 |  SORT                        |        |1        |18  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |456 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |456 |
+|2 |  SORT                        |        |1        |456 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |456 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -1925,16 +1925,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
-|2 |  SORT                        |        |1        |15  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
-|4 |    EXCHANGE IN DISTR         |        |1        |6   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
-|6 |      PX PARTITION ITERATOR   |        |1        |6   |
-|7 |       TABLE SCAN             |t1      |1        |6   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |367 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |366 |
+|2 |  SORT                        |        |1        |366 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |366 |
+|4 |    EXCHANGE IN DISTR         |        |1        |138 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |138 |
+|6 |      PX PARTITION ITERATOR   |        |1        |137 |
+|7 |       TABLE SCAN             |t1      |1        |137 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -1991,16 +1991,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |15  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |15  |
-|2 |  SORT                        |        |1        |15  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |15  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |6   |
-|9 |     TABLE SCAN               |t2      |1        |6   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |366 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |366 |
+|2 |  SORT                        |        |1        |366 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |366 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |137 |
+|9 |     TABLE SCAN               |t2      |1        |137 |
 ===========================================================
 
 Outputs & filters: 
@@ -2045,16 +2045,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |17  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |17  |
-|2 |  SORT                        |        |1        |16  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
-|4 |    EXCHANGE IN DISTR         |        |1        |8   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
-|6 |      PX PARTITION ITERATOR   |        |1        |7   |
-|7 |       TABLE SCAN             |t1      |1        |7   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |412 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |412 |
+|2 |  SORT                        |        |1        |411 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |411 |
+|4 |    EXCHANGE IN DISTR         |        |1        |183 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |183 |
+|6 |      PX PARTITION ITERATOR   |        |1        |183 |
+|7 |       TABLE SCAN             |t1      |1        |183 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -2111,16 +2111,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |16  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |16  |
-|2 |  SORT                        |        |1        |16  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |16  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |7   |
-|9 |     TABLE SCAN               |t2      |1        |7   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |411 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |411 |
+|2 |  SORT                        |        |1        |411 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |411 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |183 |
+|9 |     TABLE SCAN               |t2      |1        |183 |
 ===========================================================
 
 Outputs & filters: 
@@ -2165,16 +2165,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
-|2 |  SORT                        |        |1        |13  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
-|4 |    EXCHANGE IN DISTR         |        |1        |6   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |6   |
-|6 |      PX PARTITION ITERATOR   |        |1        |6   |
-|7 |       TABLE SCAN             |t1      |1        |6   |
-|8 |    PX PARTITION ITERATOR     |        |1        |7   |
-|9 |     TABLE SCAN               |t2      |1        |7   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |321 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |321 |
+|2 |  SORT                        |        |1        |320 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |320 |
+|4 |    EXCHANGE IN DISTR         |        |1        |138 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |138 |
+|6 |      PX PARTITION ITERATOR   |        |1        |137 |
+|7 |       TABLE SCAN             |t1      |1        |137 |
+|8 |    PX PARTITION ITERATOR     |        |1        |183 |
+|9 |     TABLE SCAN               |t2      |1        |183 |
 ===========================================================
 
 Outputs & filters: 
@@ -2231,16 +2231,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
-|2 |  SORT                        |        |1        |18  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |456 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |456 |
+|2 |  SORT                        |        |1        |456 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |456 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 
@@ -2285,16 +2285,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |14  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |14  |
-|2 |  SORT                        |        |1        |13  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |13  |
-|4 |    EXCHANGE IN DISTR         |        |1        |8   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |8   |
-|6 |      PX PARTITION ITERATOR   |        |1        |7   |
-|7 |       TABLE SCAN             |t1      |1        |7   |
-|8 |    PX PARTITION ITERATOR     |        |1        |6   |
-|9 |     TABLE SCAN               |t2      |1        |6   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |321 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |321 |
+|2 |  SORT                        |        |1        |320 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |320 |
+|4 |    EXCHANGE IN DISTR         |        |1        |183 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |183 |
+|6 |      PX PARTITION ITERATOR   |        |1        |183 |
+|7 |       TABLE SCAN             |t1      |1        |183 |
+|8 |    PX PARTITION ITERATOR     |        |1        |137 |
+|9 |     TABLE SCAN               |t2      |1        |137 |
 ===========================================================
 
 Outputs & filters: 
@@ -2351,16 +2351,16 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                      |NAME    |EST. ROWS|COST|
 -----------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT     |        |1        |18  |
-|1 | EXCHANGE OUT DISTR           |:EX10001|1        |18  |
-|2 |  SORT                        |        |1        |18  |
-|3 |   HASH FULL OUTER JOIN       |        |1        |18  |
-|4 |    EXCHANGE IN DISTR         |        |1        |9   |
-|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |9   |
-|6 |      PX PARTITION ITERATOR   |        |1        |9   |
-|7 |       TABLE SCAN             |t1      |1        |9   |
-|8 |    PX PARTITION ITERATOR     |        |1        |9   |
-|9 |     TABLE SCAN               |t2      |1        |9   |
+|0 |PX COORDINATOR MERGE SORT     |        |1        |456 |
+|1 | EXCHANGE OUT DISTR           |:EX10001|1        |456 |
+|2 |  SORT                        |        |1        |456 |
+|3 |   HASH FULL OUTER JOIN       |        |1        |456 |
+|4 |    EXCHANGE IN DISTR         |        |1        |229 |
+|5 |     EXCHANGE OUT DISTR (PKEY)|:EX10000|1        |228 |
+|6 |      PX PARTITION ITERATOR   |        |1        |228 |
+|7 |       TABLE SCAN             |t1      |1        |228 |
+|8 |    PX PARTITION ITERATOR     |        |1        |228 |
+|9 |     TABLE SCAN               |t2      |1        |228 |
 ===========================================================
 
 Outputs & filters: 

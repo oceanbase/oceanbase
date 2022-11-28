@@ -573,9 +573,7 @@ void ObLogFetcher::heartbeat_dispatch_routine()
 
       // Get the next heartbeat timestamp
       if (OB_FAIL(next_heartbeat_timestamp_(heartbeat_tstamp, last_timestamp_))) {
-        if (OB_NEED_RETRY != ret) {
-          LOG_ERROR("next_heartbeat_timestamp_ fail", KR(ret), K(heartbeat_tstamp), K_(last_timestamp));
-        }
+        LOG_ERROR("next_heartbeat_timestamp_ fail", KR(ret), K(last_timestamp_));
       } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == heartbeat_tstamp)) {
         LOG_ERROR("heartbeat timestamp is invalid", K(heartbeat_tstamp));
         ret = OB_ERR_UNEXPECTED;
@@ -602,9 +600,7 @@ void ObLogFetcher::heartbeat_dispatch_routine()
         ob_usleep((useconds_t)g_inner_heartbeat_interval);
       }
 
-      if (OB_NEED_RETRY == ret) {
-        ret = OB_SUCCESS;
-      }
+      ret = OB_SUCCESS;
     }
   }
 
@@ -655,10 +651,8 @@ ObLogFetcher::FetchCtxMapHBFunc::FetchCtxMapHBFunc() :
     max_progress_(OB_INVALID_TIMESTAMP),
     min_progress_ls_(),
     max_progress_ls_(),
-    part_count_(0),
-    ls_progress_infos_()
-{
-}
+    part_count_(0)
+{}
 
 bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const TenantLSID &tls_id, LSFetchCtx *&ctx)
 {
@@ -675,9 +669,9 @@ bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const TenantLSID &tls_id, LSFet
   }
   // The progress returned by the fetch log context must be valid, and its progress value must be a valid value, underlined by the fetch log progress
   else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == progress)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("partition dispatch progress is invalid", KR(ret), K(progress), K(tls_id), KPC(ctx),
+    LOG_ERROR("partition dispatch progress is invalid", K(progress), K(tls_id), KPC(ctx),
         K(dispatch_info));
+    ret = OB_ERR_UNEXPECTED;
   } else {
     last_dispatch_log_lsn = dispatch_info.last_dispatch_log_lsn_;
 
@@ -692,10 +686,6 @@ bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const TenantLSID &tls_id, LSFet
         data_progress_ = progress;
       } else {
         data_progress_ = std::min(data_progress_, progress);
-      }
-
-      if (OB_FAIL(ls_progress_infos_.push_back(LSProgressInfo(tls_id, progress)))) {
-        LOG_ERROR("ls_progress_infos_ push_back failed", KR(ret));
       }
     }
 
@@ -730,12 +720,10 @@ bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const TenantLSID &tls_id, LSFet
 int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int64_t last_timestamp)
 {
   int ret = OB_SUCCESS;
-  static int64_t cdc_start_tstamp_ns = TCTX.start_tstamp_ns_;
   static int64_t last_data_progress = OB_INVALID_TIMESTAMP;
   static int64_t last_ddl_handle_progress = OB_INVALID_TIMESTAMP;
   static palf::LSN last_ddl_handle_lsn;
   static TenantLSID last_min_data_progress_ls;
-  static LSProgressInfoArray last_ls_progress_infos;
 
   FetchCtxMapHBFunc hb_func;
   uint64_t ddl_min_progress_tenant_id = OB_INVALID_TENANT_ID;
@@ -745,9 +733,6 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
   if (OB_ISNULL(sys_ls_handler_)) {
     ret = OB_NOT_INIT;
     LOG_ERROR("invalid sys_ls_handler", KR(ret), K(sys_ls_handler_));
-  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP >= cdc_start_tstamp_ns)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("cdc_start_tstamp_ns is invalid", KR(ret), K(cdc_start_tstamp_ns));
   }
   // Get the DDL processing progress first, because the DDL is the producer of the data partition, and getting it first will ensure that the overall progress is not reverted
   // Note: the progress value should not be invalid
@@ -809,15 +794,8 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
           to_cstring(ddl_handle_lsn));
     }
 
-    if (OB_UNLIKELY(OB_INVALID_TIMESTAMP != heartbeat_tstamp && cdc_start_tstamp_ns -1 > heartbeat_tstamp)) {
-      ret = OB_NEED_RETRY;
-      if (REACH_TIME_INTERVAL(PRINT_HEARTBEAT_INTERVAL)) {
-        LOG_INFO("skip heartbeat_tstamp less than cdc_start_tstamp_ns_", KR(ret),
-            K(heartbeat_tstamp), K(cdc_start_tstamp_ns));
-      }
-    }
     // Checks if the heartbeat timestamp is reverted
-    else if (OB_INVALID_TIMESTAMP != last_timestamp && heartbeat_tstamp < last_timestamp) {
+    if (OB_INVALID_TIMESTAMP != last_timestamp && heartbeat_tstamp < last_timestamp) {
       LOG_ERROR("heartbeat timestamp is rollback, unexcepted error",
           "last_timestamp", NTS_TO_STR(last_timestamp),
           K(last_timestamp),
@@ -829,15 +807,13 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
           "ddl_handle_progress", NTS_TO_STR(ddl_handle_progress),
           "last_ddl_handle_progress", NTS_TO_STR(last_ddl_handle_progress),
           "ddl_handle_lsn", to_cstring(ddl_handle_lsn),
-          "last_ddl_handle_lsn", to_cstring(last_ddl_handle_lsn),
-          K(last_ls_progress_infos));
+          "last_ddl_handle_lsn", to_cstring(last_ddl_handle_lsn));
       ret = OB_ERR_UNEXPECTED;
     } else {
       last_data_progress = data_progress;
       last_ddl_handle_progress = ddl_handle_progress;
       last_ddl_handle_lsn = ddl_handle_lsn;
       last_min_data_progress_ls = min_progress_tls_id;
-      last_ls_progress_infos = hb_func.ls_progress_infos_;
     }
   }
   return ret;

@@ -121,7 +121,7 @@ public:
   {
     int ret = OB_SUCCESS;
     common::ObAddr leader;
-    OZ(location_adapter_->nonblock_get_leader(0, 0, p, leader));
+    OZ(location_adapter_->get_leader(0, 0, p, leader));
     OZ(post_msg(leader, msg));
     return ret;
   }

@@ -46,14 +46,14 @@ ObLockMemtable::ObLockMemtable()
   : ObIMemtable(),
     is_inited_(false),
     ls_id_(),
-    freeze_log_ts_(0),
-    flushed_log_ts_(0),
-    rec_log_ts_(INT64_MAX),
-    pre_rec_log_ts_(OB_INVALID_TIMESTAMP),
-    max_committed_log_ts_(OB_INVALID_TIMESTAMP),
+    freeze_scn_(),
+    flushed_scn_(),
+    rec_scn_(),
+    max_committed_scn_(),
     is_frozen_(false),
     freezer_(nullptr)
 {
+  rec_scn_.set_max();
 }
 
 ObLockMemtable::~ObLockMemtable()
@@ -96,13 +96,13 @@ int ObLockMemtable::init(
 
 void ObLockMemtable::reset()
 {
-  rec_log_ts_ = INT64_MAX;
-  max_committed_log_ts_ = OB_INVALID_TIMESTAMP;
+  rec_scn_.set_max();
+  max_committed_scn_.reset();
   ls_id_.reset();
   ObITable::reset();
   obj_lock_map_.reset();
-  freeze_log_ts_ = 0;
-  flushed_log_ts_ = 0;
+  freeze_scn_.reset();
+  flushed_scn_.reset();
   is_frozen_ = false;
   freezer_ = nullptr;
   is_inited_ = false;
@@ -171,7 +171,8 @@ int ObLockMemtable::lock_(
   if (ret == OB_OBJ_LOCK_EXIST) {
     ret = OB_SUCCESS;
   }
-  if (OB_TRY_LOCK_ROW_CONFLICT == ret &&
+  if (ENABLE_USE_LOCK_WAIT_MGR &&
+      OB_TRY_LOCK_ROW_CONFLICT == ret &&
       lock_op.is_dml_lock_op() &&   // only in trans dml lock will wait at lock wait mgr.
       conflict_tx_set.count() != 0) {
     // TODO: yanyuan.cxf only wait at the first conflict trans now, but we need
@@ -243,7 +244,7 @@ int ObLockMemtable::unlock_(
 int ObLockMemtable::check_lock_need_replay_(
     ObMemtableCtx *mem_ctx,
     const ObTableLockOp &lock_op,
-    const int64_t log_ts,
+    const palf::SCN &scn,
     bool &need_replay)
 {
   // 1. filter the lock/unlock op that has been dumped at lock memtable.
@@ -251,10 +252,10 @@ int ObLockMemtable::check_lock_need_replay_(
   // 3. filter the lock/unlock op that has been replayed.
   int ret = OB_SUCCESS;
   need_replay = true;
-  if (lock_op.is_out_trans_lock_op() && log_ts <= flushed_log_ts_) {
+  if (lock_op.is_out_trans_lock_op() && scn <= flushed_scn_) {
     need_replay = false;
-    LOG_INFO("skip replay because of lock memtable dumped", K(flushed_log_ts_), K(log_ts), K(lock_op));
-  } else if (OB_FAIL(mem_ctx->check_lock_need_replay(log_ts,
+    LOG_INFO("skip replay because of lock memtable dumped", K(flushed_scn_), K(scn), K(lock_op));
+  } else if (OB_FAIL(mem_ctx->check_lock_need_replay(scn,
                                                      lock_op,
                                                      need_replay))) {
     LOG_WARN("check need replay failed.", K(ret), K(lock_op));
@@ -267,7 +268,7 @@ int ObLockMemtable::check_lock_need_replay_(
 int ObLockMemtable::replay_lock_(
     ObMemtableCtx *mem_ctx,
     const ObTableLockOp &lock_op,
-    const int64_t log_ts)
+    const palf::SCN &scn)
 {
   int ret = OB_SUCCESS;
   bool need_replay = true;
@@ -279,7 +280,7 @@ int ObLockMemtable::replay_lock_(
   LOG_DEBUG("ObLockMemtable::replay_lock_ ", K(lock_op));
   if (OB_FAIL(check_lock_need_replay_(mem_ctx,
                                       lock_op,
-                                      log_ts,
+                                      scn,
                                       need_replay))) {
     LOG_WARN("check need replay failed.", K(ret), K(lock_op));
   } else if (!need_replay) {
@@ -288,7 +289,7 @@ int ObLockMemtable::replay_lock_(
     LOG_WARN("replay lock at lock map mgr failed.", K(ret), K(lock_op));
   } else if (FALSE_IT(succ_step = STEP_IN_LOCK_MGR)) {
   } else if (OB_FAIL(mem_ctx->replay_add_lock_record(lock_op,
-                                                     log_ts))) {
+                                                     scn))) {
     LOG_WARN("record lock at mem_ctx failed.", K(ret), K(lock_op));
   } else {
     // do nothing
@@ -348,6 +349,19 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
   }
   LOG_DEBUG("ObLockMemtable::post_obj_lock_conflict_", K(ret), K(lock_id), K(conflict_tx_id));
   return ret;
+}
+
+void ObLockMemtable::wakeup_waiters_(const ObTableLockOp &lock_op)
+{
+  // dml in trans lock does not need do this.
+  if (OB_LIKELY(!lock_op.need_wakeup_waiter())) {
+    // do nothing
+  } else if (OB_ISNULL(MTL(ObLockWaitMgr*))) {
+    LOG_WARN("MTL(ObLockWaitMgr*) is null");
+  } else {
+    MTL(ObLockWaitMgr*)->wakeup(lock_op.lock_id_);
+    LOG_DEBUG("ObLockMemtable::wakeup_waiters_ ", K(lock_op));
+  }
 }
 
 int ObLockMemtable::check_lock_conflict(
@@ -475,14 +489,17 @@ void ObLockMemtable::remove_lock_record(const ObTableLockOp &lock_op)
     LOG_WARN("invalid argument", K(ret), K(lock_op));
   } else {
     obj_lock_map_.remove_lock_record(lock_op);
+    if (ENABLE_USE_LOCK_WAIT_MGR) {
+      wakeup_waiters_(lock_op);
+    }
   }
   LOG_DEBUG("ObLockMemtable::remove_lock_record", K(lock_op));
 }
 
 int ObLockMemtable::update_lock_status(
     const ObTableLockOp &op_info,
-    const int64_t commit_version,
-    const int64_t commit_log_ts,
+    const palf::SCN &commit_version,
+    const palf::SCN &commit_scn,
     const ObTableLockOpStatus status)
 {
   int ret = OB_SUCCESS;
@@ -493,22 +510,21 @@ int ObLockMemtable::update_lock_status(
              OB_UNLIKELY(!is_op_status_valid(status))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(op_info), K(status));
-  } else if (op_info.is_out_trans_lock_op() && commit_log_ts <= flushed_log_ts_) {
-    LOG_INFO("commit skip because of lock memtable dumped", K(flushed_log_ts_),
-             K(commit_log_ts), K(op_info));
+  } else if (op_info.is_out_trans_lock_op() && commit_scn <= flushed_scn_) {
+    LOG_INFO("commit skip because of lock memtable dumped", K(flushed_scn_),
+             K(commit_scn), K(op_info));
   } else if (OB_FAIL(obj_lock_map_.update_lock_status(op_info,
                                                       commit_version,
-                                                      commit_log_ts,
+                                                      commit_scn,
                                                       status))) {
     LOG_WARN("update lock status failed.", K(op_info), K(status));
   } else if ((OUT_TRANS_LOCK == op_info.op_type_ || OUT_TRANS_UNLOCK == op_info.op_type_)
              && LOCK_OP_COMPLETE == status) {
     RLockGuard guard(flush_lock_);
-    dec_update(&rec_log_ts_, commit_log_ts);
-    inc_update(&max_committed_log_ts_, commit_log_ts);
-    LOG_INFO("out_trans update_lock_status", K(ret), K(op_info), K(commit_log_ts), K(status), K(rec_log_ts_), K(ls_id_));
+    rec_scn_.dec_update(commit_scn);
+    max_committed_scn_.inc_update(commit_scn);
   }
-  LOG_DEBUG("ObLockMemtable::update_lock_status", K(ret), K(op_info), K(commit_log_ts), K(status));
+  LOG_DEBUG("ObLockMemtable::update_lock_status", K(ret), K(op_info), K(commit_scn), K(status));
   return ret;
 }
 
@@ -534,7 +550,9 @@ int ObLockMemtable::get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLockMemtable not inited.", K(ret));
-  } else if (OB_FAIL(obj_lock_map_.get_table_lock_store_info(store_arr, freeze_log_ts_))) {
+  } else if (OB_FAIL(obj_lock_map_.get_table_lock_store_info(
+      store_arr,
+      freeze_scn_))) {
     LOG_WARN("get_table_lock_store_info failed", K(ret));
   }
   return ret;
@@ -719,15 +737,21 @@ int ObLockMemtable::get_frozen_schema_version(int64_t &schema_version) const
 
 int64_t ObLockMemtable::get_rec_log_ts()
 {
-  // no need lock because rec_log_ts_ aesc except INT64_MAX
-  LOG_INFO("rec_log_ts of ObLockMemtable is ",
-           K(rec_log_ts_), K(flushed_log_ts_), K(pre_rec_log_ts_),
-           K(freeze_log_ts_), K(max_committed_log_ts_), K(is_frozen_), K(ls_id_));
-  if (pre_rec_log_ts_ == OB_INVALID_TIMESTAMP) {
-    return rec_log_ts_;
-  } else {
-    return pre_rec_log_ts_;
-  }
+  // no need lock because rec_scn_ aesc except INT64_MAX
+  // TODO: cxf remove this
+  palf::SCN tmp;
+  int64_t tmp_rec_log_ts = INT64_MAX;
+  tmp = get_rec_scn();
+  tmp_rec_log_ts = tmp == palf::SCN::max_scn() ? INT64_MAX : tmp.get_val_for_lsn_allocator();
+  return tmp_rec_log_ts;
+}
+
+palf::SCN ObLockMemtable::get_rec_scn()
+{
+  // no need lock because rec_scn_ aesc except INT64_MAX
+  LOG_INFO("rec_scn of ObLockMemtable is ", K(rec_scn_), K(flushed_scn_),
+           K(freeze_scn_), K(max_committed_scn_), K(is_frozen_), K(ls_id_));
+  return rec_scn_;
 }
 
 ObTabletID ObLockMemtable::get_tablet_id() const
@@ -744,16 +768,23 @@ int ObLockMemtable::on_memtable_flushed()
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(flush_lock_);
-  pre_rec_log_ts_ = OB_INVALID_TIMESTAMP;
-  if (freeze_log_ts_ > flushed_log_ts_) {
-    flushed_log_ts_ = freeze_log_ts_;
+  if (max_committed_scn_ > freeze_scn_) {
+    // have no_flushed commit_scn
+    rec_scn_ = freeze_scn_;
+  } else {
+    // all commit_scn flushed
+    rec_scn_.set_max();
+    max_committed_scn_.reset();
+  }
+  if (freeze_scn_ >= flushed_scn_) {
+    flushed_scn_ = freeze_scn_;
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("freeze_log_ts_ should not smaller than flushed_log_ts_", K(ret),
-              K_(flushed_log_ts), K_(freeze_log_ts), K_(ls_id));
+    LOG_ERROR("freeze_scn_ should not smaller than flushed_scn_", K(ret),
+              K_(flushed_scn), K_(freeze_scn), K_(ls_id));
   }
   ATOMIC_STORE(&is_frozen_, false);
-  LOG_INFO("lock memtable on_memtable_flushed success", K(ret), K(flushed_log_ts_), K(ls_id_));
+  LOG_INFO("lock memtable on_memtable_flushed success", K(ret), K(flushed_scn_), K(ls_id_));
   return ret;
 }
 
@@ -777,51 +808,46 @@ bool ObLockMemtable::is_active_memtable() const
 int ObLockMemtable::flush(int64_t recycle_log_ts, bool need_freeze)
 {
   int ret = OB_SUCCESS;
-  if (need_freeze) {
-    WLockGuard guard(flush_lock_);
-    int64_t rec_log_ts = get_rec_log_ts();
-    if (rec_log_ts >= recycle_log_ts) {
-      LOG_INFO("lock memtable no need to flush", K(rec_log_ts), K(recycle_log_ts),
-              K(is_frozen_), K(ls_id_));
-    } else if (is_active_memtable()) {
-      freeze_log_ts_ = max_committed_log_ts_;
-      if (flushed_log_ts_ >= freeze_log_ts_) {
-        LOG_INFO("skip freeze because of flushed", K_(ls_id), K_(flushed_log_ts), K_(freeze_log_ts));
-      } else {
-        pre_rec_log_ts_ = rec_log_ts_;
-        rec_log_ts_ = INT64_MAX;
-        max_committed_log_ts_ = OB_INVALID_TIMESTAMP;
+  palf::SCN tmp;
+  tmp.convert_for_lsn_allocator(recycle_log_ts);
+  ret = flush(tmp, need_freeze);
+  return ret;
+}
 
-        ObLogTsRange log_ts_range;
-        log_ts_range.start_log_ts_ = 1;
-        log_ts_range.end_log_ts_ = freeze_log_ts_;
-        set_log_ts_range(log_ts_range);
-        set_snapshot_version(freeze_log_ts_);
-        ATOMIC_STORE(&is_frozen_, true);
-      }
+int ObLockMemtable::flush(const palf::SCN &recycle_scn,
+                          const bool need_freeze)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(need_freeze);
+  WLockGuard guard(flush_lock_);
+  palf::SCN rec_scn = get_rec_scn();
+  if (rec_scn >= recycle_scn) {
+    LOG_INFO("lock memtable no need to flush", K(rec_scn), K(recycle_scn),
+             K(is_frozen_), K(ls_id_));
+  } else if (is_active_memtable()) {
+    if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(freeze_scn_))) {
+      LOG_WARN("get_max_consequent_callbacked_log_ts failed", K(ret), K(ls_id_));
+    } else if (flushed_scn_ >= freeze_scn_) {
+      LOG_INFO("skip freeze because of flushed", K_(ls_id), K_(flushed_scn), K_(freeze_scn));
+    } else {
+      ObScnRange scn_range;
+      scn_range.start_scn_.convert_for_gts(1);
+      scn_range.end_scn_ = freeze_scn_;
+      set_scn_range(scn_range);
+      set_snapshot_version(freeze_scn_.get_val_for_lsn_allocator());
+      ATOMIC_STORE(&is_frozen_, true);
     }
   }
 
   if (is_frozen_memtable()) {
-    int64_t max_consequent_callbacked_log_ts = 0;
-    if (OB_FAIL(freezer_->get_max_consequent_callbacked_log_ts(max_consequent_callbacked_log_ts))) {
-      LOG_WARN("get_max_consequent_callbacked_log_ts failed", K(ret), K(ls_id_));
-    } else if (max_consequent_callbacked_log_ts < freeze_log_ts_) {
-      LOG_INFO("lock memtable not ready for flush",
-               K(max_consequent_callbacked_log_ts),
-               K(freeze_log_ts_));
-    } else {
-      // dependent to judging is_active_memtable() in dag
-      // otherwise maybe merge active memtable
-      compaction::ObTabletMergeDagParam param;
-      param.ls_id_ = ls_id_;
-      param.tablet_id_ = LS_LOCK_TABLET;
-      param.merge_type_ = MINI_MERGE;
-      param.merge_version_ = ObVersion::MIN_VERSION;
-      if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
-        if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-          LOG_WARN("failed to schedule lock_memtable merge dag", K(ret), K(this));
-        }
+    compaction::ObTabletMergeDagParam param;
+    param.ls_id_ = ls_id_;
+    param.tablet_id_ = LS_LOCK_TABLET;
+    param.merge_type_ = MINI_MERGE;
+    param.merge_version_ = ObVersion::MIN_VERSION;
+    if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
+      if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
+        LOG_WARN("failed to schedule lock_memtable merge dag", K(ret), K(this));
       }
     }
   }
@@ -874,7 +900,7 @@ int ObLockMemtable::replay_row(
     if (OB_UNLIKELY(!lock_op.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("lock op is not valid", K(ret), K(lock_op));
-    } else if (OB_FAIL(replay_lock_(mem_ctx, lock_op, ctx.log_ts_))) {
+    } else if (OB_FAIL(replay_lock_(mem_ctx, lock_op, ctx.replay_log_scn_))) {
       LOG_WARN("replay lock failed", K(ret), K(lock_op));
     }
   }
@@ -885,7 +911,7 @@ int ObLockMemtable::replay_row(
 int ObLockMemtable::replay_lock(
     ObMemtableCtx *mem_ctx,
     const ObTableLockOp &lock_op,
-    const int64_t log_ts)
+    const palf::SCN &scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -894,7 +920,7 @@ int ObLockMemtable::replay_lock(
   } else if (OB_ISNULL(mem_ctx) || OB_UNLIKELY(!lock_op.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(mem_ctx), K(lock_op));
-  } else if (OB_FAIL(replay_lock_(mem_ctx, lock_op, log_ts))) {
+  } else if (OB_FAIL(replay_lock_(mem_ctx, lock_op, scn))) {
     LOG_WARN("replay lock failed", K(ret), K(lock_op));
   } else {
     // do nothing

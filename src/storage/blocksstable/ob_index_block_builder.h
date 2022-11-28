@@ -128,7 +128,7 @@ public:
   bool is_empty() const { return addr_.is_none(); }
   void set_empty();
   bool is_mem_type() const { return addr_.is_memory(); }
-  bool is_file_type() const { return addr_.is_file(); }
+  bool is_file_tpe() const { return addr_.is_file(); }
   TO_STRING_KV(K_(addr), KP_(buf), K_(row_type), K_(height));
 public:
   storage::ObMetaDiskAddr addr_;

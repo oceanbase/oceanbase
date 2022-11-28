@@ -203,8 +203,7 @@ OB_SERIALIZE_MEMBER(ObDMLBaseCtDef,
                     error_logging_ctdef_,
                     view_check_exprs_,
                     is_primary_index_,
-                    is_heap_table_,
-                    has_instead_of_trigger_);
+                    is_heap_table_);
 
 OB_SERIALIZE_MEMBER(ObMultiInsCtDef,
                     calc_part_id_expr_,

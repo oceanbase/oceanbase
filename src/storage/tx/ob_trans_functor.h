@@ -29,7 +29,6 @@
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx/ob_tx_stat.h"
 #include "storage/tx/ob_trans_service.h"
-#include "storage/tx/ob_keep_alive_ls_handler.h"
 
 namespace oceanbase
 {
@@ -184,7 +183,7 @@ private:
 class SwitchToLeaderFunctor
 {
 public:
-  explicit SwitchToLeaderFunctor(int64_t start_working_ts)
+  explicit SwitchToLeaderFunctor(palf::SCN &start_working_ts)
   {
     start_working_ts_ = start_working_ts;
 
@@ -207,7 +206,7 @@ public:
   }
 
 private:
-  int64_t start_working_ts_;
+  palf::SCN start_working_ts_;
 };
 
 class SwitchToFollowerGracefullyFunctor
@@ -261,7 +260,7 @@ private:
 class ResumeLeaderFunctor
 {
 public:
-  ResumeLeaderFunctor(int64_t start_working_ts)
+  ResumeLeaderFunctor(palf::SCN &start_working_ts)
   {
     start_working_ts_ = start_working_ts;
 
@@ -283,13 +282,13 @@ public:
   }
 
 private:
-  int64_t start_working_ts_;
+  palf::SCN start_working_ts_;
 };
 
 class ReplayTxStartWorkingLogFunctor
 {
 public:
-  ReplayTxStartWorkingLogFunctor(int64_t start_working_ts)
+  ReplayTxStartWorkingLogFunctor(palf::SCN &start_working_ts)
   {
     start_working_ts_ = start_working_ts;
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
@@ -301,6 +300,8 @@ public:
     if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
       ret = common::OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_id), "ctx", OB_P(tx_ctx));
+    } else if (!tx_ctx->is_for_replay()) {
+      // do nothing
     } else {
       if (OB_FAIL(tx_ctx->replay_start_working_log(start_working_ts_))) {
         TRANS_LOG(WARN, "replay start working log error", KR(ret), K(tx_id));
@@ -310,7 +311,7 @@ public:
   }
 
 private:
-  int64_t start_working_ts_;
+  palf::SCN start_working_ts_;
 };
 
 class KillTxCtxFunctor
@@ -594,8 +595,11 @@ private:
 class IterateMinPrepareVersionFunctor
 {
 public:
-  explicit IterateMinPrepareVersionFunctor() : min_prepare_version_(INT64_MAX) {}
-  int64_t get_min_prepare_version() const { return min_prepare_version_; }
+  explicit IterateMinPrepareVersionFunctor()
+  {
+    min_prepare_version_.set_max();
+  }
+  palf::SCN get_min_prepare_version() const { return min_prepare_version_; }
   OPERATOR_V4(IterateMinPrepareVersionFunctor)
   {
     int tmp_ret = common::OB_SUCCESS;
@@ -605,7 +609,7 @@ public:
       TRANS_LOG(WARN, "invalid argument", K(tmp_ret), K(tx_id), "ctx", OB_P(tx_ctx));
     } else {
       bool is_prepared = false;
-      int64_t prepare_version = 0;
+      palf::SCN prepare_version;
       if (OB_TMP_FAIL(tx_ctx->get_prepare_version_if_prepared(is_prepared, prepare_version))) {
         TRANS_LOG(WARN, "get prepare version if prepared failed", K(tmp_ret), K(*tx_ctx));
       } else if (!is_prepared || prepare_version >= min_prepare_version_) {
@@ -617,15 +621,18 @@ public:
     return (OB_SUCCESS == tmp_ret);
   }
 private:
-  int64_t min_prepare_version_;
+  palf::SCN min_prepare_version_;
 };
 
 class ObGetMinUndecidedLogTsFunctor
 {
 public:
-  ObGetMinUndecidedLogTsFunctor() : log_ts_(INT64_MAX) {}
+  ObGetMinUndecidedLogTsFunctor()
+  {
+    log_ts_.set_max();
+  }
   ~ObGetMinUndecidedLogTsFunctor() {}
-  int64_t get_min_undecided_log_ts() const { return log_ts_; }
+  palf::SCN get_min_undecided_scn() const { return log_ts_; }
   OPERATOR_V4(ObGetMinUndecidedLogTsFunctor)
   {
     int ret = OB_SUCCESS;
@@ -633,7 +640,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
     } else {
-      int64_t log_ts = tx_ctx->get_min_undecided_log_ts();
+      palf::SCN log_ts = tx_ctx->get_min_undecided_log_ts();
       if (log_ts_ > log_ts) {
         log_ts_ = log_ts;
       }
@@ -641,7 +648,7 @@ public:
     return OB_SUCC(ret);
   }
 private:
-  int64_t log_ts_;
+  palf::SCN log_ts_;
 };
 
 class IterateAllLSTxStatFunctor
@@ -718,7 +725,7 @@ public:
       if (ObTxState::INIT < tx_ctx->exec_info_.state_) {
         has_decided = true;
       }
-      if (tx_ctx->is_too_long_transaction()) {
+      if (tx_ctx->is_too_slow_transaction()) {
         // If the transaction has not completed in 600 seconds, print its trace log
         tx_ctx->print_trace_log();
       }
@@ -768,10 +775,13 @@ private:
 class GetRecLogTSFunctor
 {
 public:
-  explicit GetRecLogTSFunctor() : rec_log_ts_(INT64_MAX) {}
+  explicit GetRecLogTSFunctor()
+  {
+    rec_log_ts_.set_max();
+  }
   int init()
   {
-    rec_log_ts_ = INT64_MAX;
+    rec_log_ts_.set_max();
     return OB_SUCCESS;
   }
   OPERATOR_V4(GetRecLogTSFunctor)
@@ -784,16 +794,16 @@ public:
       ret = OB_INVALID_ARGUMENT;
     } else {
       ObTxCtxTableInfo ctx_info;
-      rec_log_ts_ = MIN(rec_log_ts_, tx_ctx->get_rec_log_ts());
+      rec_log_ts_ = palf::SCN::min(rec_log_ts_, tx_ctx->get_rec_log_ts());
     }
     if (OB_SUCCESS == ret) {
       bool_ret = true;
     }
     return bool_ret;
   }
-  int64_t get_rec_log_ts() { return rec_log_ts_; }
+  palf::SCN get_rec_log_ts() { return rec_log_ts_; }
 private:
-  int64_t rec_log_ts_;
+  palf::SCN rec_log_ts_;
 };
 
 class OnTxCtxTableFlushedFunctor
@@ -1059,33 +1069,34 @@ private:
   ObTransID fail_tx_id_;
 };
 
-class GetMinStartLogTsFunctor
+class GetMinStartSCNFunctor
 {
 public:
-  GetMinStartLogTsFunctor() : min_start_log_ts_(INT64_MAX)
+  GetMinStartSCNFunctor() : min_start_scn_()
   {
+    min_start_scn_.set_max();
   }
-  ~GetMinStartLogTsFunctor() {}
+  ~GetMinStartSCNFunctor() {}
 
-  OPERATOR_V4(GetMinStartLogTsFunctor)
+  OPERATOR_V4(GetMinStartSCNFunctor)
   {
     bool bool_ret = false;
     if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
       TRANS_LOG(WARN, "invalid argument", K(tx_id), KP(tx_ctx));
     } else {
-      int64_t start_log_ts = tx_ctx->get_start_log_ts();
-      if (start_log_ts < min_start_log_ts_) {
-        min_start_log_ts_ = start_log_ts;
+      palf::SCN start_scn = tx_ctx->get_start_log_ts();
+      if (start_scn < min_start_scn_) {
+        min_start_scn_ = start_scn;
       }
       bool_ret = true;
     }
     return bool_ret;
   }
 
-  int64_t get_min_start_log_ts() { return min_start_log_ts_; }
+  palf::SCN get_min_start_scn() { return min_start_scn_; }
 
 private:
-  int64_t min_start_log_ts_;
+  palf::SCN min_start_scn_;
 };
 
 class IteratePartCtxAskSchedulerStatusFunctor
@@ -1094,7 +1105,6 @@ public:
   IteratePartCtxAskSchedulerStatusFunctor()
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
-    min_start_scn_ = INT64_MAX;
   }
 
   ~IteratePartCtxAskSchedulerStatusFunctor() { PRINT_FUNC_STAT; }
@@ -1105,43 +1115,14 @@ public:
     if (OB_UNLIKELY(!tx_id.is_valid() || OB_ISNULL(tx_ctx))) {
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_id), "ctx", OB_P(tx_ctx));
+    } else if (OB_FAIL(tx_ctx->check_scheduler_status())) {
+      TRANS_LOG(WARN, "check scheduler status error", KR(ret), "ctx", *tx_ctx);
     } else {
-      int64_t ctx_start_scn = tx_ctx->get_start_log_ts();
-      if (ctx_start_scn < 0) {
-        ctx_start_scn = INT64_MAX;
-      }
-      if (OB_FALSE_IT(min_start_scn_ = MIN(min_start_scn_, ctx_start_scn))) {
-        // do nothing
-      } else if (OB_FAIL(tx_ctx->check_scheduler_status())) {
-        TRANS_LOG(WARN, "check scheduler status error", KR(ret), "ctx", *tx_ctx);
-      } else {
-        // do nothing
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-      min_start_scn_ = OB_INVALID_TIMESTAMP;
+      // do nothing
     }
 
     return true;
   }
-
-  int64_t get_min_start_scn() { return min_start_scn_; }
-
-  MinStartScnStatus get_min_start_status()
-  {
-    MinStartScnStatus start_status = MinStartScnStatus::HAS_CTX;
-
-    if (OB_INVALID_TIMESTAMP == min_start_scn_) {
-      start_status = MinStartScnStatus::UNKOWN;
-    } else if (INT64_MAX == min_start_scn_) {
-      start_status = MinStartScnStatus::NO_CTX;
-    }
-    return start_status;
-  }
-
-private:
-  int64_t min_start_scn_;
 };
 
 } // transaction

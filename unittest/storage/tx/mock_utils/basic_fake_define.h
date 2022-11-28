@@ -215,15 +215,17 @@ public:
   int get_gts(const uint64_t tenant_id,
               const MonotonicTs stc,
               ObTsCbTask *task,
-              int64_t &gts,
+              palf::SCN &scn,
               MonotonicTs &receive_gts_ts)
   {
     int ret = OB_SUCCESS;
+    int gts = 0;
     TRANS_LOG(INFO, "get gts begin", K(gts_), K(&gts_));
     if (get_gts_error_) {
       ret = get_gts_error_;
     } else {
       gts = ATOMIC_AAF(&gts_, 1);
+      scn.convert_for_gts(gts);
       if (task != nullptr && ATOMIC_LOAD(&get_gts_waiting_mode_)) {
         get_gts_waiting_queue_.push(task);
         ret = OB_EAGAIN;
@@ -233,32 +235,32 @@ public:
     return ret;
   }
 
-  int get_gts(const uint64_t tenant_id, ObTsCbTask *task, int64_t &gts) {
+  int get_gts(const uint64_t tenant_id, ObTsCbTask *task, palf::SCN &scn) {
     if (get_gts_error_) { return get_gts_error_; }
     return OB_SUCCESS;
   }
   int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
-                  int64_t &ts, bool &is_external_consistent) { return OB_SUCCESS; }
-  int wait_gts_elapse(const uint64_t tenant_id, const int64_t ts, ObTsCbTask *task,
+                  palf::SCN &scn, bool &is_external_consistent) { return OB_SUCCESS; }
+  int wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn, ObTsCbTask *task,
                       bool &need_wait)
   {
-    TRANS_LOG(INFO, "wait_gts_elapse begin", K(gts_), K(ts));
+    TRANS_LOG(INFO, "wait_gts_elapse begin", K(gts_), K(scn));
     int ret = OB_SUCCESS;
     if (task != nullptr && ATOMIC_LOAD(&elapse_waiting_mode_)) {
       elapse_queue_.push(task);
-      callback_gts_ = ts+1;
+      callback_gts_ = scn.get_val_for_gts()+1;
       need_wait = true;
     } else {
-      update_fake_gts(ts);
+      update_fake_gts(scn.get_val_for_gts());
     }
-    TRANS_LOG(INFO, "wait_gts_elapse end", K(gts_), K(ts));
+    TRANS_LOG(INFO, "wait_gts_elapse end", K(gts_), K(scn));
     return ret;
   }
 
-  int wait_gts_elapse(const uint64_t tenant_id, const int64_t ts)
+  int wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn)
   {
     int ret = OB_SUCCESS;
-    if (ts > gts_) {
+    if (scn.get_val_for_gts() > gts_) {
       ret = OB_EAGAIN;
     }
     return ret;
@@ -294,7 +296,8 @@ public:
       ObLink *task = elapse_queue_.pop();
       if (task) {
         const MonotonicTs srr(MonotonicTs::current_time());
-        const int64_t ts = gts_;
+        palf::SCN ts;
+        ts.convert_for_gts(gts_);
         const MonotonicTs receive_gts_ts(gts_);
         const ObGTSCacheTaskType task_type = WAIT_GTS_ELAPSING;
         static_cast<ObTsCbTask*>(task)->gts_elapse_callback(srr, ts);
@@ -310,7 +313,8 @@ public:
       ObLink *task = get_gts_waiting_queue_.pop();
       if (task) {
         const MonotonicTs srr(MonotonicTs::current_time());
-        const int64_t ts = gts_;
+        palf::SCN ts;
+        ts.convert_for_gts(gts_);
         const MonotonicTs receive_gts_ts(gts_);
         const ObGTSCacheTaskType task_type = GET_GTS;
         static_cast<ObTsCbTask*>(task)->get_gts_callback(srr, ts, receive_gts_ts);
@@ -366,9 +370,9 @@ public:
   ObSpScLinkQueue replay_task_queue_arr[TASK_QUEUE_CNT];
 
   void run1() {
-    while(true) {
+    while(!stop_) {
       int64_t process_cnt = 0;
-      bool stop = stop_;
+
       if (!ATOMIC_LOAD(&pause_)) {
         for (int64_t i = 0; i < TASK_QUEUE_CNT; ++i) {
           while(true) {
@@ -384,9 +388,8 @@ public:
           }
         }
       }
-      if (!pause_ && 0 == process_cnt && stop) {
-        break;
-      } else if (0 == process_cnt && ATOMIC_BCAS(&is_sleeping_, false, true)) {
+
+      if (0 == process_cnt && ATOMIC_BCAS(&is_sleeping_, false, true)) {
         auto key = cond_.get_key();
         cond_.wait(key, 10 * 1000);
       }
@@ -417,7 +420,7 @@ public:
 
   int submit_log(const char *buf,
                  const int64_t size,
-                 const int64_t base_ts,
+                 const palf::SCN base_ts,
                  ObTxBaseLogCb *cb,
                  const bool need_nonblock)
   {
@@ -428,11 +431,13 @@ public:
       LOG_WARN("log base header deserialize error", K(ret));
     } else {
       const int64_t replay_hint = base_header.get_replay_hint();
-      const int64_t ts = std::max(base_ts, ts_) + 1;
+      const int64_t ts = MAX(base_ts.get_val_for_gts(), ts_) + 1;
+      palf::SCN scn;
+      scn.convert_for_gts(ts);
       int64_t queue_idx = replay_hint % TASK_QUEUE_CNT;
       if (!ATOMIC_LOAD(&log_drop_)) {
         const palf::LSN lsn = palf::LSN(++lsn_);
-        cb->set_log_ts(ts);
+        cb->set_log_ts(scn);
         cb->set_lsn(lsn);
         ts_ = ts;
         ApplyCbTask *apply_task = new ApplyCbTask();
@@ -511,7 +516,7 @@ public:
   ObFakeTxReplayExecutor(storage::ObLS *ls,
                          storage::ObLSTxService *ls_tx_srv,
                          const palf::LSN &lsn,
-                         const int64_t &log_timestamp)
+                         const palf::SCN &log_timestamp)
       : ObTxReplayExecutor(ls, ls_tx_srv, lsn, log_timestamp) {memtable_ = nullptr;}
 
   ~ObFakeTxReplayExecutor() {}
@@ -529,7 +534,9 @@ public:
                      memtable::ObMemtable* memtable)
   {
     int ret = OB_SUCCESS;
-    ObFakeTxReplayExecutor replay_executor(ls, ls_tx_srv, lsn, log_timestamp);
+    palf::SCN log_scn;
+    log_scn.convert_for_gts(log_timestamp);
+    ObFakeTxReplayExecutor replay_executor(ls, ls_tx_srv, lsn, log_scn);
     if (OB_ISNULL(ls) || OB_ISNULL(ls_tx_srv) || OB_ISNULL(buf) || size <= 0
         || 0 >= log_timestamp || INT64_MAX == log_timestamp || !lsn.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
@@ -564,7 +571,7 @@ private:
     storeCtx.ls_id_ = ctx_->get_ls_id();
     storeCtx.mvcc_acc_ctx_.tx_ctx_ = ctx_;
     storeCtx.mvcc_acc_ctx_.mem_ctx_ = mt_ctx_;
-    storeCtx.log_ts_ = log_ts_ns_;
+    storeCtx.replay_log_scn_ = log_ts_ns_;
     storeCtx.tablet_id_ = row_head.tablet_id_;
     storeCtx.mvcc_acc_ctx_.tx_id_ = ctx_->get_trans_id();
 
@@ -595,8 +602,8 @@ class ObFakeLSTxService : public ObLSTxService
 public:
   ObFakeLSTxService(ObLS *parent) : ObLSTxService(parent) { }
   ~ObFakeLSTxService() {}
-  virtual int64_t get_ls_weak_read_ts() override {
-    return 0;
+  virtual palf::SCN get_ls_weak_read_ts() override {
+    return palf::SCN::min_scn();
   }
 };
 

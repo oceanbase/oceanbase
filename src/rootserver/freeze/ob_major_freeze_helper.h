@@ -14,9 +14,14 @@
 #define OCEANBASE_ROOTSERVER_FREEZE_OB_MAJOR_FREEZE_HELPER_H_
 #include "rpc/frame/ob_req_transport.h"
 #include "rootserver/freeze/ob_major_freeze_rpc_define.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
+namespace palf
+{
+class SCN;
+}
 namespace share
 {
 class ObSimpleFrozenStatus;
@@ -97,9 +102,9 @@ public:
   static int clear_merge_error(const ObTenantAdminMergeParam &param);
 
   static int get_frozen_status(const int64_t tenant_id, 
-                               const int64_t major_snapshot, 
+                               const palf::SCN &frozen_scn,
                                share::ObSimpleFrozenStatus &frozen_status);
-  static int get_frozen_scn(const int64_t tenant_id, int64_t &frozen_scn);
+  static int get_frozen_scn(const int64_t tenant_id, palf::SCN &frozen_scn);
 
 private:
   static int get_freeze_info(

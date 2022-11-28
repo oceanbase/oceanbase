@@ -71,14 +71,10 @@ int ObSyncCmdDriver::send_eof_packet(bool has_more_result)
 
   // for proxy
   // in multi-stmt, send extra ok packet in the last stmt(has no more result)
-  if (!is_prexecute_ && !has_more_result
-        && OB_FAIL(sender_.update_last_pkt_pos())) {
-    LOG_WARN("failed to update last packet pos", K(ret));
+  if (!is_prexecute_ && !has_more_result) {
+    sender_.update_last_pkt_pos();
   }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
+  if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
     LOG_WARN("response packet fail", K(ret), K(has_more_result));
   }
   return ret;
@@ -118,7 +114,7 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
     }
 
     // open失败，决定是否需要重试
-    retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret, is_prexecute_);
+    retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
     LOG_WARN("result set open failed, check if need retry",
              K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
     ret = cli_ret;

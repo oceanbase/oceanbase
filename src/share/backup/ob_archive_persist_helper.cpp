@@ -215,6 +215,7 @@ int ObArchivePersistHelper::get_piece_switch_interval(
   } else if (OB_FAIL(dest_attr.set_piece_switch_interval(value.ptr()))) {
     LOG_WARN("fail to set piece switch interval", K(ret), K(value));
   } else {
+  // TODO: need to adjust
     piece_switch_interval = dest_attr.piece_switch_interval_;
   }
   return ret;
@@ -786,7 +787,7 @@ int ObArchivePersistHelper::get_frozen_pieces(
   return ret;
 }
 
-int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const ARCHIVE_SCN_TYPE &end_scn,
+int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const palf::SCN &end_scn,
     const char *backup_dest_str, ObIArray<ObTenantArchivePieceAttr> &pieces) const
 {
   int ret = OB_SUCCESS;
@@ -798,8 +799,8 @@ int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLC
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid backup_dest_str", K(ret), K(backup_dest_str));
   } else if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s<=%lu and %s='%s' and %s!='%s'",
-      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_CHECKPOINT_SCN, end_scn,
-      OB_STR_PATH, backup_dest_str, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
+      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_CHECKPOINT_SCN,
+      end_scn.get_val_for_inner_table_field(), OB_STR_PATH, backup_dest_str, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
@@ -1086,6 +1087,8 @@ int ObArchivePersistHelper::do_parse_ls_archive_piece_summary_result_(sqlclient:
   int64_t ls_id = 0;
   int64_t ls_id_bak = 0;
   int64_t real_length = 0;
+  uint64_t start_scn = 0;
+  uint64_t checkpoint_scn = 0;
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
 
   EXTRACT_INT_FIELD_MYSQL(result, "ls_id", ls_id, int64_t);
@@ -1097,15 +1100,19 @@ int ObArchivePersistHelper::do_parse_ls_archive_piece_summary_result_(sqlclient:
     EXTRACT_INT_FIELD_MYSQL(result, OB_STR_PIECE_ID, piece.piece_id_, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INCARNATION, piece.incarnation_, int64_t);
     EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MIN_LSN, piece.min_lsn_, uint64_t);
-    EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, piece.start_scn_, uint64_t);
+    EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, start_scn, uint64_t);
     EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MAX_LSN, piece.max_lsn_, uint64_t);
-    EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, piece.checkpoint_scn_, uint64_t);
+    EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, checkpoint_scn, uint64_t);
     EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_STATUS, status_str, OB_DEFAULT_STATUS_LENTH, real_length);
     EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INPUT_BYTES, piece.input_bytes_, int64_t);
     EXTRACT_INT_FIELD_MYSQL(result, OB_STR_OUTPUT_BYTES, piece.output_bytes_, int64_t);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(piece.state_.set_status(status_str))) {
       LOG_WARN("failed to set status", K(ret), K(status_str));
+    } else if (OB_FAIL(piece.start_scn_.convert_for_inner_table_field(start_scn))) {
+      LOG_WARN("failed to set start scn", K(ret), K(start_scn));
+    } else if (OB_FAIL(piece.checkpoint_scn_.convert_for_inner_table_field(checkpoint_scn))) {
+      LOG_WARN("failed to set checkpoint scn", K(ret), K(checkpoint_scn));
     } else {
       piece.ls_id_ = ObLSID(ls_id);
       piece.is_archiving_ = true;
@@ -1135,8 +1142,8 @@ int ObArchivePersistHelper::do_parse_ls_archive_piece_summary_result_(sqlclient:
       piece.piece_id_ = 0;
       piece.incarnation_ = 0;
       piece.state_.set_invalid();
-      piece.start_scn_ = 0;
-      piece.checkpoint_scn_ = 0;
+      piece.start_scn_ = palf::SCN::min_scn();
+      piece.checkpoint_scn_ = palf::SCN::min_scn();
       piece.min_lsn_ = 0;
       piece.max_lsn_ = 0;
       piece.input_bytes_ = 0;

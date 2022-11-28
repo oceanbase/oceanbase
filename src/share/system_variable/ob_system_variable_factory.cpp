@@ -134,6 +134,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_ob_proxy_session_temporary_table_used",
   "_ob_px_bcast_optimization",
   "_ob_px_slave_mapping_threshold",
+  "_ob_use_parallel_execution",
+  "_optimizer_adaptive_cursor_sharing",
   "_optimizer_null_aware_antijoin",
   "_px_broadcast_fudge_factor",
   "_px_dist_agg_partial_rollup_pushdown",
@@ -229,12 +231,14 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_compatibility_mode",
   "ob_early_lock_release",
   "ob_enable_aggregation_pushdown",
+  "ob_enable_blk_nestedloop_join",
+  "ob_enable_hash_group_by",
   "ob_enable_index_direct_select",
   "ob_enable_jit",
   "ob_enable_plan_cache",
   "ob_enable_rich_error_msg",
-  "ob_enable_show_trace",
   "ob_enable_sql_audit",
+  "ob_enable_trace_log",
   "ob_enable_transformation",
   "ob_enable_transmission_checksum",
   "ob_enable_truncate_flashback",
@@ -267,6 +271,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_trx_timeout",
   "optimizer_capture_sql_plan_baselines",
   "optimizer_use_sql_plan_baselines",
+  "parallel_max_servers",
   "parallel_servers_target",
   "performance_schema",
   "plsql_ccflags",
@@ -352,6 +357,8 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED,
   SYS_VAR__OB_PX_BCAST_OPTIMIZATION,
   SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD,
+  SYS_VAR__OB_USE_PARALLEL_EXECUTION,
+  SYS_VAR__OPTIMIZER_ADAPTIVE_CURSOR_SHARING,
   SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN,
   SYS_VAR__PX_BROADCAST_FUDGE_FACTOR,
   SYS_VAR__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN,
@@ -447,12 +454,14 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_COMPATIBILITY_MODE,
   SYS_VAR_OB_EARLY_LOCK_RELEASE,
   SYS_VAR_OB_ENABLE_AGGREGATION_PUSHDOWN,
+  SYS_VAR_OB_ENABLE_BLK_NESTEDLOOP_JOIN,
+  SYS_VAR_OB_ENABLE_HASH_GROUP_BY,
   SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT,
   SYS_VAR_OB_ENABLE_JIT,
   SYS_VAR_OB_ENABLE_PLAN_CACHE,
   SYS_VAR_OB_ENABLE_RICH_ERROR_MSG,
-  SYS_VAR_OB_ENABLE_SHOW_TRACE,
   SYS_VAR_OB_ENABLE_SQL_AUDIT,
+  SYS_VAR_OB_ENABLE_TRACE_LOG,
   SYS_VAR_OB_ENABLE_TRANSFORMATION,
   SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM,
   SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK,
@@ -485,6 +494,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_TRX_TIMEOUT,
   SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES,
   SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES,
+  SYS_VAR_PARALLEL_MAX_SERVERS,
   SYS_VAR_PARALLEL_SERVERS_TARGET,
   SYS_VAR_PERFORMANCE_SCHEMA,
   SYS_VAR_PLSQL_CCFLAGS,
@@ -662,7 +672,9 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_last_schema_version",
   "ob_global_debug_sync",
   "ob_proxy_global_variables_version",
-  "ob_enable_show_trace",
+  "ob_enable_trace_log",
+  "ob_enable_hash_group_by",
+  "ob_enable_blk_nestedloop_join",
   "ob_bnl_join_cache_size",
   "ob_proxy_user_privilege",
   "ob_org_cluster_id",
@@ -692,11 +704,14 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "auto_increment_cache_size",
   "ob_enable_jit",
   "ob_temp_tablespace_size_percentage",
+  "_optimizer_adaptive_cursor_sharing",
   "plugin_dir",
+  "_ob_use_parallel_execution",
   "ob_sql_audit_percentage",
   "ob_enable_sql_audit",
   "optimizer_use_sql_plan_baselines",
   "optimizer_capture_sql_plan_baselines",
+  "parallel_max_servers",
   "parallel_servers_target",
   "ob_early_lock_release",
   "ob_trx_idle_timeout",
@@ -1044,7 +1059,9 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObLastSchemaVersion)
         + sizeof(ObSysVarObGlobalDebugSync)
         + sizeof(ObSysVarObProxyGlobalVariablesVersion)
-        + sizeof(ObSysVarObEnableShowTrace)
+        + sizeof(ObSysVarObEnableTraceLog)
+        + sizeof(ObSysVarObEnableHashGroupBy)
+        + sizeof(ObSysVarObEnableBlkNestedloopJoin)
         + sizeof(ObSysVarObBnlJoinCacheSize)
         + sizeof(ObSysVarObProxyUserPrivilege)
         + sizeof(ObSysVarObOrgClusterId)
@@ -1074,11 +1091,14 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarAutoIncrementCacheSize)
         + sizeof(ObSysVarObEnableJit)
         + sizeof(ObSysVarObTempTablespaceSizePercentage)
+        + sizeof(ObSysVarOptimizerAdaptiveCursorSharing)
         + sizeof(ObSysVarPluginDir)
+        + sizeof(ObSysVarObUseParallelExecution)
         + sizeof(ObSysVarObSqlAuditPercentage)
         + sizeof(ObSysVarObEnableSqlAudit)
         + sizeof(ObSysVarOptimizerUseSqlPlanBaselines)
         + sizeof(ObSysVarOptimizerCaptureSqlPlanBaselines)
+        + sizeof(ObSysVarParallelMaxServers)
         + sizeof(ObSysVarParallelServersTarget)
         + sizeof(ObSysVarObEarlyLockRelease)
         + sizeof(ObSysVarObTrxIdleTimeout)
@@ -2132,12 +2152,30 @@ int ObSysVarFactory::create_all_sys_vars()
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableShowTrace())) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableTraceLog())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarObEnableShowTrace", K(ret));
+        LOG_ERROR("fail to new ObSysVarObEnableTraceLog", K(ret));
       } else {
-        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_SHOW_TRACE))] = sys_var_ptr;
-        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnableShowTrace));
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_TRACE_LOG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnableTraceLog));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableHashGroupBy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnableHashGroupBy", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_HASH_GROUP_BY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnableHashGroupBy));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableBlkNestedloopJoin())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnableBlkNestedloopJoin", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_BLK_NESTEDLOOP_JOIN))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnableBlkNestedloopJoin));
       }
     }
     if (OB_SUCC(ret)) {
@@ -2402,12 +2440,30 @@ int ObSysVarFactory::create_all_sys_vars()
       }
     }
     if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerAdaptiveCursorSharing())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerAdaptiveCursorSharing", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__OPTIMIZER_ADAPTIVE_CURSOR_SHARING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerAdaptiveCursorSharing));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPluginDir())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarPluginDir", K(ret));
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLUGIN_DIR))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarPluginDir));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObUseParallelExecution())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObUseParallelExecution", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__OB_USE_PARALLEL_EXECUTION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObUseParallelExecution));
       }
     }
     if (OB_SUCC(ret)) {
@@ -2444,6 +2500,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerCaptureSqlPlanBaselines));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParallelMaxServers())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarParallelMaxServers", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PARALLEL_MAX_SERVERS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarParallelMaxServers));
       }
     }
     if (OB_SUCC(ret)) {
@@ -4308,14 +4373,36 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       }
       break;
     }
-    case SYS_VAR_OB_ENABLE_SHOW_TRACE: {
+    case SYS_VAR_OB_ENABLE_TRACE_LOG: {
       void *ptr = NULL;
-      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnableShowTrace)))) {
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnableTraceLog)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnableShowTrace)));
-      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableShowTrace())) {
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnableTraceLog)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableTraceLog())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarObEnableShowTrace", K(ret));
+        LOG_ERROR("fail to new ObSysVarObEnableTraceLog", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_HASH_GROUP_BY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnableHashGroupBy)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnableHashGroupBy)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableHashGroupBy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnableHashGroupBy", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_ENABLE_BLK_NESTEDLOOP_JOIN: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnableBlkNestedloopJoin)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnableBlkNestedloopJoin)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableBlkNestedloopJoin())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnableBlkNestedloopJoin", K(ret));
       }
       break;
     }
@@ -4638,6 +4725,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       }
       break;
     }
+    case SYS_VAR__OPTIMIZER_ADAPTIVE_CURSOR_SHARING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerAdaptiveCursorSharing)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerAdaptiveCursorSharing)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerAdaptiveCursorSharing())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerAdaptiveCursorSharing", K(ret));
+      }
+      break;
+    }
     case SYS_VAR_PLUGIN_DIR: {
       void *ptr = NULL;
       if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPluginDir)))) {
@@ -4646,6 +4744,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPluginDir())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarPluginDir", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__OB_USE_PARALLEL_EXECUTION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObUseParallelExecution)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObUseParallelExecution)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObUseParallelExecution())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObUseParallelExecution", K(ret));
       }
       break;
     }
@@ -4690,6 +4799,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerCaptureSqlPlanBaselines())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarOptimizerCaptureSqlPlanBaselines", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PARALLEL_MAX_SERVERS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarParallelMaxServers)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarParallelMaxServers)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParallelMaxServers())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarParallelMaxServers", K(ret));
       }
       break;
     }

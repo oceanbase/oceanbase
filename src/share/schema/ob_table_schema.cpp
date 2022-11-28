@@ -1502,7 +1502,11 @@ bool ObTableSchema::is_valid() const
               }
             } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())) {
               ObLength max_length = 0;
-              max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
+              if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470) && !ObSchemaService::g_liboblog_mode_) {
+                max_length = ObAccuracy::MAX_ACCURACY_OLD[column->get_data_type()].get_length();
+              } else {
+                max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
+              }
               if (max_length < column->get_data_length()) {
                 LOG_WARN("length of text/blob column is larger than the max allowed length, ",
                     "data_length", column->get_data_length(), "column_name",
@@ -1510,7 +1514,11 @@ bool ObTableSchema::is_valid() const
                 valid_ret = false;
               } else if (!column->is_shadow_column()) {
                 // TODO @hanhui need seperate inline memtable length from store length
-                varchar_col_total_length += min(column->get_data_length(), OB_MAX_LOB_HANDLE_LENGTH);
+                if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470) && !ObSchemaService::g_liboblog_mode_) {
+                  varchar_col_total_length += column->get_data_length();
+                } else {
+                  varchar_col_total_length += min(column->get_data_length(), OB_MAX_LOB_HANDLE_LENGTH);
+                }
               }
             }
           }
@@ -1844,7 +1852,8 @@ int ObTableSchema::alter_column(ObColumnSchemaV2 &column_schema, ObColumnCheckMo
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(src_schema->assign(column_schema))) {
+    } else if (OB_FALSE_IT(*src_schema = column_schema)) {
+    } else if (OB_FAIL(src_schema->get_err_ret())) {
       LOG_WARN("failed to assign src schema", K(ret), K(column_schema));
     }
   }
@@ -4262,10 +4271,10 @@ int ObTableSchema::check_column_can_be_altered_offline(
 
 int ObTableSchema::check_column_can_be_altered_online(
     const ObColumnSchemaV2 *src_schema,
-    ObColumnSchemaV2 *dst_schema) const
+    ObColumnSchemaV2 *dst_schema)
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *tmp_column = NULL;
+  ObColumnSchemaV2 *tmp_column = NULL;
   if (OB_ISNULL(src_schema) || NULL == dst_schema) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The column schema is NULL", K(ret));
@@ -4280,23 +4289,8 @@ int ObTableSchema::check_column_can_be_altered_online(
     LOG_WARN("Only NORMAL table and INDEX table and SYSTEM table are allowed", K(ret));
   } else {
     LOG_DEBUG("check column schema can be altered", KPC(src_schema), KPC(dst_schema));
-    // Additional restriction for system table:
-    // 1. Can't alter column name
-    // 2. Can't alter column from "NULL" to "NOT NULL"
-    if (is_system_table(get_table_id())) {
-      if (0 != src_schema->get_column_name_str().compare(dst_schema->get_column_name_str())) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter system table's column name is");
-        LOG_WARN("Alter system table's column name is not supported", KR(ret), K(src_schema), K(dst_schema));
-      } else if (src_schema->is_nullable() && !dst_schema->is_nullable()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter system table's column from `NULL` to `NOT NULL`");
-        LOG_WARN("Alter system table's column from `NULL` to `NOT NULL` is not supported", KR(ret), K(src_schema), K(dst_schema));
-      }
-    }
-
     bool is_oracle_mode = false;
-    if (FAILEDx(check_if_oracle_compat_mode(is_oracle_mode))) {
+    if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
       LOG_WARN("check if oracle compat mode failed", K(ret));
     } else if (is_oracle_mode
               && ob_is_number_tc(src_schema->get_data_type())
@@ -5076,22 +5070,7 @@ int ObTableSchema::get_generated_column_ids(ObIArray<uint64_t> &column_ids) cons
   }
   return ret;
 }
-bool ObTableSchema::has_generated_and_partkey_column() const 
-{
-  bool result = false;
-  if (has_generated_column() && is_partitioned_table() ) {
-    for (int64_t i = 0; i < generated_columns_.bit_count() && !result; ++i) {
-      if (generated_columns_.has_member(i)) {
-        uint64_t generated_column_id = i + OB_APP_MIN_COLUMN_ID;
-        const ObColumnSchemaV2 *generated_column = get_column_schema(generated_column_id);
-        if (generated_column->is_tbl_part_key_column()) {
-          result = true;
-        }
-      }
-    }
-  }
-  return result;
-}
+
 // Because there are too many places to call this function, you must be careful when modifying this function,
 // and it is recommended not to modify
 // If you must modify this function, pay attention to whether the location of calling this function also depends on the error code
@@ -6852,7 +6831,6 @@ int ObTableSchema::init_column_meta_array(
   if (OB_FAIL(get_multi_version_column_descs(columns))) {
     STORAGE_LOG(WARN, "fail to get store column ids", K(ret));
   } else {
-    blocksstable::ObStorageDatum datum;
     for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
       const uint64_t col_id = columns.at(i).col_id_;
       col_meta.column_id_ = col_id;
@@ -6876,10 +6854,8 @@ int ObTableSchema::init_column_meta_array(
         } else {
           if (ob_is_large_text(col_schema->get_data_type())) {
             col_meta.column_default_checksum_ = 0;
-          } else if (OB_FAIL(datum.from_obj_enhance(col_schema->get_orig_default_value()))) {
-            STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
           } else {
-            col_meta.column_default_checksum_ = datum.checksum(0);
+            col_meta.column_default_checksum_ = col_schema->get_orig_default_value().checksum_v2(0);
           }
         }
       }

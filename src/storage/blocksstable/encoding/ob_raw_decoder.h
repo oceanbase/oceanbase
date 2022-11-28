@@ -60,7 +60,7 @@ public:
     : store_class_(ObExtendSC), integer_mask_(0), meta_data_(nullptr), is_out_row_column_(false) {}
   virtual ~ObRawDecoder() {}
 
-  OB_INLINE int init(
+  OB_INLINE int init(const common::ObObjMeta &obj_meta,
       const ObMicroBlockHeader &micro_block_header,
       const ObColumnHeader &column_header,
       const char *meta);
@@ -308,18 +308,18 @@ int ObRawDecoder::batch_locate_cell_data(
   return ret;
 }
 
-OB_INLINE int ObRawDecoder::init(
+OB_INLINE int ObRawDecoder::init(const common::ObObjMeta &obj_meta,
       const ObMicroBlockHeader &micro_block_header,
       const ObColumnHeader &column_header,
       const char *meta)
 {
-  UNUSEDx(micro_block_header);
+  UNUSED(micro_block_header);
   int ret = common::OB_SUCCESS;
   if (is_inited()) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "init twice", K(ret));
   } else {
-    const ObObjType store_type = column_header.is_out_row() ? ObVarcharType : column_header.get_store_obj_type();
+    const ObObjType store_type = column_header.is_out_row() ? ObVarcharType : obj_meta.get_type();
     const common::ObObjTypeClass type_class = ob_obj_type_class(store_type);
     store_class_ = get_store_class_map()[type_class];
     if (common::ObIntTC == type_class) {

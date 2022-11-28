@@ -41,8 +41,8 @@ RPC_F(obrpc::OB_PARTITION_CHECK_LOG, obrpc::Int64,
     obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_PARTITION_CHECK_LOG>::Response, ObRpcCheckLogProxy);
 RPC_F(obrpc::OB_NOTIFY_TENANT_SERVER_UNIT_RESOURCE, obrpc::TenantServerUnitConfig,
     obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_NOTIFY_TENANT_SERVER_UNIT_RESOURCE>::Response, ObNotifyTenantServerResourceProxy);
-RPC_F(obrpc::OB_CHECK_FROZEN_VERSION, obrpc::ObCheckFrozenVersionArg,
-    obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_CHECK_FROZEN_VERSION>::Response, ObCheckFrozenVersionProxy);
+RPC_F(obrpc::OB_CHECK_FROZEN_SCN, obrpc::ObCheckFrozenScnArg,
+    obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_CHECK_FROZEN_SCN>::Response, ObCheckFrozenScnProxy);
 RPC_F(obrpc::OB_GET_MIN_SSTABLE_SCHEMA_VERSION, obrpc::ObGetMinSSTableSchemaVersionArg,
     obrpc::ObGetMinSSTableSchemaVersionRes, ObGetMinSSTableSchemaVersionProxy);
 RPC_F(obrpc::OB_DETECT_MASTER_RS_LS, obrpc::ObDetectMasterRsArg,

@@ -28,13 +28,13 @@ See [Quick start](https://open.oceanbase.com/quickStart) to try out OceanBase Da
 
 ## System architecture
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873624-c1707034-471a-4f79-980f-6d1760dac8eb.png)
+## ![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1660643534074-2649c2e4-473a-4d07-8021-d8d1a2b2da49.png#clientId=u5d9acd3a-25ad-4&crop=0&crop=0&crop=1&crop=1&from=paste&height=1101&id=u46f6dd09&margin=%5Bobject%20Object%5D&name=image.png&originHeight=1101&originWidth=1746&originalType=binary&ratio=1&rotation=0&showTitle=false&size=130476&status=done&style=none&taskId=ud87a5d0f-5140-45f2-9274-c8375b3c7c0&title=&width=1746)
 
 ## Roadmap
 
-![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873613-44957682-76fe-42c2-b4c7-9356ed5b35f0.png)
+![image.png](https://cdn.nlark.com/yuque/0/2022/png/106206/1660643534293-a5f53258-a9ac-462c-b9fd-9832901853c2.png#clientId=u5d9acd3a-25ad-4&crop=0&crop=0&crop=1&crop=1&from=paste&height=352&id=u0f71535e&margin=%5Bobject%20Object%5D&name=image.png&originHeight=528&originWidth=1683&originalType=binary&ratio=1&rotation=0&showTitle=false&size=719961&status=done&style=none&taskId=u676e97dd-1309-42b9-b380-a423c27199c&title=&width=1122)
 
-Link: [4.0.0 function list](https://github.com/oceanbase/oceanbase/milestone/3)
+Link: [3.1.5 function list](https://github.com/oceanbase/oceanbase/milestone/6)
 
 ## Case study
 For our success stories, see [Success stories](https://www.oceanbase.com/en/customer/home).

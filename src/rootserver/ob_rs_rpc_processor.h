@@ -35,7 +35,6 @@ bool is_allow_when_disable_ddl(const obrpc::ObRpcPacketCode pcode, const obrpc::
   if (OB_ISNULL(ddl_arg)) {
   } else if (obrpc::OB_COMMIT_ALTER_TENANT_LOCALITY == pcode
              || obrpc::OB_SCHEMA_REVISE == pcode // for upgrade
-             || obrpc::OB_UPGRADE_TABLE_SCHEMA == pcode
              || ((obrpc::OB_MODIFY_TENANT == pcode
                   || obrpc::OB_MODIFY_SYSVAR == pcode
                   || obrpc::OB_DO_KEYSTORE_DDL == pcode
@@ -43,6 +42,21 @@ bool is_allow_when_disable_ddl(const obrpc::ObRpcPacketCode pcode, const obrpc::
                   || obrpc::OB_DO_PROFILE_DDL == pcode)
                  && ddl_arg->is_allow_when_disable_ddl())) {
     bret = true;
+  }
+  return bret;
+}
+
+// precondition: enable_ddl = false
+bool is_allow_when_upgrade(const obrpc::ObRpcPacketCode pcode, const obrpc::ObDDLArg *ddl_arg)
+{
+  bool bret = false;
+  UNUSED(pcode);
+  if (obrpc::OB_UPGRADE_STAGE_DBUPGRADE != GCTX.get_upgrade_stage()) {
+    bret = true;
+  } else if (OB_ISNULL(ddl_arg)) {
+    bret = false;
+  } else {
+    bret = ddl_arg->is_allow_when_upgrade();
   }
   return bret;
 }
@@ -112,7 +126,8 @@ protected:
         RS_LOG(WARN, "RS major freeze not finished, can not process ddl request",
             K(ret), K(pcode));
       } else if (is_ddl_like_
-                 && (!GCONF.enable_ddl && !is_allow_when_disable_ddl(pcode, ddl_arg_))) {
+                 && ((!GCONF.enable_ddl && !is_allow_when_disable_ddl(pcode, ddl_arg_))
+                     || (GCONF.enable_ddl && !is_allow_when_upgrade(pcode, ddl_arg_)))) {
         ret = OB_OP_NOT_ALLOW;
         RS_LOG(WARN, "ddl operation not allow, can not process this request", K(ret), K(pcode));
       } else {
@@ -461,7 +476,6 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BROADCAST_SCHEMA, ObBroadcastSchemaP, broadcas
 // only for upgrade
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_CHECK_MERGE_FINISH, ObCheckMergeFinishP, check_merge_finish(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_GET_RECYCLE_SCHEMA_VERSIONS, ObGetRecycleSchemaVersionsP, get_recycle_schema_versions(arg_, result_));
-DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_UPGRADE_TABLE_SCHEMA, ObRpcUpgradeTableSchemaP, upgrade_table_schema(arg_));
 //label security ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_LABEL_SE_POLICY_DDL, ObRpcHandleLabelSePolicyDDLP, handle_label_se_policy_ddl(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_LABEL_SE_COMPONENT_DDL, ObRpcHandleLabelSeComponentDDLP, handle_label_se_component_ddl(arg_));

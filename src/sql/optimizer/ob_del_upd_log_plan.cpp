@@ -690,9 +690,7 @@ int ObDelUpdLogPlan::replace_assignment_expr_from_dml_info(const IndexDMLInfo &d
     if (OB_ISNULL(assignment.expr_) || OB_ISNULL(assignment.column_expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (expr == assignment.column_expr_ 
-               && OB_NOT_NULL(assignment.expr_)
-               && assignment.expr_->get_expr_type() != T_TABLET_AUTOINC_NEXTVAL) {
+    } else if (expr == assignment.column_expr_) {
       expr = assignment.expr_;
       break;
     } else { /*do nothing*/ }

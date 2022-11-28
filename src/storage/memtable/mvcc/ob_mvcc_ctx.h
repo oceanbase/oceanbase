@@ -44,7 +44,6 @@ class ObLockMemtable;
 namespace storage
 {
 class ObLsmtTransNode;
-class ObFreezer;
 }
 
 using namespace transaction::tablelock;
@@ -57,20 +56,19 @@ class ObIMvccCtx
 {
 public:
   ObIMvccCtx(ObMemtableCtxCbAllocator &cb_allocator)
-      : alloc_type_(0),
-        trans_mgr_(*this, cb_allocator),
-        //记录一个事务内第一次执行的table version
-        min_table_version_(0),
-        //记录一个事务内存最大的一次table version
-        max_table_version_(0),
-        trans_version_(INT64_MAX),
-        commit_version_(0),
-        lock_start_time_(0),
-        row_purge_version_(0),
-        redo_log_timestamp_(0),
-        redo_log_id_(0),
-        lock_wait_start_ts_(0),
-        replay_compact_version_(0)
+    : alloc_type_(0),
+    trans_mgr_(*this, cb_allocator),
+    //记录一个事务内第一次执行的table version
+    min_table_version_(0),
+    //记录一个事务内存最大的一次table version
+    max_table_version_(0),
+    trans_version_(palf::SCN::max_scn()),
+    commit_version_(palf::SCN::min_scn()),
+    lock_start_time_(0),
+    redo_scn_(palf::SCN::min_scn()),
+    redo_log_id_(0),
+    lock_wait_start_ts_(0),
+    replay_compact_version_(palf::SCN::min_scn())
   {
   }
   virtual ~ObIMvccCtx() {}
@@ -93,8 +91,8 @@ public: // for mvcc engine invoke
   virtual void add_lock_for_read_elapse(const int64_t n) = 0;
   virtual int64_t get_lock_for_read_elapse() const = 0;
   virtual void on_tsc_retry(const ObMemtableKey& key,
-                            const int64_t snapshot_version,
-                            const int64_t max_trans_version,
+                            const palf::SCN snapshot_version,
+                            const palf::SCN max_trans_version,
                             const transaction::ObTransID &conflict_tx_id) = 0;
   virtual void on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id) = 0;
   virtual bool is_can_elr() const = 0;
@@ -108,19 +106,19 @@ public: // for mvcc engine invoke
   virtual void dec_unsubmitted_cnt() = 0;
   virtual void inc_unsynced_cnt() = 0;
   virtual void dec_unsynced_cnt() = 0;
-  virtual int64_t get_tx_end_log_ts() const { return INT64_MAX; };
+  virtual palf::SCN get_tx_end_scn() const { return palf::SCN::max_scn(); };
 public:
   inline int get_alloc_type() const { return alloc_type_; }
-  inline int64_t get_trans_version() const { return ATOMIC_LOAD(&trans_version_); }
-  inline int64_t get_commit_version() const { return ATOMIC_LOAD(&commit_version_); }
+  inline palf::SCN get_trans_version() const { return trans_version_.atomic_get(); }
+  inline palf::SCN get_commit_version() const { return commit_version_.atomic_get(); }
   inline int64_t get_min_table_version() const { return min_table_version_; }
   inline int64_t get_max_table_version() const { return max_table_version_; }
   inline void set_alloc_type(const int alloc_type) { alloc_type_ = alloc_type; }
-  void before_prepare(const int64_t version = 0);
+  void before_prepare(const palf::SCN version = palf::SCN::min_scn());
   bool is_prepared() const;
-  inline void set_prepare_version(const int64_t version) { set_trans_version(version); }
-  inline void set_trans_version(const int64_t trans_version) { ATOMIC_STORE(&trans_version_, trans_version); }
-  inline void set_commit_version(const int64_t trans_version) { ATOMIC_STORE(&commit_version_, trans_version); }
+  inline void set_prepare_version(const palf::SCN version) { set_trans_version(version); }
+  inline void set_trans_version(const palf::SCN trans_version) { trans_version_.atomic_set(trans_version); }
+  inline void set_commit_version(const palf::SCN trans_version) { commit_version_.atomic_set(trans_version); }
   inline void set_table_version(const int64_t table_version)
   {
     if (INT64_MAX == min_table_version_) {
@@ -141,19 +139,19 @@ public:
       max_table_version_ = table_version;
     }
   }
-  inline bool is_commit_version_valid() const { return commit_version_ != 0 && commit_version_ != INT64_MAX; }
+  inline bool is_commit_version_valid() const { return commit_version_ != palf::SCN::min_scn() && commit_version_ != palf::SCN::max_scn(); }
   inline void set_lock_start_time(const int64_t start_time) { lock_start_time_ = start_time; }
   inline int64_t get_lock_start_time() { return lock_start_time_; }
   inline void set_for_replay(const bool for_replay) { trans_mgr_.set_for_replay(for_replay); }
   inline bool is_for_replay() const { return trans_mgr_.is_for_replay(); }
-  inline void set_redo_log_timestamp(const int64_t redo_log_timestamp) { redo_log_timestamp_ = redo_log_timestamp; }
+  inline void set_redo_scn(const palf::SCN redo_scn) { redo_scn_ = redo_scn; }
   inline void set_redo_log_id(const int64_t redo_log_id) { redo_log_id_ = redo_log_id; }
-  inline int64_t get_redo_log_timestamp() const { return redo_log_timestamp_; }
+  inline palf::SCN get_redo_scn() const { return redo_scn_; }
   inline int64_t get_redo_log_id() const { return redo_log_id_; }
   inline void set_lock_wait_start_ts(const int64_t lock_wait_start_ts)
   { lock_wait_start_ts_ = lock_wait_start_ts; }
-  int64_t get_replay_compact_version() const { return replay_compact_version_; }
-  void  set_replay_compact_version(const int64_t v) { replay_compact_version_ = v; }
+  palf::SCN get_replay_compact_version() const { return replay_compact_version_; }
+  void  set_replay_compact_version(const palf::SCN v) { replay_compact_version_ = v; }
   inline int64_t get_lock_wait_start_ts() const { return lock_wait_start_ts_; }
   void acquire_callback_list() { trans_mgr_.acquire_callback_list(); }
   void revert_callback_list() { trans_mgr_.revert_callback_list(); }
@@ -173,14 +171,14 @@ public:
       const int64_t data_size,
       ObMemtable *memtable,
       const int64_t seq_no,
-      const int64_t log_ts);
+      const palf::SCN scn);
   int register_table_lock_cb(
       transaction::tablelock::ObLockMemtable *memtable,
       ObMemCtxLockOpLinkNode *lock_op);
   int register_table_lock_replay_cb(
       ObLockMemtable *memtable,
       ObMemCtxLockOpLinkNode *lock_op,
-      const int64_t log_ts);
+      const palf::SCN scn);
   int inc_pending_log_size(const int64_t size);
 public:
   virtual void reset()
@@ -189,14 +187,13 @@ public:
     trans_mgr_.reset();
     min_table_version_ = INT64_MAX;
     max_table_version_ = 0;
-    trans_version_ = INT64_MAX;
-    commit_version_ = 0;
+    trans_version_ = palf::SCN::max_scn();
+    commit_version_ = palf::SCN::min_scn();
     lock_start_time_ = 0;
-    row_purge_version_ = 0;
-    redo_log_timestamp_ = 0;
+    redo_scn_ = palf::SCN::min_scn();
     redo_log_id_ = 0;
     lock_wait_start_ts_ = 0;
-    replay_compact_version_ = 0;
+    replay_compact_version_ = palf::SCN::min_scn();
   }
   virtual int64_t to_string(char *buf, const int64_t buf_len) const
   {
@@ -208,20 +205,18 @@ public:
         "ctx_descriptor=%u "
         "min_table_version=%ld "
         "max_table_version=%ld "
-        "trans_version=%ld "
-        "commit_version=%ld "
-        "row_purge_version=%ld "
+        "trans_version=%s "
+        "commit_version=%s "
         "lock_wait_start_ts=%ld "
-        "replay_compact_version=%ld}",
+        "replay_compact_version=%s}",
         alloc_type_,
         ctx_descriptor_,
         min_table_version_,
         max_table_version_,
-        trans_version_,
-        commit_version_,
-        row_purge_version_,
+        to_cstring(trans_version_),
+        to_cstring(commit_version_),
         lock_wait_start_ts_,
-        replay_compact_version_);
+        to_cstring(replay_compact_version_));
     return pos;
   }
 public:
@@ -245,14 +240,13 @@ protected:
   ObTransCallbackMgr trans_mgr_;
   int64_t min_table_version_;
   int64_t max_table_version_;
-  int64_t trans_version_;
-  int64_t commit_version_;
+  palf::SCN trans_version_;
+  palf::SCN commit_version_;
   int64_t lock_start_time_;
-  int64_t row_purge_version_;
-  int64_t redo_log_timestamp_;
+  palf::SCN redo_scn_;
   int64_t redo_log_id_;
   int64_t lock_wait_start_ts_;
-  int64_t replay_compact_version_;
+  palf::SCN replay_compact_version_;
 };
 
 class ObMemtableCtx;
@@ -262,10 +256,10 @@ public:
   ObMvccWriteGuard(const bool exclusive = false)
     : exclusive_(exclusive),
       ctx_(NULL),
-      memtable_(NULL) {}
+      is_freeze_(false) {}
   ~ObMvccWriteGuard();
-  void set_memtable(ObMemtable *memtable) {
-    memtable_ = memtable;
+  void set_is_freeze(bool flag) {
+    is_freeze_ = flag;
   }
   /*
    * purpose of ensure replica writable
@@ -280,7 +274,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObMvccWriteGuard);
   const bool exclusive_;  // if true multiple write_auth will be serialized
   ObMemtableCtx *ctx_;
-  ObMemtable *memtable_;
+  bool is_freeze_;
 };
 }
 }

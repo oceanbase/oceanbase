@@ -480,7 +480,7 @@ public:
   void set_rpc_tenant_id(uint64_t tenant_id) { rpc_tenant_id_ = tenant_id; }
   uint64_t get_rpc_tenant_id() const
   {
-    return rpc_tenant_id_ != 0 ? rpc_tenant_id_ : effective_tenant_id_;
+    return rpc_tenant_id_?: GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_2210 ? effective_tenant_id_ : tenant_id_;
   }
   uint64_t get_login_tenant_id() const { return tenant_id_; }
   void set_login_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
@@ -499,6 +499,8 @@ public:
     return common::OB_SUCCESS;
   }
   common::ObConsistencyLevel get_consistency_level() const { return consistency_level_; };
+  void set_last_consistency_level(common::ObConsistencyLevel level) { last_consistency_level_ = level; }
+  common::ObConsistencyLevel get_last_consistency_level() const { return last_consistency_level_; }
   bool is_zombie() const { return SESSION_KILLED == get_session_state();}
   bool is_query_killed() const;
   bool is_valid() const { return is_valid_; };
@@ -615,6 +617,11 @@ public:
   int get_use_plan_baseline(bool &v) const
   {
     v = sys_vars_cache_.get_optimizer_use_sql_plan_baselines();
+    return common::OB_SUCCESS;
+  }
+  int get_adaptive_cursor_sharing(bool &acs) const
+  {
+    acs = sys_vars_cache_.get__optimizer_adaptive_cursor_sharing();
     return common::OB_SUCCESS;
   }
   int get_nlj_batching_enabled(bool &v) const;
@@ -1120,7 +1127,6 @@ public:
   int64_t get_current_execution_id() const { return current_execution_id_; }
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
-  uint64_t get_current_plan_id() const { return plan_id_; }
   void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
   void set_last_trace_id(common::ObCurTraceId::TraceId *trace_id)
   {
@@ -1158,6 +1164,8 @@ public:
   int get_auto_increment_cache_size(int64_t &auto_increment_cache_size);
   void set_curr_trans_last_stmt_end_time(int64_t t) { curr_trans_last_stmt_end_time_ = t; }
   int64_t get_curr_trans_last_stmt_end_time() const { return curr_trans_last_stmt_end_time_; }
+
+  int use_parallel_execution(bool &v) const;
 
   // nested session and sql execute for foreign key.
   bool is_nested_session() const { return nested_count_ > 0; }
@@ -1252,8 +1260,7 @@ public:
   common::ActiveSessionStat &get_ash_stat() {  return ash_stat_; }
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
-                               const bool check_timezone_valid = true,
-                               const bool is_update_sys_var = false);
+                               const bool check_timezone_valid = true);
   int process_session_variable_fast();
   //@brief process session log_level setting like 'all.*:info, sql.*:debug'.
   //int process_session_ob_binlog_row_image(const common::ObObj &value);
@@ -1263,8 +1270,7 @@ protected:
   int process_session_time_zone_value(const common::ObObj &value, const bool check_timezone_valid);
   int process_session_overlap_time_value(const ObObj &value);
   int process_session_autocommit_value(const common::ObObj &val);
-  int process_session_debug_sync(const common::ObObj &val, const bool is_global,
-                                const bool is_update_sys_var);
+  int process_session_debug_sync(const common::ObObj &val, const bool is_global);
   // session切换接口
   int base_save_session(BaseSavedValue &saved_value, bool skip_cur_stmt_tables = false);
   int base_restore_session(BaseSavedValue &saved_value);
@@ -1448,6 +1454,8 @@ private:
         optimizer_use_sql_plan_baselines_(false),
         optimizer_capture_sql_plan_baselines_(false),
         is_result_accurate_(false),
+        _ob_use_parallel_execution_(false),
+        _optimizer_adaptive_cursor_sharing_(false),
         ob_enable_transmission_checksum_(false),
         character_set_results_(ObCharsetType::CHARSET_INVALID),
         character_set_connection_(ObCharsetType::CHARSET_INVALID),
@@ -1496,6 +1504,8 @@ private:
       optimizer_use_sql_plan_baselines_ = false;
       optimizer_capture_sql_plan_baselines_ = false;
       is_result_accurate_ = false;
+      _ob_use_parallel_execution_ = false;
+      _optimizer_adaptive_cursor_sharing_ = false;
       ob_enable_transmission_checksum_ = false;
       character_set_results_ = ObCharsetType::CHARSET_INVALID;
       character_set_connection_ = ObCharsetType::CHARSET_INVALID;
@@ -1611,7 +1621,7 @@ private:
                  K(ob_trx_idle_timeout_), K(ob_trx_lock_timeout_), K(nls_collation_), K(nls_nation_collation_),
                  K_(sql_throttle_current_priority), K_(ob_last_schema_version), K_(sql_select_limit),
                  K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),
-                 K_(is_result_accurate), K_(character_set_results),
+                 K_(is_result_accurate), K_(_ob_use_parallel_execution), K_(character_set_results),
                  K_(character_set_connection), K_(ob_pl_block_timeout), K_(ob_plsql_ccflags),
                  K_(iso_nls_currency));
   public:
@@ -1632,6 +1642,8 @@ private:
     bool optimizer_use_sql_plan_baselines_;
     bool optimizer_capture_sql_plan_baselines_;
     bool is_result_accurate_;
+    bool _ob_use_parallel_execution_;
+    bool _optimizer_adaptive_cursor_sharing_;
     bool ob_enable_transmission_checksum_;
     ObCharsetType character_set_results_;
     ObCharsetType character_set_connection_;
@@ -1742,6 +1754,8 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(bool, optimizer_use_sql_plan_baselines);
     DEF_SYS_VAR_CACHE_FUNCS(bool, optimizer_capture_sql_plan_baselines);
     DEF_SYS_VAR_CACHE_FUNCS(bool, is_result_accurate);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, _ob_use_parallel_execution);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, _optimizer_adaptive_cursor_sharing);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_transmission_checksum);
     DEF_SYS_VAR_CACHE_FUNCS(ObCharsetType, character_set_results);
     DEF_SYS_VAR_CACHE_FUNCS(ObCharsetType, character_set_connection);
@@ -1803,6 +1817,8 @@ private:
         bool inc_optimizer_use_sql_plan_baselines_:1;
         bool inc_optimizer_capture_sql_plan_baselines_:1;
         bool inc_is_result_accurate_:1;
+        bool inc__ob_use_parallel_execution_:1;
+        bool inc__optimizer_adaptive_cursor_sharing_:1;
         bool inc_ob_enable_transmission_checksum_:1;
         bool inc_character_set_results_:1;
         bool inc_character_set_connection_:1;
@@ -1932,7 +1948,6 @@ private:
   ObPhysicalPlan *cur_phy_plan_;
   // sql_id of cur_phy_plan_ sql
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
-  uint64_t plan_id_; // for ASH sampling, get current SQL's sql_id & plan_id
 
   char flt_trace_id_[common::OB_MAX_UUID_LENGTH + 1];
   char flt_span_id_[common::OB_MAX_UUID_LENGTH + 1];
@@ -1964,6 +1979,10 @@ private:
   ObQueryRetryInfo retry_info_;
   // 处理的上个query包的trace_id，用于判断是否为重试query的包。这里只关心query，不管其他类型的包（比如init db等）。
   common::ObCurTraceId::TraceId last_query_trace_id_;
+  // this field is used to remember last stmt's consistency level
+  // in order to detect in txn stmt change its consistency level
+  // and then warning the user
+  common::ObConsistencyLevel last_consistency_level_;
 protected:
   //this should be used by subclass, so need be protected
   MultiThreadData thread_data_;

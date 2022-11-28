@@ -32,6 +32,7 @@
 #include "share/restore/ob_log_archive_source_mgr.h"
 #include "share/ls/ob_ls_recovery_stat_operator.h"//ObLSRecoveryStatOperator
 #include "logservice/palf/log_define.h"//scn
+#include "logservice/palf/scn.h"
 
 
 namespace oceanbase
@@ -42,6 +43,7 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 using namespace obrpc;
+using namespace palf;
 
 ObRestoreService::ObRestoreService()
   : inited_(false), schema_service_(NULL),
@@ -962,15 +964,15 @@ int ObRestoreService::restore_init_ls(const share::ObPhysicalRestoreJob &job_inf
     } else if (OB_FAIL(store.read_ls_attr_info(backup_ls_attr))) {
       LOG_WARN("failed to read ls info", KR(ret));
     } else {
-      const int64_t sync_scn = backup_ls_attr.backup_scn_;
-      const int64_t readable_scn = OB_LS_MIN_SCN_VALUE;
+      const SCN &sync_scn = backup_ls_attr.backup_scn_;
+      const SCN readable_scn = SCN::base_scn();
       ObLSRecoveryStatOperator ls_recovery;
       ObLSRecoveryStat ls_recovery_stat;
-      LOG_INFO("start to create ls and set sync scn", K(sync_scn), "ls_attr_array",
-          backup_ls_attr.ls_attr_array_);
+      LOG_INFO("start to create ls and set sync scn", K(sync_scn), K(backup_ls_attr));
       if (OB_FAIL(ls_recovery_stat.init_only_recovery_stat(
               tenant_id_, SYS_LS, sync_scn, readable_scn))) {
-        LOG_WARN("failed to init ls recovery stat", KR(ret), K(sync_scn), K(readable_scn));
+        LOG_WARN("failed to init ls recovery stat", KR(ret), K(backup_ls_attr.backup_scn_),
+                 K(sync_scn), K(readable_scn));
       } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat(ls_recovery_stat,
                                                              *sql_proxy_))) {
         LOG_WARN("failed to update ls recovery stat", KR(ret),

@@ -308,7 +308,6 @@ public:
 
   // // TODO: ==================== Memtable Other Interface ==================
   int set_freezer(storage::ObFreezer *handler);
-  storage::ObFreezer *get_freezer() { return freezer_; }
   int get_ls_id(share::ObLSID &ls_id);
   void set_memtable_mgr(storage::ObTabletMemtableMgr *mgr) { memtable_mgr_ = mgr; }
   void set_freeze_clock(const uint32_t freeze_clock) { ATOMIC_STORE(&freeze_clock_, freeze_clock); }
@@ -379,18 +378,34 @@ public:
   virtual bool is_frozen_checkpoint() const override { return is_frozen_memtable();}
   virtual bool is_active_checkpoint() const override { return is_active_memtable();}
 
+  virtual OB_INLINE palf::SCN get_end_log_scn() const
+  {
+    palf::SCN end_scn = palf::SCN::max_scn();
+    end_scn.atomic_set(key_.scn_range_.end_scn_);
+    return end_scn;
+  }
+  virtual OB_INLINE palf::SCN get_start_log_scn() const
+  {
+    palf::SCN start_scn = palf::SCN::min_scn();
+    start_scn.atomic_set(key_.scn_range_.start_scn_);
+    return start_scn;
+  }
   virtual OB_INLINE int64_t get_end_log_ts() const override
   {
-    return ATOMIC_LOAD(&(key_.log_ts_range_.end_log_ts_));
+    palf::SCN end_scn = palf::SCN::max_scn();
+    end_scn.atomic_set(key_.scn_range_.end_scn_);
+    return end_scn.get_val_for_inner_table_field();
   }
   virtual OB_INLINE int64_t get_start_log_ts() const override
   {
-    return ATOMIC_LOAD(&(key_.log_ts_range_.start_log_ts_));
+    palf::SCN start_scn = palf::SCN::min_scn();
+    start_scn.atomic_set(key_.scn_range_.start_scn_);
+    return start_scn.get_val_for_inner_table_field();
   }
   bool is_empty()
   {
     return get_end_log_ts() == get_start_log_ts() &&
-      ObLogTsRange::MIN_TS == get_max_end_log_ts();
+      share::ObScnRange::MIN_TS == get_max_end_log_ts();
   }
   int resolve_right_boundary();
   void resolve_left_boundary(int64_t end_log_ts);
@@ -432,9 +447,6 @@ public:
   blocksstable::ObDatumRange &m_get_real_range(blocksstable::ObDatumRange &real_range,
                                         const blocksstable::ObDatumRange &range, const bool is_reverse) const;
   int get_tx_table_guard(storage::ObTxTableGuard &tx_table_guard);
-  int set_migration_clog_checkpoint_ts(const int64_t clog_checkpoint_ts);
-  int64_t get_migration_clog_checkpoint_ts() { return ATOMIC_LOAD(&migration_clog_checkpoint_ts_); }
-  int resolve_right_boundary_for_migration();
 
   /* multi source data operations */
   virtual int get_multi_source_data_unit(ObIMultiSourceDataUnit *multi_source_data_unit, ObIAllocator *allocator);
@@ -454,7 +466,7 @@ public:
                        K_(freeze_clock), K_(max_schema_version), K_(write_ref_cnt), K_(local_allocator),
                        K_(unsubmitted_cnt), K_(unsynced_cnt),
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
-                       K_(contain_hotspot_row), K_(max_end_log_ts), K_(rec_log_ts), K_(snapshot_version), K_(migration_clog_checkpoint_ts),
+                       K_(contain_hotspot_row), K_(max_end_log_ts), K_(rec_log_ts), K_(snapshot_version),
                        K_(is_tablet_freeze), K_(is_force_freeze), K_(contain_hotspot_row),
                        K_(read_barrier), K_(is_flushed), K_(freeze_state));
 private:
@@ -535,7 +547,6 @@ private:
   int64_t state_;
   int64_t freeze_state_;
   int64_t timestamp_;
-  int64_t migration_clog_checkpoint_ts_;
   bool is_tablet_freeze_;
   bool is_force_freeze_;
   bool is_flushed_;
@@ -585,17 +596,17 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
           TRANS_LOG(WARN, "fail to inc_cnt_for_multi_data", K(multi_source_data_unit), K(type), KPC(this));
         }
       }
-      if (log_ts > get_start_log_ts() && log_ts < ObLogTsRange::MAX_TS) {
+      if (log_ts > get_start_log_ts() && log_ts < share::ObScnRange::MAX_TS) {
         if (OB_FAIL(ret)) {
         } 
         // skip updating max_end_log_ts of frozen memtable for commit/abort when replay clog.
-        else if ((!for_replay || !is_callback)
+        else if ((share::ObScnRange::MAX_TS == get_end_log_ts() || !for_replay || !is_callback)
                  && OB_FAIL(set_max_end_log_ts(log_ts))) {
           TRANS_LOG(WARN, "failed to set max_end_log_ts", K(ret), K(log_ts), KPC(this));
         } else if (OB_FAIL(set_rec_log_ts(log_ts))) {
           TRANS_LOG(WARN, "failed to set rec_log_ts", K(ret), K(log_ts), KPC(this));
         }
-      } else if (-1 != log_ts &&  ObLogTsRange::MAX_TS != log_ts) {
+      } else if (-1 != log_ts &&  share::ObScnRange::MAX_TS != log_ts) {
         ret = common::OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "invalid log_ts", K(ret), K(log_ts), KPC(this));
       }

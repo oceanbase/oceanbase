@@ -180,7 +180,7 @@ int ObCdcStartLsnLocator::do_locate_ls_(const ObLocateLSNByTsReq::LocateParam &l
   } else if (OB_FAIL(group_iter.get_entry(log_group_entry, result_lsn))) {
     LOG_WARN("group_iter get_entry fail", KR(ret), K_(tenant_id), K(ls_id));
   } else {
-    result_ts_ns = log_group_entry.get_log_ts();
+    result_ts_ns = log_group_entry.get_log_scn().get_val_for_lsn_allocator();
   }
 
   // Unconditional setting ret code

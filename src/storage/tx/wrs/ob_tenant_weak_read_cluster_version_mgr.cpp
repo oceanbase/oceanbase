@@ -14,7 +14,6 @@
 
 #include "share/ob_errno.h"
 #include "ob_tenant_weak_read_cluster_version_mgr.h"
-#include "lib/stat/ob_latch_define.h"
 
 namespace oceanbase
 {
@@ -26,7 +25,7 @@ namespace transaction
 ObTenantWeakReadClusterVersionMgr::ObTenantWeakReadClusterVersionMgr() :
     tenant_id_(OB_INVALID_ID),
     svr_array_(),
-    rwlock_(common::ObLatchIds::WRS_CLUSTER_VERSION_MGR_LOCK)
+    rwlock_()
 {}
 
 ObTenantWeakReadClusterVersionMgr::~ObTenantWeakReadClusterVersionMgr()
@@ -65,7 +64,7 @@ bool ObTenantWeakReadClusterVersionMgr::find_match_server(int64_t &pre_count,
 }
 
 int ObTenantWeakReadClusterVersionMgr::update_server_version(const common::ObAddr &addr,
-    const int64_t version,
+    const palf::SCN version,
     const int64_t valid_part_count,
     const int64_t total_part_count,
     const int64_t generate_tstamp,
@@ -120,11 +119,11 @@ int ObTenantWeakReadClusterVersionMgr::update_server_version(const common::ObAdd
   return ret;
 }
 
-int64_t ObTenantWeakReadClusterVersionMgr::get_version(const int64_t base_version,
+palf::SCN ObTenantWeakReadClusterVersionMgr::get_version(const palf::SCN base_version,
     int64_t &skip_server_count,
     const bool force_print) const
 {
-  int64_t min_version = 0;
+  palf::SCN min_version;
   ObSEArray<common::ObAddr, 16> skip_servers;
   bool need_print = force_print;
 
@@ -134,7 +133,7 @@ int64_t ObTenantWeakReadClusterVersionMgr::get_version(const int64_t base_versio
   for (int64_t i = 0; i < svr_array_.count(); i++) {
     bool need_skip = false;
     bool is_first_skipped = false;
-    int64_t version = svr_array_.at(i).get_version(need_skip, is_first_skipped);
+    palf::SCN version = svr_array_.at(i).get_version(need_skip, is_first_skipped);
 
     if (need_skip) {
       skip_servers.push_back(svr_array_.at(i).addr_);
@@ -145,7 +144,7 @@ int64_t ObTenantWeakReadClusterVersionMgr::get_version(const int64_t base_versio
     }
     // if server version >= base_version and is valid
     if (! need_skip && version >= base_version) {
-      if (0 == min_version || min_version > version) {
+      if (!min_version.is_valid() || min_version > version) {
         min_version = version;
       }
     }
@@ -156,7 +155,7 @@ int64_t ObTenantWeakReadClusterVersionMgr::get_version(const int64_t base_versio
   skip_server_count = skip_servers.count();
 
   // if no server version in valid, use base_version
-  if (0 == min_version) {
+  if (!min_version.is_valid()) {
     min_version = base_version;
   }
   if (need_print) {
@@ -176,7 +175,7 @@ int64_t ObTenantWeakReadClusterVersionMgr::get_version(const int64_t base_versio
 
 ObTenantWeakReadClusterVersionMgr::ServerInfo::ServerInfo() :
     addr_(),
-    version_(0),
+    version_(),
     valid_part_count_(0),
     total_part_count_(0),
     generate_tstamp_(0),
@@ -186,7 +185,7 @@ ObTenantWeakReadClusterVersionMgr::ServerInfo::ServerInfo() :
 }
 
 ObTenantWeakReadClusterVersionMgr::ServerInfo::ServerInfo(const ObAddr &addr,
-    const int64_t version,
+    const palf::SCN version,
     const int64_t valid_part_count,
     const int64_t total_part_count)
 {
@@ -204,7 +203,7 @@ bool ObTenantWeakReadClusterVersionMgr::ServerInfo::match(const common::ObAddr &
   return addr_ == addr;
 }
 
-void ObTenantWeakReadClusterVersionMgr::ServerInfo::update(const int64_t version,
+void ObTenantWeakReadClusterVersionMgr::ServerInfo::update(const palf::SCN version,
     const int64_t valid_part_count,
     const int64_t total_part_count,
     const int64_t generate_tstamp)
@@ -220,11 +219,11 @@ void ObTenantWeakReadClusterVersionMgr::ServerInfo::update(const int64_t version
   }
 }
 
-int64_t ObTenantWeakReadClusterVersionMgr::ServerInfo::get_version(bool &need_skip,
+palf::SCN ObTenantWeakReadClusterVersionMgr::ServerInfo::get_version(bool &need_skip,
     bool &is_first_skipped) const
 {
   int64_t cur_tstamp = ObTimeUtility::current_time();
-  int64_t ret_version = 0;
+  palf::SCN ret_version;
 
   SpinLockGuard guard(lock_);
 

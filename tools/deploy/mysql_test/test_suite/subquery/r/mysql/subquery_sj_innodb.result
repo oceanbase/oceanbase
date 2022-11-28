@@ -32,22 +32,28 @@ a	b
 9	5
 explain  select * from t2 where b in (select a from t1);
 Query Plan
-=============================================
-|ID|OPERATOR            |NAME|EST. ROWS|COST|
----------------------------------------------
-|0 |HASH RIGHT SEMI JOIN|    |3        |6   |
-|1 | TABLE SCAN         |t1  |3        |2   |
-|2 | TABLE SCAN         |t2  |10       |3   |
-=============================================
+=================================================
+|ID|OPERATOR               |NAME |EST. ROWS|COST|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN       |     |3        |79  |
+|1 | SUBPLAN SCAN          |VIEW2|3        |46  |
+|2 |  HASH DISTINCT        |     |3        |46  |
+|3 |   TABLE SCAN          |t1   |3        |46  |
+|4 | DISTRIBUTED TABLE SCAN|t2(b)|1        |10  |
+=================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t2.a], [t2.b]), filter(nil), rowset=256, 
-      equal_conds([t2.b = t1.a]), other_conds(nil)
-  1 - output([t1.a]), filter(nil), rowset=256, 
+      conds(nil), nl_params_([VIEW2.VIEW1.a])
+  1 - output([VIEW2.VIEW1.a]), filter(nil), rowset=256,
+      access([VIEW2.VIEW1.a])
+  2 - output([t1.a]), filter(nil), rowset=256,
+      distinct([t1.a])
+  3 - output([t1.a]), filter(nil), rowset=256,
       access([t1.a]), partitions(p0)
-  2 - output([t2.b], [t2.a]), filter(nil), rowset=256, 
-      access([t2.b], [t2.a]), partitions(p0)
+  4 - output([t2.b], [t2.a]), filter(nil), rowset=256,
+      access([GROUP_ID], [t2.__pk_increment], [t2.b], [t2.a]), partitions(p0)
 
 select * from t2 where b in (select a from t1);
 a	b
@@ -65,22 +71,28 @@ primary key(pk1, pk2, pk3)
 insert into t3 select a,a, a,a,a from t0;
 explain  select * from t3 where b in (select a from t1);
 Query Plan
-=============================================
-|ID|OPERATOR            |NAME|EST. ROWS|COST|
----------------------------------------------
-|0 |HASH RIGHT SEMI JOIN|    |3        |6   |
-|1 | TABLE SCAN         |t1  |3        |2   |
-|2 | TABLE SCAN         |t3  |10       |3   |
-=============================================
+=================================================
+|ID|OPERATOR               |NAME |EST. ROWS|COST|
+-------------------------------------------------
+|0 |NESTED-LOOP JOIN       |     |3        |79  |
+|1 | SUBPLAN SCAN          |VIEW2|3        |46  |
+|2 |  HASH DISTINCT        |     |3        |46  |
+|3 |   TABLE SCAN          |t1   |3        |46  |
+|4 | DISTRIBUTED TABLE SCAN|t3(b)|1        |10  |
+=================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t3.a], [t3.b], [t3.pk1], [t3.pk2], [t3.pk3]), filter(nil), rowset=256, 
-      equal_conds([t3.b = t1.a]), other_conds(nil)
-  1 - output([t1.a]), filter(nil), rowset=256, 
+      conds(nil), nl_params_([VIEW2.VIEW1.a])
+  1 - output([VIEW2.VIEW1.a]), filter(nil), rowset=256,
+      access([VIEW2.VIEW1.a])
+  2 - output([t1.a]), filter(nil), rowset=256,
+      distinct([t1.a])
+  3 - output([t1.a]), filter(nil), rowset=256,
       access([t1.a]), partitions(p0)
-  2 - output([t3.pk1], [t3.pk2], [t3.pk3], [t3.b], [t3.a]), filter(nil), rowset=256, 
-      access([t3.pk1], [t3.pk2], [t3.pk3], [t3.b], [t3.a]), partitions(p0)
+  4 - output([t3.pk1], [t3.pk2], [t3.pk3], [t3.b], [t3.a]), filter(nil), rowset=256,
+      access([GROUP_ID], [t3.pk1], [t3.pk2], [t3.pk3], [t3.b], [t3.a]), partitions(p0)
 
 select * from t3 where b in (select a from t1);
 a	b	pk1	pk2	pk3
@@ -102,9 +114,9 @@ Query Plan
 =============================================
 |ID|OPERATOR            |NAME|EST. ROWS|COST|
 ---------------------------------------------
-|0 |HASH RIGHT SEMI JOIN|    |10       |15  |
-|1 | TABLE SCAN         |t0  |10       |3   |
-|2 | TABLE SCAN         |t3  |50       |7   |
+|0 |HASH RIGHT SEMI JOIN|    |10       |97  |
+|1 | TABLE SCAN         |t0  |10       |46  |
+|2 | TABLE SCAN         |t3  |50       |46  |
 =============================================
 
 Outputs & filters: 
@@ -134,22 +146,22 @@ a	b	pk1	pk2
 9	9	9	9
 explain  select * from t1 where a in (select b from t2);
 Query Plan
-========================================
-|ID|OPERATOR      |NAME |EST. ROWS|COST|
-----------------------------------------
-|0 |HASH SEMI JOIN|     |3        |6   |
-|1 | TABLE SCAN   |t1   |3        |2   |
-|2 | TABLE SCAN   |t2(b)|10       |3   |
-========================================
+=================================================
+|ID|OPERATOR               |NAME |EST. ROWS|COST|
+-------------------------------------------------
+|0 |NESTED-LOOP SEMI JOIN  |     |3        |68  |
+|1 | TABLE SCAN            |t1   |3        |46  |
+|2 | DISTRIBUTED TABLE SCAN|t2(b)|1        |7   |
+=================================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.a], [t1.b]), filter(nil), rowset=256, 
-      equal_conds([t1.a = t2.b]), other_conds(nil)
+      conds(nil), nl_params_([t1.a])
   1 - output([t1.a], [t1.b]), filter(nil), rowset=256, 
       access([t1.a], [t1.b]), partitions(p0)
-  2 - output([t2.b]), filter(nil), rowset=256, 
-      access([t2.b]), partitions(p0)
+  2 - output(nil), filter(nil), rowset=256,
+      access(nil), partitions(p0)
 
 select * from t1;
 a	b
@@ -192,13 +204,13 @@ Query Plan
 =====================================================
 |ID|OPERATOR                   |NAME |EST. ROWS|COST|
 -----------------------------------------------------
-|0 |HASH SEMI JOIN             |     |1        |6   |
-|1 | NESTED-LOOP JOIN CARTESIAN|     |1        |4   |
-|2 |  TABLE SCAN               |t2   |1        |2   |
-|3 |  MATERIAL                 |     |1        |2   |
-|4 |   SUBPLAN SCAN            |VIEW3|1        |2   |
-|5 |    TABLE SCAN             |t3   |1        |2   |
-|6 | TABLE SCAN                |t2   |1        |2   |
+|0 |HASH SEMI JOIN             |     |1        |137 |
+|1 | NESTED-LOOP JOIN CARTESIAN|     |1        |91  |
+|2 |  TABLE SCAN               |t2   |1        |46  |
+|3 |  MATERIAL                 |     |1        |46  |
+|4 |   SUBPLAN SCAN            |VIEW3|1        |46  |
+|5 |    TABLE SCAN             |t3   |1        |46  |
+|6 | TABLE SCAN                |t2   |1        |46  |
 =====================================================
 
 Outputs & filters: 

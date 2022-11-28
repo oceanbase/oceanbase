@@ -87,7 +87,7 @@ public:
   // used for virtual table
   static const uint64_t LS_DATA_CHECKPOINT_TABLET_ID = 40000;
   int init(ObLS *ls);
-  int safe_to_destroy(bool &is_safe_destroy);
+  int safe_to_destroy();
   int64_t get_rec_log_ts() override;
   // if min_rec_log_ts <= the input rec_log_ts
   // logstream freeze
@@ -115,8 +115,6 @@ public:
   ObTabletID get_tablet_id() const;
 
   bool is_flushing() const;
-
-  bool has_prepared_flush_checkpoint();
 
 private:
   // traversal prepare_list to flush memtable

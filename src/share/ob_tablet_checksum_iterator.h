@@ -34,8 +34,8 @@ class ObTabletChecksumIterator
 public:
   ObTabletChecksumIterator() 
     : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID),
-      snapshot_version_(OB_INVALID_VERSION), checksum_items_(), 
-      cur_idx_(0), sql_proxy_(NULL)
+      compaction_scn_(), checksum_items_(), cur_idx_(0),
+      sql_proxy_(NULL)
   {}
   virtual ~ObTabletChecksumIterator() { reset(); }
 
@@ -46,7 +46,7 @@ public:
 
   int next(ObTabletChecksumItem &item);
 
-  void set_snapshot_version(const int64_t snapshot_version) { snapshot_version_ = snapshot_version; }
+  void set_compaction_scn(const palf::SCN &compaction_scn) { compaction_scn_ = compaction_scn; }
 
 private:
   int fetch_next_batch();
@@ -56,7 +56,7 @@ private:
 
   bool is_inited_;
   uint64_t tenant_id_;
-  int64_t snapshot_version_;
+  palf::SCN compaction_scn_;
   common::ObSEArray<ObTabletChecksumItem, BATCH_FETCH_COUNT> checksum_items_;
   int64_t cur_idx_;
   common::ObISQLClient *sql_proxy_;

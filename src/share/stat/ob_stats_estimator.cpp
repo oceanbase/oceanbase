@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_stats_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
-#include "observer/ob_inner_sql_connection_pool.h"
 
 namespace oceanbase
 {
@@ -305,11 +304,9 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   common::ObOracleSqlProxy oracle_proxy; // TODO, check the usage, is there any postprocess
   ObCommonSqlProxy *sql_proxy = ctx_.get_sql_proxy();
-  if (OB_ISNULL(sql_proxy) || OB_ISNULL(ctx_.get_my_session()) ||
-      OB_UNLIKELY(dst_opt_stats.empty() || raw_sql.empty())) {
+  if (OB_UNLIKELY(dst_opt_stats.empty())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected empty", K(ret), K(sql_proxy), K(dst_opt_stats.empty()),
-                                     K(ctx_.get_my_session()), K(raw_sql.empty()));
+    LOG_WARN("get unexpected empty", K(ret), K(dst_opt_stats.empty()));
   } else if (lib::is_oracle_mode()) {
     if (OB_FAIL(oracle_proxy.init(ctx_.get_sql_proxy()->get_pool()))) {
       LOG_WARN("failed to init oracle proxy", K(ret));
@@ -318,22 +315,14 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
     }
   }
   if (OB_SUCC(ret)) {
-    observer::ObInnerSQLConnectionPool *pool =
-                            static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool());
-    sqlclient::ObISQLConnection *conn = NULL;
-    bool is_inner = ctx_.get_my_session()->is_inner();
-    ObSQLSessionInfo::SessionType session_type = ctx_.get_my_session()->get_session_type();
-    ctx_.get_my_session()->set_inner_session();
+    LOG_TRACE("link bug basic stats", K(tenant_id));
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
       sqlclient::ObMySQLResult *client_result = NULL;
-      if (lib::is_oracle_mode() && OB_FAIL(pool->acquire(ctx_.get_my_session(), conn, true))) {
-        LOG_WARN("failed to acquire inner connection", K(ret));
-      } else if (lib::is_mysql_mode() && OB_FAIL(pool->acquire(tenant_id, conn, sql_proxy))) {
-        LOG_WARN("failed to acquire inner connection", K(ret));
-      } else if (OB_ISNULL(conn)) {
+      ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy);
+      if (OB_UNLIKELY(raw_sql.empty())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("conn is null", K(ret), K(conn));
-      } else if (OB_FAIL(conn->execute_read(tenant_id, raw_sql.ptr(), proxy_result))) {
+        LOG_WARN("get unexpected empty", K(ret), K(raw_sql));
+      } else if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, raw_sql.ptr()))) {
         LOG_WARN("failed to execute sql", K(ret), K(raw_sql));
       } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -372,17 +361,12 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
         }
       }
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = sql_proxy->close(conn, true))) {
-        LOG_WARN("close result set failed", K(ret), K(tmp_ret));
-        ret = COVER_SUCC(tmp_ret);
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
       }
-    }
-    //reset session type
-    if (is_inner) {
-      ctx_.get_my_session()->set_session_type(session_type);
-    } else {
-      ctx_.get_my_session()->set_user_session();
-      ctx_.get_my_session()->set_session_type(session_type);
     }
   }
   return ret;

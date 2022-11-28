@@ -91,6 +91,11 @@ public:
   void inc_affected_rows() { }
   void inc_found_rows() { }
   void inc_changed_rows() { }
+
+  virtual int inner_get_next_row();
+  int get_next_row_from_child();
+  int merge_row_to_das();
+  int merge_rows_post_proc();
   int do_update();
   int update_row_das();
   int delete_row_das();
@@ -114,8 +119,6 @@ protected:
   int inner_open_with_das();
   int open_table_for_each();
   int close_table_for_each();
-  virtual int write_row_to_das_buffer() override;
-  virtual int write_rows_post_proc(int last_errno) override;
 
 protected:
   int64_t affected_rows_;

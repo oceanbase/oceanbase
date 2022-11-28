@@ -18,6 +18,7 @@
 #include "common/ob_learner_list.h"     // common::GlobalLearnerList
 #include "common/ob_member_list.h"      // ObMemberList
 #include "lsn.h"                        // LSN
+#include "scn.h"                        // SCN
 #include "palf_base_info.h"             // LogInfo
 #include "palf_options.h"               // AccessMode
 #include "log_define.h"                 // ReplicaType
@@ -176,11 +177,11 @@ public:
       const int64_t proposal_id,
       const int64_t mode_version,
       const AccessMode &access_mode,
-      const int64_t ref_ts_ns);
+      const SCN &ref_scn);
   bool is_valid() const;
   void reset();
   void operator=(const LogModeMeta &mode_meta);
-  TO_STRING_KV(K_(version), K_(proposal_id), K_(mode_version), K_(access_mode), K_(ref_ts_ns));
+  TO_STRING_KV(K_(version), K_(proposal_id), K_(mode_version), K_(access_mode), K_(ref_scn));
   NEED_SERIALIZE_AND_DESERIALIZE;
 public:
   int64_t version_;
@@ -190,8 +191,8 @@ public:
   int64_t mode_version_;
   AccessMode access_mode_;
   // log_ts lower bound
-  // after switching over, log_ts of all submitted log should be bigger than ref_ts_ns_
-  int64_t ref_ts_ns_;
+  // after switching over, log_ts of all submitted log should be bigger than ref_scn_
+  SCN ref_scn_;
 
   static constexpr int64_t LOG_MODE_META_VERSION = 1;
 };

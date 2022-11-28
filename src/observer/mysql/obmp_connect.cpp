@@ -532,12 +532,14 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           int inner_ret = OB_SUCCESS;
           bool is_unlocked = false;
           if (ORACLE_MODE == session.get_compatibility_mode()
+              && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3000
               && OB_ERR_USER_IS_LOCKED == ret) {
             if (OB_SUCCESS != (inner_ret = unlock_user_if_time_is_up(conn->tenant_id_, schema_guard, is_unlocked))) {
               LOG_WARN("fail to check user unlock", K(inner_ret));
             }
           }
           if (MYSQL_MODE == session.get_compatibility_mode()
+              && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3200
               && OB_ERR_USER_IS_LOCKED == ret) {
             if (OB_SUCCESS != (inner_ret = unlock_user_if_time_is_up_mysql(conn->tenant_id_,
                                                                            session_priv.user_id_,
@@ -596,6 +598,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
 
 
       if (ORACLE_MODE == session.get_compatibility_mode()
+          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3000
           && (OB_SUCC(ret) || OB_PASSWORD_WRONG == ret)) {
         int login_ret = ret;
         if (OB_FAIL(update_login_stat_in_trans(conn->tenant_id_, OB_SUCCESS == login_ret, schema_guard))) {
@@ -606,6 +609,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
       }
 
       if (MYSQL_MODE == session.get_compatibility_mode()
+          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3200
           && (OB_SUCC(ret) || OB_PASSWORD_WRONG == ret || OB_ERR_USER_IS_LOCKED == ret)) {
         int login_ret = ret;
         bool is_unlocked_now = false;
@@ -621,7 +625,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         }
       }
 
-      if (OB_SUCC(ret)) {
+      if ((OB_SUCC(ret) && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2276)) {
         if (OB_FAIL(check_password_expired(conn->tenant_id_, schema_guard, session))) {
           LOG_WARN("fail to check password expired", K(ret));
         }
@@ -1904,7 +1908,12 @@ int ObMPConnect::verify_ip_white_list(const uint64_t tenant_id) const
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sys variable schema is null", K(ret));
   } else if (OB_FAIL(sys_variable_schema->get_sysvar_schema(var_name, sysvar))) {
-    LOG_WARN("fail to get_sysvar_schema",  K(ret));
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470) {
+      LOG_INFO("maybe server is upgrading, ignore verified", "version", GET_MIN_CLUSTER_VERSION(), K(ret));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get_sysvar_schema",  K(ret));
+    }
   } else {
     ObString var_value = sysvar->get_value();
     if (!ObHostnameStuct::is_in_white_list(client_ip_, var_value)) {

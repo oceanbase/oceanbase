@@ -415,7 +415,7 @@ bool ObBackupPath::operator ==(const ObBackupPath &path) const
 int ObBackupPathUtil::get_tenant_data_backup_set_placeholder_path_(
     const uint64_t backup_set_id,
     const ObBackupType backup_type,
-    const share::ObBackupSCN &min_restore_scn,
+    const palf::SCN &min_restore_scn,
     const ObString &suffix, 
     ObBackupPath &path) 
 {
@@ -471,7 +471,7 @@ int ObBackupPathUtil::get_backup_set_placeholder_start_path(
 
 int ObBackupPathUtil::get_backup_set_placeholder_end_success_path(
     const share::ObBackupDest &backup_tenant_dest, const share::ObBackupSetDesc &backup_set_desc,  
-    const share::ObBackupSCN &min_restore_scn, share::ObBackupPath &backup_path)
+    const palf::SCN &min_restore_scn, share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
   ObString suffix("end_success");
@@ -486,7 +486,7 @@ int ObBackupPathUtil::get_backup_set_placeholder_end_success_path(
 
 int ObBackupPathUtil::get_backup_set_placeholder_end_failed_path(
     const share::ObBackupDest &backup_tenant_dest, const share::ObBackupSetDesc &backup_set_desc, 
-    const share::ObBackupSCN &min_restore_scn, share::ObBackupPath &backup_path)
+    const palf::SCN &min_restore_scn, share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
   ObString suffix("end_failed");
@@ -524,28 +524,10 @@ int ObBackupPathUtil::get_backup_set_dir_path(const share::ObBackupDest &backup_
   return ret;
 }
 
-int ObBackupPathUtil::get_backup_set_inner_placeholder_prefix(
-    const share::ObBackupSetDesc &backup_set_desc,
-    char *placeholder_prefix,
-    int64_t length)
-{
-  int ret = OB_SUCCESS;
-  const char *backup_type_str = backup_set_desc.backup_type_.is_full_backup() ? "full" : "inc";
-  if (OB_ISNULL(placeholder_prefix)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("placeholder_prefix is null", K(ret));    
-  } else if (OB_FAIL(databuff_printf(placeholder_prefix, length, 
-      "backup_set_%lu_%s_", backup_set_desc.backup_set_id_, backup_type_str))) {
-    LOG_WARN("failed to format backup set placeholder prefix", K(ret), K(backup_set_desc)); 
-  }
-
-  return ret;
-}
-
-// file:///obbackup/backup_set_1_full/backup_set_1_full_xxxx_xxxxx
+// file:///obbackup/backup_set_1_full_20211231/log_stream_1/
 int ObBackupPathUtil::get_backup_set_inner_placeholder(
     const share::ObBackupDest &backup_set_dest, const share::ObBackupSetDesc &backup_set_desc, 
-    const share::ObBackupSCN &replay_scn, const share::ObBackupSCN &min_restore_scn, 
+    const palf::SCN &replay_scn, const palf::SCN &min_restore_scn,
     share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
@@ -577,18 +559,6 @@ int ObBackupPathUtil::get_ls_backup_dir_path(const share::ObBackupDest &backup_s
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, path))) {
     LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
-  } else if (OB_FAIL(path.join_ls(ls_id))) {
-    LOG_WARN("failed to join log stream", K(ret), K(ls_id));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_ls_backup_dir_path(const share::ObBackupDest &backup_set_dest,
-    const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, ObBackupPath &path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, desc, path))) {
-    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest), K(desc));
   } else if (OB_FAIL(path.join_ls(ls_id))) {
     LOG_WARN("failed to join log stream", K(ret), K(ls_id));
   }

@@ -333,7 +333,6 @@ int ObTabletBackfillTXDag::create_first_task()
 int ObTabletBackfillTXDag::generate_next_dag(share::ObIDag *&dag)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   common::ObTabletID next_tablet_id;
@@ -344,11 +343,6 @@ int ObTabletBackfillTXDag::generate_next_dag(share::ObIDag *&dag)
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx dag do not init", K(ret));
-  } else if (ha_dag_net_ctx_->is_failed()) {
-    if (OB_SUCCESS != (tmp_ret = ha_dag_net_ctx_->get_result(ret))) {
-      LOG_WARN("failed to get result", K(tmp_ret), KPC(this));
-      ret = tmp_ret;
-    }
   } else if (OB_FAIL(backfill_tx_ctx_->get_tablet_id(next_tablet_id))) {
     if (OB_ITER_END == ret) {
       //do nothing
@@ -661,8 +655,8 @@ int ObTabletTableBackfillTXTask::prepare_merge_ctx_()
     tablet_merge_ctx_.tablet_handle_ = tablet_handle_;
     tablet_merge_ctx_.sstable_version_range_.multi_version_start_ = tablet_handle_.get_obj()->get_multi_version_start();
     tablet_merge_ctx_.sstable_version_range_.snapshot_version_ = tablet_handle_.get_obj()->get_snapshot_version();
-    tablet_merge_ctx_.log_ts_range_ = table_handle_.get_table()->get_key().log_ts_range_;
-    tablet_merge_ctx_.merge_log_ts_ = backfill_tx_ctx_->log_sync_scn_;
+    tablet_merge_ctx_.scn_range_ = table_handle_.get_table()->get_key().scn_range_;
+    tablet_merge_ctx_.merge_scn_ = backfill_tx_ctx_->log_sync_scn_;
     tablet_merge_ctx_.create_snapshot_version_ = 0;
 
     if (OB_FAIL(tablet_merge_ctx_.tables_handle_.add_table(table_handle_))) {

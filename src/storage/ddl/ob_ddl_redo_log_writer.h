@@ -42,25 +42,18 @@ class ObLSHandle;
 // a. set write speed to the log archive speed if archive is on;
 // b. set write speed to the out bandwidth throttle rate if archive is off.
 // c. control ddl clog space used at tenant level rather than observer/logstream level.
-class ObDDLCtrlSpeedItem final
+class ObDDLCtrlSpeedHandleItem final
 {
 public:
-  ObDDLCtrlSpeedItem(): is_inited_(false), ls_id_(share::ObLSID::INVALID_LS_ID),
-      next_available_write_ts_(-1), write_speed_(750), disk_used_stop_write_threshold_(-1), 
-      need_stop_write_(false), ref_cnt_(0) {}
-  ~ObDDLCtrlSpeedItem() {};
-  void reset_need_stop_write() { need_stop_write_ = false; }
+  ObDDLCtrlSpeedHandleItem(): is_inited_(false), ls_id_(share::ObLSID::INVALID_LS_ID),
+      next_available_write_ts_(-1), write_speed_(750), disk_used_stop_write_threshold_(-1), need_stop_write_(false) {}
+  ~ObDDLCtrlSpeedHandleItem() {};
+  int assign(const ObDDLCtrlSpeedHandleItem &speed_handle_item);
   int init(const share::ObLSID &ls_id);
   int refresh();
   int limit_and_sleep(const int64_t bytes, int64_t &real_sleep_us);
-
-  // for ref_cnt_
-  void inc_ref() { ATOMIC_INC(&ref_cnt_); }
-  int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1); }
-  int64_t get_ref() { return ATOMIC_LOAD(&ref_cnt_); }
-
-  TO_STRING_KV(K_(is_inited), K_(ls_id), K_(next_available_write_ts), 
-    K_(write_speed), K_(disk_used_stop_write_threshold), K_(need_stop_write), K_(ref_cnt));
+  TO_STRING_KV(K_(is_inited), K_(is_inited), K_(next_available_write_ts),
+    K_(write_speed), K_(disk_used_stop_write_threshold), K_(disk_used_stop_write_threshold));
 private:
   int cal_limit(const int64_t bytes, int64_t &next_available_ts);
   int do_sleep(const int64_t next_available_ts, int64_t &real_sleep_us);
@@ -73,8 +66,6 @@ private:
   int64_t write_speed_;
   int64_t disk_used_stop_write_threshold_; // stop write threshold on tenant level.
   bool need_stop_write_;
-  int64_t ref_cnt_; // reference count
-  DISALLOW_COPY_AND_ASSIGN(ObDDLCtrlSpeedItem);
 };
 
 class ObDDLCtrlSpeedHandle final
@@ -83,7 +74,6 @@ public:
   int init();
   static ObDDLCtrlSpeedHandle &get_instance();
   int limit_and_sleep(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t bytes, int64_t &real_sleep_us);
-
 private:
   struct SpeedHandleKey {
     public:
@@ -100,6 +90,12 @@ private:
       uint64_t tenant_id_;
       share::ObLSID ls_id_;
   };
+private:
+  ObDDLCtrlSpeedHandle();
+  ~ObDDLCtrlSpeedHandle();
+  int refresh();
+  int add_speed_handle_item(const SpeedHandleKey &speed_handle_key);
+
 private:
   class RefreshSpeedHandleTask: public common::ObTimerTask
   {
@@ -119,36 +115,12 @@ private:
   public:
     UpdateSpeedHandleItemFn() = default;
     ~UpdateSpeedHandleItemFn() = default;
-    int operator() (common::hash::HashMapPair<SpeedHandleKey, ObDDLCtrlSpeedItem*> &entry);
+    int operator() (common::hash::HashMapPair<SpeedHandleKey, ObDDLCtrlSpeedHandleItem> &entry);
   };
-private:
-  class ObDDLCtrlSpeedItemHandle final
-  {
-  public:
-    ObDDLCtrlSpeedItemHandle(): item_(nullptr) { }
-    ~ObDDLCtrlSpeedItemHandle() { reset(); }
-    int set_ctrl_speed_item(
-        ObDDLCtrlSpeedItem *item);
-    int get_ctrl_speed_item(
-        ObDDLCtrlSpeedItem*& item) const;
-    void reset();
-  private:
-    ObDDLCtrlSpeedItem *item_;
-    DISALLOW_COPY_AND_ASSIGN(ObDDLCtrlSpeedItemHandle);
-  };
-private:
-  ObDDLCtrlSpeedHandle();
-  ~ObDDLCtrlSpeedHandle();
-  int refresh();
-  int add_ctrl_speed_item(const SpeedHandleKey &speed_handle_key, ObDDLCtrlSpeedItemHandle &item_handle);
-  int remove_ctrl_speed_item(const SpeedHandleKey &speed_handle_key);
-
 private:
   static const int64_t MAP_BUCKET_NUM  = 1024;
   bool is_inited_;
-  common::hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedItem*> speed_handle_map_;
-  common::ObArenaAllocator allocator_;
-  common::ObBucketLock bucket_lock_;
+  common::hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedHandleItem> speed_handle_map_;
   RefreshSpeedHandleTask refreshTimerTask_;
 };
 
@@ -184,7 +156,6 @@ class ObDDLRedoLogWriter final
 {
 public:
   static ObDDLRedoLogWriter &get_instance();
-  int init();
   int write(const ObDDLRedoLog &log,
             const uint64_t tenant_id,
             const share::ObLSID &ls_id,
@@ -192,10 +163,7 @@ public:
             const blocksstable::MacroBlockId &macro_block_id,
             char *buffer,
             ObDDLRedoLogHandle &handle);
-  int write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
-                          const ObDDLStartLog &log,
-                          logservice::ObLogHandler *log_handler,
-                          int64_t &start_log_ts);
+  int write_ddl_start_log(const ObDDLStartLog &log, logservice::ObLogHandler *log_handler, int64_t &start_log_ts);
   template <typename T>
   int write_ddl_finish_log(const T &log,
                           const ObDDLClogType clog_type,
@@ -212,9 +180,6 @@ private:
   public:
   };
   // TODO: traffic control
-private:
-  bool is_inited_;
-  common::ObBucketLock bucket_lock_;
 };
 
 
@@ -242,33 +207,32 @@ public:
   ObDDLSSTableRedoWriter();
   ~ObDDLSSTableRedoWriter();
   int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
-  int start_ddl_redo(const ObITable::TableKey &table_key,
-                     const int64_t execution_id,
-                     ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int start_ddl_redo(const ObITable::TableKey &table_key);
   int write_redo_log(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                      const blocksstable::MacroBlockId &macro_block_id);
   int wait_redo_log_finish(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                            const blocksstable::MacroBlockId &macro_block_id);
   int write_prepare_log(const ObITable::TableKey &table_key,
                         const int64_t table_id,
-                        const int64_t execution_id,
-                        const int64_t ddl_task_id,
+                        const int64_t schema_version,
                         int64_t &prepare_log_ts);
   int write_commit_log(const ObITable::TableKey &table_key,
                        const int64_t prepare_log_ts);
   OB_INLINE void set_start_log_ts(const int64_t start_log_ts) { ATOMIC_SET(&start_log_ts_, start_log_ts); }
   OB_INLINE int64_t get_start_log_ts() const { return ATOMIC_LOAD(&start_log_ts_); }
 private:
+  bool need_remote_write(int ret_code);
   int switch_to_remote_write();
 private:
   bool is_inited_;
   bool remote_write_;
   int64_t start_log_ts_;
-  share::ObLSID ls_id_;
-  ObTabletID tablet_id_;
+  ObLSHandle ls_handle_;
+  ObTabletHandle tablet_handle_;
   ObDDLRedoLogHandle ddl_redo_handle_;
   ObAddr leader_addr_;
   share::ObLSID leader_ls_id_;
+  ObTabletID tablet_id_;
   char *buffer_;
 };
 

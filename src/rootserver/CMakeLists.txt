@@ -1,9 +1,18 @@
 ob_set_subtarget(ob_rootserver ALONE
+  ob_alter_locality_finish_checker.cpp
   ob_bootstrap.cpp
   ob_ddl_service.cpp
   ob_index_builder.cpp
+  ob_lob_piece_builder.cpp
+  ob_lob_meta_builder.cpp
   ob_root_inspection.cpp
   ob_root_service.cpp
+  ob_schema_history_recycler.cpp
+  ob_server_balancer.cpp
+  ob_system_admin_util.cpp
+  ob_unit_manager.cpp
+  ob_update_rs_list_task.cpp
+  ob_upgrade_storage_format_version_executor.cpp
 )
 
 ob_set_subtarget(ob_rootserver backup
@@ -69,15 +78,6 @@ ob_set_subtarget(ob_rootserver common
   ob_primary_ls_service.cpp
   ob_recovery_ls_service.cpp
   ob_tenant_role_transition_service.cpp
-  ob_server_balancer.cpp
-  ob_system_admin_util.cpp
-  ob_unit_manager.cpp
-  ob_update_rs_list_task.cpp
-  ob_upgrade_storage_format_version_executor.cpp
-  ob_schema_history_recycler.cpp
-  ob_alter_locality_finish_checker.cpp
-  ob_lob_piece_builder.cpp
-  ob_lob_meta_builder.cpp
 )
 
 ob_set_subtarget(ob_rootserver ddl_task

@@ -297,10 +297,11 @@ void ObFifoArena::speed_limit(int64_t cur_mem_hold, int64_t alloc_size)
         int64_t cur_ts = ObTimeUtility::current_time();
         int64_t new_base_ts = ATOMIC_AAF(&last_base_ts_, throttling_interval);
         int64_t sleep_interval = new_base_ts - cur_ts;
+        uint32_t final_sleep_interval = 0;
         if (sleep_interval > 0) {
           //The playback of a single log may allocate 2M blocks multiple times
-          uint32_t final_sleep_interval =
-              static_cast<uint32_t>(MIN((get_writing_throttling_sleep_interval() + sleep_interval - 1), MAX_WAIT_INTERVAL));
+          final_sleep_interval = static_cast<uint32_t>(
+              MIN((get_writing_throttling_sleep_interval() + sleep_interval - 1), MAX_WAIT_INTERVAL));
           get_writing_throttling_sleep_interval() = final_sleep_interval;
           throttle_info_.record_limit_event(sleep_interval - 1);
         } else {
@@ -309,10 +310,17 @@ void ObFifoArena::speed_limit(int64_t cur_mem_hold, int64_t alloc_size)
           last_reclaimed_ = ATOMIC_LOAD(&reclaimed_);
         }
         if (REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
-          COMMON_LOG(INFO, "report write throttle info", K(alloc_size), K(throttling_interval), K(attr_),
-                     "freed memory(MB):" , (ATOMIC_LOAD(&reclaimed_) - last_reclaimed_) / 1024 / 1024,
+          COMMON_LOG(INFO,
+                     "report write throttle info",
+                     K(alloc_size),
+                     K(throttling_interval),
+                     K(attr_),
+                     "freed memory(MB):", (ATOMIC_LOAD(&reclaimed_) - last_reclaimed_) / 1024 / 1024,
                      "last_base_ts", ATOMIC_LOAD(&last_base_ts_),
-                     K(cur_mem_hold), K(throttle_info_));
+                     K(cur_mem_hold),
+                     K(throttle_info_),
+                     K(sleep_interval),
+                     K(final_sleep_interval));
         }
       }
     } else {/*do nothing*/}

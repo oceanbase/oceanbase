@@ -38,6 +38,9 @@ public:
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
 private:
+  int check_constraint_by_send_sql() const;
+  int rollback_change();
+private:
   uint64_t tenant_id_;
   int64_t data_table_id_;
   int64_t constraint_id_;
@@ -138,6 +141,7 @@ private:
   int set_alter_constraint_ddl_stmt_str_for_fk(
       obrpc::ObAlterTableArg &alter_table_arg,
       common::ObIAllocator &allocator);
+  int check_table_exist(bool &exist);
   int check_replica_end(bool &is_end);
   int check_health();
 private:

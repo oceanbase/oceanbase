@@ -252,10 +252,7 @@ int ObLogGroupBy::est_cost()
     LOG_WARN("get unexpected null", K(ret), K(child));
   } else if (OB_FAIL(get_child_est_info(child_card, child_ndv, selectivity))) {
     LOG_WARN("failed to get chidl est info", K(ret));
-  } else if (OB_FAIL(inner_est_cost(child_card, 
-                                    child_ndv, 
-                                    distinct_per_dop_, 
-                                    group_cost))) {
+  } else if (OB_FAIL(inner_est_cost(child_card, child_ndv, group_cost))) {
     LOG_WARN("failed to est group by cost", K(ret));
   } else {
     distinct_card_ = child_ndv;
@@ -299,12 +296,9 @@ int ObLogGroupBy::re_est_cost(EstimateCostInfo &param, double &card, double &cos
     if (is_block_op()) {
       param.need_row_count_ = -1; //reset need row count
     }
-    if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+    if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
       LOG_WARN("failed to re est child cost", K(ret));
-    } else if (OB_FAIL(inner_est_cost(child_card, 
-                                      need_ndv, 
-                                      distinct_per_dop_,
-                                      group_cost))) {
+    } else if (OB_FAIL(inner_est_cost(child_card, need_ndv, group_cost))) {
       LOG_WARN("failed to est distinct cost", K(ret));
     } else {
       cost = child_cost + group_cost;
@@ -319,11 +313,11 @@ int ObLogGroupBy::re_est_cost(EstimateCostInfo &param, double &card, double &cos
   return ret;
 }
 
-int ObLogGroupBy::inner_est_cost(double child_card, double &child_ndv, double &per_dop_ndv, double &op_cost)
+int ObLogGroupBy::inner_est_cost(double child_card, double &child_ndv, double &op_cost)
 {
   int ret = OB_SUCCESS;
   double per_dop_card = 0.0;
-  per_dop_ndv = 0.0;
+  double per_dop_ndv = 0.0;
   int64_t parallel = 0;
   common::ObSEArray<ObRawExpr *, 8> group_rollup_exprs;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);

@@ -31,7 +31,6 @@ public:
       const int64_t dest_table_id,
       const int64_t schema_version,
       const int64_t snapshot_version,
-      const int64_t execution_id,
       const ObSQLMode &sql_mode,
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
@@ -53,7 +52,6 @@ private:
   int64_t dest_table_id_;
   int64_t schema_version_;
   int64_t snapshot_version_;
-  int64_t execution_id_;
   ObSQLMode sql_mode_;
   ObTimeZoneInfoWrap tz_info_wrap_;
   share::ObColumnNameMap col_name_map_;
@@ -114,7 +112,6 @@ public:
   virtual int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version,
-      const int64_t execution_id,
       const int ret_code) = 0;
   int on_child_task_finish(
       const ObDDLTaskKey &child_task_key,
@@ -136,7 +133,7 @@ protected:
       const share::schema::ObTableSchema &data_table_schema,
       const share::schema::ObTableSchema &dest_table_schema,
       common::hash::ObHashMap<uint64_t, uint64_t> &validate_checksum_column_ids);
-  int check_data_dest_tables_columns_checksum(const int64_t execution_id);
+  int check_data_dest_tables_columns_checksum();
   int unlock_table();
   int fail();
   int success();

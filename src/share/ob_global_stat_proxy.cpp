@@ -31,12 +31,12 @@ const char *ObGlobalStatProxy::TENANT_ID_CNAME = "tenant_id";
 int ObGlobalStatProxy::set_init_value(const int64_t core_schema_version,
                                       const int64_t baseline_schema_version,
                                       const int64_t rootservice_epoch,
-                                      const int64_t snapshot_gc_scn,
+                                      const palf::SCN &snapshot_gc_scn,
                                       const int64_t gc_schema_version)
 {
   int ret = OB_SUCCESS;
   if (!is_valid() || core_schema_version <= 0 || baseline_schema_version < -1
-      || snapshot_gc_scn < 0 || OB_INVALID_ID == rootservice_epoch || gc_schema_version < 0) {
+      || !snapshot_gc_scn.is_valid() || OB_INVALID_ID == rootservice_epoch || gc_schema_version < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), "self valid", is_valid(), K(rootservice_epoch),
         K(core_schema_version), K(baseline_schema_version), K(snapshot_gc_scn), K(gc_schema_version));
@@ -45,7 +45,7 @@ int ObGlobalStatProxy::set_init_value(const int64_t core_schema_version,
     ObGlobalStatItem core_schema_version_item(list, "core_schema_version", core_schema_version);
     ObGlobalStatItem baseline_schema_version_item(list, "baseline_schema_version", baseline_schema_version);
     ObGlobalStatItem rootservice_epoch_item(list, "rootservice_epoch", rootservice_epoch);
-    ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn);
+    ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn.get_val_for_inner_table_field());
     ObGlobalStatItem gc_schema_version_item(list, "gc_schema_version", gc_schema_version);
 
     if (OB_FAIL(update(list))) {
@@ -58,21 +58,20 @@ int ObGlobalStatProxy::set_init_value(const int64_t core_schema_version,
 int ObGlobalStatProxy::set_tenant_init_global_stat(
     const int64_t core_schema_version,
     const int64_t baseline_schema_version,
-    const int64_t snapshot_gc_scn)
+    const palf::SCN &snapshot_gc_scn)
 {
   int ret = OB_SUCCESS;
   if (!is_valid() || core_schema_version <= 0 || baseline_schema_version < OB_INVALID_VERSION
-      || (snapshot_gc_scn < OB_INVALID_TIMESTAMP)) {
+      || (!snapshot_gc_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), "self valid", is_valid(),
-             K(core_schema_version), K(baseline_schema_version),
-             K(snapshot_gc_scn));
+             K(core_schema_version), K(baseline_schema_version), K(snapshot_gc_scn));
   } else {
     ObGlobalStatItem::ItemList list;
     ObGlobalStatItem core_schema_version_item(list, "core_schema_version", core_schema_version);
     ObGlobalStatItem baseline_schema_version_item(list, "baseline_schema_version", baseline_schema_version);
     // only Normal state tenant can refresh snapshot_gc_scn
-    ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn);
+    ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn.get_val_for_inner_table_field());
     if (OB_FAIL(update(list))) {
       LOG_WARN("update failed", KR(ret), K(list));
     }
@@ -115,15 +114,15 @@ int ObGlobalStatProxy::set_baseline_schema_version(const int64_t baseline_schema
   return ret;
 }
 
-int ObGlobalStatProxy::set_snapshot_gc_scn(const int64_t snapshot_gc_scn)
+int ObGlobalStatProxy::set_snapshot_gc_scn(const palf::SCN &snapshot_gc_scn)
 {
   int ret = OB_SUCCESS;
-  if (!is_valid() || snapshot_gc_scn <= 0) {
+  if (!is_valid() || !snapshot_gc_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(snapshot_gc_scn), "self valid", is_valid());
   } else {
     ObGlobalStatItem::ItemList list;
-    ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn);
+    ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn.get_val_for_inner_table_field());
     if (OB_FAIL(update(list))) {
       LOG_WARN("update failed", K(list), K(ret));
     }
@@ -131,30 +130,12 @@ int ObGlobalStatProxy::set_snapshot_gc_scn(const int64_t snapshot_gc_scn)
   return ret;
 }
 
-int ObGlobalStatProxy::set_snapshot_info(const int64_t snapshot_gc_scn,
-                                         const int64_t gc_schema_version)
-{
-  int ret = OB_SUCCESS;
-  if (!is_valid() || snapshot_gc_scn <= 0 || gc_schema_version <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(snapshot_gc_scn), K(gc_schema_version), "self valid", is_valid());
-  } else {
-    ObGlobalStatItem::ItemList list;
-    ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn);
-    ObGlobalStatItem gc_schema_version_item(list, "gc_schema_version", gc_schema_version);
-    bool is_incremental = true;
-    if (OB_FAIL(update(list, is_incremental))) {
-      LOG_WARN("update failed", K(list), K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObGlobalStatProxy::get_snapshot_gc_scn(int64_t &snapshot_gc_scn)
+int ObGlobalStatProxy::get_snapshot_gc_scn(palf::SCN &snapshot_gc_scn)
 {
   int ret = OB_SUCCESS;
   ObGlobalStatItem::ItemList list;
-  ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn);
+  uint64_t snapshot_gc_scn_val = 0;
+  ObGlobalStatItem snapshot_gc_scn_item(list, "snapshot_gc_scn", snapshot_gc_scn_val);
   ObTimeoutCtx ctx;
   if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -164,7 +145,10 @@ int ObGlobalStatProxy::get_snapshot_gc_scn(int64_t &snapshot_gc_scn)
   } else if (OB_FAIL(get(list))) {
     LOG_WARN("get failed", K(ret));
   } else {
-    snapshot_gc_scn = snapshot_gc_scn_item.value_;
+    snapshot_gc_scn_val = (uint64_t)(snapshot_gc_scn_item.value_);
+    if (OB_FAIL(snapshot_gc_scn.convert_for_inner_table_field(snapshot_gc_scn_val))) {
+      LOG_WARN("fail to convert val to SCN", KR(ret), K(snapshot_gc_scn_val));
+    }
   }
   return ret;
 }
@@ -363,10 +347,10 @@ int ObGlobalStatProxy::get(ObGlobalStatItem::ItemList &list)
 int ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    int64_t &snapshot_gc_scn)
+    palf::SCN &snapshot_gc_scn)
 {
   int ret = OB_SUCCESS;
-  snapshot_gc_scn = 0;
+  uint64_t snapshot_gc_scn_val = 0;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = NULL;
     ObSqlString sql;
@@ -399,12 +383,13 @@ int ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
         } else {
           MEMCPY(buf, snapshot_gc_scn_str.ptr(), str_len);
           buf[str_len] = '\0';
-          //TODO:SCN strtolu
-          snapshot_gc_scn = strtoll(buf, &endptr, 0);
+          snapshot_gc_scn_val = strtoll(buf, &endptr, 0);
           if ('\0' != *endptr) {
             ret = OB_INVALID_DATA;
             LOG_WARN("invalid data, is not int value", KR(ret), K(snapshot_gc_scn_str), 
               K(snapshot_gc_scn_str.ptr()), K(strlen(snapshot_gc_scn_str.ptr())));
+          } else if (OB_FAIL(snapshot_gc_scn.convert_for_inner_table_field(snapshot_gc_scn_val))) {
+            LOG_WARN("fail to convert val to SCN", KR(ret), K(snapshot_gc_scn_val));
           }
         }
       }
@@ -426,7 +411,7 @@ int ObGlobalStatProxy::select_snapshot_gc_scn_for_update(
 int ObGlobalStatProxy::update_snapshot_gc_scn(
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    const int64_t snapshot_gc_scn,
+    const palf::SCN &snapshot_gc_scn,
     int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
@@ -436,10 +421,11 @@ int ObGlobalStatProxy::update_snapshot_gc_scn(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
     ObSqlString sql;
+    const uint64_t snapshot_gc_scn_val = snapshot_gc_scn.get_val_for_inner_table_field();
     if (OB_FAIL(sql.assign_fmt("UPDATE %s SET column_value = %ld WHERE table_name = '%s' AND "
-        "column_name = '%s' AND column_value < %ld", OB_ALL_CORE_TABLE_TNAME, snapshot_gc_scn, 
-        "__all_global_stat", "snapshot_gc_scn", snapshot_gc_scn))) {
-      LOG_WARN("fail to append sql", KR(ret), K(tenant_id), K(snapshot_gc_scn));
+        "column_name = '%s' AND column_value < %ld", OB_ALL_CORE_TABLE_TNAME, snapshot_gc_scn_val,
+        "__all_global_stat", "snapshot_gc_scn", snapshot_gc_scn_val))) {
+      LOG_WARN("fail to append sql", KR(ret), K(tenant_id), K(snapshot_gc_scn_val));
     } else if (OB_FAIL(sql_client.write(tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(sql));
     }

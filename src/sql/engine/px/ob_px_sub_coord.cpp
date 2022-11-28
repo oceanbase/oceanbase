@@ -814,8 +814,6 @@ int ObPxSubCoord::start_ddl()
       param.task_cnt_ = sqc_arg_.sqc_.get_task_count();
       param.write_major_ = true;
       param.exec_ctx_ = exec_ctx;
-      param.execution_id_ = phy_plan->get_ddl_execution_id();
-      param.ddl_task_id_ = phy_plan->get_ddl_task_id();
       if (OB_FAIL(ObSSTableInsertManager::get_instance().create_table_context(param, ddl_ctrl_.context_id_))) {
         LOG_WARN("create table context failed", K(ret));
       } else {
@@ -885,8 +883,7 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table loc", K(ret));
     } else {
-      for (DASTabletLocListIter tmp_node = table_loc->tablet_locs_begin();
-           tmp_node != table_loc->tablet_locs_end(); ++tmp_node) {
+      FOREACH(tmp_node, table_loc->tablet_locs_) {
         ObDASTabletLoc *tablet_loc = *tmp_node;
         if (tablet_loc->tablet_id_ == location_keys.at(i).tablet_id_) {
           if (OB_FAIL(access_locations.push_back(tablet_loc))) {

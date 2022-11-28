@@ -111,7 +111,7 @@ public:
       const SortDef &sort_def);
   virtual ~ObDynamicSamplePieceMsgCtx() = default;
   int init(const ObIArray<uint64_t> &tablet_ids);
-  virtual void destroy();
+  void destroy();
   int process_piece(const ObDynamicSamplePieceMsg &piece);
   int split_range(
       const ObChunkDatumStore *sample_store,

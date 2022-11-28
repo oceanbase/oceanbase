@@ -22,6 +22,7 @@
 #include "log_meta_info.h"                      // LogMembershipMeta
 #include "log_req.h"                            // LogLearnerReqType
 #include "log_simple_member_list.h"             // LogSimpleMemberList
+#include "scn.h"                                //SCN
 #include "log_state_mgr.h"                      // LogStateMgr
 #include "palf_callback.h"                      // PalfLocationCacheCb
 
@@ -129,27 +130,27 @@ public:
       curr_replica_num_(0),
       new_replica_num_(0),
       config_version_(),
-      ref_ts_ns_(OB_INVALID_TIMESTAMP),
+      ref_scn_(),
       type_(INVALID_LOG_CONFIG_CHANGE_TYPE) { }
 
   LogConfigChangeArgs(const LogConfigVersion &config_version,
-                      const int64_t ref_ts_ns,
+                      const SCN &ref_scn,
                       const LogConfigChangeType type)
     : server_(), curr_member_list_(), curr_replica_num_(0), new_replica_num_(0),
-      config_version_(config_version), ref_ts_ns_(ref_ts_ns), type_(type) { }
+      config_version_(config_version), ref_scn_(ref_scn), type_(type) { }
 
   LogConfigChangeArgs(const common::ObMember &server,
                       const int64_t new_replica_num,
                       const LogConfigChangeType type)
     : server_(server), curr_member_list_(), curr_replica_num_(0), new_replica_num_(new_replica_num),
-      config_version_(), ref_ts_ns_(OB_INVALID_TIMESTAMP), type_(type) { }
+      config_version_(), ref_scn_(), type_(type) { }
 
   LogConfigChangeArgs(const common::ObMemberList &member_list,
                       const int64_t curr_replica_num,
                       const int64_t new_replica_num,
                       const LogConfigChangeType type)
     : server_(), curr_member_list_(member_list), curr_replica_num_(curr_replica_num), new_replica_num_(new_replica_num),
-      config_version_(), ref_ts_ns_(OB_INVALID_TIMESTAMP), type_(type) { }
+      config_version_(), ref_scn_(), type_(type) { }
 
   ~LogConfigChangeArgs()
   {
@@ -184,13 +185,13 @@ public:
     #undef CHECK_LOG_CONFIG_TYPE_STR
   }
   TO_STRING_KV(K_(server), K_(curr_member_list), K_(curr_replica_num), K_(new_replica_num),
-      K_(config_version), K_(ref_ts_ns), "type", Type2Str(type_));
+      K_(config_version), K_(ref_scn), "type", Type2Str(type_));
   common::ObMember server_;
   common::ObMemberList curr_member_list_;
   int64_t curr_replica_num_;
   int64_t new_replica_num_;
   LogConfigVersion config_version_;
-  int64_t ref_ts_ns_;
+  SCN ref_scn_;
   LogConfigChangeType type_;
 };
 
@@ -421,7 +422,6 @@ private:
   LogConfigVersion persistent_config_version_;
   mutable int64_t barrier_print_log_time_;
   mutable int64_t last_check_state_ts_us_;
-  mutable int64_t check_config_print_time_;
   // ================= Config Change =================
   // ==================== Child ========================
   mutable common::ObSpinLock parent_lock_;

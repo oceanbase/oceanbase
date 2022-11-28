@@ -357,7 +357,10 @@ void TestSqlUtils::do_resolve(
   ObParser parser(allocator_, mode);
   ObString query = ObString::make_string(query_str);
   ParseResult parse_result;
+  ObObj use_px;
   ObArenaAllocator tmp_alloc;
+  use_px.set_int(1);
+  ASSERT_EQ(OB_SUCCESS, session_info_.update_sys_variable(SYS_VAR__OB_USE_PARALLEL_EXECUTION, use_px));
   OK(parser.parse(query, parse_result));
   if (true){
     if (JSON_FORMAT == format) {

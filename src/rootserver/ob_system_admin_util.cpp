@@ -1307,49 +1307,34 @@ int ObAdminUpgradeVirtualSchema::upgrade_(
   } else if (OB_ISNULL(ctx_.ddl_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ddl service is null", KR(ret));
-  }
-  // 1. check table name duplicated
-  if (FAILEDx(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
-      tenant_id, schema_guard))) {
+  } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
+            tenant_id, schema_guard))) {
     LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+  } else if (OB_FAIL(schema_guard.get_table_schema(table.get_tenant_id(),
                                                    table.get_database_id(),
                                                    table.get_table_name(),
                                                    table.is_index_table(),
                                                    exist_schema))) {
+    // check if the table_name is occupied by others
     LOG_WARN("get table schema failed", KR(ret), K(tenant_id), "table", table.get_table_name());
     if (OB_TABLE_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     }
-  } else if (OB_ISNULL(exist_schema)) {
-    // no duplicate table name
-  } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema))) {
-    LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
-             "table", table.get_table_name(), "table_id", table.get_table_id());
-  } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
-             tenant_id, schema_guard))) {
-    LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
-  }
-  // 2. try drop table first
-  exist_schema = NULL;
-  if (FAILEDx(schema_guard.get_table_schema(tenant_id,
-                                            table.get_table_id(),
-                                            exist_schema))) {
-    LOG_WARN("get table schema failed", KR(ret), "table", table.get_table_name(),
-             "table_id", table.get_table_id());
-    if (OB_TABLE_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
+  } else if (OB_NOT_NULL(exist_schema)) {
+    // name modification except virtual table should first delete the old table,
+    // then create the new one to make virtual table upgrade valid
+    if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema))) {
+      LOG_WARN("get table schema failed", KR(ret), K(tenant_id),
+               "table", table.get_table_name(), "table_id", table.get_table_id());
+    } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
+               tenant_id, schema_guard))) {
+      LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
     }
-  } else if (OB_ISNULL(exist_schema)) {
-    // missed table
-  } else if (OB_FAIL(ctx_.ddl_service_->drop_inner_table(*exist_schema))) {
-    LOG_WARN("drop table schema failed", KR(ret), "table_schema", *exist_schema);
-  } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
-             tenant_id, schema_guard))) {
-    LOG_WARN("get schema guard in inner table failed", KR(ret), K(tenant_id));
   }
-  // 3. create table
-  if (FAILEDx(ctx_.ddl_service_->add_table_schema(table, schema_guard))) {
+
+  // rebuild the inner table
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ctx_.ddl_service_->add_table_schema(table, schema_guard))) {
     LOG_WARN("add table schema failed", KR(ret), K(tenant_id), K(table));
   } else if (OB_FAIL(ctx_.ddl_service_->refresh_schema(tenant_id))) {
     LOG_WARN("refresh schema failed", KR(ret), K(tenant_id));
@@ -1388,7 +1373,7 @@ int ObAdminUpgradeCmd::execute(const Bool &upgrade)
         LOG_WARN("assign enable_upgrade_mode config value failed", KR(ret));
       } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
         LOG_WARN("add enable_upgrade_mode config item failed", KR(ret));
-      } else {
+      } else if (current_version >= CLUSTER_VERSION_2250) {
         const char *upgrade_stage_name = "_upgrade_stage";
         obrpc::ObUpgradeStage stage = upgrade ?
                                       obrpc::OB_UPGRADE_STAGE_PREUPGRADE :

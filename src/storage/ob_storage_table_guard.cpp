@@ -32,7 +32,7 @@ ObStorageTableGuard::ObStorageTableGuard(
     ObStoreCtx &store_ctx,
     const bool need_control_mem,
     const bool for_replay,
-    const int64_t replay_log_ts,
+    const palf::SCN replay_scn,
     const bool for_multi_source_data)
   : tablet_(tablet),
     store_ctx_(store_ctx),
@@ -41,7 +41,7 @@ ObStorageTableGuard::ObStorageTableGuard(
     retry_count_(0),
     last_ts_(0),
     for_replay_(for_replay),
-    replay_log_ts_(replay_log_ts),
+    replay_scn_(replay_scn),
     for_multi_source_data_(for_multi_source_data)
 {
   get_writing_throttling_sleep_interval() = 0;
@@ -109,11 +109,15 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(ret), K(ls_id));
   }
+  bool bool_ret = false;
 
-  while (OB_SUCC(ret) && need_to_refresh_table(iter.table_iter_)) {
+  while (OB_SUCC(ret) && need_to_refresh_table(iter.table_iter_, ret)) {
+    // it's ok that get_read_tables cover the ret code returned by need_to_refresh_table
+    // because need_to_refresh_table return false and stop the loop if refresh too much times
+    // the last ret code will be passed to upper levels
     if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->get_read_tables(
         tablet_id,
-        store_ctx_.mvcc_acc_ctx_.get_snapshot_version(),
+        store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator(),
         iter,
         relative_table.allow_not_ready()))) {
       LOG_WARN("fail to get read tables", K(ret), K(ls_id), K(tablet_id),
@@ -121,13 +125,6 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
     } else {
       // no worry. iter will hold tablet reference and its life cycle is longer than guard
       tablet_ = iter.tablet_handle_.get_obj();
-      // TODO: check if seesion is killed
-      if (store_ctx_.timeout_ > 0) {
-        const int64_t query_left_time = store_ctx_.timeout_ - ObTimeUtility::current_time();
-        if (query_left_time <= 0) {
-          ret = OB_TRANS_STMT_TIMEOUT;
-        }
-      }
     }
   }
 
@@ -142,7 +139,7 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
   ObTableHandleV2 handle;
   const share::ObLSID &ls_id = tablet_->get_tablet_meta().ls_id_;
   const common::ObTabletID &tablet_id = tablet_->get_tablet_meta().tablet_id_;
-  int64_t clog_checkpoint_ts = ObTabletMeta::INIT_CLOG_CHECKPOINT_TS;
+  palf::SCN clog_checkpoint_scn;
   bool bool_ret = true;
   const int64_t start = ObTimeUtility::current_time();
 
@@ -155,9 +152,9 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
         // if there is no memtable, create a new one
         if (OB_ENTRY_NOT_EXIST == ret) {
           LOG_DEBUG("there is no boundary memtable", K(ret), K(ls_id), K(tablet_id));
-          if (OB_FAIL(memtable_mgr->get_newest_clog_checkpoint_ts(clog_checkpoint_ts))) {
-            LOG_WARN("fail to get newest clog_checkpoint_ts", K(ret), K(ls_id), K(tablet_id));
-          } else if (replay_log_ts_ > clog_checkpoint_ts) {
+          if (OB_FAIL(memtable_mgr->get_newest_clog_checkpoint_scn(clog_checkpoint_scn))) {
+            LOG_WARN("fail to get newest clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id));
+          } else if (replay_scn_ > clog_checkpoint_scn) {
             // TODO: get the newest schema_version from tablet
             ObLSHandle ls_handle;
             if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
@@ -169,7 +166,7 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
                                                                                      tablet_id, 0/*schema version*/, for_replay_))) {
               LOG_WARN("fail to create a boundary memtable", K(ret), K(ls_id), K(tablet_id));
             }
-          } else { // replay_log_ts_ <= clog_checkpoint_ts
+          } else { // replay_log_scn_ <= clog_checkpoint_scn
             // no need to create a boundary memtable
             ret = OB_SUCCESS;
             break;
@@ -191,6 +188,9 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
         if (TC_REACH_TIME_INTERVAL(10 * 1000)) {
           TRANS_LOG(WARN, "refresh replay table too much times", K(ret),
                     K(ls_id), K(tablet_id), K(cost_time));
+        }
+        if (cost_time > LOG_INTERVAL_US) {
+          ret = OB_TIMEOUT;
         }
       }
     } while ((OB_SUCC(ret) || OB_ENTRY_NOT_EXIST == ret) && bool_ret);
@@ -270,9 +270,9 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
     // the most recent memtable is active
     // no need to create a new memtable
     if (for_replay_ || for_multi_source_data_) {
-      // filter memtables for replay or multi_source_data according to log_ts
+      // filter memtables for replay or multi_source_data according to scn
       ObTableHandleV2 handle;
-      if (OB_FAIL(memtable_mgr->get_memtable_for_replay(replay_log_ts_, handle))) {
+      if (OB_FAIL(memtable_mgr->get_memtable_for_replay(replay_scn_, handle))) {
         if (OB_NO_NEED_UPDATE == ret) {
           // no need to replay the log
           bool_ret = false;
@@ -316,9 +316,9 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
   return ret;
 }
 
-bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
+bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter, int &ret)
 {
-  int ret = OB_SUCCESS;
+  ret = OB_SUCCESS;
   bool bool_ret = false;
   int exit_flag = -1;
 
@@ -361,6 +361,7 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
     } else {
       LOG_WARN("unexpect exit_flag", K(exit_flag), K(ret), K(ls_id), K(tablet_id));
     }
+    bool_ret = false;
   }
 
   return bool_ret;

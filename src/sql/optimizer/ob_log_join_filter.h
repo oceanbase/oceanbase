@@ -43,16 +43,7 @@ public:
   inline void set_filter_id(int64_t filter_id) { filter_id_ = filter_id; }
   inline int64_t get_filter_id() const { return filter_id_; }
   inline bool is_create_filter() { return is_create_; }
-  inline void set_filter_length(double filter_len)
-  {
-    if (filter_len <= 0) {
-      filter_len_ = 1;
-    } else if (filter_len > INT64_MAX) {
-      filter_len_ = INT64_MAX;
-    } else {
-      filter_len_ = filter_len;
-    }
-  }
+  inline void set_filter_length(int64_t filter_len) { filter_len_ = filter_len; }
   inline int64_t get_filter_length() const { return filter_len_; }
   inline void set_is_use_filter_shuffle(bool flag) { is_use_filter_shuffle_ = flag; }
   inline bool is_use_filter_shuffle() { return is_use_filter_shuffle_; }

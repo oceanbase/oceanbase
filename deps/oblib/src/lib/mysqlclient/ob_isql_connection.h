@@ -86,8 +86,6 @@ public:
       bool is_from_pl = false) = 0;
   virtual int execute_write(const uint64_t tenant_id, const char *sql,
       int64_t &affected_rows, bool is_user_sql = false) = 0;
-  virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
-      int64_t &affected_rows, bool is_user_sql = false) = 0;
 
   // transaction interface
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) = 0;

@@ -63,7 +63,6 @@ public:
       block_builder_(tx_id, cluster_id),
       lsn_arr_(),
       last_record_lsn_(),
-      last_normal_lsn_(),
       trans_type_(transaction::TransType::SP_TRANS),
       addr_(),
       cluster_version_(1),
@@ -74,7 +73,6 @@ public:
       epoch_(1024),
       last_op_scn_(2048),
       checksum_(29890209),
-      has_record_log_(false),
       allocator_()
   {
     addr_.set_ip_addr("127.0.0.1", 2881);
@@ -102,9 +100,12 @@ public:
     const bool is_padding_log = (palf::LOG_PADDING == log_type);
     int64_t log_entry_header_size = entry_header.get_serialize_size();
     int64_t ts = get_timestamp();
+    SCN scn;
 
-    if (OB_FAIL(entry_header.generate_header(buf, buf_len, ts))) {
-      LOG_ERROR("generate_header failed", KR(ret), K(buf), K(buf_len), K(ts));
+    if (OB_FAIL(scn.convert_for_lsn_allocator(ts))) {
+      LOG_ERROR("fail to convert ts", KR(ret), K(ts));
+    } else if (OB_FAIL(entry_header.generate_header(buf, buf_len, scn))) {
+      LOG_ERROR("generate_header failed", KR(ret), K(buf), K(buf_len), K(scn));
     } else {
       log_entry.header_ = entry_header;
       log_entry.buf_ = buf;
@@ -117,14 +118,8 @@ public:
         LOG_ERROR("lsn is not valid", KR(ret));
       } else if (OB_FAIL(block_builder_.next_log_block())) {
         LOG_ERROR("next_log_block failed", "log_entry_no", block_builder_.get_log_entry_no());
-      } else if (has_record_log_) {
-        last_record_lsn_ = lsn;
-        last_normal_lsn_ = lsn;
-        has_record_log_ = false;
       } else if (OB_FAIL(lsn_arr_.push_back(lsn))) {
         LOG_ERROR("push_back lsn to lsn_arr failed", KR(ret), K(lsn));
-      } else {
-        last_normal_lsn_ = lsn;
       }
     }
 
@@ -141,10 +136,13 @@ public:
     logservice::ObLogBaseHeader log_base_header(logservice::ObLogBaseType::GC_LS_LOG_BASE_TYPE, logservice::ObReplayBarrierType::NO_NEED_BARRIER, 1);
     const int64_t serizlize_size = log_base_header.get_serialize_size();
     char *buf = static_cast<char*>(allocator_.alloc(serizlize_size));
+    SCN scn;
 
-    if (OB_FAIL(log_base_header.serialize(buf, serizlize_size, pos))) {
+    if (OB_FAIL(scn.convert_for_lsn_allocator(ts))) {
+      LOG_ERROR("fail to convert ts", KR(ret), K(ts));
+    } else if (OB_FAIL(log_base_header.serialize(buf, serizlize_size, pos))) {
       LOG_ERROR("serialize log_base_header failed", KR(ret), K(buf), K(serizlize_size), K(pos));
-    } else if (OB_FAIL(entry_header.generate_header(buf, serizlize_size, ts))) {
+    } else if (OB_FAIL(entry_header.generate_header(buf, serizlize_size, scn))) {
       LOG_ERROR("generate_header for offline log_entry failed", KR(ret));
     } else {
       log_entry.buf_ = buf;
@@ -175,7 +173,6 @@ private:
   ObTxLogBlockBuilder block_builder_;
   ObLogLSNArray lsn_arr_;
   LSN last_record_lsn_;
-  LSN last_normal_lsn_;
   int32_t trans_type_;
   ObAddr addr_;
   int64_t cluster_version_;
@@ -186,7 +183,6 @@ private:
   int64_t epoch_;
   int64_t last_op_scn_;
   int64_t checksum_;
-  bool has_record_log_;
   common::ObArenaAllocator allocator_;
 };
 
@@ -263,9 +259,8 @@ void ObTxLogGenerator::gen_record_log()
   }
   ObTxRecordLog record_log(record_log_ref);
   LOG_DEBUG("gen record", K(record_log));
-  has_record_log_ = true;
-  EXPECT_EQ(OB_SUCCESS, block_builder_.fill_tx_log_except_redo(record_log));
   lsn_arr_.reset();
+  EXPECT_EQ(OB_SUCCESS, block_builder_.fill_tx_log_except_redo(record_log));
 }
 
 void ObTxLogGenerator::gen_commit_info_log()
@@ -292,6 +287,8 @@ void ObTxLogGenerator::gen_prepare_log()
 void ObTxLogGenerator::gen_commit_log()
 {
   int64_t commit_ts = get_timestamp();
+  palf::SCN commit_scn;
+  commit_scn.convert_for_lsn_allocator(commit_ts);
   uint64_t checksum = 0;
   share::ObLSArray inc_ls_arr;
   ObTxBufferNodeArray mds_arr;
@@ -305,7 +302,7 @@ void ObTxLogGenerator::gen_commit_log()
   }
 
   ObTxCommitLog commit_log(
-      commit_ts,
+      commit_scn,
       checksum,
       inc_ls_arr,
       mds_arr,
@@ -319,14 +316,9 @@ void ObTxLogGenerator::gen_commit_log()
 palf::LSN ObTxLogGenerator::last_lsn_()
 {
   palf::LSN lsn;
-  if (last_record_lsn_.is_valid()) {
-    if (last_normal_lsn_.is_valid()) {
-      lsn = std::max(last_record_lsn_, last_normal_lsn_);
-    } else {
-      lsn = last_record_lsn_;
-    }
-  } else {
-    lsn = last_normal_lsn_;
+  const int64_t cnt = lsn_arr_.count();
+  if (cnt > 0) {
+    lsn = lsn_arr_.at(cnt - 1);
   }
   return lsn;
 }

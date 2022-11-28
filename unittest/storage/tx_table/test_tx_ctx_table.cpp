@@ -120,7 +120,8 @@ protected:
     EXPECT_EQ(OB_SUCCESS, ctx_mt_mgr_->init(tablet_id_,
                                             ls_id_,
                                             &freezer_,
-                                            &t3m_));
+                                            &t3m_,
+                                            (ObTabletDDLKvMgr*)(0x01)));
     mt_mgr_ = ctx_mt_mgr_;
 
     // tenant_base_.set(t3m_);
@@ -231,6 +232,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ctx1.trans_id_ = id1;
   ctx1.is_inited_ = true;
   ctx1.ls_id_ = ls_id;
+  ctx1.exec_info_.max_applying_log_ts_.convert_from_ts(1);
   ObTxData data1;
   // ctx1.tx_data_ = &data1;
   ctx1.ctx_tx_data_.test_init(data1, &ls_tx_ctx_mgr_);
@@ -241,6 +243,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ctx2.trans_id_ = id2;
   ctx2.is_inited_ = true;
   ctx2.ls_id_ = ls_id;
+  ctx2.exec_info_.max_applying_log_ts_.convert_from_ts(2);
   ObTxData data2;
   // ctx2.tx_data_ = &data2;
   ctx2.ctx_tx_data_.test_init(data2, &ls_tx_ctx_mgr_);
@@ -388,7 +391,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     //    // do nothing
     //  }
     //}
-    if (OB_FAIL(ls_tx_ctx_map_.init(lib::ObMemAttr(tenant_id, "LSTxCtxMgr")))) {
+    if (OB_FAIL(ls_tx_ctx_map_.init())) {
       TRANS_LOG(WARN, "ls_tx_ctx_map_ init fail", KR(ret));
     } else {
       is_inited_ = true;

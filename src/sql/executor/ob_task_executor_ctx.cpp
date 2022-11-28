@@ -326,8 +326,7 @@ int ObTaskExecutorCtxUtil::refresh_location_cache(ObTaskExecutorCtx &task_exec_c
   DASTableLocList &table_locs = DAS_CTX(*task_exec_ctx.get_exec_context()).get_table_loc_list();
   FOREACH_X(tmp_node, table_locs, OB_SUCC(ret)) {
     ObDASTableLoc *table_loc = *tmp_node;
-    for (DASTabletLocListIter tablet_node = table_loc->tablet_locs_begin();
-         OB_SUCC(ret) && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
+    FOREACH_X(tablet_node, table_loc->tablet_locs_, OB_SUCC(ret)) {
       const ObDASTabletLoc *tablet_loc = *tablet_node;
       if (is_nonblock) {
         const int64_t expire_renew_time = 0; //表示在刷location cache之前不清空现有的location cache

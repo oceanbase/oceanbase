@@ -211,7 +211,7 @@ protected:
       const ObStoreAccessType access_type,
       const ObTableScanParam &scan_param,
       ObStoreCtxGuard &ctx_guard,
-      int64_t user_specified_snapshot);
+      palf::SCN user_specified_snapshot);
   int check_read_allowed_(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,

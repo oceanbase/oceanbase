@@ -131,7 +131,7 @@ int LogModeMgr::get_access_mode(int64_t &mode_version, AccessMode &access_mode) 
   return ret;
 }
 
-int LogModeMgr::get_ref_ts_ns(int64_t &mode_version, int64_t &ref_ts_ns) const
+int LogModeMgr::get_ref_scn(int64_t &mode_version, SCN &ref_scn) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -139,7 +139,7 @@ int LogModeMgr::get_ref_ts_ns(int64_t &mode_version, int64_t &ref_ts_ns) const
     PALF_LOG(WARN, "LogModeMgr has inited", K(ret));
   } else {
     mode_version = applied_mode_meta_.mode_version_;
-    ref_ts_ns = applied_mode_meta_.ref_ts_ns_;
+    ref_scn = applied_mode_meta_.ref_scn_;
   }
   return ret;
 }
@@ -324,19 +324,19 @@ void LogModeMgr::reset_status_()
 int LogModeMgr::change_access_mode(
     const int64_t mode_version,
     const AccessMode &access_mode,
-    const int64_t ref_ts_ns)
+    const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   common::ObSpinLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (false == is_valid_access_mode(access_mode) ||
-             OB_INVALID_TIMESTAMP == ref_ts_ns ||
+             !ref_scn.is_valid() ||
              INVALID_PROPOSAL_ID == mode_version ||
              mode_version < 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K_(self), K(access_mode),
-        K(ref_ts_ns), K(mode_version));
+        K(ref_scn), K(mode_version));
   } else if (OB_FAIL(can_change_access_mode_(mode_version))) {
     PALF_LOG(WARN, "can_change_access_mode failed", K(ret), K_(palf_id), K_(self));
   } else if (false == can_switch_access_mode_(applied_mode_meta_.access_mode_, access_mode)) {
@@ -345,7 +345,7 @@ int LogModeMgr::change_access_mode(
         K(access_mode), K_(applied_mode_meta));
   } else {
     const bool is_reconfirm = false;
-    ret = switch_state_(access_mode, ref_ts_ns, is_reconfirm);
+    ret = switch_state_(access_mode, ref_scn, is_reconfirm);
   }
   return ret;
 }
@@ -362,13 +362,14 @@ int LogModeMgr::reconfirm_mode_meta()
         K(ret), K_(palf_id), K_(self));
   } else {
     const bool is_reconfirm = true;
-    ret = switch_state_(AccessMode::INVALID_ACCESS_MODE, OB_INVALID_TIMESTAMP, is_reconfirm);
+    SCN invalid_scn;
+    ret = switch_state_(AccessMode::INVALID_ACCESS_MODE, invalid_scn, is_reconfirm);
   }
   return ret;
 }
 
 int LogModeMgr::switch_state_(const AccessMode &access_mode,
-                              const int64_t ref_ts_ns,
+                              const SCN &ref_scn,
                               const bool is_reconfirm)
 {
   int ret = OB_SUCCESS;
@@ -417,9 +418,9 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
         } else if (accepted_mode_meta_.proposal_id_ == new_proposal_id_) {
           // LogModeMeta takes effect when reaches majority
           applied_mode_meta_ = accepted_mode_meta_;
-          if (applied_mode_meta_.ref_ts_ns_ != OB_INVALID_TIMESTAMP &&
-              OB_FAIL(sw_->inc_update_log_ts_base(applied_mode_meta_.ref_ts_ns_))) {
-            PALF_LOG(ERROR, "inc_update_base_log_ts failed", KR(ret), K_(palf_id), K_(self),
+          if (applied_mode_meta_.ref_scn_.is_valid() &&
+              OB_FAIL(sw_->inc_update_log_scn_base(applied_mode_meta_.ref_scn_))) {
+            PALF_LOG(ERROR, "inc_update_log_scn_base failed", KR(ret), K_(palf_id), K_(self),
                 K_(applied_mode_meta));
           } else {
             change_done = true;
@@ -432,9 +433,9 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
         const int64_t mode_version = new_proposal_id_;
         LogModeMeta mode_meta = max_majority_accepted_mode_meta_;
         mode_meta.proposal_id_ = new_proposal_id_;
-        if (false == is_reconfirm && OB_FAIL(mode_meta.generate(new_proposal_id_, mode_version, access_mode, ref_ts_ns))) {
+        if (false == is_reconfirm && OB_FAIL(mode_meta.generate(new_proposal_id_, mode_version, access_mode, ref_scn))) {
           PALF_LOG(WARN, "generate mode_meta failed", K(ret), K_(palf_id), K_(self),
-              K(access_mode), K(ref_ts_ns), K_(new_proposal_id));
+              K(access_mode), K(ref_scn), K_(new_proposal_id));
         } else if (OB_FAIL(submit_accept_req_(new_proposal_id_, mode_meta))) {
           PALF_LOG(WARN, "submit_accept_req_ failed", K(ret), K_(palf_id), K_(self),
               K(mode_meta), K_(new_proposal_id));

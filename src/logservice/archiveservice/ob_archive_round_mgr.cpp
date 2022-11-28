@@ -26,7 +26,7 @@ using namespace oceanbase::share;
 
 ObArchiveRoundMgr::ObArchiveRoundMgr() :
   key_(),
-  round_start_ts_(OB_INVALID_TIMESTAMP),
+  round_start_scn_(),
   compatible_(false),
   log_archive_state_(),
   backup_dest_(),
@@ -50,7 +50,7 @@ void ObArchiveRoundMgr::destroy()
   WLockGuard guard(rwlock_);
 
   key_.reset();
-  round_start_ts_ = OB_INVALID_TIMESTAMP;
+  round_start_scn_.reset();
   compatible_ = false;
   log_archive_state_.status_ = ObArchiveRoundState::Status::INVALID;
   backup_dest_.reset();

@@ -397,7 +397,6 @@ private:
       const uint64_t tenant_id,
       int64_t &start_commit_version);
   int get_min_add_tenant_start_ddl_commit_version_(int64_t &commit_version);
-  void try_del_tenant_start_ddl_info_(const uint64_t tenant_id);
 private:
   bool                inited_;
 

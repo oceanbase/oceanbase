@@ -35,16 +35,16 @@ int ObLSTxLogAdapter::init(ObITxLogParam *param)
 
 int ObLSTxLogAdapter::submit_log(const char *buf,
                                  const int64_t size,
-                                 const int64_t base_ts,
+                                 const palf::SCN base_ts,
                                  ObTxBaseLogCb *cb,
                                  const bool need_nonblock)
 {
   int ret = OB_SUCCESS;
   palf::LSN lsn;
-  int64_t ts = 0;
+  palf::SCN ts;
 
   if (OB_ISNULL(log_handler_) || !log_handler_->is_valid() || NULL == buf || 0 == size
-      || base_ts > ObTimeUtility::current_time_ns() + 86400000000000L) {
+      || base_ts.convert_to_ts() > ObTimeUtility::current_time() + 86400000000L) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_), KP(buf), K(size), K(base_ts));
   } else if (OB_FAIL(log_handler_->append(buf, size, base_ts, need_nonblock, cb, lsn, ts))) {

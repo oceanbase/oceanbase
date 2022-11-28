@@ -19,7 +19,7 @@ using namespace storage;
 ObTenantRestoreCtx::ObTenantRestoreCtx()
   : job_id_(0),
     restore_type_(),
-    restore_scn_(0),
+    restore_scn_(),
     tenant_id_(0),
     backup_cluster_version_(0),
     backup_set_list_(),

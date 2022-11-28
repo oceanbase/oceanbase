@@ -210,13 +210,13 @@ int ObFailureDetector::insert_event_to_table_(const FailureEvent &event, const O
   #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(event), K(recover_operation)
   int ret = OB_SUCCESS;
   if (CLICK_FAIL(SERVER_EVENT_ADD("FAILURE_DETECTOR",
-                               common::to_cstring(info),
+                               to_cstring(info),
                                "FAILURE_MODULE",
                                obj_to_cstring(event.module_),
                                "FAILURE_TYPE",
                                obj_to_cstring(event.type_),
                                "AUTO_RECOVER",
-                               common::to_cstring(recover_operation.is_valid())))) {
+                               to_cstring(recover_operation.is_valid())))) {
     COORDINATOR_LOG_(WARN, "insert into __all_server_event_history failed");
   } else {
     COORDINATOR_LOG_(INFO, "insert into __all_server_event_history success");

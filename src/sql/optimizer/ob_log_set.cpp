@@ -511,7 +511,7 @@ int ObLogSet::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
       if (OB_ISNULL(get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(SMART_CALL(get_child(i)->re_est_cost(param, child_card, child_cost)))) {
+      } else if (OB_FAIL(get_child(i)->re_est_cost(param, child_card, child_cost))) {
         LOG_WARN("failed to re-est cost", K(ret));
       } else {
         cost += child_cost;
@@ -827,8 +827,7 @@ int ObLogSet::get_used_pq_set_hint(const ObPQSetHint *&used_hint)
     const ObIArray<ObItemType> &dist_methods = used_hint->get_dist_methods();
     if (OB_FAIL(construct_pq_set_hint(hint))) {
       LOG_WARN("fail to construct pq set hint", K(ret));
-    } else if (dist_methods.count() != hint.get_dist_methods().count()
-               || 0 != hint.get_left_branch().case_compare(used_hint->get_left_branch())) {
+    } else if (dist_methods.count() != hint.get_dist_methods().count()) {
       used_hint = NULL;
     } else {
       for (int64_t i = 0; NULL != used_hint && i < dist_methods.count(); ++i) {
@@ -863,7 +862,7 @@ int ObLogSet::print_outline_data(planText &plan_text)
     LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(construct_pq_set_hint(hint))) {
     LOG_WARN("fail to construct pq set hint", K(ret));
-  } else if (hint.get_dist_methods().empty() && hint.get_left_branch().empty()) {
+  } else if (hint.get_dist_methods().empty()) {
     /*do nothing*/
   } else if (OB_FALSE_IT(hint.set_qb_name(qb_name))) {
   } else if (hint.print_hint(plan_text)) {
@@ -875,22 +874,6 @@ int ObLogSet::print_outline_data(planText &plan_text)
 int ObLogSet::construct_pq_set_hint(ObPQSetHint &hint)
 {
   int ret = OB_SUCCESS;
-  const ObSelectStmt *stmt = static_cast<const ObSelectStmt *>(get_stmt());
-  const ObSelectStmt *left_stmt = get_left_stmt();
-  ObString left_branch;
-  if (OB_ISNULL(stmt) || OB_ISNULL(left_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), K(stmt), K(left_stmt));
-  } else if (!stmt->is_set_distinct()
-             || 2 < stmt->get_set_query().count()
-             || stmt->get_set_query(0) == left_stmt) {
-    /* do nothing */
-  } else if (OB_FAIL(left_stmt->get_qb_name(left_branch))) {
-    LOG_WARN("unexpected NULL", K(ret), K(stmt));
-  } else {
-    hint.set_left_branch(left_branch);
-  }
-
   if (DistAlgo::DIST_BASIC_METHOD != set_dist_algo_) {
     int64_t random_none_idx = OB_INVALID_INDEX;
     if (DistAlgo::DIST_SET_RANDOM == set_dist_algo_) {

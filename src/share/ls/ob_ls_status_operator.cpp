@@ -27,6 +27,7 @@
 #include "rootserver/ob_root_utils.h" // majority
 #include "logservice/palf/log_define.h" // INVALID_PROPOSAL_ID
 #include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
+#include "logservice/palf/scn.h" // SCN
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -239,11 +240,11 @@ const char* ObLSStatusOperator::ls_status_to_str(const ObLSStatus &status)
 }
 
 int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
-                                      const int64_t &current_tenant_ts,
+                                      const palf::SCN &current_tenant_scn,
                                       const common::ObString &zone_priority,
                                       ObMySQLTransaction &trans)
 {
-  UNUSEDx(current_tenant_ts, zone_priority);
+  UNUSEDx(current_tenant_scn, zone_priority);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -288,10 +289,10 @@ int ObLSStatusOperator::drop_ls(const uint64_t &tenant_id,
 int ObLSStatusOperator::set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
-                      const int64_t &drop_ts_ns,
+                      const palf::SCN &drop_scn,
                       ObMySQLTransaction &trans)
 {
-  UNUSEDx(drop_ts_ns);
+  UNUSEDx(drop_scn);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;

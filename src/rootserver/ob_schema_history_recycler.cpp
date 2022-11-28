@@ -545,13 +545,13 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
           } else if (!global_info.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid global merge info", KR(ret), K(global_info));
-          } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(*sql_proxy_, global_info.last_merged_scn_, 
+          } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(*sql_proxy_, global_info.last_merged_scn(),
               frozen_status_arr))) {
             LOG_WARN("fail to get all freeze info", KR(ret), K(global_info));
           } else if (frozen_status_arr.count() < reserved_num + 1) {
             ret = OB_EAGAIN;
             LOG_WARN("not exist enough frozen_scn to reserve", KR(ret), K(reserved_num), K(frozen_status_arr));
-          } else if (FALSE_IT(specific_merged_version = frozen_status_arr.at(reserved_num).frozen_scn_)) {
+          } else if (FALSE_IT(specific_merged_version = frozen_status_arr.at(reserved_num).frozen_scn_.get_val_for_inner_table_field())) {
           } else if (OB_FAIL(freeze_info_proxy.get_freeze_schema_info(*sql_proxy_, tenant_id,
                      specific_merged_version, schema_version))) {
             LOG_WARN("fail to get specific_merged_version", KR(ret), K(tenant_id), K(specific_merged_version));

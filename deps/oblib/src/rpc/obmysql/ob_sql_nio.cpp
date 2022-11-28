@@ -28,7 +28,6 @@
 #include <sys/eventfd.h>
 #include <arpa/inet.h>
 #include <linux/futex.h>
-#include "rpc/obrpc/ob_listener.h"
 
 using namespace oceanbase::common;
 
@@ -455,6 +454,15 @@ static int epoll_regist(int epfd, int fd, uint32_t eflag, void* s) {
   return err;
 }
 
+static struct sockaddr_in* make_unix_sockaddr(struct sockaddr_in *sin, in_addr_t ip, int port) {
+  if (NULL != sin) {
+    sin->sin_port = (uint16_t)htons((uint16_t)port);
+    sin->sin_addr.s_addr = ip;
+    sin->sin_family = AF_INET;
+  }
+  return sin;
+}
+
 static int socket_set_opt(int fd, int option, int value)
 {
   return setsockopt(fd, SOL_SOCKET, option, (void *)&value, sizeof(value));
@@ -473,7 +481,7 @@ static int listen_create(int port) {
   } else if (socket_set_opt(fd, SO_REUSEADDR, 1) < 0) {
     LOG_ERROR("sql nio set sock opt SO_REUSEADDR failed", K(errno), K(fd));
     err = errno;
-  } else if (bind(fd, (sockaddr*)obrpc::make_unix_sockaddr(&sin, 0, port), sizeof(sin))) {
+  } else if (bind(fd, (sockaddr*)make_unix_sockaddr(&sin, 0, port), sizeof(sin))) {
     LOG_ERROR("sql nio bind listen fd failed", K(errno), K(fd));
     err = errno;
   } else if (listen(fd, 1024) < 0) {

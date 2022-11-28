@@ -15,7 +15,8 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "ob_timestamp_access.h"
 #include "ob_timestamp_service.h"
-#include "logservice/ob_log_service.h" 
+#include "logservice/ob_log_service.h"
+#include "logservice/palf/scn.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_srv_network_frame.h"
 #include "storage/tx/ob_trans_service.h"
@@ -97,6 +98,7 @@ void ObStandbyTimestampService::destroy()
 {
   inited_ = false;
   tenant_id_ = OB_INVALID_ID;
+  //TODO(SCN):zhaoxing last_id should be uint64_t
   last_id_ = OB_INVALID_VERSION;
   epoch_ = OB_INVALID_TIMESTAMP;
   TG_DESTROY(tg_id_);
@@ -112,11 +114,14 @@ int ObStandbyTimestampService::query_and_update_last_id()
     if (REACH_TIME_INTERVAL(3 * 1000 * 1000)) {
       TRANS_LOG(WARN, "failed to get tenant info", K(ret), K(tenant_info));
     }
+  } else if (OB_UNLIKELY(!tenant_info.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "invalid tenant info", K(ret), K(tenant_info));
   } else if (tenant_info.is_standby() && tenant_info.is_normal_status()) {
-    if ((tenant_info.get_standby_scn() < ATOMIC_LOAD(&last_id_))) {
+    if (last_id_ > 0 && (tenant_info.get_standby_scn().get_val_for_gts() < last_id_)) {
       TRANS_LOG(ERROR, "snapshot rolls back ", K(tenant_info), K_(last_id));
     } else {
-      inc_update(&last_id_, tenant_info.get_standby_scn());
+      inc_update(&last_id_, (int64_t)tenant_info.get_standby_scn().get_val_for_gts());
     }
   } else {
     if (print_error_log_interval_.reach()) {

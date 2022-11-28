@@ -65,8 +65,7 @@ struct ObMicroBlockDesc
       K_(row_count_delta),
       K_(contain_uncommitted_row),
       K_(can_mark_deletion),
-      K_(has_out_row_column),
-      K_(original_size));
+      K_(has_out_row_column));
 };
 enum MICRO_BLOCK_MERGE_VERIFY_LEVEL
 {

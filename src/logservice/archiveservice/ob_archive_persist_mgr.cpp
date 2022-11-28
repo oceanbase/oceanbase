@@ -314,9 +314,7 @@ int ObArchivePersistMgr::persist_archive_progress_()
   bool need_do = false;
 
   if (OB_FAIL(load_archive_round_attr(attr))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      ARCHIVE_LOG(WARN, "load archive round attr failed", K(ret), K(attr));
-    }
+    ARCHIVE_LOG(WARN, "load archive round attr failed", K(ret), K(attr));
   } else if (OB_UNLIKELY(! attr.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "round attr is not valid", K(ret), K(attr));
@@ -634,7 +632,7 @@ bool ObArchivePersistMgr::need_stop_status_(const ObArchiveRoundState &state) co
   return state.is_stopping();
 }
 
-int ObArchivePersistMgr::get_ls_create_ts(const ObLSID &id, int64_t &timestamp)
+int ObArchivePersistMgr::get_ls_create_scn(const ObLSID &id, SCN &scn)
 {
   int ret = OB_SUCCESS;
   share::ObLSRecoveryStat stat;
@@ -644,9 +642,9 @@ int ObArchivePersistMgr::get_ls_create_ts(const ObLSID &id, int64_t &timestamp)
     ARCHIVE_LOG(WARN, "get ls reocvery stat failed", K(ret));
   } else if (OB_UNLIKELY(! stat.is_valid())) {
     ret = OB_EAGAIN;
-    ARCHIVE_LOG(WARN, "ls recovery stat is not valid, just wait retry", K(id), K(stat));
+    ARCHIVE_LOG(WARN, "ls recovery stat is not valid, just wait retry", K(id), K(stat), K(ret));
   } else {
-    timestamp = stat.get_create_scn();
+    scn = stat.get_create_scn();
   }
   return ret;
 }

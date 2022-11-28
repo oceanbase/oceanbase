@@ -614,7 +614,7 @@ LogModeMeta::LogModeMeta()
       proposal_id_(INVALID_PROPOSAL_ID),
       mode_version_(INVALID_PROPOSAL_ID),
       access_mode_(AccessMode::INVALID_ACCESS_MODE),
-      ref_ts_ns_(OB_INVALID_TIMESTAMP)
+      ref_scn_()
 {}
 
 LogModeMeta::~LogModeMeta()
@@ -625,20 +625,20 @@ LogModeMeta::~LogModeMeta()
 int LogModeMeta::generate(const int64_t proposal_id,
                           const int64_t mode_version,
                           const AccessMode &access_mode,
-                          const int64_t ref_ts_ns)
+                          const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   if (INVALID_PROPOSAL_ID == mode_version ||
       INVALID_PROPOSAL_ID == proposal_id ||
       false == is_valid_access_mode(access_mode) ||
-      OB_INVALID_TIMESTAMP == ref_ts_ns) {
+      !ref_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     version_ = LOG_MODE_META_VERSION;
     proposal_id_ = proposal_id;
     mode_version_ = mode_version;
     access_mode_ = access_mode;
-    ref_ts_ns_ = ref_ts_ns;
+    ref_scn_ = ref_scn;
   }
   return ret;
 }
@@ -649,7 +649,7 @@ bool LogModeMeta::is_valid() const
          INVALID_PROPOSAL_ID != proposal_id_ &&
          INVALID_PROPOSAL_ID != mode_version_ &&
          is_valid_access_mode(access_mode_) &&
-         OB_INVALID_TIMESTAMP != ref_ts_ns_;
+         ref_scn_.is_valid();
 }
 
 void LogModeMeta::reset()
@@ -658,7 +658,7 @@ void LogModeMeta::reset()
   proposal_id_ = INVALID_PROPOSAL_ID;
   mode_version_ = INVALID_PROPOSAL_ID;
   access_mode_ = AccessMode::INVALID_ACCESS_MODE;
-  ref_ts_ns_ = OB_INVALID_TIMESTAMP;
+  ref_scn_.reset();
 }
 
 void LogModeMeta::operator=(const LogModeMeta &mode_meta)
@@ -667,7 +667,7 @@ void LogModeMeta::operator=(const LogModeMeta &mode_meta)
   this->proposal_id_ = mode_meta.proposal_id_;
   this->mode_version_ = mode_meta.mode_version_;
   this->access_mode_ = mode_meta.access_mode_;
-  this->ref_ts_ns_ = mode_meta.ref_ts_ns_;
+  this->ref_scn_ = mode_meta.ref_scn_;
 }
 
 DEFINE_SERIALIZE(LogModeMeta)
@@ -682,7 +682,7 @@ DEFINE_SERIALIZE(LogModeMeta)
              OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, proposal_id_)) ||
              OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, mode_version_)) ||
              OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, static_cast<int64_t>(access_mode_))) ||
-             OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, ref_ts_ns_))) {
+             OB_FAIL(ref_scn_.fixed_serialize(buf, buf_len, new_pos))) {
     PALF_LOG(ERROR, "LogModeMeta serialize failed", K(ret), K(new_pos));
   } else {
     PALF_LOG(TRACE, "LogModeMeta serialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
@@ -701,7 +701,7 @@ DEFINE_DESERIALIZE(LogModeMeta)
              OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &proposal_id_)) ||
              OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &mode_version_)) ||
              OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, reinterpret_cast<int64_t *>(&access_mode_))) ||
-             OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &ref_ts_ns_))) {
+             OB_FAIL(ref_scn_.fixed_deserialize(buf, data_len, new_pos))) {
     PALF_LOG(ERROR, "LogModeMeta deserialize failed", K(ret), K(new_pos));
   } else {
     PALF_LOG(TRACE, "LogModeMeta deserialize", K(*this), K(buf + pos), KP(buf), K(pos), K(new_pos));
@@ -717,7 +717,7 @@ DEFINE_GET_SERIALIZE_SIZE(LogModeMeta)
   size += serialization::encoded_length_i64(proposal_id_);
   size += serialization::encoded_length_i64(mode_version_);
   size += serialization::encoded_length_i64(static_cast<int64_t>(access_mode_));
-  size += serialization::encoded_length_i64(ref_ts_ns_);
+  size += ref_scn_.get_fixed_serialize_size();
   return size;
 }
 

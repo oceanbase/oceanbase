@@ -19,14 +19,15 @@
 #include "share/rc/ob_tenant_base.h"                // MTL_*
 #include "observer/ob_server_struct.h"              // GCTX
 #include "logservice/palf/lsn.h"                    // LSN
+#include "logservice/palf/scn.h"                    // LSN
 #include "share/backup/ob_backup_connectivity.h"
-#include "share/ob_debug_sync.h"
 
 namespace oceanbase
 {
 namespace archive
 {
 using namespace oceanbase::share;
+using namespace oceanbase::palf;
 ObArchiveService::ObArchiveService() :
   inited_(false),
   allocator_(),
@@ -264,7 +265,6 @@ void ObArchiveService::do_check_switch_archive_()
 
 int ObArchiveService::load_archive_round_attr_(ObTenantArchiveRoundAttr &attr)
 {
-  DEBUG_SYNC(BEFORE_LOAD_ARCHIVE_ROUND);
   return persist_mgr_.load_archive_round_attr(attr);
 }
 
@@ -352,22 +352,22 @@ int ObArchiveService::set_log_archive_info_(const ObTenantArchiveRoundAttr &attr
   int ret = OB_SUCCESS;
   ArchiveKey key(attr.incarnation_, attr.dest_id_, attr.round_id_);
   const int64_t piece_interval = attr.piece_switch_interval_;
-  const int64_t genesis_ts = attr.start_scn_;
   const int64_t base_piece_id = attr.base_piece_id_;
   const int64_t unit_size = 100;
   const bool need_compress = false;
   ObCompressorType type = INVALID_COMPRESSOR;
   const bool need_encrypt = false;
-  const int64_t round_start_ts = attr.start_scn_;
+  const SCN &genesis_scn = attr.start_scn_;
+  const SCN &round_start_scn = attr.start_scn_;
   ObBackupDest dest;
   ObMySQLProxy *mysql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(mysql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret));
-  } else if (OB_FAIL(fetcher_.set_archive_info(piece_interval, genesis_ts, base_piece_id,
+  } else if (OB_FAIL(fetcher_.set_archive_info(piece_interval, genesis_scn, base_piece_id,
                                         unit_size, need_compress, type, need_encrypt))) {
     ARCHIVE_LOG(ERROR, "archive fetcher set archive info failed", K(ret));
-  } else if (OB_FAIL(ls_mgr_.set_archive_info(round_start_ts, piece_interval, genesis_ts, base_piece_id))) {
+  } else if (OB_FAIL(ls_mgr_.set_archive_info(round_start_scn, piece_interval, genesis_scn, base_piece_id))) {
     ARCHIVE_LOG(ERROR, "archive sequencer set archive info failed", K(ret));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*mysql_proxy, attr.key_.tenant_id_, attr.path_, dest))) {
     ARCHIVE_LOG(ERROR, "get backup dest failed", K(ret), K(attr));

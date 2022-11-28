@@ -53,7 +53,7 @@ public:
   virtual int get_need_reload_task(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) override; 
 public:
   // common func used by backup
-  static int get_scn(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, share::ObBackupSCN &scn);
+  static int get_scn(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, palf::SCN &scn);
   static int check_tenant_status(share::schema::ObMultiVersionSchemaService &schema_service, uint64_t tenant_id, bool &is_valid);
   static int get_backup_path(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, share::ObBackupPathString &backup_path);
   static int get_next_job_id(common::ObISQLClient &trans, const uint64_t tenant_id, int64_t &job_id);

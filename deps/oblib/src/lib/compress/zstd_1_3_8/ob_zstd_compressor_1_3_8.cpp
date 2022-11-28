@@ -66,11 +66,6 @@ void ObZstdCtxAllocator::reuse()
   allocator_.reuse();
 }
 
-void ObZstdCtxAllocator::reset()
-{
-  allocator_.reset();
-}
-
 /**
  * ----------------------------ObZstdCompressor---------------------------
  */
@@ -151,14 +146,6 @@ int ObZstdCompressor_1_3_8::decompress(const char *src_buffer,
     zstd_allocator->reuse();
   }
   return ret;
-}
-
-void ObZstdCompressor_1_3_8::reset_mem()
-{
-  ObZstdCtxAllocator *zstd_allocator = GET_TSI_MULT(ObZstdCtxAllocator, 1);
-  if (NULL != zstd_allocator) {
-    zstd_allocator->reset();
-  }
 }
 
 const char *ObZstdCompressor_1_3_8::get_compressor_name() const

@@ -159,34 +159,3 @@ int ObLogTempTableAccess::print_my_plan_annotation(char *buf,
   }
   return ret;
 }
-
-int ObLogTempTableAccess::get_temp_table_plan(ObLogicalOperator *& insert_op)
-{
-  int ret = OB_SUCCESS;
-  insert_op = NULL;
-  ObLogPlan *plan = get_plan();
-  const uint64_t temp_table_id = get_temp_table_id();
-  if (OB_ISNULL(plan)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected null", K(ret));
-  } else {
-    ObIArray<ObSqlTempTableInfo*> &temp_tables = plan->get_optimizer_context().get_temp_table_infos();
-    bool find = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !find && i < temp_tables.count(); ++i) {
-      if (OB_ISNULL(temp_tables.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("unexpected null", K(ret));
-      } else if (temp_table_id != temp_tables.at(i)->temp_table_id_) {
-        /* do nothing */
-      } else {
-        find = true;
-        insert_op = temp_tables.at(i)->table_plan_;
-      }
-    }
-    if (OB_SUCC(ret) && !find) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("failed to find table plan", K(ret));
-    }
-  }
-  return ret;
-}

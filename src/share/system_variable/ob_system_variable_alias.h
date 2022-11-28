@@ -124,7 +124,9 @@ namespace share
   static const char* const OB_SV_LAST_SCHEMA_VERSION = "ob_last_schema_version";
   static const char* const OB_SV_GLOBAL_DEBUG_SYNC = "ob_global_debug_sync";
   static const char* const OB_SV_PROXY_GLOBAL_VARIABLES_VERSION = "ob_proxy_global_variables_version";
-  static const char* const OB_SV_ENABLE_SHOW_TRACE = "ob_enable_show_trace";
+  static const char* const OB_SV_ENABLE_TRACE_LOG = "ob_enable_trace_log";
+  static const char* const OB_SV_ENABLE_HASH_GROUP_BY = "ob_enable_hash_group_by";
+  static const char* const OB_SV_ENABLE_BLK_NESTEDLOOP_JOIN = "ob_enable_blk_nestedloop_join";
   static const char* const OB_SV_BNL_JOIN_CACHE_SIZE = "ob_bnl_join_cache_size";
   static const char* const OB_SV_PROXY_USER_PRIVILEGE = "ob_proxy_user_privilege";
   static const char* const OB_SV_ORG_CLUSTER_ID = "ob_org_cluster_id";
@@ -154,11 +156,14 @@ namespace share
   static const char* const OB_SV_AUTO_INCREMENT_CACHE_SIZE = "auto_increment_cache_size";
   static const char* const OB_SV_ENABLE_JIT = "ob_enable_jit";
   static const char* const OB_SV_TEMP_TABLESPACE_SIZE_PERCENTAGE = "ob_temp_tablespace_size_percentage";
+  static const char* const OB_SV__OPTIMIZER_ADAPTIVE_CURSOR_SHARING = "_optimizer_adaptive_cursor_sharing";
   static const char* const OB_SV_PLUGIN_DIR = "plugin_dir";
+  static const char* const OB_SV__OB_USE_PARALLEL_EXECUTION = "_ob_use_parallel_execution";
   static const char* const OB_SV_SQL_AUDIT_PERCENTAGE = "ob_sql_audit_percentage";
   static const char* const OB_SV_ENABLE_SQL_AUDIT = "ob_enable_sql_audit";
   static const char* const OB_SV_OPTIMIZER_USE_SQL_PLAN_BASELINES = "optimizer_use_sql_plan_baselines";
   static const char* const OB_SV_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES = "optimizer_capture_sql_plan_baselines";
+  static const char* const OB_SV_PARALLEL_MAX_SERVERS = "parallel_max_servers";
   static const char* const OB_SV_PARALLEL_SERVERS_TARGET = "parallel_servers_target";
   static const char* const OB_SV_EARLY_LOCK_RELEASE = "ob_early_lock_release";
   static const char* const OB_SV_TRX_IDLE_TIMEOUT = "ob_trx_idle_timeout";

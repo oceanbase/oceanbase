@@ -472,14 +472,14 @@ void ObSSTablePrinter::print_store_row(
       }
     } else {
       // pre-process data for upper trans version calculation
-      void *p = op_alloc(ObCommitVersionsArray);
-      ObCommitVersionsArray *commit_versions = new (p) ObCommitVersionsArray();
+      void *p = op_alloc(ObCommitSCNsArray);
+      ObCommitSCNsArray *commit_versions = new (p) ObCommitSCNsArray();
 
       if (OB_FAIL(commit_versions->deserialize(str.ptr(), str.length(), pos))) {
         STORAGE_LOG(WARN, "deserialize commit versions failed", KR(ret), K(str));
         hex_dump(str.ptr(), str.length(), true, OB_LOG_LEVEL_WARN);
       } else {
-        ObCommitVersionsArray::print_to_stderr(*commit_versions);
+        ObCommitSCNsArray::print_to_stderr(*commit_versions);
       }
     }
   } else {
@@ -530,7 +530,6 @@ void ObSSTablePrinter::print_encoding_column_header(const ObColumnHeader *col_he
   print_line("is bit packing", col_header->is_bit_packing());
   print_line("is last var field", col_header->is_last_var_field());
   print_line("extend value index", col_header->extend_value_index_);
-  print_line("store object type", col_header->obj_type_);
   print_line("offset", col_header->offset_);
   print_line("length", col_header->length_);
   print_end_line();

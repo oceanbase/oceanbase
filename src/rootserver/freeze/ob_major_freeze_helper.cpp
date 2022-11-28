@@ -51,7 +51,7 @@ int ObMajorFreezeHelper::major_freeze(
   if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(param), KR(ret));
-  } else if (OB_FAIL(get_freeze_info(param, freeze_info_array))) {
+  } else if (OB_FAIL(get_freeze_info(param, freeze_info_array))){
     LOG_WARN("fail to get tenant id", KR(ret), K(param));
   } else {
     if (OB_FAIL(do_major_freeze(*param.transport_, freeze_info_array, merge_results))) {
@@ -311,6 +311,7 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(admin_type));
   } else {
     obrpc::ObTenantAdminMergeRpcProxy proxy;
+    bool force_renew = false;
     ObAddr leader;
     obrpc::ObTenantAdminMergeRequest req(tenant_id, admin_type);
     obrpc::ObTenantAdminMergeResponse resp;
@@ -318,16 +319,16 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
     if (OB_ISNULL(GCTX.location_service_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid GCTX", KR(ret));
-    } else if (OB_FAIL(proxy.init(&transport))) {
-      LOG_WARN("fail to init", KR(ret));
     } else {
       const int64_t MAX_RETRY_COUNT = 5;
       bool admin_merge_done = false;
 
       for (int64_t i = 0; OB_SUCC(ret) && (!admin_merge_done) && (i < MAX_RETRY_COUNT); ++i) {
-        if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id,
-                    tenant_id, share::SYS_LS, leader))) {
-          LOG_WARN("fail to get ls locaiton leader", KR(ret), K(tenant_id));
+        if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
+                tenant_id, share::SYS_LS, force_renew, leader))) {
+          LOG_WARN("fail to get ls locaiton leader", KR(ret), K(tenant_id), K(force_renew));
+        } else if (OB_FAIL(proxy.init(&transport))) {
+          LOG_WARN("fail to init", KR(ret));
         } else if (OB_FAIL(proxy.to(leader)
                                 .trace_time(true)
                                 .max_process_handler_time(MAX_PROCESS_TIME_US)
@@ -355,7 +356,7 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
 
 int ObMajorFreezeHelper::get_frozen_status(
     const int64_t tenant_id,
-    const int64_t major_snapshot,
+    const palf::SCN &frozen_scn,
     share::ObSimpleFrozenStatus &frozen_status)
 {
   int ret = OB_SUCCESS;
@@ -364,8 +365,8 @@ int ObMajorFreezeHelper::get_frozen_status(
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid GCTX", KR(ret));
-  } else if (OB_FAIL(freeze_info_proxy.get_freeze_info(*GCTX.sql_proxy_, major_snapshot, frozen_status))) {
-    LOG_WARN("fail to get freeze info", KR(ret), K(major_snapshot), K(tenant_id));
+  } else if (OB_FAIL(freeze_info_proxy.get_freeze_info(*GCTX.sql_proxy_, frozen_scn, frozen_status))) {
+    LOG_WARN("fail to get freeze info", KR(ret), K(frozen_scn), K(tenant_id));
   }
 
   return ret;
@@ -373,12 +374,13 @@ int ObMajorFreezeHelper::get_frozen_status(
 
 int ObMajorFreezeHelper::get_frozen_scn(
     const int64_t tenant_id,
-    int64_t &frozen_scn)
+    palf::SCN &frozen_scn)
 {
   int ret = OB_SUCCESS;
   share::ObSimpleFrozenStatus frozen_status;
 
-  if (OB_FAIL(get_frozen_status(tenant_id, 0, frozen_status))) {
+  // use min_scn to get frozen_status, means get one with biggest frozen_scn
+  if (OB_FAIL(get_frozen_status(tenant_id, palf::SCN::min_scn(), frozen_status))) {
     LOG_WARN("fail to get frozen info", KR(ret));
   } else {
     frozen_scn = frozen_status.frozen_scn_;

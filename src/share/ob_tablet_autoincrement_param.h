@@ -76,7 +76,7 @@ struct ObTabletAutoincInterval final
 public:
   ObTabletAutoincInterval()
     : tablet_id_(), start_(0), end_(0) {}
-  bool is_valid() const { return tablet_id_.is_valid() && end_ >= start_; }
+  bool is_valid() const { return tablet_id_.is_valid(); }
   void reset()
   {
     tablet_id_.reset();
@@ -176,7 +176,6 @@ public:
   TO_STRING_KV(K_(intervals));
 private:
   common::ObSArray<ObTabletAutoincInterval> intervals_;
-  DISALLOW_COPY_AND_ASSIGN(ObTabletAutoincSeq);
 };
 
 }//end namespace share

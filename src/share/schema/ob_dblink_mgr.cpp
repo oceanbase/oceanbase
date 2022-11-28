@@ -238,12 +238,11 @@ int ObDbLinkMgr::add_dblink(const ObDbLinkSchema &dblink_schema)
     LOG_WARN("failed to add dblink schema", K(ret));
   }
   if (OB_SUCC(ret)) {
-    uint64_t dblink_id = new_dblink_schema->get_dblink_id();
-    if (OB_FAIL(dblink_id_map_.set_refactored(dblink_id,
+    if (OB_FAIL(dblink_id_map_.set_refactored(new_dblink_schema->get_dblink_id(),
                                               new_dblink_schema, over_write))) {
       if (OB_HASH_EXIST != ret) {
         LOG_WARN("build dblink id hashmap failed", K(ret),
-                 "dblink_id", dblink_id);
+                 "dblink_id", new_dblink_schema->get_dblink_id());
       } else {
         ret = OB_SUCCESS;
       }
@@ -457,7 +456,9 @@ int ObDbLinkMgr::rebuild_dblink_hashmap()
       LOG_WARN("build dblink id hashmap failed", K(ret),
                "dblink_id", dblink_schema->get_dblink_id());
     } else if (FALSE_IT(name_wrapper.set_tenant_id(dblink_schema->get_tenant_id()))) {
+      ;
     } else if (FALSE_IT(name_wrapper.set_dblink_name(dblink_schema->get_dblink_name()))) {
+      ;
     } else if (OB_FAIL(dblink_name_map_.set_refactored(name_wrapper, dblink_schema, over_write))) {
       LOG_WARN("build dblink name hashmap failed", K(ret),
                "dblink_name", dblink_schema->get_dblink_name());

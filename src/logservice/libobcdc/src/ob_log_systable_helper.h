@@ -52,6 +52,10 @@ public:
   virtual int build_sql_statement(char *sql_buf, const int64_t mul_statement_buf_len, int64_t &pos) = 0;
 };
 
+bool is_cluster_version_be_equal_or_greater_than_200_();
+bool is_cluster_version_be_equal_or_greater_than_220_();
+bool is_cluster_version_be_equal_or_greater_than_320();
+
 ///////////////////////// QueryClusterIdStrategy /////////////////////////
 // 查询cluster id
 class QueryClusterIdStrategy: public ISQLStrategy

@@ -430,7 +430,7 @@ int ObVirtualTenantManager::print_tenant_usage_(
   }
   if (OB_SERVER_TENANT_ID == node.tenant_id_) {
     int64_t observer_tenant_hold = lib::get_tenant_memory_hold(node.tenant_id_);
-    int64_t system_memory = GMEMCONF.get_reserved_server_memory();
+    int64_t system_memory = GCONF.get_reserved_server_memory();
     if (observer_tenant_hold > system_memory) {
       if (GCONF._ignore_system_memory_over_limit_error) {
         COMMON_LOG(WARN, "the hold of observer tenant is over the system_memory", K(observer_tenant_hold), K(system_memory));

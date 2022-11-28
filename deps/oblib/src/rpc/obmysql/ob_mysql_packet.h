@@ -372,6 +372,7 @@ public:
  *  3B  length of compressed payload
  *  1B  compressed sequence id
  *  3B  length of payload before compression
+ * http://imysql.com/mysql-internal-manual/compressed-packet-header.html
  */
 class ObMySQLCompressedPacketHeader
 {

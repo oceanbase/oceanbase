@@ -72,19 +72,6 @@ public:
   //            int64_t &ts_ns);
   DELEGATE_WITH_RET(palf_handle_, append, int);
   DELEGATE_WITH_RET(palf_handle_, raw_write, int);
-  // @brief reads up to count bytes from palf handle at lsn into the buffer starting at buf, return the timestamp
-  //        and actuall read size.
-  // @param[out] void *&, buffer used to save read reuslt.
-  // @param[in] const int64_t, wanted read size.
-  // @param[in] const LSN, wanted read position.
-  // @param[out] int64_t &, the data timestamp.
-  // @param[out] int64_t &, actuall read size.
-  //  int pread(void *&buffer,
-  //            const int64_t nbytes,
-  //            const LSN &lsn,
-  //            int64_t &ts_ns,
-  //            int64_t &rnbytes);
-  DELEGATE_WITH_RET(palf_handle_, pread, int);
   // @brief alloc an iterator of palf, used to iterate file from start lsn
   // 1. alloc PalfBufferIterator, this iterator will get something append by caller.
   // @param[in] const LSN &, the start lsn of iterator.
@@ -104,10 +91,10 @@ public:
     return palf_handle_.seek(start_lsn, iter);
   }
 
-  int seek(const int64_t ts_ns,
+  int seek(const palf::SCN &scn,
            PalfGroupBufferIterator &iter)
   {
-    return palf_handle_.seek(ts_ns, iter);
+    return palf_handle_.seek(scn, iter);
   }
 
   // @breif, query lsn by timestamp, note that this function may be time-consuming
@@ -117,7 +104,7 @@ public:
   // @param[in] const int64_t, specified timestamp(ns).
   // @param[out] LSN&, the lower bound lsn which include timestamp.
   // int locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &lsn, int64_t &ts);
-  DELEGATE_WITH_RET(palf_handle_, locate_by_ts_ns_coarsely, int);
+  DELEGATE_WITH_RET(palf_handle_, locate_by_scn_coarsely, int);
 
   DELEGATE_WITH_RET(palf_handle_, locate_by_lsn_coarsely, int);
   // @brief, set the recycable lsn, palf will ensure that the data before recycable lsn readable.
@@ -130,7 +117,7 @@ public:
   //         recycable lsn immediately.
   // @param[out] int64_t&, begin lsn.
   // int get_base_ts_ns(int64_t &ts) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_ts_ns, int);
+  CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_scn, int);
   // int get_begin_lsn(palf::LSN &lsn) const;
   CONST_DELEGATE_WITH_RET(palf_handle_, get_begin_lsn, int);
   // @brief, get timestamp of begin lsn.
@@ -144,11 +131,11 @@ public:
   // @brief, get timestamp of end lsn.
   // @param[out] int64_t, timestamp.
   // int get_end_ts_ns(int64_t &ts) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_end_ts_ns, int);
+  CONST_DELEGATE_WITH_RET(palf_handle_, get_end_scn, int);
   // @brief, get max timestamp.
   // @param[out] int64_t, timestamp.
   // int get_max_ts_ns(int64_t &ts) const;
-  CONST_DELEGATE_WITH_RET(palf_handle_, get_max_ts_ns, int);
+  CONST_DELEGATE_WITH_RET(palf_handle_, get_max_scn, int);
 
   // @brief, get role of this replica
   // @param[out] common::ObRole&
@@ -224,7 +211,6 @@ public:
   DELEGATE_WITH_RET(palf_handle_, switch_learner_to_acceptor, int);
   DELEGATE_WITH_RET(palf_handle_, switch_acceptor_to_learner, int);
   DELEGATE_WITH_RET(palf_handle_, set_region, int);
-  DELEGATE_WITH_RET(palf_handle_, set_location_cache_cb, int);
   DELEGATE_WITH_RET(palf_handle_, change_access_mode, int);
   DELEGATE_WITH_RET(palf_handle_, get_access_mode, int);
 private:

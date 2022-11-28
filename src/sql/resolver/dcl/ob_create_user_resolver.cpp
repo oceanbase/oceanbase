@@ -256,7 +256,11 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
       }
     }
     if (OB_SUCC(ret) && NULL != resource_options) {
-      if (T_USER_RESOURCE_OPTIONS != resource_options->type_
+      if (OB_UNLIKELY(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create user with max connections not supported while upgrade", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create user with max connections while upgrade");
+      } else if (T_USER_RESOURCE_OPTIONS != resource_options->type_
                 || OB_ISNULL(resource_options->children_)) {
         ret = common::OB_INVALID_ARGUMENT;
         LOG_WARN("invalid resource options argument", K(ret), K(resource_options->type_),

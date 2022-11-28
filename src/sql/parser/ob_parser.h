@@ -85,6 +85,7 @@ public:
                     ParseResult &parse_result,
                     ParseMode mode=STD_MODE,
                     const bool is_batched_multi_stmt_split_on = false,
+                    const bool is_normal_ps_prepare = false,
                     const bool no_throw_parser_error = false);
 
   virtual void free_result(ParseResult &parse_result);

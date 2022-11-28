@@ -25,7 +25,6 @@ namespace common
 extern ObBlockAllocMgr default_blk_alloc;
 class ObBlockVSlicer
 {
-  friend class ObVSliceAlloc;
 public:
   static const uint32_t ITEM_MAGIC_CODE = 0XCCEEDDF1;
   static const uint32_t ITEM_MAGIC_CODE_MASK = 0XFFFFFFF0;
@@ -73,7 +72,6 @@ private:
 
 class ObVSliceAlloc : public common::ObIAllocator
 {
-  friend class ObBlockVSlicer;
 public:
   enum { MAX_ARENA_NUM = 32, DEFAULT_BLOCK_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE };
   typedef ObBlockAllocMgr BlockAlloc;
@@ -93,30 +91,11 @@ public:
   ObVSliceAlloc(): nway_(0), bsize_(0), blk_alloc_(default_blk_alloc) {}
   ObVSliceAlloc(const ObMemAttr &attr, int block_size = DEFAULT_BLOCK_SIZE, BlockAlloc &blk_alloc = default_blk_alloc)
     : nway_(1), bsize_(block_size), mattr_(attr), blk_alloc_(blk_alloc) {}
-  virtual ~ObVSliceAlloc() override { destroy(); }
+  virtual ~ObVSliceAlloc() override {}
   int init(int block_size, BlockAlloc& block_alloc, const ObMemAttr& attr) {
     int ret = OB_SUCCESS;
     new(this)ObVSliceAlloc(attr, block_size, block_alloc);
     return ret;
-  }
-  void destroy() {
-    for(int i = MAX_ARENA_NUM - 1; i >= 0; i--) {
-      Arena& arena = arena_[i];
-      Block* old_blk = arena.clear();
-      if (NULL != old_blk) {
-        int64_t old_pos = INT64_MAX;
-        if (old_blk->freeze(old_pos)) {
-          arena.sync();
-          if (old_blk->retire(old_pos)) {
-            destroy_block(old_blk);
-          } else {
-            // can not monitor all leak !!!
-            LIB_LOG(ERROR, "there was memory leak", K(old_blk->ref_));
-          }
-        }
-      }
-    }
-    bsize_ = 0;
   }
   void set_nway(int nway) {
     if (nway <= 0) {
@@ -203,13 +182,12 @@ public:
 #ifdef OB_USE_ASAN
     ::free(p);
 #else
-    if (NULL != p) {
+    if (bsize_ > 0 && NULL != p) {
       Block::Item* item = (Block::Item*)p - 1;
       abort_unless(Block::ITEM_MAGIC_CODE == item->MAGIC_CODE_);
       Block* blk = item->host_;
 #ifndef NDEBUG
       abort_unless(blk->get_vslice_alloc() == this);
-      abort_unless(bsize_ != 0);
 #else
       if (this != blk->get_vslice_alloc()) {
         LIB_LOG(ERROR, "blk is freed or alloced by different vslice_alloc", K(this), K(blk->get_vslice_alloc()));

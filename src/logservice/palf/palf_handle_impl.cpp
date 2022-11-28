@@ -49,7 +49,7 @@ PalfHandleImpl::PalfHandleImpl()
     role_change_cb_wrpper_(),
     rebuild_cb_wrapper_(),
     lc_cb_(NULL),
-    last_locate_ts_ns_(OB_INVALID_TIMESTAMP),
+    last_locate_scn_(),
     last_locate_block_(LOG_INVALID_BLOCK_ID),
     cannot_recv_log_warn_time_(OB_INVALID_TIMESTAMP),
     cannot_handle_committed_info_time_(OB_INVALID_TIMESTAMP),
@@ -57,12 +57,11 @@ PalfHandleImpl::PalfHandleImpl()
     last_check_parent_child_ts_us_(OB_INVALID_TIMESTAMP),
     wait_slide_print_time_us_(OB_INVALID_TIMESTAMP),
     append_size_stat_time_us_(OB_INVALID_TIMESTAMP),
-    replace_member_print_time_us_(OB_INVALID_TIMESTAMP),
-    config_change_print_time_us_(OB_INVALID_TIMESTAMP),
     last_rebuild_lsn_(),
     last_record_append_lsn_(PALF_INITIAL_LSN_VAL),
     has_set_deleted_(false),
     palf_env_impl_(NULL),
+    diskspace_enough_(true),
     append_cost_stat_("[PALF STAT WRITE LOG]", 2 * 1000 * 1000),
     flush_cb_cost_stat_("[PALF STAT FLUSH CB]", 2 * 1000 * 1000),
     replica_meta_lock_(),
@@ -196,6 +195,7 @@ void PalfHandleImpl::destroy()
   if (IS_INIT) {
     PALF_EVENT("PalfHandleImpl destroy", palf_id_, KPC(this));
     is_inited_ = false;
+    diskspace_enough_ = true;
     lc_cb_ = NULL;
     self_.reset();
     palf_id_ = INVALID_PALF_ID;
@@ -294,15 +294,15 @@ int PalfHandleImpl::get_begin_lsn(LSN &lsn) const
   return ret;
 }
 
-int PalfHandleImpl::get_begin_ts_ns(int64_t &ts) const
+int PalfHandleImpl::get_begin_scn(SCN &scn)
 {
   int ret = OB_SUCCESS;
   block_id_t unused_block_id;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not init", K(ret), KPC(this));
-  } else if (OB_FAIL(log_engine_.get_min_block_info(unused_block_id, ts))) {
-    PALF_LOG(WARN, "LogEngine get_min_block_info failed", K(ret), KPC(this));
+  } else if (OB_FAIL(log_engine_.get_min_block_id_and_min_scn(unused_block_id, scn))) {
+    PALF_LOG(WARN, "LogEngine get_min_block_id_and_min_scn failed", K(ret), KPC(this));
   }
   return ret;
 }
@@ -354,35 +354,36 @@ int PalfHandleImpl::submit_log(
     const PalfAppendOptions &opts,
     const char *buf,
     const int64_t buf_len,
-    const int64_t ref_ts_ns,
+    const SCN &ref_scn,
     LSN &lsn,
-    int64_t &log_timestamp)
+    SCN &log_scn)
 {
   int ret = OB_SUCCESS;
-  const int64_t curr_ts_ns = common::ObTimeUtility::current_time_ns();
+  const int64_t curr_ts_us = common::ObTimeUtility::current_time();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret));
   } else if (NULL == buf || buf_len <= 0 || buf_len > MAX_LOG_BODY_SIZE
-      || ref_ts_ns > curr_ts_ns + MAX_ALLOWED_SKEW_FOR_REF_TS_NS) {
+             || !ref_scn.is_valid()
+             || ref_scn.convert_to_ts() > curr_ts_us + MAX_ALLOWED_SKEW_FOR_REF_US) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), KP(buf), K(buf_len), K(ref_ts_ns));
+    PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), KP(buf), K(buf_len), K(ref_scn));
   } else {
     RLockGuard guard(lock_);
-    if (false == palf_env_impl_->check_disk_space_enough()) {
+    if (false == diskspace_enough_) {
       ret = OB_LOG_OUTOF_DISK_SPACE;
       if (palf_reach_time_interval(1 * 1000 * 1000, log_disk_full_warn_time_)) {
-        PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(opts), K(ref_ts_ns));
+        PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(opts), K(ref_scn));
       }
     } else if (!state_mgr_.can_append(opts.proposal_id, opts.need_check_proposal_id)) {
       ret = OB_NOT_MASTER;
       PALF_LOG(WARN, "cannot submit_log", K(ret), KPC(this), KP(buf), K(buf_len), "role",
           state_mgr_.get_role(), "state", state_mgr_.get_state(), "proposal_id",
           state_mgr_.get_proposal_id(), K(opts));
-    } else if (OB_FAIL(sw_.submit_log(buf, buf_len, ref_ts_ns, lsn, log_timestamp))) {
+    } else if (OB_FAIL(sw_.submit_log(buf, buf_len, ref_scn, lsn, log_scn))) {
       PALF_LOG(WARN, "submit_log failed", K(ret), KPC(this), KP(buf), K(buf_len));
     } else {
-      PALF_LOG(TRACE, "submit_log success", K(ret), KPC(this), K(buf_len), K(lsn), K(log_timestamp));
+      PALF_LOG(TRACE, "submit_log success", K(ret), KPC(this), K(buf_len), K(lsn), K(log_scn));
       if (palf_reach_time_interval(2 * 1000 * 1000, append_size_stat_time_us_)) {
         PALF_LOG(INFO, "[PALF STAT APPEND DATA SIZE]", KPC(this), "append size", lsn.val_ - last_record_append_lsn_.val_);
         last_record_append_lsn_ = lsn;
@@ -613,9 +614,7 @@ int PalfHandleImpl::replace_member(
     } else if (FALSE_IT(args.server_ = removed_member)) {
     } else if (FALSE_IT(args.type_ = REMOVE_MEMBER_AND_NUM)) {
     } else if (OB_FAIL(one_stage_config_change_(args, timeout_ns + begin_ts_ns - common::ObTimeUtility::current_time_ns()))) {
-      if (palf_reach_time_interval(100 * 1000, replace_member_print_time_us_)) {
-        PALF_LOG(WARN, "remove_member in replace_member failed", KR(ret), K(args), KPC(this));
-      }
+      PALF_LOG(WARN, "remove_member in replace_member failed", KR(ret), K(args), KPC(this));
     } else if (OB_FAIL(config_mgr_.get_curr_member_list(curr_member_list))) {
       PALF_LOG(WARN, "get_curr_member_list failed", KR(ret), KPC(this));
     } else {
@@ -842,27 +841,26 @@ int PalfHandleImpl::upgrade_learner_to_acceptor(const common::ObMemberList &lear
 int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
                                        const int64_t mode_version,
                                        const AccessMode &access_mode,
-                                       const int64_t ref_ts_ns)
+                                       const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
-  const int64_t curr_ts_ns = common::ObTimeUtility::current_time_ns();
+  const int64_t curr_ts_us = common::ObTimeUtility::current_time();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (INVALID_PROPOSAL_ID == proposal_id ||
              INVALID_PROPOSAL_ID == mode_version ||
-             OB_INVALID_TIMESTAMP == ref_ts_ns ||
-             ref_ts_ns > curr_ts_ns + MAX_ALLOWED_SKEW_FOR_REF_TS_NS ||
+             !ref_scn.is_valid() || ref_scn.convert_to_ts() > curr_ts_us + MAX_ALLOWED_SKEW_FOR_REF_US ||
              false == is_valid_access_mode(access_mode)) {
-    // ref_ts_ns is reasonable only when access_mode is APPEND
+    // ref_scn is reasonable only when access_mode is APPEND
     // mode_version is the proposal_id of PALF when access_mode was applied
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), K_(self),
-        K(proposal_id), K(mode_version), K(access_mode), K(ref_ts_ns));
+        K(proposal_id), K(mode_version), K(access_mode), K(ref_scn));
   } else if (OB_FAIL(mode_change_lock_.trylock())) {
     // require lock to protect status from concurrent change_access_mode
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "another change_access_mode is running, try again", K(ret), K_(palf_id),
-        K_(self), K(proposal_id),K(access_mode), K(ref_ts_ns));
+        K_(self), K(proposal_id),K(access_mode), K(ref_scn));
   } else {
     ret = OB_EAGAIN;
     bool first_run = true;
@@ -879,12 +877,12 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
           ret = OB_STATE_NOT_MATCH;
           PALF_LOG(WARN, "can not change_access_mode", K(ret), K_(palf_id),
               K_(self), K(proposal_id), "palf proposal_id", state_mgr_.get_proposal_id());
-        } else if (OB_SUCC(mode_mgr_.change_access_mode(mode_version, access_mode, ref_ts_ns))) {
+        } else if (OB_SUCC(mode_mgr_.change_access_mode(mode_version, access_mode, ref_scn))) {
           PALF_LOG(INFO, "change_access_mode success", K(ret), K_(palf_id), K_(self), K(proposal_id),
-              K(mode_version), K(access_mode), K(ref_ts_ns));
+              K(mode_version), K(access_mode), K(ref_scn));
         } else if (OB_EAGAIN != ret) {
           PALF_LOG(WARN, "change_access_mode failed", K(ret), K_(palf_id), K_(self), K(proposal_id),
-              K(mode_version), K(access_mode), K(ref_ts_ns));
+              K(mode_version), K(access_mode), K(ref_scn));
         }
         first_run = false;
         time_guard.click("do_once_change");
@@ -897,7 +895,7 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
           PALF_LOG(WARN, "on_role_change failed", K(tmp_ret), K_(palf_id), K_(self));
         }
         PALF_EVENT("change_access_mode success", palf_id_, K(ret), KPC(this),
-            K(proposal_id), K(access_mode), K(ref_ts_ns), K(time_guard));
+            K(proposal_id), K(access_mode), K(ref_scn), K(time_guard));
       }
       if (OB_EAGAIN == ret) {
         ob_usleep(1000);
@@ -1081,16 +1079,12 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(args));
   } else if (OB_FAIL(can_change_config_(args, curr_proposal_id))) {
-    if (palf_reach_time_interval(100 * 1000, config_change_print_time_us_)) {
-      PALF_LOG(WARN, "not active leader, can't change member", KR(ret), KPC(this),
-          "role", state_mgr_.get_role(), "state", state_mgr_.get_state());
-    }
+    PALF_LOG(WARN, "not active leader, can't change member", KR(ret), KPC(this),
+        "role", state_mgr_.get_role(), "state", state_mgr_.get_state());
   } else if (OB_FAIL(check_args_and_generate_config_(args, is_already_finished, new_log_sync_memberlist, new_log_sync_replica_num))) {
     PALF_LOG(WARN, "check_args_and_generate_config failed", KR(ret), KPC(this), K(args));
   } else if (is_already_finished) {
-    if (palf_reach_time_interval(100 * 1000, config_change_print_time_us_)) {
-      PALF_LOG(INFO, "one_stage_config_change has already finished", K(ret), KPC(this), K(args));
-    }
+    PALF_LOG(INFO, "one_stage_config_change has already finished", K(ret), KPC(this), K(args));
   } else {
     PALF_LOG(INFO, "one_stage_config_change start", KPC(this), K(curr_proposal_id), K(args), K(timeout_ns));
     TimeoutChecker not_timeout(timeout_ns);
@@ -1243,41 +1237,29 @@ int PalfHandleImpl::handle_learner_req(const LogLearner &server, const LogLearne
 int PalfHandleImpl::set_base_lsn(
     const LSN &lsn)
 {
-  // NB: Guarded by lock is important, otherwise there are some problems concurrent with rebuild or migrate.
+  // NB: 必须加读锁, 否则和迁移并发会有问题
+  // thread1(迁移):
+  // 1. 判断迁移源端的base_lsn是否比本地的大, 如果不满足, 迁移失败;
+  // 2. 提交truncate_prefix任务, 目的是将base_lsn之前的日志全部删除, 防止文件存在空洞;
+  // 3. 提交更新meta的任务.
+  // thread2(checkpoint线程):
+  // 1. 发现磁盘空间不足，推大base_lsn
   //
-  // Thread1(assume it's migrate thread)
-  // 1. if the 'base_lsn' of data source is greater than or equal to local, and then
-  // 2. avoid the hole between blocks, delete all blocks before 'base_lsn', submit truncate prefix blocks task
-  // 3. to update base lsn, submit update snpshot meta task.
-  //
-  // Execute above steps in 'advance_base_info'
-  //
-  // Thread2(checkpoint thread)
-  // 1. the clog disk is not enough, and update it via 'set_base_lsn'
-  //
-  // Consider that:
-  //
-  // Time1: thread1 has executed step1, assume the base lsn of data source is 100, local base lsn is 50,
-  // and then thread2 execute 'set_base_lsn', the local base lsn set to 150
-  //
-  // Time2: thread1 submit truncate prefix blocks, and this task will be failed because the base lsn in this task
-  // is smaller than local base lsn.
-  //
-  // Therefore, we need guarded by lock.
+  // 如果在thread1的step1之后, thread2推大了自己的base_lsn, 同时迁移远端的base_lsn相对小, 底层无法处理,
+  // 因此需要加读锁, 避免并发问题.
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
   LSN end_lsn = get_end_lsn();
-  const LSN &curr_base_lsn = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
-  const LSN new_base_lsn(lsn_2_block(lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!lsn.is_valid() || lsn > end_lsn) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), KPC(this), K(end_lsn), K(lsn));
-  } else if (curr_base_lsn >= new_base_lsn) {
-    PALF_LOG(WARN, "no need to set new base lsn, curr base lsn is greater than or equal to new base lsn",
-        KPC(this), K(curr_base_lsn), K(new_base_lsn), K(lsn));
   } else {
+    // palf持久化的base_lsn中，block内的offset均置为0
+    const LSN &curr_base_lsn = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
+    LSN new_base_lsn;
+    new_base_lsn.val_ = lsn_2_block(lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE;
     LogSnapshotMeta log_snapshot_meta;
     FlushMetaCbCtx flush_meta_cb_ctx;
     flush_meta_cb_ctx.type_ = SNAPSHOT_META;
@@ -1286,7 +1268,7 @@ int PalfHandleImpl::set_base_lsn(
       PALF_LOG(WARN, "LogSnapshotMeta generate failed", K(ret), KPC(this));
     } else if (OB_FAIL(log_engine_.submit_flush_snapshot_meta_task(flush_meta_cb_ctx, log_snapshot_meta))) {
       PALF_LOG(WARN, "submit_flush_snapshot_meta_task failed", K(ret), KPC(this));
-    } else {
+    } else if (new_base_lsn != curr_base_lsn) {
       PALF_EVENT("set_base_lsn success", palf_id_, K(ret), K_(palf_id), K(self_), K(lsn),
           K(log_snapshot_meta), K(new_base_lsn), K(flush_meta_cb_ctx));
     }
@@ -1370,11 +1352,7 @@ int PalfHandleImpl::set_allow_vote_flag_(const bool allow_vote)
     flush_meta_cb_ctx.allow_vote_ = allow_vote;
     LogReplicaPropertyMeta replica_property_meta = log_engine_.get_log_meta().get_log_replica_property_meta();
     replica_property_meta.allow_vote_ = allow_vote;
-    if (false == allow_vote
-        && LEADER == state_mgr_.get_role()
-        && OB_FAIL(election_.revoke(RoleChangeReason::PalfDisableVoteToRevoke))) {
-      PALF_LOG(WARN, "election revoke failed", K(ret), K_(palf_id));
-    } else if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
+    if (OB_FAIL(log_engine_.submit_flush_replica_property_meta_task(flush_meta_cb_ctx, replica_property_meta))) {
       PALF_LOG(WARN, "submit_flush_replica_property_meta_task failed", K(ret), K(flush_meta_cb_ctx), K(replica_property_meta));
     }
   }
@@ -1449,63 +1427,63 @@ int PalfHandleImpl::advance_base_info(const PalfBaseInfo &palf_base_info, const 
   return ret;
 }
 
-int PalfHandleImpl::locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &result_lsn)
+int PalfHandleImpl::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
 {
   int ret = OB_SUCCESS;
   block_id_t mid_block_id = LOG_INVALID_BLOCK_ID, min_block_id = LOG_INVALID_BLOCK_ID;
   block_id_t max_block_id = LOG_INVALID_BLOCK_ID, result_block_id = LOG_INVALID_BLOCK_ID;
-  int64_t mid_ts = OB_INVALID_TIMESTAMP;
   result_lsn.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret));
-  } else if (ts_ns <= 0) {
+  } else if (OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(ts_ns));
-  } else if (OB_FAIL(get_binary_search_range_(ts_ns, min_block_id, max_block_id, result_block_id))) {
-    PALF_LOG(WARN, "get_binary_search_range_ failed", KR(ret), KPC(this), K(ts_ns));
+    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(scn));
+  } else if (OB_FAIL(get_binary_search_range_(scn, min_block_id, max_block_id, result_block_id))) {
+    PALF_LOG(WARN, "get_binary_search_range_ failed", KR(ret), KPC(this), K(scn));
   } else {
     // 1. get lower bound lsn (result_lsn) by binary search
+    SCN mid_scn;
     while(OB_SUCC(ret) && min_block_id <= max_block_id) {
       mid_block_id = min_block_id + ((max_block_id - min_block_id) >> 1);
-      if (OB_FAIL(log_engine_.get_block_min_ts_ns(mid_block_id, mid_ts))) {
-        PALF_LOG(WARN, "get_block_min_ts_ns failed", KR(ret), KPC(this), K(mid_block_id));
+      if (OB_FAIL(log_engine_.get_block_min_scn(mid_block_id, mid_scn))) {
+        PALF_LOG(WARN, "get_block_min_scn failed", KR(ret), KPC(this), K(mid_block_id));
         // OB_ERR_OUT_OF_UPPER_BOUND: this block is a empty active block, just return
         // OB_ERR_OUT_OF_LOWER_BOUND: block_id_ is smaller than min_block_id, this block may be recycled
         // OB_ERR_UNEXPECTED: log files lost unexpectedly, just return
         // OB_IO_ERROR: just return
         if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
           // block mid_lsn.block_id_ may be recycled, get_binary_search_range_ again
-          if (OB_FAIL(get_binary_search_range_(ts_ns, min_block_id, max_block_id, result_block_id))) {
-            PALF_LOG(WARN, "get_binary_search_range_ failed", KR(ret), KPC(this), K(ts_ns));
+          if (OB_FAIL(get_binary_search_range_(scn, min_block_id, max_block_id, result_block_id))) {
+            PALF_LOG(WARN, "get_binary_search_range_ failed", KR(ret), KPC(this), K(scn));
           }
         } else if (OB_ERR_OUT_OF_UPPER_BOUND == ret) {
           ret = OB_ENTRY_NOT_EXIST;
         }
-      } else if (mid_ts < ts_ns) {
+      } else if (mid_scn < scn) {
         min_block_id = mid_block_id;
         if (max_block_id == min_block_id) {
           result_block_id = mid_block_id;
           break;
         } else if (max_block_id == min_block_id + 1) {
-          int64_t next_min_ts = OB_INVALID_TIMESTAMP;
-          if (OB_FAIL(log_engine_.get_block_min_ts_ns(max_block_id, next_min_ts))) {
+          SCN next_min_scn;
+          if (OB_FAIL(log_engine_.get_block_min_scn(max_block_id, next_min_scn))) {
             // if fail to read next block, just return prev block lsn
             ret = OB_SUCCESS;
             result_block_id = mid_block_id;
-          } else if (ts_ns < next_min_ts) {
+          } else if (scn < next_min_scn) {
             result_block_id = mid_block_id;
           } else {
             result_block_id = max_block_id;
           }
           break;
         }
-      } else if (mid_ts > ts_ns) {
+      } else if (mid_scn > scn) {
         // block_id is uint64_t, so check == 0 firstly.
         if (mid_block_id == 0 || mid_block_id - 1 < min_block_id) {
           ret = OB_ERR_OUT_OF_LOWER_BOUND;
-          PALF_LOG(WARN, "ts_ns is smaller than min ts of first block", KR(ret), KPC(this), K(min_block_id),
-                          K(max_block_id), K(mid_block_id), K(ts_ns), K(mid_ts));
+          PALF_LOG(WARN, "scn is smaller than min scn of first block", KR(ret), KPC(this), K(min_block_id),
+                          K(max_block_id), K(mid_block_id), K(scn), K(mid_scn));
         } else {
           max_block_id = mid_block_id - 1;
         }
@@ -1517,7 +1495,7 @@ int PalfHandleImpl::locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &result_ls
     // 2. convert block_id to lsn
     if (OB_SUCC(ret)) {
       result_lsn = result_block_id * PALF_BLOCK_SIZE;
-      inc_update_last_locate_block_ts_(result_block_id, ts_ns);
+      inc_update_last_locate_block_scn_(result_block_id, scn);
     }
   }
   return ret;
@@ -1532,7 +1510,7 @@ void PalfHandleImpl::set_deleted()
 // NB: 1) if min_block_id_ == max_block_id_, then block max_lsn.block_id_ may be active block
 //     2) if min_block_id_ < max_block_id_, then block max_lsn.block_id_ must not be active block
 //     3) if min_block_id_ > max_block_id_, cache hits
-int PalfHandleImpl::get_binary_search_range_(const int64_t ts_ns,
+int PalfHandleImpl::get_binary_search_range_(const SCN &scn,
                                              block_id_t &min_block_id,
                                              block_id_t &max_block_id,
                                              block_id_t &result_block_id)
@@ -1545,14 +1523,14 @@ int PalfHandleImpl::get_binary_search_range_(const int64_t ts_ns,
   } else {
     block_id_t committed_block_id = lsn_2_block(committed_lsn, PALF_BLOCK_SIZE);
     max_block_id = (committed_block_id < max_block_id)? committed_block_id : max_block_id;
-    // optimization: cache last_locate_ts_ns_ to shrink binary search range
+    // optimization: cache last_locate_scn_ to shrink binary search range
     SpinLockGuard guard(last_locate_lock_);
     if (is_valid_block_id(last_locate_block_) &&
         min_block_id <= last_locate_block_ &&
         max_block_id >= last_locate_block_) {
-      if (ts_ns < last_locate_ts_ns_) {
+      if (scn < last_locate_scn_) {
         max_block_id = last_locate_block_;
-      } else if (ts_ns > last_locate_ts_ns_) {
+      } else if (scn > last_locate_scn_) {
         min_block_id = last_locate_block_;
       } else {
         result_block_id = last_locate_block_;
@@ -1563,21 +1541,21 @@ int PalfHandleImpl::get_binary_search_range_(const int64_t ts_ns,
       }
     }
     PALF_LOG(INFO, "get_binary_search_range_", K(ret), KPC(this), K(min_block_id), K(max_block_id),
-        K(result_block_id), K(committed_lsn), K(ts_ns), K_(last_locate_ts_ns), K_(last_locate_block));
+        K(result_block_id), K(committed_lsn), K(scn), K_(last_locate_scn), K_(last_locate_block));
   }
   return ret;
 }
 
-void PalfHandleImpl::inc_update_last_locate_block_ts_(const block_id_t &block_id, const int64_t ts)
+void PalfHandleImpl::inc_update_last_locate_block_scn_(const block_id_t &block_id, const SCN &scn)
 {
   SpinLockGuard guard(last_locate_lock_);
   if (block_id > last_locate_block_) {
     last_locate_block_ = block_id;
-    last_locate_ts_ns_ = ts;
+    last_locate_scn_ = scn;
   }
 }
 
-int PalfHandleImpl::locate_by_lsn_coarsely(const LSN &lsn, int64_t &result_ts_ns)
+int PalfHandleImpl::locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -1594,29 +1572,26 @@ int PalfHandleImpl::locate_by_lsn_coarsely(const LSN &lsn, int64_t &result_ts_ns
     const LSN committed_lsn = get_end_lsn();
     LSN curr_lsn = (committed_lsn <= lsn) ? committed_lsn: lsn;
     block_id_t curr_block_id = lsn_2_block(curr_lsn, PALF_BLOCK_SIZE);
-    if (OB_FAIL(log_engine_.get_block_min_ts_ns(curr_block_id, result_ts_ns))) {
+    if (OB_FAIL(log_engine_.get_block_min_scn(curr_block_id, result_scn))) {
       // if this block is a empty active block, read prev block if exists
       if (OB_ERR_OUT_OF_UPPER_BOUND == ret &&
           curr_block_id > 0 &&
-          OB_FAIL(log_engine_.get_block_min_ts_ns(curr_block_id - 1, result_ts_ns))) {
-        PALF_LOG(WARN, "get_block_min_ts_ns failed", KR(ret), KPC(this), K(curr_lsn), K(lsn));
+          OB_FAIL(log_engine_.get_block_min_scn(curr_block_id - 1, result_scn))) {
+        PALF_LOG(WARN, "get_block_min_scn failed", KR(ret), KPC(this), K(curr_lsn), K(lsn));
       }
     }
-    PALF_LOG(INFO, "locate_by_lsn_coarsely", KR(ret), KPC(this), K(lsn), K(committed_lsn), K(result_ts_ns));
+    PALF_LOG(INFO, "locate_by_lsn_coarsely", KR(ret), KPC(this), K(lsn), K(committed_lsn), K(result_scn));
   }
   return ret;
 }
 
-int PalfHandleImpl::get_min_block_info_for_gc(block_id_t &min_block_id, int64_t &max_ts_ns)
+int PalfHandleImpl::get_min_block_id_min_scn(block_id_t &block_id, SCN &scn)
 {
   int ret = OB_SUCCESS;
-//  if (false == end_lsn.is_valid()) {
-//    ret = OB_ENTRY_NOT_EXIST;
-//  }
-  if (OB_FAIL(log_engine_.get_min_block_info_for_gc(min_block_id, max_ts_ns))) {
-    PALF_LOG(WARN, "get_min_block_info_for_gc failed", K(ret), KPC(this));
+  if (OB_FAIL(log_engine_.get_min_block_id_and_min_scn(block_id, scn))) {
+    PALF_LOG(WARN, "get_min_block_id_and_min_scn failed", K(ret), KPC(this));
   } else {
-    PALF_LOG(TRACE, "get_min_block_info_for_gc success", K(ret), KPC(this), K(min_block_id), K(max_ts_ns));
+    PALF_LOG(TRACE, "get_min_block_id_and_min_scn success", K(ret), KPC(this), K(block_id), K(scn));
   }
   return ret;
 }
@@ -1659,7 +1634,7 @@ int PalfHandleImpl::read_log(const LSN &lsn,
 
 int PalfHandleImpl::inner_append_log(const LSN &lsn,
                                      const LogWriteBuf &write_buf,
-                                     const int64_t log_ts)
+                                     const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   const int64_t begin_ts = ObTimeUtility::current_time();
@@ -1670,13 +1645,13 @@ int PalfHandleImpl::inner_append_log(const LSN &lsn,
              || false == write_buf.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument", K(ret), KPC(this), K(lsn), K(write_buf));
-  } else if (OB_FAIL(log_engine_.append_log(lsn, write_buf, log_ts))) {
-    PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), KPC(this), K(lsn), K(log_ts));
+  } else if (OB_FAIL(log_engine_.append_log(lsn, write_buf, log_scn))) {
+    PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), KPC(this), K(lsn), K(log_scn));
   } else {
     const int64_t time_cost = ObTimeUtility::current_time() - begin_ts;
     append_cost_stat_.stat(time_cost);
     if (time_cost >= 5 * 1000) {
-      PALF_LOG(WARN, "write log cost too much time", K(ret), KPC(this), K(lsn), K(log_ts), K(time_cost));
+      PALF_LOG(WARN, "write log cost too much time", K(ret), KPC(this), K(lsn), K(log_scn), K(time_cost));
     }
   }
   return ret;
@@ -1684,21 +1659,21 @@ int PalfHandleImpl::inner_append_log(const LSN &lsn,
 
 int PalfHandleImpl::inner_append_log(const LSNArray &lsn_array,
                                      const LogWriteBufArray &write_buf_array,
-                                     const LogTsArray &log_ts_array)
+                                     const SCNArray &scn_array)
 {
   int ret = OB_SUCCESS;
   const int64_t begin_ts = ObTimeUtility::current_time();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "PalfHandleImpl not inited", K(ret), KPC(this));
-  } else if (OB_FAIL(log_engine_.append_log(lsn_array, write_buf_array, log_ts_array))) {
-    PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), KPC(this), K(lsn_array), K(log_ts_array));
+  } else if (OB_FAIL(log_engine_.append_log(lsn_array, write_buf_array, scn_array))) {
+    PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), KPC(this), K(lsn_array), K(scn_array));
   } else {
     const int64_t time_cost = ObTimeUtility::current_time() - begin_ts;
     append_cost_stat_.stat(time_cost);
     if (time_cost > 10 * 1000) {
       PALF_LOG(WARN, "write log cost too much time", K(ret), KPC(this), K(lsn_array),
-               K(log_ts_array), K(time_cost));
+               K(scn_array), K(time_cost));
     }
   }
   return ret;
@@ -1826,7 +1801,7 @@ int PalfHandleImpl::alloc_palf_group_buffer_iterator(const LSN &offset,
   return ret;
 }
 
-int PalfHandleImpl::alloc_palf_group_buffer_iterator(const int64_t ts_ns,
+int PalfHandleImpl::alloc_palf_group_buffer_iterator(const SCN &scn,
                                                      PalfGroupBufferIterator &iterator)
 {
   int ret = OB_SUCCESS;
@@ -1842,16 +1817,16 @@ int PalfHandleImpl::alloc_palf_group_buffer_iterator(const int64_t ts_ns,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
-  } else if (ts_ns <= 0) {
+  } else if (OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", KR(ret), K_(palf_id), K(ts_ns));
-  } else if (OB_FAIL(locate_by_ts_ns_coarsely(ts_ns, start_lsn)) &&
+    PALF_LOG(WARN, "invalid argument", KR(ret), K_(palf_id), K(scn));
+  } else if (OB_FAIL(locate_by_scn_coarsely(scn, start_lsn)) &&
              OB_ERR_OUT_OF_LOWER_BOUND != ret) {
-    PALF_LOG(WARN, "locate_by_ts_ns_coarsely failed", KR(ret), KPC(this), K(ts_ns));
+    PALF_LOG(WARN, "locate_by_scn_coarsely failed", KR(ret), KPC(this), K(scn));
   } else if (OB_SUCCESS != ret &&
             !FALSE_IT(start_lsn = log_engine_.get_begin_lsn()) &&
             start_lsn.val_ != PALF_INITIAL_LSN_VAL) {
-    PALF_LOG(WARN, "log may have been recycled", KR(ret), KPC(this), K(ts_ns), K(start_lsn));
+    PALF_LOG(WARN, "log may have been recycled", KR(ret), KPC(this), K(scn), K(start_lsn));
   } else if (OB_FAIL(local_iter.init(start_lsn, log_engine_.get_log_storage(), get_file_end_lsn))) {
     PALF_LOG(WARN, "PalfGroupBufferIterator init failed", KR(ret), KPC(this), K(start_lsn));
   } else {
@@ -1861,7 +1836,7 @@ int PalfHandleImpl::alloc_palf_group_buffer_iterator(const int64_t ts_ns,
       if (OB_FAIL(local_iter.get_entry(curr_group_entry, curr_lsn))) {
         PALF_LOG(ERROR, "PalfGroupBufferIterator get_entry failed", KR(ret), KPC(this),
             K(curr_group_entry), K(curr_lsn), K(local_iter));
-      } else if (curr_group_entry.get_log_ts() >= ts_ns) {
+      } else if (curr_group_entry.get_log_scn() >= scn) {
         result_lsn = curr_lsn;
         break;
       } else {
@@ -1876,7 +1851,7 @@ int PalfHandleImpl::alloc_palf_group_buffer_iterator(const int64_t ts_ns,
       if (OB_ITER_END == ret) {
         ret = OB_ENTRY_NOT_EXIST;
       }
-      PALF_LOG(WARN, "locate_by_ts_ns failed", KR(ret), KPC(this), K(ts_ns), K(result_lsn));
+      PALF_LOG(WARN, "locate_by_scn failed", KR(ret), KPC(this), K(scn), K(result_lsn));
     }
   }
   return ret;
@@ -1972,7 +1947,6 @@ int PalfHandleImpl::set_location_cache_cb(PalfLocationCacheCb *lc_cb)
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    PALF_LOG(WARN, "not initted", KR(ret), KPC(this));
   } else if (OB_ISNULL(lc_cb)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "lc_cb is NULL, can't register", KR(ret), KPC(this));
@@ -2037,26 +2011,15 @@ int PalfHandleImpl::reset_location_cache_cb()
   return ret;
 }
 
-int PalfHandleImpl::check_and_switch_freeze_mode()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    RLockGuard guard(lock_);
-    sw_.check_and_switch_freeze_mode();
-  }
-  return ret;
-}
 
-int PalfHandleImpl::period_freeze_last_log()
+int PalfHandleImpl::try_freeze_last_log()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
     RLockGuard guard(lock_);
-    sw_.period_freeze_last_log();
+    sw_.try_freeze_last_log();
   }
   return ret;
 }
@@ -2246,26 +2209,31 @@ int PalfHandleImpl::ack_mode_meta(const common::ObAddr &server,
 
 int PalfHandleImpl::handle_election_message(const election::ElectionPrepareRequestMsg &msg)
 {
+  RLockGuard guard(lock_);
   return election_.handle_message(msg);
 }
 
 int PalfHandleImpl::handle_election_message(const election::ElectionPrepareResponseMsg &msg)
 {
+  RLockGuard guard(lock_);
   return election_.handle_message(msg);
 }
 
 int PalfHandleImpl::handle_election_message(const election::ElectionAcceptRequestMsg &msg)
 {
+  RLockGuard guard(lock_);
   return election_.handle_message(msg);
 }
 
 int PalfHandleImpl::handle_election_message(const election::ElectionAcceptResponseMsg &msg)
 {
+  RLockGuard guard(lock_);
   return election_.handle_message(msg);
 }
 
 int PalfHandleImpl::handle_election_message(const election::ElectionChangeLeaderMsg &msg)
 {
+  RLockGuard guard(lock_);
   return election_.handle_message(msg);
 }
 
@@ -2319,7 +2287,7 @@ int PalfHandleImpl::do_init_mem_(
     has_set_deleted_ = false;
     palf_env_impl_ = palf_env_impl;
     is_inited_ = true;
-    PALF_LOG(INFO, "PalfHandleImpl do_init_ success", K(ret), K(palf_id), K(self), K(log_dir), K(palf_base_info),
+    PALF_LOG(INFO, "PalfHandleImpl do_init_ success", K(ret), K(palf_id), K(log_dir), K(palf_base_info),
         K(log_meta), K(fetch_log_engine), K(alloc_mgr), K(log_rpc), K(log_io_worker));
   }
   if (OB_FAIL(ret)) {
@@ -2457,7 +2425,7 @@ int PalfHandleImpl::receive_log(const common::ObAddr &server,
   } else {
     // rdlock
     RLockGuard guard(lock_);
-    if (false == palf_env_impl_->check_disk_space_enough()) {
+    if (false == diskspace_enough_) {
       ret = OB_LOG_OUTOF_DISK_SPACE;
       if (palf_reach_time_interval(1 * 1000 * 1000, log_disk_full_warn_time_)) {
         PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(server), K(push_log_type), K(lsn));
@@ -2475,9 +2443,7 @@ int PalfHandleImpl::receive_log(const common::ObAddr &server,
         // rewrite -4023 to 0
         ret = OB_SUCCESS;
       } else {
-        if (REACH_TIME_INTERVAL(100 * 1000)) {
-          PALF_LOG(WARN, "sw_ receive_log failed", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn));
-        }
+        PALF_LOG(WARN, "sw_ receive_log failed", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn));
       }
     } else {
       PALF_LOG(TRACE, "receive_log success", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn), K(buf_len));
@@ -2518,9 +2484,7 @@ int PalfHandleImpl::receive_log(const common::ObAddr &server,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(sw_.receive_log(server, push_log_type, prev_lsn, prev_log_proposal_id, lsn, buf,
             buf_len, false, truncate_log_info))) {
-      if (REACH_TIME_INTERVAL(100 * 1000)) {
-        PALF_LOG(WARN, "sw_ receive_log failed", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn));
-      }
+      PALF_LOG(WARN, "sw_ receive_log failed", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn));
     } else {
       PALF_LOG(INFO, "receive_log success", K(ret), KPC(this), K(server), K_(self), K(msg_proposal_id), K(prev_lsn),
           K(prev_log_proposal_id), K(lsn), K(truncate_log_info));
@@ -2545,7 +2509,7 @@ int PalfHandleImpl::submit_group_log(const PalfAppendOptions &opts,
     while (true) {
       do {
         RLockGuard guard(lock_);
-        if (false == palf_env_impl_->check_disk_space_enough()) {
+        if (false == diskspace_enough_) {
           ret = OB_LOG_OUTOF_DISK_SPACE;
           if (palf_reach_time_interval(1 * 1000 * 1000, log_disk_full_warn_time_)) {
             PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(opts), K(lsn));
@@ -2794,36 +2758,13 @@ int PalfHandleImpl::fetch_log_from_storage(const common::ObAddr &server,
   return ret;
 }
 
-int PalfHandleImpl::try_send_committed_info_(const ObAddr &server,
-                                             const LSN &log_lsn,
-                                             const LSN &log_end_lsn,
-                                             const int64_t &log_proposal_id)
-{
-  int ret = OB_SUCCESS;
-  AccessMode access_mode;
-  if (!log_lsn.is_valid() || !log_end_lsn.is_valid() || INVALID_PROPOSAL_ID == log_proposal_id) {
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(mode_mgr_.get_access_mode(access_mode))) {
-    PALF_LOG(WARN, "get_access_mode failed", K(ret), KPC(this));
-  } else if (AccessMode::APPEND == access_mode) {
-    // No need send committed_info in APPEND mode, because leader will genenrate keeapAlive log periodically.
-  } else if (OB_FAIL(sw_.try_send_committed_info(server, log_lsn, log_end_lsn, log_proposal_id))) {
-    PALF_LOG(TRACE, "try_send_committed_info failed", K(ret), K_(palf_id), K_(self),
-      K(server), K(log_lsn), K(log_end_lsn), K(log_proposal_id));
-  } else {
-    PALF_LOG(TRACE, "try_send_committed_info_ success", K(ret), K_(palf_id), K_(self), K(server),
-      K(log_lsn), K(log_end_lsn), K(log_proposal_id));
-  }
-  return ret;
-}
-
 int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
-                                            const FetchLogType fetch_type,
-                                            const int64_t &msg_proposal_id,
-                                            const LSN &prev_lsn,
-                                            const LSN &fetch_start_lsn,
-                                            const int64_t fetch_log_size,
-                                            const int64_t fetch_log_count)
+                                           const FetchLogType fetch_type,
+                                           const int64_t &msg_proposal_id,
+                                           const LSN &prev_lsn,
+                                           const LSN &fetch_start_lsn,
+                                           const int64_t fetch_log_size,
+                                           const int64_t fetch_log_count)
 {
   int ret = OB_SUCCESS;
   PalfGroupBufferIterator iterator;
@@ -2879,7 +2820,6 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
     bool is_reach_end = false;
     int64_t fetched_count = 0;
     LSN curr_log_end_lsn = curr_lsn + curr_group_entry.get_group_entry_size();
-    LSN prev_log_end_lsn;
     int64_t prev_log_proposal_id = prev_log_info.log_proposal_id_;
     while (OB_SUCC(ret) && !is_reach_size_limit && !is_reach_count_limit && !is_reach_end
         && OB_SUCC(iterator.next())) {
@@ -2911,17 +2851,11 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
             K(prev_log_proposal_id), K(fetch_end_lsn), K(curr_log_end_lsn), K(is_reach_size_limit),
             K(fetch_log_size), K(fetched_count), K(is_reach_count_limit));
         each_round_prev_lsn = curr_lsn;
-        prev_log_end_lsn = curr_log_end_lsn;
         prev_log_proposal_id = curr_group_entry.get_header().get_log_proposal_id();
       }
     }
     if (OB_ITER_END == ret) {
       ret = OB_SUCCESS;
-    }
-    // try send committed_info to server
-    if (OB_SUCC(ret)) {
-      RLockGuard guard(lock_);
-      (void) try_send_committed_info_(server, each_round_prev_lsn, prev_log_end_lsn, prev_log_proposal_id);
     }
   }
 
@@ -3366,7 +3300,7 @@ int PalfHandleImpl::get_prev_log_info_(const LSN &lsn,
     }
     if (OB_SUCC(ret)) {
       prev_log_info.log_id_ = prev_entry_header.get_log_id();
-      prev_log_info.log_ts_ = prev_entry_header.get_max_timestamp();
+      prev_log_info.log_scn_ = prev_entry_header.get_max_scn();
       prev_log_info.accum_checksum_ = prev_entry_header.get_accum_checksum();
       prev_log_info.log_proposal_id_ = prev_entry_header.get_log_proposal_id();
       prev_log_info.lsn_ = prev_lsn;
@@ -3476,7 +3410,7 @@ int PalfHandleImpl::revoke_leader(const int64_t proposal_id)
   } else if (false == state_mgr_.can_revoke(proposal_id)) {
     ret = OB_NOT_MASTER;
     PALF_LOG(WARN, "revoke_leader failed, not master", K(ret), K_(palf_id), K(proposal_id));
-  } else if (OB_FAIL(election_.revoke(RoleChangeReason::AskToRevoke))) {
+  } else if (OB_FAIL(election_.revoke())) {
     PALF_LOG(WARN, "PalfHandleImpl revoke leader failed", K(ret), K_(palf_id));
   } else {
     PALF_LOG(INFO, "PalfHandleImpl revoke leader success", K(ret), K_(palf_id));
@@ -3493,7 +3427,7 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
   } else {
     int64_t unused_mode_version;
     block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
-    int64_t min_block_min_ts = -1;
+    SCN min_block_min_scn;
     ObRole curr_role = INVALID_ROLE;
     ObReplicaState curr_state = INVALID_STATE;
     palf_stat.self_ = self_;
@@ -3508,25 +3442,22 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     palf_stat.allow_vote_ = state_mgr_.is_allow_vote();
     palf_stat.replica_type_ = state_mgr_.get_replica_type();
     palf_stat.base_lsn_ = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
-    (void)log_engine_.get_min_block_info(min_block_id, min_block_min_ts);
+    (void)log_engine_.get_min_block_id_and_min_scn(min_block_id, min_block_min_scn);
     palf_stat.begin_lsn_ = LSN(min_block_id * PALF_BLOCK_SIZE);
-    palf_stat.begin_ts_ns_ = min_block_min_ts;
+    palf_stat.begin_scn_ = min_block_min_scn;
     palf_stat.end_lsn_ = get_end_lsn();
-    palf_stat.end_ts_ns_ = get_end_ts_ns();
+    palf_stat.end_scn_ = get_end_scn();
     palf_stat.max_lsn_ = get_max_lsn();
-    palf_stat.max_ts_ns_ = get_max_ts_ns();
+    palf_stat.max_scn_ = get_max_scn();
     PALF_LOG(INFO, "PalfHandleImpl stat", K(palf_stat));
   }
   return ret;
 }
 
-int PalfHandleImpl::diagnose(PalfDiagnoseInfo &diagnose_info) const
+void PalfHandleImpl::set_diskspace_enough(const bool diskspace_enough)
 {
-  int ret = OB_SUCCESS;
-  state_mgr_.get_role_and_state(diagnose_info.palf_role_, diagnose_info.palf_state_);
-  diagnose_info.palf_proposal_id_ = state_mgr_.get_proposal_id();
-  state_mgr_.get_election_role(diagnose_info.election_role_, diagnose_info.election_epoch_);
-  return ret;
+  WLockGuard guard(lock_);
+  diskspace_enough_ = diskspace_enough;
 }
 
 } // end namespace palf

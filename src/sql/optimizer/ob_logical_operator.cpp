@@ -344,9 +344,8 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     dblink_id_(0),   // 0 represent local cluster.
     plan_depth_(0),
     contain_fake_cte_(false),
-    contain_pw_merge_op_(false),
+    contain_merge_op_(false),
     contain_das_op_(false),
-    contain_match_all_fake_cte_(false),
     dup_table_pos_(),
     strong_sharding_(NULL),
     weak_sharding_(),
@@ -800,52 +799,30 @@ int ObLogicalOperator::compute_op_other_info()
         }
       }
     }
-    
-    // compute contains fake cte match all sharding
-    if (OB_SUCC(ret)) {
-      if (get_type() == log_op_def::ObLogOpType::LOG_SET &&
-          static_cast<ObLogSet*>(this)->is_recursive_union()) {
-        /*do nothing*/
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && !contain_match_all_fake_cte_ && i < get_num_of_child(); i++) {
-          if (OB_ISNULL(get_child(i))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret));
-          } else {
-            contain_match_all_fake_cte_ |= get_child(i)->get_contains_match_all_fake_cte();
-          }
-        }
-      }
-    }
 
     // compute contains merge style op
     if (OB_SUCC(ret)) {
-      for (int64_t i = 0; OB_SUCC(ret) && !contain_pw_merge_op_ && i < get_num_of_child(); i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && !contain_merge_op_ && i < get_num_of_child(); i++) {
         if (OB_ISNULL(get_child(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
         } else {
-          contain_pw_merge_op_ |= get_child(i)->get_contains_pw_merge_op() && 
-                                  log_op_def::LOG_EXCHANGE != get_child(i)->get_type();
+          contain_merge_op_ |= get_child(i)->get_contains_merge_op();
         }
       }
-      if (OB_SUCC(ret) && !contain_pw_merge_op_) {
+      if (OB_SUCC(ret) && !contain_merge_op_) {
         if (log_op_def::LOG_GROUP_BY == get_type()) {
           ObLogGroupBy *group_by = static_cast<ObLogGroupBy*>(this);
-          contain_pw_merge_op_ = !group_by->get_group_by_exprs().empty() &&
-                               (AggregateAlgo::MERGE_AGGREGATE == group_by->get_algo()) &&
-                               is_partition_wise();
+          contain_merge_op_ = !group_by->get_group_by_exprs().empty() &&
+                               (AggregateAlgo::MERGE_AGGREGATE == group_by->get_algo());
         } else if (log_op_def::LOG_DISTINCT == get_type()) {
           ObLogDistinct *distinct = static_cast<ObLogDistinct*>(this);
-          contain_pw_merge_op_ = AggregateAlgo::MERGE_AGGREGATE == distinct->get_algo() &&
-                               is_partition_wise();
+          contain_merge_op_ = AggregateAlgo::MERGE_AGGREGATE == distinct->get_algo();
         } else if (log_op_def::LOG_SET == get_type()) {
           ObLogSet *set = static_cast<ObLogSet*>(this);
-          contain_pw_merge_op_ = set->is_set_distinct() && SetAlgo::MERGE_SET == set->get_algo() &&
-                               is_partition_wise();
+          contain_merge_op_ = set->is_set_distinct() && SetAlgo::MERGE_SET == set->get_algo();
         } else if (log_op_def::LOG_WINDOW_FUNCTION == get_type()) {
-          contain_pw_merge_op_ = is_block_op() &&
-                               is_partition_wise();
+          contain_merge_op_ = is_block_op();
         } else { /*do nothing*/ }
       }
     }
@@ -908,8 +885,7 @@ int ObLogicalOperator::compute_property(Path *path)
     set_phy_plan_type(path->phy_plan_type_);
     set_location_type(path->location_type_);
     set_contains_fake_cte(path->contain_fake_cte_);
-    set_contains_pw_merge_op(path->contain_pw_merge_op_);
-    set_contains_match_all_fake_cte(path->contain_match_all_fake_cte_);
+    set_contains_merge_op(path->contain_merge_op_);
     set_contains_das_op(path->contain_das_op_);
     is_pipelined_plan_ = path->is_pipelined_path();
     is_nl_style_pipelined_plan_ = path->is_nl_style_pipelined_path();
@@ -924,7 +900,7 @@ int ObLogicalOperator::compute_property(Path *path)
     set_is_range_order(path->is_range_order_);
     set_parallel(path->parallel_);
     set_server_cnt(path->server_cnt_);
-    
+
     LOG_TRACE("compute property finished",
               K(get_op_name(type_)),
               K(get_cost()),
@@ -964,7 +940,7 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
       double op_cost = ObOptEstCost::cost_get_rows(child_card / parallel,
                                                    opt_ctx.get_cost_model_type());
-      if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+      if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
         LOG_WARN("failed to re est exchange cost", K(ret));
       } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
                                                                 get_plan()->get_selectivity_ctx(),
@@ -1037,7 +1013,7 @@ int ObLogicalOperator::compute_property()
               K(phy_plan_type_),
               K(location_type_),
               K(contain_fake_cte_),
-              K(contain_pw_merge_op_),
+              K(contain_merge_op_),
               K(contain_das_op_),
               K(width_));
   }
@@ -2847,19 +2823,6 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
         } else if (OB_FAIL(non_strict_pwj_constraint_.push_back(
                     loc_cons_ctx->base_table_constraints_.count() - 1))) {
           LOG_WARN("failed to push back location constraint offset", K(ret));
-        }
-      } else if (log_op_def::LOG_TEMP_TABLE_ACCESS == get_type()) {
-        ObLogTempTableAccess *access = static_cast<ObLogTempTableAccess*>(this);
-        ObLogicalOperator *insert_op = NULL;
-        if (OB_FAIL(access->get_temp_table_plan(insert_op))) {
-          LOG_WARN("failed to get temp table plan", K(ret));
-        } else if (OB_ISNULL(insert_op)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpect null operator", K(ret));
-        } else if (OB_FAIL(append(strict_pwj_constraint_, insert_op->strict_pwj_constraint_))) {
-          LOG_WARN("failed to append child pwj constraint", K(ret));
-        } else if (OB_FAIL(append(non_strict_pwj_constraint_, insert_op->non_strict_pwj_constraint_))) {
-          LOG_WARN("failed to append child pwj constraint", K(ret));
         }
       }
     } else if (get_num_of_child() > 0) {
@@ -5139,6 +5102,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
         join_filter_use->set_is_create_filter(false);
         join_filter_create->set_filter_id(filter_id);
         join_filter_use->set_filter_id(filter_id);
+        filter_id++;
         join_filter_create->set_child(first_child, get_child(first_child));
         get_child(first_child)->set_parent(join_filter_create);
         join_filter_create->set_parent(this);
@@ -5160,9 +5124,6 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           if (right_has_exchange) {
             join_filter_create->set_is_use_filter_shuffle(true);
             join_filter_use->set_is_use_filter_shuffle(true);
-            if (OB_FAIL(mark_bloom_filter_id_to_receive_op(join_filter_use, filter_id))) {
-              LOG_WARN("failed to mark bloom filter id to receive op", K(filter_id), K(join_filter_use));
-            }
           }
           if ((is_partition_wise_ && !right_has_exchange) || DIST_PARTITION_NONE == join_dist_algo) {
             join_filter_create->set_is_non_shared_join_filter();
@@ -5174,7 +5135,7 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           OZ(join_filter_create->compute_property());
           OZ(join_filter_use->compute_property());
         }
-        filter_id++;
+
         for (int j = 0; j < info.lexprs_.count() && OB_SUCC(ret); ++j) {
           ObRawExpr *lexpr = info.lexprs_.at(j);
           ObRawExpr *rexpr = info.rexprs_.at(j);
@@ -5184,29 +5145,6 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
         }
         OZ(push_down_bloom_filter_expr(node, join_filter_use, info.join_filter_selectivity_));
       }
-    }
-  }
-  return ret;
-}
-
-int ObLogicalOperator::mark_bloom_filter_id_to_receive_op(ObLogicalOperator *filter_use, int64_t filter_id)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *parent = NULL;
-  if (OB_ISNULL(filter_use)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null", K(ret));
-  } else if (FALSE_IT(parent = filter_use->get_parent())) {
-  } else if (NULL != parent) {
-    if (log_op_def::LOG_EXCHANGE == parent->get_type() &&
-        static_cast<ObLogExchange *>(parent)->is_consumer()) {
-      if (OB_FAIL(static_cast<ObLogExchange *>(parent)->get_bloom_filter_ids().push_back(filter_id))) {
-        LOG_WARN("ObLogExchange failed to record bloom filter id", K(parent), K(filter_id), K(ret));
-      } else {
-        LOG_DEBUG("ObLogExchange succ to record bloom filter id", K(parent), K(filter_id));
-      }
-    } else if (OB_FAIL(SMART_CALL(mark_bloom_filter_id_to_receive_op(parent, filter_id)))) {
-      LOG_WARN("mark bloom filter id to receive op failed", K(ret));
     }
   }
   return ret;
@@ -5427,7 +5365,6 @@ int ObLogicalOperator::get_pushdown_op(log_op_def::ObLogOpType op_type, const Ob
     /* do nothing */
   } else if (LOG_EXCHANGE != get_type() && LOG_SORT != get_type()
              && LOG_GRANULE_ITERATOR != get_type()
-             && LOG_TOPK != get_type()
              && LOG_MATERIAL != get_type()) {
     /* do nothing */
   } else if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {

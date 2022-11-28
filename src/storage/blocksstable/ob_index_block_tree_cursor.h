@@ -165,7 +165,7 @@ public:
       ObIArray<ObMicroIndexInfo> &micro_index_infos,
       ObIndexBlockTreePathItem &hold_item);
   int release_held_path_item(ObIndexBlockTreePathItem &held_item);
-  int get_current_endkey(ObDatumRowkey &endkey, const bool get_schema_rowkey = false);
+  int get_current_endkey(ObDatumRowkey &endkey);
   int estimate_range_macro_count(const blocksstable::ObDatumRange &range, int64_t &macro_count, int64_t &ratio);
 
 private:

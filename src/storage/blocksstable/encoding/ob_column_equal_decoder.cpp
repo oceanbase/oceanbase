@@ -53,8 +53,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
     if (!has_exc(ctx)) {
       ref = -1;
     } else {
-      const ObObjType store_type = ctx.col_header_->get_store_obj_type();
-      const ObObjTypeClass tc = ob_obj_type_class(store_type);
+      const ObObjTypeClass tc = ob_obj_type_class(ctx.obj_meta_.get_type());
       switch (get_store_class_map()[tc]) {
         case ObUIntSC:
         case ObIntSC: {
@@ -62,7 +61,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,
               ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
-              ref, cell, store_type))) {
+              ref, cell, ctx.obj_meta_))) {
             LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
           }
           break;
@@ -72,7 +71,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,
               ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
-              ref, cell, store_type))) {
+              ref, cell, ctx.obj_meta_))) {
             LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
           }
           break;
@@ -84,7 +83,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,
               ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
-              ref, cell, store_type))) {
+              ref, cell, ctx.obj_meta_))) {
             LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
           }
           break;
@@ -94,7 +93,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,
               ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
-              ref, cell, store_type))) {
+              ref, cell, ctx.obj_meta_))) {
             LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
           }
           break;
@@ -104,7 +103,7 @@ int ObColumnEqualDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const int
               meta_header_->payload_, ctx.micro_block_header_->row_count_,
               ctx.is_bit_packing(), row_id,
               ctx.col_header_->length_ - sizeof(ObColumnEqualMetaHeader),
-              ref, cell, store_type))) {
+              ref, cell, ctx.obj_meta_))) {
             LOG_WARN("meta_reader_ read failed", K(ret), K(row_id), K(ctx));
           }
           break;

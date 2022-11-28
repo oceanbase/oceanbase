@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "ob_tenant_role_transition_service.h"
 #include "logservice/palf/log_define.h"
+#include "logservice/palf/scn.h"
 #include "logservice/ob_log_service.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"//ObChangeLSAccessModeProxy
 #include "share/ob_rpc_struct.h"//ObLSAccessModeInfo
@@ -23,6 +24,7 @@
 namespace oceanbase
 {
 using namespace share;
+using namespace palf;
 namespace rootserver
 {
 ////////////LSAccessModeInfo/////////////////
@@ -226,11 +228,11 @@ int ObTenantRoleTransitionService::do_flashback_(const share::ObAllTenantInfo &t
 
 int ObTenantRoleTransitionService::do_switch_access_mode_(
     const share::ObAllTenantInfo &tenant_info,
-    const share::ObTenantRole &target_tenant_role) 
+    const share::ObTenantRole &target_tenant_role)
 {
   int ret = OB_SUCCESS;
-  palf::AccessMode access_mode = logservice::ObLogService::get_palf_access_mode(target_tenant_role); 
-  const int64_t ref_ts = tenant_info.get_ref_scn();
+  palf::AccessMode access_mode = logservice::ObLogService::get_palf_access_mode(target_tenant_role);
+  const SCN ref_scn = tenant_info.get_ref_scn();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else if (OB_UNLIKELY(!tenant_info.is_switching_status()
@@ -239,8 +241,8 @@ int ObTenantRoleTransitionService::do_switch_access_mode_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant switchover status not valid", KR(ret), K(tenant_info),
         K(target_tenant_role), K(switchover_epoch_));
-  } else if (OB_FAIL(change_ls_access_mode_(access_mode, ref_ts))) {
-    LOG_WARN("failed to get access mode", KR(ret), K(access_mode), K(ref_ts), K(tenant_info));
+  } else if (OB_FAIL(change_ls_access_mode_(access_mode, ref_scn))) {
+    LOG_WARN("failed to get access mode", KR(ret), K(access_mode), K(ref_scn), K(tenant_info));
   } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
           tenant_id_, sql_proxy_, tenant_info.get_switchover_epoch(),
           share::PRIMARY_TENANT_ROLE, share::NORMAL_SWITCHOVER_STATUS, switchover_epoch_))) {
@@ -311,7 +313,7 @@ int ObTenantRoleTransitionService::update_tenant_stat_info_()
 }
 
 int ObTenantRoleTransitionService::change_ls_access_mode_(palf::AccessMode target_access_mode,
-                             int64_t ref_ts)
+                             const palf::SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
@@ -319,9 +321,9 @@ int ObTenantRoleTransitionService::change_ls_access_mode_(palf::AccessMode targe
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else if (OB_UNLIKELY(palf::AccessMode::INVALID_ACCESS_MODE == target_access_mode 
                          || OB_INVALID_VERSION == switchover_epoch_
-                         || OB_LS_INVALID_SCN_VALUE == ref_ts)) {
+                         || !ref_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(target_access_mode), K(switchover_epoch_), K(ref_ts));
+    LOG_WARN("invalid argument", KR(ret), K(target_access_mode), K(switchover_epoch_), K(ref_scn));
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
     LOG_WARN("failed to set default timeout", KR(ret));
   } else {
@@ -366,9 +368,9 @@ int ObTenantRoleTransitionService::change_ls_access_mode_(palf::AccessMode targe
       //3. change access mode
       if (OB_SUCC(ret) && need_change_info.count() > 0) {
         if (OB_FAIL(do_change_ls_access_mode_(need_change_info,
-                target_access_mode, ref_ts))) {
+                target_access_mode, ref_scn))) {
           LOG_WARN("failed to change ls access mode", KR(ret), K(need_change_info),
-              K(target_access_mode), K(ref_ts));
+              K(target_access_mode), K(ref_scn));
         }
       }
       if (OB_SUCC(ret)) {
@@ -378,7 +380,7 @@ int ObTenantRoleTransitionService::change_ls_access_mode_(palf::AccessMode targe
 
   }
   LOG_INFO("[ROLE_TRANSITION] finish change ls mode", KR(ret), K(tenant_id_),
-      K(target_access_mode), K(ref_ts));
+      K(target_access_mode), K(ref_scn));
   return ret;
 
 }
@@ -407,10 +409,7 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(ObIArray<LSAccessModeInfo
           *rpc_proxy_, &obrpc::ObSrvRpcProxy::get_ls_access_mode);
       obrpc::ObGetLSAccessModeInfoArg arg;
       int64_t rpc_count = 0;
-      ObArray<int> return_code_array;
-      int tmp_ret = OB_SUCCESS;
       for (int64_t i = 0; OB_SUCC(ret) && i < status_info_array.count(); ++i) {
-        return_code_array.reset();
         const ObLSStatusInfo &info = status_info_array.at(i);
         const int64_t timeout = ctx.get_timeout();
         if (info.ls_is_create_abort()) {
@@ -427,6 +426,7 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(ObIArray<LSAccessModeInfo
           rpc_count++;
         }
         if (OB_FAIL(ret)) {
+          int tmp_ret = OB_SUCCESS;
           const obrpc::ObGetLSAccessModeInfoArg &arg = proxy.get_args().at(i);
           if (OB_SUCCESS !=(tmp_ret = GCTX.location_service_->nonblock_renew(
                   GCONF.cluster_id, tenant_id_, info.ls_id_))) {
@@ -435,12 +435,9 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(ObIArray<LSAccessModeInfo
         }
       }//end for
       //get result
-      //need to wait all result whether success or fail
-      if (OB_SUCCESS != (tmp_ret = proxy.wait_all(return_code_array))) {
-        LOG_WARN("wait all batch result failed", KR(ret), KR(tmp_ret));
-        ret = OB_SUCC(ret) ? tmp_ret : ret;
-      } else if (OB_FAIL(ret)) {
-        //no need to process return code
+      ObArray<int> return_code_array;
+      if (FAILEDx(proxy.wait_all(return_code_array))) {
+        LOG_WARN("wait all batch result failed", KR(ret));
       } else if (rpc_count != return_code_array.count() ||
                  rpc_count != proxy.get_args().count() ||
                  rpc_count != proxy.get_results().count()) {
@@ -486,7 +483,7 @@ int ObTenantRoleTransitionService::get_ls_access_mode_(ObIArray<LSAccessModeInfo
 }
 
 int ObTenantRoleTransitionService::do_change_ls_access_mode_(const ObIArray<LSAccessModeInfo> &ls_access_info,
-                                palf::AccessMode target_access_mode, int64_t ref_ts)
+                                palf::AccessMode target_access_mode, const palf::SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   ObTimeoutCtx ctx;
@@ -494,9 +491,9 @@ int ObTenantRoleTransitionService::do_change_ls_access_mode_(const ObIArray<LSAc
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else if (OB_UNLIKELY(0== ls_access_info.count()
                          || palf::AccessMode::INVALID_ACCESS_MODE == target_access_mode 
-                         || OB_INVALID_VERSION == ref_ts)) {
+                         || !ref_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(target_access_mode), K(ls_access_info), K(ref_ts));
+    LOG_WARN("invalid argument", KR(ret), K(target_access_mode), K(ls_access_info), K(ref_scn));
   } else if (OB_ISNULL(GCTX.location_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("location service is null", KR(ret));
@@ -509,8 +506,8 @@ int ObTenantRoleTransitionService::do_change_ls_access_mode_(const ObIArray<LSAc
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_access_info.count(); ++i) {
       const LSAccessModeInfo &info = ls_access_info.at(i);
       const int64_t timeout = ctx.get_timeout();
-      if (OB_FAIL(arg.init(tenant_id_, info.ls_id_, info.mode_version_, target_access_mode, ref_ts))) {
-        LOG_WARN("failed to init arg", KR(ret), K(info), K(target_access_mode), K(ref_ts));
+      if (OB_FAIL(arg.init(tenant_id_, info.ls_id_, info.mode_version_, target_access_mode, ref_scn))) {
+        LOG_WARN("failed to init arg", KR(ret), K(info), K(target_access_mode), K(ref_scn));
       } else if (OB_FAIL(proxy.call(info.leader_addr_, timeout, GCONF.cluster_id, tenant_id_, arg))) {
         LOG_WARN("failed to send rpc", KR(ret), K(info), K(timeout), K(tenant_id_), K(arg));
       }

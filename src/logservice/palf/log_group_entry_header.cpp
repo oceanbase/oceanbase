@@ -20,6 +20,7 @@
 #include "share/rc/ob_tenant_base.h"      // mtl_malloc
 #include "log_define.h"                   // is_valid_log_id...
 #include "log_writer_utils.h"             // LogWriteBuf
+#include "scn.h"                       // SCN
 
 namespace oceanbase
 {
@@ -46,7 +47,7 @@ bool LogGroupEntryHeader::is_valid() const
          && LOG_GROUP_ENTRY_HEADER_VERSION == version_
          && INVALID_PROPOSAL_ID != proposal_id_
          && true == committed_end_lsn_.is_valid()
-         && true == is_valid_log_ts(max_ts_)
+         && true == max_scn_.is_valid()
          && true == is_valid_log_id(log_id_);
 }
 
@@ -57,7 +58,7 @@ void LogGroupEntryHeader::reset()
   group_size_ = 0;
   proposal_id_ = INVALID_PROPOSAL_ID;
   committed_end_lsn_.reset();
-  max_ts_ = 0;
+  max_scn_.reset();
   accumulated_checksum_ = 0;
   log_id_ = 0;
   flag_ = 0;
@@ -66,26 +67,26 @@ void LogGroupEntryHeader::reset()
 int LogGroupEntryHeader::generate(const bool is_raw_write,
                                   const bool is_padding_log,
                                   const LogWriteBuf &log_write_buf,
-                                  int64_t data_len,
-                                  int64_t max_timestamp,
-                                  int64_t log_id,
+                                  const int64_t data_len,
+                                  const SCN &max_scn,
+                                  const int64_t log_id,
                                   const LSN &committed_end_lsn,
                                   const int64_t &log_proposal_id,
                                   int64_t &data_checksum)
 {
   int ret = OB_SUCCESS;
-  if (false == is_valid_log_ts(max_timestamp)
+  if (false == max_scn.is_valid()
       || false == is_valid_log_id(log_id)
       || false == committed_end_lsn.is_valid()
       || INVALID_PROPOSAL_ID == log_proposal_id) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid arguments", K(ret),
-        K(max_timestamp), K(log_id), K(committed_end_lsn), K(log_proposal_id));
+        K(max_scn), K(log_id), K(committed_end_lsn), K(log_proposal_id));
   } else {
     magic_ = LogGroupEntryHeader::MAGIC;
     version_ = LOG_GROUP_ENTRY_HEADER_VERSION;
     group_size_ = static_cast<int32_t>(data_len);
-    max_ts_ = max_timestamp;
+    max_scn_ = max_scn;
     log_id_ = log_id;
     committed_end_lsn_ = committed_end_lsn;
     proposal_id_ = log_proposal_id;
@@ -178,7 +179,7 @@ bool LogGroupEntryHeader::get_header_parity_check_res_() const
   bool_ret ^= parity_check(reinterpret_cast<const uint32_t &>(group_size_));
   bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(proposal_id_));
   bool_ret ^= parity_check(committed_end_lsn_.val_);
-  bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(max_ts_));
+  bool_ret ^= parity_check(max_scn_.get_val_for_lsn_allocator());
   bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(accumulated_checksum_));
   bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(log_id_));
   int64_t tmp_flag = (flag_ & ~(0x1));
@@ -209,7 +210,7 @@ LogGroupEntryHeader& LogGroupEntryHeader::operator=(const LogGroupEntryHeader &h
   group_size_ = header.group_size_;
   proposal_id_ = header.proposal_id_;
   committed_end_lsn_ = header.committed_end_lsn_;
-  max_ts_ = header.max_ts_;
+  max_scn_ = header.max_scn_;
   accumulated_checksum_ = header.accumulated_checksum_;
   log_id_ = header.log_id_;
   flag_ = header.flag_;
@@ -223,7 +224,7 @@ bool LogGroupEntryHeader::operator==(const LogGroupEntryHeader &header) const
           && group_size_ == header.group_size_
           && proposal_id_ == header.proposal_id_
           && committed_end_lsn_ == header.committed_end_lsn_
-          && max_ts_ == header.max_ts_
+          && max_scn_ == header.max_scn_
           && accumulated_checksum_ == header.accumulated_checksum_
           && log_id_ == header.log_id_
           && flag_ == header.flag_);
@@ -307,7 +308,7 @@ DEFINE_SERIALIZE(LogGroupEntryHeader)
              || OB_FAIL(serialization::encode_i32(buf, buf_len, new_pos, group_size_))
              || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, proposal_id_))
              || OB_FAIL(committed_end_lsn_.serialize(buf, buf_len, new_pos))
-             || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, max_ts_))
+             || OB_FAIL(max_scn_.fixed_serialize(buf, buf_len, new_pos))
              || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, accumulated_checksum_))
              || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, log_id_))
              || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, flag_))) {
@@ -331,7 +332,7 @@ DEFINE_DESERIALIZE(LogGroupEntryHeader)
               || OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, &group_size_))
               || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, reinterpret_cast<int64_t*>(&proposal_id_)))
               || OB_FAIL(committed_end_lsn_.deserialize(buf, data_len, new_pos))
-              || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &max_ts_))
+              || OB_FAIL(max_scn_.fixed_deserialize(buf, data_len, new_pos))
               || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &accumulated_checksum_))
               || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &log_id_))
               || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &flag_))) {
@@ -353,7 +354,7 @@ DEFINE_GET_SERIALIZE_SIZE(LogGroupEntryHeader)
   size += serialization::encoded_length_i32(group_size_);
   size += serialization::encoded_length_i64(proposal_id_);
   size += committed_end_lsn_.get_serialize_size();
-  size += serialization::encoded_length_i64(max_ts_);
+  size += max_scn_.get_fixed_serialize_size();
   size += serialization::encoded_length_i64(accumulated_checksum_);
   size += serialization::encoded_length_i64(log_id_);
   size += serialization::encoded_length_i64(flag_);
@@ -421,21 +422,21 @@ bool LogGroupEntryHeader::is_raw_write() const
 
 int LogGroupEntryHeader::truncate(const char *buf,
                                   const int64_t data_len,
-                                  const int64_t cut_ts,
+                                  const SCN &cut_scn,
                                   const int64_t pre_accum_checksum)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(NULL == buf || data_len <= 0 || OB_INVALID_TIMESTAMP == cut_ts)) {
+  if (OB_UNLIKELY(NULL == buf || data_len <= 0 || (!cut_scn.is_valid()))) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid arguments", K(ret), KP(buf), K(data_len), K(cut_ts));
+    PALF_LOG(ERROR, "Invalid arguments", K(ret), KP(buf), K(data_len), K(cut_scn));
   } else if (is_padding_log()) {
-    if (max_ts_ > cut_ts) {
+    if (max_scn_ > cut_scn) {
       group_size_ = 0;
       update_header_checksum();
     }
-    PALF_LOG(INFO, "This is a padding log", K(data_len), K(cut_ts), K(pre_accum_checksum), KPC(this));
+    PALF_LOG(INFO, "This is a padding log", K(data_len), K(cut_scn), K(pre_accum_checksum), KPC(this));
   } else {
-    int64_t tmp_max_log_ts = 0;
+    SCN tmp_max_log_scn;
     int64_t pos = 0;
     int64_t cut_pos = 0;
     LogEntryHeader log_entry_header;
@@ -444,21 +445,21 @@ int LogGroupEntryHeader::truncate(const char *buf,
     while (OB_SUCC(ret) && pos < data_len) {
       if (OB_FAIL(log_entry_header.deserialize(buf, data_len, pos))) {
         PALF_LOG(ERROR, "log_entry_header deserialize failed", K(ret), KP(buf), K(data_len));
-      } else if (log_entry_header.get_log_ts() > cut_ts) {
+      } else if (log_entry_header.get_log_scn() > cut_scn) {
         break;
       } else {
         log_entry_data_checksum = log_entry_header.get_data_checksum();
         tmp_log_checksum = common::ob_crc64(tmp_log_checksum, &log_entry_data_checksum, sizeof(log_entry_data_checksum));
         pos += log_entry_header.get_data_len();
         cut_pos = pos;
-        if (log_entry_header.get_log_ts() > tmp_max_log_ts) {
-          tmp_max_log_ts = log_entry_header.get_log_ts();
+        if (!tmp_max_log_scn.is_valid() || log_entry_header.get_log_scn() > tmp_max_log_scn) {
+          tmp_max_log_scn = log_entry_header.get_log_scn();
         }
       }
     }
     if (OB_SUCC(ret)) {
       group_size_ = cut_pos;
-      max_ts_ = tmp_max_log_ts;
+      max_scn_ = tmp_max_log_scn;
       update_accumulated_checksum(common::ob_crc64(pre_accum_checksum, const_cast<int64_t *>(&tmp_log_checksum),
                                                    sizeof(tmp_log_checksum)));
       update_header_checksum();

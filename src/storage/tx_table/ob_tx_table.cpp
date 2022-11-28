@@ -33,6 +33,7 @@
 namespace oceanbase
 {
 using namespace share;
+using namespace palf;
 namespace storage
 {
 int ObTxTable::init(ObLS *ls)
@@ -120,12 +121,27 @@ int ObTxTable::offline_tx_ctx_table_()
 int ObTxTable::offline_tx_data_table_()
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "tx table is not init", KR(ret));
-  } else if (OB_FAIL(tx_data_table_.offline())) {
-    STORAGE_LOG(WARN, "tx data table offline failed", KR(ret), "ls_id", ls_->get_ls_id());
+  ObTabletHandle handle;
+  ObTablet *tablet;
+  ObLSTabletService *ls_tablet_svr = ls_->get_tablet_svr();
+
+  if (NULL == ls_tablet_svr) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get ls tablet svr failed", K(ret));
+  } else if (OB_FAIL(ls_tablet_svr->get_tablet(LS_TX_DATA_TABLET,
+                                               handle))) {
+    LOG_WARN("get tablet failed", K(ret));
+    if (OB_TABLET_NOT_EXIST == ret) {
+      // a ls that of migrate does not have tx ctx tablet
+      ret = OB_SUCCESS;
+    }
+  } else if (FALSE_IT(tablet = handle.get_obj())) {
+  } else if (OB_FAIL(tablet->release_memtables())) {
+    LOG_WARN("failed to release memtables", K(ret), KPC(ls_));
+  } else {
+    // do nothing
   }
+
   return ret;
 }
 
@@ -216,7 +232,7 @@ int ObTxTable::prepare_for_safe_destroy()
   return ret;
 }
 
-int ObTxTable::create_tablet(const lib::Worker::CompatMode compat_mode, const int64_t create_scn)
+int ObTxTable::create_tablet(const lib::Worker::CompatMode compat_mode, const palf::SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -374,12 +390,13 @@ int ObTxTable::create_ctx_tablet_(
     const uint64_t tenant_id,
     const ObLSID ls_id,
     const lib::Worker::CompatMode compat_mode,
-    const int64_t create_scn)
+    const palf::SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   obrpc::ObBatchCreateTabletArg arg;
   const bool no_need_write_clog = true;
   share::schema::ObTableSchema table_schema;
+  palf::SCN tmp_scn;
 
   if (OB_FAIL(get_ctx_table_schema_(tenant_id,
                                     table_schema))) {
@@ -504,7 +521,7 @@ int ObTxTable::create_data_tablet_(
     const uint64_t tenant_id,
     const ObLSID ls_id,
     const lib::Worker::CompatMode compat_mode,
-    const int64_t create_scn)
+    const palf::SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   obrpc::ObBatchCreateTabletArg arg;
@@ -723,12 +740,10 @@ int ObTxTable::restore_tx_ctx_table_(ObITable &trans_sstable)
   share::schema::ObColDesc meta;
   meta.col_id_ = common::OB_APP_MIN_COLUMN_ID + 1;
   meta.col_type_.set_binary();
-  meta.col_order_ = ObOrderType::ASC;
 
   share::schema::ObColDesc value;
   value.col_id_ = common::OB_APP_MIN_COLUMN_ID + 2;
   value.col_type_.set_binary();
-  value.col_order_ = ObOrderType::ASC;
 
   ObTableIterParam iter_param;
   iter_param.tablet_id_ = LS_TX_CTX_TABLET;
@@ -856,7 +871,6 @@ void ObTxTable::check_state_and_epoch_(const transaction::ObTransID tx_id,
                                        const bool need_log_error,
                                        int &ret)
 {
-  UNUSED(need_log_error);
   TxTableState state = ATOMIC_LOAD(&state_);
   int64_t epoch = ATOMIC_LOAD(&epoch_);
 
@@ -893,7 +907,11 @@ void ObTxTable::check_state_and_epoch_(const transaction::ObTransID tx_id,
                K(epoch));
     }
   } else if (OB_FAIL(ret)) {
-    LOG_WARN("check with tx data failed.", KR(ret), K(tx_id), K(read_epoch), "ls_id", ls_->get_ls_id(), KPC(this));
+    if (need_log_error && OB_TRANS_CTX_NOT_EXIST == ret) {
+      LOG_ERROR("check with tx data failed.", KR(ret), K(tx_id), K(read_epoch), "ls_id", ls_->get_ls_id(), KPC(this));
+    } else {
+      LOG_WARN("check with tx data failed.", KR(ret), K(tx_id), K(read_epoch), "ls_id", ls_->get_ls_id(), KPC(this));
+    }
   }
 }
 
@@ -980,17 +998,17 @@ int ObTxTable::lock_for_read(const transaction::ObLockForReadArg &lock_for_read_
   return ret;
 }
 
-int ObTxTable::get_recycle_ts(int64_t &recycle_ts)
+int ObTxTable::get_recycle_scn(SCN &recycle_scn)
 {
   int ret = OB_SUCCESS;
   int64_t prev_epoch = ATOMIC_LOAD(&epoch_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "this tx table is not inited", KR(ret));
-  } else if (OB_FAIL(tx_data_table_.get_recycle_ts(recycle_ts))) {
+  } else if (OB_FAIL(tx_data_table_.get_recycle_scn(recycle_scn))) {
     STORAGE_LOG(WARN, "get recycle ts failed", KR(ret), "ls_id", ls_->get_ls_id());
   } else if (TxTableState::ONLINE != ATOMIC_LOAD(&state_) || prev_epoch != ATOMIC_LOAD(&epoch_)) {
-    recycle_ts = 0;
+    recycle_scn.set_min();
     ret = OB_REPLICA_NOT_READABLE;
     STORAGE_LOG(WARN, "this tx table is migrating or has migrated", KR(ret), "ls_id", ls_->get_ls_id());
   }
@@ -1002,9 +1020,25 @@ int ObTxTable::get_upper_trans_version_before_given_log_ts(const int64_t sstable
   return tx_data_table_.get_upper_trans_version_before_given_log_ts(sstable_end_log_ts, upper_trans_version);
 }
 
-int ObTxTable::get_start_tx_scn(int64_t &start_tx_scn)
+int ObTxTable::get_start_tx_log_ts(int64_t &start_tx_log_ts)
 {
-  return tx_data_table_.get_start_tx_scn(start_tx_scn);
+  int ret = OB_SUCCESS;
+  SCN tmp_start_scn;
+  if (OB_FAIL(get_start_tx_scn(tmp_start_scn))) {
+    STORAGE_LOG(WARN, "get start tx scn failed", KR(ret));
+  } else {
+    start_tx_log_ts = tmp_start_scn.get_val_for_lsn_allocator();
+  }
+  return ret;
+}
+
+int ObTxTable::get_start_tx_scn(SCN &start_tx_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tx_data_table_.get_start_tx_scn(start_tx_scn))) {
+    STORAGE_LOG(WARN, "get start tx scn failed", KR(ret));
+  }
+  return ret;
 }
 
 int ObTxTable::cleanout_tx_node(const transaction::ObTransID &tx_id,

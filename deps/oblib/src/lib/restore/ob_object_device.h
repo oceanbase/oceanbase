@@ -87,6 +87,7 @@ private:
   //maybe fd mng can be device level
   common::ObFdSimulator    fd_mng_;
   ObOssAccount oss_account_;
+  ObCosBase cos_base_; /*todo*/
   
   ObStorageUtil            util_;
   /*obj ctx pool: use to create fd ctx(reader/writer)*/

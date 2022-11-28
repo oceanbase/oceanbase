@@ -38,7 +38,6 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_config.h"
 #include "observer/mysql/ob_query_response_time.h"
-#include "rootserver/ob_rs_job_table_operator.h"  //ObRsJobType
 
 namespace oceanbase
 {
@@ -1149,6 +1148,10 @@ int ObAdminZoneResolver::resolve(const ParseNode &parse_tree)
                 LOG_WARN("unexpected zone_type info", "info", zone_type_info->value_);
               } else if (OB_FAIL(admin_zone_stmt->set_alter_zone_type_option())) {
                 SQL_RESV_LOG(WARN, "fail to set alter zone_type option", K(ret));
+              } else if (zone_type == ObZoneType::ZONE_TYPE_ENCRYPTION
+                  && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2277) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "zone with encryption type under 3.1.x");
               } else {
                 admin_zone_stmt->set_zone_type(zone_type);
               }
@@ -2443,13 +2446,17 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
                                                                  time_val))) {
               ret = OB_ERR_WRONG_VALUE;
               LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", to_cstring(time_str));
+            } else if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_inner_table_field(time_val))) {
+              LOG_WARN("fail to set scn", K(ret));
             } else {
-              stmt->get_rpc_arg().restore_timestamp_ns_ = time_val;
               stmt->get_rpc_arg().with_restore_scn_ = true;
             }
           } else if (1/*scn*/ == time_node->children_[0]->value_) {
-            stmt->get_rpc_arg().restore_timestamp_ns_ = time_node->children_[1]->value_;
-            stmt->get_rpc_arg().with_restore_scn_ = true;
+            if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_inner_table_field(time_node->children_[1]->value_))) {
+              LOG_WARN("fail to set scn", K(ret));
+            } else {
+              stmt->get_rpc_arg().with_restore_scn_ = true;
+            }
           }
         }
       }
@@ -2593,24 +2600,15 @@ int ObRunUpgradeJobResolver::resolve(const ParseNode &parse_tree)
       LOG_ERROR("create ObRunUpgradeJobStmt failed", KR(ret));
     } else {
       stmt_ = stmt;
-      ObString str;
+      ObString version_str;
       uint64_t version = OB_INVALID_VERSION;
-      if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], str))) {
+      if (OB_FAIL(Util::resolve_string(parse_tree.children_[0], version_str))) {
         LOG_WARN("resolve string failed", KR(ret));
-      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
-                 rootserver::JOB_TYPE_UPGRADE_SYSTEM_VARIABLE))) {
-        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_SYSTEM_VARIABLE;
-      } else if (0 == str.case_compare(rootserver::ObRsJobTableOperator::get_job_type_str(
-                 rootserver::JOB_TYPE_UPGRADE_SYSTEM_TABLE))) {
-        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_SYSTEM_TABLE;
+      } else if (OB_FAIL(ObClusterVersion::get_version(version_str, version))) {
+        LOG_WARN("fail to get version", KR(ret), K(version_str));
       } else {
-        // UPGRADE_POST_ACTION
-        if (OB_FAIL(ObClusterVersion::get_version(str, version))) {
-          LOG_WARN("fail to get version", KR(ret), K(str));
-        } else {
-          stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::UPGRADE_POST_ACTION;
-          stmt->get_rpc_arg().version_ = static_cast<int64_t>(version);
-        }
+        stmt->get_rpc_arg().action_ = obrpc::ObUpgradeJobArg::RUN_UPGRADE_JOB;
+        stmt->get_rpc_arg().version_ = static_cast<int64_t>(version);
       }
     }
   }

@@ -35,7 +35,7 @@ public:
   {}
   virtual ~ObStringPrefixDecoder();
 
-  OB_INLINE int init(
+  OB_INLINE int init(const common::ObObjMeta &obj_meta,
            const ObMicroBlockHeader &micro_block_header,
            const ObColumnHeader &column_header,
            const char *meta);
@@ -67,12 +67,12 @@ private:
   const char *meta_data_;
 };
 
-OB_INLINE int ObStringPrefixDecoder::init(
+OB_INLINE int ObStringPrefixDecoder::init(const common::ObObjMeta &obj_meta,
     const ObMicroBlockHeader &micro_block_header,
     const ObColumnHeader &column_header,
     const char *meta)
 {
-  UNUSEDx(micro_block_header, column_header);
+  UNUSEDx(obj_meta, micro_block_header, column_header);
   // performance critical, don't check params, already checked upper layer
   int ret = common::OB_SUCCESS;
   if (OB_UNLIKELY(is_inited())) {

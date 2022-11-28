@@ -213,7 +213,7 @@ int ObTenantStorageCheckpointWriter::write_tablet_checkpoint(
       } else if (addr.is_memory()) {
         FLOG_INFO("skip MEM type", K(ret), K(tablet_key), K(addr));
       } else if (OB_FAIL(copy_one_tablet_item(tablet_item_writer_, addr, &item_idx))) {
-        LOG_WARN("fail to copy_one_tablet_item", K(ret), K(tablet_key), K(addr));
+        LOG_ERROR("fail to copy_one_tablet_item", K(ret), K(tablet_key), K(addr));
       } else {
         addr_info.tablet_key_ = tablet_key;
         addr_info.item_idx_ = item_idx;

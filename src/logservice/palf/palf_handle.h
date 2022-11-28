@@ -27,6 +27,7 @@ class PalfAppendOptions;
 class PalfFSCb;
 class PalfRoleChangeCb;
 class PalfLocationCacheCb;
+class SCN;
 class PalfHandle
 {
 public:
@@ -78,20 +79,14 @@ public:
   int append(const PalfAppendOptions &opts,
              const void *buffer,
              const int64_t nbytes,
-             const int64_t ref_ts_ns,
+             const SCN &ref_scn,
              LSN &lsn,
-             int64_t &ts_ns);
+             SCN &log_scn);
 
   int raw_write(const PalfAppendOptions &opts,
                 const LSN &lsn,
                 const void *buffer,
                 const int64_t nbytes);
-
-  int pread(void *&buffer,
-            const int64_t nbytes,
-            const LSN &lsn,
-            int64_t &ts_ns,
-            int64_t &rnbytes);
 
   // iter->next返回的是append调用写入的值，不会在返回的buf中携带Palf增加的header信息
   //           返回的值不包含未确认日志
@@ -107,46 +102,47 @@ public:
 
   int seek(const LSN &lsn, PalfGroupBufferIterator &iter);
 
-  // @desc: seek a group buffer iterator by ts_ns, the first log A in iterator must meet
+  // @desc: seek a group buffer iterator by log_scn, the first log A in iterator must meet
   // one of the following conditions:
-  // 1. log_ts of log A equals to ts_ns
-  // 2. log_ts of log A is higher than ts_ns and A is the first log which log_ts is higher
-  // than ts_ns in all committed logs
+  // 1. scn of log A equals to log_scn
+  // 2. scn of log A is higher than log_scn and A is the first log which log_scn is higher
+  // than log_scn in all committed logs
   // Note that this function may be time-consuming
-  // @params [in] ts_ns: timestamp(nano second)
-  // @params [out] iter: group buffer iterator in which all logs's log_ts are higher than/equal to ts_ns
+  // @params [in] log_scn:
+  //  @params [out] iter: group buffer iterator in which all logs's log_scn are higher than/equal to
+  // log_scn
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT
-  // - OB_ENTRY_NOT_EXIST: there is no log's log_ts is higher than ts_ns
-  // - OB_ERR_OUT_OF_LOWER_BOUND: ts_ns is too old, log files may have been recycled
+  // - OB_ENTRY_NOT_EXIST: there is no log's log_scn is higher than log_scn
+  // - OB_ERR_OUT_OF_LOWER_BOUND: log_scn is too old, log files may have been recycled
   // - others: bug
-  int seek(const int64_t ts_ns, PalfGroupBufferIterator &iter);
+  int seek(const SCN &log_scn, PalfGroupBufferIterator &iter);
 
-  // @desc: query coarse lsn by ts(ns), that means there is a LogGroupEntry in disk,
-  // its lsn and log_ts are result_lsn and result_ts_ns, and result_ts_ns <= ts_ns.
+  // @desc: query coarse lsn by scn, that means there is a LogGroupEntry in disk,
+  // its lsn and log_scn are result_lsn and result_scn, and result_scn <= log_scn.
   // Note that this function may be time-consuming
   // Note that result_lsn always points to head of log file
-  // @params [in] ts_ns: timestamp(nano second)
-  // @params [out] result_lsn: the lower bound lsn which includes ts_ns
+  // @params [in] log_scn:
+  // @params [out] result_lsn: the lower bound lsn which includes log_scn
   // @return
-  // - OB_SUCCESS: locate_by_ts_ns_coarsely success
+  // - OB_SUCCESS: locate_by_scn_coarsely success
   // - OB_INVALID_ARGUMENT
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
-  // - OB_ERR_OUT_OF_LOWER_BOUND: ts_ns is too old, log files may have been recycled
+  // - OB_ERR_OUT_OF_LOWER_BOUND: log_scn is too small, log files may have been recycled
   // - others: bug
-  virtual int locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &result_lsn);
+  virtual int locate_by_scn_coarsely(const SCN &log_scn, LSN &result_lsn);
 
-  // @desc: query coarse ts by lsn, that means there is a log in disk,
-  // its lsn and log_ts are result_lsn and result_ts_ns, and result_lsn <= lsn.
+  // @desc: query coarse scn by lsn, that means there is a log in disk,
+  // its lsn and log_scn are result_lsn and result_scn, and result_lsn <= lsn.
   // Note that this function may be time-consuming
   // @params [in] lsn: lsn
-  // @params [out] result_ts_ns: the lower bound timestamp which includes lsn
+  // @params [out] result_scn: the lower bound scn which includes lsn
   // - OB_SUCCESS; locate_by_lsn_coarsely success
   // - OB_INVALID_ARGUMENT
   // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
   // - others: bug
-  virtual int locate_by_lsn_coarsely(const LSN &lsn, int64_t &result_ts_ns);
+  virtual int locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn);
 
   // 开启日志同步
   virtual int enable_sync();
@@ -160,7 +156,7 @@ public:
 
   // 返回文件中可读的最早日志的位置信息
   int get_begin_lsn(LSN &lsn) const;
-  int get_begin_ts_ns(int64_t &ts) const;
+  int get_begin_scn(SCN &scn) const;
 
   // PalfBaseInfo include the 'base_lsn' and the 'prev_log_info' of sliding window.
   // @param[in] const LSN&, base_lsn of ls.
@@ -171,9 +167,9 @@ public:
   // 返回最后一条已确认日志的下一位置
   // 在没有新的写入的场景下，返回的end_lsn不可读
   virtual int get_end_lsn(LSN &lsn) const;
-  int get_end_ts_ns(int64_t &ts) const;
+  int get_end_scn(SCN &scn) const;
   int get_max_lsn(LSN &lsn) const;
-  int get_max_ts_ns(int64_t &ts_ns) const;
+  int get_max_scn(SCN &log_scn) const;
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const;
 
   //================= 分布式相关接口 =========================
@@ -373,7 +369,7 @@ public:
   int change_access_mode(const int64_t proposal_id,
                          const int64_t mode_version,
                          const AccessMode &access_mode,
-                         const int64_t ref_ts_ns);
+                         const SCN &ref_ts_ns);
   // @brief: query the access_mode of palf and it's corresponding mode_version
   // @param[out] palf::AccessMode &access_mode: current access_mode
   // @param[out] int64_t &mode_version: mode_version corresponding to AccessMode
@@ -427,8 +423,6 @@ public:
   int reset_election_priority();
   int stat(PalfStat &palf_stat) const;
 
- 	// @param [out] diagnose info, current diagnose info of palf
-  int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   TO_STRING_KV(KP(palf_handle_impl_), KP(rc_cb_), KP(fs_cb_));
 private:
   palf::PalfHandleImpl *palf_handle_impl_;

@@ -29,7 +29,6 @@ namespace share
 class ObLSID;
 class ObTabletReplica;
 class ObTabletTableOperator;
-struct ObTabletReplicaChecksumItem;
 }
 namespace observer
 {
@@ -144,14 +143,12 @@ private:
   // @parma [in] batch_tasks, input tasks
   // @parma [out] update_tablet_replicas, generated update replicas
   // @parma [out] remove_tablet_replicas, generated remove replicas
-  // @parma [out] update_tablet_checksums, generated update tablet checksums
   // @parma [out] update_tablet_tasks, generated update tasks
   // @parma [out] remove_tablet_tasks, generated remove tasks
   int generate_tasks_(
       const ObIArray<ObTabletTableUpdateTask> &batch_tasks,
       ObArray<share::ObTabletReplica> &update_tablet_replicas,
       ObArray<share::ObTabletReplica> &remove_tablet_replicas,
-      ObArray<share::ObTabletReplicaChecksumItem> &update_tablet_checksums,
       UpdateTaskList &update_tablet_tasks,
       RemoveTaskList &remove_tablet_tasks);
 
@@ -159,12 +156,10 @@ private:
   // @parma [in] start_time, the time to start this execution
   // @parma [in] tasks, batch of tasks to execute
   // @parma [in] replicas, related replica to each task
-  // @parma [in] checksums, related checksum to each task
   int do_batch_update_(
       const int64_t start_time,
       const ObIArray<ObTabletTableUpdateTask> &tasks,
-      const ObIArray<share::ObTabletReplica> &replicas,
-      const ObIArray<share::ObTabletReplicaChecksumItem> &checksums);
+      const ObIArray<share::ObTabletReplica> &replicas);
 
   // do_batch_remove - the real action to remove a batch of tasks
   // @parma [in] start_time, the time to start this execution

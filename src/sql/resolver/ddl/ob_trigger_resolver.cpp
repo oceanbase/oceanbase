@@ -278,7 +278,6 @@ int ObTriggerResolver::resolve_instead_dml_trigger(const ParseNode &parse_node,
   OV (OB_ISNULL(parse_node.children_[2]), OB_ERR_WHEN_CLAUSE_IN_TRI);
   OV (OB_NOT_NULL(parse_node.children_[3]));    // trigger body.
   OX (trigger_arg.trigger_info_.add_before_row()); // instead of trigger is always before row.
-  OX (trigger_arg.trigger_info_.add_instead_row());
   OZ (resolve_dml_event_option(*parse_node.children_[0], trigger_arg));
   OZ (resolve_reference_names(parse_node.children_[1], trigger_arg));
   OZ (resolve_trigger_status(parse_node.int16_values_[1], trigger_arg));
@@ -472,7 +471,6 @@ int ObTriggerResolver::resolve_timing_point(int16_t before_or_after, int16_t stm
   const ObString &trigger_body = trigger_arg.trigger_info_.get_trigger_body();
   parse_result.is_for_trigger_ = 1;
   parse_result.mysql_compatible_comment_ = 0;
-  parse_result.is_dynamic_sql_ = 0;
   OZ (pl_parser.parse(trigger_body, trigger_body, parse_result));
   CK (OB_NOT_NULL(parse_tree = parse_result.result_tree_));
   CK (T_STMT_LIST == parse_tree->type_);

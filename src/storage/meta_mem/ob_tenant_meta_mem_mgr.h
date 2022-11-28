@@ -90,6 +90,7 @@ private:
   static const int64_t MAX_TABLET_CNT_IN_OBJ_POOL = 50000;
   static const int64_t MAX_SSTABLE_CNT_IN_OBJ_POOL = 5 * MAX_TABLET_CNT_IN_OBJ_POOL;
   static const int64_t MAX_MEMTABLE_CNT_IN_OBJ_POOL = 2 * MAX_TABLET_CNT_IN_OBJ_POOL;
+  static const int64_t DEFAULT_LOCK_BUCKET_COUNT = 2048;
   static const int64_t MAX_TX_DATA_MEMTABLE_CNT_IN_OBJ_POOL = MAX_MEMSTORE_CNT * OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER;
   static const int64_t MAX_TX_CTX_MEMTABLE_CNT_IN_OBJ_POOL = OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER;
   static const int64_t MAX_LOCK_MEMTABLE_CNT_IN_OBJ_POOL = OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER;
@@ -144,14 +145,12 @@ public:
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
       ObLSHandle &ls_handle,
-      ObTabletHandle &tablet_handle,
-      const bool only_acquire);
+      ObTabletHandle &tablet_handle);
   int acquire_tablet(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
       common::ObIAllocator &allocator,
-      ObTabletHandle &tablet_handle,
-      const bool only_acquire);
+      ObTabletHandle &tablet_handle);
   int get_tablet(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
@@ -189,7 +188,6 @@ public:
   int set_tablet_pointer_tx_data(const ObTabletMapKey &key, const ObTabletTxMultiSourceDataUnit &tx_data);
   int insert_pinned_tablet(const ObTabletMapKey &key);
   int erase_pinned_tablet(const ObTabletMapKey &key);
-  int get_tablet_ddl_kv_mgr(const ObTabletMapKey &key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
 
   // TIPS:
   //  - only for allocating variable meta object in storage meta.
@@ -318,7 +316,6 @@ private:
   friend class ObT3mTabletMapIterator;
   friend class GetWashTabletCandidate;
   friend class TableGCTask;
-  friend class ObTabletPointer;
   static const int64_t DEFAULT_BUCKET_NUM = 10243L;
   static const int64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
   static const int64_t HOLD_LIMIT = 8 * 1024L * 1024L;

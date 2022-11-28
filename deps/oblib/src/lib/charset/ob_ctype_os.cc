@@ -23,7 +23,6 @@ ob_convert_internal(char *to, uint32 to_length,
                     const ObCharsetInfo *to_cs,
                     const char *from, uint32 from_length,
                     const ObCharsetInfo *from_cs,
-                    bool trim_incomplete_tail,
                     const ob_wc_t replaced_char, uint *errors)
 {
   unsigned int error_num= 0;
@@ -47,14 +46,7 @@ ob_convert_internal(char *to, uint32 to_length,
       wc= replaced_char;
       error_num++;
     } else {
-      // Not enough characters
-      if (!trim_incomplete_tail && (const uchar*) from < from_end) {
-        error_num++;
-        from++;
-        wc= replaced_char;
-      } else {
-        break;
-      } 
+      break;
     }
 
     pbool go = TRUE;
@@ -79,15 +71,12 @@ ob_convert_internal(char *to, uint32 to_length,
 uint32
 ob_convert(char *to, uint32 to_length, const ObCharsetInfo *to_cs,
            const char *from, uint32 from_length,
-           const ObCharsetInfo *from_cs,
-           bool trim_incomplete_tail,
-           const ob_wc_t replaced_char , uint *errors)
+           const ObCharsetInfo *from_cs, const ob_wc_t replaced_char , uint *errors)
 {
   uint32 length, length2;
 
   if ((to_cs->state | from_cs->state) & OB_CS_NONASCII) {
-    return ob_convert_internal(to, to_length, to_cs, from, from_length, from_cs,
-                               trim_incomplete_tail, replaced_char, errors);
+    return ob_convert_internal(to, to_length, to_cs, from, from_length, from_cs, replaced_char, errors);
   } else {
     length= length2= OB_MIN(to_length, from_length);
   }
@@ -112,7 +101,7 @@ ob_convert(char *to, uint32 to_length, const ObCharsetInfo *to_cs,
       from_length-= copied_length;
       return copied_length + ob_convert_internal(to, to_length, to_cs,
                                                  from, from_length, from_cs,
-                                                 trim_incomplete_tail, replaced_char, errors);
+                                                 replaced_char, errors);
     }
     *to++= *from++;
     length--;

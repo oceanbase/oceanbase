@@ -262,22 +262,41 @@ int ObLogService::create_ls(const ObLSID &id,
                             ObLogRestoreHandler &restore_handler)
 {
   int ret = OB_SUCCESS;
+  SCN create_scn;
+  if (OB_FAIL(create_scn.convert_for_gts(create_ts))) {
+    CLOG_LOG(WARN, "failed to convert_for_gts", K(ret), K(create_ts));
+  } else if (OB_FAIL(create_ls(id, replica_type, tenant_role, create_scn,
+                     allow_log_sync, log_handler, restore_handler))) {
+    CLOG_LOG(WARN, "failed to create_ls", K(ret), K(create_ts));
+  } else {/*do nothing*/}
+  return ret;
+}
+
+int ObLogService::create_ls(const ObLSID &id,
+                            const ObReplicaType &replica_type,
+                            const share::ObTenantRole &tenant_role,
+                            const SCN &create_scn,
+                            const bool allow_log_sync,
+                            ObLogHandler &log_handler,
+                            ObLogRestoreHandler &restore_handler)
+{
+  int ret = OB_SUCCESS;
   palf::PalfBaseInfo palf_base_info;
   palf_base_info.generate_by_default();
-  palf_base_info.prev_log_info_.log_ts_ = create_ts;
+  palf_base_info.prev_log_info_.log_scn_ = create_scn;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "log_service is not inited", K(ret), K(id));
-  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == create_ts)) {
+  } else if (OB_UNLIKELY(!create_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid arguments", K(ret), K(id), K(replica_type),
-        K(tenant_role), K(create_ts));
+        K(tenant_role), K(create_scn));
   } else if (OB_FAIL(create_ls_(id, replica_type, tenant_role, palf_base_info, allow_log_sync,
                                 log_handler, restore_handler))) {
     CLOG_LOG(WARN, "create ls failed", K(ret), K(id), K(replica_type),
         K(tenant_role), K(palf_base_info));
   } else {
-    FLOG_INFO("ObLogService create_ls success", K(ret), K(id), K(replica_type), K(tenant_role), K(create_ts),
+    FLOG_INFO("ObLogService create_ls success", K(ret), K(id), K(replica_type), K(tenant_role), K(create_scn),
         K(log_handler), K(restore_handler));
   }
 
@@ -311,9 +330,7 @@ int ObLogService::create_ls(const share::ObLSID &id,
   return ret;
 }
 
-int ObLogService::remove_ls(const ObLSID &id,
-                            ObLogHandler &log_handler,
-                            ObLogRestoreHandler &restore_handler)
+int ObLogService::remove_ls(const ObLSID &id)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -324,20 +341,10 @@ int ObLogService::remove_ls(const ObLSID &id,
   } else if (OB_FAIL(replay_service_.remove_ls(id))) {
     CLOG_LOG(WARN, "failed to remove from replay_service", K(ret), K(id));
     // NB: remove palf_handle lastly.
+  } else if (OB_FAIL(palf_env_->remove(id.id()))) {
+    CLOG_LOG(WARN, "failed to remove from palf_env_", K(ret), K(id));
   } else {
-    // NB: can not execute destroy, otherwise, each interface in log_handler or restore_handler
-    // may return OB_NOT_INIT.
-    // TODO by runlin: create_ls don't init ObLogHandler and ObLogRestoreHandler.
-    //
-    // In normal case(for gc), stop has been executed, this stop has no effect.
-    // In abnormal case(create ls failed, need remove ls directlly), there is no possibility for dead lock.
-    log_handler.stop();
-    restore_handler.stop();
-    if (OB_FAIL(palf_env_->remove(id.id()))) {
-      CLOG_LOG(WARN, "failed to remove from palf_env_", K(ret), K(id));
-    } else {
-      FLOG_INFO("ObLogService remove_ls success", K(ret), K(id));
-    }
+    FLOG_INFO("ObLogService remove_ls success", K(ret), K(id));
   }
 
   return ret;
@@ -385,8 +392,8 @@ int ObLogService::add_ls(const ObLSID &id,
   } else if (OB_FAIL(replay_service_.add_ls(id,
                                             replica_type))) {
     CLOG_LOG(WARN, "failed to add_ls for replay_service", K(ret), K(id));
-  } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_, 
-          &role_change_service_, palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {
+  } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
+          palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {
     CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), K(id), KP(palf_env_), K(palf_handle));
   } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
@@ -438,7 +445,7 @@ int ObLogService::open_palf(const share::ObLSID &id,
   return ret;
 }
 
-int ObLogService::update_replayable_point(const int64_t replayable_point)
+int ObLogService::update_replayable_point(const SCN &replayable_point)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -600,8 +607,8 @@ int ObLogService::create_ls_(const share::ObLSID &id,
     CLOG_LOG(WARN, "failed to add_ls for apply engine", K(ret), K(id));
   } else if (OB_FAIL(replay_service_.add_ls(id, replica_type))) {
     CLOG_LOG(WARN, "failed to add_ls", K(ret), K(id));
-  } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_, 
-          &role_change_service_, palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {
+  } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
+          palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {
     CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), KP(palf_env_), K(palf_handle));
   } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
@@ -616,50 +623,6 @@ int ObLogService::create_ls_(const share::ObLSID &id,
     if (true == palf_handle.is_valid() && false == log_handler.is_valid()) {
       palf_env_->close(palf_handle);
     }
-  }
-  return ret;
-}
-
-int ObLogService::diagnose_role_change(RCDiagnoseInfo &diagnose_info)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    CLOG_LOG(WARN, "log_service is not inited", K(ret));
-  } else if (OB_FAIL(role_change_service_.diagnose(diagnose_info))) {
-    CLOG_LOG(WARN, "role_change_service diagnose failed", K(ret));
-  } else {
-    // do nothing
-  }
-  return ret;
-}
-
-int ObLogService::diagnose_replay(const share::ObLSID &id,
-                                  ReplayDiagnoseInfo &diagnose_info)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    CLOG_LOG(WARN, "log_service is not inited", K(ret));
-  } else if (OB_FAIL(replay_service_.diagnose(id, diagnose_info))) {
-    CLOG_LOG(WARN, "replay_service diagnose failed", K(ret), K(id));
-  } else {
-    // do nothing
-  }
-  return ret;
-}
-
-int ObLogService::diagnose_apply(const share::ObLSID &id,
-                                 ApplyDiagnoseInfo &diagnose_info)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    CLOG_LOG(WARN, "log_service is not inited", K(ret));
-  } else if (OB_FAIL(apply_service_.diagnose(id, diagnose_info))) {
-    CLOG_LOG(WARN, "apply_service diagnose failed", K(ret), K(id));
-  } else {
-    // do nothing
   }
   return ret;
 }

@@ -288,7 +288,7 @@ TEST_F(TestBlockManager, test_resize_file_2)
   int used_space = OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
 
   int ret = OB_SERVER_BLOCK_MGR.resize_file(used_space + 2 * free_space, 99, 0);
-  ASSERT_EQ(common::OB_SERVER_OUTOF_DISK_SPACE, ret);
+  ASSERT_EQ(common::OB_CS_OUTOF_DISK_SPACE, ret);
 
   int64_t delta_space = free_space - 100 * 1024 * 1024 * 1024L;
   int64_t min_space = 0;

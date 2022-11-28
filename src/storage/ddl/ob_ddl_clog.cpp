@@ -22,7 +22,6 @@ namespace oceanbase
 {
 
 using namespace blocksstable;
-using namespace share;
 
 namespace storage
 {
@@ -124,14 +123,17 @@ int ObDDLMacroBlockClogCb::on_success()
       LOG_INFO("data buffer is freed, do not need to callback");
     } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
       LOG_WARN("get ls handle failed", K(ret), K(ls_id_));
-    } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, redo_info_.table_key_.get_tablet_id(), tablet_handle))) {
+    } else if (OB_ISNULL(ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls is unexpected null", K(ret));
+    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(redo_info_.table_key_.get_tablet_id(), tablet_handle))) {
       LOG_WARN("get tablet handle failed", K(ret), K(redo_info_.table_key_));
     } else if (OB_FAIL(macro_block.block_handle_.set_block_id(macro_block_id_))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_block_id_));
     } else {
       macro_block.block_type_ = redo_info_.block_type_;
       macro_block.logic_id_ = redo_info_.logic_id_;
-      macro_block.log_ts_ = __get_ts_ns();
+      macro_block.log_ts_ = __get_scn().get_val_for_inner_table_field();
       macro_block.buf_ = redo_info_.data_buffer_.ptr();
       macro_block.size_ = redo_info_.data_buffer_.length();
       macro_block.ddl_start_log_ts_ = redo_info_.start_log_ts_;
@@ -196,25 +198,24 @@ DEFINE_GET_SERIALIZE_SIZE(ObDDLClogHeader)
 }
 
 ObDDLStartLog::ObDDLStartLog()
-  : table_key_(), cluster_version_(0), execution_id_(0)
+  : table_key_(), cluster_version_(0)
 {
 }
 
-int ObDDLStartLog::init(const ObITable::TableKey &table_key, const int64_t cluster_version, const int64_t execution_id)
+int ObDDLStartLog::init(const ObITable::TableKey &table_key, const int64_t cluster_version)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || cluster_version_ < 0)) {
+  if (OB_UNLIKELY(!table_key.is_valid() || cluster_version_ < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(execution_id), K(cluster_version));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(cluster_version));
   } else {
     table_key_ = table_key;
     cluster_version_ = cluster_version;
-    execution_id_ = execution_id;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, cluster_version_, execution_id_);
+OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, cluster_version_);
 
 ObDDLRedoLog::ObDDLRedoLog()
   : redo_info_()

@@ -403,14 +403,14 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
       LOG_TRACE("condition num is invalid");
       LOG_USER_WARN(OB_ERR_INVALID_CONDITION_NUMBER);
     } else {
-      int err_ret;
-      ObString err_msg, err_msg_c, sqlstate, sqlstate_c;
       ObSqlString query_virtual;
       if (OB_FAIL(query_virtual.assign_fmt(
         "select message, ori_code, sql_state from %s.%s limit %ld, 1", 
         OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_WARNING_TNAME, restored_arg - 1))) {
         LOG_WARN("assign fmt failed", K(ret));
       } else {
+        int err_ret;
+        ObString err_msg, err_msg_c, sqlstate, sqlstate_c;
         SMART_VAR(ObISQLClient::ReadResult, res) {
           common::sqlclient::ObMySQLResult *result = NULL;
           if (OB_FAIL(conn->execute_read(tenant_id, query_virtual.ptr(), res))) {
@@ -422,7 +422,8 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
             EXTRACT_VARCHAR_FIELD_MYSQL(*result, "message", err_msg);
             EXTRACT_INT_FIELD_MYSQL(*result, "ori_code", err_ret, int);
             EXTRACT_VARCHAR_FIELD_MYSQL(*result, "sql_state", sqlstate);
-            if (OB_FAIL(ret)) {
+            if (OB_FAIL(pool->acquire(session_info, conn))) {
+              LOG_WARN("failed to get conn", K(ret));
             } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), err_msg, err_msg_c, true))) {
               //when using ptr(), char *'s end should be '\0'
               LOG_WARN("ob write string failed", K(ret));
@@ -432,8 +433,8 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
             }
           }
         }
+        OZ (assign_condition_val(ctx, stmt, session_info, conn, err_ret, err_msg_c, sqlstate_c));
       }
-      OZ (assign_condition_val(ctx, stmt, session_info, conn, err_ret, err_msg_c, sqlstate_c));
     }
   } else if (stmt.get_diagnostics_type() == DiagnosticsType::GET_STACKED_COND) {
     int64_t restored_arg = 0;

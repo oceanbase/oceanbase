@@ -10,7 +10,7 @@ target_compile_definitions(ob_base INTERFACE
   PACKAGE_VERSION="${PROJECT_VERSION}"
   PACKAGE_STRING="${PROJECT_NAME} ${PROJECT_VERSION}"
   # change to real release ID.
-  RELEASEID="${BUILD_NUMBER}"
+  RELEASEID="${AONE_BUILD_NUMBER}"
   )
 target_compile_options(ob_base INTERFACE
   $<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof>)

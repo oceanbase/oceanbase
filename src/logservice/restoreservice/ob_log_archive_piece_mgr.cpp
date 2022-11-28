@@ -40,24 +40,24 @@ void ObLogArchivePieceContext::RoundContext::reset()
 {
   state_ = RoundContext::State::INVALID;
   round_id_ = 0;
-  start_ts_ = OB_INVALID_TIMESTAMP;
-  end_ts_ = OB_INVALID_TIMESTAMP;
+  start_scn_.reset();
+  end_scn_.reset();
   min_piece_id_ = 0;
   max_piece_id_ = 0;
   base_piece_id_ = 0;
   piece_switch_interval_ = 0;
-  base_piece_ts_ = OB_INVALID_TIMESTAMP;
+  base_piece_scn_.reset();
 }
 
 bool ObLogArchivePieceContext::RoundContext::is_valid() const
 {
-  return ((RoundContext::State::ACTIVE == state_ && end_ts_ == INT64_MAX)
-      || (RoundContext::State::STOP == state_ && end_ts_ > start_ts_))
+  return ((RoundContext::State::ACTIVE == state_ && end_scn_ == palf::SCN::max_scn())
+      || (RoundContext::State::STOP == state_ && end_scn_ > start_scn_))
     && round_id_ > 0
-    && start_ts_ != OB_INVALID_TIMESTAMP
+    && start_scn_.is_valid()
     && base_piece_id_ > 0
     && piece_switch_interval_ > 0
-    && base_piece_ts_ != OB_INVALID_TIMESTAMP;
+    && base_piece_scn_.is_valid();
 }
 
 bool ObLogArchivePieceContext::RoundContext::is_in_stop_state() const
@@ -74,13 +74,13 @@ ObLogArchivePieceContext::RoundContext &ObLogArchivePieceContext::RoundContext::
 {
   state_ = other.state_;
   round_id_ = other.round_id_;
-  start_ts_ = other.start_ts_;
-  end_ts_ = other.end_ts_;
+  start_scn_ = other.start_scn_;
+  end_scn_ = other.end_scn_;
   min_piece_id_ = other.min_piece_id_;
   max_piece_id_ = other.max_piece_id_;
   base_piece_id_ = other.base_piece_id_;
   piece_switch_interval_ = other.piece_switch_interval_;
-  base_piece_ts_ = other.base_piece_ts_;
+  base_piece_scn_ = other.base_piece_scn_;
   return *this;
 }
 
@@ -89,7 +89,7 @@ bool ObLogArchivePieceContext::RoundContext::check_round_continuous_(const Round
   bool bret = false;
   if (!pre_round.is_valid() || !is_valid()) {
     bret = false;
-  } else if (pre_round.end_ts_ >= start_ts_) {
+  } else if (pre_round.end_scn_ >= start_scn_) {
     bret = true;
   }
   return bret;
@@ -195,7 +195,7 @@ int ObLogArchivePieceContext::init(const share::ObLSID &id,
   return ret;
 }
 
-int ObLogArchivePieceContext::get_piece(const int64_t pre_log_ts,
+int ObLogArchivePieceContext::get_piece(const palf::SCN &pre_log_scn,
     const palf::LSN &start_lsn,
     int64_t &dest_id,
     int64_t &round_id,
@@ -206,11 +206,10 @@ int ObLogArchivePieceContext::get_piece(const int64_t pre_log_ts,
 {
   int ret = OB_SUCCESS;
   file_id = cal_archive_file_id_(start_lsn);
-  if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == pre_log_ts
-        || ! start_lsn.is_valid())) {
+  if (OB_UNLIKELY(! pre_log_scn.is_valid() || ! start_lsn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(pre_log_ts), K(start_lsn));
-  } else if (OB_FAIL(get_piece_(pre_log_ts, start_lsn, file_id, dest_id,
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(pre_log_scn), K(start_lsn));
+  } else if (OB_FAIL(get_piece_(pre_log_scn, start_lsn, file_id, dest_id,
           round_id, piece_id, offset, max_lsn))) {
     CLOG_LOG(WARN, "get piece failed", K(ret));
   }
@@ -267,7 +266,7 @@ int ObLogArchivePieceContext::update_file_info(const int64_t dest_id,
   return ret;
 }
 
-int ObLogArchivePieceContext::get_round_(const int64_t start_ts)
+int ObLogArchivePieceContext::get_round_(const palf::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   int64_t round_id = 0;
@@ -280,16 +279,16 @@ int ObLogArchivePieceContext::get_round_(const int64_t start_ts)
     CLOG_LOG(WARN, "already locate round", K(ret), KPC(this));
   } else if (OB_FAIL(archive_store.init(archive_dest_))) {
     CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
-  } else if (OB_FAIL(archive_store.get_round_id(dest_id_, start_ts, round_id))) {
-    CLOG_LOG(WARN, "archive store get round failed", K(ret), K(dest_id_), K(start_ts));
+  } else if (OB_FAIL(archive_store.get_round_id(dest_id_, start_scn, round_id))) {
+    CLOG_LOG(WARN, "archive store get round failed", K(ret), K(dest_id_), K(start_scn));
   } else if (OB_UNLIKELY(round_id <= 0)) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "invalid round id", K(ret), K(round_id), K(start_ts), K(archive_store));
+    CLOG_LOG(ERROR, "invalid round id", K(ret), K(round_id), K(start_scn), K(archive_store));
   } else {
     round_context_.reset();
     round_context_.round_id_ = round_id;
     locate_round_ = true;
-    CLOG_LOG(INFO, "get round succ", K(ret), K(start_ts), KPC(this));
+    CLOG_LOG(INFO, "get round succ", K(ret), K(start_scn), KPC(this));
   }
   return ret;
 }
@@ -370,23 +369,23 @@ int ObLogArchivePieceContext::load_round_(const int64_t round_id, RoundContext &
   if (OB_FAIL(ret) || ! exist) {
   } else {
     round_context.round_id_ = start_desc.round_id_;
-    round_context.start_ts_ = start_desc.start_scn_;
+    round_context.start_scn_ = start_desc.start_scn_;
     round_context.base_piece_id_ = start_desc.base_piece_id_;
-    round_context.base_piece_ts_ = start_desc.start_scn_;
+    round_context.base_piece_scn_ = start_desc.start_scn_;
     round_context.piece_switch_interval_ = start_desc.piece_switch_interval_;
     if (end_exist) {
       round_context.state_ = RoundContext::State::STOP;
-      round_context.end_ts_ = end_desc.checkpoint_scn_;
-      round_context.max_piece_id_ = cal_piece_id_(round_context.end_ts_);
+      round_context.end_scn_ = end_desc.checkpoint_scn_;
+      round_context.max_piece_id_ = cal_piece_id_(round_context.end_scn_);
     } else {
       round_context.state_ = RoundContext::State::ACTIVE;
-      round_context.end_ts_ = INT64_MAX;
+      round_context.end_scn_.set_max();
     }
   }
   return ret;
 }
 
-int ObLogArchivePieceContext::get_piece_(const int64_t log_ts,
+int ObLogArchivePieceContext::get_piece_(const palf::SCN &log_scn,
     const palf::LSN &lsn,
     const int64_t file_id,
     int64_t &dest_id,
@@ -398,9 +397,9 @@ int ObLogArchivePieceContext::get_piece_(const int64_t log_ts,
   int ret = OB_SUCCESS;
   bool done = false;
   while (OB_SUCC(ret) && ! done) {
-    if (OB_FAIL(switch_round_if_need_(log_ts, lsn))) {
+    if (OB_FAIL(switch_round_if_need_(log_scn, lsn))) {
       CLOG_LOG(WARN, "switch round if need failed", K(ret), KPC(this));
-    } else if (OB_FAIL(switch_piece_if_need_(file_id, log_ts, lsn))) {
+    } else if (OB_FAIL(switch_piece_if_need_(file_id, log_scn, lsn))) {
       CLOG_LOG(WARN, "switch piece if need", K(ret), KPC(this));
     } else {
       ret = get_(lsn, file_id, dest_id, round_id, piece_id, offset, max_lsn, done);
@@ -412,13 +411,13 @@ int ObLogArchivePieceContext::get_piece_(const int64_t log_ts,
     }
 
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
-      CLOG_LOG(WARN, "get piece cost too much time", K(log_ts), K(lsn), KPC(this));
+      CLOG_LOG(WARN, "get piece cost too much time", K(log_scn), K(lsn), KPC(this));
     }
   }
   return ret;
 }
 
-int ObLogArchivePieceContext::switch_round_if_need_(const int64_t log_ts, const palf::LSN &lsn)
+int ObLogArchivePieceContext::switch_round_if_need_(const palf::SCN &log_scn, const palf::LSN &lsn)
 {
   int ret = OB_SUCCESS;
   RoundOp op = RoundOp::NONE;
@@ -434,7 +433,7 @@ int ObLogArchivePieceContext::switch_round_if_need_(const int64_t log_ts, const 
       ret = get_round_range_();
       break;
     case RoundOp::LOCATE:
-      ret = get_round_(log_ts);
+      ret = get_round_(log_scn);
       break;
     case RoundOp::FORWARD:
       ret = forward_round_(pre_round);
@@ -663,7 +662,7 @@ int ObLogArchivePieceContext::check_round_exist_(const int64_t round_id, bool &e
   return ret;
 }
 
-int ObLogArchivePieceContext::switch_piece_if_need_(const int64_t file_id, const int64_t log_ts, const palf::LSN &lsn)
+int ObLogArchivePieceContext::switch_piece_if_need_(const int64_t file_id, const palf::SCN &log_scn, const palf::LSN &lsn)
 {
   int ret = OB_SUCCESS;
   PieceOp op = PieceOp::NONE;
@@ -672,7 +671,7 @@ int ObLogArchivePieceContext::switch_piece_if_need_(const int64_t file_id, const
     case PieceOp::NONE:
       break;
     case PieceOp::LOAD:
-      ret = get_cur_piece_info_(log_ts, lsn);
+      ret = get_cur_piece_info_(log_scn, lsn);
       break;
     case PieceOp::BACKWARD:
       ret = backward_piece_();
@@ -757,19 +756,19 @@ void ObLogArchivePieceContext::check_if_switch_piece_(const int64_t file_id,
   }
 }
 
-// 由log_ts以及inner_piece_context与round_context共同决定piece_id
+// 由log_scn以及inner_piece_context与round_context共同决定piece_id
 // 1. inner_piece_context.round_id == round_context.round_id 说明依然消费当前round, 如果当前piece_id有效, 并且该piece依然active, 则继续刷新该piece
 // 2. inner_piece_context.round_id == round_context.round_id 并且piece状态为FROZEN或者EMPTY, 非预期错误
-// 3. inner_piece_context.round_id != round_context.round_id, 需要由log_ts以及round piece范围, 决定piece id
-int ObLogArchivePieceContext::get_cur_piece_info_(const int64_t log_ts, const palf::LSN &lsn)
+// 3. inner_piece_context.round_id != round_context.round_id, 需要由log_scn以及round piece范围, 决定piece id
+int ObLogArchivePieceContext::get_cur_piece_info_(const palf::SCN &log_scn, const palf::LSN &lsn)
 {
   int ret = OB_SUCCESS;
   int64_t piece_id = 0;
-  if (OB_FAIL(cal_load_piece_id_(log_ts, piece_id))) {
-    CLOG_LOG(WARN, "cal load piece id failed", K(ret), K(log_ts));
+  if (OB_FAIL(cal_load_piece_id_(log_scn, piece_id))) {
+    CLOG_LOG(WARN, "cal load piece id failed", K(ret), K(log_scn));
   } else if (0 >= piece_id) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid piece id", K(ret), K(piece_id), K(log_ts));
+    CLOG_LOG(WARN, "invalid piece id", K(ret), K(piece_id), K(log_scn));
   } else if (OB_FAIL(get_piece_meta_info_(piece_id))) {
     CLOG_LOG(WARN, "get piece meta info failed", K(ret), K(piece_id));
   } else if (OB_FAIL(get_piece_file_range_())) {
@@ -782,10 +781,10 @@ int ObLogArchivePieceContext::get_cur_piece_info_(const int64_t log_ts, const pa
   return ret;
 }
 
-int ObLogArchivePieceContext::cal_load_piece_id_(const int64_t log_ts, int64_t &piece_id)
+int ObLogArchivePieceContext::cal_load_piece_id_(const palf::SCN &log_scn, int64_t &piece_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t base_piece_id = cal_piece_id_(log_ts);
+  const int64_t base_piece_id = cal_piece_id_(log_scn);
   if (inner_piece_context_.round_id_ == round_context_.round_id_) {
     // 大概率被回收了, 报错处理, 后续可以优化
     if (inner_piece_context_.piece_id_ < round_context_.min_piece_id_) {
@@ -800,7 +799,7 @@ int ObLogArchivePieceContext::cal_load_piece_id_(const int64_t log_ts, int64_t &
   } else {
     piece_id = std::max(round_context_.min_piece_id_, base_piece_id);
   }
-  CLOG_LOG(INFO, "cal load piece id", K(id_), K(round_context_), K(log_ts), K(piece_id));
+  CLOG_LOG(INFO, "cal load piece id", K(id_), K(round_context_), K(log_scn), K(piece_id));
   return ret;
 }
 
@@ -956,10 +955,10 @@ int ObLogArchivePieceContext::backward_piece_()
   return ret;
 }
 
-int64_t ObLogArchivePieceContext::cal_piece_id_(const int64_t log_ts) const
+int64_t ObLogArchivePieceContext::cal_piece_id_(const palf::SCN &log_scn) const
 {
-  return share::ObArchivePiece(log_ts, round_context_.piece_switch_interval_,
-      round_context_.base_piece_ts_, round_context_.base_piece_id_)
+  return share::ObArchivePiece(log_scn, round_context_.piece_switch_interval_,
+      round_context_.base_piece_scn_, round_context_.base_piece_id_)
     .get_piece_id();
 }
 

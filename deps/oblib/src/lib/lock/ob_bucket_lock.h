@@ -34,8 +34,8 @@ public:
   void destroy();
   int try_rdlock(const uint64_t bucket_idx);
   int try_wrlock(const uint64_t bucket_idx);
-  int rdlock(const uint64_t bucket_idx, const int64_t abs_timeout_us = INT64_MAX);
-  int wrlock(const uint64_t bucket_idx, const int64_t abs_timeout_us = INT64_MAX);
+  int rdlock(const uint64_t bucket_idx);
+  int wrlock(const uint64_t bucket_idx);
   int unlock(const uint64_t bucket_idx);
   int try_wrlock_all();
   int try_rdlock_all();
@@ -68,7 +68,7 @@ private:
 class ObBucketRLockGuard final
 {
 public:
-  [[nodiscard]] ObBucketRLockGuard(ObBucketLock &lock, const uint64_t bucket_index)
+  ObBucketRLockGuard(ObBucketLock &lock, const uint64_t bucket_index)
      : lock_(lock),
        index_(bucket_index),
        ret_(OB_SUCCESS),
@@ -109,7 +109,7 @@ private:
 class ObBucketWLockGuard final
 {
 public:
-  [[nodiscard]] ObBucketWLockGuard(ObBucketLock &lock, const uint64_t bucket_index)
+  ObBucketWLockGuard(ObBucketLock &lock, const uint64_t bucket_index)
      : lock_(lock),
        index_(bucket_index),
        ret_(OB_SUCCESS),
@@ -150,7 +150,7 @@ private:
 class ObBucketWLockAllGuard final
 {
 public:
-  [[nodiscard]] ObBucketWLockAllGuard(ObBucketLock &lock)
+  ObBucketWLockAllGuard(ObBucketLock &lock)
      : lock_(lock),
        ret_(OB_SUCCESS),
        lock_start_ts_(0)
@@ -189,7 +189,7 @@ private:
 class ObBucketTryWLockAllGuard final
 {
 public:
-  [[nodiscard]] ObBucketTryWLockAllGuard(ObBucketLock &lock)
+  ObBucketTryWLockAllGuard(ObBucketLock &lock)
      : lock_(lock),
        ret_(OB_SUCCESS),
        lock_start_ts_(0)
@@ -234,7 +234,7 @@ private:
 class ObBucketTryRLockAllGuard final
 {
 public:
-  [[nodiscard]] ObBucketTryRLockAllGuard(ObBucketLock &lock)
+  ObBucketTryRLockAllGuard(ObBucketLock &lock)
      : lock_(lock),
        ret_(OB_SUCCESS),
        lock_start_ts_(0)
@@ -279,7 +279,7 @@ private:
 class ObMultiBucketLockGuard final
 {
 public:
-  [[nodiscard]] ObMultiBucketLockGuard(ObBucketLock &lock, const bool is_write_lock);
+  ObMultiBucketLockGuard(ObBucketLock &lock, const bool is_write_lock);
   ~ObMultiBucketLockGuard();
   int lock_multi_buckets(ObIArray<uint64_t> &hash_array);
 private:
@@ -293,7 +293,7 @@ private:
 class ObBucketHashRLockGuard final
 {
 public:
-  [[nodiscard]] ObBucketHashRLockGuard(ObBucketLock &lock, const uint64_t hash_value)
+  ObBucketHashRLockGuard(ObBucketLock &lock, const uint64_t hash_value)
     : guard_(lock, lock.get_bucket_idx(hash_value))
   {
   }
@@ -307,7 +307,7 @@ private:
 class ObBucketHashWLockGuard final
 {
 public:
-  [[nodiscard]] ObBucketHashWLockGuard(ObBucketLock &lock, const uint64_t hash_value)
+  ObBucketHashWLockGuard(ObBucketLock &lock, const uint64_t hash_value)
     : guard_(lock, lock.get_bucket_idx(hash_value))
   {
   }

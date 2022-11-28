@@ -19,7 +19,6 @@
 #include "common/ob_tablet_id.h"
 #include "share/ob_ls_id.h"
 #include "storage/tablet/ob_tablet_common.h"
-#include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase
 {
@@ -41,7 +40,6 @@ public:
 public:
   int get_next_tablet(ObTabletHandle &handle);
   int get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr &addr);
-  int get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle);
 
   void reset();
   bool is_valid() const;
@@ -54,16 +52,14 @@ private:
   const int64_t timeout_us_;
 };
 
-class ObHALSTabletIDIterator final
+class ObLSTabletIDIterator final
 {
   friend class ObLSTabletService;
 public:
-  explicit ObHALSTabletIDIterator(
-      const share::ObLSID &ls_id,
-      const bool need_initial_state);
-  ~ObHALSTabletIDIterator();
-  ObHALSTabletIDIterator(const ObHALSTabletIDIterator&) = delete;
-  ObHALSTabletIDIterator &operator=(const ObHALSTabletIDIterator&) = delete;
+  explicit ObLSTabletIDIterator(const share::ObLSID &ls_id);
+  ~ObLSTabletIDIterator();
+  ObLSTabletIDIterator(const ObLSTabletIDIterator&) = delete;
+  ObLSTabletIDIterator &operator=(const ObLSTabletIDIterator&) = delete;
 public:
   int get_next_tablet_id(common::ObTabletID &tablet_id);
 
@@ -75,7 +71,6 @@ private:
   share::ObLSID ls_id_;
   common::ObSEArray<common::ObTabletID, ObTabletCommon::DEFAULT_ITERATOR_TABLET_ID_CNT> tablet_ids_;
   int64_t idx_;
-  const bool need_initial_state_;
 };
 } // namespace storage
 } // namespace oceanbase

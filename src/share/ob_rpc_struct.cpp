@@ -1779,8 +1779,7 @@ OB_SERIALIZE_MEMBER((ObTruncateTableArg, ObDDLArg),
                     table_name_,
                     session_id_,
                     is_add_to_scheduler_,
-                    compat_mode_,
-                    foreign_key_checks_);
+                    compat_mode_);
 
 DEF_TO_STRING(ObTruncateTableArg)
 {
@@ -1791,8 +1790,7 @@ DEF_TO_STRING(ObTruncateTableArg)
        K_(table_name),
        K_(session_id),
        K_(is_add_to_scheduler),
-       K_(compat_mode),
-       K_(foreign_key_checks));
+       K_(compat_mode));
   J_OBJ_END();
   return pos;
 }
@@ -2176,8 +2174,7 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(index_table_id),
        K_(is_add_to_scheduler),
        K_(is_in_recyclebin),
-       K_(is_hidden),
-       K_(is_inner));
+       K_(is_hidden));
   J_OBJ_END();
   return pos;
 }
@@ -2190,8 +2187,7 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     index_table_id_,
                     is_add_to_scheduler_,
                     is_in_recyclebin_,
-                    is_hidden_,
-                    is_inner_);
+                    is_hidden_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
@@ -2582,9 +2578,19 @@ OB_SERIALIZE_MEMBER((ObDependencyObjDDLArg, ObDDLArg),
                     delete_dep_objs_);
 
 
-OB_SERIALIZE_MEMBER(ObCheckFrozenVersionArg, frozen_version_);
+OB_SERIALIZE_MEMBER(ObCheckFrozenScnArg, frozen_scn_);
 OB_SERIALIZE_MEMBER(ObGetMinSSTableSchemaVersionArg, tenant_id_arg_list_);
 OB_SERIALIZE_MEMBER(ObGetMinSSTableSchemaVersionRes, ret_list_);
+
+ObCheckFrozenScnArg::ObCheckFrozenScnArg()
+{
+  frozen_scn_.set_min();
+}
+
+bool ObCheckFrozenScnArg::is_valid() const
+{
+  return frozen_scn_.is_valid() && frozen_scn_ > palf::SCN::min_scn();
+}
 
 void ObCreateTabletBatchRes::reset()
 {
@@ -2629,80 +2635,40 @@ DEF_TO_STRING(ObRemoveTabletRes)
 
 OB_SERIALIZE_MEMBER(ObRemoveTabletRes, ret_);
 
-OB_SERIALIZE_MEMBER(ObCalcColumnChecksumRequestArg::SingleItem, ls_id_, tablet_id_, calc_table_id_);
-
-bool ObCalcColumnChecksumRequestArg::SingleItem::is_valid() const
-{
-  return ls_id_.is_valid() && tablet_id_.is_valid() && OB_INVALID_ID != calc_table_id_;
-}
-
-void ObCalcColumnChecksumRequestArg::SingleItem::reset()
-{
-  ls_id_.reset();
-  tablet_id_.reset();
-  calc_table_id_ = OB_INVALID_ID;
-}
-
-int ObCalcColumnChecksumRequestArg::SingleItem::assign(const SingleItem &other)
-{
-  int ret = OB_SUCCESS;
-  ls_id_ = other.ls_id_;
-  tablet_id_ = other.tablet_id_;
-  calc_table_id_ = other.calc_table_id_;
-  return ret;
-}
-
 OB_SERIALIZE_MEMBER(
     ObCalcColumnChecksumRequestArg,
     tenant_id_,
+    ls_id_,
+    tablet_id_,
     target_table_id_,
     schema_version_,
     execution_id_,
     snapshot_version_,
     source_table_id_,
-    task_id_,
-    calc_items_);
+    calc_table_id_,
+    task_id_);
 
 bool ObCalcColumnChecksumRequestArg::is_valid() const
 {
-  bool bret = OB_INVALID_ID != tenant_id_ &&  OB_INVALID_ID != target_table_id_
-      && OB_INVALID_VERSION != schema_version_ && OB_INVALID_ID != execution_id_
-      && OB_INVALID_VERSION != snapshot_version_ && OB_INVALID_ID != source_table_id_ && task_id_ > 0;
-  for (int64_t i = 0; bret && i < calc_items_.count(); ++i) {
-    bret = calc_items_.at(i).is_valid();
-  }
-  return bret;
+  return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid()
+      && OB_INVALID_ID != target_table_id_ && OB_INVALID_VERSION != schema_version_
+      && OB_INVALID_ID != execution_id_ && OB_INVALID_VERSION != snapshot_version_ && OB_INVALID_ID != source_table_id_
+      && OB_INVALID_ID != calc_table_id_ && task_id_ > 0;
 }
 
 void ObCalcColumnChecksumRequestArg::reset()
 {
   tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  tablet_id_.reset();
   target_table_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
   execution_id_ = OB_INVALID_ID;
   snapshot_version_ = OB_INVALID_VERSION;
   source_table_id_ = OB_INVALID_ID;
+  calc_table_id_ = OB_INVALID_ID;
   task_id_ = 0;
-  calc_items_.reset();
 }
-
-int ObCalcColumnChecksumRequestArg::assign(const ObCalcColumnChecksumRequestArg &other)
-{
-  int ret = common::OB_SUCCESS;
-  tenant_id_ = other.tenant_id_;
-  target_table_id_ = other.target_table_id_;
-  schema_version_ = other.schema_version_;
-  execution_id_ = other.execution_id_;
-  snapshot_version_ = other.snapshot_version_;
-  source_table_id_ = other.source_table_id_;
-  task_id_ = other.task_id_;
-  if (OB_FAIL(calc_items_.assign(other.calc_items_))) {
-    LOG_WARN("assign calc_items failed", K(ret), K(other.calc_items_.count()));
-  }
-  return ret;
-}
-
-OB_SERIALIZE_MEMBER(ObCalcColumnChecksumRequestRes, ret_codes_);
 
 OB_SERIALIZE_MEMBER(
     ObCalcColumnChecksumResponseArg,
@@ -3081,56 +3047,22 @@ DEF_TO_STRING(ObSwitchLeaderArg)
 
 OB_SERIALIZE_MEMBER(ObSwitchLeaderArg, ls_id_, role_, tenant_id_, dest_server_);
 
-OB_SERIALIZE_MEMBER(ObLSTabletPair, ls_id_, tablet_id_);
-OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedArg, tenant_id_, schema_version_, need_wait_trans_end_, tablets_);
-
-bool ObCheckSchemaVersionElapsedArg::is_valid() const
-{
-  bool bret = OB_INVALID_ID != tenant_id_ && schema_version_ > 0 && !tablets_.empty();
-  for (int64_t i = 0; bret && i < tablets_.count(); ++i) {
-    bret = tablets_.at(i).is_valid();
-  }
-  return bret;
-}
+OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedArg, tenant_id_, ls_id_, data_tablet_id_, schema_version_, need_wait_trans_end_);
 
 void ObCheckSchemaVersionElapsedArg::reuse()
 {
   tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  data_tablet_id_.reset();
   schema_version_ = 0;
   need_wait_trans_end_ = true;
-  tablets_.reuse();
 }
 
-bool ObCheckModifyTimeElapsedArg::is_valid() const
-{
-  bool bret = OB_INVALID_ID != tenant_id_ && sstable_exist_ts_ > 0;
-  for (int64_t i = 0; bret && i < tablets_.count(); ++i) {
-    bret = tablets_.at(i).is_valid();
-  }
-  return bret;
-}
+OB_SERIALIZE_MEMBER(ObCheckModifyTimeElapsedArg, tenant_id_, ls_id_, tablet_id_, sstable_exist_ts_);
 
-void ObCheckModifyTimeElapsedArg::reuse()
-{
-  tenant_id_ = OB_INVALID_ID;
-  sstable_exist_ts_ = 0;
-  tablets_.reuse();
-}
+OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedResult, snapshot_);
 
-OB_SERIALIZE_MEMBER(ObCheckModifyTimeElapsedArg, tenant_id_, sstable_exist_ts_, tablets_);
-
-bool ObCheckSchemaVersionElapsedResult::is_valid() const
-{
-  bool bret = !results_.empty();
-  for (int64_t i = 0; bret && i < results_.count(); ++i) {
-    bret = (common::OB_INVALID_TIMESTAMP != results_.at(i).snapshot_);
-  }
-  return bret;
-}
-
-OB_SERIALIZE_MEMBER(ObCheckTransElapsedResult, ret_code_, snapshot_, pending_tx_id_);
-OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedResult, results_);
-
+OB_SERIALIZE_MEMBER(ObCheckModifyTimeElapsedResult, snapshot_);
 
 OB_SERIALIZE_MEMBER(CandidateStatus, candidate_status_);
 
@@ -3783,13 +3715,13 @@ bool ObPhysicalRestoreTenantArg::is_valid() const
          && uri_.length() < share::OB_MAX_RESTORE_DEST_LENGTH
          && !restore_option_.empty()
          && restore_option_.length() < common::OB_INNER_TABLE_DEFAULT_VALUE_LENTH
-         && restore_timestamp_ns_ > 0;
+         && restore_scn_.is_valid();
 }
 OB_SERIALIZE_MEMBER((ObPhysicalRestoreTenantArg, ObCmdArg),
                     tenant_name_,
                     uri_,
                     restore_option_,
-                    restore_timestamp_ns_,
+                    restore_scn_,
                     kms_info_,
                     passwd_array_,
                     table_items_,
@@ -3802,7 +3734,7 @@ ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
     tenant_name_(),
     uri_(),
     restore_option_(),
-    restore_timestamp_ns_(common::OB_INVALID_TIMESTAMP),
+    restore_scn_(),
     kms_info_(),
     passwd_array_(),
     table_items_(),
@@ -3823,7 +3755,7 @@ int ObPhysicalRestoreTenantArg::assign(const ObPhysicalRestoreTenantArg &other)
     tenant_name_ = other.tenant_name_;
     uri_ = other.uri_;
     restore_option_ = other.restore_option_;
-    restore_timestamp_ns_ = other.restore_timestamp_ns_;
+    restore_scn_ = other.restore_scn_;
     kms_info_ = other.kms_info_;
     passwd_array_ = other.passwd_array_;
     description_ = other.description_;
@@ -3897,8 +3829,7 @@ ObUpgradeJobArg::ObUpgradeJobArg()
 {}
 bool ObUpgradeJobArg::is_valid() const
 {
-  return INVALID_ACTION != action_
-          && (UPGRADE_POST_ACTION != action_ || version_ > 0);
+  return INVALID_ACTION != action_ && version_ > 0;
 }
 int ObUpgradeJobArg::assign(const ObUpgradeJobArg &other)
 {
@@ -3908,41 +3839,6 @@ int ObUpgradeJobArg::assign(const ObUpgradeJobArg &other)
   return ret;
 }
 OB_SERIALIZE_MEMBER(ObUpgradeJobArg, action_, version_);
-
-int ObUpgradeTableSchemaArg::init(
-    const uint64_t tenant_id,
-    const uint64_t table_id)
-{
-  int ret = OB_SUCCESS;
-  ObDDLArg::reset();
-  exec_tenant_id_ = tenant_id;
-  tenant_id_ = tenant_id;
-  table_id_ = table_id;
-  return ret;
-}
-
-bool ObUpgradeTableSchemaArg::is_valid() const
-{
-  return common::OB_INVALID_TENANT_ID != exec_tenant_id_
-         && common::OB_INVALID_TENANT_ID != tenant_id_
-         /*index、lob table will be created with related system table*/
-         && is_system_table(table_id_);
-}
-
-int ObUpgradeTableSchemaArg::assign(const ObUpgradeTableSchemaArg &other)
-{
-  int ret = OB_SUCCESS;
-  if (this == &other) {
-  } else if (OB_FAIL(ObDDLArg::assign(other))) {
-    LOG_WARN("fail to assign ObDDLArg", KR(ret));
-  } else {
-    tenant_id_ = other.tenant_id_;
-    table_id_ = other.table_id_;
-  }
-  return ret;
-}
-
-OB_SERIALIZE_MEMBER((ObUpgradeTableSchemaArg, ObDDLArg), tenant_id_, table_id_);
 
 int ObAdminFlushCacheArg::assign(const ObAdminFlushCacheArg &other)
 {
@@ -4909,10 +4805,10 @@ void ObBroadcastSchemaArg::reset()
   schema_version_ = OB_INVALID_VERSION;
 }
 
-OB_SERIALIZE_MEMBER(ObCheckMergeFinishArg, frozen_version_);
+OB_SERIALIZE_MEMBER(ObCheckMergeFinishArg, frozen_scn_);
 bool ObCheckMergeFinishArg::is_valid() const
 {
-  return frozen_version_ > 0;
+  return frozen_scn_.is_valid();
 }
 
 OB_SERIALIZE_MEMBER(ObGetRecycleSchemaVersionsArg, tenant_ids_);
@@ -5186,8 +5082,8 @@ bool ObBackupComplLogArg::is_valid() const
       && ls_id_.is_valid()
       && dst_server_.is_valid()
       && !backup_path_.is_empty()
-      && start_scn_ > 0
-      && end_scn_ > 0;
+      && start_scn_.is_valid()
+      && end_scn_.is_valid();
 }
 
 int ObBackupComplLogArg::assign(const ObBackupComplLogArg &arg)
@@ -5297,7 +5193,7 @@ bool ObBackupMetaArg::is_valid() const
       && ls_id_.is_valid()
       && turn_id_ > 0
       && retry_id_ >= 0
-      && start_scn_ > 0
+      && start_scn_.is_valid()
       && dst_server_.is_valid()
       && !backup_path_.is_empty();
 }
@@ -5332,7 +5228,7 @@ OB_SERIALIZE_MEMBER(ObBackupCheckTabletArg, tenant_id_, ls_id_, backup_scn_, tab
 
 bool ObBackupCheckTabletArg::is_valid() const
 {
-  return tenant_id_ > 0 && ls_id_.is_valid() && !tablet_ids_.empty() && backup_scn_ > 0;
+  return tenant_id_ > 0 && ls_id_.is_valid() && !tablet_ids_.empty() && backup_scn_.is_valid();
 }
 
 int ObBackupCheckTabletArg::assign(const ObBackupCheckTabletArg &arg)
@@ -5645,8 +5541,7 @@ OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressRequest, agency_addr_seq_, principa
 OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressResponse, err_, progress_);
 
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, source_tablet_id_, dest_tablet_id_, 
-  source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, execution_id_,
-  parallelism_, tablet_task_id_);
+  source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, parallelism_);
 
 int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaRequestArg &other)
 {
@@ -5662,8 +5557,6 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
   ddl_type_ = other.ddl_type_;
   task_id_ = other.task_id_;
   parallelism_ = other.parallelism_;
-  execution_id_ = other.execution_id_;
-  tablet_task_id_ = other.tablet_task_id_;
   return ret;
 }
 
@@ -5676,7 +5569,7 @@ int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRe
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_, source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_, task_id_, execution_id_);
+OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_, source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_, task_id_);
 
 int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResponseArg &other)
 {
@@ -5690,7 +5583,6 @@ int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResp
   snapshot_version_ = other.snapshot_version_;
   schema_version_ = other.schema_version_;
   task_id_ = other.task_id_;
-  execution_id_ = other.execution_id_;
   return ret;
 }
 
@@ -5748,7 +5640,7 @@ bool ObCreateLSArg::is_valid() const
          && REPLICA_TYPE_MAX != replica_type_
          && replica_property_.is_valid()
          && tenant_info_.is_valid()
-         && OB_INVALID_TIMESTAMP != create_scn_
+         && create_scn_.is_valid()
          && lib::Worker::CompatMode::INVALID != compat_mode_
          && (!is_create_ls_with_palf()
              || palf_base_info_.is_valid());
@@ -5760,7 +5652,7 @@ void ObCreateLSArg::reset()
   replica_type_ = REPLICA_TYPE_MAX;
   replica_property_.reset();
   tenant_info_.reset();
-  create_scn_ = OB_INVALID_TIMESTAMP;
+  create_scn_.reset();
   compat_mode_ = lib::Worker::CompatMode::INVALID;
   create_ls_type_ = EMPTY_LS;
   palf_base_info_.reset();
@@ -5789,7 +5681,7 @@ int ObCreateLSArg::init(const int64_t tenant_id,
     const share::ObLSID &id,  const ObReplicaType replica_type,
     const common::ObReplicaProperty &replica_property,
     const share::ObAllTenantInfo &tenant_info,
-    const int64_t create_ts_ns,
+    const palf::SCN &create_scn,
     const lib::Worker::CompatMode &mode,
     const bool create_with_palf,
     const palf::PalfBaseInfo &palf_base_info)
@@ -5809,7 +5701,7 @@ int ObCreateLSArg::init(const int64_t tenant_id,
     id_ = id;
     replica_type_ = replica_type;
     replica_property_ = replica_property;
-    create_scn_ = create_ts_ns;
+    create_scn_ = create_scn;
     compat_mode_ = mode;
     if (create_with_palf) {
       create_ls_type_ = CREATE_WITH_PALF;
@@ -5929,29 +5821,29 @@ bool ObLSAccessModeInfo::is_valid() const
          && ls_id_.is_valid()
          && palf::INVALID_PROPOSAL_ID != mode_version_
          && palf::AccessMode::INVALID_ACCESS_MODE != access_mode_
-         && OB_INVALID_VERSION != ref_ts_;
+         && ref_scn_.is_valid();
 }
 int ObLSAccessModeInfo::init(
     uint64_t tenant_id, const ObLSID &ls_id,
     const int64_t mode_version,
     const palf::AccessMode &access_mode,
-    const int64_t ref_ts)
+    const palf::SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   || !ls_id.is_valid()
                   || palf::AccessMode::INVALID_ACCESS_MODE == access_mode
                   || palf::INVALID_PROPOSAL_ID == mode_version
-                  || OB_INVALID_VERSION == ref_ts)) {
+                  || !ref_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id),
-    K(mode_version), K(access_mode), K(ref_ts));
+    K(mode_version), K(access_mode), K(ref_scn));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     mode_version_ = mode_version;
     access_mode_ = access_mode;
-    ref_ts_ = ref_ts;
+    ref_scn_ = ref_scn;
   }
   return ret;
 }
@@ -5963,11 +5855,11 @@ int ObLSAccessModeInfo::assign(const ObLSAccessModeInfo &other)
     ls_id_ = other.ls_id_;
     mode_version_ = other.mode_version_;
     access_mode_ = other.access_mode_;
-    ref_ts_ = other.ref_ts_;
+    ref_scn_ = other.ref_scn_;
   }
   return ret;
 }
-OB_SERIALIZE_MEMBER(ObLSAccessModeInfo, tenant_id_, ls_id_, mode_version_, access_mode_, ref_ts_);
+OB_SERIALIZE_MEMBER(ObLSAccessModeInfo, tenant_id_, ls_id_, mode_version_, access_mode_, ref_scn_);
 
 bool ObChangeLSAccessModeRes::is_valid() const
 {
@@ -6658,7 +6550,7 @@ OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLRedoLogArg, tenant_id_, ls_id_, redo_info
 
 ObRpcRemoteWriteDDLPrepareLogArg::ObRpcRemoteWriteDDLPrepareLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_log_ts_(0),
-    table_id_(0), execution_id_(0), ddl_task_id_(0)
+    table_id_(0), schema_version_(0)
 {}
 
 int ObRpcRemoteWriteDDLPrepareLogArg::init(const uint64_t tenant_id,
@@ -6666,29 +6558,27 @@ int ObRpcRemoteWriteDDLPrepareLogArg::init(const uint64_t tenant_id,
                                           const storage::ObITable::TableKey &table_key,
                                           const int64_t start_log_ts,
                                           const int64_t table_id,
-                                          const int64_t execution_id,
-                                          const int64_t ddl_task_id)
+                                          const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || start_log_ts <= 0
-                  || table_id <= 0 || execution_id <= 0 || ddl_task_id <= 0)) {
+                  || table_id <= 0 || schema_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(table_key), K(start_log_ts),
-                                       K(table_id), K(execution_id), K(ddl_task_id));
+                                       K(table_id), K(schema_version));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     table_key_ = table_key;
     start_log_ts_ = start_log_ts;
     table_id_ = table_id;
-    execution_id_ = execution_id;
-    ddl_task_id_ = ddl_task_id;
+    schema_version_ = schema_version;
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLPrepareLogArg, tenant_id_, ls_id_, table_key_, start_log_ts_,
-                    table_id_, execution_id_, ddl_task_id_);
+                    table_id_, schema_version_);
 
 ObRpcRemoteWriteDDLCommitLogArg::ObRpcRemoteWriteDDLCommitLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_log_ts_(0), prepare_log_ts_(0)

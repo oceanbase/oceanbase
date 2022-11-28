@@ -36,17 +36,6 @@ struct ObCheckpointVTInfo
   );
 };
 
-struct CheckpointDiagnoseInfo
-{
-  int64_t checkpoint_;
-  int64_t min_rec_scn_;
-  logservice::ObLogBaseType log_type_;
-
-  TO_STRING_KV(K(checkpoint_),
-               K(min_rec_scn_),
-               K(log_type_));
-};
-
 class ObCheckpointExecutor
 {
 public:
@@ -73,14 +62,18 @@ public:
   // for __all_virtual_checkpoint
   int get_checkpoint_info(ObIArray<ObCheckpointVTInfo> &checkpoint_array);
 
+  // avoid need replay too mang logs
+  bool need_flush();
+
+  bool is_wait_advance_checkpoint();
+
+  void set_wait_advance_checkpoint(int64_t checkpoint_log_ts);
+
   int64_t get_cannot_recycle_log_size();
-
-  void get_min_rec_log_ts(int &log_type, int64_t &min_rec_log_ts) const;
-
-  int diagnose(CheckpointDiagnoseInfo &diagnose_info) const;
 
 private:
   static const int64_t CLOG_GC_PERCENT = 60;
+  static const int64_t MAX_NEED_REPLAY_CLOG_INTERVAL = (int64_t)60 * 60 * 1000 * 1000 * 1000; //ns
 
   ObLS *ls_;
   logservice::ObILogHandler *loghandler_;
@@ -88,8 +81,11 @@ private:
   // be used to avoid checkpoint concurrently,
   // no need to protect handlers_[] because ls won't be destroyed(hold lshandle)
   // when the public interfaces are invoked
-  mutable common::ObSpinLock lock_;
+  common::ObSpinLock lock_;
 
+  // avoid frequent freeze when clog_used_over_threshold
+  bool wait_advance_checkpoint_;
+  int64_t last_set_wait_advance_checkpoint_time_;
   bool update_checkpoint_enabled_;
 };
 

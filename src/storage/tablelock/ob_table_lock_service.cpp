@@ -278,7 +278,6 @@ int ObTableLockService::lock_table(const uint64_t table_id,
                     !ctx.is_timeout());
     } while (need_retry);
   }
-  ret = rewrite_return_code_(ret);
   return ret;
 }
 
@@ -290,7 +289,6 @@ int ObTableLockService::unlock_table(const uint64_t table_id,
   LOG_INFO("ObTableLockService::unlock_table",
             K(table_id), K(lock_mode), K(lock_owner), K(timeout_us));
   int ret = OB_SUCCESS;
-  DEBUG_SYNC(BEFORE_LOCK_SERVICE_UNLOCK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("lock service is not inited", K(ret), K(table_id), K(lock_mode),
@@ -303,7 +301,6 @@ int ObTableLockService::unlock_table(const uint64_t table_id,
     ObTableLockCtx ctx(table_id, timeout_us, timeout_us);
     ret = process_lock_task_(ctx, UNLOCK_TABLE, lock_mode, lock_owner);
   }
-  ret = rewrite_return_code_(ret);
   return ret;
 }
 
@@ -343,7 +340,6 @@ int ObTableLockService::lock_tablet(const uint64_t table_id,
                     !ctx.is_timeout());
     } while (need_retry);
   }
-  ret = rewrite_return_code_(ret);
   return ret;
 }
 
@@ -354,7 +350,6 @@ int ObTableLockService::unlock_tablet(const uint64_t table_id,
                                       const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  DEBUG_SYNC(BEFORE_LOCK_SERVICE_UNLOCK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("lock service is not inited", K(ret), K(table_id), K(tablet_id),
@@ -369,7 +364,6 @@ int ObTableLockService::unlock_tablet(const uint64_t table_id,
     ObTableLockCtx ctx(table_id, tablet_id, timeout_us, timeout_us);
     ret = process_lock_task_(ctx, UNLOCK_TABLET, lock_mode, lock_owner);
   }
-  ret = rewrite_return_code_(ret);
   return ret;
 }
 
@@ -1063,16 +1057,6 @@ bool ObTableLockService::need_retry_single_task_(const ObTableLockCtx &ctx,
     // TODO: yanyuan.cxf multi data source can not rollback, so we can not retry.
   }
   return need_retry;
-}
-
-int ObTableLockService::rewrite_return_code_(const int ret) const
-{
-  int rewrite_rcode = ret;
-  // rewrite to OB_EAGAIN, to make sure the ddl process will retry again.
-  if (OB_TRANS_KILLED == ret) {
-    rewrite_rcode = OB_EAGAIN;
-  }
-  return rewrite_rcode;
 }
 
 int ObTableLockService::get_ls_leader_(

@@ -34,7 +34,7 @@ public:
   ObInterColSubStrDecoder();
   virtual ~ObInterColSubStrDecoder();
 
-  OB_INLINE int init(
+  OB_INLINE int init(const common::ObObjMeta &obj_meta,
                   const ObMicroBlockHeader &micro_block_header,
                   const ObColumnHeader &column_header,
                   const char *meta);
@@ -61,13 +61,13 @@ private:
   const ObInterColSubStrMetaHeader *meta_header_;
 };
 
-OB_INLINE int ObInterColSubStrDecoder::init(
+OB_INLINE int ObInterColSubStrDecoder::init(const common::ObObjMeta &obj_meta,
     const ObMicroBlockHeader &micro_block_header,
     const ObColumnHeader &column_header,
     const char *meta)
 {
   int ret = common::OB_SUCCESS;
-  UNUSEDx(micro_block_header, column_header);
+  UNUSEDx(obj_meta, micro_block_header, column_header);
   // performance critical, don't check params, already checked upper layer
   if (OB_UNLIKELY(is_inited())) {
     ret = common::OB_INIT_TWICE;

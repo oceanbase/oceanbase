@@ -72,8 +72,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
                                           ctx_,
                                           result,
                                           ret,
-                                          cli_ret,
-                                          is_prexecute_);
+                                          cli_ret);
     if (OB_TRANSACTION_SET_VIOLATION != ret && OB_REPLICA_NOT_READABLE != ret) {
       if (OB_TRY_LOCK_ROW_CONFLICT == ret && retry_ctrl_.need_retry()) {
         //锁冲突重试不打印日志，避免刷屏
@@ -108,8 +107,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
                                               ctx_,
                                               result,
                                               ret,
-                                              cli_ret,
-                                              is_prexecute_);
+                                              cli_ret);
         LOG_WARN("result response failed, check if need retry",
                  K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
         ret = cli_ret;
@@ -150,9 +148,8 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
 
       // for proxy
       // in multi-stmt, send extra ok packet in the last stmt(has no more result)
-      if (!is_prexecute_ && !result.has_more_result()
-            && OB_FAIL(sender_.update_last_pkt_pos())) {
-        LOG_WARN("failed to update last packet pos", K(ret));
+      if (!is_prexecute_ && !result.has_more_result()) {
+        sender_.update_last_pkt_pos();
       }
       if (OB_SUCC(ret) && !result.get_is_com_filed_list() &&
           OB_FAIL(sender_.response_packet(eofp, &result.get_session()))) {

@@ -66,13 +66,13 @@ public:
   void destroy();
 
   /// get SERVER level weak read version
-  int64_t get_server_version() const;
+  palf::SCN get_server_version() const;
 
   /// get CLUSTER level weak read version
   ///
   /// @retval OB_SUCCESS                            success
   /// @retval OB_TRANS_WEAK_READ_VERSION_NOT_READY  fail
-  int get_cluster_version(int64_t &version);
+  int get_cluster_version(palf::SCN &version);
 
   // update SERVER level weak read version based on partition readable snapshot version in partition iteration
   //
@@ -80,7 +80,7 @@ public:
   int update_server_version_with_part_info(const int64_t epoch_tstamp,
       const bool need_skip,
       const bool is_user_part,
-      const int64_t version);
+      const palf::SCN version);
 
   // generate new SERVER level weak read version after scan all partitions
   int generate_server_version(const int64_t epoch_tstamp,
@@ -92,7 +92,7 @@ public:
 
   /// process Cluster level RPC
   int process_cluster_heartbeat_rpc(const common::ObAddr &svr,
-      const int64_t version,
+      const palf::SCN version,
       const int64_t valid_part_count,
       const int64_t total_part_count,
       const int64_t generate_timestamp);
@@ -104,7 +104,7 @@ public:
   /// @retval OB_NOT_IN_SERVICE   self not in service
   /// @retval OB_NOT_MASTER       self is not MASTER
   /// @retval OTHER CODE          fail
-  int process_get_cluster_version_rpc(int64_t &version);
+  int process_get_cluster_version_rpc(palf::SCN &version);
 
   // get weak read info stat
   void get_weak_read_stat(ObTenantWeakReadStat &wrs_stat) const;
@@ -124,13 +124,13 @@ private:
   /// @retval OB_NOT_IN_SERVICE   self not in service
   /// @retval OB_NOT_MASTER       self is not MASTER
   /// @retval OTHER CODE          fail
-  int get_cluster_version_internal_(int64_t &version, const bool only_request_local);
-  int get_cluster_version_by_rpc_(int64_t &version);
+  int get_cluster_version_internal_(palf::SCN &version, const bool only_request_local);
+  int get_cluster_version_by_rpc_(palf::SCN &version);
   int get_cluster_service_master_(common::ObAddr &cluster_service_master);
   void refresh_cluster_service_master_();
   /// do Cluster Heartbeat request，report self's server version
   void do_cluster_heartbeat_();
-  int post_cluster_heartbeat_rpc_(const int64_t version,
+  int post_cluster_heartbeat_rpc_(const palf::SCN version,
       const int64_t valid_part_count,
       const int64_t total_part_count,
       const int64_t generate_timestamp);
@@ -187,7 +187,7 @@ private:
   // last cluster version generation timestamp
   int64_t                           last_generate_cluster_version_tstamp_;
   // cluster version the last get_version request get
-  int64_t                           local_cluster_version_;
+  palf::SCN                         local_cluster_version_;
 
   // need force self check or not
   bool                              force_self_check_;

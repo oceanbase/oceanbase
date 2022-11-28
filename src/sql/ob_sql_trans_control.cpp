@@ -540,14 +540,26 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
   auto current_consist_level = plan_ctx->get_consistency_level();
   CK (current_consist_level != ObConsistencyLevel::INVALID_CONSISTENCY);
   bool is_plain_select = plan->is_plain_select();
-
   // adjust stmt's consistency level
-  if (OB_SUCC(ret)) {
-    // Weak read statement with inner table should be converted to strong read.
-    // For example, schema refresh statement;
-    if (plan->is_contain_inner_table() ||
-       (!is_plain_select && current_consist_level != ObConsistencyLevel::STRONG)) {
-      plan_ctx->set_consistency_level(ObConsistencyLevel::STRONG);
+  if (OB_SUCC(ret) && !is_plain_select && current_consist_level != ObConsistencyLevel::STRONG) {
+    plan_ctx->set_consistency_level(ObConsistencyLevel::STRONG);
+  }
+
+  // check consistency type volatile
+  if (OB_SUCC(ret) && session->is_in_transaction()) {
+    auto current_consist_level = plan_ctx->get_consistency_level();
+    auto last_consist_level = session->get_last_consistency_level();
+    auto last_cl_valid = ObConsistencyLevel::INVALID_CONSISTENCY != last_consist_level;
+    if (last_cl_valid && last_consist_level != current_consist_level) {
+      // weak-read -> DML, reject
+       if (ObConsistencyLevel::WEAK == last_consist_level && !is_plain_select) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("different consistency type in one transaction, unexpected error", K(ret),
+                 K(last_consist_level), "trans_id", session->get_tx_id());
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "different consistency type in one transaction");
+      } else {
+        plan_ctx->set_consistency_level(last_consist_level);
+      }
     }
   }
 
@@ -562,6 +574,9 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE isolation level");
     }
   }
+  if (OB_SUCC(ret)) {
+    session->set_last_consistency_level(plan_ctx->get_consistency_level());
+  }
   return ret;
 }
 
@@ -574,12 +589,13 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   int ret = OB_SUCCESS;
   auto cl = plan_ctx->get_consistency_level();
   auto &snapshot = das_ctx.get_snapshot();
+  palf::SCN snapshot_version;
   if (session->get_read_snapshot_version() > 0) {
-    snapshot.init_special_read(session->get_read_snapshot_version());
-    // Weak read statement with inner table should be converted to strong read.
-    // For example, schema refresh statement;
+    if (OB_FAIL(snapshot_version.convert_for_lsn_allocator(session->get_read_snapshot_version()))) {
+      TRANS_LOG(WARN, "convert for lsn fail", K(session->get_read_snapshot_version()));
+    }
+    snapshot.init_special_read(snapshot_version);
   } else if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
-    int64_t snapshot_version = 0;
     if (OB_FAIL(txs->get_weak_read_snapshot_version(snapshot_version))) {
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
     } else {
@@ -629,7 +645,7 @@ int ObSqlTransControl::stmt_refresh_snapshot(ObExecContext &exec_ctx) {
   } else if (OB_FAIL(get_tx_service(session, txs))) {
     LOG_WARN("failed to get transaction service", K(ret));
   } else if (OB_FAIL(stmt_setup_snapshot_(session, das_ctx, plan, plan_ctx, txs))) {
-    LOG_WARN("failed to set snapshot", K(ret));
+    LOG_WARN("failed to set sanpshot", K(ret));
   }
   return ret;
 }

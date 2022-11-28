@@ -12,12 +12,10 @@ echo "[BUILD] args: TOP_DIR=${TOP_DIR} PROJECT_NAME=${PROJECT_NAME} VERSION=${VE
 
 cd ${TOP_DIR}
 ./build.sh clean
-./build.sh                  \
-    rpm                     \
-    -DOB_BUILD_CDC=ON       \
+./build.sh \
+    rpm \
     -DOB_RELEASEID=$RELEASE \
-    -DBUILD_NUMBER=$RELEASE \
-    --init                  \
+    --init \
     --make rpm || exit 1
 
 cd ${TOP_DIR}/build_rpm

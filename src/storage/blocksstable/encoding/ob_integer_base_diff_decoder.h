@@ -35,7 +35,7 @@ public:
   {}
   virtual ~ObIntegerBaseDiffDecoder() {}
 
-  OB_INLINE int init(
+  OB_INLINE int init(const common::ObObjMeta &obj_metan,
       const ObMicroBlockHeader &micro_block_header,
       const ObColumnHeader &column_header,
       const char *meta);
@@ -126,7 +126,7 @@ private:
   uint64_t base_;
 };
 
-OB_INLINE int ObIntegerBaseDiffDecoder::init(
+OB_INLINE int ObIntegerBaseDiffDecoder::init(const common::ObObjMeta &obj_meta,
                                              const ObMicroBlockHeader &micro_block_header,
                                              const ObColumnHeader &column_header, const char *meta)
 {
@@ -137,11 +137,11 @@ OB_INLINE int ObIntegerBaseDiffDecoder::init(
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "init twice", K(ret));
   } else {
-    const int64_t store_size = get_type_size_map()[column_header.get_store_obj_type()];
-    ObObjTypeStoreClass sc = get_store_class_map()[ob_obj_type_class(column_header.get_store_obj_type())];
+    const int64_t store_size = get_type_size_map()[obj_meta.get_type()];
+    ObObjTypeStoreClass sc = get_store_class_map()[ob_obj_type_class(obj_meta.get_type())];
     if (ObIntSC != sc && ObUIntSC != sc) {
       ret = common::OB_INNER_STAT_ERROR;
-      STORAGE_LOG(WARN, "not supported store class", K(ret), K(column_header), K(sc));
+      STORAGE_LOG(WARN, "not supported store class", K(ret), K(obj_meta), K(sc));
     } else {
       meta += column_header.offset_;
       header_ = reinterpret_cast<const ObIntegerBaseDiffHeader *>(meta);

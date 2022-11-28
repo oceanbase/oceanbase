@@ -25,7 +25,6 @@ base_lob_meta_table_id   = int(50000)
 base_lob_piece_table_id  = int(60000)
 max_lob_table_id         = int(70000)
 min_sys_index_id         = int(100000)
-max_core_index_id        = int(101000)
 max_sys_index_id         = int(200000)
 
 min_shadow_column_id     = int(32767)
@@ -57,10 +56,6 @@ def is_sys_view(table_id):
 def is_lob_table(table_id):
   table_id = int(table_id)
   return (table_id > base_lob_meta_table_id) and (table_id < max_lob_table_id)
-
-def is_core_index_table(table_id):
-  table_id = int(table_id)
-  return (table_id > min_sys_index_id) and (table_id < max_core_index_id)
 
 def is_sys_index_table(table_id):
   table_id = int(table_id)
@@ -95,7 +90,6 @@ column_collation = 'CS_TYPE_INVALID'
 # virtual tables only accessible by sys tenant or sys views.
 restrict_access_virtual_tables = []
 is_oracle_sys_table = False
-sys_index_tables = []
 copyright = """/**
  * Copyright (c) 2021 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
@@ -369,7 +363,7 @@ def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, colum
     if column_id != 0:
       if column_scale > 0 :
         line = """
-  if (OB_SUCC(ret)) {{
+  if (OB_SUCC(ret) {{
     ObObj gmt_default;
     ObObj gmt_default_null;
 
@@ -468,7 +462,7 @@ def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, colum
     if column_id != 0:
       if column_scale > 0 :
         line = """
-  if (OB_SUCC(ret)) {{
+  if (OB_SUCC(ret) {{
     ObObj gmt_default;
     ObObj gmt_default_null;
 
@@ -509,7 +503,7 @@ def print_timestamp_column(column_name, rowkey_id, index_id, part_key_pos, colum
       {12}); //is_on_update_for_timestamp
   }}
 """
-      cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrement, is_on_update_for_timestamp))
+      cpp_f.write(line.format(column_name, column_id, rowkey_id, index_id, part_key_pos, column_type, column_collation_type, column_length, column_precision, column_scale, is_nullable, is_autoincrementi, is_on_update_for_timestamp))
     else:
       if column_scale > 0 :
         line = """
@@ -750,31 +744,26 @@ def find_column_def(keywords, column_name, is_shadow_pk_column):
 def add_index_column(keywords, rowkey_id, index_id, column):
   (idx, column_def) = find_column_def(keywords, column, False)
   add_column(column_def, rowkey_id, index_id, 0, idx)
-  return idx
 
 # For shadow pk column, rowkey_position != 0 and index_position = 0.
 def add_shadow_pk_column(keywords, rowkey_id, column):
   (idx, column_def) = find_column_def(keywords, column, True)
   add_column(column_def, rowkey_id, 0, 0, idx, is_hidden='true')
-  return idx
 
 def add_index_columns(columns, **keywords):
   rowkey_id = 1
   is_unique_index = keywords['index_type'] == 'INDEX_TYPE_UNIQUE_LOCAL'
-  max_used_column_idx = 1
   if is_unique_index:
     # specified index columns.
     for column in columns:
-      column_idx = add_index_column(keywords, rowkey_id, rowkey_id, column)
-      max_used_column_idx = max(max_used_column_idx, column_idx)
+      add_index_column(keywords, rowkey_id, rowkey_id, column)
       rowkey_id += 1
 
     # generate shadow pk column whose number equals to rowkeys' number.
     shadow_pk_col_idx = 0
     for col in keywords['rowkey_columns']:
       shadow_pk_col_name = 'shadow_pk_' + str(shadow_pk_col_idx)
-      column_idx = add_shadow_pk_column(keywords, rowkey_id, shadow_pk_col_name)
-      max_used_column_idx = max(max_used_column_idx, column_idx)
+      add_shadow_pk_column(keywords, rowkey_id, shadow_pk_col_name)
       rowkey_id += 1
       shadow_pk_col_idx += 1
 
@@ -784,19 +773,15 @@ def add_index_columns(columns, **keywords):
       if col[0] not in columns:
         (idx, column_def) = find_column_def(keywords, col[0], False)
         add_column(column_def, 0, 0, 0, idx)
-        max_used_column_idx = max(max_used_column_idx, idx)
   else:
     for column in columns:
-      column_idx = add_index_column(keywords, rowkey_id, rowkey_id, column)
-      max_used_column_idx = max(max_used_column_idx, column_idx)
+      add_index_column(keywords, rowkey_id, rowkey_id, column)
       rowkey_id += 1
     for col in keywords['rowkey_columns']:
       if col[0] not in columns:
-        column_idx = add_index_column(keywords, rowkey_id, 0, col[0])
-        max_used_column_idx = max(max_used_column_idx, column_idx)
+        add_index_column(keywords, rowkey_id, 0, col[0])
         rowkey_id += 1
-  return max_used_column_idx
-
+  return rowkey_id - 1
 def add_rowkey_columns(columns, *args):
   rowkey_id = 1
   index_id = 0
@@ -1169,59 +1154,6 @@ def generate_cluster_private_table(f):
       cluster_private_switch += 'case ' + table_name2tid(kw['table_name'] + kw['name_postfix']) + ':\n'
   f.write('\n\n#ifdef CLUSTER_PRIVATE_TABLE_SWITCH\n' + cluster_private_switch + '\n#endif\n')
 
-def generate_sys_index_table_misc_data(f):
-  global sys_index_tables
-
-  data_table_dict = {}
-  for kw in sys_index_tables:
-    if not data_table_dict.has_key(kw['table_name']):
-      data_table_dict[kw['table_name']] = []
-    data_table_dict[kw['table_name']].append(kw)
-
-  sys_index_table_id_switch = '\n'
-  for kw in sys_index_tables:
-    sys_index_table_id_switch += 'case ' + table_name2index_tid(kw['table_name'], kw['index_name']) + ':\n'
-  f.write('\n\n#ifdef SYS_INDEX_TABLE_ID_SWITCH\n' + sys_index_table_id_switch + '\n#endif\n')
-
-  sys_index_data_table_id_switch = '\n'
-  for data_table_name in data_table_dict.keys():
-    sys_index_data_table_id_switch += 'case ' + table_name2tid(data_table_name) + ':\n'
-  f.write('\n\n#ifdef SYS_INDEX_DATA_TABLE_ID_SWITCH\n' + sys_index_data_table_id_switch + '\n#endif\n')
-
-  sys_index_data_table_id_to_index_ids_switch = '\n'
-  for data_table_name, sys_indexs in data_table_dict.items():
-    sys_index_data_table_id_to_index_ids_switch += 'case ' + table_name2tid(data_table_name) + ': {\n'
-    for kw in sys_indexs:
-      sys_index_data_table_id_to_index_ids_switch += '  if (FAILEDx(index_tids.push_back(' + table_name2index_tid(kw['table_name'], kw['index_name']) +  '))) {\n'
-      sys_index_data_table_id_to_index_ids_switch += '    LOG_WARN(\"fail to push back index tid\", KR(ret));\n'
-      sys_index_data_table_id_to_index_ids_switch += '  }\n'
-    sys_index_data_table_id_to_index_ids_switch += '  break;\n'
-    sys_index_data_table_id_to_index_ids_switch += '}\n'
-  f.write('\n\n#ifdef SYS_INDEX_DATA_TABLE_ID_TO_INDEX_IDS_SWITCH\n' + sys_index_data_table_id_to_index_ids_switch + '\n#endif\n')
-
-  sys_index_data_table_id_to_index_schema_switch = '\n'
-  for data_table_name, sys_indexs in data_table_dict.items():
-    sys_index_data_table_id_to_index_schema_switch += 'case ' + table_name2tid(data_table_name) + ': {\n'
-    for kw in sys_indexs:
-      method_name = kw['table_name'].replace('$', '_').strip('_').lower() + '_' + kw['index_name'].lower() + '_schema'
-      sys_index_data_table_id_to_index_schema_switch += '  index_schema.reset();\n'
-      sys_index_data_table_id_to_index_schema_switch += '  if (FAILEDx(ObInnerTableSchema::' + method_name +'(index_schema))) {\n'
-      sys_index_data_table_id_to_index_schema_switch += '    LOG_WARN(\"fail to create index schema\", KR(ret), K(tenant_id), K(data_table_id));\n'
-      sys_index_data_table_id_to_index_schema_switch += '  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {\n'
-      sys_index_data_table_id_to_index_schema_switch += '    LOG_WARN(\"fail to append\", KR(ret), K(tenant_id), K(data_table_id));\n'
-      sys_index_data_table_id_to_index_schema_switch += '  }\n'
-    sys_index_data_table_id_to_index_schema_switch += '  break;\n'
-    sys_index_data_table_id_to_index_schema_switch += '}\n'
-
-  f.write('\n\n#ifdef SYS_INDEX_DATA_TABLE_ID_TO_INDEX_SCHEMAS_SWITCH\n' + sys_index_data_table_id_to_index_schema_switch + '\n#endif\n')
-
-  add_sys_index_id = '\n'
-  for kw in sys_index_tables:
-    index_id = table_name2index_tid(kw['table_name'], kw['index_name'])
-    add_sys_index_id += '  } else if (OB_FAIL(table_ids.push_back(' + index_id +'))) {\n'
-    add_sys_index_id += '    LOG_WARN(\"add index id failed\", KR(ret), K(tenant_id));\n'
-  f.write('\n\n#ifdef ADD_SYS_INDEX_ID\n' + add_sys_index_id + '\n#endif\n')
-
 def generate_virtual_agent_misc_data(f):
   global all_agent_virtual_tables
   all_agent = [x for x in all_agent_virtual_tables]
@@ -1274,17 +1206,12 @@ def def_sys_index_table(index_name, index_table_id, index_columns, index_using_t
   global cpp_f
   global cpp_f_tmp
   global StringIO
-  global sys_index_tables
 
   kw = copy.deepcopy(keywords)
   if kw.has_key('index'):
     raise Exception("should not have index", kw['table_name'])
-  if not is_sys_table(kw['table_id']):
+  if False == is_sys_table(kw['table_id']):
     raise Exception("only support sys table", kw['table_name'])
-  if not is_sys_index_table(index_table_id):
-    raise Exception("index table id is invalid", index_table_id)
-  if is_core_table(kw['table_id']) and not is_core_index_table(index_table_id):
-    raise Exception("index table id for core table should be less than 101000", index_table_id, kw['table_id'])
 
   index_def = ''
   cpp_f_tmp = cpp_f
@@ -1301,7 +1228,6 @@ def def_sys_index_table(index_name, index_table_id, index_columns, index_using_t
   kw['partition_columns'] = []
   kw['partition_expr'] = []
   kw['storing_columns'] =[]
-  sys_index_tables.append(kw)
   def_table_schema(**kw)
   index_def = cpp_f.getvalue()
   cpp_f = cpp_f_tmp
@@ -1588,7 +1514,6 @@ def def_table_schema(**keywords):
   index_def = ''
   calculate_rowkey_column_num(keywords)
   is_oracle_sys_table = False
-  column_collation = 'CS_TYPE_INVALID'
 
   ##virtual table will set index_using_type to USING_HASH by default
   if is_virtual_table(keywords['table_id']):
@@ -1800,7 +1725,7 @@ def def_table_schema(**keywords):
         cpp_f = cpp_f_tmp
     elif field == 'index_columns':
       # only index generation will enter here
-      max_used_column_idx = add_index_columns(value, **keywords)
+      index_num_rowkeys = add_index_columns(value, **keywords)
     elif field == 'storing_columns':
       # only virtual table index generation will enter here
       add_storing_columns(value,**keywords)
@@ -1830,7 +1755,7 @@ def def_table_schema(**keywords):
     add_field('aux_lob_piece_tid', ptid)
 
   if keywords.has_key("index_name") and not type(keywords['index']) == dict:
-    add_index_method_end(max_used_column_idx)
+    add_index_method_end(index_num_rowkeys)
   else:
     add_method_end()
 
@@ -2045,18 +1970,6 @@ private:
     if is_sys_view(table_id):
       h_f.write(method_name.format(table_name.replace('$', '_').lower().strip('_'), table_name))
       sys_view_count = sys_view_count + 1
-  h_f.write("  NULL,};\n\n")
-
-  h_f.write("const schema_create_func core_index_table_schema_creators [] = {\n")
-  for index_l in index_name_ids:
-    if is_core_index_table(index_l[1]):
-      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
-  h_f.write("  NULL,};\n\n")
-
-  h_f.write("const schema_create_func sys_index_table_schema_creators [] = {\n")
-  for index_l in index_name_ids:
-    if not is_core_index_table(index_l[1]) and is_sys_index_table(index_l[1]):
-      h_f.write(method_name.format(index_l[2].replace('$', '_').strip('_').lower()+'_'+index_l[0].lower(), index_l[2]))
   h_f.write("  NULL,};\n\n")
 
   # just to make test happy
@@ -2498,7 +2411,6 @@ if __name__ == "__main__":
   generate_iterate_private_virtual_table_misc_data(f)
   generate_iterate_virtual_table_misc_data(f)
   generate_cluster_private_table(f)
-  generate_sys_index_table_misc_data(f)
 
   f.close()
 

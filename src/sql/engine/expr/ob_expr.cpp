@@ -40,7 +40,7 @@ ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx)
     exec_ctx_(exec_ctx),
     tmp_alloc_(exec_ctx.get_eval_tmp_allocator()),
     datum_caster_(NULL),
-    tmp_alloc_used_(exec_ctx.get_tmp_alloc_used()),
+    tmp_alloc_used_(false),
     batch_idx_(0),
     batch_size_(0),
     expr_res_alloc_(exec_ctx.get_eval_res_allocator())
@@ -99,6 +99,7 @@ DEF_TO_STRING(ObEvalInfo)
 OB_DEF_SERIALIZE(ObExpr)
 {
   int ret = OB_SUCCESS;
+  bool is_early_registered = ObExprExtraInfoFactory::is_early_registered(type_);
   LST_DO_CODE(OB_UNIS_ENCODE,
               type_,
               datum_meta_,
@@ -113,8 +114,14 @@ OB_DEF_SERIALIZE(ObExpr)
               datum_off_,
               res_buf_off_,
               res_buf_len_,
-              expr_ctx_id_,
-              extra_);
+              expr_ctx_id_);
+  if (OB_SUCC(ret)) {
+    if (is_early_registered) {
+      OB_UNIS_ENCODE(*extra_info_);
+    } else {
+      OB_UNIS_ENCODE(extra_)
+    }
+  }
 
   LST_DO_CODE(OB_UNIS_ENCODE,
               eval_info_off_,
@@ -125,7 +132,7 @@ OB_DEF_SERIALIZE(ObExpr)
 
   if (OB_SUCC(ret)) {
     ObExprOperatorType type = T_INVALID;
-    if (nullptr != extra_info_) {
+    if (!is_early_registered && nullptr != extra_info_) {
       type = extra_info_->type_;
     }
     // Add a type before extra_info to determine whether extra_info is empty
@@ -157,8 +164,20 @@ OB_DEF_DESERIALIZE(ObExpr)
               datum_off_,
               res_buf_off_,
               res_buf_len_,
-              expr_ctx_id_,
-              extra_);
+              expr_ctx_id_);
+  if (OB_SUCC(ret)) {
+    if (ObExprExtraInfoFactory::is_early_registered(type_)) {
+      if (OB_FAIL(ObExprExtraInfoFactory::alloc(CURRENT_CONTEXT->get_arena_allocator(),
+                                                type_,
+                                                extra_info_))) {
+        LOG_WARN("fail to alloc expr extra info", K(ret), K(type_));
+      } else if (OB_NOT_NULL(extra_info_)) {
+        OB_UNIS_DECODE(*extra_info_);
+      }
+    } else {
+      OB_UNIS_DECODE(extra_);
+    }
+  }
 
   LST_DO_CODE(OB_UNIS_DECODE,
               eval_info_off_,
@@ -183,7 +202,6 @@ OB_DEF_DESERIALIZE(ObExpr)
       OB_UNIS_DECODE(*extra_info_);
     }
   }
-
   if (OB_SUCC(ret)) {
     basic_funcs_ = ObDatumFuncs::get_basic_func(datum_meta_.type_, datum_meta_.cs_type_);
     CK(NULL != basic_funcs_);
@@ -198,6 +216,7 @@ OB_DEF_DESERIALIZE(ObExpr)
 OB_DEF_SERIALIZE_SIZE(ObExpr)
 {
   int64_t len = 0;
+  bool is_early_registered = ObExprExtraInfoFactory::is_early_registered(type_);
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               type_,
               datum_meta_,
@@ -212,8 +231,12 @@ OB_DEF_SERIALIZE_SIZE(ObExpr)
               datum_off_,
               res_buf_off_,
               res_buf_len_,
-              expr_ctx_id_,
-              extra_);
+              expr_ctx_id_);
+  if (is_early_registered) {
+    OB_UNIS_ADD_LEN(*extra_info_);
+  } else {
+    OB_UNIS_ADD_LEN(extra_);
+  }
 
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               eval_info_off_,
@@ -223,11 +246,12 @@ OB_DEF_SERIALIZE_SIZE(ObExpr)
               pvt_skip_off_);
 
   ObExprOperatorType type = T_INVALID;
-  if (nullptr != extra_info_) {
+  if (!is_early_registered && nullptr != extra_info_) {
     type = extra_info_->type_;
   }
+  // Add a type before extra_info to determine whether extra_info is empty
   OB_UNIS_ADD_LEN(type);
-  if (T_INVALID != type) {
+  if (!is_early_registered && nullptr != extra_info_) {
     OB_UNIS_ADD_LEN(*extra_info_);
   }
   OB_UNIS_ADD_LEN(dyn_buf_header_offset_);
@@ -574,16 +598,6 @@ void ObExpr::reset_datums_ptr(char *frame, const int64_t size) const
   }
 }
 
-void ObExpr::reset_datum_ptr(char *frame, const int64_t size, const int64_t idx) const
-{
-  ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
-  datum += idx;
-  char *ptr = frame + res_buf_off_ + (batch_idx_mask_ & idx) * res_buf_len_;
-  if (datum->ptr_ != ptr && idx < size) {
-    datum->ptr_ = ptr;
-  }
-}
-
 int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) const
 {
   int ret = OB_SUCCESS;
@@ -609,20 +623,15 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
   }
   datum = reinterpret_cast<ObDatum *>(frame + datum_off_) + ctx.get_batch_idx();
   if (need_evaluate) {
-    if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
-      SQL_LOG(WARN, "failed to check stack overflow", K(ret));
+    ret = eval_func_(*this, ctx, *datum);
+    if (OB_SUCC(ret)) {
+      ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
+      evaluated_flags->set(ctx.get_batch_idx());
     } else {
-      reset_datum_ptr(frame, ctx.get_batch_size(), ctx.get_batch_idx());
-      ret = eval_func_(*this, ctx, *datum);
-      if (OB_SUCC(ret)) {
-        ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
-        evaluated_flags->set(ctx.get_batch_idx());
-      } else {
-        datum->set_null();
-      }
-      if (datum->is_null()) {
-        info->notnull_ = false;
-      }
+      datum->set_null();
+    }
+    if (datum->is_null()) {
+      info->notnull_ = false;
     }
   }
 
@@ -659,21 +668,17 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
       info->notnull_ = false;
       info->point_to_frame_ = true;
     }
-    if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
-      SQL_LOG(WARN, "failed to check stack overflow", K(ret));
+    ret = (*eval_batch_func_)(*this, ctx, skip, size);
+    if (OB_SUCC(ret)) {
+      if (!info->evaluated_) {
+        info->cnt_ = size;
+        info->evaluated_ = true;
+      }
     } else {
-      ret = (*eval_batch_func_)(*this, ctx, skip, size);
-      if (OB_SUCC(ret)) {
-        if (!info->evaluated_) {
-          info->cnt_ = size;
-          info->evaluated_ = true;
-        }
-      } else {
-        ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
-        ObDatum *datum_end = datum + size;
-        for (; datum < datum_end; datum += 1) {
-          datum->set_null();
-        }
+      ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
+      ObDatum *datum_end = datum + size;
+      for (; datum < datum_end; datum += 1) {
+        datum->set_null();
       }
     }
   }

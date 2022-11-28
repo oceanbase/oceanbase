@@ -142,6 +142,7 @@ int ObSequenceSqlService::clean_sequence_cache(uint64_t tenant_id, uint64_t sequ
   ObSEArray<ObAddr, 8> server_list;
   ObSrvRpcProxy srv_rpc_proxy;
   ObUnitInfoGetter ui_getter;
+  static const int64_t OB_CLEAN_SEQUENCE_CACHE_TIMEOUT = 1000 * 1000; // 1s
   if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.net_frame_) || OB_ISNULL(GCTX.net_frame_->get_req_transport())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy or net_frame in GCTX is null", K(GCTX.sql_proxy_), K(GCTX.net_frame_));
@@ -153,11 +154,10 @@ int ObSequenceSqlService::clean_sequence_cache(uint64_t tenant_id, uint64_t sequ
     LOG_WARN("fail to init srv rpc proxy", KR(ret));
   } else {
     for (int i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
-      const uint64_t timeout = THIS_WORKER.get_timeout_remain();
       if (OB_FAIL(srv_rpc_proxy
                   .to(server_list.at(i))
                   .by(tenant_id)
-                  .timeout(timeout)
+                  .timeout(OB_CLEAN_SEQUENCE_CACHE_TIMEOUT)
                   .clean_sequence_cache(sequence_id))) {
         LOG_WARN("clean sequnece cache failed", K(ret), K(sequence_id), K(server_list.at(i)));
       }
@@ -417,7 +417,10 @@ int ObSequenceSqlService::add_sequence(common::ObISQLClient &sql_client,
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_cache_size().format(), "cache_size", "%s");
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_order_flag(), "order_flag", "%d");
       SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_cycle_flag(), "cycle_flag", "%d");
-      SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_is_system_generated(), "is_system_generated", "%d");
+
+      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3200) {
+        SQL_COL_APPEND_VALUE(sql, values, sequence_schema.get_is_system_generated(), "is_system_generated", "%d");
+      }
       if (0 == STRCMP(tname[i], OB_ALL_SEQUENCE_OBJECT_HISTORY_TNAME)) {
         SQL_COL_APPEND_VALUE(sql, values, "false", "is_deleted", "%s");
       }

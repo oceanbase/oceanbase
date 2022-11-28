@@ -109,64 +109,32 @@ int ObLSTabletIterator::get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr
   return ret;
 }
 
-int ObLSTabletIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ls_tablet_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls tablet service is nullptr", K(ret), KP(ls_tablet_service_));
-  } else {
-    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-    do {
-      ObTabletMapKey key;
-      key.ls_id_ = ls_tablet_service_->ls_->get_ls_id();
-      if (OB_UNLIKELY(tablet_ids_.count() == idx_)) {
-        ret = OB_ITER_END;
-      } else {
-        key.tablet_id_ = tablet_ids_.at(idx_);
 
-        if (OB_FAIL(t3m->get_tablet_ddl_kv_mgr(key, ddl_kv_mgr_handle))
-            && OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("fail to get tablet ddl kv mgr", K(ret), K(idx_), K(key));
-        } else {
-          ++idx_;
-        }
-      }
-    } while (OB_ENTRY_NOT_EXIST == ret);
-  }
-  
-  return ret;
-}
-
-
-ObHALSTabletIDIterator::ObHALSTabletIDIterator(
-    const share::ObLSID &ls_id,
-    const bool need_initial_state)
+ObLSTabletIDIterator::ObLSTabletIDIterator(const share::ObLSID &ls_id)
   : ls_id_(ls_id),
     tablet_ids_(),
-    idx_(0),
-    need_initial_state_(need_initial_state)
+    idx_(0)
 {
 }
 
-ObHALSTabletIDIterator::~ObHALSTabletIDIterator()
+ObLSTabletIDIterator::~ObLSTabletIDIterator()
 {
   reset();
 }
 
-bool ObHALSTabletIDIterator::is_valid() const
+bool ObLSTabletIDIterator::is_valid() const
 {
   return ls_id_.is_valid();
 }
 
-void ObHALSTabletIDIterator::reset()
+void ObLSTabletIDIterator::reset()
 {
   ls_id_.reset();
   tablet_ids_.reset();
   idx_ = 0;
 }
 
-int ObHALSTabletIDIterator::get_next_tablet_id(common::ObTabletID &tablet_id)
+int ObLSTabletIDIterator::get_next_tablet_id(common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -187,7 +155,7 @@ int ObHALSTabletIDIterator::get_next_tablet_id(common::ObTabletID &tablet_id)
         } else {
           LOG_WARN("failed to get tx data from tablet pointer", K(ret), K(key));
         }
-      } else if (ObTabletStatus::MAX == tx_data.tablet_status_ && !need_initial_state_ ) {
+      } else if (ObTabletStatus::MAX == tx_data.tablet_status_) {
         LOG_INFO("tablet is in initial state, should skip", K(ret), K(key));
         ++idx_;
       } else {

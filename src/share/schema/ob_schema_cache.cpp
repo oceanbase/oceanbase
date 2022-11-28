@@ -752,7 +752,7 @@ int ObSchemaCache::put_tablet_cache(
   } else if (OB_FAIL(tablet_cache_.put(key, value))) {
     LOG_WARN("fail to put tablet cache", KR(ret), K(key), K(value));
   }
-  LOG_TRACE("put tablet-table cache", KR(ret), K(key), K(value));
+  LOG_INFO("put tablet-table cache", KR(ret), K(key), K(value));
   return ret;
 }
 
@@ -1127,8 +1127,8 @@ int ObSchemaFetcher::fetch_tenant_schema(uint64_t tenant_id,
       LOG_WARN("NULL ptr", K(tmp_tenant_schema), K(tenant_id), K(schema_version), K(ret));
     } else {
       tenant_schema = tmp_tenant_schema;
-      LOG_TRACE("fetch tenant schema succeed", K(tenant_id), K(schema_version),
-                "tenant_name", tenant_schema->get_tenant_name_str());
+      LOG_INFO("fetch tenant schema succeed", K(tenant_id), K(schema_version),
+               "tenant_name", tenant_schema->get_tenant_name_str());
     }
   }
 
@@ -1169,7 +1169,7 @@ int ObSchemaFetcher::fetch_sys_variable_schema(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sys_variable_schema is null", K(ret), K(tenant_id), K(schema_version), K(schema_status));
   } else {
-    LOG_TRACE("fetch sys variable schema succeed", K(tenant_id), K(schema_version), K(schema_status));
+    LOG_INFO("fetch sys variable schema succeed", K(tenant_id), K(schema_version), K(schema_status));
   }
 
   return ret;
@@ -1215,8 +1215,8 @@ int ObSchemaFetcher::fetch_database_schema(const ObRefreshSchemaStatus &schema_s
       LOG_WARN("NULL ptr", K(tmp_db_schema), K(database_id), K(schema_version), K(ret));
     } else {
       database_schema = tmp_db_schema;
-      LOG_TRACE("fetch database schema succeed", K(database_id), K(schema_version),
-                "database_name", database_schema->get_database_name_str());
+      LOG_INFO("fetch database schema succeed", K(database_id), K(schema_version),
+               "database_name", database_schema->get_database_name_str());
     }
   }
 
@@ -1249,8 +1249,8 @@ int ObSchemaFetcher::fetch_tablegroup_schema(const ObRefreshSchemaStatus &schema
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr", K(tablegroup_schema), K(tablegroup_id), K(schema_version), K(ret));
   } else {
-    LOG_TRACE("fetch tablegroup schema succeed", K(tablegroup_id), K(schema_version),
-              "tablegroup_name", tablegroup_schema->get_tablegroup_name());
+    LOG_INFO("fetch tablegroup schema succeed", K(tablegroup_id), K(schema_version),
+             "tablegroup_name", tablegroup_schema->get_tablegroup_name());
   }
   return ret;
 }
@@ -1285,8 +1285,8 @@ int ObSchemaFetcher::fetch_table_schema(const ObRefreshSchemaStatus &schema_stat
     LOG_WARN("NULL ptr", K(tmp_table_schema), K(table_id), K(schema_version), K(ret));
   } else {
     table_schema = tmp_table_schema;
-    LOG_TRACE("fetch table schema succeed", K(table_id), K(schema_version),
-              "table_name", table_schema->get_table_name_str());
+    LOG_INFO("fetch table schema succeed", K(table_id), K(schema_version),
+             "table_name", table_schema->get_table_name_str());
   }
 
   return ret;
@@ -1331,7 +1331,7 @@ int ObSchemaFetcher::fetch_table_schema(const ObRefreshSchemaStatus &schema_stat
     LOG_WARN("table schema is NULL", K(ret), K(table_id), K(schema_version));
   } else {
     table_schema = tmp_table_schema;
-    LOG_TRACE("fetch table schema succeed", K(ret), K(table_id), K(schema_version), KPC(table_schema));
+    LOG_INFO("fetch table schema succeed", K(ret), K(table_id), K(schema_version), KPC(table_schema));
   }
   return ret;
 }
@@ -1380,8 +1380,8 @@ int ObSchemaFetcher::fetch_##OBJECT_NAME##_info(const ObRefreshSchemaStatus &sch
       LOG_WARN(#OBJECT_NAME "object schema is NULL", K(ret)); \
     } else { \
       object_schema = tmp_object_schema; \
-      LOG_TRACE("fetch " #OBJECT_NAME " object info succeed", \
-                K(object_id), K(schema_version), K(object_schema)); \
+      LOG_INFO("fetch " #OBJECT_NAME " object info succeed", \
+               K(object_id), K(schema_version), K(object_schema)); \
     } \
   } \
   return ret; \

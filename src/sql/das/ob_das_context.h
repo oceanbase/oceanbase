@@ -17,25 +17,11 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "sql/das/ob_das_factory.h"
 #include "storage/tx/ob_trans_define.h"
-#include "sql/engine/dml/ob_dml_ctx_define.h"
 namespace oceanbase
 {
 namespace sql
 {
 class ObDASTabletMapper;
-
-struct DmlRowkeyDistCtx
-{
-public:
-  DmlRowkeyDistCtx()
-    : deleted_rows_(nullptr),
-    table_id_(common::OB_INVALID_ID)
-  {}
-  SeRowkeyDistCtx *deleted_rows_;
-  uint64_t table_id_;
-};
-typedef common::ObList<DmlRowkeyDistCtx, common::ObIAllocator> DASDelCtxList;
-
 class ObDASCtx
 {
   OB_UNIS_VERSION(1);
@@ -50,7 +36,6 @@ public:
       self_schema_guard_(false),
       snapshot_(),
       savepoint_(0),
-      del_ctx_list_(allocator),
       flags_(0)
   {
     need_check_server_ = 1;
@@ -67,7 +52,6 @@ public:
   int init(const ObPhysicalPlan &plan, ObExecContext &ctx);
   ObDASTableLoc *get_table_loc_by_id(uint64_t table_loc_id, uint64_t ref_table_id);
   DASTableLocList &get_table_loc_list() { return table_locs_; }
-  DASDelCtxList& get_das_del_ctx_list() {return  del_ctx_list_;}
   int extended_tablet_loc(ObDASTableLoc &table_loc,
                           const common::ObTabletID &tablet_id,
                           ObDASTabletLoc *&tablet_loc);
@@ -118,7 +102,6 @@ private:
   transaction::ObTxReadSnapshot snapshot_;           // Mvcc snapshot
   int64_t savepoint_;                                // DML savepoint
   //@todo: save snapshot version
-  DASDelCtxList del_ctx_list_;
 public:
   union {
     uint64_t flags_;

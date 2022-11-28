@@ -56,10 +56,6 @@ private:
   int deep_copy_ddl_arg(common::ObIAllocator &allocator, const share::ObDDLType &ddl_type, const obrpc::ObDDLArg *source_arg);
   int init_compat_mode(const share::ObDDLType &ddl_type, const obrpc::ObDDLArg *source_arg);
   int get_forward_user_message(const obrpc::ObRpcResultCode &rcode);
-  virtual bool is_error_need_retry(const int ret_code) override
-  {
-    return common::OB_PARTITION_NOT_EXIST != ret_code && ObDDLTask::is_error_need_retry(ret_code);
-  }
 private:
   static const int64_t OB_DDL_RETRY_TASK_VERSION = 1L;
   obrpc::ObDDLArg *ddl_arg_;

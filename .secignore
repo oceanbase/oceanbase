@@ -7,7 +7,7 @@
 # Under the segmentation lines there are the folders which you need to ignore #
 ##########################################################
 **
-  http://license.coscl.org.cn/MulanPubL-2.0*
+  http://license.coscl.org.cn/MulanPubL-2.0
   http://license.coscl.org.cn/MulanPubL-1.0
   https://open.oceanbase.com*
   https://www.oceanbase.com*
@@ -30,7 +30,6 @@
   http://www.python.org/*
   https://oracle.github.io/*
   https://en.wikipedia.org/wiki/*
-  http://en.wikipedia.org/wiki/*
   https://mariadb.com/*
   https://github.com/akopytov/sysbench*
   http://foo.bar.com*
@@ -39,7 +38,6 @@
   http://llvm.org/bugs*
   https://bugs.llvm.org/*
   http://www.apache.org/licenses/*
-  https://issues.apache.org/*
   https://github.com/vectorclass*
   https://github.com/jcn/cowsay-py/blob/master/cowsay.py
   http://www.erlenstar.demon.co.uk/unix/faq_2.html#SEC16
@@ -125,72 +123,8 @@
   madler@alumni.caltech.edu
   http://en.wikipedia.org/wiki/X86-64#Linux
   https://github.com/jsteemann/atoi
+  https://tools.ietf.org/html/rfc1951
   hewei@mail.ied.ac.cn
-  http://trade.taobao.com/trade/*
-  http://buy.tmall.com/order/*
-  http://unit.buyer.trade.taobao.com/trade/*
-  http://abc.com/*
-  https://oceanbase.slack.com/*
-  https://ask.oceanbase.com/*
-  https://cdn.nlark.com/yuque/*
-  https://h5.dingtalk.com/circle/*
-  https://gw.alipayobjects.com/*
-  http://yum-test.obvos.alibaba-inc.com/*
-  http://yum.tbsite.net/taobao/*
-  https://www.cnblogs.com/*
-  http://murmurhash.googlepages.com/
-  rbrown64@csc.com.au
-  http://bazaar.launchpad.net/*
-  http://stackoverflow.com/*
-  https://stackoverflow.com/*
-  https://cloud.tencent.com/*  
-  http://k3.alibaba-inc.com/*
-  https://k3.alibaba-inc.com/*
-  libecb@schmorp.de
-  http://software.schmorp.de/*
-  http://www-01.ibm.com/*
-  http://msdn.microsoft.com/*
-  http://www.open-std.org/*
-  http://forums.freebsd.org/*
-  http://www.ussg.indiana.edu/*
-  https://www.qqxiuzi.cn/daohang.htm
-  https://blog.csdn.net/*
-  http://blog.csdn.net/*
-  https://es5.github.io/*
-  http://rapidjson.org/*
-  https://tools.ietf.org/*
-  http://tools.ietf.org/*
-  https://github.com/madler/zlib/*
-  http://www.zlib.net
-  http://www.oberhumer.com/*
-  http://www.quicklz.com/
-  http://www.goof.com/*
-  http://www.fastlz.org/*
-  http://baike.corp.taobao.com/*
-  http://gitlab.alibaba-inc.com/*
-  https://gerry.lamost.org/*
-  https://www.techonthenet.com/oracle/*
-  http://www.techonthenet.com/oracle/*
-  http://review.alibaba-inc.com/*
-  https://gw.alicdn.com/*
-  http://docs.oracle.com/*
-  https://oracle-base.com/*
-  https://www.kernel.org/doc/*
-  https://www.atatech.org/*
-  http://www.atatech.org/*
-  http://oceanbase.alibaba-inc.com/*
-  https://community.oracle.com/tech/*
-  https://docs.docker.com/*
-  http://helloworld.com/*
-  http://1.1.1.1:8080/*
-  https://mirrors.aliyun.com/*
-  https://bixense.com/clicolors/
-  martin.gieseking@uos.de
-  jloup@gzip.org
-  http://www.lz4.org
-  https://github.com/lz4/lz4
-  https://www.contributor-covenant.org/*
-  https://github.com/oceanbase/*
 **/Doxyfile
   www.doxygen.org)
   https://www.gnu.org/software/libiconv/
@@ -212,9 +146,8 @@
   http://docs.mathjax.org/en/latest/output.html)
   https://www.mathjax.org
   https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/.
-  https://issues.apache.org/*
-  https://www.atatech.org/*
 **/*.result
+  http://trade.taobao.com/trade/*
   https://workitem.aone.alibaba-inc.com/*
   http://oracle.chinaitlab.com*
   http://bugfree.corp.taobao.com*
@@ -273,6 +206,8 @@
   *@email.com
   emily@163.com
   12@126.com
+  765432455@qq.com
+  641745677@qq.com
   555@qq.com
   foo@aol.com
   bar@aol.com
@@ -348,6 +283,8 @@
   *@email.com
   emily@163.com
   12@126.com
+  765432455@qq.com
+  641745677@qq.com
   555@qq.com
   foo@aol.com
   bar@aol.com
@@ -423,6 +360,8 @@
   *@email.com
   emily@163.com
   12@126.com
+  765432455@qq.com
+  641745677@qq.com
   555@qq.com
   foo@aol.com
   bar@aol.com
@@ -446,7 +385,6 @@
 /tools/codestyle/**
 /src/objit/deps/googletest/**
 /.git/**
-/deps/oblib/src/lib/compress/**
 --------------------------------------------------------
 # Config the ignored fold to escape the Chinese scan by GLOB wildcard
 --------------------------------------------------------

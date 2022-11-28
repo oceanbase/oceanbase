@@ -69,8 +69,8 @@ void TestTenantAllZoneMergeStrategy::gen_zone_merge_info(
 {
   zone_merge_info.tenant_id_ = CUR_TENANT_ID;
   zone_merge_info.zone_ = zone;
-  zone_merge_info.frozen_scn_.value_ = frozen_version;
-  zone_merge_info.broadcast_scn_.value_ = broadcast_version;
+  zone_merge_info.frozen_scn_.set_scn(frozen_version);
+  zone_merge_info.broadcast_scn_.set_scn(broadcast_version);
 }
 
 void TestTenantAllZoneMergeStrategy::gen_global_merge_info(
@@ -78,7 +78,7 @@ void TestTenantAllZoneMergeStrategy::gen_global_merge_info(
     ObGlobalMergeInfo &global_merge_info)
 {
   global_merge_info.tenant_id_ = CUR_TENANT_ID;
-  global_merge_info.global_broadcast_scn_.value_ = global_broadcast_version;
+  global_merge_info.global_broadcast_scn_.set_scn(global_broadcast_version);
 }
 
 void TestTenantAllZoneMergeStrategy::SetUp()

@@ -32,13 +32,9 @@ int ObMPStatistic::process()
   //
   const common::ObString tmp_string("Active threads not support");
   obmysql::OMPKString pkt(tmp_string);
+  packet_sender_.update_last_pkt_pos();
   ObSMConnection *conn = NULL;
-
-  if (OB_FAIL(packet_sender_.alloc_ezbuf())) {
-    LOG_WARN("failed to alloc easy buf", K(ret));
-  } else if (OB_FAIL(packet_sender_.update_last_pkt_pos())) {
-    LOG_WARN("failed to update last packet pos", K(ret));
-  } else if (OB_FAIL(response_packet(pkt, NULL))) {
+  if (OB_FAIL(response_packet(pkt, NULL))) {
     RPC_OBMYSQL_LOG(WARN, "fail to response statistic packet", K(ret));
   } else if (OB_ISNULL(conn = get_conn())) {
     ret = OB_ERR_UNEXPECTED;

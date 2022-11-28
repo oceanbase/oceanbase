@@ -72,6 +72,7 @@ inline uint32_t ob_fast_digits10(uint64_t v)
 
 /*
  * The idea comes from the talk by Alexandrescu "Three Optimization Tips for C++".
+ * https://m.facebook.com/notes/facebook-engineering/three-optimization-tips-for-c/10151361643253920/?__tn__=H-R
  * faster then databuff_print for 20~4 times(digits from 1~20),  20~7 times(digits from 1~9),
  *
  * usage:

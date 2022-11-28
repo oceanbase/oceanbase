@@ -407,7 +407,6 @@ int ObExprUDF::build_udf_ctx(int64_t udf_ctx_id,
 int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
-  ObObj tmp_result;
   ObObj result;
   pl::ObPL *pl_engine = nullptr;
   ParamStore *udf_params = nullptr;
@@ -480,20 +479,17 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       CK (0 < udf_params->count());
       OZ (ns.init_complex_obj(alloc, pl_type, udf_params->at(0), false, false));
     }
-    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     try {
       int64_t package_id = info->is_udt_udf_ ?
            share::schema::ObUDTObjectType::mask_object_id(info->udf_package_id_)
            : info->udf_package_id_;
       OZ(pl_engine->execute(ctx.exec_ctx_,
-                            info->is_called_in_sql_ ? tmp_alloc_g.get_allocator()
-                                                    : alloc,
                             package_id,
                             info->udf_id_,
                             info->subprogram_path_,
                             *udf_params,
                             info->nocopy_params_,
-                            tmp_result,
+                            result,
                             nullptr,
                             false,
                             true,
@@ -503,22 +499,11 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                             info->udf_id_,
                             info->udf_package_id_,
                             info->is_udt_udf_,
-                            tmp_result,
+                            result,
                             package_id);
     } catch(...) {
 //      OZ(after_calc_result(schema_guard, sql_ctx, ctx.exec_ctx_));
       throw;
-    }
-    if (OB_FAIL(ret)) {
-    } else if (info->is_called_in_sql_) {
-      if (tmp_result.is_pl_extend()) {
-        OZ (pl::ObUserDefinedType::deep_copy_obj(alloc, tmp_result, result, true));
-      } else {
-        OZ (deep_copy_obj(alloc, tmp_result, result));
-      }
-      OX (ctx.exec_ctx_.get_pl_ctx()->reset_obj());
-    } else {
-      result = tmp_result;
     }
     if (OB_SUCC(ret) && info->is_udt_cons_) {
       pl::ObPLComposite *obj_self = reinterpret_cast<pl::ObPLRecord *>(udf_params->at(0).get_ext());

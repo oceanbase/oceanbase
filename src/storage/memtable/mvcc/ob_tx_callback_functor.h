@@ -66,7 +66,7 @@ protected:
 // 2. In order to correctly calculate the checksum, we should calculate them
 //    based on the granlurity of redo logs. So even if need_remove_count has
 //    reach 0, we should continue the calculation for the callbacks with same
-//    log timestamp as last_log_ts_for_remove
+//    log timestamp as last_scn_for_remove
 // 3. we need free the callbacks because its allocator requires immdeiately
 //    reclamination
 class ObRemoveCallbacksForFastCommitFunctor : public ObITxCallbackFunctor
@@ -74,8 +74,8 @@ class ObRemoveCallbacksForFastCommitFunctor : public ObITxCallbackFunctor
 public:
   ObRemoveCallbacksForFastCommitFunctor(const int64_t need_remove_count)
     : need_remove_count_(need_remove_count),
-    last_log_ts_for_remove_(OB_INVALID_TIMESTAMP),
-    checksum_log_ts_(0),
+    last_scn_for_remove_(palf::SCN::min_scn()),
+    checksum_scn_(palf::SCN::min_scn()),
     checksumer_(NULL) {}
 
   virtual bool is_iter_end(ObITransCallback *callback) const override
@@ -88,15 +88,15 @@ public:
     } else if (callback->need_fill_redo() || callback->need_submit_log()) {
       // case2: the callback has not been sync successfully
       is_iter_end = true;
-    } else if (INT64_MAX == callback->get_log_ts()) {
+    } else if (palf::SCN::max_scn() == callback->get_scn()) {
       // case3: the callback has not been sync successfully
       is_iter_end = true;
-    } else if (OB_INVALID_TIMESTAMP != last_log_ts_for_remove_
-               && callback->get_log_ts() != last_log_ts_for_remove_) {
+    } else if (palf::SCN::min_scn() != last_scn_for_remove_
+               && callback->get_scn() != last_scn_for_remove_) {
       // case4: the callback has exceeded the last log whose log ts need to be
       //         removed
       is_iter_end = true;
-    } else if (OB_INVALID_TIMESTAMP == last_log_ts_for_remove_
+    } else if (palf::SCN::min_scn() == last_scn_for_remove_
                && 0 >= need_remove_count_) {
       // case6: the callback has not reached the last log whose log ts need to
       //         be removed while having no logs need to be removed
@@ -108,16 +108,16 @@ public:
     return is_iter_end;
   }
 
-  void set_checksumer(const int64_t checksum_log_ts,
+  void set_checksumer(const palf::SCN checksum_scn,
                       ObBatchChecksum *checksumer)
   {
-    checksum_log_ts_ = checksum_log_ts;
+    checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
   }
 
-  int64_t get_checksum_last_log_ts() const
+  palf::SCN get_checksum_last_scn() const
   {
-    return last_log_ts_for_remove_;
+    return last_scn_for_remove_;
   }
 
   int operator()(ObITransCallback *callback)
@@ -127,8 +127,8 @@ public:
     if (NULL == checksumer_) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "checksumer is lost", K(ret), K(*callback));
-    } else if (callback->get_log_ts() >= checksum_log_ts_
-               && OB_FAIL(callback->calc_checksum(checksum_log_ts_, checksumer_))) {
+    } else if (callback->get_scn() >= checksum_scn_
+               && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
       TRANS_LOG(WARN, "calc checksum callback failed", K(ret), K(*callback));
     } else if (OB_FAIL(callback->checkpoint_callback())) {
       TRANS_LOG(ERROR, "row remove callback failed", K(ret), K(*callback));
@@ -141,14 +141,14 @@ public:
       // callbacks until all callbacks with the same log ts has been removed in
       // order to satisfy the checksum calculation
       ObITransCallback *next = callback->get_next();
-      if (OB_INVALID_TIMESTAMP == last_log_ts_for_remove_) {
+      if (palf::SCN::min_scn() == last_scn_for_remove_) {
         if (0 == need_remove_count_) {
-          last_log_ts_for_remove_ = callback->get_log_ts();
+          last_scn_for_remove_ = callback->get_scn();
         } else if (NULL == next
                    || next->need_submit_log()
                    || next->need_fill_redo()
-                   || INT64_MAX == next->get_log_ts()) {
-          last_log_ts_for_remove_ = callback->get_log_ts();
+                   || palf::SCN::max_scn() == next->get_scn()) {
+          last_scn_for_remove_ = callback->get_scn();
         }
       }
     }
@@ -157,13 +157,13 @@ public:
   }
 
   VIRTUAL_TO_STRING_KV(K_(need_remove_count),
-                       K_(checksum_log_ts),
-                       K_(last_log_ts_for_remove));
+                       K_(checksum_scn),
+                       K_(last_scn_for_remove));
 
 private:
   int64_t need_remove_count_;
-  int64_t last_log_ts_for_remove_;
-  int64_t checksum_log_ts_;
+  palf::SCN last_scn_for_remove_;
+  palf::SCN checksum_scn_;
   ObBatchChecksum *checksumer_;
 };
 
@@ -190,9 +190,9 @@ public:
     cond_for_stop_(stop_func),
     need_checksum_(false),
     need_remove_data_(need_remove_data),
-    checksum_log_ts_(0),
+    checksum_scn_(palf::SCN::min_scn()),
     checksumer_(NULL),
-    checksum_last_log_ts_(OB_INVALID_TIMESTAMP)
+    checksum_last_scn_(palf::SCN::min_scn())
     {
       is_reverse_ = is_reverse;
     }
@@ -209,21 +209,21 @@ public:
     return is_valid;
   }
 
-  void set_checksumer(const int64_t checksum_log_ts,
-                     ObBatchChecksum *checksumer)
+  void set_checksumer(const palf::SCN checksum_scn,
+                      ObBatchChecksum *checksumer)
   {
     need_checksum_ = true;
-    checksum_log_ts_ = checksum_log_ts;
+    checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
   }
 
-  int64_t get_checksum_last_log_ts() const
+  palf::SCN get_checksum_last_scn() const
   {
     if (need_checksum_) {
-      return checksum_last_log_ts_;
+      return checksum_last_scn_;
     } else {
       TRANS_LOG(ERROR, "we donot go here if we donot checksum", KPC(this));
-      return OB_INVALID_TIMESTAMP;
+      return palf::SCN::min_scn();
     }
   }
 
@@ -237,7 +237,7 @@ public:
     } else if (callback->need_fill_redo() || callback->need_submit_log()) {
       // case2: the callback has not been sync successfully
       is_iter_end = true;
-    } else if (INT64_MAX == callback->get_log_ts()) {
+    } else if (palf::SCN::max_scn() == callback->get_scn()) {
       // case3: the callback has not been sync successfully
       is_iter_end = true;
     } else if (cond_for_stop_(callback)) {
@@ -261,10 +261,10 @@ public:
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "remove synced will never go here", K(ret), KPC(callback));
     } else if (need_checksum_
-               && callback->get_log_ts() >= checksum_log_ts_
-               && OB_FAIL(callback->calc_checksum(checksum_log_ts_, checksumer_))) {
+               && callback->get_scn() >= checksum_scn_
+               && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
       TRANS_LOG(WARN, "row remove callback failed", K(ret), K(*callback));
-    } else if (FALSE_IT(checksum_last_log_ts_ = callback->get_log_ts())) {
+    } else if (FALSE_IT(checksum_last_scn_ = callback->get_scn())) {
     } else if (cond_for_remove_(callback)) {
       if (need_remove_data_ && OB_FAIL(callback->rollback_callback())) {
         TRANS_LOG(WARN, "rollback callback failed", K(ret), K(*callback));
@@ -280,17 +280,17 @@ public:
 
   VIRTUAL_TO_STRING_KV(K_(need_checksum),
                        K_(need_remove_data),
-                       K_(checksum_log_ts),
-                       K_(checksum_last_log_ts));
+                       K_(checksum_scn),
+                       K_(checksum_last_scn));
 
 private:
   ObFunction<bool(ObITransCallback*)> cond_for_remove_;
   ObFunction<bool(ObITransCallback*)> cond_for_stop_;
   bool need_checksum_;
   bool need_remove_data_;
-  int64_t checksum_log_ts_;
+  palf::SCN checksum_scn_;
   ObBatchChecksum *checksumer_;
-  int64_t checksum_last_log_ts_;
+  palf::SCN checksum_last_scn_;
 };
 
 class ObRemoveCallbacksWCondFunctor : public ObITxCallbackFunctor
@@ -300,24 +300,24 @@ public:
                                 const bool need_remove_data = true)
     : cond_for_remove_(func),
     need_remove_data_(need_remove_data),
-    checksum_log_ts_(0),
+    checksum_scn_(palf::SCN::min_scn()),
     checksumer_(NULL),
-    checksum_last_log_ts_(OB_INVALID_TIMESTAMP) {}
+    checksum_last_scn_(palf::SCN::min_scn()) {}
 
-  void set_checksumer(const int64_t checksum_log_ts,
+  void set_checksumer(const palf::SCN checksum_scn,
                       ObBatchChecksum *checksumer)
   {
-    checksum_log_ts_ = checksum_log_ts;
+    checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
   }
 
-  int64_t get_checksum_last_log_ts() const
+  palf::SCN get_checksum_last_scn() const
   {
     if (NULL != checksumer_) {
-      return checksum_last_log_ts_;
+      return checksum_last_scn_;
     } else {
       TRANS_LOG(ERROR, "we donot go here if we donot checksum", KPC(this));
-      return OB_INVALID_TIMESTAMP;
+      return palf::SCN::min_scn();
     }
   }
 
@@ -353,8 +353,8 @@ public:
         if (NULL == checksumer_) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "checksumer is lost", K(ret), K(*callback));
-        } else if (callback->get_log_ts() >= checksum_log_ts_
-                   && OB_FAIL(callback->calc_checksum(checksum_log_ts_, checksumer_))) {
+        } else if (callback->get_scn() >= checksum_scn_
+                   && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
           TRANS_LOG(WARN, "calc checksum callback failed", K(ret), K(*callback));
         } else if (need_remove_data_ && OB_FAIL(callback->rollback_callback())) {
           TRANS_LOG(WARN, "rollback callback failed", K(ret), K(*callback));
@@ -362,17 +362,17 @@ public:
           TRANS_LOG(WARN, "checkpoint callback failed", K(ret), K(*callback));
         } else {
           need_remove_callback_ = true;
-          checksum_last_log_ts_ = callback->get_log_ts();
+          checksum_last_scn_ = callback->get_scn();
         }
       } else {
         if (NULL == checksumer_) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "checksumer is lost", K(ret), K(*callback));
-        } else if (callback->get_log_ts() >= checksum_log_ts_
-                   && OB_FAIL(callback->calc_checksum(checksum_log_ts_, checksumer_))) {
+        } else if (callback->get_scn() >= checksum_scn_
+                   && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
           TRANS_LOG(WARN, "row remove callback failed", K(ret), K(*callback));
         } else {
-          checksum_last_log_ts_ = callback->get_log_ts();
+          checksum_last_scn_ = callback->get_scn();
         }
       }
     }
@@ -381,15 +381,15 @@ public:
   }
 
   VIRTUAL_TO_STRING_KV(K_(need_remove_data),
-                       K_(checksum_log_ts),
-                       K_(checksum_last_log_ts));
+                       K_(checksum_scn),
+                       K_(checksum_last_scn));
 
 private:
   ObFunction<bool(ObITransCallback*)> cond_for_remove_;
   bool need_remove_data_;
-  int64_t checksum_log_ts_;
+  palf::SCN checksum_scn_;
   ObBatchChecksum *checksumer_;
-  int64_t checksum_last_log_ts_;
+  palf::SCN checksum_last_scn_;
 };
 
 class ObTxForAllFunctor : public ObITxCallbackFunctor
@@ -545,11 +545,11 @@ private:
 class ObCalcChecksumFunctor : public ObITxCallbackFunctor
 {
 public:
-  ObCalcChecksumFunctor(const int64_t target_log_ts = INT64_MAX)
-    : target_log_ts_(target_log_ts),
-    checksum_log_ts_(0),
+  ObCalcChecksumFunctor(const palf::SCN target_scn = palf::SCN::max_scn())
+    : target_scn_(target_scn),
+    checksum_scn_(palf::SCN::min_scn()),
     checksumer_(NULL),
-    checksum_last_log_ts_(OB_INVALID_TIMESTAMP) {}
+    checksum_last_scn_(palf::SCN::min_scn()) {}
 
   virtual bool is_iter_end(ObITransCallback *callback) const override
   {
@@ -558,7 +558,7 @@ public:
     if (NULL == callback) {
       // case1: the callback is nullptr
       is_iter_end = true;
-    } else if (callback->get_log_ts() > target_log_ts_) {
+    } else if (callback->get_scn() > target_scn_) {
       // case2: the callback is behind than the target
       is_iter_end = true;
     } else {
@@ -569,16 +569,16 @@ public:
   }
 
 
-  void set_checksumer(const int64_t checksum_log_ts,
+  void set_checksumer(const palf::SCN checksum_scn,
                       ObBatchChecksum *checksumer)
   {
-    checksum_log_ts_ = checksum_log_ts;
+    checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
   }
 
-  int64_t get_checksum_last_log_ts() const
+  palf::SCN get_checksum_last_scn() const
   {
-    return checksum_last_log_ts_;
+    return checksum_last_scn_;
   }
 
   int operator()(ObITransCallback *callback)
@@ -588,27 +588,27 @@ public:
     if (NULL == checksumer_) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "checksumer is lost", K(ret), K(*callback));
-    } else if (callback->get_log_ts() > target_log_ts_) {
+    } else if (callback->get_scn() > target_scn_) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "callback is begind the target, should iter end", K(ret), K(*callback));
-    } else if (callback->get_log_ts() >= checksum_log_ts_
-               && OB_FAIL(callback->calc_checksum(checksum_log_ts_, checksumer_))) {
+    } else if (callback->get_scn() >= checksum_scn_
+               && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
       TRANS_LOG(WARN, "calc checksum callback failed", K(ret), K(*callback));
     } else {
-      checksum_last_log_ts_ = callback->get_log_ts();
+      checksum_last_scn_ = callback->get_scn();
     }
 
     return ret;
   }
 
-  VIRTUAL_TO_STRING_KV(K_(target_log_ts),
-                       K_(checksum_log_ts),
-                       K_(checksum_last_log_ts));
+  VIRTUAL_TO_STRING_KV(K_(target_scn),
+                       K_(checksum_scn),
+                       K_(checksum_last_scn));
 private:
-  int64_t target_log_ts_;
-  int64_t checksum_log_ts_;
+  palf::SCN target_scn_;
+  palf::SCN checksum_scn_;
   ObBatchChecksum *checksumer_;
-  int64_t checksum_last_log_ts_;
+  palf::SCN checksum_last_scn_;
 };
 
 } // memtable

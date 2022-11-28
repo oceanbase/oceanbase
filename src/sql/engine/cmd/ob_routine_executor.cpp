@@ -145,7 +145,6 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
       int64_t pkg_id = stmt.is_udt_routine()
                ? share::schema::ObUDTObjectType::mask_object_id(package_id) : package_id;
       if (OB_FAIL(ctx.get_pl_engine()->execute(ctx,
-                                               ctx.get_allocator(),
                                                pkg_id,
                                                routine_id,
                                                path,

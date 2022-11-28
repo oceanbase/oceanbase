@@ -15,8 +15,9 @@
 #include "common/ob_simple_iterator.h"
 #include "lib/list/ob_dlist.h"
 #include "lib/utility/ob_print_utils.h"
-#include "storage/tx/ob_trans_define.h"
 #include "lib/allocator/ob_mod_define.h"
+#include "logservice/palf/scn.h"
+#include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase
 {
@@ -300,8 +301,8 @@ public:
       op_type_(UNKNOWN_TYPE),
       lock_op_status_(UNKNOWN_STATUS),
       lock_seq_no_(0),
-      commit_version_(0),
-      commit_log_ts_(0),
+      commit_version_(),
+      commit_scn_(),
       create_timestamp_(0),
       create_schema_version_(-1)
   {}
@@ -322,8 +323,8 @@ public:
       op_type_(UNKNOWN_TYPE),
       lock_op_status_(UNKNOWN_STATUS),
       lock_seq_no_(0),
-      commit_version_(0),
-      commit_log_ts_(0),
+      commit_version_(),
+      commit_scn_(),
       create_timestamp_(0),
       create_schema_version_(-1)
   {
@@ -380,7 +381,7 @@ private:
 public:
   TO_STRING_KV(K_(lock_id), K_(lock_mode), K_(owner_id), K_(create_trans_id),
                K_(op_type), K_(lock_op_status), K_(lock_seq_no),
-               K_(commit_version), K_(commit_log_ts), K_(create_timestamp),
+               K_(commit_version), K_(commit_scn), K_(create_timestamp),
                K_(create_schema_version));
 
   ObLockID lock_id_;
@@ -390,8 +391,8 @@ public:
   ObTableLockOpType op_type_;
   ObTableLockOpStatus lock_op_status_;
   int64_t lock_seq_no_;
-  int64_t commit_version_;
-  int64_t commit_log_ts_;
+  palf::SCN commit_version_;
+  palf::SCN commit_scn_;
   // used to check whether a trans modify before a schema_version or timestamp.
   int64_t create_timestamp_;
   int64_t create_schema_version_;
@@ -402,11 +403,11 @@ struct ObTableLockInfo
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLockInfo() : table_lock_ops_(), max_durable_log_ts_(OB_INVALID_TIMESTAMP) {}
+  ObTableLockInfo() : table_lock_ops_(), max_durable_scn_() {}
   void reset();
-  TO_STRING_KV(K_(table_lock_ops), K_(max_durable_log_ts));
+  TO_STRING_KV(K_(table_lock_ops), K_(max_durable_scn));
   ObTableLockOpArray table_lock_ops_;
-  int64_t max_durable_log_ts_;
+  palf::SCN max_durable_scn_;
 };
 
 static inline
@@ -427,6 +428,8 @@ typedef common::ObSimpleIterator<ObLockID, ObSimpleIteratorModIds::OB_OBJ_LOCK_M
 // Is used to store and traverse all lock op
 typedef common::ObSimpleIterator<ObTableLockOp, ObSimpleIteratorModIds::OB_OBJ_LOCK, 16> ObLockOpIterator;
 
+// whether use lock wait mgr or not.
+static const bool ENABLE_USE_LOCK_WAIT_MGR = true;
 // the threshold of timeout interval which will enable the deadlock avoid.
 static const int64_t MIN_DEADLOCK_AVOID_TIMEOUT_US = 60 * 1000 * 1000; // 1 min
 bool is_deadlock_avoid_enabled(const int64_t expire_time);

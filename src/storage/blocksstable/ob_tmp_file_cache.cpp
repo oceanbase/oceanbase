@@ -122,8 +122,7 @@ int ObTmpPageCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheV
 int ObTmpPageCache::prefetch(
     const ObTmpPageCacheKey &key,
     const ObTmpBlockIOInfo &info,
-    ObMacroBlockHandle &mb_handle,
-    common::ObIAllocator &allocator)
+    ObMacroBlockHandle &mb_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!key.is_valid() )) {
@@ -135,7 +134,7 @@ int ObTmpPageCache::prefetch(
     callback.cache_ = this;
     callback.offset_ = info.offset_;
     callback.buf_size_ = info.size_;
-    callback.allocator_ = &allocator;
+    callback.allocator_ = &allocator_;
     callback.key_ = key;
     if (OB_FAIL(read_io(info, callback, mb_handle))) {
       if (mb_handle.get_io_handle().is_empty()) {
@@ -157,8 +156,7 @@ int ObTmpPageCache::prefetch(
 int ObTmpPageCache::prefetch(
     const ObTmpBlockIOInfo &info,
     const common::ObIArray<ObTmpPageIOInfo> &page_io_infos,
-    ObMacroBlockHandle &mb_handle,
-    common::ObIAllocator &allocator)
+    ObMacroBlockHandle &mb_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(page_io_infos.count() <= 0)) {
@@ -169,21 +167,30 @@ int ObTmpPageCache::prefetch(
     callback.cache_ = this;
     callback.offset_ = info.offset_;
     callback.buf_size_ = info.size_;
-    callback.allocator_ = &allocator;
-    if (OB_FAIL(callback.page_io_infos_.assign(page_io_infos))) {
-      STORAGE_LOG(WARN, "fail to assign page io infos", K(ret), K(page_io_infos.count()), K(info));
-    } else if (OB_FAIL(read_io(info, callback, mb_handle))) {
-      if (mb_handle.get_io_handle().is_empty()) {
-        // TODO: After the continuous IO has been optimized, this should
-        // not happen.
-        if (OB_FAIL(mb_handle.wait(DEFAULT_IO_WAIT_TIME_MS))) {
-          STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
-        } else if (OB_FAIL(read_io(info, callback, mb_handle))) {
+    callback.allocator_ = &allocator_;
+    void *buf = allocator_.alloc(sizeof(common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>));
+    if (NULL == buf) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to alloc a buf", K(ret), K(info));
+    } else {
+      callback.page_io_infos_ = new (buf) common::ObSEArray<ObTmpPageIOInfo, ObTmpFilePageBuddy::MAX_PAGE_NUMS>();
+      callback.page_io_infos_->assign(page_io_infos);
+      if (OB_FAIL(read_io(info, callback, mb_handle))) {
+        if (mb_handle.get_io_handle().is_empty()) {
+          // TODO: After the continuous IO has been optimized, this should
+          // not happen.
+          if (OB_FAIL(mb_handle.wait(DEFAULT_IO_WAIT_TIME_MS))) {
+            STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
+          } else if (OB_FAIL(read_io(info, callback, mb_handle))) {
+            STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
+          }
+        } else {
           STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
         }
-      } else {
-        STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
       }
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
+      allocator_.free(buf);
     }
   }
   return ret;
@@ -333,8 +340,6 @@ ObTmpPageCache::ObTmpMultiPageIOCallback::ObTmpMultiPageIOCallback()
 
 ObTmpPageCache::ObTmpMultiPageIOCallback::~ObTmpMultiPageIOCallback()
 {
-  page_io_infos_.reset();
-  page_io_infos_.~ObIArray<ObTmpPageIOInfo>();
 }
 
 int ObTmpPageCache::ObTmpMultiPageIOCallback::inner_process(const bool is_success)
@@ -345,16 +350,17 @@ int ObTmpPageCache::ObTmpMultiPageIOCallback::inner_process(const bool is_succes
     STORAGE_LOG(WARN, "Invalid tmp page cache callback, ", KP_(cache), K(ret));
   } else if (is_success) {
     char *buf = const_cast<char *>(get_data());
-    for (int32_t i = 0; OB_SUCC(ret) && i < page_io_infos_.count(); i++) {
-      int64_t offset = page_io_infos_.at(i).key_.get_page_id()
+    for (int32_t i = 0; OB_SUCC(ret) && i < page_io_infos_->count(); i++) {
+      int64_t offset = page_io_infos_->at(i).key_.get_page_id()
           * ObTmpMacroBlock::get_default_page_size() - offset_;
       offset += ObTmpMacroBlock::get_header_padding();
       ObTmpPageCacheValue value(buf + offset);
-      if (OB_FAIL(process_page(page_io_infos_.at(i).key_, value))) {
+      if (OB_FAIL(process_page(page_io_infos_->at(i).key_, value))) {
         STORAGE_LOG(WARN, "fail to process tmp page cache in callback", K(ret));
       }
     }
-    page_io_infos_.reset();
+    page_io_infos_->reset();
+    allocator_->free(page_io_infos_);
   }
   if (OB_FAIL(ret) && NULL != allocator_ && NULL != io_buf_) {
     allocator_->free(io_buf_);
@@ -382,11 +388,7 @@ int ObTmpPageCache::ObTmpMultiPageIOCallback::inner_deep_copy(char *buf,
   } else {
     ObTmpMultiPageIOCallback *pcallback = new (buf) ObTmpMultiPageIOCallback();
     *pcallback = *this;
-    if (OB_FAIL(pcallback->page_io_infos_.assign(page_io_infos_))) {
-      STORAGE_LOG(WARN, "The tmp page io assign failed", K(ret));
-    } else {
-      callback = pcallback;
-    }
+    callback = pcallback;
   }
   return ret;
 }
@@ -430,9 +432,16 @@ ObTmpPageCache::~ObTmpPageCache()
 int ObTmpPageCache::init(const char *cache_name, const int64_t priority)
 {
   int ret = OB_SUCCESS;
+  const int64_t mem_limit = 4 * 1024 * 1024 * 1024LL;
   if (OB_FAIL((common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCacheValue>::init(
       cache_name, priority)))) {
     STORAGE_LOG(WARN, "Fail to init kv cache, ", K(ret));
+  } else if (OB_FAIL(allocator_.init(mem_limit,
+                                     OB_MALLOC_BIG_BLOCK_SIZE,
+                                     OB_MALLOC_BIG_BLOCK_SIZE))) {
+    STORAGE_LOG(WARN, "Fail to init io allocator, ", K(ret));
+  } else {
+    allocator_.set_label(ObModIds::OB_TMP_PAGE_CACHE);
   }
   return ret;
 }
@@ -440,6 +449,7 @@ int ObTmpPageCache::init(const char *cache_name, const int64_t priority)
 void ObTmpPageCache::destroy()
 {
   common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCacheValue>::destroy();
+  allocator_.destroy();
 }
 
 int ObTmpPageCache::put_page(const ObTmpPageCacheKey &key, const ObTmpPageCacheValue &value)

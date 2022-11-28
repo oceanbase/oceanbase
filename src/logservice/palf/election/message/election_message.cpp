@@ -133,7 +133,7 @@ ElectionMsgDebugTs ElectionMsgBase::get_debug_ts() const { return debug_ts_; }
 void ElectionMsgBase::set_process_ts()
 {
   debug_ts_.dest_process_ts_ = ObClockGenerator::getRealClock();
-  print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
+  print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
 }
 
 int64_t ElectionMsgBase::get_id() const { return id_; }
@@ -198,7 +198,7 @@ ElectionMsgBase(request.get_id(),
 accepted_(false) {
   set_receiver(request.get_sender());
   request_debug_ts_ = request.get_debug_ts();
-  print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESHOLD);
+  print_debug_ts_if_reach_warn_threshold(*this, MSG_DELAY_WARN_THRESTHOLD);
 }
 
 void ElectionPrepareResponseMsgMiddle::set_accepted(const int64_t ballot_number, const Lease lease) {

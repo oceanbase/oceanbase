@@ -168,7 +168,6 @@ private:
   int check_basic_validity(const ObDMLStmt &stmt, bool &is_valid);
   
   int has_valid_condition(ObDMLStmt &stmt,
-                          ObCostBasedRewriteCtx &ctx,
                           const ObIArray<ObRawExpr*> &conds,
                           bool &has_valid,
                           ObIArray<ObRawExpr*> *expect_ordering);
@@ -230,7 +229,6 @@ private:
                             bool &is_vaild);
 
   int check_condition_valid_basic(const ObDMLStmt *stmt,
-                                  ObCostBasedRewriteCtx &ctx,
                                   const ObRawExpr *expr,
                                   const bool is_topk,
                                   bool &is_valid,
@@ -243,7 +241,6 @@ private:
                                OrExpandInfo &trans_info);
 
   int is_condition_valid(const ObDMLStmt *stmt,
-                         ObCostBasedRewriteCtx &ctx,
                          const ObRawExpr *expr,
                          const ObIArray<ObRawExpr*> &expect_ordering,
                          const JoinedTable *joined_table,
@@ -266,11 +263,11 @@ private:
                                             ObIArray<ObRawExpr*> &cols);
 
   int gather_transform_infos(ObSelectStmt *stmt,
-                             ObCostBasedRewriteCtx &ctx,
                              const common::ObIArray<ObRawExpr*> &candi_conds,
                              const ObIArray<ObRawExpr*> &expect_ordering,
                              const JoinedTable *joined_table,
-                             ObIArray<OrExpandInfo> &trans_infos);
+                             ObIArray<OrExpandInfo> &trans_infos,
+                             bool &is_stmt_unique);
   int transform_or_expansion(ObSelectStmt *stmt,
                              const uint64_t trans_id,
                              const int64_t expr_pos,
@@ -311,9 +308,8 @@ private:
 
   // check for semi anti join
   int is_expand_anti_or_cond(const ObRawExpr &expr, bool &is_anti_or_cond);
-  int has_valid_semi_anti_cond(ObDMLStmt &stmt, ObCostBasedRewriteCtx &ctx, int64_t &begin_idx);
+  int has_valid_semi_anti_cond(ObDMLStmt &stmt, int64_t &begin_idx);
   int is_valid_semi_anti_cond(const ObDMLStmt *stmt,
-                              ObCostBasedRewriteCtx &ctx,
                               const ObRawExpr *expr,
                               const SemiInfo *semi_info,
                               uint64_t &trans_type);

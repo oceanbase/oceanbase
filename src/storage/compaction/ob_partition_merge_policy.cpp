@@ -23,6 +23,7 @@
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "logservice/palf/scn.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -69,9 +70,9 @@ int ObPartitionMergePolicy::get_neighbour_freeze_info(
     LOG_WARN("Failed to get freeze info, use snapshot_gc_ts instead", K(ret), K(snapshot_version));
     ret = OB_SUCCESS;
     freeze_info.reset();
-    freeze_info.next.freeze_ts = INT64_MAX;
+    freeze_info.next.freeze_scn.set_max();
     if (OB_NOT_NULL(last_major)) {
-      freeze_info.prev.freeze_ts = last_major->get_snapshot_version();
+      freeze_info.prev.freeze_scn.convert_for_gts(last_major->get_snapshot_version());
     }
   } else {
     LOG_WARN("Failed to get neighbour major freeze info", K(ret), K(snapshot_version));
@@ -102,15 +103,12 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
     LOG_WARN("get unexpected null memtable mgr from tablet or invalid table store", K(ret), K(tablet), K(table_store));
   } else if (table_store.get_minor_sstables().count() >= MAX_SSTABLE_CNT_IN_STORAGE) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_ERROR("Too many sstables, delay mini merge until sstable count falls below MAX_SSTABLE_CNT",
-              K(ret), K(table_store), K(tablet));
+    LOG_ERROR("Too many sstables, delay mini merge until sstable count falls below MAX_SSTABLE_CNT", K(ret));
     // add compaction diagnose info
     diagnose_table_count_unsafe(MINI_MERGE, tablet);
   } else if (OB_FAIL(tablet.get_memtable_mgr()->get_all_memtables(memtable_handles))) {
     LOG_WARN("failed to get all memtables from memtable mgr", K(ret));
-  } else if (OB_FAIL(get_neighbour_freeze_info(merge_inc_base_version,
-                                               table_store.get_major_sstables().get_boundary_table(true),
-                                               freeze_info))) {
+  } else if (OB_FAIL(get_neighbour_freeze_info(merge_inc_base_version, table_store.get_major_sstables().get_boundary_table(true), freeze_info))) {
     LOG_WARN("failed to get next major freeze", K(ret), K(merge_inc_base_version), K(table_store));
   } else if (OB_FAIL(find_mini_merge_tables(param, freeze_info, tablet, memtable_handles, result))) {
     if (OB_NO_NEED_MERGE != ret) {
@@ -134,15 +132,19 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
   result.reset();
   // TODO: @dengzhi.ldz, remove max_snapshot_version, merge all forzen memtables
   // Keep max_snapshot_version currently because major merge must be done step by step
-  int64_t max_snapshot_version = freeze_info.next.freeze_ts;
-  const int64_t clog_checkpoint_ts = tablet.get_clog_checkpoint_ts();
+  int64_t max_snapshot_version = freeze_info.next.freeze_scn.get_val_for_inner_table_field();
+  const palf::SCN clog_checkpoint_scn = tablet.get_clog_checkpoint_scn();
 
   // Freezing in the restart phase may not satisfy end >= last_max_sstable,
-  // so the memtable cannot be filtered by log_ts
+  // so the memtable cannot be filtered by scn
   // can only take out all frozen memtable
+  if (OB_UNLIKELY(!clog_checkpoint_scn.is_valid())) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("unexpected tablet info", K(ret), K(clog_checkpoint_scn));
+  }
   ObIMemtable *memtable = nullptr;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-  bool contain_force_freeze_memtable = false;
+  int64_t log_ts_included_memtable_cnt = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < memtable_handles.count(); ++i) {
     if (OB_ISNULL(memtable = static_cast<ObIMemtable *>(memtable_handles.at(i).get_table()))) {
       ret = OB_ERR_SYS;
@@ -153,20 +155,23 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
     } else if (!memtable->can_be_minor_merged()) {
       FLOG_INFO("memtable cannot mini merge now", K(ret), K(i), KPC(memtable), K(max_snapshot_version), K(memtable_handles), K(param));
       break;
-    } else if (memtable->get_end_log_ts() <= clog_checkpoint_ts) {
+    } else if (memtable->get_end_log_ts() <= clog_checkpoint_scn.get_val_for_inner_table_field()) {
       if (!tablet_id.is_special_merge_tablet()) {
-        if (static_cast<ObMemtable *>(memtable)->get_is_force_freeze()
-            && memtable->get_snapshot_version() > tablet.get_tablet_meta().snapshot_version_) {
-          contain_force_freeze_memtable = true;
+        ObMemtable *data_memtable = static_cast<ObMemtable *>(memtable);
+        if (memtable->get_snapshot_version() > tablet.get_snapshot_version()) {
+          // for force_freeze empty memtable & log_ts included non-empty memtable
+          ++log_ts_included_memtable_cnt;
+        } else {
+          continue;
         }
       } else {
         LOG_DEBUG("memtable wait to release", K(param), KPC(memtable));
         continue;
       }
     } else if (result.handle_.get_count() > 0) {
-      if (result.log_ts_range_.end_log_ts_ < memtable->get_start_log_ts()) {
-        FLOG_INFO("log ts range not continues, reset previous minor merge tables",
-                  "last_end_log_ts", result.log_ts_range_.end_log_ts_, KPC(memtable), K(tablet));
+      if (result.scn_range_.end_scn_ < memtable->get_start_scn()) {
+        FLOG_INFO("log id not continues, reset previous minor merge tables",
+                  "last_end_scn", result.scn_range_.end_scn_, KPC(memtable));
         // mini merge always use the oldest memtable to dump
         break;
       } else if (memtable->get_snapshot_version() > max_snapshot_version) {
@@ -182,11 +187,11 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       if (OB_FAIL(result.handle_.add_table(memtable))) {
         LOG_WARN("Failed to add memtable", KPC(memtable), K(ret));
       } else {
-        // update end_log_ts/snapshot_version
+        // update end_scn/snapshot_version
         if (1 == result.handle_.get_count()) {
-          result.log_ts_range_.start_log_ts_ = memtable->get_start_log_ts();
+          result.scn_range_.start_scn_ = memtable->get_start_scn();
         }
-        result.log_ts_range_.end_log_ts_ = memtable->get_end_log_ts();
+        result.scn_range_.end_scn_ = memtable->get_end_scn();
         result.version_range_.snapshot_version_ = MAX(memtable->get_snapshot_version(), result.version_range_.snapshot_version_);
       }
     }
@@ -194,15 +199,9 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
   if (OB_SUCC(ret)) {
     result.suggest_merge_type_ = param.merge_type_;
     result.version_range_.multi_version_start_ = tablet.get_multi_version_start();
-    if (result.handle_.empty()) {
-      ret = OB_NO_NEED_MERGE;
-    } else if (result.log_ts_range_.end_log_ts_ <= clog_checkpoint_ts) {
-      if (contain_force_freeze_memtable) {
-        result.update_tablet_directly_ = true;
-        LOG_INFO("meet empty force freeze memtable, could update tablet directly", K(ret), K(result));
-      } else {
-        ret = OB_NO_NEED_MERGE;
-      }
+    if (log_ts_included_memtable_cnt > 0 && log_ts_included_memtable_cnt == result.handle_.get_count()) {
+      result.update_tablet_directly_ = true;
+      LOG_INFO("meet one empty force freeze memtable, could update tablet directly", K(ret), K(result));
     } else if (OB_FAIL(refine_mini_merge_result(tablet, result))) {
       if (OB_NO_NEED_MERGE != ret) {
         LOG_WARN("failed to refine mini merge result", K(ret), K(tablet_id));
@@ -226,10 +225,10 @@ int ObPartitionMergePolicy::deal_with_minor_result(
   if (result.handle_.empty()) {
     ret = OB_NO_NEED_MERGE;
     LOG_INFO("no need to minor merge", K(ret), K(merge_type), K(result));
-  } else if (OB_UNLIKELY(!result.log_ts_range_.is_valid())) {
+  } else if (OB_UNLIKELY(!result.scn_range_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("Invalid argument to check result", K(ret), K(result));
-  } else if (OB_FAIL(result.handle_.check_continues(merge_type == BUF_MINOR_MERGE ? nullptr : &result.log_ts_range_))) {
+  } else if (OB_FAIL(result.handle_.check_continues(merge_type == BUF_MINOR_MERGE ? nullptr : &result.scn_range_))) {
     LOG_WARN("failed to check continues", K(ret), K(result));
   } else if (BUF_MINOR_MERGE == merge_type) {
   } else {
@@ -333,8 +332,8 @@ int ObPartitionMergePolicy::get_boundary_snapshot_version(
       min_snapshot = last_major_table->get_snapshot_version();
     }
   } else {
-    min_snapshot = freeze_info.prev.freeze_ts;
-    max_snapshot = freeze_info.next.freeze_ts;
+    min_snapshot = freeze_info.prev.freeze_scn.get_val_for_inner_table_field();
+    max_snapshot = freeze_info.next.freeze_scn.get_val_for_inner_table_field();
   }
   return ret;
 }
@@ -370,9 +369,9 @@ int ObPartitionMergePolicy::find_mini_minor_merge_tables(
       } else {
         found_greater = true;
         if (result.handle_.get_count() > 0) {
-          if (result.log_ts_range_.end_log_ts_ < table->get_start_log_ts()) {
+          if (result.scn_range_.end_scn_ < table->get_start_scn()) {
             LOG_INFO("log ts not continues, reset previous minor merge tables",
-                     K(i), "last_end_log_ts", result.log_ts_range_.end_log_ts_, KPC(table));
+                     K(i), "last_end_scn", result.scn_range_.end_scn_, KPC(table));
             result.reset_handle_and_range();
           } else if (HISTORY_MINI_MINOR_MERGE == param.merge_type_ && table->get_upper_trans_version() > max_snapshot_version) {
             break;
@@ -386,9 +385,9 @@ int ObPartitionMergePolicy::find_mini_minor_merge_tables(
           LOG_WARN("Failed to add table", KPC(table), K(ret));
         } else {
           if (1 == result.handle_.get_count()) {
-            result.log_ts_range_.start_log_ts_ = table->get_start_log_ts();
+            result.scn_range_.start_scn_ = table->get_start_scn();
           }
-          result.log_ts_range_.end_log_ts_ = table->get_end_log_ts();
+          result.scn_range_.end_scn_ = table->get_end_scn();
         }
       }
     } // end of for
@@ -501,7 +500,7 @@ int ObPartitionMergePolicy::get_major_merge_tables(
     LOG_WARN("failed to get freeze info", K(ret), K(base_table->get_snapshot_version()));
   } else if (OB_FAIL(result.handle_.add_table(base_table))) {
     LOG_WARN("failed to add base_table to result", K(ret));
-  } else if (base_table->get_snapshot_version() >= freeze_info.freeze_ts) {
+  } else if (base_table->get_snapshot_version() >= freeze_info.freeze_scn.get_val_for_inner_table_field()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected sstable with snapshot_version bigger than next freeze_scn",
              K(ret), K(freeze_info), KPC(base_table), K(tablet));
@@ -520,7 +519,7 @@ int ObPartitionMergePolicy::get_major_merge_tables(
         if (OB_FAIL(result.handle_.add_table(minor_tables[i]))) {
           LOG_WARN("failed to add table", K(ret));
         } else {
-          result.log_ts_range_.end_log_ts_ = minor_tables[i]->get_key().get_end_log_ts();
+          result.scn_range_.end_scn_ = minor_tables[i]->get_key().get_end_scn();
         }
       }
     }
@@ -537,7 +536,7 @@ int ObPartitionMergePolicy::get_major_merge_tables(
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(base_table)) {
-    const int64_t major_snapshot = MAX(base_table->get_snapshot_version(), freeze_info.freeze_ts);
+    const int64_t major_snapshot = MAX(base_table->get_snapshot_version(), freeze_info.freeze_scn.get_val_for_inner_table_field());
     result.read_base_version_ = base_table->get_snapshot_version();
     result.version_range_.snapshot_version_ = major_snapshot;
     result.create_snapshot_version_ = base_table->get_meta().get_basic_meta().create_snapshot_version_;
@@ -583,22 +582,22 @@ int ObPartitionMergePolicy::check_need_mini_merge(
       if (first_frozen_memtable->can_be_minor_merged()) {
         can_merge = true;
         if (OB_NOT_NULL(latest_sstable)
-            && (latest_sstable->get_end_log_ts() >= last_frozen_memtable->get_end_log_ts()
+            && (latest_sstable->get_end_scn() >= last_frozen_memtable->get_end_scn()
                 && tablet.get_snapshot_version() >= last_frozen_memtable->get_snapshot_version())) {
           need_merge = false;
           LOG_ERROR("unexpected sstable", K(ret), KPC(latest_sstable), KPC(last_frozen_memtable));
         }
       } else if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000)) {
         LOG_INFO("memtable can not minor merge",
-                 "memtable end_log_ts", first_frozen_memtable->get_end_log_ts(),
+                 "memtable end_scn", first_frozen_memtable->get_end_scn(),
                  "memtable timestamp", first_frozen_memtable->get_timestamp());
 
         const ObStorageSchema &storage_schema = tablet.get_storage_schema();
         ADD_SUSPECT_INFO(MINI_MERGE,
             ls_id, tablet_id,
             "memtable can not minor merge",
-            "memtable end_log_ts",
-            first_frozen_memtable->get_end_log_ts(),
+            "memtable end_scn",
+            first_frozen_memtable->get_end_scn(),
             "memtable timestamp",
             first_frozen_memtable->get_timestamp());
       }
@@ -649,14 +648,12 @@ int ObPartitionMergePolicy::check_need_mini_minor_merge(
   const ObTabletTableStore &table_store = tablet.get_table_store();
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   int64_t delay_merge_schedule_interval = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   ObTablesHandleArray minor_tables;
-  {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (tenant_config.is_valid()) {
-      mini_minor_threshold = tenant_config->minor_compact_trigger;
-      delay_merge_schedule_interval = tenant_config->_minor_compaction_interval;
-    }
-  } // end of ObTenantConfigGuard
+  if (tenant_config.is_valid()) {
+    mini_minor_threshold = tenant_config->minor_compact_trigger;
+    delay_merge_schedule_interval = tenant_config->_minor_compaction_interval;
+  }
   if (table_store.get_minor_sstables().count_ <= mini_minor_threshold) {
     // total number of mini sstable is less than threshold + 1
   } else if (tablet.is_ls_tx_data_tablet()) {
@@ -790,7 +787,7 @@ int ObPartitionMergePolicy::deal_hist_minor_merge(
     LOG_WARN("failed to get freeze info mgr from MTL", K(ret));
   } else if (OB_ISNULL(first_major_table = table_store.get_major_sstables().get_boundary_table(false))) {
     // index table during building, need compat with continuous multi version
-    if (0 == (max_snapshot_version = freeze_info_mgr->get_latest_frozen_timestamp())) {
+    if (0 == (max_snapshot_version = freeze_info_mgr->get_latest_frozen_scn().get_val_for_inner_table_field())) {
       // no freeze info found, wait normal mini minor to free sstable
       ret = OB_NO_NEED_MERGE;
       LOG_WARN("No freeze range to do hist minor merge for buiding index", K(ret), K(table_store));
@@ -882,7 +879,7 @@ int ObPartitionMergePolicy::check_need_major_merge(
           LOG_INFO("can't get freeze info after snapshot", K(ret), K(merge_version), K(major_sstable_version));
         }
       } else {
-        can_merge = last_sstable_snapshot >= freeze_info.freeze_ts;
+        can_merge = last_sstable_snapshot >= freeze_info.freeze_scn.get_val_for_inner_table_field();
         if (!can_merge) {
           LOG_TRACE("tablet need merge, but cannot merge now", K(tablet_id), K(merge_version), K(last_sstable_snapshot), K(freeze_info));
         }
@@ -898,7 +895,7 @@ int ObPartitionMergePolicy::check_need_major_merge(
           // no frozen memtable, need force freeze
           need_force_freeze = true;
         } else {
-          need_force_freeze = last_frozen_memtable->get_snapshot_version() < freeze_info.freeze_ts;
+          need_force_freeze = last_frozen_memtable->get_snapshot_version() < freeze_info.freeze_scn.get_val_for_inner_table_field();
           if (!need_force_freeze) {
             FLOG_INFO("tablet no need force freeze", K(ret), K(tablet_id), K(merge_version), K(freeze_info), KPC(last_frozen_memtable));
           }
@@ -979,7 +976,7 @@ int ObPartitionMergePolicy::diagnose_table_count_unsafe(
   const ObSSTable *major_sstable = static_cast<const ObSSTable *>(major_tables.get_boundary_table(false/*last*/));
   if (OB_ISNULL(major_sstable)) {
     const ObSSTable *minor_sstable = static_cast<const ObSSTable *>(minor_tables.get_boundary_table(false/*last*/));
-    ADD_COMPACTION_INFO_PARAM(tmp_str, buf_len, "no major sstable. first_minor_start_log_ts = ", minor_sstable->get_start_log_ts());
+    ADD_COMPACTION_INFO_PARAM(tmp_str, buf_len, "no major sstable. first_minor_start_scn = ", minor_sstable->get_start_scn());
   } else if (FALSE_IT(min_merged_snapshot = major_sstable->get_snapshot_version())) {
   } else if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(diagnose_min_reserved_snapshot,
       tablet_id,
@@ -1021,22 +1018,23 @@ int ObPartitionMergePolicy::refine_mini_merge_result(
   if (OB_UNLIKELY(!table_store.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Table store not valid", K(ret), K(table_store));
+  } else if (result.handle_.empty()) {
+    ret = OB_NO_NEED_MERGE;
+    // LOG_WARN("no need mini merge", K(ret), K(result), K(table_store));
   } else if (OB_ISNULL(last_table = table_store.get_minor_sstables().get_boundary_table(true/*last*/))) {
     // no minor sstable, skip to cut memtable's boundary
-  } else if (result.log_ts_range_.start_log_ts_ > last_table->get_end_log_ts()) {
+  } else if (result.scn_range_.start_scn_ > last_table->get_end_scn()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("Unexpected uncontinuous log_ts_range in mini merge",
-              K(ret), K(result), KPC(last_table), K(table_store), K(tablet));
-  } else if (result.log_ts_range_.start_log_ts_ < last_table->get_end_log_ts()
+    LOG_ERROR("Unexpected uncontinuous scn_range in mini merge", K(ret), K(result), KPC(last_table));
+  } else if (result.scn_range_.start_scn_ < last_table->get_end_scn()
       && !tablet.get_tablet_meta().tablet_id_.is_special_merge_tablet()) {
-    // fix start_log_ts to make log_ts_range continuous in migrate phase for issue 42832934
-    if (result.log_ts_range_.end_log_ts_ <= last_table->get_end_log_ts()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("No need mini merge memtable which is covered by existing sstable",
-               K(ret), K(result), KPC(last_table), K(table_store), K(tablet));
+    // fix start_log_ts to make scn_range continuous in migrate phase for issue 42832934
+    if (result.scn_range_.end_scn_ <= last_table->get_end_scn()) {
+      ret = OB_NEED_REMOVE_UNNEED_TABLE;
+      LOG_WARN("No need mini merge memtable which is covered by existing sstable", K(ret), K(result), KPC(last_table));
     } else {
-      result.log_ts_range_.start_log_ts_ = last_table->get_end_log_ts();
-      FLOG_INFO("Fix mini merge result log ts range", K(ret), K(result), KPC(last_table), K(table_store), K(tablet));
+      result.scn_range_.start_scn_ = last_table->get_end_scn();
+      FLOG_INFO("Fix mini merge result scn range", K(ret), K(result), KPC(last_table));
     }
   }
   return ret;
@@ -1086,15 +1084,13 @@ int ObPartitionMergePolicy::refine_mini_minor_merge_result(ObGetMergeTablesResul
     if (OB_SUCC(ret)) {
       int64_t minor_compact_trigger = DEFAULT_MINOR_COMPACT_TRIGGER;
       int64_t size_amplification_factor = OB_DEFAULT_COMPACTION_AMPLIFICATION_FACTOR;
-      {
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-        if (tenant_config.is_valid()) {
-          minor_compact_trigger = tenant_config->minor_compact_trigger;
-          if (tenant_config->_minor_compaction_amplification_factor != 0) {
-            size_amplification_factor = tenant_config->_minor_compaction_amplification_factor;
-          }
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+      if (tenant_config.is_valid()) {
+        minor_compact_trigger = tenant_config->minor_compact_trigger;
+        if (tenant_config->_minor_compaction_amplification_factor != 0) {
+          size_amplification_factor = tenant_config->_minor_compaction_amplification_factor;
         }
-      } // end of ObTenantConfigGuard
+      }
       if (1 == result.handle_.get_count()) {
         LOG_INFO("minor refine, only one sstable, no need to do mini minor merge", K(result));
         result.handle_.reset();
@@ -1120,9 +1116,9 @@ int ObPartitionMergePolicy::refine_mini_minor_merge_result(ObGetMergeTablesResul
             LOG_WARN("Failed to add table to minor merge result", KPC(table), K(ret));
           } else {
             if (1 == result.handle_.get_count()) {
-              result.log_ts_range_.start_log_ts_ = table->get_start_log_ts();
+              result.scn_range_.start_scn_ = table->get_start_scn();
             }
-            result.log_ts_range_.end_log_ts_ = table->get_end_log_ts();
+            result.scn_range_.end_scn_ = table->get_end_scn();
           }
         }
         if (OB_SUCC(ret)) {

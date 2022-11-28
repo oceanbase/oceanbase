@@ -165,10 +165,10 @@ public:
   virtual void handle(void *task) override;
 public:
   int check_trans_partition_leader_unsafe(const share::ObLSID &ls_id, bool &is_leader);
-  int get_weak_read_snapshot(const uint64_t tenant_id, int64_t &snapshot_version);
+  int get_weak_read_snapshot(const uint64_t tenant_id, palf::SCN &snapshot_version);
   int calculate_trans_cost(const ObTransID &tid, uint64_t &cost);
-  int get_ls_min_uncommit_prepare_version(const share::ObLSID &ls_id, int64_t &min_prepare_version);
-  int get_min_undecided_log_ts(const share::ObLSID &ls_id, int64_t &log_ts);
+  int get_ls_min_uncommit_prepare_version(const share::ObLSID &ls_id, palf::SCN &min_prepare_version);
+  int get_min_undecided_log_ts(const share::ObLSID &ls_id, palf::SCN &log_ts);
   //get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_iter);
   int dump_elr_statistic();
@@ -198,16 +198,13 @@ public:
                        const char *buf,
                        const int64_t buf_len);
   ObTxELRUtil &get_tx_elr_util() { return elr_util_; }
-#ifdef ENABLE_DEBUG_LOG
-  transaction::ObDefensiveCheckMgr *get_defensive_check_mgr() { return defensive_check_mgr_; }
-#endif
 private:
   void check_env_();
   bool can_create_ctx_(const int64_t trx_start_ts, const common::ObTsWindows &changing_leader_windows);
 private:
   int handle_redo_sync_task_(ObDupTableRedoSyncTask *task, bool &need_release_task);
   int handle_dup_pre_commit_task_(ObPreCommitTask *task, bool &need_release_task);
-  int get_gts_(int64_t &snapshot_version,
+  int get_gts_(palf::SCN &snapshot_version,
       MonotonicTs &receive_gts_ts,
       const int64_t trans_expired_time,
       const int64_t stmt_expired_time,
@@ -221,7 +218,7 @@ public:
                     ObITxCallback *endTransCb,
                     const bool is_rollback,
                     const int64_t expire_ts);
-  int get_max_commit_version(int64_t &commit_version) const;
+  int get_max_commit_version(palf::SCN &commit_version) const;
   #include "ob_trans_service_v4.h"
 private:
   static const int64_t END_STMT_MORE_TIME_US = 100 * 1000;
@@ -269,9 +266,6 @@ private:
   // account task qeuue's inqueue and dequeue
   uint32_t input_queue_count_;
   uint32_t output_queue_count_;
-#ifdef ENABLE_DEBUG_LOG
-  transaction::ObDefensiveCheckMgr *defensive_check_mgr_;
-#endif
   // txDesc's manager
   ObTxDescMgr tx_desc_mgr_;
 

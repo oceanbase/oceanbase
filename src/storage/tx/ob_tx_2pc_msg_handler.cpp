@@ -367,9 +367,7 @@ int ObPartTransCtx::set_2pc_participants_(const ObLSArray &participants)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(exec_info_.participants_.assign(participants))) {
-    TRANS_LOG(WARN, "set participants error", K(ret), K(participants), KPC(this));
-  }
+  exec_info_.participants_ = participants;
 
   return ret;
 }
@@ -447,16 +445,16 @@ int ObPartTransCtx::merge_prepare_log_info_(const ObLSLogInfo &prepare_info)
   return ret;
 }
 
-int ObPartTransCtx::update_2pc_prepare_version_(const int64_t prepare_version)
+int ObPartTransCtx::update_2pc_prepare_version_(const palf::SCN &prepare_version)
 {
   int ret = OB_SUCCESS;
 
-  exec_info_.prepare_version_ = std::max(prepare_version, exec_info_.prepare_version_);
+  exec_info_.prepare_version_ = palf::SCN::max(prepare_version, exec_info_.prepare_version_);
 
   return ret;
 }
 
-int ObPartTransCtx::set_2pc_commit_version_(const int64_t commit_version)
+int ObPartTransCtx::set_2pc_commit_version_(const palf::SCN &commit_version)
 {
   int ret = OB_SUCCESS;
 
@@ -583,6 +581,10 @@ int ObPartTransCtx::handle_tx_2pc_prepare_version_req(const Ob2pcPrepareVersionR
     TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
   } else if (OB_FAIL(handle_2pc_req(msg_type))) {
     TRANS_LOG(WARN, "handle 2pc request failed", KR(ret), K(msg), K(*this));
+  }
+
+  if (OB_SUCC(ret)) {
+    part_trans_action_ = ObPartTransAction::COMMIT;
   }
 
   return ret;
@@ -848,20 +850,18 @@ ObTwoPhaseCommitMsgType ObPartTransCtx::switch_msg_type_(const int16_t msg_type)
 int ObPartTransCtx::post_tx_commit_resp_(const int status)
 {
   int ret = OB_SUCCESS;
-  bool has_skip = false, use_rpc = true;
   const auto commit_version = ctx_tx_data_.get_commit_version();
   // scheduler on this server, direct call
   if (exec_info_.scheduler_ == addr_) {
-    use_rpc = false;
-    if (!has_callback_scheduler_()) {
-      if (OB_FAIL(defer_callback_scheduler_(status, commit_version))) {
+    if (need_callback_scheduler_()) {
+      if (OB_FAIL(defer_commit_callback_(status, commit_version))) {
         TRANS_LOG(WARN, "report tx commit result fail", K(ret), K(status), KPC(this));
       } else {
 #ifndef NDEBUG
         TRANS_LOG(INFO, "report tx commit result to local scheduler succeed", K(status), KP(this));
 #endif
       }
-    } else { has_skip = true; }
+    }
   } else {
     ObTxCommitRespMsg msg;
     build_tx_common_msg_(SCHEDULER_LS, msg);
@@ -876,10 +876,7 @@ int ObPartTransCtx::post_tx_commit_resp_(const int status)
 #endif
     }
   }
-  REC_TRANS_TRACE_EXT(tlog_, response_scheduler,
-                      OB_ID(ret), ret,
-                      OB_ID(tag1), has_skip,
-                      OB_ID(tag2), use_rpc,
+  REC_TRANS_TRACE_EXT(tlog_, response_scheduler, OB_ID(ret), ret,
                       OB_ID(status), status,
                       OB_ID(commit_version), commit_version);
   return ret;

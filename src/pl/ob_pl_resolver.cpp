@@ -30,6 +30,7 @@
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "observer/ob_server_struct.h"
+#include "pl/ob_pl_warning.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "share/schema/ob_trigger_info.h"
 #include "sql/resolver/expr/ob_raw_expr_copier.h"
@@ -421,12 +422,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
             LOG_WARN("fail to check decalre order", K(ret));
           } else if (OB_FAIL(resolve_declare_handler(parse_tree, static_cast<ObPLDeclareHandlerStmt*>(NULL == stmt ? current_block_->get_eh() : stmt), func))) {
             LOG_WARN("failed to resolve declare handler stmt", K(parse_tree), K(stmt), K(ret));
-          } else if (stmt != NULL && static_cast<ObPLDeclareHandlerStmt*>(stmt)->get_handlers().count() <= 0) {
-            // continue handler will record into handler_analyzer_,
-            // so here handlers may null, do not add null handler to current block.
-            stmt = NULL;
-          }
-          if (OB_SUCC(ret)) {
+          } else {
             func.set_is_all_sql_stmt(false);
           }
         }
@@ -650,7 +646,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       }
 
       if (OB_SUCC(ret) && handler_analyzer_.in_continue()  && NULL != stmt && !NO_EXCEPTION_STMT(stmt->get_type())) {
-        // for continue handler, should add handler to every stmt, here, make a new block, consturct new block with handler and stmt.
+        //如果自己在continue里，那么把栈里的handler都加到block里
         ObPLStmtBlock *block = NULL;
         if (OB_FAIL(make_block(func, current_block_, block))) {
           LOG_WARN("failed to make block", K(current_block_), K(ret));
@@ -995,22 +991,10 @@ int ObPLResolver::check_declare_order(ObPLStmtType type)
   CK(PL_VAR == type || PL_COND == type || PL_HANDLER == type || PL_CURSOR == type);
   if (is_oracle_mode()) {
     // oracle compatible, do nothing ...
-  } else {
-    ObPLStmtType pre_type = INVALID_PL_STMT;
-    if (OB_NOT_NULL(current_block_) && (current_block_->get_stmts().count() != 0)) {
-      pre_type =
-        current_block_->get_stmts().at(current_block_->get_stmts().count() - 1)->get_type();
-    }
-    if (handler_analyzer_.get_stack_depth() > 0) {
-      ObPLDeclareHandlerStmt::DeclareHandler info;
-      if (OB_FAIL(handler_analyzer_.get_handler(handler_analyzer_.get_stack_depth() - 1, info))) {
-        LOG_WARN("failed to get last handler", K(ret));
-      } else if (info.get_level() == current_level_) {
-        pre_type = PL_HANDLER;
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if ((PL_VAR == type || PL_COND == type)
+  } else if (OB_NOT_NULL(current_block_) && current_block_->get_stmts().count() != 0) {
+    ObPLStmtType pre_type =
+      current_block_->get_stmts().at(current_block_->get_stmts().count() - 1)->get_type();
+    if ((PL_VAR == type || PL_COND == type)
         && (PL_HANDLER == pre_type || PL_CURSOR == pre_type)) {
       ret = OB_ER_SP_VARCOND_AFTER_CURSHNDLR;
       LOG_USER_ERROR(OB_ER_SP_VARCOND_AFTER_CURSHNDLR);
@@ -3631,8 +3615,7 @@ int ObPLResolver::check_raw_expr_in_forall(ObRawExpr* expr, int64_t idx, bool &n
         ret = OB_ERR_FORALL_ITER_NOT_ALLOWED;
         LOG_WARN("PLS-00430: FORALL iteration variable INDX is not allowed in this context", K(ret));
       }
-      //这里控制包含非数组类型变量的forall语句直接以forloop实现, 避免forall先回退, 再forloop执行
-      can_array_binding = true;
+      can_array_binding = false;
     } else {
       bool inner_modify = false;
       bool inner_can_array_binding = true;
@@ -3828,10 +3811,7 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
         ret = OB_ERR_FORALL_DML_WITHOUT_BULK;
         LOG_WARN("PLS-00435: DML statement without BULK In-BIND cannot be used inside FORALL.", K(ret), K(params.count()));
       }
-      if (OB_FAIL(ret)) {
-      } else if (stmt.is_values_bound() || stmt.is_indices_bound() || stmt.is_indices_with_between_bound()) {
-        stmt.set_binding_array(false);
-      } else if (can_array_binding) {
+      if (OB_SUCC(ret) && can_array_binding) {
         stmt.set_binding_array(true);
       }
       if (OB_SUCC(ret) && StmtType::T_SELECT == sql_stmt->get_stmt_type()) {
@@ -3901,7 +3881,7 @@ int ObPLResolver::build_forall_index_expr(ObPLForAllStmt *stmt,
   OX (res_type.set_meta(data_type.get_data_type()->get_meta_type()));
   OX (res_type.set_accuracy(data_type.get_data_type()->get_accuracy()));
   OX (c_expr->set_result_type(res_type));
-  OZ (c_expr->add_flag(IS_DYNAMIC_PARAM));
+  OX (c_expr->add_flag(IS_DYNAMIC_PARAM));
   OZ (c_expr->extract_info());
   OX (expr = c_expr);
   return ret;
@@ -5219,16 +5199,15 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
               ret = OB_ERR_NO_CHOICES;
               LOG_WARN("no choices may appear with choice OTHERS in an exception handler",
                         K(ret));
-            } else if (OB_FAIL(desc->add_condition(value))) {
-              LOG_WARN("failed to add condition for delcare handler desc", K(ret), K(value));
             } else {
+              desc->add_condition(value);
               if (NOT_FOUND == actual_type && !handler_analyzer_.in_notfound()) {
                 handler_analyzer_.set_notfound(current_level_);
                 current_block_->set_notfound();
               } else if (SQL_WARNING == actual_type && !handler_analyzer_.in_warning()) {
                 handler_analyzer_.set_warning(current_level_);
                 current_block_->set_warning();
-              }
+              } else { /*do nothing*/ }
             }
           }
         }
@@ -5253,19 +5232,17 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
       }
     }
 
-    if (OB_SUCC(ret) && !desc->is_continue()) {
+    if (OB_SUCC(ret)) {
       ObPLDeclareHandlerStmt::DeclareHandler handler;
       handler.set_desc(desc);
-      if (OB_FAIL(stmt->add_handler(handler))) {
-        LOG_WARN("failed to add handler", K(ret));
-      }
+      OZ (stmt->add_handler(handler));
     }
 
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(current_block_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Symbol table is NULL", K(current_block_), K(ret));
-      } else if (stmt->get_handlers().count() > 0) {
+      } else {
         current_block_->set_eh(stmt);
       }
     }
@@ -5344,11 +5321,6 @@ int ObPLResolver::resolve_signal(const ObStmtNodeTree *parse_tree, ObPLSignalStm
         if (!lib::is_oracle_mode() && SQL_STATE != value->type_) {
           ret = OB_ERR_SP_BAD_CONDITION_TYPE;
           LOG_WARN("SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE", K(value->type_), K(ret));
-        } else if (!is_sqlstate_valid(value->sql_state_, value->str_len_)
-            || is_sqlstate_completion(value->sql_state_)) {
-          ret = OB_ER_SP_BAD_SQLSTATE;
-          LOG_USER_ERROR(OB_ER_SP_BAD_SQLSTATE, static_cast<int>(value->str_len_), value->sql_state_);
-          LOG_WARN("Bad SQLSTATE", K(ret));
         } else {
           stmt->set_value(*value);
           stmt->set_ob_error_code(value->error_code_);
@@ -5769,7 +5741,7 @@ int ObPLResolver::resolve_cparam_with_assign(ObRawExpr* expr,
       ret = OB_ERR_SP_UNDECLARED_VAR;
       LOG_WARN("can not find param in param list", K(ret), K(position), K(name));
     }
-    OZ (resolve_cparam_without_assign(call_expr->get_expr(), position, func, params, expr_idx));
+    OZ (resolve_cparam_without_assign(call_expr, position, func, params, expr_idx));
   }
   return ret;
 }
@@ -7141,7 +7113,7 @@ int ObPLResolver::add_pl_integer_checker_expr(ObRawExprFactory &expr_factory,
   if (OB_SUCC(ret)) {
     // 对于溢出的检查只关心双目运算符的计算
     if (2 == expr->get_param_count() && !IS_COMMON_COMPARISON_OP(expr->get_expr_type())
-             && !LOGIC_EXPR(expr) && expr->get_expr_type() != T_FUN_SYS_POWER && CHECK_RES_TYPE(expr)) {
+             && !LOGIC_EXPR(expr) && CHECK_RES_TYPE(expr)) {
       const ObRawExpr *left = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(0));
       const ObRawExpr *right = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(1));
       ObPLIntegerType left_pl_integer = PL_INTEGER_INVALID, right_pl_integer = PL_INTEGER_INVALID;
@@ -7261,7 +7233,6 @@ int ObPLResolver::resolve_condition_compile(
 
     OX (parse_result.is_for_trigger_ = is_for_trigger ? 1 : 0);
     OX (parse_result.is_dynamic_sql_ = is_for_dynamic ? 1 : 0);
-    parse_result.mysql_compatible_comment_ = 0;
     OZ (pl_parser.parse(new_sql, old_sql, parse_result, is_inner_parse));
     if (OB_SUCC(ret) && OB_NOT_NULL(is_include_old_new_in_trigger)) {
       *is_include_old_new_in_trigger = parse_result.is_include_old_new_in_trigger_;
@@ -8761,7 +8732,7 @@ do { \
                       type.set_ext();
                       question_expr->set_result_type(type);
                       OZ (question_expr->extract_info());
-                      OZ (question_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
+                      OX (question_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
                       OZ (obj_access_idents.at(idx_cnt - 1)
                             .params_.push_back(std::make_pair(question_expr, 0)));
                       OZ (func.add_expr(question_expr));
@@ -8778,7 +8749,7 @@ do { \
                   OZ (expr_factory_.create_raw_expr(T_NULL, null_expr));
                   CK (OB_NOT_NULL(null_expr));
                   OZ (null_expr->extract_info());
-                  OZ (null_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
+                  OX (null_expr->add_flag(IS_UDT_UDF_SELF_PARAM));
                   OZ (obj_access_idents.at(idx_cnt - 1)
                         .params_.push_back(std::make_pair(null_expr, 0)));
                   if (OB_SUCC(ret) && 0 == self_param_pos) {
@@ -10385,7 +10356,7 @@ int ObPLResolver::resolve_routine_accessible_by(
   const ObStmtNodeTree *routine_node = NULL;
   const ObStmtNodeTree *clause_node = NULL;
   CK (lib::is_oracle_mode());
-  OZ (parser.parse_routine_body(source, parse_tree, false), source);
+  OZ (parser.parse_routine_body(source, parse_tree), source);
   CK (OB_NOT_NULL(parse_tree->children_));
   CK (1 == parse_tree->num_child_);
   CK (OB_NOT_NULL(parse_tree->children_[0]));
@@ -10521,13 +10492,6 @@ int ObPLResolver::resolve_sf_clause(
                      K(ret_type.get_type()), K(ret));
           }
           OX (routine_info->set_pipelined());
-        }
-      } else if (T_COMMENT == child->type_) {
-        if (lib::is_mysql_mode()) {
-          ObString routine_comment;
-          CK (OB_NOT_NULL(dynamic_cast<ObRoutineInfo*>(routine_info)));
-          OX (routine_comment = ObString(child->str_len_, child->str_value_));
-          OZ (dynamic_cast<ObRoutineInfo*>(routine_info)->set_comment(routine_comment));
         }
       }
     }
@@ -10985,7 +10949,7 @@ int ObPLResolver::make_var_from_access(const ObIArray<ObObjAccessIdx> &access_id
     }
     OX (c_expr->set_result_type(res_type));
     OX (c_expr->set_enum_set_values(access_idxs.at(pos).elem_type_.get_type_info()));
-    OZ (c_expr->add_flag(IS_DYNAMIC_PARAM));
+    OX (c_expr->add_flag(IS_DYNAMIC_PARAM));
     OZ (c_expr->extract_info());
     OX (expr = c_expr);
   } else if (ObObjAccessIdx::is_package_baisc_variable(access_idxs)
@@ -11462,8 +11426,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
                 && OB_ERR_SP_WRONG_ARG_NUM != ret
                 && OB_ERR_CALL_WRONG_ARG != ret
                 && OB_ERR_FUNC_DUP != ret
-                && OB_ERR_POSITIONAL_FOLLOW_NAME != ret
-                && OB_ALLOCATE_MEMORY_FAILED != ret) {
+                && OB_ERR_POSITIONAL_FOLLOW_NAME != ret) {
               ret = OB_ERR_SP_DOES_NOT_EXIST;
               if (pkg_name.empty()) {
                 db_name = db_name.empty() ? OB_NOT_NULL(session_info) ? session_info->get_database_name() : db_name : db_name;
@@ -12219,7 +12182,7 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
 {
   int ret = OB_SUCCESS;
   dup = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !dup && i < stmt.get_handlers().count(); ++i) {
+  for (int64_t i = 0; !dup && i < stmt.get_handlers().count(); ++i) {
     ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc *desc = stmt.get_handler(i).get_desc();
     if (OB_ISNULL(desc)) {
       ret = OB_ERR_UNEXPECTED;
@@ -12233,29 +12196,6 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
           dup = true;
         }
       }
-    }
-  }
-  for (int64_t i = handler_analyzer_.get_stack_depth() - 1; OB_SUCC(ret) && !dup && i >= 0; --i) {
-    ObPLDeclareHandlerStmt::DeclareHandler handler;
-    if (OB_FAIL(handler_analyzer_.get_handler(i, handler))) {
-      LOG_WARN("failed to get handler from handler analyzer", K(ret), K(i));
-    } else if (handler.get_level() == current_level_) {
-      ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc *desc = handler.get_desc();
-      if (OB_ISNULL(desc)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Handler desc is NULL", K(ret), K(i), K(handler));
-      } else if (desc->is_continue()) {
-        for (int64_t j = 0; !dup && j < desc->get_conditions().count(); ++j) {
-          if (value.type_ == desc->get_condition(j).type_ &&
-              value.error_code_ == desc->get_condition(j).error_code_ &&
-              value.str_len_ == desc->get_condition(j).str_len_ &&
-              0 == STRNCMP(value.sql_state_, desc->get_condition(j).sql_state_, value.str_len_)) {
-            dup = true;
-          }
-        }
-      }
-    } else {
-      break;
     }
   }
   return ret;
@@ -12479,12 +12419,7 @@ int ObPLResolver::HandlerAnalyzer::reset_handlers(int64_t level)
   int ret = OB_SUCCESS;
   for (int64_t i = handler_stack_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
     if (handler_stack_.at(i).get_level() == level) {
-      if (i != handler_stack_.count() -1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to reset handlers with level", K(ret), K(level), K(i), K(handler_stack_.at(i)));
-      } else {
-        handler_stack_.pop_back();
-      }
+      handler_stack_.pop_back();
     }
   }
   if (OB_SUCC(ret) && handler_stack_.count() - 1 < top_continue_) {

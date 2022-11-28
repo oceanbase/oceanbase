@@ -98,15 +98,24 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
   ObColumnSchemaV2 *col_schema = NULL;
   bool is_oracle_mode = false;
   if (column.is_generated_column()) {
-    // If the dependent column of the generated column has a change column, the current default value
-    // should be used instead of orig vaule
-    if (column.get_cur_default_value().is_null()) {
+    if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1471) {
+      // when 2.0liboblog fetch <1471 cluster, Parsing the column schema only needs to read orig_default_value
+      // Can not judge cur_default_value.is_null(), because the dependent column may have a default value
+      // cur_default_value is is_not_null, misjudgment
       if (OB_FAIL(column.get_orig_default_value().get_string(col_def))) {
         LOG_WARN("get orig default value failed", K(ret));
       }
     } else {
-      if (OB_FAIL(column.get_cur_default_value().get_string(col_def))) {
-        LOG_WARN("get cur default value failed", K(ret));
+      // If the dependent column of the generated column has a change column, the current default value
+      // should be used instead of orig vaule
+      if (column.get_cur_default_value().is_null()) {
+        if (OB_FAIL(column.get_orig_default_value().get_string(col_def))) {
+          LOG_WARN("get orig default value failed", K(ret));
+        }
+      } else {
+        if (OB_FAIL(column.get_cur_default_value().get_string(col_def))) {
+          LOG_WARN("get cur default value failed", K(ret));
+        }
       }
     }
 
@@ -330,18 +339,23 @@ int ObSchemaUtils::construct_tenant_space_simple_table(
     ObSimpleTableSchemaV2 &table)
 {
   int ret = OB_SUCCESS;
-  table.set_tenant_id(tenant_id);
-  // for distributed virtual table in tenant space
-  int64_t part_num = table.get_partition_num();
-  for (int64_t i = 0; OB_SUCC(ret) && i < part_num; i++) {
-    ObPartition *part = table.get_part_array()[i];
-    if (OB_ISNULL(part)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("part is null", KR(ret), K(i));
-    } else {
-      part->set_tenant_id(tenant_id);
-    }
-  } // end for
+  if (is_sys_tenant(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else {
+    table.set_tenant_id(tenant_id);
+    // for distributed virtual table in tenant space
+    int64_t part_num = table.get_partition_num();
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_num; i++) {
+      ObPartition *part = table.get_part_array()[i];
+      if (OB_ISNULL(part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("part is null", KR(ret), K(i));
+      } else {
+        part->set_tenant_id(tenant_id);
+      }
+    } // end for
+  }
   return ret;
 }
 
@@ -355,8 +369,10 @@ int ObSchemaUtils::construct_tenant_space_full_table(
   } else {
     // index
     const int64_t table_id = table.get_table_id();
-    if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(table))) {
-      LOG_WARN("fail to fill sys indexes", KR(ret), K(tenant_id), K(table_id));
+    const int64_t index_id = ObSysTableChecker::get_sys_table_index_tid(table_id);
+    if (OB_INVALID_ID != index_id && OB_FAIL(table.add_simple_index_info(
+        ObAuxTableMetaInfo(index_id, USER_INDEX, INDEX_TYPE_NORMAL_LOCAL)))) {
+      LOG_WARN("fail to add simple index info", KR(ret), K(index_id), K(table_id));
     }
     // lob aux
     if (OB_SUCC(ret) && is_system_table(table_id)) {
@@ -436,7 +452,7 @@ int ObSchemaUtils::construct_inner_table_schemas(
       virtual_table_schema_creators,
       sys_view_schema_creators
     };
-    HEAP_VARS_2((ObTableSchema, table_schema), (ObTableSchema, data_schema)) {
+    HEAP_VARS_3((ObTableSchema, table_schema), (ObTableSchema, index_schema), (ObTableSchema, data_schema)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
         for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
              OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
@@ -455,11 +471,20 @@ int ObSchemaUtils::construct_inner_table_schemas(
             // skip
           } else if (OB_FAIL(tables.push_back(table_schema))) {
             LOG_WARN("fail to push back table schema", KR(ret), K(table_schema));
-          } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
-                     tenant_id, table_schema.get_table_id(), tables))) {
-            LOG_WARN("fail to append sys table index schemas",
-                     KR(ret), K(tenant_id), "table_id", table_schema.get_table_id());
+          } else if (ObSysTableChecker::is_sys_table_has_index(table_schema.get_table_id())) {
+            index_schema.reset();
+            const int64_t data_table_id = table_schema.get_table_id();
+            if (OB_FAIL(ObSysTableChecker::get_sys_table_index_schema(
+                data_table_id, index_schema))) {
+              LOG_WARN("fail to get sys table's index schema", KR(ret), K(data_table_id));
+            } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
+                       tenant_id, index_schema))) {
+              LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
+            } else if (OB_FAIL(tables.push_back(index_schema))) {
+              LOG_WARN("fail to push back table schema", KR(ret), K(index_schema));
+            }
           }
+
           const int64_t data_table_id = table_schema.get_table_id();
           if (OB_SUCC(ret) && exist) {
             if (OB_FAIL(add_sys_table_lob_aux_table(tenant_id, data_table_id, tables))) {

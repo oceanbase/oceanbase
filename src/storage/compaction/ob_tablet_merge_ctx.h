@@ -186,7 +186,6 @@ struct ObTabletMergeCtx
   int generate_macro_id_list(char *buf, const int64_t buf_len) const;
   void collect_running_info();
   int update_tablet_directly(const ObGetMergeTablesResult &get_merge_table_result);
-  int update_tablet_or_release_memtable(const ObGetMergeTablesResult &get_merge_table_result);
 
   OB_INLINE int64_t get_concurrent_cnt() const { return parallel_merge_ctx_.get_concurrent_cnt(); }
   ObITable::TableType get_merged_table_type() const;
@@ -195,7 +194,7 @@ struct ObTabletMergeCtx
   int64_t get_compaction_scn() const {
     return
         is_multi_version_minor_merge(param_.merge_type_) ?
-            log_ts_range_.end_log_ts_ : sstable_version_range_.snapshot_version_;
+            scn_range_.end_scn_.get_val_for_inner_table_field() : sstable_version_range_.snapshot_version_;
   }
 
   // 1. init in dag
@@ -204,8 +203,8 @@ struct ObTabletMergeCtx
 
   // 2. filled in ObPartitionStore::get_merge_tables
   ObVersionRange sstable_version_range_;// version range for new sstable
-  common::ObLogTsRange log_ts_range_;
-  int64_t merge_log_ts_;
+  share::ObScnRange scn_range_;
+  int64_t merge_scn_;
   int64_t create_snapshot_version_;
 
   storage::ObTablesHandleArray tables_handle_;
@@ -232,7 +231,7 @@ struct ObTabletMergeCtx
   // we would push up last_replay_log_ts if the corresponding memtable has been merged,
   // but this memtable may not be released due to the warming-up table_store
   // if a new index is created, the schedule will also trigger a mini merge for it with the old frozen memtable
-  // now we get a table store with old end_log_ts within the pg which has a larger last_replay_log_ts
+  // now we get a table store with old end_scn within the pg which has a larger last_replay_log_ts
   // so we need use last_replay_log_ts to prevent such useless mini merge happening
   int64_t read_base_version_; // use for major merge
   ObBasicTabletMergeDag *merge_dag_;
@@ -249,7 +248,7 @@ struct ObTabletMergeCtx
                K_(progressive_merge_round),
                K_(progressive_merge_step),
                K_(tables_handle), K_(schedule_major),
-               K_(log_ts_range), K_(merge_log_ts), K_(read_base_version),
+               K_(scn_range), K_(merge_scn), K_(read_base_version),
                K_(ls_handle), K_(tablet_handle),
                KPC_(merge_progress),
                KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq));

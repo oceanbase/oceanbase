@@ -106,7 +106,7 @@ TEST_F(TestLogModeMgr, test_init)
   LogModeMgr mode_mgr;
   LogModeMeta valid_meta, invalid_meta;
   ObAddr invalid_addr;
-  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, 1, AccessMode::APPEND, 1));
+  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, 1, AccessMode::APPEND, SCN::base_scn()));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(-1, addr1, valid_meta,
       mock_state_mgr_, mock_log_engine_, mock_config_mgr_, mock_sw_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.init(1, invalid_addr, valid_meta,
@@ -195,7 +195,7 @@ TEST_F(TestLogModeMgr, test_receive_mode_meta)
   PALF_LOG(INFO, "test_receive_mode_meta case");
   int64_t pid = 1;
   LogModeMeta valid_meta, invalid_meta;
-  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, 1, AccessMode::APPEND, 1));
+  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, 1, AccessMode::APPEND, SCN::base_scn()));
   bool has_accepted = false;
 
   {
@@ -226,7 +226,7 @@ TEST_F(TestLogModeMgr, test_receive_mode_meta)
     // can accpet
     LogModeMgr mode_mgr;
     init_test_mode_mgr_env(addr1, valid_meta, mode_mgr, FOLLOWER, ACTIVE);
-    EXPECT_EQ(OB_SUCCESS, valid_meta.generate(2, 2, AccessMode::APPEND, 1));
+    EXPECT_EQ(OB_SUCCESS, valid_meta.generate(2, 2, AccessMode::APPEND, SCN::base_scn()));
     EXPECT_TRUE(mode_mgr.can_receive_mode_meta(pid, valid_meta, has_accepted));
     EXPECT_FALSE(has_accepted);
     EXPECT_EQ(OB_SUCCESS, mode_mgr.receive_mode_meta(addr2, 2, valid_meta));
@@ -243,9 +243,9 @@ TEST_F(TestLogModeMgr, test_can_change_access_mode)
   PALF_LOG(INFO, "test_can_change_access_mode case");
   const int64_t mode_version = 1;
   const AccessMode access_mode = AccessMode::APPEND;
-  const int64_t ref_ts_ns = 1;
+  const SCN ref_scn = SCN::base_scn();
   LogModeMeta valid_meta;
-  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, mode_version, AccessMode::APPEND, 1));
+  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, mode_version, AccessMode::APPEND, SCN::base_scn()));
   {
     LogModeMgr mode_mgr;
     // role check
@@ -254,7 +254,7 @@ TEST_F(TestLogModeMgr, test_can_change_access_mode)
     init_test_mode_mgr_env(addr1, valid_meta, mode_mgr, FOLLOWER, PENDING);
     EXPECT_EQ(OB_NOT_MASTER, mode_mgr.can_change_access_mode_(mode_version));
     init_test_mode_mgr_env(addr1, valid_meta, mode_mgr, LEADER, RECONFIRM);
-    EXPECT_EQ(OB_NOT_MASTER, mode_mgr.change_access_mode(mode_version, access_mode, ref_ts_ns));
+    EXPECT_EQ(OB_NOT_MASTER, mode_mgr.change_access_mode(mode_version, access_mode, ref_scn));
     // mode_version check
     init_test_mode_mgr_env(addr1, valid_meta, mode_mgr, LEADER, ACTIVE);
     EXPECT_EQ(OB_STATE_NOT_MATCH, mode_mgr.can_change_access_mode_(2));
@@ -267,11 +267,11 @@ TEST_F(TestLogModeMgr, test_can_change_access_mode)
     LogModeMgr mode_mgr;
     init_test_mode_mgr_env(addr1, valid_meta, mode_mgr, LEADER, ACTIVE);
     // switch to prepare state
-    EXPECT_EQ(OB_EAGAIN, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, 1));
+    EXPECT_EQ(OB_EAGAIN, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, SCN::base_scn()));
     EXPECT_EQ(MODE_PREPARE, mode_mgr.state_);
     // accept_log_propopsal_id is 2
     EXPECT_EQ(OB_SUCCESS, mode_mgr.handle_prepare_response(addr2, 2, 2, LSN(0), valid_meta));
-    EXPECT_EQ(OB_NOT_MASTER, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, 1));
+    EXPECT_EQ(OB_NOT_MASTER, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, SCN::base_scn()));
     EXPECT_EQ(MODE_PREPARE, mode_mgr.state_);
   }
   PALF_LOG(INFO, "test_can_change_access_mode case");
@@ -284,40 +284,40 @@ TEST_F(TestLogModeMgr, test_can_switch_access_mode)
   std::vector<AccessMode> dst_access_mode_list;
   std::vector<bool> ret_list;
 
-  src_access_mode_list.push_back(AccessMode::APPEND);  
-  dst_access_mode_list.push_back(AccessMode::APPEND);  
+  src_access_mode_list.push_back(AccessMode::APPEND);
+  dst_access_mode_list.push_back(AccessMode::APPEND);
   ret_list.push_back(false);
 
-  src_access_mode_list.push_back(AccessMode::APPEND);  
-  dst_access_mode_list.push_back(AccessMode::RAW_WRITE);  
+  src_access_mode_list.push_back(AccessMode::APPEND);
+  dst_access_mode_list.push_back(AccessMode::RAW_WRITE);
   ret_list.push_back(true);
 
-  src_access_mode_list.push_back(AccessMode::APPEND);  
-  dst_access_mode_list.push_back(AccessMode::FLASHBACK);  
+  src_access_mode_list.push_back(AccessMode::APPEND);
+  dst_access_mode_list.push_back(AccessMode::FLASHBACK);
   ret_list.push_back(false);
 
-  src_access_mode_list.push_back(AccessMode::RAW_WRITE);  
-  dst_access_mode_list.push_back(AccessMode::RAW_WRITE);  
+  src_access_mode_list.push_back(AccessMode::RAW_WRITE);
+  dst_access_mode_list.push_back(AccessMode::RAW_WRITE);
   ret_list.push_back(false);
 
-  src_access_mode_list.push_back(AccessMode::RAW_WRITE);  
+  src_access_mode_list.push_back(AccessMode::RAW_WRITE);
   dst_access_mode_list.push_back(AccessMode::APPEND);
   ret_list.push_back(true);
 
-  src_access_mode_list.push_back(AccessMode::RAW_WRITE);  
-  dst_access_mode_list.push_back(AccessMode::FLASHBACK);  
+  src_access_mode_list.push_back(AccessMode::RAW_WRITE);
+  dst_access_mode_list.push_back(AccessMode::FLASHBACK);
   ret_list.push_back(true);
 
-  src_access_mode_list.push_back(AccessMode::FLASHBACK);  
-  dst_access_mode_list.push_back(AccessMode::FLASHBACK);  
+  src_access_mode_list.push_back(AccessMode::FLASHBACK);
+  dst_access_mode_list.push_back(AccessMode::FLASHBACK);
   ret_list.push_back(false);
 
-  src_access_mode_list.push_back(AccessMode::FLASHBACK);  
-  dst_access_mode_list.push_back(AccessMode::APPEND); 
+  src_access_mode_list.push_back(AccessMode::FLASHBACK);
+  dst_access_mode_list.push_back(AccessMode::APPEND);
   ret_list.push_back(true);
 
-  src_access_mode_list.push_back(AccessMode::FLASHBACK);  
-  dst_access_mode_list.push_back(AccessMode::RAW_WRITE);  
+  src_access_mode_list.push_back(AccessMode::FLASHBACK);
+  dst_access_mode_list.push_back(AccessMode::RAW_WRITE);
   ret_list.push_back(false);
 
   for (int i = 0; i < src_access_mode_list.size(); i++) {
@@ -332,37 +332,38 @@ TEST_F(TestLogModeMgr, test_change_access_mode)
   PALF_LOG(INFO, "test_change_access_mode case");
   const int64_t mode_version = 1;
   const AccessMode access_mode = AccessMode::APPEND;
-  const int64_t ref_ts_ns = 1;
+  const SCN ref_scn = SCN::base_scn();
   LogModeMeta valid_meta;
-  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, mode_version, AccessMode::APPEND, 1));
+  EXPECT_EQ(OB_SUCCESS, valid_meta.generate(1, mode_version, AccessMode::APPEND, SCN::base_scn()));
   {
     // not init, invalid args
     LogModeMgr mode_mgr;
-    EXPECT_EQ(OB_NOT_INIT, mode_mgr.change_access_mode(mode_version, access_mode, ref_ts_ns));
+    SCN invalid_scn;
+    EXPECT_EQ(OB_NOT_INIT, mode_mgr.change_access_mode(mode_version, access_mode, ref_scn));
     init_test_mode_mgr_env(addr1, valid_meta, mode_mgr, LEADER, ACTIVE);
-    EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.change_access_mode(-1, access_mode, ref_ts_ns));
-    EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.change_access_mode(mode_version, AccessMode::INVALID_ACCESS_MODE, ref_ts_ns));
-    EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.change_access_mode(mode_version, access_mode, OB_INVALID_TIMESTAMP));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.change_access_mode(-1, access_mode, ref_scn));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.change_access_mode(mode_version, AccessMode::INVALID_ACCESS_MODE, ref_scn));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, mode_mgr.change_access_mode(mode_version, access_mode, invalid_scn));
   }
   {
     LogModeMgr mode_mgr;
     init_test_mode_mgr_env(addr1, valid_meta, mode_mgr, LEADER, ACTIVE);
     // switch to prepare
-    EXPECT_EQ(OB_EAGAIN, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, 1));
+    EXPECT_EQ(OB_EAGAIN, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, SCN::base_scn()));
     EXPECT_EQ(MODE_PREPARE, mode_mgr.state_);
     // handle prepare resp
     EXPECT_EQ(OB_SUCCESS, mode_mgr.handle_prepare_response(addr2, 2, 1, LSN(0), valid_meta));
     // switch to accept
-    EXPECT_EQ(OB_EAGAIN, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, 1));
+    EXPECT_EQ(OB_EAGAIN, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, SCN::base_scn()));
     EXPECT_EQ(MODE_ACCEPT, mode_mgr.state_);
     // switch to accept
     EXPECT_EQ(OB_SUCCESS, mode_mgr.ack_mode_meta(addr1, 2));
     EXPECT_EQ(OB_SUCCESS, mode_mgr.ack_mode_meta(addr2, 2));
     // should not reach majority before leader's AccessMode is flushed
-    EXPECT_EQ(OB_EAGAIN, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, 1));
+    EXPECT_EQ(OB_EAGAIN, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, SCN::base_scn()));
     // self is flushed
     EXPECT_EQ(OB_SUCCESS, mode_mgr.after_flush_mode_meta(mode_mgr.last_submit_mode_meta_));
-    EXPECT_EQ(OB_SUCCESS, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, 1));
+    EXPECT_EQ(OB_SUCCESS, mode_mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, SCN::base_scn()));
     EXPECT_EQ(MODE_INIT, mode_mgr.state_);
     EXPECT_EQ(2, mode_mgr.applied_mode_meta_.mode_version_);
     EXPECT_EQ(AccessMode::RAW_WRITE, mode_mgr.applied_mode_meta_.access_mode_);

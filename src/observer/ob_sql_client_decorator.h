@@ -34,7 +34,6 @@ public:
   virtual int read(ReadResult &res, const int64_t cluster_id, const uint64_t tenant_id, const char *sql) override;
   virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override;
   virtual sqlclient::ObISQLConnectionPool *get_pool() override;
-  virtual sqlclient::ObISQLConnection *get_connection() override;
   using ObISQLClient::read;
   using ObISQLClient::write;
 
@@ -53,10 +52,10 @@ private:
 };
 
 class ObMySQLProxy;
+// use READ_CONSISTENCY(WEAK) when did_retry_weak is true
 class ObSQLClientRetryWeak: public ObISQLClient
 {
 public:
-  // only check_sys_variable is still useful
   ObSQLClientRetryWeak(ObISQLClient *sql_client,
                        bool did_use_retry = false,
                        int64_t snapshot_timestamp = OB_INVALID_TIMESTAMP,
@@ -69,7 +68,9 @@ public:
   {
     UNUSED(did_use_retry);
   }
-  // not useful, it just use sql_client directly
+  // tenant_id is the name space where SQL is actually executed
+  // The default semantics means strong consistent read
+  // For ordinary tenant system tables that require physical synchronization for the standby database, use the weakly consistent read of the specified snapshot version
   ObSQLClientRetryWeak(ObISQLClient *sql_client,
                        bool did_use_retry,
                        const uint64_t tenant_id,
@@ -93,27 +94,31 @@ public:
   using ObISQLClient::write;
 
   virtual sqlclient::ObISQLConnectionPool *get_pool() override;
-  virtual sqlclient::ObISQLConnection *get_connection() override;
-
   bool is_oracle_mode() const override
   {
     return NULL == sql_client_ ? false : sql_client_->is_oracle_mode();
   }
 private:
+  bool is_auto_mode() { return OB_INVALID_TENANT_ID != tenant_id_ || OB_INVALID_ID != table_id_; }
+  int update_weak_read_snapshot_timestamp(const uint64_t tenant_id);
+private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSQLClientRetryWeak);
   // functions
+  int weak_read(ReadResult &res, const uint64_t tenant_id, const char *sql);
+  int get_session_read_consistency(ObConsistencyLevel &level);
+  int set_session_read_consistency(ObConsistencyLevel &level);
   int read_without_check_sys_variable(
-      sqlclient::ObISQLConnection *conn,
+      ObSingleConnectionProxy &single_conn_proxy,
       ReadResult &res,
       const uint64_t tenant_id,
       const char *sql);
 private:
   ObISQLClient *sql_client_;
-  int64_t snapshot_timestamp_;  // deprecated
+  int64_t snapshot_timestamp_;
   bool check_sys_variable_;
-  uint64_t tenant_id_;          // deprecated
-  uint64_t table_id_;           // deprecated
+  uint64_t tenant_id_;
+  uint64_t table_id_;
 };
 
 } // end namespace common

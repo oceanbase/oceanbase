@@ -45,6 +45,7 @@ class ObLSService;
 namespace palf
 {
 struct LSN;
+class SCN;
 }
 
 namespace archive
@@ -113,7 +114,7 @@ public:
   void persist_and_load();
 
   // 获取日志流创建时间戳
-  int get_ls_create_ts(const share::ObLSID &id, int64_t &timestamp);
+  int get_ls_create_scn(const share::ObLSID &id, palf::SCN &scn);
 
 private:
   // 1. 持久化当前server做归档日志流归档进度

@@ -239,9 +239,9 @@ struct ObStoreRowLockState
 {
 public:
   ObStoreRowLockState()
-      : is_locked_(false), trans_version_(0), lock_trans_id_(),
-        lock_data_sequence_(0), is_delayed_cleanout_(false),
-        mvcc_row_(NULL)
+    : is_locked_(false), trans_version_(palf::SCN::min_scn()), lock_trans_id_(),
+    lock_data_sequence_(0), is_delayed_cleanout_(false),
+    mvcc_row_(NULL)
   {}
   void reset();
   TO_STRING_KV(K_(is_locked), K_(trans_version), K_(lock_trans_id),
@@ -249,7 +249,7 @@ public:
                KP_(mvcc_row));
 
   bool is_locked_;
-  int64_t trans_version_;
+  palf::SCN trans_version_;
   transaction::ObTransID lock_trans_id_;
   int64_t lock_data_sequence_;
   bool is_delayed_cleanout_;
@@ -420,11 +420,11 @@ struct ObStoreCtx
   int init_for_read(const share::ObLSID &ls_id,
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
-                    const int64_t snapshot_version);
+                    const palf::SCN &snapshot_version);
   int init_for_read(const storage::ObLSHandle &ls_handle,
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
-                    const int64_t snapshot_version);
+                    const palf::SCN &snapshot_version);
   void force_print_trace_log();
   TO_STRING_KV(KP(this),
                K_(ls_id),
@@ -434,7 +434,7 @@ struct ObStoreCtx
                KP_(table_iter),
                K_(table_version),
                K_(mvcc_acc_ctx),
-               K_(log_ts));
+               K_(replay_log_scn));
   share::ObLSID ls_id_;
   storage::ObLS *ls_;                              // for performance opt
   common::ObTabletID tablet_id_;
@@ -442,7 +442,7 @@ struct ObStoreCtx
   int64_t table_version_;                          // used to update memtable's max_schema_version
   int64_t timeout_;
   memtable::ObMvccAccessCtx mvcc_acc_ctx_;         // all txn relative context
-  int64_t log_ts_;                                 // used in replay pass log_ts
+  palf::SCN replay_log_scn_;                         // used in replay pass log_ts
 };
 
 

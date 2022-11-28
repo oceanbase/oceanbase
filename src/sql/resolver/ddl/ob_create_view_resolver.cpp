@@ -173,7 +173,8 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       } else if (OB_FAIL(check_view_columns(*select_stmt, view_columns_node,
                                             create_arg.error_info_, is_force_view))) {
         LOG_WARN("failed to check view columns", K(ret));
-      } else if (OB_FAIL(collect_dependency_infos(params_.query_ctx_, create_arg))) {
+      } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_322
+        && OB_FAIL(collect_dependency_infos(params_.query_ctx_, create_arg))) {
         LOG_WARN("failed to collect dependency infos", K(ret));
       } else {
         // specify view related flags

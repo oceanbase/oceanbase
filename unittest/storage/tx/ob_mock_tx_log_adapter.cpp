@@ -103,25 +103,27 @@ void MockTxLogAdapter::handle(void *task)
 
 int MockTxLogAdapter::submit_log(const char *buf,
                                  const int64_t size,
-                                 const int64_t base_ts,
+                                 const palf::SCN base_ts,
                                  ObTxBaseLogCb *cb,
                                  const bool need_nonblock)
 {
   int ret = OB_SUCCESS;
   int64_t ts = 0;
   palf::LSN lsn;
+  palf::SCN scn;
   UNUSED(need_nonblock);
   if (ATOMIC_LOAD(&is_running_)) {
 
     {
       ObSpinLockGuard file_guard(log_file_lock_);
       std::string log_buf(buf, size);
-      if (base_ts > max_allocated_log_ts) {
-        max_allocated_log_ts = base_ts;
+      if (base_ts.get_val_for_gts() > max_allocated_log_ts) {
+        max_allocated_log_ts = base_ts.get_val_for_gts();
       }
       ts = ++max_allocated_log_ts;
+      scn.convert_for_gts(ts);
       lsn = palf::LSN(++lsn_);
-      cb->set_log_ts(ts);
+      cb->set_log_ts(scn);
       cb->set_lsn(lsn);
       mock_log_file_[ts] = log_buf;
     }

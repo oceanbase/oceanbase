@@ -42,8 +42,8 @@ struct ObTxNodeArg
   int64_t memstore_version_;
   // seq_no_ is the sequence no of the executing sql
   int64_t seq_no_;
-  // log_ts_ is thee log ts of the redo log
-  int64_t log_ts_;
+  // scn_ is thee log ts of the redo log
+  palf::SCN scn_;
 
   TO_STRING_KV(KP_(data),
                KP_(old_row),
@@ -51,7 +51,7 @@ struct ObTxNodeArg
                K_(acc_checksum),
                K_(memstore_version),
                K_(seq_no),
-               K_(log_ts));
+               K_(scn));
 
   // Constructor for leader
   ObTxNodeArg(const ObMemtableData *data,
@@ -64,7 +64,7 @@ struct ObTxNodeArg
     acc_checksum_(0),
     memstore_version_(memstore_version),
     seq_no_(seq_no),
-    log_ts_(INT64_MAX) {}
+    scn_(palf::SCN::max_scn()) {}
 
   // Constructor for follower
   ObTxNodeArg(const ObMemtableData *data,
@@ -73,14 +73,14 @@ struct ObTxNodeArg
               const int64_t seq_no,
               const uint32_t modify_count,
               const uint32_t acc_checksum,
-              const int64_t log_ts)
+              const palf::SCN scn)
     : data_(data),
     old_row_(old_row),
     modify_count_(modify_count),
     acc_checksum_(acc_checksum),
     memstore_version_(memstore_version),
     seq_no_(seq_no),
-    log_ts_(log_ts) {}
+    scn_(scn) {}
 
   void reset() {
     data_ = NULL;
@@ -89,7 +89,7 @@ struct ObTxNodeArg
     acc_checksum_ = 0;
     memstore_version_ = 0;
     seq_no_ = 0;
-    log_ts_ = 0;
+    scn_ = palf::SCN::min_scn();
   }
 };
 

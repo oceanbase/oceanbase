@@ -366,13 +366,13 @@ int ObOptimizerUtil::adjust_exprs_by_ordering(ObIArray<ObRawExpr *> &exprs,
                                               const ObIArray<OrderItem> &ordering,
                                               const EqualSets &equal_sets,
                                               const ObIArray<ObRawExpr*> &const_exprs,
-                                              int64_t &prefix_count,
+                                              bool &ordering_used,
                                               bool &ordering_all_used,
                                               ObIArray<ObOrderDirection> &directions,
                                               ObIArray<int64_t> *match_map /*=NULL*/)
 {
   int ret = OB_SUCCESS;
-  prefix_count = -1;
+  ordering_used = false;
   ordering_all_used = false;
   ObSEArray<ObRawExpr *, 8> adjusted_exprs;
   ObSEArray<ObOrderDirection, 8> order_types;
@@ -398,6 +398,7 @@ int ObOptimizerUtil::adjust_exprs_by_ordering(ObIArray<ObRawExpr *> &exprs,
         //已经和其它序的表达式对应了，不再参与比较
       } else if (is_expr_equivalent(sort_key.expr_, exprs.at(j), equal_sets)) {
         is_found = true;
+        ordering_used = true;
         if (OB_FAIL(adjusted_exprs.push_back(exprs.at(j)))) {
           LOG_WARN("store ordered expr failed", K(ret), K(i), K(j));
         } else if (OB_FAIL(expr_map.push_back(j))) {
@@ -411,8 +412,7 @@ int ObOptimizerUtil::adjust_exprs_by_ordering(ObIArray<ObRawExpr *> &exprs,
     }
   }
   if (OB_SUCC(ret)) {
-    prefix_count = adjusted_exprs.count();
-    ordering_all_used = prefix_count > 0;
+    ordering_all_used = ordering_used;
   }
   for (int64_t j = 0; OB_SUCC(ret) && j < exprs.count(); ++j) {
     if (expr_idxs.has_member(j)) {
@@ -3094,29 +3094,6 @@ int ObOptimizerUtil::split_child_exprs(const ObFdItem *fd_item,
   return ret;
 }
 
-int ObOptimizerUtil::is_expr_is_determined(const ObIArray<ObRawExpr *> &exprs,
-                                           const ObFdItemSet &fd_item_set,
-                                           const EqualSets &equal_sets,
-                                           const ObIArray<ObRawExpr *> &const_exprs,
-                                           const ObRawExpr *expr,
-                                           bool &is_determined)
-{
-  int ret = OB_SUCCESS;
-  is_determined = false;
-  const ObFdItem *fd_item = NULL;
-  for (int64_t fd_idx = 0; OB_SUCC(ret) && !is_determined && fd_idx < fd_item_set.count(); ++fd_idx) {
-    if (OB_ISNULL(fd_item = fd_item_set.at(fd_idx))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null fd item", K(ret));
-    } else if (OB_FAIL(is_exprs_contain_fd_parent(exprs, *fd_item, equal_sets, const_exprs, is_determined))) {
-      LOG_WARN("failed to check is exprs contain fd parent", K(ret));
-    } else if (is_determined && OB_FAIL(fd_item->check_expr_in_child(expr, equal_sets, is_determined))) {
-      LOG_WARN("failed to check expr in fd child", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObOptimizerUtil::is_exprs_contain_fd_parent(const ObIArray<ObRawExpr *> &exprs,
                                                 const ObFdItem &fd_item,
                                                 const EqualSets &equal_sets,
@@ -3761,7 +3738,7 @@ int ObOptimizerUtil::decide_sort_keys_for_merge_style_op(const ObDMLStmt *stmt,
                                                          MergeKeyInfo *&interesting_key)
 {
   int ret = OB_SUCCESS;
-  int64_t prefix_count = -1;
+  bool input_ordering_used = false;
   bool input_ordering_all_used = false;
   ObSEArray<OrderItem, 8> order_items;
   ObSEArray<OrderItem, 8> final_items;
@@ -3773,13 +3750,13 @@ int ObOptimizerUtil::decide_sort_keys_for_merge_style_op(const ObDMLStmt *stmt,
                                                                input_ordering,
                                                                equal_sets,
                                                                const_exprs,
-                                                               prefix_count,
+                                                               input_ordering_used,
                                                                input_ordering_all_used,
                                                                merge_key.order_directions_,
                                                                &merge_key.map_array_))) {
     LOG_WARN("failed to adjust expr by ordering", K(ret));
-  } else if (prefix_count > 0 || input_ordering_all_used || NULL == interesting_key) {
-    if (!input_ordering_all_used && prefix_count <= 0 &&
+  } else if (input_ordering_all_used || input_ordering_used || NULL == interesting_key) {
+    if (!input_ordering_all_used && !input_ordering_used &&
         OB_FAIL(create_interesting_merge_key(stmt, merge_exprs, stmt_equal_sets, merge_key))) {
       LOG_WARN("failed to create interesting key", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::make_sort_keys(merge_key.order_exprs_,
@@ -3805,7 +3782,7 @@ int ObOptimizerUtil::decide_sort_keys_for_merge_style_op(const ObDMLStmt *stmt,
                                                         merge_key.need_sort_,
                                                         merge_key.prefix_pos_))) {
       LOG_WARN("failed to check need sort", K(ret));
-    } else if (prefix_count > 0) {
+    } else if (input_ordering_used) {
       /*do nothing*/
     } else {
       interesting_key = &merge_key;
@@ -4451,32 +4428,9 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
                                                     equal_sets, const_exprs, is_contain))) {
         LOG_WARN("failed to check is order unique", K(ret));
       } else if (is_contain) {
-        ObSEArray<ObRawExpr *, 8> left_domain;
-        ObSEArray<ObRawExpr *, 8> right_domain;
+        ObSEArray<ObRawExpr *, 8> new_root_exprs;
+        bool eliminate_new = false;
         int64_t expr_idx = -1;
-        // 生成新的root exprs集合
-        for (int64_t j = 0; OB_SUCC(ret) && j < root_exprs.count(); ++j) {
-          if (OB_FAIL(left_domain.push_back(root_exprs.at(j)))) {
-            LOG_WARN("failed to push back root expr", K(ret));
-          } else if (OB_FAIL(fd_item->check_expr_in_child(root_exprs.at(j), equal_sets, is_in_child))) {
-            LOG_WARN("failed to check expr in child", K(ret));
-          } else if (is_in_child) {
-            // root expr可以被其它expr决定
-          } else if (OB_FAIL(right_domain.push_back(root_exprs.at(j)))) {
-            LOG_WARN("failed to push back root expr", K(ret));
-          }
-        }
-        for (int64_t j = 0; OB_SUCC(ret) && j < parent_exprs->count(); ++j) {
-          if (find_equal_expr(candi_exprs, parent_exprs->at(j), equal_sets, expr_idx)) {
-            if (OB_FAIL(right_domain.push_back(candi_exprs.at(expr_idx)))) {
-              LOG_WARN("failed to push back root expr", K(ret));
-            } else if (eliminate_set.has_member(expr_idx)) {
-              // do nothing
-            } else if (OB_FAIL(left_domain.push_back(candi_exprs.at(expr_idx)))) {
-              LOG_WARN("failed to push back root expr", K(ret));
-            }
-          }
-        }
         // 检查当前fd item能否消除新的candi expr
         for (int64_t j = 0; OB_SUCC(ret) && j < candi_exprs.count(); ++j) {
           if (eliminate_set.has_member(j)) {
@@ -4489,13 +4443,30 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
             // do nothing
           } else if (OB_FAIL(eliminate_set.add_member(j))) {
             LOG_WARN("failed to add member", K(ret));
+          } else {
+            eliminate_new = true;
+          }
+        }
+        // 生成新的root exprs集合
+        for (int64_t j = 0; OB_SUCC(ret) && j < root_exprs.count(); ++j) {
+          if (OB_FAIL(fd_item->check_expr_in_child(root_exprs.at(j), equal_sets, is_in_child))) {
+            LOG_WARN("failed to check expr in child", K(ret));
+          } else if (is_in_child) {
+            // root expr可以被其它expr决定
+          } else if (OB_FAIL(new_root_exprs.push_back(root_exprs.at(j)))) {
+            LOG_WARN("failed to push back root expr", K(ret));
+          }
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < parent_exprs->count(); ++j) {
+          if (find_equal_expr(candi_exprs, parent_exprs->at(j), equal_sets, expr_idx)) {
+            if (OB_FAIL(new_root_exprs.push_back(candi_exprs.at(expr_idx)))) {
+              LOG_WARN("failed to push back root expr", K(ret));
+            }
           }
         }
         // 如果当前fd item消除了新的candi expr或者新的root expr集合比旧的root expr集合数量更少, 则用
         // 新的root expr集合替换旧的
-        if (OB_SUCC(ret)) {
-          ObIArray<ObRawExpr*> &new_root_exprs = left_domain.count() <= right_domain.count()
-                                                 ? left_domain : right_domain;
+        if (OB_SUCC(ret) && (eliminate_new || new_root_exprs.count() < root_exprs.count())) {
           if (OB_FAIL(root_exprs.assign(new_root_exprs))) {
             LOG_WARN("failed to assign exprs", K(ret));
           }
@@ -4568,7 +4539,6 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
   order_exprs.reset();
   ObSEArray<ObRawExpr *, 8> extended_order_exprs;
   ObSEArray<ObRawExpr *, 8> fd_set_parent_exprs;
-  ObRawExpr *first_removed_expr = NULL;
   if (OB_FAIL(get_fd_set_parent_exprs(fd_item_set, fd_set_parent_exprs))) {
     LOG_WARN("failed to get fd set parent exprs ", K(ret));
   }
@@ -4582,8 +4552,11 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
       LOG_WARN("failed to check is const expr", K(ret));
     } else if (is_const) {//const expr 不需要排序
       /*do nothing*/
-    } else if (eliminate_set.has_member(i)) {
-      first_removed_expr = NULL == first_removed_expr ? expr : first_removed_expr;
+    } else if (eliminate_set.has_member(i)) {//已被移除的 epxr
+      if (order_exprs.empty() &&
+          OB_FAIL(order_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back exprs", K(ret));
+      } else { /*do nothing*/ }
     } else if (OB_FAIL(order_exprs.push_back(expr))) {
       LOG_WARN("failed to push back exprs", K(ret));
     } else if (OB_FAIL(extended_order_exprs.push_back(expr))) {
@@ -4612,12 +4585,9 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
               } else if (OB_FAIL(fd_item->check_expr_in_child(candi_exprs.at(j), equal_sets,
                                                               is_in_child))) {
                 LOG_WARN("failed to check expr in fd child", K(ret));
-              } else if (!is_in_child) {
-                /*do nothing*/
-              } else if (candi_exprs.at(j)->has_flag(CNT_SUB_QUERY)) {
-                /* to check output more than one row, do not remove subquery in order expr. */
-              } else if (OB_FAIL(eliminate_set.add_member(j))) {
-                LOG_WARN("failed to add member", K(ret));
+              } else if (is_in_child && !candi_exprs.at(j)->has_flag(CNT_SUB_QUERY)) {
+                // 不消除 order expr 中的 subquery, 为了检测输出多行时报错
+                ret = eliminate_set.add_member(j);
               }
             }
             if (OB_FAIL(ret)) {
@@ -4632,10 +4602,6 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
         }
       }
     }
-  }
-  if (OB_FAIL(ret) && order_exprs.empty() && NULL != first_removed_expr
-      && OB_FAIL(order_exprs.push_back(first_removed_expr))) {
-    LOG_WARN("failed to push back exprs", K(ret));
   }
   return ret;
 }

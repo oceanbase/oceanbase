@@ -246,13 +246,17 @@ int TestDmlCommon::create_data_and_index_tablets(
   ObLSHandle ls_handle;
   obrpc::ObBatchCreateTabletArg arg;
 
+  palf::SCN log_scn;
   if (OB_FAIL(create_ls(tenant_id, ls_id, ls_handle))) {
     STORAGE_LOG(WARN, "failed to create ls", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(build_mixed_tablets_arg(tenant_id, ls_id,
       data_tablet_id, index_tablet_id_array, arg))) {
     STORAGE_LOG(WARN, "failed to build pure data tablet arg", K(ret),
         K(tenant_id), K(ls_id), K(data_tablet_id), K(index_tablet_id_array));
-  } else if (OB_FAIL(ls_handle.get_ls()->batch_create_tablets(arg, true/*is_replay*/))) {
+  } else if (OB_FAIL(log_scn.convert_for_lsn_allocator(1))) {
+    STORAGE_LOG(WARN, "failed to convert_for_lsn_allocator", K(ret));
+
+  } else if (OB_FAIL(ls_handle.get_ls()->batch_create_tablets(arg, log_scn, true/*is_replay*/))) {
     STORAGE_LOG(WARN, "failed to batch create tablets", K(ret), K(arg));
   }
 

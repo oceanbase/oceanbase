@@ -691,18 +691,6 @@ ObSMConnection* ObMPPacketSender::get_conn() const
   return conn;
 }
 
-int ObMPPacketSender::update_last_pkt_pos()
-{
-  int ret = OB_SUCCESS;
-  if (NULL == ez_buf_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ez buf is null and cannot update last pkt pos for compress protocol", K(ret));
-  } else {
-    comp_context_.update_last_pkt_pos(ez_buf_->last);
-  }
-  return ret;
-}
-
 void ObMPPacketSender::force_disconnect()
 {
   LOG_WARN("force disconnect", K(lbt()));
@@ -802,8 +790,7 @@ int ObMPPacketSender::try_encode_with(ObMySQLPacket &pkt,
         } else {
           // try again with larger buf size
           const int64_t new_alloc_size = TRY_EZ_BUF_SIZES[try_steps++];
-          // refer to doc: https://work.aone.alibaba-inc.com/issue/46055888
-          if (OB_SIZE_OVERFLOW != last_ret && OB_BUF_NOT_ENOUGH != last_ret) {
+          if (OB_SIZE_OVERFLOW != last_ret) {
             ret = last_ret;
             LOG_WARN("last_ret is not size overflow, need check code", K(last_ret));
           } else {
@@ -1039,9 +1026,9 @@ bool ObMPPacketSender::has_pl()
   return has_pl;
 }
 
-// current max_allow_packet_size <= 1G, TODO haozheng
+// current lob will <= 64MB, TODO oushen
 int64_t ObMPPacketSender::TRY_EZ_BUF_SIZES[] = {64*1024, 128*1024, 2*1024*1024 - 1024, 4*1024*1024 - 1024,
-                                                64*1024*1024 - 1024, 128*1024*1024, 512*1024*1024, 1024*1024*1024};
+                                                64*1024*1024 - 1024, 128*1024*1024};
 
 
 }; // end namespace observer

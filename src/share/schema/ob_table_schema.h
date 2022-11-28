@@ -1092,8 +1092,6 @@ public:
   int get_column_ids_without_rowkey(common::ObIArray<share::schema::ObColDesc> &column_ids, const bool no_virtual = false) const;
   int get_generated_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   inline bool has_generated_column() const { return generated_columns_.num_members() > 0; }
-  // The table has a generated column that is a partition key.
-  bool has_generated_and_partkey_column() const;
   int add_base_table_id(uint64_t base_table_id) { return base_table_ids_.push_back(base_table_id); }
   int add_depend_table_id(uint64_t depend_table_id) { return depend_table_ids_.push_back(depend_table_id); }
   int add_depend_mock_fk_parent_table_id(uint64_t depend_table_id) { return depend_mock_fk_parent_table_ids_.push_back(depend_table_id); }
@@ -1257,7 +1255,7 @@ public:
   virtual int init_column_meta_array(
       common::ObIArray<blocksstable::ObSSTableColumnMeta> &meta_array) const override;
   int check_column_can_be_altered_online(const ObColumnSchemaV2 *src_schema,
-                                         ObColumnSchemaV2 *dst_schema) const;
+                                         ObColumnSchemaV2 *dst_schema);
   int check_column_can_be_altered_offline(const ObColumnSchemaV2 *src_schema,
                                           ObColumnSchemaV2 *dst_schema) const;
   int check_alter_column_is_offline(const ObColumnSchemaV2 *src_schema,
@@ -1837,9 +1835,6 @@ inline bool ObSimpleTableSchemaV2::is_final_invalid_index() const
 {
   return is_final_invalid_index_status(index_status_);
 }
-
-
-
 }//end of namespace schema
 }//end of namespace share
 }//end of namespace oceanbase

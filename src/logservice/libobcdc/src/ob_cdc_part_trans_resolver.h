@@ -378,10 +378,9 @@ private:
       PartTransTask &part_trans_task,
       MissingLogInfo &missing_info);
 
-  inline bool is_valid_trans_type_(const int32_t trans_type) const
-  {
-    return transaction::TransType::SP_TRANS == trans_type || transaction::TransType::DIST_TRANS == trans_type;
-  }
+  bool is_valid_trans_type_(
+      const int32_t trans_type_int,
+      PartTransTask::CDCTransType &trans_type) const;
 
   // trans_commit_version of single LS trans is log submit_ts, otherwise is trans_commit_version recorded in trans_log.
   inline int64_t get_trans_commit_version_(const int64_t commit_log_submit_ts, const int64_t commit_version_in_tx_log) const
@@ -389,6 +388,10 @@ private:
     return transaction::ObTransVersion::INVALID_TRANS_VERSION == commit_version_in_tx_log ?
         commit_log_submit_ts : commit_version_in_tx_log;
   }
+
+  int check_and_handle_not_served_sys_ls_trans_(
+      PartTransTask &part_trans_task,
+      const PartTransTask::CDCTransType &trans_type);
 
 private:
   bool                      offlined_ CACHE_ALIGNED;     // Is the partition deleted

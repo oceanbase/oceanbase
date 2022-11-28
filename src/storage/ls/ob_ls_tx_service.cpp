@@ -23,12 +23,14 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_tx_retain_ctx_mgr.h"
 #include "logservice/ob_log_base_header.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
 using namespace share;
 using namespace transaction;
 using namespace transaction::tablelock;
+using namespace palf;
 
 namespace storage
 {
@@ -135,7 +137,7 @@ int ObLSTxService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   return ret;
 }
 
-int ObLSTxService::get_read_store_ctx(const int64_t snapshot,
+int ObLSTxService::get_read_store_ctx(const palf::SCN &snapshot,
                                       const int64_t lock_timeout,
                                       ObStoreCtx &store_ctx) const
 {
@@ -176,15 +178,14 @@ int ObLSTxService::revert_store_ctx(storage::ObStoreCtx &store_ctx) const
   return ret;
 }
 
-int ObLSTxService::check_scheduler_status(int64_t &min_start_scn,
-                                          transaction::MinStartScnStatus &status)
+int ObLSTxService::check_scheduler_status(share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(trans_service_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));
   } else {
-    ret = mgr_->check_scheduler_status(min_start_scn, status);
+    ret = trans_service_->check_scheduler_status(ls_id);
   }
   return ret;
 }
@@ -303,7 +304,7 @@ int ObLSTxService::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
 int ObLSTxService::replay(const void *buffer,
                           const int64_t nbytes,
                           const palf::LSN &lsn,
-                          const int64_t ts_ns)
+                          const palf::SCN &scn)
 {
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader base_header;
@@ -315,9 +316,10 @@ int ObLSTxService::replay(const void *buffer,
   } else if (OB_FAIL(base_header.deserialize(log_buf, nbytes, tmp_pos))) {
     LOG_WARN("log base header deserialize error", K(ret));
   } else if (OB_FAIL(ObTxReplayExecutor::execute(parent_, this, log_buf, nbytes,
-                                                 tmp_pos, lsn, ts_ns, base_header.get_replay_hint(),
+                                                 tmp_pos, lsn, scn,
+                                                 base_header.get_replay_hint(),
                                                  ls_id_, parent_->get_tenant_id()))) {
-    LOG_WARN("replay tx log error", K(ret), K(lsn), K(ts_ns));
+    LOG_WARN("replay tx log error", K(ret), K(lsn), K(scn));
   }
   return ret;
 }
@@ -332,7 +334,7 @@ ObTxLSLogWriter *ObLSTxService::get_tx_ls_log_writer() { return mgr_->get_ls_log
 
 ObITxLogAdapter *ObLSTxService::get_tx_ls_log_adapter() { return mgr_->get_ls_log_adapter(); }
 
-int ObLSTxService::replay_start_working_log(const ObTxStartWorkingLog &log, int64_t log_ts_ns)
+int ObLSTxService::replay_start_working_log(const ObTxStartWorkingLog &log, palf::SCN &log_ts_ns)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(mgr_)) {
@@ -418,7 +420,6 @@ int64_t ObLSTxService::get_rec_log_ts()
   int64_t min_rec_log_ts = INT64_MAX;
   int min_rec_log_ts_common_checkpoint_type_index = 0;
   char common_checkpoint_type[common::MAX_CHECKPOINT_TYPE_BUF_LENGTH];
-  ObSpinLockGuard guard(lock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     if (OB_NOT_NULL(common_checkpoints_[i])) {
       int64_t rec_log_ts = common_checkpoints_[i]->get_rec_log_ts();
@@ -443,7 +444,6 @@ int ObLSTxService::flush(int64_t rec_log_ts)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     // only flush the common_checkpoint that whose clog need recycle
     if (OB_NOT_NULL(common_checkpoints_[i]) && rec_log_ts >= common_checkpoints_[i]->get_rec_log_ts()) {
@@ -455,29 +455,11 @@ int ObLSTxService::flush(int64_t rec_log_ts)
   return ret;
 }
 
-int ObLSTxService::flush_ls_inner_tablet(const ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  if (!tablet_id.is_ls_inner_tablet()) {
-    TRANS_LOG(INFO, "not a ls inner tablet", KR(ret), K(tablet_id));
-  } else {
-    for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
-      if (OB_NOT_NULL(common_checkpoints_[i]) && common_checkpoints_[i]->get_tablet_id() == tablet_id &&
-          OB_FAIL(common_checkpoints_[i]->flush(INT64_MAX, true))) {
-        TRANS_LOG(WARN, "obCommonCheckpoint flush failed", KR(ret), KP(common_checkpoints_[i]));
-        break;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObLSTxService::get_common_checkpoint_info(
     ObIArray<ObCommonCheckpointVTInfo> &common_checkpoint_array)
 {
   int ret = OB_SUCCESS;
   common_checkpoint_array.reset();
-  ObSpinLockGuard guard(lock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     ObCommonCheckpoint *common_checkpoint = common_checkpoints_[i];
     if (OB_ISNULL(common_checkpoint)) {
@@ -556,7 +538,6 @@ int ObLSTxService::traversal_flush()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     if (OB_NOT_NULL(common_checkpoints_[i]) &&
         OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(INT64_MAX, false))) {
@@ -567,13 +548,12 @@ int ObLSTxService::traversal_flush()
 }
 
 void ObLSTxService::reset_() {
-  ObSpinLockGuard guard(lock_);
   for (int i = 0; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     common_checkpoints_[i] = NULL;
   }
 }
 
-int64_t ObLSTxService::get_ls_weak_read_ts() {
+palf::SCN ObLSTxService::get_ls_weak_read_ts() {
   return parent_->get_ls_wrs_handler()->get_ls_weak_read_ts();
 }
 

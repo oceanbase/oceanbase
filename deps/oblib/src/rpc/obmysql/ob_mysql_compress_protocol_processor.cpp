@@ -44,6 +44,7 @@ int ObMysqlCompressProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPo
      *  3B  length of compressed payload
      *  1B  compressed sequence id
      *  3B  length of payload before compression
+     * http://imysql.com/mysql-internal-manual/compressed-packet-header.html
      */
     uint32_t pktlen_before_compress = 0;
     ObMySQLUtil::get_uint3(start, pktlen);
@@ -124,6 +125,7 @@ inline int ObMysqlCompressProtocolProcessor::decode_compressed_packet(
               K(pkt_body_size), K(ret));
   } else {
     // pktlen_before_compress==0 means do not use compress
+    // http://imysql.com/mysql-internal-manual/uncompressed-payload.html
     if (0 == pktlen_before_compress) {
       pkt_body = const_cast<char *>(comp_buf);
     } else {

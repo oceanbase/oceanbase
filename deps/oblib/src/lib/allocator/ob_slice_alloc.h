@@ -131,11 +131,9 @@ public:
   }
 public:
   uint32_t total() { return total_; }
-  int32_t stock() { return stock_; }
-  int32_t remain() { return stock_ > K ? stock_ - K : (stock_ < 0 ? stock_ + K : stock_); }
   bool acquire() { return dec_if_gt(K, K) > K; }
   bool release() { return faa(-K) > 0; }
-  bool recycle() { 
+  bool recyle() {
     int32_t total = total_;
     return inc_if_lt(2 * K, -K + total) == -K + total; 
   }
@@ -273,39 +271,12 @@ public:
       LIB_LOG(INFO, "ObSliceAlloc init finished", K(bsize_), K(isize_), K(slice_limit_), KP(tmallocator_));
     }
   ~ObSliceAlloc() {
-    destroy();
+    tmallocator_ = NULL;
   }
   int init(const int size, const int block_size, BlockAlloc& block_alloc, const ObMemAttr& attr) {
     int ret = common::OB_SUCCESS;
     new(this)ObSliceAlloc(size, attr, block_size, block_alloc, NULL);
     return ret;
-  }
-  void destroy() {
-    for(int i = MAX_ARENA_NUM - 1; i >= 0; i--) {
-      Arena& arena = arena_[i];
-      Block* old_blk = arena.clear();
-      if (NULL != old_blk) {
-        blk_ref_[ObBlockSlicer::hash((uint64_t)old_blk) % MAX_REF_NUM].sync();
-        if (old_blk->release()) {
-          blk_list_.add(&old_blk->dlink_);
-        }
-      }
-    }
-    ObDLink* dlink = nullptr;
-    dlink = blk_list_.top();
-    while (OB_NOT_NULL(dlink)) {
-      Block* blk = CONTAINER_OF(dlink, Block, dlink_);
-      if (blk->recycle()) {
-        destroy_block(blk);
-        dlink = blk_list_.top();
-      } else {
-        _LIB_LOG(ERROR, "there was memory leak, stock=%d, total=%d, remain=%d"
-            , blk->stock(), blk->total(), blk->remain());
-        dlink = nullptr; // break
-      }
-    }
-    tmallocator_ = NULL;
-    bsize_ = 0;
   }
   void set_nway(int nway) {
     if (nway <= 0) {
@@ -380,7 +351,6 @@ public:
       Block* blk = item->host_;
 #ifndef NDEBUG
       abort_unless(blk->get_slice_alloc() == this);
-      abort_unless(bsize_ != 0);
 #else
       if (this != blk->get_slice_alloc()) {
         LIB_LOG(ERROR, "blk is freed or alloced by different slice_alloc", K(this), K(blk->get_slice_alloc()));
@@ -421,7 +391,7 @@ private:
   }
   void add_to_blist(Block* blk) {
     blk_list_.add(&blk->dlink_);
-    if (blk->recycle()) {
+    if (blk->recyle()) {
       destroy_block(blk);
     }
   }

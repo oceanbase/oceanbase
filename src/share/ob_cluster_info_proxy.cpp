@@ -186,7 +186,9 @@ bool ObClusterInfo::is_valid() const
     bret = true;
   }
   if (bret) {
-    bret = OB_INVALID_VERSION != version_;
+    if (CLUSTER_VERSION_2260 <= GET_MIN_CLUSTER_VERSION()) {
+      bret = OB_INVALID_VERSION != version_;
+    }
   }
   return bret;
 }

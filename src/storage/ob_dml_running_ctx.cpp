@@ -86,7 +86,7 @@ int ObDMLRunningCtx::init(
   } else if (OB_FAIL(prepare_relative_table(
       dml_param_.table_param_->get_data_table(),
       tablet_handle,
-      store_ctx_.mvcc_acc_ctx_.get_snapshot_version()))) {
+      store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator()))) {
     LOG_WARN("failed to get relative table", K(ret), K(dml_param_));
   } else if (NULL != column_ids && OB_FAIL(prepare_column_info(*column_ids))) {
     LOG_WARN("fail to get column descriptions and column map", K(ret), K(*column_ids));

@@ -42,7 +42,7 @@ const char *sys_task_type_to_str(const ObSysTaskType &type)
 {
   STATIC_ASSERT(static_cast<int64_t>(MAX_SYS_TASK_TYPE) == ARRAYSIZEOF(ObSysTaskTypeStr), "sys_task_type str len is mismatch");
   const char *str = "";
-  if (OB_UNLIKELY(type < 0 || type >= MAX_SYS_TASK_TYPE)) {
+  if (OB_UNLIKELY(type < 0 || type > MAX_SYS_TASK_TYPE)) {
     str = "invalid task type";
   } else {
     str = ObSysTaskTypeStr[type];

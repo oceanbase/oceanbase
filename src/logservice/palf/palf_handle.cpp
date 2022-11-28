@@ -102,13 +102,13 @@ int PalfHandle::set_paxos_member_region_map(const common::ObArrayHashMap<common:
 int PalfHandle::append(const PalfAppendOptions &opts,
                        const void *buffer,
                        const int64_t nbytes,
-                       const int64_t ref_ts_ns,
+                       const SCN &ref_scn,
                        LSN &lsn,
-                       int64_t &ts_ns)
+                       SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ret = palf_handle_impl_->submit_log(opts, static_cast<const char*>(buffer), nbytes, ref_ts_ns, lsn, ts_ns);
+  ret = palf_handle_impl_->submit_log(opts, static_cast<const char*>(buffer), nbytes, ref_scn, lsn, log_scn);
   return ret;
 }
 
@@ -121,20 +121,6 @@ int PalfHandle::raw_write(const PalfAppendOptions &opts,
   CHECK_VALID;
   ret = palf_handle_impl_->submit_group_log(opts, lsn, static_cast<const char*>(buffer), nbytes);
   return ret;
-}
-
-int PalfHandle::pread(void *&buffer,
-                      const int64_t nbytes,
-                      const LSN &lsn,
-                      int64_t &ts_ns,
-                      int64_t &read_size)
-{
-  UNUSED(buffer);
-  UNUSED(nbytes);
-  UNUSED(lsn);
-  UNUSED(ts_ns);
-  UNUSED(read_size);
-  return OB_NOT_SUPPORTED;
 }
 
 int PalfHandle::seek(const LSN &lsn, PalfBufferIterator &iter)
@@ -167,22 +153,22 @@ int PalfHandle::seek(const LSN &lsn, PalfGroupBufferIterator &iter)
   return ret;
 }
 
-int PalfHandle::seek(const int64_t ts_ns, PalfGroupBufferIterator &iter)
+int PalfHandle::seek(const SCN &scn, PalfGroupBufferIterator &iter)
 {
   CHECK_VALID;
-  return palf_handle_impl_->alloc_palf_group_buffer_iterator(ts_ns, iter);
+  return palf_handle_impl_->alloc_palf_group_buffer_iterator(scn, iter);
 }
 
-int PalfHandle::locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &result_lsn)
+int PalfHandle::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
 {
   CHECK_VALID;
-  return palf_handle_impl_->locate_by_ts_ns_coarsely(ts_ns, result_lsn);
+  return palf_handle_impl_->locate_by_scn_coarsely(scn, result_lsn);
 }
 
-int PalfHandle::locate_by_lsn_coarsely(const LSN &lsn, int64_t &result_ts_ns)
+int PalfHandle::locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn)
 {
   CHECK_VALID;
-  return palf_handle_impl_->locate_by_lsn_coarsely(lsn, result_ts_ns);
+  return palf_handle_impl_->locate_by_lsn_coarsely(lsn, result_scn);
 }
 
 int PalfHandle::enable_sync()
@@ -221,10 +207,10 @@ int PalfHandle::get_begin_lsn(LSN &lsn) const
   return palf_handle_impl_->get_begin_lsn(lsn);
 }
 
-int PalfHandle::get_begin_ts_ns(int64_t &ts) const
+int PalfHandle::get_begin_scn(SCN &scn) const
 {
   CHECK_VALID;
-  return palf_handle_impl_->get_begin_ts_ns(ts);
+  return palf_handle_impl_->get_begin_scn(scn);
 }
 
 int PalfHandle::get_base_info(const LSN &lsn,
@@ -259,11 +245,11 @@ int PalfHandle::get_max_lsn(LSN &lsn) const
   return ret;
 }
 
-int PalfHandle::get_max_ts_ns(int64_t &ts_ns) const
+int PalfHandle::get_max_scn(SCN &scn) const
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ts_ns = palf_handle_impl_->get_max_ts_ns();
+  scn = palf_handle_impl_->get_max_scn();
   return ret;
 }
 
@@ -273,11 +259,11 @@ int PalfHandle::get_role(common::ObRole &role, int64_t &proposal_id, bool &is_pe
   return palf_handle_impl_->get_role(role, proposal_id, is_pending_state);
 }
 
-int PalfHandle::get_end_ts_ns(int64_t &ts_ns) const
+int PalfHandle::get_end_scn(SCN &scn) const
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ts_ns = palf_handle_impl_->get_end_ts_ns();
+  scn = palf_handle_impl_->get_end_scn();
   return ret;
 }
 
@@ -399,11 +385,11 @@ int PalfHandle::change_leader_to(const common::ObAddr &dst_addr)
 int PalfHandle::change_access_mode(const int64_t proposal_id,
                                    const int64_t mode_version,
                                    const AccessMode &access_mode,
-                                   const int64_t ref_ts_ns)
+                                   const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ret = palf_handle_impl_->change_access_mode(proposal_id, mode_version, access_mode, ref_ts_ns);
+  ret = palf_handle_impl_->change_access_mode(proposal_id, mode_version, access_mode, ref_scn);
   return ret;
 }
 
@@ -622,12 +608,6 @@ int PalfHandle::stat(PalfStat &palf_stat) const
 {
   CHECK_VALID;
   return palf_handle_impl_->stat(palf_stat);
-}
-
-int PalfHandle::diagnose(PalfDiagnoseInfo &diagnose_info) const
-{
-  CHECK_VALID;
-  return palf_handle_impl_->diagnose(diagnose_info);
 }
 
 } // end namespace palf

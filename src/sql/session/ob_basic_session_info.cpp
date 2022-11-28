@@ -104,7 +104,6 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       next_tx_isolation_(transaction::ObTxIsolationLevel::INVALID),
       log_id_level_map_valid_(false),
       cur_phy_plan_(NULL),
-      plan_id_(0),
       capability_(),
       proxy_capability_(),
       client_mode_(OB_MIN_CLIENT_MODE),
@@ -122,6 +121,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       database_id_(OB_INVALID_ID),
       retry_info_(),
       last_query_trace_id_(),
+      last_consistency_level_(ObConsistencyLevel::INVALID_CONSISTENCY),
       nested_count_(-1),
       inf_pc_configs_(),
       curr_trans_last_stmt_end_time_(0),
@@ -375,7 +375,6 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   log_id_level_map_valid_ = false;
   log_id_level_map_.reset_level();
   cur_phy_plan_ = NULL;
-  plan_id_ = 0;
   capability_.capability_ = 0;
   proxy_capability_.capability_ = 0;
   client_mode_ = OB_MIN_CLIENT_MODE;
@@ -975,13 +974,10 @@ int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const b
       }
     }
   }  // end for
-  release_to_pool_ = OB_SUCC(ret);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(gen_sys_var_in_pc_str())) { //将影响plan的系统变量序列化并缓存
       LOG_INFO("fail to generate system variables in pc str");
-    } else if (OB_FAIL(gen_configs_in_pc_str())) {
-      LOG_INFO("fail to generate system config in pc str");
     } else {
       global_vars_version_ = 0;
     }
@@ -1275,8 +1271,7 @@ int ObBasicSessionInfo::load_sys_variable(ObIAllocator &calc_buf,
     LOG_WARN("fail to init sys var", K(ret), K(sys_var->get_type()),
              K(real_val), K(name), K(value));
   } else if (OB_FAIL(process_session_variable(var_id, real_val,
-                                              false /*check_timezone_valid*/,
-                                              false /*is_update_sys_var*/))) {
+                                              false /*check_timezone_valid*/))) {
     LOG_WARN("process system variable error",  K(name), K(type), K(real_val), K(value), K(ret));
   } else {
     variables_last_modify_time_ = ObTimeUtility::current_time();
@@ -1583,8 +1578,7 @@ int ObBasicSessionInfo::update_sys_variable(const ObSysVarClassType sys_var_id, 
   }
   // 更新变量
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(process_session_variable(sys_var_id, val, false /*check_timezone_valid*/,
-                                        true /*is_update_sys_var*/))) {
+    if (OB_FAIL(process_session_variable(sys_var_id, val, false /*check_timezone_valid*/))) {
       LOG_WARN("process system variable error",  K(sys_var_id), K(val), K(ret));
     } else if (OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
       LOG_WARN("add sys var id error",  K(sys_var_id), K(ret));
@@ -1639,42 +1633,37 @@ int ObBasicSessionInfo::gen_configs_in_pc_str()
   const int64_t MAX_CONFIG_STR_SIZE = 512;
   char *buf = NULL;
   int64_t pos = 0;
-  if (!GCONF.is_valid()) {
-    // do nothing
+  int64_t cluster_config_version = GCONF.get_current_version();
+  int64_t tenant_config_version = (::oceanbase::omt::ObTenantConfigMgr::get_instance()).get_tenant_config_version(tenant_id_);
+
+  if (!inf_pc_configs_.is_out_of_date(cluster_config_version, tenant_config_version)) {
+    // unupdated configs do nothing
   } else {
-    int64_t cluster_config_version = GCONF.get_current_version();
-    int64_t tenant_config_version = (::oceanbase::omt::ObTenantConfigMgr::get_instance()).get_tenant_config_version(tenant_id_);
-
-    if (!config_in_pc_str_.empty() &&
-          !inf_pc_configs_.is_out_of_date(cluster_config_version, tenant_config_version)) {
-      // unupdated configs do nothing
+    // update out-dated cached configs
+    // first time to generate configuaration strings, init allocator
+    if (is_first_gen_config_) {
+      inf_pc_configs_.init(tenant_id_);
+      if (NULL == (buf = (char *)name_pool_.alloc(MAX_CONFIG_STR_SIZE))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory", K(ret), K(MAX_CONFIG_STR_SIZE));
+      }
+      is_first_gen_config_ = false;
     } else {
-      // update out-dated cached configs
-      // first time to generate configuaration strings, init allocator
-      if (is_first_gen_config_) {
-        inf_pc_configs_.init(tenant_id_);
-        if (NULL == (buf = (char *)name_pool_.alloc(MAX_CONFIG_STR_SIZE))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate memory", K(ret), K(MAX_CONFIG_STR_SIZE));
-        }
-        is_first_gen_config_ = false;
-      } else {
-        // reuse memory
-        buf = config_in_pc_str_.ptr();
-        MEMSET(buf, 0, config_in_pc_str_.length());
-        config_in_pc_str_.reset();
-      }
+      // reuse memory
+      buf = config_in_pc_str_.ptr();
+      MEMSET(buf, 0, config_in_pc_str_.length());
+      config_in_pc_str_.reset();
+    }
 
-      // update configs
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(inf_pc_configs_.load_influence_plan_config())) {
-        LOG_WARN("failed to load configurations that will influence executions plan.", K(ret));
-      } else if (OB_FAIL(inf_pc_configs_.serialize_configs(buf, MAX_CONFIG_STR_SIZE, pos))) {
-        LOG_WARN("failed to serialize configs", K(ret));
-      } else {
-        (void)config_in_pc_str_.assign(buf, int32_t(pos));
-        inf_pc_configs_.update_version(cluster_config_version, tenant_config_version);
-      }
+    // update configs
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(inf_pc_configs_.load_influence_plan_config())) {
+      LOG_WARN("failed to load configurations that will influence executions plan.", K(ret));
+    } else if (OB_FAIL(inf_pc_configs_.serialize_configs(buf, MAX_CONFIG_STR_SIZE, pos))) {
+      LOG_WARN("failed to serialize configs", K(ret));
+    } else {
+      (void)config_in_pc_str_.assign(buf, int32_t(pos));
+      inf_pc_configs_.update_version(cluster_config_version, tenant_config_version);
     }
   }
   return ret;
@@ -1936,7 +1925,6 @@ int ObBasicSessionInfo::sys_variable_exists(const ObString &var, bool &is_exists
   return ret;
 }
 
-// for query and DML
 int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
 {
   int ret = OB_SUCCESS;
@@ -1945,7 +1933,6 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
     LOG_WARN("current physical plan is NULL", K(lbt()), K(ret));
   } else {
     cur_phy_plan_ = cur_phy_plan;
-    plan_id_ = cur_phy_plan->get_plan_id();
     int64_t len = cur_phy_plan->stat_.sql_id_.length();
     MEMCPY(sql_id_, cur_phy_plan->stat_.sql_id_.ptr(), len);
     sql_id_[len] = '\0';
@@ -1953,7 +1940,6 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
   return ret;
 }
 
-// for cmd only
 void ObBasicSessionInfo::set_cur_sql_id(char *sql_id)
 {
   if (nullptr == sql_id) {
@@ -2053,7 +2039,7 @@ ObObjType ObBasicSessionInfo::get_sys_variable_meta_type(const ObString &var_nam
     } while(0)
 
 OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var, const ObObj &val,
-    const bool check_timezone_valid/*true*/, const bool is_update_sys_var/*false*/)
+    const bool check_timezone_valid/*true*/)
 {
   int ret = OB_SUCCESS;
   switch (var) {
@@ -2084,12 +2070,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
     }
     case SYS_VAR_DEBUG_SYNC: {
       const bool is_global = false;
-      ret = process_session_debug_sync(val, is_global, is_update_sys_var);
+      ret = process_session_debug_sync(val, is_global);
       break;
     }
     case SYS_VAR_OB_GLOBAL_DEBUG_SYNC: {
       const bool is_global = true;
-      ret = process_session_debug_sync(val, is_global, is_update_sys_var);
+      ret = process_session_debug_sync(val, is_global);
       break;
     }
     case SYS_VAR_OB_READ_CONSISTENCY: {
@@ -2194,6 +2180,18 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_is_result_accurate(int_val != 0));
       break;
     }
+    case SYS_VAR__OB_USE_PARALLEL_EXECUTION: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set__ob_use_parallel_execution(int_val != 0));
+      break;
+    }
+    case SYS_VAR__OPTIMIZER_ADAPTIVE_CURSOR_SHARING: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set__optimizer_adaptive_cursor_sharing(int_val != 0));
+      break;
+    }
     case SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
@@ -2267,7 +2265,7 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_autocommit(int_val != 0));
       break;
     }
-    case SYS_VAR_OB_ENABLE_SHOW_TRACE: {
+    case SYS_VAR_OB_ENABLE_TRACE_LOG: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache_.set_ob_enable_trace_log(int_val != 0));
@@ -2619,6 +2617,18 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       OX (sys_vars_cache.set_base_is_result_accurate(int_val != 0));
       break;
     }
+    case SYS_VAR__OB_USE_PARALLEL_EXECUTION: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base__ob_use_parallel_execution(int_val != 0));
+      break;
+    }
+    case SYS_VAR__OPTIMIZER_ADAPTIVE_CURSOR_SHARING: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base__optimizer_adaptive_cursor_sharing(int_val != 0));
+      break;
+    }
     case SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
@@ -2692,7 +2702,7 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       OX (sys_vars_cache.set_base_autocommit(int_val != 0));
       break;
     }
-    case SYS_VAR_OB_ENABLE_SHOW_TRACE: {
+    case SYS_VAR_OB_ENABLE_TRACE_LOG: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_ob_enable_trace_log(int_val != 0));
@@ -2862,11 +2872,11 @@ int ObBasicSessionInfo::process_session_variable_fast()
   // SYS_VAR_DEBUG_SYNC
   OZ (ObSysVarFactory::calc_sys_var_store_idx(SYS_VAR_DEBUG_SYNC, store_idx));
   OV (ObSysVarFactory::is_valid_sys_var_store_idx(store_idx));
-  OZ (process_session_debug_sync(sys_vars_[store_idx]->get_value(), false, false));
+  OZ (process_session_debug_sync(sys_vars_[store_idx]->get_value(), false));
   // SYS_VAR_OB_GLOBAL_DEBUG_SYNC
   OZ (ObSysVarFactory::calc_sys_var_store_idx(SYS_VAR_OB_GLOBAL_DEBUG_SYNC, store_idx));
   OV (ObSysVarFactory::is_valid_sys_var_store_idx(store_idx));
-  OZ (process_session_debug_sync(sys_vars_[store_idx]->get_value(), true, false));
+  OZ (process_session_debug_sync(sys_vars_[store_idx]->get_value(), true));
   // SYS_VAR_OB_READ_CONSISTENCY
   // 这个系统变量对应consistency_level_，该属性只能通过常规途径修改，所以适合加入sys_vars_cache_，
   // 但这样涉及到的相关修改比较大，稳妥起见保留现有的序列化操作，只在本接口里执行，保证主线程正确初始化。
@@ -3010,8 +3020,7 @@ int ObBasicSessionInfo::process_session_log_level(const ObObj &val)
 }
 
 int ObBasicSessionInfo::process_session_debug_sync(const ObObj &val,
-                                                   const bool is_global,
-                                                   const bool is_update_sys_var)
+                                                   const bool is_global)
 {
   int ret = OB_SUCCESS;
   if (OB_SYS_TENANT_ID == tenant_id_ && GCONF.is_debug_sync_enabled()) {
@@ -3024,12 +3033,6 @@ int ObBasicSessionInfo::process_session_debug_sync(const ObObj &val,
           LOG_WARN("set debug sync string failed", K(debug_sync), K(ret));
         }
       }
-    }
-  } else {
-    if (!GCONF.is_debug_sync_enabled() && is_update_sys_var) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                    "Non-system tenant or debug_sync is turned off, set debug_sync is");
     }
   }
   return ret;
@@ -3245,6 +3248,13 @@ int ObBasicSessionInfo::get_pl_block_timeout(int64_t &pl_block_timeout) const
 int ObBasicSessionInfo::get_ob_read_consistency(int64_t &ob_read_consistency) const
 {
   return get_int64_sys_var(SYS_VAR_OB_READ_CONSISTENCY, ob_read_consistency);
+}
+
+int ObBasicSessionInfo::use_parallel_execution(bool &v) const
+{
+  v = sys_vars_cache_.get__ob_use_parallel_execution();
+  LOG_DEBUG("use parallel exeuction", K(v));
+  return OB_SUCCESS;
 }
 
 int ObBasicSessionInfo::get_group_concat_max_len(uint64_t &group_concat_max_len) const
@@ -3895,9 +3905,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
         } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
           LOG_WARN("fail to update system variable", K(sys_var_id), K(sys_var->get_value()), K(ret));
         } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
-                                                    check_timezone_valid,
-                                                    false /*is_update_sys_var*/))) {
-          LOG_WARN("process system variable error",  K(ret), K(*sys_var));
+                                                    check_timezone_valid))) {
+          LOG_ERROR("process system variable error",  K(ret), K(*sys_var));
         }
       }
     }
@@ -4106,7 +4115,7 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
     OZ (load_sys_variable(calc_buf, sys_var->get_name(), sys_var->get_data_type(),
                           sys_var->get_value(), sys_var->get_min_val(),
                           sys_var->get_max_val(), sys_var->get_flags(), true));
-    if (OB_NOT_NULL(sys_vars_[i]) && OB_SUCC(ret)) {
+    if (OB_NOT_NULL(sys_vars_[i])) {
       if (sys_vars_[i]->is_influence_plan()) {
         OZ (influence_plan_var_indexs_.push_back(i));
       }
@@ -4117,10 +4126,8 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
       }
     }
   }
-  release_to_pool_ = OB_SUCC(ret);
   if (!is_deserialized_) {
     OZ (gen_sys_var_in_pc_str());
-    OZ (gen_configs_in_pc_str());
   }
   return ret;
 }
@@ -4360,7 +4367,7 @@ int ObBasicSessionInfo::is_sys_var_actully_changed(const ObSysVarClassType &sys_
       case SYS_VAR_OB_ENABLE_PLAN_CACHE:
       case SYS_VAR_OB_ENABLE_SQL_AUDIT:
       case SYS_VAR_AUTOCOMMIT:
-      case SYS_VAR_OB_ENABLE_SHOW_TRACE:
+      case SYS_VAR_OB_ENABLE_TRACE_LOG:
       case SYS_VAR_OB_ORG_CLUSTER_ID:
       case SYS_VAR_OB_QUERY_TIMEOUT:
       case SYS_VAR_OB_TRX_TIMEOUT:
@@ -4670,6 +4677,7 @@ void ObBasicSessionInfo::reset_tx_variable()
   reset_tx_read_only();
   reset_trans_flags();
   clear_app_trace_id();
+  last_consistency_level_ = ObConsistencyLevel::INVALID_CONSISTENCY;
 }
 
 ObTxIsolationLevel ObBasicSessionInfo::get_tx_isolation() const

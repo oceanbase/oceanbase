@@ -1385,7 +1385,7 @@ int ObSchemaChecker::get_routine_infos_in_udt(const uint64_t tenant_id,
 int ObSchemaChecker::get_package_info(const uint64_t tenant_id,
                                       const ObString &database_name,
                                       const ObString &package_name,
-                                      const share::schema::ObPackageType type,
+                                      const ObPackageType type,
                                       const int64_t compatible_mode,
                                       const ObPackageInfo *&package_info)
 {
@@ -2518,7 +2518,7 @@ int ObSchemaChecker::check_ora_grant_role_priv(
       LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
     } else if (schema_mgr_ == NULL) {
       ret = OB_ERR_UNEXPECTED;
-    } else {
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
       OZ (ObOraSysChecker::check_ora_grant_role_priv(*schema_mgr_,
                                                      tenant_id,
                                                      user_id,
@@ -2543,7 +2543,7 @@ int ObSchemaChecker::check_ora_grant_sys_priv(
       LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
     } else if (schema_mgr_ == NULL) {
       ret = OB_ERR_UNEXPECTED;
-    } else {
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
       OZ (ObOraSysChecker::check_ora_grant_sys_priv(*schema_mgr_,
                                                     tenant_id,
                                                     user_id,
@@ -2575,7 +2575,7 @@ int ObSchemaChecker::check_ora_grant_obj_priv(
       LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
     } else if (schema_mgr_ == NULL) {
       ret = OB_ERR_UNEXPECTED;
-    } else {
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
       OZ (ObOraSysChecker::check_ora_grant_obj_priv(*schema_mgr_,
                                                     tenant_id,
                                                     user_id,
@@ -2611,7 +2611,7 @@ int ObSchemaChecker::check_ora_ddl_priv(
       LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
     } else if (schema_mgr_ == NULL) {
       ret = OB_ERR_UNEXPECTED;
-    } else {
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
       if (is_ora_lbacsys_user(user_id) && is_lbca_op()) {
         // need not check
       } else {
@@ -2648,7 +2648,7 @@ int ObSchemaChecker::check_access_to_obj(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema_mgr_ is NULL", K(ret), K(tenant_id),
           K(user_id), K(obj_id));
-    } else {
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
       if (is_ora_lbacsys_user(user_id) && is_lbca_op()) {
         accessible = true;
       } else {
@@ -2693,6 +2693,39 @@ int ObSchemaChecker::check_access_to_obj(
   return ret;
 }
 
+/* 为or repalce ddl定制，如果有replace选项，则需要增加一个drop的权限*/
+// int ObSchemaChecker::check_ora_ddl_priv(
+//     const uint64_t tenant_id,
+//     const uint64_t user_id,
+//     const common::ObString &database_name,
+//     const bool is_replace,
+//     const stmt::StmtType stmt_type,
+//     const stmt::StmtType stmt_type2)
+// {
+//   int ret = OB_SUCCESS;
+//   if (IS_NOT_INIT) {
+//     ret = OB_NOT_INIT;
+//     LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
+//   } else if (FALSE_IT(schema_mgr_ == NULL)) {
+//   } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3000) {
+//     OZ (ObOraSysChecker::check_ora_ddl_priv(*schema_mgr_,
+//                                             tenant_id,
+//                                             user_id,
+//                                             database_name,
+//                                             stmt_type),
+//         K(tenant_id), K(user_id), K(database_name), K(stmt_type));
+//     if (OB_SUCC(ret) && is_replace) {
+//       OZ (ObOraSysChecker::check_ora_ddl_priv(*schema_mgr_,
+//                                             tenant_id,
+//                                             user_id,
+//                                             database_name,
+//                                             stmt_type2),
+//         K(tenant_id), K(user_id), K(database_name), K(stmt_type2));
+//     }
+//   }
+//   return ret;
+// }
+
 /* 对于一些ddl，系统权限可以，对象权限也可以。
 例如：alter table
      create index
@@ -2713,18 +2746,20 @@ int ObSchemaChecker::check_ora_ddl_priv(
       LOG_WARN("schema checker is not inited", K(is_inited_), K(ret));
     } else if (schema_mgr_ == NULL) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (is_ora_lbacsys_user(user_id) && is_lbca_op()) {
-      // need not check
-    } else {
-      OZ (ObOraSysChecker::check_ora_ddl_priv(*schema_mgr_,
-                                              tenant_id,
-                                              user_id,
-                                              database_name,
-                                              obj_id,
-                                              obj_type,
-                                              stmt_type,
-                                              role_id_array),
-        K(tenant_id), K(user_id), K(database_name), K(obj_id), K(obj_type), K(stmt_type));
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
+      if (is_ora_lbacsys_user(user_id) && is_lbca_op()) {
+        // need not check
+      } else {
+        OZ (ObOraSysChecker::check_ora_ddl_priv(*schema_mgr_,
+                                                tenant_id,
+                                                user_id,
+                                                database_name,
+                                                obj_id,
+                                                obj_type,
+                                                stmt_type,
+                                                role_id_array),
+          K(tenant_id), K(user_id), K(database_name), K(obj_id), K(obj_type), K(stmt_type));
+      }
     }
   }
   return ret;
@@ -2753,39 +2788,41 @@ int ObSchemaChecker::check_ora_ddl_ref_priv(
     } else if (OB_ISNULL(schema_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema_mgr is nulll", K(ret));
-    } else if (OB_FAIL(get_user_id(tenant_id,
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
+      if (OB_FAIL(get_user_id(tenant_id,
                               user_name,
                               ObString(OB_DEFAULT_HOST_NAME),
                               user_id))) {
-      LOG_WARN("get_user_id failed", K(ret), K(user_name));
-    } else if (is_ora_lbacsys_user(user_id) && is_lbca_op()) {
-      // need not check
-    } else {
-      uint64_t table_id = OB_INVALID_ID;
-      ObArray<uint64_t> col_id_array;
-      const ObTableSchema *table_schema = NULL;
-      const ObColumnSchemaV2 *col_schema = NULL;
-      OZ (get_table_schema(tenant_id, database_name, table_name, false, table_schema),
-          K(database_name), K(table_name));
-      CK (OB_NOT_NULL(table_schema));
-      OX (table_id = table_schema->get_table_id());
-      for (int i = 0; OB_SUCC(ret) && i < column_name_array.count(); ++i) {
-        const ObString &col_name = column_name_array.at(i);
-        OX (col_schema = table_schema->get_column_schema(col_name));
-        CK (OB_NOT_NULL(col_schema));
-        OZ (col_id_array.push_back(col_schema->get_column_id()));
+        LOG_WARN("get_user_id failed", K(ret), K(user_name));
+      } else if (is_ora_lbacsys_user(user_id) && is_lbca_op()) {
+        // need not check
+      } else {
+        uint64_t table_id = OB_INVALID_ID;
+        ObArray<uint64_t> col_id_array;
+        const ObTableSchema *table_schema = NULL;
+        const ObColumnSchemaV2 *col_schema = NULL;
+        OZ (get_table_schema(tenant_id, database_name, table_name, false, table_schema),
+            K(database_name), K(table_name));
+        CK (OB_NOT_NULL(table_schema));
+        OX (table_id = table_schema->get_table_id());
+        for (int i = 0; OB_SUCC(ret) && i < column_name_array.count(); ++i) {
+          const ObString &col_name = column_name_array.at(i);
+          OX (col_schema = table_schema->get_column_schema(col_name));
+          CK (OB_NOT_NULL(col_schema));
+          OZ (col_id_array.push_back(col_schema->get_column_id()));
+        }
+        OZ (ObOraSysChecker::check_ora_ddl_ref_priv(*schema_mgr_,
+                                                tenant_id,
+                                                user_id,
+                                                database_name,
+                                                table_id,
+                                                col_id_array,
+                                                obj_type,
+                                                stmt_type,
+                                                role_id_array),
+          K(tenant_id), K(user_id), K(database_name),
+          K(table_id), K(col_id_array), K(obj_type), K(stmt_type));
       }
-      OZ (ObOraSysChecker::check_ora_ddl_ref_priv(*schema_mgr_,
-                                              tenant_id,
-                                              user_id,
-                                              database_name,
-                                              table_id,
-                                              col_id_array,
-                                              obj_type,
-                                              stmt_type,
-                                              role_id_array),
-        K(tenant_id), K(user_id), K(database_name),
-        K(table_id), K(col_id_array), K(obj_type), K(stmt_type));
     }
   }
   return ret;

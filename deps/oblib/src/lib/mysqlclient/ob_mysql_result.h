@@ -108,7 +108,7 @@
 		{ \
 			if (skip_null_error) \
 			{ \
-				SQL_LOG(TRACE, "null value, ignore", "column_name", #column_name); \
+				SQL_LOG(INFO, "null value, ignore", "column_name", #column_name); \
         (obj).set_##column_name(default_value); \
 				ret = OB_SUCCESS; \
 			} \
@@ -152,7 +152,7 @@
     { \
       if (skip_null_error) \
       { \
-        SQL_LOG(TRACE, "null value, ignore", K(column_name)); \
+        SQL_LOG(INFO, "null value, ignore", K(column_name)); \
         field = static_cast<type>(default_value); \
         ret = OB_SUCCESS; \
       } \
@@ -298,7 +298,7 @@
 		{ \
 			if (skip_null_error) \
 			{ \
-				SQL_LOG(TRACE, "null value, ignore", "column_name", #column_name); \
+				SQL_LOG(INFO, "null value, ignore", "column_name", #column_name); \
         (obj).set_##column_name(static_cast<type>(default_value)); \
 				ret = OB_SUCCESS; \
 			} \
@@ -361,7 +361,7 @@
 		{ \
 			if (skip_null_error) \
 			{ \
-				SQL_LOG(TRACE, "null value, ignore", "column_name", #column_name); \
+				SQL_LOG(INFO, "null value, ignore", "column_name", #column_name); \
         (obj).set_##column_name(static_cast<type>(default_value)); \
 				ret = OB_SUCCESS; \
 			} \
@@ -452,7 +452,7 @@
 		{ \
 			if (skip_null_error) \
 			{ \
-				SQL_LOG(TRACE, "null value, ignore", "column_name", #column_name); \
+				SQL_LOG(INFO, "null value, ignore", "column_name", #column_name); \
         (obj).set_##column_name(static_cast<type>(default_value)); \
 				ret = OB_SUCCESS; \
 			} \
@@ -651,7 +651,7 @@
 			{ \
 				if (skip_null_error) \
 				{ \
-					SQL_LOG(TRACE, "null value, ignore", "column_name", #column_name); \
+					SQL_LOG(INFO, "null value, ignore", "column_name", #column_name); \
 					ret = OB_SUCCESS; \
 				} \
 				else \
@@ -719,7 +719,7 @@
     { \
 			if (skip_null_error) \
 			{ \
-				SQL_LOG(TRACE, "null value, ignore", "column_name", #column_name); \
+				SQL_LOG(INFO, "null value, ignore", "column_name", #column_name); \
 				ret = OB_SUCCESS; \
 			} \
 			else \
@@ -834,7 +834,7 @@
     { \
 			if (skip_null_error) \
 			{ \
-				SQL_LOG(TRACE, "null value, ignore", "column_name", #column_name); \
+				SQL_LOG(INFO, "null value, ignore", "column_name", #column_name); \
 				ret = OB_SUCCESS; \
 			} \
 			else \
@@ -1061,7 +1061,7 @@
           if (OB_ERR_NULL_VALUE == ret                                                \
               || OB_SIZE_OVERFLOW == ret                                              \
               || OB_INVALID_ARGUMENT == ret) {                                        \
-            SQL_LOG(TRACE, "get column failed, so set default value", K(ret), "obj", #obj); \
+            SQL_LOG(WARN, "get column failed, so set default value", K(ret), "obj", #obj); \
             ret = OB_SUCCESS;                                                         \
             obj = default_value;                                                      \
           } else {                                                                    \
@@ -1146,7 +1146,7 @@
 		{ \
 			if (skip_null_error) \
 			{ \
-				SQL_LOG(TRACE, "null value, ignore", "column_name", #column_name); \
+				SQL_LOG(INFO, "null value, ignore", "column_name", #column_name); \
         (obj).set_##column_name(static_cast<uint64_t>(default_value)); \
 				ret = OB_SUCCESS; \
 			} \
@@ -1187,7 +1187,7 @@
 		{ \
 			if (skip_null_error) \
 			{ \
-				SQL_LOG(TRACE, "null value, ignore", "column_name", #column_name); \
+				SQL_LOG(INFO, "null value, ignore", "column_name", #column_name); \
         (obj).set_##column_name(static_cast<uint64_t>(default_value)); \
 				ret = OB_SUCCESS; \
 			} \
@@ -1258,6 +1258,7 @@ class ObMySQLResult
 {
 public:
   //see this for template virtual function
+  //http://cxh.me/2014/07/01/nvi-usage-of-virtual-template/
   DEFINE_ALLOCATOR_WRAPPER
   ObMySQLResult();
   virtual ~ObMySQLResult();

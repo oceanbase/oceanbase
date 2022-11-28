@@ -169,12 +169,6 @@ ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schem
   return *this;
 }
 
-int ObColumnSchemaV2::assign(const ObColumnSchemaV2 &other)
-{
-  *this = other;
-  return error_ret_;
-}
-
 bool ObColumnSchemaV2::operator==(const ObColumnSchemaV2 &r) const
 {
   return (tenant_id_ == r.tenant_id_ && table_id_ == r.table_id_ && column_id_ == r.column_id_
@@ -512,7 +506,8 @@ int ObColumnSchemaV2::get_byte_length(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("collation type is invalid", K(ret));
   } else if (ob_is_text_tc(meta_type_.get_type()) || ob_is_json(meta_type_.get_type())) {
-    if (for_check_length) {
+    if (for_check_length &&
+        ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_1470) || ObSchemaService::g_liboblog_mode_)) {
       // when check row length, a lob will occupy at most 2KB
       length = min(get_data_length(), OB_MAX_LOB_HANDLE_LENGTH);
     } else {

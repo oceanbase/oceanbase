@@ -538,7 +538,7 @@ public:
   {
     return base_lsn_for_block_gc_;
   }
-  int get_min_block_info_for_gc(block_id_t &block_id, int64_t &ts_ns)
+  int get_min_block_id_and_min_ts_ns(block_id_t &block_id, int64_t &ts_ns)
   {
     int ret = OB_SUCCESS;
     UNUSED(block_id);

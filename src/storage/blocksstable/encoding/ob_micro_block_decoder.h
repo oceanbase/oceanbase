@@ -75,6 +75,7 @@ public:
 class ObIEncodeBlockReader
 {
   typedef int (*decode_acquire_func)(ObDecoderAllocator &allocator,
+                                     const ObObjMeta &obj_meta,
                                      const ObMicroBlockHeader &header,
                                      const ObColumnHeader &col_header,
                                      const char *meta_data,
@@ -97,7 +98,8 @@ protected:
   int add_decoder(const int64_t store_idx, const common::ObObjMeta &obj_meta, ObColumnDecoder &dest);
   void free_decoders();
   void release(const ObIColumnDecoder *decoder);
-  int acquire(const int64_t store_idx, const ObIColumnDecoder *&decoder);
+  int acquire(const common::ObObjMeta &obj_meta, int64_t store_idx,
+      const ObIColumnDecoder *&decoder);
   int setup_row(const uint64_t row_id, int64_t &row_len, const char *&row_data);
 protected:
   static const int64_t DEFAULT_DECODER_CNT = 16;
@@ -132,10 +134,11 @@ protected:
   static ObColumnDecoderCtx none_exist_column_decoder_ctx_;
   template <class Decoder>
   static int acquire_decoder(ObDecoderAllocator &allocator,
-                            const ObMicroBlockHeader &header,
-                            const ObColumnHeader &col_header,
-                            const char *meta_data,
-                            const ObIColumnDecoder *&decoder);
+                                 const ObObjMeta &obj_meta,
+                                 const ObMicroBlockHeader &header,
+                                 const ObColumnHeader &col_header,
+                                 const char *meta_data,
+                                 const ObIColumnDecoder *&decoder);
   static decode_acquire_func acquire_funcs_[ObColumnHeader::MAX_TYPE];
 };
 
@@ -313,13 +316,11 @@ private:
       const char *&meta_data, const char *block, const int64_t block_size);
 
   template <typename Allocator>
-  static int acquire(
-      Allocator &allocator,
-      const ObMicroBlockHeader &header,
-      const ObColumnHeader &col_header,
-      const char *meta_data,
+  static int acquire(Allocator &allocator, const common::ObObjMeta &obj_meta,
+      const ObMicroBlockHeader &header, const ObColumnHeader &col_header,
+      const char *meta_data, const ObIColumnDecoder *&decoder);
+  int acquire(const common::ObObjMeta &obj_meta, int64_t store_idx,
       const ObIColumnDecoder *&decoder);
-  int acquire(const int64_t store_idx, const ObIColumnDecoder *&decoder);
   void release(const ObIColumnDecoder *decoder);
 
 private:

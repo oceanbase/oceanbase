@@ -22,8 +22,7 @@ namespace transaction
 class ObTransStatItem
 {
 public:
-  explicit ObTransStatItem(const char *const item_name)
-      : item_name_(item_name), lock_(common::ObLatchIds::TX_STAT_ITEM_LOCK) { reset(); }
+  explicit ObTransStatItem(const char *const item_name) : item_name_(item_name) { reset(); }
   ~ObTransStatItem() { destroy(); }
   void reset();
   void destroy() { reset(); }
@@ -62,11 +61,6 @@ public:
   void add_commit_trans_count(const uint64_t tenant_id, const int64_t value);
   // count the number of aborted transactions
   void add_rollback_trans_count(const uint64_t tenant_id, const int64_t value);
-  // count the number of elr enable transactions
-  void add_elr_enable_trans_count(const uint64_t tenant_id, const int64_t value);
-  // count the number of elr unable transactions
-  void add_elr_unable_trans_count(const uint64_t tenant_id, const int64_t value);
-  void add_read_elr_row_count(const uint64_t tenant_id, const int64_t value);
   // count the number of timeout transactions: count when commit the transaction(end_trans)
   void add_trans_timeout_count(const uint64_t tenant_id, const int64_t value);
   // count how many transactions are started, via start_trans
@@ -290,9 +284,6 @@ private:
 #define TX_STAT_DIST_INC ObTransStatistic::get_instance().add_dist_count(tenant_id_, 1);
 #define TX_STAT_LOCAL_INC ObTransStatistic::get_instance().add_local_count(tenant_id_, 1);
 #define TX_STAT_READONLY_INC ObTransStatistic::get_instance().add_readonly_count(tenant_id_, 1);
-#define TX_STAT_ELR_ENABLE_TRANS_INC ObTransStatistic::get_instance().add_elr_enable_trans_count(MTL_ID(), 1);
-#define TX_STAT_ELR_UNABLE_TRANS_INC ObTransStatistic::get_instance().add_elr_unable_trans_count(MTL_ID(), 1);
-#define TX_STAT_READ_ELR_ROW_COUNT_INC transaction::ObTransStatistic::get_instance().add_read_elr_row_count(MTL_ID(), 1);
 
 // TODO: following events is not used, do clean up
 // count the interval time between statements

@@ -20,7 +20,7 @@ namespace palf
 {
 FlushLogCbCtx::FlushLogCbCtx()
     : log_id_(OB_INVALID_LOG_ID),
-      log_ts_(OB_INVALID_TIMESTAMP),
+      log_scn_(),
       lsn_(),
       log_proposal_id_(INVALID_PROPOSAL_ID),
       total_len_(0),
@@ -29,17 +29,17 @@ FlushLogCbCtx::FlushLogCbCtx()
 {
 }
 
-FlushLogCbCtx::FlushLogCbCtx(const int64_t log_id, const int64_t log_ts, const LSN &lsn,
+FlushLogCbCtx::FlushLogCbCtx(const int64_t log_id, const SCN &log_scn, const LSN &lsn,
                              const int64_t &log_proposal_id, const int64_t total_len,
                              const int64_t &curr_proposal_id, const int64_t begin_ts)
     : log_id_(log_id),
-      log_ts_(log_ts),
       lsn_(lsn),
       log_proposal_id_(log_proposal_id),
       total_len_(total_len),
       curr_proposal_id_(curr_proposal_id),
       begin_ts_(begin_ts)
 {
+  log_scn_ = log_scn;
 }
 
 FlushLogCbCtx::~FlushLogCbCtx()
@@ -50,7 +50,7 @@ FlushLogCbCtx::~FlushLogCbCtx()
 void FlushLogCbCtx::reset()
 {
   log_id_ = OB_INVALID_LOG_ID;
-  log_ts_ = OB_INVALID_TIMESTAMP;
+  log_scn_.reset();
   lsn_.reset();
   log_proposal_id_ = INVALID_PROPOSAL_ID;
   total_len_ = 0;
@@ -61,7 +61,7 @@ void FlushLogCbCtx::reset()
 FlushLogCbCtx& FlushLogCbCtx::operator=(const FlushLogCbCtx &arg)
 {
   log_id_ = arg.log_id_;
-  log_ts_ = arg.log_ts_;
+  log_scn_ = arg.log_scn_;
   lsn_ = arg.lsn_;
   log_proposal_id_ = arg.log_proposal_id_;
   total_len_ = arg.total_len_;

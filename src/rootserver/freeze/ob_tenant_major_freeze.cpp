@@ -53,7 +53,7 @@ int ObTenantMajorFreeze::init(
           schema_service, server_trace, config, sql_proxy))) {
     LOG_WARN("fail to init merge_scheduler", KR(ret));
   }  else if (OB_FAIL(freeze_info_detector_.init(tenant_id, sql_proxy, freeze_info_mgr_, 
-          merge_scheduler_.get_major_scheduler_idling()))) {
+              merge_scheduler_.get_major_scheduler_idling()))) {
     LOG_WARN("fail to init freeze_info_detector", KR(ret));
   } else if (OB_FAIL(daily_launcher_.init(tenant_id, config, sql_proxy, freeze_info_mgr_))) {
     LOG_WARN("fail to init daily_launcher", KR(ret));
@@ -125,7 +125,7 @@ void ObTenantMajorFreeze::resume()
   merge_scheduler_.resume();
 }
 
-int ObTenantMajorFreeze::get_frozen_scn(int64_t &frozen_scn)
+int ObTenantMajorFreeze::get_frozen_scn(palf::SCN &frozen_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -137,7 +137,7 @@ int ObTenantMajorFreeze::get_frozen_scn(int64_t &frozen_scn)
   return ret;
 }
 
-int ObTenantMajorFreeze::get_global_broadcast_scn(int64_t &global_broadcast_scn) const
+int ObTenantMajorFreeze::get_global_broadcast_scn(palf::SCN &global_broadcast_scn) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -274,8 +274,8 @@ int ObTenantMajorFreeze::check_tenant_status() const
 int ObTenantMajorFreeze::check_freeze_info()
 {
   int ret = OB_SUCCESS;
-  int64_t latest_frozen_scn = 0;
-  int64_t global_last_merged_scn = 0;
+  palf::SCN latest_frozen_scn;
+  palf::SCN global_last_merged_scn;
   ObZoneMergeInfo::MergeStatus global_merge_status = ObZoneMergeInfo::MergeStatus::MERGE_STATUS_MAX;
 
   if (IS_NOT_INIT) {

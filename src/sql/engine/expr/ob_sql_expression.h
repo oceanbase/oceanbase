@@ -399,6 +399,7 @@ public:
   static int expand_array_params(common::ObExprCtx &expr_ctx,
                                  const common::ObObj &src_param,
                                  const common::ObObj *&result);
+  static bool should_gen_postfix_expr();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlExpressionUtil);
   ObSqlExpressionUtil();

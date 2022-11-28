@@ -387,8 +387,7 @@ public:
                                 const OptSelectivityCtx &ctx,
                                 const common::ObIArray<ObRawExpr*>& exprs,
                                 const double origin_rows,
-                                double &rows,
-                                const bool need_refine = true);
+                                double &rows);
 
   // ndv 按照行数进行缩放.
   static double scale_distinct(double selected_rows, double rows, double ndv);

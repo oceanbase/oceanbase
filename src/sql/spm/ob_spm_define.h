@@ -43,12 +43,6 @@ struct ObBaselineKey : public ObILibCacheKey
     constructed_sql_(),
     sql_id_(),
     sql_cs_type_(common::ObCollationType::CS_TYPE_INVALID) {}
-  ObBaselineKey(const ObBaselineKey &other)
-  : ObILibCacheKey(ObLibCacheNameSpace::NS_SPM),
-    db_id_(other.db_id_),
-    constructed_sql_(other.constructed_sql_),
-    sql_id_(other.sql_id_),
-    sql_cs_type_(other.sql_cs_type_) {}
   ObBaselineKey(uint64_t db_id, const ObString &constructed_sql, const ObString &sql_id)
   : ObILibCacheKey(ObLibCacheNameSpace::NS_SPM),
     db_id_(db_id),
@@ -264,7 +258,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       spm_force_disable_(false),
       has_fixed_plan_to_check_(false),
       evolution_plan_type_(OB_PHY_PLAN_UNINITIALIZED),
-      select_plan_type_(INVALID_TYPE)
+      last_evolution_count_(0)
   {}
   enum SpmMode {
     MODE_INVALID,
@@ -286,13 +280,6 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
     STAT_ACCEPT_EVOLUTION_PLAN,   // accept evolution plan as baseline and move it from evolution layer to plan layer 
     STAT_ACCEPT_BASELINE_PLAN,    // move baeline plan from evolution layer to plan layer 
     STAT_MAX
-  };
-  enum SpmSelectPlanType
-  {
-    INVALID_TYPE,
-    EVO_PLAN,
-    BASELINE_PLAN,
-    MAX_TYPE
   };
   void set_get_normal_mode(uint64_t v) { plan_hash_value_ = v; handle_cache_mode_ = MODE_GET_NORMAL; }
   void set_get_offset_mode() { handle_cache_mode_ = MODE_GET_OFFSET; }
@@ -321,7 +308,7 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   bool spm_force_disable_;
   bool has_fixed_plan_to_check_;
   ObPhyPlanType evolution_plan_type_;
-  SpmSelectPlanType select_plan_type_; // for retry
+  int64_t last_evolution_count_; // for retry
 };
 
 struct EvolutionTaskResult

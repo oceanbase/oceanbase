@@ -17,6 +17,7 @@
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/palf/lsn.h"
+#include "logservice/palf/scn.h"
 #include "logservice/palf/palf_callback.h"
 #include "logservice/palf/palf_iterator.h"
 #include "logservice/palf/palf_handle.h"
@@ -63,7 +64,7 @@ struct LSReplayStat
   palf::LSN end_lsn_;
   bool enabled_;
   palf::LSN unsubmitted_lsn_;
-  int64_t unsubmitted_log_ts_ns_;
+  palf::SCN unsubmitted_log_scn_;
   int64_t pending_cnt_;
 
   TO_STRING_KV(K(ls_id_),
@@ -71,17 +72,8 @@ struct LSReplayStat
                K(end_lsn_),
                K(enabled_),
                K(unsubmitted_lsn_),
-               K(unsubmitted_log_ts_ns_),
+               K(unsubmitted_log_scn_),
                K(pending_cnt_));
-};
-
-struct ReplayDiagnoseInfo
-{
-  palf::LSN max_replayed_lsn_;
-  int64_t max_replayed_scn_;
-  ObSqlString diagnose_str_;
-  TO_STRING_KV(K(max_replayed_lsn_),
-               K(max_replayed_scn_));
 };
 
 //此类型为前向barrier日志专用, 与ObLogReplayTask分开分配
@@ -120,7 +112,7 @@ public:
   int init(const share::ObLSID &ls_id,
            const ObLogBaseHeader &header,
            const palf::LSN &lsn,
-           const int64_t log_ts,
+           const palf::SCN &log_scn,
            const int64_t log_size,
            const bool is_raw_write,
            void *log_buf);
@@ -131,7 +123,7 @@ public:
   share::ObLSID ls_id_;
   ObLogBaseType log_type_;
   palf::LSN lsn_;
-  int64_t log_ts_;
+  palf::SCN log_scn_;
   bool is_pre_barrier_;
   bool is_post_barrier_;
   int64_t log_size_;
@@ -140,22 +132,18 @@ public:
   bool is_raw_write_;
   int64_t first_handle_ts_;
   int64_t print_error_ts_;
-  int64_t replay_cost_; //此任务重试的总耗时时间
-  int64_t retry_cost_; //此任务回放成功时的当次处理时间
   void *log_buf_;
 
   TO_STRING_KV(K(ls_id_),
                K(log_type_),
                K(lsn_),
-               K(log_ts_),
+               K(log_scn_),
                K(is_pre_barrier_),
                K(is_post_barrier_),
                K(log_size_),
                K(replay_hint_),
                K(is_raw_write_),
                K(first_handle_ts_),
-               K(replay_cost_),
-               K(retry_cost_),
                KP(log_buf_));
 };
 
@@ -252,9 +240,9 @@ public:
   ObReplayServiceSubmitTask(): ObReplayServiceTask(),
     next_to_submit_lsn_(),
     committed_end_lsn_(),
-    next_to_submit_log_ts_(common::OB_INVALID_TIMESTAMP),
+    next_to_submit_log_scn_(),
     base_lsn_(),
-    base_log_ts_(common::OB_INVALID_TIMESTAMP),
+    base_log_scn_(),
     iterator_(),
     cache_replay_task_(NULL)
   {
@@ -265,7 +253,7 @@ public:
     destroy();
   }
   int init(const palf::LSN &base_lsn,
-           const int64_t base_log_ts,
+           const palf::SCN &base_log_scn,
            palf::PalfHandle *palf_handle,
            ObReplayStatus *replay_status);
   void reset() override;
@@ -275,17 +263,15 @@ public:
   // 迭代器是否迭代到终点
   bool has_remained_submit_log();
   // 不允许回退
-  int update_next_to_submit_log_info(const palf::LSN &lsn, const int64_t log_ts);
+  int update_next_to_submit_log_info(const palf::LSN &lsn, const palf::SCN &log_scn);
   int update_next_to_submit_lsn(const palf::LSN &lsn);
-  int update_next_to_submit_log_ts_allow_equal(const int64_t log_ts);
+  int update_next_to_submit_log_scn_allow_equal(const palf::SCN &log_scn);
   int update_committed_end_offset(const palf::LSN &lsn);
-  int get_next_to_submit_log_info(palf::LSN &lsn,
-                                  int64_t &log_ts) const;
+  int get_next_to_submit_log_info(palf::LSN &lsn, palf::SCN &log_scn) const;
   int get_committed_end_lsn(palf::LSN &lsn) const;
   int get_base_lsn(palf::LSN &lsn) const;
-  int get_base_log_ts(int64_t &log_ts) const;
-  int need_skip(const int64_t log_ts,
-                bool &need_skip);
+  int get_base_log_scn(palf::SCN &log_scn) const;
+  int need_skip(const palf::SCN &log_scn, bool &need_skip);
   bool is_cached_replay_task_exist() const
   {
     return NULL != cache_replay_task_;
@@ -306,7 +292,7 @@ public:
   //释放内存,在废弃cache_replay_task时调用
   void revert_cached_replay_task();
 
-  int get_log(const char *&buffer, int64_t &nbytes, int64_t &ts, palf::LSN &offset, bool &is_raw_write);
+  int get_log(const char *&buffer, int64_t &nbytes, palf::SCN &scn, palf::LSN &offset, bool &is_raw_write);
   int next_log();
   // 以当前的终点作为新起点重置迭代器
   int reset_iterator(palf::PalfHandle &palf_handle,
@@ -315,29 +301,29 @@ public:
   INHERIT_TO_STRING_KV("ObReplayServiceSubmitTask", ObReplayServiceTask,
                        K(next_to_submit_lsn_),
                        K(committed_end_lsn_),
-                       K(next_to_submit_log_ts_),
+                       K(next_to_submit_log_scn_),
                        K(base_lsn_),
-                       K(base_log_ts_));
+                       K(base_log_scn_));
 private:
   int update_next_to_submit_lsn_(const palf::LSN &lsn);
-  int update_next_to_submit_log_ts_(const int64_t log_ts);
-  int update_next_to_submit_log_ts_allow_equal_(const int64_t log_ts);
+  int update_next_to_submit_log_scn_(const palf::SCN &log_scn);
+  int update_next_to_submit_log_scn_allow_equal_(const palf::SCN &log_scn);
   int update_committed_end_lsn_(const palf::LSN &lsn);
-  void set_next_to_submit_log_info_(const palf::LSN &lsn, const int64_t log_ts);
-  int get_next_to_submit_log_info_(palf::LSN &lsn, int64_t &log_ts) const;
+  void set_next_to_submit_log_info_(const palf::LSN &lsn, const palf::SCN &log_scn);
+  int get_next_to_submit_log_info_(palf::LSN &lsn, palf::SCN &log_scn) const;
   int get_base_lsn_(palf::LSN &lsn) const;
-  int get_base_log_ts_(int64_t &log_ts) const;
+  int get_base_log_scn_(palf::SCN &log_scn) const;
 
 private:
   //location of next log after the last log that has already been submit to replay, consider as left side of iterator
   palf::LSN next_to_submit_lsn_;
   //location of the last log that need submit to replay, consider as right side of iterator
   palf::LSN committed_end_lsn_;
-  int64_t next_to_submit_log_ts_;
+  palf::SCN next_to_submit_log_scn_;
   //initial log lsn when enable replay, for stat replay process
   palf::LSN base_lsn_;
-  //initial log ts when enable replay, logs which ts small than this value should skip replay
-  int64_t base_log_ts_;
+  //initial log scn when enable replay, logs which scn small than this value should skip replay
+  palf::SCN base_log_scn_;
   //for unittest, should be a member not pointer
   palf::PalfBufferIterator iterator_;
   //缓存需要重试的log replay task
@@ -358,7 +344,7 @@ public:
     idx_ = -1;
   }
   ~ObReplayServiceReplayTask() { destroy(); }
-  // use base_log_ts init min_unreplayed_log_ts;
+  // use base_log_scn init min_unreplayed_log_scn
   int init(ObReplayStatus *replay_status,
            const int64_t idx);
   void reset() override;
@@ -379,12 +365,7 @@ public:
     queue_.push(p);
   }
   int get_min_unreplayed_log_info(palf::LSN &lsn,
-                                  int64_t &log_ts,
-                                  int64_t &replay_hint,
-                                  ObLogBaseType &log_type,
-                                  int64_t &first_handle_ts,
-                                  int64_t &replay_cost,
-                                  int64_t &retry_cost,
+                                  palf::SCN &log_scn,
                                   bool &is_queue_empty);
 private:
   Link *pop_()
@@ -439,20 +420,12 @@ public:
     }
     void reset() {
       lsn_.reset();
-      scn_ = 0;
-      log_type_ = ObLogBaseType::INVALID_LOG_BASE_TYPE;
-      is_submit_err_ = false;
       err_ts_ = 0;
       err_ret_ = common::OB_SUCCESS;
     }
-    TO_STRING_KV(K(lsn_), K(scn_), K(log_type_),
-                 K(is_submit_err_), K(err_ts_), K(err_ret_));
+    TO_STRING_KV(K(lsn_), K(err_ts_), K(err_ret_));
   public:
     palf::LSN lsn_;
-    uint64_t scn_;
-    ObLogBaseType log_type_;
-    int64_t replay_hint_;
-    bool is_submit_err_;  //is submit log task error occured
     int64_t err_ts_;  //the timestamp that partition encounts fatal error
     int err_ret_;  //the ret code of fatal error
   };
@@ -466,7 +439,7 @@ public:
   void destroy();
 public:
   int enable(const palf::LSN &base_lsn,
-             const int64_t base_log_ts);
+             const palf::SCN &base_log_scn);
   int disable();
   // if is_enabled_ is false,
   // means log stream will bedestructed and no logs need to replayed any more.
@@ -520,14 +493,9 @@ public:
 
   int get_ls_id(share::ObLSID &id);
   int get_min_unreplayed_lsn(palf::LSN &lsn);
-  int get_min_unreplayed_log_ts_ns(int64_t &log_ts);
+  int get_min_unreplayed_log_scn(palf::SCN &log_scn);
   int get_min_unreplayed_log_info(palf::LSN &lsn,
-                                  int64_t &log_ts,
-                                  int64_t &replay_hint,
-                                  ObLogBaseType &log_type,
-                                  int64_t &first_handle_ts,
-                                  int64_t &replay_cost,
-                                  int64_t &retry_cost);
+                                palf::SCN &log_scn);
   int get_replay_process(int64_t &replayed_log_size, int64_t &unreplayed_log_size);
   //提交日志检查barrier状态
   int check_submit_barrier();
@@ -539,7 +507,7 @@ public:
   void set_post_barrier_submitted(const palf::LSN &lsn);
   int set_post_barrier_finished(const palf::LSN &lsn);
   int stat(LSReplayStat &stat) const;
-  int diagnose(ReplayDiagnoseInfo &diagnose_info);
+
   inline void inc_ref()
   {
     ATOMIC_INC(&ref_cnt_);
@@ -553,13 +521,7 @@ public:
     return replay_hint & (REPLAY_TASK_QUEUE_SIZE - 1);
   }
   // 用于记录日志流级别的错误, 此类错误不可恢复
-  void set_err_info(const palf::LSN &lsn,
-                    const uint64_t scn,
-                    const ObLogBaseType &log_type,
-                    const int64_t replay_hint,
-                    const bool is_submit_err,
-                    const int64_t err_ts,
-                    const int err_ret);
+  void set_err_info(const palf::LSN &lsn, const int64_t err_ts, const int err_ret);
   bool has_fatal_error() const
   {
     return is_fatal_error(err_info_.err_ret_);
@@ -585,11 +547,11 @@ public:
                K(submit_log_task_));
 
 private:
-  void set_next_to_submit_log_info_(const palf::LSN &lsn, const int64_t log_ts);
+  void set_next_to_submit_log_info_(const palf::LSN &lsn, const palf::SCN &log_scn);
   int submit_task_to_replay_service_(ObReplayServiceTask &task);
   // 注册回调并提交当前初始化的submit_log_task
   int enable_(const palf::LSN &base_lsn,
-              const int64_t base_log_ts);
+              const palf::SCN &base_log_scn);
 
   // 注销回调并清空任务
   int disable_();
@@ -635,7 +597,6 @@ private:
   ObReplayFsCb fs_cb_;
   mutable int64_t get_log_info_debug_time_;
   mutable int64_t try_wrlock_debug_time_;
-  mutable int64_t check_enable_debug_time_;
   DISALLOW_COPY_AND_ASSIGN(ObReplayStatus);
 };
 

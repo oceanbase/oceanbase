@@ -44,7 +44,7 @@ class ObLogStreamService;
 namespace obrpc
 {
 
-//TODO(yanfeng) need use tenant module replace it in 4.1, currently use 509 tenant
+//TODO(yanfeng) need use tenant module replace it
 
 struct ObCopyMacroBlockArg
 {
@@ -94,8 +94,6 @@ public:
   int64_t data_version_;
   int64_t backfill_tx_log_ts_;
   storage::ObCopyMacroRangeInfo copy_macro_range_info_;
-  bool need_check_seq_;
-  int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockRangeArg);
 };
 
@@ -122,13 +120,13 @@ public:
   bool is_valid() const;
   void reset();
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id_list), K_(need_check_seq),
-      K_(ls_rebuild_seq), K_(is_only_copy_major));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id_list), K_(need_check_scn),
+      K_(ls_rebuild_scn), K_(is_only_copy_major));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObSArray<common::ObTabletID> tablet_id_list_;
-  bool need_check_seq_;
-  int64_t ls_rebuild_seq_;
+  bool need_check_scn_;
+  int64_t ls_rebuild_scn_;
   bool is_only_copy_major_;
 };
 
@@ -157,13 +155,13 @@ public:
   ~ObCopyTabletSSTableInfoArg();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(tablet_id), K_(max_major_sstable_snapshot), K_(minor_sstable_log_ts_range),
-      K_(ddl_sstable_log_ts_range));
+  TO_STRING_KV(K_(tablet_id), K_(max_major_sstable_snapshot), K_(minor_sstable_scn_range),
+      K_(ddl_sstable_scn_range));
 
   common::ObTabletID tablet_id_;
   int64_t max_major_sstable_snapshot_;
-  ObLogTsRange minor_sstable_log_ts_range_;
-  ObLogTsRange ddl_sstable_log_ts_range_;
+  share::ObScnRange minor_sstable_scn_range_;
+  share::ObScnRange ddl_sstable_scn_range_;
 };
 
 struct ObCopyTabletsSSTableInfoArg final
@@ -303,8 +301,6 @@ public:
   common::ObTabletID tablet_id_;
   common::ObSArray<ObITable::TableKey> copy_table_key_array_;
   int64_t macro_range_max_marco_count_;
-  bool need_check_seq_;
-  int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRangeInfoArg);
 };
 
@@ -330,12 +326,11 @@ public:
   ~ObCopyTabletSSTableHeader() {}
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(tablet_id), K_(status), K_(sstable_count), K_(tablet_meta));
+  TO_STRING_KV(K_(tablet_id), K_(status), K_(sstable_count));
 
   common::ObTabletID tablet_id_;
   storage::ObCopyTabletStatus::STATUS status_;
   int64_t sstable_count_;
-  ObMigrationTabletParam tablet_meta_;
 };
 
 // Leader notify follower to restore some tablets.

@@ -309,13 +309,13 @@ int ObLogJoin::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
                                                        left_param, 
                                                        right_param))) {
     LOG_WARN("failed to get re estimate param", K(ret));
-  } else if (OB_FAIL(SMART_CALL(left_child->re_est_cost(left_param,
+  } else if (OB_FAIL(left_child->re_est_cost(left_param,
                                               left_output_rows,
-                                              left_cost)))) {
+                                              left_cost))) {
     LOG_WARN("failed to re estimate cost", K(ret));
-  } else if (OB_FAIL(SMART_CALL(right_child->re_est_cost(right_param,
+  } else if (OB_FAIL(right_child->re_est_cost(right_param,
                                               right_output_rows,
-                                              right_cost)))) {
+                                              right_cost))) {
     LOG_WARN("failed to re estimate cost", K(ret));
   } else if (OB_FAIL(join_path_->re_estimate_rows(left_output_rows, 
                                                  right_output_rows, 
@@ -701,16 +701,14 @@ int ObLogJoin::print_join_hint_outline(const ObDMLStmt &stmt,
   char *buf = plan_text.buf;
   int64_t &buf_len = plan_text.buf_len;
   int64_t &pos = plan_text.pos;
-  const char* algo_str = T_PQ_DISTRIBUTE == hint_type
-                         ? ObJoinHint::get_dist_algo_str(get_dist_method())
-                         : NULL;
   if (OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\" ", ObQueryHint::get_outline_indent(plan_text.is_oneline_),
                                             ObHint::get_hint_name(hint_type),
                                             qb_name.length(), qb_name.ptr()))) {
     LOG_WARN("fail to print pq map hint head", K(ret));
   } else if (OB_FAIL(print_join_tables_in_hint(stmt, plan_text, table_set))) {
     LOG_WARN("fail to print join tables", K(ret));
-  } else if (NULL != algo_str && OB_FAIL(BUF_PRINTF(" %s", algo_str))) {
+  } else if (T_PQ_DISTRIBUTE == hint_type &&
+             OB_FAIL(BUF_PRINTF(" %s", ObJoinHint::get_dist_algo_str(get_dist_method())))) {
     LOG_WARN("fail to print distribute method", K(ret));
   } else if (OB_FAIL(BUF_PRINTF(")"))) {
   } else { /* do nothing */ }
@@ -754,29 +752,26 @@ int ObLogJoin::print_join_tables_in_hint(const ObDMLStmt &stmt,
   char *buf = plan_text.buf;
   int64_t &buf_len = plan_text.buf_len;
   int64_t &pos = plan_text.pos;
-  bool multi_table = table_set.num_members() > 1;
+  ObSEArray<int64_t, 8> idx_arr;
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(get_plan()));
-  } else if (multi_table && OB_FAIL(BUF_PRINTF("("))) {
+  } else if (OB_FAIL(table_set.to_array(idx_arr))) {
+    LOG_WARN("failed to array", K(ret));
+  } else if (idx_arr.count() > 1 && OB_FAIL(BUF_PRINTF("("))) {
   } else {
-    bool is_first_table = true;
     const ObIArray<TableItem*> &table_items = stmt.get_table_items();
-    const TableItem *table = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
-      if (OB_ISNULL(table = table_items.at(i))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < idx_arr.count(); ++i) {
+      const int64_t idx = idx_arr.at(i);
+      if (OB_UNLIKELY(idx <= 0 || idx > table_items.count())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), K(table));
-      } else if (!table_set.has_member(stmt.get_table_bit_index(table->table_id_))) {
-        /* do nothing */
-      } else if (!is_first_table && OB_FAIL(BUF_PRINTF(" "))) {
-      } else if (OB_FAIL(get_plan()->print_outline_table(plan_text, table))) {
+        LOG_WARN("unexpected idx/table", K(ret), K(idx), K(table_items.count()));
+      } else if (0 != i && OB_FAIL(BUF_PRINTF(" "))) {
+      } else if (OB_FAIL(get_plan()->print_outline_table(plan_text, table_items.at(idx - 1)))) {
         LOG_WARN("fail to print join table", K(ret));
-      } else {
-        is_first_table = false;
       }
     }
-    if (OB_SUCC(ret) && multi_table && OB_FAIL(BUF_PRINTF(")"))) {
+    if (OB_SUCC(ret) && idx_arr.count() > 1 && OB_FAIL(BUF_PRINTF(")"))) {
     } else { /* do nothing */ }
   }
   return ret;
@@ -1166,16 +1161,6 @@ int ObLogJoin::set_use_batch(ObLogicalOperator* root)
     }
     if(OB_FAIL(SMART_CALL(set_use_batch(root->get_child(first_child))))) {
       LOG_WARN("failed to check use batch nlj", K(ret));
-    }
-  } else if (log_op_def::LOG_SET == root->get_type()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < root->get_num_of_child(); ++i) {
-      ObLogicalOperator *child = root->get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid child", K(ret));
-      } else if(OB_FAIL(SMART_CALL(set_use_batch(child)))) {
-        LOG_WARN("failed to check use batch nlj", K(ret));
-      }
     }
   } else { /*do nothing*/ }
   return ret;

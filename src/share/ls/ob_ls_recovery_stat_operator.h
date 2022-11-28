@@ -19,6 +19,7 @@
 #include "lib/container/ob_array.h"//ObArray
 #include "lib/container/ob_iarray.h"//ObIArray
 #include "logservice/palf/log_define.h"//SCN
+#include "logservice/palf/scn.h"//SCN
 
 namespace oceanbase
 {
@@ -36,6 +37,10 @@ namespace sqlclient
 class ObMySQLResult;
 }
 }
+namespace palf
+{
+class SCN;
+}
 namespace share
 {
 struct ObLSRecoveryStat
@@ -43,21 +48,21 @@ struct ObLSRecoveryStat
   ObLSRecoveryStat()
       : tenant_id_(OB_INVALID_TENANT_ID),
         ls_id_(),
-        sync_scn_(OB_LS_INVALID_SCN_VALUE),
-        readable_scn_(OB_LS_INVALID_SCN_VALUE),
-        create_scn_(OB_LS_INVALID_SCN_VALUE),
-        drop_scn_(OB_LS_INVALID_SCN_VALUE) {}
+        sync_scn_(),
+        readable_scn_(),
+        create_scn_(),
+        drop_scn_() {}
   virtual ~ObLSRecoveryStat() {}
   bool is_valid() const;
   int init(const uint64_t tenant_id,
            const ObLSID &id,
-           const int64_t sync_scn,
-           const int64_t readable_scn,
-           const int64_t create_scn,
-           const int64_t drop_scn);
+           const palf::SCN &sync_scn,
+           const palf::SCN &readable_scn,
+           const palf::SCN &create_scn,
+           const palf::SCN &drop_scn);
   int init_only_recovery_stat(const uint64_t tenant_id, const ObLSID &id,
-                              const int64_t sync_scn,
-                              const int64_t readable_scn);
+                              const palf::SCN &sync_scn,
+                              const palf::SCN &readable_scn);
   void reset();
   int assign(const ObLSRecoveryStat &other);
   uint64_t get_tenant_id() const
@@ -68,19 +73,19 @@ struct ObLSRecoveryStat
   {
     return ls_id_;
   }
-  int64_t get_sync_scn() const
+  const palf::SCN get_sync_scn() const
   {
     return sync_scn_;
   }
-  int64_t get_readable_scn() const
+  const palf::SCN get_readable_scn() const
   {
     return readable_scn_;
   }
-  int64_t get_create_scn() const
+  const palf::SCN get_create_scn() const
   {
     return create_scn_;
   }
- int64_t get_drop_scn() const
+  const palf::SCN get_drop_scn() const
   {
     return drop_scn_;
   }
@@ -90,10 +95,10 @@ struct ObLSRecoveryStat
  private:
   uint64_t tenant_id_;
   ObLSID ls_id_;
-  int64_t sync_scn_;//clog sync ts
-  int64_t readable_scn_;//min weak read timestamp TODO need different majorty replicas and all replicas
-  int64_t create_scn_;//ts less than first clog ts
-  int64_t drop_scn_; //ts larger than last user data's clog and before offline
+  palf::SCN sync_scn_;//clog sync ts
+  palf::SCN readable_scn_;//min weak read timestamp TODO need different majorty replicas and all replicas
+  palf::SCN create_scn_;//ts less than first clog ts
+  palf::SCN drop_scn_; //ts larger than last user data's clog and before offline
 };
 
 /*
@@ -114,7 +119,7 @@ public:
    * @param[in] create_ls_scn: ls's create ts
    * @param[in] trans:*/
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
-                            const int64_t &create_ls_scn,
+                            const palf::SCN &create_ls_scn,
                             const common::ObString &zone_priority,
                             ObMySQLTransaction &trans) override;
   /*
@@ -136,7 +141,7 @@ public:
   virtual int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
-                      const int64_t &drop_scn,
+                      const palf::SCN &drop_scn,
                       ObMySQLTransaction &trans) override;
   /*
    * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference 
@@ -195,8 +200,8 @@ public:
    * */
   int get_tenant_recovery_stat(const uint64_t tenant_id,
                                ObISQLClient &client,
-                               int64_t &sync_scn,
-                               int64_t &min_wrs);
+                               palf::SCN &sync_scn,
+                               palf::SCN &min_wrs);
   /*
    * description: get user ls sync scn, for recovery ls
    * @param[in] tenant_id
@@ -205,15 +210,15 @@ public:
    * */
   int get_user_ls_sync_scn(const uint64_t tenant_id,
       ObISQLClient &client,
-      int64_t &sync_scn);
+      palf::SCN &sync_scn);
 private:
  bool need_update_ls_recovery_(const ObLSRecoveryStat &old_recovery,
                                const ObLSRecoveryStat &new_recovery);
  int get_all_ls_recovery_stat_(const uint64_t tenant_id,
                                const common::ObSqlString &sql,
                                ObISQLClient &client,
-                               int64_t &sync_scn,
-                               int64_t &min_wrs);
+                               palf::SCN &sync_scn,
+                               palf::SCN &min_wrs);
 
 };
 }

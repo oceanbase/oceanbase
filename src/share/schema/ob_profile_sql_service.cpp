@@ -87,8 +87,10 @@ int ObProfileSqlService::gen_sql(ObSqlString &sql,
   SQL_COL_APPEND_VALUE(sql, values, schema.get_password_lock_time(), "password_lock_time", "%ld");
   SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, schema.get_password_verify_function_str().ptr(),
                                   schema.get_password_verify_function_str().length(), "password_verify_function");
-  SQL_COL_APPEND_VALUE(sql, values, schema.get_password_life_time(), "password_life_time", "%ld");
-  SQL_COL_APPEND_VALUE(sql, values, schema.get_password_grace_time(), "password_grace_time", "%ld");
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2276) {
+    SQL_COL_APPEND_VALUE(sql, values, schema.get_password_life_time(), "password_life_time", "%ld");
+    SQL_COL_APPEND_VALUE(sql, values, schema.get_password_grace_time(), "password_grace_time", "%ld");
+  }
   return ret;
 }
 

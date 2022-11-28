@@ -17,9 +17,14 @@
 #include "lib/lock/ob_spin_rwlock.h"          // SpinRWLock
 #include "lib/lock/ob_small_spin_lock.h"      // ObByteLock
 #include "lib/container/ob_se_array.h"        // ObSEArray
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
+namespace palf
+{
+class SCN;
+}
 namespace transaction
 {
 
@@ -47,7 +52,7 @@ public:
   /// @retval OB_SUCCESS success
   /// @retval OTHER CODE fail
   int update_server_version(const common::ObAddr &addr,
-      const int64_t version,
+      const palf::SCN version,
       const int64_t valid_part_count,
       const int64_t total_part_count,
       const int64_t generate_tstamp,
@@ -55,7 +60,7 @@ public:
 
   /// get min server version which not smaller than base_version
   /// if no statisfied server version, return base_version
-  int64_t get_version(const int64_t base_version, int64_t &skip_server_count, const bool need_print_server_info) const;
+  palf::SCN get_version(const palf::SCN base_version, int64_t &skip_server_count, const bool need_print_server_info) const;
 
   // get server count in cluster master cached registered servers
   int64_t get_server_count() const;
@@ -75,7 +80,7 @@ private:
   struct ServerInfo
   {
     common::ObAddr  addr_;                // server addr
-    int64_t         version_;             // server weak read version
+    palf::SCN       version_;             // server weak read version
     int64_t         valid_part_count_;    // valid partition count
     int64_t         total_part_count_;    // total partition count
     int64_t         generate_tstamp_;     // server weak read version generation timestamp
@@ -85,15 +90,15 @@ private:
 
     ServerInfo();
     ServerInfo(const common::ObAddr &addr,
-        const int64_t verison,
+        const palf::SCN verison,
         const int64_t valid_part_count,
         const int64_t total_part_count);
     bool match(const common::ObAddr &addr) const;
-    void update(const int64_t version,
+    void update(const palf::SCN version,
         const int64_t valid_part_count,
         const int64_t total_part_count,
         const int64_t generate_tstamp);
-    int64_t get_version(bool &need_skip, bool &is_first_skipped) const;
+    palf::SCN get_version(bool &need_skip, bool &is_first_skipped) const;
 
     TO_STRING_KV(K_(addr), K_(version), K_(valid_part_count), K_(total_part_count),
         K_(generate_tstamp), K_(is_skipped));

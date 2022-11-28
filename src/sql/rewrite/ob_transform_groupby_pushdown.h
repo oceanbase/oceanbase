@@ -96,8 +96,6 @@ private:
                                ObIArray<PushDownParam> &params,
                                ObRawExpr *expr,
                                bool &is_valid);
-  
-  int is_lob_filter(ObRawExpr *expr, bool &has);
 
   int check_outer_join_aggr(ObSelectStmt *stmt,
                             JoinedTable *joined_table,
@@ -199,8 +197,6 @@ private:
                              ObIArray<ObSEArray<TableItem *, 4>> &trans_tables,
                               bool disassemble_join = true);
   int check_hint_valid(ObDMLStmt &stmt, ObIArray<PushDownParam> &params, bool &is_valid);
-
-   int check_join_condition_contain_lob(ObDMLStmt &stmt, bool &is_valid);
 private:
   // help functions
   int64_t get_count_sum_num(const ObIArray<ObRawExpr *> &exprs)

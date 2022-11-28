@@ -111,12 +111,13 @@ TEST(TestLogMeta, test_log_meta_generate)
   LogMeta meta1, meta2;
   LSN prev_lsn(10000), lsn(20000);
   int64_t init_pid(2);
-  int64_t init_ts(10);
+  SCN init_scn;
+  init_scn.convert_for_lsn_allocator(10);
   int64_t init_cksum(10);
   PalfBaseInfo base_info;
   LogInfo log_info;
   log_info.log_id_ = 1;
-  log_info.log_ts_ = init_ts;
+  log_info.log_scn_ = init_scn;
   log_info.log_proposal_id_ = init_pid;
   log_info.accum_checksum_ = init_cksum;
   // invalid lsn

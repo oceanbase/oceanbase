@@ -18,6 +18,7 @@
 #include "share/ob_rpc_struct.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/ls/ob_ls_tablet_service.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -40,7 +41,7 @@ int TestTabletHelper::create_tablet(ObLSTabletService &ls_tablet_svr, obrpc::ObB
 
   if (OB_FAIL(ls_tablet_svr.on_prepare_create_tablets(arg, trans_flags))) {
     STORAGE_LOG(WARN, "failed to prepare create tablets", K(ret), K(arg));
-  } else if (FALSE_IT(trans_flags.log_ts_ = INT64_MAX - 100)) {
+  } else if (FALSE_IT(trans_flags.log_ts_ = palf::OB_MAX_SCN_TS_NS - 100)) {
   } else if (OB_FAIL(ls_tablet_svr.on_redo_create_tablets(arg, trans_flags))) {
     STORAGE_LOG(WARN, "failed to redo create tablets", K(ret), K(arg));
   } else if (FALSE_IT(++trans_flags.log_ts_)) {

@@ -82,7 +82,7 @@ ObFastParserBase::ObFastParserBase(
   is_batched_multi_stmt_split_on_(enable_batched_multi_stmt),
   is_mysql_compatible_comment_(false),
   cur_token_begin_pos_(0), copy_begin_pos_(0), copy_end_pos_(0),
-  tmp_buf_(nullptr), tmp_buf_len_(0), last_escape_check_pos_(0),
+  tmp_buf_(nullptr), tmp_buf_len_(0), last_well_formed_len_(0),
   param_node_list_(nullptr), tail_param_node_(nullptr),
   cur_token_type_(INVALID_TOKEN), allocator_(allocator),
   parse_next_token_func_(nullptr), process_idf_func_(nullptr)
@@ -1382,21 +1382,22 @@ inline void ObFastParserBase::check_real_escape(bool &is_real_escape)
 {
   if (OB_NOT_NULL(charset_info_) && charset_info_->escape_with_backslash_is_dangerous) {
     char *cur_pos = tmp_buf_ + tmp_buf_len_;
-    char *last_check_pos = tmp_buf_ + last_escape_check_pos_;
+    char *last_check_pos = tmp_buf_ + last_well_formed_len_;
     int error = 0;
     int expected_well_formed_len = cur_pos - last_check_pos;
-
-    while (last_check_pos < cur_pos) {
-      size_t real_well_formed_len = charset_info_->cset->well_formed_len(
-                  charset_info_, last_check_pos, cur_pos, UINT64_MAX, &error);
-      last_check_pos += (real_well_formed_len + ((error != 0) ? 1 : 0));
-    }
-
-    if (error != 0) { //the final well-formed result
+    int real_well_formed_len = charset_info_->cset->well_formed_len(
+                charset_info_, last_check_pos, cur_pos, UINT64_MAX, &error);
+    if (error != 0) {
       *cur_pos = '\\';
-      if (charset_info_->cset->ismbchar(charset_info_, cur_pos - 1, cur_pos + 1)) {
+      if (real_well_formed_len == expected_well_formed_len - 1
+          && charset_info_->cset->ismbchar(charset_info_, cur_pos - 1, cur_pos + 1)) {
         is_real_escape = false;
+        last_well_formed_len_ = tmp_buf_len_ + 1;
+      } else {
+        last_well_formed_len_ = tmp_buf_len_;
       }
+    } else {
+      last_well_formed_len_ = tmp_buf_len_;
     }
   }
 }
@@ -1825,7 +1826,7 @@ int ObFastParserMysql::process_string(const char quote)
   ParseNode **child_node = NULL;
   char ch = INVALID_CHAR;
   tmp_buf_len_ = 0;
-  last_escape_check_pos_ = 0;
+  last_well_formed_len_ = 0;
   if (nullptr == tmp_buf_ &&
       OB_ISNULL(tmp_buf_ = static_cast<char *>(allocator_.alloc(raw_sql_.raw_sql_len_ + 1)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1854,7 +1855,6 @@ int ObFastParserMysql::process_string(const char quote)
         } else {
           process_escape_string(tmp_buf_, tmp_buf_len_);
         }
-        last_escape_check_pos_ = tmp_buf_len_;
       } else if (quote == ch) {
         if (quote == raw_sql_.peek()) { // double quote
           ch = raw_sql_.scan();
@@ -1892,16 +1892,11 @@ int ObFastParserMysql::process_string(const char quote)
       }
     } // end while
     if (OB_SUCC(ret)) {
-      // in ansi_quotes sql_mode, the "" is treated as `, shouldn't parameterize it.
-      bool is_ansi_quotes = false;
-      IS_ANSI_QUOTES(sql_mode_, is_ansi_quotes);
       raw_sql_.scan();
       if (!is_quote_end) {
         cur_token_type_ = IGNORE_TOKEN;
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
-      } else if (is_ansi_quotes && quote == '"') {
-        cur_token_type_ = NORMAL_TOKEN;
       } else {
         char *buf = nullptr;
         cur_token_type_ = PARAM_TOKEN;

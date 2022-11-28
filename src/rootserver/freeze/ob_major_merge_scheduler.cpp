@@ -31,7 +31,6 @@
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_column_checksum_error_operator.h"
-#include "share/ob_server_table_operator.h"
 
 namespace oceanbase
 {
@@ -333,9 +332,9 @@ int ObMajorMergeScheduler::do_work()
         need_merge = false;
         LOG_WARN("cannot do this round major merge cuz is_merge_error", K(need_merge), K(global_info));
       } else if (global_info.is_last_merge_complete()) {
-        if (global_info.global_broadcast_scn_ == global_info.frozen_scn_) {
+        if (global_info.global_broadcast_scn() == global_info.frozen_scn()) {
           need_merge = false;
-        } else if (global_info.global_broadcast_scn_ < global_info.frozen_scn_) {
+        } else if (global_info.global_broadcast_scn() < global_info.frozen_scn()) {
           // should do next round merge with higher broadcast_scn
           if (OB_FAIL(generate_next_global_broadcast_scn(curr_round_epoch))) {
             LOG_WARN("fail to generate next broadcast scn", KR(ret), K(global_info), K(curr_round_epoch));
@@ -372,17 +371,10 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
     // loop until 'this round major merge finished' or 'epoch changed'
     while (!stop_ && !is_paused()) {
       update_last_run_timestamp();
+
+      // get zones to schedule merge
       ObZoneArray to_merge_zone;
-      // Place is_last_merge_complete() to the head of this while loop.
-      // So as to break this loop at once, when the last merge is complete.
-      // Otherwise, may run one extra loop that should not run, and thus incur error.
-      // https://work.aone.alibaba-inc.com/issue/45954449
-      if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
-        LOG_WARN("fail to get zone global merge info", KR(ret));
-      } else if (global_info.is_last_merge_complete()) {
-        // this round major merge is complete
-        break;
-      } else if (OB_FAIL(get_next_merge_zones(to_merge_zone))) {  // get zones to schedule merge
+      if (OB_FAIL(get_next_merge_zones(to_merge_zone))) {
         LOG_WARN("fail to get next merge zones", KR(ret));
       } else if (to_merge_zone.empty()) {
         // no new zone to merge
@@ -390,11 +382,16 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
       } else if (OB_FAIL(schedule_zones_to_merge(to_merge_zone, expected_epoch))) {
         LOG_WARN("fail to get next merge zones", KR(ret), K(to_merge_zone), K(expected_epoch));
       }
-      // Need to update_merge_status, even though to_merge_zone is empty.
-      // E.g., in the 1st loop, already schedule all zones to merge, but not finish major merge.
-      // In the 2nd loop, though to_merge_zone is empty, need continue to update_merge_status.
-      if (FAILEDx(update_merge_status(expected_epoch))) {
-        LOG_WARN("fail to update merge status", KR(ret), K(expected_epoch));
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
+          LOG_WARN("fail to get zone global merge info", KR(ret));
+        } else if (global_info.is_last_merge_complete()) {
+          // this round major merge is complete
+          break;
+        } else if (OB_FAIL(update_merge_status(expected_epoch))) {
+          LOG_WARN("fail to update merge status", KR(ret), K(expected_epoch));
+        }
       }
 
       if (OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret) {
@@ -421,14 +418,14 @@ int ObMajorMergeScheduler::generate_next_global_broadcast_scn(const int64_t expe
 {
   int ret = OB_SUCCESS;
 
-  int64_t new_global_broadcast_scn = 0;
+  palf::SCN new_global_broadcast_scn;
   // MERGE_STATUS: IDLE -> MERGING
   if (OB_FAIL(zone_merge_mgr_->generate_next_global_broadcast_scn(expected_epoch, new_global_broadcast_scn))) {
     LOG_WARN("fail to generate next broadcast scn", KR(ret), K(expected_epoch));
   } else {
     LOG_INFO("start to schedule new round merge", K(new_global_broadcast_scn), K_(tenant_id));
-    ROOTSERVICE_EVENT_ADD("daily_merge", "merging", K_(tenant_id),
-                          "global_broadcast_scn", new_global_broadcast_scn,
+    ROOTSERVICE_EVENT_ADD("daily_merge", "merging", K_(tenant_id), "global_broadcast_scn",
+                          new_global_broadcast_scn.get_val_for_inner_table_field(),
                           "zone", "global_zone");
   }
 
@@ -471,7 +468,7 @@ int ObMajorMergeScheduler::schedule_zones_to_merge(
           tmp_info.zone_ = *zone;
           if (OB_FAIL(zone_merge_mgr_->get_zone_merge_info(tmp_info))) {
             LOG_WARN("fail to get zone", KR(ret), K(*zone));
-          } else if (!tmp_info.is_merging_) {
+          } else if (0 == tmp_info.is_merging_.get_value()) {
             if (OB_FAIL(set_zone_merging(*zone, expected_epoch))) {
               LOG_WARN("fail to set zone merging", KR(ret), K(*zone), K(expected_epoch));
             }
@@ -496,7 +493,7 @@ int ObMajorMergeScheduler::schedule_zones_to_merge(
 int ObMajorMergeScheduler::start_zones_merge(const ObZoneArray &to_merge, const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
-  int64_t global_broadcast_scn = 0;
+  palf::SCN global_broadcast_scn;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -510,7 +507,7 @@ int ObMajorMergeScheduler::start_zones_merge(const ObZoneArray &to_merge, const 
         tmp_info.zone_ = to_merge.at(i);
         if (OB_FAIL(zone_merge_mgr_->get_zone_merge_info(tmp_info))) {
           LOG_WARN("fail to get zone", KR(ret), "zone", tmp_info.zone_);
-        } else if (!tmp_info.is_merging_) {
+        } else if (0 == tmp_info.is_merging_.get_value()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_INFO("zone is not merging, can not start merge", KR(ret), 
                    "zone", tmp_info.zone_, K(tmp_info));
@@ -530,7 +527,7 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   ObAllZoneMergeProgress all_progress;
-  int64_t global_broadcast_scn = 0;
+  palf::SCN global_broadcast_scn;
   bool all_merged = true;
   ObSimpleFrozenStatus frozen_status;
 
@@ -547,7 +544,7 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
     if (TC_REACH_TIME_INTERVAL(time_interval)) {
       ROOTSERVICE_EVENT_ADD("daily_merge", "merge_process", K_(tenant_id), 
                             "check merge progress fail", ret,
-                            "global_broadcast_scn", global_broadcast_scn, 
+                            "global_broadcast_scn", global_broadcast_scn.get_val_for_inner_table_field(),
                             "service_addr", GCONF.self_addr_);
     }
   } else {
@@ -563,25 +560,7 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
           LOG_WARN("fail to find zone", KR(ret), K_(tenant_id), K(zone));
           if (OB_ENTRY_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
-          } 
-        } else if (info.broadcast_scn_ > global_broadcast_scn) {
-          // broadcast_scn of zones here may be not equal to the global_broadcast_scn above,
-          // since merge_info can be reload at any time.
-          // 1) Larger:  e.g., broadcast_scn (that has increased) of zones is reload in one
-          // new epoch, while global_broadcast_scn is the one generated in one old epoch.
-          // https://work.aone.alibaba-inc.com/issue/46027393
-          // 2) Smaller: broadcast_scn of new added zones may be smaller than global_broadcast_scn.
-          // 3) Equal:   the common case.
-
-          // The check_merge_progress above is based on global_broadcast_scn. Hence, 
-          // if broadcast_scn of one zone here is larger than global_broadcast_scn, then
-          // the check_merge_progress above is not enough. Need to recheck merge progress
-          // based on one global_broadcast_scn that is equal to or larger than broadcast_scn
-          // of all these zones. Note that, the info log below will be followed by one warn log
-          // with error code OB_FREEZE_SERVICE_EPOCH_MISMATCH.
-          all_merged = false;  // treat merged as false, thus all_merged is false too
-          LOG_INFO("broadcast_scn of this zone is larger than global_broadcast_scn, need to "
-            "recheck merge progress again", K_(tenant_id), K(zone), K(global_broadcast_scn));
+          }
         } else {
           merged = (0 == progress->unmerged_tablet_cnt_);
           if (!merged) {
@@ -589,49 +568,47 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
             LOG_INFO("zone merge not finish", "zone", progress->zone_, "unmerged_cnt", progress->unmerged_tablet_cnt_);
           }
 
-          int64_t cur_all_merged_scn = 0;
-          const uint64_t ori_all_merged_scn = info.all_merged_scn_.value_;
-          int64_t cur_merged_scn = (merged ? info.broadcast_scn_ : info.last_merged_scn_);
+          palf::SCN cur_all_merged_scn;
+          const palf::SCN &ori_all_merged_scn = info.all_merged_scn();
+          palf::SCN last_merged_scn = (merged ? info.broadcast_scn() : info.last_merged_scn());
 
-          if (progress->smallest_snapshot_version_ <= 0) {
-            cur_all_merged_scn = info.broadcast_scn_;
+          if (progress->smallest_snapshot_scn_ <= palf::SCN::min_scn()) {
+            cur_all_merged_scn = info.broadcast_scn();
           } else {
-            cur_all_merged_scn = progress->smallest_snapshot_version_;
+            cur_all_merged_scn = progress->smallest_snapshot_scn_;
           }
-          LOG_INFO("check updating merge status", KR(ret), K_(tenant_id), K(zone), K(merged), K(cur_all_merged_scn),
-            K(cur_merged_scn), "smallest_snapshot_version", progress->smallest_snapshot_version_, K(info));
 
-          if (OB_SUCC(ret) && merged) {
-            // cur_all_merged_scn >= cur_merged_scn
-            // 1. Equal: snapshot_version of all tablets change to frozen_scn after major compaction
-            // 2. Greater: In backup-restore situation, tablets may have higher snapshot_version, which 
-            // is larger than current frozen_scn. https://work.aone.alibaba-inc.com/issue/45933591
-            //
-            // cur_all_merged_scn >= ori_all_merged_scn
-            // 1. Greater: all_merged_scn will increase like last_merged_scn after major compaction
-            // 2. Equal: In backup-restore situation, tablets may have higher snapshot_version(eg. version=10).
-            // If major_freeze with version=4, all_merged_scn will be updated to 10; if major_freeze with version=5,
-            // all_merged_scn will still be 10.
-            if ((cur_all_merged_scn < cur_merged_scn) || (cur_all_merged_scn < ori_all_merged_scn) 
-                || (cur_merged_scn < info.last_merged_scn_)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_ERROR("unexpected merged scn", KR(ret), K(merged), K(cur_merged_scn), K(cur_all_merged_scn),
-                K(ori_all_merged_scn), K(info));
-            } else if (cur_merged_scn > info.last_merged_scn_) {
-              LOG_INFO("this zone merge finished", K(zone), K_(tenant_id), K(cur_all_merged_scn), K(ori_all_merged_scn),
-                K(cur_merged_scn), "last_merged_scn", info.last_merged_scn_);
-              // update last_merged_scn & all_merged_scn in all_zone_merge_info
-              if (OB_FAIL(zone_merge_mgr_->finish_zone_merge(zone, expected_epoch, cur_merged_scn, cur_all_merged_scn))) {
-                LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch), K(cur_merged_scn), 
-                  K(cur_all_merged_scn), K(info));
+          if ((last_merged_scn < cur_all_merged_scn) || (ori_all_merged_scn > cur_all_merged_scn)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpect version", KR(ret), K(last_merged_scn), K(cur_all_merged_scn), K(ori_all_merged_scn));
+          } else {
+            // TODO 'zone merge finish' & 'zone all tablet merge finish' should be handled in same procedure.
+            if (info.last_merged_scn_.get_scn() != last_merged_scn) {
+              LOG_INFO("this zone merge finished", K(zone), K_(tenant_id), K(cur_all_merged_scn),
+                K(ori_all_merged_scn), K(last_merged_scn));
+              // update last_merged_scn in all_merge_info table
+              if (OB_FAIL(zone_merge_mgr_->finish_zone_merge(zone, expected_epoch, last_merged_scn,
+                  ori_all_merged_scn))) {
+                LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch));
               } else {
-                ROOTSERVICE_EVENT_ADD("daily_merge", "zone_merge_finish", K_(tenant_id), 
-                                      "last_merged_scn", cur_merged_scn, 
-                                      "all_merged_scn", cur_all_merged_scn,
-                                      K(zone));
+                ROOTSERVICE_EVENT_ADD("daily_merge", "zone_merge_finish", K_(tenant_id),
+                                      "last_merged_scn", info.last_merged_scn_, K(zone));
               }
             }
-          }
+
+            if (OB_SUCC(ret) && (ori_all_merged_scn != cur_all_merged_scn)) {
+              LOG_INFO("this zone all tablet merge finished", K(zone), K_(tenant_id), K(cur_all_merged_scn),
+                K(ori_all_merged_scn), K(last_merged_scn));
+              // update all_merged_scn in all_merge_info table
+              if (OB_FAIL(zone_merge_mgr_->finish_zone_merge(zone, expected_epoch, last_merged_scn,
+                  cur_all_merged_scn))) {
+                LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch));
+              } else {
+                ROOTSERVICE_EVENT_ADD("daily_merge", "zone_all_tablet_merged", K_(tenant_id),
+                                      "all_merged_scn", cur_all_merged_scn, K(zone));
+              }
+            }
+          } // end do check
         }
       }
     }
@@ -660,12 +637,12 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
   return ret;
 }
 
-int ObMajorMergeScheduler::update_global_merge_info_after_merge(const int64_t expected_epoch)
+int ObMajorMergeScheduler::update_global_merge_info_after_merge(const int64_t expected_epaoch)
 {
   int ret = OB_SUCCESS;
   // need update global merge_status
-  if (OB_FAIL(zone_merge_mgr_->update_global_merge_info_after_merge(expected_epoch))) {
-    LOG_WARN("fail to update global merge info after merge", KR(ret), K_(tenant_id), K(expected_epoch));
+  if (OB_FAIL(zone_merge_mgr_->update_global_merge_info_after_merge(expected_epaoch))) {
+    LOG_WARN("fail to update global merge info after merge", KR(ret), K_(tenant_id), K(expected_epaoch));
   }
   return ret;
 }
@@ -679,13 +656,11 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
       LOG_WARN("not inited", KR(ret));
     } else if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, infos))) {
       LOG_WARN("fail to get zone info", KR(ret));
-    } else if (global_info.is_merge_error()) {
-      LOG_WARN("should not update global merged scn, cuz is_merge_error is true", K(global_info));
     } else {
-      if (global_info.last_merged_scn_ != global_info.global_broadcast_scn_) {
+      if (global_info.last_merged_scn() != global_info.global_broadcast_scn()) {
         bool merged = true;
         FOREACH_X(info, infos, merged) {
-          if (info->last_merged_scn_ != global_info.global_broadcast_scn_) {
+          if (info->last_merged_scn() != global_info.global_broadcast_scn()) {
             merged = false;
           }
         }
@@ -694,7 +669,7 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
             LOG_WARN("try update global last_merged_scn failed", KR(ret), K(expected_epoch));
           } else {
             ROOTSERVICE_EVENT_ADD("daily_merge", "global_merged", K_(tenant_id),
-                                  "global_broadcast_scn", global_info.global_broadcast_scn_.value_);
+                                  "global_broadcast_scn", global_info.global_broadcast_scn_.get_scn_val());
           }
         }
       }
@@ -785,8 +760,6 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
   int64_t global_last_merged_time = -1;
   int64_t global_merge_start_time = -1;
   int64_t max_merge_time = -1;
-  int64_t start_service_time = -1;
-  int64_t all_service_time = -1;
   if (OB_ISNULL(zone_merge_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("zone_merge_mgr_ is unexpected nullptr", KR(ret), K_(tenant_id));
@@ -808,25 +781,12 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
     } else {
       max_merge_time = MAX(global_last_merged_time, global_merge_start_time);
     }
-    if (OB_SUCC(ret)) {
-      ObServerTableOperator st_operator;
-      if (OB_FAIL(st_operator.init(sql_proxy_))) {
-        LOG_WARN("fail to init server table operator", K(ret), K_(tenant_id));
-      } else if (OB_FAIL(st_operator.get_start_service_time(GCONF.self_addr_, start_service_time))) {
-        LOG_WARN("fail to get start service time", KR(ret), K_(tenant_id));
-      } else {
-        all_service_time = now - start_service_time;
-      }
-    }
-    // LOG_ERROR should satisfy one additional condition: all_service_time > MAX_NO_MERGE_INTERVAL.
-    // So as to avoid LOG_ERROR when the tenant miss daily merge due to the cluster restarted.
-    if (OB_SUCC(ret) && !is_paused() && (all_service_time > MAX_NO_MERGE_INTERVAL)) {
+    if (OB_SUCC(ret) && !is_paused()) {
       if (is_merging) {
         if ((now - max_merge_time) > MAX_NO_MERGE_INTERVAL) {
           if (TC_REACH_TIME_INTERVAL(30 * 60 * 1000 * 1000)) {
-            LOG_ERROR("long time major freeze not finish, please check it", KR(ret),
-              K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
-              K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(all_service_time));
+            LOG_ERROR("long time major freeze not finish, please check it", KR(ret), K(global_last_merged_time),
+              K(global_merge_start_time), K(max_merge_time), K(now), K_(tenant_id), K(is_merging));
           }
         }
       } else {
@@ -838,9 +798,8 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
                    (GCONF.enable_major_freeze) && 
                    (!tenant_config->major_freeze_duty_time.disable())) {
           if (TC_REACH_TIME_INTERVAL(30 * 60 * 1000 * 1000)) {
-            LOG_ERROR("long time no major freeze, please check it", KR(ret),
-              K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
-              K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(all_service_time));
+            LOG_ERROR("long time no major freeze, please check it", KR(ret), K(global_last_merged_time),
+              K(global_merge_start_time), K(max_merge_time), K(now), K_(tenant_id), K(is_merging));
           }
         }
       }

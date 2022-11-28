@@ -100,15 +100,12 @@ public:
   Value *next_;
 };
 
-template<typename Key, typename Value, typename AllocHandle, typename LockType, int64_t BUCKETS_CNT = 64>
+template<typename Key, typename Value, typename AllocHandle, typename LockType>
 class ObTransHashMap
 {
  typedef common::ObSEArray<Value *, 32> ValueArray;
 public:
-  ObTransHashMap() : is_inited_(false), total_cnt_(0)
-  {
-    OB_ASSERT(BUCKETS_CNT > 0);
-  }
+  ObTransHashMap() : is_inited_(false), total_cnt_(0) {}
   ~ObTransHashMap() { destroy(); }
   int64_t count() const { return ATOMIC_LOAD(&total_cnt_); }
   int64_t alloc_cnt() const { return alloc_handle_.get_alloc_cnt(); }
@@ -119,17 +116,15 @@ public:
       Value *curr = nullptr;
       Value *next = nullptr;
       for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
-        {
-          BucketWLockGuard guard(buckets_[i].lock_, get_itid());
+        BucketWLockGuard guard(buckets_[i].lock_, get_itid());
 
-          curr = buckets_[i].next_;
-          while (OB_NOT_NULL(curr)) {
-            next = curr->next_;
-            del_from_bucket_(i, curr);
-            // dec ref and free curr value
-            revert(curr);
-            curr = next;
-          }
+        curr = buckets_[i].next_;
+        while (OB_NOT_NULL(curr)) {
+          next = curr->next_;
+          del_from_bucket_(i, curr);
+          // dec ref and free curr value
+          revert(curr);
+          curr = next;
         }
         // reset bucket
         buckets_[i].reset();
@@ -141,7 +136,7 @@ public:
 
   void destroy() { reset(); }
 
-  int init(const lib::ObMemAttr &mem_attr)
+  int init()
   {
     int ret = OB_SUCCESS;
 
@@ -149,22 +144,10 @@ public:
       ret = OB_INIT_TWICE;
       TRANS_LOG(WARN, "ObTransHashMap init twice", K(ret));
     } else {
-      // init bucket, init lock in bucket
-      for (int64_t i = 0 ; OB_SUCC(ret) && i < BUCKETS_CNT; ++i) {
-        if (OB_FAIL(buckets_[i].init(mem_attr))) {
-          TRANS_LOG(WARN, "ObTransHashMap bucket init fail", K(ret));
-          for (int64_t j = 0 ; j <= i; ++j) {
-            buckets_[j].destroy();
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        is_inited_ = true;
-      }
+      is_inited_ = true;
     }
     return ret;
   }
-
   int insert_and_get(const Key &key, Value *value, Value **old_value)
   { return insert__(key, value, 2, old_value); }
   int insert(const Key &key, Value *value)
@@ -356,9 +339,7 @@ public:
               del_from_bucket_(pos, array.at(i));
             }
           }
-          if (0 == array.at(i)->dec_ref(1)) {
-            alloc_handle_.free_value(array.at(i));
-          }
+          array.at(i)->dec_ref(1);
         }
       }
     }
@@ -422,20 +403,12 @@ private:
 
     ObTransHashHeader() : next_(NULL), hot_cache_val_(NULL) {}
     ~ObTransHashHeader() { destroy(); }
-    int init(const lib::ObMemAttr &mem_attr)
-    {
-      return lock_.init(mem_attr);
-    }
     void reset()
     {
       next_ = NULL;
       hot_cache_val_ = NULL;
-      lock_.destroy();
     }
-    void destroy()
-    {
-      reset();
-    }
+    void destroy() { reset(); }
   };
 
   // thread local node
@@ -519,10 +492,9 @@ private:
   }
 
 private:
-  // sizeof(ObTransHashMap) = BUCKETS_CNT * sizeof(LockType);
-  // sizeof(SpinRWLock) = 20B;
-  // sizeof(QsyncLock) = 4K;
   bool is_inited_;
+  const static int64_t BUCKETS_CNT = 1 << 14;
+  // (1 << 14) * 24B = 393216B
   ObTransHashHeader buckets_[BUCKETS_CNT];
   int64_t total_cnt_;
   AllocHandle alloc_handle_;

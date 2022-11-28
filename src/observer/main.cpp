@@ -348,9 +348,6 @@ static void print_limit(const char *name, const int resource)
       _OB_LOG(INFO, "[%s] %-24s = %ld", __func__, name, limit.rlim_cur);
     }
   }
-  if (RLIMIT_CORE == resource) {
-    g_rlimit_core = limit.rlim_cur;
-  }
 }
 
 static void print_all_limits()

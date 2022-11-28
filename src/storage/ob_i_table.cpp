@@ -30,7 +30,7 @@ using namespace oceanbase::transaction::tablelock;
 ObITable::TableKey::TableKey()
   :
     tablet_id_(),
-    log_ts_range_(),
+    scn_range_(),
     column_group_idx_(0),
     table_type_(ObITable::MAX_TABLE_TYPE)
 {
@@ -40,7 +40,7 @@ ObITable::TableKey::TableKey()
 void ObITable::TableKey::reset()
 {
   tablet_id_.reset();
-  log_ts_range_.reset();
+  scn_range_.reset();
   column_group_idx_ = 0;
   table_type_ = ObITable::MAX_TABLE_TYPE;
 }
@@ -71,8 +71,8 @@ uint64_t ObITable::TableKey::hash() const
   hash_value = common::murmurhash(&table_type_, sizeof(table_type_), hash_value);
   hash_value = common::murmurhash(&column_group_idx_, sizeof(table_type_), hash_value);
   hash_value += tablet_id_.hash();
-  if (is_table_with_log_ts_range()) {
-    hash_value += log_ts_range_.hash();
+  if (is_table_with_scn_range()) {
+    hash_value += scn_range_.hash();
   } else {
     hash_value += version_range_.hash();
   }
@@ -82,7 +82,7 @@ uint64_t ObITable::TableKey::hash() const
 OB_SERIALIZE_MEMBER(
     ObITable::TableKey,
     tablet_id_,
-    log_ts_range_,
+    scn_range_,
     column_group_idx_,
     table_type_);
 
@@ -668,7 +668,7 @@ int ObTablesHandleArray::get_all_minor_sstables(common::ObIArray<ObITable *> &ta
   return ret;
 }
 
-int ObTablesHandleArray::check_continues(const ObLogTsRange *log_ts_range) const
+int ObTablesHandleArray::check_continues(const share::ObScnRange *scn_range) const
 {
   int ret = OB_SUCCESS;
 
@@ -677,13 +677,13 @@ int ObTablesHandleArray::check_continues(const ObLogTsRange *log_ts_range) const
     // there can only be one major or buf minor
     const ObITable *last_table = nullptr;
     const ObITable *table = nullptr;
-    int64_t base_end_log_ts = 0;
+    palf::SCN base_end_scn = palf::SCN::min_scn();
     int64_t i = 0;
     if (OB_ISNULL(table = tables_.at(i))) {
       ret = OB_ERR_SYS;
       LOG_WARN("table is NULL", KPC(table));
     } else if (table->is_major_sstable() || table->is_buf_minor_sstable()) {
-      base_end_log_ts = table->is_buf_minor_sstable() ? table->get_end_log_ts() : 0;
+      base_end_scn = table->is_buf_minor_sstable() ? table->get_end_scn() : palf::SCN::min_scn();
       i++;
     }
     // 2:check minor sstable
@@ -696,16 +696,16 @@ int ObTablesHandleArray::check_continues(const ObLogTsRange *log_ts_range) const
         ret = OB_ERR_SYS;
         LOG_WARN("major sstable or buf minor should be first", K(ret), K(i), K(table));
       } else if (OB_ISNULL(last_table)) { // first table
-        if (OB_NOT_NULL(log_ts_range)
-            && table->get_start_log_ts() > log_ts_range->start_log_ts_) {
+        if (OB_NOT_NULL(scn_range)
+            && table->get_start_scn() > scn_range->start_scn_) {
           ret = OB_LOG_ID_RANGE_NOT_CONTINUOUS;
-          LOG_WARN("first minor sstable don't match the log_ts_range::start_log_ts", K(ret),
-              KPC(log_ts_range), K(i), K(*this));
-        } else if (table->get_end_log_ts() <= base_end_log_ts) {
+          LOG_WARN("first minor sstable don't match the scn_range::start_log_ts", K(ret),
+              KPC(scn_range), K(i), K(*this));
+        } else if (table->get_end_scn() <= base_end_scn) {
           ret = OB_LOG_ID_RANGE_NOT_CONTINUOUS;
-          LOG_WARN("Unexpected end log ts of first minor sstable", K(ret), K(base_end_log_ts), K(i), K(*this));
+          LOG_WARN("Unexpected end log ts of first minor sstable", K(ret), K(base_end_scn), K(i), K(*this));
         }
-      } else if (table->get_start_log_ts() > last_table->get_end_log_ts()) {
+      } else if (table->get_start_scn() > last_table->get_end_scn()) {
         ret = OB_LOG_ID_RANGE_NOT_CONTINUOUS;
         LOG_WARN("log ts range is not continuous", K(ret), K(i), K(*this));
       }
@@ -722,9 +722,7 @@ int64_t ObTablesHandleArray::to_string(char *buf, const int64_t buf_len) const
   } else {
     J_OBJ_START();
     J_KV(KP(meta_mem_mgr_), KP(allocator_));
-    J_COMMA();
     J_KV("tablet_id", tablet_id_);
-    J_COMMA();
     J_KV("table_count", tables_.count());
     J_COMMA();
     J_ARRAY_START();

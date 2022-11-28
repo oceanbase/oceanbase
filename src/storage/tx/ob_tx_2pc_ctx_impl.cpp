@@ -127,7 +127,7 @@ int ObPartTransCtx::do_pre_commit(bool &need_wait)
     }
   }
 
-  if (!need_wait && OB_FAIL(update_local_max_commit_version_(ctx_tx_data_.get_commit_version()))) {
+  if (OB_FAIL(update_local_max_commit_version_(ctx_tx_data_.get_commit_version()))) {
     TRANS_LOG(ERROR, "update publish version failed", KR(ret), KPC(this));
   }
   if (OB_SUCC(ret) && OB_FAIL(restart_2pc_trans_timer_())) {
@@ -139,8 +139,7 @@ int ObPartTransCtx::do_pre_commit(bool &need_wait)
 int ObPartTransCtx::do_commit()
 {
   int ret = OB_SUCCESS;
-  int64_t gts = 0;
-  int64_t local_max_read_version = 0;
+  palf::SCN gts, local_max_read_version;
 
   if (is_local_tx_()) {
     if (OB_FAIL(get_gts_(gts))) {
@@ -158,7 +157,7 @@ int ObPartTransCtx::do_commit()
       mt_ctx_.before_prepare(gts);
       if (OB_FAIL(get_local_max_read_version_(local_max_read_version))) {
         TRANS_LOG(ERROR, "get local max read version failed", KR(ret), K(*this));
-      } else if (OB_FAIL(ctx_tx_data_.set_commit_version(std::max(gts, local_max_read_version)))) {
+      } else if (OB_FAIL(ctx_tx_data_.set_commit_version(palf::SCN::max(gts, local_max_read_version)))) {
         TRANS_LOG(ERROR, "set tx data commit version failed", K(ret));
       }
     }
@@ -232,7 +231,7 @@ int ObPartTransCtx::check_and_response_scheduler_(int result)
 }
 
 
-int ObPartTransCtx::update_local_max_commit_version_(const int64_t &commit_version)
+int ObPartTransCtx::update_local_max_commit_version_(const palf::SCN &commit_version)
 {
   int ret = OB_SUCCESS;
   trans_service_->get_tx_version_mgr().update_max_commit_ts(commit_version, false);
@@ -246,7 +245,8 @@ int ObPartTransCtx::on_commit()
   if (is_local_tx_()) {
     // TODO: fill it for sp commit
   } else {
-    if (OB_FAIL(on_dist_end_(true /*commit*/))) {
+    if (OB_FAIL(on_dist_end_(true /*commit*/
+                        ))) {
       TRANS_LOG(WARN, "transaciton end error", KR(ret), "context", *this);
     }
   }
@@ -303,8 +303,8 @@ int ObPartTransCtx::on_clear()
   int ret = OB_SUCCESS;
 
   (void)unregister_timeout_task_();
-  (void)trans_clear_();
   (void)set_exiting_();
+  (void)trans_clear_();
 
   return ret;
 }

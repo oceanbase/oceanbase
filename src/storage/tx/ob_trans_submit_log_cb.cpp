@@ -29,23 +29,23 @@ namespace transaction
 void ObTxBaseLogCb::reset()
 {
   AppendCb::reset();
-  log_ts_ = 0;
+  log_ts_.reset();
   lsn_.reset();
   submit_ts_ = 0;
 }
 
 void ObTxBaseLogCb::reuse()
 {
-  log_ts_ = 0;
+  log_ts_.reset();
   lsn_.reset();
   submit_ts_ = 0;
 }
 
-int ObTxBaseLogCb::set_log_ts(const int64_t log_ts)
+int ObTxBaseLogCb::set_log_ts(const SCN &log_ts)
 {
   int ret = OB_SUCCESS;
 
-  if (log_ts <= 0) {
+  if (!log_ts.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(log_ts));
   } else {
@@ -132,7 +132,7 @@ bool ObTxLogCb::is_valid() const
 
 void ObTxLogCb::check_warn_() const
 {
-  const int64_t used_time = ObClockGenerator::getRealClock() - get_log_ts();
+  const int64_t used_time = ObClockGenerator::getRealClock() - get_submit_ts();
   if (used_time >= ObServerConfig::get_instance().clog_sync_time_warn_threshold) {
     TRANS_LOG(WARN, "transaction log sync use too much time", K(*this), K(used_time));
   }

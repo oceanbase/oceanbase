@@ -189,7 +189,6 @@ int MutatorRow::parse_cols(
     ObObj2strHelper *obj2str_helper /* = NULL */,
     const ObSimpleTableSchemaV2 *simple_table_schema /* = NULL */,
     const TableSchemaInfo *tb_schema_info /* = NULL */,
-    const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool enable_output_hidden_primary_key /*  = false */,
     const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info /* = NULL */)
 {
@@ -210,7 +209,7 @@ int MutatorRow::parse_cols(
           "mutator_row", (const ObMemtableMutatorRow &)(*this));
       new_cols_.reset();
     } else if (OB_FAIL(parse_columns_(true/*is_parse_new_col*/, new_row_.data_, new_row_.size_,
-        obj2str_helper, simple_table_schema, tb_schema_info, tz_info_wrap, enable_output_hidden_primary_key,
+        obj2str_helper, simple_table_schema, tb_schema_info, enable_output_hidden_primary_key,
         all_ddl_operation_table_schema_info, new_cols_))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(new_row_), K(obj2str_helper), K(simple_table_schema),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
@@ -225,7 +224,7 @@ int MutatorRow::parse_cols(
       // no old cols
       old_cols_.reset();
     } else if (OB_FAIL(parse_columns_(false/*is_parse_new_col*/, old_row_.data_, old_row_.size_,
-        obj2str_helper, simple_table_schema, tb_schema_info, tz_info_wrap, enable_output_hidden_primary_key,
+        obj2str_helper, simple_table_schema, tb_schema_info, enable_output_hidden_primary_key,
         all_ddl_operation_table_schema_info, old_cols_))) {
       LOG_ERROR("parse old columns fail", KR(ret), K(old_row_), K(obj2str_helper), K(simple_table_schema),
           K(tb_schema_info), K(enable_output_hidden_primary_key));
@@ -239,7 +238,7 @@ int MutatorRow::parse_cols(
     rowkey_cols_.reset();
 
     if (OB_FAIL(parse_rowkey_(rowkey_cols_, rowkey_, obj2str_helper, simple_table_schema, tb_schema_info,
-            tz_info_wrap, enable_output_hidden_primary_key))) {
+            enable_output_hidden_primary_key))) {
       LOG_ERROR("parse_rowkey_ fail", KR(ret), K(rowkey_), K(obj2str_helper),
           K(enable_output_hidden_primary_key));
     } else {
@@ -320,7 +319,6 @@ int MutatorRow::parse_columns_(
     ObObj2strHelper *obj2str_helper,
     const ObSimpleTableSchemaV2 *table_schema,
     const TableSchemaInfo *tb_schema_info,
-    const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool enable_output_hidden_primary_key,
     const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
     ColValueList &cols)
@@ -405,7 +403,7 @@ int MutatorRow::parse_columns_(
               LOG_DEBUG("handle_lob_v2_data", K(column_stored_idx), K(lob_common), K(obj));
 
               if (! is_out_row) {
-                LOG_DEBUG("is_lob_v2 in row", K(column_id), K(is_lob_v2), K(lob_common), K(obj));
+                LOG_INFO("is_lob_v2 in row", K(column_id), K(is_lob_v2), K(lob_common), K(obj));
                 obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
               } else {
                 const ObLobData &lob_data = *(reinterpret_cast<const ObLobData *>(lob_common.buffer_));
@@ -450,7 +448,6 @@ int MutatorRow::parse_columns_(
                 table_schema,
                 column_schema_info,
                 obj2str_helper,
-                tz_info_wrap,
                 cols))) {
               LOG_ERROR("add_column_ fail", KR(ret), K(cols), K(column_stored_idx), K(column_id), K(obj),
                 K(obj2str_helper), K(table_schema), K(column_schema_info));
@@ -505,7 +502,6 @@ int MutatorRow::add_column_(
     const share::schema::ObSimpleTableSchemaV2 *simple_table_schema, /*NULL if parse all_ddl_operation_table  columns*/
     const ColumnSchemaInfo *column_schema_info,
     const ObObj2strHelper *obj2str_helper/*NULL if parse all_ddl_operation_table  columns*/,
-    const ObTimeZoneInfoWrap *tz_info_wrap,
     ColValueList &cols)
 {
   int ret = OB_SUCCESS;
@@ -573,8 +569,7 @@ int MutatorRow::add_column_(
         false,
         extended_type_info,
         accuracy,
-        collation_type,
-        tz_info_wrap))) {
+        collation_type))) {
       LOG_ERROR("obj2str fail", KR(ret), "obj", *value, K(obj2str_helper), K(accuracy), K(collation_type), K(column_id), K(column_schema_info));
     } else if (OB_FAIL(cols.add(cv_node))) {
       LOG_ERROR("add column into ColValueList fail", KR(ret), "column_value", *cv_node, K(cols));
@@ -632,7 +627,6 @@ int MutatorRow::parse_rowkey_(
     ObObj2strHelper *obj2str_helper,
     const ObSimpleTableSchemaV2 *simple_table_schema,
     const TableSchemaInfo *tb_schema_info,
-    const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool enable_output_hidden_primary_key)
 {
   int ret = OB_SUCCESS;
@@ -688,7 +682,6 @@ int MutatorRow::parse_rowkey_(
             simple_table_schema,
             column_schema_info,
             obj2str_helper,
-            tz_info_wrap,
             rowkey_cols))) {
           LOG_ERROR("add_column_ fail", K(rowkey_cols), KR(ret), K(column_id),
               K(index), K(rowkey_objs[index]), K(obj2str_helper), K(simple_table_schema), K(column_schema_info));
@@ -1183,7 +1176,7 @@ int DdlStmtTask::parse_ddl_info(
   }
   // parses the column data
   // but does not convert the column data to a string
-  else if (OB_FAIL(row_.parse_cols(nullptr, nullptr, nullptr, nullptr, false, &all_ddl_operation_table_schema_info))) {
+  else if (OB_FAIL(row_.parse_cols(nullptr, nullptr, nullptr, false, &all_ddl_operation_table_schema_info))) {
     LOG_ERROR("parse columns fail", KR(ret), K(row_));
   } else if (OB_FAIL(parse_ddl_info_(contain_ddl_stmt, update_schema_version, stop_flag))) {
     if (OB_INVALID_DATA == ret) {
@@ -2035,9 +2028,10 @@ PartTransTask::PartTransTask() :
     prepare_log_lsn_(),
     commit_ts_(OB_INVALID_TIMESTAMP),
     commit_log_lsn_(),
-    trans_type_(transaction::TransType::UNKNOWN_TRANS),
+    trans_type_(CDCTransType::UNKNOWN),
     is_xa_or_dup_(false),
-    participants_(),
+    participant_count_(0),
+    participants_(NULL),
     trace_id_(),
     trace_info_(),
     sorted_log_entry_info_(),
@@ -2168,9 +2162,10 @@ void PartTransTask::reset()
   prepare_log_lsn_.reset();
   commit_ts_ = OB_INVALID_TIMESTAMP;
   commit_log_lsn_.reset();
-  trans_type_ = transaction::TransType::UNKNOWN_TRANS;
+  trans_type_ = CDCTransType::UNKNOWN;
   is_xa_or_dup_ = false;
-  participants_.reset();
+  participant_count_ = 0;
+  participants_ = NULL;
   // The trace_id memory does not need to be freed separately, the allocator frees it all together
   trace_id_.reset();
   trace_info_.reset();
@@ -2266,9 +2261,7 @@ int PartTransTask::push_redo_log(
         if (OB_SUCC(ret) && need_store_data && is_row_completed) {
           if (OB_FAIL(get_and_submit_store_task_(tls_id_.get_tenant_id(), row_flags, store_log_lsn,
                   data_buf, data_len))) {
-            if (OB_IN_STOP_STATE != ret) {
-              LOG_ERROR("get_and_submit_store_task_ fail", KR(ret), K_(tls_id), K(row_flags));
-            }
+            LOG_ERROR("get_and_submit_store_task_ fail", KR(ret), K_(tls_id), K(row_flags));
           }
         } // need_store_data
       }
@@ -2730,7 +2723,7 @@ int PartTransTask::commit(
     const uint64_t cluster_id,
     const transaction::ObTransID &tx_id,
     const int64_t trans_commit_version,
-    const transaction::TransType &trans_type,
+    const CDCTransType &trans_type,
     const transaction::ObLSLogInfoArray &ls_info_array,
     const palf::LSN &commit_log_lsn,
     const int64_t commit_log_submit_ts)
@@ -3370,14 +3363,15 @@ int PartTransTask::init_participant_array_(
     const palf::LSN &commit_log_lsn)
 {
   int ret = OB_SUCCESS;
+  transaction::ObLSLogInfo *part_array = NULL;
   const int64_t part_count = is_single_ls_trans() ? 1 : participants.count();
 
   if (OB_UNLIKELY(! tls_id_.is_valid() || ! commit_log_lsn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid tls_id or commit_log_lsn", KR(ret), K_(tls_id), K(commit_log_lsn));
-  } else if (OB_UNLIKELY(participants_.count() > 0)) {
+    LOG_ERROR("invalid tls_id or commit_log_lsn", K_(tls_id), K(commit_log_lsn));
+  } else if (OB_UNLIKELY(NULL != participants_) || OB_UNLIKELY(participant_count_ > 0)) {
+    LOG_ERROR("participant has been initialized", K(participants_), K(participant_count_));
     ret = OB_INIT_TWICE;
-    LOG_ERROR("participant has been initialized", KR(ret), K(participants_));
   // participants record prepared ls info, should be empty if is single_ls_trans.
   } else if (OB_UNLIKELY(is_single_ls_trans() && part_count != 1)
       || OB_UNLIKELY(is_dist_trans() && ! is_xa_or_dup_ && part_count <= 1)) {
@@ -3385,13 +3379,19 @@ int PartTransTask::init_participant_array_(
     LOG_ERROR("trans_type is not consistent with participant_count", KR(ret), K_(tls_id), K_(trans_id),
         K_(trans_type), K(participants));
   } else {
-    if (is_single_ls_trans()) {
-      if (OB_FAIL(participants_.push_back(transaction::ObLSLogInfo(tls_id_.get_ls_id(), commit_log_lsn)))) {
-        LOG_ERROR("participants_ push_back failed", KR(ret), KPC(this));
-      } else if (OB_UNLIKELY(! participants_[0].is_valid())) {
+    int64_t alloc_size = part_count * sizeof(transaction::ObLSLogInfo);
+    part_array = static_cast<transaction::ObLSLogInfo *>(allocator_.alloc(alloc_size));
+
+    if (OB_ISNULL(part_array)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("allocate memory for participant array fail", KR(ret), K_(tls_id), K_(trans_id),
+          K_(trans_type), K(part_count), K(alloc_size), K(participants));
+    } else if (is_single_ls_trans()) {
+      new (part_array) transaction::ObLSLogInfo(tls_id_.get_ls_id(), commit_log_lsn);
+      if (OB_UNLIKELY(! part_array->is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("unexcepted invalid part_array", KR(ret), K(participants_), KPC(this));
-      } else {}
+        LOG_ERROR("unexcepted invalid part_array", KR(ret), KPC(part_array), KPC(this));
+      }
     } else {
       for (int64_t index = 0; OB_SUCC(ret) && index < part_count; index++) {
         const transaction::ObLSLogInfo &part_log_info = participants.at(index);
@@ -3400,10 +3400,20 @@ int PartTransTask::init_participant_array_(
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("part_log_info recorded in TransCommitLog is invalid", KR(ret),
               K_(tls_id), K_(trans_id), K_(trans_type), K(participants), K(part_log_info));
-        } else if (OB_FAIL(participants_.push_back(part_log_info))) {
-          LOG_ERROR("participants_ push_back failed", KR(ret), KPC(this));
-        } else {}
+        } else {
+          new(part_array + index) transaction::ObLSLogInfo(part_log_info.get_ls_id(), part_log_info.get_lsn());
+        }
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    participants_ = part_array;
+    participant_count_ = part_count;
+  } else {
+    if (NULL != part_array) {
+      allocator_.free(part_array);
+      part_array = NULL;
     }
   }
 
@@ -3412,7 +3422,6 @@ int PartTransTask::init_participant_array_(
 
 void PartTransTask::destroy_participant_array_()
 {
-  /*
   if (NULL != participants_ && participant_count_ > 0) {
     for (int64_t index = 0; index < participant_count_; index++) {
       participants_[index].~ObLSLogInfo();
@@ -3422,7 +3431,6 @@ void PartTransTask::destroy_participant_array_()
     participants_ = NULL;
     participant_count_ = 0;
   }
-  */
 }
 
 int PartTransTask::set_participants(

@@ -88,7 +88,6 @@ public:
 
   void reset_eof_cnt() { eof_channel_cnt_ = 0; }
   void inc_eof_cnt() { eof_channel_cnt_ += 1; }
-  int64_t get_eof_cnt() { return eof_channel_cnt_; }
   bool all_eof(const int64_t data_channel_cnt) const
   {
     return eof_channel_cnt_ >= data_channel_cnt;
@@ -191,7 +190,6 @@ OB_INLINE void ObDtlChannelLoop::reset()
   first_data_get_ = false;
   sentinel_node_.prev_link_ = &sentinel_node_;
   sentinel_node_.next_link_ = &sentinel_node_;
-  eof_channel_cnt_ = 0;
 }
 
 OB_INLINE ObDtlChannelLoop &ObDtlChannelLoop::register_processor(Proc &proc)

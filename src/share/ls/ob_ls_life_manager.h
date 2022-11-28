@@ -15,11 +15,15 @@
 
 #include "share/ls/ob_ls_status_operator.h"       //ObLSStatusInfo, ObLSStatusOperator
 #include "share/ls/ob_ls_recovery_stat_operator.h"//ObLSRecoveryStatOperator
-#include "share/ls/ob_ls_i_life_manager.h" 
+#include "share/ls/ob_ls_i_life_manager.h"
 #include "share/ls/ob_ls_election_reference_info_operator.h"
 
 namespace oceanbase
 {
+namespace palf
+{
+class SCN;
+}
 namespace common
 {
 class ObMySQLTransaction;
@@ -66,12 +70,12 @@ public:
   /*
    * description: for primary cluster, create new ls
    * @param[in]ls_info:new ls status info for __all_ls_status
-   * @param[in]create_ls_ts_ns: the create_ls_ts_ns of the ls, it is current GTS of the tenant, used for __all_ls_recovery_stat
+   * @param[in]create_ls_scn: the create_ls_scn of the ls, it is current GTS of the tenant, used for __all_ls_recovery_stat
    * @param[in]zone_priority: the primary_zone of OB_ALL_LS_ELECTION_REFERENCE_INFO
    * */
   int create_new_ls(const ObLSStatusInfo &ls_info,
-                  const int64_t &create_ls_ts_ns,
-                  const common::ObString &zone_priority);
+                    const palf::SCN &create_ls_scn,
+                    const common::ObString &zone_priority);
   /*
    * description: for primary cluster and GC of standby, delete ls from each inner_table
    * @param[in] tenant_id: tenant_id
@@ -83,12 +87,12 @@ public:
    * @param[in] tenant_id: tenant_id
    * @param[in] ls_id: need delete ls
    * @param[in] ls_status: tenant_dropping or dropping status 
-   * @param[in] drop_ts_ns: there is no user data after drop_ts_ns except offline
+   * @param[in] drop_scn: there is no user data after drop_scn except offline
    * */
   int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
-                      const int64_t &drop_ts_ns);
+                      const palf::SCN &drop_scn);
   /*
    * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference 
    * @param[in] tenant_id: tenant_id
@@ -107,7 +111,7 @@ public:
    * description: for standby cluster, create new ls
    */
   int create_new_ls_in_trans(const ObLSStatusInfo &ls_info,
-                            const int64_t &create_ls_ts_ns,
+                            const palf::SCN &create_ls_scn,
                             const common::ObString &zone_priority,
                             ObMySQLTransaction &trans);
   /*
@@ -122,7 +126,7 @@ public:
   int set_ls_offline_in_trans(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
-                      const int64_t &drop_ts_ns,
+                      const palf::SCN &drop_scn,
                       ObMySQLTransaction &trans);
 
 private:

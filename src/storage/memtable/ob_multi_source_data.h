@@ -78,9 +78,9 @@ public:
   virtual bool is_valid() const = 0;
   virtual int64_t get_data_size() const = 0;
   virtual MultiSourceDataUnitType type() const = 0;
-  virtual int set_log_ts(const int64_t log_ts)
+  virtual int set_scn(const palf::SCN &scn)
   {
-    UNUSED(log_ts);
+    UNUSED(scn);
     return common::OB_SUCCESS;
   }
   bool is_sync_finish() const { return sync_finish_; }

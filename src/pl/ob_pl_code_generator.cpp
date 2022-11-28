@@ -408,18 +408,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
                                                  p_result_obj))) {
               LOG_WARN("failed to generate calc_expr func", K(ret));
             }
-            if (lib::is_mysql_mode()) {
-              ObLLVMValue ret_err;
-              ObSEArray<ObLLVMValue, 1> args;
-              OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
-              OZ (generator_.get_helper().create_call(ObString("spi_clear_diagnostic_area"),
-                                                        generator_.get_spi_service().spi_clear_diagnostic_area_,
-                                                        args,
-                                                        ret_err));
-              OZ (generator_.check_success(ret_err, s.get_stmt_id(),
-                                                s.get_block()->in_notfound(),
-                                                s.get_block()->in_warning()));
-            }
           }
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ObObjAccessIdx::datum_need_copy(into_expr, value_expr, alloc_scop))) {
@@ -1066,7 +1054,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
           OZ (generator_.extract_extend_from_objparam(var_value, var->get_type(), extend_value));
           OZ (var->get_type().generate_construct(generator_, *s.get_namespace(),
                                                  extend_value, &s));
-          OZ (generator_.set_var_addr_to_param_store(s.get_index_index(), extend_value, init_value));
+          OZ (generator_.set_var_addr_to_param_store(s.get_index_index(), extend_value));
           generator_.get_vars().at(s.get_index_index() + generator_.USER_ARG_OFFSET) = extend_value;
         } else {
           ret = OB_ERR_UNEXPECTED;
@@ -2296,36 +2284,19 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
       ObLLVMValue unwindException = generator_.get_saved_exception();
       ObLLVMValue ob_error_code = generator_.get_saved_ob_error();
       ObLLVMType unwind_exception_type, unwind_exception_pointer_type;
-      ObLLVMValue unwind_exception_header;
-      ObLLVMType condition_type;
-      ObLLVMType condition_pointer_type;
-      ObLLVMValue condition;
-      ObLLVMValue sql_state;
-      ObLLVMValue error_code;
       CK (OB_NOT_NULL(generator_.get_saved_exception().get_v()));
       CK (OB_NOT_NULL(generator_.get_saved_ob_error().get_v()));
       OZ (generator_.extract_status_from_context(generator_.get_vars().at(generator_.CTX_IDX), status));
       OZ (generator_.get_helper().create_store(ob_error_code, status));
       OZ (generator_.get_adt_service().get_unwind_exception(unwind_exception_type));
       OZ (unwind_exception_type.get_pointer_to(unwind_exception_pointer_type));
-      OZ (generator_.get_helper().create_const_gep1_64(ObString("extract_unwind_exception_header"),
-                                                       unwindException,
-                                                       generator_.get_eh_service().pl_exception_base_offset_,
-                                                       unwind_exception_header));
-      OZ (generator_.get_adt_service().get_pl_condition_value(condition_type));
-      OZ (condition_type.get_pointer_to(condition_pointer_type));
-      OZ (generator_.get_helper().create_pointer_cast(ObString("cast_header"),
-                                                      unwind_exception_header,
-                                                      condition_pointer_type,
-                                                      condition));
-      OZ (generator_.extract_name_from_condition_value(condition, sql_state));
-      OZ (generator_.extract_code_from_condition_value(condition, error_code));
       OZ (generator_.get_helper().create_pointer_cast(
           ObString("cast_unwind_exception"), unwindException,
           unwind_exception_pointer_type, unwindException));
       OZ (generator_.get_helper().create_block(ObString("normal"), generator_.get_func(), normal));
-      OZ (generator_.raise_exception(unwindException, error_code, sql_state, normal,
-                                     s.get_block()->in_notfound(), s.get_block()->in_warning(), true));
+      OZ (generator_.raise_exception(unwindException, null_sql_state, normal,
+                                     s.get_block()->in_notfound(), s.get_block()->in_warning(),
+                                     true/*is signal*/));
       OZ (generator_.set_current(normal));
     } else {
       ObLLVMValue type, ob_err_code, err_code, sql_state, str_len, is_signal, stmt_id, loc;
@@ -2600,7 +2571,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
             if (OB_FAIL(generator_.get_helper().create_call(ObString("inner_pl_execute"), generator_.get_pl_execute(), args, result))) {
               LOG_WARN("failed to create_call", K(ret));
             }
-            OZ (generator_.generate_debug(ObString("debug inner pl execute"), result));
           } else {
             ObLLVMBasicBlock alter_inner_call;
 
@@ -2612,7 +2582,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
               LOG_WARN("failed to set_current", K(ret));
             } else { /*do nothing*/ }
           }
-          OZ (generator_.generate_debug(ObString("debug inner pl execute result"), result));
+
           OZ (generator_.check_success(
             result, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
           OZ (generator_.generate_out_params(s, s.get_params(), params));
@@ -2663,8 +2633,9 @@ int ObPLCodeGenerateVisitor::visit(const ObPLFetchStmt &s)
                                         ret_err))) {
     LOG_WARN("failed to generate fetch", K(ret));
   } else if (lib::is_mysql_mode()) { //Mysql模式直接检查抛出异常
-    OZ (generator_.check_success(
-      ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning(), true));
+    if (OB_FAIL(generator_.check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
+      LOG_WARN("failed to check success", K(ret));
+    }
   } else { //Oracle模式如果是OB_READ_NOTHING错误，吞掉异常不抛出
     ObLLVMValue is_not_found;
     ObLLVMBasicBlock fetch_end;
@@ -3173,8 +3144,6 @@ int ObPLCodeGenerator::init()
       } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t var_index
         LOG_WARN("push_back error", K(ret));
       } else if (OB_FAIL(arg_types.push_back(int64_type))) { //int64_t var_addr
-        LOG_WARN("push_back error", K(ret));
-      } else if (OB_FAIL(arg_types.push_back(int32_type))) { //int32_t init_value
         LOG_WARN("push_back error", K(ret));
       } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
         LOG_WARN("failed to get function type", K(ret));
@@ -4049,8 +4018,7 @@ int ObPLCodeGenerator::init_eh_service()
   return ret;
 }
 
-int ObPLCodeGenerator::set_var_addr_to_param_store(
-  int64_t var_index, jit::ObLLVMValue &var, jit::ObLLVMValue &init_value)
+int ObPLCodeGenerator::set_var_addr_to_param_store(int64_t var_index, jit::ObLLVMValue &var)
 {
   int ret = OB_SUCCESS;
   ObLLVMValue ir_index;
@@ -4068,14 +4036,12 @@ int ObPLCodeGenerator::set_var_addr_to_param_store(
     LOG_WARN("failed to create call", K(ret));
 #endif
   } else {
-    ObSEArray<ObLLVMValue, 4> args;
+    ObSEArray<ObLLVMValue, 3> args;
     if (OB_FAIL(args.push_back(vars_.at(CTX_IDX)))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(args.push_back(ir_index))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(args.push_back(var_addr))) {
-      LOG_WARN("push_back error", K(ret));
-    } else if (OB_FAIL(args.push_back(init_value))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(helper_.create_call(ObString("set_var_addr"), get_user_type_var_func(), args))) {
       LOG_WARN("failed to create call", K(ret));
@@ -5567,7 +5533,6 @@ int ObPLCodeGenerator::generate_set_extend(ObLLVMValue &p_obj,
 
   //init extend
   ObObj extend_obj(ObExtendType);
-  extend_obj.set_int_value(0);
   OZ (store_obj(extend_obj, p_obj));
 
   //set extend type
@@ -6544,7 +6509,7 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
         if (OB_FAIL(helper_.create_call(ObString("create_exception"), get_eh_service().eh_create_exception_, args, exception))) {
           LOG_WARN("failed to create_call", K(ret));
         } else {
-          OZ (raise_exception(exception, error_code, sql_state, normal, in_notfound, in_warning, signal));
+          OZ (raise_exception(exception, sql_state, normal, in_notfound, in_warning, signal));
         }
       }
     }
@@ -6553,7 +6518,6 @@ int ObPLCodeGenerator::generate_exception(ObLLVMValue &type,
 }
 
 int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
-                                       ObLLVMValue &error_code,
                                        ObLLVMValue &sql_state,
                                        ObLLVMBasicBlock &normal,
                                        bool in_notfound,
@@ -6623,39 +6587,32 @@ int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
     }
   }
   if (OB_SUCC(ret)) {
+    ObLLVMValue exception_class;
+    ObLLVMSwitch switch_inst;
+    ObLLVMValue int_value;
     OZ (set_current(current));
-    if (OB_FAIL(ret)) {
-    } else if (lib::is_oracle_mode()) {
+    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
       OZ (helper_.create_br(raise_exception));
-    } else if (lib::is_mysql_mode()) {
-      ObLLVMBasicBlock normal_raise_block;
-      ObLLVMValue exception_class;
-      ObLLVMSwitch switch_inst1;
-      ObLLVMSwitch switch_inst2;
-      ObLLVMValue int_value;
-
-      OZ (helper_.create_block(ObString("normal_raise_block"), get_func(), normal_raise_block));
-      OZ (helper_.create_switch(error_code, normal_raise_block, switch_inst1));
-      OZ (helper_.get_int64(ER_WARN_TOO_MANY_RECORDS, int_value));
-      OZ (switch_inst1.add_case(int_value, raise_exception));
-      OZ (helper_.get_int64(WARN_DATA_TRUNCATED, int_value));
-      OZ (switch_inst1.add_case(int_value, raise_exception));
-      OZ (helper_.get_int64(ER_SIGNAL_WARN, int_value));
-      OZ (switch_inst1.add_case(int_value, raise_exception));
-
-      OZ (set_current(normal_raise_block));
-      OZ (helper_.create_call(ObString("get_exception_class"), get_eh_service().eh_classify_exception, sql_state, exception_class));
-      OZ (helper_.create_switch(exception_class, raise_exception, switch_inst2));
-      OZ (helper_.get_int64(SQL_WARNING, int_value));
-      OZ (switch_inst2.add_case(int_value, in_warning ? raise_exception : normal));
-      OZ (helper_.get_int64(NOT_FOUND, int_value));
-      OZ (switch_inst2.add_case(int_value, signal || in_notfound ? raise_exception : normal));
+    }
+    if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+      if (signal && OB_ISNULL(sql_state.get_v())) {
+        // resignal
+        // TODO: SQL_WARNING错误的resignal需要特别处理
+        OZ (helper_.create_br(raise_exception));
+      } else {
+        OZ (helper_.create_call(ObString("get_exception_class"), get_eh_service().eh_classify_exception, sql_state, exception_class));
+        OZ (helper_.create_switch(exception_class, raise_exception, switch_inst));
+        OZ (helper_.get_int64(SQL_WARNING, int_value));
+        OZ (switch_inst.add_case(int_value, in_warning ? raise_exception : normal));
+        OZ (helper_.get_int64(NOT_FOUND, int_value));
+        OZ (switch_inst.add_case(int_value, signal || in_notfound ? raise_exception : normal));
+      }
     }
   }
   return ret;
 }
 int ObPLCodeGenerator::check_success(jit::ObLLVMValue &ret_err, int64_t stmt_id,
-                                     bool in_notfound, bool in_warning, bool signal)
+                                     bool in_notfound, bool in_warning)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(helper_.set_insert_point(get_current()))) {
@@ -6737,7 +6694,7 @@ int ObPLCodeGenerator::check_success(jit::ObLLVMValue &ret_err, int64_t stmt_id,
             LOG_WARN("failed to create_load", K(ret));
           } else if (OB_FAIL(helper_.create_load(ObString("load_str_len"), str_len_ptr, str_len))) {
             LOG_WARN("failed to create_load", K(ret));
-          } else if (OB_FAIL(generate_exception(type, ret_err, error_code, sql_state, str_len, stmt_id_value, success_branch, line_number_value, in_notfound, in_warning, signal))) {
+          } else if (OB_FAIL(generate_exception(type, ret_err, error_code, sql_state, str_len, stmt_id_value, success_branch, line_number_value, in_notfound, in_warning, false/*not signal*/))) {
             LOG_WARN("failed to generate exception", K(ret));
           } else if (OB_FAIL(set_current(success_branch))) {
             LOG_WARN("failed to set_current", K(ret));
@@ -7132,15 +7089,12 @@ int ObPLCodeGenerator::init_argument()
       } else {
         ObLLVMValue arg;
         ObLLVMValue addr;
-        ObLLVMValue init_value;
         if (var->get_type().is_composite_type() || var->get_type().is_cursor_type()) {
           if (OB_FAIL(extract_objparam_from_argv(vars_.at(ARGV_IDX), i, arg))) {
             LOG_WARN("failed to extract_objparam_from_argv", K(i), K(ret));
           } else if (OB_FAIL(extract_value_from_objparam(arg, ObExtendType, addr))) {
             LOG_WARN("failed to extract_value_from_objparam", K(ret));
-          } else if (OB_FAIL(helper_.get_int32(0, init_value))) {
-            LOG_WARN("failed to get_int32", K(ret));
-          } else if (OB_FAIL(set_var_addr_to_param_store(i, addr, init_value))) {
+          } else if (OB_FAIL(set_var_addr_to_param_store(i, addr))) {
             LOG_WARN("set var addr to param store failed", K(ret));
           } else if (OB_FAIL(helper_.create_gep(ObString("obj"), arg, 0, arg))) {
             LOG_WARN("failed to create_gep", K(ret));
@@ -7690,8 +7644,6 @@ int ObPLCodeGenerator::generate(ObPLFunction &pl_func)
       LOG_WARN("failed to init augument", K(ret));
     } else if (OB_FAIL(prepare_external())) {
       LOG_WARN("failed to prepare external", K(ret));
-    } else if (lib::is_oracle_mode() && OB_FAIL(prepare_local_user_type())) {
-      LOG_WARN("failed to prepare local user type", K(ret));
     } else if (OB_FAIL(prepare_expression(pl_func))) {
       LOG_WARN("failed to prepare expression", K(ret));
     } else if (OB_FAIL(prepare_subprogram(pl_func))) {

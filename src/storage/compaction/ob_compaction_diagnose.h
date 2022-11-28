@@ -32,17 +32,13 @@ struct ObScheduleSuspectInfo : public common::ObDLinkBase<ObScheduleSuspectInfo>
 {
   ObScheduleSuspectInfo()
    : ObMergeDagHash(),
-     tenant_id_(OB_INVALID_ID),
      add_time_(0),
      suspect_info_("\0")
   {}
-  int64_t hash() const;
   bool is_valid() const;
   ObScheduleSuspectInfo & operator = (const ObScheduleSuspectInfo &other);
 
-  static int64_t gen_hash(int64_t tenant_id, int64_t dag_hash);
-  TO_STRING_KV(K_(tenant_id), K_(merge_type), K_(ls_id), K_(tablet_id), K_(add_time), K_(suspect_info));
-  int64_t tenant_id_;
+  TO_STRING_KV(K_(merge_type), K_(ls_id), K_(tablet_id), K_(add_time), K_(suspect_info));
   int64_t add_time_;
   char suspect_info_[common::OB_DIAGNOSE_INFO_LENGTH];
 };
@@ -196,16 +192,14 @@ private:
       dag_hash.merge_type_ = type;                                                                     \
       dag_hash.ls_id_ = ls_id;                                                                           \
       dag_hash.tablet_id_ = tablet_id;                                                                   \
-      int64_t tenant_id = MTL_ID();                                                                     \
-      int64_t hash_value = ObScheduleSuspectInfo::gen_hash(tenant_id, dag_hash.inner_hash());          \
-      if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().del_suspect_info(hash_value))) { \
+      if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().del_suspect_info(dag_hash.inner_hash()))) { \
         if (OB_HASH_NOT_EXIST != ret) {                                                                \
-          STORAGE_LOG(WARN, "failed to add suspect info", K(ret), K(dag_hash), K(tenant_id));         \
+          STORAGE_LOG(WARN, "failed to add suspect info", K(ret), K(dag_hash));                        \
         } else {                                                                                      \
           ret = OB_SUCCESS;                                                                           \
         }                                                                                            \
       } else {                                                                                      \
-        STORAGE_LOG(DEBUG, "success to add suspect info", K(ret), K(dag_hash), K(tenant_id));       \
+        STORAGE_LOG(DEBUG, "success to add suspect info", K(ret), K(dag_hash));                      \
       }                                                                                       \
 }
 
@@ -218,7 +212,6 @@ private:
     int64_t __pos = 0;                                                                           \
     int ret = OB_SUCCESS;                                                                        \
     compaction::ObScheduleSuspectInfo info;                                                      \
-    info.tenant_id_ = MTL_ID();                                                                  \
     info.merge_type_ = type;                                                                     \
     info.ls_id_ = ls_id;                                                                           \
     info.tablet_id_ = tablet_id;                                                                   \
@@ -233,7 +226,7 @@ private:
       buf[__pos++] = '.';                                                                          \
     }                                                                                          \
     SIMPLE_TO_STRING_##n                                                                      \
-    if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().add_suspect_info(info.hash(), info))) { \
+    if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().add_suspect_info(info.inner_hash(), info))) { \
       STORAGE_LOG(WARN, "failed to add suspect info", K(ret), K(info));                          \
     } else {                                                                                      \
       STORAGE_LOG(DEBUG, "success to add suspect info", K(ret), K(info));                          \

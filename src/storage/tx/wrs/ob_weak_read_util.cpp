@@ -12,6 +12,7 @@
 
 #include "ob_weak_read_util.h"
 #include "observer/omt/ob_tenant_config_mgr.h"  // ObTenantConfigGuard
+#include "share/ob_cluster_version.h"           // GET_MIN_CLUSTER_VERSION
 #include <algorithm>
 #include <stdarg.h>
 #include <stdint.h>
@@ -43,9 +44,9 @@ int64_t ObWeakReadUtil::replica_keepalive_interval()
 // 2. all partitions offline
 // 3. all partitions delay too much or in invalid status
 // 4. all partitions in migrating and readable snapshot version delay more than 500ms
-int64_t ObWeakReadUtil::generate_min_weak_read_version(const uint64_t tenant_id)
+palf::SCN ObWeakReadUtil::generate_min_weak_read_version(const uint64_t tenant_id)
 {
-  int64_t base_version_when_no_valid_partition = 0;
+  palf::SCN base_version_when_no_valid_partition;
   int64_t max_stale_time = 0;
   bool tenant_config_exist = false;
   // generating min weak version version should statisfy following constraint
@@ -69,7 +70,7 @@ int64_t ObWeakReadUtil::generate_min_weak_read_version(const uint64_t tenant_id)
 
   max_stale_time = std::max(max_stale_time, static_cast<int64_t>(DEFAULT_REPLICA_KEEPALIVE_INTERVAL));
   // the unit of max_stale_time is us，we should change to ns
-  base_version_when_no_valid_partition = ObTimeUtility::current_time_ns() - max_stale_time * 1000;
+  base_version_when_no_valid_partition.convert_from_ts(ObTimeUtility::current_time() - max_stale_time);
 
   if ((!tenant_config_exist) && REACH_TIME_INTERVAL(1 * 1000 * 1000L)) {
     TRANS_LOG(WARN, "tenant not exist when generate min weak read version, use default max stale time instead",

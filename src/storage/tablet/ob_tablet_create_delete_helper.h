@@ -20,8 +20,8 @@
 #include "common/ob_tablet_id.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
+#include "logservice/palf/scn.h"
 #include "storage/tablet/ob_tablet_status.h"
-#include "storage/tablet/ob_tablet_common.h"
 
 namespace oceanbase
 {
@@ -117,16 +117,14 @@ public:
 public:
   static int get_tablet(
       const ObTabletMapKey &key,
-      ObTabletHandle &handle,
-      const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US);
+      ObTabletHandle &handle);
   static int check_and_get_tablet(
       const ObTabletMapKey &key,
       ObTabletHandle &handle,
       const int64_t timeout_us);
   static int acquire_tablet(
       const ObTabletMapKey &key,
-      ObTabletHandle &handle,
-      const bool only_acquire = false);
+      ObTabletHandle &handle);
   static int check_need_create_empty_major_sstable(
       const share::schema::ObTableSchema &table_schema,
       bool &need_create_sstable);
@@ -134,6 +132,11 @@ public:
       const share::schema::ObTableSchema &table_schema,
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version,
+      ObTabletCreateSSTableParam &param);
+  static int build_create_sstable_param(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObTabletID &tablet_id,
+      const palf::SCN snapshot_version,
       ObTabletCreateSSTableParam &param);
   static int create_sstable(
       const ObTabletCreateSSTableParam &param,
@@ -176,7 +179,7 @@ private:
       common::ObIArray<ObTabletCreateInfo> &tablet_create_info_array);
   static int get_all_existed_tablets(
       const obrpc::ObBatchCreateTabletArg &arg,
-      const int64_t log_ts,
+      const palf::SCN &scn,
       common::ObIArray<common::ObTabletID> &existed_tablet_id_array,
       NonLockedHashSet &existed_tablet_id_set);
   static int build_batch_create_tablet_arg(
@@ -216,7 +219,7 @@ private:
   int handle_special_tablets_for_replay(
       const common::ObIArray<common::ObTabletID> &existed_tablet_id_array,
       const transaction::ObMulSourceDataNotifyArg &trans_flags);
-  int set_log_ts(
+  int set_scn(
       const common::ObIArray<ObTabletCreateInfo> &tablet_create_info_array,
       const transaction::ObMulSourceDataNotifyArg &trans_flags);
   int print_multi_data_for_create_tablet(
@@ -232,7 +235,7 @@ private:
       const transaction::ObMulSourceDataNotifyArg &trans_flags);
   int ensure_skip_create_all_tablets_safe(
       const obrpc::ObBatchCreateTabletArg &arg,
-      const int64_t log_ts);
+      const palf::SCN &scn);
   int build_pure_data_tablet(
       const obrpc::ObBatchCreateTabletArg &arg,
       const obrpc::ObCreateTabletInfo &info,

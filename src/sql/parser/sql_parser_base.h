@@ -64,7 +64,7 @@ extern int64_t ob_strntoll(const char *ptr, size_t len, int base, char **end, in
 extern int64_t ob_strntoull(const char *ptr, size_t len, int base, char **end, int *err);
 extern int store_prentthese_info(int left, int right, ParseResult *result);
 extern bool check_real_escape(const struct ObCharsetInfo *cs, char *str, int64_t str_len,
-                              int64_t last_escape_check_pos);
+                              int64_t *last_well_formed_len);
 
 int add_alias_name(ParseNode *node, ParseResult *result, int end);
 
@@ -109,16 +109,6 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
     } else {/*do nothing*/}                                     \
     yyerror(yylloc, yyextra, "string literal is too long\n", yytext); \
     return ERROR;                                               \
-  } while(0)
-
-#define YYABORT_UNDECLARE_VAR                 \
-  do {                                                          \
-    if (OB_UNLIKELY(NULL == result)) {                          \
-      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (0 == result->extra_errno_) {                     \
-      result->extra_errno_ = OB_PARSER_ERR_UNDECLARED_VAR;\
-    } else {/*do nothing*/}                                     \
-    YYABORT;                                                    \
   } while(0)
 
 #define YYABORT_NOT_VALID_ROUTINE_NAME                          \
@@ -342,8 +332,8 @@ do {                                                                            
     do { \
       if (NULL == result) { \
         YY_UNEXPECTED_ERROR("invalid var node\n"); \
-      } else if ((result->pl_parse_info_.is_pl_parse_ && NULL == result->pl_parse_info_.pl_ns_) \
-                 || result->is_dynamic_sql_) { \
+      } else if ((result->pl_parse_info_.is_pl_parse_ && NULL == result->pl_parse_info_.pl_ns_) || \
+                 result->is_dynamic_sql_) { \
         if (result->no_param_sql_len_ + (start - result->pl_parse_info_.last_pl_symbol_pos_ - 1) \
             + (int)(log10(idx)) + 3 \
             > result->no_param_sql_buf_len_) { \
@@ -396,7 +386,7 @@ do {                                                                            
   } while (0)
 
 //查找pl变量，并把该变量替换成:int形式
-#define lookup_pl_exec_symbol(node, result, start, end, is_trigger_new, is_add_alas_name, is_report_error) \
+#define lookup_pl_exec_symbol(node, result, start, end, is_trigger_new, is_add_alas_name) \
     do { \
       if (OB_UNLIKELY((NULL == node || NULL == result || NULL == node->str_value_))) { \
         yyerror(NULL, result, "invalid var node: %p\n", node); \
@@ -440,8 +430,6 @@ do {                                                                            
           result->no_param_sql_[result->no_param_sql_len_++]  = ':'; \
           result->no_param_sql_len_ += sprintf(result->no_param_sql_ + result->no_param_sql_len_, "%ld", idx); \
           store_pl_symbol(node, result->param_nodes_, result->tail_param_node_); \
-        } else if (is_report_error) { \
-          YYABORT_UNDECLARE_VAR;   \
         } else { /*do nothing*/ } \
       } \
     } while (0)
@@ -704,7 +692,7 @@ do {                                                                            
 
 #define CHECK_REAL_ESCAPE(is_real_escape)                                         \
   is_real_escape = check_real_escape(p->charset_info_, p->tmp_literal_,           \
-                                     yylval->node->str_len_, p->last_escape_check_pos_)
+                                     yylval->node->str_len_, &(p->last_well_formed_len_))
   /*
 do {                                                                              \
   if (NULL !=  p->charset_info_ && p->charset_info_->escape_with_backslash_is_dangerous) { \

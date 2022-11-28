@@ -98,8 +98,7 @@ public:
   //alter table add column
   int insert_single_column(common::ObISQLClient &sql_client,
                            const ObTableSchema &new_table_schema,
-                           const ObColumnSchemaV2 &column_schema,
-                           const bool record_ddl_operation);
+                           const ObColumnSchemaV2 &column_schema);
   //alter table add constraint
   int insert_single_constraint(common::ObISQLClient &sql_client,
                            const ObTableSchema &new_table_schema,
@@ -311,8 +310,7 @@ private:
   int add_table_part_info(common::ObISQLClient &sql_client, const ObTableSchema &table);
   int delete_foreign_key(common::ObISQLClient &sql_client,
       const ObTableSchema &table_schema,
-      const int64_t new_schema_version,
-      const bool is_truncate_table);
+      const int64_t new_schema_version);
   int delete_from_all_foreign_key(common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const int64_t new_schema_version,

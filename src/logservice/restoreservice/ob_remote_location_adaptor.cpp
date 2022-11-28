@@ -18,6 +18,7 @@
 #include "share/ob_ls_id.h"                     // ObLSID
 #include "common/ob_role.h"                 // ObRole
 #include "logservice/palf_handle_guard.h"   // PalfHandleGuard
+#include "logservice/palf/scn.h"   // palf::SCN
 #include "share/restore/ob_ls_restore_status.h" // ObLSRestoreStatus
 #include "share/restore/ob_log_archive_source.h"  // ObLogArchiveSourceItem
 #include "share/restore/ob_log_archive_source_mgr.h"  // ObLogArchiveSourceMgr
@@ -172,7 +173,7 @@ int ObRemoteLocationAdaptor::add_source_(const share::ObLogArchiveSourceItem &it
     ObLogRestoreHandler &restore_handler)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! item.is_valid())) {
+  if (OB_UNLIKELY(!item.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid log archive source item", K(ret), K(item));
   } else if (is_location_log_source_type(item.type_)) {
@@ -194,7 +195,7 @@ int ObRemoteLocationAdaptor::add_location_source_(const share::ObLogArchiveSourc
   share::ObBackupDest dest;
   if (OB_FAIL(ObLogArchiveSourceMgr::get_backup_dest(item, dest))) {
     LOG_WARN("get backup dest failed", K(ret), K(item));
-  } else if (OB_FAIL(restore_handler.add_source(dest, item.until_ts_))) {
+  } else if (OB_FAIL(restore_handler.add_source(dest, item.until_scn_))) {
     LOG_WARN("add ObBackupDest source failed", K(ret), K(dest), K(item));
   }
   return ret;
@@ -207,7 +208,7 @@ int ObRemoteLocationAdaptor::add_service_source_(const share::ObLogArchiveSource
   common::ObAddr addr;
   if (OB_FAIL(addr.parse_from_string(ObString(item.value_.ptr())))) {
     LOG_WARN("addr parse from string failed", K(ret), K(item));
-  } else if (OB_FAIL(restore_handler.add_source(addr, item.until_ts_))) {
+  } else if (OB_FAIL(restore_handler.add_source(addr, item.until_scn_))) {
     LOG_WARN("add ObAddr source failed", K(ret), K(addr), K(item));
   }
   return ret;

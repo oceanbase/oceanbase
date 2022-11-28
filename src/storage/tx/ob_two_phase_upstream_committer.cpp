@@ -35,7 +35,7 @@ int ObTxCycleTwoPhaseCommitter::two_phase_commit()
   bool no_need_submit_log = false;
 
   //start 2pc from root
-  if (ObTxState::PREPARE <= get_upstream_state()) {
+  if (ObTxState::INIT != get_upstream_state()) {
     TRANS_LOG(INFO, "already enter two phase commit", K(ret), K(*this));
   } else if (is_2pc_logging()) {
     TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
@@ -172,7 +172,7 @@ int ObTxCycleTwoPhaseCommitter::handle_timeout()
     TRANS_LOG(WARN, "retransmit downstream msg failed", KR(tmp_ret));
   }
 
-  if (!is_root() && OB_TMP_FAIL(retransmit_upstream_msg_(get_downstream_state()))) {
+  if (!is_root() && OB_TMP_FAIL(retransmit_upstream_msg_())) {
     TRANS_LOG(WARN, "retransmit upstream msg failed", KR(tmp_ret));
   }
 
@@ -185,13 +185,12 @@ int ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObTwoPhaseCommitMsgType msg_type;
-  bool need_submit = true;
 
   if (!is_leaf()) {
     int this_part_id = get_participant_id();
-    if (OB_FAIL(decide_downstream_msg_type_(need_submit, msg_type))) {
+    if (OB_FAIL(decide_downstream_msg_type_(msg_type))) {
       TRANS_LOG(WARN, "deecide downstream msg_type fail", K(ret), KPC(this));
-    } else if (need_submit) {
+    } else {
       for (int64_t i = 0; i < get_participants_size(); ++i) {
         if (!collected_.has_member(i) && this_part_id != i) {
           TRANS_LOG(INFO, "unresponded participant", K(i), K(*this));
@@ -205,48 +204,38 @@ int ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_()
   return ret;
 }
 
-int ObTxCycleTwoPhaseCommitter::decide_downstream_msg_type_(bool &need_submit,
-                                                            ObTwoPhaseCommitMsgType &msg_type)
+int ObTxCycleTwoPhaseCommitter::decide_downstream_msg_type_(ObTwoPhaseCommitMsgType &msg_type)
 {
   int ret = OB_SUCCESS;
   msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_UNKNOWN;
-  need_submit = true;
   switch (get_upstream_state())
   {
   case ObTxState::REDO_COMPLETE: {
     if (is_sub2pc()) {
-      need_submit = true;
       msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REDO_REQ;
     } else {
-      need_submit = false;
-      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-        TRANS_LOG(WARN, "handle timeout when redo complete", KR(ret), KPC(this));
-      }
+      ret = OB_TRANS_INVALID_STATE;
+      TRANS_LOG(WARN, "invalid coord state", KR(ret), K(get_upstream_state()));
     }
     break;
   }
   case ObTxState::PREPARE: {
-    need_submit = true;
     msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REQ;
     break;
   }
   case ObTxState::PRE_COMMIT: {
-    need_submit = true;
     msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_PRE_COMMIT_REQ;
     break;
   }
   case ObTxState::COMMIT: {
-    need_submit = true;
     msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_COMMIT_REQ;
     break;
   }
   case ObTxState::ABORT: {
-    need_submit = true;
     msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_REQ;
     break;
   }
   case ObTxState::CLEAR: {
-    need_submit = true;
     msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_CLEAR_REQ;
     break;
   }
@@ -262,12 +251,11 @@ int ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_(const uint8_t partici
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  bool need_submit = true;
   ObTwoPhaseCommitMsgType msg_type;
   if (is_leaf()) {
-  } else if (OB_FAIL(decide_downstream_msg_type_(need_submit, msg_type))) {
+  } else if (OB_FAIL(decide_downstream_msg_type_(msg_type))) {
     TRANS_LOG(WARN, "decide downstream msg type fail", K(ret), KPC(this));
-  } else if (need_submit && OB_TMP_FAIL(post_msg(msg_type, participant))) {
+  } else if (OB_TMP_FAIL(post_msg(msg_type, participant))) {
     TRANS_LOG(WARN, "post prepare msg failed", KR(tmp_ret), KPC(this));
   }
 
@@ -281,13 +269,16 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_response(const uint8_t partic
 
   switch (get_upstream_state()) {
     case ObTxState::INIT:
-    case ObTxState::REDO_COMPLETE: {
-      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+    case ObTxState::REDO_COMPLETE:
+      if (OB_FAIL(do_prepare(no_need_submit_log))) {
+        TRANS_LOG(WARN, "do prepare failed", K(ret), K(*this));
+      } else {
+        set_upstream_state(ObTxState::PREPARE);
+        collected_.reset();
         TRANS_LOG(INFO, "recv prepare resp when coord state is init or redo complete",
                   KR(ret), K(participant), K(*this));
       }
-      break;
-    }
+      // go through
     // Because we want to reduce the latency at all costs, we need to handle
     // prepare response before prepare log successfully synchronized.
     case ObTxState::PREPARE: {
@@ -365,11 +356,13 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_commit_response(const uint8_t partici
       // and post commit req to all participants. after that root crashed, and
       // coord_state_ is set to PREPARE(the same as state_), and participants'
       // commit responses arrive.
-      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-        TRANS_LOG(INFO, "recv commit resp when upstream state is prepare or pre_commit",
-                  KR(ret), K(participant), K(*this));
+      if (OB_FAIL(do_commit())) {
+        TRANS_LOG(WARN, "do commit failed", K(ret), K(*this));
+      } else {
+        set_upstream_state(ObTxState::COMMIT);
+        collected_.reset();
       }
-      break;
+      // go through
     }
     case ObTxState::COMMIT: {
       if (OB_FAIL(handle_2pc_ack_response_impl_(participant))) {
@@ -553,11 +546,10 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_pre_commit_response(const uint8_t par
       // and post pre commit req to all participants. after that root crashed, and
       // coord_state_ is set to PREPARE(the same as state_), and participants'
       // pre_commit responses
-      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-        TRANS_LOG(INFO, "recv pre_commit resp when upstream state is prepare",
-                  KR(ret), K(participant), K(*this));
+      if (OB_FAIL(try_enter_pre_commit_state())) {
+        TRANS_LOG(WARN, "try enter pre commit state failed", K(ret), K(*this));
       }
-      break;
+      // go through
     }
     case ObTxState::PRE_COMMIT: {
       if (OB_FAIL(handle_2pc_pre_commit_response_impl_(participant))) {

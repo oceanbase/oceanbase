@@ -45,12 +45,12 @@ int ObExprLastTraceId::eval_last_trace_id(const ObExpr &expr, ObEvalCtx &ctx,
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  const ObPhysicalPlanCtx *phy_plan_ctx = NULL;
-  if (OB_ISNULL(phy_plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx())) {
+  const ObSQLSessionInfo *session_info = NULL;
+  if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "session info is null", K(ret));
   } else {
-    const ObCurTraceId::TraceId &trace_id = phy_plan_ctx->get_last_trace_id();
+    const ObCurTraceId::TraceId &trace_id = session_info->get_last_trace_id();
     if (trace_id.is_invalid()) {
       expr_datum.set_null();
     } else {

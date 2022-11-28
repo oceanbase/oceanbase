@@ -104,6 +104,7 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       is_or_expand_transformed_(false),
       is_show_seed_(false),
       is_multi_dml_(false),
+      is_large_query_(false),
       field_array_(nullptr),
       is_ps_protocol_(false),
       plan_start_time_(0),
@@ -680,8 +681,8 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
   OB_UNIS_ENCODE(unsed_worker_count_since_222rel_);
   OB_UNIS_ENCODE(tenant_schema_version_);
   OB_UNIS_ENCODE(cursor_count);
+  OB_UNIS_ENCODE(is_large_query_);
   OB_UNIS_ENCODE(plan_start_time_);
-  OB_UNIS_ENCODE(last_trace_id_);
   return ret;
 }
 
@@ -762,8 +763,8 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
   OB_UNIS_ADD_LEN(unsed_worker_count_since_222rel_);
   OB_UNIS_ADD_LEN(tenant_schema_version_);
   OB_UNIS_ADD_LEN(cursor_count);
+  OB_UNIS_ADD_LEN(is_large_query_);
   OB_UNIS_ADD_LEN(plan_start_time_);
-  OB_UNIS_ADD_LEN(last_trace_id_);
   return len;
 }
 
@@ -839,12 +840,12 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       LOG_WARN("init implicit cursor infos failed", K(ret));
     }
   }
+  OB_UNIS_DECODE(is_large_query_);
   OB_UNIS_DECODE(plan_start_time_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(plan_start_time_);
     (void)ObSQLUtils::adjust_time_by_ntp_offset(ts_timeout_us_);
   }
-  OB_UNIS_DECODE(last_trace_id_);
   return ret;
 }
 

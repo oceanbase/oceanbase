@@ -138,14 +138,14 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const char *sql, int64_t &
   return ret;
 }
 
-int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
+int ObCommonSqlProxy::write(const uint64_t tenant_id, const char *sql,
                         int64_t &affected_rows, int64_t compatibility_mode, const ObSessionParam *param /* = nullptr*/)
 {
   int ret = OB_SUCCESS;
   bool is_user_sql = false;
   int64_t start = ::oceanbase::common::ObTimeUtility::current_time();
   ObISQLConnection *conn = NULL;
-  if (OB_UNLIKELY(sql.empty())) {
+  if (OB_ISNULL(sql)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("empty sql");
   } else if (OB_FAIL(acquire(tenant_id, conn))) {
@@ -155,7 +155,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
     LOG_WARN("connection can not be NULL");
   } else if (!is_active()) { // check client active after connection acquired
     ret = OB_INACTIVE_SQL_CLIENT;
-    LOG_WARN("in active sql client", K(ret), K(sql));
+    LOG_WARN("in active sql client", K(ret), KCSTRING(sql));
   }
   int64_t old_compatibility_mode;
   int64_t old_sql_mode = 0;
@@ -203,7 +203,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(conn->execute_write(tenant_id, sql, affected_rows, is_user_sql))) {
-      LOG_WARN("execute sql failed", K(ret), K(conn), K(start), K(sql));
+      LOG_WARN("execute sql failed", K(ret), K(conn), K(start), KCSTRING(sql));
     } else if (old_compatibility_mode != compatibility_mode
                && OB_FAIL(conn->set_session_variable("ob_compatibility_mode", old_compatibility_mode))) {
       LOG_WARN("fail to recover inner connection sql mode", K(ret));
@@ -220,7 +220,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
     }
   }
   close(conn, ret);
-  LOG_TRACE("execute sql with sql mode", K(sql), K(compatibility_mode), K(ret));
+  LOG_TRACE("execute sql with sql mode", KCSTRING(sql), K(compatibility_mode), K(ret));
   return ret;
 }
 

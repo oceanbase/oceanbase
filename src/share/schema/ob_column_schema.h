@@ -61,8 +61,6 @@ public:
   bool operator==(const ObColumnSchemaV2 &r) const;
   bool operator!=(const ObColumnSchemaV2 &r) const;
 
-  int assign(const ObColumnSchemaV2 &other);
-
   //set methods
   inline void set_tenant_id(const uint64_t id) { tenant_id_ = id; }
   inline void set_table_id(const uint64_t id) { table_id_ = id; }

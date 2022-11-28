@@ -15,7 +15,6 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
-#include "common/ob_smart_call.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
@@ -145,7 +144,7 @@ int ObLogSubPlanScan::re_est_cost(EstimateCostInfo &param, double &card, double 
         selectivity > 0) {
       param.need_row_count_ /= selectivity;
     }
-    if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+    if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
       LOG_WARN("failed to re est exchange cost", K(ret));
     } else {
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();

@@ -255,7 +255,6 @@ int ObPLPackage::execute_init_routine(ObIAllocator &allocator, ObExecContext &ex
       int status;
       ObSEArray<int64_t, 2> subp_path;
       OZ (pl_engine->execute(exec_ctx,
-                             exec_ctx.get_allocator(),
                              init_routine->get_package_id(),
                              init_routine->get_routine_id(),
                              subp_path,

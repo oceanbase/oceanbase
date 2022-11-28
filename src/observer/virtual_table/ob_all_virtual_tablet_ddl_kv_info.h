@@ -41,7 +41,7 @@ private:
   virtual void release_last_tenant() override;
 
   int get_next_ls(ObLS *&ls);
-  int get_next_ddl_kv_mgr(storage::ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int get_next_tablet(storage::ObTabletHandle &tablet_handle);
   int get_next_ddl_kv(ObDDLKV *&ddl_kv);
 private:
   common::ObAddr addr_;

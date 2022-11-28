@@ -19,6 +19,7 @@
 #include "lib/hash/ob_iteratable_hashset.h"
 #include "lib/hash/ob_link_hashmap.h"
 #include "lib/hash/ob_hashmap.h"
+#include "logservice/palf/scn.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/ob_i_store.h"
 
@@ -106,11 +107,10 @@ public:
   // only update the status of the exact one with the same lock_op
   int update_lock_status(
       const ObTableLockOp &lock_op,
-      const int64_t commit_version,
-      const int64_t commit_log_ts,
+      const palf::SCN commit_version,
+      const palf::SCN commit_scn,
       const ObTableLockOpStatus status,
       ObMalloc &allocator);
-
   int check_allow_lock(
       const ObTableLockOp &lock_op,
       const ObTableLockMode &lock_mode_in_same_trans,
@@ -118,10 +118,10 @@ public:
       bool &conflict_with_dml_lock,
       const bool include_finish_tx = true,
       const bool only_check_dml_lock = false);
-  int64_t get_min_ddl_lock_committed_log_ts(const int64_t flushed_log_ts) const;
+  palf::SCN get_min_ddl_lock_committed_scn(const palf::SCN &flushed_scn) const;
   int get_table_lock_store_info(
       ObIArray<ObTableLockOp> &store_arr,
-      int64_t freeze_log_ts);
+      const palf::SCN &freeze_scn);
 
   void reset(ObMalloc &allocator);
   void reset_without_lock(ObMalloc &allocator);
@@ -151,11 +151,10 @@ private:
       const bool only_check_dml_lock = false);
   int update_lock_status_(
       const ObTableLockOp &lock_op,
-      const int64_t commit_version,
-      const int64_t commit_log_ts,
+      const palf::SCN &commit_version,
+      const palf::SCN &commit_scn,
       const ObTableLockOpStatus status,
       ObTableLockOpList *op_list);
-  void wakeup_waiters_(const ObTableLockOp &lock_op);
   int recover_(
       const ObTableLockOp &lock_op,
       ObMalloc &allocator);
@@ -331,8 +330,8 @@ public:
       const ObTableLockOp &lock_op);
   int update_lock_status(
       const ObTableLockOp &lock_op,
-      const int64_t commit_version,
-      const int64_t commit_log_ts,
+      const palf::SCN commit_version,
+      const palf::SCN commit_scn,
       const ObTableLockOpStatus status);
   bool is_inited() const { return is_inited_; }
   int check_allow_lock(
@@ -342,10 +341,8 @@ public:
       const bool include_finish_tx = true,
       const bool only_check_dml_lock = false);
   void print();
-  int64_t get_min_ddl_committed_log_ts(int64_t &flushed_log_ts);
-  int get_table_lock_store_info(
-      ObIArray<ObTableLockOp> &store_arr,
-      int64_t freeze_log_ts);
+  palf::SCN get_min_ddl_committed_scn(palf::SCN &flushed_scn);
+  int get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr, palf::SCN freeze_scn);
   // get all the lock id in the lock map
   // @param[out] iter, the iterator returned.
   // int get_lock_id_iter(ObLockIDIterator &iter);
@@ -410,28 +407,28 @@ private:
   class GetMinCommittedDDLLogtsFunctor
   {
   public:
-    explicit GetMinCommittedDDLLogtsFunctor(int64_t &flushed_log_ts)
-      : min_committed_log_ts_(INT64_MAX),
-        flushed_log_ts_(flushed_log_ts) {}
+    explicit GetMinCommittedDDLLogtsFunctor(palf::SCN &flushed_scn)
+      : min_committed_scn_(palf::SCN::max_scn()),
+        flushed_scn_(flushed_scn) {}
     bool operator()(const ObLockID &lock_id, ObOBJLock *obj_lock);
-    int64_t get_min_committed_log_ts() { return min_committed_log_ts_; }
+    palf::SCN get_min_committed_scn() { return min_committed_scn_; }
 
   private:
-    int64_t min_committed_log_ts_;
-    int64_t flushed_log_ts_;
+    palf::SCN min_committed_scn_;
+    palf::SCN flushed_scn_;
   };
   class GetTableLockStoreInfoFunctor
   {
   public:
     explicit GetTableLockStoreInfoFunctor(ObIArray<ObTableLockOp> &store_arr,
-                                          int64_t freeze_log_ts)
+                                          palf::SCN freeze_scn)
       : store_arr_(store_arr),
-        freeze_log_ts_(freeze_log_ts) {}
+        freeze_scn_(freeze_scn) {}
     bool operator()(const ObLockID &lock_id, ObOBJLock *obj_lock);
 
   private:
     ObIArray<ObTableLockOp> &store_arr_;
-    int64_t freeze_log_ts_;
+    palf::SCN freeze_scn_;
   };
 
 private:

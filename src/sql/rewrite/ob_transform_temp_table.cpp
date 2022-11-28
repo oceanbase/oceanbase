@@ -14,7 +14,6 @@
 
 #include "ob_transform_temp_table.h"
 #include "lib/allocator/ob_allocator.h"
-#include "lib/hash/ob_hashmap.h"
 #include "lib/oblog/ob_log_module.h"
 #include "common/ob_common_utility.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
@@ -50,7 +49,6 @@ int ObTransformTempTable::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
   bool is_happened = false;
   ObSEArray<ObSelectStmt*, 8> child_stmts;
   ObArray<TempTableInfo> temp_table_infos;
-  hash::ObHashMap<uint64_t, ObDMLStmt *> parent_map;
   trans_happened = false;
   //当前stmt是root stmt时才改写
   if (parent_stmts.empty()) {
@@ -62,14 +60,10 @@ int ObTransformTempTable::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
       trans_param_ = new(buf)TempTableTransParam;
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(parent_map.create(128, "TempTable"))) {
-      LOG_WARN("failed to init stmt map", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::get_all_child_stmts(stmt, child_stmts, &parent_map))) {
+    } else if (OB_FAIL(ObTransformUtils::get_all_child_stmts(stmt, child_stmts))) {
       LOG_WARN("failed to get all child stmts", K(ret));
-    } else if (OB_FAIL(extract_common_subquery_as_cte(stmt, child_stmts, parent_map, is_happened))) {
+    } else if (OB_FAIL(extract_common_subquery_as_cte(stmt, child_stmts, is_happened))) {
       LOG_WARN("failed to extract common subquery as cte", K(ret));
-    } else if (OB_FAIL(parent_map.destroy())) {
-      LOG_WARN("failed to destroy map", K(ret));
     } else {
       trans_happened |= is_happened;
       LOG_TRACE("succeed to extract common subquery as cte",  K(is_happened));
@@ -356,7 +350,6 @@ int ObTransformTempTable::check_stmt_has_cross_product(ObSelectStmt *stmt, bool 
  */
 int ObTransformTempTable::extract_common_subquery_as_cte(ObDMLStmt *stmt,
                                                          ObIArray<ObSelectStmt*> &stmts,
-                                                         hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
                                                          bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -376,7 +369,6 @@ int ObTransformTempTable::extract_common_subquery_as_cte(ObDMLStmt *stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt_groups.count(); ++i) {
     if (OB_FAIL(inner_extract_common_subquery_as_cte(*stmt,
                                                      stmt_groups.at(i).stmts_, 
-                                                     parent_map,
                                                      trans_happened))) {
       LOG_WARN("failed to convert temp table", K(ret));
     }
@@ -399,7 +391,6 @@ int ObTransformTempTable::extract_common_subquery_as_cte(ObDMLStmt *stmt,
  */
 int ObTransformTempTable::inner_extract_common_subquery_as_cte(ObDMLStmt &root_stmt,
                                                                ObIArray<ObSelectStmt*> &stmts,
-                                                               hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
                                                                bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -427,19 +418,11 @@ int ObTransformTempTable::inner_extract_common_subquery_as_cte(ObDMLStmt &root_s
             !helper.hint_force_stmt_set_.has_qb_name(stmt)) {
           //hint forbid，do nothing
         } else if (OB_FAIL(check_has_stmt(helper.stmt_,
-                                          stmt,
-                                          parent_map,
-                                          has_stmt))) {
+                                  stmt,
+                                  has_stmt))) {
           LOG_WARN("failed to check has stmt", K(ret));
         } else if (has_stmt) {
           //do nothing
-        } else if (OB_FAIL(check_has_stmt(stmt,
-                                          helper.stmt_,
-                                          parent_map,
-                                          has_stmt))) {
-          LOG_WARN("failed to check has stmt", K(ret));
-        } else if (has_stmt) {
-          // do nothing
         } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(helper.stmt_,
                                                                   stmt,
                                                                   map_info,
@@ -532,28 +515,102 @@ int ObTransformTempTable::add_materialize_stmts(const ObIArray<ObSelectStmt*> &s
 
 int ObTransformTempTable::check_has_stmt(ObSelectStmt *left_stmt,
                                          ObSelectStmt *right_stmt,
-                                         hash::ObHashMap<uint64_t, ObDMLStmt *> &parent_map,
                                          bool &has_stmt)
 {
   int ret = OB_SUCCESS;
   has_stmt = false;
-  ObDMLStmt *current = left_stmt;
-  ObDMLStmt *parent = NULL;
-  while (OB_SUCC(ret) && current != right_stmt && NULL != current) {
-    uint64_t key = reinterpret_cast<uint64_t>(current);
-    if (OB_FAIL(parent_map.get_refactored(key, parent))) {
-      if (ret == OB_HASH_NOT_EXIST) {
-        current = NULL;
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to get value", K(ret));
+  if (OB_ISNULL(left_stmt) || OB_ISNULL(right_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (left_stmt->get_current_level() == right_stmt->get_current_level() &&
+             OB_FAIL(check_has_stmt_in_same_level(left_stmt, right_stmt, has_stmt))) {
+    LOG_WARN("failed to check has stmt in same level", K(ret));
+  } else if (!has_stmt &&
+             left_stmt->get_current_level() != right_stmt->get_current_level() &&
+             OB_FAIL(check_has_stmt_in_diff_level(left_stmt, right_stmt, has_stmt))) {
+    LOG_WARN("failed to check has stmt in diff level", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformTempTable::check_has_stmt_in_same_level(ObSelectStmt *left_stmt,
+                                                       ObSelectStmt *right_stmt,
+                                                       bool &has_stmt)
+{
+  int ret = OB_SUCCESS;
+  has_stmt = false;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_ISNULL(left_stmt) || OB_ISNULL(right_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (OB_FAIL(left_stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  } else if (ObOptimizerUtil::find_item(child_stmts, right_stmt)) {
+    has_stmt = true;
+  } else {
+    for (int64_t i = 0; !has_stmt && OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      ObSelectStmt *child_stmt = child_stmts.at(i);
+      if (OB_ISNULL(child_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null stmt", K(ret));
+      } else if (child_stmt->get_current_level() != right_stmt->get_current_level()) {
+        //do nothing
+      } else if (OB_FAIL(SMART_CALL(check_has_stmt_in_same_level(child_stmts.at(i), right_stmt, has_stmt)))) {
+        LOG_WARN("failed to check left stmt has right stmt", K(ret));
       }
-    } else {
-      current = parent;
     }
   }
-  if (OB_SUCC(ret) && current == right_stmt) {
-    has_stmt = true;
+  if (OB_SUCC(ret) && !has_stmt) {
+    child_stmts.reuse();
+    if (OB_FAIL(right_stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    } else if (ObOptimizerUtil::find_item(child_stmts, left_stmt)) {
+      has_stmt = true;
+    } else {
+      for (int64_t i = 0; !has_stmt && OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+        ObSelectStmt *child_stmt = child_stmts.at(i);
+        if (OB_ISNULL(child_stmt)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null stmt", K(ret));
+        } else if (child_stmt->get_current_level() != left_stmt->get_current_level()) {
+          //do nothing
+        } else if (OB_FAIL(SMART_CALL(check_has_stmt_in_same_level(child_stmts.at(i), left_stmt, has_stmt)))) {
+          LOG_WARN("failed to check left stmt has right stmt", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformTempTable::check_has_stmt_in_diff_level(ObSelectStmt *left_stmt,
+                                                       ObSelectStmt *right_stmt,
+                                                       bool &has_stmt)
+{
+  int ret = OB_SUCCESS;
+  has_stmt = false;
+  if (OB_ISNULL(left_stmt) || OB_ISNULL(right_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else {
+    ObDMLStmt *parent_stmt = right_stmt;
+    //check left contain right
+    while (!has_stmt && NULL != parent_stmt) {
+      if (parent_stmt == left_stmt) {
+        has_stmt = true;
+      } else {
+        parent_stmt = parent_stmt->get_parent_namespace_stmt();
+      }
+    }
+    //check right contain left
+    parent_stmt = left_stmt;
+    while (!has_stmt && NULL != parent_stmt) {
+      if (parent_stmt == right_stmt) {
+        has_stmt = true;
+      } else {
+        parent_stmt = parent_stmt->get_parent_namespace_stmt();
+      }
+    }
   }
   return ret;
 }

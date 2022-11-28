@@ -1603,10 +1603,13 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_store_ctx
   int ret = OB_SUCCESS;
   auto ls_id = merge_ctx_.param_.ls_id_;
   auto &snapshot = merge_ctx_.sstable_version_range_.snapshot_version_;
-  if (OB_FAIL(store_ctx_.init_for_read(ls_id,
-                                       INT64_MAX,
-                                       -1,
-                                       snapshot))) {
+  palf::SCN tmp_scn;
+  if (OB_FAIL(tmp_scn.convert_for_lsn_allocator(snapshot))) {
+    STORAGE_LOG(WARN, "convert for fail", K(ret), K(ls_id), K(snapshot));
+  } else if (OB_FAIL(store_ctx_.init_for_read(ls_id,
+                                              INT64_MAX,
+                                              -1,
+                                              tmp_scn))) {
     STORAGE_LOG(WARN, "init store ctx fail", K(ret), K(ls_id), K(snapshot));
   }
   return ret;
@@ -1629,7 +1632,7 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_table_acc
   if (OB_FAIL(tbl_xs_ctx_.init(query_flag, store_ctx_, allocator_, allocator_, scan_version_range))) {
     STORAGE_LOG(WARN, "Failed to init table access context", KR(ret));
   } else {
-    tbl_xs_ctx_.merge_log_ts_ = merge_ctx_.merge_log_ts_;
+    tbl_xs_ctx_.merge_log_ts_ = merge_ctx_.merge_scn_;
   }
   return ret;
 }

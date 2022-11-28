@@ -16,9 +16,12 @@
 #include "share/schema/ob_schema_utils.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "ob_rs_event_history_table_operator.h"
+#include "logservice/palf/scn.h"
+
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
+using namespace oceanbase::palf;
 namespace oceanbase
 {
 namespace rootserver
@@ -57,7 +60,7 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
     share::ObSnapShotType snapshot_type,
     const uint64_t tenant_id,
     const int64_t schema_version,
-    const int64_t snapshot_version,
+    const SCN &snapshot_scn,
     const char *comment,
     const common::ObIArray<ObTabletID> &tablet_ids)
 {
@@ -67,7 +70,7 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
   ObSnapshotInfo snapshot;
   snapshot.snapshot_type_ = snapshot_type;
   snapshot.tenant_id_ = tenant_id;
-  snapshot.snapshot_ts_ = snapshot_version;
+  snapshot.snapshot_scn_ = snapshot_scn;
   snapshot.schema_version_ = schema_version;
   snapshot.comment_ = comment;
   if (OB_UNLIKELY(!snapshot.is_valid() || tablet_ids.count() <= 0)) {
@@ -77,7 +80,7 @@ int ObSnapshotInfoManager::batch_acquire_snapshot(
     if (OB_FAIL(trans.start(&proxy, tenant_id))) {
       LOG_WARN("fail to start trans", K(ret), K(tenant_id));
     } else if (OB_FAIL(snapshot_proxy.batch_add_snapshot(trans, snapshot_type,
-        tenant_id, schema_version, snapshot_version, comment, tablet_ids))) {
+        tenant_id, schema_version, snapshot.snapshot_scn_, comment, tablet_ids))) {
       LOG_WARN("batch add snapshot failed", K(ret));
     } else {
       bool need_commit = (ret == OB_SUCCESS);
@@ -115,7 +118,7 @@ int ObSnapshotInfoManager::batch_release_snapshot_in_trans(
     share::ObSnapShotType snapshot_type,
     const uint64_t tenant_id,
     const int64_t schema_version,
-    const int64_t snapshot_version,
+    const SCN &snapshot_scn,
     const common::ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
@@ -123,7 +126,7 @@ int ObSnapshotInfoManager::batch_release_snapshot_in_trans(
   ObSnapshotInfo snapshot;
   snapshot.snapshot_type_ = snapshot_type;
   snapshot.tenant_id_ = tenant_id;
-  snapshot.snapshot_ts_ = snapshot_version;
+  snapshot.snapshot_scn_ = snapshot_scn;
   snapshot.schema_version_ = schema_version;
   if (OB_UNLIKELY(tablet_ids.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -132,7 +135,7 @@ int ObSnapshotInfoManager::batch_release_snapshot_in_trans(
                                                            snapshot_type,
                                                            tenant_id,
                                                            schema_version,
-                                                           snapshot_version,
+                                                           snapshot.snapshot_scn_,
                                                            tablet_ids))) {
     LOG_WARN("fail to batch remove snapshots", K(ret));
   }
@@ -161,15 +164,15 @@ int ObSnapshotInfoManager::get_snapshot(common::ObMySQLProxy &proxy,
 int ObSnapshotInfoManager::get_snapshot(common::ObMySQLProxy &proxy,
                                         const uint64_t tenant_id,
                                         share::ObSnapShotType snapshot_type,
-                                        const int64_t snapshot_ts,
+                                        const palf::SCN &snapshot_scn,
                                         share::ObSnapshotInfo &snapshot_info)
 {
   int ret = OB_SUCCESS;
   ObSnapshotTableProxy snapshot_proxy;
-  if (OB_FAIL(snapshot_proxy.get_snapshot(proxy, tenant_id, snapshot_type, snapshot_ts, snapshot_info))) {
+  if (OB_FAIL(snapshot_proxy.get_snapshot(proxy, tenant_id, snapshot_type, snapshot_scn, snapshot_info))) {
     if (OB_ITER_END == ret) {
     } else {
-      LOG_WARN("fail to get snapshot", K(ret));
+      LOG_WARN("fail to get snapshot", KR(ret), K(snapshot_type), K(snapshot_scn));
     }
   }
   return ret;

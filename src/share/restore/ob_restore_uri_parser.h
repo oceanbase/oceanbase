@@ -68,6 +68,7 @@ class ObPhysicalRestoreUriParser
 public:
   ObPhysicalRestoreUriParser() = default;
   ~ObPhysicalRestoreUriParser() = default;
+  // TODO: wangxiaohui.wxh, filter same path
   static int parse(
     const common::ObString &multi_uri,
     common::ObArenaAllocator &allocator,

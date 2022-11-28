@@ -149,10 +149,10 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 // hint structure
 BEGIN_OUTLINE_DATA END_OUTLINE_DATA OPTIMIZER_FEATURES_ENABLE QB_NAME
 // global hint
-FROZEN_VERSION TOPK QUERY_TIMEOUT READ_CONSISTENCY LOG_LEVEL USE_PLAN_CACHE
+FROZEN_VERSION TOPK QUERY_TIMEOUT READ_CONSISTENCY HOTSPOT LOG_LEVEL USE_PLAN_CACHE
 TRACE_LOG LOAD_BATCH_SIZE TRANS_PARAM OPT_PARAM OB_DDL_SCHEMA_VERSION FORCE_REFRESH_LOCATION_CACHE
 DISABLE_PARALLEL_DML ENABLE_PARALLEL_DML MONITOR NO_PARALLEL CURSOR_SHARING_EXACT
-MAX_CONCURRENT DOP TRACING NO_QUERY_TRANSFORMATION NO_COST_BASED_QUERY_TRANSFORMATION
+MAX_CONCURRENT DOP TRACING NO_QUERY_TRANSFORMATION
 // transform hint
 NO_REWRITE MERGE_HINT NO_MERGE_HINT NO_EXPAND USE_CONCAT UNNEST NO_UNNEST
 PLACE_GROUP_BY NO_PLACE_GROUP_BY INLINE MATERIALIZE SEMI_TO_INNER NO_SEMI_TO_INNER
@@ -166,7 +166,7 @@ COALESCE_SQ NO_COALESCE_SQ COUNT_TO_EXISTS NO_COUNT_TO_EXISTS LEFT_TO_ANTI NO_LE
 ELIMINATE_JOIN NO_ELIMINATE_JOIN PUSH_LIMIT NO_PUSH_LIMIT PULLUP_EXPR NO_PULLUP_EXPR
 WIN_MAGIC NO_WIN_MAGIC 
 // optimize hint
-INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT LEADING_HINT ORDERED
+INDEX_HINT FULL_HINT NO_INDEX_HINT LEADING_HINT ORDERED
 USE_NL USE_MERGE USE_HASH NO_USE_HASH NO_USE_MERGE NO_USE_NL
 USE_NL_MATERIALIZATION NO_USE_NL_MATERIALIZATION
 USE_HASH_AGGREGATION NO_USE_HASH_AGGREGATION 
@@ -474,7 +474,7 @@ END_P SET_VAR DELIMITER
 %type <node> optimize_stmt
 %type <node> dump_memory_stmt
 %type <node> create_savepoint_stmt rollback_savepoint_stmt release_savepoint_stmt
-%type <node> opt_qb_name parallel_hint pq_set_hint_desc
+%type <node> opt_qb_name parallel_hint
 %type <node> create_tablespace_stmt drop_tablespace_stmt tablespace rotate_master_key_stmt
 %type <node> alter_tablespace_stmt
 %type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action opt_force_purge
@@ -753,7 +753,7 @@ column_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, NULL, $1);
   dup_node_string($1, $$, result->malloc_pool_);
 #ifndef SQL_PARSER_COMPILATION
-  lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false, false);
+  lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false);
 #endif
 }
 | relation_name '.' column_name
@@ -763,7 +763,7 @@ column_name
 #ifndef SQL_PARSER_COMPILATION
   if (3 == $1->str_len_) {
     if (0 == strcasecmp("NEW", $1->str_value_) || 0 == strcasecmp("OLD", $1->str_value_)) {
-      lookup_pl_exec_symbol($$, result, @1.first_column, @3.last_column, true, false, false);
+      lookup_pl_exec_symbol($$, result, @1.first_column, @3.last_column, true, false);
     }
   }
 #endif
@@ -848,7 +848,7 @@ column_name
     malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, NULL, col_name);
     dup_node_string(col_name, $$, result->malloc_pool_);
   #ifndef SQL_PARSER_COMPILATION
-    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false, false);
+    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false);
   #endif
   } else {
     yyerror(&@1, result, "force key work can be used to be name in PL\n");
@@ -862,7 +862,7 @@ column_name
     malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, NULL, col_name);
     dup_node_string(col_name, $$, result->malloc_pool_);
   #ifndef SQL_PARSER_COMPILATION
-    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false, false);
+    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false);
   #endif
   } else {
     yyerror(&@1, result, "cascade key work can be used to be name in PL\n");
@@ -6389,37 +6389,31 @@ REDUNDANT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 1;
-  $$->is_hidden_const_ = 1;
 }
 | COMPACT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 2;
-  $$->is_hidden_const_ = 1;
 }
 | DYNAMIC
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 3;
-  $$->is_hidden_const_ = 1;
 }
 | COMPRESSED
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 4;
-  $$->is_hidden_const_ = 1;
 }
 | CONDENSED
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 5;
-  $$->is_hidden_const_ = 1;
 }
 | DEFAULT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = 3;
-  $$->is_hidden_const_ = 1;
 }
 ;
 /*****************************************************************************
@@ -8081,6 +8075,10 @@ READ_CONSISTENCY '(' consistency_level ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_TOPK, 2, $3, $4);
 }
+| HOTSPOT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_HOTSPOT);
+}
 | LOG_LEVEL '(' NAME_OB ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LOG_LEVEL, 1, $3);
@@ -8168,10 +8166,6 @@ READ_CONSISTENCY '(' consistency_level ')'
 | NO_QUERY_TRANSFORMATION
 {
   malloc_terminal_node($$, result->malloc_pool_, T_NO_QUERY_TRANSFORMATION);
-}
-| NO_COST_BASED_QUERY_TRANSFORMATION
-{
-  malloc_terminal_node($$, result->malloc_pool_, T_NO_COST_BASED_QUERY_TRANSFORMATION);
 }
 ;
 
@@ -8488,14 +8482,6 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FULL_HINT, 2, $3, $4);
 }
-| USE_DAS_HINT '(' qb_name_option relation_factor_in_hint ')'
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_USE_DAS_HINT, 2, $3, $4);
-}
-| NO_USE_DAS_HINT '(' qb_name_option relation_factor_in_hint ')'
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_DAS_HINT, 2, $3, $4);
-}
 | LEADING_HINT '(' qb_name_option relation_factor_in_leading_hint_list ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LEADING, 2, $3, $4);
@@ -8590,10 +8576,6 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
   (void)($7);               /* unused */
   malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE, 4, $3, $4, $6, $8);
 }
-| PQ_DISTRIBUTE '(' qb_name_option relation_factor_in_pq_hint ')'
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE, 4, $3, $4, NULL, NULL);
-}
 | PQ_MAP '(' qb_name_option relation_factor_in_hint ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_MAP, 2, $3, $4);
@@ -8605,9 +8587,11 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
   merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTRIBUTE_WINDOW, 2, $3, method_list);
 }
-| PQ_SET '(' pq_set_hint_desc ')'
+| PQ_SET '(' qb_name_option distribute_method_list ')'
 {
-  $$ = $3;
+  ParseNode *method_list = NULL;
+  merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 2, $3, method_list);
 }
 | GBY_PUSHDOWN opt_qb_name
 {
@@ -8648,29 +8632,6 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 | NO_USE_DISTRIBUTED_DML opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_DISTRIBUTED_DML, 1, $2);
-}
-;
-
-pq_set_hint_desc:
-'@' qb_name_string qb_name_string distribute_method_list
-{
-  ParseNode *method_list = NULL;
-  merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 3, $2, $3, method_list);
-}
-| '@' qb_name_string distribute_method_list
-{
-  ParseNode *method_list = NULL;
-  merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $3);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 3, $2, NULL, method_list);
-}
-| '@' qb_name_string qb_name_string
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 3, $2, $3, NULL);
-}
-| '@' qb_name_string
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 3, $2, NULL, NULL);
 }
 ;
 
@@ -9085,7 +9046,7 @@ expr %prec LOWER_PARENS
         NULL != $1->children_[2] && T_STAR == $1->children_[2]->type_) {
           /* do nothing */
     } else {
-      lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, true, false);
+      lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, true);
     }
 #endif
   }
@@ -10578,7 +10539,7 @@ INTNUM
   $$ = $1;
   if (result->pl_parse_info_.is_pl_parse_) {
 #ifndef SQL_PARSER_COMPILATION
-    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false, false);
+    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false);
 #endif
   }
 }
@@ -10683,7 +10644,7 @@ column_name
   $$ = $1;
   if (result->pl_parse_info_.is_pl_parse_) {
 #ifndef SQL_PARSER_COMPILATION
-    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false, true);
+    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false);
 #endif
   }
 }
@@ -15312,7 +15273,7 @@ column is defined as column := column_name | extension name | extension
 - AUTO : Oracle determines the columns to collect histograms based on data distribution and the workload of the columns
 - SKEWONLY : Oracle determines the columns to collect histograms based on the data distribution of the columns
 - column_name : name of a column
-- extension : can be either a column group in the format of (column_name, column_name [, ...]) or an expression
+- extension : can be either a column group in the format of (column_name, colume_name [, ...]) or an expression
 The default is FOR ALL COLUMNS SIZE AUTO.
 https://blogs.oracle.com/optimizer/how-does-the-methodopt-parameter-work
 ******************************************************************************/
@@ -15726,14 +15687,10 @@ new_or_old:
 new_or_old_column_ref:
   new_or_old '.' column_name
 {
-  if (!result->is_for_trigger_) {
-    yyerror(&@2, result, "");
-    YYERROR;
-  }
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, $1, $3);
   dup_node_string($3, $$, result->malloc_pool_);
 #ifndef SQL_PARSER_COMPILATION
-  lookup_pl_exec_symbol($$, result, @1.first_column, @3.last_column, true, false, false);
+  lookup_pl_exec_symbol($$, result, @1.first_column, @3.last_column, true, false);
 #endif
 }
 

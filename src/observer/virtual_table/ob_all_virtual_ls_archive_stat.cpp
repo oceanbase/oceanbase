@@ -118,8 +118,7 @@ int ObAllVirtualLSArchiveStat::insert_stat_(archive::LSArchiveStat &ls_stat)
         cur_row_.cells_[i].set_int(ls_stat.lease_id_);
         break;
       case OB_APP_MIN_COLUMN_ID + 10:
-        // TODO SCN
-        cur_row_.cells_[i].set_uint64(ls_stat.round_start_ts_ < 0 ? 0 : ls_stat.round_start_ts_);
+        cur_row_.cells_[i].set_uint64(ls_stat.round_start_scn_.get_val_for_inner_table_field());
         break;
       case OB_APP_MIN_COLUMN_ID + 11:
         cur_row_.cells_[i].set_uint64(ls_stat.max_issued_log_lsn_ < 0 ? 0 : ls_stat.max_issued_log_lsn_);
@@ -137,7 +136,7 @@ int ObAllVirtualLSArchiveStat::insert_stat_(archive::LSArchiveStat &ls_stat)
         cur_row_.cells_[i].set_uint64(ls_stat.max_prepared_lsn_ < 0 ? 0 : ls_stat.max_prepared_lsn_);
         break;
       case OB_APP_MIN_COLUMN_ID + 16:
-        cur_row_.cells_[i].set_uint64(ls_stat.max_prepared_ts_ < 0 ? 0 : ls_stat.max_prepared_ts_);
+        cur_row_.cells_[i].set_uint64(ls_stat.max_prepared_scn_.get_val_for_inner_table_field());
         break;
       case OB_APP_MIN_COLUMN_ID + 17:
         cur_row_.cells_[i].set_int(ls_stat.wait_send_task_count_);
@@ -149,7 +148,7 @@ int ObAllVirtualLSArchiveStat::insert_stat_(archive::LSArchiveStat &ls_stat)
         cur_row_.cells_[i].set_uint64(ls_stat.archive_lsn_ < 0 ? 0 : ls_stat.archive_lsn_);
         break;
       case OB_APP_MIN_COLUMN_ID + 20:
-        cur_row_.cells_[i].set_uint64(ls_stat.archive_ts_ < 0 ? 0 : ls_stat.archive_ts_);
+        cur_row_.cells_[i].set_uint64(ls_stat.archive_scn_.get_val_for_inner_table_field());
         break;
       case OB_APP_MIN_COLUMN_ID + 21:
         cur_row_.cells_[i].set_int(ls_stat.archive_file_id_);

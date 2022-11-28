@@ -360,7 +360,6 @@ int ObNestedLoopJoinOp::read_left_operate()
     if (OB_FAIL(group_read_left_operate()) && OB_ITER_END != ret) {
       LOG_WARN("failed to read left group", K(ret));
     }
-  } else if (FALSE_IT(set_param_null())) {
   } else if (OB_FAIL(get_next_left_row()) && OB_ITER_END != ret) {
     LOG_WARN("failed to get next left row", K(ret));
   }
@@ -531,7 +530,6 @@ int ObNestedLoopJoinOp::group_read_left_operate()
           }
         }
         save_last_row_ = false;
-        set_param_null();
         while (OB_SUCC(ret) && !is_full()) {
           // need clear evaluated flag, since prepare_rescan_params() will evaluate expression.
           clear_evaluated_flag();
@@ -835,7 +833,7 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&left_brs)
 
   if (OB_SUCC(ret)) {
     int64_t read_size = 0;
-    int64_t max_size = MY_SPEC.max_batch_size_;
+    int64_t max_size = min(MY_SPEC.max_batch_size_, left_->get_spec().max_batch_size_);
     last_save_batch_.extend_save(eval_ctx_, max_size);
     if (OB_FAIL(left_store_iter_.get_next_batch(left_->get_spec().output_,
                                                 eval_ctx_,

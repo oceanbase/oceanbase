@@ -357,7 +357,7 @@ struct ObAuditRecordData {
     return sql_len_ + tenant_name_len_ + user_name_len_ + db_name_len_;
   }
 
-  int64_t get_snapshot_version() const
+  palf::SCN get_snapshot_version() const
   {
     return snapshot_.version_;
   }
@@ -423,7 +423,7 @@ struct ObAuditRecordData {
   int64_t params_value_len_;
   char *params_value_;
   struct StmtSnapshot {
-    int64_t version_;      // snapshot version
+    palf::SCN version_;      // snapshot version
     int64_t tx_id_;        // snapshot inner which txn
     int64_t scn_;          // snapshot's position in the txn
     char const* source_;   // snapshot's acquire source

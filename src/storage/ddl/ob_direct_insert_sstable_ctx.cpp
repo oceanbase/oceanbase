@@ -38,7 +38,7 @@ using namespace oceanbase::sql;
 /***************              ObSSTableInsertTabletParam              *****************/
 ObSSTableInsertTabletParam::ObSSTableInsertTabletParam()
   : context_id_(0), ls_id_(), tablet_id_(), table_id_(0), write_major_(false),
-    task_cnt_(0), schema_version_(0), snapshot_version_(0), execution_id_(0), ddl_task_id_(0)
+    task_cnt_(0), schema_version_(0), snapshot_version_(0)
 {
 
 }
@@ -55,9 +55,7 @@ bool ObSSTableInsertTabletParam::is_valid() const
               && tablet_id_.is_valid()
               && table_id_ > 0
               && task_cnt_ >= 0
-              && schema_version_ > 0
-              && execution_id_ > 0
-              && ddl_task_id_ > 0;
+              && schema_version_ > 0;
   return bret;
 }
 
@@ -204,7 +202,6 @@ ObSSTableInsertTabletContext::~ObSSTableInsertTabletContext()
     allocator_.free(index_builder_);
     index_builder_ = nullptr;
   }
-  ddl_kv_mgr_handle_.reset();
   allocator_.reset();
 }
 
@@ -214,7 +211,6 @@ int ObSSTableInsertTabletContext::init(const ObSSTableInsertTabletParam &build_p
   const int64_t memory_limit = 1024L * 1024L * 1024L * 10L; // 10GB
   const ObTabletID &tablet_id = build_param.tablet_id_;
   const ObLSID &ls_id = build_param.ls_id_;
-  share::ObLocationService *location_service = GCTX.location_service_;
   ObLS *ls = nullptr;
   ObLSService *ls_service = nullptr;
   lib::ObMutexGuard guard(mutex_);
@@ -229,7 +225,10 @@ int ObSSTableInsertTabletContext::init(const ObSSTableInsertTabletParam &build_p
     LOG_ERROR("ls service should not be null", K(ret));
   } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle_, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id));
-  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, tablet_id, tablet_handle_))) {
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls should not be null", K(ret));
+  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_))) {
     LOG_WARN("fail to get tablet handle", K(ret), K(tablet_id));
   } else if (OB_FAIL(data_sstable_redo_writer_.init(ls_id, tablet_id))) {
     LOG_WARN("fail to init sstable redo writer", K(ret), K(ls_id), K(tablet_id));
@@ -261,7 +260,7 @@ int ObSSTableInsertTabletContext::update(const int64_t snapshot_version)
       LOG_WARN("invalid argument", K(ret), K(table_key));
     } else if (data_sstable_redo_writer_.get_start_log_ts() > 0) {
       // ddl start log is already written, do nothing
-    } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(table_key, build_param_.execution_id_, ddl_kv_mgr_handle_))) {
+    } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(table_key))) {
       LOG_WARN("fail write start log", K(ret), K(table_key), K(build_param_));
     }
   }
@@ -325,6 +324,7 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
   ObDataStoreDesc data_desc;
   const int64_t tenant_id = MTL_ID();
   int64_t snapshot_version = 0;
+  palf::SCN snapshot_scn; // TODO SCN
   {
     lib::ObMutexGuard guard(mutex_);
     snapshot_version = build_param_.snapshot_version_;
@@ -346,13 +346,15 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
     LOG_WARN("prepare sstable index builder failed", K(ret), K(build_param));
   } else if (OB_FAIL(data_redo_writer.init(ls_id, tablet_id))) {
     LOG_WARN("fail to init sstable redo writer", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(snapshot_scn.convert_for_inner_table_field((uint64_t)snapshot_version))) {
+    LOG_WARN("fail to convert val to SCN", KR(ret), K(snapshot_version));
   } else if (FALSE_IT(data_redo_writer.set_start_log_ts(data_sstable_redo_writer_.get_start_log_ts()))) {
   } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(
-          *sql_proxy, snapshot_version, frozen_status))) {
+          *sql_proxy, snapshot_scn, frozen_status))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("get freeze info failed", K(ret), K(tablet_id));
     } else {
-      frozen_status.frozen_scn_ = 1L;
+      frozen_status.frozen_scn_ = palf::SCN::base_scn();
       ret = OB_SUCCESS;
     }
   }
@@ -361,7 +363,7 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
                                     ls_id,
                                     tablet_id, // TODO(shuangcan): confirm this
                                     build_param.write_major_ ? storage::MAJOR_MERGE : storage::MINOR_MERGE,
-                                    frozen_status.frozen_scn_))) {
+                                    frozen_status.frozen_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("init data store desc failed", K(ret), K(tablet_id));
   } else {
     // index builder is need for write macro meta block.
@@ -507,8 +509,7 @@ int ObSSTableInsertTabletContext::prepare_index_builder_if_need(const ObTableSch
                                     ls_handle_.get_ls()->get_ls_id(),
                                     build_param_.tablet_id_, // TODO(shuangcan): confirm this
                                     build_param_.write_major_ ? storage::MAJOR_MERGE : storage::MINOR_MERGE,
-                                    1L /*snapshot_version*/,
-                                    GET_MIN_CLUSTER_VERSION()))) {
+                                    1L))) {
     LOG_WARN("fail to init data desc", K(ret));
   } else {
     data_desc.row_column_count_ = data_desc.rowkey_column_count_ + 1;
@@ -675,48 +676,35 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(data_sstable_redo_writer_.write_prepare_log(table_key,
                                                                  table_schema->get_table_id(),
-                                                                 build_param_.execution_id_,
-                                                                 build_param_.ddl_task_id_,
+                                                                 build_param_.schema_version_,
                                                                  prepare_log_ts))) {
-    if (OB_TASK_EXPIRED == ret) {
-      LOG_INFO("ddl task expired", K(ret), K(table_key), K(build_param_));
-    } else {
-      LOG_WARN("fail write ddl prepare log", K(ret), K(table_key));
-    }
+    LOG_WARN("fail write ddl prepare log", K(ret), K(table_key));
   } else {
     DEBUG_SYNC(AFTER_REMOTE_WRITE_DDL_PREPARE_LOG);
     ObTabletHandle tablet_handle;
-    ObDDLKvMgrHandle ddl_kv_mgr_handle;
+    ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
     ObLS *ls = ls_handle_.get_ls();
     const ObLSID &ls_id = ls->get_ls_id();
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     const int64_t ddl_start_log_ts = data_sstable_redo_writer_.get_start_log_ts();
-    if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, tablet_id, tablet_handle))) {
+    if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_log_ts,
-                                                                prepare_log_ts,
-                                                                table_schema->get_table_id(),
-                                                                build_param_.ddl_task_id_))) {
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr))) {
+      LOG_WARN("get ddl kv manager failed", K(ret));
+    } else if (OB_FAIL(ddl_kv_mgr->ddl_prepare(ddl_start_log_ts,
+                                               prepare_log_ts,
+                                               table_schema->get_table_id(),
+                                               build_param_.schema_version_))) {
+      LOG_WARN("failed to do ddl kv prepare", K(ret), K(ddl_start_log_ts), K(prepare_log_ts), K(build_param_));
+    } else if (OB_FAIL(ddl_kv_mgr->wait_ddl_commit(ddl_start_log_ts, prepare_log_ts))) {
       if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired", K(ret), K(ls_id), K(tablet_id),
-            K(ddl_start_log_ts), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
-      } else {
-        LOG_WARN("failed to do ddl kv prepare", K(ret), K(ddl_start_log_ts), K(prepare_log_ts), K(build_param_));
-      }
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_log_ts, prepare_log_ts))) {
-      if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired", K(ret), K(ls_id), K(tablet_id),
-            K(ddl_start_log_ts), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_log_ts());
+        ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to wait ddl kv commit", K(ret), K(ddl_start_log_ts), K(build_param_));
       }
     } else if (OB_FAIL(data_sstable_redo_writer_.write_commit_log(table_key,
                                                                   prepare_log_ts))) {
       LOG_WARN("fail write ddl commit log", K(ret), K(table_key));
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(ddl_start_log_ts, ddl_kv_mgr_handle))) {
-      LOG_WARN("ddl kv mgr unregister failed", K(ret), K(build_param_));
     }
   }
   return ret;
@@ -734,7 +722,7 @@ int ObSSTableInsertTabletContext::get_table_key(ObITable::TableKey &table_key)
 
 ObSSTableInsertTableParam::ObSSTableInsertTableParam()
   : exec_ctx_(nullptr), context_id_(0), dest_table_id_(OB_INVALID_ID), write_major_(false), schema_version_(0),
-    snapshot_version_(0), task_cnt_(0), execution_id_(0), ddl_task_id_(0), ls_tablet_ids_()
+    snapshot_version_(0), task_cnt_(0), ls_tablet_ids_()
 {
 }
 
@@ -750,8 +738,6 @@ int ObSSTableInsertTableParam::assign(const ObSSTableInsertTableParam &other)
     schema_version_ = other.schema_version_;
     snapshot_version_ = other.snapshot_version_;
     task_cnt_ = other.task_cnt_;
-    execution_id_ = other.execution_id_;
-    ddl_task_id_ = other.ddl_task_id_;
     exec_ctx_ = other.exec_ctx_;
   }
   return ret;
@@ -820,8 +806,6 @@ int ObSSTableInsertTableContext::create_all_tablet_contexts(
         param.table_id_ = param_.dest_table_id_;
         param.write_major_ = param_.write_major_;
         param.task_cnt_ = param_.task_cnt_;
-        param.execution_id_ = param_.execution_id_;
-        param.ddl_task_id_ = param_.ddl_task_id_;
         if (OB_FAIL(tablet_ctx->init(param))) {
           LOG_WARN("init tablet insert sstable context", K(ret));
         } else if (OB_FAIL(tablet_ctx_map_.set_refactored(tablet_id, tablet_ctx))) {

@@ -24,12 +24,6 @@ set(CPACK_PACKAGE_VERSION_MINOR "${OceanBase_CE_VERSION_MINOR}")
 set(CPACK_PACKAGE_VERSION_PATCH "${OceanBase_CE_VERSION_PATCH}")
 set(CPACK_RPM_PACKAGE_URL "${OceanBase_CE_HOMEPAGE_URL}")
 set(CPACK_RPM_PACKAGE_RELEASE_DIST ON)
-## set relocation path install prefix for each component
-set(CPACK_RPM_DEVEL_PACKAGE_PREFIX /usr)
-set(CPACK_RPM_UTILS_PACKAGE_PREFIX /usr)
-list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home")
-list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin")
-list(APPEND CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "/home/admin/oceanbase")
 set(CPACK_RPM_PACKAGE_GROUP "Applications/Databases")
 set(CPACK_RPM_PACKAGE_DESCRIPTION "OceanBase is a distributed relational database")
 set(CPACK_RPM_PACKAGE_LICENSE "Mulan PubL v2.")
@@ -39,12 +33,8 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
   "%global _missing_build_ids_terminate_build 0
 %global _find_debuginfo_opts -g
 %define __strip ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-strip
-%undefine __brp_mangle_shebangs
 %define __debug_install_post %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}
-%if \\\"%name\\\" != \\\"oceanbase-ce-sql-parser\\\" && \\\"%name\\\" != \\\"oceanbase-sql-parser\\\"
-%debug_package
-%endif
-")
+%debug_package")
 
 ## TIPS
 #
@@ -66,6 +56,10 @@ install(FILES
   tools/upgrade/upgrade_post_checker.py
   tools/upgrade/upgrade_checker.py
   tools/upgrade/upgrade_cluster_health_checker.py
+  tools/upgrade/upgrade_rolling_pre.py
+  tools/upgrade/upgrade_rolling_post.py
+  tools/upgrade/priv_checker.py
+  tools/upgrade/mysql_to_ora_priv.py
   DESTINATION etc
   COMPONENT server)
 
@@ -75,7 +69,7 @@ install(
   COMPONENT server)
 
 ## oceanbase-cdc
-if (NOT OB_SO_CACHE AND OB_BUILD_CDC)
+if (NOT OB_SO_CACHE)
 include(GNUInstallDirs)
 install(
   TARGETS obcdc obcdc_tailf
@@ -103,13 +97,11 @@ install(
 endif()
 
 ## oceanbase-sql-parser
-if (OB_BUILD_LIBOB_SQL_PROXY_PARSER)
-  install(PROGRAMS
-    ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
-    DESTINATION lib
-    COMPONENT sql-parser
-    )
-endif()
+install(PROGRAMS
+  ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
+  DESTINATION lib
+  COMPONENT sql-parser
+  )
 
 install(FILES
   src/objit/include/objit/common/ob_item_type.h
@@ -120,6 +112,13 @@ install(FILES
   src/sql/parser/parse_node.h
   DESTINATION include
   COMPONENT sql-parser)
+
+## oceanbase-sql-parser
+install(PROGRAMS
+  ${CMAKE_BINARY_DIR}/src/sql/parser/libob_sql_proxy_parser_static.a
+  DESTINATION lib
+  COMPONENT sql-parser
+  )
 
 install(FILES
   src/objit/include/objit/common/ob_item_type.h
@@ -291,22 +290,20 @@ install(FILES
   COMPONENT table)
 
 install(FILES
-  src/libtable/examples/ob_pstore_example.cpp
-  src/libtable/examples/ob_kvtable_example.cpp
-  src/libtable/examples/ob_table_example.cpp
-  src/libtable/examples/example_makefile.mk
+  src/libtable//examples/ob_pstore_example.cpp
+  src/libtable//examples/ob_kvtable_example.cpp
+  src/libtable//examples/ob_table_example.cpp
+  src/libtable//examples/example_makefile.mk
   DESTINATION examples
   COMPONENT table)
 
-if (OB_BUILD_LIBOBTABLE)
-  install(PROGRAMS
-    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so
-    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1
-    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1.0.0
-    ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a
-    DESTINATION lib
-    COMPONENT table)
-endif()
+install(PROGRAMS
+  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so
+  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1
+  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable.so.1.0.0
+  ${CMAKE_BINARY_DIR}/src/libtable/src/libobtable_static.a
+  DESTINATION lib
+  COMPONENT table)
 
 ## oceanbase-libs
 install(PROGRAMS
@@ -318,15 +315,12 @@ install(PROGRAMS
   DESTINATION lib
   COMPONENT libs
 )
-if(OB_BUILD_OBMAIN)
-    ## oceanbase-utils
-    install(PROGRAMS
-      ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
-      ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
-      DESTINATION /usr/bin
-      COMPONENT utils
-    )
-  endif()
+## oceanbase-utils
+install(PROGRAMS
+  ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
+  DESTINATION /usr/bin
+  COMPONENT utils
+)
 
 # install cpack to make everything work
 include(CPack)
@@ -336,4 +330,4 @@ add_custom_target(rpm
   COMMAND +make package
   DEPENDS
   observer obcdc_tailf obtable obtable_static
-  ob_admin ob_error ob_sql_proxy_parser_static)
+  ob_admin ob_sql_proxy_parser_static)

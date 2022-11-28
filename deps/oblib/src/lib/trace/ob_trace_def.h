@@ -30,7 +30,7 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
       FLT_DEF_SPAN(resolve, "resolve syntax tree's semantics and generate statement")
       FLT_DEF_SPAN(rewrite, "transform statement")
       FLT_DEF_SPAN(optimize, "do cost-base optimization and generate log plan")
-      FLT_DEF_SPAN(code_generate, "generate physical plan according to log plan")
+      FLT_DEF_SPAN(code_generate, "generate physical plan accordding to log plan")
     FLT_DEF_SPAN(sql_execute, "execute physical plan")
       //TODO shengle code of open interface need refator
       FLT_DEF_SPAN(open, "open plan")
@@ -38,7 +38,7 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
         FLT_DEF_SPAN(px_schedule, "schedule tasks divided by px")
         FLT_DEF_SPAN(px_task, "execution of px's schedule")
       FLT_DEF_SPAN(close, "close plan")
-    FLT_DEF_SPAN(cmd_execute, "command execute")
+    FLT_DEF_SPAN(cmd_execute, "commmand execute")
       FLT_DEF_SPAN(cmd_open, "command open")
   // **** for sql end ****
 
@@ -48,7 +48,7 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
     FLT_DEF_SPAN(pc_get_pl_object, "get pl object from plan cache")
     FLT_DEF_SPAN(pc_add_pl_object, "add pl object to plan cache")
     FLT_DEF_SPAN(pl_execute, "execute pl object")
-      FLT_DEF_SPAN(pl_spi_query, "execute pl spi query")
+      FLT_DEF_SPAN(pl_spi_query, "exeute pl spi query")
       FLT_DEF_SPAN(pl_spi_prepare, "prepare phase of pl execution")
       FLT_DEF_SPAN(pl_spi_execute, "execute phase of pl execution")
   // **** for pl end ****
@@ -71,16 +71,6 @@ FLT_DEF_SPAN(com_query_process, "com_query process")
   FLT_DEF_SPAN(ps_execute, "execute phase of ps protocol")
   FLT_DEF_SPAN(ps_close, "close phase of ps protocol")
   // for ps end
-
-  // for das
-  FLT_DEF_SPAN(get_das_id, "fetch das task id")
-  FLT_DEF_SPAN(do_local_das_task, "execute local das task")
-  FLT_DEF_SPAN(do_remote_das_task, "execute remote das task")
-    FLT_DEF_SPAN(das_rpc_process, "das task rpc process")
-  FLT_DEF_SPAN(rescan_das_task, "rescan das task")
-  FLT_DEF_SPAN(close_das_task, "close das task")
-  FLT_DEF_SPAN(fetch_das_extra_result, "fetch das extra result")
-    FLT_DEF_SPAN(fetch_das_result_process, "fetch das result process")
 
 #endif // __HIGH_LEVEL_SPAN
 

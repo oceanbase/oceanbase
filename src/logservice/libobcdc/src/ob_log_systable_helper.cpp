@@ -20,6 +20,7 @@
 #include "common/ob_role.h"                                    // LEADER
 
 #include "share/inner_table/ob_inner_table_schema_constants.h" // OB_***_TNAME
+#include "share/ob_cluster_version.h"                          // GET_MIN_CLUSTER_VERSION
 #include "share/schema/ob_schema_struct.h"                     // TenantStatus
 #include "ob_log_config.h"                                     // ObLogConfig, TCONF
 #include "ob_log_utils.h"
@@ -45,6 +46,36 @@ namespace libobcdc
 {
 
 bool ISQLStrategy::g_is_replica_type_info_valid = true;
+
+bool is_cluster_version_be_equal_or_greater_than_200_()
+{
+  bool bool_ret = true;
+
+  // ob version: 2_0_0
+  bool_ret = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2000);
+
+  return bool_ret;
+}
+
+bool is_cluster_version_be_equal_or_greater_than_220_()
+{
+  bool bool_ret = true;
+
+  // ob version: 2_2_0
+  bool_ret = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2200);
+
+  return bool_ret;
+}
+
+bool is_cluster_version_be_equal_or_greater_than_320()
+{
+  bool bool_ret = true;
+
+  // ob version: 3_2_0
+  bool_ret = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3200);
+
+  return bool_ret;
+}
 
 ////////////////////////////////////// QueryClusterId /////////////////////////////////
 int QueryClusterIdStrategy::build_sql_statement(char *sql_buf,
@@ -98,9 +129,13 @@ int QueryTimeZoneInfoVersionStrategy::build_sql_statement(char *sql_buf,
   int ret = OB_SUCCESS;
   pos = 0;
   const char *query_sql = NULL;
-  const bool need_query_tenant_timezone_version = true;
+  const bool need_query_tenant_timezone_version = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260);
 
-  query_sql = "select value from __all_virtual_sys_stat where name='current_timezone_version' and tenant_id=";
+  if (need_query_tenant_timezone_version) {
+    query_sql = "select value from __all_virtual_sys_stat where name='current_timezone_version' and tenant_id=";
+  } else {
+    query_sql = "select value from __all_zone where name='time_zone_info_version';";
+  }
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     LOG_ERROR("invalid argument", K(sql_buf), K(mul_statement_buf_len));
     ret = OB_INVALID_ARGUMENT;
@@ -1360,8 +1395,8 @@ int ObLogSysTableHelper::change_to_next_server_(const int64_t svr_idx, ObLogMySQ
   // update connection
   ObAddr svr;
   MySQLConnConfig conn_config;
-  int mysql_connect_timeout_sec = TCONF.rs_sql_connect_timeout_sec;
-  int mysql_query_timeout_sec = TCONF.rs_sql_query_timeout_sec;
+  int mysql_connect_timeout_sec = TCONF.mysql_connect_timeout_sec;
+  int mysql_query_timeout_sec = TCONF.mysql_query_timeout_sec;
   const bool enable_ssl_client_authentication = (1 == TCONF.ssl_client_authentication);
 
   if (OB_ISNULL(svr_provider_)) {

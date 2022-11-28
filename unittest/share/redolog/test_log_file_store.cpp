@@ -595,7 +595,7 @@ TEST_F(TestLogFileStore, errsim_disk_full)
 
   // make write return disk full
 #ifdef ERRSIM
-  // OB_SERVER_OUTOF_DISK_SPACE is not defined in lib/ob_errno.h, use OB_RESOURCE_OUT to represent
+  // OB_CS_OUTOF_DISK_SPACE is not defined in lib/ob_errno.h, use OB_RESOURCE_OUT to represent
   TP_SET_EVENT(EventTable::EN_IO_GETEVENTS, OB_RESOURCE_OUT, 0, 1);
   usleep(100 * 1000);
 #endif
@@ -611,7 +611,7 @@ TEST_F(TestLogFileStore, errsim_disk_full)
   ret = file_store.write((void *) buf, count, 0);
 
 #ifdef ERRSIM
-  ASSERT_EQ(OB_SERVER_OUTOF_DISK_SPACE, ret);
+  ASSERT_EQ(OB_CS_OUTOF_DISK_SPACE, ret);
 #else
   ASSERT_EQ(OB_SUCCESS, ret);
 #endif

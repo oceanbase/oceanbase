@@ -15,7 +15,6 @@
 #include "ob_log_operator_factory.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_join_order.h"
-#include "common/ob_smart_call.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -61,7 +60,7 @@ int ObLogMaterial::re_est_cost(EstimateCostInfo &param, double &card, double &co
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
   } else if (OB_FALSE_IT(param.need_row_count_ = child->get_card())) {
-  } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+  } else if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
     LOG_WARN("failed to re est cost", K(ret));
   } else {
     double op_cost = 0.0;

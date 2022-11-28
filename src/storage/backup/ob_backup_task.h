@@ -56,10 +56,10 @@ struct ObLSBackupDagNetInitParam : public share::ObIDagInitParam {
   int64_t turn_id_;
   int64_t retry_id_;
   ObBackupReportCtx report_ctx_;
-  share::ObBackupSCN start_scn_;               // for backup meta
+  palf::SCN start_scn_;               // for backup meta
   share::ObBackupDataType backup_data_type_;   // for build index
-  share::ObBackupSCN compl_start_scn_;         // for complemnt log
-  share::ObBackupSCN compl_end_scn_;           // for complemet log
+  palf::SCN compl_start_scn_;         // for complemnt log
+  palf::SCN compl_end_scn_;           // for complemet log
 };
 
 struct ObLSBackupDagInitParam : public share::ObIDagInitParam {
@@ -128,7 +128,7 @@ private:
   bool is_inited_;
   ObLSBackupDagInitParam param_;
   ObBackupReportCtx report_ctx_;
-  share::ObBackupSCN start_scn_;
+  palf::SCN start_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupMetaDagNet);
 };
 
@@ -210,8 +210,8 @@ private:
   bool is_inited_;
   ObLSBackupDagInitParam param_;
   ObBackupReportCtx report_ctx_;
-  share::ObBackupSCN compl_start_scn_;
-  share::ObBackupSCN compl_end_scn_;
+  palf::SCN compl_start_scn_;
+  palf::SCN compl_end_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogDagNet);
 };
 
@@ -231,7 +231,7 @@ class ObLSBackupMetaDag : public ObBackupDag {
 public:
   ObLSBackupMetaDag();
   virtual ~ObLSBackupMetaDag();
-  int init(const share::ObBackupSCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx);
+  int init(const palf::SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
@@ -242,7 +242,7 @@ public:
 
 private:
   bool is_inited_;
-  share::ObBackupSCN start_scn_;
+  palf::SCN start_scn_;
   ObLSBackupDagInitParam param_;
   ObBackupReportCtx report_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupMetaDag);
@@ -385,7 +385,7 @@ public:
   virtual ~ObLSBackupComplementLogDag();
   int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t turn_id, 
-      const int64_t retry_id, const int64_t start_ts, const int64_t end_ts, const ObBackupReportCtx &report_ctx);
+      const int64_t retry_id, const palf::SCN &start_scn, const palf::SCN &end_scn, const ObBackupReportCtx &report_ctx);
   virtual int create_first_task() override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
@@ -402,8 +402,8 @@ private:
   share::ObLSID ls_id_;
   int64_t turn_id_;
   int64_t retry_id_;
-  share::ObBackupSCN compl_start_scn_;
-  share::ObBackupSCN compl_end_scn_;
+  palf::SCN compl_start_scn_;
+  palf::SCN compl_end_scn_;
   ObBackupReportCtx report_ctx_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogDag);
@@ -413,23 +413,23 @@ class ObLSBackupMetaTask : public share::ObITask {
 public:
   ObLSBackupMetaTask();
   virtual ~ObLSBackupMetaTask();
-  int init(const share::ObBackupSCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx);
+  int init(const palf::SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx);
   virtual int process() override;
 
 private:
-  int advance_checkpoint_by_flush_(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::ObBackupSCN &start_scn);
+  int advance_checkpoint_by_flush_(const uint64_t tenant_id, const share::ObLSID &ls_id, const palf::SCN &start_scn);
   int get_backup_meta_ctx_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       ObBackupLSMetaInfo &ls_meta_info, common::ObArray<common::ObTabletID> &tablet_id_list);
   int backup_ls_meta_package_(const ObBackupLSMetaInfo &ls_meta_info);
   int backup_ls_tablet_list_(
-      const int64_t gts, const share::ObLSID &ls, const common::ObIArray<common::ObTabletID> &tablet_id_list);
-  int build_backup_data_ls_tablet_desc_(const share::ObLSID &ls_id, const int64_t gts,
+      const palf::SCN &scn, const share::ObLSID &ls, const common::ObIArray<common::ObTabletID> &tablet_id_list);
+  int build_backup_data_ls_tablet_desc_(const share::ObLSID &ls_id, const palf::SCN &scn,
       const common::ObIArray<common::ObTabletID> &tablet_id, share::ObBackupDataTabletToLSDesc &info);
 
 
 private:
   bool is_inited_;
-  share::ObBackupSCN start_scn_;
+  palf::SCN start_scn_;
   ObLSBackupDagInitParam param_;
   ObBackupReportCtx report_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupMetaTask);
@@ -447,14 +447,6 @@ public:
 private:
   int may_need_advance_checkpoint_();
   int fetch_backup_ls_meta_(int64_t &rebuild_seq, int64_t &clog_checkpoint_ts);
-  int check_tx_data_can_explain_user_data_();
-  int get_backup_tx_data_table_filled_tx_log_ts_(int64_t &filled_tx_log_ts);
-  int prepare_meta_index_store_(ObBackupMetaIndexStore &meta_index_store);
-  int get_sys_ls_retry_id_(int64_t &retry_id);
-  int prepare_meta_index_store_param_(const int64_t retry_id, ObBackupIndexStoreParam &param);
-  int get_cur_ls_min_filled_tx_log_ts_(int64_t &min_filled_tx_log_ts);
-  int get_tablet_min_filled_tx_log_ts_(ObTabletHandle &tablet_handle,
-      int64_t &min_filled_tx_log_ts, bool &has_minor_sstable);
 
 private:
   bool is_inited_;
@@ -673,24 +665,24 @@ public:
   ObLSBackupComplementLogTask();
   virtual ~ObLSBackupComplementLogTask();
   int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
-      const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t start_ts,
-      const int64_t end_ts, const int64_t turn_id, const int64_t retry_id, const ObBackupReportCtx &report_ctx);
+      const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const palf::SCN &start_scn,
+      const palf::SCN &end_scn, const int64_t turn_id, const int64_t retry_id, const ObBackupReportCtx &report_ctx);
   virtual int process() override;
 
 private:
   int get_complement_log_dir_path_(share::ObBackupPath &backup_path);
   int calc_backup_file_range_(common::ObIArray<BackupPieceFile> &file_list);
   int check_pieces_continue_(const common::ObIArray<share::ObTenantArchivePieceAttr> &rounds);
-  int get_piece_id_by_ts_(const uint64_t tenant_id, const int64_t ts, int64_t &piece_id);
+  int get_piece_id_by_ts_(const uint64_t tenant_id, const palf::SCN &scn, int64_t &piece_id);
   int get_all_pieces_(const uint64_t tenant_id, const int64_t start_piece_id, const int64_t end_piece_id,
       common::ObArray<share::ObTenantArchivePieceAttr> &piece_list);
   int get_all_piece_file_list_(const uint64_t tenant_id,
-      const common::ObIArray<share::ObTenantArchivePieceAttr> &piece_list, const int64_t start_ts, const int64_t end_ts,
+      const common::ObIArray<share::ObTenantArchivePieceAttr> &piece_list, const palf::SCN &start_scn, const palf::SCN &end_scn,
       common::ObIArray<BackupPieceFile> &piece_file_list);
   int inner_get_piece_file_list_(
       const int64_t round_id, const int64_t piece_id, common::ObIArray<BackupPieceFile> &piece_file_list);
   int locate_archive_file_id_by_ts_(const uint64_t tenant_id, const int64_t round_id, const int64_t piece_id,
-      const int64_t ts, const bool is_upper_bound, int64_t &file_id);
+      const palf::SCN &scn, const bool is_upper_bound, int64_t &file_id);
   int filter_file_id_smaller_than_(const int64_t file_id, common::ObIArray<BackupPieceFile> &list);
   int filter_file_id_larger_than_(const int64_t file_id, common::ObIArray<BackupPieceFile> &list);
   int get_src_backup_piece_dir_(const int64_t round_id, const int64_t piece_id, share::ObBackupPath &backup_path);
@@ -711,8 +703,8 @@ private:
   uint64_t tenant_id_;
   share::ObBackupSetDesc backup_set_desc_;
   share::ObLSID ls_id_;
-  share::ObBackupSCN compl_start_scn_;
-  share::ObBackupSCN compl_end_scn_;
+  palf::SCN compl_start_scn_;
+  palf::SCN compl_end_scn_;
   int64_t turn_id_;
   int64_t retry_id_;
 

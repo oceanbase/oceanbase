@@ -160,7 +160,8 @@ public:
   inline void set_can_direct_use_param(bool v) { can_direct_use_param_ = v; }
   inline void set_ps_stmt_checksum(uint64_t ps_checksum) { ps_stmt_checksum_ = ps_checksum; }
   inline uint64_t get_ps_stmt_checksum() const { return ps_stmt_checksum_; }
-
+  inline void set_is_dynamic_sql(const bool is_dynamic_sql) { is_dynamic_sql_ = is_dynamic_sql; }
+  inline bool get_is_dynamic_sql() const { return is_dynamic_sql_; }
   inline void set_num_of_returning_into(int32_t num_of_returning_into)
   { num_of_returning_into_ = num_of_returning_into; }
   inline int32_t get_num_of_returning_into() const { return num_of_returning_into_; }
@@ -245,6 +246,7 @@ private:
   common::ObIAllocator *allocator_;
   //指向ObPsPlancache中的inner_allocator_, 用于释放整个ObPsStmtItem的内存
   common::ObIAllocator *external_allocator_;
+  bool is_dynamic_sql_;
   int32_t num_of_returning_into_;
   common::ObString no_param_sql_;
   bool is_sensitive_sql_;

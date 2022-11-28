@@ -102,7 +102,7 @@ public:
   virtual int inner_close() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
-  virtual int transmit();
+  virtual int do_transmit() = 0;
 public:
   int init_channel(ObPxTransmitOpInput &trans_input);
   int init_dfc(dtl::ObDtlDfoKey &parent_key, dtl::ObDtlSqcInfo &child_info);
@@ -111,7 +111,6 @@ public:
   common::ObIArray<dtl::ObDtlChannel *> &get_task_channels() { return task_channels_; }
   void set_batch_param_remain(bool batch_param_remain) { batch_param_remain_ = batch_param_remain; }
 protected:
-  virtual int do_transmit() = 0;
   int init_channels_cur_block(common::ObIArray<dtl::ObDtlChannel*> &dtl_chs);
 protected:
   int link_ch_sets(ObPxTaskChSet &ch_set,

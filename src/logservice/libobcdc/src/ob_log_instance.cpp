@@ -398,10 +398,8 @@ int ObLogInstance::init_logger_()
   if (OB_FAIL(common::FileDirectoryUtils::create_full_path(log_dir))) {
     LOG_ERROR("FileDirectoryUtils create_full_path fail", KR(ret), K(log_dir));
   } else {
-    const int64_t max_log_file_count = TCONF.max_log_file_count;
     easy_log_level = EASY_LOG_INFO;
     OB_LOGGER.set_max_file_size(MAX_LOG_FILE_SIZE);
-    OB_LOGGER.set_max_file_index(max_log_file_count);
     OB_LOGGER.set_file_name(log_file, disable_redirect_log_, false);
     OB_LOGGER.set_log_level("INFO");
     OB_LOGGER.disable_thread_log_level();
@@ -732,10 +730,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const char *tg_white_list = TCONF.tablegroup_white_list.str();
   const char *tg_black_list = TCONF.tablegroup_black_list.str();
   int64_t max_cached_trans_ctx_count = MAX_CACHED_TRANS_CTX_COUNT;
-  int64_t rs_sql_conn_timeout_us = TCONF.rs_sql_connect_timeout_sec * _SEC_;
-  int64_t rs_sql_query_timeout_us = TCONF.rs_sql_query_timeout_sec * _SEC_;
-  int64_t tenant_sql_conn_timeout_us = TCONF.tenant_sql_connect_timeout_sec * _SEC_;
-  int64_t tenant_sql_query_timeout_us = TCONF.tenant_sql_query_timeout_sec * _SEC_;
+  int64_t sql_conn_timeout_us = TCONF.mysql_connect_timeout_sec * _SEC_;
+  int64_t sql_query_timeout_us = TCONF.mysql_query_timeout_sec * _SEC_;
   const char *ob_trace_id_ptr = TCONF.ob_trace_id.str();
   const char *drc_message_factory_binlog_record_type_str = TCONF.drc_message_factory_binlog_record_type.str();
   // The starting schema version of the SYS tenant
@@ -796,10 +792,10 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   // init ObLogMysqlProxy
   if (OB_SUCC(ret)) {
     if (OB_FAIL(mysql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
-        rs_sql_conn_timeout_us, rs_sql_query_timeout_us, enable_ssl_client_authentication, rs_server_provider_))) {
+        sql_conn_timeout_us, sql_query_timeout_us, enable_ssl_client_authentication, rs_server_provider_))) {
       LOG_ERROR("mysql_proxy_ init fail", KR(ret), K(rs_server_provider_),
-          K(cluster_user), K(cluster_password), K(cluster_db_name), K(rs_sql_conn_timeout_us),
-          K(rs_sql_query_timeout_us), K(enable_ssl_client_authentication));
+          K(cluster_user), K(cluster_password), K(cluster_db_name), K(sql_conn_timeout_us),
+          K(sql_query_timeout_us), K(enable_ssl_client_authentication));
     }
   }
 
@@ -834,11 +830,11 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   // init ObLogTenantSQLProxy
   if (OB_SUCC(ret)) {
     if (OB_FAIL(tenant_sql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
-        tenant_sql_conn_timeout_us, tenant_sql_query_timeout_us, enable_ssl_client_authentication,
+        sql_conn_timeout_us, sql_query_timeout_us, enable_ssl_client_authentication,
         tenant_server_provider_, true/*is_tenant_server_provider*/))) {
       LOG_ERROR("tenant_sql_proxy_ init fail", KR(ret), K(tenant_server_provider_),
-          K(cluster_user), K(cluster_password), K(cluster_db_name), K(tenant_sql_conn_timeout_us),
-          K(tenant_sql_query_timeout_us), K(enable_ssl_client_authentication));
+          K(cluster_user), K(cluster_password), K(cluster_db_name), K(sql_conn_timeout_us),
+          K(sql_query_timeout_us), K(enable_ssl_client_authentication));
     }
   }
 
@@ -1987,10 +1983,8 @@ void ObLogInstance::reload_config_()
   if (OB_FAIL(config.load_from_file(default_config_fpath))) {
     LOG_ERROR("load_from_file fail", KR(ret), K(default_config_fpath));
   } else {
-    const int64_t max_log_file_count = config.max_log_file_count;
-    LOG_INFO("reset log config", "log_level", config.log_level.str(), K(max_log_file_count));
+    LOG_INFO("reset log level", "log_level", config.log_level.str());
     OB_LOGGER.set_mod_log_levels(config.log_level.str());
-    OB_LOGGER.set_max_file_index(max_log_file_count);
 
     ATOMIC_STORE(&log_clean_cycle_time_us_, config.log_clean_cycle_time_in_hours * _HOUR_);
 
@@ -2417,7 +2411,7 @@ int ObLogInstance::get_task_count_(int64_t &ready_to_seq_task_count,
             committer_pending_dml_trans_count,
             committer_ddl_part_trans_task_count,
             committer_dml_part_trans_task_count);
-        _LOG_INFO("[TASK_COUNT_STAT] [USER_QUEUE] [PART_TRANS_TASK=%ld] [DDL_BR=%ld] [DML_BR=%ld]",
+        _LOG_INFO("[TASK_COUNT_STAT] [USER_QUEQUE] [PART_TRANS_TASK=%ld] [DDL_BR=%ld] [DML_BR=%ld]",
             br_queue_part_trans_task_count,
             ddl_br_count_in_user_queue,
             dml_br_count_in_user_queue);

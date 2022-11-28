@@ -707,8 +707,6 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
             // set current time before do pre calculation
           } else if (FALSE_IT(phy_plan_ctx.set_cur_time(ObTimeUtility::current_time(), *session))) {
             // do nothing
-          } else if (FALSE_IT(phy_plan_ctx.set_last_trace_id(session->get_last_trace_id()))) {
-            // do nothing
           } else if (OB_FAIL(ObPlanCacheObject::pre_calculation(false,
                                                                 *pre_calc_frame,
                                                                 exec_ctx))) {
@@ -997,7 +995,13 @@ int ObSQLUtils::check_and_convert_db_name(const ObCollationType cs_type, const b
   ObString origin_name = name;
   int64_t name_len = name.length();
   const char *name_str = name.ptr();
-  int32_t max_database_name_length = OB_MAX_DATABASE_NAME_LENGTH;
+  /**
+   * 在2.2.20版本上将命名长度比较逻辑由大于等于128字节时报错调整为大于128字节时报错后, 2.2.20以上版本
+   * 数据库名长度可以为128字节。 升级过程中高版本server序列化session info到低版本server时, 如果数据
+   * 库名长度为128字节会存在兼容性问题。 因此在升级过程中限制数据库名长度不超过127字节
+   */
+  int32_t max_database_name_length = GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION ?
+              OB_MAX_DATABASE_NAME_LENGTH - 1 : OB_MAX_DATABASE_NAME_LENGTH;
   if (0 == name_len || name_len > (max_database_name_length * OB_MAX_CHAR_LEN)) {
     ret = OB_WRONG_DB_NAME;
     LOG_USER_ERROR(OB_WRONG_DB_NAME, static_cast<int32_t>(name_len), name_str);
@@ -4388,37 +4392,24 @@ int ObSQLUtils::create_multi_stmt_param_store(common::ObIAllocator &allocator,
   return ret;
 }
 
-int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, ParamStore &obj_params)
+int ObSQLUtils::get_one_group_params(int64_t pos, ParamStore &src, ParamStore &obj_params)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); ++i) {
     ObObjParam &obj = src.at(i);
     pl::ObPLCollection *coll = NULL;
     ObObj *data = NULL;
-    if (OB_UNLIKELY(!obj.is_ext())) {
-      OZ (obj_params.push_back(obj));
-    } else {
-      CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
-      CK (coll->get_count() > actual_pos);
-      CK (1 == coll->get_column_count());
-      CK (OB_NOT_NULL(data = reinterpret_cast<ObObj*>(coll->get_data())));
-      if (OB_SUCC(ret)) {
-        bool is_del = true;
-        for (; OB_SUCC(ret) && is_del;) {
-          OZ (coll->is_elem_deleted(actual_pos, is_del));
-          if (is_del) {
-            ++actual_pos;
-          }
-        }
-        OX (obj_params.push_back(*(data + actual_pos)));
-      }
-    }
+    CK (obj.is_ext());
+    CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
+    CK (coll->get_count() > pos);
+    CK (1 == coll->get_column_count());
+    CK (OB_NOT_NULL(data = reinterpret_cast<ObObj*>(coll->get_data())));
+    OX (obj_params.push_back(*(data + pos)));
   }
   return ret;
 }
 
-int ObSQLUtils::copy_params_to_array_params(int64_t query_pos, ParamStore &src, ParamStore &dst,
-                                            ObIAllocator &alloc, bool is_forall)
+int ObSQLUtils::copy_params_to_array_params(int64_t query_pos, ParamStore &src, ParamStore &dst)
 {
   int ret = OB_SUCCESS;
   for (int64_t j = 0; OB_SUCC(ret) && j < dst.count(); j++) {
@@ -4432,11 +4423,7 @@ int ObSQLUtils::copy_params_to_array_params(int64_t query_pos, ParamStore &src, 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), KPC(array_params));
     } else {
-      ObObjParam new_param = src.at(j);
-      if (is_forall) {
-        OZ (deep_copy_obj(alloc, src.at(j), new_param));
-      }
-      array_params->data_[query_pos] = new_param;
+      array_params->data_[query_pos] = src.at(j);
     }
   }
   return ret;
@@ -4451,24 +4438,19 @@ int ObSQLUtils::init_elements_info(ParamStore &src, ParamStore &dst)
     ObObjParam &obj = src.at(i);
     pl::ObPLCollection *coll = NULL;
     ObObj *data = NULL;
+    CK (obj.is_ext());
+    CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
     CK (dst.at(i).is_ext_sql_array());
     CK (OB_NOT_NULL(array_params = reinterpret_cast<ObSqlArrayObj*>(dst.at(i).get_ext())));
-    if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(!obj.is_ext())) {
-      array_params->element_.set_meta_type(obj.get_meta());
-      array_params->element_.set_accuracy(obj.get_accuracy());
-    } else {
-      CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
-      if (OB_SUCC(ret)) {
-        array_params->element_ = coll->get_element_type();
-      }
+    if (OB_SUCC(ret)) {
+      array_params->element_ = coll->get_element_type();
     }
   }
   return ret;
 }
 
 int ObSQLUtils::transform_pl_ext_type(
-    ParamStore &src, int64_t array_binding_size, ObIAllocator &alloc, ParamStore *&dst, bool is_forall)
+    ParamStore &src, int64_t array_binding_size, ObIAllocator &alloc, ParamStore *&dst)
 {
   int ret = OB_SUCCESS;
   ParamStore *ps_ab_params = NULL;
@@ -4487,14 +4469,13 @@ int ObSQLUtils::transform_pl_ext_type(
     ObArenaAllocator tmp_alloc;
     ParamStore temp_obj_params((ObWrapperAllocator(tmp_alloc)));
     int64_t N = src.count();
-    int64_t actual_pos = 0;
-    for (int64_t query_pos = 0; OB_SUCC(ret) && query_pos < array_binding_size; ++query_pos, ++actual_pos) {
+    for (int64_t query_pos = 0; OB_SUCC(ret) && query_pos < array_binding_size; ++query_pos) {
       temp_obj_params.reuse();
       if (OB_FAIL(temp_obj_params.reserve(N))) {
         LOG_WARN("fail to reverse params_store", K(ret));
-      } else if (OB_FAIL(get_one_group_params(actual_pos, src, temp_obj_params))) {
-        LOG_WARN("get one group params failed", K(ret), K(actual_pos));
-      } else if (OB_FAIL(copy_params_to_array_params(query_pos, temp_obj_params, *dst, alloc, is_forall))) {
+      } else if (OB_FAIL(get_one_group_params(query_pos, src, temp_obj_params))) {
+        LOG_WARN("get one group params failed", K(ret), K(query_pos));
+      } else if (OB_FAIL(copy_params_to_array_params(query_pos, temp_obj_params, *dst))) {
         LOG_WARN("copy params to array params failed", K(ret), K(query_pos));
       } else if (query_pos == 0) {
         if (OB_FAIL(init_elements_info(src, *dst))) {

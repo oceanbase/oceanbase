@@ -114,7 +114,6 @@ public:
                          ObString &output_str);
 
 private:
-  const static char *EMPTY_STR;
   bool inited_;
   ObMySQLProxy* mysql_proxy_;
 };

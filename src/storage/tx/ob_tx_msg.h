@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_TRANSACTION_OB_TX_MSG_
 #define OCEANBASE_TRANSACTION_OB_TX_MSG_
 
+#include "logservice/palf/scn.h"
 #include "share/ob_define.h"
 #include "ob_trans_define.h"
 #include "share/rpc/ob_batch_proxy.h"
@@ -51,8 +52,7 @@ namespace transaction
       TX_2PC_CLEAR_RESP        = 53,
       /* for others */
       ROLLBACK_SAVEPOINT       = 60,
-      KEEPALIVE                = 61,
-      KEEPALIVE_RESP           = 62
+      KEEPALIVE                = 61
     };
 
     struct ObTxMsg : public obrpc::ObIFill
@@ -204,10 +204,9 @@ namespace transaction
 
     struct ObTxCommitRespMsg : public ObTxMsg {
       ObTxCommitRespMsg() :
-          ObTxMsg(TX_COMMIT_RESP),
-          commit_version_(OB_INVALID_TIMESTAMP)
+          ObTxMsg(TX_COMMIT_RESP)
       {}
-      int64_t commit_version_;
+      palf::SCN commit_version_;
       int ret_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(commit_version));
@@ -262,16 +261,6 @@ namespace transaction
       OB_UNIS_VERSION(1);
     };
 
-    struct ObTxKeepaliveRespMsg : public ObTxMsg {
-      ObTxKeepaliveRespMsg() :
-          ObTxMsg(KEEPALIVE_RESP)
-      {}
-      int64_t status_;
-      bool is_valid() const;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(status));
-      OB_UNIS_VERSION(1);
-    };
-    
     struct Ob2pcPrepareReqMsg : public ObTxMsg
     {
     public:
@@ -292,11 +281,10 @@ namespace transaction
     public:
       Ob2pcPrepareRespMsg() :
           ObTxMsg(TX_2PC_PREPARE_RESP),
-          prepare_version_(OB_INVALID_TIMESTAMP),
           prepare_info_array_()
       {}
     public:
-      int64_t prepare_version_;
+      palf::SCN prepare_version_;
       ObLSLogInfoArray prepare_info_array_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(prepare_version), K_(prepare_info_array));
@@ -307,11 +295,10 @@ namespace transaction
     {
     public:
       Ob2pcPreCommitReqMsg() :
-          ObTxMsg(TX_2PC_PRE_COMMIT_REQ),
-          commit_version_(OB_INVALID_TIMESTAMP)
+          ObTxMsg(TX_2PC_PRE_COMMIT_REQ)
       {}
     public:
-      int64_t commit_version_;
+      palf::SCN commit_version_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version));
       OB_UNIS_VERSION(1);
@@ -321,14 +308,13 @@ namespace transaction
     {
     public:
       Ob2pcPreCommitRespMsg() :
-          ObTxMsg(TX_2PC_PRE_COMMIT_RESP),
-          commit_version_(OB_INVALID_TIMESTAMP)
+          ObTxMsg(TX_2PC_PRE_COMMIT_RESP)
       {}
     public:
       //set commit_version when the root participant 
       //which recover from prepare log recive a pre_commit response 
       //because the coord_state_ will be set as pre_commit
-      int64_t commit_version_;
+      palf::SCN commit_version_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version));
       OB_UNIS_VERSION(1);
@@ -339,11 +325,10 @@ namespace transaction
     public:
       Ob2pcCommitReqMsg() :
           ObTxMsg(TX_2PC_COMMIT_REQ),
-          commit_version_(OB_INVALID_TIMESTAMP),
           prepare_info_array_()
       {}
     public:
-      int64_t commit_version_;
+      palf::SCN commit_version_;
       ObLSLogInfoArray prepare_info_array_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version), K_(prepare_info_array));
@@ -354,12 +339,11 @@ namespace transaction
     {
     public:
       Ob2pcCommitRespMsg() :
-          ObTxMsg(TX_2PC_COMMIT_RESP),
-          commit_version_(OB_INVALID_TIMESTAMP)
+          ObTxMsg(TX_2PC_COMMIT_RESP)
       {}
     public:
       bool is_valid() const;
-      int64_t commit_version_;
+      palf::SCN commit_version_;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(commit_version));
       OB_UNIS_VERSION(1);
     };
@@ -453,11 +437,10 @@ namespace transaction
     public:
       Ob2pcPrepareVersionRespMsg() :
           ObTxMsg(TX_2PC_PREPARE_VERSION_RESP),
-          prepare_version_(OB_INVALID_TIMESTAMP),
           prepare_info_array_()
       {}
     public:
-      int64_t prepare_version_;
+      palf::SCN prepare_version_;
       ObLSLogInfoArray prepare_info_array_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(prepare_version), K_(prepare_info_array));
@@ -473,7 +456,7 @@ namespace transaction
             || (20 <= msg_type && 22 >= msg_type)
             || (40 <= msg_type && 49 >= msg_type)
             || (50 <= msg_type && 53 >= msg_type)
-            || (60 <= msg_type && 62 >= msg_type));
+            || (60 <= msg_type && 61 >= msg_type));
       }
 
       static bool is_2pc_msg_type(const int16_t msg_type)

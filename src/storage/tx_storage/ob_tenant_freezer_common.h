@@ -49,32 +49,6 @@ struct ObRetryMajorInfo
   TO_STRING_KV(K_(tenant_id), K_(frozen_scn));
 };
 
-// store a snapshot of the tenant info to make sure
-// the tenant_info will be a atomic value
-struct ObTenantFreezeCtx final
-{
-public:
-  ObTenantFreezeCtx();
-  ~ObTenantFreezeCtx() { reset(); }
-  void reset();
-public:
-  // snapshot of tenant_info
-  int64_t mem_lower_limit_;
-  int64_t mem_upper_limit_;
-  int64_t mem_memstore_limit_;
-
-  // running data
-  int64_t memstore_freeze_trigger_;
-  int64_t max_mem_memstore_can_get_now_;
-  int64_t kvcache_mem_;
-
-  int64_t active_memstore_used_;
-  int64_t total_memstore_used_;
-  int64_t total_memstore_hold_;
-private:
-  DISABLE_COPY_ASSIGN(ObTenantFreezeCtx);
-};
-
 // store the tenant info, such as memory limit, memstore limit,
 // slow freeze flag, freezing flag and so on.
 class ObTenantInfo : public ObDLinkBase<ObTenantInfo>
@@ -85,14 +59,13 @@ public:
   void reset();
   int update_frozen_scn(int64_t frozen_scn);
   int64_t mem_memstore_left() const;
-
-  void update_mem_limit(const int64_t lower_limit, const int64_t upper_limit);
-  void get_mem_limit(int64_t &lower_limit, int64_t &upper_limit) const;
-  void update_memstore_limit(const int64_t memstore_limit_percentage);
-  int64_t get_memstore_limit() const;
-  void get_freeze_ctx(ObTenantFreezeCtx &ctx) const;
 public:
   uint64_t tenant_id_;
+  int64_t mem_lower_limit_;    // the min memory limit
+  int64_t mem_upper_limit_;    // the max memory limit
+  // mem_memstore_limit will be checked when **leader** partitions
+  // perform writing operation (select for update is included)
+  int64_t mem_memstore_limit_; // the max memstore limit
   bool is_loaded_;             // whether the memory limit set or not.
   bool is_freezing_;           // is the tenant freezing now.
   int64_t last_freeze_clock_;
@@ -103,15 +76,6 @@ public:
   int64_t slow_freeze_timestamp_; // the last slow freeze time timestamp
   int64_t slow_freeze_min_protect_clock_;
   common::ObTabletID slow_tablet_;
-private:
-  // protect mem_lower_limit_/mem_upper_limit_/mem_memstore_limit_
-  // to make sure it is consistency
-  SpinRWLock lock_;
-  int64_t mem_lower_limit_;    // the min memory limit
-  int64_t mem_upper_limit_;    // the max memory limit
-  // mem_memstore_limit will be checked when **leader** partitions
-  // perform writing operation (select for update is included)
-  int64_t mem_memstore_limit_; // the max memstore limit
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantInfo);
 };

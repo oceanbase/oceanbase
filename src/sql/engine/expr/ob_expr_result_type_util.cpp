@@ -40,7 +40,7 @@ using namespace share;
 namespace sql
 {
 
-const int64_t MAX_NUMBER_BUFFER_SIZE_IN_TYPE_UTIL = 40;
+const int64_t MAX_NUMBER_BUFFER_SIZE = 40;
 
 using ArithOp = ObArithResultTypeMap::OP;
 int ObExprResultTypeUtil::get_relational_cmp_type(ObExprResType &res_type,
@@ -761,7 +761,7 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
       if (orig_type.is_null()) {
         // do nothing
       } else if (orig_type.is_numeric_type()) {
-        ascii_bytes = MAX_NUMBER_BUFFER_SIZE_IN_TYPE_UTIL;
+        ascii_bytes = MAX_NUMBER_BUFFER_SIZE;
       } else if (orig_type.is_datetime()
                  || orig_type.is_otimestamp_type()) {
         // deduce by format

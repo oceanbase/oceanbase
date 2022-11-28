@@ -109,7 +109,6 @@ public:
     conflict_checker_.destroy();
     insert_up_rtdefs_.release_array();
     insert_up_row_store_.~ObChunkDatumStore();
-    upd_rtctx_.cleanup();
     ObTableModifyOp::destroy();
   }
 

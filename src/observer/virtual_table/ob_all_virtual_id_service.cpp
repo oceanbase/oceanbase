@@ -38,8 +38,8 @@ void ObAllVirtualIDService::reset()
   cur_tenant_id_ = 0;
   last_id_ = 0;
   limit_id_ = 0;
-  rec_log_ts_ = 0;
-  latest_log_ts_ = 0;
+  rec_log_ts_.reset();
+  latest_log_ts_.reset();
   pre_allocated_range_ = 0;
   submit_log_ts_ = 0;
   is_master_ = false;
@@ -186,13 +186,12 @@ int ObAllVirtualIDService::inner_get_next_row(ObNewRow *&row)
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 6: { // rec_log_ts
-        uint64_t v = rec_log_ts_ < 0 ? 0 : rec_log_ts_;
+        uint64_t v = rec_log_ts_.is_valid() ? rec_log_ts_.get_val_for_inner_table_field() : 0;
         cur_row_.cells_[i].set_uint64(v);
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 7: { // latest_log_ts
-        //TODO:SCN
-        uint64_t v = latest_log_ts_ < 0 ? 0 : latest_log_ts_;
+        uint64_t v = latest_log_ts_.is_valid() ? latest_log_ts_.get_val_for_inner_table_field() : 0;
         cur_row_.cells_[i].set_uint64(v);
         break;
       }

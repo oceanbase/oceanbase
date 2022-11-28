@@ -910,7 +910,11 @@ int ObMemtableMultiVersionScanIterator::init_next_value_iter()
     ret = (OB_SUCCESS == ret) ? OB_ERR_UNEXPECTED : ret;
   } else {
     key_first_row_ = true;
-    value_iter_->set_merge_log_ts(context_->merge_log_ts_);
+    // TODO(handora.qc): fix it
+    palf::SCN merge_scn;
+    merge_scn.convert_for_lsn_allocator(context_->merge_log_ts_);
+
+    value_iter_->set_merge_scn(merge_scn);
     row_checker_.reset();
   }
   return ret;
@@ -1131,8 +1135,9 @@ void ObMemtableMultiVersionScanIterator::set_flag_and_version_for_compacted_row(
     const ObMvccTransNode *tnode, ObDatumRow &row)
 {
   const bool is_committed = reinterpret_cast<const ObMvccTransNode*>(tnode)->is_committed();
-  const int64_t trans_version =
-      is_committed ? reinterpret_cast<const ObMvccTransNode*>(tnode)->trans_version_ : INT64_MAX;
+  const int64_t trans_version = is_committed
+    ? reinterpret_cast<const ObMvccTransNode*>(tnode)->trans_version_.get_val_for_lsn_allocator()
+    : INT64_MAX;
   row.snapshot_version_ = std::max(trans_version, row.snapshot_version_);
   STORAGE_LOG(DEBUG, "row snapshot version", K(row.snapshot_version_));
 }
@@ -1147,6 +1152,7 @@ int ObMemtableMultiVersionScanIterator::iterate_uncommitted_row_value_(ObDatumRo
   int64_t sql_seq = -1;
   int64_t first_sql_sequence = -1;
   int64_t trans_version = INT64_MAX;
+  palf::SCN trans_scn;
   bool same_sql_sequence_flag = true;
   if (OB_ISNULL(value_iter_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1159,11 +1165,14 @@ int ObMemtableMultiVersionScanIterator::iterate_uncommitted_row_value_(ObDatumRo
         TRANS_LOG(WARN, "failed to check next sql sequence", K(ret), K(tnode));
       } else if (!same_sql_sequence_flag) { // different sql sequence need break
         break;
-      } else if (OB_FAIL(value_iter_->get_next_uncommitted_node(tnode, row.trans_id_,
-          trans_version, sql_seq))){
+      } else if (OB_FAIL(value_iter_->get_next_uncommitted_node(tnode,
+                                                                row.trans_id_,
+                                                                trans_scn,
+                                                                sql_seq))){
         if (OB_ITER_END != ret) {
           TRANS_LOG(WARN, "failed to get next uncommitted node", K(ret), K(tnode));
         }
+      } else if (FALSE_IT(trans_version = trans_scn.get_val_for_tx())) {
       } else if (row.row_flag_.is_delete()) {
         continue;
       } else {
@@ -1271,7 +1280,7 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
       if (row.row_flag_.is_not_exist()) {
         row.row_flag_.set_flag(mtd->dml_flag_);
       }
-      compare_trans_version = reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_;
+      compare_trans_version = reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_.get_val_for_lsn_allocator();
       if (compare_trans_version <= version_range.base_version_) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "trans version smaller than base version", K(compare_trans_version), K(version_range.base_version_));
@@ -1357,7 +1366,7 @@ OB_INLINE int ObReadRow::iterate_row_value_(
       TRANS_LOG(WARN, "transa node value is null", K(ret), KP(tnode), KP(mtd));
     } else {
       const bool is_committed = reinterpret_cast<const ObMvccTransNode *>(tnode)->is_committed();
-      const int64_t trans_version = is_committed ? reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_ : INT64_MAX;
+      const int64_t trans_version = is_committed ? reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_.get_val_for_lsn_allocator() : INT64_MAX;
       if (row.row_flag_.is_not_exist()) {
         if (ObDmlFlag::DF_DELETE == mtd->dml_flag_) {
           row.row_flag_.set_flag(ObDmlFlag::DF_DELETE);
@@ -1374,7 +1383,7 @@ OB_INLINE int ObReadRow::iterate_row_value_(
       if (OB_FAIL(reader.read_memtable_row(mtd->buf_, mtd->buf_len_, read_info, row, bitmap, read_finished))) {
         TRANS_LOG(WARN, "Failed to read memtable row", K(ret));
       } else if (0 == row_scn) {
-        row_scn = reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_;
+        row_scn = reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_.get_val_for_tx();
       }
       if (OB_SUCC(ret) &&(ObDmlFlag::DF_INSERT == mtd->dml_flag_ || read_finished)) {
         LOG_DEBUG("chaser debug iter memtable row", KPC(mtd), K(read_finished));

@@ -99,9 +99,9 @@ public:
   void destroy();
 
   int create_hidden_sys_tenant();
-  int convert_hidden_to_real_sys_tenant(const share::ObUnitInfoGetter::ObTenantConfig &unit, const int64_t abs_timeout_us = INT64_MAX);
+  int convert_hidden_to_real_sys_tenant(const share::ObUnitInfoGetter::ObTenantConfig &unit);
   int create_tenant_without_unit(const uint64_t tenant_id, const double min_cpu, const double max_cpu);
-  int create_tenant(const ObTenantMeta &meta, bool write_slog, const int64_t abs_timeout_us = INT64_MAX);
+  int create_tenant(const ObTenantMeta &meta, bool write_slog);
   int update_tenant_unit(const share::ObUnitInfoGetter::ObTenantConfig &unit);
 
   int get_tenant_unit(const uint64_t tenant_id, share::ObUnitInfoGetter::ObTenantConfig &unit);

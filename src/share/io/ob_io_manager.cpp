@@ -80,7 +80,7 @@ struct DestroyChannelMapFn
 {
 public:
   DestroyChannelMapFn(ObIAllocator &allocator) : allocator_(allocator) {}
-  int operator () (oceanbase::common::hash::HashMapPair<int64_t, ObDeviceChannel *> &entry) {
+  int operator () (hash::HashMapPair<int64_t, ObDeviceChannel *> &entry) {
     if (nullptr != entry.second) {
       entry.second->~ObDeviceChannel();
       allocator_.free(entry.second);
@@ -95,7 +95,7 @@ struct DestroyTenantMapFn
 {
 public:
   DestroyTenantMapFn(ObIAllocator &allocator) : allocator_(allocator) {}
-  int operator () (oceanbase::common::hash::HashMapPair<uint64_t, ObTenantIOManager *> &entry) {
+  int operator () (hash::HashMapPair<uint64_t, ObTenantIOManager *> &entry) {
     if (nullptr != entry.second) {
       entry.second->~ObTenantIOManager();
       allocator_.free(entry.second);

@@ -161,9 +161,9 @@ int ObMySQLConnectionPool::set_db_param(const char *db_user, const char *db_pass
   } else if (OB_UNLIKELY(w_len <= 0) || OB_UNLIKELY(w_len > OB_MAX_USER_NAME_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fill db user error", KCSTRING(db_user), K(ret));
-  } else if (FALSE_IT(w_len = snprintf(db_pass_, OB_MAX_PASSWORD_BUF_LENGTH, "%s", db_pass))) {
+  } else if (FALSE_IT(w_len = snprintf(db_pass_, OB_MAX_PASS_WORD_LENGTH, "%s", db_pass))) {
     // impossible
-  } else if (OB_UNLIKELY(w_len < 0) || OB_UNLIKELY(w_len >= OB_MAX_PASSWORD_BUF_LENGTH)) {
+  } else if (OB_UNLIKELY(w_len < 0) || OB_UNLIKELY(w_len >= OB_MAX_PASS_WORD_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fill db password error", KCSTRING(db_pass), K(ret));
   } else if (FALSE_IT(w_len = snprintf(db_name_, OB_MAX_DATABASE_NAME_BUF_LENGTH, "%s", db_name))) {
@@ -180,7 +180,7 @@ int ObMySQLConnectionPool::set_db_param(const ObString &db_user, const ObString 
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(db_user.length() > OB_MAX_USER_NAME_LENGTH)
-      || OB_UNLIKELY(db_pass.length() > OB_MAX_PASSWORD_LENGTH)
+      || OB_UNLIKELY(db_pass.length() > OB_MAX_PASS_WORD_LENGTH)
       || OB_UNLIKELY(db_name.length() > OB_MAX_DATABASE_NAME_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("db param buffer is not enough", K(db_user), K(db_pass), K(db_name), K(ret));

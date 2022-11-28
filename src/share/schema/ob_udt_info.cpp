@@ -569,9 +569,6 @@ int ObUDTTypeInfo::transform_to_pl_type(common::ObIAllocator &allocator, const p
     ObString copy_type_name;
     if (OB_FAIL(deep_copy_name(allocator, get_type_name(), copy_type_name))) {
       LOG_WARN("failed to deep copy type name", K(ret));
-    } else if (OB_UNLIKELY(OB_ISNULL(local_pl_type))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("local_pl_type is null", K(ret));
     } else {
       local_pl_type->set_name(copy_type_name);
       pl_type = local_pl_type;

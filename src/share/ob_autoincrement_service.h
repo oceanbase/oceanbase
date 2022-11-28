@@ -277,6 +277,8 @@ public:
   virtual ~ObRpcGlobalAutoIncrementService() = default;
 
   int init(const common::ObAddr &addr,
+           share::schema::ObMultiVersionSchemaService &schema_service,
+           share::ObLocationService &location_service,
            rpc::frame::ObReqTransport *req_transport);
 
   virtual int get_value(
@@ -314,6 +316,7 @@ public:
 private:
   bool is_inited_;
   ObGAISClient gais_client_;
+  transaction::ObLocationAdapter location_adapter_def_;
   obrpc::ObGAISRpcProxy gais_request_rpc_proxy_;
   ObGAISRequestRpc gais_request_rpc_;
 };
@@ -332,11 +335,13 @@ public:
            common::ObMySQLProxy *mysql_proxy,
            obrpc::ObSrvRpcProxy *srv_proxy,
            share::schema::ObMultiVersionSchemaService *schema_service,
+           share::ObLocationService &location_service,
            rpc::frame::ObReqTransport *req_transport);
   int init_for_backup(common::ObAddr &addr,
                       common::ObMySQLProxy *mysql_proxy,
                       obrpc::ObSrvRpcProxy *srv_proxy,
                       share::schema::ObMultiVersionSchemaService *schema_service,
+                      share::ObLocationService &location_service,
                       rpc::frame::ObReqTransport *req_transport);
   int get_handle(AutoincParam &param, CacheHandle *&handle);
   void release_handle(CacheHandle *&handle);

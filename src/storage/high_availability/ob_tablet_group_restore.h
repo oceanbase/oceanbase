@@ -65,8 +65,6 @@ public:
   ObStorageHATableInfoMgr ha_table_info_mgr_;
   ObArray<common::ObTabletID> tablet_id_array_;
   ObHATabletGroupCtx tablet_group_ctx_;
-  bool need_check_seq_;
-  int64_t ls_rebuild_seq_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -89,7 +87,7 @@ public:
   int set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status);
   int get_copy_tablet_status(ObCopyTabletStatus::STATUS &status);
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), KPC_(restore_base_info), K_(is_leader),
-      K_(action), KP_(meta_index_store), KP_(second_meta_index_store), K_(replica_type), KP_(ha_table_info_mgr), K_(status));
+      K_(action), KP_(second_meta_index_store), K_(replica_type), KP_(ha_table_info_mgr), K_(status));
 
 public:
   uint64_t tenant_id_;
@@ -99,12 +97,9 @@ public:
   const ObRestoreBaseInfo *restore_base_info_;
   bool is_leader_;
   ObTabletRestoreAction::ACTION action_;
-  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObReplicaType replica_type_;
   ObStorageHATableInfoMgr *ha_table_info_mgr_;
-  bool need_check_seq_;
-  int64_t ls_rebuild_seq_;
 private:
   common::SpinRWLock lock_;
   ObCopyTabletStatus::STATUS status_;
@@ -141,8 +136,7 @@ public:
   virtual int64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
-  virtual int clear_dag_net_ctx() override;
-  virtual int deal_with_cancel() override;
+  virtual int clear_dag_net_ctx();
 
   ObTabletGroupRestoreCtx *get_restore_ctx() { return ctx_; }
   common::ObInOutBandwidthThrottle *get_bandwidth_throttle() { return bandwidth_throttle_; }
@@ -331,9 +325,7 @@ struct ObInitTabletRestoreParam final
       KPC_(restore_base_info),
       KP_(second_meta_index_store),
       KP_(ha_table_info_mgr),
-      KP_(tablet_group_ctx),
-      K_(need_check_seq),
-      K_(ls_rebuild_seq));
+      KP_(tablet_group_ctx));
 
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -342,12 +334,9 @@ struct ObInitTabletRestoreParam final
   bool is_leader_;
   ObTabletRestoreAction::ACTION action_;
   const ObRestoreBaseInfo *restore_base_info_;
-  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObStorageHATableInfoMgr *ha_table_info_mgr_;
   ObHATabletGroupCtx *tablet_group_ctx_;
-  bool need_check_seq_;
-  int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObInitTabletRestoreParam);
 };
 
@@ -428,7 +417,6 @@ private:
       const ObITable::TableKey &table_key,
       bool &need_copy);
   int record_server_event_();
-  int check_src_sstable_exist_();
 
 private:
   bool is_inited_;
@@ -439,8 +427,6 @@ private:
   storage::ObStorageRpc *storage_rpc_;
   storage::ObLS *ls_;
   ObStorageHASrcInfo src_info_;
-  bool need_check_seq_;
-  int64_t ls_rebuild_seq_;
   common::ObArray<ObITable::TableKey> copy_table_key_array_;
   ObStorageHACopySSTableInfoMgr copy_sstable_info_mgr_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletRestoreTask);
@@ -473,12 +459,9 @@ struct ObTabletGroupRestoreUtils
       const uint64_t tenant_id,
       const common::ObIArray<common::ObTabletID> &tablet_id_array,
       const bool is_leader_restore,
-      const bool need_check_seq,
-      const int64_t ls_rebuild_seq,
       const ObStorageHASrcInfo src_info,
       ObLS *ls,
       const ObRestoreBaseInfo *restore_base_info,
-      const ObTabletRestoreAction::ACTION &restore_action,
       backup::ObBackupMetaIndexStoreWrapper *meta_index_store,
       ObStorageHATableInfoMgr *ha_table_info_mgr,
       ObStorageHATabletsBuilder &ha_tablets_builder);

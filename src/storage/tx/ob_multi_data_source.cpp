@@ -309,7 +309,7 @@ int ObMulSourceTxDataNotifier::notify_modify_tablet_binding(const NotifyType typ
       break;
     }
     case transaction::NotifyType::ON_REDO: {
-      if (!arg.for_replay_ && OB_FAIL(ObTabletBindingHelper::set_log_ts_for_unbind(modify_arg, arg))) {
+      if (!arg.for_replay_ && OB_FAIL(ObTabletBindingHelper::set_scn_for_unbind(modify_arg, arg))) {
         TRANS_LOG(WARN, "failed to lock tablet binding, retry", K(ret));
       }
       break;

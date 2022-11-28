@@ -35,8 +35,10 @@ int build_batch_packet(const ObAddr &sender, const uint32_t batch_type, const ui
   bool is_retry = false;
   ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
   uint32_t flag = 0;
-  // with trace id
-  flag = 1;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
+    // with trace id
+    flag = 1;
+  }
   // 优先从线程局部分配内存, 如果分配的内存不够大, 则动态分配内存
   while (true) {
     bool need_retry = false;
@@ -103,7 +105,7 @@ int64_t ObRpcBuffer::send(Rpc& rpc, uint64_t tenant_id, const ObAddr &sender, bo
     Packet* pkt = (Packet*)buf;
     pkt->set((int32_t)(size - sizeof(*pkt)), sender, (char*)(pkt+1));
     common::ObAddr dest = server_;
-    if (CLOG_BATCH_REQ_NODELAY == batch_type_) {
+    if (CLOG_BATCH_REQ_NODELAY == batch_type_ && (!IS_CLUSTER_VERSION_BEFORE_2200)) {
       uint32_t new_port = dest.get_port() + BATCH_RPC_PORT_DELTA;
       dest.set_port(new_port);
     }
@@ -125,7 +127,7 @@ int ObBatchRpcBase::post(const uint64_t tenant_id, const ObAddr &dest, const int
   RpcBuffer* buffer = fetch(tenant_id, dest, dst_cluster_id);
 
   ObAddr new_dest = dest;
-  if (CLOG_BATCH_REQ_NODELAY == batch_type) {
+  if (CLOG_BATCH_REQ_NODELAY == batch_type && (!IS_CLUSTER_VERSION_BEFORE_2200)) {
     new_dest.set_port(dest.get_port() + BATCH_RPC_PORT_DELTA);
   }
   if (NULL == buffer || !buffer->fill(sub_type, req)) {
@@ -160,8 +162,10 @@ int build_batch_packet(const ObAddr &sender, const uint32_t batch_type, const in
   bool is_retry = false;
   ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
   uint32_t flag = 0;
-  // with trace id
-  flag = 1;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260) {
+    // with trace id
+    flag = 1;
+  }
   // 优先从线程局部分配内存, 如果分配的内存不够大, 则动态分配内存
   while (true) {
     bool need_retry = false;
@@ -231,7 +235,7 @@ int ObBatchRpcBase::post(const uint64_t tenant_id, const ObAddr &dest, const int
   RpcBuffer* buffer = fetch(tenant_id, dest, dst_cluster_id);
 
   ObAddr new_dest = dest;
-  if (CLOG_BATCH_REQ_NODELAY == batch_type) {
+  if (CLOG_BATCH_REQ_NODELAY == batch_type && (!IS_CLUSTER_VERSION_BEFORE_2200)) {
     new_dest.set_port(dest.get_port() + BATCH_RPC_PORT_DELTA);
   }
   if (NULL == buffer || !buffer->fill(sub_type, ls, req)) {

@@ -559,6 +559,9 @@ int ObPsCache::fill_ps_stmt_info(const ObResultSet &result,
   }
   if (OB_SUCC(ret)) {
     int64_t info_size = 0;
+    if (!sql_ctx->is_dbms_sql_) {
+      ps_stmt_info.set_is_dynamic_sql(sql_ctx->is_dynamic_sql_);
+    }
     if (OB_FAIL(ps_stmt_info.get_convert_size(info_size))) {
       LOG_WARN("fail to get convert size", K(ret));
     } else {

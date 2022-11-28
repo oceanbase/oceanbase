@@ -24,6 +24,7 @@
 #include "common/ob_zone_status.h"
 #include "common/ob_zone_type.h"
 #include "share/ob_replica_info.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -31,23 +32,30 @@ namespace share
 {
 struct ObMergeInfoItem : public common::ObDLinkBase<ObMergeInfoItem>		
 {		
-public:		
-  //TODO:scn
+public:
   typedef common::ObDList<ObMergeInfoItem> ItemList;		
-  ObMergeInfoItem(ItemList &list, const char *name, int64_t value, const bool need_update);		
+  ObMergeInfoItem(ItemList &list, const char *name, const palf::SCN &scn, const bool need_update);
+  ObMergeInfoItem(ItemList &list, const char *name, const int64_t value, const bool need_update);
   ObMergeInfoItem(const ObMergeInfoItem &item);	
   
   ObMergeInfoItem &operator = (const ObMergeInfoItem &item);
   // Differ from operator=, won't assign <need_update_>
   void assign_value(const ObMergeInfoItem &item);
-  bool is_valid() const { return NULL != name_ && value_ >= 0; }
-  void set_val(const int64_t value, const bool need_update)
-  { value_ = value < 0 ? 0: value; need_update_ = need_update; }
-  TO_STRING_KV(K_(name), K_(value), K_(need_update));	
-  operator int64_t() const { return value_; }		
+  bool is_valid() const;
+  void set_val(const int64_t value, const bool need_update);
+  void set_scn(const palf::SCN &scn, const bool need_update);
+  int set_scn(const uint64_t scn_val);
+  int set_scn(const uint64_t scn_val, const bool need_update);
+  const palf::SCN &get_scn() const { return scn_; }
+  uint64_t get_scn_val() const { return scn_.get_val_for_inner_table_field(); }
+  int64_t get_value() const { return value_; }
+
+  TO_STRING_KV(K_(name), K_(is_scn), K_(scn), K_(value), K_(need_update));
 public:		
-  const char *name_;		
-  uint64_t value_;		
+  const char *name_;
+  bool is_scn_;
+  palf::SCN scn_;
+  int64_t value_;
   bool need_update_; // used to mark the table field need to be updated or not
 };
 
@@ -82,6 +90,11 @@ public:
   bool is_in_merge() const;
   bool need_merge(const int64_t broadcast_version) const;
 
+  const palf::SCN &broadcast_scn() const { return broadcast_scn_.get_scn(); }
+  const palf::SCN &last_merged_scn() const { return last_merged_scn_.get_scn(); }
+  const palf::SCN &all_merged_scn() const { return all_merged_scn_.get_scn(); }
+  const palf::SCN &frozen_scn() const { return frozen_scn_.get_scn(); }
+
   TO_STRING_KV(K_(tenant_id), K_(zone), K_(is_merging), K_(broadcast_scn), K_(last_merged_scn),
     K_(last_merged_time), K_(all_merged_scn), K_(merge_start_time), K_(merge_status), K_(frozen_scn), 
     K_(start_merge_fail_times));
@@ -111,11 +124,14 @@ public:
   bool is_in_merge() const;
   bool is_valid() const;
   bool is_merge_error() const;
-  bool is_in_verifying_status() const;
   ObGlobalMergeInfo &operator = (const ObGlobalMergeInfo &other) = delete;
   int assign(const ObGlobalMergeInfo &other);
   // differ from assign, only exclude 'need_update_' copy
   int assign_value(const ObGlobalMergeInfo &other);
+
+  const palf::SCN &frozen_scn() const { return frozen_scn_.get_scn(); }
+  const palf::SCN &global_broadcast_scn() const { return global_broadcast_scn_.get_scn(); }
+  const palf::SCN &last_merged_scn() const { return last_merged_scn_.get_scn(); }
 
   TO_STRING_KV(K_(tenant_id), K_(cluster), K_(frozen_scn),
     K_(global_broadcast_scn), K_(last_merged_scn), K_(is_merge_error), 
@@ -150,7 +166,7 @@ public:
   int64_t merged_tablet_cnt_;
   int64_t merged_data_size_;
 
-  int64_t smallest_snapshot_version_;
+  palf::SCN smallest_snapshot_scn_;
 
   int64_t get_merged_tablet_percentage() const;
   int64_t get_merged_data_percentage() const;
@@ -160,11 +176,12 @@ public:
 
   ObMergeProgress() 
     : tenant_id_(0), zone_(), unmerged_tablet_cnt_(0), unmerged_data_size_(0),
-      merged_tablet_cnt_(0), merged_data_size_(0), smallest_snapshot_version_(0)
+      merged_tablet_cnt_(0), merged_data_size_(0), smallest_snapshot_scn_()
   {}
   ~ObMergeProgress() {}
 
-  TO_STRING_KV(K_(tenant_id), K_(zone), K_(unmerged_tablet_cnt), K_(unmerged_data_size));
+  TO_STRING_KV(K_(tenant_id), K_(zone), K_(unmerged_tablet_cnt), K_(unmerged_data_size),
+    K_(smallest_snapshot_scn));
 };
 
 typedef common::ObArray<ObMergeProgress> ObAllZoneMergeProgress;

@@ -31,7 +31,6 @@ public:
   void *alloc(size_t size);
   void free(void *addr);
   void reuse();
-  void reset();
 private:
   ObArenaAllocator allocator_;
 };
@@ -55,7 +54,6 @@ public:
   ObCompressorType get_compressor_type() const;
   int get_max_overflow_size(const int64_t src_data_size,
                             int64_t &max_overflow_size) const;
-  void reset_mem();
 
 };
 } // namespace zstd_1_3_8

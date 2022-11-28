@@ -187,7 +187,7 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
   return ret;
 }
 
-void ObPLCtx::reset_obj()
+ObPLCtx::~ObPLCtx()
 {
   int tmp_ret = OB_SUCCESS;
   for (int64_t i = 0; i < objects_.count(); ++i) {
@@ -196,11 +196,6 @@ void ObPLCtx::reset_obj()
     }
   }
   objects_.reset();
-}
-
-ObPLCtx::~ObPLCtx()
-{
-  reset_obj();
 }
 
 void ObPL::destory()
@@ -286,7 +281,6 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
         ctx.exec_ctx_->get_sql_ctx()->schema_guard_ = &schema_guard;
         try {
           if (OB_FAIL(pl.execute(*ctx.exec_ctx_,
-                                 ctx.exec_ctx_->get_allocator(),
                                  package_id,
                                  proc_id,
                                  path_array,
@@ -311,10 +305,6 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
           }
         }
         ctx.exec_ctx_->get_sql_ctx()->schema_guard_ = old_schema_guard; //这里其实没有必要置回来，但是不置的话schema_guard的生命周期结束后会变成野指针太危险了
-        // support `SHOW WARNINGS` in mysql PL
-        if (OB_FAIL(ret)) {
-          ctx.exec_ctx_->get_my_session()->set_show_warnings_buf(ret);
-        }
       }
     }
   }
@@ -331,7 +321,7 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
   return ret;
 }
 
-int ObPL::set_user_type_var(ObPLExecCtx *ctx, int64_t var_index, int64_t var_addr, int64_t init_size)
+int ObPL::set_user_type_var(ObPLExecCtx *ctx, int64_t var_index, int64_t var_addr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
@@ -345,9 +335,7 @@ int ObPL::set_user_type_var(ObPLExecCtx *ctx, int64_t var_index, int64_t var_add
     LOG_WARN("var_index is invalid", K(var_index), K(var_index > ctx->params_->count()));
   } else {
     ObObjParam &obj_param = ctx->params_->at(var_index);
-    obj_param.set_extend(var_addr,
-                         obj_param.get_meta().get_extend_type(),
-                         (0 == obj_param.get_val_len()) ? init_size : obj_param.get_val_len());
+    obj_param.set_extend(var_addr, obj_param.get_meta().get_extend_type(), obj_param.get_val_len());
     obj_param.set_param_meta();
   }
   if (OB_SUCC(ret)) {
@@ -672,9 +660,7 @@ void ObPLContext::destory(
     } else {
       if (!in_nested_sql_ctrl() &&
           lib::is_mysql_mode() && is_function_or_trigger_ &&
-          OB_SUCCESS == ret &&
-          reset_autocommit_ &&
-          session_info.is_in_transaction()) {
+          OB_SUCCESS == ret && session_info.is_in_transaction()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not supported cmd execute udf which has dml stmt", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "use cmd stmt execute udf which has dml stmt");
@@ -1160,7 +1146,6 @@ int ObPLContext::set_subprogram_var_from_local(
 
 // for common execute routine.
 int ObPL::execute(ObExecContext &ctx,
-                  ObIAllocator &allocator,
                   ObPLPackageGuard &package_guard,
                   ObPLFunction &routine,
                   ParamStore *params,
@@ -1179,7 +1164,7 @@ int ObPL::execute(ObExecContext &ctx,
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
 
-  ObPLExecState pl(allocator,
+  ObPLExecState pl(ctx.get_allocator(),
                    ctx,
                    package_guard,
                    routine,
@@ -1292,7 +1277,6 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
       try {
         // execute it.
         OZ (execute(ctx,
-                    ctx.get_allocator(),
                     *(ctx.get_package_guard()),
                     *routine,
                     NULL, // params
@@ -1300,7 +1284,7 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
                     NULL, // result
                     NULL, // status
                     stack_ctx.is_top_stack(),
-                    false,
+                    !stack_ctx.is_top_stack(), // inner call
                     false)); // in function
 
         // unprepare it.
@@ -1311,13 +1295,6 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
         // unprepare it.
         if (stack_ctx.is_inited()) {
           stack_ctx.destory(*(ctx.get_my_session()), ctx, ret);
-        }
-        if (NULL != routine) {
-          routine->~ObPLFunction();
-        }
-        if (NULL != mem_context) {
-          DESTROY_CONTEXT(mem_context);
-          mem_context = NULL;
         }
         throw;
       }
@@ -1376,7 +1353,6 @@ int ObPL::execute(ObExecContext &ctx,
       try {
         // execute it...
         OZ (execute(ctx,
-                    ctx.get_allocator(),
                     *(ctx.get_package_guard()),
                     *routine,
                     &params,
@@ -1406,7 +1382,6 @@ int ObPL::execute(ObExecContext &ctx,
 
 // for normal routine
 int ObPL::execute(ObExecContext &ctx,
-                  ObIAllocator &allocator,
                   uint64_t package_id,
                   uint64_t routine_id,
                   const ObIArray<int64_t> &subprogram_path,
@@ -1525,7 +1500,6 @@ int ObPL::execute(ObExecContext &ctx,
     try {
       // execute it ...
       OZ (execute(ctx,
-                  allocator,
                   *(ctx.get_package_guard()),
                   *routine,
                   &params,
@@ -2301,8 +2275,6 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
 int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
 {
   int ret = OB_SUCCESS;
-  int param_cnt = OB_NOT_NULL(params) ? params->count() : 0;
-
   CK (OB_NOT_NULL(ctx_.exec_ctx_));
   if (OB_SUCC(ret) && OB_ISNULL(ctx_.exec_ctx_->get_pl_ctx())) {
     OZ (ctx_.exec_ctx_->init_pl_ctx());
@@ -2321,11 +2293,6 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
       OX (param.set_meta_type(func_.get_variables().at(i).get_data_type()->get_meta_type()));
       OX (param.set_param_meta());
       OX (param.set_accuracy(func_.get_variables().at(i).get_data_type()->get_accuracy()));
-      if (OB_SUCC(ret) && i >= param_cnt) {
-        ObObjMeta null_meta = param.get_meta();
-        param.set_null();
-        param.set_null_meta(null_meta);
-      }
     } else if (func_.get_variables().at(i).is_ref_cursor_type()) {
       OX (param.set_is_ref_cursor_type(true));
       // CURSOR初始化为NULL
@@ -2336,7 +2303,7 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
       LOG_WARN("found subtype in variables symbol table is unexpected", K(ret), K(i));
     } else {
       param.set_type(ObExtendType);
-      param.set_extend(0, func_.get_variables().at(i).get_type());
+      param.set_extend(0, PL_INVALID_TYPE);
       param.set_param_meta();
       param.set_udt_id(func_.get_variables().at(i).get_user_type_id());
     }
@@ -3080,7 +3047,7 @@ int ObPLFunction::set_variables_debuginfo(const ObPLSymbolDebugInfoTable &symbol
     OZ (var_debuginfo->deep_copy(allocator_, *symbol_debug_info_table.get_symbol(i)));
     OZ (variables_debuginfo_.push_back(var_debuginfo));
   }
-  LOG_INFO("set variable debuginfo", K(ret), K(variables_debuginfo_), K(symbol_debug_info_table));
+  LOG_INFO("set variable debuginfo", K(ret), K(variables_debuginfo_));
   return ret;
 }
 

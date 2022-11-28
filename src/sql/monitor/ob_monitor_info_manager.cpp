@@ -25,7 +25,7 @@ ObMonitorInfoManager::ObMonitorInfoManager()
 {
   memory_limit_ = min(
       MAX_MEMORY_SIZE,
-      static_cast<int64_t>(static_cast<double>(GMEMCONF.get_server_memory_avail()) * MONITOR_MEM_FACTOR));
+      static_cast<int64_t>(static_cast<double>(GCONF.get_server_memory_avail()) * MONITOR_MEM_FACTOR));
 }
 
 ObMonitorInfoManager::~ObMonitorInfoManager()
@@ -149,14 +149,14 @@ int ObMonitorInfoManager::add_monitor_info(ObPhyPlanMonitorInfo *info)
     int64_t retry_times = 3;
     while (retry_times > 0) {
       retry_times --;
-      int64_t &req_id = info->get_request_id();
-      int64_t cur_operator_info_size = info->get_operator_info_memory_size();
-      if (OB_FAIL(slow_query_queue_.push_with_imme_seq((void*)info, req_id))) {
+      int64_t req_id = 0;
+      if (OB_FAIL(slow_query_queue_.push((void*)info, req_id))) {
         if (OB_SIZE_OVERFLOW == ret) {
           clear_queue(OB_BATCH_GC_COUNT);
         }
       } else {
-        operator_info_size_ += cur_operator_info_size;
+        info->set_request_id(req_id);
+        operator_info_size_ += info->get_operator_info_memory_size();
         LOG_DEBUG("add monitor info", K(*info));
         break;
       }

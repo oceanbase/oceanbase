@@ -87,16 +87,15 @@ int ObDeleteStmt::replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &ot
   return ret;
 }
 
-int ObDeleteStmt::check_table_be_modified(uint64_t ref_table_id, bool& found) const
+bool ObDeleteStmt::check_table_be_modified(uint64_t ref_table_id) const
 {
-  int ret = OB_SUCCESS;
-  found = false;
+  bool found = false;
   for (int64_t i = 0; !found && i < table_info_.count(); i++) {
     if (NULL != table_info_.at(i) && table_info_.at(i)->ref_table_id_ == ref_table_id) {
       found = true;
     }
   }
-  return ret;
+  return found;
 }
 
 int ObDeleteStmt::remove_delete_table_info(int64_t table_id)

@@ -40,7 +40,7 @@ static inline void prepare_palf_base_info(const obrpc::ObCreateLSArg &arg,
                                           palf::PalfBaseInfo &palf_base_info)
 {
   palf_base_info.generate_by_default();
-  palf_base_info.prev_log_info_.log_ts_ = arg.get_create_scn();
+  palf_base_info.prev_log_info_.log_scn_ = arg.get_create_scn();
   if (arg.is_create_ls_with_palf()) {
     palf_base_info = arg.get_palf_base_info();
   }
@@ -137,15 +137,14 @@ int ObLSService::stop()
           LOG_ERROR("ls is null", K(ret));
         } else if (OB_FAIL(ls->offline())) {
           LOG_WARN("ls offline failed", K(ret), K(ls->get_ls_id()), KP(ls));
-        } else if (OB_FAIL(ls->stop())) {
-          LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls_id));
-        } else if (FALSE_IT(ls->wait())) {
         } else if (OB_FAIL(handle.set_ls(ls_map_, *ls, ObLSGetMod::TXSTORAGE_MOD))) {
           LOG_WARN("get ls handle failed", K(ret), KPC(ls));
         } else {
           ObLSLockGuard lock_ls(ls);
-          if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
-                                                               "LSSafeDestroy"))) {
+          if (OB_FAIL(ls->stop())) {
+            LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls_id));
+          } else if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
+                                                                      "LSSafeDestroy"))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc memory failed", K(ret));
           } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {
@@ -386,7 +385,7 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
   bool need_retry = true;
   bool ls_exist = false;
   bool waiting_destroy = false;
-  const int64_t create_scn = arg.get_create_scn();
+  const palf::SCN create_scn = arg.get_create_scn();
   palf::PalfBaseInfo palf_base_info;
   const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
   lib::ObMutexGuard change_guard(change_lock_);
@@ -422,7 +421,7 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
                                       (is_ls_to_restore_(arg) ?
                                        ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_START) :
                                        ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE)),
-                                      create_scn,
+                                      create_scn.get_val_for_lsn_allocator(),
                                       ls))) {
     LOG_WARN("inner create log stream failed.", K(ret), K(arg), K(migration_status));
   } else {
@@ -451,7 +450,8 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
       // inner tablet reverted by inner_del_ls_ if fail to create
       // only restore ls with base will not need create inner tablet
     } else if (need_create_inner_tablets_(arg) &&
-               OB_FAIL(ls->create_ls_inner_tablet(arg.get_compat_mode(), arg.get_create_scn()))) {
+               OB_FAIL(ls->create_ls_inner_tablet(arg.get_compat_mode(),
+                                                  arg.get_create_scn()))) {
       LOG_WARN("create ls inner tablet failed", K(ret), K(arg));
     } else if (OB_FAIL(write_commit_create_ls_slog_(ls->get_ls_id()))) {
       LOG_WARN("fail to write create log stream commit slog", K(ret), K(ls_meta));
@@ -636,10 +636,9 @@ int ObLSService::gc_ls_after_replay_slog()
         ls_status = ls->get_create_state();
         if (ObInnerLSStatus::CREATING == ls_status || ObInnerLSStatus::REMOVED == ls_status) {
           do {
+            ObLSLockGuard lock_ls(ls);
             if (OB_TMP_FAIL(ls->stop())) {
               LOG_WARN("ls stop failed", K(tmp_ret), K(ls->get_ls_id()), KP(ls));
-            } else {
-              ls->wait();
             }
             if (OB_SUCCESS != tmp_ret) {
               usleep(SLEEP_TS);
@@ -874,15 +873,14 @@ int ObLSService::remove_ls(
   // ls leader gc must has block tx start, gracefully kill tx and write offline log before here.
   } else if (OB_FAIL(ls->offline())) {
     LOG_WARN("ls offline failed", K(ret), K(ls_id), KP(ls));
-  } else if (OB_FAIL(ls->stop())) {
-    LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls_id));
-  } else if (FALSE_IT(ls->wait())) {
   } else {
     ObLSSafeDestroyTask *task = nullptr;
     static const int64_t SLEEP_TS = 100_ms;
     ObLSLockGuard lock_ls(ls);
-    if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
-                                                         "LSSafeDestroy"))) {
+    if (OB_FAIL(ls->stop())) {
+      LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls_id));
+    } else if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
+                                                                "LSSafeDestroy"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));
     } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {
@@ -1204,7 +1202,7 @@ int ObLSService::create_tablet(const obrpc::ObBatchCreateTabletArg &batch_arg,
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("log stream is null, unexpected error", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls->batch_create_tablets(batch_arg, OB_INVALID_TIMESTAMP/*log_ts*/, is_replay))) {
+  } else if (OB_FAIL(ls->batch_create_tablets(batch_arg, palf::SCN(), is_replay))) {
     LOG_WARN("batch create tablet failed", K(ret), K(batch_arg));
   } else {
     // do nothing
@@ -1257,34 +1255,6 @@ bool ObLSService::is_ls_to_restore_(const obrpc::ObCreateLSArg &arg) const
 bool ObLSService::need_create_inner_tablets_(const obrpc::ObCreateLSArg &arg) const
 {
   return arg.need_create_inner_tablets();
-}
-
-int ObLSService::iterate_diagnose(const ObFunction<int(const storage::ObLS &ls)> &func)
-{
-  int ret = OB_SUCCESS;
-  common::ObSharedGuard<ObLSIterator> ls_iter;
-  ObLS *ls = nullptr;
-
-  if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::OBSERVER_MOD))) {
-    LOG_WARN("failed to get ls iter", K(ret));
-  } else {
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(ls_iter->get_next(ls))) {
-        if (OB_ITER_END != ret) {
-          LOG_ERROR("fail to get next ls", K(ret));
-        }
-      } else if (nullptr == ls) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("ls is null", K(ret));
-      } else if (OB_FAIL(func(*ls))) {
-        LOG_WARN("iter ls diagnose failed", K(ret));
-      }
-    }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    }
-  }
-  return ret;
 }
 
 } // storage

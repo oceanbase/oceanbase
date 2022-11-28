@@ -53,8 +53,6 @@ public:
   ObArray<common::ObTabletID> data_tablet_id_array_;
   ObStorageHATableInfoMgr ha_table_info_mgr_;
   ObHATabletGroupMgr tablet_group_mgr_;
-  bool need_check_seq_;
-  int64_t ls_rebuild_seq_;
 
   INHERIT_TO_STRING_KV(
       "ObIHADagNetCtx", ObIHADagNetCtx,
@@ -97,8 +95,7 @@ public:
   virtual int64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
-  virtual int clear_dag_net_ctx() override;
-  virtual int deal_with_cancel() override;
+  virtual int clear_dag_net_ctx();
 
   ObLSRestoreCtx *get_ls_restore_ctx() { return ctx_; }
   common::ObInOutBandwidthThrottle *get_bandwidth_throttle() { return bandwidth_throttle_; }

@@ -266,7 +266,6 @@ struct TableItem
     return (is_generated_table() || is_temp_table()) && view_base_item_ != NULL
         ? view_base_item_->get_base_table_item() : *this;
   }
-  virtual bool has_for_update() const { return for_update_; }
   // if real table id, it is valid for all threads,
   // else if generated id, it is unique just during the thread session
   uint64_t    table_id_;
@@ -444,11 +443,6 @@ struct JoinedTable : public TableItem
   bool is_left_join() const { return LEFT_OUTER_JOIN == joined_type_; }
   bool is_right_join() const { return RIGHT_OUTER_JOIN == joined_type_; }
   bool is_full_join() const { return FULL_OUTER_JOIN == joined_type_; }
-  virtual bool has_for_update() const 
-  {
-    return (left_table_ != NULL &&  left_table_->has_for_update())
-            || (right_table_ != NULL &&  right_table_->has_for_update());
-  }
   common::ObIArray<ObRawExpr*> &get_join_conditions() { return join_conditions_; }
   const common::ObIArray<ObRawExpr*> &get_join_conditions() const { return join_conditions_; }
   TO_STRING_KV(N_TID, table_id_,
@@ -588,12 +582,8 @@ public:
   int get_child_table_id_count_recurseive(int64_t &object_ids_cnt,
       const int64_t object_limit_count = common::OB_MAX_TABLE_NUM_PER_STMT) const;
 
-  virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const
-  { 
-    UNUSED(ref_table_id); 
-    is_modified = false;
-    return OB_SUCCESS; 
-  }
+  virtual bool check_table_be_modified(uint64_t ref_table_id) const
+  { UNUSED(ref_table_id); return false; }
 
   virtual int copy_and_replace_stmt_expr(ObRawExprCopier &copier);
 
@@ -681,9 +671,13 @@ public:
   int set_part_expr(uint64_t table_id, uint64_t index_tid, ObRawExpr *part_expr, ObRawExpr *subpart_expr);
   inline ObStmtHint &get_stmt_hint() { return stmt_hint_; }
   inline const ObStmtHint &get_stmt_hint() const { return stmt_hint_; }
-  int check_hint_table_matched_table_item(ObCollationType cs_type,
-                                          const ObTableInHint &hint_table,
-                                          bool &matched) const;
+  int hint_table_may_used(ObCollationType cs_type,
+                                     const ObIArray<ObTableInHint*> &all_tables,
+                                     bool &may_used) const;
+  bool is_generate_name(ObString &name) const;
+  int hint_table_may_used(ObCollationType cs_type,
+                                     const ObTableInHint &hint_table,
+                                     bool &may_appear) const;
   virtual bool has_subquery() const;
   inline bool has_order_by() const { return (get_order_item_size() > 0); }
   int add_joined_table(JoinedTable *joined_table) { return joined_tables_.push_back(joined_table); }
@@ -738,7 +732,6 @@ public:
   virtual int remove_useless_sharable_expr();
   virtual int clear_sharable_expr_reference();
   virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
-  virtual int get_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
   int is_referred_by_partitioning_expr(const ObRawExpr *expr,
                                        bool &is_referred);
   int64_t get_table_size() const { return table_items_.count(); }
@@ -970,10 +963,6 @@ public:
   const common::ObIArray<CheckConstraintItem> &get_check_constraint_items() const {
     return check_constraint_items_; }
   int set_check_constraint_item(CheckConstraintItem &check_constraint_item);
-  int remove_check_constraint_item(const uint64_t table_id);
-  int get_check_constraint_items(const uint64_t table_id,
-                                 CheckConstraintItem &check_constraint_item);
-
   int get_qb_name(ObString &qb_name) const;
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_),

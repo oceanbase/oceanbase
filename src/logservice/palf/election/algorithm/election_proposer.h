@@ -81,7 +81,7 @@ public:
     }
     return ret;
   }
-  int revoke(const RoleChangeReason &reason);
+  int revoke();
 public:
   // 发prepare请求
   void prepare(const common::ObRole role);

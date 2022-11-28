@@ -42,6 +42,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
     const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
     memtable::ObMvccAccessCtx &ctx = context_->store_ctx_->mvcc_acc_ctx_;
     const transaction::ObTransID &read_trans_id = ctx.get_tx_id();
+    int64_t trans_version = INT64_MAX;
     row = &row_;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(end_of_block())) {
@@ -53,10 +54,13 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
                   rowkey_cnt,
                   flag,
                   trans_id,
-                  lock_state_->trans_version_,
+                  trans_version,
                   sql_sequence))) {
         LOG_WARN("failed to get multi version info", K(ret), K_(current), K(flag), K(trans_id),
                  KPC_(lock_state), K(sql_sequence), K_(macro_id));
+        // TODO(handora.qc): fix it
+      } else if (OB_FAIL(lock_state_->trans_version_.convert_for_tx(trans_version))) {
+        LOG_ERROR("convert failed", K(ret), K(trans_version));
       } else if (flag.is_uncommitted_row()) {
         ObTxTableGuard tx_table_guard = ctx.get_tx_table_guard();
         ObTxTable *tx_table = nullptr;
@@ -72,7 +76,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
 
         STORAGE_LOG(DEBUG, "check row lock", K(ret), KPC_(range), K(read_trans_id), K(trans_id),
                     K(sql_sequence), KPC_(lock_state));
-        if (0 != lock_state_->trans_version_ || // trans is commit
+        if (palf::SCN::min_scn() != lock_state_->trans_version_ || // trans is commit
             lock_state_->is_locked_) {
           break;
         }

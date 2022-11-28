@@ -25,7 +25,7 @@ using namespace sql;
 using namespace obrpc;
 
 #define MIN_FILTER_SIZE 256
-#define MAX_BIT_COUNT 17179869184// 2^34 due to the memory single alloc limit
+#define MAX_BIT_COUNT 4611686018427387904 // 2^62
 #define BF_BLOCK_SIZE 256L
 #define BLOCK_MASK 255L         // = size of block - 1
 #define CACHE_LINE_SIZE 64      // 64 bytes
@@ -551,6 +551,7 @@ int ObSendBloomFilterP::process_px_bloom_filter_data()
         phase_end))) {
       LOG_WARN("fail to process recieve count", K(ret));
     }
+    (void)filter->dec_merge_filter_count();
   }
 
   if (OB_SUCC(ret) && phase_end && arg_.is_first_phase() && !arg_.next_peer_addrs_.empty()) {
@@ -582,9 +583,6 @@ int ObSendBloomFilterP::process_px_bloom_filter_data()
         }
       }
     }
-  }
-  if (OB_NOT_NULL(filter)) {
-    (void)filter->dec_merge_filter_count();
   }
   return ret;
 }

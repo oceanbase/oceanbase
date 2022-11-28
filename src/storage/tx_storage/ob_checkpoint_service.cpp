@@ -171,10 +171,10 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
   }
 }
 
-bool ObCheckPointService::get_disk_usage_threshold_(int64_t &threshold)
+bool ObCheckPointService::clog_disk_usage_over_threshold_(int64_t &threshold)
 {
   int ret = OB_SUCCESS;
-  bool get_disk_usage_threshold_success = false;
+  int clog_disk_usage_over_threshold = false;
   // avod clog disk full
   logservice::ObLogService *log_service = nullptr;
   PalfEnv *palf_env = nullptr;
@@ -189,13 +189,13 @@ bool ObCheckPointService::get_disk_usage_threshold_(int64_t &threshold)
     int64_t total_size = 0;
     if (OB_FAIL(palf_env->get_disk_usage(used_size, total_size))) {
       STORAGE_LOG(WARN, "get_disk_usage failed", K(ret), K(used_size), K(total_size));
-    } else {
-      threshold = total_size * NEED_FLUSH_CLOG_DISK_PERCENT / 100;
-      get_disk_usage_threshold_success = true;
+    } else if (used_size > (threshold = (total_size * NEED_FLUSH_CLOG_DISK_PERCENT / 100))) {
+      STORAGE_LOG(INFO, "clog disk is not enough",
+                  K(used_size), K(total_size));
+      clog_disk_usage_over_threshold = true;
     }
   }
-
-  return get_disk_usage_threshold_success;
+  return clog_disk_usage_over_threshold;
 }
 
 bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t threshold)
@@ -327,7 +327,7 @@ void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()
   int ret = OB_SUCCESS;
   int64_t threshold_size = INT64_MAX;
   bool need_flush = false;
-  if (checkpoint_service_.get_disk_usage_threshold_(threshold_size)) {
+  if (checkpoint_service_.clog_disk_usage_over_threshold_(threshold_size)) {
     if (checkpoint_service_.cannot_recycle_log_over_threshold_(threshold_size)) {
       need_flush = true;
     }
@@ -355,7 +355,10 @@ int ObCheckPointService::do_minor_freeze()
     ObLS *ls = nullptr;
     int ls_cnt = 0;
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      if (OB_SUCCESS != (tmp_ret = (ls->advance_checkpoint_by_flush(INT64_MAX)))) {
+      ObCheckpointExecutor *checkpoint_executor = nullptr;
+      if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
+        STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
+      } else if (OB_SUCCESS != (tmp_ret = (checkpoint_executor->advance_checkpoint_by_flush(INT64_MAX)))) {
         STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", K(tmp_ret), K(ls->get_ls_id()));
       }
     }

@@ -197,8 +197,8 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
       if (OB_ISNULL(top_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("top stmt should not be null", K(ret));
-      } else if (OB_FAIL(top_stmt->check_table_be_modified(ref_table_id, is_dml_table))) {
-        LOG_WARN("failed to check table be modified", K(ret));
+      } else {
+        is_dml_table = top_stmt->check_table_be_modified(ref_table_id);
       }
     }
 
@@ -299,7 +299,7 @@ int ObJoinOrder::compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &ac
                                                           *path->table_partition_info_,
                                                           path->strong_sharding_))) {
             LOG_WARN("failed to calc sharding info", K(ret));
-          } else if (!path->use_das_ && (1 < access_paths.count() || path->is_inner_path_) &&
+          } else if (!path->use_das_ &&
                      (path->is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) && 
                      !is_virtual_table(path->ref_table_id_) &&
                      !ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), path->ref_table_id_) &&
@@ -342,7 +342,6 @@ int ObJoinOrder::compute_sharding_info_for_base_path(const bool use_das,
   const TableItem *table_item = NULL;
   sharding_info = NULL;
   bool hint_need_partition_info;
-  bool is_modified = false;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(session_info = opt_ctx->get_session_info()) ||
@@ -370,14 +369,12 @@ int ObJoinOrder::compute_sharding_info_for_base_path(const bool use_das,
                                        allocator_->alloc(sizeof(ObShardingInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to allocate memory", K(ret));
-  } else if (OB_FAIL(stmt->check_table_be_modified(table_partition_info.get_ref_table_id(), is_modified))) {
-    LOG_WARN("failed to check table be modified", K(ret));
   } else {
     const ObCandiTableLoc &phy_tbl_info = table_partition_info.get_phy_tbl_location_info();
     bool can_reselect_replica = (phy_tbl_info.is_duplicate_table_not_in_dml() &&
         (1 == phy_tbl_info.get_phy_part_loc_info_list().count())
         && !session_info->get_is_in_retry_for_dup_tbl()
-        && !is_modified);
+        && !stmt->check_table_be_modified(table_partition_info.get_ref_table_id()));
     int64_t parallel = opt_ctx->get_parallel();
     if (opt_ctx->is_use_table_dop()) {
       parallel = table_schema->get_dop();
@@ -1142,8 +1139,6 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                              bool &create_basic_path) 
 {
   int ret = OB_SUCCESS;
-  create_das_path = false;
-  create_basic_path = false;
   IndexInfoEntry *index_info_entry;
   bool force_das_tsc = false;
   bool is_batch_update_table = false;
@@ -1169,8 +1164,6 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
   }
 
   if(OB_SUCC(ret)) {
-    bool hint_force_das = false;
-    bool hint_force_no_das = false;
     force_das_tsc = get_plan()->get_optimizer_context().in_nested_sql() ||
                     get_plan()->get_optimizer_context().has_pl_udf() ||
                     is_batch_update_table;
@@ -1178,17 +1171,9 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     //batch update table(multi queries or arraybinding)
     //contain nested sql(pl udf or in nested sql)
     //trigger or foreign key in the top sql not force to use DAS TSC
-    if (force_das_tsc) {
-      create_das_path = true;
-      create_basic_path = false;
-    } else if (OB_FAIL(get_plan()->get_log_plan_hint().check_use_das(table_id, hint_force_das,
-                                                                     hint_force_no_das))) {
-      LOG_WARN("table_item is null", K(ret), K(table_id));
-    } else if (hint_force_das || hint_force_no_das) {
-      create_das_path = hint_force_das;
-      create_basic_path = hint_force_no_das;
-    } else if (index_info_entry->is_index_global() &&
-               get_plan()->get_optimizer_context().get_parallel() < 2) {
+    if (force_das_tsc ||
+        (index_info_entry->is_index_global() &&
+         get_plan()->get_optimizer_context().get_parallel() < 2)) {
       create_das_path = true;
       create_basic_path = false;
     } else if ((helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) && 
@@ -1200,8 +1185,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
       create_das_path = false;
       create_basic_path = true;
     }
-    LOG_TRACE("will use das", K(force_das_tsc), K(hint_force_das), K(hint_force_no_das),
-                              K(helper.is_inner_path_), K(create_das_path), K(create_basic_path));
+    LOG_TRACE("will use das", K(force_das_tsc), K(helper.is_inner_path_), K(create_das_path), K(create_basic_path));
   }
   return ret;
 }
@@ -1326,15 +1310,6 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
         LOG_WARN("failed to fill query range info", K(ret));
       } else { /*do nothing*/ }
     } else { /*do nothing*/ }
-
-    for (int i = 0; OB_SUCC(ret) && i < ap->est_cost_info_.range_columns_.count(); ++i) {
-      ColumnItem &col = ap->est_cost_info_.range_columns_.at(i);
-      if (NULL == get_plan()->get_stmt()->get_column_expr_by_id(col.table_id_, col.column_id_)) {
-        //do nothing
-      } else if (OB_FAIL(ap->est_cost_info_.index_access_column_items_.push_back(col))) {
-        LOG_WARN("failed to push back column item", K(ret));
-      }
-    }
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(fill_filters(ap->filter_,
@@ -2990,8 +2965,7 @@ int ObJoinOrder::compute_const_exprs_for_join(const ObJoinOrder* left_tree,
       LOG_WARN("failed to append const exprs", K(ret));
     } else if (OB_FAIL(append(output_const_exprs_, right_tree->get_output_const_exprs()))) {
       LOG_WARN("failed to append const exprs", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(join_info_->where_conditions_,
-                                                            output_const_exprs_))) {
+    } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
       LOG_WARN("failed to compute const exprs", K(ret));
     } else {/*do nothing*/}
   } else if (IS_OUTER_JOIN(join_type)) {
@@ -3017,11 +2991,6 @@ int ObJoinOrder::compute_const_exprs_for_join(const ObJoinOrder* left_tree,
       if (OB_FAIL(append(output_const_exprs_, right_tree->get_output_const_exprs()))) {
         LOG_WARN("failed to append const exprs", K(ret));
       }
-    }
-    if (OB_SUCC(ret) && IS_SEMI_JOIN(join_type)
-        && OB_FAIL(ObOptimizerUtil::compute_const_exprs(join_info_->where_conditions_,
-                                                        output_const_exprs_))) {
-      LOG_WARN("failed to compute const exprs for semi join", K(ret));
     }
   } else if (CONNECT_BY_JOIN == join_type) {
     if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
@@ -3412,11 +3381,6 @@ int ObJoinOrder::add_path(Path* path)
   } else {
     bool should_add = true;
     DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
-    if (!path->is_cte_path() && 
-        path->contain_match_all_fake_cte() &&
-        !path->is_remote()) {
-      should_add = false;
-    }
     for (int64_t i = interesting_paths_.count() - 1; OB_SUCC(ret) && should_add && i >= 0; --i) {
       Path *cur_path = interesting_paths_.at(i);
       if (OB_ISNULL(cur_path)) {
@@ -3724,8 +3688,7 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
   phy_plan_type_ = other.phy_plan_type_;
   location_type_ = other.location_type_;
   contain_fake_cte_ = other.contain_fake_cte_;
-  contain_pw_merge_op_ = other.contain_pw_merge_op_;
-  contain_match_all_fake_cte_ = other.contain_match_all_fake_cte_;
+  contain_merge_op_ = other.contain_merge_op_;
   contain_das_op_ = other.contain_das_op_;
   parallel_ = other.parallel_;
   server_cnt_ = other.server_cnt_;
@@ -3926,7 +3889,6 @@ int AccessPath::re_estimate_cost(EstimateCostInfo &param, double &card, double &
   double table_filter_sel = est_cost_info_.table_filter_sel_;
   index_back_cost = 0.0;
   card = get_path_output_rows();
-  est_cost_info_.join_filter_sel_ = 1.0;
   if (OB_ISNULL(parent_) || OB_ISNULL(parent_->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(parent_), K(ret));
@@ -3937,7 +3899,6 @@ int AccessPath::re_estimate_cost(EstimateCostInfo &param, double &card, double &
       const JoinFilterInfo &info = param.join_filter_infos_.at(i);
       if (info.table_id_ == table_id_) {
         table_filter_sel *= info.join_filter_selectivity_;
-        est_cost_info_.join_filter_sel_ *= info.join_filter_selectivity_;
         card *= info.join_filter_selectivity_;
       }
     }
@@ -4521,9 +4482,9 @@ int JoinPath::compute_hash_hash_sharding_info()
         } else {
           target_sharding = new (target_sharding) ObShardingInfo();
           target_sharding->set_distributed();
-          if (use_left && FULL_OUTER_JOIN != join_type_ && RIGHT_OUTER_JOIN != join_type_) {
+          if (use_left) {
             ret = target_sharding->get_partition_keys().assign(left_join_exprs);
-          } else if (use_right && FULL_OUTER_JOIN != join_type_ && LEFT_OUTER_JOIN != join_type_) {
+          } else if (use_right) {
             ret = target_sharding->get_partition_keys().assign(right_join_exprs);
           } else { /*do nothing*/ }
 
@@ -4793,7 +4754,6 @@ int JoinPath::estimate_cost()
       LOG_WARN("failed to cost merge join", K(*this), K(ret));
     }
   } else if(HASH_JOIN == join_algo_) {
-    double left_output_rows = left_path_->get_path_output_rows();
     double right_output_rows = right_path_->get_path_output_rows();
     double right_cost = right_path_->get_cost();
     if (!join_filter_infos_.empty()) {
@@ -4832,11 +4792,8 @@ int JoinPath::compute_join_path_info()
     LOG_WARN("get unexpected null", K(left_path_), K(right_path_), K(ret));
   } else {
     contain_fake_cte_ = left_path_->contain_fake_cte_ || right_path_->contain_fake_cte_;
-    contain_pw_merge_op_ = (left_path_->contain_pw_merge_op_ && !is_left_need_exchange()) || 
-                           (right_path_->contain_pw_merge_op_ && !is_right_need_exchange()) ||
-                           (join_algo_ == JoinAlgo::MERGE_JOIN && is_partition_wise());
-    contain_match_all_fake_cte_ = left_path_->contain_match_all_fake_cte_ ||
-                                  right_path_->contain_match_all_fake_cte_; 
+    contain_merge_op_ = left_path_->contain_merge_op_ || right_path_->contain_merge_op_ ||
+                        (join_algo_ == JoinAlgo::MERGE_JOIN);
     contain_das_op_ = left_path_->contain_das_op_ || right_path_->contain_das_op_;
   }
   return ret;
@@ -5171,7 +5128,7 @@ int JoinPath::cost_merge_join(double left_output_rows,
       left_rows /= in_parallel;
       right_rows /= in_parallel;
     }
-    ObCostMergeJoinInfo est_join_info(left_rows,
+    ObCostMergeJoinInfo est_join_info(left_output_rows,
                                       left_join_order->get_output_row_size(),
                                       right_rows,
                                       right_join_order->get_output_row_size(),
@@ -5376,8 +5333,7 @@ void JoinPath::reuse()
   phy_plan_type_ = ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED;
   location_type_ = ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED;
   contain_fake_cte_ = false;
-  contain_pw_merge_op_ = false;
-  contain_match_all_fake_cte_ = false;
+  contain_merge_op_ = false;
   contain_das_op_ = false;
   parallel_ = 1;
   server_cnt_ = 1;
@@ -5651,12 +5607,19 @@ int ObJoinOrder::param_funct_table_expr(ObRawExpr* &function_table_expr,
   return ret;
 }
 
-int ObJoinOrder::create_one_cte_table_path(const TableItem* table_item, 
-                                           ObShardingInfo *sharding)
+int ObJoinOrder::generate_cte_table_paths()
 {
   int ret = OB_SUCCESS;
   CteTablePath *ap = NULL;
-  if (OB_ISNULL(ap = reinterpret_cast<CteTablePath*>(allocator_->alloc(sizeof(CteTablePath))))) {
+  const ObDMLStmt *stmt = NULL;
+  const TableItem *table_item = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get  unexpected null", K(get_plan()), K(stmt), K(allocator_), K(ret));
+  } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table_id_));
+  } else if (OB_ISNULL(ap = reinterpret_cast<CteTablePath*>(allocator_->alloc(sizeof(CteTablePath))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to allocate an AccessPath", K(ret));
   } else {
@@ -5668,9 +5631,7 @@ int ObJoinOrder::create_one_cte_table_path(const TableItem* table_item,
     ap->ref_table_id_ = table_item->ref_id_;
     ap->parent_ = this;
     ap->contain_fake_cte_ = true;
-    ap->strong_sharding_ = sharding;
-    ap->contain_match_all_fake_cte_ = (table_item->is_recursive_union_fake_table_ &&
-                                       sharding->is_match_all());
+    ap->strong_sharding_ = get_plan()->get_optimizer_context().get_match_all_sharding();
     if (OB_FAIL(append(ap->filter_, get_restrict_infos()))) {
       LOG_WARN("failed to push back expr", K(ret));
     } else if (OB_FAIL(ap->estimate_cost())) {
@@ -5679,32 +5640,7 @@ int ObJoinOrder::create_one_cte_table_path(const TableItem* table_item,
       LOG_WARN("failed to compute pipelined path", K(ret));
     } else if (OB_FAIL(add_path(ap))) {
       LOG_WARN("failed to add path", K(ret));
-    } else {
-      /* do nothing */
-    }
-  }
-
-  return ret;
-}
-
-int ObJoinOrder::generate_cte_table_paths()
-{
-  int ret = OB_SUCCESS;
-  const ObDMLStmt *stmt = NULL;
-  const TableItem *table_item = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(allocator_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get  unexpected null", K(get_plan()), K(stmt), K(allocator_), K(ret));
-  } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(table_id_));
-  } else if (OB_FAIL(create_one_cte_table_path(table_item, 
-                                               get_plan()->get_optimizer_context().get_match_all_sharding()))) {
-    LOG_WARN("failed to create one cte table path", K(ret));
-  } else if (table_item->is_recursive_union_fake_table_ &&
-             OB_FAIL(create_one_cte_table_path(table_item, 
-                                               get_plan()->get_optimizer_context().get_local_sharding()))) {
-    LOG_WARN("failed to create one cte table path", K(ret));
+    } else { /*do nothing*/ }
   }
   return ret;
 }
@@ -5730,19 +5666,16 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
   ObSEArray<ObTablePartitionInfo *, 8> tbl_part_infos;
   uint64_t table_id = table_id_;
   uint64_t ref_table_id = table_meta_info_.ref_table_id_;
-  if (!helper.is_inner_path_ && 
-      OB_FAIL(compute_base_table_property(table_id, ref_table_id))) {
-    LOG_WARN("failed to compute base path property", K(ret));
-  } else if (OB_FAIL(create_access_paths(table_id, ref_table_id, helper, access_paths))) {
+  if (OB_FAIL(create_access_paths(table_id, ref_table_id, helper, access_paths))) {
     LOG_WARN("failed to add table to join order(single)", K(ret));
   } else if (OB_FAIL(compute_table_location_for_paths(access_paths,
                                                       tbl_part_infos))) {
     LOG_WARN("failed to calc table location", K(ret));
-  } else if (OB_FAIL(estimate_size_and_width_for_base_table(helper, access_paths))) {
-    LOG_WARN("failed to estimate_size", K(ret));
-  } else if (!helper.is_inner_path_ && !is_virtual_table(ref_table_id) &&
-             OB_FAIL(compute_one_row_info_for_table_scan(access_paths))) {
-    LOG_WARN("failed to compute one row info", K(ret));
+  } else if (OB_FAIL(compute_base_table_property(table_id,
+                                                 ref_table_id,
+                                                 helper,
+                                                 access_paths))) {
+    LOG_WARN("failed to compute base path property", K(ret));
   } else if (!access_paths.empty() && // when generate inner path, access_paths may be empty
              OB_FAIL(pruning_unstable_access_path(helper.table_opt_info_, access_paths))) {
     LOG_WARN("failed to pruning unstable access path", K(ret));
@@ -5761,10 +5694,16 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
 }
 
 int ObJoinOrder::compute_base_table_property(uint64_t table_id,
-                                             uint64_t ref_table_id)
+                                             uint64_t ref_table_id,
+                                             PathHelper &helper,
+                                             ObIArray<AccessPath *> &access_paths)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
+  if (OB_FAIL(estimate_size_and_width_for_base_table(helper, access_paths))) {
+    LOG_WARN("failed to estimate_size", K(ret));
+  } else if (helper.is_inner_path_) {
+    /*do nothing*/
+  } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(restrict_info_set_, output_const_exprs_))) {
     LOG_WARN("failed to compute const exprs", K(ret));
   } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(allocator_,
                                                         restrict_info_set_,
@@ -5774,25 +5713,31 @@ int ObJoinOrder::compute_base_table_property(uint64_t table_id,
                                                         ref_table_id,
                                                         get_restrict_infos()))) {
     LOG_WARN("failed to extract fd item set", K(ret));
+  } else if (!is_virtual_table(ref_table_id) &&
+             OB_FAIL(compute_one_row_info_for_table_scan(access_paths))) {
+    LOG_WARN("failed to compute one row info", K(ret));
   } else {
     LOG_TRACE("succeed to compute base table property",
         K(restrict_info_set_), K(output_const_exprs_),
-        K(output_equal_sets_));
+        K(output_equal_sets_), K(is_at_most_one_row_));
   }
   return ret;
-} 
+}
 
 int ObJoinOrder::pruning_unstable_access_path(BaseTableOptInfo *table_opt_info,
                                               ObIArray<AccessPath *> &access_paths)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
+  bool use_acs = false;
   ObSEArray<uint64_t, 4> unstable_index_id;
   if (OB_UNLIKELY(access_paths.empty()) || OB_ISNULL(get_plan()) ||
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(access_paths.count()), K(get_plan()), K(session_info));
-  } else if (access_paths.count() <= 1 ||
+  } else if (OB_FAIL(session_info->get_adaptive_cursor_sharing(use_acs))) {
+    LOG_WARN("failed to check is acs enabled", K(ret));
+  } else if (use_acs || access_paths.count() <= 1 ||
              OB_DEFAULT_STAT_EST == table_meta_info_.cost_est_type_) {
     /* do not pruning access path */
   } else if (OB_FAIL(try_pruning_base_table_access_path(access_paths, unstable_index_id))) {
@@ -6096,8 +6041,7 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
       path->phy_plan_type_ = root->get_phy_plan_type();
       path->location_type_ = root->get_location_type();
       path->contain_fake_cte_ = root->get_contains_fake_cte();
-      path->contain_pw_merge_op_ = root->get_contains_pw_merge_op();
-      path->contain_match_all_fake_cte_ = root->get_contains_match_all_fake_cte();
+      path->contain_merge_op_ = root->get_contains_merge_op();
       path->contain_das_op_ = root->get_contains_das_op();
       path->parallel_ = root->get_parallel();
       path->server_cnt_ = root->get_server_cnt();
@@ -7331,8 +7275,11 @@ bool ObJoinOrder::is_partition_wise_valid(const Path &left_path,
                                           const Path &right_path)
 {
   bool is_valid = true;
-  if ((left_path.exchange_allocated_ || right_path.exchange_allocated_) &&
-      (left_path.contain_pw_merge_op() || right_path.contain_pw_merge_op())) {
+  if (left_path.exchange_allocated_ && !right_path.exchange_allocated_ &&
+      right_path.contain_merge_op()) {
+    is_valid = false;
+  } else if (!left_path.exchange_allocated_ && right_path.exchange_allocated_ &&
+             left_path.contain_merge_op()) {
     is_valid = false;
   } else {
     is_valid = true;
@@ -7834,8 +7781,7 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
       LOG_WARN("failed to append join filters", K(ret));
     } else if (OB_FAIL(append(join_path->filter_, filters))) {
       LOG_WARN("failed to append join quals", K(ret));
-    } else if (DistAlgo::DIST_PULL_TO_LOCAL != join_dist_algo &&
-               OB_FAIL(generate_join_filter_infos(left_path,
+    } else if (OB_FAIL(generate_join_filter_infos(left_path,
                                                   right_path,
                                                   join_type,
                                                   join_dist_algo,
@@ -8089,6 +8035,7 @@ int ObJoinOrder::check_normal_join_filter_valid(const Path& left_path,
   ObLogPlan *plan = get_plan();
   ObJoinOrder* left_tree = NULL;
   const ObDMLStmt *stmt = NULL;
+  ObRelIds table_set;
   bool left_find = false;
   bool right_find = false;
   bool cur_dfo_has_shuffle_bf = false;
@@ -8106,66 +8053,33 @@ int ObJoinOrder::check_normal_join_filter_valid(const Path& left_path,
   }
   for (int i = 0; OB_SUCC(ret) && i < join_filter_infos.count(); ++i) {
     JoinFilterInfo &info = join_filter_infos.at(i);
-    double join_filter_sel = 1.0;
+    double left_distinct_card = 0;
+    double right_distinct_card = 0;
+    table_set.reuse();
     if (!info.in_current_dfo_ && cur_dfo_has_shuffle_bf) {
       info.can_use_join_filter_ = false;
     } else if (!info.can_use_join_filter_ || info.lexprs_.empty()) {
       info.can_use_join_filter_ = false;
-    } else if (OB_FAIL(calc_join_filter_selectivity(left_path,
-                                                    right_path,
-                                                    info,
-                                                    join_filter_sel))) {
-      LOG_WARN("failed to calc join filter sel", K(ret));
+    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
+                                                            plan->get_selectivity_ctx(),
+                                                            info.lexprs_,
+                                                            left_tree->get_output_rows(),
+                                                            left_distinct_card))) {
+      LOG_WARN("failed to calc distinct", K(ret));
+    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
+                                                            plan->get_selectivity_ctx(),
+                                                            info.rexprs_,
+                                                            info.row_count_,
+                                                            right_distinct_card))) {
+      LOG_WARN("failed to calc distinct", K(ret));
     } else {
-      double rate = 1 - join_filter_sel;
-      double threshold = 0.6;
-      if (info.in_current_dfo_) {
-        threshold = 0.9;
-      }
-      info.join_filter_selectivity_ = join_filter_sel;
-      info.can_use_join_filter_ = rate >= threshold || NULL != info.force_filter_;
-      LOG_TRACE("succeed to check normal join filter", K(info));
+      double rate = 1 - left_distinct_card / right_distinct_card;
+      rate = rate < 0.0 ? 0.0 : rate;
+      rate = rate > 0.9 ? 0.9 : rate;
+      info.join_filter_selectivity_ = 1 - rate;
+      info.can_use_join_filter_ = rate >= (info.in_current_dfo_ ? 0.9 : 0.6)
+                                  || NULL != info.force_filter_;
     }
-  }
-  return ret;
-}
-
-int ObJoinOrder::calc_join_filter_selectivity(const Path& left_path,
-                                              const Path& right_path,
-                                              JoinFilterInfo& info,
-                                              double &join_filter_selectivity)
-{
-  int ret = OB_SUCCESS;
-  ObLogPlan *plan = get_plan();
-  double left_distinct_card = 1.0;
-  double right_distinct_card = 1.0;
-  join_filter_selectivity = 1.0;
-  if (OB_ISNULL(plan)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null plan", K(ret));
-  } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
-                                                          plan->get_selectivity_ctx(),
-                                                          info.rexprs_,
-                                                          info.row_count_,
-                                                          right_distinct_card,
-                                                          false))) {
-    LOG_WARN("failed to calc distinct", K(ret));
-  } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
-                                                          plan->get_selectivity_ctx(),
-                                                          info.lexprs_,
-                                                          left_path.get_path_output_rows(),
-                                                          left_distinct_card,
-                                                          false))) {
-    LOG_WARN("failed to calc distinct", K(ret));
-  } else {
-    join_filter_selectivity = left_distinct_card / right_distinct_card;
-    if (join_filter_selectivity < 0) {
-      join_filter_selectivity = 0;
-    } else if (join_filter_selectivity > 0.9) {
-      join_filter_selectivity = 0.9;
-    }
-    LOG_TRACE("succeed to calc join filter selectivity", K(join_filter_selectivity), 
-                                      K(left_distinct_card), K(right_distinct_card));
   }
   return ret;
 }
@@ -8892,7 +8806,6 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
       path_info.force_mat_ = log_join_hint->nl_material_->is_enable_hint();
       path_info.force_no_mat_ = log_join_hint->nl_material_->is_disable_hint();
     } else if (log_hint.is_outline_data_) {
-      path_info.force_mat_ = false;
       path_info.force_no_mat_ = true;
     }
     if (NULL != log_join_hint && !log_join_hint->local_method_hints_.empty()) {
@@ -10868,11 +10781,6 @@ int ObJoinOrder::generate_inner_base_paths(const ObIArray<ObRawExpr *> &join_con
   } else {
     // todo: @guoping.wgp support join type in future
   }
-
-  if (OB_UNLIKELY(OB_ERR_NO_PATH_GENERATED == ret && !inner_path_info.force_inner_nl_)) {
-    ret = OB_SUCCESS;
-    LOG_TRACE("OPT: generate no inner path" , K(right_tree.get_type()), K(inner_path_info));
-  }
   return ret;
 }
 
@@ -11411,10 +11319,11 @@ int ObJoinOrder::extract_pushdown_quals(const ObIArray<ObRawExpr *> &quals,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexplected null", K(qual), K(ret));
     // can not push down expr with subquery
-    } else if (qual->has_flag(CNT_PSEUDO_COLUMN) ||
+    } else if (qual->has_flag(CNT_ONETIME) ||
+               qual->has_flag(CNT_PSEUDO_COLUMN) ||
                qual->has_flag(CNT_PRIOR) ||
                qual->has_flag(CNT_ROWNUM)) {
-      if (force_inner_nl && qual->has_flag(CNT_SUB_QUERY)) {
+      if (force_inner_nl) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("can not push down special qual", KPC(qual), K(ret));
       }

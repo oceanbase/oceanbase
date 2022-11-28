@@ -18,6 +18,7 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "logservice/ob_log_base_type.h"
+#include "logservice/palf/scn.h"
 #include "share/ob_autoincrement_param.h"
 #include "share/ob_autoincrement_service.h"
 #include "share/ob_gais_msg.h"
@@ -141,13 +142,13 @@ public:
   int replay(const void *buffer,
              const int64_t nbytes,
              const palf::LSN &lsn,
-             const int64_t ts_ns) override final
+             const palf::SCN &scn) override final
   {
     int ret = OB_SUCCESS;
     UNUSED(buffer);
     UNUSED(nbytes);
     UNUSED(lsn);
-    UNUSED(ts_ns);
+    UNUSED(scn);
     return ret;
   }
 

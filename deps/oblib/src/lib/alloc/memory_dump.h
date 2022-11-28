@@ -102,7 +102,7 @@ struct LabelInfoItem
   void *block_;
 };
 
-typedef common::hash::ObHashMap<ObString, LabelInfoItem, hash::NoPthreadDefendMode> LabelMap;
+typedef common::hash::ObHashMap<ObString, LabelInfoItem> LabelMap;
 
 using lib::AChunk;
 using lib::ABlock;

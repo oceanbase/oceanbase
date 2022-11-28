@@ -74,16 +74,16 @@ void TableLockRedoDataNode::set(
   create_schema_version_ = lock_op.create_schema_version_;
 }
 
-void ObITransCallback::set_log_ts(const int64_t log_ts)
+void ObITransCallback::set_scn(const palf::SCN scn)
 {
-  if (INT64_MAX == log_ts_) {
-    log_ts_ = log_ts;
+  if (palf::SCN::max_scn() == scn_) {
+    scn_ = scn;
   }
 }
 
-int64_t ObITransCallback::get_log_ts() const
+palf::SCN ObITransCallback::get_scn() const
 {
-  return log_ts_;
+  return scn_;
 }
 
 int ObITransCallback::before_append_cb(const bool is_replay)
@@ -126,14 +126,14 @@ int ObITransCallback::undo_log_submitted_cb()
   return ret;
 }
 
-int ObITransCallback::log_sync_cb(const int64_t log_ts)
+int ObITransCallback::log_sync_cb(const palf::SCN scn)
 {
   int ret = OB_SUCCESS;
   if (!need_fill_redo_) {
-  } else if (OB_UNLIKELY(INT64_MAX == log_ts)) {
+  } else if (OB_UNLIKELY(palf::SCN::max_scn() == scn)) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "log ts should not be invalid", K(ret), K(log_ts), K(*this));
-  } else if (OB_SUCC(log_sync(log_ts))) {
+    TRANS_LOG(ERROR, "log ts should not be invalid", K(ret), K(scn), K(*this));
+  } else if (OB_SUCC(log_sync(scn))) {
     need_fill_redo_ = false;
   }
   return ret;
@@ -414,28 +414,28 @@ int ObTransCallbackMgr::clean_unlog_callbacks(int64_t &removed_cnt)
   return ret;
 }
 
-int ObTransCallbackMgr::calc_checksum_before_log_ts(const int64_t log_ts,
-                                                    uint64_t &checksum,
-                                                    int64_t &checksum_log_ts)
+int ObTransCallbackMgr::calc_checksum_before_scn(const palf::SCN scn,
+                                                 uint64_t &checksum,
+                                                 palf::SCN &checksum_scn)
 {
   int ret = OB_SUCCESS;
 
-  if (INT64_MAX == log_ts) {
+  if (palf::SCN::max_scn() == scn) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "log ts is invalid", K(log_ts));
-  } else if (OB_FAIL(callback_list_.tx_calc_checksum_before_log_ts(log_ts))) {
-    TRANS_LOG(WARN, "calc checksum with minor freeze failed", K(ret), K(log_ts));
+    TRANS_LOG(ERROR, "log ts is invalid", K(scn));
+  } else if (OB_FAIL(callback_list_.tx_calc_checksum_before_scn(scn))) {
+    TRANS_LOG(WARN, "calc checksum with minor freeze failed", K(ret), K(scn));
   } else {
-    callback_list_.get_checksum_and_log_ts(checksum, checksum_log_ts);
+    callback_list_.get_checksum_and_scn(checksum, checksum_scn);
   }
 
   return ret;
 }
 
 void ObTransCallbackMgr::update_checksum(const uint64_t checksum,
-                                         const int64_t checksum_log_ts)
+                                         const palf::SCN checksum_scn)
 {
-  callback_list_.update_checksum(checksum, checksum_log_ts);
+  callback_list_.update_checksum(checksum, checksum_scn);
 }
 
 int64_t ObTransCallbackMgr::inc_pending_log_size(const int64_t size)
@@ -557,12 +557,12 @@ void ObTransCallbackMgr::set_for_replay(const bool for_replay)
   }
 }
 
-int ObTransCallbackMgr::replay_fail(const int64_t log_timestamp)
+int ObTransCallbackMgr::replay_fail(const palf::SCN scn)
 {
-  return callback_list_.replay_fail(log_timestamp);
+  return callback_list_.replay_fail(scn);
 }
 
-int ObTransCallbackMgr::replay_succ(const int64_t log_timestamp)
+int ObTransCallbackMgr::replay_succ(const palf::SCN scn)
 {
   return OB_SUCCESS;
 }
@@ -854,7 +854,7 @@ ObTransCtx *ObMvccRowCallback::get_trans_ctx() const
   return trans_ctx;
 }
 
-int ObMvccRowCallback::calc_checksum(const int64_t checksum_log_ts,
+int ObMvccRowCallback::calc_checksum(const palf::SCN checksum_scn,
                                      ObBatchChecksum *checksumer)
 {
   ObRowLatchGuard guard(value_.latch_);
@@ -866,7 +866,7 @@ int ObMvccRowCallback::calc_checksum(const int64_t checksum_log_ts,
         TRANS_LOG(ERROR, "only LOCK node can not calc checksum",
                   K(*this), K(get_dml_flag()));
       }
-    } else if (checksum_log_ts <= log_ts_) {
+    } else if (checksum_scn <= scn_) {
       tnode_->checksum(*checksumer);
       ((ObMemtableDataHeader *)tnode_->buf_)->checksum(*checksumer);
     }
@@ -960,7 +960,7 @@ int ObMvccRowCallback::trans_commit()
       if (OB_SUCC(ret)) {
         if (OB_FAIL(value_.trans_commit(ctx_.get_commit_version(), *tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K_(ctx), K_(value));
-        } else if (FALSE_IT(tnode_->trans_commit(ctx_.get_commit_version(), ctx_.get_tx_end_log_ts()))) {
+        } else if (FALSE_IT(tnode_->trans_commit(ctx_.get_commit_version(), ctx_.get_tx_end_scn()))) {
         } else if (!ctx_.is_for_replay() && FALSE_IT(wakeup_row_waiter_if_need_())) {
         } else if (blocksstable::ObDmlFlag::DF_LOCK == get_dml_flag()) {
           unlink_trans_node();
@@ -975,8 +975,8 @@ int ObMvccRowCallback::trans_commit()
           (void)ATOMIC_FAA(&value_.update_since_compact_, 1);
           if (value_.need_compact(for_read, ctx_.is_for_replay())) {
             if (ctx_.is_for_replay()) {
-              if (0 != ctx_.get_replay_compact_version() && INT64_MAX != ctx_.get_replay_compact_version()) {
-                memtable_->row_compact(&value_, ctx_.is_for_replay(), ctx_.get_replay_compact_version());
+              if (palf::SCN::min_scn() != ctx_.get_replay_compact_version() && palf::SCN::max_scn() != ctx_.get_replay_compact_version()) {
+                memtable_->row_compact(&value_, ctx_.is_for_replay(), ctx_.get_replay_compact_version().get_val_for_lsn_allocator());
               }
             } else {
               memtable_->row_compact(&value_, ctx_.is_for_replay(), INT64_MAX - 100);
@@ -1031,7 +1031,7 @@ int ObMvccRowCallback::trans_abort()
 
   if (NULL != tnode_) {
     if (!(tnode_->is_committed() || tnode_->is_aborted())) {
-      tnode_->trans_abort(ctx_.get_tx_end_log_ts());
+      tnode_->trans_abort(ctx_.get_tx_end_scn());
       wakeup_row_waiter_if_need_();
       unlink_trans_node();
     } else if (tnode_->is_committed()) {
@@ -1053,7 +1053,7 @@ int ObMvccRowCallback::rollback_callback()
 
   if (need_submit_log_
       && need_fill_redo_
-      && INT64_MAX == log_ts_) {
+      && palf::SCN::max_scn() == scn_) {
     ctx_.inc_pending_log_size(-1 * data_size_);
   }
 
@@ -1158,23 +1158,23 @@ int64_t ObMvccRowCallback::to_string(char *buf, const int64_t buf_len) const
   databuff_printf(buf, buf_len, pos,
       "[this=%p, ctx=%s, is_link=%d, need_fill_redo=%d, "
       "value=%s, tnode=(%s), "
-      "seq_no=%ld, memtable=%p, log_ts=%lu",
+      "seq_no=%ld, memtable=%p, scn=%s",
       this, to_cstring(ctx_), is_link_, need_fill_redo_,
       to_cstring(value_), NULL == tnode_ ? "null" : to_cstring(*tnode_),
-      seq_no_, memtable_, log_ts_);
+      seq_no_, memtable_, to_cstring(scn_));
   return pos;
 }
 
-int ObMvccRowCallback::log_sync(const int64_t log_ts)
+int ObMvccRowCallback::log_sync(const palf::SCN scn)
 {
   int ret = OB_SUCCESS;
 
-  memtable_->set_rec_log_ts(log_ts);
-  memtable_->set_max_end_log_ts(log_ts);
-  (void)tnode_->fill_log_timestamp(log_ts);
+  memtable_->set_rec_log_ts(scn.get_val_for_lsn_allocator());
+  memtable_->set_max_end_log_ts(scn.get_val_for_lsn_allocator());
+  (void)tnode_->fill_scn(scn);
   ctx_.update_max_submitted_seq_no(seq_no_);
   if (OB_FAIL(dec_unsynced_cnt_())) {
-    TRANS_LOG(ERROR, "memtable dec unsynced cnt error", K(ret), K(log_ts),
+    TRANS_LOG(ERROR, "memtable dec unsynced cnt error", K(ret), K(scn),
               K(memtable_->get_unsynced_cnt()));
   } else {
     // do nothing

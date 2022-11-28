@@ -569,24 +569,16 @@ int ObMultiTenant::create_tenant_without_unit(const uint64_t tenant_id,
     static const int64_t VIRTUAL_TENANT_MEMORY_LIMTI = 1L << 30;
     mem_limit = VIRTUAL_TENANT_MEMORY_LIMTI;
   }
+
   if (OB_FAIL(construct_meta_for_virtual_tenant(tenant_id, min_cpu, max_cpu, mem_limit, meta))) {
     LOG_WARN("fail to construct_meta_for_virtual_tenant", K(ret), K(tenant_id));
   } else if (OB_FAIL(create_tenant(meta, false))) {
     LOG_WARN("fail to create virtual tenant", K(ret), K(tenant_id));
   }
-  if (OB_SUCC(ret) && is_virtual_tenant_id(tenant_id)) {
-    ObVirtualTenantManager &omti = ObVirtualTenantManager::get_instance();
-    if (OB_FAIL(omti.add_tenant(tenant_id))) {
-      LOG_ERROR("Fail to add virtual tenant to tenant manager, ", K(ret));
-    } else if (OB_FAIL(omti.set_tenant_mem_limit(tenant_id, 0, mem_limit))) {
-      LOG_ERROR("Fail to set virtual tenant mem limit, ", K(ret));
-    }
-  }
   return ret;
 }
 
-int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObTenantConfig &unit,
-                                                     const int64_t abs_timeout_us)
+int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObTenantConfig &unit)
 {
   int ret = OB_SUCCESS;
 
@@ -598,14 +590,12 @@ int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObT
   ObTenantSuperBlock new_super_block;
   bool lock_succ = false;
   int64_t bucket_lock_idx = -1;
-  int64_t lock_timeout_ts = abs_timeout_us - 3000000; // reserve 3s for converting tenant
-
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(bucket_lock_.wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id), lock_timeout_ts))) {
-    LOG_WARN("fail to wrlock for convert_hidden_to_real_sys_tenant", K(ret), K(bucket_lock_idx), K(lock_timeout_ts));
+  } else if (OB_FAIL(bucket_lock_.try_wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id)))) {
+    LOG_WARN("fail to try_wrlock for convert_hidden_to_real_sys_tenant", K(ret), K(bucket_lock_idx));
   } else if (FALSE_IT(lock_succ = true)) {
   } else if (OB_FAIL(get_tenant(tenant_id, tenant))) {
     LOG_WARN("fail to get sys tenant", K(tenant_id), K(ret));
@@ -632,7 +622,7 @@ int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObT
   return ret;
 }
 
-int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, const int64_t abs_timeout_us)
+int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog)
 {
   int ret = OB_SUCCESS;
 
@@ -645,7 +635,6 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   ObTenantCreateStep create_step = ObTenantCreateStep::STEP_BEGIN;  // step0
   bool lock_succ = false;
   int64_t bucket_lock_idx = -1;
-  int64_t lock_timeout_ts = abs_timeout_us - 5000000; // reserve 5s for creating tenant
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -656,8 +645,8 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   } else if (OB_ISNULL(malloc_allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("malloc allocator is NULL", K(ret));
-  } else if (OB_FAIL(bucket_lock_.wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id), lock_timeout_ts))) {
-    LOG_WARN("fail to wrlock for create tenant", K(ret), K(tenant_id), K(bucket_lock_idx), K(lock_timeout_ts));
+  } else if (OB_FAIL(bucket_lock_.try_wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id)))) {
+    LOG_WARN("fail to try_wrlock for create tenant", K(ret), K(tenant_id), K(bucket_lock_idx));
   } else if (FALSE_IT(lock_succ = true)) {
   } else if (OB_SUCC(get_tenant(tenant_id, tenant))) {
     ret = OB_TENANT_EXIST;
@@ -837,6 +826,8 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
     LOG_WARN("fail to update_tenant_freezer_mem_limit", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant->update_thread_cnt(max_cpu))) {
     LOG_WARN("fail to update mtl module thread_cnt", K(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant->update_thread_cnt(max_cpu))) {
+      LOG_WARN("fail to update mtl module thread_cnt", K(ret), K(tenant_id));
   } else if (OB_FAIL(update_tenant_log_disk_size(tenant_id, unit.config_.log_disk_size()))) {
       LOG_WARN("fail to update tenant log disk size", K(ret), K(tenant_id));
   } else {
@@ -863,7 +854,7 @@ int ObMultiTenant::update_tenant_unit(const ObUnitInfoGetter::ObTenantConfig &un
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(bucket_lock_.wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id)))) {
+  } else if (OB_FAIL(bucket_lock_.try_wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id)))) {
     LOG_WARN("fail to try_wrlock for update tenant unit", K(ret), K(tenant_id), K(bucket_lock_idx));
   } else if (FALSE_IT(lock_succ = true)) {
   } else if (OB_FAIL(update_tenant_unit_no_lock(unit))) {
@@ -1218,7 +1209,9 @@ bool ObMultiTenant::is_available_tenant(uint64_t tenant_id) const
   if (OB_SUCCESS == ret && NULL != tenant) {
     if (tenant->get_create_status() == ObTenantCreateStatus::CREATE_COMMIT) {
       ObUnitInfoGetter::ObUnitStatus unit_status = tenant->get_unit().unit_status_;
-      available = share::ObUnitInfoGetter::is_valid_tenant(unit_status);
+      if (unit_status == ObUnitInfoGetter::UNIT_NORMAL || unit_status == ObUnitInfoGetter::UNIT_MIGRATE_IN || unit_status == ObUnitInfoGetter::UNIT_MIGRATE_OUT) {
+        available = true;
+      }
     }
   }
   return available;
@@ -1290,6 +1283,13 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id)
   } else if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id))) {
     LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
   } else {
+    LOG_INFO("removed_tenant begin to stop", K(tenant_id));
+    removed_tenant->stop();
+    LOG_INFO("removed_tenant begin to wait", K(tenant_id));
+    removed_tenant->wait();
+    // wait for some outstanding requests to complete, which may need to switch tenant,
+    // so here call try_wrlock after wait, otherwise, some req may be hang in the th_worker.
+    // https://work.aone.alibaba-inc.com/issue/44705579
     LOG_INFO("removed_tenant begin to try wlock", K(tenant_id));
     bool locked = false;
     ObLDHandle handle;
@@ -1305,10 +1305,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id)
       LOG_WARN("can't get tenant wlock to remove tenant", K(tenant_id), K(ret));
       removed_tenant->lock_.ld_.print();
     } else {
-      LOG_INFO("removed_tenant begin to stop", K(tenant_id));
-      removed_tenant->stop();
-      LOG_INFO("removed_tenant begin to wait", K(tenant_id));
-      removed_tenant->wait();
       ObTenant *removed_tenant_tmp = nullptr;
       SpinWLockGuard guard(lock_);
 
@@ -1564,20 +1560,13 @@ int ObMultiTenant::get_tenant_with_tenant_lock(
   const uint64_t tenant_id, ObLDHandle &handle, ObTenant *&tenant) const
 {
   SpinRLockGuard guard(lock_);
-  ObTenant *tenant_tmp = nullptr;
-  int ret = get_tenant_unsafe(tenant_id, tenant_tmp);
+  int ret = get_tenant_unsafe(tenant_id, tenant);
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(tenant_tmp->try_rdlock(handle))) {
-      if (tenant_tmp->has_stopped()) {
-        // in some cases this error code is handled specially
-        ret = OB_IN_STOP_STATE;
-        LOG_WARN("fail to try rdlock tenant", K(ret), K(tenant_id));
-      }
-    } else {
-      // assign tenant when get rdlock succ
-      tenant = tenant_tmp;
-    }
-    if (OB_UNLIKELY(tenant_tmp->has_stopped())) {
+    if (OB_FAIL(tenant->try_rdlock(handle)) && tenant->has_stopped()) {
+      // in some cases this error code is handled specially
+      ret = OB_IN_STOP_STATE;
+      LOG_WARN("fail to try rdlock tenant", K(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(tenant->has_stopped())) {
       LOG_WARN("get rdlock when tenant has stopped", K(tenant_id), K(lbt()));
     }
   }

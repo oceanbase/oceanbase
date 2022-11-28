@@ -283,7 +283,6 @@ TEST_F(TestIOStruct, IOAllocator)
 TEST_F(TestIOStruct, IORequest)
 {
   ObTenantIOManager tenant_io_mgr;
-  tenant_io_mgr.inc_ref();
   ASSERT_SUCC(tenant_io_mgr.io_allocator_.init(TEST_TENANT_ID, IO_MEMORY_LIMIT));
   ObRefHolder<ObTenantIOManager> holder(&tenant_io_mgr);
   ObIOFd fd;
@@ -560,8 +559,7 @@ TEST_F(TestIOStruct, IOCallbackManager)
   ASSERT_FAIL(callback_mgr.enqueue_callback(req));
   char buf[32] = "test";
   req.io_buf_ = buf;
-  char callback_buf_[ObIOCallback::CALLBACK_BUF_SIZE] __attribute__ ((aligned (16)));
-  req.copied_callback_ = new (callback_buf_) TestIOCallback();
+  req.copied_callback_ = new (req.callback_buf_) TestIOCallback();
 //  ObIOManager::get_instance().io_config_ = ObIOConfig::default_config();
   ASSERT_SUCC(callback_mgr.enqueue_callback(req));
 

@@ -17,22 +17,22 @@ insert/*trace*/ into t1(id) values (107);
 insert/*trace*/ into t2(id) values (107),(75),(1000);
 EXPLAIN select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200;
 Query Plan
-====================================
-|ID|OPERATOR   |NAME|EST. ROWS|COST|
-------------------------------------
-|0 |MERGE JOIN |    |1        |4   |
-|1 | TABLE SCAN|t1  |1        |2   |
-|2 | TABLE SCAN|t2  |1        |2   |
-====================================
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |NESTED-LOOP JOIN      |    |1        |53  |
+|1 | TABLE SCAN           |t1  |1        |46  |
+|2 | DISTRIBUTED TABLE GET|t2  |1        |7   |
+===============================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.id], [t2.id]), filter(nil), rowset=256, 
-      equal_conds([t2.id = t1.id]), other_conds(nil)
+      conds(nil), nl_params_([t1.id])
   1 - output([t1.id]), filter(nil), rowset=256, 
       access([t1.id]), partitions(p0)
   2 - output([t2.id]), filter(nil), rowset=256, 
-      access([t2.id]), partitions(p0)
+      access([GROUP_ID], [t2.id]), partitions(p0)
 
 select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200;
 +----+----+
@@ -42,22 +42,22 @@ select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200;
 
 EXPLAIN select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200 and t1.id<200;
 Query Plan
-====================================
-|ID|OPERATOR   |NAME|EST. ROWS|COST|
-------------------------------------
-|0 |MERGE JOIN |    |1        |4   |
-|1 | TABLE SCAN|t1  |1        |2   |
-|2 | TABLE SCAN|t2  |1        |2   |
-====================================
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |NESTED-LOOP JOIN      |    |1        |53  |
+|1 | TABLE SCAN           |t1  |1        |46  |
+|2 | DISTRIBUTED TABLE GET|t2  |1        |7   |
+===============================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([t1.id], [t2.id]), filter(nil), rowset=256, 
-      equal_conds([t2.id = t1.id]), other_conds(nil)
+      conds(nil), nl_params_([t1.id])
   1 - output([t1.id]), filter(nil), rowset=256, 
       access([t1.id]), partitions(p0)
   2 - output([t2.id]), filter(nil), rowset=256, 
-      access([t2.id]), partitions(p0)
+      access([GROUP_ID], [t2.id]), partitions(p0)
 
 select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200 and t1.id<200;
 +----+----+
@@ -67,22 +67,22 @@ select t1.id, t2.id from t1, t2 where t2.id = t1.id and t1.id>200 and t1.id<200;
 
 EXPLAIN select a.id , b.id from t1 a, t2 b where a.id = b.id and a.id>200 and a.id<200;
 Query Plan
-====================================
-|ID|OPERATOR   |NAME|EST. ROWS|COST|
-------------------------------------
-|0 |MERGE JOIN |    |1        |4   |
-|1 | TABLE SCAN|a   |1        |2   |
-|2 | TABLE SCAN|b   |1        |2   |
-====================================
+===============================================
+|ID|OPERATOR              |NAME|EST. ROWS|COST|
+-----------------------------------------------
+|0 |NESTED-LOOP JOIN      |    |1        |53  |
+|1 | TABLE SCAN           |a   |1        |46  |
+|2 | DISTRIBUTED TABLE GET|b   |1        |7   |
+===============================================
 
 Outputs & filters: 
 -------------------------------------
   0 - output([a.id], [b.id]), filter(nil), rowset=256, 
-      equal_conds([a.id = b.id]), other_conds(nil)
+      conds(nil), nl_params_([a.id])
   1 - output([a.id]), filter(nil), rowset=256, 
       access([a.id]), partitions(p0)
   2 - output([b.id]), filter(nil), rowset=256, 
-      access([b.id]), partitions(p0)
+      access([GROUP_ID], [b.id]), partitions(p0)
 
 select a.id , b.id from t1 a, t2 b where a.id = b.id and a.id>200 and a.id<200;
 +----+----+
@@ -95,10 +95,10 @@ Query Plan
 ===================================================
 |ID|OPERATOR                  |NAME|EST. ROWS|COST|
 ---------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN|    |3        |4   |
-|1 | TABLE SCAN               |b   |3        |2   |
-|2 | MATERIAL                 |    |1        |2   |
-|3 |  TABLE SCAN              |a   |1        |2   |
+|0 |NESTED-LOOP JOIN CARTESIAN|    |3        |91  |
+|1 | TABLE SCAN               |b   |3        |46  |
+|2 | MATERIAL                 |    |1        |46  |
+|3 |  TABLE SCAN              |a   |1        |46  |
 ===================================================
 
 Outputs & filters: 

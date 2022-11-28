@@ -37,6 +37,7 @@ namespace oceanbase
 using namespace common;
 using namespace share;
 using namespace transaction;
+using namespace palf;
 namespace rootserver
 {
 /////////ObUnitGroupInfo
@@ -374,13 +375,12 @@ int ObTenantLSInfo::fix_ls_status_(const ObLSStatusMachineParameter &machine)
       //already offline, status will be deleted by GC
     } else if (status_info.ls_is_dropping()
                || status_info.ls_is_tenant_dropping()) {
-      int64_t drop_ts = OB_INVALID_TIMESTAMP; 
-      if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(tenant_id, drop_ts))) {
+      SCN drop_scn;
+      if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(tenant_id, drop_scn))) {
         LOG_WARN("failed to get gts", KR(ret), K(tenant_id));
       } else if (OB_FAIL(ls_life_agent.set_ls_offline(tenant_id,
-                     status_info.ls_id_, status_info.status_,
-                     drop_ts))) {
-        LOG_WARN("failed to update ls status", KR(ret), K(status_info), K(tenant_id), K(drop_ts));
+                     status_info.ls_id_, status_info.status_, drop_scn))) {
+        LOG_WARN("failed to update ls status", KR(ret), K(status_info), K(tenant_id), K(drop_scn));
       }
     } else if (status_info.ls_is_creating()
                || status_info.ls_is_created()
@@ -705,7 +705,7 @@ int ObTenantLSInfo::check_unit_group_valid_(
 int ObTenantLSInfo::create_new_ls_for_recovery(
     const share::ObLSID &ls_id,
     const uint64_t ls_group_id,
-    const int64_t create_ts_ns,
+    const SCN &create_scn,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -713,9 +713,9 @@ int ObTenantLSInfo::create_new_ls_for_recovery(
   int64_t info_index = OB_INVALID_INDEX_INT64;
   if (OB_UNLIKELY(!ls_id.is_valid()
                   || OB_INVALID_ID == ls_group_id
-                  || OB_INVALID_TIMESTAMP == create_ts_ns)) {
+                  || !create_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls id is invalid", KR(ret), K(ls_id), K(ls_group_id), K(create_ts_ns));
+    LOG_WARN("ls id is invalid", KR(ret), K(ls_id), K(ls_group_id), K(create_scn));
   } else if (OB_UNLIKELY(!is_valid())
              || OB_ISNULL(tenant_schema_)
              || OB_ISNULL(sql_proxy_)) {
@@ -761,9 +761,9 @@ int ObTenantLSInfo::create_new_ls_for_recovery(
                K(ls_id), K(ls_group_id), K(group_info), K(primary_zone));
     } else if (OB_FAIL(get_zone_priority(primary_zone, *tenant_schema_, zone_priority))) {
       LOG_WARN("failed to get normalize primary zone", KR(ret), K(primary_zone), K(zone_priority));
-    } else if (OB_FAIL(ls_life_agent.create_new_ls_in_trans(new_info, create_ts_ns,
+    } else if (OB_FAIL(ls_life_agent.create_new_ls_in_trans(new_info, create_scn,
             zone_priority.string(), trans))) {
-      LOG_WARN("failed to insert ls info", KR(ret), K(new_info), K(create_ts_ns), K(zone_priority));
+      LOG_WARN("failed to insert ls info", KR(ret), K(new_info), K(create_scn), K(zone_priority));
     } else if (OB_FAIL(add_ls_status_info_(new_info))) {
       LOG_WARN("failed to add new ls info to memory", KR(ret), K(new_info));
     }
@@ -1203,25 +1203,25 @@ int ObTenantLSInfo::create_new_ls_(const share::ObLSStatusInfo &status_info)
     share::ObLSLifeAgentManager ls_life_agent(*sql_proxy_);
     share::ObLSAttr ls_info;
     share::ObLSFlag flag = share::OB_LS_FLAG_NORMAL;//TODO
-    int64_t create_ts_ns = OB_INVALID_TIMESTAMP;
+    SCN create_scn;
     ObSqlString zone_priority;
-    if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(status_info.tenant_id_, create_ts_ns))) {
+    if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(status_info.tenant_id_, create_scn))) {
       LOG_WARN("failed to get tenant gts", KR(ret), K(status_info));
     } else if (OB_FAIL(ls_info.init(status_info.ls_id_, status_info.ls_group_id_, flag,
-                             share::OB_LS_CREATING, share::OB_LS_OP_CREATE_PRE, create_ts_ns))) {
-      LOG_WARN("failed to init new operation", KR(ret), K(status_info), K(create_ts_ns));
+                             share::OB_LS_CREATING, share::OB_LS_OP_CREATE_PRE, create_scn))) {
+      LOG_WARN("failed to init new operation", KR(ret), K(status_info), K(create_scn));
     } else if (OB_FAIL(ls_operator_.insert_ls(ls_info, max_ls_group_id_))) {
       LOG_WARN("failed to insert new operation", KR(ret), K(ls_info), K(max_ls_group_id_));
     } else if (OB_FAIL(get_zone_priority(status_info.primary_zone_,
             *tenant_schema_, zone_priority))) {
       LOG_WARN("failed to get normalize primary zone", KR(ret), K(status_info),
           K(zone_priority), K(tenant_schema_));
-    } else if (OB_FAIL(ls_life_agent.create_new_ls(status_info, create_ts_ns,
+    } else if (OB_FAIL(ls_life_agent.create_new_ls(status_info, create_scn,
             zone_priority.string()))) {
-      LOG_WARN("failed to create new ls", KR(ret), K(status_info), K(create_ts_ns),
+      LOG_WARN("failed to create new ls", KR(ret), K(status_info), K(create_scn),
           K(zone_priority));
-    } else if (OB_FAIL(do_create_ls_(status_info, create_ts_ns))) {
-      LOG_WARN("failed to create ls", KR(ret), K(status_info), K(create_ts_ns));
+    } else if (OB_FAIL(do_create_ls_(status_info, create_scn))) {
+      LOG_WARN("failed to create ls", KR(ret), K(status_info), K(create_scn));
     } else if (OB_FAIL(process_ls_status_after_created_(status_info))) {
       LOG_WARN("failed to update ls status", KR(ret), K(status_info));
     }
@@ -1291,7 +1291,7 @@ int ObTenantLSInfo::fetch_new_ls_id(const uint64_t tenant_id, share::ObLSID &id)
 
 int ObTenantLSInfo::create_ls_with_palf(
     const share::ObLSStatusInfo &info,
-    const int64_t create_ts_ns,
+    const SCN &create_scn,
     const bool create_ls_with_palf,
     const palf::PalfBaseInfo &palf_base_info)
 {
@@ -1327,11 +1327,11 @@ int ObTenantLSInfo::create_ls_with_palf(
       ObLSCreator creator(*rpc_proxy_, info.tenant_id_,
                           info.ls_id_, sql_proxy_);
       if (OB_FAIL(creator.create_user_ls(info, paxos_replica_num,
-                                         locality_array, create_ts_ns,
+                                         locality_array, create_scn,
                                          tenant_schema_->get_compatibility_mode(),
                                          create_ls_with_palf,
                                          palf_base_info))) {
-        LOG_WARN("failed to create user ls", KR(ret), K(info), K(locality_array), K(create_ts_ns),
+        LOG_WARN("failed to create user ls", KR(ret), K(info), K(locality_array), K(create_scn),
                                              K(palf_base_info), K(create_ls_with_palf));
       }
     }
@@ -1342,7 +1342,7 @@ int ObTenantLSInfo::create_ls_with_palf(
 }
 
 int ObTenantLSInfo::do_create_ls_(const share::ObLSStatusInfo &info,
-                                  const int64_t create_scn)
+                                  const SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::fast_current_time();
@@ -1408,21 +1408,21 @@ int ObTenantLSInfo::do_tenant_drop_ls_(const share::ObLSStatusInfo &status_info)
     LOG_WARN("failed to check ls can offline", KR(ret), K(status_info));
   } else if (can_offline) {
     ObLSLifeAgentManager ls_life_agent(*sql_proxy_);
-    int64_t drop_ts = OB_INVALID_TIMESTAMP;
+    SCN drop_scn;
     if (!status_info.ls_id_.is_sys_ls()) {
       //sys ls cannot delete ls, after ls is in tenant dropping
       if (OB_FAIL(ls_operator_.delete_ls(status_info.ls_id_, share::OB_LS_TENANT_DROPPING))) {
         LOG_WARN("failed to delete ls", KR(ret), K(status_info));
-      } else if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(status_info.tenant_id_, drop_ts))) {
+      } else if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(status_info.tenant_id_, drop_scn))) {
         LOG_WARN("failed to get gts", KR(ret), K(status_info));
       }
     } else {
       //TODO sys ls can not get GTS after tenant_dropping
-      drop_ts = OB_LS_MIN_SCN_VALUE;
+      drop_scn.set_base();
     }
     if (FAILEDx(ls_life_agent.set_ls_offline(status_info.tenant_id_,
-            status_info.ls_id_, status_info.status_, drop_ts))) {
-      LOG_WARN("failed to update ls info", KR(ret), K(status_info), K(drop_ts));
+            status_info.ls_id_, status_info.status_, drop_scn))) {
+      LOG_WARN("failed to update ls info", KR(ret), K(status_info), K(drop_scn));
     }
   }
   const int64_t cost = ObTimeUtility::fast_current_time() - start_time;
@@ -1464,14 +1464,14 @@ int ObTenantLSInfo::do_drop_ls_(const share::ObLSStatusInfo &status_info)
       LOG_WARN("failed to check ls can offline", KR(ret), K(status_info));
     } else if (can_offline) {
       ObLSLifeAgentManager ls_life_agent(*sql_proxy_);
-      int64_t drop_ts = OB_INVALID_TIMESTAMP;
+      SCN drop_scn;
       if (OB_FAIL(ls_operator_.delete_ls(status_info.ls_id_, share::OB_LS_DROPPING))) {
         LOG_WARN("failed to delete ls", KR(ret), K(status_info));
-      } else if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(status_info.tenant_id_, drop_ts))) {
+      } else if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(status_info.tenant_id_, drop_scn))) {
         LOG_WARN("failed to get gts", KR(ret), K(status_info));
       } else if (OB_FAIL(ls_life_agent.set_ls_offline(status_info.tenant_id_,
-              status_info.ls_id_, status_info.status_, drop_ts))) {
-        LOG_WARN("failed to update ls info", KR(ret), K(status_info), K(drop_ts));
+              status_info.ls_id_, status_info.status_, drop_scn))) {
+        LOG_WARN("failed to update ls info", KR(ret), K(status_info), K(drop_scn));
       }
     }
   }
@@ -2049,7 +2049,7 @@ void ObPrimaryLSService::do_work()
     int64_t idle_time_us = 100 * 1000L;
     int tmp_ret = OB_SUCCESS;
     while (!has_set_stop()) {
-      idle_time_us = is_meta_tenant(tenant_id_) ? 100 * 1000L : 10 * 1000 * 1000L;
+      idle_time_us = 10 * 1000 * 1000L;
       {
         ObCurTraceId::init(GCONF.self_addr_);
         share::schema::ObSchemaGetterGuard schema_guard;
@@ -2321,17 +2321,17 @@ int ObPrimaryLSService::gather_tenant_recovery_stat_()
     ObAllTenantInfoProxy info_proxy;
     ObAllTenantInfo tenant_info;
     const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id_);
-    int64_t sync_ts = 0;
-    int64_t min_wrs = 0;
+    SCN sync_scn;
+    SCN min_wrs_scn;
     if (OB_FAIL(ls_recovery_op.get_tenant_recovery_stat(
-            user_tenant_id, *GCTX.sql_proxy_, sync_ts, min_wrs))) {
+            user_tenant_id, *GCTX.sql_proxy_, sync_scn, min_wrs_scn))) {
       LOG_WARN("failed to get tenant recovery stat", KR(ret), K(user_tenant_id));
       //TODO replayable_ts_ns is equal to sync_ts_ns
     } else if (OB_FAIL(info_proxy.update_tenant_recovery_status(
-                   user_tenant_id, GCTX.sql_proxy_, share::NORMAL_SWITCHOVER_STATUS, sync_ts,
-                   sync_ts, min_wrs))) {
+                   user_tenant_id, GCTX.sql_proxy_, share::NORMAL_SWITCHOVER_STATUS, sync_scn,
+                   sync_scn, min_wrs_scn))) {
       LOG_WARN("failed to update tenant recovery stat", KR(ret),
-               K(user_tenant_id), K(sync_ts), K(min_wrs));
+               K(user_tenant_id), K(sync_scn), K(min_wrs_scn));
     }
   }
   return ret;

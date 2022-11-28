@@ -75,8 +75,15 @@ ObResultSet::~ObResultSet()
   if (OB_NOT_NULL(pc)) {
     cache_obj_guard_.force_early_release(pc);
   }
-  // Always called at the end of the ObResultSet destructor
-  update_end_time();
+
+  if (need_update_cnt_ > 0) {
+    observer::ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(observer::ObReqTimeInfo,
+                                               observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
+    OB_ASSERT(NULL != req_timeinfo);
+    for (int i=0; i < need_update_cnt_; i++) {
+      req_timeinfo->update_end_time();
+    }
+  }
 }
 
 int ObResultSet::open_cmd()
@@ -886,30 +893,15 @@ int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCPa
              && OB_FAIL(construct_field_name(raw_params, false))) {
     LOG_WARN("failed to construct field name", K(ret));
   } else {
-    int64_t ps_param_count = plan_ctx->get_orig_question_mark_cnt();
     p_field_columns_ = phy_plan.contain_paramed_column_field()
                                   ? &field_columns_
                                   : &phy_plan.get_field_columns();
+    p_param_columns_ = &phy_plan.get_param_fields();
     p_returning_param_columns_ = &phy_plan.get_returning_param_fields();
     stmt_type_ = phy_plan.get_stmt_type();
     literal_stmt_type_ = phy_plan.get_literal_stmt_type();
     is_returning_ = phy_plan.is_returning();
     plan_ctx->set_is_affect_found_row(phy_plan.is_affect_found_row());
-    if (is_ps_protocol() && ps_param_count != phy_plan.get_param_fields().count()) {
-      if (OB_FAIL(reserve_param_columns(ps_param_count))) {
-        LOG_WARN("reserve param columns failed", K(ret), K(ps_param_count));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < ps_param_count; ++i) {
-        ObField param_field;
-        param_field.type_.set_type(ObIntType); // @bug
-        param_field.cname_ = ObString::make_string("?");
-        OZ (add_param_column(param_field), K(param_field), K(i), K(ps_param_count));
-      }
-      LOG_DEBUG("reset param count ", K(ps_param_count), K(plan_ctx->get_orig_question_mark_cnt()), 
-        K(phy_plan.get_returning_param_fields().count()), K(phy_plan.get_param_fields().count()));
-    } else {
-      p_param_columns_ = &phy_plan.get_param_fields();
-    }
   }
   return ret;
 }

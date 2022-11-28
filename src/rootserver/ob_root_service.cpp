@@ -39,7 +39,6 @@
 #include "share/schema/ob_schema_mgr.h"
 #include "share/ob_lease_struct.h"
 #include "share/ob_common_rpc_proxy.h"
-#include "share/config/ob_config_helper.h"
 #include "share/config/ob_config_manager.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_part_mgr_util.h"
@@ -93,6 +92,7 @@
 #include "storage/ob_file_system_router.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/restore/ob_physical_restore_table_operator.h"//ObPhysicalRestoreTableOperator
+#include "logservice/palf/scn.h"
 namespace oceanbase
 {
 
@@ -1432,22 +1432,20 @@ int ObRootService::submit_offline_server_task(const common::ObAddr &server)
   return ret;
 }
 
-int ObRootService::submit_upgrade_task(
-    const obrpc::ObUpgradeJobArg::Action action,
-    const int64_t version)
+int ObRootService::submit_upgrade_task(const int64_t version)
 {
   int ret = OB_SUCCESS;
-  ObUpgradeTask task(upgrade_executor_, action, version);
+  ObUpgradeTask task(upgrade_executor_, version);
   task.set_retry_times(0); //not repeat
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(upgrade_executor_.can_execute())) {
-    LOG_WARN("can't run task now", KR(ret), K(action), K(version));
+    LOG_WARN("can't run task now", KR(ret), K(version));
   } else if (OB_FAIL(task_queue_.add_async_task(task))) {
-    LOG_WARN("submit upgrade task fail", KR(ret), K(action), K(version));
+    LOG_WARN("submit upgrade task fail", KR(ret), K(version));
   } else {
-    LOG_INFO("submit upgrade task success", KR(ret), K(action), K(version));
+    LOG_INFO("submit upgrade task success", KR(ret), K(version));
   }
   return ret;
 }
@@ -2924,7 +2922,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
     ObArray<ObTableSchema> table_schemas;
-    int64_t frozen_scn = 0;
+    palf::SCN frozen_scn;
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *db_schema = NULL;
     schema_guard.set_session_id(arg.schema_.get_session_id());
@@ -3174,8 +3172,8 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
             LOG_WARN("generate_schema for aux vp table failed",
               K(vp_arg), K(table_schema), K(ret));
           }
-        } else if (OB_FAIL(vp_builder.generate_aux_vp_table_schema(
-              schema_service, vp_arg, frozen_scn, table_schema, aux_vp_table_schema))) {
+        } else if (OB_FAIL(vp_builder.generate_aux_vp_table_schema(schema_service, vp_arg,
+                   frozen_scn.get_val_for_inner_table_field(), table_schema, aux_vp_table_schema))) {
           LOG_WARN("generate_schema for aux vp table failed", K(vp_arg), K(frozen_scn), K(table_schema), K(ret));
         } else if (OB_FAIL(table_schemas.push_back(aux_vp_table_schema))) {
           LOG_WARN("push_back failed", K(ret));
@@ -3682,6 +3680,8 @@ int ObRootService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLA
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_322) {
+    // do nothing
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
@@ -3696,7 +3696,7 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
 {
   LOG_DEBUG("receive execute ddl task arg", K(arg));
   int ret = OB_SUCCESS;
-  int64_t frozen_scn = 0;
+  palf::SCN frozen_scn;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -3793,10 +3793,13 @@ int ObRootService::precheck_interval_part(const obrpc::ObAlterTableArg &arg)
   int64_t tenant_id = alter_table_schema.get_tenant_id();
 
   if (!alter_table_schema.is_interval_part()
-      || obrpc::ObAlterTableArg::ADD_PARTITION != op_type) {
+             || obrpc::ObAlterTableArg::ADD_PARTITION != op_type) {
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, schema service must not be NULL", K(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval partition");
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard", K(ret));
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
@@ -3879,7 +3882,7 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
       LOG_WARN("fail to precheck_interval_part", K(arg), KR(ret));
     }
   } else {
-    int64_t frozen_scn = 0;
+    palf::SCN frozen_scn;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
       LOG_WARN("get_frozen_scn failed", K(ret), K(arg));
@@ -3972,7 +3975,7 @@ int ObRootService::create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTable
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    int64_t frozen_scn = 0;
+    palf::SCN frozen_scn;
     ObIndexBuilder index_builder(ddl_service_);
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
@@ -4209,7 +4212,7 @@ int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObA
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    int64_t frozen_scn = 0;
+    palf::SCN frozen_scn;
     if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(arg.tenant_id_, frozen_scn))) {
       LOG_WARN("get_frozen_scn failed", K(ret));
     } else if (OB_FAIL(ddl_service_.rebuild_index(arg, frozen_scn, res))) {
@@ -4276,7 +4279,7 @@ int ObRootService::truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::O
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    int64_t frozen_scn = 0;
+    palf::SCN frozen_scn;
     if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(arg.tenant_id_, frozen_scn))) {
       LOG_WARN("get_frozen_scn failed", K(ret));
     } else if (arg.is_add_to_scheduler_) {
@@ -4316,7 +4319,7 @@ int ObRootService::truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::O
         }
       }
     } else if (OB_FAIL(ddl_service_.truncate_table(arg, res, frozen_scn))) {
-      LOG_WARN("ddl service failed to truncate table", K(arg), K(ret));
+      LOG_WARN("ddl service failed to truncate table", K(arg), K(ret), K(frozen_scn));
     }
   }
   return ret;
@@ -4332,10 +4335,10 @@ int ObRootService::create_table_like(const ObCreateTableLikeArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    int64_t frozen_scn = 0;
+    palf::SCN frozen_scn;
     if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(arg.tenant_id_, frozen_scn))) {
       LOG_WARN("get_frozen_scn failed", K(ret));
-    } else if (OB_FAIL(ddl_service_.create_table_like(arg, frozen_scn))){
+    } else if (OB_FAIL(ddl_service_.create_table_like(arg, frozen_scn))) {
       if (OB_ERR_TABLE_EXIST == ret) {
         //create table xx if not exist like
         if (arg.if_not_exist_) {
@@ -6347,8 +6350,7 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
           if (old_package_info->get_source().length() == new_package_info.get_source().length()
               && (0 == MEMCMP(old_package_info->get_source().ptr(),
                               new_package_info.get_source().ptr(),
-                              old_package_info->get_source().length()))
-              && old_package_info->get_exec_env() == new_package_info.get_exec_env()) {
+                              old_package_info->get_source().length()))) {
             need_create = false;
             LOG_INFO("do not recreate package with same source",
                      K(ret),
@@ -7783,9 +7785,9 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   int ret = OB_SUCCESS;
   bool has_standby_cluster = false;
 
-  int64_t current_timestamp = ObTimeUtility::current_time_ns();
+  int64_t current_timestamp = ObTimeUtility::current_time();
   int64_t start_ts = ObTimeUtility::current_time();
-  const int64_t RESTORE_TIMESTAMP_DETA = 10 * 1000 * 1000L; // prevent to recovery to a certain time in the future
+  const int64_t RESTORE_TIMESTAMP_DETA = 10 * 1000; // prevent to recovery to a certain time in the future
   int64_t job_id = OB_INVALID_ID;
   int64_t refreshed_schema_version = OB_INVALID_VERSION;
   ObSchemaGetterGuard schema_guard;
@@ -7806,7 +7808,7 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
     LOG_WARN("restore tenant when restore_concurrency is 0 not allowed", KR(ret));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore tenant when restore_concurrency is 0");
     //TODO check has standby cluster
-  } else if (arg.restore_timestamp_ns_ + RESTORE_TIMESTAMP_DETA >= current_timestamp) {
+  } else if (arg.restore_scn_.convert_to_ts() + RESTORE_TIMESTAMP_DETA >= current_timestamp) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("restore_timestamp is too new", K(ret), K(current_timestamp), K(arg));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "need retry later, restore timestamp is too new");
@@ -7953,15 +7955,13 @@ int ObRootService::run_upgrade_job(const obrpc::ObUpgradeJobArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), KR(ret));
-  } else if (ObUpgradeJobArg::UPGRADE_POST_ACTION == arg.action_
-             || ObUpgradeJobArg::UPGRADE_SYSTEM_VARIABLE == arg.action_
-             || ObUpgradeJobArg::UPGRADE_SYSTEM_TABLE == arg.action_) {
-    if (ObUpgradeJobArg::UPGRADE_POST_ACTION == arg.action_
-        && !ObUpgradeChecker::check_data_version_exist(version)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "run upgrade job with such version is");
-    } else if (OB_FAIL(submit_upgrade_task(arg.action_, version))) {
+  } else if (version < CLUSTER_VERSION_2270
+             || !ObUpgradeChecker::check_cluster_version_exist(version)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "run upgrade job with such version is");
+  } else if (ObUpgradeJobArg::RUN_UPGRADE_JOB == arg.action_) {
+    if (OB_FAIL(submit_upgrade_task(arg.version_))) {
       LOG_WARN("fail to submit upgrade task", KR(ret), K(arg));
     }
   } else if (ObUpgradeJobArg::STOP_UPGRADE_JOB == arg.action_) {
@@ -7975,18 +7975,6 @@ int ObRootService::run_upgrade_job(const obrpc::ObUpgradeJobArg &arg)
     LOG_WARN("invalid action type", KR(ret), K(arg));
   }
   ROOTSERVICE_EVENT_ADD("root_service", "admin_run_upgrade_job", KR(ret), K(arg));
-  return ret;
-}
-
-int ObRootService::upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(ddl_service_.upgrade_table_schema(arg))) {
-    LOG_WARN("fail to upgrade table schema", KR(ret), K(arg));
-  }
   return ret;
 }
 
@@ -8668,28 +8656,10 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
     LOG_WARN("invalid argument", K(ret), K(arg));
   }
   FOREACH_X(item, arg.items_, OB_SUCCESS == ret) {
-    bool valid = true;
+    bool valid;
     if (item->name_.is_empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("empty config name", "item", *item, K(ret));
-    } else if (0 == STRCMP(item->name_.ptr(), FREEZE_TRIGGER_PERCENTAGE)) {
-      // check write throttle percentage
-      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
-        valid = valid && ObConfigFreezeTriggerIntChecker::check(item->tenant_ids_.at(i), *item);
-        if (!valid) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
-        }
-      }
-    } else if (0 == STRCMP(item->name_.ptr(), WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE)) {
-      // check freeze trigger
-      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
-        valid = valid && ObConfigWriteThrottleTriggerIntChecker::check(item->tenant_ids_.at(i), *item);
-        if (!valid) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
-        }
-      }
     }
   }
   return ret;
@@ -9021,7 +8991,7 @@ int ObRootService::check_merge_finish(const obrpc::ObCheckMergeFinishArg &arg)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("receive check_merge_finish request", K(arg));
-  int64_t last_merged_version = 0;
+  palf::SCN last_merged_scn = palf::SCN::min_scn();
   share::ObSimpleFrozenStatus frozen_status;
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -9029,21 +8999,21 @@ int ObRootService::check_merge_finish(const obrpc::ObCheckMergeFinishArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("arg is invalid", K(ret), K(arg));
-  } else if (/*OB_FAIL(zone_manager_.get_global_last_merged_version(last_merged_version))*/false) {
+  } else if (/*OB_FAIL(zone_manager_.get_global_last_merged_scn(last_merged_scn))*/false) {
     LOG_WARN("fail to get last merged version", K(ret));
   } /*else if (OB_FAIL(freeze_info_manager_.get_freeze_info(0, frozen_status))) {
     LOG_WARN("fail to get freeze info", K(ret));
-  } */ else if (frozen_status.frozen_scn_ != last_merged_version) {
+  } */ else if (frozen_status.frozen_scn_ != last_merged_scn) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can't alter column when major freeze is not finished", K(ret));
-  } else if (arg.frozen_version_ != last_merged_version) {
+  } else if (arg.frozen_scn_ != last_merged_scn) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("frozen_version is not new enough", K(ret), K(arg),
-             K(last_merged_version), K(frozen_status));
-  } else if (OB_FAIL(ddl_service_.check_all_server_frozen_version(last_merged_version))) {
-    LOG_WARN("fail to check all servers's frozen version", K(ret), K(last_merged_version));
+             K(last_merged_scn), K(frozen_status));
+  } else if (OB_FAIL(ddl_service_.check_all_server_frozen_scn(last_merged_scn))) {
+    LOG_WARN("fail to check all servers's frozen version", K(ret), K(last_merged_scn));
   }
-  LOG_INFO("check_merge_finish finish", K(ret), K(last_merged_version), K(frozen_status), K(arg));
+  LOG_INFO("check_merge_finish finish", K(ret), K(last_merged_scn), K(frozen_status), K(arg));
   return ret;
 }
 
@@ -9174,9 +9144,20 @@ int ObRootService::handle_backup_manage(const obrpc::ObBackupManageArg &arg)
   } else {
     switch (arg.type_) {
     case ObBackupManageArg::CANCEL_BACKUP: {
+      //TODO(yanfeng): compelte it
       if (OB_FAIL(handle_backup_database_cancel(arg))) {
         LOG_WARN("failed to handle backup database cancel", K(ret), K(arg));
       }
+      break;
+    };
+    case ObBackupManageArg::SUSPEND_BACKUP: {
+      //TODO(yanfeng): compelte it
+      ret = OB_NOT_SUPPORTED;
+      break;
+    };
+    case ObBackupManageArg::RESUME_BACKUP: {
+      //TODO(yanfeng): compelte it
+      ret = OB_NOT_SUPPORTED;
       break;
     };
     case ObBackupManageArg::VALIDATE_DATABASE: {
@@ -9440,7 +9421,7 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(ddl_scheduler_.on_sstable_complement_job_reply(
-      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.dest_schema_id_, arg.schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_))) {
+      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.dest_schema_id_, arg.schema_version_), arg.snapshot_version_, arg.ret_code_))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
   }
   return ret;

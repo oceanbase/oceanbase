@@ -258,8 +258,7 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
     LOG_WARN("get unexpected error", K(index_param.is_global_index_), K(gather_part_ids.count()));
   } else if (mgr.get_table_stat(data_param.tenant_id_, data_param.table_id_, gather_part_ids, data_table_stats)) {
     LOG_WARN("failed to get table stat", K(ret));
-  } else if (index_param.need_estimate_block_ &&
-             OB_FAIL(partition_id_block_map.create(10000,
+  } else if (OB_FAIL(partition_id_block_map.create(10000,
                                                    ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
                                                    ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
                                                    index_param.tenant_id_))) {

@@ -21,6 +21,7 @@
 #include "share/ob_tenant_info_proxy.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "share/ls/ob_ls_i_life_manager.h"
+#include "logservice/palf/scn.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -30,14 +31,14 @@ using namespace common;
  * ------------------------------ObArchiveRoundHandler---------------------
  */
 ObArchiveRoundHandler::ObArchiveRoundHandler()
-  :is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), incarnation_(OB_START_INCARNATION), 
+  :is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), incarnation_(OB_START_INCARNATION),
    sql_proxy_(nullptr), archive_table_op_()
 {
 
 }
 
 int ObArchiveRoundHandler::init(
-    const uint64_t tenant_id, 
+    const uint64_t tenant_id,
     const int64_t incarnation,
     ObMySQLProxy &sql_proxy)
 {
@@ -98,7 +99,7 @@ int ObArchiveRoundHandler::prepare_beginning_dest_round_(const ObTenantArchiveRo
 {
   int ret = OB_SUCCESS;
 
-  ARCHIVE_SCN_TYPE start_scn = 0;
+  palf::SCN start_scn = palf::SCN::min_scn();
   ObArchiveRoundState next_state = ObArchiveRoundState::beginning();
   if (!round.state_.is_prepare()) {
     ret = OB_INVALID_ARGUMENT;
@@ -130,7 +131,7 @@ bool ObArchiveRoundHandler::can_stop_archive(const ObTenantArchiveRoundAttr &rou
 }
 
 
-int ObArchiveRoundHandler::decide_start_scn_(ARCHIVE_SCN_TYPE &start_scn)
+int ObArchiveRoundHandler::decide_start_scn_(palf::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
@@ -138,7 +139,7 @@ int ObArchiveRoundHandler::decide_start_scn_(ARCHIVE_SCN_TYPE &start_scn)
   if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, sql_proxy_, for_update, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), K_(tenant_id));
   } else if (OB_FALSE_IT(start_scn = tenant_info.get_standby_scn())){
-  } else if (OB_LS_MIN_SCN_VALUE >= start_scn) {
+  } else if (palf::SCN::base_scn() >= start_scn) {
     ret = OB_EAGAIN;
     LOG_WARN("start_scn not valid， need wait", K(ret), K(tenant_info));
   }

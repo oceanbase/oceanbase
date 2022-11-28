@@ -130,9 +130,7 @@ void close_socket_fd()
     }
     DLOG(INFO, "[CLOSEFD], close socket fd finish");
   }
-  if (NULL != dir) {
-    closedir(dir);
-  }
+
 }
 
 
@@ -157,9 +155,7 @@ void coredump_cb(int sig, siginfo_t *si, void *context)
       // backtrace
       char bt[256];
       int64_t len = 0;
-#ifdef __x86_64__
       safe_backtrace(bt, sizeof(bt) - 1, &len);
-#endif
       bt[len++] = '\0';
       // extra
       const ObFatalErrExtraInfoGuard *extra_info = nullptr; // TODO: May deadlock, ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
@@ -178,29 +174,11 @@ void coredump_cb(int sig, siginfo_t *si, void *context)
       int64_t ip = -1;
       int64_t bp = -1;
 #endif
-      char rlimit_core[32] = "unlimited";
-      if (UINT64_MAX != g_rlimit_core) {
-        safe_snprintf(rlimit_core, sizeof(rlimit_core), "%lu", g_rlimit_core);
-      }
       ssize_t print_len = safe_snprintf(print_buf, sizeof(print_buf),
-                                       "CRASH ERROR!!! IP=%lx, RBP=%lx, sig=%d, sig_code=%d, sig_addr=%p, RLIMIT_CORE=%s, "COMMON_FMT", ",
-                                       ip, bp, sig, si->si_code, si->si_addr, rlimit_core, ts, GETTID(), tname, uval[0], uval[1], uval[2], uval[3],
+                                       "CRASH ERROR!!! IP=%lx, RBP=%lx, sig=%d, sig_code=%d, sig_addr=%p, "COMMON_FMT"\n",
+                                       ip, bp, sig, si->si_code, si->si_addr, ts, GETTID(), tname, uval[0], uval[1], uval[2], uval[3],
                                        (NULL == extra_info) ? NULL : to_cstring(*extra_info), bt);
-      const auto &si_guard = ObSqlInfoGuard::get_cur_guard();
-      char sql[] = "SQL=";
-      char end[] = "\n";
-      struct iovec iov[4];
-      memset(iov, 0, sizeof(iov));
-      iov[0].iov_base = print_buf;
-      iov[0].iov_len = print_len;
-      iov[1].iov_base = sql;
-      iov[1].iov_len = strlen(sql);
-      iov[2].iov_base = NULL != si_guard ? si_guard->sql_.ptr() : NULL;
-      iov[2].iov_len = NULL != si_guard ? si_guard->sql_.length() : 0;
-      iov[3].iov_base = end;
-      iov[3].iov_len = strlen(end);
-      writev(STDERR_FILENO, iov, sizeof(iov) / sizeof(iov[0]));
-
+      write(STDERR_FILENO, print_buf, print_len);
     #if MINICORE
     } else {
       // child

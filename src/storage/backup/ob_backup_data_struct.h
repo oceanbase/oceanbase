@@ -447,7 +447,7 @@ public:
   ObBackupPhysicalID physical_id_;
 };
 
-// TODO(yangyi.yyy): separate array and map to different data structure in 4.1
+// TODO(yangyi.yyy): separate array and map to different data structure
 struct ObBackupMacroBlockIDMapping final {
   ObBackupMacroBlockIDMapping();
   ~ObBackupMacroBlockIDMapping();
@@ -616,7 +616,7 @@ struct ObLSBackupDataParam {
   int64_t retry_id_;
 };
 
-// TODO(yangyi.yyy): move to some place suitable later in 4.1
+// TODO(yangyi.yyy): move to some place suitable later
 static bool is_aligned(uint64_t x)
 {
   static const int64_t alignment = DIO_READ_ALIGN_SIZE;

@@ -70,8 +70,6 @@ struct ObOptParamHint
     DEF(HIDDEN_COLUMN_VISIBLE,)           \
     DEF(ROWSETS_ENABLED,)                 \
     DEF(ROWSETS_MAX_ROWS,)                \
-    DEF(DDL_EXECUTION_ID,)                \
-    DEF(DDL_TASK_ID,)                     \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -126,7 +124,6 @@ struct ObGlobalHint {
 
   bool has_hint_exclude_concurrent() const;
   int print_global_hint(planText &plan_text) const;
-  int print_monitoring_hints(planText &plan_text) const;
 
   ObPDMLOption get_pdml_option() const { return pdml_option_; }
   ObParamOption get_param_option() const { return param_option_; }
@@ -137,12 +134,12 @@ struct ObGlobalHint {
   static bool is_valid_opt_features_version(uint64_t version)
   { return MIN_OUTLINE_ENABLE_VERSION <= version && CLUSTER_CURRENT_VERSION >= version; }
   bool disable_query_transform() const { return disable_transform_; }
-  bool disable_cost_based_transform() const { return disable_cost_based_transform_; }
 
   TO_STRING_KV(K_(frozen_version),
                K_(topk_precision),
                K_(sharding_minimum_row_count),
                K_(query_timeout),
+               K_(hotspot),
                K_(read_consistency),
                K_(plan_cache_policy),
                K_(force_trace_log),
@@ -158,13 +155,13 @@ struct ObGlobalHint {
                K_(dops),
                K_(opt_features_version),
                K_(disable_transform),
-               K_(disable_cost_based_transform),
                K_(opt_params),
                K_(ob_ddl_schema_versions));
   int64_t frozen_version_;
   int64_t topk_precision_;
   int64_t sharding_minimum_row_count_;
   int64_t query_timeout_;
+  bool hotspot_;
   common::ObConsistencyLevel read_consistency_;
   ObPlanCachePolicy plan_cache_policy_;
   bool force_trace_log_;
@@ -180,7 +177,6 @@ struct ObGlobalHint {
   common::ObSArray<ObDopHint> dops_;
   uint64_t opt_features_version_;
   bool disable_transform_;
-  bool disable_cost_based_transform_;
   ObOptParamHint opt_params_;
   common::ObSArray<ObDDLSchemaVersionHint> ob_ddl_schema_versions_;
 };
@@ -249,7 +245,7 @@ struct ObTableInHint
                                        bool ignore_qb_name = false);
 
   void reset() { qb_name_.reset(); db_name_.reset(); table_name_.reset(); }
-  void set_table(const TableItem& table);
+  void reset(const TableItem& table);
 
   DECLARE_TO_STRING;
 
@@ -710,7 +706,7 @@ private:
 class ObTableParallelHint : public ObOptHint
 {
 public:
-  ObTableParallelHint(ObItemType hint_type = T_TABLE_PARALLEL)
+  ObTableParallelHint(ObItemType hint_type)
     : ObOptHint(hint_type), parallel_(ObGlobalHint::UNSET_PARALLEL)
   {
     set_hint_class(HINT_TABLE_PARALLEL);
@@ -792,8 +788,7 @@ class ObPQSetHint : public ObOptHint
   public:
   ObPQSetHint(ObItemType hint_type = T_PQ_SET)
     : ObOptHint(hint_type),
-      dist_methods_(),
-      left_branch_()
+      dist_methods_()
   {
     set_hint_class(HINT_PQ_SET);
   }
@@ -809,13 +804,11 @@ class ObPQSetHint : public ObOptHint
   ObIArray<ObItemType> &get_dist_methods() { return dist_methods_; }
   int set_pq_set_hint(const DistAlgo dist_algo, const int64_t child_num, const int64_t random_none_idx);
   DistAlgo get_dist_algo(int64_t &random_none_idx) const { return get_dist_algo(dist_methods_, random_none_idx); }
-  const ObString &get_left_branch() const { return left_branch_; }
-  void set_left_branch(const ObString &left_branch) { return left_branch_.assign_ptr(left_branch.ptr(), left_branch.length()); }
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_methods), K_(left_branch));
+
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_methods));
 
 private:
   common::ObSEArray<ObItemType, 2, common::ModulePageAllocator, true> dist_methods_;
-  common::ObString left_branch_;  // qb_name for first branch of set, used for union distinct / intersect
 };
 
 class ObJoinOrderHint : public ObOptHint {

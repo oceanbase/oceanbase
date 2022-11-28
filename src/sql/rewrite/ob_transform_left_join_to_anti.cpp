@@ -180,8 +180,7 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_condition_exprs(), target_exprs))) {
     LOG_WARN("failed to remove condition exprs", K(ret));
   } else if (is_root_table) {
-    if ((right_table->is_joined_table() || 
-        (lib::is_mysql_mode() && right_table->has_for_update())) &&
+    if (right_table->is_joined_table() &&
         OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
                                                          ctx_,
                                                          right_table,
@@ -195,14 +194,7 @@ int ObTransformLeftJoinToAnti::transform_left_join_to_anti_join(ObDMLStmt *&stmt
   } else {
     TableItem *table = joined_table;
     ObDMLStmt *ref_query = NULL;
-    TableItem *view_table_for_update = NULL;
-    if (lib::is_mysql_mode() && right_table->has_for_update() &&
-        OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
-                                                         ctx_,
-                                                         right_table,
-                                                         view_table_for_update))) {
-      LOG_WARN("failed to create semi view", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
+    if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt,
                                                          ctx_,
                                                          table,
                                                          view_table))) {
@@ -235,8 +227,6 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
   int64_t idx = OB_INVALID_INDEX;
   TableItem *left_table = NULL;
   TableItem *right_table = NULL;
-  TableItem *right_view_table = NULL;
-  uint64_t right_table_id = OB_INVALID_ID;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
       OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -254,13 +244,9 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
   } else if (lib::is_oracle_mode() && OB_FAIL(clear_for_update(right_table))) {
     // avoid for update op in the right side of the anti/semi.
     LOG_WARN("failed to clear for update", K(ret));
-  } else if (right_table->is_joined_table() &&
-             OB_FAIL(ObTransformUtils::create_view_with_table(stmt, ctx_, right_table, right_view_table))) {
-    LOG_WARN("failed to create right view table", K(ret));
   } else {
-    right_table_id = right_view_table == NULL ? right_table->table_id_ : right_view_table->table_id_;
     semi_info->join_type_ = LEFT_ANTI_JOIN;
-    semi_info->right_table_id_ = right_table_id;
+    semi_info->right_table_id_ = right_table->table_id_;
     semi_info->semi_id_ = stmt->get_query_ctx()->available_tb_id_--;
     idx = stmt->get_from_item_idx(joined_table->table_id_);
     if (OB_UNLIKELY(idx < 0 || idx >= stmt->get_from_item_size())) {
@@ -303,26 +289,21 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
       ObRawExpr *from_expr = NULL;
       ObRawExpr *to_expr = NULL;
       ObSysFunRawExpr *cast_expr = NULL;
-      ObCastMode cm;
       if (OB_ISNULL(col_item = stmt->get_column_item(i)) ||
           OB_ISNULL(from_expr = col_item->expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null column", K(ret));
-      } else if (right_table_id != col_item->table_id_) {
+      } else if (right_table->table_id_ != col_item->table_id_) {
         // do nothing
       } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_,
                                                          to_expr))) {
         LOG_WARN("failed to build null expr", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
-                                                           0,    /* result_flag */
-                                                           ctx_->session_info_, cm))) {
-        LOG_WARN("fail to get default cast mode", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_,
                                                           to_expr,
                                                           from_expr->get_result_type(),
-                                                          cast_expr, ctx_->session_info_,
-                                                          false, cm | CM_TO_COLUMN_CS_LEVEL))) {
-        LOG_WARN("failed to cast expr", K(ret), K(*from_expr), K(*to_expr));
+                                                          cast_expr,
+                                                          ctx_->session_info_))) {
+        LOG_WARN("failed to create cast expr", K(ret));
       } else if (OB_ISNULL(to_expr = cast_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null cast expr", K(ret));
@@ -525,7 +506,7 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   is_valid = false;
   TableItem *right_table = NULL;
-  bool is_table_valid = true;
+  bool is_del_upd_valid = true;
   if (OB_ISNULL(stmt) ||
       OB_ISNULL(ctx_) || OB_ISNULL(ctx_->schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -551,22 +532,14 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
       } else if (right_table->is_joined_table()) {
         JoinedTable *right_joined_table = static_cast<JoinedTable *>(right_table);
         if (is_contain(right_joined_table->single_table_ids_, table_info->table_id_)) {
-          is_table_valid = false;
+          is_del_upd_valid = false;
         }
       } else if (table_info->table_id_ == right_table->table_id_) {
-        is_table_valid = false;
+        is_del_upd_valid = false;
       }
     }
   }
-  if (OB_SUCC(ret) && is_table_valid) {
-    bool contained = false;
-    if (OB_FAIL(ObTransformUtils::check_table_contain_in_semi(stmt, right_table, contained))) {
-      LOG_WARN("failed to check table contained in semi", K(ret));
-    } else if (contained) {
-      is_table_valid = false;
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && is_table_valid &&
+  for (int64_t i = 0; OB_SUCC(ret) && is_del_upd_valid &&
                       i < cond_exprs.count(); ++i) {
     bool tmp_cond_valid = false;
     ObArray<ObRawExpr *> tmp_constraints;

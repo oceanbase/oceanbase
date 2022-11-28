@@ -74,10 +74,11 @@ class ObTableInsertAllOp : public ObTableInsertOp
 
 protected:
   virtual int inner_open() override;
+  virtual int inner_get_next_row() override;
   virtual int inner_rescan() override;
   virtual int inner_close() override;
 protected:
-  virtual int write_row_to_das_buffer() override;
+  int insert_all_row_to_das();
 private:
   int check_match_conditions(const int64_t tbl_idx,
                              const bool have_insert_row,

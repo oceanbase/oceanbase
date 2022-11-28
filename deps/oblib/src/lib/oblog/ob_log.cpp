@@ -337,8 +337,6 @@ ProbeAction probe_str2action(const char *str)
     action = ProbeAction::PROBE_BT;
   } else if (0 == strcmp(str, "abort")) {
     action = ProbeAction::PROBE_ABORT;
-  } else if (0 == strcmp(str, "disable")) {
-    action = ProbeAction::PROBE_DISABLE;
   }
   return action;
 }
@@ -353,10 +351,6 @@ const char *probe_action2str(ProbeAction action)
     }
   case ProbeAction::PROBE_ABORT: {
     str = "abort";
-    break;
-    }
-  case ProbeAction::PROBE_DISABLE: {
-    str = "disable";
     break;
     }
   default: {
@@ -389,7 +383,6 @@ int ObLogger::set_probe(char *str)
           auto &probe = probes_[probe_cnt_++];
           probe.action_ = action;
           strncpy(probe.file_, file, sizeof probe.file_);
-          probe.file_[sizeof probe.file_ - 1] = '\0';
           probe.line_ = atoi(line);
           char location[256];
           snprintf(location, sizeof location, "%s:%s", file, line);

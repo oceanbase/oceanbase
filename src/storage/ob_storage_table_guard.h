@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_STORAGE_TABLE_GUARD
 
 #include <stdint.h>
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -39,7 +40,7 @@ public:
       ObStoreCtx &store_ctx,
       const bool need_control_mem,
       const bool for_replay = false,
-      const int64_t replay_log_ts = -1,
+      const palf::SCN replay_scn = palf::SCN(),
       const bool for_multi_source_data = false);
   ~ObStorageTableGuard();
 
@@ -57,7 +58,7 @@ private:
       memtable::ObIMemtable *memtable,
       bool &bool_ret);
   int check_freeze_to_inc_write_ref(ObITable *table, bool &bool_ret);
-  bool need_to_refresh_table(ObTableStoreIterator &iter);
+  bool need_to_refresh_table(ObTableStoreIterator &iter, int &ret);
   bool check_if_need_log();
 private:
   static const int64_t LOG_INTERVAL_US = 10 * 1000 * 1000;
@@ -70,7 +71,7 @@ private:
   int64_t retry_count_;
   int64_t last_ts_;
   bool for_replay_;
-  int64_t replay_log_ts_;
+  palf::SCN replay_scn_;
   bool for_multi_source_data_;
 };
 } // namespace storage

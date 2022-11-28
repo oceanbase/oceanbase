@@ -26,7 +26,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
 ObDropIndexTask::ObDropIndexTask()
-  : ObDDLTask(DDL_DROP_INDEX), wait_trans_ctx_(), drop_index_arg_()
+  : ObDDLTask(DDL_DROP_INDEX), wait_trans_ctx_()
 {
 }
 
@@ -40,8 +40,7 @@ int ObDropIndexTask::init(
     const uint64_t data_table_id,
     const uint64_t index_table_id,
     const int64_t schema_version,
-    const int64_t parent_task_id,
-    const obrpc::ObDropIndexArg &drop_index_arg)
+    const int64_t parent_task_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0 || OB_INVALID_ID == data_table_id
@@ -52,8 +51,7 @@ int ObDropIndexTask::init(
   } else if (OB_ISNULL(root_service_ = GCTX.root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service is null", K(ret));
-  } else if (OB_FAIL(deep_copy_index_arg(allocator_, drop_index_arg, drop_index_arg_))) {
-    LOG_WARN("deep copy drop index arg failed", K(ret));
+    LOG_WARN("init task record operator failed", K(ret));
   } else {
     tenant_id_ = tenant_id;
     object_id_ = data_table_id;
@@ -71,7 +69,6 @@ int ObDropIndexTask::init(
     const ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
-  int64_t pos = 0;
   if (OB_UNLIKELY(!task_record.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(task_record));
@@ -86,8 +83,7 @@ int ObDropIndexTask::init(
     task_id_ = task_record.task_id_;
     parent_task_id_ = task_record.parent_task_id_;
     task_version_ = task_record.task_version_;
-    ret_code_ = task_record.ret_code_;
-    if (nullptr != task_record.message_.ptr()) {
+    if (nullptr != task_record.message_) {
       int64_t pos = 0;
       if (OB_FAIL(deserlize_params_from_message(task_record.message_.ptr(), task_record.message_.length(), pos))) {
         LOG_WARN("deserialize params from message failed", K(ret));
@@ -211,7 +207,7 @@ int ObDropIndexTask::drop_index_impl()
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("index schema is null", K(ret), K(target_object_id_));
   } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
-    LOG_WARN("get index name failed", K(ret), K(index_schema->get_table_type()), KPC(index_schema));
+    LOG_WARN("get index name failed", K(ret));
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, index_schema->get_database_id(), database_schema))) {
     LOG_WARN("get database schema failed", K(ret), K(index_schema->get_database_id()));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_schema->get_data_table_id(), data_table_schema))) {
@@ -219,25 +215,35 @@ int ObDropIndexTask::drop_index_impl()
   } else if (OB_UNLIKELY(nullptr == database_schema || nullptr == data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null schema", K(ret), KP(database_schema), KP(data_table_schema));
-  } else if (OB_FAIL(drop_index_sql.assign(drop_index_arg_.ddl_stmt_str_))) {
-    LOG_WARN("assign user drop index sql failed", K(ret));
   } else {
-    obrpc::ObDropIndexArg drop_index_arg;
-    obrpc::ObDropIndexRes drop_index_res;
-    drop_index_arg.tenant_id_         = tenant_id_;
-    drop_index_arg.exec_tenant_id_    = tenant_id_;
-    drop_index_arg.index_table_id_    = target_object_id_;
-    drop_index_arg.session_id_        = data_table_schema->get_session_id();
-    drop_index_arg.index_name_        = index_name;
-    drop_index_arg.table_name_        = data_table_schema->get_table_name();
-    drop_index_arg.database_name_     = database_schema->get_database_name_str();
-    drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
-    drop_index_arg.ddl_stmt_str_      = drop_index_sql.string();
-    drop_index_arg.is_add_to_scheduler_ = false;
-    if (OB_FAIL(root_service_->get_common_rpc_proxy().drop_index(drop_index_arg, drop_index_res))) {
-      LOG_WARN("drop index failed", K(ret));
+    if (is_oracle_mode) {
+      if (OB_FAIL(drop_index_sql.append_fmt("drop index \"%.*s\"", index_name.length(), index_name.ptr()))) {
+        LOG_WARN("generate drop index sql failed", K(ret));
+      }
+    } else {
+      if (OB_FAIL(drop_index_sql.append_fmt("drop index \"%.*s\" on \"%.*s\"", index_name.length(), index_name.ptr(),
+              data_table_schema->get_table_name_str().length(), data_table_schema->get_table_name_str().ptr()))) {
+        LOG_WARN("generate drop index sql failed", K(ret));
+      }
     }
-    LOG_INFO("drop index", K(ret), K(drop_index_sql.ptr()), K(drop_index_arg));
+    if (OB_SUCC(ret)) {
+      obrpc::ObDropIndexArg drop_index_arg;
+      obrpc::ObDropIndexRes drop_index_res;
+      drop_index_arg.tenant_id_         = tenant_id_;
+      drop_index_arg.exec_tenant_id_    = tenant_id_;
+      drop_index_arg.index_table_id_    = target_object_id_;
+      drop_index_arg.session_id_        = data_table_schema->get_session_id();
+      drop_index_arg.index_name_        = index_name;
+      drop_index_arg.table_name_        = data_table_schema->get_table_name();
+      drop_index_arg.database_name_     = database_schema->get_database_name_str();
+      drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
+      drop_index_arg.ddl_stmt_str_      = drop_index_sql.string();
+      drop_index_arg.is_add_to_scheduler_ = false;
+      if (OB_FAIL(root_service_->get_common_rpc_proxy().drop_index(drop_index_arg, drop_index_res))) {
+        LOG_WARN("drop index failed", K(ret));
+      }
+      LOG_INFO("succeed to drop index", K(ret), K(drop_index_arg));
+    }
   }
   return ret;
 }
@@ -364,8 +370,6 @@ int ObDropIndexTask::check_switch_succ()
   } else if (OB_ISNULL(root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys", K(ret));
-  } else if (OB_FAIL(refresh_schema_version())) {
-    LOG_WARN("refresh schema version failed", K(ret));
   } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, target_object_id_, is_index_exist))) {
@@ -376,58 +380,17 @@ int ObDropIndexTask::check_switch_succ()
   return ret;
 }
 
-int ObDropIndexTask::deep_copy_index_arg(common::ObIAllocator &allocator,
-                                        const obrpc::ObDropIndexArg &src_index_arg,
-                                        obrpc::ObDropIndexArg &dst_index_arg)
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  char *buf = nullptr;
-  const int64_t serialize_size = src_index_arg.get_serialize_size();
-  if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(serialize_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc memory failed", K(ret), K(serialize_size));
-  } else if (OB_FAIL(src_index_arg.serialize(buf, serialize_size, pos))) {
-    LOG_WARN("serialize source index arg failed", K(ret));
-  } else if (OB_FALSE_IT(pos = 0)) {
-  } else if (OB_FAIL(dst_index_arg.deserialize(buf, serialize_size, pos))) {
-    LOG_WARN("deserialize failed", K(ret));
-  }
-  if (OB_FAIL(ret) && nullptr != buf) {
-    allocator.free(buf);
-  }
-
-  return ret;
-}
-
 int ObDropIndexTask::serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const
 {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), KP(buf), K(buf_size));
-  } else if (OB_FAIL(drop_index_arg_.serialize(buf, buf_size, pos))) {
-    LOG_WARN("serialize failed", K(ret));
-  }
-  return ret;
+  return OB_SUCCESS;
 }
 
 int ObDropIndexTask::deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos)
 {
-  int ret = OB_SUCCESS;
-  obrpc::ObDropIndexArg tmp_drop_index_arg;
-  if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), KP(buf), K(buf_size));
-  } else if (OB_FAIL(tmp_drop_index_arg.deserialize(buf, buf_size, pos))) {
-    LOG_WARN("deserialize failed", K(ret));
-  } else if (OB_FAIL(deep_copy_index_arg(allocator_, tmp_drop_index_arg, drop_index_arg_))) {
-    LOG_WARN("deep copy drop index arg failed", K(ret));
-  }
-  return ret;
+  return OB_SUCCESS;
 }
 
 int64_t ObDropIndexTask::get_serialize_param_size() const
 {
-  return drop_index_arg_.get_serialize_size();
+  return 0;
 }

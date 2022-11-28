@@ -239,18 +239,18 @@ int ObMetaPointerMap<Key, T>::erase(const Key &key)
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
   } else {
-    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
-    if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
-      STORAGE_LOG(WARN, "fail to get from map", K(ret));
-    } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
-      STORAGE_LOG(WARN, "fail to erase from map", K(ret));
-    } else {
-      ObMetaPointer<T> *value = ptr->get_value_ptr();
-      value->reset_obj();
-      if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
-        STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
-      }
-    }
+     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+     if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
+       STORAGE_LOG(WARN, "fail to get from map", K(ret));
+     } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
+       STORAGE_LOG(WARN, "fail to erase from map", K(ret));
+     } else {
+       ObMetaPointer<T> *value = ptr->get_value_ptr();
+       value->reset_obj();
+       if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
+         STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
+       }
+     }
    }
   return ret;
 }
@@ -371,7 +371,7 @@ int ObMetaPointerMap<Key, T>::try_get_in_memory_meta_obj(
     STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
   } else if (OB_UNLIKELY(t_ptr->get_addr().is_none())) {
     ret = OB_ITEM_NOT_SETTED;
-    STORAGE_LOG(DEBUG, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
+    STORAGE_LOG(WARN, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
   } else {
     is_in_memory = t_ptr->is_in_memory();
     if (is_in_memory && OB_FAIL(t_ptr->get_in_memory_obj(guard))) {
@@ -395,7 +395,7 @@ int ObMetaPointerMap<Key, T>::get_meta_obj(
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
   } else if (OB_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, guard, is_in_memory))) {
-    if (OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
       STORAGE_LOG(DEBUG, "meta obj does not exist", K(ret), K(key));
     } else {
       STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));
@@ -567,7 +567,7 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
             if (REACH_TIME_INTERVAL(1000000)) {
               STORAGE_LOG(WARN, "disk address change", K(ret), K(disk_addr), KPC(t_ptr));
             }
-          } else if (OB_FAIL(t->deserialize_post_work())) {
+          } else if (t->deserialize_post_work()) {
             STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
           } else if (OB_FAIL(t->assign_pointer_handle(ptr_hdl))) {
             STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), KP(t));
