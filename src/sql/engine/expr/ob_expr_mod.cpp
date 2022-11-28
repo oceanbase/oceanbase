@@ -192,10 +192,11 @@ int ObExprMod::mod_double(ObObj &res,
 {
 
   int ret = OB_SUCCESS;
+  const double EPSILON = 1e-14;
   if (OB_UNLIKELY(left.get_type_class() != right.get_type_class())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid types", K(ret), K(left), K(right));
-  } else if (fabs(right.get_double()) == 0.0) {
+  } else if (fabs(right.get_double()) < EPSILON) {
     if (lib::is_oracle_mode()) {
       res.set_double(left.get_double());
     } else {

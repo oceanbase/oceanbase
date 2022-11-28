@@ -46,7 +46,7 @@ private:
 private:
   bool opened_;
   common::ObMemLeakChecker *leak_checker_;
-  common::ObMemLeakChecker::mod_info_map_t::const_iterator it_;
+  common::ObMemLeakChecker::mod_info_map_t::hashmap::const_iterator it_;
   common::ObMemLeakChecker::mod_info_map_t info_map_;
   common::ObAddr *addr_;
   uint64_t tenant_id_;

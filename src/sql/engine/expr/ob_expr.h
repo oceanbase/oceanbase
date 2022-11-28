@@ -20,6 +20,7 @@
 #include "sql/engine/ob_serializable_function.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/engine/ob_bit_vector.h"
+#include "common/ob_common_utility.h"
 
 namespace oceanbase
 {
@@ -610,6 +611,7 @@ public:
       uint64_t is_static_const_:1; // is const during the whole execution
       uint64_t is_boolean_:1; // to distinguish result of this expr between and int tc
       uint64_t is_dynamic_const_:1; // is const during the subplan execution, including exec param
+      uint64_t need_stack_check_:1; // the expression tree depth needs to check whether the stack overflows
     };
     uint64_t flag_;
   };
@@ -976,7 +978,6 @@ OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
   OB_ASSERT(NULL != frame);
 	datum = (ObDatum *)(frame + datum_off_);
   ObEvalInfo *eval_info = (ObEvalInfo *)(frame + eval_info_off_);
-
   if (is_batch_result()) {
     if (NULL == eval_func_ || eval_info->projected_) {
       datum = datum + ctx.get_batch_idx();
@@ -985,14 +986,18 @@ OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
     }
   } else if (NULL != eval_func_ && !eval_info->evaluated_) {
 	// do nothing for const/column reference expr or already evaluated expr
-		if (datum->ptr_ != frame + res_buf_off_) {
-			datum->ptr_ = frame + res_buf_off_;
-		}
-		ret = eval_func_(*this, ctx, *datum);
-    if (OB_LIKELY(common::OB_SUCCESS == ret)) {
-      eval_info->evaluated_ = true;
+    if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
+      SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else {
-      datum->set_null();
+      if (datum->ptr_ != frame + res_buf_off_) {
+        datum->ptr_ = frame + res_buf_off_;
+      }
+      ret = eval_func_(*this, ctx, *datum);
+      if (OB_LIKELY(common::OB_SUCCESS == ret)) {
+        eval_info->evaluated_ = true;
+      } else {
+        datum->set_null();
+      }
     }
 	}
 	return ret;

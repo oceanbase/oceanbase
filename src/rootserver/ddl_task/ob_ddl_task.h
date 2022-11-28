@@ -299,6 +299,7 @@ public:
   int convert_to_record(ObDDLTaskRecord &task_record, common::ObIAllocator &allocator);
   int switch_status(share::ObDDLTaskStatus new_status, const int ret_code);
   int refresh_status();
+  int refresh_schema_version();
   int remove_task_record();
   int report_error_code(const ObString &forward_user_message, const int64_t affected_rows = 0);
   int wait_trans_end(

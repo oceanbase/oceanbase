@@ -292,6 +292,7 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
   int tmp_ret = OB_SUCCESS;
   bool is_cancel = false;
   int real_ret_code = ret_code;
+  bool is_tenant_dropped = false;
   const ObDDLTaskStatus old_status = task_status_;
   if (OB_TMP_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(trace_id_, is_cancel))) {
     LOG_WARN("check task is canceled", K(tmp_ret), K(trace_id_));
@@ -310,6 +311,11 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(root_service->get_schema_service().check_if_tenant_has_been_dropped(tenant_id_, is_tenant_dropped))) {
+    LOG_WARN("check if tenant has been dropped failed", K(ret), K(tenant_id_));
+  } else if (is_tenant_dropped) {
+    need_retry_ = false;
+    LOG_INFO("tenant has been dropped, exit anyway", K(ret), K(tenant_id_));
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
@@ -354,6 +360,29 @@ int ObDDLTask::refresh_status()
   int ret = OB_SUCCESS;
   if (OB_FAIL(switch_status(task_status_, OB_SUCCESS))) {
     LOG_WARN("refresh status failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLTask::refresh_schema_version()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLTask has not been inited", K(ret));
+  } else if (schema_version_ > 0 && schema_version_ != UINT64_MAX) {
+    ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
+    int64_t refreshed_schema_version = 0;
+    if (OB_FAIL(schema_service.async_refresh_schema(tenant_id_, schema_version_))) {
+      LOG_WARN("async refresh schema version failed", K(ret), K(tenant_id_), K(schema_version_));
+    } else if (OB_FAIL(schema_service.get_tenant_refreshed_schema_version(tenant_id_, refreshed_schema_version))) {
+      LOG_WARN("get refreshed schema version failed", K(ret), K(tenant_id_));
+    } else if (refreshed_schema_version < schema_version_) {
+      ret = OB_SCHEMA_EAGAIN;
+      if (REACH_TIME_INTERVAL(1000L * 1000L)) {
+        LOG_INFO("tenant schema not refreshed to the target version", K(ret), K(tenant_id_), K(schema_version_), K(refreshed_schema_version));
+      }
+    }
   }
   return ret;
 }

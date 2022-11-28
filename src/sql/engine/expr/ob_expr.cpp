@@ -609,16 +609,20 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
   }
   datum = reinterpret_cast<ObDatum *>(frame + datum_off_) + ctx.get_batch_idx();
   if (need_evaluate) {
-    reset_datum_ptr(frame, ctx.get_batch_size(), ctx.get_batch_idx());
-    ret = eval_func_(*this, ctx, *datum);
-    if (OB_SUCC(ret)) {
-      ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
-      evaluated_flags->set(ctx.get_batch_idx());
+    if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
+      SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else {
-      datum->set_null();
-    }
-    if (datum->is_null()) {
-      info->notnull_ = false;
+      reset_datum_ptr(frame, ctx.get_batch_size(), ctx.get_batch_idx());
+      ret = eval_func_(*this, ctx, *datum);
+      if (OB_SUCC(ret)) {
+        ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
+        evaluated_flags->set(ctx.get_batch_idx());
+      } else {
+        datum->set_null();
+      }
+      if (datum->is_null()) {
+        info->notnull_ = false;
+      }
     }
   }
 
@@ -655,17 +659,21 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
       info->notnull_ = false;
       info->point_to_frame_ = true;
     }
-    ret = (*eval_batch_func_)(*this, ctx, skip, size);
-    if (OB_SUCC(ret)) {
-      if (!info->evaluated_) {
-        info->cnt_ = size;
-        info->evaluated_ = true;
-      }
+    if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
+      SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else {
-      ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
-      ObDatum *datum_end = datum + size;
-      for (; datum < datum_end; datum += 1) {
-        datum->set_null();
+      ret = (*eval_batch_func_)(*this, ctx, skip, size);
+      if (OB_SUCC(ret)) {
+        if (!info->evaluated_) {
+          info->cnt_ = size;
+          info->evaluated_ = true;
+        }
+      } else {
+        ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
+        ObDatum *datum_end = datum + size;
+        for (; datum < datum_end; datum += 1) {
+          datum->set_null();
+        }
       }
     }
   }

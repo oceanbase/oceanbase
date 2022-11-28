@@ -1153,6 +1153,14 @@ int ObLS::force_tablet_freeze(const ObTabletID &tablet_id)
   return ret;
 }
 
+int ObLS::advance_checkpoint_by_flush(SCN recycle_scn)
+{
+  int64_t read_lock = LSLOCKALL;
+  int64_t write_lock = 0;
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+  return checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
+}
+
 int ObLS::get_ls_meta_package_and_tablet_ids(ObLSMetaPackage &meta_package, common::ObIArray<common::ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;

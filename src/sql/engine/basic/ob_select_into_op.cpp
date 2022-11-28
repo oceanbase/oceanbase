@@ -72,9 +72,14 @@ int ObSelectIntoOp::inner_open()
     ObString path = file_name_.get_varchar().trim();
     if (path.prefix_match_ci(OB_OSS_PREFIX)) {
       file_location_ = IntoFileLocation::REMOTE_OSS;
-      url_ = path.split_on('?');
-      url_.trim();
-      if (OB_FAIL(access_info_.set(url_.ptr(), path.ptr()))) {
+      ObString temp_url = path.split_on('?');
+      temp_url.trim();
+      ObString storage_info;
+      if (OB_FAIL(ob_write_string(ctx_.get_allocator(), temp_url, url_, true))) {
+        LOG_WARN("fail to append string", K(ret));
+      } else if (OB_FAIL(ob_write_string(ctx_.get_allocator(), path, storage_info, true))) {
+        LOG_WARN("fail to append string", K(ret));
+      } else if (OB_FAIL(access_info_.set(url_.ptr(), storage_info.ptr()))) {
         LOG_WARN("fail to set access info", K(ret), K(path));
       }
 

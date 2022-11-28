@@ -86,7 +86,7 @@ int ObDBMSMonitor::session_trace_enable(sql::ObExecContext &ctx, sql::ParamStore
   OZ (params.at(2).get_number(sample_pct));
   OV (params.at(3).is_varchar(), OB_INVALID_ARGUMENT);
   OZ (params.at(3).get_string(record_policy));
-  // add recorde polciy
+  // add record polciy
   sql::ObSQLSessionInfo *sess = NULL;
   sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
   FLTControlInfo c_info;

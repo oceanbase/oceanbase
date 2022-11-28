@@ -1216,9 +1216,12 @@ int ObStartMigrationTask::update_ls_()
       LOG_WARN("failed to advance base lsn for migration", K(ret), KPC(ctx_));
     } else {
       ctx_->local_clog_checkpoint_scn_ = ctx_->src_ls_meta_package_.ls_meta_.get_clog_checkpoint_scn();
+    }
+
+    if (OB_SUCC(ret)) {
+      ctx_->local_rebuild_seq_ = ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq();
       LOG_INFO("update rebuild seq", "old_ls_rebuld_seq", ctx_->local_rebuild_seq_,
           "new_ls_rebuild_seq", ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq(), K(lbt()));
-      ctx_->local_rebuild_seq_ = ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq();
     }
   }
   return ret;

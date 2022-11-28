@@ -116,10 +116,11 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
     } else {
       ObString file_name(file_name_node->str_len_, file_name_node->str_value_);
       if (ObLoadFileLocation::OSS != load_args.load_file_storage_) {
-        load_args.file_name_ = file_name;
         char *full_path_buf = nullptr;
         char *actual_path = nullptr;
-        if (OB_ISNULL(full_path_buf = static_cast<char*>(allocator_->alloc(DEFAULT_BUF_LENGTH)))) {
+        if (OB_FAIL(ob_write_string(*allocator_, file_name, load_args.file_name_, true))) {
+          LOG_WARN("fail to write string", K(ret));
+        } else if (OB_ISNULL(full_path_buf = static_cast<char*>(allocator_->alloc(DEFAULT_BUF_LENGTH)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to allocate memory", K(ret));
         } else if (OB_ISNULL(actual_path = realpath(file_name_node->str_value_, full_path_buf))) {
@@ -138,12 +139,16 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
           }
         }
       } else {
-        load_args.file_name_ = file_name.split_on('?');
-        if (load_args.file_name_.length() <= 0
-            || file_name <= 0) {
+        ObString temp_file_name = file_name.split_on('?');
+        ObString storage_info;
+        if (OB_FAIL(ob_write_string(*allocator_, temp_file_name, load_args.file_name_, true))) {
+          LOG_WARN("fail to copy string", K(ret));
+        } else if (OB_FAIL(ob_write_string(*allocator_, file_name, storage_info, true))) {
+          LOG_WARN("fail to copy string", K(ret));
+        } else if (temp_file_name.length() <= 0 || storage_info.length() <= 0) {
           ret = OB_INVALID_ARGUMENT;
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name or access key");
-        } else if (OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), file_name.ptr()))) {
+        } else if (OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), storage_info.ptr()))) {
           LOG_WARN("failed to set access info", K(ret));
         }
       }

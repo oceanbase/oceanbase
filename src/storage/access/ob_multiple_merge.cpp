@@ -1056,7 +1056,7 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
   tables_.reset();
   if (OB_UNLIKELY(!get_table_param_.is_valid() || !access_param_->is_valid() || NULL == access_ctx_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ObMultipleMerge has not been inited", K(ret), K_(get_table_param), K_(access_param),
+    LOG_WARN("ObMultipleMerge has not been inited", K(ret), K_(get_table_param), KP_(access_param),
         KP_(access_ctx));
   } else if (OB_UNLIKELY(!access_ctx_->query_flag_.is_whole_macro_scan() &&
                          0 != access_ctx_->trans_version_range_.base_version_)) {
@@ -1071,13 +1071,13 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
     ObTabletHandle &tablet_handle = get_table_param_.tablet_iter_.tablet_handle_;
     if (OB_UNLIKELY(!tablet_handle.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid tablet handle", K(ret), K_(get_table_param), K_(access_param), K(*access_ctx_));
+      LOG_WARN("invalid tablet handle", K(ret), K_(get_table_param), KP_(access_param));
     } else if (OB_UNLIKELY(get_table_param_.frozen_version_ != -1)) {
       if (!get_table_param_.sample_info_.is_no_sample()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("sample query does not support frozen_version", K(ret), K_(get_table_param), K_(access_param), K(*access_ctx_));
+        LOG_WARN("sample query does not support frozen_version", K(ret), K_(get_table_param), KP_(access_param));
       } else if (OB_FAIL(tablet_handle.get_obj()->get_read_major_sstable(get_table_param_.frozen_version_, get_table_param_.tablet_iter_))) {
-        LOG_WARN("get table iterator fail", K(ret), K_(get_table_param), K_(access_param), K(*access_ctx_));
+        LOG_WARN("get table iterator fail", K(ret), K_(get_table_param), KP_(access_param));
       }
     } else if (OB_FAIL(tablet_handle.get_obj()->get_read_tables(
         get_table_param_.sample_info_.is_no_sample()
@@ -1085,7 +1085,7 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
           : INT64_MAX,
         get_table_param_.tablet_iter_,
         false/*allow_not_ready*/))) {
-      LOG_WARN("get table iterator fail", K(ret), K_(get_table_param), K_(access_param), K(*access_ctx_) );
+      LOG_WARN("get table iterator fail", K(ret), K_(get_table_param), KP_(access_param));
     }
 
     if (OB_SUCC(ret)) {
@@ -1202,7 +1202,7 @@ int ObMultipleMerge::refresh_tablet_iter()
   } else {
     const common::ObTabletID tablet_id = tablet_handle.get_obj()->get_tablet_meta().tablet_id_;
     if (OB_FAIL(MTL(ObLSService*)->get_ls(access_ctx_->ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-      LOG_WARN("failed to get ls", K(ret), K(*access_ctx_));
+      LOG_WARN("failed to get ls", K(ret));
     } else if (OB_ISNULL(ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls is null", K(ret), K(ls_handle));
@@ -1213,7 +1213,7 @@ int ObMultipleMerge::refresh_tablet_iter()
           : INT64_MAX,
         get_table_param_.tablet_iter_,
         false/*allow_not_ready*/))) {
-      LOG_WARN("failed to refresh tablet iterator", K(ret), K_(get_table_param), K_(access_param), K(*access_ctx_) );
+      LOG_WARN("failed to refresh tablet iterator", K(ret), K_(get_table_param), KP_(access_param));
     }
   }
   return ret;

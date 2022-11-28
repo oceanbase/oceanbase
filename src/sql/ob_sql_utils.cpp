@@ -4417,7 +4417,8 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
   return ret;
 }
 
-int ObSQLUtils::copy_params_to_array_params(int64_t query_pos, ParamStore &src, ParamStore &dst)
+int ObSQLUtils::copy_params_to_array_params(int64_t query_pos, ParamStore &src, ParamStore &dst,
+                                            ObIAllocator &alloc, bool is_forall)
 {
   int ret = OB_SUCCESS;
   for (int64_t j = 0; OB_SUCC(ret) && j < dst.count(); j++) {
@@ -4431,7 +4432,11 @@ int ObSQLUtils::copy_params_to_array_params(int64_t query_pos, ParamStore &src, 
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), KPC(array_params));
     } else {
-      array_params->data_[query_pos] = src.at(j);
+      ObObjParam new_param = src.at(j);
+      if (is_forall) {
+        OZ (deep_copy_obj(alloc, src.at(j), new_param));
+      }
+      array_params->data_[query_pos] = new_param;
     }
   }
   return ret;
@@ -4463,7 +4468,7 @@ int ObSQLUtils::init_elements_info(ParamStore &src, ParamStore &dst)
 }
 
 int ObSQLUtils::transform_pl_ext_type(
-    ParamStore &src, int64_t array_binding_size, ObIAllocator &alloc, ParamStore *&dst)
+    ParamStore &src, int64_t array_binding_size, ObIAllocator &alloc, ParamStore *&dst, bool is_forall)
 {
   int ret = OB_SUCCESS;
   ParamStore *ps_ab_params = NULL;
@@ -4489,7 +4494,7 @@ int ObSQLUtils::transform_pl_ext_type(
         LOG_WARN("fail to reverse params_store", K(ret));
       } else if (OB_FAIL(get_one_group_params(actual_pos, src, temp_obj_params))) {
         LOG_WARN("get one group params failed", K(ret), K(actual_pos));
-      } else if (OB_FAIL(copy_params_to_array_params(query_pos, temp_obj_params, *dst))) {
+      } else if (OB_FAIL(copy_params_to_array_params(query_pos, temp_obj_params, *dst, alloc, is_forall))) {
         LOG_WARN("copy params to array params failed", K(ret), K(query_pos));
       } else if (query_pos == 0) {
         if (OB_FAIL(init_elements_info(src, *dst))) {

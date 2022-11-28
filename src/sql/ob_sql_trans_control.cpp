@@ -625,7 +625,7 @@ int ObSqlTransControl::stmt_refresh_snapshot(ObExecContext &exec_ctx) {
   } else if (OB_FAIL(get_tx_service(session, txs))) {
     LOG_WARN("failed to get transaction service", K(ret));
   } else if (OB_FAIL(stmt_setup_snapshot_(session, das_ctx, plan, plan_ctx, txs))) {
-    LOG_WARN("failed to set sanpshot", K(ret));
+    LOG_WARN("failed to set snapshot", K(ret));
   }
   return ret;
 }

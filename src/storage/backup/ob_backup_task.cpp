@@ -73,13 +73,9 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
   int ret = OB_SUCCESS;
   const int64_t advance_checkpoint_timeout = GCONF._advance_checkpoint_timeout;
   LOG_INFO("backup advance checkpoint timeout", K(tenant_id), K(advance_checkpoint_timeout));
-  checkpoint::ObCheckpointExecutor *checkpoint_executor = NULL;
-  if (!start_scn.is_valid()) {
+  if (start_scn < SCN::min_scn()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(start_scn));
-  } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("checkpoint executor should not be null", K(ret), KPC(ls));
   } else {
     ObLSMetaPackage ls_meta_package;
     int64_t i = 0;
@@ -89,7 +85,7 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
       if (cur_ts - start_ts > advance_checkpoint_timeout) {
         ret = OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT;
         LOG_WARN("backup advance checkpoint by flush timeout", K(ret), K(tenant_id), K(ls_id), K(start_scn));
-      } else if (OB_FAIL(checkpoint_executor->advance_checkpoint_by_flush(start_scn))) {
+      } else if (OB_FAIL(ls->advance_checkpoint_by_flush(start_scn))) {
         if (OB_NO_NEED_UPDATE == ret) {
           // clog checkpoint ts has passed start log ts
           ret = OB_SUCCESS;
