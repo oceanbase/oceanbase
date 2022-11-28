@@ -223,7 +223,9 @@ public:
     rs_mgr_(NULL),
     execution_id_(0),
     px_sequence_id_(0)
-  {}
+  {
+    px_sequence_id_ = ObTimeUtility::current_time();
+  }
 
   virtual ~ObSql() { destroy(); }
   static int construct_ps_param(const ParamStore &params,
