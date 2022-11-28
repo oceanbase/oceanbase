@@ -95,7 +95,7 @@ int ObRawExprPullUpAggrExpr::visit(ObAggFunRawExpr& expr)
           }
         } else {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("the grouping must has only one real param expr", K(expr.get_real_param_count()));
+          LOG_WARN("the grouping must have only one real param expr", K(expr.get_real_param_count()));
         }
         break;
       case T_FUN_MAX:

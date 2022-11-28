@@ -162,9 +162,9 @@ int ObExecutorRpcImpl::task_execute(ObExecutorRpcCtx& rpc_ctx, ObTask& task, con
       LOG_WARN("rpc task_execute fail", K(ret), K(tenant_id), K(svr), K(timeout), K(timeout_timestamp));
       // rcode.rcode_ will be set in ObRpcProcessor<T>::part_response() of remote server,
       // and return to local server from remote server. so:
-      // 1. if we get OB_SUCCESS from rcode.rcode_ here, transfer process must has error,
+      // 1. if we get OB_SUCCESS from rcode.rcode_ here, transfer process must have error,
       //    such as network error or crash of remote server.
-      // 2. if we get some error from rcode.rcode_ here, transfer process must has no error,
+      // 2. if we get some error from rcode.rcode_ here, transfer process must have no error,
       //    otherwise we can not get rcode.rcode_ from remote server.
       const obrpc::ObRpcResultCode& rcode = to_proxy.get_result_code();
       if (OB_LIKELY(OB_SUCCESS != rcode.rcode_)) {
@@ -212,9 +212,9 @@ int ObExecutorRpcImpl::task_execute_v2(ObExecutorRpcCtx& rpc_ctx, ObRemoteTask& 
       LOG_WARN("rpc task_execute fail", K(ret), K(tenant_id), K(svr), K(timeout), K(timeout_timestamp));
       // rcode.rcode_ will be set in ObRpcProcessor<T>::part_response() of remote server,
       // and return to local server from remote server. so:
-      // 1. if we get OB_SUCCESS from rcode.rcode_ here, transfer process must has error,
+      // 1. if we get OB_SUCCESS from rcode.rcode_ here, transfer process must have error,
       //    such as network error or crash of remote server.
-      // 2. if we get some error from rcode.rcode_ here, transfer process must has no error,
+      // 2. if we get some error from rcode.rcode_ here, transfer process must have no error,
       //    otherwise we can not get rcode.rcode_ from remote server.
       const obrpc::ObRpcResultCode& rcode = to_proxy.get_result_code();
       if (OB_LIKELY(OB_SUCCESS != rcode.rcode_)) {

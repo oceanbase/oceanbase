@@ -162,7 +162,7 @@ int ObMPStmtExecute::check_param_type_for_arraybinding(
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "oci arraybinding has autocommit = on");
   } else if (OB_UNLIKELY(param_type_infos.count() <= 0)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("oci arraybinding must has parameters", K(ret));
+    LOG_WARN("oci arraybinding must have parameters", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "oci arraybinding has no parameter");
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < param_type_infos.count(); ++i) {
