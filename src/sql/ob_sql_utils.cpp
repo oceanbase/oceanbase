@@ -2912,7 +2912,7 @@ int ObSQLUtils::update_session_last_schema_version(ObMultiVersionSchemaService &
   uint64_t tenant_id = session_info.get_effective_tenant_id();
   if (OB_FAIL(schema_service.get_tenant_received_broadcast_version(tenant_id,
                                                                    received_schema_version))) {
-    LOG_WARN("fail to get tenant received brocast version", K(ret), K(tenant_id));
+    LOG_WARN("fail to get tenant received broadcast version", K(ret), K(tenant_id));
   } else if (OB_FAIL(session_info.update_sys_variable(SYS_VAR_OB_LAST_SCHEMA_VERSION,
                                                       received_schema_version))) {
     LOG_WARN("fail to set session variable for last_schema_version", K(ret));
