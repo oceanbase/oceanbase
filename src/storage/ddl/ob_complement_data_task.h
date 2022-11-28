@@ -21,6 +21,7 @@
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "storage/ob_store_row_comparer.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
+#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 namespace oceanbase
 {
