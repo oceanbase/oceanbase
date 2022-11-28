@@ -146,7 +146,7 @@ int ObTabletCreateDeleteHelper::replay_prepare_create_tablets(
   NonLockedHashSet existed_tablet_id_set;
   bool need_create = true;
 
-  if (OB_UNLIKELY(!arg.is_valid())) {
+  if (OB_UNLIKELY(!arg.is_valid() || !scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(PRINT_CREATE_ARG(arg)), K(scn));
   } else if (OB_FAIL(existed_tablet_id_set.create(arg.get_tablet_count()))) {
@@ -512,9 +512,10 @@ int ObTabletCreateDeleteHelper::redo_create_tablets(
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_.get_ls_id();
+  SCN scn = trans_flags.scn_;
   const bool is_clog_replaying = trans_flags.for_replay_;
 
-  if (OB_UNLIKELY(!arg.is_valid())) {
+  if (OB_UNLIKELY(!arg.is_valid() || !scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid args", K(ret), K(PRINT_CREATE_ARG(arg)));
   } else if (OB_UNLIKELY(arg.id_ != ls_id)) {
@@ -523,7 +524,6 @@ int ObTabletCreateDeleteHelper::redo_create_tablets(
   } else if (is_clog_replaying) {
     LOG_INFO("in clog replaying procedure, do nothing while redo log callback", K(ret));
   } else {
-    SCN scn = trans_flags.scn_;
     bool is_valid = true;
     ObSArray<ObTabletCreateInfo> tablet_create_info_array;
     if (OB_FAIL(check_tablet_existence(arg, is_valid))) {
@@ -927,8 +927,7 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablet(
   } else {
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::DELETED,
         trans_flags.scn_, trans_flags.scn_, trans_flags.for_replay_))) {
-      LOG_WARN("failed to set tablet status to DELETED", K(ret), K(tablet_handle),
-          K(trans_flags.scn_), K(trans_flags));
+      LOG_WARN("failed to set tablet status to DELETED", K(ret), K(tablet_handle), K(trans_flags));
     } else if (OB_FAIL(t3m->erase_pinned_tablet(key))) {
       LOG_ERROR("failed to erase tablet handle", K(ret), K(key));
       ob_usleep(1000 * 1000);
@@ -1057,7 +1056,7 @@ int ObTabletCreateDeleteHelper::redo_remove_tablets(
   const bool is_clog_replaying = trans_flags.for_replay_;
   const SCN scn = trans_flags.scn_;
 
-  if (OB_UNLIKELY(!arg.is_valid())) {
+  if (OB_UNLIKELY(!arg.is_valid() || !scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(arg));
   } else if (OB_UNLIKELY(arg.id_ != ls_id)) {

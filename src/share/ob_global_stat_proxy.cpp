@@ -422,8 +422,8 @@ int ObGlobalStatProxy::update_snapshot_gc_scn(
   } else {
     ObSqlString sql;
     const uint64_t snapshot_gc_scn_val = snapshot_gc_scn.get_val_for_inner_table_field();
-    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET column_value = %ld WHERE table_name = '%s' AND "
-        "column_name = '%s' AND column_value < %ld", OB_ALL_CORE_TABLE_TNAME, snapshot_gc_scn_val,
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET column_value = %lu WHERE table_name = '%s' AND "
+        "column_name = '%s' AND column_value < %lu", OB_ALL_CORE_TABLE_TNAME, snapshot_gc_scn_val,
         "__all_global_stat", "snapshot_gc_scn", snapshot_gc_scn_val))) {
       LOG_WARN("fail to append sql", KR(ret), K(tenant_id), K(snapshot_gc_scn_val));
     } else if (OB_FAIL(sql_client.write(tenant_id, sql.ptr(), affected_rows))) {

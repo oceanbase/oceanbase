@@ -52,7 +52,6 @@ using namespace omt;
 using namespace name;
 using namespace transaction;
 using namespace blocksstable;
-using namespace palf;
 
 namespace storage
 {

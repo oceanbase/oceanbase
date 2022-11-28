@@ -342,7 +342,7 @@ int ObTablet::init(
       // this interface for migration to batch update table store
       // use old tablet clog_checkpoint_ts to avoid lose tx data
       // use max schema to makesure sstable and schema match
-     ))) {
+      ))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(param), K(tx_data), K(ddl_data), K(autoinc_seq));
   } else if (OB_FAIL(table_store_.build_ha_new_table_store(*allocator_, this, param, old_tablet.table_store_))) {
     LOG_WARN("failed to init table store", K(ret), K(old_tablet));
@@ -1537,6 +1537,9 @@ int ObTablet::replay_update_storage_schema(
     LOG_WARN("storage schema recorder replay fail", K(ret), K(scn));
   } else {
     pos = new_pos;
+  }
+  if (OB_TIMEOUT == ret) {
+    ret = OB_EAGAIN; // need retry.
   }
   return ret;
 }
@@ -2850,34 +2853,36 @@ int ObTablet::set_memtable_clog_checkpoint_scn(
   ObTableHandleV2 handle;
   memtable::ObMemtable *memtable = nullptr;
 
-  if (OB_ISNULL(tablet_meta)) {
-    //no need to set memtable clog checkpoint ts
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(tablet_meta)) {
+    // no need to set memtable clog checkpoint ts
   } else if (tablet_meta->clog_checkpoint_scn_ <= tablet_meta_.clog_checkpoint_scn_) {
-    //do nothing
+    // do nothing
+  } else if (is_ls_inner_tablet()) {
+    if (OB_UNLIKELY(memtable_mgr->has_memtable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls inner tablet should not have memtable", K(ret), KPC(tablet_meta));
+    }
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (tablet_meta_.tablet_id_.is_ls_inner_tablet()) {
-    if (memtable_mgr->has_memtable()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls inner tablet should not has memtable", K(ret), KPC(tablet_meta));
-    }
-  } else if (OB_FAIL(memtable_mgr->get_active_memtable(handle))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get active memtable for tablet", K(ret), KPC(this), KPC(tablet_meta));
-    } else {
+  } else if (OB_FAIL(memtable_mgr->get_boundary_memtable(handle))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get boundary memtable for tablet", K(ret), KPC(this), KPC(tablet_meta));
     }
   } else if (OB_FAIL(handle.get_data_memtable(memtable))) {
-    LOG_WARN("failed to get memtalbe", K(ret), K(handle));
+    LOG_WARN("failed to get memtable", K(ret), K(handle));
   } else if (OB_ISNULL(memtable)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null memtable", K(ret), KPC(memtable));
   } else if (OB_FAIL(memtable->set_migration_clog_checkpoint_scn(tablet_meta->clog_checkpoint_scn_))) {
     LOG_WARN("failed to set migration clog checkpoint ts", K(ret), K(handle), KPC(this));
   }
+
   return ret;
 }
-
-
 } // namespace storage
 } // namespace oceanbase

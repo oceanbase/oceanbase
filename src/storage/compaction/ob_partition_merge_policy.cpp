@@ -504,7 +504,7 @@ int ObPartitionMergePolicy::get_major_merge_tables(
     LOG_WARN("failed to get freeze info", K(ret), K(base_table->get_snapshot_version()));
   } else if (OB_FAIL(result.handle_.add_table(base_table))) {
     LOG_WARN("failed to add base_table to result", K(ret));
-  } else if (base_table->get_snapshot_version() >= freeze_info.freeze_scn.get_val_for_inner_table_field()) {
+  } else if (base_table->get_snapshot_version() >= freeze_info.freeze_scn.get_val_for_tx()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected sstable with snapshot_version bigger than next freeze_scn",
              K(ret), K(freeze_info), KPC(base_table), K(tablet));
