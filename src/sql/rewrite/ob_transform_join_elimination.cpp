@@ -247,13 +247,22 @@ int ObTransformJoinElimination::check_eliminate_delupd_table_valid(const ObDelUp
   int ret = OB_SUCCESS;
   bool is_modified = false;
   is_valid = true;
+  ObSEArray<const ObDmlTableInfo*, 2> table_infos;
   if (OB_ISNULL(del_up_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null stmt", K(ret));
-  } else if (OB_FAIL(del_up_stmt->check_table_be_modified(table_id, is_modified))) {
-    LOG_WARN("failed to check table be modified", K(ret));
-  } else if (is_modified){
-    is_valid = false;
+  } else if (OB_FAIL(del_up_stmt->get_dml_table_infos(table_infos))) {
+    LOG_WARN("failed to get dml table infos", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < table_infos.count(); ++i) {
+      const ObDmlTableInfo* table_info = table_infos.at(i);
+      if (OB_ISNULL(table_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null table info", K(ret), K(i), K(table_infos));
+      } else {
+        is_valid = table_info->table_id_ != table_id;
+      }
+    }
   }
   return ret;
 }
