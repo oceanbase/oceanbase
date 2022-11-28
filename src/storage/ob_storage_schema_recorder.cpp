@@ -164,7 +164,11 @@ int ObStorageSchemaRecorder::replay_schema_log(
     int64_t table_version = OB_INVALID_VERSION;
     ObArenaAllocator tmp_allocator;
     ObStorageSchema replay_storage_schema;
-    if (tablet_id_.is_special_merge_tablet()) {
+    // TODO: fix it
+    palf::SCN scn;
+    if (OB_FAIL(scn.convert_for_lsn_allocator(log_ts))) {
+      LOG_WARN("convert failed", K(log_ts), K(ret));
+    } else if (tablet_id_.is_special_merge_tablet()) {
       // do nothing
     } else if (OB_FAIL(serialization::decode_i64(buf, size, pos, &table_version))) {
       // table_version
@@ -177,8 +181,10 @@ int ObStorageSchemaRecorder::replay_schema_log(
     } else if (OB_FAIL(replay_storage_schema.deserialize(tmp_allocator, buf, size, pos))) {
       LOG_WARN("fail to deserialize storage schema", K(ret), K_(tablet_id));
     } else if (FALSE_IT(replay_storage_schema.set_sync_finish(true))) {
-    } else if (OB_FAIL(tablet_handle_.get_obj()->save_multi_source_data_unit(&replay_storage_schema, log_ts,
-        true/*for_replay*/, memtable::MemtableRefOp::NONE))) {
+    } else if (OB_FAIL(tablet_handle_.get_obj()->save_multi_source_data_unit(&replay_storage_schema,
+                                                                             scn,
+                                                                             true/*for_replay*/,
+                                                                             memtable::MemtableRefOp::NONE))) {
       LOG_WARN("failed to save storage schema on memtable", K(ret), K_(tablet_id), K(replay_storage_schema));
     } else {
       ATOMIC_SET(&max_saved_table_version_, table_version);

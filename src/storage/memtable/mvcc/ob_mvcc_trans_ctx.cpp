@@ -976,10 +976,11 @@ int ObMvccRowCallback::trans_commit()
           if (value_.need_compact(for_read, ctx_.is_for_replay())) {
             if (ctx_.is_for_replay()) {
               if (palf::SCN::min_scn() != ctx_.get_replay_compact_version() && palf::SCN::max_scn() != ctx_.get_replay_compact_version()) {
-                memtable_->row_compact(&value_, ctx_.is_for_replay(), ctx_.get_replay_compact_version().get_val_for_lsn_allocator());
+                memtable_->row_compact(&value_, ctx_.is_for_replay(), ctx_.get_replay_compact_version());
               }
             } else {
-              memtable_->row_compact(&value_, ctx_.is_for_replay(), INT64_MAX - 100);
+              palf::SCN snapshot_version_for_compact = palf::SCN::minus(palf::SCN::max_scn(), 100);
+              memtable_->row_compact(&value_, ctx_.is_for_replay(), snapshot_version_for_compact);
             }
           }
         }
@@ -1169,8 +1170,8 @@ int ObMvccRowCallback::log_sync(const palf::SCN scn)
 {
   int ret = OB_SUCCESS;
 
-  memtable_->set_rec_log_ts(scn.get_val_for_lsn_allocator());
-  memtable_->set_max_end_log_ts(scn.get_val_for_lsn_allocator());
+  memtable_->set_rec_scn(scn);
+  memtable_->set_max_end_scn(scn);
   (void)tnode_->fill_scn(scn);
   ctx_.update_max_submitted_seq_no(seq_no_);
   if (OB_FAIL(dec_unsynced_cnt_())) {

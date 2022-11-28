@@ -209,7 +209,7 @@ int ObTabletMemtableMgr::create_memtable(const int64_t clog_checkpoint_ts,
           last_frozen_memtable->resolve_right_boundary();
           TRANS_LOG(INFO, "[resolve_right_boundary] create_memtable", K(for_replay), K(ls_id), KPC(last_frozen_memtable));
           if (memtable != last_frozen_memtable) {
-            memtable->resolve_left_boundary(last_frozen_memtable->get_end_log_ts());
+            memtable->resolve_left_boundary(last_frozen_memtable->get_end_scn());
           }
         }
       // there is no frozen memtable and new sstable will not be generated,
@@ -221,7 +221,7 @@ int ObTabletMemtableMgr::create_memtable(const int64_t clog_checkpoint_ts,
       } else if (OB_FAIL(get_newest_snapshot_version(new_snapshot_version))){
         LOG_WARN("failed to get newest snapshot_version", K(ret), K(ls_id), K(tablet_id_), K(new_snapshot_version));
       } else {
-        memtable->resolve_left_boundary(new_clog_checkpoint_scn.get_val_for_lsn_allocator());
+        memtable->resolve_left_boundary(new_clog_checkpoint_scn);
       }
 
       time_guard.click("init memtable");
@@ -367,7 +367,9 @@ ObMemtable *ObTabletMemtableMgr::get_last_frozen_memtable_() const
   return memtable;
 }
 
-int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(ObIMemtable *memtable, int64_t start_log_ts, int64_t snapshot_version)
+int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(ObIMemtable *memtable,
+                                                                   palf::SCN start_scn,
+                                                                   palf::SCN snapshot_scn)
 {
   ObTableHandleV2 handle;
   ObIMemtable *active_memtable = nullptr;
@@ -381,8 +383,8 @@ int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(ObIMemtable *
   } else if (OB_FAIL(handle.get_memtable(active_memtable))) {
     LOG_WARN("fail to get active memtable", K(ret));
   } else {
-    // set the start_log_ts of the new memtable
-    static_cast<ObMemtable*>(active_memtable)->resolve_left_boundary(start_log_ts);
+    // set the start_scn of the new memtable
+    static_cast<ObMemtable*>(active_memtable)->resolve_left_boundary(start_scn);
   }
   if (OB_ENTRY_NOT_EXIST== ret) {
     ret = OB_SUCCESS;

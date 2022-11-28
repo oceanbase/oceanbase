@@ -202,7 +202,7 @@ int ObRedoLogGenerator::log_submitted(const ObCallbackScope &callbacks)
   return ret;
 }
 
-int ObRedoLogGenerator::sync_log_succ(const int64_t log_ts, const ObCallbackScope &callbacks)
+int ObRedoLogGenerator::sync_log_succ(const palf::SCN scn, const ObCallbackScope &callbacks)
 {
   // no need to submit log
   // since the number of log callback is enough now
@@ -219,9 +219,6 @@ int ObRedoLogGenerator::sync_log_succ(const int64_t log_ts, const ObCallbackScop
     do {
       ObITransCallback *iter = (ObITransCallback *)*cursor;
       if (iter->need_fill_redo()) {
-        // TODO(handora.qc): fix it
-        palf::SCN scn;
-        scn.convert_for_lsn_allocator(log_ts);
         iter->set_scn(scn);
         if (OB_TMP_FAIL(iter->log_sync_cb(scn))) {
           if (OB_SUCC(ret)) {
@@ -232,7 +229,7 @@ int ObRedoLogGenerator::sync_log_succ(const int64_t log_ts, const ObCallbackScop
           redo_sync_succ_cnt_ += 1;
         }
       } else {
-        TRANS_LOG(ERROR, "sync_log_succ error", K(ret), K(iter), K(iter->need_fill_redo()), K(log_ts));
+        TRANS_LOG(ERROR, "sync_log_succ error", K(ret), K(iter), K(iter->need_fill_redo()), K(scn));
       }
     } while (cursor != callbacks.end_ && !FALSE_IT(cursor++));
   }

@@ -2864,7 +2864,7 @@ int ObTablet::get_rec_log_ts(int64_t &rec_log_ts)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mt is NULL", KR(ret), K(handle));
   } else {
-    rec_log_ts = mt->get_rec_log_ts();
+    rec_log_ts = mt->get_rec_scn().get_val_for_tx();
   }
   return ret;
 }

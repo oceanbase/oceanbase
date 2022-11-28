@@ -778,7 +778,7 @@ int ObPartTransCtx::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
   return ret;
 }
 
-bool ObPartTransCtx::need_update_schema_version(const int64_t log_id, const int64_t log_ts)
+bool ObPartTransCtx::need_update_schema_version(const int64_t log_id, const palf::SCN)
 {
   // const int64_t restore_snapshot_version = ls_tx_ctx_mgr_->get_restore_snapshot_version();
   // const int64_t last_restore_log_id = ls_tx_ctx_mgr_->get_last_restore_log_id();
@@ -796,8 +796,8 @@ int ObPartTransCtx::trans_replay_abort_(const palf::SCN &final_log_ts)
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(mt_ctx_.trans_replay_end(false, /*commit*/
-                                       ctx_tx_data_.get_commit_version().get_val_for_lsn_allocator(),
-                                       final_log_ts.get_val_for_lsn_allocator()))) {
+                                       ctx_tx_data_.get_commit_version(),
+                                       final_log_ts))) {
     TRANS_LOG(WARN, "transaction replay end error", KR(ret), KPC(this));
   }
 
@@ -818,8 +818,8 @@ int ObPartTransCtx::trans_replay_commit_(const palf::SCN &commit_version,
   } else {
     int64_t freeze_ts = 0;
     if (OB_FAIL(mt_ctx_.trans_replay_end(true, /*commit*/
-                                         commit_version.get_val_for_lsn_allocator(),
-                                         final_log_ts.get_val_for_lsn_allocator(),
+                                         commit_version,
+                                         final_log_ts,
                                          log_cluster_version,
                                          checksum))) {
       TRANS_LOG(WARN, "transaction replay end error", KR(ret), K(commit_version), K(checksum),
@@ -1243,7 +1243,7 @@ int ObPartTransCtx::recover_tx_ctx_table_info(const ObTxCtxTableInfo &ctx_info)
     } else if (OB_FAIL(deep_copy_mds_array(ctx_info.exec_info_.multi_data_source_))) {
       TRANS_LOG(WARN, "deep copy ctx_info mds_array failed", K(ret));
     } else if (FALSE_IT(mt_ctx_.update_checksum(exec_info_.checksum_,
-                                                exec_info_.checksum_log_ts_))) {
+                                                exec_info_.checksum_scn_))) {
       TRANS_LOG(ERROR, "recover checksum failed", K(ret), KPC(this), K(ctx_info));
     } else if (!is_local_tx_() && OB_FAIL(ObTxCycleTwoPhaseCommitter::recover_from_tx_table())) {
       TRANS_LOG(ERROR, "recover_from_tx_table failed", K(ret), KPC(this));
@@ -1511,13 +1511,14 @@ int ObPartTransCtx::on_dist_end_(const bool commit)
 
   int64_t start_us, end_us;
   start_us = end_us = 0;
-  const int64_t trans_version = commit ? ctx_tx_data_.get_commit_version().get_val_for_lsn_allocator() : -1;
+  const palf::SCN trans_version = commit ? ctx_tx_data_.get_commit_version() : palf::SCN::invalid_scn();
   // Distributed transactions need to wait for the commit log majority successfully before
   // unlocking. If you want to know the reason, it is in the ::do_dist_commit
 
   start_us = ObTimeUtility::fast_current_time();
-  if (OB_FAIL(mt_ctx_.trans_end(commit, trans_version,
-                                ctx_tx_data_.get_end_log_ts().get_val_for_lsn_allocator()))) {
+  if (OB_FAIL(mt_ctx_.trans_end(commit,
+                                trans_version,
+                                ctx_tx_data_.get_end_log_ts()))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), K(trans_version), "context", *this);
   } else if (FALSE_IT(end_us = ObTimeUtility::fast_current_time())) {
   } else if (commit) {
@@ -1844,7 +1845,7 @@ int ObPartTransCtx::common_on_success_(ObTxLogCb *log_cb)
     exec_info_.max_durable_lsn_ = lsn;
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(mt_ctx_.sync_log_succ(log_ts.get_val_for_lsn_allocator(), log_cb->get_callbacks()))) {
+    if (OB_FAIL(mt_ctx_.sync_log_succ(log_ts, log_cb->get_callbacks()))) {
       TRANS_LOG(ERROR, "mt ctx sync log failed", KR(ret), K(*log_cb), K(*this));
     } else if (OB_SUCCESS != (tmp_ret = mt_ctx_.remove_callbacks_for_fast_commit())) {
       TRANS_LOG(WARN, "cleanout callbacks for fast commit", K(ret), K(*this));
@@ -3541,11 +3542,11 @@ void ObPartTransCtx::check_no_need_replay_checksum(const palf::SCN &log_ts)
 {
   // TODO(handora.qc): How to lock the tx_ctx
 
-  // checksum_log_ts_ means all data's checksum has been calculated before the
-  // log of checksum_log_ts_(not included). So if the data with this log_ts is
-  // not replayed with checksum_log_ts_ <= log_ts, it means may exist some data
+  // checksum_scn_ means all data's checksum has been calculated before the
+  // log of checksum_scn_(not included). So if the data with this scn is
+  // not replayed with checksum_scn_ <= scn, it means may exist some data
   // will never be replayed because the memtable will filter the data.
-  if (exec_info_.checksum_log_ts_ <= log_ts.get_val_for_lsn_allocator()) {
+  if (exec_info_.checksum_scn_ <= log_ts) {
     exec_info_.need_checksum_ = false;
   }
 }
@@ -4788,9 +4789,9 @@ int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(mt_ctx_.calc_checksum_before_log_ts(exec_info_.max_applied_log_ts_.get_val_for_lsn_allocator(),
-                                                    exec_info_.checksum_,
-                                                    exec_info_.checksum_log_ts_))) {
+    if (OB_FAIL(mt_ctx_.calc_checksum_before_scn(exec_info_.max_applied_log_ts_,
+                                                 exec_info_.checksum_,
+                                                 exec_info_.checksum_scn_))) {
       TRANS_LOG(ERROR, "calc checksum before log ts failed", K(ret), KPC(this));
     } else {
       info.tx_id_ = trans_id_;
@@ -5070,7 +5071,7 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
   int ret = OB_SUCCESS;
   ObMulSourceDataNotifyArg arg;
   arg.tx_id_ = trans_id_;
-  arg.log_ts_ = log_ts.get_val_for_lsn_allocator();
+  arg.scn_ = log_ts;
   arg.trans_version_ = ctx_tx_data_.get_commit_version();
   arg.for_replay_ = for_replay;
   arg.notify_type_ = notify_type;
@@ -5896,8 +5897,9 @@ int ObPartTransCtx::on_local_commit_tx_()
       TRANS_LOG(WARN, "wait gts elapse commit version failed", KR(ret), KPC(this));
     } else if (FALSE_IT(tg.click())) {
     } else if (FALSE_IT(start_us = ObTimeUtility::fast_current_time())) {
-    } else if (OB_FAIL(mt_ctx_.trans_end(true, ctx_tx_data_.get_commit_version().get_val_for_lsn_allocator(),
-                                         ctx_tx_data_.get_end_log_ts().get_val_for_lsn_allocator()))) {
+    } else if (OB_FAIL(mt_ctx_.trans_end(true,
+                                         ctx_tx_data_.get_commit_version(),
+                                         ctx_tx_data_.get_end_log_ts()))) {
       TRANS_LOG(WARN, "trans end error", KR(ret), "context", *this);
     } else if (FALSE_IT(end_us = ObTimeUtility::fast_current_time())) {
     } else if (FALSE_IT(elr_handler_.reset_elr_state())) {
@@ -5946,7 +5948,7 @@ int ObPartTransCtx::on_local_abort_tx_()
   ObTxBufferNodeArray tmp_array;
 
   start_us = ObTimeUtility::fast_current_time();
-  if (OB_FAIL(mt_ctx_.trans_end(false, -1 /*unused*/, ctx_tx_data_.get_end_log_ts().get_val_for_lsn_allocator()))) {
+  if (OB_FAIL(mt_ctx_.trans_end(false, palf::SCN::invalid_scn(), ctx_tx_data_.get_end_log_ts()))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), K(commit_version), "context", *this);
   } else if (FALSE_IT(end_us = ObTimeUtility::fast_current_time())) {
   } else if (OB_FAIL(trans_clear_())) {

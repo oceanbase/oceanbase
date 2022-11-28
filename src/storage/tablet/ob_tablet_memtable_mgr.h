@@ -83,7 +83,9 @@ public:
       const bool include_active_memtable = true);
   int get_memtables_nolock(ObTableHdlArray &handle);
   int get_first_frozen_memtable(ObTableHandleV2 &handle) const;
-  int resolve_left_boundary_for_active_memtable(memtable::ObIMemtable *memtable, int64_t start_log_ts, int64_t snapshot_version);
+  int resolve_left_boundary_for_active_memtable(memtable::ObIMemtable *memtable,
+                                                palf::SCN start_scn,
+                                                palf::SCN snapshot_version);
   int unset_logging_blocked_for_active_memtable(memtable::ObIMemtable *memtable);
   int set_is_tablet_freeze_for_active_memtable(memtable::ObIMemtable *&memtable,
                                                bool is_force_freeze = false);

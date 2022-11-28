@@ -421,7 +421,7 @@ bool ObTxDataMemtable::ready_for_flush()
     STORAGE_LOG(WARN, "get_max_consequent_callbacked_log_ts failed", K(ret), K(freezer_->get_ls_id()));
   } else if (max_consequent_callbacked_scn >= key_.scn_range_.end_scn_) {
     state_ = ObTxDataMemtable::State::FROZEN;
-    set_snapshot_version(min_tx_scn_.get_val_for_lsn_allocator());
+    set_snapshot_version(min_tx_scn_);
     bool_ret = true;
   } else {
     int64_t freeze_ts = key_.scn_range_.end_scn_.get_val_for_inner_table_field();

@@ -621,11 +621,8 @@ int ObTablet::prepare_data(T &multi_source_data_unit, const transaction::ObMulSo
 {
   int ret = OB_SUCCESS;
 
-//TODO(SCN): const palf::SCN scn = trans_flags.for_replay_ ? trans_flags.log_ts_ : palf::SCN::max_scn();
-  palf::SCN scn = palf::SCN::max_scn();
-  if (trans_flags.for_replay_) {
-    scn.convert_for_lsn_allocator(trans_flags.log_ts_);
-  }
+  const palf::SCN scn = trans_flags.for_replay_ ? trans_flags.scn_ : palf::SCN::max_scn();
+
   TRANS_LOG(INFO, "prepare data when tx_end", K(multi_source_data_unit), K(tablet_meta_.tablet_id_));
 
   if (IS_NOT_INIT) {
@@ -720,7 +717,7 @@ int ObTablet::save_multi_source_data_unit(
     memtable::ObMemtable *memtable = nullptr;
     if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(memtable, msd->type()))) {
       TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
-    } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn.get_val_for_inner_table_field(), for_replay, ref_op, is_callback))) {
+    } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op, is_callback))) {
       TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op));
     }
   }
@@ -729,7 +726,7 @@ int ObTablet::save_multi_source_data_unit(
     memtable::ObMemtable *memtable = nullptr;
     if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(memtable, memtable::MultiSourceDataUnitType::TABLET_TX_DATA))) {
       TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
-    } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn.get_val_for_inner_table_field(), for_replay, ref_op/*add_ref*/, is_callback/*false*/))) {
+    } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op/*add_ref*/, is_callback/*false*/))) {
       TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op));
     }
   } else {
@@ -761,7 +758,7 @@ int ObTablet::save_multi_source_data_unit(
         ob_usleep(100);
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn.get_val_for_inner_table_field(), for_replay, ref_op, is_callback))) {
+      } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op, is_callback))) {
         TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op), K(for_replay));
       }
     }

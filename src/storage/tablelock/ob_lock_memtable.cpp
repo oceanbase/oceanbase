@@ -814,7 +814,7 @@ int ObLockMemtable::flush(palf::SCN recycle_scn,
       scn_range.start_scn_.convert_for_gts(1);
       scn_range.end_scn_ = freeze_scn_;
       set_scn_range(scn_range);
-      set_snapshot_version(freeze_scn_.get_val_for_lsn_allocator());
+      set_snapshot_version(freeze_scn_);
       ATOMIC_STORE(&is_frozen_, true);
     }
   }

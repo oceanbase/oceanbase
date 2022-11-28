@@ -274,7 +274,7 @@ int ObTxCtxMemtable::flush(palf::SCN recycle_scn, bool need_freeze)
       scn_range.start_scn_.convert_for_gts(1);
       scn_range.end_scn_.convert_for_gts(cur_ts);
       set_scn_range(scn_range);
-      set_snapshot_version(cur_ts);
+      set_snapshot_version(scn_range.end_scn_);
       ATOMIC_STORE(&is_frozen_, true);
     }
   }

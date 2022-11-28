@@ -149,7 +149,8 @@ int ObTabletMeta::init(
   } else if (OB_UNLIKELY(!ls_id.is_valid())
       || OB_UNLIKELY(!tablet_id.is_valid())
       || OB_UNLIKELY(!data_tablet_id.is_valid())
-      || OB_UNLIKELY(!create_scn.is_valid())
+      // TODO: fix it after multi source data refactor
+      // || OB_UNLIKELY(!create_scn.is_valid())
       || OB_UNLIKELY(!snapshot_version.is_valid())
       || OB_UNLIKELY(lib::Worker::CompatMode::INVALID == compat_mode)) {
     ret = OB_INVALID_ARGUMENT;

@@ -239,7 +239,7 @@ int ObTxReplayExecutor::before_replay_redo_()
   if (!has_redo_) {
     if (OB_ISNULL(ctx_) || OB_ISNULL(mt_ctx_ = ctx_->get_memtable_ctx())) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (mt_ctx_->replay_begin(log_ts_ns_.get_val_for_lsn_allocator())) {
+    } else if (mt_ctx_->replay_begin(log_ts_ns_)) {
       TRANS_LOG(ERROR, "[Replay Tx] replay_begin fail or mt_ctx_ is NULL", K(ret), K(mt_ctx_));
     } else {
       has_redo_ = true;
@@ -253,11 +253,11 @@ void ObTxReplayExecutor::finish_replay_(const int retcode)
   if (has_redo_) {
     if (OB_SUCCESS != retcode) {
       mt_ctx_->replay_end(false, /*is_replay_succ*/
-                          log_ts_ns_.get_val_for_lsn_allocator());
+                          log_ts_ns_);
       TRANS_LOG(WARN, "[Replay Tx]Tx Redo replay error, rollback to start", K(*this));
     } else {
       mt_ctx_->replay_end(true, /*is_replay_succ*/
-                          log_ts_ns_.get_val_for_lsn_allocator());
+                          log_ts_ns_);
       // TRANS_LOG(INFO, "[Replay Tx] Tx Redo replay success, commit sub_trans", K(*this));
     }
   }
@@ -668,9 +668,9 @@ int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
               KP(mmi_ptr));
   } else if (OB_FAIL(data_mem_ptr->replay_row(store_ctx, mmi_ptr, row_buf))) {
     TRANS_LOG(WARN, "[Replay Tx] replay row error", K(ret));
-  } else if (OB_FAIL(data_mem_ptr->set_max_end_log_ts(log_ts_ns_.get_val_for_lsn_allocator()))) { // for freeze log_ts , may be
+  } else if (OB_FAIL(data_mem_ptr->set_max_end_scn(log_ts_ns_))) { // for freeze log_ts , may be
     TRANS_LOG(WARN, "[Replay Tx] set memtable max end log ts failed", K(ret), KP(data_mem_ptr));
-  } else if (OB_FAIL(data_mem_ptr->set_rec_log_ts(log_ts_ns_.get_val_for_lsn_allocator()))) {
+  } else if (OB_FAIL(data_mem_ptr->set_rec_scn(log_ts_ns_))) {
     TRANS_LOG(WARN, "[Replay Tx] set rec_log_ts error", K(ret), KPC(data_mem_ptr));
   }
 
@@ -679,7 +679,7 @@ int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
     // in a freeze memtable which has a smaller end ts than this log.
     //
     // The rollback operation must hold write_ref to make memtable stay in memory.
-    mt_ctx_->rollback_redo_callbacks(log_ts_ns_.get_val_for_lsn_allocator());
+    mt_ctx_->rollback_redo_callbacks(log_ts_ns_);
   }
   return ret;
 }

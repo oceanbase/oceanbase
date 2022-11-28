@@ -41,6 +41,13 @@ bool SCN::atomic_bcas(const SCN &old_v, const SCN &new_val)
   return ATOMIC_BCAS(&val_, old_v.val_, new_val.val_);
 }
 
+SCN SCN::atomic_vcas(const SCN &old_v, const SCN &new_val)
+{
+  SCN tmp;
+  tmp.val_ = ATOMIC_VCAS(&val_, old_v.val_, new_val.val_);
+  return tmp;
+}
+
 bool SCN::is_valid() const
 {
   return ((OB_INVALID_SCN_VAL != val_) && (SCN_VERSION == v_));
@@ -57,7 +64,7 @@ void SCN::set_max()
   ts_ns_ = OB_MAX_SCN_TS_NS;
 }
 
-bool SCN::is_max()
+bool SCN::is_max() const
 {
   bool bool_ret = false;
   if (v_ == SCN_VERSION && ts_ns_ == OB_MAX_SCN_TS_NS) {
@@ -72,7 +79,7 @@ void SCN::set_min()
   ts_ns_ = OB_MIN_SCN_TS_NS;
 }
 
-bool SCN::is_min()
+bool SCN::is_min() const
 {
   bool bool_ret = false;
   if (v_ == SCN_VERSION && ts_ns_ == OB_MIN_SCN_TS_NS) {

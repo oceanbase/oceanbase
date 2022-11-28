@@ -96,15 +96,12 @@ int ObTabletCreateDeleteHelper::prepare_create_tablets(
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_.get_ls_id();
   const ObTransID &tx_id = trans_flags.tx_id_;
-  SCN scn;
-  const int64_t log_ts = trans_flags.log_ts_;
+  const palf::SCN scn = trans_flags.scn_;
   const bool is_clog_replaying = trans_flags.for_replay_;
   const int64_t create_begin_ts = ObTimeUtility::current_monotonic_time();
   ObTabletBindingPrepareCtx binding_ctx;
 
-  if (OB_FAIL(scn.convert_tmp(log_ts))) {
-    LOG_WARN("failed to convert_tmp", K(ret), K(scn));
-  } else if (OB_UNLIKELY(!arg.is_valid())) {
+  if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(PRINT_CREATE_ARG(arg)));
   } else if (OB_UNLIKELY(arg.id_ != ls_id)) {
@@ -142,16 +139,14 @@ int ObTabletCreateDeleteHelper::replay_prepare_create_tablets(
       const ObMulSourceDataNotifyArg &trans_flags)
 {
   int ret = OB_SUCCESS;
-  SCN scn;
+  SCN scn = trans_flags.scn_;
   const ObBatchCreateTabletArg *final_arg = &arg;
   ObBatchCreateTabletArg new_arg;
   ObSArray<ObTabletID> existed_tablet_id_array;
   NonLockedHashSet existed_tablet_id_set;
   bool need_create = true;
 
-  if (OB_FAIL(scn.convert_tmp(trans_flags.log_ts_))) {
-    LOG_WARN("failed to convert_tmp", K(ret), K(scn));
-  } else if (OB_UNLIKELY(!arg.is_valid())) {
+  if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(PRINT_CREATE_ARG(arg)), K(scn));
   } else if (OB_FAIL(existed_tablet_id_set.create(arg.get_tablet_count()))) {
@@ -290,7 +285,6 @@ int ObTabletCreateDeleteHelper::handle_special_tablets_for_replay(
       const ObTabletID &tablet_id = existed_tablet_id_array.at(i);
       key.tablet_id_ = tablet_id;
       tx_data.reset();
-      SCN scn;
       bool tx_data_is_valid = false;
       if (OB_FAIL(get_tablet(key, tablet_handle))) {
         LOG_WARN("failed to get tablet", K(ret), K(key));
@@ -299,12 +293,10 @@ int ObTabletCreateDeleteHelper::handle_special_tablets_for_replay(
       } else if (OB_UNLIKELY(tx_data_is_valid)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tx data should not be valid", K(ret), K(key));
-      } else if (OB_FAIL(scn.convert_for_lsn_allocator(trans_flags.log_ts_))) {
-        LOG_WARN("failed to convert scn", K(ret), K(key), K(trans_flags));
       } else {
         int tmp_ret = OB_SUCCESS;
         tx_data.tx_id_ = trans_flags.tx_id_;
-        tx_data.tx_scn_ = scn;
+        tx_data.tx_scn_ = trans_flags.scn_;
         tx_data.tablet_status_ = ObTabletStatus::CREATING;
         const bool update_cache = false;
 
@@ -332,8 +324,7 @@ int ObTabletCreateDeleteHelper::set_scn(
   const ObLSID &ls_id = ls_.get_ls_id();
   ObTabletMapKey key;
   key.ls_id_ = ls_id;
-  SCN scn;
-  scn.convert_tmp(trans_flags.log_ts_);
+  SCN scn = trans_flags.scn_;
   const int64_t tx_id = trans_flags.tx_id_;
   const bool for_replay = false;
 
@@ -533,12 +524,10 @@ int ObTabletCreateDeleteHelper::redo_create_tablets(
   } else if (is_clog_replaying) {
     LOG_INFO("in clog replaying procedure, do nothing while redo log callback", K(ret));
   } else {
-    SCN scn;
+    SCN scn = trans_flags.scn_;
     bool is_valid = true;
     ObSArray<ObTabletCreateInfo> tablet_create_info_array;
-    if (OB_FAIL(scn.convert_tmp(trans_flags.log_ts_))) {
-      LOG_WARN("failed to convert_tmp", K(ret), K(scn));
-    } else if (OB_FAIL(check_tablet_existence(arg, is_valid))) {
+    if (OB_FAIL(check_tablet_existence(arg, is_valid))) {
       LOG_ERROR("failed to check tablet existence", K(ret), K(PRINT_CREATE_ARG(arg)));
     } else if (!is_valid) {
       ret = OB_ERR_UNEXPECTED;
@@ -632,10 +621,10 @@ int ObTabletCreateDeleteHelper::do_commit_create_tablet(
     LOG_WARN("failed to get tablet", K(ret), K(key));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret), K(tablet_handle));
-  } else if (trans_flags.for_replay_ && trans_flags.log_ts_ <= tx_data.tx_scn_.get_val_for_inner_table_field()) {
+  } else if (trans_flags.for_replay_ && trans_flags.scn_ <= tx_data.tx_scn_) {
     // replaying procedure, clog ts is smaller than tx log ts, just skip
     LOG_INFO("skip commit create tablet", K(ret), K(key), K(trans_flags), K(tx_data));
-  } else if (OB_UNLIKELY(!trans_flags.for_replay_ && trans_flags.log_ts_ <= tx_data.tx_scn_.get_val_for_inner_table_field())) {
+  } else if (OB_UNLIKELY(!trans_flags.for_replay_ && trans_flags.scn_ <= tx_data.tx_scn_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log ts is smaller than tx log ts", K(ret), K(key), K(trans_flags), K(tx_data));
   } else if (OB_UNLIKELY(trans_flags.tx_id_ != tx_data.tx_id_)) {
@@ -645,8 +634,8 @@ int ObTabletCreateDeleteHelper::do_commit_create_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is not CREATING", K(ret), K(key), K(trans_flags), K(tx_data));
   } else {
-    const int64_t tx_log_ts = trans_flags.log_ts_;
-    const int64_t memtable_log_ts = trans_flags.log_ts_;
+    const int64_t tx_log_ts = trans_flags.scn_.get_val_for_lsn_allocator();
+    const int64_t memtable_log_ts = trans_flags.scn_.get_val_for_lsn_allocator();
 
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::NORMAL,
         tx_log_ts, memtable_log_ts, trans_flags.for_replay_))) {
@@ -697,10 +686,12 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablets(
   ObTabletMapKey key;
   key.ls_id_ = ls_.get_ls_id();
 
-  if (OB_UNLIKELY(trans_flags.log_ts_ < OB_INVALID_TIMESTAMP)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid log ts", K(ret), K(trans_flags));
-  } else if (!trans_flags.is_redo_synced()) {
+  // TODO: fix it after multi source data refactor
+  // if (OB_UNLIKELY(trans_flags.log_ts_ < OB_INVALID_TIMESTAMP)) {
+  //   ret = OB_ERR_UNEXPECTED;
+  //   LOG_WARN("invalid log ts", K(ret), K(trans_flags));
+  // } else
+  if (!trans_flags.is_redo_synced()) {
     // on redo cb has not been called
     // just remove tablets directly
     if (OB_FAIL(roll_back_remove_tablets(arg, trans_flags))) {
@@ -881,7 +872,7 @@ int ObTabletCreateDeleteHelper::roll_back_remove_tablet(
         LOG_INFO("memtable does not have msd, do nothing", K(ret), K(ls_id), K(tablet_id));
       } else if (OB_FAIL(tablet->get_tx_data(tx_data))) {
         LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, ObScnRange::MAX_TS,
+      } else if (OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, ObScnRange::MAX_SCN,
           trans_flags.for_replay_, MemtableRefOp::DEC_REF, true/*is_callback*/))) {
         LOG_WARN("failed to save msd", K(ret), K(ls_id), K(tablet_id));
       }
@@ -921,12 +912,12 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablet(
 
   if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret), K(tablet_handle));
-  } else if (trans_flags.for_replay_ && trans_flags.log_ts_ <= tx_data.tx_scn_.get_val_for_inner_table_field()) {
+  } else if (trans_flags.for_replay_ && trans_flags.scn_ <= tx_data.tx_scn_) {
     // replaying procedure, clog ts is smaller than tx log ts, just skip
     LOG_INFO("skip abort create tablet", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
   } else if (OB_UNLIKELY(!trans_flags.for_replay_
-                         && tx_data.tx_scn_.get_val_for_inner_table_field() != OB_MAX_SCN_TS_NS
-                         && trans_flags.log_ts_ <= tx_data.tx_scn_.get_val_for_inner_table_field())) {
+                         && tx_data.tx_scn_ != palf::SCN::max_scn()
+                         && trans_flags.scn_ <= tx_data.tx_scn_)) {
     // If tx log ts equals ObScnRange::MAX_TS, it means redo callback has not been called.
     // Thus, we should handle this situation
     ret = OB_ERR_UNEXPECTED;
@@ -938,8 +929,8 @@ int ObTabletCreateDeleteHelper::do_abort_create_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is not CREATING", K(ret), K(tablet_id), K(trans_flags), K(tx_data));
   } else {
-    const int64_t tx_log_ts = trans_flags.log_ts_;
-    const int64_t memtable_log_ts = trans_flags.log_ts_;
+    const int64_t tx_log_ts = trans_flags.scn_.get_val_for_inner_table_field();
+    const int64_t memtable_log_ts = trans_flags.scn_.get_val_for_inner_table_field();
 
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::DELETED,
         tx_log_ts, memtable_log_ts, trans_flags.for_replay_))) {
@@ -980,7 +971,7 @@ int ObTabletCreateDeleteHelper::prepare_remove_tablets(
   } else if (trans_flags.for_replay_) {
     if (OB_FAIL(tablet_id_array.reserve(tablet_cnt))) {
       LOG_WARN("fail to allocate memory for tablet_id_array", K(ret), K(tablet_cnt));
-    } else if (OB_FAIL(replay_verify_tablets(arg, trans_flags.log_ts_, tablet_id_array))) {
+    } else if (OB_FAIL(replay_verify_tablets(arg, trans_flags.scn_.get_val_for_inner_table_field(), tablet_id_array))) {
       LOG_WARN("failed to replay verify tablets", K(ret), K(trans_flags));
     }
   }
@@ -999,23 +990,18 @@ int ObTabletCreateDeleteHelper::prepare_remove_tablets(
       } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(cur_tx_data))) {
         LOG_WARN("failed to get tx data", K(ret), K(key));
       } else {
-        SCN flag_scn;
-        if (OB_INVALID_SCN_VAL != trans_flags.log_ts_
-            && OB_FAIL(flag_scn.convert_for_lsn_allocator(trans_flags.log_ts_))) {
-          LOG_WARN("failed to convert_tmp", K(ret), K(trans_flags));
-        } else {
-          ObTabletTxMultiSourceDataUnit tx_data;
-          tx_data.tx_id_ = trans_flags.tx_id_;
-          tx_data.tx_scn_ = trans_flags.for_replay_ ? flag_scn: cur_tx_data.tx_scn_;
-          tx_data.tablet_status_ = ObTabletStatus::DELETING;
+        SCN flag_scn = trans_flags.scn_;
+        ObTabletTxMultiSourceDataUnit tx_data;
+        tx_data.tx_id_ = trans_flags.tx_id_;
+        tx_data.tx_scn_ = trans_flags.for_replay_ ? flag_scn: cur_tx_data.tx_scn_;
+        tx_data.tablet_status_ = ObTabletStatus::DELETING;
 
-          if (OB_FAIL(ObTabletBindingHelper::lock_and_set_tx_data(tablet_handle, tx_data, trans_flags.for_replay_))) {
-            LOG_WARN("failed to lock tablet binding", K(ret), K(key), K(tx_data));
-            // TODO(bowen.gbw): temproarily swallow 4200 error while prepare remove tablets
-            if (trans_flags.for_replay_ && OB_HASH_EXIST == ret) {
-              ret = OB_SUCCESS;
-              LOG_INFO("swallow 4200 error", K(ret), K(key), K(tx_data), K(trans_flags));
-            }
+        if (OB_FAIL(ObTabletBindingHelper::lock_and_set_tx_data(tablet_handle, tx_data, trans_flags.for_replay_))) {
+          LOG_WARN("failed to lock tablet binding", K(ret), K(key), K(tx_data));
+          // TODO(bowen.gbw): temproarily swallow 4200 error while prepare remove tablets
+          if (trans_flags.for_replay_ && OB_HASH_EXIST == ret) {
+            ret = OB_SUCCESS;
+            LOG_INFO("swallow 4200 error", K(ret), K(key), K(tx_data), K(trans_flags));
           }
         }
       }
@@ -1084,7 +1070,7 @@ int ObTabletCreateDeleteHelper::redo_remove_tablets(
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_.get_ls_id();
   const bool is_clog_replaying = trans_flags.for_replay_;
-  const int64_t log_ts = trans_flags.log_ts_;
+  const palf::SCN scn = trans_flags.scn_;
 
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1100,14 +1086,11 @@ int ObTabletCreateDeleteHelper::redo_remove_tablets(
     ObTabletMapKey key;
     key.ls_id_ = ls_id;
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablet_ids_.count(); ++i) {
-      SCN scn;
       key.tablet_id_ = arg.tablet_ids_.at(i);
       if (OB_FAIL(get_tablet(key, tablet_handle))) {
         LOG_WARN("failed to get tablet", K(ret), K(key));
       } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
         LOG_WARN("failed to get tx data", K(ret), K(tablet_handle));
-      } else if (OB_FAIL(scn.convert_tmp(log_ts))) {
-        LOG_WARN("failed to convert_tmp", K(ret), K(scn));
       } else if (OB_FAIL(tablet_handle.get_obj()->set_tx_scn(tx_data.tx_id_, scn, false/*for_replay*/))) {
         LOG_WARN("failed to set tx data", K(ret), K(tablet_handle), K(tx_data), K(scn));
       }
@@ -1137,7 +1120,7 @@ int ObTabletCreateDeleteHelper::commit_remove_tablets(
     LOG_WARN("unexpected arg", K(ret), K(arg), K(ls_id));
   } else if (trans_flags.for_replay_) {
     if (OB_FAIL(tablet_id_array.reserve(arg.tablet_ids_.count()))) {
-    } else if (OB_FAIL(replay_verify_tablets(arg, trans_flags.log_ts_, tablet_id_array))) {
+    } else if (OB_FAIL(replay_verify_tablets(arg, trans_flags.scn_.get_val_for_inner_table_field(), tablet_id_array))) {
       LOG_WARN("failed to replay verify tablets", K(ret), K(trans_flags));
     }
   }
@@ -1173,7 +1156,7 @@ int ObTabletCreateDeleteHelper::do_commit_remove_tablet(
     LOG_WARN("failed to get tablet", K(ret), K(key));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret), K(key));
-  } else if (OB_UNLIKELY(!trans_flags.for_replay_ && trans_flags.log_ts_ <= tx_data.tx_scn_.get_val_for_inner_table_field())) {
+  } else if (OB_UNLIKELY(!trans_flags.for_replay_ && trans_flags.scn_ <= tx_data.tx_scn_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log ts is smaller than tx log ts", K(ret), K(key), K(trans_flags), K(tx_data));
   } else if (OB_UNLIKELY(trans_flags.tx_id_ != tx_data.tx_id_)) {
@@ -1183,8 +1166,8 @@ int ObTabletCreateDeleteHelper::do_commit_remove_tablet(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is not DELETING", K(ret), K(key), K(trans_flags), K(tx_data));
   } else {
-    const int64_t tx_log_ts = trans_flags.log_ts_;
-    const int64_t memtable_log_ts = trans_flags.log_ts_;
+    const int64_t tx_log_ts = trans_flags.scn_.get_val_for_inner_table_field();
+    const int64_t memtable_log_ts = trans_flags.scn_.get_val_for_inner_table_field();
 
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::DELETED,
         tx_log_ts, memtable_log_ts, trans_flags.for_replay_))) {
@@ -1216,7 +1199,7 @@ int ObTabletCreateDeleteHelper::abort_remove_tablets(
     LOG_WARN("unexpected arg", K(ret), K(arg), K(ls_id));
   } else if (trans_flags.for_replay_) {
     if (OB_FAIL(tablet_id_array.reserve(arg.tablet_ids_.count()))) {
-    } else if (OB_FAIL(replay_verify_tablets(arg, trans_flags.log_ts_, tablet_id_array))) {
+    } else if (OB_FAIL(replay_verify_tablets(arg, trans_flags.scn_.get_val_for_inner_table_field(), tablet_id_array))) {
       LOG_WARN("failed to replay verify tablets", K(ret), K(trans_flags));
     }
   }
@@ -1271,8 +1254,8 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
   } else if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret), K(key));
   } else if (OB_UNLIKELY(!trans_flags.for_replay_
-      && trans_flags.log_ts_ != OB_INVALID_TIMESTAMP
-      && trans_flags.log_ts_ <= tx_data.tx_scn_.get_val_for_inner_table_field())) {
+                         && trans_flags.scn_ != palf::SCN::invalid_scn()
+                         && trans_flags.scn_ <= tx_data.tx_scn_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log ts is smaller than tx log ts", K(ret), K(key), K(trans_flags), K(tx_data));
   } else if (OB_UNLIKELY(trans_flags.tx_id_ != tx_data.tx_id_)) {
@@ -1314,7 +1297,9 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
     }
   } else {
     const int64_t tx_log_ts = tx_data.tx_scn_.get_val_for_inner_table_field();
-    const int64_t memtable_log_ts = (OB_INVALID_TIMESTAMP == trans_flags.log_ts_) ? share::ObScnRange::MAX_TS: trans_flags.log_ts_;
+    const int64_t memtable_log_ts = (palf::SCN::invalid_scn() == trans_flags.scn_)
+      ? share::ObScnRange::MAX_TS
+      : trans_flags.scn_.get_val_for_inner_table_field();
 
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::NORMAL,
         tx_log_ts, memtable_log_ts, trans_flags.for_replay_, ref_op))) {
@@ -2287,21 +2272,15 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
   ObFreezer *freezer = ls_.get_freezer();
   bool need_create_empty_major_sstable = false;
   const ObTransID &tx_id = trans_flags.tx_id_;
-  SCN scn;
-  SCN create_scn;
   const bool for_replay = trans_flags.for_replay_;
-  const int64_t log_ts = for_replay ? trans_flags.log_ts_ : share::ObScnRange::MAX_TS;
-  const int64_t create_ts = trans_flags.log_ts_; // may be invalid
   MemtableRefOp ref_op = for_replay ? MemtableRefOp::NONE : MemtableRefOp::INC_REF;
+  SCN scn = trans_flags.for_replay_ ? trans_flags.scn_ : palf::SCN::max_scn();
+  SCN create_scn = trans_flags.scn_;
   ObMetaDiskAddr mem_addr;
   ObTabletTableStoreFlag table_store_flag;
   table_store_flag.set_with_major_sstable();
   if (OB_FAIL(mem_addr.set_mem_addr(0, sizeof(ObTablet)))) {
     LOG_WARN("fail to set memory address", K(ret));
-  } else if (OB_FAIL(scn.convert_tmp(log_ts))) {
-    LOG_WARN("failed to convert_tmp", K(ret), K(scn));
-  } else if (OB_FAIL(create_scn.convert_tmp(create_ts))) {
-    LOG_WARN("failed to convert_tmp", K(ret), K(create_scn));
   } else if (OB_FAIL(acquire_tablet(key, tablet_handle, false/*only acquire*/))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (OB_FAIL(check_need_create_empty_major_sstable(table_schema, need_create_empty_major_sstable))) {

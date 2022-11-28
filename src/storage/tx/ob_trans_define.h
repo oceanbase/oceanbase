@@ -1725,7 +1725,7 @@ public:
                K_(max_applying_part_log_no),
                K_(max_submitted_seq_no),
                K_(checksum),
-               K_(checksum_log_ts),
+               K_(checksum_scn),
                K_(max_durable_lsn),
                K_(data_complete),
                K_(is_dup_tx),
@@ -1750,7 +1750,7 @@ public:
   int64_t max_applying_part_log_no_; // start from 0 on follower and always be INT64_MAX on leader
   int64_t max_submitted_seq_no_; // maintains on Leader and transfer to Follower via ActiveInfoLog
   uint64_t checksum_;
-  int64_t checksum_log_ts_;
+  palf::SCN checksum_scn_;
   palf::LSN max_durable_lsn_;
   bool data_complete_;
   bool is_dup_tx_;
@@ -1768,7 +1768,7 @@ static const int64_t USEC_PER_SEC = 1000 * 1000;
 struct ObMulSourceDataNotifyArg
 {
   ObTransID tx_id_;
-  int64_t log_ts_; // the log ts of current notify type
+  palf::SCN scn_; // the log ts of current notify type
   // in case of abort transaction, trans_version_ is invalid
   palf::SCN trans_version_;
   bool for_replay_;
@@ -1778,7 +1778,7 @@ struct ObMulSourceDataNotifyArg
   bool redo_synced_;
 
   TO_STRING_KV(K_(tx_id),
-               K_(log_ts),
+               K_(scn),
                K_(trans_version),
                K_(for_replay),
                K_(notify_type),

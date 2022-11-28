@@ -77,16 +77,16 @@ int TestLobCommon::create_data_tablet(
   } else {
     transaction::ObMulSourceDataNotifyArg trans_flags;
     trans_flags.tx_id_ = 123;
-    trans_flags.log_ts_ = -1;
+    trans_flags.scn_ = palf::SCN::invalid_scn();
     trans_flags.for_replay_ = false;
 
     ObLS *ls = ls_handle.get_ls();
     if (OB_FAIL(ls->get_tablet_svr()->on_prepare_create_tablets(arg, trans_flags))) {
       STORAGE_LOG(WARN, "failed to prepare create tablets", K(ret), K(arg));
-    } else if (FALSE_IT(trans_flags.log_ts_ = INT64_MAX - 100)) {
+    } else if (FALSE_IT(trans_flags.scn_ = palf::SCN::minus(palf::SCN::max_scn(), 100))) {
     } else if (OB_FAIL(ls->get_tablet_svr()->on_redo_create_tablets(arg, trans_flags))) {
       STORAGE_LOG(WARN, "failed to redo create tablets", K(ret), K(arg));
-    } else if (FALSE_IT(++trans_flags.log_ts_)) {
+    } else if (FALSE_IT(trans_flags.scn_ = palf::SCN::plus(trans_flags.scn_, 1))) {
     } else if (OB_FAIL(ls->get_tablet_svr()->on_commit_create_tablets(arg, trans_flags))) {
       STORAGE_LOG(WARN, "failed to commit create tablets", K(ret), K(arg));
     }
