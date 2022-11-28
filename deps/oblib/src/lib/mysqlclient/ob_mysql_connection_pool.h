@@ -225,6 +225,7 @@ protected:
   char init_sql_[OB_MAX_SQL_LENGTH];
   ObConnPoolConfigParam config_;
   mutable obsys::ObRWLock get_lock_;
+  mutable obsys::ObRWLock dblink_pool_lock_;
   common::ObArenaAllocator allocator_;
   ServerList server_list_;
   TenantServerConnMap tenant_server_pool_map_;

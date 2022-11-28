@@ -93,6 +93,7 @@ ObMySQLConnectionPool::ObMySQLConnectionPool()
     busy_conn_count_(0),
     config_(),
     get_lock_(obsys::WRITE_PRIORITY),
+    dblink_pool_lock_(obsys::WRITE_PRIORITY),
     allocator_(ObModIds::OB_SQL_CONNECTION_POOL),
     server_list_(allocator_),
     tenant_server_pool_map_(),
@@ -762,17 +763,24 @@ int ObMySQLConnectionPool::create_dblink_pool(uint64_t tenant_id, uint64_t dblin
     LOG_WARN("fail to get dblink connection pool", K(dblink_id));
   } else if (OB_NOT_NULL(dblink_pool)) {
     // nothing.
-  } else if (OB_ISNULL(dblink_pool = server_pool_.alloc())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("out of memory", K(ret));
-  } else if (OB_FAIL(dblink_pool->init_dblink(dblink_id, server, db_tenant, db_user, db_pass,
-                                              db_name, conn_str, cluster_str,
-                                              this, config_.sqlclient_per_observer_conn_limit_))) {
-    LOG_WARN("fail to init dblink connection pool", K(ret));
-  } else if (OB_FAIL(server_list_.push_back(dblink_pool))) {
-    LOG_WARN("fail to push pool to list", K(ret));
   } else {
-    LOG_INFO("new dblink pool created", K(server), K(config_.sqlclient_per_observer_conn_limit_));
+    obsys::ObWLockGuard lock(dblink_pool_lock_);
+    if (OB_FAIL(get_dblink_pool(dblink_id, dblink_pool))) {
+      LOG_WARN("fail to get dblink connection pool", K(dblink_id));
+    } else if (OB_NOT_NULL(dblink_pool)) {
+      // nothing.
+    } else if (OB_ISNULL(dblink_pool = server_pool_.alloc())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("out of memory", K(ret));
+    } else if (OB_FAIL(dblink_pool->init_dblink(dblink_id, server, db_tenant, db_user, db_pass,
+                                                db_name, conn_str, cluster_str,
+                                                this, config_.sqlclient_per_observer_conn_limit_))) {
+      LOG_WARN("fail to init dblink connection pool", K(ret));
+    } else if (OB_FAIL(server_list_.push_back(dblink_pool))) {
+      LOG_WARN("fail to push pool to list", K(ret));
+    } else {
+      LOG_INFO("new dblink pool created", K(server), K(config_.sqlclient_per_observer_conn_limit_));
+    }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(dblink_pool)) {
     server_pool_.free(dblink_pool); // put back to cache. prevent memory leak
