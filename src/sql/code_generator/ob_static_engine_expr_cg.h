@@ -196,9 +196,6 @@ private:
   // alloc stack overflow check exprs.
   int alloc_so_check_exprs(const common::ObIArray<ObRawExpr *> &raw_exprs,
                            ObExprFrameInfo &expr_info);
-  // add stack overflow check expr above %e
-  int add_so_check_expr_above(common::ObIArray<ObExpr> &exprs,
-                              ObExpr *e);
 
   // calculate res_buf_len_ for exprs' datums
   int calc_exprs_res_buf_len(const common::ObIArray<ObRawExpr *> &raw_exprs);

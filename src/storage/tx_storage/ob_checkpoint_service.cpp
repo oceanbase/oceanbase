@@ -356,10 +356,7 @@ int ObCheckPointService::do_minor_freeze()
     ObLS *ls = nullptr;
     int ls_cnt = 0;
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      ObCheckpointExecutor *checkpoint_executor = nullptr;
-      if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
-        STORAGE_LOG(WARN, "checkpoint_executor should not be null", K(ls->get_ls_id()));
-      } else if (OB_SUCCESS != (tmp_ret = (checkpoint_executor->advance_checkpoint_by_flush(SCN::max_scn())))) {
+      if (OB_SUCCESS != (tmp_ret = (ls->advance_checkpoint_by_flush(SCN::max_scn())))) {
         STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", K(tmp_ret), K(ls->get_ls_id()));
       }
     }

@@ -1808,7 +1808,9 @@ int ObTenantDagScheduler::add_dag(
   } else {
     ObThreadCondGuard guard(scheduler_sync_);
     if (OB_FAIL(inner_add_dag(emergency, check_size_overflow, dag))) {
-      LOG_WARN("failed to inner add dag", K(ret), KPC(dag));
+      if (OB_EAGAIN != ret) {
+        LOG_WARN("failed to inner add dag", K(ret), KPC(dag));
+      }
     }
   }
   return ret;

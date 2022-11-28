@@ -924,7 +924,7 @@ int ObSelectStmtPrinter::print_cte_define_title(TableItem* cte_table)
   PRINT_TABLE_NAME(cte_table);
   if (OB_ISNULL(cte_table->node_->children_[1]) && (TableItem::RECURSIVE_CTE == cte_table->cte_type_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the recursive cte must have the colume definition", K(ret));
+    LOG_WARN("the recursive cte must have the column definition", K(ret));
   } else if (OB_NOT_NULL(cte_table->node_->children_[1])) {
     DATA_PRINTF("(");
     sub_select_stmt = cte_table->ref_query_;

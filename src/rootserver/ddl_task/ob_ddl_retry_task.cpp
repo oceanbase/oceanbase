@@ -447,6 +447,8 @@ int ObDDLRetryTask::check_health()
     need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) {
     LOG_WARN("refresh status failed", K(ret));
+  } else if (OB_FAIL(refresh_schema_version())) {
+    LOG_WARN("refresh schema version failed", K(ret));
   }
   if (ObDDLTaskStatus::FAIL == static_cast<ObDDLTaskStatus>(task_status_)
       || ObDDLTaskStatus::SUCCESS == static_cast<ObDDLTaskStatus>(task_status_)) {

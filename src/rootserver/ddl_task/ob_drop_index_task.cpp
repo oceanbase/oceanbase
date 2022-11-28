@@ -364,6 +364,8 @@ int ObDropIndexTask::check_switch_succ()
   } else if (OB_ISNULL(root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys", K(ret));
+  } else if (OB_FAIL(refresh_schema_version())) {
+    LOG_WARN("refresh schema version failed", K(ret));
   } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, target_object_id_, is_index_exist))) {

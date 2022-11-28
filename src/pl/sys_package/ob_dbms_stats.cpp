@@ -4124,7 +4124,7 @@ int ObDbmsStats::parse_set_column_stats_options(ObExecContext &ctx,
      - AUTO : Oracle determines the columns to collect histograms based on data distribution and the workload of the columns
      - SKEWONLY : Oracle determines the columns to collect histograms based on the data distribution of the columns
      - column_name : name of a column
-     - extension : can be either a column group in the format of (column_name, colume_name [, ...]) or an expressionThe default is FOR ALL COLUMNS SIZE AUTO.
+     - extension : can be either a column group in the format of (column_name, column_name [, ...]) or an expressionThe default is FOR ALL COLUMNS SIZE AUTO.
  * @return
  */
 int ObDbmsStats::parse_method_opt(sql::ObExecContext &ctx,

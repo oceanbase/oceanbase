@@ -175,7 +175,7 @@ int ObMultipleMultiScanMerge::construct_iters()
         STORAGE_LOG(WARN, "Fail to get access param", K(i), K(ret), K(*table));
       } else if (!use_cache_iter) {
         if (OB_FAIL(table->multi_scan(*iter_param, *access_ctx_, *ranges_, iter))) {
-          STORAGE_LOG(WARN, "Fail to get iterator, ", K(ret), K(*iter_param), K(*access_ctx_), K(i));
+          STORAGE_LOG(WARN, "Fail to get iterator, ", K(ret), K(i), K(*iter_param));
         } else if (OB_FAIL(iters_.push_back(iter))) {
           iter->~ObStoreRowIterator();
           STORAGE_LOG(WARN, "Fail to push iter to iterator array, ", K(ret), K(i));

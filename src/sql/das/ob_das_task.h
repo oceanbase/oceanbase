@@ -109,6 +109,7 @@ public:
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   void set_tablet_loc(const ObDASTabletLoc *tablet_loc) { tablet_loc_ = tablet_loc; }
   const ObDASTabletLoc *get_tablet_loc() const { return tablet_loc_; }
+  inline int64_t get_ref_table_id() const { return tablet_loc_->loc_meta_->ref_table_id_; }
   virtual int decode_task_result(ObIDASTaskResult *task_result) = 0;
   //远程执行填充第一个RPC结果，并返回是否还有剩余的RPC结果
   virtual int fill_task_result(ObIDASTaskResult &task_result,

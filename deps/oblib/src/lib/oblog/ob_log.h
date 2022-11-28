@@ -770,7 +770,7 @@ private:
   bool redirect_flag_;//whether redirect, TRUE: redirect FALSE: no redirect.
   bool open_wf_flag_;//whether open warning log-file.
   bool enable_wf_flag_; //whether write waring log to wf log-file.
-  bool rec_old_file_flag_;//whether recorde old file.
+  bool rec_old_file_flag_;//whether record old file.
   volatile bool can_print_;//when disk has no space, logger control
 
   bool enable_async_log_;//if false, use sync way logging

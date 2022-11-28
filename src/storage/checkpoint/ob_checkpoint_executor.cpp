@@ -200,47 +200,51 @@ int ObCheckpointExecutor::update_clog_checkpoint()
 
 int ObCheckpointExecutor::advance_checkpoint_by_flush(SCN recycle_scn) {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
 
-  // calcu recycle_ according to clog disk situation
-  if (!recycle_scn.is_valid()) {
-    LSN end_lsn;
-    if (OB_FAIL(loghandler_->get_end_lsn(end_lsn))) {
-      STORAGE_LOG(WARN, "get end lsn failed", K(ret), K(ls_->get_ls_id()));
-    } else {
-      LSN clog_checkpoint_lsn = ls_->get_clog_base_lsn();
-      LSN calcu_recycle_lsn = clog_checkpoint_lsn
-            + ((end_lsn - clog_checkpoint_lsn) * CLOG_GC_PERCENT / 100);
-      if (OB_FAIL(loghandler_->locate_by_lsn_coarsely(calcu_recycle_lsn, recycle_scn))) {
-        STORAGE_LOG(WARN, "locate_by_lsn_coarsely failed", K(calcu_recycle_lsn),
-                      K(recycle_scn), K(ls_->get_ls_id()));
+  ObSpinLockGuard guard(lock_);
+  if (update_checkpoint_enabled_) {
+    int tmp_ret = OB_SUCCESS;
+
+    // calcu recycle_scn according to clog disk situation
+    if (!recycle_scn.is_valid()) {
+      LSN end_lsn;
+      if (OB_FAIL(loghandler_->get_end_lsn(end_lsn))) {
+        STORAGE_LOG(WARN, "get end lsn failed", K(ret), K(ls_->get_ls_id()));
       } else {
-        STORAGE_LOG(INFO, "advance checkpoint by flush to avoid clog disk full",
-                    K(recycle_scn), K(end_lsn), K(clog_checkpoint_lsn),
-                    K(calcu_recycle_lsn), K(ls_->get_ls_id()));
+        LSN clog_checkpoint_lsn = ls_->get_clog_base_lsn();
+        LSN calcu_recycle_lsn = clog_checkpoint_lsn
+              + ((end_lsn - clog_checkpoint_lsn) * CLOG_GC_PERCENT / 100);
+        if (OB_FAIL(loghandler_->locate_by_lsn_coarsely(calcu_recycle_lsn, recycle_scn))) {
+          STORAGE_LOG(WARN, "locate_by_lsn_coarsely failed", K(calcu_recycle_lsn),
+                        K(recycle_scn), K(ls_->get_ls_id()));
+        } else {
+          STORAGE_LOG(INFO, "advance checkpoint by flush to avoid clog disk full",
+                      K(recycle_scn), K(end_lsn), K(clog_checkpoint_lsn),
+                      K(calcu_recycle_lsn), K(ls_->get_ls_id()));
+        }
       }
-    }
-    // the log of end_log_lsn and the log of clog_checkpoint_lsn may be in a block
+      // the log of end_log_lsn and the log of clog_checkpoint_lsn may be in a block
     if (recycle_scn < ls_->get_clog_checkpoint_scn()) {
       recycle_scn.set_max();
+      }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    if (recycle_scn < ls_->get_clog_checkpoint_scn()) {
-      ret = OB_NO_NEED_UPDATE;
-      STORAGE_LOG(WARN, "recycle_scn should not smaller than checkpoint_scn",
-                  K(recycle_scn), K(ls_->get_clog_checkpoint_scn()), K(ls_->get_ls_id()));
-    } else {
-      STORAGE_LOG(INFO, "start flush",
-                  K(recycle_scn),
-                  K(ls_->get_clog_checkpoint_scn()),
-                  K(ls_->get_ls_id()));
-      for (int i = 1; i < ObLogBaseType::MAX_LOG_BASE_TYPE; i++) {
-        if (OB_NOT_NULL(handlers_[i])
-            && OB_SUCCESS != (tmp_ret = (handlers_[i]->flush(recycle_scn)))) {
-          STORAGE_LOG(WARN, "handler flush failed", K(recycle_scn), K(tmp_ret),
-                      K(i), K(ls_->get_ls_id()));
+    if (OB_SUCC(ret)) {
+      if (recycle_scn < ls_->get_clog_checkpoint_scn()) {
+        ret = OB_NO_NEED_UPDATE;
+        STORAGE_LOG(WARN, "recycle_scn should not smaller than checkpoint_log_scn",
+                    K(recycle_scn), K(ls_->get_clog_checkpoint_scn()), K(ls_->get_ls_id()));
+      } else {
+        STORAGE_LOG(INFO, "start flush",
+                    K(recycle_scn),
+                    K(ls_->get_clog_checkpoint_scn()),
+                    K(ls_->get_ls_id()));
+        for (int i = 1; i < ObLogBaseType::MAX_LOG_BASE_TYPE; i++) {
+          if (OB_NOT_NULL(handlers_[i])
+              && OB_SUCCESS != (tmp_ret = (handlers_[i]->flush(recycle_scn)))) {
+            STORAGE_LOG(WARN, "handler flush failed", K(recycle_scn), K(tmp_ret),
+                        K(i), K(ls_->get_ls_id()));
+          }
         }
       }
     }

@@ -5344,6 +5344,11 @@ int ObPLResolver::resolve_signal(const ObStmtNodeTree *parse_tree, ObPLSignalStm
         if (!lib::is_oracle_mode() && SQL_STATE != value->type_) {
           ret = OB_ERR_SP_BAD_CONDITION_TYPE;
           LOG_WARN("SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE", K(value->type_), K(ret));
+        } else if (!is_sqlstate_valid(value->sql_state_, value->str_len_)
+            || is_sqlstate_completion(value->sql_state_)) {
+          ret = OB_ER_SP_BAD_SQLSTATE;
+          LOG_USER_ERROR(OB_ER_SP_BAD_SQLSTATE, static_cast<int>(value->str_len_), value->sql_state_);
+          LOG_WARN("Bad SQLSTATE", K(ret));
         } else {
           stmt->set_value(*value);
           stmt->set_ob_error_code(value->error_code_);

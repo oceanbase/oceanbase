@@ -656,7 +656,7 @@ int ObConstraintTask::release_snapshot(const int64_t snapshot_version)
   } else if (OB_ISNULL(table_schema)) {
     LOG_INFO("table not exist", K(ret), K(object_id_), K(target_object_id_));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
-    if (OB_TABLE_NOT_EXIST == ret) {
+    if (OB_TABLE_NOT_EXIST == ret || OB_TENANT_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get tablet snapshots", K(ret));
@@ -1319,6 +1319,7 @@ int ObConstraintTask::rollback_failed_check_constraint()
             ? CST_FK_NO_VALIDATE : CST_FK_VALIDATED;
           (*iter)->set_validate_flag(validate_flag);
         }
+        (*iter)->set_need_validate_data(false);
         alter_table_arg.alter_constraint_type_ = obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE;
         if (OB_FAIL(set_alter_constraint_ddl_stmt_str_for_check(alter_table_arg, allocator))) {
           LOG_WARN("fail to set alter constraint ddl_stmt_str", K(ret));
@@ -1755,6 +1756,8 @@ int ObConstraintTask::check_health()
     need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) { // refresh task status
     LOG_WARN("refresh status failed", K(ret));
+  } else if (OB_FAIL(refresh_schema_version())) {
+    LOG_WARN("refresh schema version failed", K(ret));
   } else {
     ObMultiVersionSchemaService &schema_service = root_service->get_schema_service();
     ObSchemaGetterGuard schema_guard;

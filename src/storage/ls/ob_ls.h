@@ -603,6 +603,7 @@ public:
 
   // ObCheckpointExecutor interface:
   DELEGATE_WITH_RET(checkpoint_executor_, get_checkpoint_info, int);
+  int advance_checkpoint_by_flush(share::SCN recycle_scn);
 
   // ObDataCheckpoint interface:
   DELEGATE_WITH_RET(data_checkpoint_, get_freezecheckpoint_info, int);

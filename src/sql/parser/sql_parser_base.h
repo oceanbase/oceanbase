@@ -111,6 +111,16 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
     return ERROR;                                               \
   } while(0)
 
+#define YYABORT_UNDECLARE_VAR                 \
+  do {                                                          \
+    if (OB_UNLIKELY(NULL == result)) {                          \
+      (void)fprintf(stderr, "ERROR : result is NULL\n");        \
+    } else if (0 == result->extra_errno_) {                     \
+      result->extra_errno_ = OB_PARSER_ERR_UNDECLARED_VAR;\
+    } else {/*do nothing*/}                                     \
+    YYABORT;                                                    \
+  } while(0)
+
 #define YYABORT_NOT_VALID_ROUTINE_NAME                          \
   do {                                                          \
     if (OB_UNLIKELY(NULL == result)) {                          \
@@ -386,7 +396,7 @@ do {                                                                            
   } while (0)
 
 //查找pl变量，并把该变量替换成:int形式
-#define lookup_pl_exec_symbol(node, result, start, end, is_trigger_new, is_add_alas_name) \
+#define lookup_pl_exec_symbol(node, result, start, end, is_trigger_new, is_add_alas_name, is_report_error) \
     do { \
       if (OB_UNLIKELY((NULL == node || NULL == result || NULL == node->str_value_))) { \
         yyerror(NULL, result, "invalid var node: %p\n", node); \
@@ -430,6 +440,8 @@ do {                                                                            
           result->no_param_sql_[result->no_param_sql_len_++]  = ':'; \
           result->no_param_sql_len_ += sprintf(result->no_param_sql_ + result->no_param_sql_len_, "%ld", idx); \
           store_pl_symbol(node, result->param_nodes_, result->tail_param_node_); \
+        } else if (is_report_error) { \
+          YYABORT_UNDECLARE_VAR;   \
         } else { /*do nothing*/ } \
       } \
     } while (0)

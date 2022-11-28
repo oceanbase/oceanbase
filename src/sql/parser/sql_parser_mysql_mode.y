@@ -753,7 +753,7 @@ column_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, NULL, $1);
   dup_node_string($1, $$, result->malloc_pool_);
 #ifndef SQL_PARSER_COMPILATION
-  lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false);
+  lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false, false);
 #endif
 }
 | relation_name '.' column_name
@@ -763,7 +763,7 @@ column_name
 #ifndef SQL_PARSER_COMPILATION
   if (3 == $1->str_len_) {
     if (0 == strcasecmp("NEW", $1->str_value_) || 0 == strcasecmp("OLD", $1->str_value_)) {
-      lookup_pl_exec_symbol($$, result, @1.first_column, @3.last_column, true, false);
+      lookup_pl_exec_symbol($$, result, @1.first_column, @3.last_column, true, false, false);
     }
   }
 #endif
@@ -848,7 +848,7 @@ column_name
     malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, NULL, col_name);
     dup_node_string(col_name, $$, result->malloc_pool_);
   #ifndef SQL_PARSER_COMPILATION
-    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false);
+    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false, false);
   #endif
   } else {
     yyerror(&@1, result, "force key work can be used to be name in PL\n");
@@ -862,7 +862,7 @@ column_name
     malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, NULL, col_name);
     dup_node_string(col_name, $$, result->malloc_pool_);
   #ifndef SQL_PARSER_COMPILATION
-    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false);
+    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false, false);
   #endif
   } else {
     yyerror(&@1, result, "cascade key work can be used to be name in PL\n");
@@ -9085,7 +9085,7 @@ expr %prec LOWER_PARENS
         NULL != $1->children_[2] && T_STAR == $1->children_[2]->type_) {
           /* do nothing */
     } else {
-      lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, true);
+      lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, true, false);
     }
 #endif
   }
@@ -10578,7 +10578,7 @@ INTNUM
   $$ = $1;
   if (result->pl_parse_info_.is_pl_parse_) {
 #ifndef SQL_PARSER_COMPILATION
-    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false);
+    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false, false);
 #endif
   }
 }
@@ -10683,7 +10683,7 @@ column_name
   $$ = $1;
   if (result->pl_parse_info_.is_pl_parse_) {
 #ifndef SQL_PARSER_COMPILATION
-    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false);
+    lookup_pl_exec_symbol($$, result, @1.first_column, @1.last_column, false, false, true);
 #endif
   }
 }
@@ -15312,7 +15312,7 @@ column is defined as column := column_name | extension name | extension
 - AUTO : Oracle determines the columns to collect histograms based on data distribution and the workload of the columns
 - SKEWONLY : Oracle determines the columns to collect histograms based on the data distribution of the columns
 - column_name : name of a column
-- extension : can be either a column group in the format of (column_name, colume_name [, ...]) or an expression
+- extension : can be either a column group in the format of (column_name, column_name [, ...]) or an expression
 The default is FOR ALL COLUMNS SIZE AUTO.
 https://blogs.oracle.com/optimizer/how-does-the-methodopt-parameter-work
 ******************************************************************************/
@@ -15733,7 +15733,7 @@ new_or_old_column_ref:
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_REF, 3, NULL, $1, $3);
   dup_node_string($3, $$, result->malloc_pool_);
 #ifndef SQL_PARSER_COMPILATION
-  lookup_pl_exec_symbol($$, result, @1.first_column, @3.last_column, true, false);
+  lookup_pl_exec_symbol($$, result, @1.first_column, @3.last_column, true, false, false);
 #endif
 }
 

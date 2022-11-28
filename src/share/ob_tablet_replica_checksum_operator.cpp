@@ -422,6 +422,38 @@ int ObTabletReplicaChecksumOperator::inner_batch_remove_by_sql_(
   return ret;
 }
 
+int ObTabletReplicaChecksumOperator::remove_residual_checksum(
+    ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const ObAddr &server,
+    const int64_t limit,
+    int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  affected_rows = 0;
+  char ip[OB_MAX_SERVER_ADDR_SIZE] = "";
+  ObSqlString sql;
+  const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+                  || is_virtual_tenant_id(tenant_id)
+                  || !server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(server));
+  } else if (OB_UNLIKELY(!server.ip_to_string(ip, sizeof(ip)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("convert server ip to string failed", KR(ret), K(server));
+  } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu AND svr_ip = '%s' AND"
+             " svr_port = %d limit %ld", OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, tenant_id, ip,
+             server.get_port(), limit))) {
+    LOG_WARN("assign sql string failed", KR(ret), K(sql));
+  } else if (OB_FAIL(sql_client.write(sql_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("execute sql failed", KR(ret), K(sql), K(sql_tenant_id));
+  } else if (affected_rows > 0) {
+    LOG_INFO("finish to remove residual checksum", KR(ret), K(tenant_id), K(affected_rows));
+  }
+  return ret;
+}
+
 int ObTabletReplicaChecksumOperator::batch_get(
     const uint64_t tenant_id,
     const ObTabletLSPair &start_pair,
@@ -1474,7 +1506,7 @@ int ObTabletReplicaChecksumOperator::set_column_meta_with_hex_str(
     } else if (OB_FAIL(hex_to_cstr(hex_str.ptr(), hex_str_len, deserialize_buf, deserialize_size))) {
       LOG_WARN("fail to get cstr from hex", KR(ret), K(hex_str_len), K(deserialize_size));
     } else if (OB_FAIL(column_meta.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
-      LOG_WARN("fail to deserialize from str to build colume meta", KR(ret), "column_meta_str", hex_str.ptr());
+      LOG_WARN("fail to deserialize from str to build column meta", KR(ret), "column_meta_str", hex_str.ptr());
     } else if (deserialize_pos > deserialize_size) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("deserialize size overflow", KR(ret), K(deserialize_pos), K(deserialize_size));

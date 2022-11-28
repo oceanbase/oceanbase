@@ -212,7 +212,11 @@ void ObPartTransCtx::destroy()
     // Defensive Check 3 : missing to callback scheduler
     if (!is_follower_() && need_callback_scheduler_()) {
       int ret = OB_TRANS_UNKNOWN;
-      TRANS_LOG(ERROR, "missing callback scheduler, callback with TRANS_UNKNOWN", K(ret), KPC(this));
+      if (SCN::min_scn() == start_working_log_ts_) {
+        TRANS_LOG(ERROR, "missing callback scheduler, callback with TRANS_UNKNOWN", K(ret), KPC(this));
+      } else {
+        TRANS_LOG(WARN, "missing callback scheduler maybe, callback with TRANS_UNKNOWN", K(ret), KPC(this));
+      }
       // NOTE: callback scheduler may introduce deadlock, need take care
       trans_service_->handle_tx_commit_result(trans_id_, OB_TRANS_UNKNOWN, SCN());
       FORCE_PRINT_TRACE(tlog_, "[missing callback scheduler] ");
@@ -430,7 +434,9 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
       (void)unregister_timeout_task_();
       update_trans_2pc_timeout_();
       timeout_task_.set_running(true);
-      if (ObTxState::INIT == exec_info_.state_ && now >= (trans_expired_time_ + OB_TRANS_WARN_USE_TIME)) {
+      if (ObTxState::INIT == exec_info_.state_ &&
+          trans_expired_time_ > 0 && trans_expired_time_ < INT64_MAX &&
+          now >= (trans_expired_time_ + OB_TRANS_WARN_USE_TIME)) {
         TRANS_LOG(ERROR, "transaction use too much time", KPC(this));
       }
       if (exec_info_.is_dup_tx_) {
@@ -1596,6 +1602,7 @@ int ObPartTransCtx::tx_end_(const bool commit)
   // you need pay attention to is that we rely on the status to report the
   // suicide before the tnode can be cleanout by concurrent read using state in
   // ctx_tx_data.
+  } else if (!commit && FALSE_IT(mt_ctx_.set_tx_rollbacked())) {
   // STEP4: We need set state in order to informing others of the final status
   // of my txn. What you need pay attention to is that after this action, others
   // can cleanout the unfinished txn state and see all your data. We currently

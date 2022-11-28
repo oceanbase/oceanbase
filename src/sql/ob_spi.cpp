@@ -802,6 +802,8 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
   }
   if (OB_SUCC(ret)) {
     result->set_is_pl_mock_default_param(expr->get_is_pl_mock_default_expr());
+  } else if (lib::is_mysql_mode()) {
+    ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(ret);
   }
   SET_SPI_STATUS;
   return ret;
@@ -3207,6 +3209,9 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
       }
     }
   }
+  if (OB_FAIL(ret) && lib::is_mysql_mode()) {
+    ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(ret);
+  }
   SET_SPI_STATUS;
   return ret;
 }
@@ -3724,6 +3729,10 @@ int ObSPIService::spi_cursor_fetch(ObPLExecCtx *ctx,
                       pl_integer_ranges,
                       is_bulk,
                       limit));
+
+  if (OB_FAIL(ret) && lib::is_mysql_mode()) {
+    ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(ret);
+  }
 
   if (lib::is_mysql_mode() || OB_READ_NOTHING != ret) {
     //Oracle模式的cursor发生NOT FOUND错误的时候不对外报错，而是把错误信息记录在CURSOR上，PL的CG会吞掉这个错误
@@ -4661,7 +4670,8 @@ int ObSPIService::construct_exec_params(ObPLExecCtx *ctx,
                                         const ObSqlExpression **into_exprs,
                                         int64_t into_count,
                                         ParamStore &exec_params,
-                                        ObSPIOutParams &out_params)
+                                        ObSPIOutParams &out_params,
+                                        bool is_forall)
 {
   int ret = OB_SUCCESS;
   ObObjParam result;
@@ -4723,13 +4733,15 @@ int ObSPIService::construct_exec_params(ObPLExecCtx *ctx,
       }
       if (OB_SUCC(ret)) { //执行期参数必须从PL的内存空间拷贝到SQL自己的内存空间，以防止在SQL执行过程中参数被改掉
         ObObjParam new_param = result;
-        if (result.is_pl_extend()) {
-          if (result.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-            new_param.set_int_value(0);
-            OZ (pl::ObUserDefinedType::deep_copy_obj(param_allocator, result, new_param, true));
+        if (!is_forall) { // forall场景, 不做拷贝, 上层代码transform_pl_ext_type会进行paramstore整体拷贝
+          if (result.is_pl_extend()) {
+            if (result.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
+              new_param.set_int_value(0);
+              OZ (pl::ObUserDefinedType::deep_copy_obj(param_allocator, result, new_param, true));
+            }
+          } else {
+            OZ (deep_copy_obj(param_allocator, result, new_param));
           }
-        } else {
-          OZ (deep_copy_obj(param_allocator, result, new_param));
         }
         OX (new_param.set_need_to_check_type(true));
         OZ (exec_params.push_back(new_param));
@@ -4804,7 +4816,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
 
   if (NULL == sql) {
     OZ (construct_exec_params(ctx, param_allocator, param_exprs, param_count,
-                              into_exprs, into_count, exec_params, out_params),
+                              into_exprs, into_count, exec_params, out_params, is_forall),
       K(sql), K(id), K(type), K(param_count), K(out_params), K(exec_params));
   }
 
@@ -4824,7 +4836,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("array_binding_count is wrong", K(array_binding_count), K(ret));
       } else if (OB_FAIL(ObSQLUtils::transform_pl_ext_type(
-          exec_params, array_binding_count, param_allocator, batch_params))) {
+          exec_params, array_binding_count, param_allocator, batch_params, true))) {
         LOG_WARN("transform failed", K(ret));
       } else if (OB_ISNULL(batch_params)) {
         ret = OB_ERR_UNEXPECTED;

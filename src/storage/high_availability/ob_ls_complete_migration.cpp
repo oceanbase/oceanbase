@@ -1183,7 +1183,6 @@ int ObStartCompleteMigrationTask::update_ls_migration_status_hold_()
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   const ObMigrationStatus hold_status = ObMigrationStatus::OB_MIGRATION_STATUS_HOLD;
-  int64_t rebuild_seq = 0;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1193,7 +1192,7 @@ int ObStartCompleteMigrationTask::update_ls_migration_status_hold_()
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to change member list", K(ret), KP(ls));
-  } else if (OB_FAIL(ls->set_migration_status(hold_status, rebuild_seq))) {
+  } else if (OB_FAIL(ls->set_migration_status(hold_status, ctx_->rebuild_seq_))) {
     LOG_WARN("failed to set migration status", K(ret), KPC(ls));
   } else {
 #ifdef ERRSIM
