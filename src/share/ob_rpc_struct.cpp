@@ -6029,8 +6029,7 @@ OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_sche
 
 bool ObBatchCreateTabletArg::is_inited() const
 {
-  return id_.is_valid()
-         && OB_INVALID_TIMESTAMP != frozen_timestamp_;
+  return id_.is_valid() && major_frozen_scn_.is_valid();
 }
 
 bool ObBatchCreateTabletArg::is_valid() const
@@ -6060,7 +6059,7 @@ bool ObBatchCreateTabletArg::is_valid() const
 void ObBatchCreateTabletArg::reset()
 {
   id_.reset();
-  frozen_timestamp_ = OB_INVALID_TIMESTAMP;
+  major_frozen_scn_.reset();
   tablets_.reset();
   table_schemas_.reset();
 }
@@ -6077,7 +6076,7 @@ int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
     LOG_WARN("failed to assign table schema", KR(ret), K(arg));
   } else {
     id_ = arg.id_;
-    frozen_timestamp_ = arg.frozen_timestamp_;
+    major_frozen_scn_ = arg.major_frozen_scn_;
   }
   return ret;
 }
@@ -6101,16 +6100,15 @@ int ObContextDDLArg::assign(const ObContextDDLArg &other)
   return ret;
 }
 
-int ObBatchCreateTabletArg::init_create_tablet(const share::ObLSID &id, const int64_t &frozen_timestamp)
+int ObBatchCreateTabletArg::init_create_tablet(const share::ObLSID &id, const palf::SCN &major_frozen_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!id.is_valid()
-                  || OB_INVALID_TIMESTAMP == frozen_timestamp)) {
+  if (OB_UNLIKELY(!id.is_valid() || !major_frozen_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(id), K(frozen_timestamp));
+    LOG_WARN("invalid argument", KR(ret), K(id), K(major_frozen_scn));
   } else {
     id_ = id;
-    frozen_timestamp_ = frozen_timestamp;
+    major_frozen_scn_ = major_frozen_scn;
   }
   return ret;
 }
@@ -6128,11 +6126,11 @@ int64_t ObBatchCreateTabletArg::get_tablet_count() const
 DEF_TO_STRING(ObBatchCreateTabletArg)
 {
   int64_t pos = 0;
-  J_KV(K_(id), K_(frozen_timestamp), K_(tablets));
+  J_KV(K_(id), K_(major_frozen_scn), K_(tablets));
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObBatchCreateTabletArg, id_, frozen_timestamp_,
+OB_SERIALIZE_MEMBER(ObBatchCreateTabletArg, id_, major_frozen_scn_,
     tablets_, table_schemas_);
 
 OB_SERIALIZE_MEMBER(ObCreateLSResult, ret_);

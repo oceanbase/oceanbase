@@ -109,7 +109,6 @@ namespace storage
     return ret;                                                   \
   }
 
-const static int64_t LS_INNER_TABLET_FROZEN_TIMESTAMP = 1;
 
 struct ObLSVTInfo
 {

@@ -157,7 +157,9 @@ void coredump_cb(int sig, siginfo_t *si, void *context)
       // backtrace
       char bt[256];
       int64_t len = 0;
+#ifdef __x86_64__
       safe_backtrace(bt, sizeof(bt) - 1, &len);
+#endif
       bt[len++] = '\0';
       // extra
       const ObFatalErrExtraInfoGuard *extra_info = nullptr; // TODO: May deadlock, ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();

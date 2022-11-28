@@ -255,7 +255,7 @@ int ObBackupUtils::check_tablet_minor_sstable_validity_(const storage::ObTabletH
     LOG_WARN("table ptr not correct", K(ret), KPC(last_table_ptr));
   } else {
     const ObITable::TableKey &table_key = last_table_ptr->get_key();
-    if (table_key.get_end_scn() != clog_checkpoint_scn) {
+    if (table_key.get_end_scn() < clog_checkpoint_scn) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tablet meta is not valid", K(ret), K(table_key), K(clog_checkpoint_scn));
     }

@@ -580,7 +580,6 @@ int TestDmlCommon::build_pure_data_tablet_arg(
   ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> tablet_id_array;
   ObArray<int64_t> tablet_schema_index_array;
-  int64_t frozen_timestamp = 0;
   share::schema::ObTableSchema table_schema;
   build_data_table_schema(tenant_id, table_schema);
 
@@ -592,9 +591,8 @@ int TestDmlCommon::build_pure_data_tablet_arg(
   } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, frozen_timestamp))) {
-    STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id),
-        K(frozen_timestamp));
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, palf::SCN::min_scn()))) {
+    STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     STORAGE_LOG(WARN, "failed to push back table schema", K(ret), K(table_schema));
   } else if (OB_FAIL(arg.tablets_.push_back(tablet_info))) {
@@ -620,7 +618,6 @@ int TestDmlCommon::build_mixed_tablets_arg(
   ObCreateTabletInfo tablet_info;
   ObArray<common::ObTabletID> tablet_id_array;
   ObArray<int64_t> tablet_schema_index_array;
-  int64_t frozen_timestamp = 0;
   share::schema::ObTableSchema data_table_schema;
   share::schema::ObTableSchema index_table_schema;
   build_data_table_schema(tenant_id, data_table_schema);
@@ -646,8 +643,8 @@ int TestDmlCommon::build_mixed_tablets_arg(
   } else if (OB_FAIL(tablet_info.init(tablet_id_array, data_tablet_id, tablet_schema_index_array, lib::Worker::CompatMode::MYSQL, false))) {
     STORAGE_LOG(WARN, "failed to init tablet info", K(ret), K(tablet_id_array),
         K(data_tablet_id), K(tablet_schema_index_array));
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id, frozen_timestamp))) {
-    STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id), K(frozen_timestamp));
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, palf::SCN::min_scn()))) {
+    STORAGE_LOG(WARN, "failed to init create tablet", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(data_table_schema))) {
     STORAGE_LOG(WARN, "failed to push back data table schema", K(ret), K(data_table_schema));
   } else if (OB_FAIL(arg.table_schemas_.push_back(index_table_schema))) {

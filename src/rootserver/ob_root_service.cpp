@@ -2182,7 +2182,6 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request,
     // before __all_zone load, it may fail, ignore it
     int temp_ret = OB_SUCCESS;
     int64_t lease_info_version = 0;
-    int64_t frozen_timestamp = 0;
     bool is_stopped = false;
     int64_t leader_cnt = -1;
     bool has_leader = true;

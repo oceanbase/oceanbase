@@ -234,9 +234,7 @@ int ObRemoteFetchLogImpl::get_palf_base_lsn_scn_(ObLS &ls, LSN &lsn, SCN &scn)
   } else if (OB_FAIL(palf_handle_guard.get_end_lsn(lsn))) {
     LOG_WARN("get end lsn failed", K(ret), K(id));
   } else {
-    int64_t checkpoint_ts = ls.get_clog_checkpoint_ts();
-    SCN checkpoint_scn;
-    checkpoint_scn.convert_tmp(checkpoint_ts);
+    const SCN &checkpoint_scn = ls.get_clog_checkpoint_scn();
     scn = SCN::max(scn, checkpoint_scn);
   }
   return ret;

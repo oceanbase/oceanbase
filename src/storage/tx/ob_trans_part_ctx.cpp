@@ -358,6 +358,13 @@ int ObPartTransCtx::trans_kill_()
 {
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "trans killed", K(trans_id_));
+
+  if (ctx_tx_data_.get_state() == ObTxData::RUNNING) {
+    if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::ABORT))) {
+      TRANS_LOG(WARN, "set abort state in ctx_tx_data_ failed", K(ret));
+    }
+  }
+
   mt_ctx_.trans_kill();
   return ret;
 }
@@ -1422,6 +1429,11 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
       ret = submit_log_impl_(ObTxLogType::TX_REDO_LOG);
       try_submit = true;
     }
+    if (try_submit) {
+      REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, Y(ret), OB_ID(arg2), is_freeze,
+                           OB_ID(used), ObTimeUtility::fast_current_time() - start,
+                           OB_ID(ctx_ref), get_ref());
+    }
   } else if (OB_FAIL(lock_.try_lock())) {
     // try lock
     if (OB_EAGAIN == ret) {
@@ -1443,11 +1455,11 @@ int ObPartTransCtx::submit_redo_log(const bool is_freeze)
         try_submit = true;
       }
     }
-  }
-  if (try_submit) {
-    REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, Y(ret), OB_ID(arg2), is_freeze,
-                         OB_ID(used), ObTimeUtility::fast_current_time() - start,
-                         OB_ID(ctx_ref), get_ref());
+    if (try_submit) {
+      REC_TRANS_TRACE_EXT2(tlog_, submit_instant_log, Y(ret), OB_ID(arg2), is_freeze,
+                           OB_ID(used), ObTimeUtility::fast_current_time() - start,
+                           OB_ID(ctx_ref), get_ref());
+    }
   }
   if (OB_BLOCK_FROZEN == ret) {
     ret = OB_SUCCESS;
@@ -5947,10 +5959,13 @@ int ObPartTransCtx::on_local_abort_tx_()
 
   ObTxBufferNodeArray tmp_array;
 
-  start_us = ObTimeUtility::fast_current_time();
-  if (OB_FAIL(mt_ctx_.trans_end(false, palf::SCN::invalid_scn(), ctx_tx_data_.get_end_log_ts()))) {
+  if (!has_persisted_log_() && OB_FAIL(ctx_tx_data_.set_state(ObTxData::ABORT))) {
+    TRANS_LOG(WARN, "set abort state failed", K(ret));
+  } else if (OB_FALSE_IT(start_us = ObTimeUtility::fast_current_time())) {
+  } else if (OB_FAIL(mt_ctx_.trans_end(false, palf::SCN::invalid_scn(), ctx_tx_data_.get_end_log_ts()))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), K(commit_version), "context", *this);
   } else if (FALSE_IT(end_us = ObTimeUtility::fast_current_time())) {
+
   } else if (OB_FAIL(trans_clear_())) {
     TRANS_LOG(WARN, "local tx clear error", KR(ret), K(*this));
   } else if (OB_FAIL(gen_total_mds_array_(tmp_array))) {
@@ -5975,7 +5990,6 @@ int ObPartTransCtx::on_local_abort_tx_()
 
   return ret;
 }
-
 int ObPartTransCtx::dump_2_text(FILE *fd)
 {
   int ret = OB_SUCCESS;

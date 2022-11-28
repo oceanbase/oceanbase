@@ -340,7 +340,7 @@ struct ObBatchUpdateTableStoreParam final
   bool is_valid() const;
   void reset();
   int assign(const ObBatchUpdateTableStoreParam &param);
-  int get_max_clog_checkpoint_ts(int64_t &clog_checkpoint_ts) const;
+  int get_max_clog_checkpoint_scn(palf::SCN &clog_checkpoint_scn) const;
 
   TO_STRING_KV(K_(tables_handle), K_(snapshot_version), K_(multi_version_start), K_(need_report),
       K_(rebuild_seq), K_(update_logical_minor_sstable), K_(start_scn), KP_(tablet_meta));

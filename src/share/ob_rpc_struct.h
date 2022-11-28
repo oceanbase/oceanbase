@@ -2709,13 +2709,13 @@ public:
   void reset();
   int assign(const ObBatchCreateTabletArg &arg);
   int init_create_tablet(const share::ObLSID &id_,
-                         const int64_t &frozen_timestamp);
+                         const palf::SCN &major_frozen_scn);
   int64_t get_tablet_count() const;
   DECLARE_TO_STRING;
 
 public:
   share::ObLSID id_;
-  int64_t frozen_timestamp_;
+  palf::SCN major_frozen_scn_;
   common::ObSArray<share::schema::ObTableSchema> table_schemas_;
   common::ObSArray<ObCreateTabletInfo> tablets_;
 };

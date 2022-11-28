@@ -36,8 +36,6 @@ ObMigrationCtx::ObMigrationCtx()
   : ObIHADagNetCtx(),
     tenant_id_(OB_INVALID_ID),
     arg_(),
-    local_clog_checkpoint_ts_(0),
-    local_rebuild_seq_(0),
     start_ts_(0),
     finish_ts_(0),
     task_id_(),
@@ -49,6 +47,7 @@ ObMigrationCtx::ObMigrationCtx()
     ha_table_info_mgr_(),
     check_tablet_info_cost_time_(0)
 {
+  local_clog_checkpoint_scn_.set_min();
 }
 
 ObMigrationCtx::~ObMigrationCtx()
@@ -65,7 +64,7 @@ void ObMigrationCtx::reset()
 {
   tenant_id_ = OB_INVALID_ID;
   arg_.reset();
-  local_clog_checkpoint_ts_ = 0;
+  local_clog_checkpoint_scn_.set_min();
   local_rebuild_seq_ = 0;
   start_ts_ = 0;
   finish_ts_ = 0;
@@ -109,7 +108,7 @@ int ObMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
 
 void ObMigrationCtx::reuse()
 {
-  local_clog_checkpoint_ts_ = 0;
+  local_clog_checkpoint_scn_.set_min();
   local_rebuild_seq_ = 0;
   minor_src_.reset();
   major_src_.reset();
@@ -1052,7 +1051,7 @@ int ObStartMigrationTask::deal_with_local_ls_()
     if (OB_FAIL(ls->get_ls_meta(local_ls_meta))) {
       LOG_WARN("failed to get ls meta", K(ret), "arg", ctx_->arg_);
     } else {
-      ctx_->local_clog_checkpoint_ts_ = local_ls_meta.get_clog_checkpoint_ts();
+      ctx_->local_clog_checkpoint_scn_ = local_ls_meta.get_clog_checkpoint_scn();
       ctx_->local_rebuild_seq_ = local_ls_meta.get_rebuild_seq();
       common::ObReplicaType replica_type = ctx_->arg_.dst_.get_replica_type();
       common::ObReplicaType local_replica_type = ls->get_replica_type();
@@ -1082,13 +1081,13 @@ int ObStartMigrationTask::choose_src_()
     const share::ObLSID &ls_id = ctx_->arg_.ls_id_;
     ObStorageHASrcInfo src_info;
     obrpc::ObCopyLSInfo ls_info;
-    int64_t local_clog_checkpoint_ts = 0;
-    if (OB_FAIL(get_local_ls_checkpoint_ts_(local_clog_checkpoint_ts))) {
+    palf::SCN local_clog_checkpoint_scn = palf::SCN::min_scn();
+    if (OB_FAIL(get_local_ls_checkpoint_scn_(local_clog_checkpoint_scn))) {
       LOG_WARN("failed to get local ls checkpoint ts", K(ret));
     } else if (OB_FAIL(src_provider.init(tenant_id, storage_rpc_))) {
       LOG_WARN("failed to init src provider", K(ret), K(tenant_id));
-    } else if (OB_FAIL(src_provider.choose_ob_src(ls_id, local_clog_checkpoint_ts, src_info))) {
-      LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_ts));
+    } else if (OB_FAIL(src_provider.choose_ob_src(ls_id, local_clog_checkpoint_scn, src_info))) {
+      LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn));
     } else if (OB_FAIL(fetch_ls_info_(tenant_id, ls_id, src_info.src_addr_, ls_info))) {
       LOG_WARN("failed to fetch ls info", K(ret), K(tenant_id), K(ls_id), K(src_info));
     } else {
@@ -1135,10 +1134,10 @@ int ObStartMigrationTask::fetch_ls_info_(const uint64_t tenant_id, const share::
   return ret;
 }
 
-int ObStartMigrationTask::get_local_ls_checkpoint_ts_(int64_t &local_checkpoint_ts)
+int ObStartMigrationTask::get_local_ls_checkpoint_scn_(palf::SCN &local_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
-  local_checkpoint_ts = 0;
+  local_checkpoint_scn.set_min();
   ObLSHandle ls_handle;
   ObLS *ls = NULL;
   ObLSMeta local_ls_meta;
@@ -1153,7 +1152,7 @@ int ObStartMigrationTask::get_local_ls_checkpoint_ts_(int64_t &local_checkpoint_
   } else if (OB_FAIL(ls->get_ls_meta(local_ls_meta))) {
     LOG_WARN("failed to get ls meta", K(ret), "arg", ctx_->arg_);
   } else {
-    local_checkpoint_ts = local_ls_meta.get_clog_checkpoint_ts();
+    local_checkpoint_scn = local_ls_meta.get_clog_checkpoint_scn();
   }
   return ret;
 }
@@ -1189,7 +1188,7 @@ int ObStartMigrationTask::update_ls_()
     } else if (OB_FAIL(ls->advance_base_info(ctx_->src_ls_meta_package_.palf_meta_, is_rebuild))) {
       LOG_WARN("failed to advance base lsn for migration", K(ret), KPC(ctx_));
     } else {
-      ctx_->local_clog_checkpoint_ts_ = ctx_->src_ls_meta_package_.ls_meta_.get_clog_checkpoint_ts();
+      ctx_->local_clog_checkpoint_scn_ = ctx_->src_ls_meta_package_.ls_meta_.get_clog_checkpoint_scn();
       ctx_->local_rebuild_seq_ = ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq();
     }
   }
@@ -2106,13 +2105,11 @@ int ObTabletMigrationDag::inner_reset_status_for_retry()
         "ls_id", ctx->arg_.ls_id_.id(),
         "tablet_id", copy_tablet_ctx_.tablet_id_,
         "result", result, "retry_count", retry_count);
-    if (OB_SSTABLE_NOT_EXIST == result) {
-      if (OB_FAIL(ctx->ha_table_info_mgr_.remove_tablet_table_info(copy_tablet_ctx_.tablet_id_))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to remove tablet info", K(ret), KPC(ctx), K(copy_tablet_ctx_));
-        }
+    if (OB_FAIL(ctx->ha_table_info_mgr_.remove_tablet_table_info(copy_tablet_ctx_.tablet_id_))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to remove tablet info", K(ret), KPC(ctx), K(copy_tablet_ctx_));
       }
     }
 

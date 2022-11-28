@@ -33,6 +33,7 @@ bool g_inited = false;
 int send_request_and_wait(ObSigRequestCode code, int exclude_tid)
 {
   int ret = OB_SUCCESS;
+#ifdef __x86_64__
   DTraceId trace_id = DTraceId::gen_trace_id();
   DTraceIdGuard trace_guard(trace_id);
   ObSigRequest req;
@@ -93,6 +94,7 @@ int send_request_and_wait(ObSigRequestCode code, int exclude_tid)
       }
     }
   }
+#endif
   return ret;
 }
 

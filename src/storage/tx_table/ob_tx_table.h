@@ -213,14 +213,6 @@ public:
    * be cleared.
    */
   int get_recycle_scn(palf::SCN &recycle_scn);
-  int get_recycle_ts(int64_t &recycle_ts)
-  {
-    int ret = OB_SUCCESS;
-    palf::SCN recycle_scn = palf::SCN::min_scn();
-    ret = get_recycle_scn(recycle_scn);
-    recycle_ts = recycle_scn.get_val_for_lsn_allocator();
-    return ret;
-  }
 
   /**
    * @brief Get the upper trans version for each given end_scn

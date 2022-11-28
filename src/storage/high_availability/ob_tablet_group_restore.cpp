@@ -116,8 +116,11 @@ ObTabletRestoreCtx::~ObTabletRestoreCtx()
 
 bool ObTabletRestoreCtx::is_valid() const
 {
-  return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && tablet_id_.is_valid() && tablet_handle_.is_valid()
-      && ObCopyTabletStatus::is_valid(status_) && OB_NOT_NULL(restore_base_info_)
+  return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && tablet_id_.is_valid()
+      && ObCopyTabletStatus::is_valid(status_)
+      && ((ObCopyTabletStatus::TABLET_EXIST == status_ && tablet_handle_.is_valid())
+          || ObCopyTabletStatus::TABLET_NOT_EXIST == status_)
+      && OB_NOT_NULL(restore_base_info_)
       && ObTabletRestoreAction::is_valid(action_)
       && (!is_leader_ || OB_NOT_NULL(second_meta_index_store_))
       && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
@@ -1685,7 +1688,7 @@ ObTabletRestoreDag::~ObTabletRestoreDag()
   if (OB_NOT_NULL(tablet_restore_ctx_.ha_table_info_mgr_)) {
     if (OB_SUCCESS != (tmp_ret = tablet_restore_ctx_.ha_table_info_mgr_->remove_tablet_table_info(
         tablet_restore_ctx_.tablet_id_))) {
-      LOG_ERROR("failed to remove tablet table info", K(tmp_ret), K(tablet_restore_ctx_));
+      LOG_WARN("failed to remove tablet table info", K(tmp_ret), K(tablet_restore_ctx_));
     }
   }
 }
@@ -1863,7 +1866,7 @@ int ObTabletRestoreDag::inner_reset_status_for_retry()
   } else {
     LOG_INFO("start retry", KPC(this));
     result_mgr_.reuse();
-    if (OB_SSTABLE_NOT_EXIST == result && !tablet_restore_ctx_.is_leader_) {
+    if (!tablet_restore_ctx_.is_leader_) {
       if (OB_FAIL(tablet_restore_ctx_.ha_table_info_mgr_->remove_tablet_table_info(tablet_restore_ctx_.tablet_id_))) {
         LOG_WARN("failed to remove tablet info", K(ret), K(tablet_restore_ctx_));
       }

@@ -225,9 +225,6 @@ int ObLockTable::gen_create_tablet_arg_(
   ObArray<ObTabletID> tablet_ids;
   ObArray<int64_t> tablet_schema_idxs;
 
-  // frozen_timestamp: next merge time
-  int64_t frozen_timestamp = LS_INNER_TABLET_FROZEN_TIMESTAMP;
-
   arg.reset();
   // create ObCreateTabletInfo
   if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
@@ -242,10 +239,8 @@ int ObLockTable::gen_create_tablet_arg_(
                                              false/*is_create_bind_hidden_tablets*/))) {
     LOG_WARN("create tablet info init failed", K(ret), K(tablet_ids), K(tablet_id));
   // create ObBatchCreateTabletArg
-  } else if (OB_FAIL(arg.init_create_tablet(ls_id,
-                                            frozen_timestamp))) {
-    LOG_WARN("ObBatchCreateTabletArg init create tablet failed", K(ret), K(tenant_id),
-             K(ls_id), K(frozen_timestamp));
+  } else if (OB_FAIL(arg.init_create_tablet(ls_id, palf::SCN::base_scn()))) {
+    LOG_WARN("ObBatchCreateTabletArg init create tablet failed", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(arg.table_schemas_.push_back(table_schema))) {
     LOG_WARN("add table schema failed", K(ret), K(table_schema));
   } else if (OB_FAIL(arg.tablets_.push_back(create_tablet_info))) {

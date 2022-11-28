@@ -1592,7 +1592,6 @@ int ObLSTabletService::build_single_data_tablet(
     common::ObIArray<ObTabletHandle> &tablet_handle_array)
 {
   int ret = OB_SUCCESS;
-  palf::SCN snapshot_version;
   const common::ObTabletID &data_tablet_id = info.data_tablet_id_;
   const common::ObSArray<common::ObTabletID> &tablet_ids = info.tablet_ids_;
   const common::ObSArray<share::schema::ObTableSchema> &table_schemas = arg.table_schemas_;
@@ -1607,13 +1606,11 @@ int ObLSTabletService::build_single_data_tablet(
   } else if (OB_UNLIKELY(index < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, table schema index is invalid", K(ret), K(data_tablet_id), K(index));
-  } else if (OB_FAIL(snapshot_version.convert_for_lsn_allocator(arg.frozen_timestamp_))) {
-    STORAGE_LOG(WARN, "fail to convert to scn", KR(ret), K(create_scn));
   } else if (OB_FAIL(do_create_tablet(ls_id, data_tablet_id, data_tablet_id, empty_array,
-      create_scn, snapshot_version, table_schemas[info.table_schema_index_[index]],
+      create_scn, arg.major_frozen_scn_, table_schemas[info.table_schema_index_[index]],
       compat_mode, empty_tablet_id, empty_tablet_id, tablet_handle))) {
     LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(data_tablet_id),
-        K(create_scn), K(snapshot_version), K(compat_mode));
+        K(create_scn), K(arg), K(compat_mode));
   } else if (OB_FAIL(tablet_handle_array.push_back(tablet_handle))) {
     LOG_WARN("failed to insert tablet handle into array", K(ret), K(tablet_handle));
   }
@@ -1669,7 +1666,7 @@ int ObLSTabletService::build_batch_create_tablet_arg(
   if (OB_FAIL(ret)) { // do nothing
   } else {
     new_arg.id_ = old_arg.id_;
-    new_arg.frozen_timestamp_ = old_arg.frozen_timestamp_;
+    new_arg.major_frozen_scn_ = old_arg.major_frozen_scn_;
 
     if (new_arg.get_tablet_count() > 0 && OB_FAIL(new_arg.table_schemas_.assign(old_arg.table_schemas_))) {
       LOG_WARN("failed to assign table schemas", K(ret), K(old_arg));
@@ -5123,7 +5120,7 @@ int ObLSTabletService::create_ls_inner_tablet(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,
     const int64_t memstore_version,
-    const palf::SCN &frozen_timestamp,
+    const palf::SCN &major_frozen_scn,
     const share::schema::ObTableSchema &table_schema,
     const lib::Worker::CompatMode &compat_mode,
     const palf::SCN &create_scn)
@@ -5142,12 +5139,12 @@ int ObLSTabletService::create_ls_inner_tablet(
   } else if (OB_UNLIKELY(!ls_id.is_valid())
       || OB_UNLIKELY(!tablet_id.is_valid())
       || OB_UNLIKELY(OB_INVALID_VERSION == memstore_version)
-      || OB_UNLIKELY(!frozen_timestamp.is_valid())
+      || OB_UNLIKELY(!major_frozen_scn.is_valid())
       || OB_UNLIKELY(!table_schema.is_valid())
       || OB_UNLIKELY(lib::Worker::CompatMode::INVALID == compat_mode)
       /*|| OB_UNLIKELY(create_scn <= OB_INVALID_TIMESTAMP)*/) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(frozen_timestamp),
+    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(major_frozen_scn),
         K(table_schema), K(compat_mode), K(create_scn));
   } else if (OB_UNLIKELY(ls_id != ls_->get_ls_id())) {
     ret = OB_ERR_UNEXPECTED;
@@ -5161,9 +5158,9 @@ int ObLSTabletService::create_ls_inner_tablet(
     ret = OB_TABLET_EXIST;
     LOG_WARN("tablet already exists", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(do_create_tablet(ls_id, tablet_id, tablet_id/*data_tablet_id*/, empty_index_tablet_array,
-      create_scn, frozen_timestamp, table_schema, compat_mode, empty_tablet_id, empty_tablet_id, tablet_handle))) {
+      create_scn, major_frozen_scn, table_schema, compat_mode, empty_tablet_id, empty_tablet_id, tablet_handle))) {
     LOG_WARN("failed to do create tablet", K(ret), K(ls_id), K(tablet_id),
-        K(create_scn), K(frozen_timestamp), K(table_schema), K(compat_mode));
+        K(create_scn), K(major_frozen_scn), K(table_schema), K(compat_mode));
   } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(tablet_handle, disk_addr))) {
     LOG_WARN("failed to write create tablet slog", K(ret), K(tablet_handle));
   } else if (OB_FAIL(tablet_id_set_.set(tablet_id))) {

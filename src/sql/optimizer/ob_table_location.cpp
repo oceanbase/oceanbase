@@ -5139,9 +5139,13 @@ int ObTableLocation::get_full_leader_table_loc(ObIAllocator &allocator,
   ObSchemaGetterGuard schema_guard;
   OZ(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
   OZ(schema_guard.get_table_schema(tenant_id, ref_table_id, table_schema));
-  CK(OB_NOT_NULL(table_schema));
-  OZ(table_schema->get_all_tablet_and_object_ids(tablet_ids, partition_ids));
-  CK(table_schema->has_tablet());
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("table schema is null", K(ret), K(table_id), K(tenant_id), K(ref_table_id));
+  } else {
+    OZ(table_schema->get_all_tablet_and_object_ids(tablet_ids, partition_ids));
+    CK(table_schema->has_tablet());
+  }
   if (OB_SUCC(ret)) {
     ObDASTableLocMeta *loc_meta = NULL;
     char *table_buf = static_cast<char*>(allocator.alloc(sizeof(ObDASTableLoc)

@@ -181,6 +181,10 @@ private:
   int check_tablet_ready_(
       const common::ObTabletID &tablet_id,
       ObLS *ls);
+  int check_need_wait_checkpoint_scn_push_(
+      ObLS *ls,
+      bool &need_wait);
+  int wait_ls_checkpoint_scn_push_();
   int record_server_event_();
 
 private:
@@ -188,6 +192,7 @@ private:
   ObLSHandle ls_handle_;
   ObLSCompleteMigrationCtx *ctx_;
   palf::SCN log_sync_scn_;
+  palf::SCN max_minor_end_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObStartCompleteMigrationTask);
 };
 

@@ -3993,7 +3993,6 @@ int ObLSBackupPrepareTask::get_tablet_min_filled_tx_scn_(
   } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
     // skip inner tablet
   } else {
-    min_filled_tx_scn = tablet->get_tablet_meta().clog_checkpoint_scn_;
     ObTabletTableStore &table_store = tablet->get_table_store();
     const ObSSTableArray &sstable_array = table_store.get_minor_sstables();
     has_minor_sstable = !sstable_array.empty();
@@ -4008,8 +4007,8 @@ int ObLSBackupPrepareTask::get_tablet_min_filled_tx_scn_(
         LOG_WARN("table ptr type not expectedd", K(ret));
       } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table_ptr))) {
       } else {
-        palf::SCN filled_tx_scn = sstable->get_meta().get_basic_meta().filled_tx_scn_;
-        min_filled_tx_scn = std::min(filled_tx_scn, min_filled_tx_scn);
+        min_filled_tx_scn = std::min(
+          std::max(sstable->get_meta().get_basic_meta().filled_tx_scn_, sstable->get_end_scn()), min_filled_tx_scn);
       }
     }
   }
