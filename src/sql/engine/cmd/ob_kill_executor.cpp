@@ -123,15 +123,30 @@ int ObKillExecutor::get_remote_session_location(const ObKillSessionArg &arg, ObE
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(result_set->next())) {
       if (OB_LIKELY(OB_ITER_END == ret)) {
-        ret = OB_UNKNOWN_CONNECTION;
+        read_sql.reuse();
+        if (OB_FAIL(generate_read_sql_from_session_info(arg.sess_id_, read_sql))) {
+          LOG_WARN("fail to generate sql", K(ret), K(read_sql));
+        } else if (OB_FAIL(sql_proxy->read(res, read_sql.ptr()))) {
+          LOG_WARN("fail to read by sql proxy", K(ret), K(read_sql));
+        } else if (OB_ISNULL(result_set = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result set is NULL", K(ret), K(read_sql));
+        } else if (OB_FAIL(result_set->next())) {
+          if (OB_LIKELY(OB_ITER_END == ret)) {
+            ret = OB_UNKNOWN_CONNECTION;
+            LOG_WARN("fail to get next row", K(ret), K(result_set));
+          }
+        }
       }
-      LOG_WARN("fail to get next row", K(ret), K(result_set));
+    }
+
+    if (OB_FAIL(ret)) {
     } else {
       UNUSED(tmp_real_str_len);
       EXTRACT_STRBUF_FIELD_MYSQL(*result_set, "svr_ip", svr_ip, OB_IP_STR_BUFF, tmp_real_str_len);
       EXTRACT_INT_FIELD_MYSQL(*result_set, "svr_port", svr_port, int64_t);
     }
-  
+
     //set addr
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(OB_ITER_END != result_set->next())) {
@@ -150,6 +165,17 @@ int ObKillExecutor::generate_read_sql(uint32_t sess_id, ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
   const char *sql_str = "select svr_ip, svr_port from oceanbase.__all_virtual_processlist \
+              where id = %u";
+  if (OB_FAIL(sql.append_fmt(sql_str, sess_id))) {
+    LOG_WARN("fail to append sql", K(ret), K(sess_id));
+  }
+  return ret;
+}
+
+int ObKillExecutor::generate_read_sql_from_session_info(uint32_t sess_id, ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  const char *sql_str = "select svr_ip, svr_port from oceanbase.__all_virtual_session_info \
               where id = %u";
   if (OB_FAIL(sql.append_fmt(sql_str, sess_id))) {
     LOG_WARN("fail to append sql", K(ret), K(sess_id));

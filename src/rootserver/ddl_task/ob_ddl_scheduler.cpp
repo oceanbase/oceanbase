@@ -1293,6 +1293,37 @@ int ObDDLScheduler::on_column_checksum_calc_reply(
   return ret;
 }
 
+int ObDDLScheduler::on_update_execution_id(
+    const int64_t task_id,
+    int64_t &ret_execution_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(task_id <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(task_id));
+  } else {
+    ObDDLTask *ddl_task = nullptr;
+    if (OB_FAIL(task_queue_.get_task(task_id, ddl_task))) {
+      LOG_WARN("get task failed", K(ret), K(task_id));
+    } else if (OB_ISNULL(ddl_task)) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("ddl task must not be nullptr", K(ret));
+    } else if (OB_FAIL(ddl_task->get_task_id() != task_id)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("update task id is diff from ddl task id",
+        K(ret), K(task_id), KPC(ddl_task));
+    } else if (OB_FAIL(ddl_task->push_execution_id())) {
+      LOG_WARN("fail to push execution id", K(ret), KPC(ddl_task));
+    } else {
+      ret_execution_id = ddl_task->get_execution_id();
+    }
+  }
+  return ret;
+}
+
 int ObDDLScheduler::on_sstable_complement_job_reply(
     const common::ObTabletID &tablet_id,
     const ObDDLTaskKey &task_key,

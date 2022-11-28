@@ -44,11 +44,13 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     const common::ObCurTraceId::TraceId &trace_id,
     const int64_t parallelism,
     const bool use_heap_table_ddl_plan,
-    ObRootService *root_service)
+    ObRootService *root_service,
+    const common::ObAddr &inner_sql_exec_addr)
   : is_inited_(false), tenant_id_(tenant_id), task_id_(task_id), data_table_id_(data_table_id),
     dest_table_id_(dest_table_id), schema_version_(schema_version), snapshot_version_(snapshot_version),
     execution_id_(execution_id), sql_mode_(sql_mode), trace_id_(trace_id), parallelism_(parallelism),
-    use_heap_table_ddl_plan_(use_heap_table_ddl_plan), root_service_(root_service)
+    use_heap_table_ddl_plan_(use_heap_table_ddl_plan), root_service_(root_service),
+    inner_sql_exec_addr_(inner_sql_exec_addr)
 {
   set_retry_times(0); // do not retry
 }
@@ -83,6 +85,8 @@ int ObDDLRedefinitionSSTableBuildTask::process()
   const ObSysVariableSchema *sys_variable_schema = nullptr;
   ObDDLTaskKey task_key(dest_table_id_, schema_version_);
   bool oracle_mode = false;
+  bool need_exec_new_inner_sql = true;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl redefinition sstable build task not inited", K(ret));
@@ -99,7 +103,19 @@ int ObDDLRedefinitionSSTableBuildTask::process()
     LOG_WARN("sys variable schema is NULL", K(ret));
   } else if (OB_FAIL(sys_variable_schema->get_oracle_mode(oracle_mode))) {
     LOG_WARN("get oracle mode failed", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
+  } else {
+    (void)ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_,
+                                                        dest_table_id_,
+                                                        inner_sql_exec_addr_,
+                                                        trace_id_,
+                                                        schema_version_,
+                                                        snapshot_version_,
+                                                        need_exec_new_inner_sql);
+    if (!need_exec_new_inner_sql) {
+      LOG_INFO("succ to wait and complete old task finished!", K(ret));
+    } else if (OB_FAIL(root_service_->get_ddl_scheduler().on_update_execution_id(task_id_, execution_id_))) {  // genenal new ObIndexSSTableBuildTask::execution_id_ and persist to inner table
+      LOG_WARN("failed to update execution id", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
                                                            data_table_id_,
                                                            dest_table_id_,
                                                            schema_version_,
@@ -111,36 +127,44 @@ int ObDDLRedefinitionSSTableBuildTask::process()
                                                            false/*use_schema_version_hint_for_src_table*/,
                                                            &col_name_map_,
                                                            sql_string))) {
-    LOG_WARN("fail to generate build replica sql", K(ret));
-  } else {
-    ObTimeoutCtx timeout_ctx;
-    common::ObCommonSqlProxy *user_sql_proxy = nullptr;
-    int64_t affected_rows = 0;
-    if (oracle_mode) {
-      sql_mode_ = SMO_STRICT_ALL_TABLES | SMO_PAD_CHAR_TO_FULL_LENGTH;
-    }
-    ObSessionParam session_param;
-    session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
-    session_param.tz_info_wrap_ = &tz_info_wrap_;
-    session_param.ddl_info_.set_is_ddl(true);
-    session_param.ddl_info_.set_source_table_hidden(false);
-    session_param.ddl_info_.set_dest_table_hidden(true);
-    session_param.ddl_info_.set_heap_table_ddl(use_heap_table_ddl_plan_);
-    if (oracle_mode) {
-      user_sql_proxy = GCTX.ddl_oracle_sql_proxy_;
+      LOG_WARN("fail to generate build replica sql", K(ret));
     } else {
-      user_sql_proxy = GCTX.ddl_sql_proxy_;
-    }
-    LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_),
-             "is_strict_mode", is_strict_mode(sql_mode_), K(sql_mode_), K(parallelism_));
-    if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
-      LOG_WARN("set trx timeout failed", K(ret));
-    } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
-      LOG_WARN("set timeout failed", K(ret));
-    } else {
-      if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
-              oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param))) {
-        LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+      ObTimeoutCtx timeout_ctx;
+      common::ObCommonSqlProxy *user_sql_proxy = nullptr;
+      int64_t affected_rows = 0;
+      if (oracle_mode) {
+        sql_mode_ = SMO_STRICT_ALL_TABLES | SMO_PAD_CHAR_TO_FULL_LENGTH;
+      }
+      ObSessionParam session_param;
+      session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
+      session_param.tz_info_wrap_ = &tz_info_wrap_;
+      session_param.ddl_info_.set_is_ddl(true);
+      session_param.ddl_info_.set_source_table_hidden(false);
+      session_param.ddl_info_.set_dest_table_hidden(true);
+      session_param.ddl_info_.set_heap_table_ddl(use_heap_table_ddl_plan_);
+      session_param.use_external_session_ = true;  // means session id dispatched by session mgr
+
+      common::ObAddr *sql_exec_addr = nullptr;
+      if (inner_sql_exec_addr_.is_valid()) {
+        sql_exec_addr = &inner_sql_exec_addr_;
+        LOG_INFO("inner sql execute addr" , K(*sql_exec_addr));
+      }
+      if (oracle_mode) {
+        user_sql_proxy = GCTX.ddl_oracle_sql_proxy_;
+      } else {
+        user_sql_proxy = GCTX.ddl_sql_proxy_;
+      }
+      LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_),
+              "is_strict_mode", is_strict_mode(sql_mode_), K(sql_mode_), K(parallelism_));
+      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+        LOG_WARN("set trx timeout failed", K(ret));
+      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+        LOG_WARN("set timeout failed", K(ret));
+      } else {
+        if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
+                oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
+          LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+        }
       }
     }
   }
@@ -173,7 +197,8 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
         trace_id_,
         parallelism_,
         use_heap_table_ddl_plan_,
-        root_service_);
+        root_service_,
+        inner_sql_exec_addr_);
     if (OB_FAIL(new_task->tz_info_wrap_.deep_copy(tz_info_wrap_))) {
       LOG_WARN("failed to copy tz info wrap", K(ret));
     } else if (OB_FAIL(new_task->col_name_map_.assign(col_name_map_))) {

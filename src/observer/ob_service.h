@@ -165,6 +165,10 @@ public:
       const obrpc::ObCheckModifyTimeElapsedArg &arg,
       obrpc::ObCheckModifyTimeElapsedResult &result);
 
+  int check_ddl_tablet_merge_status(
+    const obrpc::ObDDLCheckTabletMergeStatusArg &arg,
+    obrpc::ObDDLCheckTabletMergeStatusResult &result);
+
   ////////////////////////////////////////////////////////////////
   // ObRpcBatchSwitchRsLeaderP @RS leader coordinator & admin
   int batch_switch_rs_leader(const ObAddr &arg);

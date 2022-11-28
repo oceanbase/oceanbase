@@ -99,6 +99,7 @@ int VirtualSvrPair::get_part_and_tablet_id_by_server(const ObAddr &addr,
   if (!tablet_id.is_valid()) {
     LOG_DEBUG("virtual table partition not exists", K(ret), K(addr));
   }
+
   return ret;
 }
 

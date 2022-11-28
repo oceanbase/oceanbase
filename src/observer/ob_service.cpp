@@ -70,6 +70,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "observer/report/ob_tenant_meta_checker.h"//ObTenantMetaChecker
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 namespace oceanbase
 {
@@ -1128,6 +1129,54 @@ int ObService::check_schema_version_elapsed(
   return ret;
 }
 
+int ObService::check_ddl_tablet_merge_status(
+    const obrpc::ObDDLCheckTabletMergeStatusArg &arg,
+    obrpc::ObDDLCheckTabletMergeStatusResult &result)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else {
+    result.reset();
+    MTL_SWITCH(arg.tenant_id_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablet_ids_.count(); ++i) {
+        const common::ObTabletID &tablet_id = arg.tablet_ids_.at(i);
+        ObTabletHandle tablet_handle;
+        ObLSHandle ls_handle;
+        ObDDLKvMgrHandle ddl_kv_mgr_handle;
+        ObLSService *ls_service = nullptr;
+        bool status = false;
+
+        if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error unexpected, get ls service failed", K(ret));
+        } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid arguments", K(ret), K(arg));
+        } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+          LOG_WARN("get ls failed", K(ret), K(arg));
+        } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle))) {
+          LOG_WARN("get tablet failed", K(ret));
+        }
+        // check and update major status
+        if (OB_SUCC(ret)) {
+          ObSSTable *latest_major_sstable = static_cast<ObSSTable *>(
+              tablet_handle.get_obj()->get_table_store().get_major_sstables().get_boundary_table(true/*last*/));
+          status = nullptr != latest_major_sstable;
+          if (OB_FAIL(result.merge_status_.push_back(status))) {
+            LOG_WARN("fail to push back to array", K(ret), K(status), K(tablet_id));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 
 int ObService::batch_switch_rs_leader(const ObAddr &arg)
 {

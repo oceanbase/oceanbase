@@ -33,11 +33,13 @@ public:
       const int64_t execution_id,
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
-      ObRootService *root_service)
+      ObRootService *root_service,
+      const common::ObAddr &inner_sql_exec_addr)
       : task_id_(task_id), tenant_id_(tenant_id), data_table_id_(data_table_id), dest_table_id_(dest_table_id),
         schema_version_(schema_version), snapshot_version_(snapshot_version), execution_id_(execution_id),
         trace_id_(trace_id), parallelism_(parallelism), allocator_("IdxSSTBuildTask"),
-        root_service_(root_service)
+        root_service_(root_service),
+        inner_sql_exec_addr_(inner_sql_exec_addr)
   {
     set_retry_times(0);
   }
@@ -68,6 +70,7 @@ private:
   ObString nls_timestamp_format_;
   ObString nls_timestamp_tz_format_;
   ObRootService *root_service_;
+  common::ObAddr inner_sql_exec_addr_;
 
   DISALLOW_COPY_AND_ASSIGN(ObIndexSSTableBuildTask);
 };

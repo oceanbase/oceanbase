@@ -16,6 +16,7 @@
 #include "lib/allocator/page_arena.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service.h"
+#include "share/location_cache/ob_location_struct.h"
 #include "storage/tablet/ob_tablet_common.h"
 
 namespace oceanbase
@@ -282,6 +283,22 @@ public:
               && CS_TYPE_BINARY != obj_meta.get_collation_type();
   }
 
+  static int get_sys_ls_leader_addr(
+    const uint64_t cluster_id,
+    const uint64_t tenant_id,
+    common::ObAddr &leader_addr);
+
+  static int get_tablet_paxos_member_list(
+    const uint64_t tenant_id,
+    const common::ObTabletID &tablet_id,
+    common::ObIArray<common::ObAddr> &paxos_server_list,
+    int64_t &paxos_member_count);
+
+  static int get_tablet_replica_location(
+    const uint64_t tenant_id,
+    const common::ObTabletID &tablet_id,
+    ObLSLocation &location);
+
 private:
   static int generate_column_name_str(
     const common::ObIArray<ObColumnNameInfo> &column_names,
@@ -305,6 +322,76 @@ private:
       const sql::ObOpSpec *spec,
       uint64_t &table_id);
 };
+
+
+class ObCheckTabletDataComplementOp
+{
+public:
+
+  static int check_and_wait_old_complement_task(
+      const uint64_t tenant_id,
+      const uint64_t index_table_id,
+      const common::ObAddr &inner_sql_exec_addr,
+      const common::ObCurTraceId::TraceId &trace_id,
+      const int64_t schema_version,
+      const int64_t scn,
+      bool &need_exec_new_inner_sql);
+
+private:
+
+  static int check_all_tablet_sstable_status(
+      const uint64_t tenant_id,
+      const uint64_t index_table_id,
+      const int64_t snapshot_version,
+      bool &is_all_sstable_build_finished);
+
+  static int check_task_inner_sql_session_status(
+      const common::ObAddr &inner_sql_exec_addr,
+      const common::ObCurTraceId::TraceId &trace_id,
+      const uint64_t tenant_id,
+      const int64_t schema_version,
+      const int64_t scn,
+      bool &is_old_task_session_exist);
+
+  static int do_check_tablets_merge_status(
+      const uint64_t tenant_id,
+      const int64_t snapshot_version,
+      const ObIArray<ObTabletID> &tablet_ids,
+      const ObLSID &ls_id,
+      hash::ObHashMap<ObAddr, ObArray<ObTabletID>> &ip_tablets_map,
+      hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map,
+      int64_t &tablet_commit_count);
+
+  static int check_tablet_merge_status(
+      const uint64_t tenant_id,
+      const ObIArray<common::ObTabletID> &tablet_ids,
+      const int64_t snapshot_version,
+      bool &is_all_tablets_commited);
+
+  static int update_replica_merge_status(
+      const ObTabletID &tablet_id,
+      const int merge_status,
+      hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map);
+
+
+  static int calculate_build_finish(
+      const uint64_t tenant_id,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
+      hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map,
+      int64_t &commit_succ_count);
+
+  static int construct_ls_tablet_map(
+      const uint64_t tenant_id,
+      const common::ObTabletID &tablet_id,
+      hash::ObHashMap<ObLSID, ObArray<ObTabletID>> &ls_tablets_map);
+
+  static int construct_tablet_ip_map(
+      const uint64_t tenant_id,
+      const ObTabletID &tablet_id,
+      hash::ObHashMap<ObAddr, ObArray<ObTabletID>> &ip_tablets_map);
+
+};
+
 
 
 }  // end namespace share

@@ -182,6 +182,12 @@ public:
 
   static int to_hex_str(const ObString &src, ObSqlString &dst);
 
+  static int kill_task_inner_sql(
+      common::ObMySQLProxy &proxy,
+      const common::ObCurTraceId::TraceId &trace_id,
+      const uint64_t tenant_id,
+      const common::ObAddr &sql_exec_addr);
+
 private:
   static int fill_task_record(
       const common::sqlclient::ObMySQLResult *result_row,
@@ -189,6 +195,11 @@ private:
       ObDDLTaskRecord &task_record);
 
   static int64_t get_record_id(share::ObDDLType ddl_type, int64_t origin_id);
+
+  static int kill_inner_sql(
+      common::ObMySQLProxy &proxy,
+      const uint64_t tenant_id,
+      const uint64_t session_id);
 };
 
 class ObDDLWaitTransEndCtx
@@ -263,7 +274,7 @@ public:
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
-      delay_schedule_time_(0), next_schedule_ts_(0), execution_id_(0)
+      delay_schedule_time_(0), next_schedule_ts_(0), execution_id_(0), sql_exec_addr_()
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -310,11 +321,12 @@ public:
       const int64_t snapshot_version, 
       const common::ObIArray<common::ObTabletID> &tablet_ids);
   void set_sys_task_id(const TraceId &sys_task_id) { sys_task_id_ = sys_task_id; }
+  void set_sql_exec_addr(const common::ObAddr &addr) { sql_exec_addr_ = addr; }
   const TraceId &get_sys_task_id() const { return sys_task_id_; }
   void calc_next_schedule_ts(int ret_code);
   bool need_schedule() { return next_schedule_ts_ <= ObTimeUtility::current_time(); }
-  int push_execution_id();
   bool is_replica_build_need_retry(const int ret_code);
+  int push_execution_id();
   #ifdef ERRSIM
   int check_errsim_error();
   #endif
@@ -324,7 +336,7 @@ public:
       K(target_object_id_), K(task_status_), K(snapshot_version_),
       K_(ret_code), K_(task_id), K_(parent_task_id), K_(parent_task_key),
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
-      K_(sys_task_id), K_(err_code_occurence_cnt), K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_));
+      K_(sys_task_id), K_(err_code_occurence_cnt), K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_));
 protected:
   int check_is_latest_execution_id(const int64_t execution_id, bool &is_latest);
   virtual bool is_error_need_retry(const int ret_code)
@@ -359,6 +371,7 @@ protected:
   int64_t delay_schedule_time_;
   int64_t next_schedule_ts_;
   int64_t execution_id_;
+  common::ObAddr sql_exec_addr_;
 };
 
 enum ColChecksumStat

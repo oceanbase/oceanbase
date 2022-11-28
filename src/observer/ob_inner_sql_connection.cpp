@@ -149,7 +149,8 @@ ObInnerSQLConnection::ObInnerSQLConnection()
       resource_conn_id_(OB_INVALID_ID),
       last_query_timestamp_(0),
       force_remote_execute_(false),
-      force_no_reuse_(false)
+      force_no_reuse_(false),
+      use_external_session_(false)
 {
 }
 
@@ -309,16 +310,22 @@ void ObInnerSQLConnection::set_is_load_data_exec(bool v)
   get_session().set_load_data_exec_session(v);
 }
 
-int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, const bool is_ddl)
+int ObInnerSQLConnection::init_session_info(
+    sql::ObSQLSessionInfo *session,
+    const bool is_extern_session,
+    const bool is_oracle_mode,
+    const bool is_ddl)
 {
   int ret = OB_SUCCESS;
-  if (NULL == extern_session) {
+  if (NULL == session) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to init session info, not pointer", K(ret), KPC(session));
+  } else {
     // called in init(), can not check inited_ flag.
-    ObArenaAllocator *allocator = NULL;
     const bool print_info_log = false;
     const bool is_sys_tenant = true;
     ObPCMemPctConf pc_mem_conf;
-    inner_session_.set_inner_session();
+    session->set_inner_session();
     ObObj mysql_mode;
     ObObj oracle_mode;
     mysql_mode.set_int(0);
@@ -327,46 +334,70 @@ int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, co
     ObObj oracle_sql_mode;
     mysql_sql_mode.set_uint(ObUInt64Type, DEFAULT_MYSQL_MODE);
     oracle_sql_mode.set_uint(ObUInt64Type, DEFAULT_ORACLE_MODE);
-    if (OB_FAIL(inner_session_.init(INNER_SQL_SESS_ID, INNER_SQL_PROXY_SESS_ID, allocator))) {
-      LOG_WARN("init session failed", K(ret));
-    } else if (OB_FAIL(inner_session_.load_default_sys_variable(print_info_log, is_sys_tenant))) {
+    if (OB_FAIL(session->load_default_sys_variable(print_info_log, is_sys_tenant))) {
       LOG_WARN("session load default system variable failed", K(ret));
-    } else if (OB_FAIL(inner_session_.update_max_packet_size())) {
+    } else if (OB_FAIL(session->update_max_packet_size())) {
       LOG_WARN("fail to update max packet size", K(ret));
-    } else if (OB_FAIL(inner_session_.init_tenant(OB_SYS_TENANT_NAME, OB_SYS_TENANT_ID))) {
+    } else if (OB_FAIL(session->init_tenant(OB_SYS_TENANT_NAME, OB_SYS_TENANT_ID))) {
       LOG_WARN("fail to init tenant", K(ret));
-    } else if (OB_FAIL(switch_tenant(OB_SYS_TENANT_ID))) {
-      LOG_WARN("set system tenant id failed", K(ret));
-    } else if (OB_FAIL(inner_session_.update_sys_variable(SYS_VAR_SQL_MODE,
-        oracle_mode_ ? oracle_sql_mode : mysql_sql_mode))) {
-      LOG_WARN("update sys variables failed", K(ret));
-    } else if (OB_FAIL(inner_session_.update_sys_variable(SYS_VAR_OB_COMPATIBILITY_MODE,
-        oracle_mode_ ? oracle_mode : mysql_mode))) {
-      LOG_WARN("update sys variables failed", K(ret));
-    } else if (OB_FAIL(inner_session_.update_sys_variable(SYS_VAR_NLS_DATE_FORMAT,
-                                                          ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT))) {
-      LOG_WARN("update sys variables failed", K(ret));
-    } else if (OB_FAIL(inner_session_.update_sys_variable(SYS_VAR_NLS_TIMESTAMP_FORMAT,
-                                                          ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT))) {
-      LOG_WARN("update sys variables failed", K(ret));
-    } else if (OB_FAIL(inner_session_.update_sys_variable(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,
-                                                          ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT))) {
-      LOG_WARN("update sys variables failed", K(ret));
-    } else if (OB_FAIL(inner_session_.gen_configs_in_pc_str())) {
-      LOG_WARN("fail to generate configuration strings that can influence execution plan", K(ret));
     } else {
-      ObString database_name(OB_SYS_DATABASE_NAME);
-      if (OB_FAIL(inner_session_.set_default_database(database_name))) {
-        LOG_WARN("fail to set default database", K(ret), K(database_name));
-      } else if (OB_FAIL(inner_session_.get_pc_mem_conf(pc_mem_conf))) {
-        LOG_WARN("fail to get pc mem conf", K(ret));
-      } else {
-        inner_session_.set_plan_cache_manager(ob_sql_->get_plan_cache_manager());
-        inner_session_.set_database_id(OB_SYS_DATABASE_ID);
-        //TODO shengle ?
-        inner_session_.get_ddl_info().set_is_ddl(is_ddl);
-        inner_session_.reset_timezone();
+      if (!is_extern_session) { // if not exetern session
+        if(OB_FAIL(session->switch_tenant(OB_SYS_TENANT_ID))) {
+          LOG_WARN("Init sys tenant in session error", K(ret));
+        } else if (OB_FAIL(session->set_user(OB_SYS_USER_NAME, OB_SYS_HOST_NAME, OB_SYS_USER_ID))) {
+          LOG_WARN("Set sys user in session error", K(ret));
+        } else {
+          session->set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT);
+          session->set_database_id(OB_SYS_DATABASE_ID);
+        }
       }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(session->update_sys_variable(
+            SYS_VAR_SQL_MODE, is_oracle_mode ? oracle_sql_mode : mysql_sql_mode))) {
+          LOG_WARN("update sys variables failed", K(ret));
+        } else if (OB_FAIL(session->update_sys_variable(
+            SYS_VAR_OB_COMPATIBILITY_MODE, is_oracle_mode ? oracle_mode : mysql_mode))) {
+          LOG_WARN("update sys variables failed", K(ret));
+        } else if (OB_FAIL(session->update_sys_variable(
+            SYS_VAR_NLS_DATE_FORMAT, ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT))) {
+          LOG_WARN("update sys variables failed", K(ret));
+        } else if (OB_FAIL(session->update_sys_variable(
+            SYS_VAR_NLS_TIMESTAMP_FORMAT, ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT))) {
+          LOG_WARN("update sys variables failed", K(ret));
+        } else if (OB_FAIL(session->update_sys_variable(
+            SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT, ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT))) {
+          LOG_WARN("update sys variables failed", K(ret));
+        } else {
+          ObString database_name(OB_SYS_DATABASE_NAME);
+          if (OB_FAIL(session->set_default_database(database_name))) {
+            LOG_WARN("fail to set default database", K(ret), K(database_name));
+          } else if (OB_FAIL(session->get_pc_mem_conf(pc_mem_conf))) {
+            LOG_WARN("fail to get pc mem conf", K(ret));
+          } else {
+            session->set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager());
+            session->set_database_id(OB_SYS_DATABASE_ID);
+            //TODO shengle ?
+            session->get_ddl_info().set_is_ddl(is_ddl);
+            session->reset_timezone();
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, const bool is_ddl)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == extern_session) {
+    sql::ObSQLSessionInfo * inner_session = &inner_session_;
+    ObArenaAllocator *allocator = NULL;
+    const bool is_extern_session = false;
+    if (OB_FAIL(inner_session->init(INNER_SQL_SESS_ID, INNER_SQL_PROXY_SESS_ID, allocator))) {
+      LOG_WARN("init session failed", K(ret));
+    } else if (OB_FAIL(init_session_info(inner_session, is_extern_session, oracle_mode_, is_ddl))) {
+      LOG_WARN("fail to init session info", K(ret), KPC(inner_session));
     }
   } else {
     extern_session_ = extern_session;
@@ -666,6 +697,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
 
   // switch tenant for MTL tenant ctx
   uint64_t tenant_id = get_session().get_effective_tenant_id();
+
   if (OB_SUCC(ret)) {
     MTL_SWITCH(tenant_id) {
       execution_id = ob_sql_->get_execution_id();
@@ -710,6 +742,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
           }
 
           const uint64_t tenant_id = get_session().get_effective_tenant_id();
+
           if (OB_FAIL(ret)){
             // do nothing
           } else if (OB_FAIL(gctx.schema_service_->get_tenant_schema_guard(tenant_id, res.schema_guard_))) {
@@ -731,7 +764,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
             // do nothing
           } else if (OB_FAIL(SMART_CALL(do_query(executor, res)))) {
             ret_code = ret;
-            LOG_WARN("execute failed", K(ret), K(executor), K(retry_cnt));
+            LOG_WARN("execute failed", K(ret), K(tenant_id), K(executor), K(retry_cnt));
             ret = process_retry(res, ret, abs_timeout_us, need_retry, retry_cnt, is_from_pl);
             // moved here from ObInnerSQLConnection::do_query() -> ObInnerSQLResult::open().
             int close_ret = res.force_close();
@@ -1253,7 +1286,7 @@ int ObInnerSQLConnection::start_transaction_inner(
               sql, ObInnerSQLTransmitArg::OPERATION_TYPE_START_TRANSACTION,
               lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
               THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout,
-              sql_mode, ddl_info, is_load_data_exec);
+              sql_mode, ddl_info, is_load_data_exec, use_external_session_);
           arg.set_nls_formats(get_session().get_local_nls_date_format(),
                               get_session().get_local_nls_timestamp_format(),
                               get_session().get_local_nls_timestamp_tz_format());
@@ -1595,7 +1628,7 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
                               sql, (ObInnerSQLTransmitArg::InnerSQLOperationType)op_type,
                               lib::Worker::CompatMode::ORACLE == get_compat_mode(),
                               GCONF.cluster_id, THIS_WORKER.get_timeout_ts(), query_timeout,
-                              trx_timeout, sql_mode, ddl_info, is_load_data_exec);;
+                              trx_timeout, sql_mode, ddl_info, is_load_data_exec, use_external_session_);
     arg.set_nls_formats(get_session().get_local_nls_date_format(),
                         get_session().get_local_nls_timestamp_format(),
                         get_session().get_local_nls_timestamp_tz_format());
@@ -1667,7 +1700,7 @@ int ObInnerSQLConnection::rollback()
               ObString::make_string("ROLLBACK"), ObInnerSQLTransmitArg::OPERATION_TYPE_ROLLBACK,
               lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
               THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-              ddl_info, is_load_data_exec);
+              ddl_info, is_load_data_exec, use_external_session_);
           arg.set_nls_formats(get_session().get_local_nls_date_format(),
                               get_session().get_local_nls_timestamp_format(),
                               get_session().get_local_nls_timestamp_tz_format());
@@ -1738,7 +1771,7 @@ int ObInnerSQLConnection::commit()
               ObString::make_string("COMMIT"), ObInnerSQLTransmitArg::OPERATION_TYPE_COMMIT,
               lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
               THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-              ddl_info, is_load_data_exec);
+              ddl_info, is_load_data_exec, use_external_session_);
           arg.set_nls_formats(get_session().get_local_nls_date_format(),
                               get_session().get_local_nls_timestamp_format(),
                               get_session().get_local_nls_timestamp_tz_format());
@@ -1769,20 +1802,20 @@ int ObInnerSQLConnection::commit()
 }
 
 int ObInnerSQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
-  int64_t &affected_rows, bool is_user_sql)
+  int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(execute_write(tenant_id, ObString::make_string(sql), affected_rows, is_user_sql))) {
+  if (OB_FAIL(execute_write(tenant_id, ObString::make_string(sql), affected_rows, is_user_sql, sql_exec_addr))) {
     LOG_WARN("execute_write failed", K(ret), K(tenant_id), K(sql));
   }
   return ret;
 }
 
 int ObInnerSQLConnection::execute_write(const uint64_t tenant_id, const ObString &sql,
-    int64_t &affected_rows, bool is_user_sql)
+    int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
   int ret = OB_SUCCESS;
-  auto function = [&]() { return execute_write_inner(tenant_id, sql, affected_rows, is_user_sql); };
+  auto function = [&]() { return execute_write_inner(tenant_id, sql, affected_rows, is_user_sql, sql_exec_addr); };
   if (OB_FAIL(retry_while_no_tenant_resource(GCONF.cluster_id, tenant_id, function))) {
     LOG_WARN("execute_write failed", K(ret), K(tenant_id), K(sql), K(is_user_sql));
   }
@@ -1790,7 +1823,7 @@ int ObInnerSQLConnection::execute_write(const uint64_t tenant_id, const ObString
 }
 
 int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const ObString &sql,
-    int64_t &affected_rows, bool is_user_sql)
+    int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute_write);
@@ -1838,6 +1871,9 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
           LOG_WARN("resource_conn_id or resource_svr is invalid",
                    K(ret), K(get_resource_svr()), K(get_resource_conn_id()));
         }
+      } else if (!OB_ISNULL(sql_exec_addr)) {  // not in trans
+          set_resource_svr(*sql_exec_addr);
+          set_resource_conn_id(OB_INVALID_ID);
       } else { // not in trans
         common::ObAddr resource_server_addr;
         share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
@@ -1866,7 +1902,7 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
             sql, ObInnerSQLTransmitArg::OPERATION_TYPE_EXECUTE_WRITE,
             lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
             THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-            ddl_info, is_load_data_exec);
+            ddl_info, is_load_data_exec, use_external_session_);
         arg.set_nls_formats(get_session().get_local_nls_date_format(),
                             get_session().get_local_nls_timestamp_format(),
                             get_session().get_local_nls_timestamp_tz_format());
@@ -1926,9 +1962,10 @@ int ObInnerSQLConnection::execute_read(const uint64_t tenant_id,
                                        const char *sql,
                                        ObISQLClient::ReadResult &res,
                                        bool is_user_sql,
-                                       bool is_from_pl)
+                                       bool is_from_pl,
+                                       const common::ObAddr *sql_exec_addr)
 {
-  return execute_read(GCONF.cluster_id, tenant_id, sql, res, is_user_sql, is_from_pl);
+  return execute_read(GCONF.cluster_id, tenant_id, sql, res, is_user_sql, is_from_pl, sql_exec_addr);
 }
 
 int ObInnerSQLConnection::execute_read(const int64_t cluster_id,
@@ -1936,11 +1973,12 @@ int ObInnerSQLConnection::execute_read(const int64_t cluster_id,
                                        const ObString &sql,
                                        ObISQLClient::ReadResult &res,
                                        bool is_user_sql,
-                                       bool is_from_pl)
+                                       bool is_from_pl,
+                                       const common::ObAddr *sql_exec_addr)
 {
 
   int ret = OB_SUCCESS;
-  auto function = [&]() { return execute_read_inner(cluster_id, tenant_id, sql, res, is_user_sql, is_from_pl); };
+  auto function = [&]() { return execute_read_inner(cluster_id, tenant_id, sql, res, is_user_sql, is_from_pl, sql_exec_addr); };
   if (OB_FAIL(retry_while_no_tenant_resource(cluster_id, tenant_id, function))) {
     LOG_WARN("execute_read failed", K(ret), K(cluster_id), K(tenant_id));
   }
@@ -1972,7 +2010,8 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
                                              const ObString &sql,
                                              ObISQLClient::ReadResult &res,
                                              bool is_user_sql,
-                                             bool is_from_pl)
+                                             bool is_from_pl,
+                                             const common::ObAddr *sql_exec_addr)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute_read);
@@ -2024,7 +2063,11 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can not acrocc cluster in trans", KR(ret), K(resource_conn_id_));
       }
-    } else { // not in trans
+    } else if (!OB_ISNULL(sql_exec_addr)) {
+       set_resource_svr(*sql_exec_addr);
+       set_resource_conn_id(OB_INVALID_ID);
+       LOG_INFO("set sql exec addr", KR(ret), K(*sql_exec_addr));
+    } else {
       common::ObAddr resource_server_addr;
       share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
       if (OB_FAIL(nonblock_get_leader(
@@ -2052,7 +2095,7 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
           sql, ObInnerSQLTransmitArg::OPERATION_TYPE_EXECUTE_READ,
           lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
           THIS_WORKER.get_timeout_ts(), query_timeout, trx_timeout, sql_mode,
-          ddl_info, is_load_data_exec);
+          ddl_info, is_load_data_exec, use_external_session_);
       arg.set_nls_formats(get_session().get_local_nls_date_format(),
                           get_session().get_local_nls_timestamp_format(),
                           get_session().get_local_nls_timestamp_tz_format());

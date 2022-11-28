@@ -52,6 +52,7 @@ public:
 private:
   int get_remote_session_location(const ObKillSessionArg &arg, ObExecContext &ctx, common::ObAddr &addr);
   int generate_read_sql(uint32_t sess_id, common::ObSqlString &sql);
+  int generate_read_sql_from_session_info(uint32_t sess_id, common::ObSqlString &sql);
   int kill_remote_session(ObExecContext &ctx, const common::ObAddr &addr, const ObKillSessionArg &arg);
 
   DISALLOW_COPY_AND_ASSIGN(ObKillExecutor);

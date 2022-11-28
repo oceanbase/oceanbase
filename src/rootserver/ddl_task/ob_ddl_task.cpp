@@ -351,6 +351,11 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
           "new_state", real_new_status, K_(snapshot_version), ret_code_);
       task_status_ = real_new_status;
     }
+
+    if (OB_CANCELED == real_ret_code) {
+      (void)ObDDLTaskRecordOperator::kill_task_inner_sql(root_service->get_sql_proxy(),
+          trace_id_, tenant_id_, sql_exec_addr_); // ignore return code
+    }
   }
   return ret;
 }
@@ -623,7 +628,7 @@ int ObDDLTask::push_execution_id()
     LOG_WARN("start transaction failed", K(ret));
   } else {
     if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id_, task_id_, table_task_status, table_execution_id))) {
-      LOG_WARN("select for update failed", K(ret), K(task_id_));
+      LOG_WARN("select for update failed", K(ret), K(task_id));
     } else if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id_, task_id_, table_execution_id + 1))) {
       LOG_WARN("update task status failed", K(ret));
     } else {
@@ -2064,6 +2069,98 @@ int ObDDLTaskRecordOperator::select_for_update(
   }
   return ret;
 }
+
+
+int ObDDLTaskRecordOperator::kill_inner_sql(
+    common::ObMySQLProxy &proxy,
+    const uint64_t tenant_id,
+    const uint64_t session_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql_string;
+  int64_t affected_rows = 0;
+
+  LOG_INFO("start to kill inner sql", K(session_id), K(tenant_id));
+  if (OB_UNLIKELY(session_id <= 0 || tenant_id <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(session_id), K(tenant_id));
+  } else if (OB_FAIL(sql_string.assign_fmt("KILL %ld", session_id))) {
+     LOG_WARN("assign sql string failed", K(ret), K(session_id));
+  } else if (OB_FAIL(proxy.write(tenant_id, sql_string.ptr(), affected_rows))) {
+    LOG_WARN("KILL session failed", K(ret), K(tenant_id), K(session_id));
+  } else if (OB_UNLIKELY(affected_rows < 0)) {  // kill session affected_rows is 0
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
+  }
+  return ret;
+}
+
+int ObDDLTaskRecordOperator::kill_task_inner_sql(
+    common::ObMySQLProxy &proxy,
+    const common::ObCurTraceId::TraceId &trace_id,
+    const uint64_t tenant_id,
+    const common::ObAddr &sql_exec_addr)
+{
+  int ret = OB_SUCCESS;
+  char ip_str[common::OB_IP_STR_BUFF];
+
+  if (OB_UNLIKELY(!proxy.is_inited()) || !sql_exec_addr.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(proxy.is_inited()));
+  } else if (!sql_exec_addr.ip_to_string(ip_str, sizeof(ip_str))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ip to string failed", K(ret), K(sql_exec_addr));
+  } else {
+    LOG_INFO("start ddl kill inner sql session", K(ret), K(trace_id));
+    ObSqlString sql_string;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      char trace_id_str[64] = { 0 };
+      char spec_charater = '%';
+      if (OB_UNLIKELY(0 > trace_id.to_string(trace_id_str, sizeof(trace_id_str)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get trace id string failed", K(ret), K(trace_id), K(tenant_id));
+      } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id = \"%s\""
+          " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%cINTO%cSELECT%c\" ",
+          OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
+          trace_id_str,
+          ip_str,
+          sql_exec_addr.get_port(),
+          spec_charater,
+          spec_charater,
+          spec_charater,
+          spec_charater))) {
+        LOG_WARN("assign sql string failed", K(ret));
+      } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql_string.ptr(), &sql_exec_addr))) { // default use OB_SYS_TENANT_ID
+        LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+      } else if (OB_ISNULL((result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else {
+        uint64_t session_id = 0;
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("fail to get next row", K(ret));
+            }
+          } else {
+            EXTRACT_UINT_FIELD_MYSQL(*result, "session_id", session_id, uint64_t);
+            if (OB_FAIL(kill_inner_sql(proxy, tenant_id, session_id))){
+              LOG_WARN("fail to kill session", K(ret), K(session_id), K(trace_id));
+            } else {
+              LOG_WARN("succ to kill session", K(ret), K(session_id), K(trace_id));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 
 } // end namespace rootserver
 } // end namespace oceanbase

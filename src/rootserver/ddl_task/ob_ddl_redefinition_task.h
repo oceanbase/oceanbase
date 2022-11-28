@@ -36,7 +36,8 @@ public:
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
       const bool use_heap_table_ddl_plan,
-      ObRootService *root_service);
+      ObRootService *root_service,
+      const common::ObAddr &inner_sql_exec_addr);
   int init(
       const ObTableSchema &orig_table_schema,
       const AlterTableSchema &alter_table_schema,
@@ -61,6 +62,7 @@ private:
   int64_t parallelism_;
   bool use_heap_table_ddl_plan_;
   ObRootService *root_service_;
+  common::ObAddr inner_sql_exec_addr_;
 };
 
 class ObSyncTabletAutoincSeqCtx final
