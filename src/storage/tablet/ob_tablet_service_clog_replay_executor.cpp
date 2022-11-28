@@ -92,7 +92,7 @@ int ObTabletServiceClogReplayExecutor::replay_update_storage_schema(
     LOG_WARN("invalid args", K(ret), KP(buf), K(buf_size), K(pos));
   } else if (OB_FAIL(tablet_id.deserialize(buf, buf_size, tmp_pos))) {
     LOG_WARN("fail to deserialize tablet id", K(ret), K(buf_size), K(pos), K(tablet_id));
-  } else if (OB_FAIL(ls_->replay_get_tablet(tablet_id, scn.get_val_for_lsn_allocator(), handle))) {
+  } else if (OB_FAIL(ls_->replay_get_tablet(tablet_id, scn, handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       ret = OB_SUCCESS; // TODO (bowen.gbw): unify multi data replay logic
       LOG_INFO("tablet does not exist, skip", K(ret), K(tablet_id));

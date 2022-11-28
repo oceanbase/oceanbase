@@ -302,7 +302,7 @@ private:
       const transaction::ObMulSourceDataNotifyArg &trans_flags);
   int replay_verify_tablets(
       const obrpc::ObBatchRemoveTabletArg &arg,
-      const int64_t log_ts,
+      const palf::SCN &scn,
       common::ObIArray<common::ObTabletID> &tablet_id_array);
 private:
   ObLS &ls_;

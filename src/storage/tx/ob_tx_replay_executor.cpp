@@ -558,7 +558,7 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
   lib::Worker::CompatMode mode;
   ObTabletHandle tablet_handle;
 
-  if (OB_FAIL(ls_->replay_get_tablet(row_head.tablet_id_, log_ts_ns_.get_val_for_lsn_allocator(), tablet_handle))) {
+  if (OB_FAIL(ls_->replay_get_tablet(row_head.tablet_id_, log_ts_ns_, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       ctx_->force_no_need_replay_checksum();
       ret = OB_SUCCESS;

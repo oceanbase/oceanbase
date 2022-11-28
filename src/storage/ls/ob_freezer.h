@@ -237,7 +237,6 @@ public:
 
   /* others */
   // get consequent callbacked log_ts right boundary
-  virtual int get_max_consequent_callbacked_log_ts(int64_t &max_consequent_callbacked_log_ts);
   virtual int get_max_consequent_callbacked_scn(palf::SCN &max_consequent_callbacked_scn);
   // to set snapshot version when memtables meet ready_for_flush
   int get_ls_weak_read_scn(palf::SCN &weak_read_scn);

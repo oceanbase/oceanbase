@@ -944,20 +944,17 @@ int ObLS::finish_slog_replay()
 }
 
 int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
-                            const int64_t log_ts,
+                            const palf::SCN &scn,
                             ObTabletHandle &handle) const
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_meta_.ls_id_, tablet_id);
   const palf::SCN tablet_change_checkpoint_scn = ls_meta_.get_tablet_change_checkpoint_scn();
-  palf::SCN scn;
   ObTabletHandle tablet_handle;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_FAIL(scn.convert_for_lsn_allocator(log_ts))) {
-    STORAGE_LOG(WARN, "fail to convert to scn", KR(ret), K(scn));
   } else if (OB_UNLIKELY(!tablet_id.is_valid() || !scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(scn));

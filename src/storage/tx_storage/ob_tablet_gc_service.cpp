@@ -148,7 +148,7 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
           // 1. get minor merge point
           else if (OB_FAIL(freezer->decide_max_decided_scn(checkpoint_scn))) {
             need_retry = true;
-            STORAGE_LOG(WARN, "get_max_consequent_callbacked_log_ts failed", KR(ret), K(freezer->get_ls_id()));
+            STORAGE_LOG(WARN, "decide_max_decided_scn failed", KR(ret), K(freezer->get_ls_id()));
           } else if (!checkpoint_scn.is_valid()
                      || SCN::min_scn() == checkpoint_scn
                      || checkpoint_scn <= ls->get_tablet_change_checkpoint_scn()) {

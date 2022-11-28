@@ -761,26 +761,6 @@ bool ObFreezer::is_freeze(uint32_t freeze_flag) const
 }
 
 /* other public functions */
-int ObFreezer::get_max_consequent_callbacked_log_ts(int64_t &max_decided_log_ts)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("[Freezer] not inited", K(ret), K_(ls_id));
-  } else if (OB_FAIL(loghandler_->get_max_decided_log_ts_ns(max_decided_log_ts))) {
-    if (OB_STATE_NOT_MATCH == ret) {
-      max_decided_log_ts = 0;
-      ret = OB_SUCCESS;
-    } else {
-      TRANS_LOG(WARN, "[Freezer] fail to get min_unreplay_log_ts", K(ret), K_(ls_id),
-                K(max_decided_log_ts));
-    }
-  } else {
-    TRANS_LOG(TRACE, "[Freezer] get_max_decided_log_ts", K(ret), K_(ls_id), K(max_decided_log_ts));
-  }
-  return ret;
-}
-
 int ObFreezer::decide_max_decided_scn(palf::SCN &max_decided_scn)
 {
   int ret = OB_SUCCESS;
