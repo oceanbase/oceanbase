@@ -122,7 +122,7 @@ public:
   int remove_ls(const share::ObLSID &id);
   int enable(const share::ObLSID &id,
              const palf::LSN &base_lsn,
-             const palf::SCN &base_log_scn);
+             const palf::SCN &base_scn);
   int disable(const share::ObLSID &id);
   int is_enabled(const share::ObLSID &id, bool &is_enabled);
   int set_submit_log_pending(const share::ObLSID &id);
@@ -133,12 +133,9 @@ public:
   int is_replay_done(const share::ObLSID &id,
                      const palf::LSN &end_lsn,
                      bool &is_done);
-  int get_min_unreplayed_log_scn(const share::ObLSID &id,
-                                 palf::SCN &log_scn);
-  int get_min_unreplayed_log_ts_ns(const share::ObLSID &id,
-                                   int64_t &log_ts);
+  int get_min_unreplayed_scn(const share::ObLSID &id,
+                                 palf::SCN &scn);
   int submit_task(ObReplayServiceTask *task);
-  int update_replayable_point(const int64_t replayable_ts_ns);
   int update_replayable_point(const palf::SCN &replayable_scn);
   int stat_for_each(const common::ObFunction<int (const ObReplayStatus &)> &func);
   int stat_all_ls_replay_process(int64_t &replayed_log_size, int64_t &unreplayed_log_size);

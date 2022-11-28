@@ -106,7 +106,7 @@ void LogStorage::destroy()
   PALF_LOG(INFO, "LogStorage destroy success");
 }
 
-int LogStorage::writev(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &log_scn)
+int LogStorage::writev(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   int64_t write_size = write_buf.get_total_size();
@@ -132,7 +132,7 @@ int LogStorage::writev(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &
     // For restart, the last block may have no data, however, we need append_block_header_
     // before first writev opt.
   } else if (true == need_append_block_header_
-             && OB_FAIL(append_block_header_(lsn, log_scn))) {
+             && OB_FAIL(append_block_header_(lsn, scn))) {
     PALF_LOG(ERROR, "append_block_header_ failed", K(ret), KPC(this));
   } else if (OB_FAIL(block_mgr_.writev(
                  lsn_2_block(lsn, logical_block_size_), get_phy_offset_(lsn), write_buf))) {
@@ -162,7 +162,7 @@ int LogStorage::writev(const LSNArray &lsn_array,
     do {
       LSN lsn = lsn_array[merge_start_idx];
       LogWriteBuf *write_buf = write_buf_array[merge_start_idx];
-      SCN log_scn = scn_array[merge_start_idx];
+      SCN scn = scn_array[merge_start_idx];
       int64_t writable_size =
           (0 == curr_block_writable_size_ ? logical_block_size_ : curr_block_writable_size_)
           - write_buf->get_total_size();
@@ -199,8 +199,8 @@ int LogStorage::writev(const LSNArray &lsn_array,
           }
         }
       }
-      if (OB_SUCC(ret) && OB_FAIL(writev(lsn, *write_buf, log_scn))) {
-        PALF_LOG(ERROR, "writev failed", K(ret), K(log_scn), K(lsn_array), K(write_buf_array));
+      if (OB_SUCC(ret) && OB_FAIL(writev(lsn, *write_buf, scn))) {
+        PALF_LOG(ERROR, "writev failed", K(ret), K(scn), K(lsn_array), K(write_buf_array));
       } else {
         // update 'merge_start_idx' to 'idx_to_be_merged' after writev successfully.
         merge_start_idx = idx_to_be_merged;
@@ -422,7 +422,7 @@ int LogStorage::get_block_min_scn(const block_id_t &block_id, SCN &min_scn) cons
   } else if (OB_FAIL(read_block_header_(block_id, block_header))) {
     PALF_LOG(WARN, "read_block_header_ failed", K(ret), K(block_id), KPC(this));
   } else {
-    min_scn = block_header.get_min_log_scn();
+    min_scn = block_header.get_min_scn();
     PALF_LOG(TRACE, "get_block_min_scn success", K(block_id), K(min_scn), KPC(this));
   }
   return ret;

@@ -257,7 +257,7 @@ int LSFetchCtx::read_log(
   int ret = OB_SUCCESS;
   const char *buf = log_entry.get_data_buf();
   const int64_t buf_len = log_entry.get_data_len();
-  const int64_t submit_ts = log_entry.get_log_scn().get_val_for_lsn_allocator();
+  const int64_t submit_ts = log_entry.get_scn().get_val_for_lsn_allocator();
   int64_t pos = 0;
   logservice::ObLogBaseHeader log_base_header;
 
@@ -318,7 +318,7 @@ int LSFetchCtx::read_miss_tx_log(
   int ret = OB_SUCCESS;
   const char *buf = log_entry.get_data_buf();
   const int64_t buf_len = log_entry.get_data_len();
-  const int64_t submit_ts = log_entry.get_log_scn().get_val_for_lsn_allocator();
+  const int64_t submit_ts = log_entry.get_scn().get_val_for_lsn_allocator();
   int64_t pos = 0;
   logservice::ObLogBaseHeader log_base_header;
 
@@ -354,7 +354,7 @@ int LSFetchCtx::update_progress(
     const palf::LSN &group_entry_lsn)
 {
   int ret = OB_SUCCESS;
-  const int64_t submit_ts = group_entry.get_log_scn().get_val_for_lsn_allocator();
+  const int64_t submit_ts = group_entry.get_scn().get_val_for_lsn_allocator();
   const int64_t group_entry_serialize_size = group_entry.get_serialize_size();
 
   // Verifying log continuity

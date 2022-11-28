@@ -106,7 +106,7 @@ int LogIOFlushLogTask::do_task(int tg_id, PalfEnvImpl *palf_env_impl)
     PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
              K(flush_log_cb_ctx_));
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_append_log(
-                 flush_log_cb_ctx_.lsn_, write_buf_, flush_log_cb_ctx_.log_scn_))) {
+                 flush_log_cb_ctx_.lsn_, write_buf_, flush_log_cb_ctx_.scn_))) {
     PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), K(write_buf_));
     // Advance reuse lsn for group_buffer firstly, then callback asynchronous.
   } else if (OB_FAIL(guard.get_palf_handle_impl()->advance_reuse_lsn(flush_log_end_lsn))) {
@@ -590,7 +590,7 @@ int BatchLogIOFlushLogTask::do_task_(int tg_id, PalfEnvImpl *palf_env_impl)
       } else if (OB_FAIL(log_write_buf_array_.push_back(&io_task->write_buf_))) {
         PALF_LOG(ERROR, "log_write_buf_array_ push_back failed, unexpected error!!!", K(ret),
                  KPC(this));
-      } else if (OB_FAIL(scn_array_.push_back(io_task->flush_log_cb_ctx_.log_scn_))) {
+      } else if (OB_FAIL(scn_array_.push_back(io_task->flush_log_cb_ctx_.scn_))) {
         PALF_LOG(ERROR, "flush_log_cb_ctx_array_ push_back failed, unexpected error!!!", K(ret),
                  KPC(this), KPC(io_task));
       } else if (OB_FAIL(lsn_array_.push_back(io_task->flush_log_cb_ctx_.lsn_))) {

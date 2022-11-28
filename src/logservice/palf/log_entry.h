@@ -39,7 +39,7 @@ public:
   int64_t get_header_size() const { return header_.get_serialize_size(); }
   int64_t get_payload_offset() const { return header_.get_serialize_size(); }
   int64_t get_data_len() const { return header_.get_data_len(); }
-  const SCN get_log_scn() const { return header_.get_log_scn(); }
+  const SCN get_scn() const { return header_.get_scn(); }
   const char *get_data_buf() const { return buf_; }
   const LogEntryHeader &get_header() const { return header_; }
 

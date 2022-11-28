@@ -354,7 +354,7 @@ int PalfHandleImpl::submit_log(
     const int64_t buf_len,
     const SCN &ref_scn,
     LSN &lsn,
-    SCN &log_scn)
+    SCN &scn)
 {
   int ret = OB_SUCCESS;
   const int64_t curr_ts_us = common::ObTimeUtility::current_time();
@@ -378,10 +378,10 @@ int PalfHandleImpl::submit_log(
       PALF_LOG(WARN, "cannot submit_log", K(ret), KPC(this), KP(buf), K(buf_len), "role",
           state_mgr_.get_role(), "state", state_mgr_.get_state(), "proposal_id",
           state_mgr_.get_proposal_id(), K(opts));
-    } else if (OB_FAIL(sw_.submit_log(buf, buf_len, ref_scn, lsn, log_scn))) {
+    } else if (OB_FAIL(sw_.submit_log(buf, buf_len, ref_scn, lsn, scn))) {
       PALF_LOG(WARN, "submit_log failed", K(ret), KPC(this), KP(buf), K(buf_len));
     } else {
-      PALF_LOG(TRACE, "submit_log success", K(ret), KPC(this), K(buf_len), K(lsn), K(log_scn));
+      PALF_LOG(TRACE, "submit_log success", K(ret), KPC(this), K(buf_len), K(lsn), K(scn));
       if (palf_reach_time_interval(2 * 1000 * 1000, append_size_stat_time_us_)) {
         PALF_LOG(INFO, "[PALF STAT APPEND DATA SIZE]", KPC(this), "append size", lsn.val_ - last_record_append_lsn_.val_);
         last_record_append_lsn_ = lsn;
@@ -511,7 +511,7 @@ int PalfHandleImpl::change_replica_num(
     const common::ObMemberList &member_list,
     const int64_t curr_replica_num,
     const int64_t new_replica_num,
-    const int64_t timeout_ns)
+    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -520,13 +520,13 @@ int PalfHandleImpl::change_replica_num(
   } else if (!member_list.is_valid() ||
              false == is_valid_replica_num(curr_replica_num) ||
              false == is_valid_replica_num(new_replica_num) ||
-             timeout_ns <= 0) {
+             timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member_list), K(curr_replica_num),
-        K(new_replica_num), K(timeout_ns));
+        K(new_replica_num), K(timeout_us));
   } else {
     LogConfigChangeArgs args(member_list, curr_replica_num, new_replica_num, CHANGE_REPLICA_NUM);
-    if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
+    if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "change_replica_num failed", KR(ret), KPC(this), K(member_list),
           K(curr_replica_num), K(new_replica_num));
     } else {
@@ -540,7 +540,7 @@ int PalfHandleImpl::change_replica_num(
 int PalfHandleImpl::add_member(
     const common::ObMember &member,
     const int64_t new_replica_num,
-    const int64_t timeout_ns)
+    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -548,12 +548,12 @@ int PalfHandleImpl::add_member(
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
   } else if (!member.is_valid() ||
              false == is_valid_replica_num(new_replica_num) ||
-             timeout_ns <= 0) {
+             timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member), K(new_replica_num), K(timeout_ns));
+    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member), K(new_replica_num), K(timeout_us));
   } else {
     LogConfigChangeArgs args(member, new_replica_num, ADD_MEMBER);
-    if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
+    if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "add_member failed", KR(ret), KPC(this), K(member), K(new_replica_num));
     } else {
       PALF_EVENT("add_member success", palf_id_, KR(ret), KPC(this), K(member), K(new_replica_num));
@@ -565,7 +565,7 @@ int PalfHandleImpl::add_member(
 int PalfHandleImpl::remove_member(
     const common::ObMember &member,
     const int64_t new_replica_num,
-    const int64_t timeout_ns)
+    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -573,12 +573,12 @@ int PalfHandleImpl::remove_member(
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
   } else if (!member.is_valid() ||
              false == is_valid_replica_num(new_replica_num) ||
-             timeout_ns <= 0) {
+             timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member), K(new_replica_num), K(timeout_ns));
+    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member), K(new_replica_num), K(timeout_us));
   } else {
     LogConfigChangeArgs args(member, new_replica_num, REMOVE_MEMBER);
-    if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
+    if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "remove_member failed", KR(ret), KPC(this), K(member), K(new_replica_num));
     } else {
       PALF_EVENT("remove_member success", palf_id_, KR(ret), KPC(this), K(member), K(new_replica_num));
@@ -590,7 +590,7 @@ int PalfHandleImpl::remove_member(
 int PalfHandleImpl::replace_member(
     const common::ObMember &added_member,
     const common::ObMember &removed_member,
-    const int64_t timeout_ns)
+    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -598,99 +598,99 @@ int PalfHandleImpl::replace_member(
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
   } else if (!added_member.is_valid() ||
              !removed_member.is_valid() ||
-             timeout_ns <= 0) {
+             timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(added_member), K(removed_member), K(timeout_ns));
+    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(added_member), K(removed_member), K(timeout_us));
   } else {
     ObMemberList old_member_list, curr_member_list;
     LogConfigChangeArgs args(added_member, 0, ADD_MEMBER_AND_NUM);
-    const int64_t begin_ts_ns = common::ObTimeUtility::current_time_ns();
+    const int64_t begin_time_us = common::ObTimeUtility::current_time();
     if (OB_FAIL(config_mgr_.get_curr_member_list(old_member_list))) {
       PALF_LOG(WARN, "get_curr_member_list failed", KR(ret), KPC(this));
-    } else if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
+    } else if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "add_member in replace_member failed", KR(ret), KPC(this), K(args));
     } else if (FALSE_IT(args.server_ = removed_member)) {
     } else if (FALSE_IT(args.type_ = REMOVE_MEMBER_AND_NUM)) {
-    } else if (OB_FAIL(one_stage_config_change_(args, timeout_ns + begin_ts_ns - common::ObTimeUtility::current_time_ns()))) {
+    } else if (OB_FAIL(one_stage_config_change_(args, timeout_us + begin_time_us - common::ObTimeUtility::current_time()))) {
       PALF_LOG(WARN, "remove_member in replace_member failed", KR(ret), K(args), KPC(this));
     } else if (OB_FAIL(config_mgr_.get_curr_member_list(curr_member_list))) {
       PALF_LOG(WARN, "get_curr_member_list failed", KR(ret), KPC(this));
     } else {
       PALF_EVENT("replace_member success", palf_id_, KR(ret), KPC(this), K(added_member),
-          K(removed_member), K(timeout_ns), K(old_member_list), K(curr_member_list),
-          "leader replace_member cost time(ns)", common::ObTimeUtility::current_time_ns() - begin_ts_ns);
+          K(removed_member), K(timeout_us), K(old_member_list), K(curr_member_list),
+          "leader replace_member cost time(ns)", common::ObTimeUtility::current_time() - begin_time_us);
     }
   }
   return ret;
 }
 
-int PalfHandleImpl::add_learner(const common::ObMember &added_learner, const int64_t timeout_ns)
+int PalfHandleImpl::add_learner(const common::ObMember &added_learner, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!added_learner.is_valid() || timeout_ns <= 0) {
+  } else if (!added_learner.is_valid() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     LogConfigChangeArgs args(added_learner, 0, ADD_LEARNER);
-    if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
-      PALF_LOG(WARN, "add_learner failed", KR(ret), KPC(this), K(args), K(timeout_ns));
+    if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
+      PALF_LOG(WARN, "add_learner failed", KR(ret), KPC(this), K(args), K(timeout_us));
     } else {
-      PALF_EVENT("add_learner success", palf_id_, K(ret), KPC(this), K(args), K(timeout_ns));
+      PALF_EVENT("add_learner success", palf_id_, K(ret), KPC(this), K(args), K(timeout_us));
     }
   }
   return ret;
 }
 
-int PalfHandleImpl::remove_learner(const common::ObMember &removed_learner, const int64_t timeout_ns)
+int PalfHandleImpl::remove_learner(const common::ObMember &removed_learner, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!removed_learner.is_valid() || timeout_ns <= 0) {
+  } else if (!removed_learner.is_valid() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     LogConfigChangeArgs args(removed_learner, 0, REMOVE_LEARNER);
-    if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
-      PALF_LOG(WARN, "remove_learner failed", KR(ret), KPC(this), K(args), K(timeout_ns));
+    if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
+      PALF_LOG(WARN, "remove_learner failed", KR(ret), KPC(this), K(args), K(timeout_us));
     } else {
-      PALF_EVENT("remove_learner success", palf_id_, K(ret), KPC(this), K(args), K(timeout_ns));
+      PALF_EVENT("remove_learner success", palf_id_, K(ret), KPC(this), K(args), K(timeout_us));
     }
   }
   return ret;
 }
 
-int PalfHandleImpl::switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_ns)
+int PalfHandleImpl::switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!learner.is_valid() || timeout_ns <= 0) {
+  } else if (!learner.is_valid() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     LogConfigChangeArgs args(learner, 0, SWITCH_LEARNER_TO_ACCEPTOR);
-    if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
-      PALF_LOG(WARN, "switch_learner_to_acceptor failed", KR(ret), KPC(this), K(args), K(timeout_ns));
+    if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
+      PALF_LOG(WARN, "switch_learner_to_acceptor failed", KR(ret), KPC(this), K(args), K(timeout_us));
     } else {
-      PALF_EVENT("switch_learner_to_acceptor success", palf_id_, K(ret), KPC(this), K(args), K(timeout_ns));
+      PALF_EVENT("switch_learner_to_acceptor success", palf_id_, K(ret), KPC(this), K(args), K(timeout_us));
     }
   }
   return ret;
 }
 
-int PalfHandleImpl::switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_ns)
+int PalfHandleImpl::switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!member.is_valid() || timeout_ns <= 0) {
+  } else if (!member.is_valid() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     LogConfigChangeArgs args(member, 0, SWITCH_ACCEPTOR_TO_LEARNER);
-    if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
-      PALF_LOG(WARN, "switch_acceptor_to_learner failed", KR(ret), KPC(this), K(args), K(timeout_ns));
+    if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
+      PALF_LOG(WARN, "switch_acceptor_to_learner failed", KR(ret), KPC(this), K(args), K(timeout_us));
     } else {
-      PALF_EVENT("switch_acceptor_to_learner success", palf_id_, K(ret), KPC(this), K(args), K(timeout_ns));
+      PALF_EVENT("switch_acceptor_to_learner success", palf_id_, K(ret), KPC(this), K(args), K(timeout_us));
     }
   }
   return ret;
@@ -699,7 +699,7 @@ int PalfHandleImpl::switch_acceptor_to_learner(const common::ObMember &member, c
 int PalfHandleImpl::add_arb_member(
     const common::ObMember &member,
     const int64_t new_replica_num,
-    const int64_t timeout_ns)
+    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -707,12 +707,12 @@ int PalfHandleImpl::add_arb_member(
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
   } else if (!member.is_valid() ||
              false == is_valid_replica_num(new_replica_num) ||
-             timeout_ns <= 0) {
+             timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member), K(new_replica_num), K(timeout_ns));
+    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member), K(new_replica_num), K(timeout_us));
   } else {
     LogConfigChangeArgs args(member, new_replica_num, ADD_ARB_MEMBER);
-    if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
+    if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "add_arb_member failed", KR(ret), KPC(this), K(member), K(new_replica_num));
     } else {
       PALF_LOG(INFO, "add_arb_member success", KR(ret), KPC(this), K(member), K(new_replica_num));
@@ -724,7 +724,7 @@ int PalfHandleImpl::add_arb_member(
 int PalfHandleImpl::remove_arb_member(
     const common::ObMember &member,
     const int64_t new_replica_num,
-    const int64_t timeout_ns)
+    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -732,12 +732,12 @@ int PalfHandleImpl::remove_arb_member(
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
   } else if (!member.is_valid() ||
              false == is_valid_replica_num(new_replica_num) ||
-             timeout_ns <= 0) {
+             timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member), K(new_replica_num), K(timeout_ns));
+    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member), K(new_replica_num), K(timeout_us));
   } else {
     LogConfigChangeArgs args(member, new_replica_num, REMOVE_ARB_MEMBER);
-    if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
+    if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "remove_arb_member failed", KR(ret), KPC(this), K(member), K(new_replica_num));
     } else {
       PALF_LOG(INFO, "remove_arb_member success", KR(ret), KPC(this), K(member), K(new_replica_num));
@@ -749,7 +749,7 @@ int PalfHandleImpl::remove_arb_member(
 int PalfHandleImpl::replace_arb_member(
     const common::ObMember &added_member,
     const common::ObMember &removed_member,
-    const int64_t timeout_ns)
+    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -757,81 +757,81 @@ int PalfHandleImpl::replace_arb_member(
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
   } else if (!added_member.is_valid() ||
              !removed_member.is_valid() ||
-             timeout_ns <= 0) {
+             timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(added_member), K(removed_member), K(timeout_ns));
+    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(added_member), K(removed_member), K(timeout_us));
   } else {
     ObMemberList old_member_list, curr_member_list;
     LogConfigChangeArgs args(removed_member, 0, REMOVE_ARB_MEMBER_AND_NUM);
-    const int64_t begin_ts_ns = common::ObTimeUtility::current_time_ns();
+    const int64_t begin_time_us = common::ObTimeUtility::current_time();
     if (OB_FAIL(config_mgr_.get_curr_member_list(old_member_list))) {
       PALF_LOG(WARN, "get_curr_member_list failed", KR(ret), KPC(this));
-    } else if (OB_FAIL(one_stage_config_change_(args, timeout_ns))) {
+    } else if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "remove_member in replace_arb_member failed", KR(ret), KPC(this), K(args));
     } else if (FALSE_IT(args.server_ = added_member)) {
     } else if (FALSE_IT(args.type_ = ADD_MEMBER_AND_NUM)) {
-    } else if (OB_FAIL(one_stage_config_change_(args, timeout_ns + begin_ts_ns - common::ObTimeUtility::current_time_ns()))) {
+    } else if (OB_FAIL(one_stage_config_change_(args, timeout_us + begin_time_us - common::ObTimeUtility::current_time()))) {
       PALF_LOG(WARN, "add_member in replace_arb_member failed", KR(ret), K(args), KPC(this));
     } else if (OB_FAIL(config_mgr_.get_curr_member_list(curr_member_list))) {
       PALF_LOG(WARN, "get_curr_member_list failed", KR(ret), KPC(this));
     } else {
       PALF_LOG(INFO, "replace_arb_member success", KR(ret), KPC(this), K(added_member),
-          K(removed_member), K(timeout_ns), K(old_member_list), K(curr_member_list),
-          "leader replace_arb_member cost time(ns)", common::ObTimeUtility::current_time_ns() - begin_ts_ns);
+          K(removed_member), K(timeout_us), K(old_member_list), K(curr_member_list),
+          "leader replace_arb_member cost time(ns)", common::ObTimeUtility::current_time() - begin_time_us);
     }
   }
   return ret;
 }
 
-int PalfHandleImpl::degrade_acceptor_to_learner(const common::ObMemberList &member_list, const int64_t timeout_ns)
+int PalfHandleImpl::degrade_acceptor_to_learner(const common::ObMemberList &member_list, const int64_t timeout_us)
 {
   // TODO by yunlong: add another arg to check if ack_ts in match_lsn_map do not change
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!member_list.is_valid() || timeout_ns <= 0) {
+  } else if (!member_list.is_valid() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     for (int64_t i = 0; i < member_list.get_member_number() && OB_SUCC(ret); i++) {
       ObMember member;
       LogConfigChangeArgs args(member, 0, DEGRADE_ACCEPTOR_TO_LEARNER);
-      const int64_t begin_ts_ns = common::ObTimeUtility::current_time_ns();
+      const int64_t begin_time_us = common::ObTimeUtility::current_time();
       if (OB_FAIL(member_list.get_member_by_index(i, member))) {
       } else if (FALSE_IT(args.server_ = member)) {
       } else if (OB_FAIL(one_stage_config_change_(args,
-          timeout_ns + begin_ts_ns - common::ObTimeUtility::current_time_ns()))) {
-        PALF_LOG(WARN, "degrade_acceptor_to_learner failed", KR(ret), KPC(this), K(member), K(timeout_ns));
+          timeout_us + begin_time_us - common::ObTimeUtility::current_time()))) {
+        PALF_LOG(WARN, "degrade_acceptor_to_learner failed", KR(ret), KPC(this), K(member), K(timeout_us));
       } else {
-        PALF_LOG(INFO, "degrade_acceptor_to_learner success", K(ret), KPC(this), K(member), K(timeout_ns));
+        PALF_LOG(INFO, "degrade_acceptor_to_learner success", K(ret), KPC(this), K(member), K(timeout_us));
       }
     }
-    PALF_LOG(INFO, "degrade_acceptor_to_learner finish", K(ret), KPC(this), K(member_list), K(timeout_ns));
+    PALF_LOG(INFO, "degrade_acceptor_to_learner finish", K(ret), KPC(this), K(member_list), K(timeout_us));
   }
   return ret;
 }
 
-int PalfHandleImpl::upgrade_learner_to_acceptor(const common::ObMemberList &learner_list, const int64_t timeout_ns)
+int PalfHandleImpl::upgrade_learner_to_acceptor(const common::ObMemberList &learner_list, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!learner_list.is_valid() || timeout_ns <= 0) {
+  } else if (!learner_list.is_valid() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     for (int64_t i = 0; i < learner_list.get_member_number() && OB_SUCC(ret); i++) {
       ObMember member;
       LogConfigChangeArgs args(member, 0, UPGRADE_LEARNER_TO_ACCEPTOR);
-      const int64_t begin_ts_ns = common::ObTimeUtility::current_time_ns();
+      const int64_t begin_time_us = common::ObTimeUtility::current_time();
       if (OB_FAIL(learner_list.get_member_by_index(i, member))) {
       } else if (FALSE_IT(args.server_ = member)) {
       } else if (OB_FAIL(one_stage_config_change_(args,
-          timeout_ns + begin_ts_ns - common::ObTimeUtility::current_time_ns()))) {
-        PALF_LOG(WARN, "upgrade_learner_to_acceptor failed", KR(ret), KPC(this), K(member), K(timeout_ns));
+          timeout_us + begin_time_us - common::ObTimeUtility::current_time()))) {
+        PALF_LOG(WARN, "upgrade_learner_to_acceptor failed", KR(ret), KPC(this), K(member), K(timeout_us));
       } else {
-        PALF_LOG(INFO, "upgrade_learner_to_acceptor success", K(ret), KPC(this), K(member), K(timeout_ns));
+        PALF_LOG(INFO, "upgrade_learner_to_acceptor success", K(ret), KPC(this), K(member), K(timeout_us));
       }
     }
-    PALF_LOG(INFO, "upgrade_learner_to_acceptor finish", K(ret), KPC(this), K(learner_list), K(timeout_ns));
+    PALF_LOG(INFO, "upgrade_learner_to_acceptor finish", K(ret), KPC(this), K(learner_list), K(timeout_us));
   }
   return ret;
 }
@@ -944,7 +944,7 @@ int PalfHandleImpl::check_args_and_generate_config_(const LogConfigChangeArgs &a
 int PalfHandleImpl::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
                                                 const ObMemberList &new_member_list,
                                                 const int64_t new_replica_num,
-                                                const int64_t conn_timeout_ns,
+                                                const int64_t conn_timeout_us,
                                                 LSN &committed_end_lsn,
                                                 bool &added_member_has_new_version)
 {
@@ -968,9 +968,9 @@ int PalfHandleImpl::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
       lsn_array[resp_cnt++] = leader_max_flushed_end_lsn;
       PALF_LOG(INFO, "server do not need check", KPC(this), K(server), K_(self));
     } else if (OB_SUCCESS != (tmp_ret = log_engine_.submit_get_memberchange_status_req(server,
-            curr_config_version, conn_timeout_ns, resp))) {
+            curr_config_version, conn_timeout_us, resp))) {
       PALF_LOG(WARN, "submit_get_memberchange_status_req failed", KR(ret), KPC(this), K(server),
-          K(conn_timeout_ns), K(resp));
+          K(conn_timeout_us), K(resp));
     } else if (!resp.is_normal_replica_) {
       PALF_LOG(WARN, "follower is not normal replica", KPC(this), K(server), K(resp));
     } else {
@@ -985,13 +985,13 @@ int PalfHandleImpl::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
     // do not recv majority resp, can not change member
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "connection timeout with majority of new_member_list, can't change member!",
-        KPC(this), K(new_member_list), K(new_replica_num), K(resp_cnt), K(conn_timeout_ns));
+        KPC(this), K(new_member_list), K(new_replica_num), K(resp_cnt), K(conn_timeout_us));
   } else {
     std::sort(lsn_array, lsn_array + resp_cnt, LSNCompare());
     committed_end_lsn = lsn_array[new_replica_num / 2];
   }
   PALF_LOG(INFO, "sync_get_committed_end_lsn_ finish", KPC(this), K(new_member_list), K(new_replica_num),
-      K(conn_timeout_ns), K(leader_max_flushed_end_lsn), K(committed_end_lsn),
+      K(conn_timeout_us), K(leader_max_flushed_end_lsn), K(committed_end_lsn),
       "lsn_array:", common::ObArrayWrap<LSN>(lsn_array, resp_cnt));
   return ret;
 }
@@ -1000,44 +1000,44 @@ int PalfHandleImpl::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
 bool PalfHandleImpl::check_follower_sync_status_(const LogConfigChangeArgs &args,
                                                  const ObMemberList &new_member_list,
                                                  const int64_t new_replica_num,
-                                                 const int64_t half_timeout_ns,
+                                                 const int64_t half_timeout_us,
                                                  bool &added_member_has_new_version)
 {
   bool bool_ret = false;
   int ret = OB_SUCCESS;
   LSN first_leader_committed_end_lsn, second_leader_committed_end_lsn;
   LSN first_committed_end_lsn, second_committed_end_lsn;
-  int64_t conn_timeout_ns = 100 * 1000L * 1000L;       // default 100ms
+  int64_t conn_timeout_us = 100 * 1000L;       // default 100ms
   (void) sw_.get_committed_end_lsn(first_leader_committed_end_lsn);
 
   added_member_has_new_version = true;
   if (new_member_list.get_member_number() == 0) {
-  } else if (FALSE_IT(conn_timeout_ns = half_timeout_ns / (new_member_list.get_member_number()))) {
+  } else if (FALSE_IT(conn_timeout_us = half_timeout_us / (new_member_list.get_member_number()))) {
   } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num,
-      conn_timeout_ns, first_committed_end_lsn, added_member_has_new_version))) {
+      conn_timeout_us, first_committed_end_lsn, added_member_has_new_version))) {
     bool_ret = false;
   } else if (first_committed_end_lsn >= first_leader_committed_end_lsn) {
     // if committed lsn of new majority do not retreat, then start config change
     bool_ret = true;
     PALF_LOG(INFO, "majority of new_member_list are sync with leader, start config change", KPC(this),
-            K(first_committed_end_lsn), K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_ns));
+            K(first_committed_end_lsn), K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
   } else {
     PALF_LOG(INFO, "majority of new_member_list aren't sync with leader", KPC(this), K(first_committed_end_lsn),
-        K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_ns));
+        K(first_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
     // committed_lsn of new majority is behind than old majority's, we want to know if
     // they can catch up with leader during config change timeout. If they can, start config change
     ob_usleep(500 * 1000);
     sw_.get_committed_end_lsn(second_leader_committed_end_lsn);
     int64_t expected_sync_time_s;
     int64_t sync_speed_gap;
-    if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num, conn_timeout_ns,
+    if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num, conn_timeout_us,
         second_committed_end_lsn, added_member_has_new_version))) {
       bool_ret = false;
     } else if (second_committed_end_lsn >= second_leader_committed_end_lsn) {
       // if committed lsn of new majority do not retreat, then start config change
       bool_ret = true;
       PALF_LOG(INFO, "majority of new_member_list are sync with leader, start config change", KPC(this),
-              K(second_committed_end_lsn), K(second_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_ns));
+              K(second_committed_end_lsn), K(second_leader_committed_end_lsn), K(new_member_list), K(new_replica_num), K(conn_timeout_us));
     } else if (FALSE_IT(sync_speed_gap = ((second_committed_end_lsn - first_committed_end_lsn) * 2) - \
         ((second_leader_committed_end_lsn - first_leader_committed_end_lsn) * 2) )) {
     } else if (sync_speed_gap <= 0) {
@@ -1045,16 +1045,16 @@ bool PalfHandleImpl::check_follower_sync_status_(const LogConfigChangeArgs &args
       PALF_LOG(WARN, "follwer is not sync with leader after waiting 500 ms", KPC(this), K(sync_speed_gap),
               K(bool_ret), K(second_committed_end_lsn), K(second_leader_committed_end_lsn));
     } else if (FALSE_IT(expected_sync_time_s = (second_leader_committed_end_lsn - second_committed_end_lsn) / sync_speed_gap)) {
-    } else if ((expected_sync_time_s * 1E9) <= half_timeout_ns) {
+    } else if ((expected_sync_time_s * 1E6) <= half_timeout_us) {
       bool_ret = true;
       PALF_LOG(INFO, "majority of new_member_list are sync with leader, start config change",
               KPC(this), K(bool_ret), K(second_committed_end_lsn), K(first_committed_end_lsn), K(sync_speed_gap),
-              K(second_leader_committed_end_lsn), K(half_timeout_ns));
+              K(second_leader_committed_end_lsn), K(half_timeout_us));
     } else {
       bool_ret = false;
       PALF_LOG(INFO, "majority of new_member_list are far behind, can not change member",
               KPC(this), K(bool_ret), K(second_committed_end_lsn), K(first_committed_end_lsn), K(sync_speed_gap),
-              K(second_leader_committed_end_lsn), K(half_timeout_ns));
+              K(second_leader_committed_end_lsn), K(half_timeout_us));
     }
   }
   bool_ret = bool_ret && added_member_has_new_version;
@@ -1062,7 +1062,7 @@ bool PalfHandleImpl::check_follower_sync_status_(const LogConfigChangeArgs &args
 }
 
 int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
-                                             const int64_t timeout_ns)
+                                             const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   int64_t curr_proposal_id = INVALID_PROPOSAL_ID;
@@ -1072,8 +1072,8 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
   const int get_lock = config_change_lock_.trylock();
   if (OB_SUCCESS != get_lock) {
     ret = OB_EAGAIN;
-    PALF_LOG(WARN, "another config_change is running, try again", KR(ret), KPC(this), K(args), K(timeout_ns));
-  } else if (!args.is_valid() || timeout_ns <= 0) {
+    PALF_LOG(WARN, "another config_change is running, try again", KR(ret), KPC(this), K(args), K(timeout_us));
+  } else if (!args.is_valid() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(args));
   } else if (OB_FAIL(can_change_config_(args, curr_proposal_id))) {
@@ -1084,8 +1084,8 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
   } else if (is_already_finished) {
     PALF_LOG(INFO, "one_stage_config_change has already finished", K(ret), KPC(this), K(args));
   } else {
-    PALF_LOG(INFO, "one_stage_config_change start", KPC(this), K(curr_proposal_id), K(args), K(timeout_ns));
-    TimeoutChecker not_timeout(timeout_ns);
+    PALF_LOG(INFO, "one_stage_config_change start", KPC(this), K(curr_proposal_id), K(args), K(timeout_us));
+    TimeoutChecker not_timeout(timeout_us);
     ObTimeGuard time_guard("config_change");
     // step 1: pre sync config log when adding member
     // The reason for this is when a new member is created and is going to add Paxos Group.
@@ -1107,7 +1107,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
         PALF_LOG(WARN, "not leader, can't change member", KR(ret), KPC(this),
             "role", state_mgr_.get_role(), "state", state_mgr_.get_state());
       } else if (check_follower_sync_status_(args, new_log_sync_memberlist, new_log_sync_replica_num,
-          timeout_ns / 2, added_member_has_new_version)) {
+          timeout_us / 2, added_member_has_new_version)) {
         break;
       } else {
         if (is_add_log_sync_member_list(args.type_) && false == added_member_has_new_version) {
@@ -1146,7 +1146,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
     }
     time_guard.click("finish");
     PALF_LOG(INFO, "one_stage_config_change finish", KR(ret), KPC(this), K(args),
-        K(timeout_ns), K(time_guard));
+        K(timeout_us), K(time_guard));
     if (OB_TIMEOUT == ret) {
       config_mgr_.after_config_change_timeout();
     }
@@ -1177,7 +1177,7 @@ int PalfHandleImpl::handle_register_parent_req(const LogLearner &child, const bo
     LogLearner parent;
     LogCandidateList candidate_list;
     parent.server_ = self_;
-    parent.register_ts_ns_ = child.register_ts_ns_;
+    parent.register_time_us_ = child.register_time_us_;
     if (OB_FAIL(log_engine_.submit_register_parent_resp(child.server_, parent, candidate_list, RegisterReturn::REGISTER_NOT_MASTER))) {
       PALF_LOG(WARN, "submit_register_parent_resp failed", KR(ret), K_(palf_id), K_(self), K(child));
     }
@@ -1632,7 +1632,7 @@ int PalfHandleImpl::read_log(const LSN &lsn,
 
 int PalfHandleImpl::inner_append_log(const LSN &lsn,
                                      const LogWriteBuf &write_buf,
-                                     const SCN &log_scn)
+                                     const SCN &scn)
 {
   int ret = OB_SUCCESS;
   const int64_t begin_ts = ObTimeUtility::current_time();
@@ -1643,13 +1643,13 @@ int PalfHandleImpl::inner_append_log(const LSN &lsn,
              || false == write_buf.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument", K(ret), KPC(this), K(lsn), K(write_buf));
-  } else if (OB_FAIL(log_engine_.append_log(lsn, write_buf, log_scn))) {
-    PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), KPC(this), K(lsn), K(log_scn));
+  } else if (OB_FAIL(log_engine_.append_log(lsn, write_buf, scn))) {
+    PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), KPC(this), K(lsn), K(scn));
   } else {
     const int64_t time_cost = ObTimeUtility::current_time() - begin_ts;
     append_cost_stat_.stat(time_cost);
     if (time_cost >= 5 * 1000) {
-      PALF_LOG(WARN, "write log cost too much time", K(ret), KPC(this), K(lsn), K(log_scn), K(time_cost));
+      PALF_LOG(WARN, "write log cost too much time", K(ret), KPC(this), K(lsn), K(scn), K(time_cost));
     }
   }
   return ret;
@@ -1834,7 +1834,7 @@ int PalfHandleImpl::alloc_palf_group_buffer_iterator(const SCN &scn,
       if (OB_FAIL(local_iter.get_entry(curr_group_entry, curr_lsn))) {
         PALF_LOG(ERROR, "PalfGroupBufferIterator get_entry failed", KR(ret), KPC(this),
             K(curr_group_entry), K(curr_lsn), K(local_iter));
-      } else if (curr_group_entry.get_log_scn() >= scn) {
+      } else if (curr_group_entry.get_scn() >= scn) {
         result_lsn = curr_lsn;
         break;
       } else {
@@ -2697,7 +2697,7 @@ int PalfHandleImpl::handle_notify_rebuild_req(const common::ObAddr &server,
     int tmp_ret = OB_SUCCESS;
     // leader may send multiple notify_rebuild_req, when next req arrives, previous on_rebuild may
     // hold rlock, so try hold wlock and release it after timeout (1ms).
-    const int64_t until_timeout_us = common::ObTimeUtility::current_time() + 1 * 1000;
+    const int64_t until_timeout_us = common::ObTimeUtility::current_time() + 1;
     WLockGuardWithTimeout guard(lock_, until_timeout_us, tmp_ret);
     if (OB_SUCCESS != tmp_ret) {
       PALF_LOG(INFO, "notify_rebuild wait lock timeout", K(ret), KPC(this), K(server), K(base_lsn),
@@ -3298,7 +3298,7 @@ int PalfHandleImpl::get_prev_log_info_(const LSN &lsn,
     }
     if (OB_SUCC(ret)) {
       prev_log_info.log_id_ = prev_entry_header.get_log_id();
-      prev_log_info.log_scn_ = prev_entry_header.get_max_scn();
+      prev_log_info.scn_ = prev_entry_header.get_max_scn();
       prev_log_info.accum_checksum_ = prev_entry_header.get_accum_checksum();
       prev_log_info.log_proposal_id_ = prev_entry_header.get_log_proposal_id();
       prev_log_info.lsn_ = prev_lsn;

@@ -583,6 +583,18 @@ int ObBackupPathUtil::get_ls_backup_dir_path(const share::ObBackupDest &backup_s
   return ret;
 }
 
+int ObBackupPathUtil::get_ls_backup_dir_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, desc, path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest), K(desc));
+  } else if (OB_FAIL(path.join_ls(ls_id))) {
+    LOG_WARN("failed to join log stream", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full_20211231/log_stream_1/meta_info_turn_1/tablet_info
 int ObBackupPathUtil::get_ls_data_tablet_info_path(const share::ObBackupDest &backup_set_dest,
     const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, ObBackupPath &path)

@@ -589,6 +589,7 @@ int ObInnerSQLConnection::do_query(sqlclient::ObIExecutor &executor, ObInnerSQLR
     // restore有自己的inner_sql_connection，sql_modifier不为null
     bool is_restore = NULL != sql_modifier_;
     res.sql_ctx().is_restore_ = is_restore;
+    get_session().set_process_query_time(ObTimeUtility::current_time());
     if (!inited_) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
@@ -1285,6 +1286,9 @@ int ObInnerSQLConnection::start_transaction_inner(
           } else if (FALSE_IT(get_session().set_trans_type(transaction::ObTxClass::SYS))) {
           }
         }
+        if (OB_FAIL(ret)) {
+          reset_resource_conn_info();
+        }
       }
       if (OB_SUCC(ret)) {
         set_is_in_trans(true);
@@ -1306,7 +1310,7 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
   bool need_res_update_endtime = true;
   observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
 
-  bool has_tenant_resource = false;
+  const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
   transaction::ObTxDesc *tx_desc = nullptr;
 
   SMART_VAR(ObInnerSQLResult, res, get_session())
@@ -1317,25 +1321,24 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
     } else if (OB_INVALID_ID == tenant_id) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(tenant_id));
-    } else if (GCTX.omt_->is_available_tenant(tenant_id)) {
-      has_tenant_resource = true;
+    } else if (local_execute) {
       if (OB_FAIL(switch_tenant(tenant_id))) {
         LOG_WARN("set system tenant id failed", K(ret), K(tenant_id));
       }
     } else {
-      has_tenant_resource = false;
-      LOG_DEBUG("tenant not in server", K(ret), K(tenant_id), K(MYADDR));
+      LOG_DEBUG("tenant may be not in server", K(ret), K(local_execute), K(tenant_id), K(MYADDR));
     }
 
     if (OB_SUCC(ret)) {
       if (!is_in_trans()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("inner conn must be already in trans when register multi source data", K(ret));
-      } else if (OB_FAIL(res.init(has_tenant_resource))) {
-        LOG_WARN("init result set", K(ret), K(has_tenant_resource));
-      } else if (has_tenant_resource) {
+      } else if (OB_FAIL(res.init(local_execute))) {
+        LOG_WARN("init result set", K(ret), K(local_execute));
+      } else if (local_execute) {
         if (OB_ISNULL(tx_desc = get_session().get_tx_desc())) {
           // TODO ADD LOG and check get_session
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Invalid tx_desc", K(ls_id), K(type));
         } else {
           MTL_SWITCH(tenant_id) {
@@ -1393,6 +1396,14 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
     res.inc_need_update_endtime();
   }
 
+
+  LOG_INFO("register mds in inner_sql_connection",
+           KR(ret),
+           KP(this),
+           K(local_execute),
+           K(get_resource_conn_id()),
+           K(get_session().get_sessid()),
+           KPC(get_session().get_tx_desc()));
   return ret;
 }
 

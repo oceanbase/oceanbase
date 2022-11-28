@@ -2326,7 +2326,7 @@ int ObPrimaryLSService::gather_tenant_recovery_stat_()
     if (OB_FAIL(ls_recovery_op.get_tenant_recovery_stat(
             user_tenant_id, *GCTX.sql_proxy_, sync_scn, min_wrs_scn))) {
       LOG_WARN("failed to get tenant recovery stat", KR(ret), K(user_tenant_id));
-      //TODO replayable_ts_ns is equal to sync_ts_ns
+      //TODO replayable_scn is equal to sync_scn
     } else if (OB_FAIL(info_proxy.update_tenant_recovery_status(
                    user_tenant_id, GCTX.sql_proxy_, share::NORMAL_SWITCHOVER_STATUS, sync_scn,
                    sync_scn, min_wrs_scn))) {

@@ -652,7 +652,7 @@ int ObLS::online_log_()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(log_handler_.enable_replay(ls_meta_.get_clog_base_lsn(),
-                                         ls_meta_.get_clog_checkpoint_ts()))) {
+                                         ls_meta_.get_clog_checkpoint_scn()))) {
     LOG_WARN("failed to enable replay", K(ret), K(ls_meta_));
   } else if (OB_FAIL(log_handler_.enable_sync())) {
     LOG_WARN("failed to enable sync", K(ret), K(ls_meta_));
@@ -1126,7 +1126,7 @@ int ObLS::enable_replay()
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
   } else if (OB_FAIL(log_handler_.enable_replay(ls_meta_.get_clog_base_lsn(),
-                                                ls_meta_.get_clog_checkpoint_ts()))) {
+                                                ls_meta_.get_clog_checkpoint_scn()))) {
     LOG_WARN("failed to enable replay", K(ret));
   }
   return ret;
@@ -1139,7 +1139,7 @@ int ObLS::enable_replay_without_lock()
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
   } else if (OB_FAIL(log_handler_.enable_replay(ls_meta_.get_clog_base_lsn(),
-                                                ls_meta_.get_clog_checkpoint_ts()))) {
+                                                ls_meta_.get_clog_checkpoint_scn()))) {
     LOG_WARN("enable replay without lock failed", K(ret), K_(ls_meta));
   } else {
     LOG_INFO("enable replay without lock successfully", K(ret), K_(ls_meta));

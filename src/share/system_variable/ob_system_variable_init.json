@@ -1930,7 +1930,7 @@
   "optimizer_use_sql_plan_baselines": {
     "id": 10057,
     "name": "optimizer_use_sql_plan_baselines",
-    "value": "1",
+    "value": "0",
     "data_type": "bool",
     "info": "Enable use sql plan baseline",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
@@ -1942,7 +1942,7 @@
   "optimizer_capture_sql_plan_baselines": {
     "id": 10058,
     "name": "optimizer_capture_sql_plan_baselines",
-    "value": "1",
+    "value": "0",
     "data_type": "bool",
     "info": "optimizer_capture_sql_plan_baselines enables or disables automitic capture plan baseline.",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE",

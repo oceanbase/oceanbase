@@ -88,7 +88,7 @@ class LogFileTuple
 {
 public:
   LogFileTuple();
-  LogFileTuple(const LSN &lsn, const palf::SCN &log_scn, const ObArchivePiece &piece);
+  LogFileTuple(const LSN &lsn, const palf::SCN &scn, const ObArchivePiece &piece);
   ~LogFileTuple();
 
 public:
@@ -98,14 +98,14 @@ public:
   LogFileTuple &operator=(const LogFileTuple &other);
 
   const LSN &get_lsn() const { return offset_; }
-  const palf::SCN &get_log_scn() const { return log_scn_; }
+  const palf::SCN &get_scn() const { return scn_; }
   const ObArchivePiece &get_piece() const { return piece_; };
   void compensate_piece();
-  TO_STRING_KV(K_(offset), K_(log_scn), K_(piece));
+  TO_STRING_KV(K_(offset), K_(scn), K_(piece));
 
 private:
   LSN offset_;            // 文件内偏移
-  palf::SCN log_scn_;        // 最大log scn
+  palf::SCN scn_;        // 最大log scn
   ObArchivePiece piece_;  // 所属piece
 };
 

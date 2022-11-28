@@ -256,25 +256,6 @@ palf::AccessMode ObLogService::get_palf_access_mode(const share::ObTenantRole &t
 int ObLogService::create_ls(const ObLSID &id,
                             const ObReplicaType &replica_type,
                             const share::ObTenantRole &tenant_role,
-                            const int64_t create_ts,
-                            const bool allow_log_sync,
-                            ObLogHandler &log_handler,
-                            ObLogRestoreHandler &restore_handler)
-{
-  int ret = OB_SUCCESS;
-  SCN create_scn;
-  if (OB_FAIL(create_scn.convert_for_gts(create_ts))) {
-    CLOG_LOG(WARN, "failed to convert_for_gts", K(ret), K(create_ts));
-  } else if (OB_FAIL(create_ls(id, replica_type, tenant_role, create_scn,
-                     allow_log_sync, log_handler, restore_handler))) {
-    CLOG_LOG(WARN, "failed to create_ls", K(ret), K(create_ts));
-  } else {/*do nothing*/}
-  return ret;
-}
-
-int ObLogService::create_ls(const ObLSID &id,
-                            const ObReplicaType &replica_type,
-                            const share::ObTenantRole &tenant_role,
                             const SCN &create_scn,
                             const bool allow_log_sync,
                             ObLogHandler &log_handler,
@@ -283,7 +264,7 @@ int ObLogService::create_ls(const ObLSID &id,
   int ret = OB_SUCCESS;
   palf::PalfBaseInfo palf_base_info;
   palf_base_info.generate_by_default();
-  palf_base_info.prev_log_info_.log_scn_ = create_scn;
+  palf_base_info.prev_log_info_.scn_ = create_scn;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "log_service is not inited", K(ret), K(id));

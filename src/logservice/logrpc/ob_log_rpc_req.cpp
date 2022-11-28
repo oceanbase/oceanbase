@@ -27,7 +27,7 @@ LogConfigChangeCmd::LogConfigChangeCmd()
     curr_replica_num_(0),
     new_replica_num_(0),
     cmd_type_(INVALID_CONFIG_CHANGE_CMD),
-    timeout_ns_(0) { }
+    timeout_us_(0) { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -36,7 +36,7 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObMember &removed_member,
     const int64_t new_replica_num,
     const LogConfigChangeCmdType cmd_type,
-    const int64_t timeout_ns)
+    const int64_t timeout_us)
   : src_(src),
     palf_id_(palf_id),
     added_member_(added_member),
@@ -45,7 +45,7 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     curr_replica_num_(),
     new_replica_num_(new_replica_num),
     cmd_type_(cmd_type),
-    timeout_ns_(timeout_ns) { }
+    timeout_us_(timeout_us) { }
 
 LogConfigChangeCmd::LogConfigChangeCmd(
     const common::ObAddr &src,
@@ -54,7 +54,7 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     const int64_t curr_replica_num,
     const int64_t new_replica_num,
     const LogConfigChangeCmdType cmd_type,
-    const int64_t timeout_ns)
+    const int64_t timeout_us)
   : src_(src),
     palf_id_(palf_id),
     added_member_(),
@@ -63,7 +63,7 @@ LogConfigChangeCmd::LogConfigChangeCmd(
     curr_replica_num_(curr_replica_num),
     new_replica_num_(new_replica_num),
     cmd_type_(cmd_type),
-    timeout_ns_(timeout_ns) { }
+    timeout_us_(timeout_us) { }
 
 LogConfigChangeCmd::~LogConfigChangeCmd()
 {
@@ -73,7 +73,7 @@ LogConfigChangeCmd::~LogConfigChangeCmd()
 bool LogConfigChangeCmd::is_valid() const
 {
   bool bool_ret = false;
-  bool_ret = (src_.is_valid() && palf_id_ >= 0 && timeout_ns_ > 0 &&                            \
+  bool_ret = (src_.is_valid() && palf_id_ >= 0 && timeout_us_ > 0 &&                            \
       cmd_type_ != INVALID_CONFIG_CHANGE_CMD)? true: false;
   bool_ret = bool_ret && ((is_add_member_list() || ADD_LEARNER_CMD == cmd_type_ ||              \
       SWITCH_TO_LEARNER_CMD == cmd_type_)? added_member_.is_valid(): true);
@@ -109,11 +109,11 @@ void LogConfigChangeCmd::reset()
   curr_replica_num_ = 0;
   new_replica_num_ = 0;
   cmd_type_ = INVALID_CONFIG_CHANGE_CMD;
-  timeout_ns_ = 0;
+  timeout_us_ = 0;
 }
 
 OB_SERIALIZE_MEMBER(LogConfigChangeCmd, src_, palf_id_, added_member_, removed_member_,
-curr_member_list_, curr_replica_num_, new_replica_num_, cmd_type_, timeout_ns_);
+curr_member_list_, curr_replica_num_, new_replica_num_, cmd_type_, timeout_us_);
 // ============= LogConfigChangeCmd end =============
 
 // ============= LogConfigChangeCmdResp begin ===========

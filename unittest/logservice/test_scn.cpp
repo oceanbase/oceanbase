@@ -85,7 +85,7 @@ TEST(TestSCN, test_scn)
 
   EXPECT_EQ(100, scn1.convert_to_ts());
   EXPECT_EQ(90, scn2.convert_to_ts());
-  EXPECT_EQ(UINT64_MAX / 4/ 1000, scn_invalid.convert_to_ts());
+  EXPECT_EQ(0, scn_invalid.convert_to_ts());
   SCN scn_convert;
   EXPECT_EQ(OB_INVALID_ARGUMENT, scn_convert.convert_from_ts(46116860184273880));
   EXPECT_EQ(OB_INVALID_ARGUMENT, scn_convert.convert_from_ts(4611686018427388));

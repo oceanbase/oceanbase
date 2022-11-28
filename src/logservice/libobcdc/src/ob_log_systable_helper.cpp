@@ -1395,8 +1395,8 @@ int ObLogSysTableHelper::change_to_next_server_(const int64_t svr_idx, ObLogMySQ
   // update connection
   ObAddr svr;
   MySQLConnConfig conn_config;
-  int mysql_connect_timeout_sec = TCONF.mysql_connect_timeout_sec;
-  int mysql_query_timeout_sec = TCONF.mysql_query_timeout_sec;
+  int mysql_connect_timeout_sec = TCONF.rs_sql_connect_timeout_sec;
+  int mysql_query_timeout_sec = TCONF.rs_sql_query_timeout_sec;
   const bool enable_ssl_client_authentication = (1 == TCONF.ssl_client_authentication);
 
   if (OB_ISNULL(svr_provider_)) {

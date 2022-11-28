@@ -94,7 +94,7 @@ bool ObReplayServiceTask::need_replay_immediately() const
 
 //---------------ObReplayServiceSubmitTask---------------//
 int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
-                                    const palf::SCN &base_log_scn,
+                                    const palf::SCN &base_scn,
                                     PalfHandle *palf_handle,
                                     ObReplayStatus *replay_status)
 {
@@ -105,23 +105,23 @@ int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
     CLOG_LOG(WARN, "invalid argument", K(type_), K(ret), K(replay_status), K(palf_handle));
   } else if (OB_FAIL(palf_handle->seek(base_lsn, iterator_))) {
     CLOG_LOG(WARN, "seek iterator failed", KR(ret), K(type_), K(palf_handle), K(base_lsn));
-  } else if (OB_UNLIKELY(!base_log_scn.is_valid())) {
+  } else if (OB_UNLIKELY(!base_scn.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "base_log_scn is invalid", K(type_), K(base_lsn), K(base_log_scn), KR(ret));
+    CLOG_LOG(ERROR, "base_scn is invalid", K(type_), K(base_lsn), K(base_scn), KR(ret));
   } else {
     replay_status_ = replay_status;
     committed_end_lsn_ = base_lsn;
     next_to_submit_lsn_ = base_lsn;
-    next_to_submit_log_scn_.set_min();
+    next_to_submit_scn_.set_min();
     base_lsn_ = base_lsn;
-    base_log_scn_ = base_log_scn;
+    base_scn_ = base_scn;
     type_ = ObReplayServiceTaskType::SUBMIT_LOG_TASK;
     if (OB_SUCCESS != (tmp_ret = iterator_.next())) {
       // 在没有写入的情况下有可能已经到达边界
       CLOG_LOG(WARN, "iterator next failed", K(iterator_), K(tmp_ret));
     }
     CLOG_LOG(INFO, "submit log task init success", K(type_), K(next_to_submit_lsn_), K(committed_end_lsn_),
-               K(next_to_submit_log_scn_), K(replay_status_), K(ret));
+               K(next_to_submit_scn_), K(replay_status_), K(ret));
   }
   return ret;
 }
@@ -131,9 +131,9 @@ void ObReplayServiceSubmitTask::reset()
   ObLockGuard<ObSpinLock> guard(lock_);
   next_to_submit_lsn_.reset();
   committed_end_lsn_.reset();
-  next_to_submit_log_scn_.reset();
+  next_to_submit_scn_.reset();
   base_lsn_.reset();
-  base_log_scn_.reset();
+  base_scn_.reset();
   revert_cached_replay_task();
   ObReplayServiceTask::reset();
 }
@@ -146,17 +146,17 @@ void ObReplayServiceSubmitTask::destroy()
   ObReplayServiceTask::destroy();
 }
 
-int ObReplayServiceSubmitTask::get_next_to_submit_log_info(LSN &lsn, SCN &log_scn) const
+int ObReplayServiceSubmitTask::get_next_to_submit_log_info(LSN &lsn, SCN &scn) const
 {
   ObLockGuard<ObSpinLock> guard(lock_);
-  return get_next_to_submit_log_info_(lsn, log_scn);
+  return get_next_to_submit_log_info_(lsn, scn);
 }
 
-int ObReplayServiceSubmitTask::get_next_to_submit_log_info_(LSN &lsn, SCN &log_scn) const
+int ObReplayServiceSubmitTask::get_next_to_submit_log_info_(LSN &lsn, SCN &scn) const
 {
   int ret = OB_SUCCESS;
   lsn = next_to_submit_lsn_;
-  log_scn = next_to_submit_log_scn_;
+  scn = next_to_submit_scn_;
   return ret;
 }
 
@@ -180,16 +180,16 @@ int ObReplayServiceSubmitTask::get_base_lsn_(LSN &lsn) const
   return ret;
 }
 
-int ObReplayServiceSubmitTask::get_base_log_scn(SCN &log_scn) const
+int ObReplayServiceSubmitTask::get_base_scn(SCN &scn) const
 {
   ObLockGuard<ObSpinLock> guard(lock_);
-  return get_base_log_scn_(log_scn);
+  return get_base_scn_(scn);
 }
 
-int ObReplayServiceSubmitTask::get_base_log_scn_(SCN &log_scn) const
+int ObReplayServiceSubmitTask::get_base_scn_(SCN &scn) const
 {
   int ret = OB_SUCCESS;
-  log_scn = base_log_scn_;
+  scn = base_scn_;
   return ret;
 }
 
@@ -215,26 +215,26 @@ int ObReplayServiceSubmitTask::update_next_to_submit_lsn(const LSN &lsn)
 }
 
 //更新值可以与记录值相等
-int ObReplayServiceSubmitTask::update_next_to_submit_log_scn_allow_equal(const SCN &log_scn)
+int ObReplayServiceSubmitTask::update_next_to_submit_scn_allow_equal(const SCN &scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(update_next_to_submit_log_scn_allow_equal_(log_scn))) {
-    CLOG_LOG(WARN, "failed to update_next_to_submit_log_scn_allow_equal", KR(ret),
-             K(log_scn), K(next_to_submit_log_scn_));
+  if (OB_FAIL(update_next_to_submit_scn_allow_equal_(scn))) {
+    CLOG_LOG(WARN, "failed to update_next_to_submit_scn_allow_equal", KR(ret),
+             K(scn), K(next_to_submit_scn_));
   } else {
     //do nothing
   }
   return ret;
 }
 
-int ObReplayServiceSubmitTask::update_next_to_submit_log_info(const LSN &lsn, const SCN &log_scn)
+int ObReplayServiceSubmitTask::update_next_to_submit_log_info(const LSN &lsn, const SCN &scn)
 {
   ObLockGuard<ObSpinLock> guard(lock_);
   int ret = OB_SUCCESS;
   if (OB_FAIL(update_next_to_submit_lsn_(lsn))
-      || OB_FAIL(update_next_to_submit_log_scn_(log_scn))) {
-    CLOG_LOG(ERROR, "failed to update_next_to_submit_log_info", KR(ret), K(lsn), K(log_scn),
-             K(next_to_submit_lsn_), K(next_to_submit_log_scn_));
+      || OB_FAIL(update_next_to_submit_scn_(scn))) {
+    CLOG_LOG(ERROR, "failed to update_next_to_submit_log_info", KR(ret), K(lsn), K(scn),
+             K(next_to_submit_lsn_), K(next_to_submit_scn_));
   } else {
     //do nothing
   }
@@ -259,13 +259,13 @@ int ObReplayServiceSubmitTask::update_committed_end_lsn_(const LSN &lsn)
   return ret;
 }
 
-int ObReplayServiceSubmitTask::need_skip(const SCN &log_scn, bool &need_skip)
+int ObReplayServiceSubmitTask::need_skip(const SCN &scn, bool &need_skip)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!base_log_scn_.is_valid())) {
+  if (OB_UNLIKELY(!base_scn_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    need_skip = log_scn < base_log_scn_;
+    need_skip = scn < base_scn_;
   }
   return ret;
 }
@@ -281,10 +281,10 @@ void ObReplayServiceSubmitTask::revert_cached_replay_task()
   }
 }
 
-int ObReplayServiceSubmitTask::get_log(const char *&buffer, int64_t &nbytes, SCN &log_scn,
+int ObReplayServiceSubmitTask::get_log(const char *&buffer, int64_t &nbytes, SCN &scn,
                                        palf::LSN &offset, bool &is_raw_write)
 {
-  return iterator_.get_entry(buffer, nbytes, log_scn, offset, is_raw_write);
+  return iterator_.get_entry(buffer, nbytes, scn, offset, is_raw_write);
 }
 
 int ObReplayServiceSubmitTask::next_log()
@@ -305,30 +305,30 @@ int ObReplayServiceSubmitTask::reset_iterator(PalfHandle &palf_handle, const LSN
   return ret;
 }
 
-int ObReplayServiceSubmitTask::update_next_to_submit_log_scn_(const SCN &log_scn)
+int ObReplayServiceSubmitTask::update_next_to_submit_scn_(const SCN &scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(log_scn <= next_to_submit_log_scn_)) {
+  if (OB_UNLIKELY(scn <= next_to_submit_scn_)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "update_next_to_submit_log_scn invalid argument", K(type_), K(log_scn),
-               K(next_to_submit_log_scn_), K(ret));
+    CLOG_LOG(WARN, "update_next_to_submit_scn invalid argument", K(type_), K(scn),
+               K(next_to_submit_scn_), K(ret));
   } else {
-    next_to_submit_log_scn_ = log_scn;
+    next_to_submit_scn_ = scn;
   }
   return ret;
 }
 
-int ObReplayServiceSubmitTask::update_next_to_submit_log_scn_allow_equal_(const SCN &log_scn)
+int ObReplayServiceSubmitTask::update_next_to_submit_scn_allow_equal_(const SCN &scn)
 {
   int ret = OB_SUCCESS;
-  if (log_scn == next_to_submit_log_scn_) {
+  if (scn == next_to_submit_scn_) {
     // do nothing
-  } else if (OB_UNLIKELY(log_scn < next_to_submit_log_scn_)) {
+  } else if (OB_UNLIKELY(scn < next_to_submit_scn_)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "update_next_to_submit_log_scn_allow_equal_ invalid argument", K(type_), K(log_scn),
-               K(next_to_submit_log_scn_), K(ret));
+    CLOG_LOG(WARN, "update_next_to_submit_scn_allow_equal_ invalid argument", K(type_), K(scn),
+               K(next_to_submit_scn_), K(ret));
   } else {
-    next_to_submit_log_scn_ = log_scn;
+    next_to_submit_scn_ = scn;
   }
   return ret;
 }
@@ -402,7 +402,7 @@ int64_t ObReplayServiceReplayTask::idx() const
   return idx_;
 }
 
-int ObReplayServiceReplayTask::get_min_unreplayed_log_info(LSN &lsn, SCN &log_scn, bool &is_queue_empty)
+int ObReplayServiceReplayTask::get_min_unreplayed_log_info(LSN &lsn, SCN &scn, bool &is_queue_empty)
 {
   int ret = OB_SUCCESS;
   ObLockGuard<ObSpinLock> guard(lock_);
@@ -410,7 +410,7 @@ int ObReplayServiceReplayTask::get_min_unreplayed_log_info(LSN &lsn, SCN &log_sc
   ObLink *top_item = top();
   if (NULL != top_item && NULL != (replay_task = static_cast<ObLogReplayTask *>(top_item))) {
     lsn = replay_task->lsn_;
-    log_scn = replay_task->log_scn_;
+    scn = replay_task->scn_;
     is_queue_empty = false;
   } else {
     is_queue_empty = true;
@@ -444,7 +444,7 @@ int64_t ObLogReplayBuffer::get_replay_ref()
 int ObLogReplayTask::init(const share::ObLSID &ls_id,
                           const ObLogBaseHeader &header,
                           const LSN &lsn,
-                          const SCN &log_scn,
+                          const SCN &scn,
                           const int64_t log_size,
                           const bool is_raw_write,
                           void *log_buf)
@@ -452,19 +452,19 @@ int ObLogReplayTask::init(const share::ObLSID &ls_id,
   int ret = OB_SUCCESS;
   if (!ls_id.is_valid()
       || !lsn.is_valid()
-      || !log_scn.is_valid()
+      || !scn.is_valid()
       || log_size < 0
       || NULL == log_buf
       || !header.is_valid())
   {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(ERROR, "ObLogReplayTask init invalid argument", K(ls_id), K(lsn), K(log_scn),
+    CLOG_LOG(ERROR, "ObLogReplayTask init invalid argument", K(ls_id), K(lsn), K(scn),
              K(log_size), KP(log_buf), K(header));
   } else {
     ls_id_ = ls_id;
     log_type_ = header.get_log_type();
     lsn_ = lsn;
-    log_scn_ = log_scn;
+    scn_ = scn;
     is_pre_barrier_ = header.need_pre_replay_barrier();
     is_post_barrier_ = header.need_post_replay_barrier();
     log_size_ = log_size;
@@ -483,7 +483,7 @@ int ObLogReplayTask::init(const share::ObLSID &ls_id,
 void ObLogReplayTask::reset()
 {
   ls_id_.reset();
-  log_scn_.reset();
+  scn_.reset();
   lsn_.reset();
   log_size_ = 0;
   is_pre_barrier_ = false;
@@ -500,7 +500,7 @@ bool ObLogReplayTask::is_valid()
 {
   bool ret = false;
   ret = ls_id_.is_valid()
-        && log_scn_.is_valid()
+        && scn_.is_valid()
         && lsn_.is_valid()
         && log_size_ > 0
         && NULL != log_buf_;
@@ -510,7 +510,7 @@ bool ObLogReplayTask::is_valid()
 void ObLogReplayTask::shallow_copy(const ObLogReplayTask &other)
 {
   ls_id_ = other.ls_id_;
-  log_scn_ = other.log_scn_;
+  scn_ = other.scn_;
   lsn_ = other.lsn_;
   log_size_ = other.log_size_;
   is_pre_barrier_ = other.is_pre_barrier_;
@@ -634,7 +634,7 @@ void ObReplayStatus::destroy()
 }
 
 //不可重入,如果失败需要外部手动disable
-int ObReplayStatus::enable(const LSN &base_lsn, const SCN &base_log_scn)
+int ObReplayStatus::enable(const LSN &base_lsn, const SCN &base_scn)
 {
   int ret = OB_SUCCESS;
   if (is_enabled()) {
@@ -642,17 +642,17 @@ int ObReplayStatus::enable(const LSN &base_lsn, const SCN &base_log_scn)
     CLOG_LOG(WARN, "replay status already enable", K(ret));
   } else {
     WLockGuard wlock_guard(rwlock_);
-    if (OB_FAIL(enable_(base_lsn, base_log_scn))) {
-      CLOG_LOG(WARN, "enable replay status failed", K(ret), K(base_lsn), K(base_log_scn), K(ls_id_));
+    if (OB_FAIL(enable_(base_lsn, base_scn))) {
+      CLOG_LOG(WARN, "enable replay status failed", K(ret), K(base_lsn), K(base_scn), K(ls_id_));
     } else {
-      CLOG_LOG(INFO, "enable replay status success", K(ret), K(base_lsn), K(base_log_scn), K(ls_id_));
+      CLOG_LOG(INFO, "enable replay status success", K(ret), K(base_lsn), K(base_scn), K(ls_id_));
     }
   }
   return ret;
 }
 
 // 提交当前的submit_log_task并注册回调
-int ObReplayStatus::enable_(const LSN &base_lsn, const SCN &base_log_scn)
+int ObReplayStatus::enable_(const LSN &base_lsn, const SCN &base_scn)
 {
   int ret = OB_SUCCESS;
   // 处理submit_task需要先设置enable状态
@@ -662,7 +662,7 @@ int ObReplayStatus::enable_(const LSN &base_lsn, const SCN &base_log_scn)
     //针对reuse场景的防御检查
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "remain pending task when enable replay status", K(ret), KPC(this));
-  } else if (OB_FAIL(submit_log_task_.init(base_lsn, base_log_scn, &palf_handle_, this))) {
+  } else if (OB_FAIL(submit_log_task_.init(base_lsn, base_scn, &palf_handle_, this))) {
     CLOG_LOG(WARN, "failed to init submit_log_task", K(ret), K(&palf_handle_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < REPLAY_TASK_QUEUE_SIZE; ++i) {
@@ -900,10 +900,10 @@ int ObReplayStatus::get_ls_id(share::ObLSID &id)
   return ret;
 }
 
-int ObReplayStatus::get_min_unreplayed_log_info(LSN &lsn, SCN &log_scn)
+int ObReplayStatus::get_min_unreplayed_log_info(LSN &lsn, SCN &scn)
 {
   int ret = OB_SUCCESS;
-  SCN base_log_scn = SCN::min_scn();
+  SCN base_scn = SCN::min_scn();
   do {
     RLockGuard rlock_guard(rwlock_);
     if (IS_NOT_INIT) {
@@ -917,16 +917,16 @@ int ObReplayStatus::get_min_unreplayed_log_info(LSN &lsn, SCN &log_scn)
     }
   } while (0);
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(submit_log_task_.get_next_to_submit_log_info(lsn, log_scn))) {
+    if (OB_FAIL(submit_log_task_.get_next_to_submit_log_info(lsn, scn))) {
       ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "get_next_to_submit_log_scn failed", K(ret));
-    } else if (OB_FAIL(submit_log_task_.get_base_log_scn(base_log_scn))) {
-      CLOG_LOG(ERROR, "get_base_log_scn failed", K(ret));
-    } else if (log_scn <= base_log_scn) {
+      CLOG_LOG(ERROR, "get_next_to_submit_scn failed", K(ret));
+    } else if (OB_FAIL(submit_log_task_.get_base_scn(base_scn))) {
+      CLOG_LOG(ERROR, "get_base_scn failed", K(ret));
+    } else if (scn <= base_scn) {
       //拉到的日志尚未超过过滤点
-      log_scn = base_log_scn;
+      scn = base_scn;
       if (palf_reach_time_interval(5 * 1000 * 1000, get_log_info_debug_time_)) {
-        CLOG_LOG(INFO, "get_min_unreplayed_log_info in skip state", K(lsn), K(log_scn), KPC(this));
+        CLOG_LOG(INFO, "get_min_unreplayed_log_info in skip state", K(lsn), K(scn), KPC(this));
       }
     } else {
       LSN queue_lsn;
@@ -937,13 +937,13 @@ int ObReplayStatus::get_min_unreplayed_log_info(LSN &lsn, SCN &log_scn)
           CLOG_LOG(ERROR, "task_queue get_min_unreplayed_log_info failed", K(ret), K(task_queues_[i]));
         } else if (!is_queue_empty
                   && queue_lsn < lsn
-                  && queue_scn < log_scn) {
+                  && queue_scn < scn) {
           lsn = queue_lsn;
-          log_scn = queue_scn;
+          scn = queue_scn;
         }
       }
       if (palf_reach_time_interval(5 * 1000 * 1000, get_log_info_debug_time_)) {
-        CLOG_LOG(INFO, "get_min_unreplayed_log_info", K(lsn), K(log_scn), KPC(this));
+        CLOG_LOG(INFO, "get_min_unreplayed_log_info", K(lsn), K(scn), KPC(this));
       }
     }
   }
@@ -956,10 +956,10 @@ int ObReplayStatus::get_min_unreplayed_lsn(LSN &lsn)
   return get_min_unreplayed_log_info(lsn, unused_scn);
 }
 
-int ObReplayStatus::get_min_unreplayed_log_scn(SCN &log_scn)
+int ObReplayStatus::get_min_unreplayed_scn(SCN &scn)
 {
   LSN unused_lsn;
-  return get_min_unreplayed_log_info(unused_lsn, log_scn);
+  return get_min_unreplayed_log_info(unused_lsn, scn);
 }
 
 int ObReplayStatus::get_replay_process(int64_t &replayed_log_size,
@@ -1230,7 +1230,7 @@ int ObReplayStatus::stat(LSReplayStat &stat) const
     stat.enabled_ = is_enabled_;
     stat.pending_cnt_ = pending_task_count_;
     if (OB_FAIL(submit_log_task_.get_next_to_submit_log_info(stat.unsubmitted_lsn_,
-                                                             stat.unsubmitted_log_scn_))) {
+                                                             stat.unsubmitted_scn_))) {
       CLOG_LOG(WARN, "get_next_to_submit_log_info failed", KPC(this), K(ret));
     } else if (OB_FAIL(submit_log_task_.get_committed_end_lsn(stat.end_lsn_))) {
       CLOG_LOG(WARN, "get_committed_end_lsn failed", KPC(this), K(ret));

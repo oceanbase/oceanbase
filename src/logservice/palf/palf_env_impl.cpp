@@ -630,7 +630,7 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
                && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
       ret_code_ = ret;
       bool_ret = false;
-      PALF_LOG(ERROR, "LogGetRecycableFileCandidate get_min_block_id_min_ts_ns failed", K(ret), K(palf_id));
+      PALF_LOG(WARN, "LogGetRecycableFileCandidate get_min_block_id_min_scn failed", K(ret), K(palf_id));
       // recycable conditions:
       // 1. current palf_handle_impl must have some block can be recycable;
       // 2. current palf_handle_impl must have older blocks(at least two blocks).

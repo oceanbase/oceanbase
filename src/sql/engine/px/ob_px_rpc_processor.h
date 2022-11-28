@@ -120,8 +120,9 @@ public:
   ObDealWithRpcTimeoutCall(common::ObAddr addr,
       ObQueryRetryInfo *retry_info,
       int64_t timeout_ts,
-      common::ObCurTraceId::TraceId &trace_id) : addr_(addr), retry_info_(retry_info),
-      timeout_ts_(timeout_ts), trace_id_(trace_id), ret_(common::OB_TIMEOUT) {}
+      common::ObCurTraceId::TraceId &trace_id,
+      bool retry) : addr_(addr), retry_info_(retry_info),
+      timeout_ts_(timeout_ts), trace_id_(trace_id), ret_(common::OB_TIMEOUT), can_retry_(retry) {}
   ~ObDealWithRpcTimeoutCall() = default;
   void operator() (hash::HashMapPair<ObInterruptibleTaskID,
       ObInterruptCheckerNode *> &entry);
@@ -132,6 +133,7 @@ public:
   int64_t timeout_ts_;
   common::ObCurTraceId::TraceId trace_id_;
   int ret_;
+  bool can_retry_;
 };
 
 class ObFastInitSqcCB

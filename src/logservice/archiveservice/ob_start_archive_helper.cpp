@@ -33,7 +33,7 @@ using namespace oceanbase::palf;
 StartArchiveHelper::StartArchiveHelper(const ObLSID &id,
     const uint64_t tenant_id,
     const ArchiveWorkStation &station,
-    const SCN &min_log_scn,
+    const SCN &min_scn,
     const int64_t piece_interval,
     const SCN &genesis_scn,
     const int64_t base_piece_id,
@@ -42,7 +42,7 @@ StartArchiveHelper::StartArchiveHelper(const ObLSID &id,
     tenant_id_(tenant_id),
     station_(station),
     log_gap_exist_(false),
-    min_log_scn_(min_log_scn),
+    min_scn_(min_scn),
     piece_interval_(piece_interval),
     genesis_scn_(genesis_scn),
     base_piece_id_(base_piece_id),
@@ -60,7 +60,7 @@ StartArchiveHelper::~StartArchiveHelper()
   tenant_id_ = OB_INVALID_TENANT_ID;
   station_.reset();
   log_gap_exist_ = false;
-  min_log_scn_.reset();
+  min_scn_.reset();
   piece_interval_ = 0;
   genesis_scn_.reset();
   base_piece_id_ = 0;
@@ -93,7 +93,7 @@ int StartArchiveHelper::handle()
 
   if (OB_UNLIKELY(! id_.is_valid()
         || ! station_.is_valid()
-        || ! min_log_scn_.is_valid()
+        || ! min_scn_.is_valid()
         || NULL == persist_mgr_)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argumetn", K(ret), K(id_), K(station_), K(persist_mgr_));
@@ -161,7 +161,7 @@ int StartArchiveHelper::locate_round_start_archive_point_()
     // 这是为开启归档后创建日志流, 为归档任何日志即回收, 有足够大的piece_id
     // piece_id既是归档进度表主键, 也是统计归档进度基准不能回退
     if (log_gap) {
-      ARCHIVE_LOG(ERROR, "locate round start archive point, log gap exist", K(id_), K(min_log_scn_));
+      ARCHIVE_LOG(ERROR, "locate round start archive point, log gap exist", K(id_), K(min_scn_));
       log_gap_exist_ = log_gap;
     } else if (OB_FAIL(cal_archive_file_id_offset_(lsn, OB_INVALID_ARCHIVE_FILE_ID, 0))) {
       ARCHIVE_LOG(WARN, "cal archive file id and offset failed", K(ret), K_(id));
@@ -194,10 +194,10 @@ int StartArchiveHelper::get_local_base_lsn_(palf::LSN &lsn, bool &log_gap)
   palf::PalfHandleGuard guard;
   if (OB_FAIL(MTL(logservice::ObLogService*)->open_palf(id_, guard))) {
     ARCHIVE_LOG(WARN, "open palf failed", K(ret), KPC(this));
-  } else if (OB_FAIL(guard.locate_by_scn_coarsely(min_log_scn_, lsn))) {
+  } else if (OB_FAIL(guard.locate_by_scn_coarsely(min_scn_, lsn))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_EAGAIN;
-      ARCHIVE_LOG(WARN, "no log bigger than min_log_scn_, wait next turn", K(ret), K_(id), K_(min_log_scn));
+      ARCHIVE_LOG(WARN, "no log bigger than min_scn_, wait next turn", K(ret), K_(id), K_(min_scn));
     } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = guard.get_begin_lsn(lsn))) {
@@ -239,15 +239,11 @@ int StartArchiveHelper::get_local_start_scn_(SCN &scn)
   if (OB_FAIL(persist_mgr_->get_ls_create_scn(id_, create_scn))) {
     ARCHIVE_LOG(WARN, "get ls create scn failed", K(ret), K(id_));
   } else {
-    SCN last_scn;
-    if (OB_FAIL(last_scn.convert_for_gts(min_log_scn_.get_val_for_lsn_allocator() - 1))) {
-      ARCHIVE_LOG(WARN, "convert_for_gts failed", K(ret), K(id_), K(min_log_scn_));
-    } else {
-      scn = create_scn > last_scn ? create_scn : last_scn;
-      if (!scn.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        ARCHIVE_LOG(WARN, "scn is invalid", K(ret), K(id_), K(scn));
-      }
+    SCN last_scn = palf::SCN::minus(min_scn_, 1);
+    scn = create_scn > last_scn ? create_scn : last_scn;
+    if (!scn.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      ARCHIVE_LOG(WARN, "scn is invalid", K(ret), K(id_), K(scn));
     }
   }
   return ret;

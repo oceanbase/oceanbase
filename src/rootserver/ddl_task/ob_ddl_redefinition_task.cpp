@@ -1297,7 +1297,7 @@ int ObDDLRedefinitionTask::check_health()
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("data table or dest table not exist", K(ret), K(is_source_table_exist), K(is_dest_table_exist));
     }
-    if (OB_FAIL(ret) && !ObIDDLTask::error_need_retry(ret)) {
+    if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
       const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
       switch_status(new_status, ret);

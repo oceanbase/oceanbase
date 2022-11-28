@@ -109,40 +109,40 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
     switch (req.cmd_type_) {
       case CHANGE_REPLICA_NUM_CMD:
         ret = palf_handle_->change_replica_num(req.curr_member_list_, req.curr_replica_num_,
-            req.new_replica_num_, req.timeout_ns_);
+            req.new_replica_num_, req.timeout_us_);
         break;
       case ADD_MEMBER_CMD:
-        ret = palf_handle_->add_member(req.added_member_, req.new_replica_num_, req.timeout_ns_);
+        ret = palf_handle_->add_member(req.added_member_, req.new_replica_num_, req.timeout_us_);
         break;
       case ADD_ARB_MEMBER_CMD:
         ret = palf_handle_->add_arb_member(req.added_member_, req.new_replica_num_,
-            req.timeout_ns_);
+            req.timeout_us_);
         break;
       case REMOVE_MEMBER_CMD:
         ret = palf_handle_->remove_member(req.removed_member_, req.new_replica_num_,
-            req.timeout_ns_);
+            req.timeout_us_);
         break;
       case REMOVE_ARB_MEMBER_CMD:
         ret = palf_handle_->remove_arb_member(req.removed_member_, req.new_replica_num_,
-            req.timeout_ns_);
+            req.timeout_us_);
         break;
       case REPLACE_MEMBER_CMD:
-        ret = palf_handle_->replace_member(req.added_member_, req.removed_member_, req.timeout_ns_);
+        ret = palf_handle_->replace_member(req.added_member_, req.removed_member_, req.timeout_us_);
         break;
       case REPLACE_ARB_MEMBER_CMD:
-        ret = palf_handle_->replace_arb_member(req.added_member_, req.removed_member_, req.timeout_ns_);
+        ret = palf_handle_->replace_arb_member(req.added_member_, req.removed_member_, req.timeout_us_);
         break;
       case ADD_LEARNER_CMD:
-        ret = palf_handle_->add_learner(req.added_member_, req.timeout_ns_);
+        ret = palf_handle_->add_learner(req.added_member_, req.timeout_us_);
         break;
       case REMOVE_LEARNER_CMD:
-        ret = palf_handle_->remove_learner(req.removed_member_, req.timeout_ns_);
+        ret = palf_handle_->remove_learner(req.removed_member_, req.timeout_us_);
         break;
       case SWITCH_TO_ACCEPTOR_CMD:
-        ret = palf_handle_->switch_learner_to_acceptor(req.removed_member_, req.timeout_ns_);
+        ret = palf_handle_->switch_learner_to_acceptor(req.removed_member_, req.timeout_us_);
         break;
       case SWITCH_TO_LEARNER_CMD:
-        ret = palf_handle_->switch_acceptor_to_learner(req.removed_member_, req.timeout_ns_);
+        ret = palf_handle_->switch_acceptor_to_learner(req.removed_member_, req.timeout_us_);
         break;
       default:
         break;

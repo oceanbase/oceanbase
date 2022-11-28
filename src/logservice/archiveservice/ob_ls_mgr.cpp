@@ -450,12 +450,12 @@ int ObArchiveLSMgr::add_task_(const ObLSID &id,
     const int64_t epoch)
 {
   int ret = OB_SUCCESS;
-  const SCN &min_log_scn = round_start_scn_;
+  const SCN &min_scn = round_start_scn_;
 
   //TODO fake lease
   ObArchiveLease lease(epoch, 0, 0);
   ArchiveWorkStation station(key, lease);
-  StartArchiveHelper helper(id, tenant_id_, station, min_log_scn, piece_interval_,
+  StartArchiveHelper helper(id, tenant_id_, station, min_scn, piece_interval_,
       genesis_scn_, base_piece_id_, persist_mgr_);
   if (OB_FAIL(helper.handle())) {
     ARCHIVE_LOG(WARN, "start archive helper handle failed", KR(ret), K(helper));

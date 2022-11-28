@@ -97,7 +97,7 @@ public:
   TO_STRING_KV(KP(this), K_(self), K_(palf_id), "role", role_to_string(role_),                         \
       "state", replica_state_to_string(state_), K_(prepare_meta), K_(leader), K_(leader_epoch),        \
       K_(is_sync_enabled), K_(pending_end_lsn), K_(scan_disk_log_finished), K_(last_check_start_id),   \
-      K_(reconfirm_start_time_ns), KP_(palf_role_change_cb));
+      K_(reconfirm_start_time_us), KP_(palf_role_change_cb));
 private:
   bool check_role_and_state_(const common::ObRole &role, const ObReplicaState &state) const;
   void update_role_and_state_(const common::ObRole &new_role, const ObReplicaState &new_state);
@@ -169,9 +169,9 @@ private:
   common::ObAddr leader_;
   int64_t leader_epoch_;
   int64_t last_check_start_id_;
-  int64_t last_check_start_id_time_ns_;
+  int64_t last_check_start_id_time_us_;
   int64_t last_check_pending_replay_cnt_;
-  int64_t reconfirm_start_time_ns_;
+  int64_t reconfirm_start_time_us_;
   int64_t check_sync_enabled_time_;
   int64_t check_reconfirm_timeout_time_;
   mutable int64_t check_follower_pending_warn_time_;

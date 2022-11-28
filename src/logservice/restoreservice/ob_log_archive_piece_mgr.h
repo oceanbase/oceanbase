@@ -30,7 +30,7 @@ namespace logservice
 // In archive destination, logs are organized inner rounds and pieces.
 //
 // Round is a continuous interval of all log streams, while piece is an interval of a specified length of time
-// Through parsing rounds and pieces, locate the specified log with the log_scn of its previous log
+// Through parsing rounds and pieces, locate the specified log with the scn of its previous log
 //
 // As rounds may be continuous with previous one, forward round is necessary.
 
@@ -47,7 +47,7 @@ public:
 
   void reset();
 
-  int get_piece(const palf::SCN &pre_log_scn,
+  int get_piece(const palf::SCN &pre_scn,
       const palf::LSN &start_lsn,
       int64_t &dest_id,
       int64_t &round_id,
@@ -169,7 +169,7 @@ private:
   };
 
 private:
-  int get_piece_(const palf::SCN &log_scn,
+  int get_piece_(const palf::SCN &scn,
       const palf::LSN &lsn,
       const int64_t file_id,
       int64_t &dest_id,
@@ -185,10 +185,10 @@ private:
   virtual int get_round_range_();
 
   // 根据时间戳定位round
-  virtual int get_round_(const palf::SCN &log_scn);
+  virtual int get_round_(const palf::SCN &scn);
 
   // 如果round不满足数据需求, 支持切round
-  int switch_round_if_need_(const palf::SCN &log_scn, const palf::LSN &lsn);
+  int switch_round_if_need_(const palf::SCN &scn, const palf::LSN &lsn);
 
   void check_if_switch_round_(const palf::LSN &lsn, RoundOp &op);
   bool is_max_round_done_(const palf::LSN &lsn) const;
@@ -210,11 +210,11 @@ private:
   int backward_round_();
 
   // 当piece不匹配, 需要切piece
-  int switch_piece_if_need_(const int64_t file_id, const palf::SCN &log_scn, const palf::LSN &lsn);
+  int switch_piece_if_need_(const int64_t file_id, const palf::SCN &scn, const palf::LSN &lsn);
   void check_if_switch_piece_(const int64_t file_id, const palf::LSN &lsn, PieceOp &op);
 
   // load当前piece信息, 包括piece内文件范围, LSN范围
-  int get_cur_piece_info_(const palf::SCN &log_scn, const palf::LSN &lsn);
+  int get_cur_piece_info_(const palf::SCN &scn, const palf::LSN &lsn);
   virtual int get_piece_meta_info_(const int64_t piece_id);
   int get_ls_inner_piece_info_(const share::ObLSID &id, const int64_t dest_id, const int64_t round_id,
       const int64_t piece_id, palf::LSN &min_lsn, palf::LSN &max_lsn, bool &exist);
@@ -222,9 +222,9 @@ private:
 
   int forward_piece_();
   int backward_piece_();
-  int cal_load_piece_id_(const palf::SCN &log_scn, int64_t &piece_id);
+  int cal_load_piece_id_(const palf::SCN &scn, int64_t &piece_id);
 
-  int64_t cal_piece_id_(const palf::SCN &log_scn) const;
+  int64_t cal_piece_id_(const palf::SCN &scn) const;
   virtual int get_min_lsn_in_piece_();
   int64_t cal_archive_file_id_(const palf::LSN &lsn) const;
 

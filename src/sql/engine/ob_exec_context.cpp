@@ -121,7 +121,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     parent_ctx_(nullptr),
     nested_level_(0),
     is_ps_prepare_stage_(false),
-    register_op_id_(OB_INVALID_ID)
+    register_op_id_(OB_INVALID_ID),
+    tmp_alloc_used_(false)
 {
 }
 
@@ -294,6 +295,7 @@ void ObExecContext::destroy_eval_allocator()
 {
   eval_res_allocator_.reset();
   eval_tmp_allocator_.reset();
+  tmp_alloc_used_ = false;
 }
 
 int ObExecContext::get_temp_expr_eval_ctx(const ObTempExpr &temp_expr,

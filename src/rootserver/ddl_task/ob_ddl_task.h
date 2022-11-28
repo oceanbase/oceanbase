@@ -296,6 +296,12 @@ public:
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
       K_(sys_task_id), K_(err_code_occurence_cnt));
 protected:
+  virtual bool is_error_need_retry(const int ret_code)
+  {
+    return !share::ObIDDLTask::in_ddl_retry_black_list(ret_code) && (share::ObIDDLTask::in_ddl_retry_white_list(ret_code)
+             || MAX_ERR_TOLERANCE_CNT > ++err_code_occurence_cnt_);
+  }
+protected:
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
   bool is_inited_;
   bool need_retry_;

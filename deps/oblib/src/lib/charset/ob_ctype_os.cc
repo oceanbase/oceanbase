@@ -48,7 +48,7 @@ ob_convert_internal(char *to, uint32 to_length,
       error_num++;
     } else {
       // Not enough characters
-      if (!trim_incomplete_tail && cnvres != OB_CS_TOOSMALL) {
+      if (!trim_incomplete_tail && (const uchar*) from < from_end) {
         error_num++;
         from++;
         wc= replaced_char;

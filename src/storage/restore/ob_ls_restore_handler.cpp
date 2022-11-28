@@ -2351,6 +2351,17 @@ ObLSRestoreResultMgr::ObLSRestoreResultMgr()
 {
 }
 
+bool ObLSRestoreResultMgr::can_retry() const
+{
+  int64_t max_retry_cnt = OB_MAX_RESTORE_RETRY_TIMES;
+#ifdef ERRSIM
+  if (0 != GCONF.errsim_max_restore_retry_count) {
+    max_retry_cnt = GCONF.errsim_max_restore_retry_count;
+  }
+#endif
+  return retry_cnt_ < max_retry_cnt &&  can_retrieable_err_(result_);
+}
+
 bool ObLSRestoreResultMgr::is_met_retry_time_interval()
 {
   lib::ObMutexGuard guard(mtx_);
@@ -2406,6 +2417,8 @@ bool ObLSRestoreResultMgr::can_retrieable_err_(const int err) const
     case OB_NOT_SUPPORTED :
     case OB_TENANT_HAS_BEEN_DROPPED :
     case OB_SERVER_OUTOF_DISK_SPACE :
+    case OB_BACKUP_FILE_NOT_EXIST :
+    case OB_ARCHIVE_ROUND_NOT_CONTINUOUS :
     case OB_HASH_NOT_EXIST:
       bret = false;
       break;

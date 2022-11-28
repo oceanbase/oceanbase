@@ -2537,6 +2537,7 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
   ObLS *ls = nullptr;
   ObTabletMigrationDag *tablet_migration_dag = nullptr;
   observer::ObIMetaReport *reporter = GCTX.ob_service_;
+  const ObMigrationTabletParam *src_tablet_meta = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2546,7 +2547,9 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
     LOG_WARN("failed to alloc tablet copy finish task", K(ret), KPC(ctx_));
   } else if (OB_FAIL(tablet_migration_dag->get_ls(ls))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(tablet_copy_finish_task->init(copy_tablet_ctx_->tablet_id_, ls, reporter))) {
+  } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_tablet_meta(copy_tablet_ctx_->tablet_id_, src_tablet_meta))) {
+    LOG_WARN("failed to get src tablet meta", K(ret), KPC(copy_tablet_ctx_));
+  } else if (OB_FAIL(tablet_copy_finish_task->init(copy_tablet_ctx_->tablet_id_, ls, reporter, src_tablet_meta))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   }
   return ret;

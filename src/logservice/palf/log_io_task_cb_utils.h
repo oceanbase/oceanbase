@@ -27,16 +27,16 @@ namespace palf
 struct FlushLogCbCtx
 {
   FlushLogCbCtx();
-  FlushLogCbCtx(const int64_t log_id, const SCN &log_scn, const LSN &lsn,
+  FlushLogCbCtx(const int64_t log_id, const SCN &scn, const LSN &lsn,
                 const int64_t &log_proposal_id, const int64_t total_len,
                 const int64_t &curr_log_proposal_id, const int64_t begine_ts);
   ~FlushLogCbCtx();
-  bool is_valid() const { return true == lsn_.is_valid() && true == log_scn_.is_valid(); }
+  bool is_valid() const { return true == lsn_.is_valid() && true == scn_.is_valid(); }
   void reset();
   FlushLogCbCtx &operator=(const FlushLogCbCtx &flush_log_cb_ctx);
-  TO_STRING_KV(K_(log_id), K_(log_scn), K_(lsn), K_(log_proposal_id), K_(total_len), K_(curr_proposal_id), K_(begin_ts));
+  TO_STRING_KV(K_(log_id), K_(scn), K_(lsn), K_(log_proposal_id), K_(total_len), K_(curr_proposal_id), K_(begin_ts));
   int64_t log_id_;
-  SCN log_scn_;
+  SCN scn_;
   LSN lsn_;
   int64_t log_proposal_id_;
   int64_t total_len_;

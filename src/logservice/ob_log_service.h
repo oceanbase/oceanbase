@@ -94,7 +94,7 @@ public:
   // @param [in] id，日志流标识符
   // @param [in] replica_type，日志流的副本类型
   // @param [in] tenant_role, 租户角色, 以此决定Palf使用模式(APPEND/RAW_WRITE)
-  // @param [in] create_ts, 日志流创建时间, 保证日志流产生的日志都大于该时间
+  // @param [in] create_scn, 日志流创建scn, 保证日志流产生的日志都大于该scn
   // @param [in] allow_log_sync, 是否允许同步日志, 迁移支持先加 learner 后移除
   // @param [out] log_handler，新建日志流以ObLogHandler形式返回，保证上层使用日志流时的生命周期
   // @param [out] restore_handler，新建日志流以ObLogRestoreHandler形式返回，用于备库同步日志
@@ -106,13 +106,6 @@ public:
                 ObLogHandler &log_handler,
                 ObLogRestoreHandler &restore_handler);
 
-  int create_ls(const share::ObLSID &id,
-                const common::ObReplicaType &replica_type,
-                const share::ObTenantRole &tenant_role,
-                const int64_t create_ts,
-                const bool allow_log_sync,
-                ObLogHandler &log_handler,
-                ObLogRestoreHandler &restore_handler);
   //--日志流相关接口--
   //新建日志流接口，该接口会创建日志流对应的目录，新建一个以PalfBaeInfo为日志基点的日志流。
   //其中包括生成并初始化对应的ObReplayStatus结构

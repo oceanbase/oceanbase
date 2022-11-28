@@ -44,7 +44,7 @@ ObAdminParserLogEntry::ObAdminParserLogEntry(const LogEntry &entry,
                                              const LSN lsn,
                                              const ObAdminMutatorStringArg &str_arg)
     : buf_(entry.get_data_buf()), buf_len_(entry.get_data_len()), pos_(0),
-    log_ts_(entry.get_log_scn().get_val_for_lsn_allocator()), block_id_(block_id), lsn_(lsn)
+    scn_val_(entry.get_scn().get_val_for_lsn_allocator()), block_id_(block_id), lsn_(lsn)
 {
   str_arg_ = str_arg;
 }
@@ -119,8 +119,8 @@ int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block)
       }
       str_arg_.writer_ptr_->dump_key("TxID");
       str_arg_.writer_ptr_->dump_int64(tx_id);
-      str_arg_.writer_ptr_->dump_key("log_ts");
-      str_arg_.writer_ptr_->dump_int64(log_ts_);
+      str_arg_.writer_ptr_->dump_key("scn");
+      str_arg_.writer_ptr_->dump_int64(scn_val_);
       str_arg_.writer_ptr_->dump_key("TxBlockHeader");
       str_arg_.writer_ptr_->dump_string(to_cstring(tx_block_header));
       has_dumped_tx_id = true;
@@ -139,14 +139,14 @@ int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block)
           //filter_format with valid tablet_id only cares redo log
           if (tx_log_type == transaction::ObTxLogType::TX_REDO_LOG) {
             if (OB_FAIL(parse_trans_redo_log_(tx_log_block, tx_id, has_dumped_tx_id))) {
-              LOG_WARN("failed to parse_trans_redo_log_", K(ret), K(str_arg_), K(tx_id), K(log_ts_));
+              LOG_WARN("failed to parse_trans_redo_log_", K(ret), K(str_arg_), K(tx_id), K(scn_val_));
             }
           } else { /*do nothing*/}
         } else {
           switch (tx_log_type) {
             case transaction::ObTxLogType::TX_REDO_LOG: {
               if (OB_FAIL(parse_trans_redo_log_(tx_log_block, tx_id, has_dumped_tx_id))) {
-                LOG_WARN("failed to parse_trans_redo_log_", K(ret), K(str_arg_), K(tx_id), K(log_ts_));
+                LOG_WARN("failed to parse_trans_redo_log_", K(ret), K(str_arg_), K(tx_id), K(scn_val_));
               }
               break;
             }
@@ -570,7 +570,7 @@ int ObAdminParserLogEntry::dump_tx_id_ts_(ObAdminLogDumperInterface *writer_ptr,
     writer_ptr->dump_key("TxID");
     writer_ptr->dump_int64(tx_id);
     writer_ptr->dump_key("log_ts");
-    writer_ptr->dump_int64(log_ts_);
+    writer_ptr->dump_int64(scn_val_);
     has_dumped_tx_id = true;
   }
   return ret;
@@ -588,8 +588,8 @@ int ObAdminParserLogEntry::parse_trans_redo_log_(ObTxLogBlock &tx_log_block,
   str_arg_.log_stat_->total_tx_redo_log_count_++;
   if (OB_FAIL(tx_log_block.deserialize_log_body(redolog))) {
     LOG_WARN("tx_log_block.deserialize_log_body failed", K(ret), K(redolog));
-  } else if (OB_FAIL(scn.convert_for_lsn_allocator(log_ts_))) {
-    LOG_WARN("failed to convert", K(ret), K(log_ts_));
+  } else if (OB_FAIL(scn.convert_for_lsn_allocator(scn_val_))) {
+    LOG_WARN("failed to convert", K(ret), K(scn_val_));
   } else if (OB_FAIL(redolog.ob_admin_dump(&mmi, str_arg_, block_id_, lsn_, tx_id, scn, has_dumped_tx_id))) {
     LOG_WARN("get mutator json string failed", K(block_id_), K(lsn_), K(tx_id), K(ret));
   } else {/*do nothing*/}

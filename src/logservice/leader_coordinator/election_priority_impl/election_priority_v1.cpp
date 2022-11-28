@@ -91,9 +91,6 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, palf::SCN &scn)
     COORDINATOR_LOG_(WARN, "open_palf failed");
   } else if (OB_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
     COORDINATOR_LOG_(WARN, "get_access_mode failed");
-//  } else if (palf::AccessMode::APPEND != access_mode) {
-//    // Set log_ts to 0 when current access mode is not APPEND.
-//    log_ts = 0;
     common::ObRole role;
     int64_t unused_pid = -1;
     palf::SCN min_unreplay_scn;
@@ -102,15 +99,20 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, palf::SCN &scn)
     } else if (OB_FAIL(palf_handle_guard.get_max_scn(scn))) {
       COORDINATOR_LOG_(WARN, "get_max_scn failed");
     } else if (FOLLOWER == role) {
-      if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_log_scn(ls_id, min_unreplay_scn))) {
+      if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_scn(ls_id, min_unreplay_scn))) {
         COORDINATOR_LOG_(WARN, "failed to get_min_unreplayed_scn");
         ret = OB_SUCCESS;
-      } else if (SCN::minus(min_unreplay_scn, 1) < scn) {
+      } else if (!min_unreplay_scn.is_valid_and_not_min()) {
+        scn.set_min();
+      } else if (palf::SCN::minus(min_unreplay_scn, 1) < scn) {
         // For restore case, min_unreplay_scn may be larger than max_ts.
-        scn = SCN::minus(min_unreplay_scn, 1) ;
+        scn = palf::SCN::minus(min_unreplay_scn, 1) ;
       } else {}
     } else {}
     COORDINATOR_LOG_(TRACE, "get_scn_ finished", K(role), K(min_unreplay_scn), K(scn));
+    if (OB_SUCC(ret) && !scn.is_valid()) {
+      scn.set_min();
+    }
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -124,7 +126,7 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
   ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
   ObFailureDetector* detector = MTL(ObFailureDetector*);
   LsElectionReferenceInfo election_reference_info;
-  palf::SCN scn;
+  palf::SCN scn = palf::SCN::min_scn();
   if (OB_ISNULL(coordinator) || OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(ERROR, "unexpected nullptr");
@@ -311,11 +313,19 @@ int PriorityV1::compare_scn_(int &ret, const PriorityV1&rhs) const
 {
   int compare_result = 0;
   if (OB_SUCC(ret)) {
-    if (std::max(scn_.value_, rhs.scn_.value_).convert_to_ts() - std::min(scn_.value_, rhs.scn_.value_).convert_to_ts() <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_US) {
+    if (scn_.value_ == rhs.scn_.value_) {
       compare_result = 0;
-    } else if (std::max(scn_.value_, rhs.scn_.value_) == scn_.value_) {
+    } else if (scn_.value_.is_valid() && rhs.scn_.value_.is_valid()) {
+      if (std::max(scn_.value_, rhs.scn_.value_).convert_to_ts() - std::min(scn_.value_, rhs.scn_.value_).convert_to_ts() <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_US) {
+        compare_result = 0;
+      } else if (std::max(scn_.value_, rhs.scn_.value_) == scn_.value_) {
+        compare_result = 1;
+      } else {
+        compare_result = -1;
+      }
+    } else if (scn_.value_.is_valid() && (!rhs.scn_.value_.is_valid())) {
       compare_result = 1;
-    } else {
+    } else if ((!scn_.value_.is_valid()) && rhs.scn_.value_.is_valid()) {
       compare_result = -1;
     }
   }

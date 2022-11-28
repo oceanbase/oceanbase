@@ -623,6 +623,7 @@ DEFINE_ERROR(OB_WAIT_TABLET_READY_TIMEOUT, -4742, -1, "HY000", "log stream wait 
 DEFINE_ERROR(OB_FREEZE_SERVICE_EPOCH_MISMATCH, -4743, -1, "HY000", "freeze service epoch is not expected");
 DEFINE_ERROR_EXT_DEP(OB_FROZEN_INFO_ALREADY_EXIST, -4744, -1, "HY000", "already exist larger frozen_scn in __all_freeze_info", "%s");
 DEFINE_ERROR_EXT(OB_DELETE_SERVER_NOT_ALLOWED, -4745, -1, "HY000", "delete server not allowed", "%s");
+DEFINE_ERROR(OB_PACKET_STATUS_UNKNOWN, -4746, -1, "HY000", "Network error and packet status unknown. Abort auto retry.");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000

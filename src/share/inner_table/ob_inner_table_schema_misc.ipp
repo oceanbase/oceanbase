@@ -3412,3 +3412,113 @@ case OB_TENANT_PARAMETER_AUX_LOB_META_TID:
 case OB_TENANT_PARAMETER_AUX_LOB_PIECE_TID:
 
 #endif
+
+
+#ifdef SYS_INDEX_TABLE_ID_SWITCH
+
+case OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID:
+case OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID:
+case OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID:
+case OB_ALL_DDL_TASK_STATUS_IDX_TASK_KEY_TID:
+
+#endif
+
+
+#ifdef SYS_INDEX_DATA_TABLE_ID_SWITCH
+
+case OB_ALL_TABLE_HISTORY_TID:
+case OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID:
+case OB_ALL_BACKUP_SET_FILES_TID:
+case OB_ALL_DDL_TASK_STATUS_TID:
+
+#endif
+
+
+#ifdef SYS_INDEX_DATA_TABLE_ID_TO_INDEX_IDS_SWITCH
+
+case OB_ALL_TABLE_HISTORY_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_DDL_TASK_STATUS_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_DDL_TASK_STATUS_IDX_TASK_KEY_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+case OB_ALL_BACKUP_SET_FILES_TID: {
+  if (FAILEDx(index_tids.push_back(OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  break;
+}
+
+#endif
+
+
+#ifdef SYS_INDEX_DATA_TABLE_ID_TO_INDEX_SCHEMAS_SWITCH
+
+case OB_ALL_TABLE_HISTORY_TID: {
+  if (FAILEDx(ObInnerTableSchema::all_table_history_idx_data_table_id_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (!is_sys_tenant(tenant_id) && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, index_schema))) {
+    LOG_WARN("fail to construct full table", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(tables.push_back(index_schema))) {
+    LOG_WARN("fail to push back index", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID: {
+  if (FAILEDx(ObInnerTableSchema::all_log_archive_piece_files_idx_status_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (!is_sys_tenant(tenant_id) && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, index_schema))) {
+    LOG_WARN("fail to construct full table", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(tables.push_back(index_schema))) {
+    LOG_WARN("fail to push back index", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_DDL_TASK_STATUS_TID: {
+  if (FAILEDx(ObInnerTableSchema::all_ddl_task_status_idx_task_key_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (!is_sys_tenant(tenant_id) && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, index_schema))) {
+    LOG_WARN("fail to construct full table", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(tables.push_back(index_schema))) {
+    LOG_WARN("fail to push back index", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+case OB_ALL_BACKUP_SET_FILES_TID: {
+  if (FAILEDx(ObInnerTableSchema::all_backup_set_files_idx_status_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (!is_sys_tenant(tenant_id) && OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(tenant_id, index_schema))) {
+    LOG_WARN("fail to construct full table", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(tables.push_back(index_schema))) {
+    LOG_WARN("fail to push back index", KR(ret), K(tenant_id), K(data_table_id));
+  }
+  break;
+}
+
+#endif
+
+
+#ifdef ADD_SYS_INDEX_ID
+
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_DDL_TASK_STATUS_IDX_TASK_KEY_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+
+#endif

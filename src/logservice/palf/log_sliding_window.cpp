@@ -55,7 +55,7 @@ LogSlidingWindow::LogSlidingWindow()
     committed_end_lsn_(),
     last_slide_info_lock_(),
     last_slide_log_id_(OB_INVALID_LOG_ID),
-    last_slide_log_scn_(),
+    last_slide_scn_(),
     last_slide_lsn_(),
     last_slide_log_pid_(INVALID_PROPOSAL_ID),
     last_slide_log_accum_checksum_(-1),
@@ -138,7 +138,7 @@ int LogSlidingWindow::init(const int64_t palf_id,
   } else if (OB_FAIL(sw_.init(prev_log_info.log_id_ + 1, PALF_SLIDING_WINDOW_SIZE, alloc_mgr))) {
     PALF_LOG(WARN, "sw init failed", K(ret), K(palf_id), K(palf_base_info));
   } else if (OB_FAIL(lsn_allocator_.init(prev_log_info.log_id_,
-          prev_log_info.log_scn_, palf_base_info.curr_lsn_))) {
+          prev_log_info.scn_, palf_base_info.curr_lsn_))) {
     PALF_LOG(WARN, "lsn_allocator_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(group_buffer_.init(palf_base_info.curr_lsn_))) {
     PALF_LOG(WARN, "group_buffer_ init failed", K(ret), K(palf_id));
@@ -165,7 +165,7 @@ int LogSlidingWindow::init(const int64_t palf_id,
     max_flushed_log_pid_ = prev_log_info.log_proposal_id_;
 
     last_slide_log_id_ = prev_log_info.log_id_;
-    last_slide_log_scn_ = prev_log_info.log_scn_;
+    last_slide_scn_ = prev_log_info.scn_;
     last_slide_lsn_ = prev_log_info.lsn_;
     last_slide_end_lsn_ = palf_base_info.curr_lsn_;
     last_slide_log_pid_ = prev_log_info.log_proposal_id_;
@@ -300,11 +300,11 @@ int LogSlidingWindow::submit_log(const char *buf,
                                  const int64_t buf_len,
                                  const SCN &ref_scn,
                                  LSN &lsn,
-                                 SCN &result_log_scn)
+                                 SCN &result_scn)
 {
   int ret = OB_SUCCESS;
   int64_t log_id = OB_INVALID_LOG_ID;
-  SCN log_scn;
+  SCN scn;
   // whether need generate new log task
   bool is_new_log = false;
   // whether need generate a padding entry at the end of block
@@ -326,12 +326,12 @@ int LogSlidingWindow::submit_log(const char *buf,
         K(valid_log_size), K(buf_len), "start_id", get_start_id(), "max_log_id", get_max_log_id());
     // sw_ cannot submit larger log
   } else if (OB_FAIL(lsn_allocator_.alloc_lsn_scn(ref_scn, valid_log_size,
-            tmp_lsn, log_id, log_scn, is_new_log, need_gen_padding_entry, padding_size))) {
+            tmp_lsn, log_id, scn, is_new_log, need_gen_padding_entry, padding_size))) {
     PALF_LOG(WARN, "alloc_lsn_scn failed", K(ret), K_(palf_id), K_(self));
   } else if (OB_FAIL(leader_wait_sw_slot_ready_(log_id))) {
     PALF_LOG(WARN, "leader_wait_sw_slot_ready_ failed", K(ret), K_(palf_id), K_(self), K(log_id));
   } else {
-    PALF_LOG(TRACE, "alloc_lsn_scn success", K(ret), K_(palf_id), K_(self), K(tmp_lsn), K(log_scn),
+    PALF_LOG(TRACE, "alloc_lsn_scn success", K(ret), K_(palf_id), K_(self), K(tmp_lsn), K(scn),
         K(log_id), K(valid_log_size), K(is_new_log), K(need_gen_padding_entry), K(padding_size));
     bool is_need_handle_next = false;
     bool is_need_handle = false;
@@ -343,25 +343,21 @@ int LogSlidingWindow::submit_log(const char *buf,
         PALF_LOG(ERROR, "try_freeze_prev_log_ failed", K(ret), K_(palf_id), K_(self), K(log_id), K(tmp_lsn),
             K(padding_size), K(is_new_log), K(valid_log_size));
       } else if (is_need_handle && FALSE_IT(is_need_handle_next |= is_need_handle)) {
-      } else if (OB_FAIL(generate_new_group_log_(tmp_lsn, log_id, log_scn, padding_entry_body_size, LOG_PADDING, \
+      } else if (OB_FAIL(generate_new_group_log_(tmp_lsn, log_id, scn, padding_entry_body_size, LOG_PADDING, \
               NULL, padding_entry_body_size, is_need_handle))) {
         PALF_LOG(ERROR, "generate_new_group_log_ failed", K(ret), K_(palf_id), K_(self), K(log_id), K(tmp_lsn), K(padding_size),
             K(is_new_log), K(valid_log_size));
       } else if (is_need_handle && FALSE_IT(is_need_handle_next |= is_need_handle)) {
       } else {
         PALF_LOG(INFO, "generate_new_group_log_ for padding log success", K_(palf_id), K_(self), K(log_id),
-            K(tmp_lsn), K(log_scn), K(is_need_handle), K(is_need_handle_next));
+            K(tmp_lsn), K(scn), K(is_need_handle), K(is_need_handle_next));
         // after gen padding_entry, update lsn to next block
         tmp_lsn.val_ += padding_size;
         log_id++;  // inc log_id for following new log
-        const uint64_t new_scn_val = log_scn.get_val_for_lsn_allocator() + 1;
-        // inc log_scn for following new log
-        if (OB_FAIL(log_scn.convert_for_lsn_allocator(new_scn_val))) {
-          PALF_LOG(WARN, "failed to convert scn", K(ret), K_(palf_id), K_(self), K(new_scn_val), K(log_id));
-        }
+        scn = SCN::plus(scn, 1);
       }
     }
-    result_log_scn = log_scn;
+    result_scn = scn;
     lsn = tmp_lsn;
     if (OB_SUCC(ret)) {
       if (is_new_log) {
@@ -370,21 +366,21 @@ int LogSlidingWindow::submit_log(const char *buf,
         if (OB_FAIL(try_freeze_prev_log_(log_id, tmp_lsn, is_need_handle))) {
           PALF_LOG(WARN, "try_freeze_prev_log_ failed", K(ret), K_(palf_id), K_(self), K(log_id));
         } else if (is_need_handle && FALSE_IT(is_need_handle_next |= is_need_handle)) {
-        } else if (OB_FAIL(generate_new_group_log_(tmp_lsn, log_id, log_scn, valid_log_size, LOG_SUBMIT, \
+        } else if (OB_FAIL(generate_new_group_log_(tmp_lsn, log_id, scn, valid_log_size, LOG_SUBMIT, \
                 buf, buf_len, is_need_handle))) {
           PALF_LOG(WARN, "generate_new_group_log_ failed", K(ret), K_(palf_id), K_(self), K(log_id));
         } else if (is_need_handle && FALSE_IT(is_need_handle_next |= is_need_handle)) {
         } else {
-          PALF_LOG(TRACE, "generate_new_group_log_ success", K_(palf_id), K_(self), K(log_id), K(lsn), K(log_scn),
+          PALF_LOG(TRACE, "generate_new_group_log_ success", K_(palf_id), K_(self), K(log_id), K(lsn), K(scn),
               K(valid_log_size), K(is_need_handle), K(is_need_handle_next));
         }
       } else {
         // this log need to be appended to last log
-        if (OB_FAIL(append_to_group_log_(lsn, log_id, log_scn, valid_log_size, buf, buf_len, is_need_handle))) {
+        if (OB_FAIL(append_to_group_log_(lsn, log_id, scn, valid_log_size, buf, buf_len, is_need_handle))) {
           PALF_LOG(WARN, "append_to_group_log_ failed", K(ret), K_(palf_id), K_(self), K(log_id));
         } else if (is_need_handle && FALSE_IT(is_need_handle_next |= is_need_handle)) {
         } else {
-          PALF_LOG(TRACE, "append_to_group_log_ success", K_(palf_id), K_(self), K(log_id), K(lsn), K(log_scn),
+          PALF_LOG(TRACE, "append_to_group_log_ success", K_(palf_id), K_(self), K(log_id), K(lsn), K(scn),
               K(valid_log_size), K(is_need_handle), K(is_need_handle_next));
         }
       }
@@ -469,7 +465,7 @@ int LogSlidingWindow::wait_group_buffer_ready_(const LSN &lsn, const int64_t dat
 
 int LogSlidingWindow::append_to_group_log_(const LSN &lsn,
                                            const int64_t log_id,
-                                           const SCN &log_scn,
+                                           const SCN &scn,
                                            const int64_t log_entry_size, // log_entry_header + log_data
                                            const char *log_data,
                                            const int64_t data_len,
@@ -479,10 +475,10 @@ int LogSlidingWindow::append_to_group_log_(const LSN &lsn,
   is_need_handle = false;
   LogTaskGuard guard(this);
   LogTask *log_task = NULL;
-  if (!lsn.is_valid() || !log_scn.is_valid() || OB_INVALID_LOG_ID == log_id || log_entry_size <= 0
+  if (!lsn.is_valid() || !scn.is_valid() || OB_INVALID_LOG_ID == log_id || log_entry_size <= 0
       || NULL == log_data || data_len <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(lsn), K(log_scn), K(log_id), K(log_entry_size),
+    PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(lsn), K(scn), K(log_id), K(log_entry_size),
         KP(log_data), K(data_len));
   } else if (OB_FAIL(guard.get_log_task(log_id, log_task))) {
     PALF_LOG(WARN, "get_log_task_ failed", K(ret), K(log_id), K_(palf_id), K_(self));
@@ -490,7 +486,7 @@ int LogSlidingWindow::append_to_group_log_(const LSN &lsn,
     // Note: 此处无需判断log_task valid, 因为并发submit场景第一条log_entry可能还没更新log_task
     LogEntryHeader log_entry_header;
     // Firstly, we need update log_task info, so that later alloc_log_id() can succeed as soon as possible.
-    log_task->inc_update_max_log_scn(log_scn);
+    log_task->inc_update_max_scn(scn);
     log_task->update_data_len(log_entry_size);
 
     const LSN log_entry_data_lsn = lsn + LogEntryHeader::HEADER_SER_SIZE;
@@ -502,7 +498,7 @@ int LogSlidingWindow::append_to_group_log_(const LSN &lsn,
       PALF_LOG(ERROR, "group_buffer wait failed", K(ret), K_(palf_id), K_(self), K(lsn), K(log_entry_size));
     } else if (OB_FAIL(group_buffer_.fill(log_entry_data_lsn, log_data, data_len))) {
       PALF_LOG(ERROR, "fill group buffer failed", K(ret), K_(palf_id), K_(self));
-    } else if (OB_FAIL(log_entry_header.generate_header(log_data, data_len, log_scn))) {
+    } else if (OB_FAIL(log_entry_header.generate_header(log_data, data_len, scn))) {
       PALF_LOG(WARN, "genearate header failed", K(ret), K_(palf_id), K_(self));
     } else if (OB_FAIL(log_entry_header.serialize(tmp_buf, TMP_HEADER_SER_BUF_LEN, pos))) {
       PALF_LOG(WARN, "serialize log_entry_header failed", K(ret), K_(palf_id), K_(self));
@@ -523,7 +519,7 @@ int LogSlidingWindow::append_to_group_log_(const LSN &lsn,
 
 int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
                                               const int64_t log_id,
-                                              const SCN &log_scn,
+                                              const SCN &scn,
                                               const int64_t log_body_size,  // LOG_HEADER_SIZE + log_data_len
                                               const LogType &log_type,
                                               const char *log_data,
@@ -534,12 +530,12 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
   is_need_handle = false;
   LogTaskGuard guard(this);
   LogTask *log_task = NULL;
-  if (!lsn.is_valid() || !log_scn.is_valid()
+  if (!lsn.is_valid() || !scn.is_valid()
       || log_body_size <= 0 || OB_INVALID_LOG_ID == log_id
       || LOG_UNKNOWN == log_type
       || (LOG_PADDING != log_type && (NULL == log_data || data_len <= 0))) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(lsn), K(log_scn), K(log_id), K(log_body_size),
+    PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(lsn), K(scn), K(log_id), K(log_body_size),
         K(log_type), KP(log_data), K(data_len));
   } else if (OB_FAIL(guard.get_log_task(log_id, log_task))) {
     PALF_LOG(WARN, "get_log_task_ failed", K(ret), K(log_id), K_(palf_id), K_(self));
@@ -553,8 +549,8 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
     header_info.begin_lsn_ = lsn;
     header_info.is_padding_log_ = is_padding_log;
     header_info.log_id_ = log_id;
-    header_info.min_log_scn_= log_scn;
-    header_info.max_log_scn_ = log_scn;
+    header_info.min_scn_= scn;
+    header_info.max_scn_ = scn;
     header_info.data_len_ = log_body_size;
     header_info.proposal_id_ = proposal_id;
     header_info.is_raw_write_ = false;
@@ -562,7 +558,7 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
     log_task->lock();
     if (log_task->is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(ERROR, "log_task is valid, unexpected", K(ret), K(log_id), K_(palf_id), K_(self), K(lsn), K(log_scn),
+      PALF_LOG(ERROR, "log_task is valid, unexpected", K(ret), K(log_id), K_(palf_id), K_(self), K(lsn), K(scn),
           K(log_body_size), K(log_type), K(data_len), KPC(log_task));
     } else if (OB_FAIL(log_task->set_initial_header_info(header_info))) {
       PALF_LOG(WARN, "set_initial_header_info failed", K(ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
@@ -589,7 +585,7 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
         char tmp_buf[TMP_HEADER_SER_BUF_LEN];
         if (OB_FAIL(group_buffer_.fill(log_entry_data_lsn, log_data, data_len))) {
           PALF_LOG(ERROR, "fill group buffer failed", K(ret), K_(palf_id), K_(self));
-        } else if (OB_FAIL(log_entry_header.generate_header(log_data, data_len, log_scn))) {
+        } else if (OB_FAIL(log_entry_header.generate_header(log_data, data_len, scn))) {
           PALF_LOG(WARN, "genearate header failed", K(ret), K_(palf_id), K_(self));
         } else if (OB_FAIL(log_entry_header.serialize(tmp_buf, TMP_HEADER_SER_BUF_LEN, pos))) {
           PALF_LOG(WARN, "serialize log_entry_header failed", K(ret), K_(palf_id), K_(self));
@@ -740,7 +736,7 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
         (void) get_last_submit_log_info_(last_submit_lsn, last_submit_end_lsn, last_submit_log_id, last_submit_log_pid);
         const int64_t tmp_log_id = last_submit_log_id + 1;
         PALF_LOG(TRACE, "handle_next_submit_log_ begin", K(ret), K_(palf_id), K_(self), K(tmp_log_id), K(last_submit_log_id));
-        SCN log_scn;
+        SCN scn;
         LogTask *log_task = NULL;
         LogTaskGuard guard(this);
         if (OB_FAIL(guard.get_log_task(tmp_log_id, log_task))) {
@@ -802,7 +798,7 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
                   PALF_LOG(WARN, "update_header_info failed", K(ret), K_(palf_id), K_(self), K(group_entry_header));
                 }
               }
-              log_scn = log_task->get_min_log_scn();
+              scn = log_task->get_min_scn();
               log_task->unlock();
             }
           } else {
@@ -817,7 +813,7 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
 
             FlushLogCbCtx flush_log_cb_ctx;
             flush_log_cb_ctx.log_id_ = tmp_log_id;
-            flush_log_cb_ctx.log_scn_ = log_scn;
+            flush_log_cb_ctx.scn_ = scn;
             flush_log_cb_ctx.lsn_ = begin_lsn;
             flush_log_cb_ctx.curr_proposal_id_ = curr_proposal_id;
             flush_log_cb_ctx.log_proposal_id_ = log_proposal_id;
@@ -937,7 +933,7 @@ int LogSlidingWindow::generate_group_entry_header_(const int64_t log_id,
       log_committed_end_lsn = global_committed_end_lsn;
     }
     const int64_t data_len = header_info.data_len_;
-    const SCN max_log_scn = header_info.max_log_scn_;
+    const SCN max_scn = header_info.max_scn_;
     const int64_t log_proposal_id = header_info.proposal_id_;
     const int64_t group_entry_size = LogGroupEntryHeader::HEADER_SER_SIZE + data_len;
     LogWriteBuf log_write_buf;
@@ -948,7 +944,7 @@ int LogSlidingWindow::generate_group_entry_header_(const int64_t log_id,
           K(header_info));
     } else if (OB_FAIL(group_buffer_.get_log_buf(begin_lsn, group_entry_size, log_write_buf))) {
       PALF_LOG(WARN, "get log buffer failed", K(ret), K_(palf_id), K_(self));
-    } else if (OB_FAIL(group_header.generate(is_raw_write, is_padding_log, log_write_buf, data_len, max_log_scn,
+    } else if (OB_FAIL(group_header.generate(is_raw_write, is_padding_log, log_write_buf, data_len, max_scn,
             log_id, log_committed_end_lsn, log_proposal_id, group_log_data_checksum))) {
       PALF_LOG(WARN, "group_header generate failed", K(ret), K_(palf_id), K_(self));
     } else if (OB_FAIL(checksum_.acquire_accum_checksum(group_log_data_checksum, accum_checksum))) {
@@ -1258,26 +1254,26 @@ int64_t LogSlidingWindow::get_last_slide_log_id_() const
   return ATOMIC_LOAD(&last_slide_log_id_);
 }
 
-const SCN LogSlidingWindow::get_last_slide_log_scn() const
+const SCN LogSlidingWindow::get_last_slide_scn() const
 {
-  return last_slide_log_scn_;
+  return last_slide_scn_;
 }
 
 void LogSlidingWindow::get_last_slide_end_lsn_(LSN &out_end_lsn) const
 {
   int64_t last_slide_log_id = OB_INVALID_LOG_ID;
-  SCN last_slide_log_scn;
+  SCN last_slide_scn;
   LSN last_slide_lsn;
   LSN last_slide_end_lsn;
   int64_t unused_pid = INVALID_PROPOSAL_ID;
   int64_t last_slide_accum_checksum = -1;
-  get_last_slide_log_info_(last_slide_log_id, last_slide_log_scn, \
+  get_last_slide_log_info_(last_slide_log_id, last_slide_scn, \
           last_slide_lsn, last_slide_end_lsn, unused_pid, last_slide_accum_checksum);
   out_end_lsn = last_slide_end_lsn;
 }
 
 void LogSlidingWindow::get_last_slide_log_info_(int64_t &log_id,
-                                                SCN &log_scn,
+                                                SCN &scn,
                                                 LSN &lsn,
                                                 LSN &end_lsn,
                                                 int64_t &log_proposal_id,
@@ -1285,7 +1281,7 @@ void LogSlidingWindow::get_last_slide_log_info_(int64_t &log_id,
 {
   ObSpinLockGuard guard(last_slide_info_lock_);
   log_id = last_slide_log_id_;
-  log_scn = last_slide_log_scn_;
+  scn = last_slide_scn_;
   lsn = last_slide_lsn_;
   end_lsn = last_slide_end_lsn_;
   log_proposal_id = last_slide_log_pid_;
@@ -1317,7 +1313,7 @@ int LogSlidingWindow::set_last_submit_log_info_(const LSN &lsn,
 
 int LogSlidingWindow::try_update_last_slide_log_info_(
     const int64_t log_id,
-    const SCN &log_scn,
+    const SCN &scn,
     const LSN &lsn,
     const LSN &end_lsn,
     const int64_t &proposal_id,
@@ -1328,18 +1324,18 @@ int LogSlidingWindow::try_update_last_slide_log_info_(
       !end_lsn.is_valid() ||
       INVALID_PROPOSAL_ID == proposal_id ||
       OB_INVALID_LOG_ID == log_id ||
-      !log_scn.is_valid()) {
+      !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(lsn), K(end_lsn), K(proposal_id), K(log_id), K(log_scn));
+    PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(lsn), K(end_lsn), K(proposal_id), K(log_id), K(scn));
   } else {
     ObSpinLockGuard guard(last_slide_info_lock_);
     ATOMIC_STORE(&last_slide_log_id_, log_id);
-    last_slide_log_scn_ = log_scn;
+    last_slide_scn_ = scn;
     last_slide_lsn_ = lsn;
     last_slide_end_lsn_ = end_lsn;
     last_slide_log_pid_ = proposal_id;
     last_slide_log_accum_checksum_ = accum_checksum;
-    PALF_LOG(TRACE, "try_update_last_slide_log_info_ success", K_(palf_id), K_(self), K(log_id), K(log_scn),
+    PALF_LOG(TRACE, "try_update_last_slide_log_info_ success", K_(palf_id), K_(self), K(log_id), K(scn),
         K(lsn), K(end_lsn), K(proposal_id), K(accum_checksum));
   }
   return ret;
@@ -1377,13 +1373,13 @@ int LogSlidingWindow::try_advance_committed_lsn_(const LSN &end_lsn)
   return ret;
 }
 
-int LogSlidingWindow::inc_update_log_scn_base(const SCN &log_scn)
+int LogSlidingWindow::inc_update_scn_base(const SCN &scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(lsn_allocator_.inc_update_log_scn_base(log_scn))) {
-    PALF_LOG(WARN, "inc_update_log_scn_base failed", K(ret), K_(palf_id), K_(self), K(log_scn));
+  } else if (OB_FAIL(lsn_allocator_.inc_update_scn_base(scn))) {
+    PALF_LOG(WARN, "inc_update_scn_base failed", K(ret), K_(palf_id), K_(self), K(scn));
   }
   return ret;
 }
@@ -1529,12 +1525,12 @@ int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
     }
   } else if (FetchTriggerType::MODE_META_BARRIER == fetch_log_type) {
     int64_t last_slide_log_id = OB_INVALID_LOG_ID;
-    SCN last_slide_log_scn;
+    SCN last_slide_scn;
     LSN last_slide_lsn;
     LSN last_slide_end_lsn;
     int64_t last_slide_log_pid = INVALID_PROPOSAL_ID;
     int64_t last_slide_accum_checksum = -1;
-    get_last_slide_log_info_(last_slide_log_id, last_slide_log_scn, last_slide_lsn, \
+    get_last_slide_log_info_(last_slide_log_id, last_slide_scn, last_slide_lsn, \
         last_slide_end_lsn, last_slide_log_pid, last_slide_accum_checksum);
     if (OB_FAIL(do_fetch_log_(fetch_log_type, fetch_log_dst, last_slide_lsn, \
           last_slide_end_lsn, fetch_log_size, last_slide_log_id + 1))) {
@@ -1695,12 +1691,12 @@ bool LogSlidingWindow::is_all_committed_log_slided_out_(LSN &prev_lsn, int64_t &
 {
   bool bool_ret = false;
   int64_t last_slide_log_id = OB_INVALID_LOG_ID;
-  SCN last_slide_log_scn;
+  SCN last_slide_scn;
   LSN last_slide_lsn;
   LSN last_slide_end_lsn;
   int64_t last_slide_log_pid = INVALID_PROPOSAL_ID;
   int64_t last_slide_accum_checksum = -1;
-  get_last_slide_log_info_(last_slide_log_id, last_slide_log_scn, last_slide_lsn, \
+  get_last_slide_log_info_(last_slide_log_id, last_slide_scn, last_slide_lsn, \
       last_slide_end_lsn, last_slide_log_pid, last_slide_accum_checksum);
   get_committed_end_lsn_(committed_end_lsn);
   if (committed_end_lsn <= last_slide_end_lsn) {
@@ -1740,7 +1736,7 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
 
       log_task->lock();
       log_begin_lsn = log_task->get_begin_lsn();
-      const SCN log_max_scn = log_task->get_max_log_scn();
+      const SCN log_max_scn = log_task->get_max_scn();
       log_end_lsn = log_begin_lsn + LogGroupEntryHeader::HEADER_SER_SIZE + log_task->get_data_len();
       log_task_header = log_task->get_header_info();
       const int64_t log_proposal_id = log_task->get_proposal_id();
@@ -1996,12 +1992,12 @@ int LogSlidingWindow::clean_log_()
   (void) lsn_allocator_.get_curr_end_lsn(curr_end_lsn);
 
   int64_t last_slide_log_id = OB_INVALID_LOG_ID;
-  SCN last_slide_log_scn;
+  SCN last_slide_scn;
   LSN last_slide_lsn;
   LSN last_slide_end_lsn;
   int64_t last_slide_log_pid = INVALID_PROPOSAL_ID;
   int64_t last_slide_accum_checksum = -1;
-  get_last_slide_log_info_(last_slide_log_id, last_slide_log_scn, last_slide_lsn, \
+  get_last_slide_log_info_(last_slide_log_id, last_slide_scn, last_slide_lsn, \
       last_slide_end_lsn, last_slide_log_pid, last_slide_accum_checksum);
   LSN last_submit_lsn;
   LSN last_submit_end_lsn;
@@ -2010,14 +2006,14 @@ int LogSlidingWindow::clean_log_()
   (void) get_last_submit_log_info_(last_submit_lsn, last_submit_end_lsn, last_submit_log_id, last_submit_log_pid);
   // new_last_log_xxx are used to truncate lsn_allocator.
   int64_t new_last_log_id = OB_INVALID_LOG_ID;
-  SCN new_last_log_scn;
+  SCN new_last_scn;
   LSN new_last_log_end_lsn;
   if (last_slide_end_lsn == last_submit_end_lsn) {
     new_last_log_id = last_slide_log_id;
-    new_last_log_scn = last_slide_log_scn;
+    new_last_scn = last_slide_scn;
     new_last_log_end_lsn = last_slide_end_lsn;
     PALF_LOG(INFO, "record last slide log info", K(ret), K(last_slide_log_id),
-        K(last_slide_log_scn), K(last_slide_end_lsn), K_(palf_id), K_(self));
+        K(last_slide_scn), K(last_slide_end_lsn), K_(palf_id), K_(self));
   }
 
   int64_t first_empty_log_id = OB_INVALID_LOG_ID;  // record the first hole in sw, just for debug
@@ -2037,14 +2033,14 @@ int LogSlidingWindow::clean_log_()
           PALF_LOG(INFO, "found first empty log slot", K(ret), K(tmp_log_id), K_(palf_id), K_(self));
         }
       } else {
-        const SCN curr_log_scn = log_task->get_max_log_scn();
+        const SCN curr_scn = log_task->get_max_scn();
         const LSN log_end_lsn = log_task->get_begin_lsn() + LogGroupEntryHeader::HEADER_SER_SIZE + log_task->get_data_len();
         PALF_LOG(INFO, "log_task is valid, check if need clean", K(ret), K(tmp_log_id), K_(palf_id), K_(self), KPC(log_task));
         if (log_end_lsn == last_submit_end_lsn) {
           if (OB_INVALID_LOG_ID == new_last_log_id) {
             // record max flushed log_task info
             new_last_log_id = tmp_log_id;
-            new_last_log_scn = curr_log_scn;
+            new_last_scn = curr_scn;
             new_last_log_end_lsn = log_end_lsn;
             PALF_LOG(INFO, "find last submit log_task", K(ret), K(tmp_log_id), K_(palf_id), K_(self),
                 KPC(log_task), K(last_submit_log_id));
@@ -2064,22 +2060,22 @@ int LogSlidingWindow::clean_log_()
   }
   if (OB_SUCC(ret)) {
     if (OB_INVALID_LOG_ID == new_last_log_id
-        || !new_last_log_scn.is_valid()
+        || !new_last_scn.is_valid()
         || !new_last_log_end_lsn.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       PALF_LOG(ERROR, "last_log info is invalid", K(ret), K(max_log_id), K(first_empty_log_id), K(last_submit_log_id),
-           K_(palf_id), K_(self), K(new_last_log_end_lsn), K(new_last_log_id), K(new_last_log_scn), K(start_log_id), K(max_log_id));
+           K_(palf_id), K_(self), K(new_last_log_end_lsn), K(new_last_log_id), K(new_last_scn), K(start_log_id), K(max_log_id));
     } else if (new_last_log_end_lsn <= curr_end_lsn
-               && OB_FAIL(truncate_lsn_allocator_(new_last_log_end_lsn, new_last_log_id, new_last_log_scn))) {
+               && OB_FAIL(truncate_lsn_allocator_(new_last_log_end_lsn, new_last_log_id, new_last_scn))) {
       // truncate lsn_allocator_ by new_last_log info
       PALF_LOG(ERROR, "truncate_lsn_allocator_ failed", K(ret), K_(palf_id), K_(self), K(new_last_log_id), K(new_last_log_end_lsn),
-          K(new_last_log_scn));
+          K(new_last_scn));
     } else {
       // do nothing
     }
   }
   PALF_LOG(INFO, "clean log finished", K(ret), K_(palf_id), K_(self), K(max_log_id), K(first_empty_log_id), K(last_submit_log_id),
-      K(start_log_id), K(max_log_id), K(new_last_log_id), K(new_last_log_scn), K(new_last_log_end_lsn));
+      K(start_log_id), K(max_log_id), K(new_last_log_id), K(new_last_scn), K(new_last_log_end_lsn));
   return ret;
 }
 
@@ -2108,7 +2104,7 @@ int LogSlidingWindow::to_leader_active()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(mode_mgr_->get_ref_scn(mode_version, ref_scn))) {
-    PALF_LOG(INFO, "get_ref_ts_ns failed", K(ret), K_(palf_id), K_(self));
+    PALF_LOG(INFO, "get_ref_scn failed", K(ret), K_(palf_id), K_(self));
   } else if (curr_proposal_id < mode_version) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "curr_proposal_id is less than proposal_id in ModeMeta", K(ret),
@@ -2121,8 +2117,8 @@ int LogSlidingWindow::to_leader_active()
     PALF_LOG(INFO, "clean_log_ failed", K(ret), K_(palf_id), K_(self));
   } else if (OB_FAIL(group_buffer_.to_leader())) {
     PALF_LOG(WARN, "group_buffer_.to_leader failed", K(ret), K_(palf_id), K_(self));
-  } else if (ref_scn.is_valid() && OB_FAIL(lsn_allocator_.inc_update_log_scn_base(ref_scn))) {
-    PALF_LOG(ERROR, "inc_update_log_ts_base failed", K(ret), K_(palf_id), K_(self), K(ref_scn));
+  } else if (ref_scn.is_valid() && OB_FAIL(lsn_allocator_.inc_update_scn_base(ref_scn))) {
+    PALF_LOG(ERROR, "inc_update_scn_base failed", K(ret), K_(palf_id), K_(self), K(ref_scn));
   } else {
     reconfirm_fetch_dest_.reset();
     PALF_LOG(INFO, "to_leader_active success", K(ret), K_(palf_id), K_(self));
@@ -2219,11 +2215,11 @@ int LogSlidingWindow::truncate_for_rebuild(const PalfBaseInfo &palf_base_info)
     if (max_log_id >= prev_log_info.log_id_) {
       int tmp_ret = OB_SUCCESS;
       LSN local_prev_lsn, local_prev_end_lsn;
-      SCN local_prev_log_scn;
+      SCN local_prev_scn;
       int64_t local_prev_log_pid = INVALID_PROPOSAL_ID;
       int64_t local_prev_log_accum_checksum = -1;
       if (OB_SUCCESS != (tmp_ret = get_prev_log_info_(new_start_log_id, local_prev_lsn, \
-              local_prev_end_lsn, local_prev_log_scn, local_prev_log_pid, local_prev_log_accum_checksum))) {
+              local_prev_end_lsn, local_prev_scn, local_prev_log_pid, local_prev_log_accum_checksum))) {
         if (OB_ENTRY_NOT_EXIST != tmp_ret) {
           ret = tmp_ret;
           PALF_LOG(WARN, "get_prev_log_info_ failed", K(ret), K(new_start_log_id), K(palf_base_info), K_(palf_id), K_(self));
@@ -2257,7 +2253,7 @@ int LogSlidingWindow::truncate_for_rebuild(const PalfBaseInfo &palf_base_info)
       (void) lsn_allocator_.get_curr_end_lsn(curr_end_lsn);
       if (curr_end_lsn.is_valid()
           && curr_end_lsn < palf_base_info.curr_lsn_) {
-        if (OB_FAIL(lsn_allocator_.truncate(palf_base_info.curr_lsn_, prev_log_info.log_id_, prev_log_info.log_scn_))) {
+        if (OB_FAIL(lsn_allocator_.truncate(palf_base_info.curr_lsn_, prev_log_info.log_id_, prev_log_info.scn_))) {
           PALF_LOG(WARN, "truncate lsn_allocator_ failed", K(ret), K_(palf_id), K_(self), K(curr_end_lsn), K(palf_base_info));
         } else {
           PALF_LOG(INFO, "truncate lsn_allocator_ success", K(ret), K_(palf_id), K_(self), K(curr_end_lsn), K(palf_base_info));
@@ -2288,7 +2284,7 @@ int LogSlidingWindow::truncate_for_rebuild(const PalfBaseInfo &palf_base_info)
       }
       const int64_t last_slide_log_id = get_last_slide_log_id_();
       if (last_slide_log_id <= prev_log_info.log_id_) {
-        (void) try_update_last_slide_log_info_(prev_log_info.log_id_, prev_log_info.log_scn_, \
+        (void) try_update_last_slide_log_info_(prev_log_info.log_id_, prev_log_info.scn_, \
             prev_log_info.lsn_, palf_base_info.curr_lsn_, prev_log_info.log_proposal_id_, \
             prev_log_info.accum_checksum_);
         // update local verify_checksum when last_slide_log_info updated
@@ -2328,10 +2324,10 @@ int LogSlidingWindow::truncate(const TruncateLogInfo &truncate_log_info, const L
     LSN log_end_lsn;
     int64_t prev_log_id = truncate_log_id - 1;
     LSN prev_lsn, prev_end_lsn;
-    SCN prev_log_scn;
+    SCN prev_scn;
     int64_t prev_proposal_id = INVALID_PROPOSAL_ID;
     int64_t prev_accum_checksum = -1;
-    SCN max_log_scn;
+    SCN max_scn;
     // double check the prev log is not changed
     bool is_prev_log_exist = false;
     const bool is_prev_log_match = is_prev_log_pid_match(truncate_log_id, truncate_begin_lsn, expected_prev_lsn,
@@ -2350,7 +2346,7 @@ int LogSlidingWindow::truncate(const TruncateLogInfo &truncate_log_info, const L
       log_end_lsn = log_task->get_begin_lsn() + LogGroupEntryHeader::HEADER_SER_SIZE + log_task->get_data_len();
       prev_lsn = log_task->get_prev_lsn();
       prev_proposal_id = log_task->get_prev_proposal_id();
-      max_log_scn = log_task->get_max_log_scn();
+      max_scn = log_task->get_max_scn();
       log_task->reset();
     }
     log_task->unlock();
@@ -2362,10 +2358,10 @@ int LogSlidingWindow::truncate(const TruncateLogInfo &truncate_log_info, const L
         prev_log_info.generate_by_default();
         prev_log_id = prev_log_info.log_id_;
         prev_lsn = prev_log_info.lsn_;
-        prev_log_scn = prev_log_info.log_scn_;
+        prev_scn = prev_log_info.scn_;
         prev_proposal_id = prev_log_info.log_proposal_id_;
         prev_accum_checksum = prev_log_info.accum_checksum_;
-      } else if (OB_FAIL(get_prev_log_info_(truncate_log_id, prev_lsn, prev_end_lsn, prev_log_scn, prev_proposal_id, prev_accum_checksum))) {
+      } else if (OB_FAIL(get_prev_log_info_(truncate_log_id, prev_lsn, prev_end_lsn, prev_scn, prev_proposal_id, prev_accum_checksum))) {
         PALF_LOG(WARN, "get_prev_log_info_ failed when truncate log", K(ret), K_(palf_id), K_(self), K(truncate_log_info), KPC(log_task));
       } else {
         // do nothing
@@ -2392,7 +2388,7 @@ int LogSlidingWindow::truncate(const TruncateLogInfo &truncate_log_info, const L
         last_truncate_lsn_ = truncate_begin_lsn;
 
         // truncate max log meta of lsn_allocator
-        (void) truncate_lsn_allocator_(truncate_begin_lsn, prev_log_id, prev_log_scn);
+        (void) truncate_lsn_allocator_(truncate_begin_lsn, prev_log_id, prev_scn);
         // truncate last_submit_log info
         // 当被truncate的log已经submit时才需要truncate last_submit_log_info
         const int64_t last_submit_log_id = get_last_submit_log_id_();
@@ -2486,7 +2482,7 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
         prev_log_proposal_id, is_prev_log_exist);
     bool need_send_ack = false;
     bool is_log_pid_match = false;
-    SCN min_log_scn;
+    SCN min_scn;
     if (is_prev_log_exist && !is_prev_log_match) {
       // prev log exists and its proposal_id does not match with arg, cannot receive this log
       ret = OB_STATE_NOT_MATCH;
@@ -2615,9 +2611,9 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
               K(ret), K_(palf_id), K_(self), KPC(log_task), K(lsn), K(log_end_lsn), K(max_flushed_end_lsn), K(group_entry_header),
               K(is_prev_log_exist), K(is_prev_log_match), K(last_submit_log_id), K(last_submit_log_pid),
               K(last_submit_log_id), K(last_submit_lsn), K(last_submit_end_lsn));
-        } else if (OB_FAIL(get_min_log_scn_from_buf_(group_entry_header, buf + LogGroupEntryHeader::HEADER_SER_SIZE,
-                buf_len - LogGroupEntryHeader::HEADER_SER_SIZE, min_log_scn))) {
-          PALF_LOG(WARN, "get_min_log_scn_from_buf_ failed", K(ret), K_(palf_id), K_(self), K(lsn), K(group_entry_header));
+        } else if (OB_FAIL(get_min_scn_from_buf_(group_entry_header, buf + LogGroupEntryHeader::HEADER_SER_SIZE,
+                buf_len - LogGroupEntryHeader::HEADER_SER_SIZE, min_scn))) {
+          PALF_LOG(WARN, "get_min_scn_from_buf_ failed", K(ret), K_(palf_id), K_(self), K(lsn), K(group_entry_header));
         // local log_task is invalid, receive it.
         // 这里不需要wait_group_buffer_ready_，因为lsn是确定且唯一的，前置检查通过即可
         // fill需做内存copy, 故不能持有log_task的锁, 通过PRE_FILL控制至多一个线程执行fill.
@@ -2632,7 +2628,7 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
             ret = OB_ERR_UNEXPECTED;
             PALF_LOG(ERROR, "log_task has been updated during filling group buffer, unexpected", K(ret), K_(palf_id),
                 K_(self), K(lsn), K(group_entry_header), KPC(log_task));
-          } else if (OB_FAIL(log_task->set_group_header(lsn, min_log_scn, group_entry_header))) {
+          } else if (OB_FAIL(log_task->set_group_header(lsn, min_scn, group_entry_header))) {
             PALF_LOG(ERROR, "log_task->set_group_header failed", K(ret), K_(palf_id), K_(self), K(group_entry_header));
           } else {
             // update prev_lsn
@@ -2756,13 +2752,13 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
         // get log_task success
       }
       if (OB_SUCC(ret)) {
-        SCN min_log_scn;
+        SCN min_scn;
         if (log_task->is_valid()) {
           PALF_LOG(INFO, "log_task is already valid, no need receive log", K(log_id), K_(palf_id), K_(self),
               K(group_entry_header), KPC(log_task));
-        } else if (OB_FAIL(get_min_log_scn_from_buf_(group_entry_header, buf + LogGroupEntryHeader::HEADER_SER_SIZE,
-                buf_len - LogGroupEntryHeader::HEADER_SER_SIZE, min_log_scn))) {
-          PALF_LOG(WARN, "get_min_log_scn_from_buf_ failed", K(ret), K_(palf_id), K_(self));
+        } else if (OB_FAIL(get_min_scn_from_buf_(group_entry_header, buf + LogGroupEntryHeader::HEADER_SER_SIZE,
+                buf_len - LogGroupEntryHeader::HEADER_SER_SIZE, min_scn))) {
+          PALF_LOG(WARN, "get_min_scn_from_buf_ failed", K(ret), K_(palf_id), K_(self));
         // 这里不需要wait_group_buffer_ready_，因为lsn是确定且唯一的，因此前置检查通过即可.
         // fill期间不能持有log_task的锁, 因为耗时可能较长.
         } else if (OB_FAIL(group_buffer_.fill(lsn, buf, buf_len))) {
@@ -2779,7 +2775,7 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
               PALF_LOG(ERROR, "log_task has been updated during filling group buffer, and log proposal_id does not match "\
                   "with this req, unexpected", K(ret), K_(palf_id), K_(self), K(lsn), K(group_entry_header), KPC(log_task));
             }
-          } else if (OB_FAIL(log_task->set_group_header(lsn, min_log_scn, group_entry_header))) {
+          } else if (OB_FAIL(log_task->set_group_header(lsn, min_scn, group_entry_header))) {
             PALF_LOG(WARN, "log_task->set_group_header failed", K(ret), K_(palf_id), K_(self));
           } else {
             // update group log data_checksum
@@ -2872,7 +2868,7 @@ bool LogSlidingWindow::need_update_log_task_(LogGroupEntryHeader &header,
 int LogSlidingWindow::get_prev_log_info_(const int64_t log_id,
                                          LSN &prev_lsn,
                                          LSN &prev_end_lsn,
-                                         SCN &prev_log_scn,
+                                         SCN &prev_scn,
                                          int64_t &prev_log_pid,
                                          int64_t &prev_log_accum_checksum)
 {
@@ -2895,18 +2891,18 @@ int LogSlidingWindow::get_prev_log_info_(const int64_t log_id,
         ret = OB_SUCCESS;
         if (start_id == log_id) {
           int64_t last_slide_log_id = OB_INVALID_LOG_ID;
-          SCN last_slide_log_scn;
+          SCN last_slide_scn;
           LSN last_slide_lsn;
           LSN last_slide_end_lsn;
           int64_t last_slide_log_pid = INVALID_PROPOSAL_ID;
           int64_t last_slide_accum_checksum = -1;
-          get_last_slide_log_info_(last_slide_log_id, last_slide_log_scn, last_slide_lsn, \
+          get_last_slide_log_info_(last_slide_log_id, last_slide_scn, last_slide_lsn, \
               last_slide_end_lsn, last_slide_log_pid, last_slide_accum_checksum);
           if (get_start_id() == start_id) {
             // double check log_id == start_id
             prev_lsn = last_slide_lsn;
             prev_end_lsn = last_slide_end_lsn;
-            prev_log_scn = last_slide_log_scn;
+            prev_scn = last_slide_scn;
             prev_log_pid = last_slide_log_pid;
             prev_log_accum_checksum = last_slide_accum_checksum;
           } else {
@@ -2928,7 +2924,7 @@ int LogSlidingWindow::get_prev_log_info_(const int64_t log_id,
         prev_lsn = prev_log_task->get_begin_lsn();
         prev_end_lsn = prev_log_task->get_begin_lsn() + LogGroupEntryHeader::HEADER_SER_SIZE
               + prev_log_task->get_data_len();
-        prev_log_scn = prev_log_task->get_max_log_scn();
+        prev_scn = prev_log_task->get_max_scn();
         prev_log_pid = prev_log_task->get_proposal_id();
         prev_log_accum_checksum = prev_log_task->get_accum_checksum();
       }
@@ -2947,12 +2943,12 @@ bool LogSlidingWindow::pre_check_for_config_log(const int64_t &msg_proposal_id,
   bool bool_ret = false;
   int tmp_ret = OB_SUCCESS;
   int64_t last_slide_log_id = OB_INVALID_LOG_ID;
-  SCN last_slide_log_scn;
+  SCN last_slide_scn;
   LSN last_slide_lsn;
   LSN last_slide_end_lsn;
   int64_t last_slide_log_pid = INVALID_PROPOSAL_ID;
   int64_t last_slide_accum_checksum = -1;
-  get_last_slide_log_info_(last_slide_log_id, last_slide_log_scn, last_slide_lsn, \
+  get_last_slide_log_info_(last_slide_log_id, last_slide_scn, last_slide_lsn, \
       last_slide_end_lsn, last_slide_log_pid, last_slide_accum_checksum);
   int64_t match_log_id = OB_INVALID_LOG_ID;
   LSN match_log_end_lsn;
@@ -3102,7 +3098,7 @@ bool LogSlidingWindow::is_prev_log_pid_match(const int64_t log_id,
   bool bool_ret = false;
   is_prev_log_exist = false;
   LSN local_prev_lsn, local_prev_end_lsn;
-  SCN local_prev_log_scn;
+  SCN local_prev_scn;
   int64_t local_prev_log_pid = INVALID_PROPOSAL_ID;
   int64_t local_prev_log_accum_checksum = -1;
   int tmp_ret = OB_SUCCESS;
@@ -3113,7 +3109,7 @@ bool LogSlidingWindow::is_prev_log_pid_match(const int64_t log_id,
     PALF_LOG(INFO, "this is the first log, no need check prev log proposal_id", K(log_id),
         K_(palf_id), K_(self), K(lsn), K(prev_log_pid));
   } else if (OB_SUCCESS != (tmp_ret = get_prev_log_info_(log_id, local_prev_lsn, local_prev_end_lsn,
-          local_prev_log_scn, local_prev_log_pid, local_prev_log_accum_checksum))) {
+          local_prev_scn, local_prev_log_pid, local_prev_log_accum_checksum))) {
     if (REACH_TIME_INTERVAL(100 * 1000)) {
       PALF_LOG(WARN, "get_prev_log_info_ failed", K(tmp_ret), K(log_id), K_(palf_id), K_(self), K(log_id),
           K(lsn), K(prev_lsn), K(prev_log_pid));
@@ -3168,9 +3164,9 @@ LSN LogSlidingWindow::get_max_lsn() const
   return max_lsn;
 }
 
-const SCN LogSlidingWindow::get_max_log_scn() const
+const SCN LogSlidingWindow::get_max_scn() const
 {
-  return lsn_allocator_.get_max_log_scn();
+  return lsn_allocator_.get_max_scn();
 }
 
 bool LogSlidingWindow::check_all_log_has_flushed()
@@ -3405,7 +3401,7 @@ int LogSlidingWindow::append_disk_log_to_sw_(const LSN &lsn,
   LogTask *log_task = NULL;
   LogTaskGuard guard(this);
   const LogGroupEntryHeader &header = entry.get_header();
-  SCN min_log_scn;
+  SCN min_scn;
   const int64_t log_id = header.get_log_id();
   const char *buf = entry.get_data_buf();
   const int64_t buf_len = entry.get_data_len();
@@ -3419,15 +3415,15 @@ int LogSlidingWindow::append_disk_log_to_sw_(const LSN &lsn,
   } else if (log_task->is_valid()) {
     PALF_LOG(ERROR, "it's not possible to get valid log_task from sw successfully in scan disk phase", K(ret), K_(palf_id), K_(self),
         K(lsn), K(header), "start_id", sw_.get_begin_sn());
-  } else if (OB_FAIL(get_min_log_scn_from_buf_(header, buf, buf_len, min_log_scn))) {
-    PALF_LOG(WARN, "get_min_log_scn_from_buf_ failed", K(ret), K_(palf_id), K_(self));
+  } else if (OB_FAIL(get_min_scn_from_buf_(header, buf, buf_len, min_scn))) {
+    PALF_LOG(WARN, "get_min_scn_from_buf_ failed", K(ret), K_(palf_id), K_(self));
   } else {
     LSN max_flushed_lsn;
     LSN max_flushed_end_lsn;
     int64_t max_flushed_log_pid = INVALID_PROPOSAL_ID;
     (void) get_max_flushed_log_info_(max_flushed_lsn, max_flushed_end_lsn, max_flushed_log_pid);
     log_task->lock();
-    if (OB_FAIL(log_task->set_group_header(lsn, min_log_scn, header))) {
+    if (OB_FAIL(log_task->set_group_header(lsn, min_scn, header))) {
       PALF_LOG(WARN, "set_group_header failed", K(ret), K_(palf_id), K_(self), K(lsn), K(header), KPC(log_task));
     } else {
       log_task->set_group_log_checksum(group_log_data_checksum);
@@ -3445,31 +3441,31 @@ int LogSlidingWindow::append_disk_log_to_sw_(const LSN &lsn,
 int LogSlidingWindow::try_update_max_lsn_(const LSN &lsn, const LogGroupEntryHeader &header)
 {
   int ret = OB_SUCCESS;
-  const SCN &log_scn = header.get_max_scn();
+  const SCN &scn = header.get_max_scn();
   const int64_t log_id = header.get_log_id();
   const int64_t &log_proposal_id = header.get_log_proposal_id();
   const int64_t group_entry_len = header.get_serialize_size() + header.get_data_len();
   const LSN end_lsn = lsn + group_entry_len;
-  if (OB_FAIL(lsn_allocator_.inc_update_last_log_info(end_lsn, log_id, log_scn))) {
-    PALF_LOG(WARN, "inc_update_last_log_info failed", K(ret), K_(palf_id), K_(self), K(lsn), K(log_scn));
+  if (OB_FAIL(lsn_allocator_.inc_update_last_log_info(end_lsn, log_id, scn))) {
+    PALF_LOG(WARN, "inc_update_last_log_info failed", K(ret), K_(palf_id), K_(self), K(lsn), K(scn));
   } else {
     PALF_LOG(TRACE, "try_update_max_lsn_ success", K(ret), K_(palf_id), K_(self), K(lsn), K(end_lsn),
-        K(log_id), K(log_scn));
+        K(log_id), K(scn));
   }
   return ret;
 }
 
 int LogSlidingWindow::truncate_lsn_allocator_(const LSN &last_lsn, const int64_t last_log_id,
-    const SCN &last_log_scn)
+    const SCN &last_scn)
 {
   int ret = OB_SUCCESS;
-  if (!last_lsn.is_valid() || OB_INVALID_LOG_ID == last_log_id || (!last_log_scn.is_valid() && 0 != last_log_id)) {
+  if (!last_lsn.is_valid() || OB_INVALID_LOG_ID == last_log_id || (!last_scn.is_valid() && 0 != last_log_id)) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(lsn_allocator_.truncate(last_lsn, last_log_id, last_log_scn))) {
+  } else if (OB_FAIL(lsn_allocator_.truncate(last_lsn, last_log_id, last_scn))) {
     PALF_LOG(WARN, "lsn_allocator_.truncate failed", K(ret), K_(palf_id), K_(self));
   } else {
     PALF_LOG(INFO, "lsn_allocator_.truncate success", K(ret), K_(palf_id), K_(self), K(last_lsn),
-        K(last_log_id), K(last_log_scn));
+        K(last_log_id), K(last_scn));
   }
   return ret;
 }
@@ -3536,20 +3532,20 @@ int LogSlidingWindow::reset_location_cache_cb()
   return ret;
 }
 
-int LogSlidingWindow::get_min_log_scn_from_buf_(const LogGroupEntryHeader &header,
+int LogSlidingWindow::get_min_scn_from_buf_(const LogGroupEntryHeader &header,
                                                   const char *buf,
                                                   const int64_t buf_len,
-                                                  SCN &min_log_scn)
+                                                  SCN &min_scn)
 {
   int ret = OB_SUCCESS;
   LogEntryHeader log_entry_header;
   int64_t pos = 0;
   if (true == header.is_padding_log()) {
-    min_log_scn = header.get_max_scn();
+    min_scn = header.get_max_scn();
   } else if (OB_FAIL(log_entry_header.deserialize(buf, buf_len, pos))) {
     PALF_LOG(WARN, "LogEntryHeader deserialize failed", K(ret), K(header), K(buf_len));
   } else {
-    min_log_scn = log_entry_header.get_log_scn();
+    min_scn = log_entry_header.get_scn();
   }
   return ret;
 }

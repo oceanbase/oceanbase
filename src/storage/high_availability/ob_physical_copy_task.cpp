@@ -197,7 +197,7 @@ int ObPhysicalCopyTask::process()
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy task do not init", K(ret));
   } else if (copy_ctx_->ha_dag_->get_ha_dag_net_ctx()->is_failed()) {
-    //do nothing
+    FLOG_INFO("ha dag net is already failed, skip physical copy task", KPC(copy_ctx_));
   } else {
     if (copy_ctx_->tablet_id_.is_inner_tablet() || copy_ctx_->tablet_id_.is_ls_inner_tablet()) {
     } else {
@@ -635,6 +635,8 @@ int ObPhysicalCopyFinishTask::process()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy finish task do not init", K(ret));
+  } else if (copy_ctx_.ha_dag_->get_ha_dag_net_ctx()->is_failed()) {
+    FLOG_INFO("ha dag net is already failed, skip physical copy finish task", K(copy_ctx_));
   } else if (OB_FAIL(create_sstable_())) {
     LOG_WARN("failed to create sstable", K(ret), K(copy_ctx_));
   } else if (OB_FAIL(check_sstable_valid_())) {
@@ -1068,7 +1070,8 @@ ObTabletCopyFinishTask::ObTabletCopyFinishTask()
     ls_(nullptr),
     reporter_(nullptr),
     ha_dag_(nullptr),
-    tables_handle_()
+    tables_handle_(),
+    src_tablet_meta_(nullptr)
 
 {
 }
@@ -1080,20 +1083,23 @@ ObTabletCopyFinishTask::~ObTabletCopyFinishTask()
 int ObTabletCopyFinishTask::init(
     const common::ObTabletID &tablet_id,
     ObLS *ls,
-    observer::ObIMetaReport *reporter)
+    observer::ObIMetaReport *reporter,
+    const ObMigrationTabletParam *src_tablet_meta)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("tablet copy finish task init twice", K(ret));
-  } else if (!tablet_id.is_valid() || OB_ISNULL(ls) || OB_ISNULL(reporter)) {
+  } else if (!tablet_id.is_valid() || OB_ISNULL(ls) || OB_ISNULL(reporter) || OB_ISNULL(src_tablet_meta)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init tablet copy finish task get invalid argument", K(ret), K(tablet_id), KP(ls), KP(reporter));
+    LOG_WARN("init tablet copy finish task get invalid argument", K(ret), K(tablet_id), KP(ls),
+        KP(reporter), KP(src_tablet_meta));
   } else {
     tablet_id_ = tablet_id;
     ls_ = ls;
     reporter_ = reporter;
     ha_dag_ = static_cast<ObStorageHADag *>(this->get_dag());
+    src_tablet_meta_ = src_tablet_meta;
     is_inited_ = true;
   }
   return ret;
@@ -1105,6 +1111,8 @@ int ObTabletCopyFinishTask::process()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet copy finish task do not init", K(ret));
+  } else if (ha_dag_->get_ha_dag_net_ctx()->is_failed()) {
+    FLOG_INFO("ha dag net is already failed, skip physical copy finish task", K(tablet_id_), KPC(ha_dag_));
   } else if (OB_FAIL(create_new_table_store_())) {
     LOG_WARN("failed to create new table store", K(ret), K(tablet_id_));
   } else if (OB_FAIL(update_tablet_data_status_())) {
@@ -1196,7 +1204,7 @@ int ObTabletCopyFinishTask::create_new_table_store_()
   } else {
     update_table_store_param.multi_version_start_ = 0;
     update_table_store_param.need_report_ = true;
-    update_table_store_param.storage_schema_ = &tablet->get_storage_schema();
+    update_table_store_param.tablet_meta_ = src_tablet_meta_;
     update_table_store_param.rebuild_seq_ = ls_->get_rebuild_seq();
 
     if (OB_FAIL(update_table_store_param.tables_handle_.assign(tables_handle_))) {

@@ -39,24 +39,24 @@ LogConfigMgr::LogConfigMgr()
       prev_lsn_(),
       prev_mode_pid_(INVALID_PROPOSAL_ID),
       state_(INIT),
-      last_submit_config_log_ts_ns_(OB_INVALID_TIMESTAMP),
+      last_submit_config_log_time_us_(OB_INVALID_TIMESTAMP),
       ms_ack_list_(),
       need_change_config_bkgd_(false),
       resend_config_version_(),
       resend_log_list_(),
-      last_broadcast_leader_info_ts_ns_(OB_INVALID_TIMESTAMP),
+      last_broadcast_leader_info_time_us_(OB_INVALID_TIMESTAMP),
       persistent_config_version_(),
       barrier_print_log_time_(OB_INVALID_TIMESTAMP),
       last_check_state_ts_us_(OB_INVALID_TIMESTAMP),
       parent_lock_(),
-      register_ts_ns_(OB_INVALID_TIMESTAMP),
+      register_time_us_(OB_INVALID_TIMESTAMP),
       parent_(),
-      parent_keepalive_ts_ns_(OB_INVALID_TIMESTAMP),
-      last_submit_register_req_ts_ns_(OB_INVALID_TIMESTAMP),
-      last_first_register_ts_ns_(OB_INVALID_TIMESTAMP),
+      parent_keepalive_time_us_(OB_INVALID_TIMESTAMP),
+      last_submit_register_req_time_us_(OB_INVALID_TIMESTAMP),
+      last_first_register_time_us_(OB_INVALID_TIMESTAMP),
       child_lock_(),
       children_(),
-      last_submit_keepalive_ts_ns_(OB_INVALID_TIMESTAMP),
+      last_submit_keepalive_time_us_(OB_INVALID_TIMESTAMP),
       log_engine_(NULL),
       sw_(NULL),
       state_mgr_(NULL),
@@ -133,16 +133,16 @@ void LogConfigMgr::destroy()
     state_mgr_ = NULL;
     sw_ = NULL;
     log_engine_ = NULL;
-    register_ts_ns_ = OB_INVALID_TIMESTAMP;
+    register_time_us_ = OB_INVALID_TIMESTAMP;
     parent_.reset();
-    parent_keepalive_ts_ns_ = OB_INVALID_TIMESTAMP;
+    parent_keepalive_time_us_ = OB_INVALID_TIMESTAMP;
     reset_registering_state_();
     children_.reset();
-    last_submit_keepalive_ts_ns_ = OB_INVALID_TIMESTAMP;
+    last_submit_keepalive_time_us_ = OB_INVALID_TIMESTAMP;
     ms_ack_list_.reset();
     resend_config_version_.reset();
     resend_log_list_.reset();
-    last_submit_config_log_ts_ns_ = OB_INVALID_TIMESTAMP;
+    last_submit_config_log_time_us_ = OB_INVALID_TIMESTAMP;
     log_ms_meta_.reset();
     paxos_memberlist_.reset();
     paxos_replica_num_ = 0;
@@ -503,7 +503,7 @@ int LogConfigMgr::leader_do_loop_work()
       PALF_LOG(WARN, "try_resend_config_log failed", KR(ret), K_(palf_id), K_(self));
     }
   }
-  if (is_leader_active && palf_reach_time_interval_ns(PALF_BROADCAST_LEADER_INFO_INTERVAL_NS, last_broadcast_leader_info_ts_ns_) &&
+  if (is_leader_active && palf_reach_time_interval(PALF_BROADCAST_LEADER_INFO_INTERVAL_US, last_broadcast_leader_info_time_us_) &&
       OB_FAIL(submit_broadcast_leader_info_(proposal_id))) {
     PALF_LOG(WARN, "submit_broadcast_leader_info failed", KR(ret), K_(self), K_(palf_id));
   }
@@ -548,7 +548,7 @@ int LogConfigMgr::is_state_changed(bool &need_rlock, bool &need_wlock) const
         K_(self), K_(log_ms_meta), K_(prev_log_proposal_id), K_(prev_lsn),
         K_(prev_mode_pid), K_(state), K_(persistent_config_version),
         K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list),
-        K_(last_submit_config_log_ts_ns));
+        K_(last_submit_config_log_time_us));
     }
   }
   return ret;
@@ -625,7 +625,7 @@ int LogConfigMgr::change_config_(const LogConfigChangeArgs &args)
           (void) set_resend_log_info_();
           state_ = ConfigChangeState::CHANGING;
           need_change_config_bkgd_ = false;
-          last_submit_config_log_ts_ns_ = OB_INVALID_TIMESTAMP;
+          last_submit_config_log_time_us_ = OB_INVALID_TIMESTAMP;
           last_check_state_ts_us_ = OB_INVALID_TIMESTAMP;
           ret = OB_EAGAIN;
         }
@@ -636,7 +636,7 @@ int LogConfigMgr::change_config_(const LogConfigChangeArgs &args)
           state_ = INIT;
           ms_ack_list_.reset();
           resend_config_version_ = log_ms_meta_.curr_.config_version_;
-          last_submit_config_log_ts_ns_ = OB_INVALID_TIMESTAMP;
+          last_submit_config_log_time_us_ = OB_INVALID_TIMESTAMP;
           ret = OB_SUCCESS;
         } else if (need_resend_config_log_()) {
           if (OB_SUCC(submit_config_log_(curr_proposal_id, prev_log_proposal_id_, prev_lsn_,
@@ -699,9 +699,9 @@ bool LogConfigMgr::is_reach_majority_() const
 
 bool LogConfigMgr::need_resend_config_log_() const
 {
-  int64_t curr_time_ns = common::ObTimeUtility::current_time_ns();
-  return (last_submit_config_log_ts_ns_ == OB_INVALID_TIMESTAMP ||
-      curr_time_ns - last_submit_config_log_ts_ns_ > PALF_RESEND_MSLOG_INTERVAL_NS);
+  int64_t curr_time_us = common::ObTimeUtility::current_time();
+  return (last_submit_config_log_time_us_ == OB_INVALID_TIMESTAMP ||
+      curr_time_us - last_submit_config_log_time_us_ > PALF_RESEND_MSLOG_INTERVAL_US);
 }
 
 int LogConfigMgr::renew_config_change_barrier_()
@@ -1296,7 +1296,7 @@ void LogConfigMgr::reset_status()
   need_change_config_bkgd_ = false;
   resend_config_version_.reset();
   resend_log_list_.reset();
-  last_submit_config_log_ts_ns_ = OB_INVALID_TIMESTAMP;
+  last_submit_config_log_time_us_ = OB_INVALID_TIMESTAMP;
   last_check_state_ts_us_ = OB_INVALID_TIMESTAMP;
 }
 
@@ -1371,7 +1371,7 @@ int LogConfigMgr::submit_config_log_(const int64_t proposal_id,
       PALF_LOG(WARN, "submit_change_config_meta_req failed, to learner", KR(ret), K_(palf_id), K_(self), K(proposal_id),
           K(prev_log_proposal_id), K(prev_lsn), K(prev_mode_pid), K(config_meta));
     } else {
-      last_submit_config_log_ts_ns_ = common::ObTimeUtility::current_time_ns();
+      last_submit_config_log_time_us_ = common::ObTimeUtility::current_time();
       PALF_LOG(INFO, "submit_config_log success", KR(ret), K_(palf_id), K_(self), K(dst_member_list), K(proposal_id),
           K(prev_log_proposal_id), K(prev_lsn), K(prev_mode_pid), K(config_meta));
     }
@@ -1463,7 +1463,7 @@ int LogConfigMgr::try_resend_config_log_(const int64_t proposal_id)
   if (INIT == state_ &&
       resend_log_list_.get_member_number() != 0 &&
       resend_config_version_.is_valid() &&
-      palf_reach_time_interval_ns(PALF_RESEND_MSLOG_INTERVAL_NS, last_submit_config_log_ts_ns_) &&
+      palf_reach_time_interval(PALF_RESEND_MSLOG_INTERVAL_US, last_submit_config_log_time_us_) &&
       OB_FAIL(log_engine_->submit_change_config_meta_req(resend_log_list_, proposal_id, prev_log_proposal_id_,
           prev_lsn_, prev_mode_pid_, log_ms_meta_))) {
     PALF_LOG(WARN, "resend config log failed", KR(ret), K(proposal_id), K(resend_config_version_), K_(log_ms_meta));
@@ -1498,12 +1498,12 @@ void LogConfigChangeArgs::reset()
 //================================ Child ================================
 void LogConfigMgr::reset_registering_state_()
 {
-  last_submit_register_req_ts_ns_ = OB_INVALID_TIMESTAMP;
+  last_submit_register_req_time_us_ = OB_INVALID_TIMESTAMP;
 }
 
 bool LogConfigMgr::is_registering_() const
 {
-  return (last_submit_register_req_ts_ns_ != OB_INVALID_TIMESTAMP);
+  return (last_submit_register_req_time_us_ != OB_INVALID_TIMESTAMP);
 }
 
 int LogConfigMgr::get_register_leader_(common::ObAddr &leader) const
@@ -1520,9 +1520,9 @@ int LogConfigMgr::after_register_done_()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(sw_->try_fetch_log(FetchTriggerType::LEARNER_REGISTER))){
-    PALF_LOG(WARN, "try_fetch_log failed", KR(ret), K_(palf_id), K_(self), K_(parent), K_(register_ts_ns));
+    PALF_LOG(WARN, "try_fetch_log failed", KR(ret), K_(palf_id), K_(self), K_(parent), K_(register_time_us));
   }
-  PALF_LOG(INFO, "after_register_done", K_(palf_id), K_(self), K_(parent), K_(register_ts_ns));
+  PALF_LOG(INFO, "after_register_done", K_(palf_id), K_(self), K_(parent), K_(register_time_us));
   return ret;
 }
 
@@ -1571,15 +1571,15 @@ int LogConfigMgr::register_parent_()
     PALF_LOG(TRACE, "get_register_leader_ failed", KR(ret), K_(palf_id), K_(self));
   } else {
     const bool is_to_leader = true;
-    const int64_t curr_ts_ns = ObTimeUtility::current_time_ns();
-    LogLearner child_self(self_, region_, curr_ts_ns);
+    const int64_t curr_time_us = ObTimeUtility::current_time();
+    LogLearner child_self(self_, region_, curr_time_us);
     if (OB_FAIL(log_engine_->submit_register_parent_req(leader, child_self, is_to_leader))) {
-      // NB: register_req sends my addr_, region_ and register_ts_ns_
+      // NB: register_req sends my addr_, region_ and register_time_us_
       PALF_LOG(WARN, "submit_register_parent_req failed", KR(ret), K_(palf_id), K_(self), K(leader), K(child_self), K(is_to_leader));
     } else {
-      last_submit_register_req_ts_ns_ = curr_ts_ns;
-      register_ts_ns_ = curr_ts_ns;
-      parent_keepalive_ts_ns_ = OB_INVALID_TIMESTAMP;
+      last_submit_register_req_time_us_ = curr_time_us;
+      register_time_us_ = curr_time_us;
+      parent_keepalive_time_us_ = OB_INVALID_TIMESTAMP;
     }
   }
   return ret;
@@ -1599,26 +1599,26 @@ int LogConfigMgr::handle_register_parent_resp(const LogLearner &server,
     PALF_LOG(WARN, "invalid argument", KR(ret), K(server));
   } else {
     SpinLockGuard guard(parent_lock_);
-    if (!is_registering_() || register_ts_ns_ != server.register_ts_ns_) {
+    if (!is_registering_() || register_time_us_ != server.register_time_us_) {
       ret = OB_STATE_NOT_MATCH;
-      PALF_LOG(WARN, "receive wrong register resp", K_(palf_id), K_(self), K(server), K_(register_ts_ns), "registering", is_registering_());
+      PALF_LOG(WARN, "receive wrong register resp", K_(palf_id), K_(self), K(server), K_(register_time_us), "registering", is_registering_());
     } else if (REGISTER_DONE == reg_ret) {
       // register done, just set parent_ and clean registering state
       parent_ = server.server_;
-      parent_keepalive_ts_ns_ = common::ObTimeUtility::current_time_ns();
+      parent_keepalive_time_us_ = common::ObTimeUtility::current_time();
       reset_registering_state_();
       do_after_register_done = true;
-      PALF_EVENT("register_parent done", palf_id_, K_(self), K_(parent), K_(register_ts_ns));
+      PALF_EVENT("register_parent done", palf_id_, K_(self), K_(parent), K_(register_time_us));
     } else if (REGISTER_CONTINUE == reg_ret && candidate_list.get_member_number() > 0) {
       common::ObAddr reg_dst;
       const int64_t reg_dst_idx = ObRandom::rand(0, candidate_list.get_member_number() - 1);
-      LogLearner child_self(self_, region_, register_ts_ns_);
+      LogLearner child_self(self_, region_, register_time_us_);
       if (OB_FAIL(candidate_list.get_server_by_index(reg_dst_idx, reg_dst))) {
         PALF_LOG(WARN, "get_server_by_index failed", KR(ret), K_(palf_id), K_(self), K(candidate_list), K(reg_dst));
       } else if (OB_FAIL(log_engine_->submit_register_parent_req(reg_dst, child_self, false))) {
         PALF_LOG(WARN, "submit_register_parent_req failed", KR(ret), K_(palf_id), K_(self), K(reg_dst));
       } else {
-        last_submit_register_req_ts_ns_ = common::ObTimeUtility::current_time_ns();
+        last_submit_register_req_time_us_ = common::ObTimeUtility::current_time();
       }
     } else if (REGISTER_DIFF_REGION == reg_ret) {
       const char *reason = "diff_region";
@@ -1646,11 +1646,11 @@ int LogConfigMgr::retire_parent_()
   if (!parent_.is_valid()) {
     // parent is already invalid, skip
   } else {
-    LogLearner child_self(self_, region_, register_ts_ns_);
+    LogLearner child_self(self_, region_, register_time_us_);
     if (OB_FAIL(log_engine_->submit_retire_parent_req(parent_, child_self))) {
-      PALF_LOG(WARN, "submit_retire_parent_req failed", KR(ret), K_(palf_id), K_(self), K_(parent), K_(register_ts_ns));
+      PALF_LOG(WARN, "submit_retire_parent_req failed", KR(ret), K_(palf_id), K_(self), K_(parent), K_(register_time_us));
     } else {
-      PALF_LOG(INFO, "submit_retire_parent_req success", K_(palf_id), K_(self), K_(parent), K_(register_ts_ns));
+      PALF_LOG(INFO, "submit_retire_parent_req success", K_(palf_id), K_(self), K_(parent), K_(register_time_us));
       reset_parent_info_();
     }
   }
@@ -1664,7 +1664,7 @@ int LogConfigMgr::handle_retire_child(const LogLearner &parent)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
-  } else if (is_registering_() || parent.server_ != parent_ || parent.register_ts_ns_ != register_ts_ns_) {
+  } else if (is_registering_() || parent.server_ != parent_ || parent.register_time_us_ != register_time_us_) {
     PALF_LOG(WARN, "handle_retire_child failed, invalid msg", KR(ret), K(parent), K(parent_), K_(self));
   } else {
     reset_parent_info_();
@@ -1685,17 +1685,17 @@ int LogConfigMgr::handle_learner_keepalive_req(const LogLearner &parent)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
-  } else if (!parent.is_valid() || parent.register_ts_ns_ <= 0) {
+  } else if (!parent.is_valid() || parent.register_time_us_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (true == is_registering_() || parent.server_ != parent_ || parent.register_ts_ns_ != register_ts_ns_) {
-    PALF_LOG(WARN, "handle_keepalive failed", KR(ret), K_(palf_id), K_(self), K(parent), K(parent_), K_(register_ts_ns));
+  } else if (true == is_registering_() || parent.server_ != parent_ || parent.register_time_us_ != register_time_us_) {
+    PALF_LOG(WARN, "handle_keepalive failed", KR(ret), K_(palf_id), K_(self), K(parent), K(parent_), K_(register_time_us));
   } else {
-    parent_keepalive_ts_ns_ = common::ObTimeUtility::current_time_ns();
-    LogLearner child_itself(self_, region_, register_ts_ns_);
+    parent_keepalive_time_us_ = common::ObTimeUtility::current_time();
+    LogLearner child_itself(self_, region_, register_time_us_);
     if (OB_FAIL(log_engine_->submit_learner_keepalive_resp(parent.server_, child_itself))) {
       PALF_LOG(WARN, "submit_learner_keepalive_resp failed", KR(ret), K_(palf_id), K_(self), K(parent));
     } else {
-      PALF_LOG(INFO, "handle_learner_keepalive_req success", KR(ret), K_(palf_id), K_(self), K(parent), K_(parent_keepalive_ts_ns));
+      PALF_LOG(INFO, "handle_learner_keepalive_req success", KR(ret), K_(palf_id), K_(self), K(parent), K_(parent_keepalive_time_us));
     }
   }
   return ret;
@@ -1711,14 +1711,14 @@ int LogConfigMgr::check_parent_health()
     ret = OB_NOT_INIT;
   } else {
     SpinLockGuard guard(parent_lock_);
-    const int64_t curr_ts_ns = common::ObTimeUtility::current_time_ns();
-    const bool is_registering_timeout = (is_registering_() && curr_ts_ns - last_submit_register_req_ts_ns_ > PALF_CHILD_RESEND_REGISTER_INTERVAL_NS);
+    const int64_t curr_time_us = common::ObTimeUtility::current_time();
+    const bool is_registering_timeout = (is_registering_() && curr_time_us - last_submit_register_req_time_us_ > PALF_CHILD_RESEND_REGISTER_INTERVAL_US);
     const bool first_registration = (!parent_.is_valid() && !is_registering_() &&
-        palf_reach_time_interval_ns(PALF_CHILD_RESEND_REGISTER_INTERVAL_NS, last_first_register_ts_ns_));
-    const bool parent_timeout = (parent_.is_valid() && curr_ts_ns - parent_keepalive_ts_ns_ > PALF_PARENT_CHILD_TIMEOUT_NS);
+        palf_reach_time_interval(PALF_CHILD_RESEND_REGISTER_INTERVAL_US, last_first_register_time_us_));
+    const bool parent_timeout = (parent_.is_valid() && curr_time_us - parent_keepalive_time_us_ > PALF_PARENT_CHILD_TIMEOUT_US);
     if (is_registering_timeout || first_registration || parent_timeout) {
       PALF_LOG(INFO, "re_register_parent reason", K_(palf_id), K_(self), K(is_registering_timeout), K(first_registration), K(parent_timeout),
-          K_(parent_keepalive_ts_ns), K_(last_submit_register_req_ts_ns), K_(last_first_register_ts_ns), K_(register_ts_ns), K(curr_ts_ns));
+          K_(parent_keepalive_time_us), K_(last_submit_register_req_time_us), K_(last_first_register_time_us), K_(register_time_us), K(curr_time_us));
       reset_parent_info_();
       if (OB_FAIL(register_parent_())) {
         PALF_LOG(WARN, "register request timeout, re_register_parent failed", KR(ret), K_(palf_id), K_(self));
@@ -1732,10 +1732,10 @@ int LogConfigMgr::check_parent_health()
 
 void LogConfigMgr::reset_parent_info_()
 {
-  register_ts_ns_ = OB_INVALID_TIMESTAMP;
+  register_time_us_ = OB_INVALID_TIMESTAMP;
   parent_.reset();
-  parent_keepalive_ts_ns_ = OB_INVALID_TIMESTAMP;
-  last_submit_register_req_ts_ns_ = OB_INVALID_TIMESTAMP;
+  parent_keepalive_time_us_ = OB_INVALID_TIMESTAMP;
+  last_submit_register_req_time_us_ = OB_INVALID_TIMESTAMP;
 }
 //================================ Child ================================
 
@@ -1748,7 +1748,7 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
   RegisterReturn reg_ret = INVALID_REG_RET;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!child.is_valid() || child.register_ts_ns_ <= 0) {
+  } else if (!child.is_valid() || child.register_time_us_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), K_(palf_id), K_(self), K(child));
   } else if (is_to_leader && !all_learnerlist_.contains(child.get_server())) {
@@ -1761,7 +1761,7 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
     if (is_in_children && children_.get_learner(idx).region_ == child.region_) {
       // if child is already in the children list and child's region don't change,
       // replace old child in children_list
-      children_.get_learner(idx).register_ts_ns_ = child.register_ts_ns_;
+      children_.get_learner(idx).register_time_us_ = child.register_time_us_;
       children_.get_learner(idx).update_keepalive_ts();
       reg_ret = REGISTER_DONE;
     } else if (is_in_children && FALSE_IT(children_.remove_learner(child.server_))) {
@@ -1784,8 +1784,8 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
           PALF_LOG(ERROR, "leader's children is full and their regions are different", KR(ret), K_(palf_id), K_(self), K(child), K_(children));
         } else {
           LogLearner dst_child(child);
-          dst_child.keepalive_ts_ = common::ObTimeUtility::current_time_ns();
-          dst_child.register_ts_ns_ = child.register_ts_ns_;
+          dst_child.keepalive_ts_ = common::ObTimeUtility::current_time();
+          dst_child.register_time_us_ = child.register_time_us_;
           if (OB_FAIL(children_.add_learner(dst_child))) {
             PALF_LOG(WARN, "handle_register_parent_req failed", KR(ret), K_(palf_id), K_(self), K(is_to_leader), K(dst_child));
           } else {
@@ -1799,8 +1799,8 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
     } else if (children_.get_member_number() < OB_MAX_CHILD_MEMBER_NUMBER_IN_FOLLOWER) {
       // register to self
       LogLearner dst_child(child);
-      dst_child.keepalive_ts_ = common::ObTimeUtility::current_time_ns();
-      dst_child.register_ts_ns_ = child.register_ts_ns_;
+      dst_child.keepalive_ts_ = common::ObTimeUtility::current_time();
+      dst_child.register_time_us_ = child.register_time_us_;
       if (OB_FAIL(children_.add_learner(dst_child))) {
         PALF_LOG(WARN, "handle_register_parent_req failed", KR(ret), K_(palf_id), K_(self), K(is_to_leader), K(dst_child));
       } else {
@@ -1817,7 +1817,7 @@ int LogConfigMgr::handle_register_parent_req(const LogLearner &child, const bool
     }
   }
   if (OB_SUCC(ret)){
-    LogLearner parent(self_, region_, child.register_ts_ns_);
+    LogLearner parent(self_, region_, child.register_time_us_);
     if (reg_ret == REGISTER_DONE ||
         reg_ret == REGISTER_CONTINUE ||
         reg_ret == REGISTER_DIFF_REGION) {
@@ -1845,10 +1845,10 @@ int LogConfigMgr::handle_retire_parent(const LogLearner &child)
   LogLearner learner;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!child.is_valid() || child.register_ts_ns_ <= 0) {
+  } else if (!child.is_valid() || child.register_time_us_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_SUCC(children_.get_learner_by_addr(child.server_, learner)) &&
-             learner.register_ts_ns_ == child.register_ts_ns_) {
+             learner.register_time_us_ == child.register_time_us_) {
     if (OB_FAIL(children_.remove_learner(child))) {
       PALF_LOG(WARN, "children_ remove_learner failed", KR(ret), K_(palf_id), K_(self), K_(children), K(child));
     } else {
@@ -1868,13 +1868,13 @@ int LogConfigMgr::handle_learner_keepalive_resp(const LogLearner &child)
   int64_t idx = -1;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!child.is_valid() || child.register_ts_ns_ <= 0) {
+  } else if (!child.is_valid() || child.register_time_us_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     SpinLockGuard guard(child_lock_);
     int64_t idx = -1;
     if (-1 != (idx = children_.get_index_by_addr(child.server_)) &&
-        children_.get_learner(idx).register_ts_ns_ == child.register_ts_ns_) {
+        children_.get_learner(idx).register_time_us_ == child.register_time_us_) {
       children_.get_learner(idx).update_keepalive_ts();
       PALF_LOG(INFO, "handle_learner_keepalive_resp success", K_(palf_id), K_(self), K_(children));
     }
@@ -1915,7 +1915,7 @@ int LogConfigMgr::check_children_health()
       }
     }
     // 4. send keepalive msg to children
-    if (children_.is_valid() && palf_reach_time_interval_ns(PALF_PARENT_KEEPALIVE_INTERVAL_NS, last_submit_keepalive_ts_ns_)) {
+    if (children_.is_valid() && palf_reach_time_interval(PALF_PARENT_KEEPALIVE_INTERVAL_US, last_submit_keepalive_time_us_)) {
       // reach keepalive interval, submit keepalive req
       SpinLockGuard guard(child_lock_);
       LogLearner parent_self(self_, region_, OB_INVALID_TIMESTAMP);
@@ -1923,7 +1923,7 @@ int LogConfigMgr::check_children_health()
         LogLearner child;
         if (OB_FAIL(children_.get_learner(i, child))) {
           PALF_LOG(WARN, "children_.get_learner failed", KR(ret), K_(palf_id), K_(self), K(i));
-        } else if (FALSE_IT(parent_self.register_ts_ns_ = child.register_ts_ns_)) {
+        } else if (FALSE_IT(parent_self.register_time_us_ = child.register_time_us_)) {
         } else if (OB_FAIL(log_engine_->submit_learner_keepalive_req(child.get_server(), parent_self))) {
           PALF_LOG(WARN, "submit_learner_keepalive_req failed", KR(ret), K_(palf_id), K_(self), K(child));
         } else {
@@ -1948,7 +1948,7 @@ int LogConfigMgr::remove_timeout_child_(LogLearnerList &dead_children)
   LogLearnerCond child_timeout_cond;
   LogLearnerAction child_timeout_action;
   // if child is timeout, then add it to dead_children
-  if (OB_FAIL(child_timeout_cond.assign([](const LogLearner &child) { return child.is_timeout(PALF_PARENT_CHILD_TIMEOUT_NS);}))) {
+  if (OB_FAIL(child_timeout_cond.assign([](const LogLearner &child) { return child.is_timeout(PALF_PARENT_CHILD_TIMEOUT_US);}))) {
     PALF_LOG(WARN, "child_timeout_cond assign failed", KR(ret), K_(palf_id), K_(self));
   } else if (OB_FAIL(child_timeout_action.assign([&dead_children](const LogLearner &child) {return dead_children.add_learner(child);}))) {
     PALF_LOG(WARN, "child_timeout_action assign failed", KR(ret), K_(palf_id), K_(self));
@@ -2156,7 +2156,7 @@ int LogConfigMgr::submit_retire_children_req_(const LogLearnerList &retired_chil
     LogLearner retired_child;
     if (OB_SUCCESS != (tmp_ret = retired_children.get_learner(i, retired_child))) {
       PALF_LOG(WARN, "get_learner failed", K(retired_children));
-    } else if (FALSE_IT(parent.register_ts_ns_ = retired_child.register_ts_ns_)) {
+    } else if (FALSE_IT(parent.register_time_us_ = retired_child.register_time_us_)) {
     } else if (OB_SUCCESS != (tmp_ret = log_engine_->submit_retire_child_req(retired_child.server_, parent))) {
       PALF_LOG(WARN, "submit_retire_child_req failed", KR(ret), K(retired_child), K(parent));
     }

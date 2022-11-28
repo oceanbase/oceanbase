@@ -159,6 +159,9 @@ public:
   int check_copy_tablet_exist(const common::ObTabletID &tablet_id, bool &is_exist);
   int check_tablet_table_info_exist(
       const common::ObTabletID &tablet_id, bool &is_exist);
+  int get_tablet_meta(
+      const common::ObTabletID &tablet_id,
+      const ObMigrationTabletParam *&tablet_meta);
   void reuse();
 
 public:
@@ -167,7 +170,9 @@ public:
   public:
     ObStorageHATabletTableInfoMgr();
     virtual ~ObStorageHATabletTableInfoMgr();
-    int init(const common::ObTabletID &tablet_id, const storage::ObCopyTabletStatus::STATUS &status);
+    int init(const common::ObTabletID &tablet_id,
+        const storage::ObCopyTabletStatus::STATUS &status,
+        const ObMigrationTabletParam &tablet_meta);
     int add_copy_table_info(const blocksstable::ObMigrationSSTableParam &copy_table_info);
     int get_copy_table_info(
         const ObITable::TableKey &table_key,
@@ -175,12 +180,13 @@ public:
     int get_table_keys(
         common::ObIArray<ObITable::TableKey> &table_keys);
     int check_copy_tablet_exist(bool &is_exist);
-
+    int get_tablet_meta(const ObMigrationTabletParam *&tablet_meta);
   private:
     bool is_inited_;
     common::ObTabletID tablet_id_;
     storage::ObCopyTabletStatus::STATUS status_;
     common::ObArray<blocksstable::ObMigrationSSTableParam> copy_table_info_array_;
+    ObMigrationTabletParam tablet_meta_;
     DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletTableInfoMgr);
   };
 

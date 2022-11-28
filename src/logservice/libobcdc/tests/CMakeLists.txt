@@ -18,8 +18,15 @@ target_link_libraries(obcdc_tailf_static PRIVATE obcdc_tailf_objects_static)
 
 if (OB_BUILD_CDC)
   # execute build_cdc_demo to check dlopen and compile
-  add_custom_command(TARGET obcdc_tailf POST_BUILD
-    COMMAND /usr/bin/sh build_cdc_demo.sh ${DEVTOOLS_DIR}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/demo/
-  )
+  if (NOT OB_STATIC_LINK_LGPL_DEPS)
+    add_custom_command(TARGET obcdc_tailf POST_BUILD
+      COMMAND /usr/bin/sh build_cdc_demo.sh ${DEVTOOLS_DIR} ${PROJECT_BINARY_DIR} ${DEP_DIR}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/demo/
+      )
+  else()
+    add_custom_command(TARGET obcdc_tailf POST_BUILD
+      COMMAND /usr/bin/sh build_cdc_demo.sh ${DEVTOOLS_DIR} ${PROJECT_BINARY_DIR}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/demo/
+      )
+  endif()
 endif()

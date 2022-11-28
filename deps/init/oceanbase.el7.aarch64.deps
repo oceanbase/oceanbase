@@ -14,7 +14,7 @@ arch=aarch64
 repo=http://yum.tbsite.net/taobao/7/aarch64/test/ob-deploy/
 
 [deps]
-devdeps-gtest-1.8.0-72022092914.el7.aarch64.rpm
+devdeps-gtest-1.8.0-132022101316.el7.aarch64.rpm
 devdeps-isa-l-static-2.22.0-22022092915.el7.aarch64.rpm
 devdeps-libcurl-static-7.29.0-32022093010.el7.aarch64.rpm
 devdeps-libunwind-static-1.6.2-222022100410.el7.aarch64.rpm

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_backup_task_scheduler.h"
+#include "share/location_cache/ob_location_service.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/backup/ob_backup_clean_operator.h"
 #include "share/ob_srv_rpc_proxy.h"
@@ -931,7 +932,7 @@ int64_t ObBackupCleanLSTask::get_deep_copy_size() const
 
 bool ObBackupCleanLSTask::can_execute_on_any_server() const
 {
-  return true;
+  return false;
 }
 
 int ObBackupCleanLSTask::do_update_dst_and_doing_status_(common::ObMySQLProxy &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) 
@@ -940,6 +941,50 @@ int ObBackupCleanLSTask::do_update_dst_and_doing_status_(common::ObMySQLProxy &s
   ObLSID ls_id(get_ls_id());
   if (OB_FAIL(ObBackupCleanLSTaskOperator::update_dst_and_status(sql_proxy, get_task_id(), get_tenant_id(), ls_id, trace_id, dst))) {
     LOG_WARN("failed to update task status", K(ret), K(*this), K(dst));
+  }
+  return ret;
+}
+
+
+int ObBackupCleanLSTask::set_optional_servers_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObBackupServer> servers;
+  uint64_t tenant_id = get_tenant_id();
+  share::ObLocationService *location_service = GCTX.location_service_;
+  int64_t cluster_id = GCONF.cluster_id;
+  share::ObLSID ls_id(share::ObLSID::SYS_LS_ID);
+  share::ObLSLocation location;
+  bool is_cache_hit = false;
+
+  if (OB_ISNULL(location_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location_service ptr is null", K(ret));
+  } else if (OB_FAIL(location_service->get(cluster_id, tenant_id, ls_id, INT64_MAX/*expire_renew_time*/,
+      is_cache_hit, location))) {
+    LOG_WARN("failed to get location", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
+  } else {
+    const common::ObIArray<ObLSReplicaLocation> &replica_array = location.get_replica_locations();
+    for (int i = 0; OB_SUCC(ret) && i < replica_array.count(); ++i) {
+      const ObLSReplicaLocation &replica = replica_array.at(i);
+      if (replica.is_valid()) {
+        ObBackupServer server;
+        server.set(replica.get_server(), 1/*high priority*/);
+        if (OB_FAIL(servers.push_back(server))) {
+          LOG_WARN("failed to push server", K(ret), K(server));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && servers.empty()) {
+      ret = OB_EAGAIN;
+      LOG_WARN("no optional servers, retry_later", K(ret), K(*this));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(set_optional_servers(servers))) {
+    LOG_WARN("failed to optional servers", K(ret));
+  } else {
+    FLOG_INFO("task optional servers are：", K(*this), K(servers));
   }
   return ret;
 }
@@ -1008,6 +1053,8 @@ int ObBackupCleanLSTask::build(const ObBackupCleanTaskAttr &task_attr, const ObB
       LOG_WARN("failed to assign backup path", K(ret), K(task_attr.backup_path_));
     } else if (OB_FAIL(task_attr.get_backup_clean_id(id_))) {
       LOG_WARN("failed to get task id", K(ret), K(task_attr)); 
+    } else if (OB_FAIL(set_optional_servers_())) {
+      LOG_WARN("failed to set optional servers", K(ret), K(task_attr));
     }
   }
   return ret;

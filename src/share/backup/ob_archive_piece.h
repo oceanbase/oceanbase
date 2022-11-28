@@ -33,8 +33,8 @@ namespace share
  * 最终呈现效果可能是[d1:A(1-10)]/[d2:A(1-15)]/[d3:A(1-30)],
  * 也可能是[d1:A(1-30)]/[d2:A(1-30)]/[d3:A(1-30)]
  *
- * 公式 piece = (log_scn.convert_to_ts() - genesis_scn.convert_to_ts()) / interval + base_piece_id
- * 其中log_ts为日志提交时间戳, genesis_ts为基准, interval为piece时间跨度默认为一天
+ * 公式 piece = (scn.convert_to_ts() - genesis_scn.convert_to_ts()) / interval + base_piece_id
+ * 其中scn日志提交scn, genesis_ts为基准, interval为piece时间跨度默认为一天
  *
  * 实际生产环境以天为piece切分单元, 并且不对用户展示,
  * 测试环境支持更细粒度目录切分单元

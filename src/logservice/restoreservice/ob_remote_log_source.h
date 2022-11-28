@@ -48,7 +48,7 @@ public:
   virtual int update_locate_info(ObRemoteLogParent &source) = 0;
   bool to_end() const { return to_end_; }
   void set_to_end(const bool is_to_end, const palf::SCN &scn);
-  void get_end_scn(palf::SCN &scn) const { scn = end_fetch_log_scn_;}
+  void get_end_scn(palf::SCN &scn) const { scn = end_fetch_scn_;}
   void get_upper_limit_scn(palf::SCN &scn) const { scn = upper_limit_scn_; }
   ObLogArchiveSourceType get_source_type() const { return type_; }
   const char *get_source_type_str(const ObLogArchiveSourceType &type) const;
@@ -64,7 +64,7 @@ protected:
   ObLogArchiveSourceType type_;
   palf::SCN upper_limit_scn_;
   bool to_end_;
-  palf::SCN end_fetch_log_scn_;
+  palf::SCN end_fetch_scn_;
   palf::LSN end_lsn_;
 
   ObLogRestoreErrorContext error_context_;    // 记录该source的错误信息, 仅leader有效
@@ -79,13 +79,13 @@ public:
   virtual ~ObRemoteSerivceParent();
 
 public:
-  int set(const ObAddr &addr, const palf::SCN &end_log_scn);
-  void get(ObAddr &addr, palf::SCN &end_log_scn);
+  int set(const ObAddr &addr, const palf::SCN &end_scn);
+  void get(ObAddr &addr, palf::SCN &end_scn);
   int deep_copy_to(ObRemoteLogParent &other) override;
   bool is_valid() const override;
   int update_locate_info(ObRemoteLogParent &source) override { UNUSED(source); return OB_SUCCESS; }
   TO_STRING_KV("ObRemoteLogParent", get_source_type_str(type_), K_(ls_id), K_(server),
-      K_(upper_limit_scn), K_(to_end), K_(end_fetch_log_scn), K_(end_lsn));
+      K_(upper_limit_scn), K_(to_end), K_(end_fetch_scn), K_(end_lsn));
 
 private:
   ObAddr server_;
@@ -101,14 +101,14 @@ public:
   virtual ~ObRemoteLocationParent();
 
 public:
-  void get(share::ObBackupDest *&dest, ObLogArchivePieceContext *&piece_context, palf::SCN &end_log_scn);
-  int set(const share::ObBackupDest &dest, const palf::SCN &end_log_scn);
+  void get(share::ObBackupDest *&dest, ObLogArchivePieceContext *&piece_context, palf::SCN &end_scn);
+  int set(const share::ObBackupDest &dest, const palf::SCN &end_scn);
   int deep_copy_to(ObRemoteLogParent &other) override;
   bool is_valid() const override;
   int update_locate_info(ObRemoteLogParent &source) override;
 
   TO_STRING_KV("ObRemoteLogParent", get_source_type_str(type_), K_(ls_id), K_(root_path), K_(piece_context),
-      K_(upper_limit_scn), K_(to_end), K_(end_fetch_log_scn), K_(end_lsn));
+      K_(upper_limit_scn), K_(to_end), K_(end_fetch_scn), K_(end_lsn));
 
 private:
   share::ObBackupDest root_path_;   // uri & storage_info
@@ -125,16 +125,16 @@ public:
   virtual ~ObRemoteRawPathParent();
 
 public:
-  void get(DirArray &array, palf::SCN &end_log_scn);
+  void get(DirArray &array, palf::SCN &end_scn);
   int set(const int64_t cluster_id, const ObAddr &addr);
   int deep_copy_to(ObRemoteLogParent &other) override;
   bool is_valid() const override;
-  int set(DirArray &array, const palf::SCN &end_log_scn);
+  int set(DirArray &array, const palf::SCN &end_scn);
   int update_locate_info(ObRemoteLogParent &source) override { UNUSED(source); return OB_NOT_SUPPORTED; }
   void get_locate_info(int64_t &piece_index, int64_t &min_file_id, int64_t &max_file_id) const;
 
   TO_STRING_KV("ObRemoteLogParent", get_source_type_str(type_), K_(ls_id),
-      K_(upper_limit_scn), K_(to_end), K_(end_fetch_log_scn), K_(end_lsn),
+      K_(upper_limit_scn), K_(to_end), K_(end_fetch_scn), K_(end_lsn),
       K_(paths), K_(piece_index), K_(min_file_id), K_(max_file_id));
 
 private:

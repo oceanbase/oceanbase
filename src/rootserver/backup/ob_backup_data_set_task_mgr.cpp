@@ -388,8 +388,14 @@ int ObBackupSetTaskMgr::backup_user_meta_()
   ObArray<ObBackupLSTaskAttr> ls_task;
   int64_t finish_cnt = 0;
   uint64_t backup_meta_start_ts = set_task_attr_.user_ls_start_scn_.convert_to_ts();
+  int64_t backup_user_meta_timeout = OB_MAX_BACKUP_META_TIMEOUT;
+
+#ifdef ERRSIM
+  backup_user_meta_timeout = GCONF.errsim_max_backup_meta_retry_time_interval;
+#endif
+
   DEBUG_SYNC(BEFORE_BACKUP_UESR_META);
-  if (backup_meta_start_ts + OB_MAX_BACKUP_META_TIMEOUT < ObTimeUtility::current_time()) {
+  if (backup_meta_start_ts + backup_user_meta_timeout < ObTimeUtility::current_time()) {
     // backup meta overtime, need change meta turn.
     // get new ls list, and do backup meta in new turn.
     if (OB_FAIL(enable_transfer_())) {
@@ -1570,7 +1576,7 @@ int ObBackupSetTaskMgr::calculate_start_replay_scn_(palf::SCN &start_replay_scn)
   } else {
     ARRAY_FOREACH_X(ls_meta_infos.ls_meta_packages_, i, cnt, OB_SUCC(ret)) {
       const palf::PalfBaseInfo &palf_base_info = ls_meta_infos.ls_meta_packages_.at(i).palf_meta_;
-      tmp_start_replay_scn = palf::SCN::min(tmp_start_replay_scn, palf_base_info.prev_log_info_.log_scn_);
+      tmp_start_replay_scn = palf::SCN::min(tmp_start_replay_scn, palf_base_info.prev_log_info_.scn_);
     }
     if (OB_SUCC(ret)) {
       start_replay_scn = tmp_start_replay_scn;

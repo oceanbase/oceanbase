@@ -83,12 +83,12 @@ private:
              const ObIArray<ObString> &tenant_path_array,
              const common::ObString &passwd_array,
              const palf::SCN &restore_scn,
-             palf::SCN &restore_start_log_scn,
+             palf::SCN &restore_start_scn,
              ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
   static int get_restore_log_piece_array_(
              const ObIArray<ObString> &tenant_path_array,
-             const palf::SCN &restore_start_log_scn,
-             const palf::SCN &restore_end_log_scn,
+             const palf::SCN &restore_start_scn,
+             const palf::SCN &restore_end_scn,
              ObIArray<share::ObBackupPiecePath> &backup_piece_list,
              ObIArray<share::ObBackupPathString> &log_path_list);
   static int get_restore_backup_piece_list_(

@@ -76,7 +76,7 @@ private:
   const int64_t buf_len_;
   int64_t pos_;
 
-  int64_t log_ts_;
+  int64_t scn_val_;
   palf::block_id_t block_id_;
   palf::LSN lsn_;
   share::ObAdminMutatorStringArg str_arg_;

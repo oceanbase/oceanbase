@@ -100,7 +100,7 @@ public:
     } else {
       buffer = entry.get_data_buf();
       nbytes = entry.get_data_len();
-      scn = entry.get_log_scn();
+      scn = entry.get_scn();
       PALF_LOG(TRACE, "PalfIterator get_entry success", K(iterator_impl_), K(ret), KPC(this), K(entry), K(is_raw_write));
     }
     return ret;
@@ -118,7 +118,7 @@ public:
     } else {
       buffer = entry.get_data_buf();
       nbytes = entry.get_data_len();
-      scn = entry.get_log_scn();
+      scn = entry.get_scn();
       PALF_LOG(TRACE, "PalfIterator get_entry success", K(iterator_impl_), K(ret), KPC(this), K(entry));
     }
     return ret;

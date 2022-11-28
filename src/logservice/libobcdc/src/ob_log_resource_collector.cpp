@@ -406,6 +406,9 @@ int ObLogResourceCollector::push_task_into_queue_(ObLogResourceRecycleTask &task
 
     if (OB_TIMEOUT != ret) {
       break;
+    } else {
+      // When timeout, need to retry
+      ret = OB_SUCCESS;
     }
   }
   // Note: After a task is pushed to the queue, it may be recycled quickly and the task cannot be accessed later
@@ -613,7 +616,9 @@ int ObLogResourceCollector::revert_dml_binlog_record_(ObLogBR &br, volatile bool
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(dec_ref_cnt_and_try_to_recycle_log_entry_task_(br))) {
-        LOG_ERROR("dec_ref_cnt_and_try_to_recycle_log_entry_task_ fail", KR(ret));
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("dec_ref_cnt_and_try_to_recycle_log_entry_task_ fail", KR(ret));
+        }
       }
     }
   }

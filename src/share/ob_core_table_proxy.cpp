@@ -1113,6 +1113,9 @@ int ObCoreTableProxy::execute_update_sql(const Row &row, const ObIArray<UpdateCe
       } else if (NULL == c) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL cell", K(ret));
+      } else if ((OB_ISNULL(c->value_.ptr()) && OB_NOT_NULL(uc->cell_.value_.ptr()))
+                 || (OB_NOT_NULL(c->value_.ptr()) && OB_ISNULL(uc->cell_.value_.ptr()))) {
+        // NULL == ObString.ptr() means NULL, which is different with empty string(data_length is 0, but ptr is not null)
       } else if (c->value_ == uc->cell_.value_) {
         LOG_INFO("value is same, just continue", KPC(c), KPC(uc));
         continue;

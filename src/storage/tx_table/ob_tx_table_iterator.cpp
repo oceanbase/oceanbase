@@ -215,7 +215,7 @@ int ObTxDataMemtableScanIterator::get_next_tx_data_row_(const blocksstable::ObDa
     int64_t end_ts_column = TX_DATA_END_TS_COLUMN + SSTABLE_HIDDEN_COLUMN_CNT;
     int64_t value_column = TX_DATA_VAL_COLUMN + SSTABLE_HIDDEN_COLUMN_CNT;
     row_.storage_datums_[total_row_cnt_column].set_int(1);
-    row_.storage_datums_[end_ts_column].set_int(tx_data->end_scn_.get_val_for_row_cell());
+    row_.storage_datums_[end_ts_column].set_int(tx_data->end_scn_.get_val_for_tx());
     row_.storage_datums_[value_column].set_string(ObString(serialize_size, buf_.get_ptr()));
     row_.set_first_multi_version_row();
     row_.set_last_multi_version_row();

@@ -507,16 +507,16 @@ bool ObGCHandler::is_ls_offline_finished_(const LSGCState &state)
   return LSGCState::LS_OFFLINE <= state;
 }
 
-int ObGCHandler::get_gts_(const int64_t timeout_ns, SCN &gts_scn)
+int ObGCHandler::get_gts_(const int64_t timeout_us, SCN &gts_scn)
 {
   int ret = OB_SUCCESS;
   const transaction::MonotonicTs stc_ahead = transaction::MonotonicTs::current_time() ;
   transaction::MonotonicTs tmp_receive_gts_ts(0);
-  const int64_t expire_ts_ns = common::ObTimeUtility::current_time_ns() + timeout_ns;
+  const int64_t expire_time_us = common::ObTimeUtility::current_time() + timeout_us;
   do {
     ret = OB_TS_MGR.get_gts(MTL_ID(), stc_ahead, NULL, gts_scn, tmp_receive_gts_ts);
     if (ret == OB_EAGAIN) {
-      if (common::ObTimeUtility::current_time_ns() > expire_ts_ns) {
+      if (common::ObTimeUtility::current_time() > expire_time_us) {
         ret = OB_TIMEOUT;
       } else {
         ob_usleep(10);
@@ -589,7 +589,7 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
     CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(ret));
   } else if (OB_FAIL(ls_->get_offline_scn(offline_scn))) {
     CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(gc_state), K(ret));
-  } else if (OB_FAIL(get_gts_(GET_GTS_TIMEOUT_NS, current_gts_scn))) {
+  } else if (OB_FAIL(get_gts_(GET_GTS_TIMEOUT_US, current_gts_scn))) {
     CLOG_LOG(WARN, "get_gts_ failed", K(ls_id), K(gc_state), K(current_gts_scn), K(ret));
   } else if (current_gts_scn.convert_to_ts() < offline_scn.convert_to_ts() + LS_CLOG_ALIVE_TIMEOUT_US) {
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait clog remove", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn));
@@ -637,7 +637,7 @@ void ObGCHandler::submit_log_(const ObGCLSLOGType log_type)
     CLOG_LOG(WARN, "failed to alloc buffer", K(ret), K(log_type));
   } else if (OB_FAIL(gc_log.serialize(buffer, buffer_size, pos))) {
     CLOG_LOG(WARN, "failed to serialize log header", K(ret), K(buffer_size), K(pos));
-  } else if (OB_FAIL(get_gts_(GET_GTS_TIMEOUT_NS, ref_scn))) {
+  } else if (OB_FAIL(get_gts_(GET_GTS_TIMEOUT_US, ref_scn))) {
     CLOG_LOG(WARN, "failed to get gts", K(ret), K(ref_scn));
   } else if (OB_FAIL(ls_->append(buffer,
                                  buffer_size,
@@ -676,14 +676,14 @@ void ObGCHandler::submit_log_(const ObGCLSLOGType log_type)
 }
 
 void ObGCHandler::update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_type,
-                                                       const SCN &log_scn)
+                                                       const SCN &scn)
 {
   switch(log_type) {
   case ObGCLSLOGType::BLOCK_TABLET_TRANSFER_IN:
-    (void)block_ls_transfer_in_(log_scn);
+    (void)block_ls_transfer_in_(scn);
     break;
   case ObGCLSLOGType::OFFLINE_LS:
-    (void)offline_ls_(log_scn);
+    (void)offline_ls_(scn);
     break;
   default:
     //do nothing
@@ -978,7 +978,7 @@ bool ObGarbageCollector::is_need_delete_entry_ls_status_(const LSStatus &status)
 int ObGarbageCollector::gc_check_member_list_(ObGCCandidateArray &gc_candidates)
 {
   int ret = OB_SUCCESS;
-  const int64_t begin_time_ns = ObTimeUtility::current_time_ns();
+  const int64_t begin_time_us = ObTimeUtility::current_time();
   ServerLSMap server_ls_map;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -990,7 +990,7 @@ int ObGarbageCollector::gc_check_member_list_(ObGCCandidateArray &gc_candidates)
   } else if (OB_FAIL(handle_each_ls_for_member_list_(server_ls_map, gc_candidates))) {
     CLOG_LOG(WARN, "handle_each_ls_for_member_list_ failed", K(ret));
   }
-  CLOG_LOG(INFO, "gc_check_member_list_ cost time", K(ret), "time_ns", ObTimeUtility::current_time_ns() - begin_time_ns);
+  CLOG_LOG(INFO, "gc_check_member_list_ cost time", K(ret), "time_us", ObTimeUtility::current_time() - begin_time_us);
   return ret;
 }
 
@@ -1186,7 +1186,7 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const int64_t begin_time_ns = ObTimeUtility::current_time_ns();
+  const int64_t begin_time_us = ObTimeUtility::current_time();
   for (int64_t index = 0; OB_SUCC(ret) && index < gc_candidates.count(); index++) {
     const ObLSID id = gc_candidates[index].ls_id_;
     LSStatus &ls_status = gc_candidates[index].ls_status_;
@@ -1231,7 +1231,7 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
       }
     }
   }
-  CLOG_LOG(INFO, "execute_gc cost time", K(ret), "time_ns", ObTimeUtility::current_time_ns() - begin_time_ns);
+  CLOG_LOG(INFO, "execute_gc cost time", K(ret), "time_us", ObTimeUtility::current_time() - begin_time_us);
 }
 
 int ObGarbageCollector::delete_ls_status_(const ObLSID &id)

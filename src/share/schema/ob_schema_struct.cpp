@@ -395,69 +395,107 @@ int ObSysTableChecker::check_inner_table_exist(
 /* -- hard code info for sys table indexes -- */
 bool ObSysTableChecker::is_sys_table_index_tid(const int64_t index_id)
 {
-  const int64_t pure_index_id = index_id;
-  return (pure_index_id == OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID
-          || pure_index_id == OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID
-          || pure_index_id == OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID
-          || pure_index_id == OB_ALL_DDL_TASK_STATUS_IDX_TASK_KEY_TID);
+  bool bret = false;
+  switch (index_id) {
+#define SYS_INDEX_TABLE_ID_SWITCH
+#include "share/inner_table/ob_inner_table_schema_misc.ipp"
+#undef SYS_INDEX_TABLE_ID_SWITCH
+    {
+      bret = true;
+      break;
+    }
+    default : {
+      bret = false;
+      break;
+    }
+  }
+  return bret;
 }
 
 bool ObSysTableChecker::is_sys_table_has_index(const int64_t table_id)
 {
-  bool has_index = false;
-  const int64_t pure_table_id = table_id;
-  if (OB_ALL_TABLE_HISTORY_TID == pure_table_id
-      || OB_ALL_BACKUP_SET_FILES_TID == pure_table_id
-      || OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID == pure_table_id
-      || OB_ALL_DDL_TASK_STATUS_TID == pure_table_id) {
-    has_index = true;
+  bool bret = false;
+  switch (table_id) {
+#define SYS_INDEX_DATA_TABLE_ID_SWITCH
+#include "share/inner_table/ob_inner_table_schema_misc.ipp"
+#undef SYS_INDEX_DATA_TABLE_ID_SWITCH
+    {
+      bret = true;
+      break;
+    }
+    default : {
+      bret = false;
+      break;
+    }
   }
-  return has_index;
+  return bret;
 }
 
-int64_t ObSysTableChecker::get_sys_table_index_tid(
-  const int64_t table_id)
-{
-  int64_t index_id = OB_INVALID_ID;
-  if (OB_ALL_TABLE_HISTORY_TID == table_id) {
-    index_id = OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID;
-  } else if (OB_ALL_BACKUP_SET_FILES_TID == table_id) {
-    index_id = OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID;
-  } else if (OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID == table_id) {
-    index_id = OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID;
-  } else if (OB_ALL_DDL_TASK_STATUS_TID == table_id) {
-    index_id = OB_ALL_DDL_TASK_STATUS_IDX_TASK_KEY_TID;
-  } else {
-    index_id = OB_INVALID_ID;
-  }
-  return index_id;
-}
-
-int ObSysTableChecker::get_sys_table_index_schema(
-    const int64_t data_table_id,
-    ObTableSchema &index_schema)
+int ObSysTableChecker::fill_sys_index_infos(ObTableSchema &table)
 {
   int ret = OB_SUCCESS;
-  const int64_t pure_data_table_id = data_table_id;
-  if (OB_ALL_TABLE_HISTORY_TID == pure_data_table_id) {
-    if (OB_FAIL(ObInnerTableSchema::all_table_history_idx_data_table_id_schema(index_schema))) {
-      LOG_WARN("fail to create index schema", KR(ret), K(pure_data_table_id));
+  const int64_t table_id = table.get_table_id();
+  if (ObSysTableChecker::is_sys_table_has_index(table_id)
+      && table.get_index_tid_count() <= 0) {
+    ObArray<uint64_t> index_tids;
+    if (OB_FAIL(get_sys_table_index_tids(table_id, index_tids))) {
+      LOG_WARN("fail to get index tids", KR(ret), K(table_id));
     }
-  } else if (OB_ALL_BACKUP_SET_FILES_TID == pure_data_table_id) {
-    if (OB_FAIL(ObInnerTableSchema::all_backup_set_files_idx_status_schema(index_schema))) {
-      LOG_WARN("fail to create index schema", KR(ret), K(pure_data_table_id));
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_tids.count(); i++) {
+      const int64_t index_id = index_tids.at(i);
+      if (OB_INVALID_ID == index_id) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid sys table's index_id", KR(ret), K(table_id));
+      } else if (OB_FAIL(table.add_simple_index_info(ObAuxTableMetaInfo(
+                         index_id,
+                         USER_INDEX,
+                         INDEX_TYPE_NORMAL_LOCAL)))) {
+        LOG_WARN("fail to add simple_index_info", KR(ret), K(table_id), K(index_id));
+      }
+    } // end for
+  }
+  return ret;
+}
+
+
+int ObSysTableChecker::get_sys_table_index_tids(
+    const int64_t table_id,
+    ObIArray<uint64_t> &index_tids)
+{
+  int ret = OB_SUCCESS;
+  index_tids.reset();
+  switch (table_id) {
+#define SYS_INDEX_DATA_TABLE_ID_TO_INDEX_IDS_SWITCH
+#include "share/inner_table/ob_inner_table_schema_misc.ipp"
+#undef SYS_INDEX_DATA_TABLE_ID_TO_INDEX_IDS_SWITCH
+    default : {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid data table id", KR(ret), K(table_id));
+      break;
     }
-  } else if (OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID == pure_data_table_id) {
-    if (OB_FAIL(ObInnerTableSchema::all_log_archive_piece_files_idx_status_schema(index_schema))) {
-      LOG_WARN("fail to create index schema", KR(ret), K(pure_data_table_id));
-    }
-  } else if (OB_ALL_DDL_TASK_STATUS_TID == pure_data_table_id) {
-    if (OB_FAIL(ObInnerTableSchema::all_ddl_task_status_idx_task_key_schema(index_schema))) {
-      LOG_WARN("fail to create index schema", KR(ret), K(pure_data_table_id));
-    }
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("data table is invalid", KR(ret), K(pure_data_table_id));
+  }
+  return ret;
+}
+
+int ObSysTableChecker::append_sys_table_index_schemas(
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    ObIArray<ObTableSchema> &tables)
+{
+  int ret = OB_SUCCESS;
+  if (ObSysTableChecker::is_sys_table_has_index(data_table_id)) {
+    SMART_VAR(ObTableSchema, index_schema) {
+      switch (data_table_id) {
+#define SYS_INDEX_DATA_TABLE_ID_TO_INDEX_SCHEMAS_SWITCH
+#include "share/inner_table/ob_inner_table_schema_misc.ipp"
+#undef SYS_INDEX_DATA_TABLE_ID_TO_INDEX_SCHEMAS_SWITCH
+        default : {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("data table is invalid", KR(ret), K(data_table_id));
+          break;
+        }
+      }
+    } // end SMART_VAR
   }
   return ret;
 }
@@ -470,14 +508,9 @@ int ObSysTableChecker::add_sys_table_index_ids(
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(table_ids.push_back(OB_ALL_TABLE_HISTORY_IDX_DATA_TABLE_ID_TID))) {
-    LOG_WARN("add index table id failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(table_ids.push_back(OB_ALL_BACKUP_SET_FILES_IDX_STATUS_TID))) {
-    LOG_WARN("add index table id failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(table_ids.push_back(OB_ALL_LOG_ARCHIVE_PIECE_FILES_IDX_STATUS_TID))) {
-    LOG_WARN("add index table id failed", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(table_ids.push_back(OB_ALL_DDL_TASK_STATUS_IDX_TASK_KEY_TID))) {
-    LOG_WARN("add index table id failed", KR(ret), K(tenant_id));
+#define ADD_SYS_INDEX_ID
+#include "share/inner_table/ob_inner_table_schema_misc.ipp"
+#undef ADD_SYS_INDEX_ID
   }
   return ret;
 }

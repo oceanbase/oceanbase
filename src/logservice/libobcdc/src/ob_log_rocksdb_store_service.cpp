@@ -261,12 +261,14 @@ int RocksDbStoreService::del(void *cf_handle, const std::string &key)
 {
   int ret = OB_SUCCESS;
   rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handle);
+  rocksdb::WriteOptions writer_options;
+  writer_options.disableWAL = true;
 
   if (OB_ISNULL(column_family_handle)) {
     LOG_ERROR("column_family_handle is NULL");
     ret = OB_ERR_UNEXPECTED;
   } else {
-    rocksdb::Status s = m_db_->Delete(rocksdb::WriteOptions(), column_family_handle, key);
+    rocksdb::Status s = m_db_->Delete(writer_options, column_family_handle, key);
 
     if (!s.ok()) {
       LOG_ERROR("delete %s from rocksdb failed, error %s", key.c_str(), s.ToString().c_str());

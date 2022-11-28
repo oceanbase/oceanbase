@@ -3719,7 +3719,7 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
   phy_plan_type_ = other.phy_plan_type_;
   location_type_ = other.location_type_;
   contain_fake_cte_ = other.contain_fake_cte_;
-  contain_merge_op_ = other.contain_merge_op_;
+  contain_pw_merge_op_ = other.contain_pw_merge_op_;
   contain_das_op_ = other.contain_das_op_;
   parallel_ = other.parallel_;
   server_cnt_ = other.server_cnt_;
@@ -4826,8 +4826,9 @@ int JoinPath::compute_join_path_info()
     LOG_WARN("get unexpected null", K(left_path_), K(right_path_), K(ret));
   } else {
     contain_fake_cte_ = left_path_->contain_fake_cte_ || right_path_->contain_fake_cte_;
-    contain_merge_op_ = left_path_->contain_merge_op_ || right_path_->contain_merge_op_ ||
-                        (join_algo_ == JoinAlgo::MERGE_JOIN);
+    contain_pw_merge_op_ = (left_path_->contain_pw_merge_op_ && !is_left_need_exchange()) ||
+                           (right_path_->contain_pw_merge_op_ && !is_right_need_exchange()) ||
+                           (join_algo_ == JoinAlgo::MERGE_JOIN && is_partition_wise());
     contain_das_op_ = left_path_->contain_das_op_ || right_path_->contain_das_op_;
   }
   return ret;
@@ -5367,7 +5368,7 @@ void JoinPath::reuse()
   phy_plan_type_ = ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED;
   location_type_ = ObPhyPlanType::OB_PHY_PLAN_UNINITIALIZED;
   contain_fake_cte_ = false;
-  contain_merge_op_ = false;
+  contain_pw_merge_op_ = false;
   contain_das_op_ = false;
   parallel_ = 1;
   server_cnt_ = 1;
@@ -6075,7 +6076,7 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
       path->phy_plan_type_ = root->get_phy_plan_type();
       path->location_type_ = root->get_location_type();
       path->contain_fake_cte_ = root->get_contains_fake_cte();
-      path->contain_merge_op_ = root->get_contains_merge_op();
+      path->contain_pw_merge_op_ = root->get_contains_pw_merge_op();
       path->contain_das_op_ = root->get_contains_das_op();
       path->parallel_ = root->get_parallel();
       path->server_cnt_ = root->get_server_cnt();
@@ -7309,11 +7310,8 @@ bool ObJoinOrder::is_partition_wise_valid(const Path &left_path,
                                           const Path &right_path)
 {
   bool is_valid = true;
-  if (left_path.exchange_allocated_ && !right_path.exchange_allocated_ &&
-      right_path.contain_merge_op()) {
-    is_valid = false;
-  } else if (!left_path.exchange_allocated_ && right_path.exchange_allocated_ &&
-             left_path.contain_merge_op()) {
+  if ((left_path.exchange_allocated_ || right_path.exchange_allocated_) &&
+      (left_path.contain_pw_merge_op() || right_path.contain_pw_merge_op())) {
     is_valid = false;
   } else {
     is_valid = true;

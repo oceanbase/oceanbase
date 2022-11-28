@@ -40,7 +40,7 @@ ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx)
     exec_ctx_(exec_ctx),
     tmp_alloc_(exec_ctx.get_eval_tmp_allocator()),
     datum_caster_(NULL),
-    tmp_alloc_used_(false),
+    tmp_alloc_used_(exec_ctx.get_tmp_alloc_used()),
     batch_idx_(0),
     batch_size_(0),
     expr_res_alloc_(exec_ctx.get_eval_res_allocator())

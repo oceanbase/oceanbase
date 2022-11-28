@@ -95,14 +95,10 @@ struct PriorityV1 : public AbstractPriority
 /**********************this is for some strange compact reason***********************/
   struct SCN_WRAPPER {
     SCN_WRAPPER() {value_.set_min();}
-    SCN_WRAPPER(const palf::SCN &scn) : value_(scn) {}
-    SCN_WRAPPER &operator=(const palf::SCN &scn) {
-      value_ = scn;
-      return *this;
-    }
     int serialize(char *buf, const int64_t buf_len, int64_t &pos) const {
       int ret = OB_SUCCESS;
       int64_t new_pos = pos;
+
       if (NULL == buf && buf_len <= 0) {
         ret = OB_INVALID_ARGUMENT;
       } else if (OB_FAIL(value_.fixed_serialize(buf, buf_len, new_pos))) {

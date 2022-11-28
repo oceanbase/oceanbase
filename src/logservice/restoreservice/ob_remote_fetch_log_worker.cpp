@@ -259,30 +259,30 @@ int ObRemoteFetchWorker::handle(ObFetchLogTask &task)
 
   LSN end_lsn;
   SCN upper_limit_scn;
-  SCN max_fetch_log_scn;
-  SCN max_submit_log_scn;
+  SCN max_fetch_scn;
+  SCN max_submit_scn;
   ObRemoteLogIterator iter(get_source_func, update_source_func, refresh_storage_info_func);
 
   if (OB_UNLIKELY(! task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task));
-  } else if (OB_FAIL(iter.init(tenant_id_, task.id_, task.pre_log_scn_,
+  } else if (OB_FAIL(iter.init(tenant_id_, task.id_, task.pre_scn_,
           task.cur_lsn_, task.end_lsn_))) {
     LOG_WARN("ObRemoteLogIterator init failed", K(ret), K_(tenant_id), K(task));
   } else if (OB_FAIL(get_upper_limit_scn_(task.id_, upper_limit_scn))) {
     LOG_WARN("get upper_limit_scn failed", K(ret), K(task));
-  } else if (OB_FAIL(submit_entries_(task.id_, upper_limit_scn, iter, max_submit_log_scn))) {
+  } else if (OB_FAIL(submit_entries_(task.id_, upper_limit_scn, iter, max_submit_scn))) {
     LOG_WARN("submit entries failed", K(ret), K(task), K(iter));
-  } else if (OB_FAIL(iter.get_cur_lsn_scn(end_lsn, max_fetch_log_scn))) {
+  } else if (OB_FAIL(iter.get_cur_lsn_scn(end_lsn, max_fetch_scn))) {
     // TODO iterator可能是没有数据的, 此处暂不处理, 后续不需要cut日志, 后续处理逻辑会放到restore_handler, 此处不处理该异常
     // 仅支持备份恢复, 不存在为空场景
     LOG_WARN("iter get cur_lsn failed", K(ret), K(iter), K(task));
   } else if (! end_lsn.is_valid()) {
     // no log, just skip
     LOG_TRACE("no log restore, just skip", K(task));
-  } else if (OB_FAIL(task.update_cur_lsn_scn(end_lsn, max_submit_log_scn, max_fetch_log_scn))) {
+  } else if (OB_FAIL(task.update_cur_lsn_scn(end_lsn, max_submit_scn, max_fetch_scn))) {
     LOG_WARN("update cur_lsn failed", K(ret), K(task));
-  } else if (FALSE_IT(mark_if_to_end_(task, upper_limit_scn, max_submit_log_scn))) {
+  } else if (FALSE_IT(mark_if_to_end_(task, upper_limit_scn, max_submit_scn))) {
   } else {
     LOG_INFO("ObRemoteFetchWorker handle succ", K(task));
   }
@@ -322,7 +322,7 @@ int ObRemoteFetchWorker::get_upper_limit_scn_(const ObLSID &id, SCN &scn)
 int ObRemoteFetchWorker::submit_entries_(const ObLSID &id,
     const SCN &upper_limit_scn,
     ObRemoteLogIterator &iter,
-    SCN &max_submit_log_scn)
+    SCN &max_submit_scn)
 {
   int ret = OB_SUCCESS;
   LogGroupEntry entry;
@@ -353,7 +353,7 @@ int ObRemoteFetchWorker::submit_entries_(const ObLSID &id,
       } else if (OB_FAIL(submit_log_(id, lsn, buf, entry.get_serialize_size()))) {
         LOG_WARN("submit log failed", K(ret), K(iter), K(buf), K(entry), K(lsn));
       } else {
-        max_submit_log_scn = entry.get_header().get_max_scn();
+        max_submit_scn = entry.get_header().get_max_scn();
       }
       if (entry.get_serialize_size() != size) {
         break;
@@ -392,7 +392,7 @@ int ObRemoteFetchWorker::try_retire_(ObFetchLogTask *&task)
   bool is_stale = false;
   GET_RESTORE_HANDLER_CTX(task->id_) {
   if (OB_FAIL(restore_handler->update_fetch_log_progress(task->id_.id(), task->proposal_id_,
-          task->cur_lsn_, task->max_submit_log_scn_, is_finish, is_to_end, is_stale))) {
+          task->cur_lsn_, task->max_submit_scn_, is_finish, is_to_end, is_stale))) {
     LOG_WARN("update fetch log progress failed", KPC(task), KPC(restore_handler));
   } else if (is_finish || is_stale || is_to_end) {
     mtl_free(task);

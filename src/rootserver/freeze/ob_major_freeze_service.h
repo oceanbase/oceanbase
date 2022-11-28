@@ -49,12 +49,12 @@ public:
   int replay(const void *buffer,
              const int64_t buf_size,
              const palf::LSN &lsn,
-             const palf::SCN &log_scn)
+             const palf::SCN &scn)
   { 
     UNUSED(buffer);
     UNUSED(buf_size);
     UNUSED(lsn);
-    UNUSED(log_scn);
+    UNUSED(scn);
     return OB_SUCCESS; 
   }
 

@@ -47,11 +47,6 @@ public:
              const int64_t nbytes,
              const palf::LSN &lsn,
              const palf::SCN &scn);
-  int replay(const ObLogBaseType &type,
-             const void *buffer,
-             const int64_t nbytes,
-             const palf::LSN &lsn,
-             const int64_t ts_ns);
 private:
   typedef common::RWLock::WLockGuard WLockGuard;
   typedef common::RWLock::RLockGuard RLockGuard;

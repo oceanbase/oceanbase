@@ -61,9 +61,9 @@ private:
   int check_need_schedule_(ObLS &ls, bool &need_schedule, int64_t &proposal_id, LSN &lsn, int64_t &last_fetch_ts);
   int get_fetch_log_max_lsn_(ObLS &ls, palf::LSN &max_lsn);
   int get_fetch_log_base_lsn_(ObLS &ls, const LSN &max_fetch_lsn, const int64_t last_fetch_ts,
-                              palf::SCN &log_scn, LSN &lsn, int64_t &size);
-  int get_palf_base_lsn_scn_(ObLS &ls, LSN &lsn, palf::SCN &log_scn);
-  int submit_fetch_log_task_(ObLS &ls, const palf::SCN &log_scn, const LSN &lsn, const int64_t size, const int64_t proposal_id);
+                              palf::SCN &scn, LSN &lsn, int64_t &size);
+  int get_palf_base_lsn_scn_(ObLS &ls, LSN &lsn, palf::SCN &scn);
+  int submit_fetch_log_task_(ObLS &ls, const palf::SCN &scn, const LSN &lsn, const int64_t size, const int64_t proposal_id);
 
 private:
   bool inited_;

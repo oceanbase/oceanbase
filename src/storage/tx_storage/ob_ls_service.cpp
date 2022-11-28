@@ -40,7 +40,7 @@ static inline void prepare_palf_base_info(const obrpc::ObCreateLSArg &arg,
                                           palf::PalfBaseInfo &palf_base_info)
 {
   palf_base_info.generate_by_default();
-  palf_base_info.prev_log_info_.log_scn_ = arg.get_create_scn();
+  palf_base_info.prev_log_info_.scn_ = arg.get_create_scn();
   if (arg.is_create_ls_with_palf()) {
     palf_base_info = arg.get_palf_base_info();
   }

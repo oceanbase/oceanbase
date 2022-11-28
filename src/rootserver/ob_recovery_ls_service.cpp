@@ -190,7 +190,7 @@ int ObRecoveryLSService::process_ls_log_(const SCN &start_scn, PalfBufferIterato
       LOG_WARN("log entry is null", KR(ret));
     } else {
       LOG_DEBUG("get log", K(log_entry), K(target_lsn), K(start_scn));
-      sync_scn = log_entry.get_log_scn();
+      sync_scn = log_entry.get_scn();
       const char *log_buf = log_entry.get_data_buf();
       const int64_t log_length = log_entry.get_data_len();
       logservice::ObLogBaseHeader header;
@@ -645,7 +645,7 @@ int ObRecoveryLSService::update_sys_ls_restore_finish_()
         if (OB_FAIL(ls_recovery.get_ls_recovery_stat(tenant_id_,
                                                      SYS_LS, false, ls_recovery_stat, *proxy_))) {
           LOG_WARN("failed to load sys recovery stat", KR(ret), K(tenant_id_));
-        } else if (OB_FAIL(restore_handler->get_max_restore_log_scn(max_ls_scn))) {
+        } else if (OB_FAIL(restore_handler->get_max_restore_scn(max_ls_scn))) {
           LOG_WARN("failed to get max restore log ts", KR(ret));
         } else if (max_ls_scn == ls_recovery_stat.get_sync_scn()) {
           //restore finish, update sync scn to restore_unti_scn

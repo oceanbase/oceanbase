@@ -53,7 +53,7 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
   if (OB_ISNULL(ls) || OB_ISNULL(tx_ctx_table)) {
     ret = OB_ERR_NULL_VALUE;
     STORAGE_LOG(WARN, "ls tablet service or tx ctx table is nullptr", KR(ret));
-  } else if (OB_FAIL(slice_allocator_.init(TX_DATA_SLICE_SIZE, OB_MALLOC_BIG_BLOCK_SIZE,
+  } else if (OB_FAIL(slice_allocator_.init(TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE,
                                            common::default_blk_alloc, mem_attr_))) {
     STORAGE_LOG(ERROR, "slice_allocator_ init fail");
   } else if (FALSE_IT(ls_tablet_svr_ = ls->get_tablet_svr())) {

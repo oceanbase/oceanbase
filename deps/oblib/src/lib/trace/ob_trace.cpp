@@ -255,12 +255,12 @@ int UUID::deserialize(const char* buf, const int64_t buf_len, int64_t& pos)
 int to_string_and_strip(const char* str, const int64_t length, char* buf, const int64_t buf_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
-  char from[] = "\"\n\r\\";
-  const char* to[] = { "\\\"", "\\n", "\\r", "\\\\"};
+  char from[] = "\"\n\r\\\t";
+  const char* to[] = { "\\\"", "\\n", "\\r", "\\\\", " "};
   buf[pos++] = '\"';
   for (auto j = 0; j < length && str[j]; ++j) {
     bool conv = false;
-    for (auto i = 0; i < 4; ++i) {
+    for (auto i = 0; i < sizeof(from) - 1; ++i) {
       if (from[i] == str[j]) {
         for (const char* toc = to[i]; *toc; ++toc) {
           if (pos < buf_len) {
@@ -341,15 +341,15 @@ ObSpanCtx::ObSpanCtx()
 ObTrace* ObTrace::get_instance()
 {
   if (OB_ISNULL(save_buffer)) {
-    thread_local char* default_tsi_buffer = (char*)GET_TSI(ByteBuf<8 * DEFAULT_BUFFER_SIZE>);
-    thread_local char default_tls_buffer[DEFAULT_BUFFER_SIZE];
+    thread_local char* default_tsi_buffer = (char*)GET_TSI(ByteBuf<DEFAULT_BUFFER_SIZE>);
+    thread_local char default_tls_buffer[MIN_BUFFER_SIZE];
     struct Guard {
       Guard(char* buffer, int64_t size) {
         IGNORE_RETURN new(buffer) ObTrace(size);
       }
     };
-    thread_local Guard guard1(default_tsi_buffer, 8 * DEFAULT_BUFFER_SIZE);
-    thread_local Guard guard2(default_tls_buffer, 1 * DEFAULT_BUFFER_SIZE);
+    thread_local Guard guard1(default_tsi_buffer, DEFAULT_BUFFER_SIZE);
+    thread_local Guard guard2(default_tls_buffer, MIN_BUFFER_SIZE);
     if (OB_ISNULL(default_tsi_buffer)) {
       save_buffer = (ObTrace*)default_tls_buffer;
       LIB_LOG(WARN, "tsi was nullptr");

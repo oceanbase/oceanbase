@@ -1262,12 +1262,17 @@ int ObArchiveStore::get_piece_paths_in_range(const palf::SCN &start_scn, const p
       }
     }
 
-    if (OB_SUCC(ret)) {
+    if (OB_FAIL(ret)) {
+    } else if (-1 == last_piece_idx) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("no enough log for restore", K(ret), K(last_piece_idx), K(end_scn));
+      LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
+    } else {
       const ObTenantArchivePieceAttr &last_piece = piece_whole_info.his_frozen_pieces_.at(last_piece_idx);
       if (last_piece.checkpoint_scn_ < end_scn) {
-        ret = OB_ENTRY_EXIST;
+        ret = OB_ENTRY_NOT_EXIST;
         LOG_WARN("no enough log for restore", K(ret), K(last_piece), K(end_scn));
-        LOG_USER_ERROR(OB_ENTRY_EXIST, "No enough log for restore");
+        LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
       }
     }
   }

@@ -349,7 +349,7 @@ public:
   DELEGATE_WITH_RET(ls_meta_, get_gc_state, int);
   // set offline ts
   // @param [in] offline ts.
-  // int set_offline_ts_ns(const int64_t offline_scn);
+  // int set_offline_scn(const int64_t offline_scn);
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_offline_scn);
   // get offline ts
   // @param [in] offline ts.
@@ -466,11 +466,6 @@ public:
   // @param [out] quorum, the quorum of member_list
   // int get_paxos_member_list(common::ObMemberList &member_list, int64_t &quorum) const;
   CONST_DELEGATE_WITH_RET(log_handler_, get_paxos_member_list, int);
-  // @breif, query lsn by timestamp, note that this function may be time-consuming
-  // @param[in] const int64_t, specified timestamp(ns).
-  // @param[out] LSN&, the lower bound lsn which include timestamp.
-  // int locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &result_lsn, int64_t &result_ts_ns);
-  DELEGATE_WITH_RET(log_handler_, locate_by_ts_ns_coarsely, int);
   // advance the base_lsn of log_handler.
   // @param[in] palf_base_info, the palf meta used to advance base lsn.
   // int advance_base_info(const palf::PalfBaseInfo &palf_base_info);
@@ -486,9 +481,6 @@ public:
   int disable_replay();
   // WARNING: must has ls read lock and log write lock.
   int disable_replay_without_lock();
-  // @brief, get max decided log ts considering both apply and replay.
-  // @param[out] int64_t&, max decided log ts ns.
-  DELEGATE_WITH_RET(log_handler_, get_max_decided_log_ts_ns, int);
   // @brief, get max decided log scn considering both apply and replay.
   // @param[out] palf::SCN&, max decided log scn.
   DELEGATE_WITH_RET(log_handler_, get_max_decided_scn, int);
@@ -522,7 +514,6 @@ public:
   DELEGATE_WITH_RET(log_handler_, remove_learner, int);
   DELEGATE_WITH_RET(log_handler_, replace_member, int);
   DELEGATE_WITH_RET(log_handler_, is_in_sync, int);
-  DELEGATE_WITH_RET(log_handler_, get_end_ts_ns, int);
   DELEGATE_WITH_RET(log_handler_, get_end_scn, int);
   DELEGATE_WITH_RET(log_handler_, disable_sync, int);
   DELEGATE_WITH_RET(log_handler_, change_replica_num, int);

@@ -176,7 +176,7 @@ public:
   // 的拿到准确的版本号信息
   // @param [out] lsn, 日志的唯一标识符
   //                          主要使用场景是prepare日志中记录redo日志的lsn，用于数据链路回拉历史日志时定位使用
-  // @param [out] log_scn, 日志对应的submit_scn，主要用于事务版本号，比如lock_for_read场景使用
+  // @param [out] scn, 日志对应的submit_scn，主要用于事务版本号，比如lock_for_read场景使用
   //
   // @return :TODO
   virtual int submit_log(const PalfAppendOptions &opts,
@@ -184,7 +184,7 @@ public:
                          const int64_t buf_len,
                          const SCN &ref_scn,
                          LSN &lsn,
-                         SCN &log_scn) = 0;
+                         SCN &scn) = 0;
   // 提交group_log到palf
   // 使用场景：备库leader处理从主库收到的日志
   // @param [in] opts, 提交日志的一些可选项参数，具体参见PalfAppendOptions的定义
@@ -223,7 +223,7 @@ public:
   // @param[in] common::ObMemberList: current memberlist, for pre-check
   // @param[in] const int64_t curr_replica_num: current replica num, for pre-check
   // @param[in] const int64_t new_replica_num: new replica num
-  // @param[in] const int64_t timeout_ns: timeout, ns
+  // @param[in] const int64_t timeout_us: timeout, ns
   // @return
   // - OB_SUCCESS: change_replica_num successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -233,12 +233,12 @@ public:
   virtual int change_replica_num(const common::ObMemberList &member_list,
                                  const int64_t curr_replica_num,
                                  const int64_t new_replica_num,
-                                 const int64_t timeout_ns) = 0;
+                                 const int64_t timeout_us) = 0;
 
   // @brief, add a member into paxos group
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t new_replica_num: replica number of paxos group after adding 'member'
-  // @param[in] const int64_t timeout_ns: add member timeout, ns
+  // @param[in] const int64_t timeout_us: add member timeout, ns
   // @return
   // - OB_SUCCESS: add member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -247,12 +247,12 @@ public:
   // - other: bug
   virtual int add_member(const common::ObMember &member,
                         const int64_t new_replica_num,
-                        const int64_t timeout_ns) = 0;
+                        const int64_t timeout_us) = 0;
 
   // @brief, remove a member from paxos group
   // @param[in] common::ObMember &member: member which will be removed
   // @param[in] const int64_t new_replica_num: replica number of paxos group after removing 'member'
-  // @param[in] const int64_t timeout_ns: remove member timeout, ns
+  // @param[in] const int64_t timeout_us: remove member timeout, ns
   // @return
   // - OB_SUCCESS: remove member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -261,12 +261,12 @@ public:
   // - other: bug
   virtual int remove_member(const common::ObMember &member,
                             const int64_t new_replica_num,
-                            const int64_t timeout_ns) = 0;
+                            const int64_t timeout_us) = 0;
 
   // @brief, replace old_member with new_member
   // @param[in] const common::ObMember &added_member: member wil be added
   // @param[in] const common::ObMember &removed_member: member will be removed
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS: replace member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -275,47 +275,47 @@ public:
   // - other: bug
   virtual int replace_member(const common::ObMember &added_member,
                              const common::ObMember &removed_member,
-                             const int64_t timeout_ns) = 0;
+                             const int64_t timeout_us) = 0;
 
   // @brief: add a learner(read only replica) in this clsuter
   // @param[in] const common::ObMember &added_learner: learner will be added
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: add_learner timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  virtual int add_learner(const common::ObMember &added_learner, const int64_t timeout_ns) = 0;
+  virtual int add_learner(const common::ObMember &added_learner, const int64_t timeout_us) = 0;
 
   // @brief: remove a learner(read only replica) in this clsuter
   // @param[in] const common::ObMember &removed_learner: learner will be removed
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: remove_learner timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  virtual int remove_learner(const common::ObMember &removed_learner, const int64_t timeout_ns) = 0;
+  virtual int remove_learner(const common::ObMember &removed_learner, const int64_t timeout_us) = 0;
 
   // @brief: switch a learner(read only replica) to acceptor(full replica) in this clsuter
   // @param[in] const common::ObMember &learner: learner will be switched to acceptor
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: switch_learner_to_acceptor timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  virtual int switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_ns) = 0;
+  virtual int switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_us) = 0;
 
   // @brief: switch an acceptor(full replica) to learner(read only replica) in this clsuter
   // @param[in] const common::ObMember &member: acceptor will be switched to learner
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: switch_acceptor_to_learner timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
-  virtual int switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_ns) = 0;
+  virtual int switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_us) = 0;
 
   // @brief, add an arbitration member to paxos group
   // @param[in] common::ObMember &member: arbitration member which will be added
@@ -364,7 +364,7 @@ public:
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: timeout
   // - OB_NOT_MASTER: not leader
-  virtual int degrade_acceptor_to_learner(const common::ObMemberList &member_list, const int64_t timeout_ns) = 0;
+  virtual int degrade_acceptor_to_learner(const common::ObMemberList &member_list, const int64_t timeout_us) = 0;
   // @brief: upgrade a learner(special read only replica) to acceptor(full replica) in this cluster
   // @param[in] const common::ObMemberList &learner_list: learners will be upgraded to acceptors
   // @param[in] const int64_t timeout_us
@@ -373,7 +373,7 @@ public:
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: timeout
   // - OB_NOT_MASTER: not leader
-  virtual int upgrade_learner_to_acceptor(const common::ObMemberList &learner_list, const int64_t timeout_ns) = 0;
+  virtual int upgrade_learner_to_acceptor(const common::ObMemberList &learner_list, const int64_t timeout_us) = 0;
 
   // 设置日志文件的可回收位点，小于等于lsn的日志文件均可以安全回收
   //
@@ -387,7 +387,7 @@ public:
   virtual int advance_base_info(const PalfBaseInfo &palf_base_info, const bool is_rebuild) = 0;
 
   // @desc: query coarse lsn by scn, that means there is a LogGroupEntry in disk,
-  // its lsn and log_scn are result_lsn and result_scn, and result_scn <= scn.
+  // its lsn and scn are result_lsn and result_scn, and result_scn <= scn.
   //        result_lsn   result_scn
   //                 \   /
   //      [log 1]     [log 2][log 3] ... [log n]  [log n+1]
@@ -406,7 +406,7 @@ public:
   virtual int locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn) = 0;
 
   // @desc: query coarse scn by lsn, that means there is a LogGroupEntry in disk,
-  // its lsn and log_scn are result_lsn and result_scn, and result_lsn <= lsn.
+  // its lsn and scn are result_lsn and result_scn, and result_lsn <= lsn.
   //  result_lsn    result_scn
   //           \    /
   //    [log 1][log 2][log 3][log 4][log 5]...[log n][log n+1]
@@ -424,7 +424,7 @@ public:
   virtual int get_begin_scn(SCN &scn) = 0;
   virtual int get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info) = 0;
 
-  virtual int get_min_block_id_min_scn(block_id_t &block_id, SCN &log_scn) = 0;
+  virtual int get_min_block_id_min_scn(block_id_t &block_id, SCN &scn) = 0;
   //begin lsn                          base lsn                                end lsn
   //   │                                │                                         │
   //   │                                │                                         │
@@ -458,7 +458,7 @@ public:
   virtual int advance_reuse_lsn(const LSN &flush_log_end_lsn) = 0;
   virtual int inner_append_log(const LSN &lsn,
                                const LogWriteBuf &write_buf,
-                               const SCN &log_scn) = 0;
+                               const SCN &scn) = 0;
   virtual int inner_append_log(const LSNArray &lsn_array,
                                const LogWriteBufArray &write_buf_array,
                                const SCNArray &scn_array) = 0;
@@ -628,7 +628,7 @@ public:
                  const int64_t buf_len,
                  const SCN &ref_scn,
                  LSN &lsn,
-                 SCN &log_scn) override final;
+                 SCN &scn) override final;
 
   int submit_group_log(const PalfAppendOptions &opts,
                        const LSN &lsn,
@@ -643,24 +643,24 @@ public:
   int change_replica_num(const common::ObMemberList &member_list,
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,
-                         const int64_t timeout_ns) override final;
+                         const int64_t timeout_us) override final;
   int add_member(const common::ObMember &member,
                 const int64_t new_replica_num,
-                const int64_t timeout_ns) override final;
+                const int64_t timeout_us) override final;
   int remove_member(const common::ObMember &member,
                     const int64_t new_replica_num,
-                    const int64_t timeout_ns) override final;
+                    const int64_t timeout_us) override final;
   int replace_member(const common::ObMember &added_member,
                      const common::ObMember &removed_member,
-                     const int64_t timeout_ns) override final;
+                     const int64_t timeout_us) override final;
   int add_learner(const common::ObMember &added_learner,
-                  const int64_t timeout_ns) override final;
+                  const int64_t timeout_us) override final;
   int remove_learner(const common::ObMember &removed_learner,
-                  const int64_t timeout_ns) override final;
+                  const int64_t timeout_us) override final;
   int switch_learner_to_acceptor(const common::ObMember &learner,
-                                 const int64_t timeout_ns) override final;
+                                 const int64_t timeout_us) override final;
   int switch_acceptor_to_learner(const common::ObMember &member,
-                                 const int64_t timeout_ns) override final;
+                                 const int64_t timeout_us) override final;
   int add_arb_member(const common::ObMember &added_member,
                      const int64_t paxos_replica_num,
                      const int64_t timeout_us) override final;
@@ -670,8 +670,8 @@ public:
   int replace_arb_member(const common::ObMember &added_arb_member,
                          const common::ObMember &removed_arb_member,
                          const int64_t timeout_us) override final;
-  int degrade_acceptor_to_learner(const common::ObMemberList &member_list, const int64_t timeout_ns) override final;
-  int upgrade_learner_to_acceptor(const common::ObMemberList &learner_list, const int64_t timeout_ns) override final;
+  int degrade_acceptor_to_learner(const common::ObMemberList &member_list, const int64_t timeout_us) override final;
+  int upgrade_learner_to_acceptor(const common::ObMemberList &learner_list, const int64_t timeout_us) override final;
   int set_base_lsn(const LSN &lsn) override final;
   int enable_sync();
   int disable_sync();
@@ -733,14 +733,14 @@ public:
 
   const SCN get_max_scn() const override final
   {
-    return sw_.get_max_log_scn();
+    return sw_.get_max_scn();
   }
 
   const SCN get_end_scn() const override final
   {
-    // 基于实现复杂度考虑，直接用last_slide_log_scn作为end_scn
-    // 否则需要在match_lsn_map中额外维护log_scn
-    return sw_.get_last_slide_log_scn();
+    // 基于实现复杂度考虑，直接用last_slide_scn作为end_scn
+    // 否则需要在match_lsn_map中额外维护scn
+    return sw_.get_last_slide_scn();
   }
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const override final;
   int64_t get_total_used_disk_space() const;
@@ -757,7 +757,7 @@ public:
   int advance_reuse_lsn(const LSN &flush_log_end_lsn);
   int inner_append_log(const LSN &lsn,
                        const LogWriteBuf &write_buf,
-                       const SCN &log_scn) override final;
+                       const SCN &scn) override final;
   int inner_append_log(const LSNArray &lsn_array,
                        const LogWriteBufArray &write_buf_array,
                        const SCNArray &scn_array);
@@ -899,7 +899,7 @@ private:
   int sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
                                   const ObMemberList &new_member_list,
                                   const int64_t new_replica_num,
-                                  const int64_t conn_timeout_ns,
+                                  const int64_t conn_timeout_us,
                                   LSN &committed_end_lsn,
                                   bool &added_member_has_new_version);
   bool check_follower_sync_status_(const LogConfigChangeArgs &args,
@@ -907,7 +907,7 @@ private:
                                    const int64_t new_replica_num,
                                    const int64_t half_timeout_us,
                                    bool &added_member_has_new_version);
-  int one_stage_config_change_(const LogConfigChangeArgs &args, const int64_t timeout_ns);
+  int one_stage_config_change_(const LogConfigChangeArgs &args, const int64_t timeout_us);
   int check_need_rebuild_(const LSN &base_lsn,
                           const LogInfo &base_prev_log_info,
                           bool &need_rebuild,

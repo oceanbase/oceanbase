@@ -580,22 +580,13 @@ int ObBootstrap::generate_table_schema_array_for_create_partition(
   const uint64_t table_id = tschema.get_table_id();
   int64_t tschema_idx = table_schema_array.count();
 
-  HEAP_VAR(ObTableSchema, index_schema) {
-    if (OB_FAIL(table_schema_array.push_back(tschema))) {
-      LOG_WARN("fail to push back", KR(ret));
-    } else if (ObSysTableChecker::is_sys_table_has_index(table_id)) {
-      if (OB_FAIL(ObSysTableChecker::get_sys_table_index_schema(
-          table_id, index_schema))) {
-        LOG_WARN("fail to get sys table's index schema", KR(ret), K(table_id));
-      } else if (OB_FAIL(table_schema_array.push_back(index_schema))) {
-        LOG_WARN("fail to push back index schema", KR(ret), K(index_schema));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(add_sys_table_lob_aux_table(table_id, table_schema_array))) {
-      LOG_WARN("fail to add lob table to sys table", KR(ret), K(table_id));
-    }
+  if (OB_FAIL(table_schema_array.push_back(tschema))) {
+    LOG_WARN("fail to push back", KR(ret));
+  } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
+             OB_SYS_TENANT_ID, table_id, table_schema_array))) {
+    LOG_WARN("fail to append sys table index schemas", KR(ret), K(table_id));
+  } else if (OB_FAIL(add_sys_table_lob_aux_table(table_id, table_schema_array))) {
+    LOG_WARN("fail to add lob table to sys table", KR(ret), K(table_id));
   }
   return ret;
 }
@@ -798,7 +789,7 @@ int ObBootstrap::construct_all_schema(ObIArray<ObTableSchema> &table_schemas)
   } else if (OB_FAIL(table_schemas.reserve(OB_SYS_TABLE_COUNT))) {
     LOG_WARN("reserve failed", "capacity", OB_SYS_TABLE_COUNT, KR(ret));
   } else {
-    HEAP_VARS_2((ObTableSchema, index_schema), (ObTableSchema, data_schema)) {
+    HEAP_VAR(ObTableSchema, data_schema) {
       for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
         for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
              OB_SUCCESS == ret && NULL != *creator_ptr; ++creator_ptr) {
@@ -813,19 +804,12 @@ int ObBootstrap::construct_all_schema(ObIArray<ObTableSchema> &table_schemas)
           } else if (!exist) {
             // skip
           } else if (ObSysTableChecker::is_sys_table_has_index(table_schema.get_table_id())) {
-            index_schema.reset();
             const int64_t data_table_id = table_schema.get_table_id();
-            if (OB_FAIL(ObSysTableChecker::get_sys_table_index_schema(data_table_id, index_schema))) {
-              LOG_WARN("fail to get sys table's index schema", KR(ret), K(data_table_id));
-            } else if (OB_FAIL(table_schema.add_simple_index_info(ObAuxTableMetaInfo(
-                       index_schema.get_table_id(),
-                       index_schema.get_table_type(),
-                       index_schema.get_index_type())))) {
-              LOG_WARN("fail to add simple_index_info", KR(ret), K(table_schema));
-            } else if (OB_FAIL(table_schemas.push_back(index_schema))) {
-              LOG_WARN("push_back failed", KR(ret), K(index_schema));
-            } else {
-              LOG_INFO("create sys index schema", KR(ret), K(table_schema), K(index_schema));
+            if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(table_schema))) {
+              LOG_WARN("fail to fill sys index infos", KR(ret), K(data_table_id));
+            } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
+                       OB_SYS_TENANT_ID, data_table_id, table_schemas))) {
+              LOG_WARN("fail to append sys table index schemas", KR(ret), K(data_table_id));
             }
           }
 

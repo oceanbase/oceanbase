@@ -984,7 +984,11 @@ int ObParser::parse(const ObString &query,
   parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(connection_collation_) ?
         (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4) : false;
   parse_result.malloc_pool_ = allocator_;
-  parse_result.sql_mode_ = sql_mode_;
+  if (lib::is_oracle_mode()) {
+    parse_result.sql_mode_ = sql_mode_ | SMO_ORACLE;
+  } else {
+    parse_result.sql_mode_ = sql_mode_ & (~SMO_ORACLE);
+  }
   parse_result.need_parameterize_ = (FP_MODE == parse_mode
                          || FP_PARAMERIZE_AND_FILTER_HINT_MODE == parse_mode);
   parse_result.minus_ctx_.pos_ = -1;

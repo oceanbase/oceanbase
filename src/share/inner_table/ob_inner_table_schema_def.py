@@ -3572,9 +3572,9 @@ def_table_schema(
     rowkey_columns = [
         ('tenant_id', 'int'),
         ('dest_id', 'int'),
-        ('ls_id', 'int'),
         ('round_id', 'int'),
         ('piece_id', 'int'),
+        ('ls_id', 'int'),
     ],
 
   in_tenant_space = True,
@@ -5103,6 +5103,12 @@ def_table_schema(
 # 420 : __all_column_group_history
 # 421 : __all_column_group_mapping
 # 422 : __all_column_group_mapping_history
+# 423 : __all_transfer_task
+# 424 : __all_transfer_task_history
+# 425 : __all_balance_task
+# 426 : __all_balance_task_history
+# 427 : __all_ls_balance_job
+# 428 : __all_ls_balance_job_history
 
 ################################################################################
 # Virtual Table (10000, 20000]
@@ -11021,7 +11027,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15270', all_def_ke
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15272', all_def_keywords['__all_virtual_ls_replica_task'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15273', all_def_keywords['__all_virtual_ls_replica_task_plan'])))
 # 15274: __all_virtual_show_trace
-# 15275: __all_virtaul_database_privilege
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_keywords['__all_database_privilege']))
 
 ################################################################################
 # System View (20000,30000]
@@ -19575,47 +19581,8 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-def_table_schema(
-  owner             = 'jianyun.sjy',
-  table_name        = 'GV$OB_IO_QUOTA',
-  table_id          = '21243',
-  table_type        = 'SYSTEM_VIEW',
-  in_tenant_space   = False,
-  gm_columns        = [],
-  rowkey_columns    = [],
-  normal_columns    = [],
-  view_definition   = """
-    SELECT
-        SVR_IP,
-        SVR_PORT,
-        TENANT_ID,
-        CATEGORY,
-        MODE,
-        SIZE,
-        MIN_IOPS,
-        MAX_IOPS,
-        REAL_IOPS,
-        MIN_MBPS,
-        MAX_MBPS,
-        REAL_MBPS
-    FROM oceanbase.__all_virtual_io_quota
-  """.replace("\n", " "),
-)
-
-def_table_schema(
-  owner             = 'jianyun.sjy',
-  table_name        = 'V$OB_IO_QUOTA',
-  table_id          = '21244',
-  table_type        = 'SYSTEM_VIEW',
-  in_tenant_space   = False,
-  gm_columns        = [],
-  rowkey_columns    = [],
-  normal_columns    = [],
-  view_definition   = """
-    SELECT * FROM oceanbase.GV$OB_IO_QUOTA
-    WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
-  """.replace("\n", " "),
-)
+# reserve 21243 for GV$OB_IO_QUOTA
+# reserve 21244 for V$OB_IO_QUOTA
 
 
 # 4.0 backup clean view
@@ -23039,10 +23006,177 @@ def_table_schema(
     'TUESDAY_WINDOW', 'WEDNESDAY_WINDOW', 'THURSDAY_WINDOW', 'FRIDAY_WINDOW', 'SATURDAY_WINDOW', 'SUNDAY_WINDOW')
   """.replace("\n", " ")
 )
-# 21336: DBA_OB_USERS;
-# 21337: CDB_OB_USERS;
-# 21338: DBA_OB_DATABASE_PRIVILEGE
-# 21339: CDB_OB_DATABASE_PRIVILEGE
+
+def_table_schema(
+  owner           = 'mingye.swj',
+  table_name      = 'DBA_OB_USERS',
+  table_id        = '21336',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT USER_NAME,
+          HOST,
+          PASSWD,
+          INFO,
+          (CASE WHEN PRIV_ALTER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER,
+          (CASE WHEN PRIV_CREATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE,
+          (CASE WHEN PRIV_DELETE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DELETE,
+          (CASE WHEN PRIV_DROP = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DROP,
+          (CASE WHEN PRIV_GRANT_OPTION = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_GRANT_OPTION,
+          (CASE WHEN PRIV_INSERT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INSERT,
+          (CASE WHEN PRIV_UPDATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_UPDATE,
+          (CASE WHEN PRIV_SELECT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SELECT,
+          (CASE WHEN PRIV_INDEX = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INDEX,
+          (CASE WHEN PRIV_CREATE_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_VIEW,
+          (CASE WHEN PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW,
+          (CASE WHEN PRIV_SHOW_DB = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_DB,
+          (CASE WHEN PRIV_CREATE_USER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_USER,
+          (CASE WHEN PRIV_SUPER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SUPER,
+          (CASE WHEN IS_LOCKED = 0 THEN 'NO' ELSE 'YES' END) AS IS_LOCKED,
+          (CASE WHEN PRIV_PROCESS = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_PROCESS,
+          (CASE WHEN PRIV_CREATE_SYNONYM = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_SYNONYM,
+          SSL_TYPE,
+          SSL_CIPHER,
+          X509_ISSUER,
+          X509_SUBJECT,
+          (CASE WHEN TYPE = 0 THEN 'USER' ELSE 'ROLE' END) AS TYPE,
+          PROFILE_ID,
+          PASSWORD_LAST_CHANGED,
+          (CASE WHEN PRIV_FILE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_FILE,
+          (CASE WHEN PRIV_ALTER_TENANT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER_TENANT,
+          (CASE WHEN PRIV_ALTER_SYSTEM = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER_SYSTEM,
+          (CASE WHEN PRIV_CREATE_RESOURCE_POOL = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_RESOURCE_POOL,
+          (CASE WHEN PRIV_CREATE_RESOURCE_UNIT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_RESOURCE_UNIT,
+          MAX_CONNECTIONS,
+          MAX_USER_CONNECTIONS,
+          (CASE WHEN PRIV_REPL_SLAVE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_SLAVE,
+          (CASE WHEN PRIV_REPL_CLIENT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_CLIENT
+  FROM OCEANBASE.__all_user;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'mingye.swj',
+  table_name      = 'CDB_OB_USERS',
+  table_id        = '21337',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT TENANT_ID,
+          USER_NAME,
+          HOST,
+          PASSWD,
+          INFO,
+          (CASE WHEN PRIV_ALTER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER,
+          (CASE WHEN PRIV_CREATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE,
+          (CASE WHEN PRIV_DELETE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DELETE,
+          (CASE WHEN PRIV_DROP = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DROP,
+          (CASE WHEN PRIV_GRANT_OPTION = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_GRANT_OPTION,
+          (CASE WHEN PRIV_INSERT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INSERT,
+          (CASE WHEN PRIV_UPDATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_UPDATE,
+          (CASE WHEN PRIV_SELECT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SELECT,
+          (CASE WHEN PRIV_INDEX = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INDEX,
+          (CASE WHEN PRIV_CREATE_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_VIEW,
+          (CASE WHEN PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW,
+          (CASE WHEN PRIV_SHOW_DB = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_DB,
+          (CASE WHEN PRIV_CREATE_USER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_USER,
+          (CASE WHEN PRIV_SUPER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SUPER,
+          (CASE WHEN IS_LOCKED = 0 THEN 'NO' ELSE 'YES' END) AS IS_LOCKED,
+          (CASE WHEN PRIV_PROCESS = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_PROCESS,
+          (CASE WHEN PRIV_CREATE_SYNONYM = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_SYNONYM,
+          SSL_TYPE,
+          SSL_CIPHER,
+          X509_ISSUER,
+          X509_SUBJECT,
+          (CASE WHEN TYPE = 0 THEN 'USER' ELSE 'ROLE' END) AS TYPE,
+          PROFILE_ID,
+          PASSWORD_LAST_CHANGED,
+          (CASE WHEN PRIV_FILE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_FILE,
+          (CASE WHEN PRIV_ALTER_TENANT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER_TENANT,
+          (CASE WHEN PRIV_ALTER_SYSTEM = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER_SYSTEM,
+          (CASE WHEN PRIV_CREATE_RESOURCE_POOL = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_RESOURCE_POOL,
+          (CASE WHEN PRIV_CREATE_RESOURCE_UNIT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_RESOURCE_UNIT,
+          MAX_CONNECTIONS,
+          MAX_USER_CONNECTIONS,
+          (CASE WHEN PRIV_REPL_SLAVE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_SLAVE,
+          (CASE WHEN PRIV_REPL_CLIENT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_CLIENT
+  FROM OCEANBASE.__all_virtual_user;
+  """.replace("\n", " ")
+)
+
+
+def_table_schema(
+  owner           = 'mingye.swj',
+  table_name      = 'DBA_OB_DATABASE_PRIVILEGE',
+  table_id        = '21338',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT A.USER_ID USER_ID,
+          B.USER_NAME USERNAME,
+          A.DATABASE_NAME DATABASE_NAME,
+          A.GMT_CREATE GMT_CREATE,
+          A.GMT_MODIFIED GMT_MODIFIED,
+          (CASE WHEN A.PRIV_ALTER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER,
+          (CASE WHEN A.PRIV_CREATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE,
+          (CASE WHEN A.PRIV_DELETE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DELETE,
+          (CASE WHEN A.PRIV_DROP = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DROP,
+          (CASE WHEN A.PRIV_GRANT_OPTION = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_GRANT_OPTION,
+          (CASE WHEN A.PRIV_INSERT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INSERT,
+          (CASE WHEN A.PRIV_UPDATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_UPDATE,
+          (CASE WHEN A.PRIV_SELECT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SELECT,
+          (CASE WHEN A.PRIV_INDEX = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INDEX,
+          (CASE WHEN A.PRIV_CREATE_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_VIEW,
+          (CASE WHEN A.PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW
+  FROM OCEANBASE.__all_database_privilege A INNER JOIN OCEANBASE.__all_user B
+        ON A.TENANT_ID = B.TENANT_ID AND A.USER_ID = B.USER_ID;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'mingye.swj',
+  table_name      = 'CDB_OB_DATABASE_PRIVILEGE',
+  table_id        = '21339',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT A.TENANT_ID,
+          A.USER_ID USER_ID,
+          B.USER_NAME USERNAME,
+          A.DATABASE_NAME DATABASE_NAME,
+          A.GMT_CREATE GMT_CREATE,
+          A.GMT_MODIFIED GMT_MODIFIED,
+          (CASE WHEN A.PRIV_ALTER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER,
+          (CASE WHEN A.PRIV_CREATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE,
+          (CASE WHEN A.PRIV_DELETE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DELETE,
+          (CASE WHEN A.PRIV_DROP = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DROP,
+          (CASE WHEN A.PRIV_GRANT_OPTION = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_GRANT_OPTION,
+          (CASE WHEN A.PRIV_INSERT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INSERT,
+          (CASE WHEN A.PRIV_UPDATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_UPDATE,
+          (CASE WHEN A.PRIV_SELECT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SELECT,
+          (CASE WHEN A.PRIV_INDEX = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INDEX,
+          (CASE WHEN A.PRIV_CREATE_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_VIEW,
+          (CASE WHEN A.PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW
+  FROM OCEANBASE.__all_virtual_database_privilege A INNER JOIN OCEANBASE.__all_virtual_user B
+        ON A.USER_ID = B.USER_ID AND A.TENANT_ID = B.TENANT_ID;
+  """.replace("\n", " ")
+)
+
+
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -39575,7 +39709,41 @@ def_table_schema(
   in_tenant_space = True,
   view_definition ="""SELECT * FROM SYS.ALL_SCHEDULER_WINDOWS""".replace("\n", " "),
 )
-#25207: DBA_OB_DATABASE_PRIVILEGE
+
+def_table_schema(
+  owner           = 'mingye.swj',
+  table_name      = 'DBA_OB_DATABASE_PRIVILEGE',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25207',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+   SELECT A.USER_ID USER_ID,
+          B.USER_NAME USERNAME,
+          A.DATABASE_NAME DATABASE_NAME,
+          A.GMT_CREATE GMT_CREATE,
+          A.GMT_MODIFIED GMT_MODIFIED,
+          (CASE WHEN A.PRIV_ALTER = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_ALTER,
+          (CASE WHEN A.PRIV_CREATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE,
+          (CASE WHEN A.PRIV_DELETE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DELETE,
+          (CASE WHEN A.PRIV_DROP = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DROP,
+          (CASE WHEN A.PRIV_GRANT_OPTION = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_GRANT_OPTION,
+          (CASE WHEN A.PRIV_INSERT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INSERT,
+          (CASE WHEN A.PRIV_UPDATE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_UPDATE,
+          (CASE WHEN A.PRIV_SELECT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SELECT,
+          (CASE WHEN A.PRIV_INDEX = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_INDEX,
+          (CASE WHEN A.PRIV_CREATE_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_VIEW,
+          (CASE WHEN A.PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW
+  FROM SYS.ALL_VIRTUAL_DATABASE_PRIVILEGE_REAL_AGENT A INNER JOIN SYS.ALL_VIRTUAL_USER_REAL_AGENT B
+        ON A.TENANT_ID = B.TENANT_ID AND A.USER_ID = B.USER_ID;
+  """.replace("\n", " "),
+)
+
 #### End Data Dictionary View
 ################################################################################
 
@@ -44578,7 +44746,6 @@ FROM (
     ORDER BY A.TABLE_ID, A.TABLET_ID, C.ZONE, SVR_IP, SVR_PORT
   """.replace("\n", " "),
 )
-
 
 # 28153: GV$OB_TENANTS
 # 28154: V$OB_TENANTS

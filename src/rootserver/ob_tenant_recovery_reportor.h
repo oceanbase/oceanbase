@@ -70,7 +70,7 @@ public:
  static int get_readable_scn(const share::ObLSID &id, palf::SCN &read_scn);
 private:
   int load_tenant_info_();
-  static int get_sync_point_(const share::ObLSID &id, palf::SCN &log_scn, palf::SCN &read_scn);
+  static int get_sync_point_(const share::ObLSID &id, palf::SCN &scn, palf::SCN &read_scn);
   int update_ls_recovery_stat_();
 
 public:

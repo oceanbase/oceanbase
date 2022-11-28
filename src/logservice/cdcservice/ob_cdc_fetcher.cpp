@@ -344,7 +344,7 @@ void ObCdcFetcher::check_next_group_entry_(const LSN &next_lsn,
     bool &reach_upper_limit)
 {
   //TODO(scn)
-  int64_t submit_ts = next_log_group_entry.get_log_scn().get_val_for_lsn_allocator();
+  int64_t submit_ts = next_log_group_entry.get_scn().get_val_for_lsn_allocator();
   int64_t entry_size = next_log_group_entry.get_serialize_size();
   bool is_buf_full = (! resp.has_enough_buffer(entry_size));
 

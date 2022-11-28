@@ -294,9 +294,9 @@ public:
     J_KV(K_(palf_id), K_(self), K_(log_ms_meta), K_(prev_log_proposal_id), K_(prev_lsn),      \
       K_(prev_mode_pid), K_(state), K_(persistent_config_version),                            \
       K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list),
-      K_(last_submit_config_log_ts_ns), K_(region), K_(paxos_member_region_map),
-      K_(register_ts_ns), K_(parent), K_(parent_keepalive_ts_ns),
-      K_(last_submit_register_req_ts_ns), K_(children), K_(last_submit_keepalive_ts_ns), KP(this));
+      K_(last_submit_config_log_time_us), K_(region), K_(paxos_member_region_map),
+      K_(register_time_us), K_(parent), K_(parent_keepalive_time_us),
+      K_(last_submit_register_req_time_us), K_(children), K_(last_submit_keepalive_time_us), KP(this));
     J_OBJ_END();
     return pos;
   }
@@ -402,7 +402,7 @@ private:
   // previous mode proposal_id for barrier
   int64_t prev_mode_pid_;
   ConfigChangeState state_;
-  int64_t last_submit_config_log_ts_ns_;
+  int64_t last_submit_config_log_time_us_;
   // record ack to membership log
   LogSimpleMemberList ms_ack_list_;
   // need change_config with background thread
@@ -418,25 +418,25 @@ private:
   // for resend config log
   LogConfigVersion resend_config_version_;
   ResendConfigLogList resend_log_list_;
-  int64_t last_broadcast_leader_info_ts_ns_;
+  int64_t last_broadcast_leader_info_time_us_;
   LogConfigVersion persistent_config_version_;
   mutable int64_t barrier_print_log_time_;
   mutable int64_t last_check_state_ts_us_;
   // ================= Config Change =================
   // ==================== Child ========================
   mutable common::ObSpinLock parent_lock_;
-  int64_t register_ts_ns_;
+  int64_t register_time_us_;
   common::ObAddr parent_;
-  int64_t parent_keepalive_ts_ns_;
+  int64_t parent_keepalive_time_us_;
   // registering state
-  int64_t last_submit_register_req_ts_ns_;
+  int64_t last_submit_register_req_time_us_;
   // control register req frequency
-  int64_t last_first_register_ts_ns_;
+  int64_t last_first_register_time_us_;
   // ==================== Child ========================
   // ==================== Parent ========================
   mutable common::ObSpinLock child_lock_;
   LogLearnerList children_;
-  int64_t last_submit_keepalive_ts_ns_;
+  int64_t last_submit_keepalive_time_us_;
   // ==================== Parent ========================
   LogEngine *log_engine_;
   LogSlidingWindow *sw_;

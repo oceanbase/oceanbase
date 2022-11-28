@@ -341,12 +341,12 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
     }
   }
   // 解析参数列表
-  if (OB_SUCC(ret) && params_.is_execute_call_stmt_) {
-    OZ (stmt->add_params(expr_params));
-    OX (stmt->set_can_direct_use_param(true));
-  } else {
+  // if (OB_SUCC(ret) && params_.is_execute_call_stmt_) {
+  //   OZ (stmt->add_params(expr_params));
+  //   OX (stmt->set_can_direct_use_param(true));
+  // } else {
     OZ (resolve_cparams(params_node, proc_info, stmt));
-  }
+  // }
 
   if (OB_SUCC(ret)) {
     if (OB_INVALID_ID == proc_info->get_package_id()) {

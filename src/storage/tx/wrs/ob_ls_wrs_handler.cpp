@@ -139,12 +139,11 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
 int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_stale_time, palf::SCN &timestamp)
 {
   int ret = OB_SUCCESS;
-  palf::SCN min_log_service_ts, min_tx_service_ts;
-  int64_t tmp_min_log_service_ts = 0;
+  palf::SCN min_log_service_scn, min_tx_service_ts;
   const ObLSID &ls_id = ls.get_ls_id();
 
   //the order of apply service、trx should not be changed
-  if (OB_FAIL(ls.get_max_decided_log_ts_ns(tmp_min_log_service_ts))) {
+  if (OB_FAIL(ls.get_max_decided_scn(min_log_service_scn))) {
     if (OB_STATE_NOT_MATCH == ret) {
       // print one log per minute
       if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
@@ -165,10 +164,7 @@ int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_st
       STORAGE_LOG(WARN, "get_min_uncommit_prepare_version error", K(ret), K(ls_id));
     }
   } else {
-    if (OB_FAIL(min_log_service_ts.convert_for_lsn_allocator(tmp_min_log_service_ts))) {
-      STORAGE_LOG(WARN, "convert for lsn fail", K(ret), K(ls_id), K(tmp_min_log_service_ts));
-    }
-    timestamp = palf::SCN::min(min_log_service_ts, min_tx_service_ts);
+    timestamp = palf::SCN::min(min_log_service_scn, min_tx_service_ts);
     const int64_t current_us = ObClockGenerator::getClock();
     if (current_us - timestamp.convert_to_ts() > 3000 * 1000L /*3s*/
         || REACH_TIME_INTERVAL(10 * 1000 * 1000)) {

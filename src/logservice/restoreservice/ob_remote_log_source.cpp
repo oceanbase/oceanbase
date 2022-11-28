@@ -31,7 +31,7 @@ ObRemoteLogParent::ObRemoteLogParent(const ObLogArchiveSourceType &type, const s
   type_(type),
   upper_limit_scn_(),
   to_end_(false),
-  end_fetch_log_scn_(),
+  end_fetch_scn_(),
   end_lsn_(),
   error_context_()
 {}
@@ -42,7 +42,7 @@ ObRemoteLogParent::~ObRemoteLogParent()
   type_ = ObLogArchiveSourceType::INVALID;
   upper_limit_scn_.reset();
   to_end_ = false;
-  end_fetch_log_scn_.reset();
+  end_fetch_scn_.reset();
   end_lsn_.reset();
 }
 
@@ -55,7 +55,7 @@ void ObRemoteLogParent::set_to_end(const bool is_to_end, const SCN &scn)
 {
   if (is_to_end && ! to_end_) {
     to_end_ = true;
-    end_fetch_log_scn_ = scn;
+    end_fetch_scn_ = scn;
     CLOG_LOG(INFO, "set_to_end succ", KPC(this));
   }
 }
@@ -65,7 +65,7 @@ void ObRemoteLogParent::base_copy_to_(ObRemoteLogParent &other)
   other.type_ = type_;
   other.upper_limit_scn_ = upper_limit_scn_;
   other.to_end_ = to_end_;
-  other.end_fetch_log_scn_ = end_fetch_log_scn_;
+  other.end_fetch_scn_ = end_fetch_scn_;
   other.end_lsn_ = end_lsn_;
   other.error_context_ = error_context_;
 }
@@ -107,24 +107,24 @@ ObRemoteSerivceParent::~ObRemoteSerivceParent()
   server_.reset();
 }
 
-int ObRemoteSerivceParent::set(const ObAddr &addr, const SCN &end_log_scn)
+int ObRemoteSerivceParent::set(const ObAddr &addr, const SCN &end_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! addr.is_valid() || !end_log_scn.is_valid())) {
+  if (OB_UNLIKELY(! addr.is_valid() || !end_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(end_log_scn), K(addr));
-  } else if (addr == server_ && end_log_scn == upper_limit_scn_) {
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(end_scn), K(addr));
+  } else if (addr == server_ && end_scn == upper_limit_scn_) {
   } else {
     server_ = addr;
-    upper_limit_scn_ = end_log_scn;
+    upper_limit_scn_ = end_scn;
   }
   return ret;
 }
 
-void ObRemoteSerivceParent::get(ObAddr &addr, SCN &end_log_scn)
+void ObRemoteSerivceParent::get(ObAddr &addr, SCN &end_scn)
 {
   addr = server_;
-  end_log_scn = upper_limit_scn_;
+  end_scn = upper_limit_scn_;
 }
 
 int ObRemoteSerivceParent::deep_copy_to(ObRemoteLogParent &other)
@@ -155,35 +155,35 @@ ObRemoteLocationParent::~ObRemoteLocationParent()
 
 void ObRemoteLocationParent::get(share::ObBackupDest *&dest,
     ObLogArchivePieceContext *&piece_context,
-    SCN &end_log_scn)
+    SCN &end_scn)
 {
   dest = &root_path_;
   piece_context = &piece_context_;
-  end_log_scn = upper_limit_scn_;
+  end_scn = upper_limit_scn_;
 }
 
-int ObRemoteLocationParent::set(const share::ObBackupDest &dest, const SCN &end_log_scn)
+int ObRemoteLocationParent::set(const share::ObBackupDest &dest, const SCN &end_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! dest.is_valid() || ! end_log_scn.is_valid())) {
+  if (OB_UNLIKELY(! dest.is_valid() || ! end_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(end_log_scn), K(dest));
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(end_scn), K(dest));
   } else if (dest == root_path_) {
-    if (end_log_scn < upper_limit_scn_ && SCN::max_scn() != upper_limit_scn_) {
-      CLOG_LOG(WARN, "fetch log upper_limit_scn rollback", K(ret), K(end_log_scn), KPC(this));
-    } else if (end_log_scn == upper_limit_scn_) {
+    if (end_scn < upper_limit_scn_ && SCN::max_scn() != upper_limit_scn_) {
+      CLOG_LOG(WARN, "fetch log upper_limit_scn rollback", K(ret), K(end_scn), KPC(this));
+    } else if (end_scn == upper_limit_scn_) {
       // skip
     } else {
-      const SCN pre_upper_log_scn = upper_limit_scn_;
-      upper_limit_scn_ = end_log_scn;
-      CLOG_LOG(INFO, "upper limit scn increase", K(dest), K(pre_upper_log_scn), K(end_log_scn));
+      const SCN pre_upper_scn = upper_limit_scn_;
+      upper_limit_scn_ = end_scn;
+      CLOG_LOG(INFO, "upper limit scn increase", K(dest), K(pre_upper_scn), K(end_scn));
     }
   } else if (OB_FAIL(root_path_.deep_copy(dest))) {
     CLOG_LOG(WARN, "root path deep copy failed", K(ret), K(dest), KPC(this));
   } else if (OB_FAIL(piece_context_.init(ls_id_, root_path_))) {
     CLOG_LOG(WARN, "piece context init failed", K(ret), KPC(this));
   } else {
-    upper_limit_scn_ = end_log_scn;
+    upper_limit_scn_ = end_scn;
     CLOG_LOG(INFO, "add location source succ", K(ret), KPC(this));
   }
   return ret;
@@ -240,27 +240,27 @@ ObRemoteRawPathParent::~ObRemoteRawPathParent()
 {
   to_end_ = false;
   upper_limit_scn_.reset();
-  end_fetch_log_scn_.reset();
+  end_fetch_scn_.reset();
   end_lsn_.reset();
   piece_index_ = 0;
   min_file_id_ = 0;
   max_file_id_ = 0;
 }
 
-void ObRemoteRawPathParent::get(DirArray &array, SCN &end_log_scn)
+void ObRemoteRawPathParent::get(DirArray &array, SCN &end_scn)
 {
   array.assign(paths_);
-  end_log_scn = upper_limit_scn_;
+  end_scn = upper_limit_scn_;
 }
 
-int ObRemoteRawPathParent::set(DirArray &array, const SCN &end_log_scn)
+int ObRemoteRawPathParent::set(DirArray &array, const SCN &end_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(array.empty() || !end_log_scn.is_valid())) {
+  if (OB_UNLIKELY(array.empty() || !end_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     paths_.assign(array);
-    upper_limit_scn_ = end_log_scn;
+    upper_limit_scn_ = end_scn;
   }
   CLOG_LOG(INFO, "add_source dest", KPC(this));
   return ret;

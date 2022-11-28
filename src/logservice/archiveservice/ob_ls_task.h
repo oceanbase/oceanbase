@@ -97,7 +97,7 @@ public:
   // 获取fetch进度
   int get_fetcher_progress(const ArchiveWorkStation &station,
                          palf::LSN &offset,
-                         palf::SCN &log_scn);
+                         palf::SCN &scn);
 
   int compensate_piece(const ArchiveWorkStation &station,
                        const int64_t next_compensate_piece_id);
@@ -159,7 +159,7 @@ private:
     int get_top_fetch_log(ObArchiveLogFetchTask *&task);
     int pop_fetch_log(ObArchiveLogFetchTask *&task);
     int compensate_piece(const int64_t piece_id);
-    void get_max_archive_progress(LSN &piece_min_lsn, LSN &lsn, palf::SCN &log_scn, ObArchivePiece &piece,
+    void get_max_archive_progress(LSN &piece_min_lsn, LSN &lsn, palf::SCN &scn, ObArchivePiece &piece,
         int64_t &file_id, int64_t &file_offset, bool &error_exist);
     int update_archive_progress(const palf::SCN &round_start_scn, const int64_t file_id, const int64_t file_offset, const LogFileTuple &tuple);
     void get_archive_progress(int64_t &file_id, int64_t &file_offset, LogFileTuple &tuple);

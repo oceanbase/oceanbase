@@ -71,21 +71,21 @@ const int64_t MAX_ALLOWED_SKEW_FOR_REF_US = 3600L * 1000 * 1000;          // 1h
 // follower's group buffer size is 8MB larger than leader's.
 const int64_t FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE = LEADER_DEFAULT_GROUP_BUFFER_SIZE + 8 * 1024 * 1024L;
 const int64_t PALF_RECONFIRM_FETCH_MAX_LSN_INTERVAL = 1 * 1000 * 1000;
-const int64_t PALF_FETCH_LOG_INTERVAL_NS = 2 * 1000 * 1000 * 1000L;                 // 2s
+const int64_t PALF_FETCH_LOG_INTERVAL_US = 2 * 1000 * 1000L;                 // 2s
 const int64_t PALF_FETCH_LOG_RENEW_LEADER_INTERVAL_US = 5 * 1000 * 1000;            // 5s
-const int64_t PALF_LEADER_RECONFIRM_SYNC_TIMEOUT_NS = 10 * 1000 * 1000 * 1000L;     // 10s
+const int64_t PALF_LEADER_RECONFIRM_SYNC_TIMEOUT_US = 10 * 1000 * 1000L;     // 10s
 const int64_t PREPARE_LOG_BUFFER_SIZE = 2048;
-const int64_t PALF_LEADER_ACTIVE_SYNC_TIMEOUT_NS = 10 * 1000 * 1000 * 1000L;        // 10s
+const int64_t PALF_LEADER_ACTIVE_SYNC_TIMEOUT_US = 10 * 1000 * 1000L;        // 10s
 const int32_t PALF_MAX_REPLAY_TIMEOUT = 500 * 1000;
 const int32_t PALF_LOG_LOOP_INTERVAL_US = 1 * 1000;                                 // 1ms
 const int64_t PALF_SLIDING_WINDOW_SIZE = 1 << 11;                                   // must be 2^n(n>0), default 2^11 = 2048
 const int64_t PALF_MAX_LEADER_SUBMIT_LOG_COUNT = PALF_SLIDING_WINDOW_SIZE / 2;      // max number of concurrent submitting group log in leader
-const int64_t PALF_RESEND_MSLOG_INTERVAL_NS = 500 * 1000 * 1000L;                   // 500 ms
-const int64_t PALF_BROADCAST_LEADER_INFO_INTERVAL_NS = 5 * 1000 * 1000 * 1000L;     // 5s
+const int64_t PALF_RESEND_MSLOG_INTERVAL_US = 500 * 1000L;                   // 500 ms
+const int64_t PALF_BROADCAST_LEADER_INFO_INTERVAL_US = 5 * 1000 * 1000L;     // 5s
 const int64_t FIRST_VALID_LOG_ID = 1;  // The first valid log_id is 1.
-const int64_t PALF_PARENT_CHILD_TIMEOUT_NS = 4 * 1000 * 1000 * 1000L;               // 4000ms, 4s
-const int64_t PALF_PARENT_KEEPALIVE_INTERVAL_NS = 1 * 1000 * 1000 * 1000L;          // 1000ms, 1s
-const int64_t PALF_CHILD_RESEND_REGISTER_INTERVAL_NS = 4 * 1000 * 1000 * 1000L;     // 4000ms
+const int64_t PALF_PARENT_CHILD_TIMEOUT_US = 4 * 1000 * 1000L;               // 4000ms, 4s
+const int64_t PALF_PARENT_KEEPALIVE_INTERVAL_US = 1 * 1000 * 1000L;          // 1000ms, 1s
+const int64_t PALF_CHILD_RESEND_REGISTER_INTERVAL_US = 4 * 1000 * 1000L;     // 4000ms
 const int64_t PALF_CHECK_PARENT_CHILD_INTERVAL_US = 1 * 1000 * 1000;                // 1000ms
 const int64_t PALF_DUMP_DEBUG_INFO_INTERVAL_US = 10 * 1000 * 1000;                  // 10s
 constexpr int64_t INVALID_PROPOSAL_ID = INT64_MAX;
@@ -229,25 +229,25 @@ int scan_dir(const char *dir_name, ObBaseDirFunctor &functor);
 
 struct TimeoutChecker
 {
-  explicit TimeoutChecker(const int64_t timeout_ns)
-      : begin_ts_ns_(common::ObTimeUtility::current_time_ns()), timeout_ns_(timeout_ns) { }
+  explicit TimeoutChecker(const int64_t timeout_us)
+      : begin_time_us_(common::ObTimeUtility::current_time()), timeout_us_(timeout_us) { }
   ~TimeoutChecker() { }
   void reset()
   {
-    begin_ts_ns_ = common::ObTimeUtility::current_time_ns();
+    begin_time_us_ = common::ObTimeUtility::current_time();
   }
 
   int operator()()
   {
     int ret = OB_SUCCESS;
-    if ((common::ObTimeUtility::current_time_ns() - begin_ts_ns_ >= timeout_ns_)) {
+    if ((common::ObTimeUtility::current_time() - begin_time_us_ >= timeout_us_)) {
       ret = OB_TIMEOUT;
     }
     return ret;
   }
 
-  int64_t begin_ts_ns_;
-  int64_t timeout_ns_;
+  int64_t begin_time_us_;
+  int64_t timeout_us_;
 };
 
 inline bool palf_reach_time_interval(const int64_t interval, int64_t &warn_time)
@@ -256,18 +256,6 @@ inline bool palf_reach_time_interval(const int64_t interval, int64_t &warn_time)
   if ((common::ObTimeUtility::current_time() - warn_time >= interval) ||
       common::OB_INVALID_TIMESTAMP == warn_time) {
     warn_time = common::ObTimeUtility::current_time();
-    bool_ret = true;
-  }
-  return bool_ret;
-}
-
-inline bool palf_reach_time_interval_ns(const int64_t interval_ns, int64_t &warn_time_ns)
-{
-  bool bool_ret = false;
-  const int64_t curr_ts_ns = common::ObTimeUtility::current_time_ns();
-  if ((curr_ts_ns - warn_time_ns >= interval_ns) ||
-      common::OB_INVALID_TIMESTAMP == warn_time_ns) {
-    warn_time_ns = curr_ts_ns;
     bool_ret = true;
   }
   return bool_ret;
