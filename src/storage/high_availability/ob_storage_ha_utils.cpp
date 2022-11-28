@@ -28,7 +28,6 @@ int ObStorageHAUtils::check_tablet_replica_validity(const uint64_t tenant_id, co
     const common::ObAddr &src_addr, const common::ObTabletID &tablet_id, common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
-  int64_t compaction_scn_val = 0;
   palf::SCN compaction_scn;
   if (tablet_id.is_ls_inner_tablet()) {
     // do nothing
@@ -37,15 +36,13 @@ int ObStorageHAUtils::check_tablet_replica_validity(const uint64_t tenant_id, co
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id), K(src_addr), K(tablet_id));
   } else if (OB_FAIL(check_merge_error_(tenant_id, sql_client))) {
     LOG_WARN("failed to check merge error", K(ret), K(tenant_id));
-  } else if (OB_FAIL(fetch_src_tablet_meta_info_(tenant_id, tablet_id, ls_id, src_addr, sql_client, compaction_scn_val))) {
+  } else if (OB_FAIL(fetch_src_tablet_meta_info_(tenant_id, tablet_id, ls_id, src_addr, sql_client, compaction_scn))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       LOG_INFO("tablet may not has major sstable, no need check", K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
     } else {
       LOG_WARN("failed to fetch src tablet meta info", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
     }
-  } else if (OB_FAIL(compaction_scn.convert_for_lsn_allocator(compaction_scn_val))) {
-    LOG_WARN("failed to convert scn", K(ret), K(compaction_scn_val), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(check_tablet_replica_checksum_(tenant_id, tablet_id, ls_id, compaction_scn, sql_client))) {
     LOG_WARN("failed to check tablet replica checksum", K(ret), K(compaction_scn));
   }
@@ -66,7 +63,7 @@ int ObStorageHAUtils::check_merge_error_(const uint64_t tenant_id, common::ObISQ
 }
 
 int ObStorageHAUtils::fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-    const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client, int64_t &compaction_scn)
+    const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client, palf::SCN &compaction_scn)
 {
   int ret = OB_SUCCESS;
   ObTabletTableOperator op;
@@ -76,7 +73,7 @@ int ObStorageHAUtils::fetch_src_tablet_meta_info_(const uint64_t tenant_id, cons
   } else if (OB_FAIL(op.get(tenant_id, tablet_id, ls_id, src_addr, tablet_replica))) {
     LOG_WARN("failed to get tablet meta info", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
   } else {
-    compaction_scn = tablet_replica.get_snapshot_version();
+    compaction_scn.convert_for_tx(tablet_replica.get_snapshot_version());
   }
   return ret;
 }

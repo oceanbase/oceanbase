@@ -52,7 +52,6 @@
 #include "rootserver/ob_update_rs_list_task.h"
 #include "rootserver/ob_schema_history_recycler.h"
 #include "rootserver/backup/ob_backup_lease_service.h"
-#include "rootserver/ob_restore_point_service.h"
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "share/ls/ob_ls_info.h"
 #include "share/ls/ob_ls_table_operator.h"
@@ -966,7 +965,6 @@ private:
 
   int64_t fail_count_;
   ObSchemaHistoryRecycler schema_history_recycler_;
-  ObRestorePointService restore_point_service_;
   ObBackupLeaseService backup_lease_service_;
   // Disaster Recovery related
   ObDRTaskExecutor disaster_recovery_task_executor_;

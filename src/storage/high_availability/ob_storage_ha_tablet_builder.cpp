@@ -16,6 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -693,11 +694,11 @@ int ObStorageHATabletsBuilder::get_need_copy_ddl_sstable_range_(
       bool ddl_checkpoint_pushed = !ddl_sstable_array.empty();
       if (ddl_checkpoint_pushed) {
         need_copy_scn_range.start_scn_ = ddl_start_scn;
-        int64_t min_start_scn = 0;
-        if (OB_FAIL(get_ddl_sstable_min_start_log_ts_(ddl_sstable_array, min_start_scn))) {
+        palf::SCN max_start_scn = palf::SCN::max_scn();
+        if (OB_FAIL(get_ddl_sstable_max_start_scn_(ddl_sstable_array, max_start_scn))) {
           LOG_WARN("failed to get ddl sstable min start log ts", K(ret));
         } else {
-          need_copy_scn_range.end_scn_.convert_for_lsn_allocator(min_start_scn);
+          need_copy_scn_range.end_scn_ = max_start_scn;
         }
       } else {
         need_copy_scn_range.start_scn_ = ddl_start_scn;
@@ -712,13 +713,13 @@ int ObStorageHATabletsBuilder::get_need_copy_ddl_sstable_range_(
   return ret;
 }
 
-int ObStorageHATabletsBuilder::get_ddl_sstable_min_start_log_ts_(
+int ObStorageHATabletsBuilder::get_ddl_sstable_max_start_scn_(
     const ObSSTableArray &ddl_sstable_array,
-    int64_t &min_start_log_ts)
+    palf::SCN &max_start_scn)
 {
   int ret = OB_SUCCESS;
   ObArray<ObITable *> sstables;
-  min_start_log_ts = 0;
+  max_start_scn = palf::SCN::max_scn();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -736,11 +737,17 @@ int ObStorageHATabletsBuilder::get_ddl_sstable_min_start_log_ts_(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable type is unexpected", K(ret), KP(table), K(param_));
       } else {
-        //TODO(scn)
-        int64_t start_log_ts = table->get_key().scn_range_.start_scn_.is_valid() ? (int64_t)(table->get_key().scn_range_.start_scn_.get_val_for_inner_table_field()) : OB_INVALID_TIMESTAMP;
-        min_start_log_ts = std::min(min_start_log_ts, start_log_ts);
+        palf::SCN start_scn = table->get_key().scn_range_.start_scn_.is_valid() ? (table->get_key().scn_range_.start_scn_) : palf::SCN::max_scn();
+        max_start_scn = std::min(max_start_scn, start_scn);
       }
     }
+
+    if (OB_FAIL(ret)) {
+    } else if (palf::SCN::max_scn() == max_start_scn) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("max start scn must not be equal to palf::max_scn", K(ret), K(max_start_scn));
+    }
+
   }
   return ret;
 }

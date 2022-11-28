@@ -50,7 +50,6 @@ ob_set_subtarget(ob_rootserver common
   ob_inner_table_monitor.cpp
   ob_locality_util.cpp
   ob_resource_weight_parser.cpp
-  ob_restore_point_service.cpp
   ob_root_balancer.cpp
   ob_root_minor_freeze.cpp
   ob_root_utils.cpp

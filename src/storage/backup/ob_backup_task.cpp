@@ -68,13 +68,13 @@ static int get_ls_handle(const uint64_t tenant_id, const share::ObLSID &ls_id, s
 }
 
 static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::ObLSID &ls_id,
-  const int64_t start_scn, storage::ObLS *ls)
+  const palf::SCN &start_scn, storage::ObLS *ls)
 {
   int ret = OB_SUCCESS;
   const int64_t advance_checkpoint_timeout = GCONF._advance_checkpoint_timeout;
   LOG_INFO("backup advance checkpoint timeout", K(tenant_id), K(advance_checkpoint_timeout));
   checkpoint::ObCheckpointExecutor *checkpoint_executor = NULL;
-  if (start_scn < 0) {
+  if (!start_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(start_scn));
   } else if (OB_ISNULL(checkpoint_executor = ls->get_checkpoint_executor())) {
@@ -84,14 +84,12 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
     ObLSMetaPackage ls_meta_package;
     int64_t i = 0;
     const int64_t start_ts = ObTimeUtility::current_time();
-    palf::SCN tmp;
-    tmp.convert_for_lsn_allocator(start_scn);
     do {
       const int64_t cur_ts = ObTimeUtility::current_time();
       if (cur_ts - start_ts > advance_checkpoint_timeout) {
         ret = OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT;
         LOG_WARN("backup advance checkpoint by flush timeout", K(ret), K(tenant_id), K(ls_id), K(start_scn));
-      } else if (OB_FAIL(checkpoint_executor->advance_checkpoint_by_flush(tmp))) {
+      } else if (OB_FAIL(checkpoint_executor->advance_checkpoint_by_flush(start_scn))) {
         if (OB_NO_NEED_UPDATE == ret) {
           // clog checkpoint ts has passed start log ts
           ret = OB_SUCCESS;
@@ -102,21 +100,21 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
       } else if (OB_FAIL(ls->get_ls_meta_package(ls_meta_package))) {
         LOG_WARN("failed to get ls meta package", K(ret), K(tenant_id), K(ls_id));
       } else {
-        const int64_t clog_checkpoint_ts = ls_meta_package.ls_meta_.get_clog_checkpoint_ts();
-        if (clog_checkpoint_ts >= start_scn) {
-          LOG_INFO("clog checkpoint ts has passed start log ts",
+        const palf::SCN clog_checkpoint_scn = ls_meta_package.ls_meta_.get_clog_checkpoint_scn();
+        if (clog_checkpoint_scn >= start_scn) {
+          LOG_INFO("clog checkpoint scn has passed start scn",
               K(i),
               K(tenant_id),
               K(ls_id),
-              K(clog_checkpoint_ts),
+              K(clog_checkpoint_scn),
               K(start_scn));
           break;
         } else {
-          LOG_WARN("clog checkpoint ts has not passed start log ts, retry again",
+          LOG_WARN("clog checkpoint scn has not passed start scn, retry again",
               K(i),
               K(tenant_id),
               K(ls_id),
-              K(clog_checkpoint_ts),
+              K(clog_checkpoint_scn),
               K(start_scn));
           sleep(1);
         }
@@ -3473,14 +3471,13 @@ int ObLSBackupMetaTask::advance_checkpoint_by_flush_(
   checkpoint::ObCheckpointExecutor *checkpoint_executor = NULL;
   storage::ObLSHandle ls_handle;
   storage::ObLS *ls = NULL;
-  const int64_t checkpoint_ts = static_cast<int64_t>(start_scn.get_val_for_lsn_allocator());
   if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream not exist", K(ret), K(ls_id));
-  } else if (OB_FAIL(advance_checkpoint_by_flush(tenant_id, ls_id, checkpoint_ts, ls))) {
-    LOG_WARN("failed to advance checkpoint by flush", K(ret), K(tenant_id), K(ls_id), K(checkpoint_ts));
+  } else if (OB_FAIL(advance_checkpoint_by_flush(tenant_id, ls_id, start_scn, ls))) {
+    LOG_WARN("failed to advance checkpoint by flush", K(ret), K(tenant_id), K(ls_id), K(start_scn));
   }
   return ret;
 }
@@ -3778,11 +3775,11 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
 {
   int ret = OB_SUCCESS;
   int64_t rebuild_seq = 0;
-  int64_t backup_clog_checkpoint_ts = 0;
+  palf::SCN backup_clog_checkpoint_scn;
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
-  } else if (OB_FAIL(fetch_backup_ls_meta_(rebuild_seq, backup_clog_checkpoint_ts))) {
+  } else if (OB_FAIL(fetch_backup_ls_meta_(rebuild_seq, backup_clog_checkpoint_scn))) {
     LOG_WARN("failed to fetch backup ls meta checkpoint ts", K(ret), K_(param));
   } else if (FALSE_IT(ls_backup_ctx_->rebuild_seq_ = rebuild_seq)) {
     // assign rebuild seq
@@ -3802,10 +3799,10 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
         LOG_WARN("log stream not exist", K(ret), K(ls_id));
       } else if (OB_FAIL(ls->get_ls_meta_package(cur_ls_meta))) {
         LOG_WARN("failed to get ls meta package", K(ret), K(tenant_id), K(ls_id));
-      } else if (backup_clog_checkpoint_ts <= cur_ls_meta.ls_meta_.get_clog_checkpoint_ts()) {
+      } else if (backup_clog_checkpoint_scn <= cur_ls_meta.ls_meta_.get_clog_checkpoint_scn()) {
         LOG_INFO("no need advance checkpoint", K_(param));
-      } else if (OB_FAIL(advance_checkpoint_by_flush(tenant_id, ls_id, backup_clog_checkpoint_ts, ls))) {
-        LOG_WARN("failed to advance checkpoint by flush", K(ret), K(ls_id), K(backup_clog_checkpoint_ts));
+      } else if (OB_FAIL(advance_checkpoint_by_flush(tenant_id, ls_id, backup_clog_checkpoint_scn, ls))) {
+        LOG_WARN("failed to advance checkpoint by flush", K(ret), K(ls_id), K(backup_clog_checkpoint_scn));
       } else {
         LOG_INFO("advance checkpint by flush", K_(param));
       }
@@ -3814,11 +3811,11 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
   return ret;
 }
 
-int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &rebuild_seq, int64_t &clog_checkpoint_ts)
+int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &rebuild_seq, palf::SCN &clog_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   rebuild_seq = 0;
-  clog_checkpoint_ts = 0;
+  clog_checkpoint_scn.reset();
   ObLSMetaPackage ls_meta_package;
   share::ObBackupDataStore store;
   if (OB_FAIL(store.init(param_.backup_dest_, param_.backup_set_desc_))) {
@@ -3830,7 +3827,7 @@ int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &rebuild_seq, int64_t &
     LOG_WARN("invalid ls meta package", K(ret), K(ls_meta_package));
   } else {
     rebuild_seq = ls_meta_package.ls_meta_.get_rebuild_seq();
-    clog_checkpoint_ts = ls_meta_package.ls_meta_.get_clog_checkpoint_ts();
+    clog_checkpoint_scn = ls_meta_package.ls_meta_.get_clog_checkpoint_scn();
   }
   return ret;
 }
@@ -3838,29 +3835,29 @@ int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &rebuild_seq, int64_t &
 int ObLSBackupPrepareTask::check_tx_data_can_explain_user_data_()
 {
   int ret = OB_SUCCESS;
-  int64_t backup_filled_tx_log_ts = INT64_MAX;
-  int64_t cur_min_filled_tx_log_ts = INT64_MAX;
+  palf::SCN backup_filled_tx_scn = palf::SCN::max_scn();
+  palf::SCN cur_min_filled_tx_scn = palf::SCN::max_scn();
   if (!backup_data_type_.is_minor_backup()) {
     // do nothing
-  } else if (OB_FAIL(get_backup_tx_data_table_filled_tx_log_ts_(backup_filled_tx_log_ts))) {
+  } else if (OB_FAIL(get_backup_tx_data_table_filled_tx_scn_(backup_filled_tx_scn))) {
     LOG_WARN("failed to get backup tx data table filled tx log ts", K(ret));
-  } else if (OB_FAIL(get_cur_ls_min_filled_tx_log_ts_(cur_min_filled_tx_log_ts))) {
+  } else if (OB_FAIL(get_cur_ls_min_filled_tx_scn_(cur_min_filled_tx_scn))) {
     LOG_WARN("failed to get cur ls min end log ts in latest tablets", K(ret));
   } else {
-    if (cur_min_filled_tx_log_ts >= backup_filled_tx_log_ts) {
-      LOG_INFO("can backup replica", K(ret), K(cur_min_filled_tx_log_ts), K(backup_filled_tx_log_ts));
+    if (cur_min_filled_tx_scn >= backup_filled_tx_scn) {
+      LOG_INFO("can backup replica", K(ret), K(cur_min_filled_tx_scn), K(backup_filled_tx_scn));
     } else {
       ret = OB_REPLICA_CANNOT_BACKUP;
-      LOG_WARN("can not backup replica", K(ret), K(cur_min_filled_tx_log_ts), K(backup_filled_tx_log_ts));
+      LOG_WARN("can not backup replica", K(ret), K(cur_min_filled_tx_scn), K(backup_filled_tx_scn));
     }
   }
   return ret;
 }
 
-int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_log_ts_(int64_t &filled_tx_log_ts)
+int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_scn_(palf::SCN &filled_tx_scn)
 {
   int ret = OB_SUCCESS;
-  filled_tx_log_ts = INT64_MAX;
+  filled_tx_scn = palf::SCN::max_scn();
   const common::ObTabletID &tx_data_tablet_id = LS_TX_DATA_TABLET;
   const ObBackupMetaType meta_type = ObBackupMetaType::BACKUP_SSTABLE_META;
   ObBackupDataType sys_backup_data_type;
@@ -3881,10 +3878,10 @@ int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_log_ts_(int64_t &f
       backup_path.get_obstr(), param_.backup_dest_.get_storage_info(), meta_index, meta_array))) {
     LOG_WARN("failed to read sstable metas", K(ret), K(backup_path), K(meta_index));
   } else if (meta_array.empty()) {
-    filled_tx_log_ts = 0;
+    filled_tx_scn = palf::SCN::min_scn();
     LOG_INFO("the log stream do not have tx data sstable", K(ret));
   } else {
-    filled_tx_log_ts = meta_array.at(0).sstable_meta_.basic_meta_.filled_tx_scn_.get_val_for_lsn_allocator();
+    filled_tx_scn = meta_array.at(0).sstable_meta_.basic_meta_.filled_tx_scn_;
   }
   return ret;
 }
@@ -3944,10 +3941,10 @@ int ObLSBackupPrepareTask::prepare_meta_index_store_param_(
   return ret;
 }
 
-int ObLSBackupPrepareTask::get_cur_ls_min_filled_tx_log_ts_(int64_t &min_filled_tx_log_ts)
+int ObLSBackupPrepareTask::get_cur_ls_min_filled_tx_scn_(palf::SCN &min_filled_tx_scn)
 {
   int ret = OB_SUCCESS;
-  min_filled_tx_log_ts = INT64_MAX;
+  min_filled_tx_scn = palf::SCN::max_scn();
   ObLSTabletIterator iterator(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
   storage::ObLSHandle ls_handle;
   storage::ObLS *ls = NULL;
@@ -3965,14 +3962,14 @@ int ObLSBackupPrepareTask::get_cur_ls_min_filled_tx_log_ts_(int64_t &min_filled_
     STORAGE_LOG(WARN, "build ls table iter failed.", KR(ret));
   } else {
     while (OB_SUCC(iterator.get_next_tablet(tablet_handle))) {
-      int64_t tmp_filled_tx_log_ts = INT64_MAX;
+      palf::SCN tmp_filled_tx_scn = palf::SCN::max_scn();
       bool has_minor_sstable = false;
-      if (OB_FAIL(get_tablet_min_filled_tx_log_ts_(tablet_handle, tmp_filled_tx_log_ts, has_minor_sstable))) {
+      if (OB_FAIL(get_tablet_min_filled_tx_scn_(tablet_handle, tmp_filled_tx_scn, has_minor_sstable))) {
         STORAGE_LOG(WARN, "get min end_log_ts from a single tablet failed.", KR(ret));
       } else if (!has_minor_sstable) {
         continue;
-      } else if (tmp_filled_tx_log_ts < min_filled_tx_log_ts) {
-        min_filled_tx_log_ts = tmp_filled_tx_log_ts;
+      } else if (tmp_filled_tx_scn < min_filled_tx_scn) {
+        min_filled_tx_scn = tmp_filled_tx_scn;
       }
     }
 
@@ -3983,12 +3980,12 @@ int ObLSBackupPrepareTask::get_cur_ls_min_filled_tx_log_ts_(int64_t &min_filled_
   return ret;
 }
 
-int ObLSBackupPrepareTask::get_tablet_min_filled_tx_log_ts_(
-    ObTabletHandle &tablet_handle, int64_t &min_filled_tx_log_ts, bool &has_minor_sstable)
+int ObLSBackupPrepareTask::get_tablet_min_filled_tx_scn_(
+    ObTabletHandle &tablet_handle, palf::SCN &min_filled_tx_scn, bool &has_minor_sstable)
 {
   int ret = OB_SUCCESS;
   has_minor_sstable = false;
-  min_filled_tx_log_ts = INT64_MAX;
+  min_filled_tx_scn = palf::SCN::max_scn();
   ObTablet *tablet = nullptr;
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -3996,7 +3993,7 @@ int ObLSBackupPrepareTask::get_tablet_min_filled_tx_log_ts_(
   } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
     // skip inner tablet
   } else {
-    min_filled_tx_log_ts = tablet->get_tablet_meta().clog_checkpoint_scn_.get_val_for_lsn_allocator();
+    min_filled_tx_scn = tablet->get_tablet_meta().clog_checkpoint_scn_;
     ObTabletTableStore &table_store = tablet->get_table_store();
     const ObSSTableArray &sstable_array = table_store.get_minor_sstables();
     has_minor_sstable = !sstable_array.empty();
@@ -4011,8 +4008,8 @@ int ObLSBackupPrepareTask::get_tablet_min_filled_tx_log_ts_(
         LOG_WARN("table ptr type not expectedd", K(ret));
       } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table_ptr))) {
       } else {
-        int64_t filled_tx_scn = sstable->get_meta().get_basic_meta().filled_tx_scn_.get_val_for_lsn_allocator();
-        min_filled_tx_log_ts = std::min(filled_tx_scn, min_filled_tx_log_ts);
+        palf::SCN filled_tx_scn = sstable->get_meta().get_basic_meta().filled_tx_scn_;
+        min_filled_tx_scn = std::min(filled_tx_scn, min_filled_tx_scn);
       }
     }
   }
