@@ -430,6 +430,7 @@ private:
 
   int replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt, ObQueryCtx *query_ctx);
 
+  int is_need_check_col_dup(const ObRawExpr *expr, bool &need_check);
 protected:
   // data members
   /*these member is only for with clause*/
