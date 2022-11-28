@@ -13,7 +13,6 @@
 #include "ob_tx_elr_util.h"
 #include "common/ob_clock_generator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
-#include "ob_trans_event.h"
 
 namespace oceanbase
 {
@@ -25,7 +24,6 @@ int ObTxELRUtil::check_and_update_tx_elr_info(ObTxDesc &tx, const bool can_elr)
   int ret = OB_SUCCESS;
   if (can_elr && can_tenant_elr_) {  // tenant config enable elr
     tx.set_can_elr(true);
-    TX_STAT_ELR_ENABLE_TRANS_INC(MTL_ID());
   } else {
     refresh_elr_tenant_config_();
   }

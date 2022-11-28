@@ -27,12 +27,23 @@
 #include "share/ob_encryption_util.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/ob_dml_sql_splicer.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
 namespace share
 {
 
+enum ObBackupCompatibleVersion // used for data backup TODO(chongrong): delete it?
+{
+  OB_BACKUP_COMPATIBLE_VERSION_V1 = 1, // since 2.2.60
+  OB_BACKUP_COMPATIBLE_VERSION_V2 = 2, // since 2.2.77
+  OB_BACKUP_COMPATIBLE_VERSION_V3 = 3, // since 3.1
+  OB_BACKUP_COMPATIBLE_VERSION_V4 = 4, // since 4.0
+  OB_BACKUP_COMPATIBLE_VERSION_MAX,
+};
+
+bool has_independ_inc_backup_set(const int64_t version);
 // for log archive and data backup, exclude backup lease service inner table
 enum ObBackupInnerTableVersion {
   OB_BACKUP_INNER_TABLE_V1 = 1, // since 2.2.60
@@ -99,6 +110,7 @@ static const int64_t OB_MAX_BACKUP_META_TIMEOUT = 30 * 60 * 1000 * 1000; // 30 m
 static constexpr const int64_t MAX_FAKE_PROVIDE_ITEM_COUNT = 128;
 static constexpr const int64_t DEFAULT_FAKE_BATCH_COUNT = 32;
 static constexpr const int64_t FAKE_MAX_FILE_ID = MAX_FAKE_PROVIDE_ITEM_COUNT / DEFAULT_FAKE_BATCH_COUNT - 1;
+static constexpr const int64_t FAKE_PROVIDER_VERSION = 1;  // TODO(yangyi.yyy): retry related
 
 static constexpr const int64_t DEFAULT_ARCHIVE_FILE_SIZE = 64 << 20; // 64MB
 
@@ -255,7 +267,7 @@ const char *const OB_STR_MAX_FILE_ID = "max_file_id";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_ID = "id";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_TYPE = "type";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_VALUE = "value";
-const char *const OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_SCN = "recovery_until_scn";
+const char *const OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_TS = "recovery_until_ts";
 
 const char *const OB_STR_TENANT = "tenant";
 const char *const OB_STR_DATA = "data";
@@ -906,6 +918,27 @@ struct ObBackupInfoStatus final
   BackupStatus status_;
 };
 
+//TODO(yanfeng) backup use lib backupdevicetype, fix it later
+struct ObBackupDeviceType final
+{
+  enum BackupDeviceType
+  {
+    NFS = 0,
+    OSS = 1,
+    OFS = 2,
+    COS = 3,
+    MAX,
+  };
+  ObBackupDeviceType() : type_(MAX) {}
+  virtual ~ObBackupDeviceType() = default;
+  void reset() { type_ = MAX; }
+  const char* get_backup_device_str() const;
+  int set_backup_device_type(const char *buf);
+  TO_STRING_KV(K_(type));
+
+  BackupDeviceType type_;
+};
+
 struct ObBaseBackupInfoStruct
 {
 public:
@@ -1285,9 +1318,6 @@ public:
   int64_t retry_count_;
 };
 
-  // TODO:  delete this when real SCN is ready.
-typedef int64_t ObBackupSCN;
-
 struct ObBackupSetTaskAttr final
 {
 public:
@@ -1306,9 +1336,9 @@ public:
   int64_t backup_set_id_;
   int64_t start_ts_;
   int64_t end_ts_;
-  ObBackupSCN start_scn_;
-  ObBackupSCN end_scn_;
-  ObBackupSCN user_ls_start_scn_;
+  palf::SCN start_scn_;
+  palf::SCN end_scn_;
+  palf::SCN user_ls_start_scn_;
   int64_t data_turn_id_;
   int64_t meta_turn_id_;
   ObBackupStatus status_;
@@ -1436,8 +1466,8 @@ public:
   common::ObFixedLengthString<OB_MAX_PASSWORD_LENGTH> passwd_;
   ObBackupFileStatus::STATUS file_status_;
   common::ObFixedLengthString<OB_MAX_BACKUP_DEST_LENGTH> backup_path_;
-  ObBackupSCN start_replay_scn_;
-  ObBackupSCN min_restore_scn_;
+  palf::SCN start_replay_scn_;
+  palf::SCN min_restore_scn_;
   uint64_t tenant_compatible_;
   Compatible backup_compatible_;
   int64_t data_turn_id_;
@@ -1596,13 +1626,12 @@ struct ObLogArchiveDestAtrr final
 int trim_right_backslash(ObBackupPathString &path);
 
 // Convert a scn to time string, return like '2022-05-31 12:00:00' if concat is ' '.
-int backup_scn_to_strftime(const uint64_t scn, char *buf, const int64_t buf_len, int64_t &pos, const char concat);
+int backup_scn_to_strftime(const palf::SCN &scn, char *buf, const int64_t buf_len, int64_t &pos, const char concat);
 
 // Convert a scn to time tag, return like '20220531T120000'
-int backup_scn_to_time_tag(const uint64_t scn, char *buf, const int64_t buf_len, int64_t &pos);
+int backup_scn_to_time_tag(const palf::SCN &scn, char *buf, const int64_t buf_len, int64_t &pos);
 
-inline uint64_t trans_scn_to_timestamp(const uint64_t scn) { return scn / 1000; }
-inline uint64_t trans_scn_to_second(const uint64_t scn) { return trans_scn_to_timestamp(scn) / 1000 / 1000; }
+inline uint64_t trans_scn_to_second(const palf::SCN &scn) { return scn.convert_to_ts() / 1000 / 1000; }
 }//share
 }//oceanbase
 

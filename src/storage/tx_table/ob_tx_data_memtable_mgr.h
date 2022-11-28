@@ -46,12 +46,9 @@ public:  // ObTxDataMemtableMgr
   int init(const common::ObTabletID &tablet_id,
            const share::ObLSID &ls_id,
            ObFreezer *freezer,
-           ObTenantMetaMemMgr *t3m) override;
+           ObTenantMetaMemMgr *t3m,
+           ObTabletDDLKvMgr *ddl_kv_mgr) override;
   virtual void destroy() override;
-
-  int offline();
-
-
   /**
    * @brief This function do the following operations:
    * 1. check some parameters which is required by freeze;
@@ -71,6 +68,9 @@ public:  // ObTxDataMemtableMgr
    * @param[in] schema_version  schema_version, not used
    */
   virtual int create_memtable(const int64_t clog_checkpoint_ts,
+                              const int64_t schema_version,
+                              const bool for_replay=false) override;
+  virtual int create_memtable(const palf::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
                               const bool for_replay=false) override;
   /**
@@ -95,8 +95,10 @@ public:  // ObTxDataMemtableMgr
 
   // ================ INHERITED FROM ObCommonCheckpoint ===============
   virtual int64_t get_rec_log_ts() override;
+  virtual palf::SCN get_rec_scn() override;
 
   virtual int flush(int64_t recycle_log_ts, bool need_freeze = true) override;
+  virtual int flush(palf::SCN recycle_scn, bool need_freeze = true) override;
 
   virtual ObTabletID get_tablet_id() const override;
 
@@ -120,9 +122,10 @@ protected:
                                      const bool force);
 
 private:  // ObTxDataMemtableMgr
-  int create_memtable_(const int64_t clog_checkpoint_ts, const int64_t schema_version);
+  int create_memtable_(const palf::SCN clog_checkpoint_scn, const int64_t schema_version);
 
   int freeze_();
+
   int get_all_memtables_(ObTableHdlArray &handles);
 
   int flush_all_frozen_memtables_(ObTableHdlArray &memtable_handles);

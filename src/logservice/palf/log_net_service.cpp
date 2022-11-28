@@ -94,25 +94,6 @@ int LogNetService::submit_push_log_req(
   return ret;
 }
 
-int LogNetService::submit_committed_info_req(
-      const common::ObAddr &server,
-      const int64_t &msg_proposal_id,
-      const int64_t prev_log_id,
-      const int64_t &prev_log_proposal_id,
-      const LSN &committed_end_lsn)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(ERROR, "LogNetService has not inited!!!", K(ret));
-  } else {
-    CommittedInfo committed_info_req(msg_proposal_id, prev_log_id,
-                            prev_log_proposal_id, committed_end_lsn);
-    ret = post_request_to_server_(server, committed_info_req);
-  }
-  return ret;
-}
-
 int LogNetService::submit_push_log_resp(
     const ObAddr &server,
     const int64_t &msg_proposal_id,

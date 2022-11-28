@@ -746,8 +746,6 @@ int ObLogFormatter::build_row_value_(
   ColValueList *old_cols = nullptr;
   ObLobDataOutRowCtxList *new_lob_ctx_cols = nullptr;
   TableSchemaInfo *tb_schema_info = NULL;
-  IObLogTenantMgr *tenant_mgr_ = TCTX.tenant_mgr_;
-  ObTimeZoneInfoWrap *tz_info_wrap = nullptr;
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("ObLogFormatter has not been initialized");
@@ -767,11 +765,6 @@ int ObLogFormatter::build_row_value_(
   } else if (OB_ISNULL(tb_schema_info)) {
     LOG_ERROR("tb_schema_info is null", K(tb_schema_info));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_ISNULL(tenant_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("tenant_mgr_ is nullptr", KR(ret), K(tenant_mgr_));
-  } else if (OB_FAIL(tenant_mgr_->get_tenant_tz_wrap(tenant_id, tz_info_wrap))) {
-    LOG_ERROR("get_tenant_tz_wrap failed", KR(ret), K(tenant_id));
   } else {
     const int64_t column_num = tb_schema_info->get_usr_column_count();
     const uint64_t aux_lob_meta_tid = tb_schema_info->get_aux_lob_meta_tid();
@@ -781,7 +774,7 @@ int ObLogFormatter::build_row_value_(
       LOG_INFO("no valid column is found", "table_name", simple_table_schema->get_table_name(),
           "table_id", simple_table_schema->get_table_id());
     } else if (! is_cur_stmt_task_cb_progress && OB_FAIL(stmt_task->parse_cols(obj2str_helper_, simple_table_schema,
-            tb_schema_info, tz_info_wrap, enable_output_hidden_primary_key_))) {
+            tb_schema_info, enable_output_hidden_primary_key_))) {
       LOG_ERROR("stmt_task.parse_cols fail", KR(ret), K(*stmt_task), K(obj2str_helper_),
           KPC(simple_table_schema), KPC(tb_schema_info),
           K(enable_output_hidden_primary_key_));

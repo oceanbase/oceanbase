@@ -32,6 +32,7 @@ class ObLSService;
 namespace palf
 {
 struct LSN;
+class SCN;
 }
 
 namespace logservice
@@ -59,9 +60,10 @@ private:
   int check_replica_status_(ObLS &ls, bool &can_fetch_log);
   int check_need_schedule_(ObLS &ls, bool &need_schedule, int64_t &proposal_id, LSN &lsn, int64_t &last_fetch_ts);
   int get_fetch_log_max_lsn_(ObLS &ls, palf::LSN &max_lsn);
-  int get_fetch_log_base_lsn_(ObLS &ls, const LSN &max_fetch_lsn, const int64_t last_fetch_ts, int64_t &log_ts, LSN &lsn, int64_t &size);
-  int get_palf_base_lsn_ts_(ObLS &ls, LSN &lsn, int64_t &log_ts);
-  int submit_fetch_log_task_(ObLS &ls, const int64_t log_ts, const LSN &lsn, const int64_t size, const int64_t proposal_id);
+  int get_fetch_log_base_lsn_(ObLS &ls, const LSN &max_fetch_lsn, const int64_t last_fetch_ts,
+                              palf::SCN &log_scn, LSN &lsn, int64_t &size);
+  int get_palf_base_lsn_scn_(ObLS &ls, LSN &lsn, palf::SCN &log_scn);
+  int submit_fetch_log_task_(ObLS &ls, const palf::SCN &log_scn, const LSN &lsn, const int64_t size, const int64_t proposal_id);
 
 private:
   bool inited_;

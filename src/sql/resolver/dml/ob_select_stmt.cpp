@@ -59,10 +59,10 @@ const bool ObSelectIntoItem::DEFAULT_OPTIONAL_ENCLOSED = false;
 const char ObSelectIntoItem::DEFAULT_FIELD_ESCAPED_CHAR = '\\';
 
 //对于select .. for update 也认为是被更改
-int ObSelectStmt::check_table_be_modified(uint64_t ref_table_id, bool& is_exists) const
+bool ObSelectStmt::check_table_be_modified(uint64_t ref_table_id) const
 {
+  bool is_exists = false;
   int ret = OB_SUCCESS;
-  is_exists = false;
   for (int64_t i = 0; OB_SUCC(ret) && !is_exists && i < table_items_.count(); ++i) {
     TableItem *table_item = table_items_.at(i);
     if (OB_ISNULL(table_item)) {
@@ -83,13 +83,13 @@ int ObSelectStmt::check_table_be_modified(uint64_t ref_table_id, bool& is_exists
         if (OB_ISNULL(sub_stmt)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("sub stmt is null", K(ret));
-        } else if (OB_FAIL(SMART_CALL(sub_stmt->check_table_be_modified(ref_table_id, is_exists)))) {
+        } else if (OB_FAIL(sub_stmt->check_table_be_modified(ref_table_id))) {
           LOG_WARN("check sub stmt whether has select for update failed", K(ret), K(i));
         }
       }
     }
   }
-  return ret;
+  return is_exists;
 }
 
 bool ObSelectStmt::has_distinct_or_concat_agg() const
@@ -869,13 +869,10 @@ int ObSelectStmt::adjust_view_parent_namespace_stmt(ObDMLStmt *new_parent)
   int ret = OB_SUCCESS;
   int32_t subquery_level = (new_parent != NULL ? new_parent->get_current_level() + 1 : 0);
   ObArray<ObSelectStmt *> view_stmts;
-  ObArray<ObSelectStmt *> subquery_stmts;
   set_parent_namespace_stmt(new_parent);
   set_current_level(subquery_level);
   if (OB_FAIL(get_from_subquery_stmts(view_stmts))) {
     LOG_WARN("get from subquery stmts failed", K(ret));
-  } else if (OB_FAIL(get_subquery_stmts(subquery_stmts))) {
-    LOG_WARN("get subquery stmts failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < view_stmts.count(); ++i) {
     ObSelectStmt *view_stmt = view_stmts.at(i);
@@ -884,15 +881,6 @@ int ObSelectStmt::adjust_view_parent_namespace_stmt(ObDMLStmt *new_parent)
       LOG_WARN("table_item is null", K(i));
     } else if (OB_FAIL(view_stmt->adjust_view_parent_namespace_stmt(new_parent))) {
       LOG_WARN("adjust view parent namespace stmt failed", K(ret));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_stmts.count(); ++i) {
-    ObSelectStmt *subquery = subquery_stmts.at(i);
-    if (OB_ISNULL(subquery)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table_item is null", K(i));
-    } else if (OB_FAIL(subquery->adjust_view_parent_namespace_stmt(this))) {
-      LOG_WARN("adjust subquery parent namespace stmt failed", K(ret));
     }
   }
   return ret;

@@ -36,6 +36,7 @@ namespace storage
 {
 class ObFreezer;
 class ObTenantMetaMemMgr;
+class ObTabletDDLKvMgr;
 }
 
 namespace transaction
@@ -58,14 +59,15 @@ public:
   virtual int init(const common::ObTabletID &tablet_id,
                    const share::ObLSID &ls_id,
                    storage::ObFreezer *freezer,
-                   storage::ObTenantMetaMemMgr *t3m) override;
+                   storage::ObTenantMetaMemMgr *t3m,
+                   storage::ObTabletDDLKvMgr *ddl_kv_mgr) override;
   virtual void destroy() override;
 
   virtual int create_memtable(const int64_t last_replay_log_ts,
                               const int64_t schema_version,
                               const bool for_replay=false) override;
 
-  DECLARE_VIRTUAL_TO_STRING;
+  DECLARE_TO_STRING;
 private:
   const ObLockMemtable *get_memtable_(const int64_t pos) const;
 private:

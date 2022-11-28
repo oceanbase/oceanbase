@@ -28,18 +28,21 @@ using namespace oceanbase::transaction;
 
 namespace share
 {
-int ObGAISClient::init(const ObAddr &self, ObGAISRequestRpc *gais_request_rpc)
+int ObGAISClient::init(const ObAddr &self, ObGAISRequestRpc *gais_request_rpc,
+                       ObILocationAdapter *location_adapter)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_UNLIKELY(!self.is_valid()) || OB_ISNULL(gais_request_rpc)) {
+  } else if (OB_UNLIKELY(!self.is_valid()) || OB_ISNULL(gais_request_rpc) ||
+             OB_ISNULL(location_adapter)) {
+    LOG_WARN("invalid argument", KR(ret), K(self), KP(gais_request_rpc), KP(location_adapter));
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(self), KP(gais_request_rpc));
   } else {
     self_ = self;
     gais_request_rpc_ = gais_request_rpc;
+    location_adapter_ = location_adapter;
     is_inited_ = true;
     LOG_INFO("gais client init success", K(self), KP(this));
   }
@@ -51,6 +54,7 @@ void ObGAISClient::reset()
   is_inited_ = false;
   self_.reset();
   gais_request_rpc_ = NULL;
+  location_adapter_ = NULL;
   reset_cache_leader_();
 }
 
@@ -71,29 +75,31 @@ int ObGAISClient::get_value(const AutoincKey &key,
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else {
-    ObGAISNextAutoIncValReq msg;
-    ObGAISNextValRpcResult rpc_result;
-    ObAddr leader;
-    if (OB_FAIL(get_leader_(tenant_id, leader))) {
-      LOG_WARN("get leader fail", K(ret));
-      (void)refresh_location_(tenant_id);
-    } else if (OB_FAIL(msg.init(key, offset, increment, table_auto_increment, max_value,
-                                desired_count, cache_size, self_))) {
-      LOG_WARN("fail to init request msg", K(ret));
-    } else if (OB_UNLIKELY(!msg.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(msg));
-    } else if (OB_FAIL(gais_request_rpc_->next_autoinc_val(leader, msg, rpc_result))) {
-      LOG_WARN("handle gais request failed", K(ret), K(msg), K(rpc_result));
-      (void)refresh_location_(tenant_id);
-    } else if (!rpc_result.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("rpc result is unexpected", K(ret), K(rpc_result));
-    } else {
-      start_inclusive = rpc_result.start_inclusive_;
-      end_inclusive = rpc_result.end_inclusive_;
-      sync_value = rpc_result.sync_value_;
-      LOG_DEBUG("handle gais success", K(rpc_result));
+    MTL_SWITCH(tenant_id) {
+      ObGAISNextAutoIncValReq msg;
+      ObGAISNextValRpcResult rpc_result;
+      ObAddr leader;
+      if (OB_FAIL(get_leader_(tenant_id, leader))) {
+        LOG_WARN("get leader fail", K(ret));
+        (void)refresh_location_(tenant_id);
+      } else if (OB_FAIL(msg.init(key, offset, increment, table_auto_increment, max_value,
+                                  desired_count, cache_size, self_))) {
+        LOG_WARN("fail to init request msg", K(ret));
+      } else if (OB_UNLIKELY(!msg.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(msg));
+      } else if (OB_FAIL(gais_request_rpc_->next_autoinc_val(leader, msg, rpc_result))) {
+        LOG_WARN("handle gais request failed", K(ret), K(msg), K(rpc_result));
+        (void)refresh_location_(tenant_id);
+      } else if (!rpc_result.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rpc result is unexpected", K(ret), K(rpc_result));
+      } else {
+        start_inclusive = rpc_result.start_inclusive_;
+        end_inclusive = rpc_result.end_inclusive_;
+        sync_value = rpc_result.sync_value_;
+        LOG_DEBUG("handle gais success", K(rpc_result));
+      }
     }
   }
   return ret;
@@ -107,23 +113,25 @@ int ObGAISClient::get_sequence_value(const AutoincKey &key, uint64_t &sequence_v
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else {
-    ObGAISAutoIncKeyArg msg;
-    ObGAISCurrValRpcResult rpc_result;
-    ObAddr leader;
-    if (OB_FAIL(get_leader_(tenant_id, leader))) {
-      LOG_WARN("get leader fail", K(ret));
-      (void)refresh_location_(tenant_id);
-    } else if (OB_FAIL(msg.init(key, self_))) {
-      LOG_WARN("fail to init request msg", K(ret));
-    } else if (OB_UNLIKELY(!msg.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(msg));
-    } else if (OB_FAIL(gais_request_rpc_->curr_autoinc_val(leader, msg, rpc_result))) {
-      LOG_WARN("handle gais request failed", K(ret), K(msg), K(rpc_result));
-      (void)refresh_location_(tenant_id);
-    } else {
-      sequence_value = rpc_result.sequence_value_;
-      LOG_DEBUG("handle gais success", K(rpc_result));
+    MTL_SWITCH(tenant_id) {
+      ObGAISAutoIncKeyArg msg;
+      ObGAISCurrValRpcResult rpc_result;
+      ObAddr leader;
+      if (OB_FAIL(get_leader_(tenant_id, leader))) {
+        LOG_WARN("get leader fail", K(ret));
+        (void)refresh_location_(tenant_id);
+      } else if (OB_FAIL(msg.init(key, self_))) {
+        LOG_WARN("fail to init request msg", K(ret));
+      } else if (OB_UNLIKELY(!msg.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(msg));
+      } else if (OB_FAIL(gais_request_rpc_->curr_autoinc_val(leader, msg, rpc_result))) {
+        LOG_WARN("handle gais request failed", K(ret), K(msg), K(rpc_result));
+        (void)refresh_location_(tenant_id);
+      } else {
+        sequence_value = rpc_result.sequence_value_;
+        LOG_DEBUG("handle gais success", K(rpc_result));
+      }
     }
   }
 
@@ -144,28 +152,30 @@ int ObGAISClient::get_auto_increment_values(
       ret = OB_NOT_INIT;
       LOG_WARN("not inited", K(ret));
     } else {
-      ObGAISAutoIncKeyArg msg;
-      ObGAISCurrValRpcResult rpc_result;
-      ObAddr leader;
-      if (OB_FAIL(get_leader_(tenant_id, leader))) {
-        LOG_WARN("get leader fail", K(ret));
-        (void)refresh_location_(tenant_id);
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < autoinc_keys.count(); ++i) {
-          rpc_result.reset();
-          AutoincKey key = autoinc_keys.at(i);
-          if (OB_FAIL(msg.init(key, self_))) {
-            LOG_WARN("fail to init request msg", K(ret));
-          } else if (OB_UNLIKELY(!msg.is_valid())) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid argument", K(ret), K(msg));
-          } else if (OB_FAIL(gais_request_rpc_->curr_autoinc_val(leader, msg, rpc_result))) {
-            LOG_WARN("handle gais request failed", K(ret), K(msg), K(rpc_result));
-            (void)refresh_location_(tenant_id);
-          } else if (OB_FAIL(seq_values.set_refactored(key, rpc_result.sequence_value_))) {
-            LOG_WARN("fail to get int_value.", K(ret));
-          } else {
-            LOG_DEBUG("handle gais success", K(rpc_result));
+      MTL_SWITCH(tenant_id) {
+        ObGAISAutoIncKeyArg msg;
+        ObGAISCurrValRpcResult rpc_result;
+        ObAddr leader;
+        if (OB_FAIL(get_leader_(tenant_id, leader))) {
+          LOG_WARN("get leader fail", K(ret));
+          (void)refresh_location_(tenant_id);
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < autoinc_keys.count(); ++i) {
+            rpc_result.reset();
+            AutoincKey key = autoinc_keys.at(i);
+            if (OB_FAIL(msg.init(key, self_))) {
+              LOG_WARN("fail to init request msg", K(ret));
+            } else if (OB_UNLIKELY(!msg.is_valid())) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid argument", K(ret), K(msg));
+            } else if (OB_FAIL(gais_request_rpc_->curr_autoinc_val(leader, msg, rpc_result))) {
+              LOG_WARN("handle gais request failed", K(ret), K(msg), K(rpc_result));
+              (void)refresh_location_(tenant_id);
+            } else if (OB_FAIL(seq_values.set_refactored(key, rpc_result.sequence_value_))) {
+              LOG_WARN("fail to get int_value.", K(ret));
+            } else {
+              LOG_DEBUG("handle gais success", K(rpc_result));
+            }
           }
         }
       }
@@ -186,23 +196,25 @@ int ObGAISClient::local_push_to_global_value(const AutoincKey &key,
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else {
-    ObGAISPushAutoIncValReq msg;
-    uint64_t new_sync_value = 0;
-    ObAddr leader;
-    if (OB_FAIL(get_leader_(tenant_id, leader))) {
-      LOG_WARN("get leader fail", K(ret));
-      (void)refresh_location_(tenant_id);
-    } else if (OB_FAIL(msg.init(key, local_sync_value, max_value, self_))) {
-      LOG_WARN("fail to init request msg", K(ret));
-    } else if (OB_UNLIKELY(!msg.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(msg));
-    } else if (OB_FAIL(gais_request_rpc_->push_autoinc_val(leader, msg, new_sync_value))) {
-      LOG_WARN("handle gais request failed", K(ret), K(msg));
-      (void)refresh_location_(tenant_id);
-    } else {
-      global_sync_value = new_sync_value;
-      LOG_DEBUG("handle gais success", K(global_sync_value));
+    MTL_SWITCH(tenant_id) {
+      ObGAISPushAutoIncValReq msg;
+      uint64_t new_sync_value = 0;
+      ObAddr leader;
+      if (OB_FAIL(get_leader_(tenant_id, leader))) {
+        LOG_WARN("get leader fail", K(ret));
+        (void)refresh_location_(tenant_id);
+      } else if (OB_FAIL(msg.init(key, local_sync_value, max_value, self_))) {
+        LOG_WARN("fail to init request msg", K(ret));
+      } else if (OB_UNLIKELY(!msg.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(msg));
+      } else if (OB_FAIL(gais_request_rpc_->push_autoinc_val(leader, msg, new_sync_value))) {
+        LOG_WARN("handle gais request failed", K(ret), K(msg));
+        (void)refresh_location_(tenant_id);
+      } else {
+        global_sync_value = new_sync_value;
+        LOG_DEBUG("handle gais success", K(global_sync_value));
+      }
     }
   }
   return ret;
@@ -216,26 +228,28 @@ int ObGAISClient::local_sync_with_global_value(const AutoincKey &key, uint64_t &
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else {
-    ObGAISAutoIncKeyArg msg;
-    ObGAISCurrValRpcResult rpc_result;
-    ObAddr leader;
-    if (OB_FAIL(get_leader_(tenant_id, leader))) {
-      LOG_WARN("get leader fail", K(ret));
-      (void)refresh_location_(key.tenant_id_);
-    } else if (OB_FAIL(msg.init(key, self_))) {
-      LOG_WARN("fail to init request msg", K(ret));
-    } else if (OB_UNLIKELY(!msg.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(msg));
-    } else if (OB_FAIL(gais_request_rpc_->curr_autoinc_val(leader, msg, rpc_result))) {
-      LOG_WARN("handle gais request failed", K(ret), K(msg));
-      (void)refresh_location_(key.tenant_id_);
-    } else if (!rpc_result.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("rpc result is unexpected", K(ret), K(rpc_result));
-    } else {
-      global_sync_value = rpc_result.sync_value_;
-      LOG_DEBUG("handle gais success", K(global_sync_value));
+    MTL_SWITCH(tenant_id) {
+      ObGAISAutoIncKeyArg msg;
+      ObGAISCurrValRpcResult rpc_result;
+      ObAddr leader;
+      if (OB_FAIL(get_leader_(tenant_id, leader))) {
+        LOG_WARN("get leader fail", K(ret));
+        (void)refresh_location_(key.tenant_id_);
+      } else if (OB_FAIL(msg.init(key, self_))) {
+        LOG_WARN("fail to init request msg", K(ret));
+      } else if (OB_UNLIKELY(!msg.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(msg));
+      } else if (OB_FAIL(gais_request_rpc_->curr_autoinc_val(leader, msg, rpc_result))) {
+        LOG_WARN("handle gais request failed", K(ret), K(msg));
+        (void)refresh_location_(key.tenant_id_);
+      } else if (!rpc_result.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("rpc result is unexpected", K(ret), K(rpc_result));
+      } else {
+        global_sync_value = rpc_result.sync_value_;
+        LOG_DEBUG("handle gais success", K(global_sync_value));
+      }
     }
   }
   return ret;
@@ -249,21 +263,23 @@ int ObGAISClient::clear_global_autoinc_cache(const AutoincKey &key)
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
   } else {
-    ObGAISAutoIncKeyArg msg;
-    ObAddr leader;
-    if (OB_FAIL(get_leader_(tenant_id, leader))) {
-      LOG_WARN("get leader fail", K(ret));
-      (void)refresh_location_(key.tenant_id_);
-    } else if (OB_FAIL(msg.init(key, self_))) {
-      LOG_WARN("fail to init request msg", K(ret));
-    } else if (OB_UNLIKELY(!msg.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(msg));
-    } else if (OB_FAIL(gais_request_rpc_->clear_autoinc_cache(leader, msg))) {
-      LOG_WARN("handle gais request failed", K(ret), K(msg));
-      (void)refresh_location_(key.tenant_id_);
-    } else {
-      LOG_DEBUG("clear global autoinc cache success", K(msg));
+    MTL_SWITCH(tenant_id) {
+      ObGAISAutoIncKeyArg msg;
+      ObAddr leader;
+      if (OB_FAIL(get_leader_(tenant_id, leader))) {
+        LOG_WARN("get leader fail", K(ret));
+        (void)refresh_location_(key.tenant_id_);
+      } else if (OB_FAIL(msg.init(key, self_))) {
+        LOG_WARN("fail to init request msg", K(ret));
+      } else if (OB_UNLIKELY(!msg.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(msg));
+      } else if (OB_FAIL(gais_request_rpc_->clear_autoinc_cache(leader, msg))) {
+        LOG_WARN("handle gais request failed", K(ret), K(msg));
+        (void)refresh_location_(key.tenant_id_);
+      } else {
+        LOG_DEBUG("clear global autoinc cache success", K(msg));
+      }
     }
   }
   return ret;
@@ -276,11 +292,8 @@ int ObGAISClient::get_leader_(const uint64_t tenant_id, ObAddr &leader)
   lib::ObMutexGuard guard(cache_leader_mutex_);
   if (OB_LIKELY(gais_cache_leader_.is_valid())) {
     leader = gais_cache_leader_;
-  } else if (OB_ISNULL(GCTX.location_service_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("location cache is NULL", K(ret));
-  } else if (OB_FAIL(GCTX.location_service_->nonblock_get_leader(
-                                             cluster_id, tenant_id, GAIS_LS, leader))) {
+  } else if (OB_FAIL(location_adapter_->nonblock_get_leader(
+                                        cluster_id, tenant_id, GAIS_LS, leader))) {
     LOG_WARN("gais nonblock get leader failed", K(ret), K(tenant_id), K(GAIS_LS));
   } else if (OB_UNLIKELY(!leader.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -296,10 +309,7 @@ int ObGAISClient::refresh_location_(const uint64_t tenant_id)
   int ret = OB_SUCCESS;
   const int64_t cluster_id = GCONF.cluster_id;
   reset_cache_leader_();
-  if (OB_ISNULL(GCTX.location_service_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("location cache is NULL", K(ret));
-  } else if (OB_FAIL(GCTX.location_service_->nonblock_renew(cluster_id, tenant_id, GAIS_LS))) {
+  if (OB_FAIL(location_adapter_->nonblock_renew(cluster_id, tenant_id, GAIS_LS))) {
     LOG_WARN("gais nonblock renew error", KR(ret), K(tenant_id), K(GAIS_LS));
   }
   return ret;

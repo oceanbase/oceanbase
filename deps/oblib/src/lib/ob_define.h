@@ -309,7 +309,6 @@ const int64_t OB_SERVER_TYPE_LENGTH = 64;
 const int64_t OB_MAX_HOSTNAME_LENGTH = 60;
 const int64_t OB_MAX_USERNAME_LENGTH = 32;
 const int64_t OB_MAX_PASSWORD_LENGTH = 128;
-const int64_t OB_MAX_PASSWORD_BUF_LENGTH = OB_MAX_PASSWORD_LENGTH + 1;
 // After each sha1 is 41 characters, the incremental backup is up to 64 times, and the maximum password required for recovery is 64*(41+1)=2,688
 const int64_t OB_MAX_PASSWORD_ARRAY_LENGTH = 4096;
 const int64_t OB_MAX_ERROR_MSG_LEN = 512;
@@ -775,7 +774,6 @@ const char *const OB_DIAG_TENANT_NAME = "diag";
 //for sync ddl (ClusterID_TenantID_SchemaVersion)
 const char *const OB_DDL_ID_VAR_NAME = "__oceanbase_ddl_id";
 const int64_t OB_MAX_DDL_ID_STR_LENGTH = 64;
-const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 7L * 24L * 60L * 60L * 1000L * 1000L; // 7days
 
 // The default user name of the standby database to log in to the main database
 const char *const OB_STANDBY_USER_NAME = "__oceanbase_inner_standby_user";

@@ -586,7 +586,7 @@ private:
   ObSqlMemMgrProcessor distinct_sql_mem_processor_;
   ObAdaptiveByPassCtrl bypass_ctrl_;
   ObGroupRowItem *by_pass_group_row_;
-  ObAggregateProcessor::GroupRow **by_pass_group_batch_;
+  ObGroupRowItem **by_pass_group_batch_;
   int64_t by_pass_batch_size_;
   int64_t by_pass_nth_group_;
   ObChunkDatumStore::LastStoredRow *last_child_row_;

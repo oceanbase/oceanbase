@@ -230,28 +230,6 @@ void ObClusterVersion::update_cluster_version(const uint64_t cluster_version)
   ATOMIC_SET(&cluster_version_, cluster_version);
 }
 
-int ObClusterVersion::get_tenant_data_version(
-    const uint64_t tenant_id,
-    uint64_t &data_version)
-{
-  int ret = OB_SUCCESS;
-  //TODO: mock data version with cluster version for now.
-  UNUSED(tenant_id);
-  data_version = ATOMIC_LOAD(&cluster_version_);
-  return ret;
-}
-
-int ObClusterVersion::tenant_need_upgrade(
-    const uint64_t tenant_id,
-    bool &need_upgrade)
-{
-  int ret = OB_SUCCESS;
-  //TODO: mock data version with cluster version for now.
-  UNUSED(tenant_id);
-  need_upgrade = get_cluster_version() < CLUSTER_CURRENT_VERSION;
-  return ret;
-}
-
 int ObClusterVersion::is_valid(const char *verstr)
 {
   int ret = OB_SUCCESS;

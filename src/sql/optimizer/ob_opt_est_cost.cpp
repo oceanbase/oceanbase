@@ -24,7 +24,6 @@
 #include "ob_opt_est_parameter_normal.h"
 #include "ob_opt_est_parameter_vector.h"
 #include "share/stat/ob_opt_stat_manager.h"
-#include "ob_opt_est_cost_model_vector.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -36,7 +35,7 @@ using namespace oceanbase::jit::expr;
 
 const int64_t ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM = 10;
 ObOptEstCostModel normal_model_(comparison_params_normal, hash_params_normal, cost_params_normal);
-ObOptEstVectorCostModel vector_model_(comparison_params_vector, hash_params_vector, cost_params_vector);
+ObOptEstCostModel vector_model_(comparison_params_vector, hash_params_vector, cost_params_vector);
 
 int ObOptEstCost::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                                 double &cost,

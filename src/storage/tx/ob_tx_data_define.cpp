@@ -159,7 +159,6 @@ int64_t ObUndoStatusList::get_serialize_size_() const
 bool ObUndoStatusList::is_contain(const int64_t seq_no) const
 {
   bool bool_ret = false;
-  SpinRLockGuard guard(lock_);
   ObUndoStatusNode *node_ptr = head_;
   while (OB_NOT_NULL(node_ptr)) {
     for (int i = 0; i < node_ptr->size_; i++) {
@@ -218,9 +217,9 @@ void ObTxCommitData::reset()
 {
   tx_id_ = INT64_MAX;
   state_ = RUNNING;
-  commit_version_ = transaction::ObTransVersion::INVALID_TRANS_VERSION;
-  start_log_ts_ = INT64_MAX;
-  end_log_ts_ = INT64_MAX;
+  commit_scn_.reset();
+  start_scn_.reset();
+  end_scn_.reset();
   is_in_tx_data_table_ = false;
 }
 
@@ -258,17 +257,17 @@ int ObTxData::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 int ObTxData::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  // LST_DO_CODE(OB_UNIS_ENCODE, state_, commit_version_, start_log_ts_, end_log_ts_);
+  // LST_DO_CODE(OB_UNIS_ENCODE, state_, commit_scn_, start_scn_, end_scn_);
 
   if (OB_FAIL(tx_id_.serialize(buf, buf_len, pos))) {
     STORAGE_LOG(WARN, "serialize tx_id fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(serialization::encode_vi32(buf, buf_len, pos, state_))) {
     STORAGE_LOG(WARN, "serialize state fail.", KR(ret), K(pos), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, commit_version_))) {
-    STORAGE_LOG(WARN, "serialize commit_version fail.", KR(ret), K(pos), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, start_log_ts_))) {
+  } else if (OB_FAIL(commit_scn_.serialize(buf, buf_len, pos))) {
+    STORAGE_LOG(WARN, "serialize commit_scn fail.", KR(ret), K(pos), K(buf_len));
+  } else if (OB_FAIL(start_scn_.serialize(buf, buf_len, pos))) {
     STORAGE_LOG(WARN, "serialize start_log_ts fail.", KR(ret), K(pos), K(buf_len));
-  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, end_log_ts_))) {
+  } else if (OB_FAIL(end_scn_.serialize(buf, buf_len, pos))) {
     STORAGE_LOG(WARN, "serialize end_log_ts fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(undo_status_list_.serialize(buf, buf_len, pos))) {
     STORAGE_LOG(WARN, "serialize undo_status_list fail.", KR(ret), K(pos), K(buf_len));
@@ -290,12 +289,12 @@ int64_t ObTxData::get_serialize_size() const
 int64_t ObTxData::get_serialize_size_() const
 {
   int64_t len = 0;
-  // LST_DO_CODE(OB_UNIS_ADD_LEN, state_, commit_version_, start_log_ts_, end_log_ts_);
+  // LST_DO_CODE(OB_UNIS_ADD_LEN, state_, commit_scn_, start_scn_, end_scn_);
   len += tx_id_.get_serialize_size();
   len += serialization::encoded_length_vi32(state_);
-  len += serialization::encoded_length_vi64(commit_version_);
-  len += serialization::encoded_length_vi64(start_log_ts_);
-  len += serialization::encoded_length_vi64(end_log_ts_);
+  len += commit_scn_.get_serialize_size();
+  len += start_scn_.get_serialize_size();
+  len += end_scn_.get_serialize_size();
   len += undo_status_list_.get_serialize_size();
   return len;
 }
@@ -340,11 +339,11 @@ int ObTxData::deserialize_(const char *buf,
     STORAGE_LOG(WARN, "deserialize tx_id fail.", KR(ret), K(pos), K(data_len));
   } else if (OB_FAIL(serialization::decode_vi32(buf, data_len, pos, &state_))) {
     STORAGE_LOG(WARN, "deserialize state fail.", KR(ret), K(pos), K(data_len));
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &commit_version_))) {
-    STORAGE_LOG(WARN, "deserialize commit_version fail.", KR(ret), K(pos), K(data_len));
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &start_log_ts_))) {
+  } else if (OB_FAIL(commit_scn_.deserialize(buf, data_len, pos))) {
+    STORAGE_LOG(WARN, "deserialize commit_scn fail.", KR(ret), K(pos), K(data_len));
+  } else if (OB_FAIL(start_scn_.deserialize(buf, data_len, pos))) {
     STORAGE_LOG(WARN, "deserialize start_log_ts fail.", KR(ret), K(pos), K(data_len));
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &end_log_ts_))) {
+  } else if (OB_FAIL(end_scn_.deserialize(buf, data_len, pos))) {
     STORAGE_LOG(WARN, "deserialize end_log_ts fail.", KR(ret), K(pos), K(data_len));
   } else if (OB_FAIL(undo_status_list_.deserialize(buf, data_len, pos, slice_allocator))) {
     STORAGE_LOG(WARN, "deserialize undo_status_list fail.", KR(ret), K(pos), K(data_len));
@@ -368,9 +367,9 @@ ObTxData &ObTxData::operator=(const ObTxData &rhs)
 {
   tx_id_ = rhs.tx_id_;
   state_ = rhs.state_;
-  commit_version_ = rhs.commit_version_;
-  start_log_ts_ = rhs.start_log_ts_;
-  end_log_ts_ = rhs.end_log_ts_;
+  commit_scn_ = rhs.commit_scn_;
+  start_scn_ = rhs.start_scn_;
+  end_scn_ = rhs.end_scn_;
   undo_status_list_ = rhs.undo_status_list_;
   is_in_tx_data_table_ = rhs.is_in_tx_data_table_;
   return *this;
@@ -380,9 +379,9 @@ ObTxData &ObTxData::operator=(const ObTxCommitData &rhs)
 {
   tx_id_ = rhs.tx_id_;
   state_ = rhs.state_;
-  commit_version_ = rhs.commit_version_;
-  start_log_ts_ = rhs.start_log_ts_;
-  end_log_ts_ = rhs.end_log_ts_;
+  commit_scn_ = rhs.commit_scn_;
+  start_scn_ = rhs.start_scn_;
+  end_scn_ = rhs.end_scn_;
   is_in_tx_data_table_ = rhs.is_in_tx_data_table_;
   undo_status_list_.reset();
   return *this;
@@ -393,7 +392,7 @@ bool ObTxData::is_valid_in_tx_data_table() const
   bool bool_ret = true;
 
   if (ObTxData::RUNNING == state_) {
-    if (end_log_ts_ <= 0 || end_log_ts_ == INT64_MAX) {
+    if (!end_scn_.is_valid()) {
       bool_ret = false;
       STORAGE_LOG(ERROR, "tx data end log ts is invalid", KPC(this));
     } else if (OB_ISNULL(undo_status_list_.head_)) {
@@ -405,30 +404,29 @@ bool ObTxData::is_valid_in_tx_data_table() const
   } else if (state_ < 0 || state_ >= MAX_STATE_CNT) {
     bool_ret = false;
     STORAGE_LOG(ERROR, "tx data state is invalid", KPC(this));
-  } else if (start_log_ts_ <= 0 || start_log_ts_ == INT64_MAX) {
+  } else if (!start_scn_.is_valid()) {
     bool_ret = false;
     STORAGE_LOG(ERROR, "tx data start_log_ts is invalid", KPC(this));
-  } else if (end_log_ts_ <= 0 || end_log_ts_ == INT64_MAX) {
+  } else if (!end_scn_.is_valid()) {
     bool_ret = false;
     STORAGE_LOG(ERROR, "tx data end_log_ts is invalid", KPC(this));
-  } else if (end_log_ts_ < start_log_ts_) {
+  } else if (end_scn_ < start_scn_) {
     bool_ret = false;
     STORAGE_LOG(ERROR, "tx data end_log_ts is less than start_log_ts", KPC(this));
-  } else if (commit_version_ == transaction::ObTransVersion::INVALID_TRANS_VERSION
-             && state_ != RUNNING && state_ != ABORT) {
+  } else if (!commit_scn_.is_valid() && state_ != RUNNING && state_ != ABORT) {
     bool_ret = false;
-    STORAGE_LOG(ERROR, "tx data commit_version is invalid but state is not running or abort",
+    STORAGE_LOG(ERROR, "tx data commit_scn is invalid but state is not running or abort",
                 KPC(this));
   }
 
   return bool_ret;
 }
 
-int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &new_undo_action, ObUndoStatusNode *undo_node)
+int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &new_undo_action)
 {
   // STORAGE_LOG(DEBUG, "do add_undo_action");
   int ret = OB_SUCCESS;
-  SpinWLockGuard guard(undo_status_list_.lock_);
+  ObByteLockGuard guard(undo_status_list_.lock_);
   ObTxDataTable *tx_data_table = nullptr;
   ObUndoStatusNode *node = undo_status_list_.head_;
   if (OB_ISNULL(tx_table)) {
@@ -443,13 +441,9 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
     if (OB_ISNULL(node) || node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
       // STORAGE_LOG(DEBUG, "generate new undo status node");
       ObUndoStatusNode *new_node = nullptr;
-      if (OB_NOT_NULL(undo_node)) {
-        new_node = undo_node;
-        undo_node = NULL;
-      } else if (OB_FAIL(tx_data_table->alloc_undo_status_node(new_node))) {
+      if (OB_FAIL(tx_data_table->alloc_undo_status_node(new_node))) {
         STORAGE_LOG(WARN, "alloc_undo_status_node() fail", KR(ret));
-      }
-      if (OB_SUCC(ret)) {
+      } else {
         new_node->next_ = node;
         undo_status_list_.head_ = new_node;
         node = new_node;
@@ -463,10 +457,6 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
       STORAGE_LOG(WARN, "Too many undo actions. The size of tx data is overflow.", KR(ret),
                   K(undo_status_list_.undo_node_cnt_), KPC(this));
     }
-  }
-
-  if (OB_NOT_NULL(undo_node)) {
-    tx_data_table->free_undo_status_node(undo_node);
   }
 
   return ret;
@@ -521,13 +511,13 @@ bool ObTxData::equals_(ObTxData &rhs)
   } else if (state_ != rhs.state_) {
     bool_ret = false;
     STORAGE_LOG(INFO, "state is not equal.");
-  } else if (commit_version_ != rhs.commit_version_) {
+  } else if (commit_scn_ != rhs.commit_scn_) {
     bool_ret = false;
-    STORAGE_LOG(INFO, "commit_version is not equal.");
-  } else if (start_log_ts_ != rhs.start_log_ts_) {
+    STORAGE_LOG(INFO, "commit_scn is not equal.");
+  } else if (start_scn_ != rhs.start_scn_) {
     bool_ret = false;
     STORAGE_LOG(INFO, "start_log_ts is not equal.");
-  } else if (end_log_ts_ != rhs.end_log_ts_) {
+  } else if (end_scn_ != rhs.end_scn_) {
     bool_ret = false;
     STORAGE_LOG(INFO, "end_log_ts is not equal.");
   } else if (undo_status_list_.undo_node_cnt_ != rhs.undo_status_list_.undo_node_cnt_) {
@@ -575,13 +565,13 @@ bool ObTxData::equals_(ObTxData &rhs)
 void ObTxData::print_to_stderr(const ObTxData &tx_data)
 {
   fprintf(stderr,
-          "TX_DATA:{tx_id=%-20ld in_tx_data_table=%-6s start_log_ts=%-20ld end_log_ts=%-20ld commit_version=%-20ld "
+          "TX_DATA:{tx_id=%-20ld in_tx_data_table=%-6s start_log_scn=%-20s end_log_scn=%-20s commit_scn=%-20s "
           "state=%s",
           tx_data.tx_id_.get_id(),
           tx_data.is_in_tx_data_table_ ? "True" : "False",
-          tx_data.start_log_ts_,
-          tx_data.end_log_ts_,
-          tx_data.commit_version_,
+          to_cstring(tx_data.start_scn_),
+          to_cstring(tx_data.end_scn_),
+          to_cstring(tx_data.commit_scn_),
           get_state_string(tx_data.state_));
 
   tx_data.undo_status_list_.dump_2_text(stderr);
@@ -594,13 +584,13 @@ void ObTxData::dump_2_text(FILE *fd) const
   }
 
   fprintf(fd,
-          "TX_DATA:\n{\n    tx_id=%-20ld\n    in_tx_data_table=%-6s\n    start_log_ts=%-20ld\n    end_log_ts=%-20ld\n  "
-          "  commit_version=%-20ld\n    state=%s\n",
+          "TX_DATA:\n{\n    tx_id=%-20ld\n    in_tx_data_table=%-6s\n    start_log_scn=%-20s\n    end_log_scn=%-20s\n  "
+          "  commit_scn=%-20s\n    state=%s\n",
           tx_id_.get_id(),
           is_in_tx_data_table_ ? "True" : "False",
-          start_log_ts_,
-          end_log_ts_,
-          commit_version_,
+          to_cstring(start_scn_),
+          to_cstring(end_scn_),
+          to_cstring(commit_scn_),
           get_state_string(state_));
 
   undo_status_list_.dump_2_text(fd);
@@ -615,9 +605,9 @@ DEF_TO_STRING(ObTxData)
   J_KV(K_(tx_id),
        "state", get_state_string(state_),
        "in_tx_data_table", is_in_tx_data_table_ ? "True" : "False",
-       K_(commit_version),
-       K_(start_log_ts),
-       K_(end_log_ts),
+       K_(commit_scn),
+       K_(start_scn),
+       K_(end_scn),
        K_(undo_status_list));
   J_OBJ_END();
   return pos;
@@ -663,15 +653,13 @@ DEF_TO_STRING(ObUndoStatusNode)
 
 void ObTxDataMemtableWriteGuard::reset()
 {
-  for (int i = 0; i < MAX_TX_DATA_MEMTABLE_CNT; i++) {
-    if (handles_[i].is_valid()) {
+  for (int i = 0; i < handles_.count(); i++) {
+    if (handles_.at(i).is_valid()) {
       ObTxDataMemtable *tx_data_memtable = nullptr;
-      handles_[i].get_tx_data_memtable(tx_data_memtable);
+      handles_.at(i).get_tx_data_memtable(tx_data_memtable);
       tx_data_memtable->dec_write_ref();
     }
-    handles_[i].reset();
   }
-  size_ = 0;
 }
 
 }  // namespace storage

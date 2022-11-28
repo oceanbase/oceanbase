@@ -74,12 +74,12 @@ struct ObBackupPathUtil
   // file:///backup/backup_sets/backup_set_1_[full|inc]_end_success_20220601T120000
   static int get_backup_set_placeholder_end_success_path(const share::ObBackupDest &backup_tenant_dest,
       const share::ObBackupSetDesc &backup_set_desc,
-      const share::ObBackupSCN &min_restore_scn, share::ObBackupPath &backup_path);
+      const palf::SCN &min_restore_scn, share::ObBackupPath &backup_path);
 
   // file:///backup/backup_sets/backup_set_1_[full|inc]_end_failed_20220601T120000
   static int get_backup_set_placeholder_end_failed_path(const share::ObBackupDest &backup_tenant_dest,
       const share::ObBackupSetDesc &backup_set_desc, 
-      const share::ObBackupSCN &min_restore_scn, share::ObBackupPath &backup_path);
+      const palf::SCN &min_restore_scn, share::ObBackupPath &backup_path);
 
   // file:///obbackup/backup_set_1_full/
   static int get_backup_set_dir_path(const share::ObBackupDest &backup_set_dest,
@@ -87,22 +87,15 @@ struct ObBackupPathUtil
 
   static int get_backup_set_dir_path(const share::ObBackupDest &backup_tenant_dest, 
       const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path);
-  // backup_set_1_full_ 
-  static int get_backup_set_inner_placeholder_prefix(
-      const share::ObBackupSetDesc &backup_set_desc,
-      char *placeholder_prefix,
-      int64_t length);
 
   // file:///obbackup/backup_set_1_full/backup_set_1_full_xxxx_xxxxx
   static int get_backup_set_inner_placeholder(const share::ObBackupDest &backup_set_dest,
-      const share::ObBackupSetDesc &backup_set_desc, const share::ObBackupSCN &replay_scn, 
-      const share::ObBackupSCN &min_restore_scn, share::ObBackupPath &backup_path);
+      const share::ObBackupSetDesc &backup_set_desc, const palf::SCN &replay_scn,
+      const palf::SCN &min_restore_scn, share::ObBackupPath &backup_path);
 
   // file:///obbackup/backup_set_1_full/log_stream_1/
   static int get_ls_backup_dir_path(const share::ObBackupDest &backup_set_dest,
        const share::ObLSID &ls_id, share::ObBackupPath &backup_path);
-  static int get_ls_backup_dir_path(const share::ObBackupDest &backup_set_dest,
-       const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, share::ObBackupPath &backup_path);
 
   // file:///obbackup/backup_set_1_full/log_stream_1/info_retry_0/tablet_info
   static int get_ls_data_tablet_info_path(const share::ObBackupDest &backup_set_dest,
@@ -263,7 +256,7 @@ private:
   static int get_tenant_data_backup_set_placeholder_path_(
       const uint64_t backup_set_id,
       const ObBackupType backup_type,
-      const share::ObBackupSCN &min_restore_scn,
+      const palf::SCN &min_restore_scn,
       const ObString &suffix, 
       share::ObBackupPath &path);
 };

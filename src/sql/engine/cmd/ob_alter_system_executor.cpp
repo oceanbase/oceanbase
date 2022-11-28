@@ -728,7 +728,11 @@ int ObAdminZoneExecutor::execute(ObExecContext &ctx, ObAdminZoneStmt &stmt)
         }
       } else {} // force stop, no need to wait leader switch
     } else if (ObAdminZoneArg::MODIFY == stmt.get_op()) {
-      if (OB_FAIL(common_proxy->alter_zone(arg))) {
+      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1440) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "cannot alter zone during cluster updating to 143");
+        LOG_INFO("alter zone during cluster upgrading to version 1.4.3");
+      } else if (OB_FAIL(common_proxy->alter_zone(arg))) {
         LOG_WARN("common rpc proxy alter zone failed", K(arg), K(ret));
       }
     } else {
@@ -1566,10 +1570,6 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
   } else if (OB_FAIL(schema_guard.check_db_access(session_priv, database_name))) { // case 3
     LOG_WARN("fail to check db access", KR(ret), K(pre_effective_tenant_id),
              K(session_priv), K(database_name));
-  } else if (session_info->get_ps_session_info_size() > 0) { // case 4
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("chang tenant is not allow when prepared stmt already opened in session", KR(ret), KPC(session_info));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "change tenant when has prepared stmt already opened in session");
   } else {
     // switch connection
     if (OB_SUCC(ret)) {

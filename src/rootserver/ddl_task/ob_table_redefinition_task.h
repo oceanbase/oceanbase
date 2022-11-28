@@ -43,7 +43,6 @@ public:
   virtual int update_complete_sstable_job_status(
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version,
-      const int64_t execution_id,
       const int ret_code) override;
 protected:
   int table_redefinition(const share::ObDDLTaskStatus next_task_status);

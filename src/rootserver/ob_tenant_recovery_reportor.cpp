@@ -22,6 +22,7 @@
 #include "share/ls/ob_ls_recovery_stat_operator.h" //ObLSRecoveryStatOperator
 #include "share/schema/ob_multi_version_schema_service.h"//is_tenant_full_schema
 #include "logservice/ob_log_service.h"//get_palf_role
+#include "logservice/palf/scn.h"//SCN
 #include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
 
 namespace oceanbase
@@ -29,6 +30,7 @@ namespace oceanbase
 using namespace share;
 using namespace common;
 using namespace storage;
+using namespace palf;
 namespace rootserver
 {
 int ObTenantRecoveryReportor::mtl_init(ObTenantRecoveryReportor *&ka)
@@ -191,14 +193,6 @@ int ObTenantRecoveryReportor::update_ls_recovery_stat_()
             LOG_WARN("failed to update ls recovery", KR(ret), KPC(ls));
           }
         }
-      }//end while
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-      } else if (OB_FAIL(ret)) {
-        LOG_WARN("failed to get next ls", KR(ret));
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("return code not expected", KR(ret));
       }
     }
   }
@@ -213,8 +207,8 @@ int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls or sql proxy is null", KR(ret), KP(ls),  KP(sql_proxy));
   } else {
-    int64_t sync_scn = 0;
-    int64_t readable_scn = 0;
+    SCN sync_scn;
+    SCN readable_scn;
     int64_t first_proposal_id = 0;
     int64_t second_proposal_id = 0;
     common::ObRole role;
@@ -276,14 +270,6 @@ int ObTenantRecoveryReportor::load_tenant_info_()
           sql_proxy_, false, tenant_info))) {
     LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id_));
   } else {
-    /**
-    * Only need to refer to tenant role, no need to refer to switchover status.
-    * tenant_role is primary only in <primary, normal switchoverstatus>.
-    * When switch to standby starts, it will change to <standby, prepare switch to standby>.
-    * During the master switch process, some LS may be in RO state.
-    * This also ensures the consistency of tenant_role cache and the tenant role field in all_tenant_info
-    */
-    MTL_SET_TENANT_ROLE(tenant_info.get_tenant_role().value());
     SpinWLockGuard guard(lock_);
     if (OB_FAIL(tenant_info_.assign(tenant_info))) {
       LOG_WARN("failed to assign tenant info", KR(ret), K(tenant_info));
@@ -317,7 +303,6 @@ int ObTenantRecoveryReportor::get_tenant_info(share::ObAllTenantInfo &tenant_inf
   return ret;
 }
 
-
 int ObTenantRecoveryReportor::update_replayable_point_()
 {
   int ret = OB_SUCCESS;
@@ -346,7 +331,7 @@ int ObTenantRecoveryReportor::update_replayable_point_from_tenant_info_()
   SpinRLockGuard guard(lock_);
   if (!tenant_info_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant_info invalid", KR(ret), K(tenant_id_));
+    LOG_WARN("tenant_info invalid", KR(ret), K(tenant_id_), K(tenant_info_));
   } else if (OB_FAIL(log_service->update_replayable_point(tenant_info_.get_replayable_scn()))) {
     LOG_WARN("logservice update_replayable_point failed", KR(ret), K(tenant_info_));
   } else {
@@ -358,7 +343,7 @@ int ObTenantRecoveryReportor::update_replayable_point_from_tenant_info_()
 int ObTenantRecoveryReportor::update_replayable_point_from_meta_()
 {
   int ret = OB_SUCCESS;
-  int64_t replayable_point = OB_INVALID_TIMESTAMP;
+  SCN replayable_point;
   ObLSIterator *iter = NULL;
   common::ObSharedGuard<ObLSIterator> guard;
   ObLSService *ls_svr = MTL(ObLSService *);
@@ -372,14 +357,14 @@ int ObTenantRecoveryReportor::update_replayable_point_from_meta_()
     LOG_WARN("iter is NULL", KR(ret));
   } else {
     ObLS *ls = nullptr;
-    int64_t max_replayable_point = OB_INVALID_TIMESTAMP;
+    SCN max_replayable_point;
     while (OB_SUCC(iter->get_next(ls))) {
       if (OB_ISNULL(ls)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("ls is null", KR(ret), KP(ls));
       } else if (OB_FAIL(ls->get_ls_replayable_point(replayable_point))) {
         LOG_WARN("failed to update_ls_replayable_point", KR(ret), KPC(ls), K(replayable_point));
-      } else if (max_replayable_point < replayable_point) {
+      } else if (!max_replayable_point.is_valid() || max_replayable_point < replayable_point) {
         max_replayable_point = replayable_point;
       }
     }
@@ -396,7 +381,7 @@ int ObTenantRecoveryReportor::update_replayable_point_from_meta_()
 }
 
 int ObTenantRecoveryReportor::get_sync_point_(const share::ObLSID &id,
-    int64_t &sync_scn, int64_t &read_scn)
+    palf::SCN &sync_scn, palf::SCN &read_scn)
 {
   int ret = OB_SUCCESS;
   palf::AccessMode access_mode;
@@ -404,7 +389,7 @@ int ObTenantRecoveryReportor::get_sync_point_(const share::ObLSID &id,
   palf::PalfHandleGuard palf_handle_guard;
   if (OB_FAIL(MTL(logservice::ObLogService*)->open_palf(id, palf_handle_guard))) {
     LOG_WARN("failed to open palf", KR(ret), K(id));
-  } else if (OB_FAIL(palf_handle_guard.get_end_ts_ns(sync_scn))) {
+  } else if (OB_FAIL(palf_handle_guard.get_end_scn(sync_scn))) {
     LOG_WARN("failed to get end ts", KR(ret), K(id));
   } else if (OB_FAIL(palf_handle_guard.get_access_mode(unused_mode_version, access_mode))) {
     LOG_WARN("failed to get access_mode", KR(ret), K(id));
@@ -426,7 +411,7 @@ int ObTenantRecoveryReportor::get_sync_point_(const share::ObLSID &id,
     } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("restore_handler is NULL", K(ret), K(id), K(restore_handler));
-    } else if (OB_FAIL(restore_handler->get_restore_sync_ts(id, sync_scn))) {
+    } else if (OB_FAIL(restore_handler->get_restore_sync_scn(id, sync_scn))) {
       LOG_WARN("get restore sync point failed", KR(ret), K(id));
     }
   }
@@ -438,7 +423,7 @@ int ObTenantRecoveryReportor::get_sync_point_(const share::ObLSID &id,
 }
 
 
-int ObTenantRecoveryReportor::get_readable_scn(const share::ObLSID &id, int64_t &readable_scn)
+int ObTenantRecoveryReportor::get_readable_scn(const share::ObLSID &id, SCN &readable_scn)
 {
   int ret = OB_SUCCESS;
   storage::ObLSHandle ls_handle;
@@ -453,11 +438,11 @@ int ObTenantRecoveryReportor::get_readable_scn(const share::ObLSID &id, int64_t 
   } else if (OB_FAIL(ls->get_ls_info(ls_info))) {
     LOG_WARN("failed to get ls info", KR(ret));
   } else {
-    readable_scn = ls_info.weak_read_timestamp_ < OB_LS_MIN_SCN_VALUE ? 
-                   OB_LS_MIN_SCN_VALUE : ls_info.weak_read_timestamp_; 
+    readable_scn = (ls_info.weak_read_scn_.is_valid() && ls_info.weak_read_scn_ >= SCN::base_scn())
+        ? ls_info.weak_read_scn_ : SCN::base_scn();
   }
   return ret;
-
 }
+
 }
 }

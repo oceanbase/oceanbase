@@ -321,7 +321,7 @@ typedef struct
   PLParseInfo pl_parse_info_;
   /*for  q-quote*/
   ObMinusStatusCtx minus_ctx_; // for fast parser to parse negative value
-  int64_t last_escape_check_pos_;  //解析quoted string%parse-param时的一个临时变量，处理连接gbk字符集时遇到的转义字符问题
+  int64_t last_well_formed_len_;  //解析quoted string%parse-param时的一个临时变量，处理连接gbk字符集时遇到的转义字符问题
   int connection_collation_;//connection collation
   bool mysql_compatible_comment_; //whether the parser is parsing "/*! xxxx */"
   bool enable_compatible_comment_;

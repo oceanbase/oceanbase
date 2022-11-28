@@ -168,26 +168,18 @@ public:
   // return OB_SCHEMA_ERROR for table schema mismatch
   virtual int check_table_schema(const uint64_t tenant_id,
                                  const share::schema::ObTableSchema &hard_code_table);
-
+  // TODO:(yanmu.ztl) standby cluster won't sync sys table schema any more. To be removed.
   static int check_table_schema(const share::schema::ObTableSchema &hard_code_table,
                                 const share::schema::ObTableSchema &inner_table);
-
-  // For system tables, check and get column schemas' difference
-  // between table schema in memory and hard code table schema.
-  // 1. Drop column: Not supported.
-  // 2. Add column: Can only add columns at last.
-  // 3. Alter column: Can only alter columns online.
-  static int check_and_get_system_table_column_diff(
-             const share::schema::ObTableSchema &table_schema,
-             const share::schema::ObTableSchema &hard_code_schema,
-             common::ObIArray<uint64_t> &add_column_ids,
-             common::ObIArray<uint64_t> &alter_column_ids);
+  // TODO:(yanmu.ztl) standby cluster wont't sync sys table schema any more. Should be private.
+  int check_sys_table_schemas();
 private:
   static const int64_t NAME_BUF_LEN = 64;
   typedef common::ObFixedLengthString<NAME_BUF_LEN> Name;
   int check_zone();
   int check_sys_stat();
   int check_sys_param();
+  int check_sys_table_schemas_(const uint64_t tenant_id);
 
   template<typename Item>
   int get_names(const common::ObDList<Item> &list, common::ObIArray<const char*> &names);
@@ -207,15 +199,12 @@ private:
                       common::ObIArray<Name> &fetch_names, /* data from inner table*/
                       common::ObIArray<Name> &extra_names, /* inner table more than hard code*/
                       common::ObIArray<Name> &miss_names /* inner table less than hard code*/);
-
-  int check_sys_table_schemas_();
-  int check_sys_table_schemas_(const uint64_t tenant_id);
-  static int check_table_options_(const share::schema::ObTableSchema &table,
-                                  const share::schema::ObTableSchema &hard_code_table);
-  static int check_column_schema_(const common::ObString &table_name,
-                                  const share::schema::ObColumnSchemaV2 &column,
-                                  const share::schema::ObColumnSchemaV2 &hard_code_column,
-                                  const bool ignore_column_id);
+  static int check_table_options(const share::schema::ObTableSchema &table,
+                                 const share::schema::ObTableSchema &hard_code_table);
+  static int check_column_schema(const common::ObString &table_name,
+                                 const share::schema::ObColumnSchemaV2 &column,
+                                 const share::schema::ObColumnSchemaV2 &hard_code_column,
+                                 const bool ignore_column_id);
 
   bool check_str_with_lower_case_(const ObString &str);
   int check_sys_view_(const uint64_t tenant_id,

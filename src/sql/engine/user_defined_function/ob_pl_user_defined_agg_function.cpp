@@ -110,7 +110,6 @@ int ObPlAggUdfFunction::call_pl_engine_exectue_udf(ParamStore& udf_params,
     LOG_WARN("udf parameter number is not equal to params desc count",
                                  K(ret), K(udf_params.count()), K(routine_info->get_param_count()));
   } else if (OB_FAIL(pl_engine->execute(*exec_ctx_,
-                                        exec_ctx_->get_allocator(),
                                         -1,
                                         routine_info->get_routine_id(),
                                         empty_subprogram_path,

@@ -40,7 +40,6 @@ cluster_id
 compaction_high_thread_score
 compaction_low_thread_score
 compaction_mid_thread_score
-compatible
 config_additional_dir
 connection_control_failed_connections_threshold
 connection_control_max_connection_delay
@@ -65,7 +64,6 @@ devname
 disk_io_thread_count
 dtl_buffer_size
 enable_async_syslog
-enable_cgroup
 enable_ddl
 enable_early_lock_release
 enable_major_freeze
@@ -89,6 +87,7 @@ enable_upgrade_mode
 external_kms_info
 freeze_trigger_percentage
 fuse_row_cache_priority
+global_index_build_single_replica_timeout
 global_write_halt_residual_memory
 ha_high_thread_score
 ha_low_thread_score
@@ -268,10 +267,10 @@ _ob_elr_fast_freeze_threshold
 _ob_enable_fast_freeze
 _ob_enable_fast_parser
 _ob_enable_prepared_statement
+_ob_enable_px_for_inner_sql
 _ob_get_gts_ahead_interval
 _ob_max_thread_num
 _ob_obj_dep_maint_task_interval
-_ob_plan_cache_auto_flush_interval
 _ob_plan_cache_gc_strategy
 _ob_query_rate_limit
 _ob_ssl_invited_nodes

@@ -55,27 +55,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanFileOp);
 };
 
-class ObBackupPrefixDeleteFileOp : public ObBaseDirEntryOperator
-{
-public:
-  ObBackupPrefixDeleteFileOp();
-  virtual ~ObBackupPrefixDeleteFileOp() {}
-  int func(const dirent *entry) override;
-  int init(
-      const char *filter_str,
-      const int32_t filter_str_len,
-      const ObBackupPath& path,
-      const share::ObBackupStorageInfo *storage_info);
-
-public:
-  bool is_inited_;
-  ObBackupPath path_;
-  char filter_str_[common::MAX_PATH_SIZE];
-  const share::ObBackupStorageInfo *storage_info_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObBackupPrefixDeleteFileOp); 
-};
-
 class ObBackupCleanUtil
 {
 public:

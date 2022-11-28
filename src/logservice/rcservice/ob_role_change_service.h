@@ -61,7 +61,6 @@ public:
   void handle(void *task);
   int on_role_change(const int64_t id) final override;
   int on_need_change_leader(const int64_t ls_id, const common::ObAddr &dst_addr) final override;
-  int diagnose(RCDiagnoseInfo &diagnose_info);
 
 private:
   int submit_role_change_event_(const RoleChangeEvent &event);
@@ -112,15 +111,8 @@ private:
                                                         const int64_t proposal_id,
                                                         const share::ObLSID &ls_id,
                                                         palf::LSN &end_lsn);
-  bool need_execute_role_change(const int64_t curr_proposal_id, 
-                                const common::ObRole curr_role,
-                                const int64_t new_proposal_id, 
-                                const common::ObRole new_role,
-                                const bool is_pending_state, 
-                                const bool is_offline) const;
-
-  bool is_append_mode(const palf::AccessMode &access_mode) const;
-  bool is_raw_write_or_flashback_mode(const palf::AccessMode &access_mode) const;
+  bool check_need_execute_role_change_(const int64_t curr_proposal_id, const common::ObRole &curr_role,
+                                       const int64_t new_proposal_id, const common::ObRole &new_role) const;
 private:
   enum class RoleChangeOptType {
     INVALID_RC_OPT_TYPE = 0,
@@ -144,7 +136,6 @@ private:
   logservice::ObLogApplyService *apply_service_;
   logservice::ObILogReplayService *replay_service_;
   int tg_id_;
-  RCDiagnoseInfo cur_task_info_; // for diagnose
   bool is_inited_;
 };
 } // end namespace logservice

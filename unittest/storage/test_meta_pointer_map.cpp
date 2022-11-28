@@ -51,7 +51,6 @@ public:
 
   virtual void SetUp() override;
   virtual void TearDown() override;
-  void FakeLs(ObLS &ls);
 
 private:
   static constexpr uint64_t TEST_TENANT_ID = 500;
@@ -67,7 +66,7 @@ TestMetaPointerMap::TestMetaPointerMap()
 
 void TestMetaPointerMap::SetUp()
 {
-  int ret = tablet_map_.init(100000000L, "TabletMap", 15 * 1024L * 1024L * 1024L, 8 * 1024L * 1024L,
+  int ret = tablet_map_.init(10243L, "TabletMap", 15 * 1024L * 1024L * 1024L, 8 * 1024L * 1024L,
           common::OB_MALLOC_NORMAL_BLOCK_SIZE);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
@@ -88,18 +87,6 @@ void TestMetaPointerMap::TearDown()
   t3m->destroy();
   tenant_base_.destroy();
 }
-
-void TestMetaPointerMap::FakeLs(ObLS &ls)
-{
-  ls.ls_meta_.tenant_id_ = 1;
-  ls.ls_meta_.ls_id_.id_ = 1001;
-  ls.ls_meta_.gc_state_ = logservice::LSGCState::NORMAL;
-  ls.ls_meta_.migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
-  ls.ls_meta_.restore_status_ = ObLSRestoreStatus::RESTORE_NONE;
-  ls.ls_meta_.replica_type_ = ObReplicaType::REPLICA_TYPE_FULL;
-  ls.ls_meta_.rebuild_seq_ = 0;
-}
-
 
 class CalculateSize final
 {
@@ -133,8 +120,6 @@ int CalculateSize::operator()(common::hash::HashMapPair<ObTabletMapKey, ObTablet
 TEST_F(TestMetaPointerMap, test_meta_pointer_handle)
 {
   ObLS fake_ls;
-  FakeLs(fake_ls);
-
   observer::ObIMetaReport *fake_reporter = (observer::ObIMetaReport *)0xff;
 
   ObLSTabletService *tablet_svr = fake_ls.get_tablet_svr();
@@ -154,7 +139,7 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_handle)
 
   ObLSHandle ls_handle;
   ls_handle.ls_ = &fake_ls;
-  ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
+  ObTabletPointer tablet_ptr(ls_handle, ddl_kv_mgr_hdl, memtable_mgr_hdl);
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
   tablet_ptr.set_addr_with_reset_obj(phy_addr);
@@ -201,7 +186,6 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_handle)
 TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 {
   ObLS fake_ls;
-  FakeLs(fake_ls);
   observer::ObIMetaReport *fake_reporter = (observer::ObIMetaReport *)0xff;
 
   ObLSTabletService *tablet_svr = fake_ls.get_tablet_svr();
@@ -221,7 +205,7 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 
   ObLSHandle ls_handle;
   ls_handle.ls_ = &fake_ls;
-  ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
+  ObTabletPointer tablet_ptr(ls_handle, ddl_kv_mgr_hdl, memtable_mgr_hdl);
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
   tablet_ptr.set_addr_with_reset_obj(phy_addr);
@@ -283,7 +267,6 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
 {
   ObLS fake_ls;
-  FakeLs(fake_ls);
   observer::ObIMetaReport *fake_reporter = (observer::ObIMetaReport *)0xff;
 
   ObLSTabletService *tablet_svr = fake_ls.get_tablet_svr();
@@ -303,7 +286,7 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
 
   ObLSHandle ls_handle;
   ls_handle.ls_ = &fake_ls;
-  ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
+  ObTabletPointer tablet_ptr(ls_handle, ddl_kv_mgr_hdl, memtable_mgr_hdl);
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
   tablet_ptr.set_addr_with_reset_obj(phy_addr);

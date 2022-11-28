@@ -113,7 +113,7 @@ int ObExprConvertOracle::calc_result_typeN(ObExprResType &type,
                                            ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (!(param_num >= 2 && param_num <= 3)) {
+  if (!(param_num >= 2 || param_num <= 3)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param num should be 2 or 3", K(ret));
   }

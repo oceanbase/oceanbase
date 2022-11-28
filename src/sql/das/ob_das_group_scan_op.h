@@ -25,7 +25,6 @@ public:
                       index_group_cnt_(1),
                       lookup_group_cnt_(1)
   {}
-  virtual ~ObGroupLookupOp();
   virtual void reset() override
   {
     ObLocalIndexLookupOp::reset();
@@ -58,7 +57,6 @@ class ObDASGroupScanOp : public ObDASScanOp
   OB_UNIS_VERSION(1);
 public:
   ObDASGroupScanOp(common::ObIAllocator &op_alloc);
-  virtual ~ObDASGroupScanOp();
   int open_op() override;
   int release_op() override;
   virtual int rescan() override;

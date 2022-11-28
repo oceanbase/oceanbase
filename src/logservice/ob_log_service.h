@@ -59,6 +59,7 @@ class PalfHandleGuard;
 class PalfRoleChangeCb;
 class PalfDiskOptions;
 class PalfEnv;
+class SCN;
 }
 namespace storage
 {
@@ -100,6 +101,14 @@ public:
   int create_ls(const share::ObLSID &id,
                 const common::ObReplicaType &replica_type,
                 const share::ObTenantRole &tenant_role,
+                const palf::SCN &create_scn,
+                const bool allow_log_sync,
+                ObLogHandler &log_handler,
+                ObLogRestoreHandler &restore_handler);
+
+  int create_ls(const share::ObLSID &id,
+                const common::ObReplicaType &replica_type,
+                const share::ObTenantRole &tenant_role,
                 const int64_t create_ts,
                 const bool allow_log_sync,
                 ObLogHandler &log_handler,
@@ -122,9 +131,7 @@ public:
                 ObLogRestoreHandler &restore_handler);
 
   //删除日志流接口:外层调用create_ls()之后，后续流程失败，需要调用remove_ls()
-  int remove_ls(const share::ObLSID &id, 
-                ObLogHandler &log_handler,
-                ObLogRestoreHandler &restore_handler);
+  int remove_ls(const share::ObLSID &id);
 
   int check_palf_exist(const share::ObLSID &id, bool &exist) const;
   //宕机重启恢复日志流接口，包括生成并初始化对应的ObReplayStatus结构
@@ -148,7 +155,7 @@ public:
                     common::ObRole &role,
                     int64_t &proposal_id);
 
-  int update_replayable_point(const int64_t replayable_point);
+  int update_replayable_point(const palf::SCN &replayable_point);
   int get_palf_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte);
   int update_palf_disk_options(const palf::PalfDiskOptions &disk_options);
   // why we need update 'log_disk_size_' and 'log_disk_util_threshold' separately.
@@ -181,9 +188,6 @@ public:
   int iterate_palf(const ObFunction<int(const palf::PalfHandle&)> &func);
   int iterate_apply(const ObFunction<int(const ObApplyStatus&)> &func);
   int iterate_replay(const ObFunction<int(const ObReplayStatus&)> &func);
-  int diagnose_role_change(RCDiagnoseInfo &diagnose_info);
-  int diagnose_replay(const share::ObLSID &id, ReplayDiagnoseInfo &diagnose_info);
-  int diagnose_apply(const share::ObLSID &id, ApplyDiagnoseInfo &diagnose_info);
 
   palf::PalfEnv *get_palf_env() { return palf_env_; }
   // TODO by yunlong: temp solution, will by removed after Reporter be added in MTL

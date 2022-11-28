@@ -174,7 +174,7 @@ int ObSingleRowGetter::init_dml_access_ctx(
     query_flag.skip_read_lob_ = ObQueryFlag::OBSF_MASK_SKIP_READ_LOB;
   }
   //TODO (yanfeng) trans_version_range值后续由上层传入
-  trans_version_range.snapshot_version_ = store_ctx.mvcc_acc_ctx_.get_snapshot_version();
+  trans_version_range.snapshot_version_ = store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator();
   trans_version_range.base_version_ = 0;
   trans_version_range.multi_version_start_ = 0;
   store_ctx_ = &store_ctx;
@@ -292,9 +292,7 @@ int ObSingleRowGetter::get_next_row(ObNewRow *&row)
     // check txn status not aborted, which cause readout incorrect result
     if (store_ctx_->mvcc_acc_ctx_.snapshot_.tx_id_.is_valid() &&
         store_ctx_->mvcc_acc_ctx_.mem_ctx_ &&
-        store_ctx_->mvcc_acc_ctx_.mem_ctx_->is_tx_rollbacked()) {
-      // The txn has been killed during normal processing. So we return
-      // OB_TRANS_KILLED to prompt this abnormal state.
+        store_ctx_->mvcc_acc_ctx_.mem_ctx_->is_trans_rollbacked()) {
       ret = OB_TRANS_KILLED;
       STORAGE_LOG(WARN, "txn has terminated", K(ret));
     }

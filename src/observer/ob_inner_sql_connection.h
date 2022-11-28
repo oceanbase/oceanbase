@@ -139,9 +139,9 @@ public:
   virtual int execute_write(const uint64_t tenant_id, const char *sql,
                             int64_t &affected_rows,
                             bool is_user_sql = false) override;
-  virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
-                            int64_t &affected_rows,
-                            bool is_user_sql = false) override;
+  int execute_write(const uint64_t tenant_id, const ObString &sql,
+                    int64_t &affected_rows,
+                    bool is_user_sql = false);
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int register_multi_data_source(const uint64_t &tenant_id,
                                          const share::ObLSID ls_id,
@@ -244,8 +244,7 @@ public:
           common::ObISQLClient::ReadResult &res,
           bool is_from_pl = false,
           bool is_dynamic = false,
-          bool is_forall = false,
-          int64_t array_binding_count = 0);
+          bool is_forall = false);
 
   virtual int execute(const uint64_t tenant_id, sqlclient::ObIExecutor &executor) override;
 
@@ -334,8 +333,7 @@ private:
               ObVirtualTableIteratorFactory *vt_iter_factory = NULL,
               bool is_from_pl = false,
               bool is_dynamic = false,
-              bool is_forall = false,
-              int64_t array_binding_count = 0);
+              bool is_forall = false);
   int do_execute(const ParamStore &params, ObInnerSQLResult &res);
   int switch_tenant(const uint64_t tenant_id);
 

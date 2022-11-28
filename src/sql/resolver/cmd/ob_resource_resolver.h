@@ -246,7 +246,7 @@ public:
         name = "IOPS_WEIGHT";
         break;
       default:
-        LOG_WARN("invalid item type for RESOURCE UNIT", K(type));
+        LOG_ERROR("invalid item type for RESOURCE UNIT", K(type));
         name = "UNKNOWN";
         break;
     }
@@ -319,12 +319,12 @@ int ObResourceUnitOptionResolver<T>::check_value_(const ValueT value,
       // iops weight is allowed to set zero
       print_invalid_argument_user_error_(type, ", value should be positive");
       ret = common::OB_INVALID_ARGUMENT;
-      LOG_WARN("param can't be zero", KR(ret), K(type), K(value));
+      LOG_ERROR("param can't be zero", KR(ret), K(type), K(value));
     }
   } else if (OB_UNLIKELY(value < 0)) {
     print_invalid_argument_user_error_(type, ", value can not be negative");
     ret = common::OB_INVALID_ARGUMENT;
-    LOG_WARN("param can not be negative", KR(ret), K(type), K(value));
+    LOG_ERROR("param can not be negative", KR(ret), K(type), K(value));
   } else {
     // succ
   }
@@ -397,14 +397,14 @@ int ObResourceUnitOptionResolver<T>::resolve_varchar_(ParseNode *child, const Ob
       parse_int_value = common::ObConfigCapacityParser::get(buf.ptr(), valid);
     } else {
       ret = common::OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid option node type", KR(ret), K(type), K(buf));
+      LOG_ERROR("invalid option node type", KR(ret), K(type), K(buf));
     }
 
     if (OB_FAIL(ret)) {
     } else if (!valid) {
       print_invalid_argument_user_error_(type, ", parse int value error");
       ret = common::OB_ERR_PARSE_SQL;
-      LOG_WARN("parse varchar value to int fail", KR(ret), K(type), K(buf), K(valid));
+      LOG_ERROR("parse varchar value to int fail", KR(ret), K(type), K(buf), K(valid));
     }
   }
   return ret;
@@ -475,7 +475,7 @@ int ObResourceUnitOptionResolver<T>::resolve_option_(ParseNode *option_node, sha
         } else {
           /* won't be here */
           ret = common::OB_ERR_UNEXPECTED;
-          LOG_WARN("unknown resource unit option, unexprected", KR(ret), K(option_type),
+          LOG_ERROR("unknown resource unit option, unexprected", KR(ret), K(option_type),
               K(parse_int_value));
         }
       }

@@ -23,8 +23,7 @@ namespace storage
 {
 
 ObLobDataReader::ObLobDataReader()
-  : is_inited_(false), tablet_id_(), access_ctx_(nullptr),
-    allocator_(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+  : is_inited_(false), tablet_id_(), access_ctx_(nullptr), allocator_(ObModIds::OB_LOB_READER)
 {
 }
 

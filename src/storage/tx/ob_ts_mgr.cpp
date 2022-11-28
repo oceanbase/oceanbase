@@ -724,11 +724,11 @@ int ObTsMgr::update_gts(const uint64_t tenant_id, const int64_t gts, bool &updat
   return ret;
 }
 
-//不需要获取gts的最新值，如果gts不满足条件，需要注册异步回调的task
-int ObTsMgr::get_gts(const uint64_t tenant_id, ObTsCbTask *task, int64_t &gts)
+int ObTsMgr::get_gts(const uint64_t tenant_id, ObTsCbTask *task, palf::SCN &scn)
 {
+  const int64_t start = ObTimeUtility::fast_current_time();
   int ret = OB_SUCCESS;
-
+  int64_t gts = 0;//need be invalid value for SCN
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "ObTsMgr is not inited", K(ret));
@@ -766,6 +766,15 @@ int ObTsMgr::get_gts(const uint64_t tenant_id, ObTsCbTask *task, int64_t &gts)
       }
     } while (OB_SUCCESS == ret);
   }
+  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
+  //如果gts获取失败，需要注册wait task，此时先不用统计gts acquire的total time
+  if (OB_SUCC(ret)) {
+    const int64_t end = ObTimeUtility::fast_current_time();
+    ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
+    if (OB_FAIL(scn.convert_for_gts(gts))) {
+      TRANS_LOG(WARN, "failed to convert_for_gts", K(ret), K(tenant_id), K(gts));
+    }
+  }
 
   return ret;
 }
@@ -773,10 +782,12 @@ int ObTsMgr::get_gts(const uint64_t tenant_id, ObTsCbTask *task, int64_t &gts)
 int ObTsMgr::get_gts(const uint64_t tenant_id,
                      const MonotonicTs stc,
                      ObTsCbTask *task,
-                     int64_t &gts,
+                     palf::SCN &scn,
                      MonotonicTs &receive_gts_ts)
 {
+  const int64_t start = ObTimeUtility::fast_current_time();
   int ret = OB_SUCCESS;
+  int64_t gts = 0;//need be invalid value for SCN
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -817,13 +828,22 @@ int ObTsMgr::get_gts(const uint64_t tenant_id,
       }
     } while (OB_SUCCESS == ret);
   }
+  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
+  //如果gts获取失败，需要注册wait task，此时先不用统计gts acquire的total time
+  if (OB_SUCC(ret)) {
+    const int64_t end = ObTimeUtility::fast_current_time();
+    ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
+    if (OB_FAIL(scn.convert_for_gts(gts))) {
+      TRANS_LOG(WARN, "failed to convert_for_gts", K(ret), K(tenant_id), K(gts));
+    }
+  }
 
   return ret;
 }
 
 int ObTsMgr::get_ts_sync(const uint64_t tenant_id,
                          const int64_t timeout_us,
-                         int64_t &ts,
+                         palf::SCN &scn,
                          bool &is_external_consistent)
 {
   int ret = OB_SUCCESS;
@@ -844,6 +864,7 @@ int ObTsMgr::get_ts_sync(const uint64_t tenant_id,
   } else {
     do {
       bool is_valid = false;
+      int64_t ts = 0;
       ObTsSourceInfo *ts_source_info = NULL;
       ObITsSource *ts_source = NULL;
       ObTsSourceInfoGuard info_guard;
@@ -872,6 +893,7 @@ int ObTsMgr::get_ts_sync(const uint64_t tenant_id,
             ret = OB_SUCCESS;
           }
         } else {
+          scn.convert_for_gts(ts);
           is_external_consistent = ts_source->is_external_consistent();
           break;
         }
@@ -879,6 +901,12 @@ int ObTsMgr::get_ts_sync(const uint64_t tenant_id,
         PAUSE();
       }
     } while (OB_SUCCESS == ret);
+  }
+  ObTransStatistic::get_instance().add_gts_acquire_total_count(tenant_id, 1);
+  //如果gts获取失败，需要注册wait task，此时先不用统计gts acquire的total time
+  if (OB_SUCC(ret)) {
+    const int64_t end = ObTimeUtility::current_time();
+    ObTransStatistic::get_instance().add_gts_acquire_total_time(tenant_id, end - start);
   }
 
   return ret;
@@ -980,7 +1008,7 @@ bool ObTsMgr::is_external_consistent(const uint64_t tenant_id)
   return bool_ret;
 }
 
-int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const int64_t ts,
+int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn,
     ObTsCbTask *task, bool &need_wait)
 {
   const int64_t start = ObTimeUtility::fast_current_time();
@@ -991,12 +1019,13 @@ int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const int64_t ts,
   } else if (OB_UNLIKELY(!is_running_)) {
     ret = OB_NOT_RUNNING;
     TRANS_LOG(WARN, "ObTsMgr not running", K(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)) || OB_UNLIKELY(ts <= 0) || OB_ISNULL(task)) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)) || OB_UNLIKELY(!scn.is_valid()) || OB_ISNULL(task)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(ts), KP(task));
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(scn), KP(task));
   } else {
     do {
       bool is_valid = false;
+      const int64_t ts = scn.get_val_for_gts();
       ObTsSourceInfo *ts_source_info = NULL;
       ObITsSource *ts_source = NULL;
       ObTsSourceInfoGuard info_guard;
@@ -1031,59 +1060,7 @@ int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const int64_t ts,
   return ret;
 }
 
-int ObTsMgr::get_gts_and_type(const uint64_t tenant_id, const MonotonicTs stc,
-    int64_t &gts, int64_t &ts_type)
-{
-  int ret = OB_SUCCESS;
-  MonotonicTs unused_receive_gts_ts;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "ObTsMgr is not inited", K(ret));
-  } else if (OB_UNLIKELY(!is_running_)) {
-    ret = OB_NOT_RUNNING;
-    TRANS_LOG(WARN, "ObTsMgr is not running", K(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), K(tenant_id));
-  } else {
-    do {
-      bool is_valid = false;
-      ObTsSourceInfo *ts_source_info = NULL;
-      ObITsSource *ts_source = NULL;
-      ObTsSourceInfoGuard info_guard;
-      ObTsSourceGuard source_guard;
-      if (OB_FAIL(get_ts_source_info_opt_(tenant_id, info_guard, true, true))) {
-        TRANS_LOG(WARN, "get ts source info failed", K(ret), K(tenant_id));
-      } else if (OB_ISNULL(ts_source_info = info_guard.get_ts_source_info())) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "ts source info is NULL", K(ret), K(tenant_id));
-      } else if (OB_FAIL(ts_source_info->get_ts_source(tenant_id, source_guard, is_valid))) {
-        TRANS_LOG(WARN, "get ts source failed", K(ret), K(tenant_id));
-      } else if (is_valid) {
-        if (OB_ISNULL(ts_source = source_guard.get_ts_source())) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(WARN, "ts source is NULL", K(ret));
-        } else {
-          ts_type = source_guard.get_ts_type();
-          if (OB_FAIL(ts_source->get_gts(stc, NULL, gts, unused_receive_gts_ts))) {
-            if (OB_EAGAIN != ret) {
-              TRANS_LOG(WARN, "get gts failed", K(ret), K(tenant_id), K(ts_source));
-            }
-          } else {
-            break;
-          }
-        }
-      } else {
-        PAUSE();
-      }
-    } while (OB_SUCCESS == ret);
-  }
-  ObTransStatistic::get_instance().add_gts_try_acquire_total_count(tenant_id, 1);
-
-  return ret;
-}
-
-int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const int64_t ts)
+int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const palf::SCN &scn)
 {
   int ret = OB_SUCCESS;
 
@@ -1093,12 +1070,13 @@ int ObTsMgr::wait_gts_elapse(const uint64_t tenant_id, const int64_t ts)
   } else if (OB_UNLIKELY(!is_running_)) {
     ret = OB_NOT_RUNNING;
     TRANS_LOG(WARN, "ObTsMgr not running", K(ret));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)) || OB_UNLIKELY(ts <= 0)) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)) || OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(ts));
+    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(scn));
   } else {
     do {
       bool is_valid = false;
+      const int64_t ts = scn.get_val_for_gts();
       ObTsSourceInfo *ts_source_info = NULL;
       ObITsSource *ts_source = NULL;
       ObTsSourceInfoGuard info_guard;

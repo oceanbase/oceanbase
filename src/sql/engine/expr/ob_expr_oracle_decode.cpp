@@ -231,46 +231,39 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
     for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
       all_literal = all_literal & types_stack[i].is_literal();
       ObObjOType o_type = ob_obj_type_to_oracle_type(types_stack[i].get_calc_type());
-      if (o_type >= ObOMaxType || o_result_type >= ObOMaxType || o_calc_type >= ObOMaxType) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid oracle obj type", K(o_type), K(o_result_type), K(o_calc_type));
-      } else {
-        if (0 == i || ((i % 2) == 1 && i != param_num - 1)) { // expr and search
-          // 通过隐式转换矩阵判断两个类型间是否可以进行转换
-          dir = OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[o_type][o_calc_type];
-        } else { // result and default
-          dir = OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[o_type][o_result_type];
-        }
-        if (ImplicitCastDirection::IC_NOT_SUPPORT == dir) {
-          ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("invalid oracle type implict cast",
-                   K(ret), K(o_calc_type), K(o_result_type), K(o_type), K(i));
-        }
+      if (0 == i || ((i % 2) == 1 && i != param_num - 1)) { // expr and search
+        // 通过隐式转换矩阵判断两个类型间是否可以进行转换
+        dir = OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[o_type][o_calc_type];
+      } else { // result and default
+        dir = OB_OBJ_IMPLICIT_CAST_DIRECTION_FOR_ORACLE[o_type][o_result_type];
+      }
+      if (ImplicitCastDirection::IC_NOT_SUPPORT == dir) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid oracle type implict cast",
+                 K(ret), K(o_calc_type), K(o_result_type), K(o_type), K(i));
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    if (ob_is_otimestamp_type(types_stack[RESULT_TYPE_INDEX].get_type())) {
-      type.set_accuracy(types_stack[RESULT_TYPE_INDEX].get_accuracy());
+  if (ob_is_otimestamp_type(types_stack[RESULT_TYPE_INDEX].get_type())) {
+    type.set_accuracy(types_stack[RESULT_TYPE_INDEX].get_accuracy());
+  }
+  //deduce string length
+  if (ob_is_string_type(type.get_type()) || ob_is_raw(type.get_type())) {
+    ObLength len = -1;
+    for (int64_t i = 2; i < param_num; i += 2 /*skip conditions */) {
+      if (types_stack[i].get_length() > len) {
+        len = types_stack[i].get_length();
+      }
     }
-    //deduce string length
-    if (ob_is_string_type(type.get_type()) || ob_is_raw(type.get_type())) {
-      ObLength len = -1;
-      for (int64_t i = 2; i < param_num; i += 2 /*skip conditions */) {
-        if (types_stack[i].get_length() > len) {
-          len = types_stack[i].get_length();
-        }
+    if (has_default) {
+      len = static_cast<ObLength>(MAX(types_stack[param_num - 1].get_length(), len));
+    }
+    if (all_literal && lib::is_oracle_mode()) {
+      if (OB_FAIL(calc_result_type_for_literal(type, types_stack, param_num, type_ctx))) {
+        LOG_WARN("failed to calc result for literal", K(ret));
       }
-      if (has_default) {
-        len = static_cast<ObLength>(MAX(types_stack[param_num - 1].get_length(), len));
-      }
-      if (all_literal && lib::is_oracle_mode()) {
-        if (OB_FAIL(calc_result_type_for_literal(type, types_stack, param_num, type_ctx))) {
-          LOG_WARN("failed to calc result for literal", K(ret));
-        }
-      } else {
-        type.set_length(len);
-      }
+    } else {
+      type.set_length(len);
     }
   }
   if (OB_SUCC(ret)) {

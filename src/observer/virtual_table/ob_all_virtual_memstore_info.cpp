@@ -245,11 +245,11 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 6:
           // start_ts
-          cur_row_.cells_[i].set_uint64(mt->get_key().log_ts_range_.start_log_ts_ < 0 ? 0 : mt->get_key().log_ts_range_.start_log_ts_);
+          cur_row_.cells_[i].set_uint64(mt->get_key().scn_range_.start_scn_.get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 7:
           // end_ts
-          cur_row_.cells_[i].set_uint64(mt->get_key().log_ts_range_.end_log_ts_ < 0 ? 0 : mt->get_key().log_ts_range_.end_log_ts_);
+          cur_row_.cells_[i].set_uint64(mt->get_key().scn_range_.end_scn_.get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // logging_blocked

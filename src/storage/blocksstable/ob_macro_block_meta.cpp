@@ -294,8 +294,9 @@ int64_t ObDataBlockMetaVal::get_max_serialize_size() const
 {
   int64_t len = sizeof(*this);
   len -= sizeof(column_checksums_);
+  const int64_t column_count = column_checksums_.count();
   len += sizeof(int64_t); // serialize column count
-  len += sizeof(int64_t) * column_count_; // serialize each checksum
+  len += sizeof(int64_t) * column_count; // serialize each checksum
   return len;
 }
 DEFINE_GET_SERIALIZE_SIZE(ObDataBlockMetaVal)

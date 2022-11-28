@@ -27,7 +27,7 @@ OB_SERIALIZE_MEMBER(ObBackupDataLSAttrDesc, backup_scn_, ls_attr_array_);
 
 bool ObBackupDataLSAttrDesc::is_valid() const
 {
-  return backup_scn_ > 0 && !ls_attr_array_.empty();
+  return backup_scn_.is_valid() && !ls_attr_array_.empty();
 }
 
 /*
@@ -61,7 +61,7 @@ OB_SERIALIZE_MEMBER(ObBackupDataTabletToLSDesc, backup_scn_, tablet_to_ls_);
 
 bool ObBackupDataTabletToLSDesc::is_valid() const
 {
-  return backup_scn_ > 0 && !tablet_to_ls_.empty();
+  return backup_scn_.is_valid() && !tablet_to_ls_.empty();
 }
 
 /*
@@ -526,8 +526,8 @@ int ObBackupDataStore::write_backup_set_placeholder(
     const bool is_inner,
     const bool is_start, 
     const bool is_succeed,
-    const share::ObBackupSCN &replay_scn, 
-    const share::ObBackupSCN &min_restore_scn)
+    const palf::SCN &replay_scn,
+    const palf::SCN &min_restore_scn)
 {
   int ret = OB_SUCCESS;
   ObExternBackupSetPlaceholderDesc placeholder;
@@ -672,8 +672,8 @@ int ObBackupDataStore::get_backup_set_placeholder_path_(
     const bool is_inner, 
     const bool is_start, 
     const bool is_succeed, 
-    const share::ObBackupSCN &replay_scn, 
-    const share::ObBackupSCN &min_restore_scn, 
+    const palf::SCN &replay_scn,
+    const palf::SCN &min_restore_scn,
     share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -704,17 +704,19 @@ int ObBackupDataStore::get_backup_set_placeholder_path_(
 
 int ObBackupDataStore::get_backup_set_array(
     const common::ObString &passwd_array,
-    const share::ObBackupSCN &restore_scn, 
-    share::ObBackupSCN &restore_start_scn, 
+    const palf::SCN &restore_scn,
+    palf::SCN &restore_start_scn,
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list)
 {
   int ret = OB_SUCCESS;
-  backup_set_list.reset();
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDataStore not init", K(ret));
   } else {
+    int64_t cur_max_backup_set_id = -1;
     int64_t global_max_backup_set_id = -1;
+    common::ObArray<share::ObRestoreBackupSetBriefInfo> tmp_backup_set_list;
+    palf::SCN tmp_restore_start_scn;
     ObBackupIoAdapter util;
     ObBackupSetFilter op;
     share::ObBackupPath tenant_backup_placeholder_dir_path;
@@ -725,18 +727,27 @@ int ObBackupDataStore::get_backup_set_array(
       LOG_WARN("fail to get simple backup placeholder dir", K(ret));
     } else if (OB_FAIL(util.list_files(tenant_backup_placeholder_dir_path.get_obstr(), storage_info, op))) {
       LOG_WARN("fail to list files", K(ret), K(tenant_backup_placeholder_dir_path));
-    } else if (OB_FAIL(do_get_backup_set_array_(passwd_array, restore_scn, op, backup_set_list, 
-        global_max_backup_set_id, restore_start_scn))) {
+    } else if (OB_FAIL(do_get_backup_set_array_(passwd_array, restore_scn, op, tmp_backup_set_list,
+        cur_max_backup_set_id, tmp_restore_start_scn))) {
       LOG_WARN("fail to do get backup set array", K(ret), K(op));
-    } 
+    } else if (global_max_backup_set_id == -1 || global_max_backup_set_id < cur_max_backup_set_id) {
+      //update backup set list
+      backup_set_list.reset();
+      if (OB_FAIL(backup_set_list.assign(tmp_backup_set_list))) {
+        LOG_WARN("fail to assign backup set list", K(ret));
+      } else {
+        restore_start_scn = tmp_restore_start_scn;
+        global_max_backup_set_id = cur_max_backup_set_id;
+      }
+    }
   }
   return ret;
 }
 
 int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_array, 
-    const share::ObBackupSCN &restore_scn, const ObBackupSetFilter &op, 
+    const palf::SCN &restore_scn, const ObBackupSetFilter &op,
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 
-    int64_t &cur_max_backup_set_id, share::ObBackupSCN &restore_start_scn)
+    int64_t &cur_max_backup_set_id, palf::SCN &restore_start_scn)
 {
   int ret = OB_SUCCESS;
   const int64_t OB_BACKUP_MAX_BACKUP_SET_ID = 5000;

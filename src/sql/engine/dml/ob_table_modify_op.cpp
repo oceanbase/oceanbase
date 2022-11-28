@@ -82,7 +82,7 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
           bool is_self_ref = false;
           if (OB_FAIL(is_self_ref_row(op.get_eval_ctx(), old_row, fk_arg, is_self_ref))) {
             LOG_WARN("is_self_ref_row failed", K(ret), K(old_row), K(fk_arg));
-          } else if (new_row.empty() && is_self_ref && op.is_fk_nested_session()) {
+          } else if (new_row.empty() && is_self_ref && op.is_nested_session()) {
             // delete self refercnced row should not cascade delete.
           } else if (OB_FAIL(cascade(op, fk_arg, old_row, new_row))) {
             LOG_WARN("failed to cascade", K(ret), K(fk_arg), K(old_row), K(new_row));
@@ -519,6 +519,7 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext &ctx,
     inner_conn_(NULL),
     tenant_id_(0),
     saved_conn_(),
+    is_nested_session_(false),
     foreign_key_checks_(false),
     need_close_conn_(false),
     iter_end_(false),
@@ -533,20 +534,6 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext &ctx,
   // in NO_BACKSLASH_ESCAPES, obj_print_sql<ObVarcharType> won't escape.
   // We use skip_escape_ to indicate this case. It will finally be passed to ObHexEscapeSqlStr.
   GET_SQL_MODE_BIT(IS_NO_BACKSLASH_ESCAPES, ctx_.get_my_session()->get_sql_mode(), obj_print_params_.skip_escape_);
-}
-
-bool ObTableModifyOp::is_fk_root_session() {
-  bool ret = false;
-  if (OB_ISNULL(ctx_.get_parent_ctx())) {
-    if (this->need_foreign_key_checks()) {
-      ret = true;
-    }
-  } else {
-    if (!ctx_.get_parent_ctx()->get_das_ctx().is_fk_cascading_ && need_foreign_key_checks()) {
-      ret = true;
-    }
-  }
-  return ret;
 }
 
 int ObTableModifyOp::inner_open()
@@ -692,16 +679,6 @@ int ObTableModifyOp::inner_close()
       dml_rtctx_.das_ref_.reset();
     }
   }
-  // Release the hash sets created at root ctx for delete distinct check
-  if (OB_SUCC(ret) && get_exec_ctx().is_root_ctx()) {
-    DASDelCtxList& del_ctx_list = get_exec_ctx().get_das_ctx().get_das_del_ctx_list();
-    DASDelCtxList::iterator iter = del_ctx_list.begin();
-    for (;  OB_SUCC(ret)&& iter != del_ctx_list.end(); iter++) {
-      DmlRowkeyDistCtx del_ctx = *iter;
-      del_ctx.deleted_rows_->destroy();
-    }
-    del_ctx_list.destroy();
-  }
   return ret;
 }
 
@@ -798,7 +775,7 @@ int ObTableModifyOp::calc_single_table_loc()
                K(table_loc_id), K(ref_table_id), K(das_ctx.get_table_loc_list()));
     } else {
       get_input()->table_loc_ = table_loc;
-      get_input()->tablet_loc_ = table_loc->get_first_tablet_loc();
+      get_input()->tablet_loc_ = table_loc->tablet_locs_.get_first();
     }
   }
   return ret;
@@ -836,6 +813,7 @@ int ObTableModifyOp::open_inner_conn()
   if (OB_SUCC(ret)) {
     inner_conn_ = static_cast<ObInnerSQLConnection *>(session->get_inner_conn());
     tenant_id_ = session->get_effective_tenant_id();
+    is_nested_session_ = ObSQLUtils::is_nested_sql(&ctx_);
   }
   return ret;
 }
@@ -1069,85 +1047,5 @@ int ObTableModifyOp::submit_all_dml_task()
   return ret;
 }
 
-//The data to be written by DML will be buffered in the DAS Write Buffer
-//When the buffer data exceeds 6M,
-//needs to be written to the storage to release the memory.
-int ObTableModifyOp::discharge_das_write_buffer()
-{
-  int ret = OB_SUCCESS;
-  if (dml_rtctx_.das_ref_.get_das_alloc().used() >= das::OB_DAS_MAX_TOTAL_PACKET_SIZE) {
-    LOG_INFO("DASWriteBuffer full, now to write storage",
-             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used());
-    ret = submit_all_dml_task();
-  }
-  return ret;
-}
-
-int ObTableModifyOp::get_next_row_from_child()
-{
-  int ret = OB_SUCCESS;
-  clear_evaluated_flag();
-  if (OB_FAIL(child_->get_next_row())) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to get next row", K(ret));
-    }
-  } else {
-    LOG_TRACE("child output row", "row", ROWEXPR2STR(eval_ctx_, child_->get_spec().output_));
-  }
-  return ret;
-}
-
-int ObTableModifyOp::inner_get_next_row()
-{
-  int ret = OB_SUCCESS;
-  if (iter_end_) {
-    LOG_DEBUG("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
-    ret = OB_ITER_END;
-  } else {
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(try_check_status())) {
-        LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(get_next_row_from_child())) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("fail to get next row", K(ret));
-        } else {
-          iter_end_ = true;
-          ret = OB_SUCCESS;
-          break;
-        }
-      } else if (OB_FAIL(write_row_to_das_buffer())) {
-        LOG_WARN("write row to das failed", K(ret));
-      } else if (OB_FAIL(discharge_das_write_buffer())) {
-        LOG_WARN("discharge das write buffer failed", K(ret));
-      } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
-        clear_evaluated_flag();
-        err_log_rt_def_.curr_err_log_record_num_++;
-        err_log_rt_def_.reset();
-        continue;
-      } else if (MY_SPEC.is_returning_) {
-        break;
-      }
-    }
-
-    if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
-      //DML operator reach iter end,
-      //now submit the remaining rows in the DAS Write Buffer to the storage
-      if (dml_rtctx_.need_pick_del_task_first() &&
-          OB_FAIL(dml_rtctx_.das_ref_.pick_del_task_to_first())) {
-        LOG_WARN("pick delete das task to first failed", K(ret));
-      } else if (OB_FAIL(dml_rtctx_.das_ref_.execute_all_task())) {
-        LOG_WARN("execute all dml das task failed", K(ret));
-      } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
-        LOG_WARN("close all das task failed", K(ret));
-      }
-    }
-    //to post process the DML info after writing all data to the storage or returning one row
-    ret = write_rows_post_proc(ret);
-    if (OB_SUCC(ret) && iter_end_) {
-      ret = OB_ITER_END;
-    }
-  }
-  return ret;
-}
 }  // namespace sql
 }  // namespace oceanbase

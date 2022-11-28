@@ -77,8 +77,8 @@ int ObIndexBlockRowHeader::fill_micro_des_meta(
 }
 
 ObIndexBlockRowBuilder::ObIndexBlockRowBuilder()
-  : allocator_(ObModIds::OB_BLOCK_INDEX_INTERMEDIATE, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    index_data_allocator_(ObModIds::OB_BLOCK_INDEX_INTERMEDIATE, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+  : allocator_(ObModIds::OB_BLOCK_INDEX_INTERMEDIATE),
+    index_data_allocator_(ObModIds::OB_BLOCK_INDEX_INTERMEDIATE),
     row_(),
     rowkey_column_count_(0),
     rowkey_column_types_(nullptr),
@@ -227,7 +227,7 @@ int ObIndexBlockRowBuilder::set_rowkey(const ObDatumRowkey &rowkey)
     LOG_WARN("Rowkey column count mismatch", K(ret), K_(rowkey_column_count), K(rowkey));
   } else if (OB_FAIL(dest_rowkey.assign(row_.storage_datums_, rowkey_column_count_))) {
     STORAGE_LOG(WARN, "Failed to assign dest rowkey", K(ret), K(rowkey_column_count_));
-  } else if (OB_FAIL(rowkey.semi_copy(dest_rowkey, index_data_allocator_))) {
+  } else if (OB_FAIL(rowkey.semi_copy(dest_rowkey, allocator_))) {
     STORAGE_LOG(WARN, "Failed to semi copy dest rowkey", K(ret), K(rowkey));
   }
 

@@ -153,11 +153,11 @@ public:
       const char **micro_data,
       const int64_t micro_cnt,
       const int64_t rowkey_cnt,
-      const ObLogTsRange &log_ts_range,
+      const ObScnRange &scn_range,
       const int64_t snapshot_version);
 public:
   ObITable::TableType get_merged_table_type() const;
-  void prepare_table_schema(const char **micro_data, const int64_t schema_rowkey_cnt, const ObLogTsRange &log_ts_range, const int64_t snapshot_version);
+  void prepare_table_schema(const char **micro_data, const int64_t schema_rowkey_cnt, const ObScnRange &scn_range, const int64_t snapshot_version);
   void reset_writer(const int64_t snapshot_version);
   void prepare_one_macro(
       const char **micro_data,
@@ -309,7 +309,7 @@ ObITable::TableType ObMultiVersionSSTableTest::get_merged_table_type() const
 void ObMultiVersionSSTableTest::prepare_table_schema(
     const char **micro_data,
     const int64_t schema_rowkey_cnt,
-    const ObLogTsRange &log_ts_range,
+    const ObScnRange &scn_range,
     const int64_t snapshot_version)
 {
   full_read_info_.reset();
@@ -407,7 +407,7 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
 
   table_key_.table_type_ = get_merged_table_type();
   table_key_.tablet_id_ = tablet_id_;
-  table_key_.log_ts_range_ = log_ts_range;
+  table_key_.scn_range_ = scn_range;
   if (MAJOR_MERGE == merge_type_) {
     table_key_.version_range_.snapshot_version_ = snapshot_version;
   }
@@ -560,10 +560,10 @@ void ObMultiVersionSSTableTest::prepare_data(
     const char **micro_data,
     const int64_t micro_cnt,
     const int64_t schema_rowkey_cnt,
-    const ObLogTsRange &log_ts_range,
+    const ObScnRange &scn_range,
     const int64_t snapshot_version)
 {
-  prepare_table_schema(micro_data, schema_rowkey_cnt, log_ts_range, snapshot_version);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, micro_cnt);
   prepare_data_end(handle);

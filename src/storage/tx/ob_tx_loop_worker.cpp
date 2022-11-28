@@ -102,8 +102,9 @@ void ObTxLoopWorker::run1()
       can_gc_tx = true;
     }
     
-    //retain ctx gc, interval = 5s
-    if (common::ObClockGenerator::getClock() - last_retain_ctx_gc_ts_ > TX_RETAIN_CTX_GC_INTERVAL) {
+    //retain ctx gc, interval = 15s
+    if(common::ObClockGenerator::getClock() - last_retain_ctx_gc_ts_ > TX_RETAIN_CTX_GC_INTERVAL)
+    {
       TRANS_LOG(INFO, "try gc retain ctx");
       last_retain_ctx_gc_ts_ = common::ObClockGenerator::getClock();
       can_gc_retain_ctx = true;
@@ -125,7 +126,6 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
 {
   int ret = OB_SUCCESS;
   int iter_ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
 
   ObSharedGuard<ObLSIterator> ls_iter_guard;
   ObLSIterator *iter_ptr = nullptr;
@@ -147,44 +147,15 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
     cur_ls_ptr = nullptr;
     while (OB_SUCCESS == (iter_ret = iter_ptr->get_next(cur_ls_ptr))) {
 
-      int64_t min_start_scn = OB_INVALID_TIMESTAMP;
-      MinStartScnStatus status = MinStartScnStatus::UNKOWN;
-      common::ObRole role;
-      int64_t base_proposal_id, proposal_id;
-
-      if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, base_proposal_id))) {
-        TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));
-        status  = MinStartScnStatus::UNKOWN;
-      } else if (role == common::ObRole::FOLLOWER) {
-        status = MinStartScnStatus::UNKOWN;
-      }
+      // keep alive, interval = 100ms
+      do_keep_alive_(cur_ls_ptr);
 
       // tx gc, interval = 15s
       if (can_tx_gc) {
         // TODO shanyan.g close ctx gc temporarily because of logical bug
         // https://work.aone.alibaba-inc.com/issue/42892101
-        do_tx_gc_(cur_ls_ptr, min_start_scn, status);
+        do_tx_gc_(cur_ls_ptr);
       }
-
-      if(MinStartScnStatus::UNKOWN == status) {
-        // do nothing
-      } else if (OB_TMP_FAIL(cur_ls_ptr->get_log_handler()->get_role(role, proposal_id))) {
-        TRANS_LOG(WARN, "get role failed", K(tmp_ret), K(cur_ls_ptr->get_ls_id()));
-        status = MinStartScnStatus::UNKOWN;
-      } else if (role == common::ObRole::FOLLOWER) {
-        status = MinStartScnStatus::UNKOWN;
-      } else if (base_proposal_id != proposal_id) {
-        status = MinStartScnStatus::UNKOWN;
-      }
-
-      if (MinStartScnStatus::UNKOWN == status) {
-        min_start_scn = OB_INVALID_TIMESTAMP;
-      } else if (MinStartScnStatus::NO_CTX == status) {
-        min_start_scn = 0;
-      }
-
-      // keep alive, interval = 100ms
-      do_keep_alive_(cur_ls_ptr, min_start_scn, status);
 
       // TODO shanyan.g
       // 1) We use max(max_commit_ts, gts_cache) as read snapshot,
@@ -201,11 +172,11 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
   return ret;
 }
 
-void ObTxLoopWorker::do_keep_alive_(ObLS *ls_ptr, int64_t min_start_scn, MinStartScnStatus status)
+void ObTxLoopWorker::do_keep_alive_(ObLS *ls_ptr)
 {
   int ret = OB_SUCCESS;
 
-  if (ls_ptr->get_keep_alive_ls_handler()->try_submit_log(min_start_scn, status)) {
+  if (ls_ptr->get_keep_alive_ls_handler()->try_submit_log()) {
     TRANS_LOG(WARN, "[Tx Loop Worker] try submit keep alive log failed", K(ret));
   } else if (REACH_TIME_INTERVAL(KEEP_ALIVE_PRINT_INFO_INTERVAL)) {
     ls_ptr->get_keep_alive_ls_handler()->print_stat_info();
@@ -216,11 +187,11 @@ void ObTxLoopWorker::do_keep_alive_(ObLS *ls_ptr, int64_t min_start_scn, MinStar
   UNUSED(ret);
 }
 
-void ObTxLoopWorker::do_tx_gc_(ObLS *ls_ptr, int64_t &min_start_scn, MinStartScnStatus &status)
+void ObTxLoopWorker::do_tx_gc_(ObLS *ls_ptr)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(ls_ptr->get_tx_svr()->check_scheduler_status(min_start_scn, status))) {
+  if (OB_FAIL(ls_ptr->get_tx_svr()->check_scheduler_status(ls_ptr->get_ls_id()))) {
     TRANS_LOG(WARN, "[Tx Loop Worker] check tx scheduler failed", K(ret), K(MTL_ID()), K(*ls_ptr));
   } else {
     TRANS_LOG(INFO, "[Tx Loop Worker] check tx scheduler success", K(MTL_ID()), K(*ls_ptr));
@@ -232,7 +203,7 @@ void ObTxLoopWorker::do_tx_gc_(ObLS *ls_ptr, int64_t &min_start_scn, MinStartScn
 void ObTxLoopWorker::update_max_commit_ts_(ObLS *ls_ptr)
 {
   int ret = OB_SUCCESS;
-  int64_t snapshot = 0;
+  palf::SCN snapshot;
   const int64_t expire_ts = ObClockGenerator::getClock() + 1000000; // 1s
 
   do {
@@ -245,7 +216,7 @@ void ObTxLoopWorker::update_max_commit_ts_(ObLS *ls_ptr)
       } else {
         TRANS_LOG(WARN, "get gts fail", "tenant_id", MTL_ID());
       }
-    } else if (OB_UNLIKELY(snapshot <= 0)) {
+    } else if (OB_UNLIKELY(!snapshot.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "invalid snapshot from gts", K(snapshot));
     } else {

@@ -59,16 +59,14 @@ public:
   void destroy() { reset(); }
   int deep_copy(const blocksstable::ObDatumRow &row,
                 const blocksstable::ObDatumRowkey &rowkey,
-                const ObDefensiveCheckRecordExtend &extend_info,
-                const ObTabletID &tablet_id);
+                const ObDefensiveCheckRecordExtend &extend_info);
 
-  TO_STRING_KV(K_(row), K_(generate_ts), K_(rowkey), K_(tablet_id), K_(extend_info));
+  TO_STRING_KV(K_(row), K_(generate_ts), K_(rowkey), K_(extend_info));
 
   blocksstable::ObDatumRow row_;
   int64_t generate_ts_;
   ObArenaAllocator allocator_;
   blocksstable::ObDatumRowkey rowkey_;
-  ObTabletID tablet_id_;
   ObDefensiveCheckRecordExtend extend_info_;
 };
 
@@ -79,15 +77,15 @@ class ObSingleTabletDefensiveCheckInfo : public ObTransHashLink<ObSingleTabletDe
 public:
   ObSingleTabletDefensiveCheckInfo() { }
   ~ObSingleTabletDefensiveCheckInfo() { reset(); }
-  int init(const ObTransID &tx_id);
+  int init(const ObTabletID &tablet_id);
   void reset();
   void destroy() { reset(); }
-  bool contain(const ObTransID &tx_id) { return tx_id_ == tx_id; }
+  bool contain(const ObTabletID &tablet_id) { return tablet_id_ == tablet_id; }
   int add_record(SingleRowDefensiveRecord *record);
   ObSingleRowDefensiveRecordArray &get_record_arr() { return record_arr_; }
-  const ObTransID &get_tx_id() const { return tx_id_; }
+  const ObTabletID &get_tablet_id() const { return tablet_id_; }
 private:
-  ObTransID tx_id_;
+  ObTabletID tablet_id_;
   ObSingleRowDefensiveRecordArray record_arr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSingleTabletDefensiveCheckInfo);
@@ -111,26 +109,24 @@ public:
   }
 };
 
-typedef ObTransHashMap<ObTransID,
+typedef ObTransHashMap<ObTabletID,
                        ObSingleTabletDefensiveCheckInfo,
                        ObSingleTabletDefensiveCheckInfoAlloc,
-                       common::SpinRWLock, 2 << 16 /*bucket_num*/> ObTxDefensiveCheckInfoMap;
+                       common::SpinRWLock> ObTxDefensiveCheckInfoMap;
 
 class ObDefensiveCheckMgr
 {
 public:
   ObDefensiveCheckMgr() : is_inited_(false)  { }
   ~ObDefensiveCheckMgr() { destroy(); }
-  int init(const lib::ObMemAttr &mem_attr);
+  int init();
   void reset();
   void destroy() { reset(); }
   int put(const ObTabletID &tablet_id,
-          const ObTransID &tx_id,
           const blocksstable::ObDatumRow &row,
           const blocksstable::ObDatumRowkey &rowkey,
           const ObDefensiveCheckRecordExtend &extend_info);
-  void del(const ObTransID &tx_id);
-  void dump(const ObTransID &tx_id);
+  void dump(const ObTabletID &tablet_id);
 private:
   static int64_t max_record_cnt_;
   typedef ObSmallSpinLockGuard<common::ObByteLock> Guard;

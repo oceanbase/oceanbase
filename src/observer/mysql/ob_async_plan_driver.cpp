@@ -79,7 +79,7 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
     // 如果try_again为true，说明这条SQL需要重做。考虑到重做之前我们需要回滚整个事务，会调用EndTransCb
     // 所以这里设置一个标记，告诉EndTransCb这种情况下不要给客户端回包。
     int cli_ret = OB_SUCCESS;
-    retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret, is_prexecute_);
+    retry_ctrl_.test_and_save_retry_state(gctx_, ctx_, result, ret, cli_ret);
     if (retry_ctrl_.need_retry()) {
       result.set_end_trans_async(false);
     }

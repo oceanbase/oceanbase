@@ -335,7 +335,9 @@ int ObUDTSqlService::add_udt_object(ObISQLClient &sql_client,
                                    bool only_history)
 {
   int ret = OB_SUCCESS;
-  if (udt_info.is_object_type()) {
+  bool is_invalid_version = ObSchemaService::g_liboblog_mode_
+                            && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2270;
+  if (udt_info.is_object_type() && !is_invalid_version) {
     const uint64_t tenant_id = udt_info.get_tenant_id();
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     ObUDTObjectType *obj_info = NULL;
@@ -569,10 +571,14 @@ int ObUDTSqlService::del_udt_object(ObISQLClient &sql_client,
                                     int64_t new_schema_version)
 {
   int ret = OB_SUCCESS;
+  bool is_invalid_version = ObSchemaService::g_liboblog_mode_
+                            && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2270;
   const uint64_t tenant_id = udt_info.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   ObDMLSqlSplicer dml;
-  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+  if (INVALID_UDT_OBJECT_TYPE == object_type && is_invalid_version) {
+    // do nothing;
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, udt_info.get_tenant_id())))
       || OB_FAIL(dml.add_pk_column("object_type_id", ObSchemaUtils::get_extract_schema_id(
                                                    exec_tenant_id, udt_info.get_type_id())))
@@ -589,7 +595,7 @@ int ObUDTSqlService::del_udt_object(ObISQLClient &sql_client,
                                    K(object_type), K(new_schema_version));
     }
   }
-  if (OB_SUCC(ret) && INVALID_UDT_OBJECT_TYPE != object_type) {
+  if (OB_SUCC(ret) && INVALID_UDT_OBJECT_TYPE != object_type && !is_invalid_version) {
     ObSqlString sql;
     int64_t affected_rows = 0;
     if (OB_FAIL(sql.assign_fmt("INSERT INTO %s(tenant_id, object_type_id, type, schema_version, is_deleted) VALUES(%lu,%lu, %ld, %ld,%d)",

@@ -445,7 +445,8 @@ int ObMPQuery::try_batched_multi_stmt_optimization(sql::ObSQLSessionInfo &sessio
   bool enable_batch_opt = session.is_enable_batched_multi_statement();
   bool use_plan_cache = session.get_local_ob_enable_plan_cache();
   optimization_done = false;
-  if (queries.count() <= 1 || parse_stat.parse_fail_) {
+  if (queries.count() <= 1 || parse_stat.parse_fail_ ||
+      GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2230) {
     /*do nothing*/
   } else if (!enable_batch_opt) {
     // 未打开batch开关
@@ -699,7 +700,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
   ObTenantCachedSchemaGuardInfo &cached_schema_info = session.get_cached_schema_guard_info();
   int64_t tenant_version = 0;
   int64_t sys_version = 0;
-  common::ObSqlInfoGuard si_guard(sql);
   ObSqlFatalErrExtraInfoGuard extra_info_guard;
   extra_info_guard.set_cur_sql(sql);
   extra_info_guard.set_tenant_id(session.get_effective_tenant_id());

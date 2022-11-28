@@ -241,10 +241,6 @@ int ObVirtualASH::convert_node_to_row(const ActiveSessionStat &node, ObNewRow *&
 #endif
         break;
       }
-      case PLAN_ID: {
-        cells[cell_idx].set_int(node.plan_id_);
-        break;
-      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(column_id), K(cell_idx),

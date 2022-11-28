@@ -238,15 +238,14 @@ class ObTransPreCommitLog : public ObTransLog
   OB_UNIS_VERSION(1);
 public:
   ObTransPreCommitLog()
-    : ObTransLog(),
-      publish_version_(-1) {}
+    : ObTransLog() {}
   ~ObTransPreCommitLog() {}
-  int64_t get_publish_version() const { return publish_version_; }
+  palf::SCN get_publish_version() const { return publish_version_; }
   bool is_valid() const;
 public:
   TO_STRING_KV(K_(log_type));
 private:
-  int64_t publish_version_;
+  palf::SCN publish_version_;
 };
 
 class ObTransAbortLog : public ObTransLog
@@ -359,7 +358,7 @@ public:
   ObTransStateLog() : create_ts_(0), tenant_id_(common::OB_INVALID_TENANT_ID), trans_expired_time_(0),
       is_readonly_(false), trans_type_(TransType::UNKNOWN_TRANS), session_id_(0), proxy_session_id_(0),
       commit_task_count_(0), schema_version_(0), can_elr_(false), cluster_version_(0),
-      snapshot_version_(0), cur_query_start_time_(0), stmt_expired_time_(0), trx_api_v2_(true) {}
+      snapshot_version_(), cur_query_start_time_(0), stmt_expired_time_(0), trx_api_v2_(true) {}
   ~ObTransStateLog() {}
 public:
   bool is_valid() const { return true; }
@@ -382,7 +381,7 @@ private:
   bool can_elr_;
   common::ObAddr proposal_leader_;
   uint64_t cluster_version_;
-  int64_t snapshot_version_;
+  palf::SCN snapshot_version_;
   int64_t cur_query_start_time_;
   int64_t stmt_expired_time_;
   ObXATransID xid_;

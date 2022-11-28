@@ -1,15 +1,17 @@
 ob_define(DEBUG_PREFIX "-fdebug-prefix-map=${CMAKE_SOURCE_DIR}=.")
+ob_define(AUTO_FDO_OPT "")
 ob_define(OB_LD_BIN ld)
+ob_define(CACHE_UUID "e3cf8ff1-e7e7-4aa3-ae43-3fc35e2bb836")
 ob_define(ASAN_IGNORE_LIST "${CMAKE_SOURCE_DIR}/asan_ignore_list.txt")
 
-ob_define(DEP_3RD_DIR "${CMAKE_SOURCE_DIR}/deps/3rd")
 ob_define(DEVTOOLS_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools")
 ob_define(DEP_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/deps/devel")
+# TODO: will remove all DEP_3RD_DIR rpm
+ob_define(DEP_3RD_DIR "${CMAKE_SOURCE_DIR}/deps/3rd")
 
-ob_define(OB_BUILD_CDC OFF)
 ob_define(OB_USE_CLANG ON)
 ob_define(OB_ERRSIM OFF)
-ob_define(BUILD_NUMBER 1)
+ob_define(AONE_BUILD_NUMBER 1)
 ob_define(OB_GPERF_MODE OFF)
 ob_define(OB_TRANS_ERRSIM OFF)
 ob_define(OB_DIS_SEARRAY OFF)
@@ -20,9 +22,6 @@ ob_define(ENABLE_FATAL_ERROR_HANG ON)
 ob_define(ENABLE_SMART_VAR_CHECK OFF)
 ob_define(ENABLE_COMPILE_DLL_MODE OFF)
 ob_define(OB_CMAKE_RULES_CHECK ON)
-ob_define(OB_STATIC_LINK_LGPL_DEPS ON)
-ob_define(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/hotfuncs.txt")
-ob_define(OB_BUILD_CCLS OFF)
 
 # 'ENABLE_PERF_MODE' use for offline system insight performance test
 # PERF_MODE macro controls many special code path in system
@@ -35,6 +34,7 @@ ob_define(OB_MAX_UNITY_BATCH_SIZE 30)
 ob_define(OB_ENABLE_UNITY ON)
 
 if(WITH_COVERAGE)
+  # doc about coverage: https://yuque.antfin.com/docs/share/c6a2742b-bc66-4054-a781-681264a3b6fe?#
   # -ftest-coverage to generate .gcno file
   # -fprofile-arcs to generate .gcda file
   # -DDBUILD_COVERAGE marco use to mark 'coverage build type' and to handle some speical case
@@ -42,16 +42,7 @@ if(WITH_COVERAGE)
   set(DEBUG_PREFIX "")
 endif()
 
-ob_define(AUTO_FDO_OPT "")
-if(ENABLE_AUTO_FDO)
-  set(AUTO_FDO_OPT "-fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof")
-endif()
 
-
-# should not use initial-exec for tls-model if building OBCDC.
-if(NOT OB_BUILD_CDC)
-  add_definitions(-DENABLE_INITIAL_EXEC_TLS_MODEL)
-endif()
 
 if (OB_USE_CLANG)
   find_program(OB_CC clang
@@ -73,24 +64,29 @@ if (OB_USE_CLANG)
   if (OB_USE_LLD)
     set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld")
     set(REORDER_COMP_OPT "-ffunction-sections -funique-internal-linkage-names -fdebug-info-for-profiling")
-    set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
+    set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1")
     set(OB_LD_BIN "${DEVTOOLS_DIR}/bin/ld.lld")
   endif()
-  set(CMAKE_CXX_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG} ${CMAKE_COVERAGE_FLAG} -std=gnu++11")
-  set(CMAKE_C_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG} ${CMAKE_COVERAGE_FLAG}")
+  set(CMAKE_CXX_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG} ${CMAKE_COVERAGE_FLAG} -DCACHE_UUID=${CACHE_UUID} -std=gnu++11")
+  set(CMAKE_C_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG} ${CMAKE_COVERAGE_FLAG} -DCACHE_UUID=${CACHE_UUID}")
   set(CMAKE_CXX_LINK_FLAGS "${LD_OPT} --gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT}")
   set(CMAKE_SHARED_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack ${REORDER_LINK_OPT}")
   set(CMAKE_EXE_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack ${REORDER_LINK_OPT}")
 else() # not clang, use gcc
-  message("gcc9 not support currently, please set OB_USE_CLANG ON and we will finish it as soon as possible")
-endif()
-
-if (OB_BUILD_CCLS)
-  # ccls场景采用更大的unity的联合编译单元，ccls是非完整编译，掉用clang AST接口，单元的size和耗时成指数衰减
-  set(OB_MAX_UNITY_BATCH_SIZE 200)
-  # -DCCLS_LASY_ENABLE 给全局设置上，将采用ccls懒加载模式，主要针对单测case，当添加上-DCCLS_LASY_OFF，首次将会进行检索
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCCLS_LASY_ENABLE")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCCLS_LASY_ENABLE")
+  find_program(OB_CC gcc
+    PATHS ${DEVTOOLS_DIR}/bin
+    NO_DEFAULT_PATH)
+  find_program(OB_CXX g++
+    PATHS ${DEVTOOLS_DIR}/bin
+    NO_DEFAULT_PATH)
+  if (OB_USE_LLD)
+    set(LD_OPT "-B${CMAKE_SOURCE_DIR}/rpm/.compile")
+    set(REORDER_COMP_OPT "-ffunction-sections")
+  endif()
+  set(CMAKE_CXX_FLAGS "${LD_OPT} -fdiagnostics-color ${REORDER_COMP_OPT}")
+  set(CMAKE_C_FLAGS "${LD_OPT} -fdiagnostics-color ${REORDER_COMP_OPT}")
+  set(CMAKE_SHARED_LINKER_FLAGS "-z noexecstack ${REORDER_LINK_OPT}")
+  set(CMAKE_EXE_LINKER_FLAGS "-z noexecstack ${REORDER_LINK_OPT}")
 endif()
 
 if (OB_CC AND OB_CXX)
@@ -100,6 +96,15 @@ else()
   message(FATAL_ERROR "can't find suitable compiler")
 endif()
 
+find_program(OB_COMPILE_EXECUTABLE ob-compile)
+if (NOT OB_COMPILE_EXECUTABLE)
+  message(WARNING "ob-compile not found, compile locally.")
+else()
+  set(CMAKE_C_COMPILER_LAUNCHER ${OB_COMPILE_EXECUTABLE})
+  set(CMAKE_CXX_COMPILER_LAUNCHER ${OB_COMPILE_EXECUTABLE})
+  set(CMAKE_C_LINKER_LAUNCHER ${OB_COMPILE_EXECUTABLE})
+  set(CMAKE_CXX_LINKER_LAUNCHER ${OB_COMPILE_EXECUTABLE})
+endif()
 
 option(OB_ENABLE_AVX2 "enable AVX2 and related instruction set support for x86_64" OFF)
 

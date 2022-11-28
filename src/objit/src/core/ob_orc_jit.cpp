@@ -63,32 +63,32 @@ ObOrcJit::ObOrcJit(common::ObIAllocator &Allocator)
     JITAllocator(),
     NotifyLoaded(Allocator, DebugBuf, DebugLen),
     TheContext(),
-    ObResolver(createLegacyLookupResolver(
-             ObES,
+    Resolver(createLegacyLookupResolver(
+             ES,
              [this](StringRef Name) { return findMangledSymbol(std::string(Name)); },
              [](Error Err) { cantFail(std::move(Err), "lookupFlags failed"); })),
-    ObTM(EngineBuilder().selectTarget()),
-    ObDL(ObTM->createDataLayout()),
-    ObObjectLayer(AcknowledgeORCv1Deprecation,
-                  ObES,
-                  [this](ObVModuleKey) {
-                    return ObObjLayerT::Resources{
-                      std::make_shared<ObJitMemoryManager>(JITAllocator), ObResolver}; },
-                  NotifyLoaded),
-    ObCompileLayer(AcknowledgeORCv1Deprecation, ObObjectLayer, SimpleCompiler(*ObTM))
+    TM(EngineBuilder().selectTarget()),
+    DL(TM->createDataLayout()),
+    ObjectLayer(AcknowledgeORCv1Deprecation,
+                ES,
+                [this](VModuleKey) {
+                  return ObjLayerT::Resources{
+                    std::make_shared<ObJitMemoryManager>(JITAllocator), Resolver}; },
+                NotifyLoaded),
+    CompileLayer(AcknowledgeORCv1Deprecation, ObjectLayer, SimpleCompiler(*TM))
 {
   llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr);
 }
 
-ObVModuleKey ObOrcJit::addModule(std::unique_ptr<Module> M)
+VModuleKey ObOrcJit::addModule(std::unique_ptr<Module> M)
 {
-  auto Key = ObES.allocateVModule();
-  cantFail(ObCompileLayer.addModule(Key, std::move(M)));
-  ObModuleKeys.push_back(Key);
-  return Key;
+  auto K = ES.allocateVModule();
+  cantFail(CompileLayer.addModule(K, std::move(M)));
+  ModuleKeys.push_back(K);
+  return K;
 }
 
-ObJITSymbol ObOrcJit::lookup(std::string Name)
+JITSymbol ObOrcJit::lookup(std::string Name)
 {
   return findMangledSymbol(mangle(Name));
 }
@@ -101,20 +101,20 @@ uint64_t ObOrcJit::get_function_address(const std::string Name)
 #else
 static ExitOnError ExitOnErr;
 
-ObOrcJit::ObOrcJit(ObIAllocator &Allocator, JITTargetMachineBuilder JTMB, ObDataLayout ObDL)
+ObOrcJit::ObOrcJit(ObIAllocator &Allocator, JITTargetMachineBuilder JTMB, DataLayout DL)
   : DebugBuf(nullptr),
     DebugLen(0),
     JITAllocator(),
     NotifyLoaded(Allocator, DebugBuf, DebugLen),
-    ObObjectLayer(ObES,
+    ObjectLayer(ES,
                 [this]() { return std::make_unique<ObJitMemoryManager>(JITAllocator); }),
-    ObCompileLayer(ObES,
-                 ObObjectLayer,
+    CompileLayer(ES,
+                 ObjectLayer,
                  std::make_unique<ConcurrentIRCompiler>(std::move(JTMB))),
-    ObDL(std::move(ObDL)),
-    Mangle(ObES, this->ObDL),
-    Ctx(std::make_unique<ObLLVMContext>()),
-    MainJD(ObES.createBareJITDylib("<main>"))
+    DL(std::move(DL)),
+    Mangle(ES, this->DL),
+    Ctx(std::make_unique<LLVMContext>()),
+    MainJD(ES.createBareJITDylib("<main>"))
 {
   /*
   MainJD.define(absoluteSymbols({
@@ -123,17 +123,17 @@ ObOrcJit::ObOrcJit(ObIAllocator &Allocator, JITTargetMachineBuilder JTMB, ObData
   */
   MainJD.addGenerator(
         cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(
-            ObDL.getGlobalPrefix())));
+            DL.getGlobalPrefix())));
 }
 
 Error ObOrcJit::addModule(std::unique_ptr<Module> M)
 {
-  return ObCompileLayer.add(MainJD, ThreadSafeModule(std::move(M), Ctx));
+  return CompileLayer.add(MainJD, ThreadSafeModule(std::move(M), Ctx));
 }
 
 Expected<JITEvaluatedSymbol> ObOrcJit::lookup(StringRef Name)
 {
-  return ObES.lookup({&MainJD}, Mangle(Name.str()));
+  return ES.lookup({&MainJD}, Mangle(Name.str()));
 }
 
 uint64_t ObOrcJit::get_function_address(const std::string Name)
@@ -146,7 +146,7 @@ uint64_t ObOrcJit::get_function_address(const std::string Name)
 #endif
 
 void ObNotifyLoaded::operator()(
-  ObVModuleKey Key,
+  llvm::orc::VModuleKey Key,
   const object::ObjectFile &Obj,
   const RuntimeDyld::LoadedObjectInfo &Info)
 {

@@ -35,6 +35,7 @@ ob_set_subtarget(ob_server common
   ob_srv_xlator_primary.cpp
   ob_srv_xlator_rootserver.cpp
   ob_srv_xlator_storage.cpp
+  ob_tablet_checksum_updater.cpp
   ob_tenant_duty_task.cpp
   ob_uniq_task_queue.cpp
 )
@@ -229,7 +230,6 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_log_stat.cpp
   virtual_table/ob_all_virtual_apply_stat.cpp
   virtual_table/ob_all_virtual_replay_stat.cpp
-  virtual_table/ob_all_virtual_ha_diagnose.cpp
   virtual_table/ob_global_variables.cpp
   virtual_table/ob_gv_sql.cpp
   virtual_table/ob_gv_sql_audit.cpp

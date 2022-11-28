@@ -273,12 +273,7 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
               }
 
               if (OB_SUCC(ret) && set_var.set_scope_ == ObSetVar::SET_SCOPE_GLOBAL) {
-                if(set_var.var_name_ == OB_SV_TIME_ZONE) {
-                  if(OB_FAIL(global_variable_timezone_formalize(ctx, value_obj))) {
-                    LOG_WARN("failed to formalize global variables", K(ret));
-                  }
-                }
-                if (OB_SUCC(ret) && OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
+                if (OB_FAIL(update_global_variables(ctx, stmt, set_var, value_obj))) {
                   LOG_WARN("failed to update global variables", K(ret));
                 } else { }
               }
@@ -419,17 +414,25 @@ int ObVariableSetExecutor::execute_subquery_expr(ObExecContext &ctx,
         LOG_WARN("failed to get obj", K(ret), K(idx));
       }
     }
-    if (OB_SUCC(ret) && (OB_FAIL(ob_write_obj(ctx.get_allocator(), tmp_value, value_obj)))) {
-      LOG_WARN("failed to write value", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(conn) && OB_NOT_NULL(sql_proxy) &&
+               OB_FAIL(sql_proxy->close(conn, true))) {
+      LOG_WARN("failed to close connection", K(ret));
+    } else if (tmp_value.need_deep_copy()) {
+      char *copy_data = NULL;
+      int64_t copy_size = tmp_value.get_deep_copy_size();
+      int64_t copy_pos = 0;
+      if (OB_ISNULL(copy_data = static_cast<char *>(ctx.get_allocator().alloc(copy_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("memory allocate failed", K(ret));
+      } else if (OB_FAIL(value_obj.deep_copy(tmp_value, copy_data, copy_size, copy_pos))) {
+        LOG_WARN("obj deep copy failed", K(ret));
+      }
+      LOG_TRACE("succeed to deep copy current value", K(ret));
+    } else {
+      value_obj = tmp_value;
     }
     LOG_TRACE("succ to calculate value by executing inner sql", K(ret), K(value_obj), K(subquery_expr));
-  }
-  if (OB_NOT_NULL(conn) && OB_NOT_NULL(sql_proxy)) {
-    int tmp_ret = sql_proxy->close(conn, true);
-    if (OB_UNLIKELY(tmp_ret != OB_SUCCESS)) {
-      LOG_WARN("failed to close sql connection", K(tmp_ret));
-    }
-    ret = ret == OB_SUCCESS ? tmp_ret : ret;
   }
   return ret;
 }
@@ -672,49 +675,6 @@ int ObVariableSetExecutor::update_global_variables(ObExecContext &ctx,
       LOG_WARN("rpc proxy alter system variable failed", K(ret));
     } else {}
   }
-  return ret;
-}
-
-// formalize : '+8:00' ---> '+08:00'
-int ObVariableSetExecutor::global_variable_timezone_formalize(ObExecContext &ctx, ObObj &in_val) {
-  int ret = OB_SUCCESS;
-
-  int32_t sec_val = 0;
-  int ret_more = OB_SUCCESS;
-  bool check_timezone_valid = false;
-  bool is_oralce_mode = false;
-  ObSQLSessionInfo *session = ctx.get_my_session(); 
-  if (OB_ISNULL(session)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get session info", K(ret), K(session));
-  } else {
-    is_oralce_mode = is_oracle_compatible(session->get_sql_mode());
-    ObString str = in_val.get_string();
-    if (OB_FAIL(ObTimeConverter::str_to_offset(str, sec_val, ret_more, is_oralce_mode, check_timezone_valid))) {
-      if (ret != OB_ERR_UNKNOWN_TIME_ZONE) {
-        LOG_WARN("fail to convert time zone", K(sec_val), K(ret));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    } else {
-      int64_t pos = 0;
-      const int64_t buf_len = 16;
-      char *tmp_buf = reinterpret_cast<char*>(ctx.get_allocator().alloc(buf_len));
-      if(OB_ISNULL(tmp_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory", K(ret), K(tmp_buf));
-      } else {
-        int32_t offset_min = static_cast<int32_t>(SEC_TO_MIN(sec_val));
-        const char *fmt_str = (offset_min < 0 ? "-%02d:%02d" : "+%02d:%02d");
-        if (OB_FAIL(databuff_printf(tmp_buf, buf_len, pos, fmt_str, abs(offset_min) / 60, abs(offset_min) % 60))) {
-          LOG_ERROR("fail to print offset_min information to tmp_buf", K(ret), K(tmp_buf), K(offset_min));
-        } else {
-          in_val.set_varchar(tmp_buf, pos);
-        }
-      }
-    }
-  }
-
   return ret;
 }
 

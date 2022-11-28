@@ -1317,9 +1317,8 @@ int ObDMLStmt::update_table_item_id(const ObDMLStmt &other,
   if (OB_ISNULL(query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null query ctx", K(ret));
-  // } else if (OB_FAIL(get_qb_name(new_item.qb_name_))) {
-  //   LOG_WARN("fail to get qb_name", K(ret), K(get_stmt_id()));
-  // do not update table item qb name
+  } else if (OB_FAIL(get_qb_name(new_item.qb_name_))) {
+    LOG_WARN("fail to get qb_name", K(ret), K(get_stmt_id()));
   } else {
     uint64_t old_table_id = old_item.table_id_;
     uint64_t new_table_id = query_ctx_->available_tb_id_--;
@@ -1572,7 +1571,7 @@ int ObDMLStmt::remove_part_expr_items(ObIArray<uint64_t> &table_ids)
 int ObDMLStmt::remove_part_expr_items(uint64_t table_id)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = part_expr_items_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+  for (int64_t i = part_expr_items_.count() - 1; i >= 0; --i) {
     if (table_id == part_expr_items_.at(i).table_id_) {
       if (OB_FAIL(part_expr_items_.remove(i))) {
         LOG_WARN("fail to remove part expr item", K(table_id), K(ret));
@@ -2119,7 +2118,7 @@ int ObDMLStmt::remove_useless_sharable_expr()
     } else if (OB_FAIL(column_items_.remove(i))) {
       LOG_WARN("failed to remove column item", K(ret));
     } else {
-      LOG_TRACE("succeed to remove column items", K(expr), K(lbt()));
+      LOG_TRACE("succeed to remove column items", K(*expr), K(lbt()));
     }
   }
   for (int64_t i = subquery_exprs_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
@@ -2248,22 +2247,6 @@ int ObDMLStmt::get_from_subquery_stmts(ObIArray<ObSelectStmt*> &child_stmts) con
       if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
         LOG_WARN("adjust parent namespace stmt failed", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObDMLStmt::get_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const
-{
-  int ret = OB_SUCCESS;
-  for (int64_t j = 0; OB_SUCC(ret) && j < get_subquery_expr_size(); ++j) {
-    ObQueryRefRawExpr *subquery_ref = subquery_exprs_.at(j);
-    if (OB_ISNULL(subquery_ref) ||
-        OB_ISNULL(subquery_ref->get_ref_stmt())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("subquery reference is null", K(subquery_ref));
-    } else if (OB_FAIL(child_stmts.push_back(subquery_ref->get_ref_stmt()))) {
-      LOG_WARN("stored subquery reference stmt failed", K(ret));
     }
   }
   return ret;
@@ -4123,18 +4106,64 @@ int ObDMLStmt::has_virtual_generated_column(int64_t table_id, bool &has_virtual_
   return ret;
 }
 
-int ObDMLStmt::check_hint_table_matched_table_item(ObCollationType cs_type,
-                                                   const ObTableInHint &hint_table,
-                                                   bool &matched) const
+// check all hint table may appear in stmt child stmt
+int ObDMLStmt::hint_table_may_used(ObCollationType cs_type,
+                                   const ObIArray<ObTableInHint*> &all_tables,
+                                   bool &may_used) const
 {
   int ret = OB_SUCCESS;
-  matched = false;
-  for (int64_t i = 0; !matched && OB_SUCC(ret) && i < table_items_.count(); ++i) {
+  may_used = true;
+  ObTableInHint *table = NULL;
+  for (int64_t i = 0; may_used && OB_SUCC(ret) && i < all_tables.count(); ++i) {
+    if (OB_ISNULL(table = all_tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(table));
+    } else if (table->db_name_.empty() && is_generate_name(table->table_name_)) {
+      /* do nohting */
+    } else if (OB_FAIL(hint_table_may_used(cs_type, *table, may_used))) {
+      LOG_WARN("get unexpected null", K(ret));
+    }
+  }
+  return ret;
+}
+
+bool ObDMLStmt::is_generate_name(ObString &name) const
+{
+  return name.prefix_match("view") ||
+         name.prefix_match("temp") ||
+         name.prefix_match("func_table");
+}
+
+int ObDMLStmt::hint_table_may_used(ObCollationType cs_type,
+                                   const ObTableInHint &hint_table,
+                                   bool &may_appear) const
+{
+  int ret = OB_SUCCESS;
+  may_appear = false;
+  for (int64_t i = 0; !may_appear && OB_SUCC(ret) && i < table_items_.count(); ++i) {
     if (OB_ISNULL(table_items_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else {
-      matched = hint_table.is_match_table_item(cs_type, *table_items_.at(i));
+      may_appear = hint_table.is_match_table_item(cs_type, *table_items_.at(i));
+    }
+  }
+  if (OB_SUCC(ret) && !may_appear) {
+    ObSEArray<ObSelectStmt*, 4> child_stmts;
+    if (is_set_stmt() && OB_FAIL(ObDMLStmt::get_child_stmts(child_stmts))) {
+      // for set stmt, do not check union set child stmt.
+      LOG_WARN("failed to get child stmts", K(ret));
+    } else if (!is_set_stmt() && OB_FAIL(get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    } else {
+      for (int64_t i = 0; !may_appear && OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+        if (OB_ISNULL(child_stmts.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(SMART_CALL(child_stmts.at(i)->hint_table_may_used(cs_type, hint_table, may_appear)))) {
+          LOG_WARN("failed to check hint table may used", K(ret));
+        }
+      }
     }
   }
   return ret;
@@ -4183,35 +4212,6 @@ int ObDMLStmt::set_check_constraint_item(CheckConstraintItem &check_constraint_i
     LOG_TRACE("check constraint item exists", K(check_constraint_item), K(check_constraint_items_));
   } else if (OB_FAIL(check_constraint_items_.push_back(check_constraint_item))) {
     LOG_WARN("failed to push back", K(ret));
-  }
-  return ret;
-}
-
-int ObDMLStmt::remove_check_constraint_item(const uint64_t table_id)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = check_constraint_items_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-    if (table_id == check_constraint_items_.at(i).table_id_) {
-      if (OB_FAIL(check_constraint_items_.remove(i))) {
-        LOG_WARN("failed to remove check constraint item", K(ret), K(table_id));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDMLStmt::get_check_constraint_items(const uint64_t table_id,
-                                          CheckConstraintItem &check_constraint_item)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < check_constraint_items_.count(); ++i) {
-    if (table_id != check_constraint_items_.at(i).table_id_) {
-      // do nothing
-    } else if (OB_FAIL(check_constraint_item.assign(check_constraint_items_.at(i)))) {
-      LOG_WARN("failed to assign check constraint item", K(ret));
-    } else {
-      break;
-    }
   }
   return ret;
 }

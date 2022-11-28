@@ -58,24 +58,6 @@ class ObIVirtualTableIteratorFactory;
 struct ObSqlCtx;
 class ObResultSet;
 
-class ObPlanBaseKeyGuard
-{
-public:
-  explicit ObPlanBaseKeyGuard(ObBaselineKey &bl_key)
-    : bl_key_(bl_key),
-      ori_bl_key_(bl_key) {}
-  ~ObPlanBaseKeyGuard()
-  {
-    bl_key_ = ori_bl_key_;
-  }
-private:
-  // disallow copy
-  ObPlanBaseKeyGuard(const ObPlanBaseKeyGuard &other);
-private:
-  ObBaselineKey &bl_key_;
-  ObBaselineKey ori_bl_key_;
-};
-
 // this class is the main interface for sql module
 class ObSql
 {

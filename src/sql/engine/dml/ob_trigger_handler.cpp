@@ -111,12 +111,12 @@ int TriggerHandle::init_trigger_params(
   int64_t param_store_size = sizeof(ParamStore);
   // TODO: 这个接口还可以进一步精细化，比如在没有when条件时，tg_when_point_params_相关逻辑都不需要执行的，
   //       或者在insert/delete操作时，tg_init_point_params_也不需要执行的。
-  if (OB_ISNULL(when_point_params_buf = das_ctx.get_exec_ctx().get_allocator().alloc(param_store_size)) ||
-      OB_ISNULL(row_point_params_buf = das_ctx.get_exec_ctx().get_allocator().alloc(param_store_size))) {
+  if (OB_ISNULL(when_point_params_buf = das_ctx.get_das_alloc().alloc(param_store_size)) ||
+      OB_ISNULL(row_point_params_buf = das_ctx.get_das_alloc().alloc(param_store_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
-    ObIAllocator &allocator = das_ctx.get_exec_ctx().get_allocator();
+    ObIAllocator &allocator = das_ctx.get_das_alloc();
     trig_rtdef.tg_when_point_params_ = new(when_point_params_buf)ParamStore(ObWrapperAllocator(allocator));
     trig_rtdef.tg_row_point_params_ = new(row_point_params_buf)ParamStore(ObWrapperAllocator(allocator));
     OZ (trig_rtdef.tg_when_point_params_->prepare_allocate(WHEN_POINT_PARAM_COUNT));
@@ -129,8 +129,8 @@ int TriggerHandle::init_trigger_params(
     int64_t rowtype_col_count = trig_ctdef.trig_col_info_.get_rowtype_count();
     int64_t init_size = pl::ObRecordType::get_init_size(rowtype_col_count);
     if (trig_ctdef.all_tm_points_.has_when_condition() || trig_ctdef.all_tm_points_.has_row_point()) {
-      OZ (init_trigger_row(das_ctx.get_exec_ctx().get_allocator(), rowtype_col_count, old_record));
-      OZ (init_trigger_row(das_ctx.get_exec_ctx().get_allocator(), rowtype_col_count, new_record));
+      OZ (init_trigger_row(das_ctx.get_das_alloc(), rowtype_col_count, old_record));
+      OZ (init_trigger_row(das_ctx.get_das_alloc(), rowtype_col_count, new_record));
     }
     LOG_DEBUG("trigger init", K(rowtype_col_count), K(ret));
 
@@ -403,7 +403,7 @@ int TriggerHandle::calc_trigger_routine(
   trigger_id = ObTriggerInfo::get_trigger_spec_package_id(trigger_id);
   OV (OB_NOT_NULL(exec_ctx.get_pl_engine()));
   OZ (exec_ctx.get_pl_engine()->execute(
-    exec_ctx, exec_ctx.get_allocator(), trigger_id, routine_id, path, params, nocopy_params, result),
+    exec_ctx, trigger_id, routine_id, path, params, nocopy_params, result),
       trigger_id, routine_id, params);
   return ret;
 }
@@ -532,12 +532,12 @@ int TriggerHandle::do_handle_before_row(
             ret = OB_NOT_INIT;
             LOG_WARN("trigger row point params is not init", K(ret));
           } else {
-            const ObTableModifySpec &modify_spec = static_cast<const ObTableModifySpec&>(dml_op.get_spec());
             if (OB_FAIL(calc_before_row(dml_op, trig_rtdef, tg_arg.get_trigger_id()))) {
               LOG_WARN("failed to calc before row", K(ret));
             } else if ((ObTriggerEvents::is_update_event(tg_event) ||
                   ObTriggerEvents::is_insert_event(tg_event))) {
-                if (!trig_ctdef.all_tm_points_.has_instead_row() &&
+                const ObTableModifySpec &modify_spec = static_cast<const ObTableModifySpec&>(dml_op.get_spec());
+                if (!modify_spec.has_instead_of_trigger_ &&
                     OB_FAIL(check_and_update_new_row(&dml_op,
                                               trig_ctdef.trig_col_info_,
                                               dml_op.get_eval_ctx(),
@@ -545,13 +545,6 @@ int TriggerHandle::do_handle_before_row(
                                               trig_rtdef.new_record_,
                                               ObTriggerEvents::is_update_event(tg_event)))) {
                   LOG_WARN("failed to check updated new row", K(ret));
-              }
-            }
-            if (OB_SUCC(ret) && trig_ctdef.all_tm_points_.has_instead_row()) {
-              GET_PHY_PLAN_CTX(dml_op.get_exec_ctx())->add_affected_rows(1);
-              if (ObTriggerEvents::is_update_event(tg_event)) {
-                GET_PHY_PLAN_CTX(dml_op.get_exec_ctx())->add_row_matched_count(1);
-                GET_PHY_PLAN_CTX(dml_op.get_exec_ctx())->add_row_duplicated_count(1);
               }
             }
             LOG_DEBUG("TRIGGER calc before row", K(need_fire), K(i));

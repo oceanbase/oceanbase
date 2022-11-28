@@ -207,21 +207,16 @@ int ObResourceMap<Key, Value>::init(const int64_t bucket_num, const char *label,
     const int64_t total_limit, const int64_t hold_limit, const int64_t page_size)
 {
   int ret = common::OB_SUCCESS;
-  const int64_t bkt_num = common::hash::cal_next_prime(bucket_num);
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObResourceMap has already been inited", K(ret));
   } else if (OB_UNLIKELY(bucket_num <= 0 || total_limit <= 0 || hold_limit <= 0 || page_size <= 0)) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(bucket_num), K(total_limit), K(hold_limit), K(page_size));
-  } else if (OB_FAIL(bucket_lock_.init(bkt_num))) {
-    STORAGE_LOG(WARN, "fail to init bucket lock", K(ret), K(bkt_num));
-  } else if (OB_FAIL(map_.create(bkt_num, label))) {
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num))) {
+    STORAGE_LOG(WARN, "fail to init bucket lock", K(ret), K(bucket_num));
+  } else if (OB_FAIL(map_.create(bucket_num, label))) {
     STORAGE_LOG(WARN, "fail to create map", K(ret));
-  } else if (OB_UNLIKELY(bkt_num != map_.bucket_count())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "lock buckets isn't equal to map buckets, which could cause concurrency issues", K(ret),
-        K(bkt_num), K(map_.bucket_count()));
   } else if (OB_FAIL(allocator_.init(total_limit, hold_limit, page_size))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
   } else {

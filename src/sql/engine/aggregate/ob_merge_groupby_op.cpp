@@ -161,7 +161,8 @@ int ObMergeGroupByOp::init_rollup_distributor()
 
       // init hash values
       if (OB_SUCC(ret) && is_vectorized()) {
-        int64_t max_size = MY_SPEC.max_batch_size_;
+        int64_t max_size = (child_->get_spec().max_batch_size_ == 0)
+                            ? 1 : child_->get_spec().max_batch_size_;
         int64_t rollup_hash_vals_pos = 0;
         int64_t sort_batch_skip_pos = rollup_hash_vals_pos + sizeof(uint64_t) * max_size;
         int64_t max_mem_size = sort_batch_skip_pos + ObBitVector::memory_size(max_size);
@@ -765,7 +766,8 @@ int ObMergeGroupByOp::get_child_next_batch_row(
       const_cast<ObBatchRows *>(batch_rows)->size_ = read_rows;
       const_cast<ObBatchRows *>(batch_rows)->end_ = false;
       if (first_batch_from_sort_) {
-        int64_t max_size = MY_SPEC.max_batch_size_;
+        int64_t max_size = (child_->get_spec().max_batch_size_ == 0)
+                            ? 1 : child_->get_spec().max_batch_size_;
         const_cast<ObBatchRows *>(batch_rows)->skip_->reset(max_size);
         first_batch_from_sort_ = false;
       } else {

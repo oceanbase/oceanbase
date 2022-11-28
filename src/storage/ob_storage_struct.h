@@ -17,14 +17,11 @@
 #include "lib/ob_replica_define.h"
 #include "common/ob_store_range.h"
 #include "common/ob_member_list.h"
-#include "share/ob_tablet_autoincrement_param.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_schema.h"
 #include "storage/ob_i_table.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
-#include "storage/tablet/ob_tablet_multi_source_data.h"
-#include "storage/tablet/ob_tablet_binding_helper.h"
 
 namespace oceanbase
 {
@@ -36,7 +33,6 @@ class ObLSTxCtxMgr;
 namespace storage
 {
 class ObStorageSchema;
-class ObMigrationTabletParam;
 
 typedef common::ObSEArray<common::ObStoreRowkey, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> GetRowkeyArray;
 typedef common::ObSEArray<common::ObStoreRange, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> ScanRangeArray;
@@ -268,7 +264,7 @@ struct ObGetMergeTablesResult
   ObMergeType suggest_merge_type_;
   bool update_tablet_directly_;
   bool schedule_major_;
-  common::ObLogTsRange log_ts_range_;
+  share::ObScnRange scn_range_;
   int64_t dump_memtable_timestamp_;
   int64_t read_base_version_;
 
@@ -281,7 +277,7 @@ struct ObGetMergeTablesResult
   int deep_copy(const ObGetMergeTablesResult &src);
   TO_STRING_KV(K_(version_range), K_(merge_version), K_(base_schema_version), K_(schema_version),
       K_(create_snapshot_version), K_(checksum_method), K_(suggest_merge_type), K_(handle),
-      K_(update_tablet_directly), K_(schedule_major), K_(log_ts_range), K_(dump_memtable_timestamp), K_(read_base_version));
+      K_(update_tablet_directly), K_(schedule_major), K_(scn_range), K_(dump_memtable_timestamp), K_(read_base_version));
 };
 
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)
@@ -318,8 +314,7 @@ struct ObUpdateTableStoreParam
   bool is_valid() const;
   TO_STRING_KV(K_(table_handle), K_(snapshot_version), K_(clog_checkpoint_ts), K_(multi_version_start),
                K_(keep_old_ddl_sstable), K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
-               K_(need_check_sstable), K_(ddl_checkpoint_ts), K_(ddl_start_log_ts), K_(ddl_snapshot_version),
-               K_(ddl_execution_id), K_(ddl_cluster_version), K_(tx_data), K_(binding_info), K_(auto_inc_seq));
+               K_(need_check_sstable), K_(ddl_checkpoint_ts), K_(ddl_start_log_ts), K_(ddl_snapshot_version));
 
   ObTableHandleV2 table_handle_;
   int64_t snapshot_version_;
@@ -334,13 +329,6 @@ struct ObUpdateTableStoreParam
   int64_t ddl_checkpoint_ts_;
   int64_t ddl_start_log_ts_;
   int64_t ddl_snapshot_version_;
-  int64_t ddl_execution_id_;
-  int64_t ddl_cluster_version_;
-
-  // msd
-  ObTabletTxMultiSourceDataUnit tx_data_;
-  ObTabletBindingInfo binding_info_;
-  share::ObTabletAutoincSeq auto_inc_seq_;
 };
 
 struct ObBatchUpdateTableStoreParam final
@@ -353,16 +341,16 @@ struct ObBatchUpdateTableStoreParam final
   int get_max_clog_checkpoint_ts(int64_t &clog_checkpoint_ts) const;
 
   TO_STRING_KV(K_(tables_handle), K_(snapshot_version), K_(multi_version_start), K_(need_report),
-      K_(rebuild_seq), K_(update_logical_minor_sstable), K_(start_scn), KP_(tablet_meta));
+      KPC_(storage_schema), K_(rebuild_seq), K_(update_logical_minor_sstable), K_(start_scn));
 
   ObTablesHandleArray tables_handle_;
   int64_t snapshot_version_;
   int64_t multi_version_start_;
+  const ObStorageSchema *storage_schema_;
   bool need_report_;
   int64_t rebuild_seq_;
   bool update_logical_minor_sstable_;
   int64_t start_scn_;
-  const ObMigrationTabletParam *tablet_meta_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);
 };

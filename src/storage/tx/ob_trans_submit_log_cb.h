@@ -53,15 +53,15 @@ public:
   void reset();
   void reuse();
 public:
-  int set_log_ts(const int64_t log_ts);
-  int64_t get_log_ts() const { return log_ts_; }
+  int set_log_ts(const palf::SCN &log_ts);
+  const palf::SCN &get_log_ts() const { return log_ts_; }
   int set_lsn(const palf::LSN &lsn);
   palf::LSN get_lsn() const { return lsn_; }
   void set_submit_ts(const int64_t submit_ts) { submit_ts_ = submit_ts; }
   int64_t get_submit_ts() const { return submit_ts_; }
   TO_STRING_KV(K_(log_ts), K_(lsn), K_(submit_ts));
 protected:
-  int64_t log_ts_;
+  palf::SCN log_ts_;
   palf::LSN lsn_;
   int64_t submit_ts_;
 };

@@ -14,6 +14,7 @@
 #include "logservice/palf/palf_handle.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/palf/palf_env.h"
+#include "logservice/palf/scn.h"
 #include "logservice/ob_log_base_type.h"
 
 #ifndef MOCK_OB_LOG_HANDLER_H_
@@ -31,6 +32,24 @@ class MockObLogHandler : public logservice::ObILogHandler
 public:
   MockObLogHandler(){};
   virtual bool is_valid() const { return true; }
+  virtual int append(const void *buffer,
+                     const int64_t nbytes,
+                     const palf::SCN &ref_scn,
+                     const bool need_nonblock,
+                     logservice::AppendCb *cb,
+                     palf::LSN &lsn,
+                     palf::SCN &scn)
+  {
+    UNUSED(need_nonblock);
+    UNUSED(buffer);
+    UNUSED(nbytes);
+    UNUSED(ref_scn);
+    UNUSED(cb);
+    UNUSED(lsn);
+    UNUSED(scn);
+    return OB_SUCCESS;
+  }
+
   virtual int append(const void *buffer,
                      const int64_t nbytes,
                      const int64_t ref_ts_ns,
@@ -62,6 +81,16 @@ public:
     UNUSED(mode_version);
     return OB_SUCCESS;
   }
+
+  virtual int change_access_mode(const int64_t mode_version,
+                                 const AccessMode &access_mode,
+                                 const palf::SCN &ref_scn)
+  {
+    UNUSED(mode_version);
+    UNUSED(access_mode);
+    UNUSED(ref_scn);
+    return OB_SUCCESS;
+  }
   virtual int change_access_mode(const int64_t mode_version,
                                  const AccessMode &access_mode,
                                  const int64_t ref_ts_ns)
@@ -89,6 +118,13 @@ public:
     UNUSED(iter);
     return OB_SUCCESS;
   };
+  int seek(const palf::SCN &start_scn,
+           palf::PalfGroupBufferIterator &iter)
+  {
+    UNUSED(start_scn);
+    UNUSED(iter);
+    return OB_SUCCESS;
+  }
   int seek(const int64_t start_ts_ns,
            palf::PalfGroupBufferIterator &iter)
   {
@@ -108,6 +144,11 @@ public:
                               const int64_t paxos_replica_num)
   {
     UNUSEDx(member_list, arb_replica, paxos_replica_num);
+    return OB_SUCCESS;
+  }
+  int get_end_scn(palf::SCN &scn) const
+  {
+    UNUSED(scn);
     return OB_SUCCESS;
   }
   int get_end_ts_ns(int64_t &ts) const
@@ -131,9 +172,20 @@ public:
     UNUSED(lsn);
     return OB_SUCCESS;
   }
+  int get_max_scn(palf::SCN &scn) const
+  {
+    UNUSED(scn);
+    return OB_SUCCESS;
+  }
   int get_max_ts_ns(int64_t &ts_ns) const
   {
     UNUSED(ts_ns);
+    return OB_SUCCESS;
+  }
+  int locate_by_scn_coarsely(const palf::SCN &scn, LSN &result_lsn)
+  {
+    LSN tmp(scn.get_val_for_inner_table_field());
+    result_lsn = tmp;
     return OB_SUCCESS;
   }
   int locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &result_lsn)
@@ -146,6 +198,12 @@ public:
   int advance_base_lsn(const LSN &lsn)
   {
     base_lsn_ = lsn;
+    return OB_SUCCESS;
+  }
+
+  int locate_by_lsn_coarsely(const palf::LSN &lsn, palf::SCN &result_scn)
+  {
+    result_scn = result_scn_;
     return OB_SUCCESS;
   }
 
@@ -317,6 +375,14 @@ public:
 
   LSN base_lsn_;
   int64_t result_ts_ns_;
+  palf::SCN result_scn_;
+  int enable_replay(const palf::LSN &initial_lsn,
+                    const palf::SCN &initial_scn)
+  {
+    UNUSED(initial_lsn);
+    UNUSED(initial_scn);
+    return OB_SUCCESS;
+  }
   int enable_replay(const palf::LSN &initial_lsn,
                     const int64_t &initial_log_ts)
   {
@@ -326,6 +392,11 @@ public:
   }
   int disable_replay()
   {
+    return OB_SUCCESS;
+  }
+  int get_max_decided_log_scn(palf::SCN &log_scn)
+  {
+    log_scn.set_max();
     return OB_SUCCESS;
   }
   int get_max_decided_log_ts_ns(int64_t &log_ts)
@@ -341,9 +412,6 @@ public:
     return OB_SUCCESS;
   }
   int unregister_rebuild_cb() { return OB_SUCCESS; }
-  bool is_offline() const {return false;};
-  int offline() {return OB_SUCCESS;};
-  int online(const LSN &lsn, const int64_t ts) { UNUSED(lsn); UNUSED(ts); return OB_SUCCESS;};
 };
 
 }  // namespace storage

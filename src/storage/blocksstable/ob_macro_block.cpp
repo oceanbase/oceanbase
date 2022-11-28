@@ -374,19 +374,13 @@ ObMicroBlockCompressor::ObMicroBlockCompressor()
 
 ObMicroBlockCompressor::~ObMicroBlockCompressor()
 {
-  if (compressor_ != nullptr) {
-    compressor_->reset_mem();
-  }
 }
 
 void ObMicroBlockCompressor::reset()
 {
   is_none_ = false;
   micro_block_size_ = 0;
-  if (compressor_ != nullptr) {
-    compressor_->reset_mem();
-    compressor_ = nullptr;
-  }
+  compressor_ = NULL;
   comp_buf_.reuse();
   decomp_buf_.reuse();
 }

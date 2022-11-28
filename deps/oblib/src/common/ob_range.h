@@ -62,7 +62,7 @@ public:
   inline void set_all_open() { set_data(0); }
   inline void set_all_close() { data_ = INCLUSIVE_START | INCLUSIVE_END; }
   inline int8_t get_data() const { return data_; }
-  inline void set_inclusive(const int8_t data) 
+  inline void set_inclusive(const int8_t data)
   {
     data_ &= MIN_VALUE + MAX_VALUE;
     data_ += data & (INCLUSIVE_START + INCLUSIVE_END);
@@ -325,44 +325,6 @@ public:
   TO_STRING_KV(K_(base_version), K_(snapshot_version));
 };
 
-struct ObLogTsRange
-{
-  OB_UNIS_VERSION(1);
-public:
-  static const int64_t MIN_TS = 0;
-  static const int64_t MAX_TS = INT64_MAX;
-
-  ObLogTsRange();
-  OB_INLINE void reset();
-  OB_INLINE bool is_valid() const
-  {
-    return end_log_ts_ >= start_log_ts_;
-  }
-  OB_INLINE bool is_empty() const
-  {
-    return end_log_ts_ == start_log_ts_;
-  }
-  int64_t hash() const;
-  OB_INLINE bool operator == (const ObLogTsRange &range) const
-  {
-    return start_log_ts_ == range.start_log_ts_
-      && end_log_ts_ == range.end_log_ts_;
-  }
-  OB_INLINE bool operator != (const ObLogTsRange &range) const
-  {
-    return !this->operator==(range);
-  }
-  OB_INLINE bool contain(const int64_t log_ts) const
-  {
-    return is_valid() && start_log_ts_ < log_ts
-      && end_log_ts_ >= log_ts;
-  }
-
-  int64_t start_log_ts_;
-  int64_t end_log_ts_;
-
-  TO_STRING_KV(K_(start_log_ts), K_(end_log_ts));
-};
 
 class ObNewRange
 {
@@ -730,11 +692,6 @@ bool ObNewVersionRange::operator ==(const ObNewVersionRange &range) const
       && snapshot_version_ == range.snapshot_version_;
 }
 
-void ObLogTsRange::reset()
-{
-  start_log_ts_ = ObLogTsRange::MIN_TS;
-  end_log_ts_ = ObLogTsRange::MIN_TS;
-}
 
 } // end namespace common
 } // end namespace oceanbase

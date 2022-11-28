@@ -193,7 +193,7 @@ typedef ObPair<share::ObLSID, int64_t> ObTxLSEpochPair;
 // internal core snapshot for read data
 struct ObTxSnapshot
 {
-  int64_t version_;
+  palf::SCN version_;
   ObTransID tx_id_;
   int64_t scn_;
   bool elr_;
@@ -202,7 +202,7 @@ struct ObTxSnapshot
   ~ObTxSnapshot();
   void reset();
   ObTxSnapshot &operator=(const ObTxSnapshot &r);
-  bool is_valid() const { return version_ > 0; }
+  bool is_valid() const { return version_.is_valid(); }
   OB_UNIS_VERSION(1);
 };
 
@@ -223,8 +223,8 @@ struct ObTxReadSnapshot
   int64_t uncertain_bound_; // for source_ GLOBAL
   ObSEArray<ObTxLSEpochPair, 1> parts_;
 
-  void init_weak_read(const int64_t snapshot);
-  void init_special_read(const int64_t snapshot);
+  void init_weak_read(const palf::SCN snapshot);
+  void init_special_read(const palf::SCN snapshot);
   void init_none_read() { valid_ = true; source_ = SRC::NONE; }
   void init_ls_read(const share::ObLSID &ls_id, const ObTxSnapshot &core);
   void wait_consistency();
@@ -329,7 +329,7 @@ protected:
   ObXATransID xid_;                    // xa info if participant in XA
   ObTxIsolationLevel isolation_;       // isolation level
   ObTxAccessMode access_mode_;         // READ_ONLY | READ_WRITE
-  int64_t snapshot_version_;           // snapshot for RR | SERIAL Isolation
+  palf::SCN snapshot_version_;           // snapshot for RR | SERIAL Isolation
   int64_t snapshot_uncertain_bound_;   // uncertain bound of @snapshot_version_
   int64_t snapshot_scn_;               // the time of acquire @snapshot_version_
   uint32_t sess_id_;                   // sesssion id
@@ -397,7 +397,7 @@ protected:
   share::ObLSID coord_id_;           // coordinator ID
   int64_t commit_expire_ts_;         // commit operation deadline
   share::ObLSArray commit_parts_;    // participants to do commit
-  int64_t commit_version_;           // Tx commit version
+  palf::SCN commit_version_;         // Tx commit version
   int commit_out_;                   // the commit result
   /* internal abort cause */
   int16_t abort_cause_;              // Tx Aborted cause
@@ -474,9 +474,8 @@ public:
                K_(can_elr),
                K_(cflict_txs),
                K_(abort_cause),
-               K_(commit_expire_ts),
-               K(commit_task_.is_registered()),
-               K_(ref));
+               K_(ref),
+               K_(commit_expire_ts));
 
   int get_conflict_txs(ObIArray<ObTransIDAndAddr> &array)
   { ObSpinLockGuard guard(lock_); return array.assign(cflict_txs_); }
@@ -498,7 +497,7 @@ public:
   bool is_rdonly() const { return access_mode_ == ObTxAccessMode::RD_ONLY; }
   int64_t get_op_sn() const { return op_sn_; }
   int inc_op_sn() { return ++op_sn_; }
-  int64_t get_commit_version() const { return commit_version_; }
+  palf::SCN get_commit_version() const { return commit_version_; }
   bool contain_savepoint(const ObString &sp);
   bool is_tx_end() {
     return is_committed() || is_rollbacked();
@@ -567,7 +566,7 @@ class ObTxDescMgr final
 public:
   ObTxDescMgr(ObTransService &txs): inited_(false), stoped_(true), tx_id_allocator_(), txs_(txs) {}
  ~ObTxDescMgr() { inited_ = false; stoped_ = true; }
-  int init(std::function<int(ObTransID&)> tx_id_allocator, const lib::ObMemAttr &mem_attr);
+  int init(std::function<int(ObTransID&)> tx_id_allocator);
   int start();
   int stop();
   int wait();
@@ -581,8 +580,6 @@ public:
   int remove(ObTxDesc &tx);
   int acquire_tx_ref(const ObTransID &trans_id);
   int release_tx_ref(ObTxDesc *tx_desc);
-  int64_t get_alloc_count() const { return map_.alloc_cnt(); }
-  int64_t get_total_count() const { return map_.count(); }
 private:
   struct {
     bool inited_: 1;
@@ -608,7 +605,7 @@ private:
   private:
     int64_t alloc_cnt_;
   };
-  ObTransHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
+  ObTransHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;
   ObTransService &txs_;
 };
@@ -625,7 +622,7 @@ protected:
   ObTransID tx_id_;
   ObTxIsolationLevel isolation_;
   ObTxAccessMode access_mode_;
-  int64_t snapshot_version_;
+  palf::SCN snapshot_version_;
   int64_t snapshot_uncertain_bound_;
   uint64_t op_sn_;
   int64_t alloc_ts_;

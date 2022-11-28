@@ -180,7 +180,7 @@ private:
       common::ObIAllocator &allocator,
       const ObBatchUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
-  int cut_ha_sstable_log_ts_range_(
+  int cut_ha_sstable_scn_range_(
       common::ObIArray<ObITable *> &minor_sstables);
   int check_minor_tables_continue_(
       const int64_t count,

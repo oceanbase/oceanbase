@@ -104,8 +104,6 @@ int ObInnerSQLConnectionPool::acquire(const uint64_t tenant_id, common::sqlclien
   } else if (OB_FAIL(inner_sql_conn->init(this, schema_service_, ob_sql_, vt_iter_creator_,
                                           config_, nullptr /* session_info */, client_addr, nullptr/*sql modifer*/, is_ddl_))) {
     LOG_WARN("init connection failed", K(ret));
-  } else if (OB_FAIL(add_to_used_conn_list(inner_sql_conn))) {
-    LOG_WARN("add_to_used_conn_list failed", K(ret));
   } else {
     inner_sql_conn->ref();
     conn = inner_sql_conn;
@@ -113,11 +111,7 @@ int ObInnerSQLConnectionPool::acquire(const uint64_t tenant_id, common::sqlclien
 
   if (OB_FAIL(ret)) {
     if (NULL != inner_sql_conn) {
-      int tmp_ret = remove_from_used_conn_list(inner_sql_conn);
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("remove_from_used_conn_list failed", "ret", tmp_ret);
-      }
-      tmp_ret = inner_sql_conn->destroy();
+      int tmp_ret = inner_sql_conn->destroy();
       if (OB_SUCCESS != tmp_ret) {
         LOG_WARN("destroy connection failed", "ret", tmp_ret);
       }
@@ -178,8 +172,6 @@ int ObInnerSQLConnectionPool::acquire(
   } else if (OB_FAIL(inner_sql_conn->init(this, schema_service_, ob_sql_, vt_iter_creator_, config_,
                      session_info, NULL, NULL, false, is_oracle_mode))) {
     LOG_WARN("init connection failed", K(ret));
-  } else if (OB_FAIL(add_to_used_conn_list(inner_sql_conn))) {
-    LOG_WARN("add_to_used_conn_list failed", K(ret));
   } else {
     if (0 != inner_sql_conn->get_ref()) {
       LOG_WARN("ref is not ZERO after acquire", KP(inner_sql_conn),
@@ -191,11 +183,7 @@ int ObInnerSQLConnectionPool::acquire(
 
   if (OB_FAIL(ret)) {
     if (NULL != inner_sql_conn) {
-      int tmp_ret = remove_from_used_conn_list(inner_sql_conn);
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("remove_from_used_conn_list failed", "ret", tmp_ret);
-      }
-      tmp_ret = inner_sql_conn->destroy();
+      int tmp_ret = inner_sql_conn->destroy();
       if (OB_SUCCESS != tmp_ret) {
         LOG_WARN("destroy connection failed", "ret", tmp_ret);
       }
@@ -238,8 +226,6 @@ int ObInnerSQLConnectionPool::revert(ObInnerSQLConnection *conn)
     if (conn->is_spi_conn()) {
       //spi connection come from ObServerObjectPool, so release it to ObServerObjectPool
       rp_free(conn, ObInnerSQLConnection::LABEL);
-    } else if (OB_FAIL(remove_from_used_conn_list(conn))) {
-      LOG_WARN("remove_from_used_conn_list failed", K(ret));
     } else if (OB_FAIL(conn->destroy())) {
       LOG_WARN("connection destroy failed", K(ret));
     } else if (OB_FAIL(free_conn(conn))) {
@@ -322,7 +308,13 @@ int ObInnerSQLConnectionPool::alloc_conn(ObInnerSQLConnection *&conn)
           dump_used_conn_list();
         }
       }
-      conn = inner_sql_conn;
+
+      if (OB_UNLIKELY(false == used_conn_list_.add_last(inner_sql_conn))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("add connection to used connection list failed", K(ret));
+      } else {
+        conn = inner_sql_conn;
+      }
     }
   }
 
@@ -340,56 +332,23 @@ int ObInnerSQLConnectionPool::free_conn(ObInnerSQLConnection *conn)
     LOG_WARN("invalid argument", K(ret), KP(conn));
   } else {
     ObThreadCondGuard guard(cond_);
-    conn->~ObInnerSQLConnection();
-    LinkNode *node = new (conn) LinkNode();
-    if (!free_conn_list_.add_last(node)) {
+    if (OB_UNLIKELY(NULL == used_conn_list_.remove(conn))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("add connection to free connection list failed", K(ret));
+      LOG_WARN("remove connection from used connection list failed", K(ret));
     } else {
-      if (stop_ && 0 == used_conn_list_.get_size()) {
-        cond_.signal();
+      conn->~ObInnerSQLConnection();
+      LinkNode *node = new (conn) LinkNode();
+      if (!free_conn_list_.add_last(node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("add connection to free connection list failed", K(ret));
+      } else {
+        if (stop_ && 0 == used_conn_list_.get_size()) {
+          cond_.signal();
+        }
       }
     }
   }
 
-  return ret;
-}
-
-int ObInnerSQLConnectionPool::add_to_used_conn_list(ObInnerSQLConnection *conn)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (NULL == conn) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(conn));
-  } else {
-    ObThreadCondGuard guard(cond_);
-    if (OB_UNLIKELY(false == used_conn_list_.add_last(conn))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("add connection to used connection list failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObInnerSQLConnectionPool::remove_from_used_conn_list(ObInnerSQLConnection *conn)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (NULL == conn) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(conn));
-  } else {
-    ObThreadCondGuard guard(cond_);
-    if (OB_UNLIKELY(NULL == used_conn_list_.remove(conn))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("remove connection from used connection list failed", K(ret));
-    }
-  }
 
   return ret;
 }

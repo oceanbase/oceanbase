@@ -43,6 +43,10 @@ namespace storage
 class ObLSService;
 class ObLS;
 }
+namespace palf
+{
+class SCN;
+}
 namespace logservice
 {
 enum ObGCLSLOGType
@@ -63,38 +67,6 @@ enum LSGCState
   LS_OFFLINE = 4,
   WAIT_GC = 5,
   MAX_LS_GC_STATE = 6,
-};
-
-static inline
-int gc_state_to_string(const LSGCState gc_state,
-                       char *str,
-                       const int64_t str_len)
-{
-  int ret = OB_SUCCESS;
-  if (gc_state == INVALID_LS_GC_STATE) {
-    strncpy(str ,"INVALID_STATE", str_len);
-  } else if (gc_state == NORMAL) {
-    strncpy(str ,"NORMAL", str_len);
-  } else if (gc_state == LS_BLOCKED) {
-    strncpy(str ,"LS_BLOCKED", str_len);
-  } else if (gc_state == WAIT_OFFLINE) {
-    strncpy(str ,"WAIT_OFFLINE", str_len);
-  } else if (gc_state == LS_OFFLINE) {
-    strncpy(str ,"LS_OFFLINE", str_len);
-  } else if (gc_state == WAIT_GC) {
-    strncpy(str ,"WAIT_GC", str_len);
-  } else {
-    ret = OB_INVALID_ARGUMENT;
-  }
-  return ret;
-}
-
-struct GCDiagnoseInfo
-{
-  LSGCState gc_state_;
-  int64_t gc_start_ts_;
-  TO_STRING_KV(K(gc_state_),
-               K(gc_start_ts_));
 };
 
 class ObGCLSLog
@@ -221,13 +193,12 @@ public:
   int check_ls_can_offline();
   int gc_check_invalid_member_seq(const int64_t gc_seq, bool &need_gc);
   static bool is_valid_ls_gc_state(const LSGCState &state);
-  int diagnose(GCDiagnoseInfo &diagnose_info) const;
 
   // for replay
   virtual int replay(const void *buffer,
                      const int64_t nbytes,
                      const palf::LSN &lsn,
-                     const int64_t ts_ns) override;
+                     const palf::SCN &scn) override;
 
   // for role change
   virtual void switch_to_follower_forcedly() override;
@@ -237,7 +208,9 @@ public:
 
   // for checkpoint
   virtual int64_t get_rec_log_ts() override;
+  virtual void get_rec_log_scn(palf::SCN &scn);
   virtual int flush(int64_t rec_log_ts) override;
+  virtual int flush(const palf::SCN &scn) ;
 
   TO_STRING_KV(K(is_inited_),
                K(gc_seq_invalid_member_));
@@ -276,9 +249,9 @@ private:
   };
 
 private:
-  const int64_t LS_CLOG_ALIVE_TIMEOUT_NS = 100 * 1000 * 1000; //100ms
+  const int64_t LS_CLOG_ALIVE_TIMEOUT_US = 100 * 1000; //100ms
   const int64_t GET_GTS_TIMEOUT_NS = 10L * 1000 * 1000 * 1000; //10s
-  int get_gts_(const int64_t timeout_ns, int64_t &gts);
+  int get_gts_(const int64_t timeout_ns, palf::SCN &gts_scn);
   bool is_ls_blocked_state_(const LSGCState &state);
   bool is_ls_offline_state_(const LSGCState &state);
   bool is_ls_wait_gc_state_(const LSGCState &state);
@@ -289,9 +262,9 @@ private:
   void try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_status);
   void submit_log_(const ObGCLSLOGType log_type);
   void update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_type,
-                                            const int64_t log_ts_ns);
-  void block_ls_transfer_in_(const int64_t block_ts_ns);
-  void offline_ls_(const int64_t offline_ts_ns);
+                                            const palf::SCN &log_scn);
+  void block_ls_transfer_in_(const palf::SCN &block_scn);
+  void offline_ls_(const palf::SCN &offline_scn);
   int get_palf_role_(common::ObRole &role);
   void handle_gc_ls_dropping_(const ObGarbageCollector::LSStatus &ls_status);
   void handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status);
@@ -300,7 +273,6 @@ private:
   RWLock rwlock_; //for leader revoke/takeover submit log
   storage::ObLS *ls_;
   int64_t gc_seq_invalid_member_; //缓存gc检查当前ls不在成员列表时的轮次
-  int64_t gc_start_ts_;
 };
 
 } // namespace logservice

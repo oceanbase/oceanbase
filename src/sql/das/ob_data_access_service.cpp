@@ -74,12 +74,9 @@ int ObDataAccessService::execute_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_
 {
   int ret = OB_SUCCESS;
   if (OB_LIKELY(das_ref.is_execute_directly())) {
-    NG_TRACE(do_local_das_task_begin);
-    FLTSpanGuard(do_local_das_task);
     if (OB_FAIL(task_op.start_das_task())) {
       LOG_WARN("start das task failed", K(ret), K(task_op));
     }
-    NG_TRACE(do_local_das_task_end);
   } else {
     ret = execute_dist_das_task(das_ref, task_op);
     task_op.errcode_ = ret;
@@ -100,8 +97,6 @@ int ObDataAccessService::execute_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_
 int ObDataAccessService::get_das_task_id(int64_t &das_id)
 {
   int ret = OB_SUCCESS;
-  NG_TRACE(get_das_id_begin);
-  FLTSpanGuard(get_das_id);
   const int MAX_RETRY_TIMES = 50;
   int64_t tmp_das_id = 0;
   bool force_renew = false;
@@ -128,7 +123,6 @@ int ObDataAccessService::get_das_task_id(int64_t &das_id)
   if (OB_SUCC(ret)) {
     das_id = tmp_das_id;
   }
-  NG_TRACE(get_das_id_end);
   return ret;
 }
 
@@ -182,55 +176,22 @@ int ObDataAccessService::refresh_partition_location(ObDASRef &das_ref, ObIDASTas
 int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op)
 {
   int ret = task_op.errcode_;
-  while (!is_virtual_table(task_op.get_ref_table_id()) &&
-         (is_master_changed_error(ret) || is_partition_change_error(ret) || OB_REPLICA_NOT_READABLE == ret)) {
-    if (!can_fast_fail(task_op)) {
-      task_op.in_part_retry_ = true;
-      das_ref.get_exec_ctx().get_my_session()->set_session_in_retry(true, ret);
-      if (OB_FAIL(clear_task_exec_env(das_ref, task_op))) {
-        LOG_WARN("clear task execution environment", K(ret));
-      } else if (OB_FAIL(das_ref.get_exec_ctx().check_status())) {
-        LOG_WARN("query is timeout, terminate retry", K(ret));
-      } else if (OB_FAIL(refresh_partition_location(das_ref, task_op))) {
-        LOG_WARN("refresh partition location failed", K(ret));
-      } else if (OB_FAIL(execute_dist_das_task(das_ref, task_op))) {
-        LOG_WARN("execute dist das task failed", K(ret));
-      }
-    } else {
-      break;
+  while (is_master_changed_error(ret) ||
+         is_partition_change_error(ret) ||
+         OB_REPLICA_NOT_READABLE == ret) {
+    task_op.in_part_retry_ = true;
+    das_ref.get_exec_ctx().get_my_session()->set_session_in_retry(true, ret);
+    if (OB_FAIL(clear_task_exec_env(das_ref, task_op))) {
+      LOG_WARN("clear task execution environment", K(ret));
+    } else if (OB_FAIL(das_ref.get_exec_ctx().check_status())) {
+      LOG_WARN("query is timeout, terminate retry", K(ret));
+    } else if (OB_FAIL(refresh_partition_location(das_ref, task_op))) {
+      LOG_WARN("refresh partition location failed", K(ret));
+    } else if (OB_FAIL(execute_dist_das_task(das_ref, task_op))) {
+      LOG_WARN("execute dist das task failed", K(ret));
     }
   }
   return ret;
-}
-
-
-bool ObDataAccessService::can_fast_fail(const ObIDASTaskOp &task_op) const
-{
-  bool bret = false;
-  int ret = OB_SUCCESS;  // no need to pass ret outside.
-  const common::ObTableID &table_id = IS_DAS_DML_OP(task_op)
-      ? static_cast<const ObDASDMLBaseCtDef *>(task_op.get_ctdef())->table_id_
-      : static_cast<const ObDASScanCtDef *>(task_op.get_ctdef())->ref_table_id_;
-  int64_t schema_version = IS_DAS_DML_OP(task_op)
-      ? static_cast<const ObDASDMLBaseCtDef *>(task_op.get_ctdef())->schema_version_
-      : static_cast<const ObDASScanCtDef *>(task_op.get_ctdef())->schema_version_;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObTableSchema *table_schema = nullptr;
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    LOG_ERROR("invalid schema service", KR(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard))) {
-    LOG_WARN("get tenant schema guard fail", KR(ret), K(MTL_ID()));
-  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
-    LOG_WARN("failed to get table schema", KR(ret));
-  } else if (OB_ISNULL(table_schema)) {
-    bret = true;
-    LOG_WARN("table not exist, fast fail das task");
-  } else if (table_schema->get_schema_version() != schema_version) {
-    bret = true;
-    LOG_WARN("schema version changed, fast fail das task", "current schema version",
-             table_schema->get_schema_version(), "query schema version", schema_version);
-  }
-  return bret;
 }
 
 int ObDataAccessService::end_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op)
@@ -245,8 +206,6 @@ int ObDataAccessService::end_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op)
 int ObDataAccessService::rescan_das_task(ObDASRef &das_ref, ObDASScanOp &scan_op)
 {
   int ret = OB_SUCCESS;
-  NG_TRACE(rescan_das_task_begin);
-  FLTSpanGuard(rescan_das_task);
   if (scan_op.is_local_task()) {
     if (OB_FAIL(scan_op.rescan())) {
       LOG_WARN("rescan das task failed", K(ret));
@@ -264,7 +223,6 @@ int ObDataAccessService::rescan_das_task(ObDASRef &das_ref, ObDASScanOp &scan_op
       LOG_WARN("failed to retry das task", K(tmp_ret));
     }
   }
-  NG_TRACE(rescan_das_task_end);
   return ret;
 }
 
@@ -274,12 +232,9 @@ int ObDataAccessService::do_local_das_task(ObDASRef &das_ref, ObDASTaskArg &task
   int ret = OB_SUCCESS;
   LOG_DEBUG("begin to do local das task", K(task_arg));
   ObIDASTaskOp *task_op = task_arg.get_task_op();
-  NG_TRACE(do_local_das_task_begin);
-  FLTSpanGuard(do_local_das_task);
   if (OB_FAIL(task_op->start_das_task())) {
     LOG_WARN("start local das task failed", K(ret));
   }
-  NG_TRACE(do_local_das_task_end);
   return ret;
 }
 
@@ -287,8 +242,6 @@ int ObDataAccessService::do_remote_das_task(ObDASRef &das_ref, ObDASTaskArg &tas
 {
   int ret = OB_SUCCESS;
   void *resp_buf = nullptr;
-  NG_TRACE(do_remote_das_task_begin);
-  FLTSpanGuard(do_remote_das_task);
   ObSQLSessionInfo *session = das_ref.get_exec_ctx().get_my_session();
   ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
   int64_t timeout = plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time();
@@ -351,7 +304,6 @@ int ObDataAccessService::do_remote_das_task(ObDASRef &das_ref, ObDASTaskArg &tas
       }
     }
   }
-  NG_TRACE_EXT(do_remote_das_task_end, Y(ret), OB_ID(addr), task_arg.get_runner_svr());
   return ret;
 }
 

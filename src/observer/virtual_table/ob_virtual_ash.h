@@ -67,8 +67,7 @@ private:
     MODULE,
     ACTION,
     CLIENT_ID,
-    BACKTRACE,
-    PLAN_ID
+    BACKTRACE
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   share::ObActiveSessHistList::Iterator iterator_;

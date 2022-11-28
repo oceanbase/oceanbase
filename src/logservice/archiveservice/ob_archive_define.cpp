@@ -20,6 +20,7 @@
 
 namespace oceanbase
 {
+using namespace palf;
 namespace archive
 {
 // =================================== ObArchiveLease ================================= //
@@ -76,13 +77,13 @@ bool ObArchiveLease::operator==(const ObArchiveLease &other) const
 //
 LogFileTuple::LogFileTuple() :
   offset_(),
-  log_ts_(OB_INVALID_TIMESTAMP),
+  log_scn_(),
   piece_()
 {}
 
-LogFileTuple::LogFileTuple(const LSN &lsn, const int64_t log_ts, const ObArchivePiece &piece)
+LogFileTuple::LogFileTuple(const LSN &lsn, const SCN &log_scn, const ObArchivePiece &piece)
   : offset_(lsn),
-    log_ts_(log_ts),
+    log_scn_(log_scn),
     piece_(piece)
 {}
 
@@ -93,29 +94,29 @@ LogFileTuple::~LogFileTuple()
 
 bool LogFileTuple::is_valid() const
 {
-  return offset_.is_valid() && OB_INVALID_TIMESTAMP != log_ts_ && piece_.is_valid();
+  return offset_.is_valid() && log_scn_.is_valid() && piece_.is_valid();
 }
 
 void LogFileTuple::reset()
 {
   offset_.reset();
-  log_ts_ = OB_INVALID_TIMESTAMP;
+  log_scn_.reset();
   piece_.reset();
 }
 
-// 同一个piece, lsn和log ts都要小于
-// 不同的piece, 必须piece小并且lsn和log ts小于等于
+// 同一个piece, lsn和log scn都要小于
+// 不同的piece, 必须piece小并且lsn和log scn小于等于
 bool LogFileTuple::operator<(const LogFileTuple &other) const
 {
   ObArchivePiece piece = piece_;
-  return (offset_ < other.offset_&& log_ts_ < other.log_ts_)
-    || (offset_ <= other.offset_&& log_ts_ <= other.log_ts_ && !(other.piece_ > (++piece)));
+  return (offset_ < other.offset_&& log_scn_ < other.log_scn_)
+    || (offset_ <= other.offset_&& log_scn_ <= other.log_scn_ && !(other.piece_ > (++piece)));
 }
 
 LogFileTuple &LogFileTuple::operator=(const LogFileTuple &other)
 {
   offset_ = other.offset_;
-  log_ts_ = other.log_ts_;
+  log_scn_ = other.log_scn_;
   piece_ = other.piece_;
   return *this;
 }

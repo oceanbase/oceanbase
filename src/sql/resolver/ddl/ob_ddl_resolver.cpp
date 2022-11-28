@@ -1397,7 +1397,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
       case T_COLLATION: {
         if (!is_index_option) {
           if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
-              && lib::is_oracle_mode()) {
+              && (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0
+              || lib::is_oracle_mode())) {
             ret = OB_ERR_PARSE_SQL;
             SQL_RESV_LOG(WARN, "Not support to alter collation", K(ret));
           } else if (CS_TYPE_INVALID == collation_type_) {
@@ -1528,15 +1529,26 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), K(ret));
           } else if (T_DEFAULT == option_node->children_[0]->type_) {
-            // do nothing
+            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
+              ret = OB_OP_NOT_ALLOW;
+              SQL_RESV_LOG(WARN, "set primary_zone DEFAULT is not allowed now", K(ret));
+              LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone DEFAULT");
+            }
           } else if (T_RANDOM == option_node->children_[0]->type_) {
-            primary_zone_.assign_ptr(common::OB_RANDOM_PRIMARY_ZONE,
+            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
+              ret = OB_OP_NOT_ALLOW;
+              SQL_RESV_LOG(WARN, "set primary_zone RANDOM is not allowed now", K(ret));
+              LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone RANDOM");
+            } else {
+              primary_zone_.assign_ptr(common::OB_RANDOM_PRIMARY_ZONE,
                                        static_cast<int32_t>(strlen(common::OB_RANDOM_PRIMARY_ZONE)));
+            }
           } else {
             tmp_str.assign_ptr(const_cast<char *>(option_node->children_[0]->str_value_),
                                static_cast<int32_t>(option_node->children_[0]->str_len_));
             primary_zone_ = tmp_str.trim();
-            if (primary_zone_.empty()) {
+            if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2000
+                && primary_zone_.empty()) {
               ret = OB_OP_NOT_ALLOW;
               SQL_RESV_LOG(WARN, "set primary_zone empty is not allowed now", K(ret));
               LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone empty");
@@ -1798,7 +1810,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           ret = common::OB_INVALID_ARGUMENT;
           SQL_RESV_LOG(WARN, "invalid locality argument", K(ret), "num_child", option_node->num_child_);
         } else if (T_DEFAULT == option_node->children_[0]->type_) {
-          // do nothing
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
+            ret = OB_OP_NOT_ALLOW;
+            SQL_RESV_LOG(WARN, "set locality DEFAULT is not allowed now", K(ret));
+            LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set locality DEFAULT");
+          }
         } else {
           int64_t locality_length = option_node->children_[0]->str_len_;
           const char *locality_str = option_node->children_[0]->str_value_;
@@ -1807,7 +1823,8 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             ret = common::OB_ERR_TOO_LONG_IDENT;
             SQL_RESV_LOG(WARN, "locality length is beyond limit", K(ret), K(locality));
             LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, locality.length(), locality.ptr());
-          } else if (0 == locality_length) {
+          } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2000
+                     && 0 == locality_length) {
             ret = OB_OP_NOT_ALLOW;
             SQL_RESV_LOG(WARN, "set locality empty is not allowed now", K(ret));
             LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set locality empty");
@@ -2052,6 +2069,10 @@ int ObDDLResolver::resolve_identity_column_definition(ObColumnSchemaV2 &column,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid option node type or child num", K(ret),
              K(generated_option->type_), K(generated_option->num_child_));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3200) {
+    ret = OB_OP_NOT_ALLOW;
+    SQL_RESV_LOG(WARN, "create identity column on table is not allowed now", K(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "create identity column on table");
   } else {
     column.erase_identity_column_flags();
     if (generated_option->type_ == T_CONSTR_ALWAYS) {
@@ -5571,9 +5592,9 @@ int ObDDLResolver::check_column_in_foreign_key_for_oracle(
               ret = OB_ALLOCATE_MEMORY_FAILED;
               SQL_RESV_LOG(ERROR, "failed to allocate memory", K(ret));
             } else if (FALSE_IT(foreign_key_arg = new (tmp_ptr)ObDropForeignKeyArg())) {
-            } else if (OB_FAIL(deep_copy_str(foreign_key_info.foreign_key_name_,
-                                             foreign_key_arg->foreign_key_name_))) {
-              LOG_WARN("failed to deep copy foreign_key_name", K(ret), K(foreign_key_info));
+            } else if (FALSE_IT(foreign_key_arg->foreign_key_name_.assign_ptr(
+                                foreign_key_info.foreign_key_name_.ptr(),
+                                foreign_key_info.foreign_key_name_.length()))) {
             } else if (OB_ISNULL(alter_table_stmt)) {
               ret = OB_ERR_UNEXPECTED;
               SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
@@ -7425,40 +7446,6 @@ int ObDDLResolver::check_foreign_key_reference(
                  K(ret), K(child_table_schema->is_user_table()));
       } else if (arg.is_parent_table_mock_) {
         // skip checking parent table
-        uint64_t database_id = session_info_->get_database_id();
-        const ObMockFKParentTableSchema *mock_fk_parent_table_schema = NULL;
-        if (!arg.database_name_.empty()
-            && OB_FAIL(schema_checker_->get_database_id(
-               session_info_->get_effective_tenant_id(), arg.database_name_, database_id))) {
-          LOG_WARN("failed to get_database_id", K(ret), K(session_info_->get_effective_tenant_id()),
-                                                K(arg.database_name_), K(database_id));
-        } else if (OB_FAIL(schema_checker_->get_mock_fk_parent_table_with_name(
-                           session_info_->get_effective_tenant_id(), database_id,
-                           arg.foreign_key_name_, mock_fk_parent_table_schema))) {
-          LOG_WARN("failed to get_mock_fk_parent_table_schema_with_name", K(ret),
-                    K(session_info_->get_effective_tenant_id()), K(database_id),
-                    K(arg.foreign_key_name_));
-        } else if (OB_NOT_NULL(mock_fk_parent_table_schema)) {
-          if (is_alter_table
-              && OB_FAIL(alter_table_stmt->get_alter_table_arg().based_schema_object_infos_.push_back(
-                 ObBasedSchemaObjectInfo(
-                     mock_fk_parent_table_schema->get_mock_fk_parent_table_id(),
-                     MOCK_FK_PARENT_TABLE_SHCEMA,
-                     mock_fk_parent_table_schema->get_schema_version())))) {
-            LOG_WARN("failed to add based_schema_object_info to arg",
-                         K(ret), K(mock_fk_parent_table_schema->get_mock_fk_parent_table_id()),
-                         K(mock_fk_parent_table_schema->get_schema_version()));
-          } else if (!is_alter_table
-                     && OB_FAIL(create_table_stmt->get_create_table_arg().based_schema_object_infos_.push_back(
-                     ObBasedSchemaObjectInfo(
-                         mock_fk_parent_table_schema->get_mock_fk_parent_table_id(),
-                         MOCK_FK_PARENT_TABLE_SHCEMA,
-                         mock_fk_parent_table_schema->get_schema_version())))) {
-            LOG_WARN("failed to add based_schema_object_info to arg",
-                         K(ret), K(mock_fk_parent_table_schema->get_mock_fk_parent_table_id()),
-                         K(mock_fk_parent_table_schema->get_schema_version()));
-          }
-        }
       } else if (!parent_table_schema->is_user_table()) {
         ret = OB_ERR_CANNOT_ADD_FOREIGN;
         LOG_WARN("foreign key cannot be based on non-user table",
@@ -7970,7 +7957,8 @@ int ObDDLResolver::resolve_hash_or_key_partition_basic_infos(ParseNode *node,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(node), K(partition_fun_node),
                                     K(schema_checker_), K(session_info_));
-  } else if (!table_schema.get_tablegroup_name().empty() &&
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3000 &&
+             !table_schema.get_tablegroup_name().empty() &&
              OB_FAIL(schema_checker_->get_tablegroup_schema(session_info_->get_effective_tenant_id(),
                                                             table_schema.get_tablegroup_name(),
                                                             tablegroup_schema))) {

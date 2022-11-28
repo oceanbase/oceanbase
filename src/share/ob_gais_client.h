@@ -25,10 +25,13 @@ namespace share
 class ObGAISClient
 {
 public:
-  ObGAISClient() : is_inited_(false), self_(), gais_request_rpc_(nullptr), gais_cache_leader_() { }
+  ObGAISClient() : is_inited_(false), self_(), gais_request_rpc_(nullptr),
+                   location_adapter_(nullptr), gais_cache_leader_() { }
   ~ObGAISClient() { }
-  int init(const common::ObAddr &self, share::ObGAISRequestRpc *gais_request_rpc);
+  int init(const common::ObAddr &self, share::ObGAISRequestRpc *gais_request_rpc,
+           transaction::ObILocationAdapter *location_adapter);
   void reset();
+  int refresh_location(const uint64_t tenant_id) { return refresh_location_(tenant_id); }
   TO_STRING_KV(K_(self), K_(gais_cache_leader));
 
 public:
@@ -65,6 +68,7 @@ private:
   bool is_inited_;
   common::ObAddr self_;
   share::ObGAISRequestRpc *gais_request_rpc_;
+  transaction::ObILocationAdapter *location_adapter_;
   common::ObAddr gais_cache_leader_;
   lib::ObMutex cache_leader_mutex_;
 };

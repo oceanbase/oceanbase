@@ -107,8 +107,8 @@ class ObFrozenMemtableInfo
 public:
   ObFrozenMemtableInfo();
   ObFrozenMemtableInfo(const ObTabletID &tablet_id,
-                       const int64_t start_log_ts,
-                       const int64_t end_log_ts,
+                       const palf::SCN &start_log_scn_,
+                       const palf::SCN &end_log_scn,
                        const int64_t write_ref_cnt,
                        const int64_t unsubmitted_cnt,
                        const int64_t unsynced_cnt,
@@ -117,8 +117,8 @@ public:
 
   void reset();
   void set(const ObTabletID &tablet_id,
-           const int64_t start_log_ts,
-           const int64_t end_log_ts,
+           const palf::SCN &start_log_scn,
+           const palf::SCN &end_log_scn,
            const int64_t write_ref_cnt,
            const int64_t unsubmitted_cnt,
            const int64_t unsynced_cnt,
@@ -127,13 +127,13 @@ public:
 
 public:
   ObTabletID tablet_id_;
-  int64_t start_log_ts_;
-  int64_t end_log_ts_;
+  palf::SCN start_log_scn_;
+  palf::SCN end_log_scn_;
   int64_t write_ref_cnt_;
   int64_t unsubmitted_cnt_;
   int64_t unsynced_cnt_;
   int64_t current_right_boundary_;
-  TO_STRING_KV(K_(tablet_id), K_(start_log_ts), K_(end_log_ts), K_(write_ref_cnt),
+  TO_STRING_KV(K_(tablet_id), K_(start_log_scn), K_(end_log_scn), K_(write_ref_cnt),
                K_(unsubmitted_cnt), K_(unsynced_cnt), K_(current_right_boundary));
 };
 
@@ -151,8 +151,8 @@ public:
 
 public:
   int add_memtable_info(const ObTabletID &tablet_id,
-                        const int64_t start_log_ts,
-                        const int64_t end_log_ts,
+                        const palf::SCN &start_log_scn,
+                        const palf::SCN &end_log_scn,
                         const int64_t write_ref_cnt,
                         const int64_t unsubmitted_cnt,
                         const int64_t unsynced_cnt,
@@ -205,16 +205,12 @@ public:
            const share::ObLSID &ls_id,
            uint32_t freeze_flag = 0);
   void reset();
-  void offline() { enable_ = false; }
-  void online() { enable_ = true; }
 
 public:
   /* freeze */
   int logstream_freeze();
   int tablet_freeze(const ObTabletID &tablet_id);
   int force_tablet_freeze(const ObTabletID &tablet_id);
-  int tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *&imemtable);
-  int handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *imemtable);
 
   /* freeze_flag */
   bool is_freeze(uint32_t is_freeze=UINT32_MAX) const;
@@ -228,10 +224,10 @@ public:
   ObLSTabletService *get_ls_tablet_svr() { return ls_tablet_svr_; }
 
   /* freeze_snapshot_version */
-  int64_t get_freeze_snapshot_version() { return freeze_snapshot_version_; }
+  palf::SCN get_freeze_snapshot_version() { return freeze_snapshot_version_; }
 
-  /* max_decided_log_ts */
-  int64_t get_max_decided_log_ts() { return max_decided_log_ts_; }
+  /* max_decided_log_scn */
+  palf::SCN get_max_decided_log_scn() { return max_decided_log_scn_; }
 
   /* statistics*/
   void inc_empty_memtable_cnt();
@@ -242,37 +238,17 @@ public:
   /* others */
   // get consequent callbacked log_ts right boundary
   virtual int get_max_consequent_callbacked_log_ts(int64_t &max_consequent_callbacked_log_ts);
+  virtual int get_max_consequent_callbacked_scn(palf::SCN &max_consequent_callbacked_scn);
   // to set snapshot version when memtables meet ready_for_flush
-  int get_ls_weak_read_ts(int64_t &weak_read_ts);
-  int decide_max_decided_log_ts(int64_t &max_decided_log_ts);
+  int get_ls_weak_read_scn(palf::SCN &weak_read_scn);
+  int decide_max_decided_log_scn(palf::SCN &max_decided_log_scn);
   // to resolve concurrency problems about multi-version tablet
-  int get_newest_clog_checkpoint_ts(const ObTabletID &tablet_id,
-                                    int64_t &clog_checkpoint_ts);
+  int get_newest_clog_checkpoint_scn(const ObTabletID &tablet_id,
+                                    palf::SCN &clog_checkpoint_scn);
   int get_newest_snapshot_version(const ObTabletID &tablet_id,
-                                  int64_t &snapshot_version);
+                                  palf::SCN &snapshot_version);
   ObFreezerStat& get_stat() { return stat_; }
-  bool need_resubmit_log() { return ATOMIC_LOAD(&need_resubmit_log_); }
-  void set_need_resubmit_log(bool flag) { return ATOMIC_STORE(&need_resubmit_log_, flag); }
 
-private:
-  class ObLSFreezeGuard
-  {
-  public:
-    ObLSFreezeGuard(ObFreezer &parent);
-    ~ObLSFreezeGuard();
-  private:
-    ObFreezer &parent_;
-  };
-  class ObTabletFreezeGuard
-  {
-  public:
-    ObTabletFreezeGuard(ObFreezer &parent, const bool try_guard = false);
-    ~ObTabletFreezeGuard();
-    int try_set_tablet_freeze_begin();
-  private:
-    bool need_release_;
-    ObFreezer &parent_;
-  };
 private:
   /* freeze_flag */
   int set_freeze_flag();
@@ -289,11 +265,6 @@ private:
   int handle_memtable_for_tablet_freeze(memtable::ObIMemtable *imemtable);
   int create_memtable_if_no_active_memtable(ObTablet *tablet);
 
-  int try_set_tablet_freeze_begin_();
-  void set_tablet_freeze_begin_();
-  void set_tablet_freeze_end_();
-  void set_ls_freeze_begin_();
-  void set_ls_freeze_end_();
 private:
   // flag whether the logsteram is freezing
   // the first bit: 1, freeze; 0, not freeze
@@ -302,10 +273,10 @@ private:
   // weak read timestamp saved for memtable, which means the version before
   // which all transaction has been saved into the memtable and the memtables
   // before it.
-  int64_t freeze_snapshot_version_;
-  // max_decided_log_ts saved for memtable when freeze happen, which means the
+  palf::SCN freeze_snapshot_version_;
+  // max_decided_log_scn saved for memtable when freeze happen, which means the
   // log ts before which will be smaller than the log ts in the latter memtables
-  int64_t max_decided_log_ts_;
+  palf::SCN max_decided_log_scn_;
 
   ObLSWRSHandler *ls_wrs_handler_;
   ObLSTxService *ls_tx_svr_;
@@ -316,13 +287,6 @@ private:
   ObFreezerStat stat_;
 
   int64_t empty_memtable_cnt_;
-
-  // make sure ls freeze has higher priority than tablet freeze
-  int64_t high_priority_freeze_cnt_; // waiting and freeze cnt
-  int64_t low_priority_freeze_cnt_; // freeze tablet cnt
-
-  bool need_resubmit_log_;
-  bool enable_;                     // whether we can do freeze now
 
   bool is_inited_;
 };

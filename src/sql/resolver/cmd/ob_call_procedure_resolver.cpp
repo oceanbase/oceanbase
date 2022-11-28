@@ -213,38 +213,7 @@ int ObCallProcedureResolver::resolve_param_exprs(const ParseNode *params_node,
   for (int64_t i = 0; OB_SUCC(ret) && i < params_node->num_child_; ++i) {
     ObRawExpr* raw_expr = NULL;
     CK (OB_NOT_NULL(params_node->children_[i]));
-    if (OB_SUCC(ret) && params_.is_execute_call_stmt_) {
-      ObArray<ObQualifiedName> columns;
-      ObArray<ObVarInfo> sys_vars;
-      ObArray<ObAggFunRawExpr*> aggr_exprs;
-      ObArray<ObWinFunRawExpr*> win_exprs;
-      ObArray<ObSubQueryInfo> sub_query_info;
-      ObArray<ObUDFInfo> udf_info;
-      ObArray<ObOpRawExpr*> op_exprs;
-      if (OB_FAIL(ObRawExprUtils::build_raw_expr(*params_.expr_factory_,
-                               *params_.session_info_,
-                               params_.schema_checker_,
-                               params_.secondary_namespace_,
-                               T_PL_SCOPE,
-                               NULL/*ObStmt*/,
-                               params_.param_list_,
-                               NULL/*external_param_info*/,
-                               *params_node->children_[i],
-                               raw_expr,
-                               columns,
-                               sys_vars,
-                               aggr_exprs,
-                               win_exprs,
-                               sub_query_info,
-                               udf_info,
-                               op_exprs,
-                               true,
-                               static_cast<TgTimingEvent>(params_.tg_timing_event_)))) {
-        LOG_WARN("failed to build raw expr", K(ret));
-      }
-    } else {
-      OZ (pl::ObPLResolver::resolve_raw_expr(*params_node->children_[i], params_, raw_expr));
-    }
+    OZ (pl::ObPLResolver::resolve_raw_expr(*params_node->children_[i], params_, raw_expr));
     CK (OB_NOT_NULL(raw_expr));
     OZ (check_param_expr_legal(raw_expr));
     OZ (expr_params.push_back(raw_expr));
@@ -300,9 +269,9 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       }
     }
   }
-  ObSEArray<ObRawExpr*, 16> expr_params;
   // 获取routine schem info
   if (OB_SUCC(ret)) {
+    ObSEArray<ObRawExpr*, 16> expr_params;
     if (OB_NOT_NULL(params_node)
         && OB_FAIL(resolve_param_exprs(params_node, expr_params))) {
       LOG_WARN("failed to resolve param exprs", K(ret));
@@ -341,12 +310,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
     }
   }
   // 解析参数列表
-  // if (OB_SUCC(ret) && params_.is_execute_call_stmt_) {
-  //   OZ (stmt->add_params(expr_params));
-  //   OX (stmt->set_can_direct_use_param(true));
-  // } else {
-    OZ (resolve_cparams(params_node, proc_info, stmt));
-  // }
+  OZ (resolve_cparams(params_node, proc_info, stmt));
 
   if (OB_SUCC(ret)) {
     if (OB_INVALID_ID == proc_info->get_package_id()) {

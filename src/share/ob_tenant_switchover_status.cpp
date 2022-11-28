@@ -51,7 +51,7 @@ ObTenantSwitchoverStatus::ObTenantSwitchoverStatus(const ObString &str)
   } else {
     for (int64_t i = 0; i < ARRAYSIZEOF(TENANT_SWITCHOVER_ARRAY); i++) {
       if (0 == str.case_compare(TENANT_SWITCHOVER_ARRAY[i])) {
-        value_ = static_cast<ObTenantSwitchoverStatus::Status>(i);
+        value_ = i;
         break;
       }
     }

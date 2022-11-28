@@ -109,7 +109,6 @@ int ObBackupDataScheduler::get_need_reload_task(
         LOG_INFO("[DATA_BACKUP]no job need to reload");
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < jobs.count(); ++i) {
-          ls_tasks.reset();
           const ObBackupJobAttr &job = jobs.at(i);
           ObBackupSetTaskAttr set_task_attr;
           bool is_valid = true;
@@ -622,8 +621,7 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
         LOG_WARN("[DATA_BACKUP]failed to update backup type", K(ret), K(new_job_attr));
       } else if (OB_FAIL(new_job_attr.executor_tenant_id_.push_back(new_job_attr.tenant_id_))) {
         LOG_WARN("[DATA_BACKUP]failed to push back tenant id", K(ret));
-      } else if (OB_FALSE_IT(new_job_attr.initiator_job_id_ = new_job_attr.tenant_id_ == new_job_attr.initiator_tenant_id_ ? 
-          0/*no parent job*/ : new_job_attr.initiator_job_id_)) {
+      } else if (OB_FALSE_IT(new_job_attr.initiator_job_id_ = new_job_attr.job_id_)) {
       } else if (OB_FAIL(lease_service_->check_lease())) {
         LOG_WARN("fail to check leader", K(ret));
       } else if (OB_FAIL(ObBackupJobOperator::insert_job(trans, new_job_attr))) {
@@ -647,23 +645,30 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
   return ret;
 }
 
-int ObBackupDataScheduler::get_scn(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, ObBackupSCN &scn)
+int ObBackupDataScheduler::get_scn(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, palf::SCN &scn)
 {
   int ret = OB_SUCCESS;
-  ObBackupSCN tmp_scn;
   ObAllTenantInfo tenant_info;
   const bool for_update = false;
   if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &sql_proxy, for_update, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
   } else {
-    // TODO when provide the scn_to_str, remove this .
+    // TODO when yaoying provide the scn_to_str, remove this .
     // The conversion accuracy of SCN to time_stamp is inconsistent under MySQL mode and Oracle mode.
     // The conversion accuracy in ORALCE mode is nanosecond, but it is microsecond in mysql
     // for backup and restore, we keep the scn round up to microseconds that keep the conversion accuracy is consistent.
     // meanwhile, in order to solve that boundary is not included in the restore, scn + 1;
     // 1658475549197665190 --> 1658475549197666000
-    tmp_scn = tenant_info.get_standby_scn();
-    scn = (tmp_scn % 1000 > 0) ? (tmp_scn / 1000 + 1) * 1000 : tmp_scn;
+    palf::SCN tmp_scn;
+    int64_t ts;
+    ts = tenant_info.get_standby_scn().convert_to_ts();
+    if (OB_FAIL(tmp_scn.convert_from_ts(ts))) {
+      LOG_WARN("fail to convert from ts", K(ret), K(ts));
+    } else if (tenant_info.get_standby_scn() != tmp_scn && OB_FAIL(tmp_scn.convert_from_ts(ts + 1))) {
+      LOG_WARN("fail to convert from ts", K(ret), K(ts));
+    } else {
+      scn = tmp_scn;
+    }
   }
   return ret;
 }
@@ -1220,25 +1225,21 @@ int ObUserTenantBackupJobMgr::report_failed_to_initiator_()
 int ObUserTenantBackupJobMgr::check_can_backup_()
 {
   int ret = OB_SUCCESS;
-  if (share::ObBackupStatus::CANCELING == job_attr_->status_.status_) {
-    // backup job is canceling, no need to check log archive status
-  } else {
-    ObTenantArchiveRoundAttr round_attr;
-    if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr_->tenant_id_, job_attr_->incarnation_id_, round_attr))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_LOG_ARCHIVE_NOT_RUNNING;
-        LOG_WARN("[DATA_BACKUP]not supported backup when log archive is not doing", K(ret), K(round_attr));
-      } else {
-        LOG_WARN("failed to get cur log archive round", K(ret), K(round_attr));
-      }
-    } else if (ObArchiveRoundState::Status::DOING != round_attr.state_.status_) {
-      if (ObArchiveRoundState::Status::INTERRUPTED == round_attr.state_.status_) {
-        ret = OB_LOG_ARCHIVE_INTERRUPTED;
-      } else {
-        ret = OB_LOG_ARCHIVE_NOT_RUNNING;
-      }
+  ObTenantArchiveRoundAttr round_attr;
+  if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr_->tenant_id_, job_attr_->incarnation_id_, round_attr))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_LOG_ARCHIVE_NOT_RUNNING;
       LOG_WARN("[DATA_BACKUP]not supported backup when log archive is not doing", K(ret), K(round_attr));
+    } else {
+      LOG_WARN("failed to get cur log archive round", K(ret), K(round_attr));
     }
+  } else if (ObArchiveRoundState::Status::DOING != round_attr.state_.status_) {
+    if (ObArchiveRoundState::Status::INTERRUPTED == round_attr.state_.status_) {
+      ret = OB_LOG_ARCHIVE_INTERRUPTED;
+    } else {
+      ret = OB_LOG_ARCHIVE_NOT_RUNNING;
+    }
+    LOG_WARN("[DATA_BACKUP]not supported backup when log archive is not doing", K(ret), K(round_attr));
   }
   return ret;
 }
@@ -1409,8 +1410,8 @@ int ObUserTenantBackupJobMgr::insert_backup_set_task_(common::ObISQLClient &sql_
     backup_set_task.start_ts_ = job_attr_->start_ts_;
     backup_set_task.meta_turn_id_ = 1;
     backup_set_task.data_turn_id_ = 1;
-    backup_set_task.end_scn_ = 0;
-    backup_set_task.user_ls_start_scn_ = 0;
+    backup_set_task.end_scn_ = palf::SCN::min_scn();
+    backup_set_task.user_ls_start_scn_ = palf::SCN::min_scn();
     if (OB_FAIL(lease_service_->check_lease())) {
       LOG_WARN("fail to check leader", K(ret));
     } else if (OB_FAIL(ObBackupTaskOperator::insert_backup_task(sql_proxy, backup_set_task))) {
@@ -1478,10 +1479,10 @@ int ObUserTenantBackupJobMgr::fill_backup_set_desc_(
     backup_set_desc.file_status_ = ObBackupFileStatus::BACKUP_FILE_COPYING;
     backup_set_desc.result_ = job_attr.result_;
     backup_set_desc.encryption_mode_ = job_attr.encryption_mode_;
-    backup_set_desc.start_replay_scn_ = 0;
-    backup_set_desc.min_restore_scn_ = 0;
+    backup_set_desc.start_replay_scn_ = palf::SCN::min_scn();
+    backup_set_desc.min_restore_scn_ = palf::SCN::min_scn();
     backup_set_desc.backup_compatible_ = ObBackupSetFileDesc::Compatible::COMPATIBLE_VERSION_1;
-    backup_set_desc.tenant_compatible_ = GET_MIN_CLUSTER_VERSION();
+    backup_set_desc.tenant_compatible_ = ObClusterVersion::get_instance().get_cluster_version();
     backup_set_desc.plus_archivelog_ = job_attr.plus_archivelog_;
   }
   return ret;

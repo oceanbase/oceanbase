@@ -347,43 +347,42 @@ select /*+ parallel(2) pq_distribute(b broadcast none) */ * from t1 a, t2 b wher
 
 EXPLAIN BASIC select /*+ use_px parallel(2) */ c2,sum(c1) from (select  a.c1,b.c2 from t5 a , t5 b where a.c1=b.c2) group by c2 order by 1,2;
 Query Plan
-=============================================
-|ID|OPERATOR                       |NAME    |
----------------------------------------------
-|0 |PX COORDINATOR MERGE SORT      |        |
-|1 | EXCHANGE OUT DISTR            |:EX10002|
-|2 |  MERGE GROUP BY               |        |
-|3 |   SORT                        |        |
-|4 |    HASH JOIN                  |        |
-|5 |     EXCHANGE IN DISTR         |        |
-|6 |      EXCHANGE OUT DISTR (HASH)|:EX10000|
-|7 |       PX BLOCK ITERATOR       |        |
-|8 |        TABLE SCAN             |a       |
-|9 |     EXCHANGE IN DISTR         |        |
-|10|      EXCHANGE OUT DISTR (HASH)|:EX10001|
-|11|       PX BLOCK ITERATOR       |        |
-|12|        TABLE SCAN             |b       |
-=============================================
+==============================================
+|ID|OPERATOR                        |NAME    |
+----------------------------------------------
+|0 |PX COORDINATOR MERGE SORT       |        |
+|1 | EXCHANGE OUT DISTR             |:EX10001|
+|2 |  MATERIAL                      |        |
+|3 |   MERGE GROUP BY               |        |
+|4 |    EXCHANGE IN MERGE SORT DISTR|        |
+|5 |     EXCHANGE OUT DISTR (HASH)  |:EX10000|
+|6 |      MERGE GROUP BY            |        |
+|7 |       SORT                     |        |
+|8 |        NESTED-LOOP JOIN        |        |
+|9 |         PX BLOCK ITERATOR      |        |
+|10|          TABLE SCAN            |b       |
+|11|         DISTRIBUTED TABLE GET  |a       |
+==============================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(b.c2, T_FUN_SUM(a.c1))]), filter(nil), rowset=256, sort_keys([b.c2, ASC], [T_FUN_SUM(a.c1), ASC])
-  1 - output([b.c2], [T_FUN_SUM(a.c1)], [INTERNAL_FUNCTION(b.c2, T_FUN_SUM(a.c1))]), filter(nil), rowset=256, dop=2
-  2 - output([b.c2], [T_FUN_SUM(a.c1)]), filter(nil), rowset=256, 
+  0 - output([INTERNAL_FUNCTION(b.c2, T_FUN_SUM(T_FUN_SUM(a.c1)))]), filter(nil), rowset=256, sort_keys([b.c2, ASC], [T_FUN_SUM(T_FUN_SUM(a.c1)), ASC])
+  1 - output([b.c2], [T_FUN_SUM(T_FUN_SUM(a.c1))], [INTERNAL_FUNCTION(b.c2, T_FUN_SUM(T_FUN_SUM(a.c1)))]), filter(nil), rowset=256, dop=2
+  2 - output([b.c2], [T_FUN_SUM(T_FUN_SUM(a.c1))]), filter(nil), rowset=256
+  3 - output([b.c2], [T_FUN_SUM(T_FUN_SUM(a.c1))]), filter(nil), rowset=256,
+      group([b.c2]), agg_func([T_FUN_SUM(T_FUN_SUM(a.c1))])
+  4 - output([b.c2], [T_FUN_SUM(a.c1)]), filter(nil), rowset=256, sort_keys([b.c2, ASC])
+  5 - (#keys=1, [b.c2]), output([b.c2], [T_FUN_SUM(a.c1)]), filter(nil), rowset=256, dop=2
+  6 - output([b.c2], [T_FUN_SUM(a.c1)]), filter(nil), rowset=256,
       group([b.c2]), agg_func([T_FUN_SUM(a.c1)])
-  3 - output([b.c2], [a.c1]), filter(nil), rowset=256, sort_keys([b.c2, ASC])
-  4 - output([b.c2], [a.c1]), filter(nil), rowset=256, 
-      equal_conds([a.c1 = b.c2]), other_conds(nil)
-  5 - output([a.c1]), filter(nil), rowset=256
-  6 - (#keys=1, [a.c1]), output([a.c1]), filter(nil), rowset=256, dop=2
-  7 - output([a.c1]), filter(nil), rowset=256
-  8 - output([a.c1]), filter(nil), rowset=256, 
-      access([a.c1]), partitions(p0)
+  7 - output([b.c2], [a.c1]), filter(nil), rowset=256, sort_keys([b.c2, ASC])
+  8 - output([b.c2], [a.c1]), filter(nil), rowset=256,
+      conds(nil), nl_params_([b.c2])
   9 - output([b.c2]), filter(nil), rowset=256
-  10 - (#keys=1, [b.c2]), output([b.c2]), filter(nil), rowset=256, dop=2
-  11 - output([b.c2]), filter(nil), rowset=256
-  12 - output([b.c2]), filter(nil), rowset=256, 
+  10 - output([b.c2]), filter(nil), rowset=256,
       access([b.c2]), partitions(p0)
+  11 - output([a.c1]), filter(nil), rowset=256,
+      access([GROUP_ID], [a.c1]), partitions(p0)
 
 select /*+ use_px parallel(2) */ c2,sum(c1) from (select  a.c1,b.c2 from t5 a , t5 b where a.c1=b.c2) group by c2 order by 1,2;
 +------+---------+

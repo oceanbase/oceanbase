@@ -54,6 +54,6 @@ DEF_SIMPLE_EXECUTOR_IMPL(ObCreateSequence, do_sequence_ddl);
 DEF_SIMPLE_EXECUTOR_IMPL(ObAlterSequence,  do_sequence_ddl);
 DEF_SIMPLE_EXECUTOR_IMPL(ObDropSequence,   do_sequence_ddl);
 
-#undef DEF_SIMPLE_EXECUTOR_IMPL
+#undef DEF_EXECUTOR_IMPL
 }  // namespace sql
 }  // namespace oceanbase

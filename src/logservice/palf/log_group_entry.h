@@ -48,14 +48,14 @@ public:
   // used for fetch_log, ignore the data len of padding entry
   int64_t get_group_size_without_padding_data() const { return header_.get_serialize_size() +
     (header_.is_padding_log() ? 0 : header_.get_data_len()); }
-  int64_t get_log_ts() const { return header_.get_max_timestamp(); }
+  const SCN get_log_scn() const { return header_.get_max_scn(); }
   LSN get_committed_end_lsn() const { return header_.get_committed_end_lsn(); }
   const LogGroupEntryHeader &get_header() const { return header_; }
   const char *get_data_buf() const { return buf_; }
-  // @brief truncate log group entry the upper_limit_ts, only log entries with log_ts not bigger than which can reserve
-  // param[in] upper_limit_ts, the upper bound to determain which log entries can reserve
+  // @brief truncate log group entry the upper_limit_scn, only log entries with log_scn not bigger than which can reserve
+  // param[in] upper_limit_scn the upper bound to determain which log entries can reserve
   // param[in] pre_accum_checksum, the accum_checksum of the pre log
-  int truncate(const int64_t upper_limit_ts, const int64_t pre_accum_checksum);
+  int truncate(const SCN &upper_limit_scn, const int64_t pre_accum_checksum);
 
   TO_STRING_KV("LogGroupEntryHeader", header_);
   NEED_SERIALIZE_AND_DESERIALIZE;

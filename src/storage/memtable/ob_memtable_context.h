@@ -366,9 +366,24 @@ public:
                                const uint64_t log_cluster_version = 0,
                                const uint64_t checksum = 0);
   //method called when leader takeover
-  virtual int replay_to_commit(const bool is_resume);
+  virtual int replay_to_commit();
   //method called when leader revoke
   virtual int commit_to_replay();
+  virtual int get_trans_status() const
+  {
+    return ATOMIC_LOAD(&end_code_);
+  }
+  int get_trans_status_retcode() const
+  {
+    auto s = get_trans_status();
+    if (PARTIAL_ROLLBACKED == s) { return OB_TRANS_KILLED; }
+    return s;
+  }
+  virtual bool is_trans_rollbacked() const
+  {
+    auto s = get_trans_status();
+    return s != OB_SUCCESS && s != OB_TRANS_COMMITED;
+  }
   virtual int fill_redo_log(char *buf,
                             const int64_t buf_len,
                             int64_t &buf_pos,
@@ -398,6 +413,8 @@ public:
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_); }
   uint64_t get_tenant_id() const;
   bool is_can_elr() const;
+  ObMemtableMutatorIterator *get_memtable_mutator_iter() { return mutator_iter_; }
+  ObMemtableMutatorIterator *alloc_memtable_mutator_iter();
   inline bool has_read_elr_data() const { return read_elr_data_; }
   int remove_callbacks_for_fast_commit();
   int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
@@ -416,14 +433,15 @@ public:
   int clean_unlog_callbacks();
   int check_tx_mem_size_overflow(bool &is_overflow);
 public:
-  void on_tsc_retry(const ObMemtableKey& key, const int64_t snapshot_version,
-                    const int64_t max_trans_version,
+  void on_tsc_retry(const ObMemtableKey& key,
+                    const palf::SCN snapshot_version,
+                    const palf::SCN max_trans_version,
                     const transaction::ObTransID &conflict_tx_id);
   void on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id);
   virtual int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual storage::ObTxTableGuard *get_tx_table_guard() override { return &tx_table_guard_; }
   virtual transaction::ObTransID get_tx_id() const override;
-  virtual int64_t get_tx_end_log_ts() const override;
+  virtual palf::SCN get_tx_end_scn() const override;
 
   // mainly used by revert ref
   void reset_trans_table_guard();
@@ -436,18 +454,7 @@ public:
   void replay_done();
   int64_t get_checksum() const { return trans_mgr_.get_checksum(); }
   int64_t get_tmp_checksum() const { return trans_mgr_.get_tmp_checksum(); }
-  int64_t get_checksum_log_ts() const { return trans_mgr_.get_checksum_log_ts(); }
-public:
-  // tx_status
-  enum ObTxStatus {
-    PARTIAL_ROLLBACKED = -1,
-    NORMAL = 0,
-    ROLLBACKED = 1,
-  };
-  virtual int64_t get_tx_status() const { return ATOMIC_LOAD(&tx_status_); }
-  bool is_tx_rollbacked() const { return get_tx_status() != ObTxStatus::NORMAL; }
-  inline void set_partial_rollbacked() { ATOMIC_STORE(&tx_status_, ObTxStatus::PARTIAL_ROLLBACKED); }
-  inline void set_tx_rollbacked() { ATOMIC_STORE(&tx_status_, ObTxStatus::ROLLBACKED); }
+  palf::SCN get_checksum_log_ts() const { return trans_mgr_.get_checksum_scn(); }
 public:
   // table lock.
   int enable_lock_table(storage::ObTableHandleV2 &handle);
@@ -461,23 +468,28 @@ public:
   int check_modify_time_elapsed(const common::ObTabletID &tablet_id,
                                 const int64_t timestamp);
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
-  int check_lock_need_replay(const int64_t log_ts,
+  int check_lock_need_replay(const palf::SCN &scn,
                              const transaction::tablelock::ObTableLockOp &lock_op,
                              bool &need_replay);
   int add_lock_record(const transaction::tablelock::ObTableLockOp &lock_op);
   int replay_add_lock_record(const transaction::tablelock::ObTableLockOp &lock_op,
-                             const int64_t log_ts);
+                             const palf::SCN &scn);
   void remove_lock_record(ObMemCtxLockOpLinkNode *lock_op);
-  void set_log_synced(ObMemCtxLockOpLinkNode *lock_op, int64_t log_ts);
+  void set_log_synced(ObMemCtxLockOpLinkNode *lock_op, const palf::SCN &scn);
   // replay lock to lock map and trans part ctx.
   // used by the replay process of multi data source.
   int replay_lock(const transaction::tablelock::ObTableLockOp &lock_op,
                   const int64_t log_ts);
+  int replay_lock(const transaction::tablelock::ObTableLockOp &lock_op,
+                  const palf::SCN &scn);
   int recover_from_table_lock_durable_info(const ObTableLockInfo &table_lock_info);
   int get_table_lock_store_info(ObTableLockInfo &table_lock_info);
   // for deadlock detect.
   void set_table_lock_killed() { lock_mem_ctx_.set_killed(); }
   bool is_table_lock_killed() const { return lock_mem_ctx_.is_killed(); }
+#ifdef ENABLE_DEBUG_LOG
+  transaction::ObDefensiveCheckMgr *get_defensive_check_mgr() { return defensive_check_mgr_; }
+#endif
 private:
   int do_trans_end(
       const bool commit,
@@ -487,6 +499,9 @@ private:
   int clear_table_lock_(const bool is_commit,
                         const int64_t commit_version,
                         const int64_t commit_log_ts);
+  int clear_table_lock_(const bool is_commit,
+                        const palf::SCN &commit_version,
+                        const palf::SCN &commit_scn);
   int rollback_table_lock_(int64_t seq_no);
   int register_multi_source_data_if_need_(
       const transaction::tablelock::ObTableLockOp &lock_op,
@@ -505,14 +520,16 @@ private:
   {
     trans_mgr_.inc_flushed_log_size(size);
   }
+  bool is_partial_rollbacked_() { return ATOMIC_LOAD(&end_code_) == PARTIAL_ROLLBACKED; }
+  void set_partial_rollbacked_();
 public:
   inline ObRedoLogGenerator &get_redo_generator() { return log_gen_; }
 private:
+  static const int PARTIAL_ROLLBACKED = -1;
   DISALLOW_COPY_AND_ASSIGN(ObMemtableCtx);
   RWLock rwlock_;
   common::ObByteLock lock_;
   int end_code_;
-  int64_t tx_status_;
   int64_t ref_;
   // allocate memory for callback when query executing
   ObQueryAllocator query_allocator_;
@@ -521,6 +538,7 @@ private:
   MemtableCtxStat mtstat_;
   ObTimeInterval log_conflict_interval_;
   transaction::ObPartTransCtx *ctx_;
+  ObMemtableMutatorIterator *mutator_iter_;
   transaction::ObPartitionAuditInfoCache partition_audit_info_cache_;
   int64_t truncate_cnt_;
   // the retry count of lock for read
@@ -547,6 +565,9 @@ private:
   common::ObArray<transaction::ObTransID> conflict_trans_ids_;
   // table lock mem ctx.
   transaction::tablelock::ObLockMemCtx lock_mem_ctx_;
+#ifdef ENABLE_DEBUG_LOG
+  transaction::ObDefensiveCheckMgr *defensive_check_mgr_;
+#endif
   bool is_inited_;
 };
 

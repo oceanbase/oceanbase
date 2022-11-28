@@ -71,16 +71,15 @@ public:
   // @param[in], proposal_id, global monotonically increasing id
   virtual void switch_role(const common::ObRole &role, const int64_t proposal_id) override;
   // interface only for restore_and_standby branch, TODO should delete after no cut log by shuning.tsn
-  // get the restore end ts of the restore tenant
-  int get_upper_limit_ts(int64_t &ts) const;
+  int get_upper_limit_scn(palf::SCN &scn) const;
   // get the log ts of the max restored log
-  int get_max_restore_log_ts(int64_t &ts) const;
+  int get_max_restore_log_scn(palf::SCN &scn) const;
   // @brief add log fetch source of phyiscal backups
-  int add_source(share::DirArray &array, const int64_t end_log_ts);
+  int add_source(share::DirArray &array, const palf::SCN &end_log_scn);
   // for stale TODO delete after log archive source ready
-  int add_source(logservice::DirArray &array, const int64_t end_log_ts);
-  int add_source(share::ObBackupDest &dest, const int64_t end_log_ts);
-  int add_source(const ObAddr &addr, const int64_t end_log_ts);
+  int add_source(logservice::DirArray &array, const palf::SCN &end_log_scn);
+  int add_source(share::ObBackupDest &dest, const palf::SCN &end_log_scn);
+  int add_source(const ObAddr &addr, const palf::SCN &end_log_scn);
   // @brief As restore handler maybe destroyed, log source should be copied out
   void deep_copy_source(ObRemoteSourceGuard &guard);
   // @brief raw write logs to the pointed offset of palf
@@ -100,25 +99,25 @@ public:
   // @param[in] is_to_end, log fetch is to end, only for physical restore
   // @param[out] is_stale, fetch log task is stale due to cur_proposal_id is changed
   int update_fetch_log_progress(const int64_t id, const int64_t proposal_id, const LSN &max_fetch_lsn,
-      const int64_t max_submit_log_ts, const bool is_finish, const bool is_to_end, bool &is_stale);
+      const palf::SCN &max_submit_log_scn, const bool is_finish, const bool is_to_end, bool &is_stale);
   int update_location_info(ObRemoteLogParent *source);
   // @brief check if restore finish
   // return true only if in restore state and all replicas have restore and replay finish
   int check_restore_done(bool &done);
-  // only for physical restore to get the restore upper limit ts as sync_point if restore to end
+  // only for physical restore to get the restore upper limit scn as sync_point if restore to end
   // param[in], const share::ObLSID, the identification of LS
   // param[in], int64_t, the commit ts of LS
   // @param[out], int64_t, the restore upper ts if restore to the end
-  int get_restore_sync_ts(const share::ObLSID &id, int64_t &log_ts);
+  int get_restore_sync_scn(const share::ObLSID &id, palf::SCN &log_scn);
   void mark_error(share::ObTaskId &trace_id, const int ret_code);
   int get_restore_error(share::ObTaskId &trace_id, int &ret_code, bool &error_exist);
-  TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context));
+  TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KPC_(parent), K_(context));
 
 private:
   bool is_valid() const;
   void alloc_source(const share::ObLogArchiveSourceType &type);
-  int check_replay_done_(const int64_t timestamp, bool &done);
-  int check_replica_replay_done_(const int64_t timestamp, common::ObMemberList &member_list, bool &done);
+  int check_replay_done_(const palf::SCN &scn, bool &done);
+  int check_replica_replay_done_(const palf::SCN &scn, common::ObMemberList &member_list, bool &done);
   int check_member_list_change_(common::ObMemberList &member_list, bool &member_list_change);
 
 private:

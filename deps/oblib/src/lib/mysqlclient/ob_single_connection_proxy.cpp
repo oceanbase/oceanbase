@@ -71,6 +71,7 @@ int ObSingleConnectionProxy::connect(const uint64_t tenant_id, ObISQLClient *sql
   return ret;
 }
 
+
 int ObSingleConnectionProxy::read(ReadResult &res,
     const uint64_t tenant_id, const char *sql)
 {

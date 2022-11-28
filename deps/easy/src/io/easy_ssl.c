@@ -1707,6 +1707,14 @@ static int easy_ssl_dhparam(easy_ssl_ctx_t *ssl, char *file)
     DH                      *dh;
     BIO                     *bio;
 
+    /*
+     * -----BEGIN DH PARAMETERS-----
+     * MIGHAoGBALu8LcrYRnSQfEP89YDpz9vZWKP1aLQtSwju1OsPs1BMbAMCducQgAxc
+     * y7qokiYUxb7spWWl/fHSh6K8BJvmd4Bg6RqSp1fjBI9osHb302zI8pul34HcLKcl
+     * 7OZicMyaUDXYzs7vnqAnSmOrHlj6/UmI0PZdFGdX2gcd8EXP4WubAgEC
+     * -----END DH PARAMETERS-----
+     */
+
     static unsigned char    dh1024_p[] = {
         0xBB, 0xBC, 0x2D, 0xCA, 0xD8, 0x46, 0x74, 0x90, 0x7C, 0x43, 0xFC, 0xF5,
         0x80, 0xE9, 0xCF, 0xDB, 0xD9, 0x58, 0xA3, 0xF5, 0x68, 0xB4, 0x2D, 0x4B,
@@ -1774,6 +1782,19 @@ static int easy_ssl_dhparam_mysql(easy_ssl_ctx_t *ssl)
 {
     DH                      *dh;
 
+    /*
+      Diffie-Hellman key.
+      Generated using: >openssl dhparam -5 -C 2048
+
+      -----BEGIN DH PARAMETERS-----
+      MIIBCAKCAQEAil36wGZ2TmH6ysA3V1xtP4MKofXx5n88xq/aiybmGnReZMviCPEJ
+      46+7VCktl/RZ5iaDH1XNG1dVQmznt9pu2G3usU+k1/VB4bQL4ZgW4u0Wzxh9PyXD
+      glm99I9Xyj4Z5PVE4MyAsxCRGA1kWQpD9/zKAegUBPLNqSo886Uqg9hmn8ksyU9E
+      BV5eAEciCuawh6V0O+Sj/C3cSfLhgA0GcXp3OqlmcDu6jS5gWjn3LdP1U0duVxMB
+      h/neTSCSvtce4CAMYMjKNVh9P1nu+2d9ZH2Od2xhRIqMTfAS1KTqF3VmSWzPFCjG
+      mjxx/bg6bOOjpgZapvB6ABWlWmRmAAWFtwIBBQ==
+      -----END DH PARAMETERS-----
+     */
     static unsigned char dh2048_p[]=
     {
       0x8A, 0x5D, 0xFA, 0xC0, 0x66, 0x76, 0x4E, 0x61, 0xFA, 0xCA, 0xC0, 0x37,

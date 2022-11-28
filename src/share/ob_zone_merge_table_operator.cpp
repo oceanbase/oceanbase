@@ -106,13 +106,17 @@ int ObZoneMergeTableOperator::update_partial_zone_merge_info(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("null item", KR(ret), KP(it), K(tenant_id), K(info));
         } else {
-          //TODO: SCN
           if (it->need_update_) {
-            if (OB_FAIL(dml.add_uint64_column(it->name_, it->value_))) {
-              LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(info), K(*it));
+            if (it->is_scn_) {
+              if (OB_FAIL(dml.add_uint64_column(it->name_, it->get_scn_val()))) {
+                LOG_WARN("fail to add scn column", KR(ret), K(tenant_id), K(info), K(*it));
+              }
             } else {
-              need_update = true;
+              if (OB_FAIL(dml.add_uint64_column(it->name_, it->value_))) {
+                LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(info), K(*it));
+              }
             }
+            need_update = true;
           }
           it = it->get_next();
         }
@@ -184,18 +188,18 @@ int ObZoneMergeTableOperator::inner_insert_or_update_zone_merge_infos_(
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
   for (int64_t i = 0; OB_SUCC(ret) && (i < info_cnt); ++i) {
     const ObZoneMergeInfo &cur_info = infos.at(i);
-    const uint64_t all_merged_scn = cur_info.all_merged_scn_.value_ < 0 ? 0 : cur_info.all_merged_scn_.value_;
-    const uint64_t broadcast_scn = cur_info.broadcast_scn_.value_ < 0 ? 0 : cur_info.broadcast_scn_.value_;
-    const uint64_t frozen_scn = cur_info.frozen_scn_.value_ < 0 ? 0 : cur_info.frozen_scn_.value_;
-    const uint64_t last_merged_scn = cur_info.last_merged_scn_.value_ < 0 ? 0 : cur_info.last_merged_scn_.value_;
+    const uint64_t all_merged_scn_val = cur_info.all_merged_scn_.get_scn_val();
+    const uint64_t broadcast_scn_val = cur_info.broadcast_scn_.get_scn_val();
+    const uint64_t frozen_scn_val = cur_info.frozen_scn_.get_scn_val();
+    const uint64_t last_merged_scn_val = cur_info.last_merged_scn_.get_scn_val();
     if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
         || OB_FAIL(dml.add_pk_column("zone", cur_info.zone_.ptr()))
-        || OB_FAIL(dml.add_uint64_column("all_merged_scn", all_merged_scn))
-        || OB_FAIL(dml.add_uint64_column("broadcast_scn", broadcast_scn))
-        || OB_FAIL(dml.add_uint64_column("frozen_scn", frozen_scn))
+        || OB_FAIL(dml.add_uint64_column("all_merged_scn", all_merged_scn_val))
+        || OB_FAIL(dml.add_uint64_column("broadcast_scn", broadcast_scn_val))
+        || OB_FAIL(dml.add_uint64_column("frozen_scn", frozen_scn_val))
         || OB_FAIL(dml.add_uint64_column("is_merging", cur_info.is_merging_.value_))
         || OB_FAIL(dml.add_uint64_column("last_merged_time", cur_info.last_merged_time_.value_))
-        || OB_FAIL(dml.add_uint64_column("last_merged_scn", last_merged_scn))
+        || OB_FAIL(dml.add_uint64_column("last_merged_scn", last_merged_scn_val))
         || OB_FAIL(dml.add_uint64_column("merge_start_time", cur_info.merge_start_time_.value_))
         || OB_FAIL(dml.add_uint64_column("merge_status", cur_info.merge_status_.value_))) {
       LOG_WARN("fail to add column", KR(ret), K(cur_info));
@@ -388,17 +392,32 @@ int ObZoneMergeTableOperator::construct_zone_merge_info_(
   int64_t tenant_id = 0;
   char zone_buf[OB_MAX_TZ_NAME_LEN] = "";
   ObZoneMergeInfo tmp_merge_info;
+  uint64_t all_merged_scn = 0;
+  uint64_t broadcast_scn = 0;
+  uint64_t frozen_scn = 0;
+  uint64_t last_merged_scn = 0;
 
   EXTRACT_INT_FIELD_MYSQL(result, "tenant_id", tmp_merge_info.tenant_id_, int64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, "all_merged_scn", tmp_merge_info.all_merged_scn_.value_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, "broadcast_scn", tmp_merge_info.broadcast_scn_.value_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, "frozen_scn", tmp_merge_info.frozen_scn_.value_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, "all_merged_scn", all_merged_scn, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, "broadcast_scn", broadcast_scn, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, "frozen_scn", frozen_scn, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "is_merging", tmp_merge_info.is_merging_.value_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "last_merged_time", tmp_merge_info.last_merged_time_.value_, int64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, "last_merged_scn", tmp_merge_info.last_merged_scn_.value_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, "last_merged_scn", last_merged_scn, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "merge_start_time", tmp_merge_info.merge_start_time_.value_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "merge_status", tmp_merge_info.merge_status_.value_, int64_t);
   EXTRACT_STRBUF_FIELD_MYSQL(result, "zone", zone_buf, static_cast<int64_t>(sizeof(zone_buf)), tmp_real_str_len);
+
+  if (FAILEDx(tmp_merge_info.all_merged_scn_.set_scn(all_merged_scn))) {
+    LOG_WARN("fail to set scn val", KR(ret), K(all_merged_scn));
+  } else if (OB_FAIL(tmp_merge_info.broadcast_scn_.set_scn(broadcast_scn))) {
+    LOG_WARN("fail to set scn val", KR(ret), K(broadcast_scn));
+  } else if (OB_FAIL(tmp_merge_info.frozen_scn_.set_scn(frozen_scn))) {
+    LOG_WARN("fail to set scn val", KR(ret), K(frozen_scn));
+  } else if (OB_FAIL(tmp_merge_info.last_merged_scn_.set_scn(last_merged_scn))) {
+    LOG_WARN("fail to set scn val", KR(ret), K(last_merged_scn));
+  }
+
   if (OB_SUCC(ret)) {
     tmp_merge_info.zone_ = zone_buf;
 

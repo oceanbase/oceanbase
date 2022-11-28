@@ -38,7 +38,6 @@ OB_SERIALIZE_MEMBER_INHERIT(ObTxCommitMsg, ObTxMsg, expire_ts_, parts_, app_trac
 OB_SERIALIZE_MEMBER_INHERIT(ObTxCommitRespMsg, ObTxMsg, ret_, commit_version_);
 OB_SERIALIZE_MEMBER_INHERIT(ObTxAbortMsg, ObTxMsg, reason_);
 OB_SERIALIZE_MEMBER_INHERIT(ObTxKeepaliveMsg, ObTxMsg, status_);
-OB_SERIALIZE_MEMBER_INHERIT(ObTxKeepaliveRespMsg, ObTxMsg, status_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareReqMsg, ObTxMsg, upstream_, app_trace_info_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPrepareRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);
 OB_SERIALIZE_MEMBER_INHERIT(Ob2pcPreCommitReqMsg, ObTxMsg, commit_version_);
@@ -188,8 +187,8 @@ bool ObTxCommitRespMsg::is_valid() const
 {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == TX_COMMIT_RESP
-     && ((OB_SUCCESS == ret_ && commit_version_ > OB_INVALID_TIMESTAMP) 
-     || (OB_SUCCESS != ret_ && commit_version_ == OB_INVALID_TIMESTAMP))) {
+     && ((OB_SUCCESS == ret_ && commit_version_.is_valid())
+     || (OB_SUCCESS != ret_ && !commit_version_.is_valid()))) {
     ret = true;
   }
   return ret;
@@ -223,15 +222,6 @@ bool ObTxKeepaliveMsg::is_valid() const
   return ret;
 }
 
-bool ObTxKeepaliveRespMsg::is_valid() const
-{
-  bool ret = false;
-  if (ObTxMsg::is_valid() && type_ == KEEPALIVE_RESP) {
-    ret = true;
-  }
-  return ret;
-}
-
 bool Ob2pcPrepareReqMsg::is_valid() const
 {
   bool ret = false;
@@ -246,7 +236,7 @@ bool Ob2pcPrepareRespMsg::is_valid() const
 {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == TX_2PC_PREPARE_RESP
-      && prepare_version_ > OB_INVALID_TIMESTAMP
+      && prepare_version_.is_valid()
       && prepare_info_array_.count() > 0) {
     ret = true;
   }
@@ -257,7 +247,7 @@ bool Ob2pcPreCommitReqMsg::is_valid() const
 {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == TX_2PC_PRE_COMMIT_REQ
-      && commit_version_ > OB_INVALID_TIMESTAMP) {
+      && commit_version_.is_valid()) {
     ret = true;
   }
   return ret;
@@ -267,7 +257,7 @@ bool Ob2pcPreCommitRespMsg::is_valid() const
 {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == TX_2PC_PRE_COMMIT_RESP
-      && commit_version_ > OB_INVALID_TIMESTAMP) {
+      && commit_version_.is_valid()) {
     ret = true;
   }
   return ret;
@@ -277,7 +267,7 @@ bool Ob2pcCommitReqMsg::is_valid() const
 {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == TX_2PC_COMMIT_REQ
-      && commit_version_ > OB_INVALID_TIMESTAMP
+      && commit_version_.is_valid()
       && prepare_info_array_.count() > 0) {
     ret = true;
   }
@@ -288,7 +278,7 @@ bool Ob2pcCommitRespMsg::is_valid() const
 {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == TX_2PC_COMMIT_RESP
-      && commit_version_ > OB_INVALID_TIMESTAMP) {
+      && commit_version_.is_valid()) {
     ret = true;
   }
   return ret;
@@ -362,7 +352,7 @@ bool Ob2pcPrepareVersionRespMsg::is_valid() const
 {
   bool ret = false;
   if (ObTxMsg::is_valid() && type_ == TX_2PC_PREPARE_VERSION_RESP
-      && prepare_version_ > OB_INVALID_TIMESTAMP
+      && prepare_version_.is_valid()
       && prepare_info_array_.count() > 0) {
     ret = true;
   }

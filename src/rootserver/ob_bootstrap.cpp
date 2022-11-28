@@ -52,6 +52,7 @@
 #include "observer/ob_server_struct.h"
 #include "rootserver/freeze/ob_freeze_info_manager.h"
 #include "rootserver/ob_table_creator.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -579,13 +580,22 @@ int ObBootstrap::generate_table_schema_array_for_create_partition(
   const uint64_t table_id = tschema.get_table_id();
   int64_t tschema_idx = table_schema_array.count();
 
-  if (OB_FAIL(table_schema_array.push_back(tschema))) {
-    LOG_WARN("fail to push back", KR(ret));
-  } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
-             OB_SYS_TENANT_ID, table_id, table_schema_array))) {
-    LOG_WARN("fail to append sys table index schemas", KR(ret), K(table_id));
-  } else if (OB_FAIL(add_sys_table_lob_aux_table(table_id, table_schema_array))) {
-    LOG_WARN("fail to add lob table to sys table", KR(ret), K(table_id));
+  HEAP_VAR(ObTableSchema, index_schema) {
+    if (OB_FAIL(table_schema_array.push_back(tschema))) {
+      LOG_WARN("fail to push back", KR(ret));
+    } else if (ObSysTableChecker::is_sys_table_has_index(table_id)) {
+      if (OB_FAIL(ObSysTableChecker::get_sys_table_index_schema(
+          table_id, index_schema))) {
+        LOG_WARN("fail to get sys table's index schema", KR(ret), K(table_id));
+      } else if (OB_FAIL(table_schema_array.push_back(index_schema))) {
+        LOG_WARN("fail to push back index schema", KR(ret), K(index_schema));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(add_sys_table_lob_aux_table(table_id, table_schema_array))) {
+      LOG_WARN("fail to add lob table to sys table", KR(ret), K(table_id));
+    }
   }
   return ret;
 }
@@ -658,7 +668,7 @@ int ObBootstrap::create_all_core_table_partition()
     ObMySQLTransaction trans;
     ObMySQLProxy &sql_proxy = ddl_service_.get_sql_proxy();
     ObTableCreator table_creator(OB_SYS_TENANT_ID,
-                                 ObFreezeInfoManager::ORIGIN_FROZEN_SCN,
+                                 palf::SCN::base_scn(),
                                  lst_operator_,
                                  trans);
     if (OB_FAIL(trans.start(&sql_proxy, OB_SYS_TENANT_ID))) {
@@ -707,7 +717,7 @@ int ObBootstrap::create_all_partitions()
     ObMySQLTransaction trans;
     ObMySQLProxy &sql_proxy = ddl_service_.get_sql_proxy();
     ObTableCreator table_creator(OB_SYS_TENANT_ID,
-                                 ObFreezeInfoManager::ORIGIN_FROZEN_SCN,
+                                 palf::SCN::base_scn(),
                                  lst_operator_,
                                  trans);
     if (OB_FAIL(trans.start(&sql_proxy, OB_SYS_TENANT_ID))) {
@@ -788,7 +798,7 @@ int ObBootstrap::construct_all_schema(ObIArray<ObTableSchema> &table_schemas)
   } else if (OB_FAIL(table_schemas.reserve(OB_SYS_TABLE_COUNT))) {
     LOG_WARN("reserve failed", "capacity", OB_SYS_TABLE_COUNT, KR(ret));
   } else {
-    HEAP_VAR(ObTableSchema, data_schema) {
+    HEAP_VARS_2((ObTableSchema, index_schema), (ObTableSchema, data_schema)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
         for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
              OB_SUCCESS == ret && NULL != *creator_ptr; ++creator_ptr) {
@@ -803,12 +813,19 @@ int ObBootstrap::construct_all_schema(ObIArray<ObTableSchema> &table_schemas)
           } else if (!exist) {
             // skip
           } else if (ObSysTableChecker::is_sys_table_has_index(table_schema.get_table_id())) {
+            index_schema.reset();
             const int64_t data_table_id = table_schema.get_table_id();
-            if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(table_schema))) {
-              LOG_WARN("fail to fill sys index infos", KR(ret), K(data_table_id));
-            } else if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
-                       OB_SYS_TENANT_ID, data_table_id, table_schemas))) {
-              LOG_WARN("fail to append sys table index schemas", KR(ret), K(data_table_id));
+            if (OB_FAIL(ObSysTableChecker::get_sys_table_index_schema(data_table_id, index_schema))) {
+              LOG_WARN("fail to get sys table's index schema", KR(ret), K(data_table_id));
+            } else if (OB_FAIL(table_schema.add_simple_index_info(ObAuxTableMetaInfo(
+                       index_schema.get_table_id(),
+                       index_schema.get_table_type(),
+                       index_schema.get_index_type())))) {
+              LOG_WARN("fail to add simple_index_info", KR(ret), K(table_schema));
+            } else if (OB_FAIL(table_schemas.push_back(index_schema))) {
+              LOG_WARN("push_back failed", KR(ret), K(index_schema));
+            } else {
+              LOG_INFO("create sys index schema", KR(ret), K(table_schema), K(index_schema));
             }
           }
 
@@ -1156,7 +1173,7 @@ int ObBootstrap::init_global_stat()
   } else {
     const int64_t baseline_schema_version = -1;
     const int64_t rootservice_epoch = 0;
-    const int64_t snapshot_gc_ts = 0;
+    const palf::SCN snapshot_gc_scn = palf::SCN::min_scn();
     const int64_t snapshot_gc_timestamp = 0;
     ObGlobalStatProxy global_stat_proxy(trans, OB_SYS_TENANT_ID);
     ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
@@ -1167,7 +1184,7 @@ int ObBootstrap::init_global_stat()
       LOG_WARN("schema_status_proxy is null", K(ret));
     } else if (OB_FAIL(global_stat_proxy.set_init_value(
                OB_CORE_SCHEMA_VERSION, baseline_schema_version,
-               rootservice_epoch, snapshot_gc_ts, snapshot_gc_timestamp))) {
+               rootservice_epoch, snapshot_gc_scn, snapshot_gc_timestamp))) {
       LOG_WARN("set_init_value failed", K(ret),
                "schema_version", OB_CORE_SCHEMA_VERSION, K(baseline_schema_version),
                K(rootservice_epoch));
@@ -1360,13 +1377,12 @@ int ObBootstrap::insert_sys_ls_(const share::schema::ObTenantSchema &tenant_sche
   if (OB_SUCC(ret)) {
     ObLSLifeAgentManager life_agent(ddl_service_.get_sql_proxy());
     share::ObLSStatusInfo status_info;
-    const int64_t current_scn = OB_LS_MIN_SCN_VALUE;
     const uint64_t unit_group_id = 0;
     const uint64_t ls_group_id = 0;
     if (OB_FAIL(status_info.init(OB_SYS_TENANT_ID, SYS_LS, ls_group_id,
             share::OB_LS_NORMAL, unit_group_id, primary_zone))) {
       LOG_WARN("failed to init ls info", KR(ret), K(primary_zone));
-    } else if (OB_FAIL(life_agent.create_new_ls(status_info, current_scn, primary_zone_str.string()))) {
+    } else if (OB_FAIL(life_agent.create_new_ls(status_info, palf::SCN::base_scn(), primary_zone_str.string()))) {
       LOG_WARN("failed to get init member list", KR(ret), K(status_info), K(primary_zone_str));
     }
   }

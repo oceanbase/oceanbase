@@ -2316,9 +2316,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           c_expr->set_expr_obj_meta(question_mark_meta);
           if (NULL == ctx_.external_param_info_) {
             /*do nothing...*/
-          } else if (ctx_.is_for_dbms_sql_
-                     || (ctx_.is_for_dynamic_sql_ && OB_NOT_NULL(session_info->get_pl_context()))){
-            //NOTICE: only need to process PL dynamic sql and dbms sql
+          } else if (ctx_.is_for_dynamic_sql_ || ctx_.is_for_dbms_sql_) {
             /*dynmaic and dbms sql already prepare question mark in parse stage.*/
             bool need_save = true;
             for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.external_param_info_->count(); ++i) {
@@ -2384,16 +2382,6 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             c_expr->set_accuracy(param.get_accuracy());
             c_expr->set_result_flag(param.get_result_flag()); // not_null etc
             c_expr->set_param(param);
-
-            sql::ObExprResType result_type = c_expr->get_result_type();
-            if (result_type.get_length() == -1) {
-              if (result_type.is_varchar() || result_type.is_nvarchar2()) {
-                result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
-              } else if (result_type.is_char() || result_type.is_nchar()) {
-                result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);
-              }
-            }
-            c_expr->set_result_type(result_type);
           }
 //execute阶段不需要统计prepare_param_count_的个数
 //          ctx_.prepare_param_count_++;
@@ -3804,7 +3792,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
       int64_t pos = (T_FUN_GROUPING == node->type_) ? 0 : 1;
       if ((T_FUN_VAR_POP == node->type_ || T_FUN_VAR_SAMP == node->type_ ||
            T_FUN_STDDEV_POP == node->type_ || T_FUN_STDDEV_SAMP == node->type_
-           || T_FUN_MEDIAN == node->type_ || T_FUN_JSON_ARRAYAGG == node->type_) &&
+           || T_FUN_MEDIAN == node->type_) &&
           node->children_[0] != NULL && node->children_[0]->type_ == T_DISTINCT) {
         ret = OB_DISTINCT_NOT_ALLOWED;
         LOG_WARN("distinct not allowed in aggr", K(ret));
@@ -6486,7 +6474,6 @@ int ObRawExprResolverImpl::process_odbc_time_literals(const ObItemType dst_time_
       tmp_node.num_child_ = 0;
       tmp_node.str_len_ = time_str.length();
       tmp_node.str_value_ = time_str.ptr();
-      tmp_node.is_date_unit_ = false;
       if (OB_FAIL(process_datatype_or_questionmark(tmp_node, expr))) {
         if (ret == OB_ERR_WRONG_VALUE) {//invalid time str, go back default way like Mysql.
           ret = OB_SUCCESS;

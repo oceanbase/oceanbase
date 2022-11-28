@@ -39,10 +39,9 @@ public:
   ObComplementDataParam():
     is_inited_(false), tenant_id_(common::OB_INVALID_TENANT_ID), ls_id_(share::ObLSID::INVALID_LS_ID), 
     source_tablet_id_(ObTabletID::INVALID_TABLET_ID), dest_tablet_id_(ObTabletID::INVALID_TABLET_ID), 
-    data_table_schema_(nullptr), hidden_table_schema_(nullptr), allocator_("CompleteDataPar"), 
+    data_table_schema_(nullptr), hidden_table_schema_(nullptr), allocator_("ComplementData"),
     row_store_type_(common::ENCODING_ROW_STORE), schema_version_(0), snapshot_version_(0),
-    concurrent_cnt_(0), task_id_(0), execution_id_(0), tablet_task_id_(0),
-    compat_mode_(lib::Worker::CompatMode::INVALID)
+    concurrent_cnt_(0), task_id_(0), compat_mode_(lib::Worker::CompatMode::INVALID)
   {}
   ~ObComplementDataParam() { destroy(); }
   int init(const ObDDLBuildSingleReplicaRequestArg &arg);
@@ -52,8 +51,7 @@ public:
   {
     return common::OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid()
            && dest_tablet_id_.is_valid() && OB_NOT_NULL(data_table_schema_) && OB_NOT_NULL(hidden_table_schema_)
-           && 0 != concurrent_cnt_ && snapshot_version_ > 0 && compat_mode_ != lib::Worker::CompatMode::INVALID
-           && execution_id_ > 0 && tablet_task_id_ > 0;
+           && 0 != concurrent_cnt_ && snapshot_version_ > 0 && compat_mode_ != lib::Worker::CompatMode::INVALID;
   }
   int get_hidden_table_key(ObITable::TableKey &table_key) const;
   void destroy()
@@ -71,20 +69,17 @@ public:
     }
     data_table_schema_ = nullptr;
     hidden_table_schema_ = nullptr;
-    ranges_.reset();
     allocator_.reset();
     row_store_type_ = common::ENCODING_ROW_STORE;
     schema_version_ = 0;
     snapshot_version_ = 0;
     concurrent_cnt_ = 0;
     task_id_ = 0;
-    execution_id_ = 0;
-    tablet_task_id_ = 0;
     compat_mode_ = lib::Worker::CompatMode::INVALID;
   }
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(ls_id), K_(source_tablet_id), K_(dest_tablet_id),
-      KPC_(data_table_schema), KPC_(hidden_table_schema), K_(schema_version), K_(tablet_task_id),
-      K_(snapshot_version), K_(concurrent_cnt), K_(task_id), K_(execution_id), K_(compat_mode));
+      KPC_(data_table_schema), KPC_(hidden_table_schema), K_(schema_version),
+      K_(snapshot_version), K_(concurrent_cnt), K_(task_id), K_(compat_mode));
 public:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -99,8 +94,6 @@ public:
   int64_t snapshot_version_;
   int64_t concurrent_cnt_;
   int64_t task_id_;
-  int64_t execution_id_;
-  int64_t tablet_task_id_;
   lib::Worker::CompatMode compat_mode_;
   ObSEArray<common::ObStoreRange, 32> ranges_;
 };
@@ -109,24 +102,21 @@ struct ObComplementDataContext final
 {
 public:
   ObComplementDataContext():
-    is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
-    allocator_("CompleteDataCtx"), lock_(), concurrent_cnt_(0), data_sstable_redo_writer_(), index_builder_(nullptr)
+    is_inited_(false), complement_data_ret_(common::OB_SUCCESS),
+    allocator_("ComplementData"), lock_(), concurrent_cnt_(0), data_sstable_redo_writer_(), index_builder_(nullptr)
   {}
   ~ObComplementDataContext() { destroy(); }
   int init(const ObComplementDataParam &param, const ObDataStoreDesc &desc);
   void destroy();
-  int write_start_log(const ObComplementDataParam &param);
   TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder));
 public:
   bool is_inited_;
-  bool is_major_sstable_exist_;
   int complement_data_ret_;
   common::ObArenaAllocator allocator_;
   ObSpinLock lock_;
   int64_t concurrent_cnt_;
   ObDDLSSTableRedoWriter data_sstable_redo_writer_;
   blocksstable::ObSSTableIndexBuilder *index_builder_;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle_; // for keeping ddl kv mgr alive
 };
 
 class ObComplementPrepareTask;
@@ -138,7 +128,6 @@ public:
   ObComplementDataDag();
   ~ObComplementDataDag();
   int init(const ObDDLBuildSingleReplicaRequestArg &arg);
-  int prepare_context();
   int64_t hash() const;
   bool operator ==(const share::ObIDag &other) const;
   bool is_inited() const { return is_inited_; }
@@ -149,7 +138,6 @@ public:
   int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return param_.compat_mode_; }
-  virtual int create_first_task() override;
   // report replica build status to RS.
   int report_replica_build_status();
 private:
@@ -166,6 +154,9 @@ public:
   ~ObComplementPrepareTask();
   int init(ObComplementDataParam &param, ObComplementDataContext &context);
   int process() override;
+private:
+  int generate_complement_write_task(ObComplementDataDag *dag, ObComplementWriteTask *&write_task);
+  int generate_complement_merge_task(ObComplementDataDag *dag, ObComplementWriteTask *write_task, ObComplementMergeTask *&merge_task);
 private:
   bool is_inited_;
   ObComplementDataParam *param_;

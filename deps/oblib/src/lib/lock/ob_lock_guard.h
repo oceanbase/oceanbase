@@ -25,7 +25,7 @@ template <typename LockT>
 class ObLockGuard
 {
 public:
-  [[nodiscard]] explicit ObLockGuard(LockT &lock);
+  explicit ObLockGuard(LockT &lock);
   ~ObLockGuard();
   inline int get_ret() const { return ret_; }
 private:

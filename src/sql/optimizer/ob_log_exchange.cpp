@@ -404,7 +404,7 @@ int ObLogExchange::re_est_cost(EstimateCostInfo &param, double &card, double &co
         param.need_row_count_ = -1; //reset need row count
       }
     }
-    if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+    if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
       LOG_WARN("failed to re est exchange cost", K(ret));
     } else if (OB_FAIL(inner_est_cost(child_card, op_cost))) {
       LOG_WARN("failed to est exchange cost", K(ret));

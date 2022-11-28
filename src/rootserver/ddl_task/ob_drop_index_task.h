@@ -31,8 +31,7 @@ public:
       const uint64_t data_table_id,
       const uint64_t index_table_id,
       const int64_t schema_version,
-      const int64_t parent_task_id,
-      const obrpc::ObDropIndexArg &drop_index_arg);
+      const int64_t parent_task_id);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
   virtual bool is_valid() const override;
@@ -52,20 +51,10 @@ private:
   int drop_index(const share::ObDDLTaskStatus new_status);
   int succ();
   int fail();
-  int deep_copy_index_arg(common::ObIAllocator &allocator,
-                          const obrpc::ObDropIndexArg &src_index_arg,
-                          obrpc::ObDropIndexArg &dst_index_arg);
-  virtual bool is_error_need_retry(const int ret_code) override
-  {
-    UNUSED(ret_code);
-    // we should always retry on drop index task
-    return task_status_ < share::ObDDLTaskStatus::DROP_SCHEMA;
-  }
 private:
   static const int64_t OB_DROP_INDEX_TASK_VERSION = 1;
   ObDDLWaitTransEndCtx wait_trans_ctx_;
   ObRootService *root_service_;
-  obrpc::ObDropIndexArg drop_index_arg_;
 };
 
 }  // end namespace rootserver

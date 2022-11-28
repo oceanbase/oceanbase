@@ -33,6 +33,7 @@
 
 namespace oceanbase
 {
+using namespace palf;
 namespace logservice
 {
 using namespace oceanbase::share;
@@ -132,34 +133,34 @@ bool ObLogRestoreHandler::is_valid() const
          && NULL != palf_env_;
 }
 
-int ObLogRestoreHandler::get_upper_limit_ts(int64_t &ts) const
+int ObLogRestoreHandler::get_upper_limit_scn(SCN &scn) const
 {
   RLockGuard guard(lock_);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(parent_)) {
     ret = OB_EAGAIN;
   } else {
-    parent_->get_upper_limit_ts(ts);
+    parent_->get_upper_limit_scn(scn);
   }
   return ret;
 }
 
-int ObLogRestoreHandler::get_max_restore_log_ts(int64_t &ts) const
+int ObLogRestoreHandler::get_max_restore_log_scn(SCN &scn) const
 {
   RLockGuard guard(lock_);
   int ret = OB_SUCCESS;
   if (OB_ISNULL(parent_) || ! parent_->to_end()) {
     ret = OB_EAGAIN;
   } else {
-    parent_->get_end_ts(ts);
+    parent_->get_end_scn(scn);
   }
   return ret;
 }
 
-int ObLogRestoreHandler::add_source(share::DirArray &array, const int64_t end_log_ts)
+int ObLogRestoreHandler::add_source(share::DirArray &array, const SCN &end_log_scn)
 {
   UNUSED(array);
-  UNUSED(end_log_ts);
+  UNUSED(end_log_scn);
   /*
   WLockGuard guard(lock_);
   if (IS_NOT_INIT) {
@@ -185,7 +186,7 @@ int ObLogRestoreHandler::add_source(share::DirArray &array, const int64_t end_lo
   return OB_NOT_SUPPORTED;;
 }
 
-int ObLogRestoreHandler::add_source(logservice::DirArray &array, const int64_t end_log_ts)
+int ObLogRestoreHandler::add_source(logservice::DirArray &array, const SCN &end_log_scn)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
@@ -197,16 +198,16 @@ int ObLogRestoreHandler::add_source(logservice::DirArray &array, const int64_t e
     // not leader, just skip
     ret = OB_NOT_MASTER;
     */
-  } else if (OB_UNLIKELY(array.empty() || OB_INVALID_TIMESTAMP == end_log_ts)) {
+  } else if (OB_UNLIKELY(array.empty() || !end_log_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(array), K(end_log_ts), KPC(this));
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(array), K(end_log_scn), KPC(this));
   } else if (FALSE_IT(alloc_source(share::ObLogArchiveSourceType::RAWPATH))) {
   } else if (NULL == parent_) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     ObRemoteRawPathParent *source = static_cast<ObRemoteRawPathParent *>(parent_);
-    if (OB_FAIL(source->set(array, end_log_ts))) {
-      CLOG_LOG(WARN, "ObRemoteRawPathParent set failed", K(ret), K(array), K(end_log_ts));
+    if (OB_FAIL(source->set(array, end_log_scn))) {
+      CLOG_LOG(WARN, "ObRemoteRawPathParent set failed", K(ret), K(array), K(end_log_scn));
       ObResSrcAlloctor::free(parent_);
       parent_ = NULL;
     }
@@ -214,7 +215,7 @@ int ObLogRestoreHandler::add_source(logservice::DirArray &array, const int64_t e
   return ret;;
 }
 
-int ObLogRestoreHandler::add_source(share::ObBackupDest &dest, const int64_t end_log_ts)
+int ObLogRestoreHandler::add_source(share::ObBackupDest &dest, const SCN &end_log_scn)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
@@ -223,16 +224,16 @@ int ObLogRestoreHandler::add_source(share::ObBackupDest &dest, const int64_t end
     CLOG_LOG(WARN, "ObLogRestoreHandler not init", K(ret), KPC(this));
   } else if (! is_strong_leader(role_)) {
     // not leader, just skip
-  } else if (OB_UNLIKELY(! dest.is_valid() || OB_INVALID_TIMESTAMP == end_log_ts)) {
+  } else if (OB_UNLIKELY(! dest.is_valid() || !end_log_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-     CLOG_LOG(WARN, "invalid argument", K(ret), K(end_log_ts), K(dest), KPC(this));
+     CLOG_LOG(WARN, "invalid argument", K(ret), K(end_log_scn), K(dest), KPC(this));
   } else if (FALSE_IT(alloc_source(share::ObLogArchiveSourceType::LOCATION))) {
   } else if (NULL == parent_) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     ObRemoteLocationParent *source = static_cast<ObRemoteLocationParent *>(parent_);
-    if (OB_FAIL(source->set(dest, end_log_ts))) {
-      CLOG_LOG(WARN, "ObRemoteLocationParent set failed", K(ret), K(end_log_ts), K(dest));
+    if (OB_FAIL(source->set(dest, end_log_scn))) {
+      CLOG_LOG(WARN, "ObRemoteLocationParent set failed", K(ret), K(end_log_scn), K(dest));
       ObResSrcAlloctor::free(parent_);
       parent_ = NULL;
     }
@@ -240,7 +241,7 @@ int ObLogRestoreHandler::add_source(share::ObBackupDest &dest, const int64_t end
   return ret;
 }
 
-int ObLogRestoreHandler::add_source(const common::ObAddr &addr, const int64_t end_log_ts)
+int  ObLogRestoreHandler::add_source(const common::ObAddr &addr, const SCN &end_log_scn)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
@@ -249,17 +250,17 @@ int ObLogRestoreHandler::add_source(const common::ObAddr &addr, const int64_t en
     CLOG_LOG(WARN, "ObLogRestoreHandler not init", K(ret), KPC(this));
   } else if (! is_strong_leader(role_)) {
     // not leader, just skip
-  } else if (OB_UNLIKELY(!addr.is_valid() || OB_INVALID_TIMESTAMP == end_log_ts)) {
+  } else if (OB_UNLIKELY(!addr.is_valid() || !end_log_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(end_log_ts), K(addr), KPC(this));
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(end_log_scn), K(addr), KPC(this));
   } else if (FALSE_IT(alloc_source(ObLogArchiveSourceType::SERVICE))) {
   } else if (NULL == parent_) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     ObRemoteSerivceParent *source = static_cast<ObRemoteSerivceParent *>(parent_);
-    if (OB_FAIL(source->set(addr, end_log_ts))) {
+    if (OB_FAIL(source->set(addr, end_log_scn))) {
       CLOG_LOG(WARN, "ObRemoteSerivceParent set failed",
-          K(ret), K(end_log_ts), K(addr), KPC(this));
+          K(ret), K(end_log_scn), K(addr), KPC(this));
       ObResSrcAlloctor::free(parent_);
       parent_ = NULL;
     }
@@ -349,7 +350,7 @@ int ObLogRestoreHandler::schedule(const int64_t id,
 int ObLogRestoreHandler::update_fetch_log_progress(const int64_t id,
     const int64_t proposal_id,
     const LSN &max_fetch_lsn,
-    const int64_t max_submit_log_ts,
+    const SCN &max_submit_log_scn,
     const bool is_finished,
     const bool is_to_end,
     bool &is_stale)
@@ -371,7 +372,7 @@ int ObLogRestoreHandler::update_fetch_log_progress(const int64_t id,
     context_.issued_ = ! is_finished && ! is_to_end;
     context_.max_fetch_lsn_ = max_fetch_lsn;
     context_.last_fetch_ts_ = ObTimeUtility::current_time();
-    parent_->set_to_end(is_to_end, max_submit_log_ts);
+    parent_->set_to_end(is_to_end, max_submit_log_scn);
   }
   return ret;
 }
@@ -471,17 +472,17 @@ void ObLogRestoreHandler::alloc_source(const ObLogArchiveSourceType &type)
   }
 }
 
-int ObLogRestoreHandler::get_restore_sync_ts(const share::ObLSID &id, int64_t &log_ts)
+int ObLogRestoreHandler::get_restore_sync_scn(const share::ObLSID &id, SCN &log_scn)
 {
   int ret = OB_SUCCESS;
-  int64_t upper_limit_ts = OB_INVALID_TIMESTAMP;
   UNUSED(id);
+  SCN upper_limit_scn;
   RLockGuard guard(lock_);
   if (OB_ISNULL(parent_)) {
     ret = OB_EAGAIN;
   } else {
-    parent_->get_upper_limit_ts(upper_limit_ts);
-    log_ts = std::max(log_ts, upper_limit_ts);
+    parent_->get_upper_limit_scn(upper_limit_scn);
+    log_scn = log_scn > upper_limit_scn ? log_scn : upper_limit_scn;
   }
   return ret;
 }
@@ -489,8 +490,8 @@ int ObLogRestoreHandler::get_restore_sync_ts(const share::ObLSID &id, int64_t &l
 int ObLogRestoreHandler::check_restore_done(bool &done)
 {
   int ret = OB_SUCCESS;
-  int64_t end_ts = OB_INVALID_TIMESTAMP;
-  int64_t replay_ts = OB_INVALID_TIMESTAMP;
+  SCN end_scn;
+  SCN replay_scn;
   done = false;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
@@ -506,10 +507,10 @@ int ObLogRestoreHandler::check_restore_done(bool &done)
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
       CLOG_LOG(WARN, "log not restore to end, need wait", K(ret), KPC(this));
     }
-  } else if (FALSE_IT(parent_->get_end_ts(end_ts))) {
-  } else if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_log_ts_ns(ObLSID(id_), replay_ts))) {
+  } else if (FALSE_IT(parent_->get_end_scn(end_scn))) {
+  } else if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_log_scn(ObLSID(id_), replay_scn))) {
     CLOG_LOG(WARN, "get min unreplay log ts failed", K(ret), KPC(this));
-  } else if (replay_ts > end_ts) {
+  } else if (replay_scn > end_scn) {
     done = true;
     CLOG_LOG(INFO, "check restore done succ", KPC(this));
   }

@@ -258,7 +258,6 @@ void ObPDMLOpBatchRowCache::destroy()
     LOG_TRACE("destroy the batch row cache, but the cache_rows_num_ is not zero",
               K(cached_rows_num_));
   }
-  (void)free_datum_store_memory();
   pstore_map_.destroy();
   sql_mem_processor_.unregister_profile();
   sql_mem_processor_.destroy();
@@ -285,17 +284,6 @@ int ObPDMLOpBatchRowCache::reuse_after_rows_processed()
               K(sql_mem_processor_.get_data_size()),
               K(sql_mem_processor_.get_mem_bound()));
   }
-  ret = free_datum_store_memory();
-  pstore_map_.reuse();
-  cached_rows_num_ = 0;
-  cached_rows_size_ = 0;
-  cached_in_mem_rows_num_ = 0;
-  return ret;
-}
-
-int ObPDMLOpBatchRowCache::free_datum_store_memory()
-{
-  int ret = OB_SUCCESS;
   PartitionStoreMap::iterator iter = pstore_map_.begin();
   ObChunkDatumStore *store = nullptr;
   for (; OB_SUCC(ret) && iter != pstore_map_.end(); ++iter) {
@@ -308,6 +296,10 @@ int ObPDMLOpBatchRowCache::free_datum_store_memory()
       mem_context_->get_malloc_allocator().free(store);
     }
   }
+  pstore_map_.reuse();
+  cached_rows_num_ = 0;
+  cached_rows_size_ = 0;
+  cached_in_mem_rows_num_ = 0;
   return ret;
 }
 

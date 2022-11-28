@@ -690,8 +690,7 @@ int ObTableScanOp::prepare_das_task()
     }
   } else if (OB_LIKELY(nullptr == MY_CTDEF.das_dppr_tbl_)) {
     ObDASTableLoc *table_loc = tsc_rtdef_.scan_rtdef_.table_loc_;
-    for (DASTabletLocListIter node = table_loc->tablet_locs_begin();
-         OB_SUCC(ret) && node != table_loc->tablet_locs_end(); ++node) {
+    FOREACH_X(node, table_loc->tablet_locs_, OB_SUCC(ret)) {
       ObDASTabletLoc *tablet_loc = *node;
       if (OB_FAIL(create_one_das_task(tablet_loc))) {
         LOG_WARN("create one das task failed", K(ret));
@@ -808,7 +807,7 @@ int ObTableScanOp::init_table_scan_rtdef()
     if (OB_FAIL(init_das_scan_rtdef(scan_ctdef, scan_rtdef, loc_meta))) {
       LOG_WARN("init das scan rtdef failed", K(ret));
     } else if (!MY_SPEC.use_dist_das_ && !MY_SPEC.gi_above_ && !scan_rtdef.table_loc_->empty()) {
-      MY_INPUT.tablet_loc_ = scan_rtdef.table_loc_->get_first_tablet_loc();
+      MY_INPUT.tablet_loc_ = scan_rtdef.table_loc_->tablet_locs_.get_first();
     }
   }
   if (OB_SUCC(ret) && MY_CTDEF.lookup_ctdef_ != nullptr) {
@@ -2063,8 +2062,9 @@ int ObTableScanOp::get_access_tablet_loc(ObGranuleTaskInfo &info)
         iter_end_ = true;
         ret = OB_SUCCESS;
       }
-    } else if (OB_FAIL(tsc_rtdef_.scan_rtdef_.table_loc_->get_tablet_loc_by_id(info.tablet_loc_->tablet_id_,
-                                                                               MY_INPUT.tablet_loc_))) {
+    } else if (OB_FAIL(ObDASUtils::get_tablet_loc_by_id(info.tablet_loc_->tablet_id_,
+                                                        *tsc_rtdef_.scan_rtdef_.table_loc_,
+                                                        MY_INPUT.tablet_loc_))) {
       //need use `get_tablet_loc_by_id` to find my px work thread's tablet_loc,
       //because the tablet_loc in SQC maybe shared with other px work thread,
       //the tablet loc maybe modify in das partition retry
@@ -2311,12 +2311,12 @@ int ObTableScanOp::report_ddl_column_checksum()
     const uint64_t table_id = MY_CTDEF.scan_ctdef_.ref_table_id_;
     for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ddl_output_cids_.count(); ++i) {
       ObDDLChecksumItem item;
-      item.execution_id_ = MY_SPEC.plan_->get_ddl_execution_id();
+      item.execution_id_ = MY_SPEC.plan_->get_ddl_schema_version();
       item.tenant_id_ = MTL_ID();
       item.table_id_ = table_id;
-      item.ddl_task_id_ = MY_SPEC.plan_->get_ddl_task_id();
+      item.tablet_id_ = tablet_id.id();
       item.column_id_ = MY_SPEC.ddl_output_cids_.at(i);
-      item.task_id_ = ctx_.get_px_sqc_id() << 48 | ctx_.get_px_task_id() << 32 | curr_scan_task_id;
+      item.task_id_ = ctx_.get_px_task_id() << 32 | curr_scan_task_id;
       item.checksum_ = i < column_checksum_.count() ? column_checksum_[i] : 0;
     #ifdef ERRSIM
       if (OB_SUCC(ret)) {

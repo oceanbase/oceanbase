@@ -14,8 +14,6 @@
 #include "ob_ls_rebuild_cb_impl.h"
 #include "ob_storage_ha_service.h"
 #include "share/ls/ob_ls_table_operator.h"
-#include "observer/ob_server_event_history_table_operator.h"
-#include "logservice/ob_log_service.h"
 
 namespace oceanbase
 {
@@ -88,11 +86,6 @@ int ObLSRebuildCbImpl::on_rebuild(
     LOG_WARN("ls no need rebuild", K(ret), K(lsn), KPC(ls_));
   } else if (OB_FAIL(execute_rebuild_())) {
     LOG_WARN("failed to execute rebuild", K(ret), K(lsn), KPC(ls_));
-  } else {
-    SERVER_EVENT_ADD("storage_ha", "on_rebuild",
-                     "ls_id", ls_id.id(),
-                     "lsn", lsn,
-                     "rebuild_seq", ls_->get_rebuild_seq());
   }
   return ret;
 }
@@ -122,6 +115,7 @@ int ObLSRebuildCbImpl::check_need_rebuild_(
 {
   int ret = OB_SUCCESS;
   ObLSInfo ls_info;
+  share::ObLSTableOperator *lst_operator = GCTX.lst_operator_;
   int64_t cluster_id = GCONF.cluster_id;
   uint64_t tenant_id = MTL_ID();
   ObAddr leader_addr;
@@ -131,28 +125,21 @@ int ObLSRebuildCbImpl::check_need_rebuild_(
   obrpc::ObFetchLSMemberListInfo member_info;
   const bool force_renew = true;
   src_info.cluster_id_ = cluster_id;
-  ObRole role;
-  int64_t proposal_id = 0;
-  logservice::ObLogService *log_service = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls rebuild cb impl do not init", K(ret));
-  } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
+  } else if (nullptr == lst_operator) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log service should not be NULL", K(ret), KP(log_service));
-  } else if (OB_FAIL(log_service->get_palf_role(ls_->get_ls_id(), role, proposal_id))) {
-    LOG_WARN("failed to get role", K(ret), KPC(ls_));
-  } else if (is_strong_leader(role)) {
-    need_rebuild = false;
-    LOG_INFO("replica is leader, can not rebuild", KPC(ls_));
+    LOG_WARN("lst_operator ptr is null", K(ret));
   } else if (OB_ISNULL(location_service = GCTX.location_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("location service should not be NULL", K(ret), KP(location_service));
   } else if (OB_FAIL(location_service->get_leader(src_info.cluster_id_, tenant_id, ls_->get_ls_id(), force_renew, src_info.src_addr_))) {
     LOG_WARN("fail to get ls leader server", K(ret), K(tenant_id), KPC(ls_));
-    //for rebuild without leader exist
-    ret = OB_SUCCESS;
+  } else if (src_info.src_addr_ == GCONF.self_addr_) {
+    need_rebuild = false;
+    LOG_INFO("replica is leader, can not rebuild", KPC(ls_));
   } else if (OB_FAIL(storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_->get_ls_id(), member_info))) {
     LOG_WARN("failed to get ls member info", K(ret), KPC(ls_));
   } else if (!member_info.member_list_.contains(GCONF.self_addr_)) {
@@ -188,7 +175,7 @@ void ObLSRebuildCbImpl::wakeup_ha_service_()
   int ret = OB_SUCCESS;
   ObStorageHAService *ha_service = nullptr;
 
-  if (OB_ISNULL(ha_service = (MTL(ObStorageHAService *)))) {
+  if (OB_ISNULL(ha_service =  (MTL(ObStorageHAService *)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be NULL", K(ret), KP(ha_service));
   } else {

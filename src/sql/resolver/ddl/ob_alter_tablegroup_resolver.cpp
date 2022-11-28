@@ -103,7 +103,11 @@ int ObAlterTablegroupResolver::resolve(const ParseNode &parser_tree)
         alter_tablegroup_stmt->set_alter_option_set(get_alter_option_bitset());
       }
     } else if (T_ALTER_PARTITION_OPTION == node->children_[1]->type_) {
-      if (OB_FAIL(resolve_partition_options(*(node->children_[1])))) {
+      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to modify partitions while cluster not upgrade to 2.0", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify partitions while cluster not upgrade to 2.0");
+      } else if (OB_FAIL(resolve_partition_options(*(node->children_[1])))) {
         LOG_WARN("fail to resolve tablegroup partition option", K(ret));
       } else {
         // partition_array是否序列化依赖part_level，由于resolver端不获取schema，

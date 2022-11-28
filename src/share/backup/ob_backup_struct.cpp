@@ -30,6 +30,10 @@ using namespace lib;
 using namespace common;
 using namespace share;
 
+bool share::has_independ_inc_backup_set(const int64_t version)
+{
+  return version >= OB_BACKUP_COMPATIBLE_VERSION_V2 && version < OB_BACKUP_COMPATIBLE_VERSION_MAX;
+}
 bool share::is_valid_backup_inner_table_version(const ObBackupInnerTableVersion &version)
 {
   return version > 0 && version < OB_BACKUP_INNER_TABLE_VMAX;
@@ -1530,7 +1534,7 @@ int ObBackupDest::parse_backup_dest_str_(const char *backup_dest)
   } else if (OB_FAIL(get_storage_type_from_path(bakup_dest_str, type))) {
     LOG_WARN("failed to get storage type", K(ret));
   } else {
-    // oss://backup_dir/?host=xxx.com&access_id=111&access_key=222
+    // oss://backup_dir/?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&access_key=222
     // file:///root_backup_dir"
     while (backup_dest[pos] != '\0') {
       if ('?' == backup_dest[pos]) {
@@ -1925,6 +1929,55 @@ int ObBackupType::set_backup_type(
   return ret;
 }
 
+const char *ObBackupDeviceType::get_backup_device_str() const
+{
+  const char *str = "UNKNOWN";
+  const char *backup_device_type_strs[] = {
+      "file://",
+      "oss://",
+      "ofs://",
+      "cos://",
+  };
+  STATIC_ASSERT(MAX == ARRAYSIZEOF(backup_device_type_strs), "types count mismatch");
+  if (type_ < 0 || type_ >= MAX) {
+    LOG_ERROR("invalid backup device type", K(type_));
+  } else {
+    str = backup_device_type_strs[type_];
+  }
+  return str;
+}
+
+int ObBackupDeviceType::set_backup_device_type(
+    const char *buf)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("set backup device get invalid argument", K(ret), KP(buf));
+  } else {
+    const char *backup_device_type_strs[] = {
+        "file://",
+        "oss://",
+        "ofs://",
+        "cos://",
+    };
+    BackupDeviceType tmp_type = MAX;
+    STATIC_ASSERT(MAX == ARRAYSIZEOF(backup_device_type_strs), "types count mismatch");
+    for (int64_t i = 0; i < ARRAYSIZEOF(backup_device_type_strs); i++) {
+      if (0 == STRCMP(backup_device_type_strs[i], buf)) {
+        tmp_type = static_cast<BackupDeviceType>(i);
+      }
+    }
+
+    if (MAX == tmp_type) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("backup device type str not found", K(ret), K(buf));
+    } else {
+      type_ = tmp_type;
+    }
+  }
+  return ret;
+}
 
 ObBaseBackupInfoStruct::ObBaseBackupInfoStruct()
   : tenant_id_(OB_INVALID_ID), backup_set_id_(0), incarnation_(0), backup_dest_(),
@@ -2074,7 +2127,7 @@ bool ObBackupUtils::is_need_retry_error(const int err)
     case OB_LOG_ARCHIVE_STAT_NOT_MATCH :
     case OB_NOT_SUPPORTED :
     case OB_TENANT_HAS_BEEN_DROPPED :
-    case OB_SERVER_OUTOF_DISK_SPACE :
+    case OB_CS_OUTOF_DISK_SPACE :
     case OB_HASH_NOT_EXIST:
     case OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA :
     case OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED :
@@ -3341,9 +3394,9 @@ ObBackupSetTaskAttr::ObBackupSetTaskAttr()
     backup_set_id_(0),
     start_ts_(0),
     end_ts_(0),
-    start_scn_(0),
-    end_scn_(0),
-    user_ls_start_scn_(0),
+    start_scn_(),
+    end_scn_(),
+    user_ls_start_scn_(),
     data_turn_id_(0),
     meta_turn_id_(0),
     status_(),
@@ -3488,8 +3541,8 @@ ObBackupSetFileDesc::ObBackupSetFileDesc()
     passwd_(),
     file_status_(ObBackupFileStatus::BACKUP_FILE_MAX),
     backup_path_(),
-    start_replay_scn_(0),
-    min_restore_scn_(0),
+    start_replay_scn_(),
+    min_restore_scn_(),
     tenant_compatible_(0),
     backup_compatible_(Compatible::MAX_COMPATIBLE_VERSION),
     data_turn_id_(0),
@@ -3517,8 +3570,8 @@ void ObBackupSetFileDesc::reset()
   passwd_.reset();
   file_status_ = ObBackupFileStatus::BACKUP_FILE_MAX;
   backup_path_.reset();
-  start_replay_scn_ = 0;
-  min_restore_scn_ = 0;
+  start_replay_scn_ = palf::SCN::min_scn();
+  min_restore_scn_ = palf::SCN::min_scn();
   tenant_compatible_ = 0;
   backup_compatible_ = Compatible::MAX_COMPATIBLE_VERSION;
   data_turn_id_ = 0;
@@ -4058,7 +4111,7 @@ int share::trim_right_backslash(ObBackupPathString &path)
 }
 
 // Convert a scn to time string.
-int share::backup_scn_to_strftime(const uint64_t scn, char *buf,
+int share::backup_scn_to_strftime(const palf::SCN &scn, char *buf,
     const int64_t buf_len, int64_t &pos, const char concat)
 {
   int ret = OB_SUCCESS;
@@ -4085,7 +4138,7 @@ int share::backup_scn_to_strftime(const uint64_t scn, char *buf,
   return ret;
 }
 
-int share::backup_scn_to_time_tag(const uint64_t scn, char *buf, const int64_t buf_len, int64_t &pos)
+int share::backup_scn_to_time_tag(const palf::SCN &scn, char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(share::backup_scn_to_strftime(scn, buf, buf_len, pos, 'T'/* concat */))) {

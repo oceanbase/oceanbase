@@ -26,8 +26,8 @@ using namespace oceanbase::common;
 
 ObTabletReplicaChecksumIterator::ObTabletReplicaChecksumIterator()
   : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID),
-    snapshot_version_(OB_INVALID_VERSION), checksum_items_(), 
-    cur_idx_(0), sql_proxy_(NULL)
+    compaction_scn_(), checksum_items_(), cur_idx_(0),
+    sql_proxy_(NULL)
 {}
 
 int ObTabletReplicaChecksumIterator::init(
@@ -60,7 +60,7 @@ void ObTabletReplicaChecksumIterator::reuse()
 {
   cur_idx_ = 0;
   checksum_items_.reuse();
-  snapshot_version_ = OB_INVALID_VERSION;
+  compaction_scn_.reset();
 }
 
 int ObTabletReplicaChecksumIterator::next(ObTabletReplicaChecksumItem &item)
@@ -114,8 +114,8 @@ int ObTabletReplicaChecksumIterator::fetch_next_batch()
     if (OB_SUCC(ret)) {
       checksum_items_.reuse();
       if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id_, start_pair, 
-          BATCH_FETCH_COUNT, snapshot_version_, *sql_proxy_, checksum_items_))) {
-        LOG_WARN("fail to get batch checksums", KR(ret), K_(tenant_id), K(start_pair), K_(snapshot_version));
+          BATCH_FETCH_COUNT, compaction_scn_, *sql_proxy_, checksum_items_))) {
+        LOG_WARN("fail to get batch checksums", KR(ret), K_(tenant_id), K(start_pair), K_(compaction_scn));
       } else if (OB_UNLIKELY(0 == checksum_items_.count())) {
         ret = OB_ITER_END;
       }

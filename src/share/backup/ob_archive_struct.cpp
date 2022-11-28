@@ -101,9 +101,9 @@ bool ObTenantArchiveRoundAttr::is_valid() const
          && OB_START_INCARNATION <= incarnation_
          && 0 < dest_id_
          && 0 < round_id_
-         && 0 <= start_scn_
-         && 0 <= checkpoint_scn_
-         && 0 <= max_scn_
+         && start_scn_.is_valid()
+         && checkpoint_scn_.is_valid()
+         && max_scn_.is_valid()
          && 0 <= base_piece_id_
          && base_piece_id_ <= used_piece_id_
          && 0 <= piece_switch_interval_
@@ -121,7 +121,9 @@ int ObTenantArchiveRoundAttr::parse_from(common::sqlclient::ObMySQLResult &resul
   int ret = OB_SUCCESS;
   int64_t compatible = 0;
   int64_t real_length = 0;
-
+  uint64_t start_scn = 0;
+  uint64_t checkpoint_scn = 0;
+  uint64_t max_scn = 0;
   ObString comment;
   ObString path;
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
@@ -132,9 +134,9 @@ int ObTenantArchiveRoundAttr::parse_from(common::sqlclient::ObMySQLResult &resul
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INCARNATION, incarnation_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_DEST_ID, dest_id_, int64_t);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_STATUS, status_str, OB_DEFAULT_STATUS_LENTH, real_length);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, start_scn_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, checkpoint_scn_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MAX_SCN, max_scn_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, start_scn, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, checkpoint_scn, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MAX_SCN, max_scn, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_COMPATIBLE, compatible, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_BASE_PIECE_ID, base_piece_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_USED_PIECE_ID, used_piece_id_, int64_t);
@@ -158,6 +160,12 @@ int ObTenantArchiveRoundAttr::parse_from(common::sqlclient::ObMySQLResult &resul
     LOG_WARN("failed to set status", K(ret), K(status_str));
   } else if (OB_FAIL(comment_.assign(comment))) {
     LOG_WARN("failed to set status", K(ret), K(comment));
+  } else if (OB_FAIL(start_scn_.convert_for_inner_table_field(start_scn))) {
+    LOG_WARN("failed to set start scn", K(ret), K(start_scn));
+  } else if (OB_FAIL(checkpoint_scn_.convert_for_inner_table_field(checkpoint_scn))) {
+    LOG_WARN("failed to set checkpoint scn", K(ret), K(checkpoint_scn));
+  } else if (OB_FAIL(max_scn_.convert_for_inner_table_field(max_scn))) {
+    LOG_WARN("failed to set max scn", K(ret), K(max_scn));
   }
 
   return ret;
@@ -178,11 +186,11 @@ int ObTenantArchiveRoundAttr::fill_dml(share::ObDMLSqlSplicer &dml) const
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_STATUS, state_.to_status_str()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_SCN, start_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_SCN, start_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_CHECKPOINT_SCN, checkpoint_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_CHECKPOINT_SCN, checkpoint_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_MAX_SCN, max_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_MAX_SCN, max_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_COMPATIBLE, compatible_.version_))) {
     LOG_WARN("failed to add column", K(ret));
@@ -354,9 +362,9 @@ bool ObTenantArchiveHisRoundAttr::is_valid() const
   return key_.is_pkey_valid() && compatible_.is_valid()
          && OB_START_INCARNATION <= incarnation_
          && 0 < dest_id_
-         && 0 <= start_scn_
-         && 0 <= checkpoint_scn_
-         && 0 <= max_scn_
+         && start_scn_.is_valid()
+         && checkpoint_scn_.is_valid()
+         && max_scn_.is_valid()
          && 0 <= base_piece_id_
          && base_piece_id_ <= used_piece_id_
          && 0 <= piece_switch_interval_
@@ -372,7 +380,9 @@ int ObTenantArchiveHisRoundAttr::parse_from(common::sqlclient::ObMySQLResult &re
   int ret = OB_SUCCESS;
   int64_t compatible = 0;
   int64_t real_length = 0;
-
+  uint64_t start_scn = 0;
+  uint64_t checkpoint_scn = 0;
+  uint64_t max_scn = 0;
   ObString path;
   ObString comment;
 
@@ -381,9 +391,9 @@ int ObTenantArchiveHisRoundAttr::parse_from(common::sqlclient::ObMySQLResult &re
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_ROUND_ID, key_.round_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INCARNATION, incarnation_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_DEST_ID, dest_id_, int64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, start_scn_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, checkpoint_scn_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MAX_SCN, max_scn_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, start_scn, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, checkpoint_scn, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MAX_SCN, max_scn, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_COMPATIBLE, compatible, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_BASE_PIECE_ID, base_piece_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_USED_PIECE_ID, used_piece_id_, int64_t);
@@ -403,6 +413,12 @@ int ObTenantArchiveHisRoundAttr::parse_from(common::sqlclient::ObMySQLResult &re
     LOG_WARN("failed to set compatible", K(ret), K(compatible));
   } else if (OB_FAIL(comment_.assign(comment))) {
     LOG_WARN("failed to set status", K(ret), K(comment));
+  } else if (OB_FAIL(start_scn_.convert_for_inner_table_field(start_scn))) {
+    LOG_WARN("failed to set start scn", K(ret), K(start_scn));
+  } else if (OB_FAIL(checkpoint_scn_.convert_for_inner_table_field(checkpoint_scn))) {
+    LOG_WARN("failed to set checkpoint scn", K(ret), K(checkpoint_scn));
+  } else if (OB_FAIL(max_scn_.convert_for_inner_table_field(max_scn))) {
+    LOG_WARN("failed to set max scn", K(ret), K(max_scn));
   }
 
   return ret;
@@ -419,11 +435,11 @@ int ObTenantArchiveHisRoundAttr::fill_dml(share::ObDMLSqlSplicer &dml) const
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_DEST_ID, dest_id_))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_SCN, start_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_SCN, start_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_CHECKPOINT_SCN, checkpoint_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_CHECKPOINT_SCN, checkpoint_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_MAX_SCN, max_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_MAX_SCN, max_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_COMPATIBLE, compatible_.version_))) {
     LOG_WARN("failed to add column", K(ret));
@@ -565,10 +581,10 @@ bool ObTenantArchivePieceAttr::is_valid() const
          && OB_START_INCARNATION <= incarnation_
          && 0 <= dest_no_
          && 0 <= file_count_
-         && 0 <= start_scn_
-         && 0 <= checkpoint_scn_
-         && 0 <= max_scn_
-         && 0 <= end_scn_
+         && start_scn_.is_valid()
+         && checkpoint_scn_.is_valid()
+         && max_scn_.is_valid()
+         && end_scn_.is_valid()
          && 0 <= input_bytes_
          && 0 <= output_bytes_
          && status_.is_valid()
@@ -584,7 +600,10 @@ int ObTenantArchivePieceAttr::parse_from(common::sqlclient::ObMySQLResult &resul
   int ret = OB_SUCCESS;
   int64_t compatible = 0;
   int64_t real_length = 0;
-
+  uint64_t start_scn = 0;
+  uint64_t checkpoint_scn = 0;
+  uint64_t max_scn = 0;
+  uint64_t end_scn = 0;
   char file_status_str[OB_DEFAULT_STATUS_LENTH] = "";
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
   ObString path;
@@ -597,10 +616,10 @@ int ObTenantArchivePieceAttr::parse_from(common::sqlclient::ObMySQLResult &resul
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INCARNATION, incarnation_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_DEST_NO, dest_no_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_FILE_COUNT, file_count_, int64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, start_scn_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, checkpoint_scn_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MAX_SCN, max_scn_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_END_SCN, end_scn_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, start_scn, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, checkpoint_scn, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MAX_SCN, max_scn, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_END_SCN, end_scn, uint64_t);
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_COMPATIBLE, compatible, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INPUT_BYTES, input_bytes_, int64_t);
@@ -622,6 +641,14 @@ int ObTenantArchivePieceAttr::parse_from(common::sqlclient::ObMySQLResult &resul
     LOG_WARN("failed to set status", K(ret), K(status_str));
   } else if (OB_FAIL(set_compatible_version(compatible))) {
     LOG_WARN("failed to set compatible", K(ret), K(compatible));
+  } else if (OB_FAIL(start_scn_.convert_for_inner_table_field(start_scn))) {
+    LOG_WARN("failed to set start scn", K(ret), K(start_scn));
+  } else if (OB_FAIL(checkpoint_scn_.convert_for_inner_table_field(checkpoint_scn))) {
+    LOG_WARN("failed to set checkpoint scn", K(ret), K(checkpoint_scn));
+  } else if (OB_FAIL(max_scn_.convert_for_inner_table_field(max_scn))) {
+    LOG_WARN("failed to set max scn", K(ret), K(max_scn));
+  } else if (OB_FAIL(end_scn_.convert_for_inner_table_field(end_scn))) {
+    LOG_WARN("failed to set end scn", K(ret), K(end_scn));
   }
 
   return ret;
@@ -639,13 +666,13 @@ int ObTenantArchivePieceAttr::fill_dml(ObDMLSqlSplicer &dml) const
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_FILE_COUNT, file_count_))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_SCN, start_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_SCN, start_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_CHECKPOINT_SCN, checkpoint_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_CHECKPOINT_SCN, checkpoint_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_MAX_SCN, max_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_MAX_SCN, max_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_END_SCN, end_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_END_SCN, end_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_COMPATIBLE, compatible_.version_))) {
     LOG_WARN("failed to add column", K(ret));
@@ -742,8 +769,8 @@ bool ObLSArchivePersistInfo::is_valid() const
   return key_.is_pkey_valid()
     && state_.is_valid()
     && OB_START_INCARNATION <= incarnation_
-    && 0 <= start_scn_
-    && 0 <= checkpoint_scn_
+    && start_scn_.is_valid()
+    && checkpoint_scn_.is_valid()
     && 0 <= start_lsn_
     && 0 <= lsn_
     && 0 <= input_bytes_
@@ -758,7 +785,8 @@ int ObLSArchivePersistInfo::parse_from(common::sqlclient::ObMySQLResult &result)
   int ret = OB_SUCCESS;
   int64_t ls_id = 0;
   int64_t real_length = 0;
-
+  uint64_t start_scn = 0;
+  uint64_t checkpoint_scn = 0;
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TENANT_ID, key_.tenant_id_, uint64_t);
@@ -768,9 +796,9 @@ int ObLSArchivePersistInfo::parse_from(common::sqlclient::ObMySQLResult &result)
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_LS_ID, ls_id, int64_t);
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_INCARNATION, incarnation_, int64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, start_scn_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_SCN, start_scn, uint64_t);
   EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MIN_LSN, start_lsn_, uint64_t);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, checkpoint_scn_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_CHECKPOINT_SCN, checkpoint_scn, uint64_t);
   EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MAX_LSN, lsn_, uint64_t);
 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_ARCHIVE_FILE_ID, archive_file_id_, int64_t);
@@ -782,6 +810,10 @@ int ObLSArchivePersistInfo::parse_from(common::sqlclient::ObMySQLResult &result)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(set_status(status_str))) {
     LOG_WARN("failed to set status", K(ret), K(status_str));
+  } else if (OB_FAIL(start_scn_.convert_for_inner_table_field(start_scn))) {
+    LOG_WARN("failed to set start scn", K(ret), K(start_scn));
+  } else if (OB_FAIL(checkpoint_scn_.convert_for_inner_table_field(checkpoint_scn))) {
+    LOG_WARN("failed to set checkpoint scn", K(ret), K(checkpoint_scn));
   } else {
     key_.ls_id_ = ObLSID(ls_id);
   }
@@ -797,11 +829,11 @@ int ObLSArchivePersistInfo::fill_dml(ObDMLSqlSplicer &dml) const
     LOG_WARN("failed to fill pkey dml", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_INCARNATION, incarnation_))) {
     LOG_WARN("failed to add column", K(ret));
-  }  else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_SCN, start_scn_))) {
+  }  else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_SCN, start_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_uint64_column(OB_STR_MIN_LSN, start_lsn_))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_CHECKPOINT_SCN, checkpoint_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_CHECKPOINT_SCN, checkpoint_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_uint64_column(OB_STR_MAX_LSN, lsn_))) {
     LOG_WARN("failed to add column", K(ret));
@@ -845,9 +877,9 @@ void ObLSArchivePersistInfo::reset()
 {
   key_.reset();
   incarnation_ = OB_START_INCARNATION;
-  start_scn_ = 0;
+  start_scn_ = palf::SCN::min_scn();
   start_lsn_ = 0;
-  checkpoint_scn_ = 0;
+  checkpoint_scn_.palf::SCN::min_scn();
   lsn_ = 0;
   archive_file_id_ = -1;
   archive_file_offset_ = -1;
@@ -915,8 +947,8 @@ ObArchiveLSPieceSummary::ObArchiveLSPieceSummary()
   incarnation_ = OB_START_INCARNATION;
   state_.set_invalid();
 
-  start_scn_ = 0;
-  checkpoint_scn_ = 0;
+  start_scn_ = palf::SCN::min_scn();
+  checkpoint_scn_ = palf::SCN::min_scn();
   min_lsn_ = 0;
   max_lsn_ = 0;
   input_bytes_ = 0;
@@ -1042,8 +1074,8 @@ void ObLSDestRoundSummary::reset()
   ls_id_.reset();
   is_deleted_ = false;
   state_.set_invalid();
-  start_scn_ = 0;
-  checkpoint_scn_ = 0;
+  start_scn_ = palf::SCN::min_scn();
+  checkpoint_scn_.reset();
   piece_list_.reset();
 }
 

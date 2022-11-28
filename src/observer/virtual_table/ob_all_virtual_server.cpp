@@ -83,7 +83,7 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
     const double cpu_capacity_max = (cpu_capacity * hard_limit) / 100;
     const double cpu_assigned = svr_res_assigned.min_cpu_;
     const double cpu_assigned_max = svr_res_assigned.max_cpu_;
-    const int64_t mem_capacity = GMEMCONF.get_server_memory_avail();
+    const int64_t mem_capacity = GCONF.get_server_memory_avail();
     const int64_t mem_assigned = svr_res_assigned.memory_size_;
     const int64_t data_disk_capacity =
         OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
@@ -162,7 +162,7 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
           cur_row_.cells_[i].set_int(ssl_cert_expired_time);
           break;
         case MEMORY_LIMIT:
-          cur_row_.cells_[i].set_int(GMEMCONF.get_server_memory_limit());
+          cur_row_.cells_[i].set_int(GCONF.get_server_memory_limit());
           break;
         default: {
           ret = OB_ERR_UNEXPECTED;

@@ -111,7 +111,7 @@ DEFINE_ERROR_DEP(OB_ITEM_NOT_SETTED, -4022, -1, "HY000", "Item not set");
 DEFINE_ERROR_DEP(OB_EAGAIN, -4023, -1, "HY000", "Try again");
 DEFINE_ERROR_DEP(OB_BUF_NOT_ENOUGH, -4024, -1, "HY000", "Buffer not enough");
 DEFINE_ERROR(OB_PARTIAL_FAILED, -4025, -1, "HY000", "Partial failed");
-DEFINE_ORACLE_ERROR_DEP(OB_READ_NOTHING, -4026, ER_SP_FETCH_NO_DATA, "02000", "No data - zero rows fetched, selected, or processed", 1403, "no data found");
+DEFINE_ORACLE_ERROR_DEP(OB_READ_NOTHING, -4026, -1, "02000", "Nothing to read", 1403, "no data found");
 DEFINE_ERROR_DEP(OB_FILE_NOT_EXIST, -4027, ER_FILE_NOT_FOUND, "HY000", "File not exist");
 DEFINE_ERROR_DEP(OB_DISCONTINUOUS_LOG, -4028, -1, "HY000", "Log entry not continuous");
 DEFINE_ERROR(OB_SCHEMA_ERROR, -4029, -1, "HY000", "Schema error");
@@ -241,7 +241,7 @@ DEFINE_ERROR(OB_NO_EMPTY_ENTRY, -4180, -1, "HY000", "No empty entry");
 DEFINE_ERROR_DEP(OB_ERR_ALREADY_EXISTS, -4181, -1, "42S01", "Already exist");
 DEFINE_ERROR_DEP(OB_SEARCH_NOT_FOUND, -4182, -1, "HY000", "Value not found");
 DEFINE_ERROR(OB_BEYOND_THE_RANGE, -4183, -1, "HY000", "Key out of range");
-DEFINE_ERROR(OB_SERVER_OUTOF_DISK_SPACE, -4184, -1, "53100", "Server out of disk space");
+DEFINE_ERROR(OB_CS_OUTOF_DISK_SPACE, -4184, -1, "53100", "Server out of disk space");
 DEFINE_ERROR(OB_COLUMN_GROUP_NOT_FOUND, -4185, -1, "HY000", "Column group not found");
 DEFINE_ERROR(OB_CS_COMPRESS_LIB_ERROR, -4186, -1, "HY000", "Server failed to get compress library");
 DEFINE_ERROR_DEP(OB_ITEM_NOT_MATCH, -4187, -1, "HY000", "Item not match");
@@ -562,7 +562,7 @@ DEFINE_ERROR(OB_TOO_MANY_TENANT_PARTITIONS_ERROR, -4684, -1, "HY000", "Too many 
 DEFINE_ERROR(OB_ACTIVE_MEMTBALE_NOT_EXSIT, -4685, -1, "HY000", "active memtable not exist");
 DEFINE_ERROR(OB_USE_DUP_FOLLOW_AFTER_DML, -4686, -1, "HY000", "Should use leader replica for duplicate table after DML operator");
 DEFINE_ERROR(OB_NO_DISK_NEED_REBUILD, -4687, -1, "HY000", "no disk need rebuild");
-DEFINE_ORACLE_ERROR(OB_STANDBY_READ_ONLY, -4688, -1, "HY000", "standby tenant is read only", 16000, "standby tenant is read only");
+DEFINE_ORACLE_ERROR(OB_STANDBY_WEAK_READ_ONLY, -4688, -1, "HY000", "standby cluster support weak read only", 16000, "standby cluster support weak read only");
 DEFINE_ERROR(OB_INVALD_WEB_SERVICE_CONTENT, -4689, -1, "HY000", "web service content not valid");
 DEFINE_ERROR(OB_PRIMARY_CLUSTER_EXIST, -4690, -1, "HY000", "other primary cluster already exist, can not start as primary");
 DEFINE_ERROR(OB_ARRAY_BINDING_SWITCH_ITERATOR, -4691, -1, "HY000", "array binding needs to switch iterator");
@@ -623,9 +623,6 @@ DEFINE_ERROR(OB_WAIT_TABLET_READY_TIMEOUT, -4742, -1, "HY000", "log stream wait 
 DEFINE_ERROR(OB_FREEZE_SERVICE_EPOCH_MISMATCH, -4743, -1, "HY000", "freeze service epoch is not expected");
 DEFINE_ERROR_EXT_DEP(OB_FROZEN_INFO_ALREADY_EXIST, -4744, -1, "HY000", "already exist larger frozen_scn in __all_freeze_info", "%s");
 DEFINE_ERROR_EXT(OB_DELETE_SERVER_NOT_ALLOWED, -4745, -1, "HY000", "delete server not allowed", "%s");
-DEFINE_ERROR(OB_PACKET_STATUS_UNKNOWN, -4746, -1, "HY000", "Network error and packet status unknown. Abort auto retry.");
-//4747: OB_ARBITRATION_SERVICE_NOT_EXIST
-//4748: OB_ARBITRATION_SERVICE_ALREADY_EXIST
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -997,7 +994,6 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_OBJECT_STRING_DOES_NOT_EXIST, -5400, -1, "HY000",
 DEFINE_ORACLE_ERROR(OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED, -5401, -1, "HY000", "resultant data type of virtual column is not supported", 54004, "resultant data type of virtual column is not supported");
 DEFINE_ERROR(OB_ERR_GET_STACKED_DIAGNOSTICS, -5402, ER_GET_STACKED_DIAGNOSTICS_INACTIVE, "0Z002", "GET STACKED DIAGNOSTICS when handler not active");
 DEFINE_ERROR(OB_DDL_SCHEMA_VERSION_NOT_MATCH, -5403, -1, "HY000", "ddl schema version not match");
-DEFINE_ERROR_EXT(OB_ERR_COLUMN_GROUP_DUPLICATE, -5404, ER_DUP_FIELDNAME, "42S21", "Duplicate column group name", "Duplicate column group name '%.*s'");
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //error code for json  -5410 ---- -5433, as for json only support mysql mode, error code for oracle use special values 
@@ -2014,6 +2010,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_STATEMENT_STRING_IN_EXECUTE_IMMEDIATE_IS_NULL_OR_ZERO
 DEFINE_ORACLE_ERROR(OB_ERR_MISSING_INTO_KEYWORD, -9712, -1, "HY000", "missing INTO keyword", 925, "missing INTO keyword");
 DEFINE_ORACLE_ERROR(OB_ERR_CLAUSE_RETURN_ILLEGAL, -9713, -1, "HY000", "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements", 6547, "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements");
 DEFINE_ORACLE_ERROR(OB_ERR_NAME_HAS_TOO_MANY_PARTS, -9714, -1, "HY000", "name has too many parts", 6563, "name has too many parts");
+DEFINE_ERROR(OB_ERR_SP_FETCH_NO_DATA, -9715, ER_SP_FETCH_NO_DATA, "HY000", "No data - zero rows fetched, selected, or processed");
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!

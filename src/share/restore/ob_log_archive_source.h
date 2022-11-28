@@ -18,6 +18,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/worker.h"
+#include "logservice/palf/scn.h"
 #include <cstdint>
 namespace oceanbase
 {
@@ -59,39 +60,39 @@ struct ObLogArchiveSourceItem
   int64_t id_;
   ObLogArchiveSourceType type_;
   common::ObString value_;
-  int64_t until_ts_;
+  palf::SCN until_scn_;
   lib::ObArenaAllocator allocator_;
   ObLogArchiveSourceItem() :
     tenant_id_(),
     id_(),
     type_(ObLogArchiveSourceType::INVALID),
-    until_ts_(OB_INVALID_TIMESTAMP),
+    until_scn_(),
     allocator_() {}
   ObLogArchiveSourceItem(const uint64_t tenant_id,
       const int64_t id,
-      const int64_t until_ts) :
+      const palf::SCN &until_scn) :
     tenant_id_(tenant_id),
     id_(id),
     type_(ObLogArchiveSourceType::INVALID),
-    until_ts_(until_ts),
+    until_scn_(until_scn),
     allocator_() {}
   ObLogArchiveSourceItem(const uint64_t tenant_id,
       const int64_t id,
       const ObLogArchiveSourceType &type,
       const ObString &value,
-      const int64_t until_ts) :
+      const palf::SCN &until_scn) :
     tenant_id_(tenant_id),
     id_(id),
     type_(type),
     value_(value),
-    until_ts_(until_ts),
+    until_scn_(until_scn),
     allocator_() {}
     ~ObLogArchiveSourceItem() {}
   bool is_valid() const;
   int deep_copy(ObLogArchiveSourceItem &other);
   static ObLogArchiveSourceType get_source_type(const ObString &type);
   static const char *get_source_type_str(const ObLogArchiveSourceType &type);
-  TO_STRING_KV(K_(tenant_id), K_(id), K_(until_ts), K_(type), K_(value));
+  TO_STRING_KV(K_(tenant_id), K_(id), K_(until_scn), K_(type), K_(value));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogArchiveSourceItem);
 };

@@ -24,6 +24,7 @@
 #include "storage/tx/ob_keep_alive_ls_handler.h"
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_garbage_collector.h"
+#include "logservice/palf/scn.h"
 
 
 #include <rapidjson/prettywriter.h>
@@ -43,7 +44,7 @@ ObAdminParserLogEntry::ObAdminParserLogEntry(const LogEntry &entry,
                                              const LSN lsn,
                                              const ObAdminMutatorStringArg &str_arg)
     : buf_(entry.get_data_buf()), buf_len_(entry.get_data_len()), pos_(0),
-    log_ts_(entry.get_log_ts()), block_id_(block_id), lsn_(lsn)
+    log_ts_(entry.get_log_scn().get_val_for_lsn_allocator()), block_id_(block_id), lsn_(lsn)
 {
   str_arg_ = str_arg;
 }
@@ -583,10 +584,13 @@ int ObAdminParserLogEntry::parse_trans_redo_log_(ObTxLogBlock &tx_log_block,
   ObTxRedoLogTempRef temp_ref;
   ObTxRedoLog redolog(temp_ref);
   memtable::ObMemtableMutatorIterator mmi;
+  palf::SCN scn;
   str_arg_.log_stat_->total_tx_redo_log_count_++;
   if (OB_FAIL(tx_log_block.deserialize_log_body(redolog))) {
     LOG_WARN("tx_log_block.deserialize_log_body failed", K(ret), K(redolog));
-  } else if (OB_FAIL(redolog.ob_admin_dump(&mmi, str_arg_, block_id_, lsn_, tx_id, log_ts_, has_dumped_tx_id))) {
+  } else if (OB_FAIL(scn.convert_for_lsn_allocator(log_ts_))) {
+    LOG_WARN("failed to convert", K(ret), K(log_ts_));
+  } else if (OB_FAIL(redolog.ob_admin_dump(&mmi, str_arg_, block_id_, lsn_, tx_id, scn, has_dumped_tx_id))) {
     LOG_WARN("get mutator json string failed", K(block_id_), K(lsn_), K(tx_id), K(ret));
   } else {/*do nothing*/}
   return ret;

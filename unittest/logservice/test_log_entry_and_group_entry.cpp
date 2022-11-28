@@ -19,6 +19,7 @@
 #define private public
 #include "logservice/palf/log_group_entry_header.h"
 #include "logservice/palf/log_entry.h"
+#include "logservice/palf/scn.h"
 #undef private
 
 #include <gtest/gtest.h>
@@ -49,7 +50,7 @@ TEST(TestLogGroupEntryHeader, test_log_group_entry_header)
   const char *data = buf + header_size;
   int64_t data_len = strlen(ptr);
   int64_t min_timestamp = 0;
-  int64_t max_timestamp = 0;
+  SCN max_scn = SCN::min_scn();
   int64_t log_id = 1;
   LSN committed_lsn;
   committed_lsn.val_ = 1;
@@ -58,8 +59,8 @@ TEST(TestLogGroupEntryHeader, test_log_group_entry_header)
 
   // test LogEntry and LogEntryHeader
   LogEntry log_entry;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_entry_header.generate_header(NULL, 0, 1));
-  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(data, data_len, 1));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_entry_header.generate_header(NULL, 0, SCN::base_scn()));
+  EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(data, data_len, SCN::base_scn()));
   log_entry.header_ = log_entry_header;
   log_entry.buf_ = data;
   int64_t tmp_pos = 0;
@@ -71,24 +72,25 @@ TEST(TestLogGroupEntryHeader, test_log_group_entry_header)
   EXPECT_EQ(OB_SUCCESS, write_buf.push_back(buf, data_len + header_size));
   PALF_LOG(INFO, "runlin trace", K(tmp_pos), K(log_entry), K(write_buf),
            K(write_buf.get_total_size()));
+  max_scn.reset();
   EXPECT_EQ(OB_INVALID_ARGUMENT,
             header.generate(false, is_padding_log, write_buf, data_len + log_entry_header_size,
-                            max_timestamp, log_id, committed_lsn, proposal_id, log_checksum));
-  max_timestamp = 1;
+                            max_scn, log_id, committed_lsn, proposal_id, log_checksum));
+  max_scn.set_base();
   int64_t defalut_acc = 10;
   header.update_accumulated_checksum(defalut_acc);
   header.update_header_checksum();
   min_timestamp = 1;
   EXPECT_EQ(OB_SUCCESS,
             header.generate(false, is_padding_log, write_buf, data_len + log_entry_header_size,
-                            max_timestamp, log_id, committed_lsn, proposal_id, log_checksum));
+                            max_scn, log_id, committed_lsn, proposal_id, log_checksum));
   header.update_accumulated_checksum(defalut_acc);
   header.update_header_checksum();
   EXPECT_TRUE(
       header.check_integrity(buf + log_group_entry_header_size, data_len + log_entry_header_size));
   EXPECT_TRUE(header.is_valid());
   EXPECT_EQ(data_len + log_entry_header_size, header.get_data_len());
-  EXPECT_EQ(max_timestamp, header.get_max_timestamp());
+  EXPECT_EQ(max_scn, header.get_max_scn());
   EXPECT_EQ(log_id, header.get_log_id());
   EXPECT_EQ(proposal_id, header.get_log_proposal_id());
   EXPECT_EQ(committed_lsn, header.get_committed_end_lsn());
@@ -121,7 +123,7 @@ TEST(TestLogGroupEntryHeader, test_log_group_entry_header)
   EXPECT_EQ(data_len + log_entry_header_size, log_group_entry.get_data_len());
   EXPECT_TRUE(
       header1.check_integrity(buf + log_group_entry_header_size, data_len + log_entry_header_size));
-  EXPECT_EQ(max_timestamp, log_group_entry.get_log_ts());
+  EXPECT_EQ(max_scn, log_group_entry.get_log_scn());
   EXPECT_EQ(committed_lsn, log_group_entry.get_committed_end_lsn());
   pos = 0;
   EXPECT_EQ(OB_SUCCESS, log_group_entry.serialize(buf, BUFSIZE, pos));

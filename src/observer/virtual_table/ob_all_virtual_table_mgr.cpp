@@ -219,14 +219,12 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           break;
           //TODO:SCN
         case START_LOG_SCN: {
-          uint64_t v = table_key.log_ts_range_.start_log_ts_ < 0 ?
-              0 : (uint64_t)(table_key.log_ts_range_.start_log_ts_);
+          uint64_t v = table_key.scn_range_.start_scn_.get_val_for_inner_table_field();
           cur_row_.cells_[i].set_uint64(v);
           break;
         }
         case END_LOG_SCN: {
-          uint64_t v = table_key.log_ts_range_.end_log_ts_ < 0 ?
-              0 : (uint64_t)(table_key.log_ts_range_.end_log_ts_);
+          uint64_t v = table_key.scn_range_.end_scn_.get_val_for_inner_table_field();
           cur_row_.cells_[i].set_uint64(v);
         }
           break;

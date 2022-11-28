@@ -114,36 +114,6 @@ private:
   ObPLPackageGuard &package_guard_;
   common::ObMySQLProxy &sql_proxy_;
 };
-
-class ObPLCompilerEnvGuard
-{
-public:
-  ObPLCompilerEnvGuard(const ObPackageInfo &info,
-                       ObSQLSessionInfo &session_info,
-                       share::schema::ObSchemaGetterGuard &schema_guard,
-                       int &ret);
-  
-  ObPLCompilerEnvGuard(const ObRoutineInfo &info,
-                       ObSQLSessionInfo &session_info,
-                       share::schema::ObSchemaGetterGuard &schema_guard,
-                       int &ret);
-
-  ~ObPLCompilerEnvGuard();
-
-private:
-  template<class Info>
-  void init(const Info &info, ObSQLSessionInfo &sessionInfo, share::schema::ObSchemaGetterGuard &schema_guard, int &ret);
-
-private:
-  int &ret_;
-  ObSQLSessionInfo &session_info_;
-  ObExecEnv old_exec_env_;
-  ObSqlString old_db_name_;
-  uint64_t old_db_id_;
-  bool need_reset_exec_env_;
-  bool need_reset_default_database_;
-};
-
 }
 }
 

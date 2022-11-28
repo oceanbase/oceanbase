@@ -90,6 +90,7 @@ public:
   int inner_open() override;
   int inner_rescan() override;
   int inner_switch_iterator() override;
+  int inner_get_next_row() override;
   int inner_close() override;
 protected:
   int inner_open_with_das();
@@ -105,9 +106,9 @@ protected:
                            bool check_exist = false);
   int open_table_for_each();
   int close_table_for_each();
+  int get_next_row_from_child();
+  int do_instead_of_trigger_update();
   int check_update_affected_row();
-  virtual int write_row_to_das_buffer() override;
-  virtual int write_rows_post_proc(int last_errno) override;
 protected:
   UpdRtDef2DArray upd_rtdefs_;  //see the comment of UpdCtDef2DArray
   common::ObArrayWrap<ObInsRtDef> ins_rtdefs_;

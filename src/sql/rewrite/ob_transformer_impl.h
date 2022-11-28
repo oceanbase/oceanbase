@@ -34,7 +34,7 @@ class ObSelectStmt;
       if (OB_FAIL(THIS_WORKER.check_status())) {                    \
         LOG_WARN("check status fail", K(ret));                      \
       } else if (OB_FAIL(trans.transform(stmt, needed_transform_types_))) {    \
-        LOG_WARN("failed to transform a rewrite rule", "class", (#c), K(ret), K(ctx_->outline_trans_hints_)); \
+        LOG_WARN("failed to transform a rewrite rule", "class", (#c), K(ret)); \
       } else if (OB_FAIL(collect_trans_stat(trans))) {                    \
         LOG_WARN("failed to collect transform stat", K(ret));             \
       } else {                                                            \

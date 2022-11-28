@@ -716,8 +716,6 @@ int ObTableLocation::assign(const ObTableLocation &other)
     is_valid_temporal_part_range_ = other.is_valid_temporal_part_range_;
     is_valid_temporal_subpart_range_ = other.is_valid_temporal_subpart_range_;
     is_link_ = other.is_link_;
-    is_part_range_get_ = other.is_part_range_get_;
-    is_subpart_range_get_ = other.is_subpart_range_get_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
     }
@@ -835,8 +833,6 @@ void ObTableLocation::reset()
   is_valid_temporal_part_range_ = false;
   is_valid_temporal_subpart_range_ = false;
   is_link_ = false;
-  is_part_range_get_ = false;
-  is_subpart_range_get_ = false;
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObDMLStmt &stmt,
@@ -1785,8 +1781,7 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             bool &is_col_part_expr,
                                             ObPartLocCalcNode *&calc_node,
                                             ObPartLocCalcNode *&gen_col_node,
-                                            bool &get_all,
-                                            bool &is_range_get)
+                                            bool &get_all)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ColumnItem, 5> part_columns;
@@ -1813,7 +1808,6 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             filter_exprs,
                                             calc_node,
                                             get_all,
-                                            is_range_get,
                                             dtc_params,
                                             exec_ctx))) {
     LOG_WARN("Failed to get location calc node", K(ret));
@@ -2100,8 +2094,7 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                      is_col_part_expr_,
                                      calc_node_,
                                      gen_col_node_,
-                                     part_get_all_,
-                                     is_part_range_get_))) {
+                                     part_get_all_))) {
     LOG_WARN("failed to set location calc node for first-level partition", K(ret));
   } else if (PARTITION_LEVEL_TWO == part_level_
              && OB_FAIL(set_location_calc_node(stmt,
@@ -2114,8 +2107,7 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                                is_col_subpart_expr_,
                                                subcalc_node_,
                                                sub_gen_col_node_,
-                                               subpart_get_all_,
-                                               is_subpart_range_get_))) {
+                                               subpart_get_all_))) {
     LOG_WARN("failed to set location calc node for second-level partition", K(ret));
   }
 
@@ -2196,14 +2188,12 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                             const ObIArray<ObRawExpr*> &filter_exprs,
                                             ObPartLocCalcNode *&res_node,
                                             bool &get_all,
-                                            bool &is_range_get,
                                             const ObDataTypeCastParams &dtc_params,
                                             ObExecContext *exec_ctx)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_INVALID_ID;
   get_all = false;
-  is_range_get = false;
   bool only_range_node = false;
 
   if (partition_expr->is_column_ref_expr() || is_virtual_table(loc_meta_.ref_table_id_)) {
@@ -2232,9 +2222,6 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       get_all = true;
     } else {
       res_node = calc_node;
-      if (OB_NOT_NULL(calc_node)) {
-        is_range_get = static_cast<ObPLQueryRangeNode*>(calc_node)->pre_query_range_.is_precise_get();
-      }
     }
   } else {
     ObSEArray<ObRawExpr *, 5> normal_filters;
@@ -4329,7 +4316,6 @@ int ValueItemExpr::serialize(char *buf, const int64_t buf_len, int64_t &pos) con
   } else if (QUESTMARK_TYPE == type_) {
     OB_UNIS_ENCODE(idx_);
   }
-  OB_UNIS_ENCODE(dst_type_);
   if (ob_is_enum_or_set_type(dst_type_)) {
     CK(OB_NOT_NULL(enum_set_values_));
     OB_UNIS_ENCODE_ARRAY(enum_set_values_, enum_set_values_cnt_);
@@ -4350,7 +4336,6 @@ int64_t ValueItemExpr::get_serialize_size() const
   } else if (QUESTMARK_TYPE == type_) {
     OB_UNIS_ADD_LEN(idx_);
   }
-  OB_UNIS_ADD_LEN(dst_type_);
   if (ob_is_enum_or_set_type(dst_type_)) {
     OB_UNIS_ADD_LEN_ARRAY(enum_set_values_, enum_set_values_cnt_);
   }
@@ -4374,7 +4359,6 @@ int ValueItemExpr::deserialize(common::ObIAllocator &allocator, const char *buf,
   } else if (QUESTMARK_TYPE == type_) {
     OB_UNIS_DECODE(idx_);
   }
-  OB_UNIS_DECODE(dst_type_);
   if (ob_is_enum_or_set_type(dst_type_)) {
     OB_UNIS_DECODE(enum_set_values_cnt_);
     if (enum_set_values_cnt_ > 0) {
@@ -4397,7 +4381,6 @@ int ValueItemExpr::deep_copy(ObIAllocator &allocator, ValueItemExpr &dst) const
   } else if (CONST_EXPR_TYPE == type_) {
     OZ(expr_->deep_copy(allocator, dst.expr_));
   }
-  dst.dst_type_ = dst_type_;
   if (ob_is_enum_or_set_type(dst_type_)) {
     dst.enum_set_values_cnt_ = enum_set_values_cnt_;
     dst.enum_set_values_ =
@@ -4500,11 +4483,6 @@ OB_DEF_SERIALIZE(ObTableLocation)
       OB_UNIS_ENCODE(part_hint_ids_.at(i));
     }
   }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE,
-                is_part_range_get_,
-                is_subpart_range_get_);
-  }
   return ret;
 }
 
@@ -4574,9 +4552,6 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   for (int64_t i = 0; i < part_hint_ids_.count(); i++) {
     OB_UNIS_ADD_LEN(part_hint_ids_.at(i));
   }
-  LST_DO_CODE(OB_UNIS_ADD_LEN,
-              is_part_range_get_,
-              is_subpart_range_get_);
   return len;
 }
 
@@ -4721,11 +4696,6 @@ OB_DEF_DESERIALIZE(ObTableLocation)
       OZ(part_hint_ids_.init(part_hint_ids_count));
       OZ(part_hint_ids_.push_back(part_hint_id));
     }
-  }
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE,
-                is_part_range_get_,
-                is_subpart_range_get_);
   }
   return ret;
 }
@@ -5093,7 +5063,7 @@ int ObTableLocation::try_split_integer_range(const common::ObIArray<common::ObNe
         if (!range->border_flag_.inclusive_end()) {
           end_val--;
         }
-        if (end_val - start_val >= MAX_INTEGER_RANGE_SPLITE_COUNT || end_val - start_val < 0) {
+        if (end_val - start_val + 1 > MAX_INTEGER_RANGE_SPLITE_COUNT) {
           all_part = true;
         } else if (OB_FAIL(int_ranges.push_back(std::pair<int64_t, int64_t>(start_val, end_val)))) {
           LOG_WARN("fail to push back integer range", K(ret));
@@ -5143,13 +5113,9 @@ int ObTableLocation::get_full_leader_table_loc(ObIAllocator &allocator,
   ObSchemaGetterGuard schema_guard;
   OZ(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
   OZ(schema_guard.get_table_schema(tenant_id, ref_table_id, table_schema));
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("table schema is null", K(ret), K(table_id), K(tenant_id), K(ref_table_id));
-  } else {
-    OZ(table_schema->get_all_tablet_and_object_ids(tablet_ids, partition_ids));
-    CK(table_schema->has_tablet());
-  }
+  CK(OB_NOT_NULL(table_schema));
+  OZ(table_schema->get_all_tablet_and_object_ids(tablet_ids, partition_ids));
+  CK(table_schema->has_tablet());
   if (OB_SUCC(ret)) {
     ObDASTableLocMeta *loc_meta = NULL;
     char *table_buf = static_cast<char*>(allocator.alloc(sizeof(ObDASTableLoc)
@@ -5170,7 +5136,7 @@ int ObTableLocation::get_full_leader_table_loc(ObIAllocator &allocator,
       OX(tablet_loc = new(tablet_buf) ObDASTabletLoc());
       OX(tablet_loc->loc_meta_ = loc_meta);
       OZ(ObDASLocationRouter::get_leader(tenant_id, tablet_ids.at(i), *tablet_loc, expire_renew_time));
-      OZ(table_loc->add_tablet_loc(tablet_loc));
+      OZ(table_loc->tablet_locs_.push_back(tablet_loc));
     }
   }
 

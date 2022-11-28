@@ -994,7 +994,9 @@ int ObServerManager::receive_hb(
         }
       } else {
         status_ptr->last_hb_time_ = now;
-        if (update_delay_time_flag) {
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1450) {
+          // for compatibility
+        } else if (update_delay_time_flag) {
           const int64_t current_rs_time = ObTimeUtility::current_time();
           int64_t server_behind_time = current_rs_time - (lease_request.current_server_time_ + lease_request.round_trip_time_ / 2);
           if (std::abs(server_behind_time) > GCONF.rpc_timeout) {

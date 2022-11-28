@@ -68,8 +68,13 @@ public:
 
   virtual int execute(sql::ObSql &engine, sql::ObSqlCtx &ctx, sql::ObResultSet &res)
   {
+    /* !!!
+     * 内部sql，req_timeinfo_guard一定要在进入sql引擎定义
+     * !!!
+     */
+    bool need_res_update_endtime = true;
+    observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
     int ret = OB_SUCCESS;
-    common::ObSqlInfoGuard si_guard(sql_);
     // Deep copy sql, because sql may be destroyed before result iteration.
     const int64_t alloc_size = sizeof(ObString) + sql_.length() + 1; // 1 for C terminate char
     void *mem = res.get_mem_pool().alloc(alloc_size);
@@ -82,6 +87,7 @@ public:
       MEMCPY(dup_sql->ptr(), sql_.ptr(), sql_.length());
       dup_sql->ptr()[sql_.length()] = '\0';
       res.get_session().store_query_string(*dup_sql);
+      res.inc_need_update_endtime();
       ret = engine.stmt_query(*dup_sql, ctx, res);
     }
     return ret;
@@ -352,8 +358,6 @@ int ObInnerSQLConnection::init_session(sql::ObSQLSessionInfo* extern_session, co
     } else if (OB_FAIL(inner_session_.update_sys_variable(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,
                                                           ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT))) {
       LOG_WARN("update sys variables failed", K(ret));
-    } else if (OB_FAIL(inner_session_.gen_configs_in_pc_str())) {
-      LOG_WARN("fail to generate configuration strings that can influence execution plan", K(ret));
     } else {
       ObString database_name(OB_SYS_DATABASE_NAME);
       if (OB_FAIL(inner_session_.set_default_database(database_name))) {
@@ -585,7 +589,6 @@ int ObInnerSQLConnection::do_query(sqlclient::ObIExecutor &executor, ObInnerSQLR
     // restore有自己的inner_sql_connection，sql_modifier不为null
     bool is_restore = NULL != sql_modifier_;
     res.sql_ctx().is_restore_ = is_restore;
-    get_session().set_process_query_time(ObTimeUtility::current_time());
     if (!inited_) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
@@ -946,8 +949,7 @@ int ObInnerSQLConnection::execute(ParamStore &params,
                                   ObVirtualTableIteratorFactory *vt_iter_factory,
                                   bool is_from_pl,
                                   bool is_dynamic,
-                                  bool is_forall,
-                                  int64_t array_binding_count)
+                                  bool is_forall)
 {
   int ret = OB_SUCCESS;
   ObExecRecord exec_record;
@@ -1035,9 +1037,15 @@ int ObInnerSQLConnection::execute(ParamStore &params,
         if (enable_sql_audit) {
           exec_record.record_start();
         }
-        if (OB_SUCC(ret) && is_forall) {
-          res.sql_ctx().multi_stmt_item_.set_ps_mode(true);
-          res.sql_ctx().multi_stmt_item_.set_ab_cnt(array_binding_count);
+        if (is_forall) {
+          const ObSqlArrayObj *array_obj = NULL;
+          CK (params.count() > 0);
+          CK (params.at(0).is_ext_sql_array());
+          CK (OB_NOT_NULL(array_obj = reinterpret_cast<const ObSqlArrayObj*>(params.at(0).get_ext())));
+          if (OB_SUCC(ret)) {
+            res.sql_ctx().multi_stmt_item_.set_ps_mode(true);
+            res.sql_ctx().multi_stmt_item_.set_ab_cnt(array_obj->count_);
+          }
         }
 
         const uint64_t tenant_id = get_session().get_effective_tenant_id();
@@ -1191,6 +1199,12 @@ int ObInnerSQLConnection::start_transaction_inner(
 {
   int ret = OB_SUCCESS;
   ObString sql;
+  /* !!!
+   * 内部sql，req_timeinfo_guard一定要在进入sql引擎定义
+   * !!!
+   */
+  bool need_res_update_endtime = true;
+  observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
   bool has_tenant_resource = false;
   if (with_snap_shot) {
     sql = ObString::make_string("START TRANSACTION WITH CONSISTENT SNAPSHOT");
@@ -1276,13 +1290,11 @@ int ObInnerSQLConnection::start_transaction_inner(
           } else if (FALSE_IT(get_session().set_trans_type(transaction::ObTxClass::SYS))) {
           }
         }
-        if (OB_FAIL(ret)) {
-          reset_resource_conn_info();
-        }
       }
       if (OB_SUCC(ret)) {
         set_is_in_trans(true);
       }
+      res.inc_need_update_endtime();
     }
   }
 
@@ -1296,7 +1308,10 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
                                                      const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
-  const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
+  bool need_res_update_endtime = true;
+  observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
+
+  bool has_tenant_resource = false;
   transaction::ObTxDesc *tx_desc = nullptr;
 
   SMART_VAR(ObInnerSQLResult, res, get_session())
@@ -1307,24 +1322,25 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
     } else if (OB_INVALID_ID == tenant_id) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(tenant_id));
-    } else if (local_execute) {
+    } else if (GCTX.omt_->is_available_tenant(tenant_id)) {
+      has_tenant_resource = true;
       if (OB_FAIL(switch_tenant(tenant_id))) {
         LOG_WARN("set system tenant id failed", K(ret), K(tenant_id));
       }
     } else {
-      LOG_DEBUG("tenant may be not in server", K(ret), K(local_execute), K(tenant_id), K(MYADDR));
+      has_tenant_resource = false;
+      LOG_DEBUG("tenant not in server", K(ret), K(tenant_id), K(MYADDR));
     }
 
     if (OB_SUCC(ret)) {
       if (!is_in_trans()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("inner conn must be already in trans when register multi source data", K(ret));
-      } else if (OB_FAIL(res.init(local_execute))) {
-        LOG_WARN("init result set", K(ret), K(local_execute));
-      } else if (local_execute) {
+      } else if (OB_FAIL(res.init(has_tenant_resource))) {
+        LOG_WARN("init result set", K(ret), K(has_tenant_resource));
+      } else if (has_tenant_resource) {
         if (OB_ISNULL(tx_desc = get_session().get_tx_desc())) {
           // TODO ADD LOG and check get_session
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Invalid tx_desc", K(ls_id), K(type));
         } else {
           MTL_SWITCH(tenant_id) {
@@ -1379,16 +1395,9 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
         }
       }
     }
+    res.inc_need_update_endtime();
   }
 
-
-  LOG_INFO("register mds in inner_sql_connection",
-           KR(ret),
-           KP(this),
-           K(local_execute),
-           K(get_resource_conn_id()),
-           K(get_session().get_sessid()),
-           KPC(get_session().get_tx_desc()));
   return ret;
 }
 
@@ -1398,6 +1407,9 @@ int ObInnerSQLConnection::lock_table(const uint64_t tenant_id,
                                      const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
+  bool need_res_update_endtime = true;
+  observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
+
   bool has_tenant_resource = false;
   transaction::ObTxDesc *tx_desc = nullptr;
 
@@ -1472,6 +1484,7 @@ int ObInnerSQLConnection::lock_table(const uint64_t tenant_id,
         }
       }
     }
+    res.inc_need_update_endtime();
   }
 
   return ret;
@@ -1484,6 +1497,9 @@ int ObInnerSQLConnection::lock_tablet(const uint64_t tenant_id,
                                       const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
+  bool need_res_update_endtime = true;
+  observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
+
   bool has_tenant_resource = false;
   transaction::ObTxDesc *tx_desc = nullptr;
 
@@ -1560,6 +1576,7 @@ int ObInnerSQLConnection::lock_tablet(const uint64_t tenant_id,
         }
       }
     }
+    res.inc_need_update_endtime();
   }
 
   return ret;
@@ -1630,6 +1647,12 @@ int ObInnerSQLConnection::rollback()
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_rollback);
+  /* !!!
+   * 内部sql，req_timeinfo_guard一定要在进入sql引擎定义
+   * !!!
+   */
+  bool need_res_update_endtime = true;
+  observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
   ObSqlQueryExecutor executor("ROLLBACK");
   bool has_tenant_resource = is_resource_conn() || OB_INVALID_ID == get_resource_conn_id();
   if (!is_in_trans()) {
@@ -1691,6 +1714,7 @@ int ObInnerSQLConnection::rollback()
           }
         }
       }
+      res.inc_need_update_endtime();
     }
   }
   set_is_in_trans(false);
@@ -1702,6 +1726,12 @@ int ObInnerSQLConnection::commit()
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_commit);
   DEBUG_SYNC(BEFORE_INNER_SQL_COMMIT);
+  /* !!!
+   * 内部sql，req_timeinfo_guard一定要在进入sql引擎定义
+   * !!!
+   */
+  bool need_res_update_endtime = true;
+  observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
   ObSqlQueryExecutor executor("COMMIT");
   bool has_tenant_resource = is_resource_conn() || OB_INVALID_ID == get_resource_conn_id();
   if (!is_in_trans()) {
@@ -1762,6 +1792,7 @@ int ObInnerSQLConnection::commit()
           }
         }
       }
+      res.inc_need_update_endtime();
     }
   }
   set_is_in_trans(false);
@@ -1794,6 +1825,12 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute_write);
+  /* !!!
+   * 内部sql，req_timeinfo_guard一定要在进入sql引擎定义
+   * !!!
+   */
+  bool need_res_update_endtime = true;
+  observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
   ObSqlQueryExecutor executor(sql);
   const bool local_execute = is_local_execute(GCONF.cluster_id, tenant_id);
   SMART_VAR(ObInnerSQLResult, res, get_session()) {
@@ -1861,7 +1898,6 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
         }
       }
       if (OB_SUCC(ret)) {
-        get_session().store_query_string(sql);
         ObInnerSQLTransmitArg arg (MYADDR, get_resource_svr(), tenant_id, get_resource_conn_id(),
             sql, ObInnerSQLTransmitArg::OPERATION_TYPE_EXECUTE_WRITE,
             lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
@@ -1901,6 +1937,7 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
     if (tenant_id < OB_MAX_RESERVED_TENANT_ID) {  //only print log for sys table
       LOG_INFO("execute write sql", K(ret), K(tenant_id), K(affected_rows), K(sql));
     }
+    res.inc_need_update_endtime();
   }
 
   return ret;
@@ -1977,6 +2014,10 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute_read);
   ObInnerSQLReadContext *read_ctx = NULL;
+  /* !!!
+   * 内部sql，req_timeinfo_guard一定要在进入sql引擎定义
+   * !!!
+   */
   const static int64_t ctx_size = sizeof(ObInnerSQLReadContext);
   static_assert(ctx_size <= ObISQLClient::ReadResult::BUF_SIZE, "buffer not enough");
   ObSqlQueryExecutor executor(sql);
@@ -2047,7 +2088,6 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
       }
     }
     if (OB_SUCC(ret)) {
-      get_session().store_query_string(sql);
       ObInnerSQLTransmitArg arg (MYADDR, get_resource_svr(), tenant_id, get_resource_conn_id(),
           sql, ObInnerSQLTransmitArg::OPERATION_TYPE_EXECUTE_READ,
           lib::Worker::CompatMode::ORACLE == get_compat_mode(), GCONF.cluster_id,
@@ -2135,6 +2175,12 @@ int ObInnerSQLConnection::execute(
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute);
+  /* !!!
+   * 内部sql，req_timeinfo_guard一定要在进入sql引擎定义
+   * !!!
+   */
+  bool need_res_update_endtime = true;
+  observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
   SMART_VAR(ObInnerSQLResult, res, get_session()) {
     if (OB_FAIL(res.init())) {
       LOG_WARN("init result set", K(ret));
@@ -2163,6 +2209,7 @@ int ObInnerSQLConnection::execute(
       }
     }
     LOG_INFO("execute executor", K(ret), K(tenant_id), K(executor));
+    res.inc_need_update_endtime();
   }
   return ret;
 }
@@ -2212,12 +2259,17 @@ int ObInnerSQLConnection::execute(const uint64_t tenant_id,
                                   ObISQLClient::ReadResult &res,
                                   bool is_from_pl,
                                   bool is_dynamic,
-                                  bool is_forall,
-                                  int64_t array_binding_count)
+                                  bool is_forall)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(inner_execute);
   ObInnerSQLReadContext *read_ctx = NULL;
+  /* !!!
+   * 内部sql，req_timeinfo_guard一定要在进入sql引擎定义
+   * !!!
+   */
+  bool need_res_update_endtime = true;
+  observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
   ObPsStmtInfoGuard ps_guard;
   ObPsStmtInfo *ps_info = NULL;
   ObPsCache *ps_cache = get_session().get_ps_cache();
@@ -2245,10 +2297,11 @@ int ObInnerSQLConnection::execute(const uint64_t tenant_id,
     read_ctx->get_result().result_set().set_ps_protocol();
     read_ctx->get_result().result_set().set_statement_id(stmt_id);
     read_ctx->get_result().result_set().set_stmt_type(stmt_type);
+    read_ctx->get_result().result_set().inc_need_update_endtime();
     get_session().store_query_string(ps_info->get_ps_sql());
 
     if (OB_FAIL(execute(params, read_ctx->get_result(), &read_ctx->get_vt_iter_factory(),
-                        is_from_pl, is_dynamic, is_forall, array_binding_count))) {
+                        is_from_pl, is_dynamic, is_forall))) {
       LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(stmt_id));
     }
   }

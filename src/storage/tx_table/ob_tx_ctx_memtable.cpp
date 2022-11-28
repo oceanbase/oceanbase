@@ -223,15 +223,27 @@ transaction::ObLSTxCtxMgr *ObTxCtxMemtable::get_ls_tx_ctx_mgr()
 int64_t ObTxCtxMemtable::get_rec_log_ts()
 {
   int ret = OB_SUCCESS;
-  int64_t rec_log_ts = OB_INVALID_TIMESTAMP;
 
-  if (OB_FAIL(get_ls_tx_ctx_mgr()->get_rec_log_ts(rec_log_ts))) {
+  // TODO: cxf remove this
+  palf::SCN tmp;
+  int64_t tmp_rec_log_ts = INT64_MAX;
+  tmp = get_rec_scn();
+  tmp_rec_log_ts = tmp == palf::SCN::max_scn() ? INT64_MAX : tmp.get_val_for_lsn_allocator();
+  return tmp_rec_log_ts;
+}
+
+palf::SCN ObTxCtxMemtable::get_rec_scn()
+{
+  int ret = OB_SUCCESS;
+  palf::SCN rec_scn;
+
+  if (OB_FAIL(get_ls_tx_ctx_mgr()->get_rec_scn(rec_scn))) {
     TRANS_LOG(WARN, "get rec log ts failed", K(ret));
   } else {
-    TRANS_LOG(INFO, "tx ctx memtable get rec log ts", KPC(this), K(rec_log_ts));
+    TRANS_LOG(INFO, "tx ctx memtable get rec log ts", KPC(this), K(rec_scn));
   }
 
-  return rec_log_ts;
+  return rec_scn;
 }
 
 ObTabletID ObTxCtxMemtable::get_tablet_id() const
@@ -271,10 +283,10 @@ int ObTxCtxMemtable::flush(int64_t recycle_log_ts, bool need_freeze)
       TRANS_LOG(INFO, "no need to freeze", K(rec_log_ts), K(recycle_log_ts));
     } else if (is_active_memtable()) {
       int64_t cur_ts = common::ObClockGenerator::getClock();
-      ObLogTsRange log_ts_range;
-      log_ts_range.start_log_ts_ = 1;
-      log_ts_range.end_log_ts_ = cur_ts;
-      set_log_ts_range(log_ts_range);
+      ObScnRange scn_range;
+      scn_range.start_scn_.convert_for_gts(1);
+      scn_range.end_scn_.convert_for_gts(cur_ts);
+      set_scn_range(scn_range);
       set_snapshot_version(cur_ts);
       ATOMIC_STORE(&is_frozen_, true);
     }

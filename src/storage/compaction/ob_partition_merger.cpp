@@ -140,7 +140,7 @@ int ObPartitionMerger::open_macro_writer(ObMergeParameter &merge_param)
   } else if (OB_FAIL(macro_start_seq.set_parallel_degree(task_idx_))) {
     STORAGE_LOG(WARN, "Failed to set parallel degree to macro start seq", K(ret), K_(task_idx));
   } else {
-    data_store_desc_.end_log_ts_ = merge_ctx_->log_ts_range_.end_log_ts_;
+    data_store_desc_.end_log_ts_ = merge_ctx_->scn_range_.end_scn_.get_val_for_inner_table_field();
     if (OB_FAIL(macro_writer_.open(data_store_desc_, macro_start_seq))) {
       STORAGE_LOG(WARN, "Failed to open macro block writer", K(ret));
     }
@@ -1947,8 +1947,8 @@ int ObPartitionMergeDumper::generate_dump_table_name(const char *dir_name,
                        table->is_memtable() ? "dump_memtable" : "dump_sstable",
                        "tablet_id", table->get_key().tablet_id_.id(),
                        "table_type", table->get_key().table_type_,
-                       "start_log_ts", table->get_start_log_ts(),
-                       "end_log_ts", table->get_end_log_ts());
+                       "start_scn", table->get_start_scn().get_val_for_inner_table_field(),
+                       "end_scn", table->get_end_scn().get_val_for_inner_table_field());
     if (pret < 0 || pret >= OB_MAX_FILE_NAME_LENGTH) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "name too long", K(ret), K(pret), K(file_name));
@@ -1967,7 +1967,7 @@ int ObPartitionMergeDumper::check_disk_free_space(const char *dir_name)
   if (OB_FAIL(FileDirectoryUtils::get_disk_space(dir_name, total_space, free_space))) {
     STORAGE_LOG(WARN, "Failed to get disk space ", K(ret), K(dir_name));
   } else if (free_space < ObPartitionMergeDumper::DUMP_TABLE_DISK_FREE_PERCENTAGE * total_space) {
-    ret = OB_SERVER_OUTOF_DISK_SPACE;
+    ret = OB_CS_OUTOF_DISK_SPACE;
   }
   return ret;
 }
@@ -1988,13 +1988,13 @@ int ObPartitionMergeDumper::judge_disk_free_space(const char *dir_name, ObITable
           - static_cast<ObSSTable *>(table)->get_meta().get_basic_meta().get_total_macro_block_count() *
           OB_DEFAULT_MACRO_BLOCK_SIZE
           < ObPartitionMergeDumper::DUMP_TABLE_DISK_FREE_PERCENTAGE * total_space) {
-        ret = OB_SERVER_OUTOF_DISK_SPACE;
+        ret = OB_CS_OUTOF_DISK_SPACE;
         STORAGE_LOG(WARN, "disk space is not enough", K(ret), K(free_space), K(total_space), KPC(table));
       }
     } else if (free_space
                - static_cast<ObMemtable *>(table)->get_occupied_size() * MEMTABLE_DUMP_SIZE_PERCENTAGE
                < ObPartitionMergeDumper::DUMP_TABLE_DISK_FREE_PERCENTAGE * total_space) {
-      ret = OB_SERVER_OUTOF_DISK_SPACE;
+      ret = OB_CS_OUTOF_DISK_SPACE;
       STORAGE_LOG(WARN, "disk space is not enough", K(ret), K(free_space), K(total_space), KPC(table));
     }
   }
@@ -2053,7 +2053,7 @@ void ObPartitionMergeDumper::print_error_info(const int err_no,
         STORAGE_LOG(WARN, "The store is NULL", K(idx), K(tables));
       } else if (OB_FAIL(compaction::ObPartitionMergeDumper::judge_disk_free_space(dump_table_dir,
                          table))) {
-        if (OB_SERVER_OUTOF_DISK_SPACE != ret) {
+        if (OB_CS_OUTOF_DISK_SPACE != ret) {
           STORAGE_LOG(WARN, "failed to judge disk space", K(ret), K(dump_table_dir));
         }
       } else if (OB_FAIL(generate_dump_table_name(dump_table_dir, table, file_name))) {
@@ -2062,7 +2062,7 @@ void ObPartitionMergeDumper::print_error_info(const int err_no,
       } else if (table->is_sstable()) {
         if (OB_FAIL(static_cast<ObSSTable *>(table)->dump2text(dump_table_dir, *ctx.schema_ctx_.table_schema_,
                                                                file_name))) {
-          if (OB_SERVER_OUTOF_DISK_SPACE != ret) {
+          if (OB_CS_OUTOF_DISK_SPACE != ret) {
             STORAGE_LOG(WARN, "failed to dump sstable", K(ret), K(file_name));
           }
         } else {

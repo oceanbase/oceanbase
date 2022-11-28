@@ -54,6 +54,7 @@ public:
 // transaction committer, ObTxCycleTwoPhaseCommitter and ObTxOnePhaseCommitter based on
 // participants number
 class MockOb2pcCtx : public ObTxCycleTwoPhaseCommitter,
+                     public ObTxOnePhaseCommitter,
                      public ObMailHandler<ObTwoPhaseCommitMsgType>
 {
 public:

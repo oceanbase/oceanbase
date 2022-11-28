@@ -17,6 +17,7 @@
 
 #include "share/ob_define.h"                      // OB_*
 #include "lib/allocator/ob_allocator.h"           // ObIAllocator
+#include "lib/hash/ob_ext_iter_hashset.h"         // ObExtIterHashSet
 #include "lib/container/ob_se_array.h"            // ObSEArray
 #include "lib/allocator/page_arena.h"             // ObArenaAllocator
 #include "lib/lock/ob_spin_lock.h"                // ObSpinLock

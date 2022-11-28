@@ -45,8 +45,7 @@ int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
                                                    ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
                                                    param.tenant_id_))) {
     LOG_WARN("failed to create hash map", K(ret));
-  } else if (param.need_estimate_block_ &&
-             OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, param,
+  } else if (OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, param,
                                                                  extra.partition_id_block_map_))) {
     LOG_WARN("failed to estimate block count", K(ret));
   }

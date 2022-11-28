@@ -44,7 +44,7 @@ public:
   int replay(const void *buffer,
              const int64_t buf_size,
              const palf::LSN &lsn,
-             const int64_t log_ts) override final;
+             const palf::SCN &log_ts) override final;
                       
   // for role change
   void switch_to_follower_forcedly() override final;

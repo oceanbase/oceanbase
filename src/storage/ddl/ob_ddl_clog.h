@@ -120,16 +120,14 @@ class ObDDLStartLog final
 public:
   ObDDLStartLog();
   ~ObDDLStartLog() = default;
-  int init(const ObITable::TableKey &table_key, const int64_t cluster_version, const int64_t execution_id);
-  bool is_valid() const { return table_key_.is_valid() && cluster_version_ >= 0 && execution_id_ >= 0; }
+  int init(const ObITable::TableKey &table_key, const int64_t cluster_version);
+  bool is_valid() const { return table_key_.is_valid() && cluster_version_ >= 0; }
   ObITable::TableKey get_table_key() const { return table_key_; }
   int64_t get_cluster_version() const { return cluster_version_; }
-  int64_t get_execution_id() const { return execution_id_; }
-  TO_STRING_KV(K_(table_key), K_(cluster_version), K_(execution_id));
+  TO_STRING_KV(K_(table_key), K_(cluster_version));
 private:
   ObITable::TableKey table_key_;
   int64_t cluster_version_; // used for compatibility
-  int64_t execution_id_;
 };
 
 class ObDDLRedoLog final

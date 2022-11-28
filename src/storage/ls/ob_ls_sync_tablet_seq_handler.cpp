@@ -15,13 +15,12 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
 #include "logservice/ob_log_base_header.h"
+#include "logservice/palf/scn.h"
 #include "lib/oblog/ob_log_module.h"
-#include "share/ob_tablet_autoincrement_service.h"
 
 namespace oceanbase
 {
-
-using namespace share;
+using namespace palf;
 namespace storage
 {
 
@@ -50,14 +49,14 @@ void ObLSSyncTabletSeqHandler::reset()
 int ObLSSyncTabletSeqHandler::replay(const void *buffer,
                                      const int64_t nbytes,
                                      const palf::LSN &lsn,
-                                     const int64_t ts_ns)
+                                     const SCN &scn)
 {
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader base_header;
   ObSyncTabletSeqLog log;
   int64_t tmp_pos = 0;
   const char *log_buf = static_cast<const char *>(buffer);
-  ObTabletAutoincSeqRpcHandler &autoinc_seq_handler = ObTabletAutoincSeqRpcHandler::get_instance();
+  ObTabletHandle tablet_handle;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLSSyncTabletSeqHandler not inited", K(ret));
@@ -65,10 +64,17 @@ int ObLSSyncTabletSeqHandler::replay(const void *buffer,
     LOG_WARN("log base header deserialize error", K(ret));
   } else if (OB_FAIL(log.deserialize(log_buf, nbytes, tmp_pos))) {
     LOG_WARN("ObSyncTabletSeqLog deserialize error", K(ret));
-  } else if (OB_FAIL(autoinc_seq_handler.replay_update_tablet_autoinc_seq(ls_,
-                                                                          log.get_tablet_id(),
-                                                                          log.get_autoinc_seq(),
-                                                                          ts_ns))) {
+  } else if (OB_FAIL(ls_->replay_get_tablet(log.get_tablet_id(), scn.get_val_for_inner_table_field(), tablet_handle))) {
+    if (OB_TABLET_NOT_EXIST == ret) {
+      LOG_INFO("tablet may be deleted, skip this log", K(ret), "tablet_id", log.get_tablet_id(), K(scn));
+      ret = OB_SUCCESS;
+    } else if (OB_EAGAIN == ret) {
+      // retry replay again
+    } else {
+      LOG_WARN("fail to replay get tablet, retry again", K(ret), K(log), K(scn));
+      ret = OB_EAGAIN;
+    }
+  } else if (OB_FAIL(tablet_handle.get_obj()->update_tablet_autoinc_seq(log.get_autoinc_seq(), scn))) {
     LOG_WARN("failed to update tablet auto inc seq", K(ret), K(log));
   }
   return ret;

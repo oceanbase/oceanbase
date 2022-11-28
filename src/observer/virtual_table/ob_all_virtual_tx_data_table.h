@@ -26,9 +26,9 @@ private:
   struct RowData {
     const char *state_;
     int64_t tx_data_count_;
-    int64_t min_tx_scn_;
-    int64_t max_tx_scn_;
-    RowData() : state_(""), tx_data_count_(-1), min_tx_scn_(OB_INVALID_LOG_ID), max_tx_scn_(OB_INVALID_LOG_ID) {}
+    palf::SCN min_tx_scn_;
+    palf::SCN max_tx_scn_;
+    RowData() : state_(""), tx_data_count_(-1), min_tx_scn_(), max_tx_scn_() {}
   };
 
   enum VirtualTxDataTableColumnID : uint64_t {

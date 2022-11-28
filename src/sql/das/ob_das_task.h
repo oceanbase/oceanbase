@@ -109,7 +109,6 @@ public:
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   void set_tablet_loc(const ObDASTabletLoc *tablet_loc) { tablet_loc_ = tablet_loc; }
   const ObDASTabletLoc *get_tablet_loc() const { return tablet_loc_; }
-  inline int64_t get_ref_table_id() const { return tablet_loc_->loc_meta_->ref_table_id_; }
   virtual int decode_task_result(ObIDASTaskResult *task_result) = 0;
   //远程执行填充第一个RPC结果，并返回是否还有剩余的RPC结果
   virtual int fill_task_result(ObIDASTaskResult &task_result,
@@ -143,6 +142,7 @@ public:
                        K_(need_switch_param),
                        KPC_(trans_desc),
                        KPC_(snapshot),
+                       K_(trans_result),
                        K_(tablet_id),
                        K_(ls_id),
                        KPC_(tablet_loc),
@@ -153,11 +153,12 @@ public:
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_type(ObDASOpType op_type) { op_type_ = op_type; }
-  ObDASOpType get_type() const { return op_type_; }
+  ObDASOpType get_type() { return op_type_; }
   void set_trans_desc(transaction::ObTxDesc *trans_desc) { trans_desc_ = trans_desc; }
   transaction::ObTxDesc *get_trans_desc() { return trans_desc_; }
   void set_snapshot(transaction::ObTxReadSnapshot *snapshot) { snapshot_ = snapshot; }
   transaction::ObTxReadSnapshot *get_snapshot() { return snapshot_; }
+  transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
   bool is_local_task() const { return task_started_; }
   void set_can_part_retry(const bool flag) { can_part_retry_ = flag; }
   bool can_part_retry() const { return can_part_retry_; }
@@ -191,6 +192,7 @@ protected:
   };
   transaction::ObTxDesc *trans_desc_; //trans desc，事务是全局信息，由RPC框架管理，这里不维护其内存
   transaction::ObTxReadSnapshot *snapshot_; // Mvcc snapshot
+  transaction::ObTxExecResult trans_result_; //does not need serialize it
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   const ObDASTabletLoc *tablet_loc_; //does not need serialize it

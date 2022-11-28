@@ -60,8 +60,8 @@ public:
 
   uint64_t get_tenant_id() const { return tenant_id_; }
 
-  int get_frozen_scn(int64_t &frozen_scn);
-  int get_global_broadcast_scn(int64_t &global_broadcast_scn) const; 
+  int get_frozen_scn(palf::SCN &frozen_scn);
+  int get_global_broadcast_scn(palf::SCN &global_broadcast_scn) const;
 
   int launch_major_freeze();
 

@@ -119,7 +119,6 @@ class ObDRTaskTableUpdater
 public:
   ObDRTaskTableUpdater()
       : inited_(false),
-        stopped_(true),
         update_queue_(),
         sql_proxy_(nullptr),
         task_mgr_(nullptr) {}
@@ -140,13 +139,11 @@ public:
   int process_barrier(const ObDRTaskTableUpdateTask &task, bool &stopped);
   inline bool is_inited() const { return inited_; }
   int init(common::ObMySQLProxy *sql_proxy, ObDRTaskMgr *task_mgr);
-  int start();
   void stop();
   void wait();
   void destroy();
 
 private:
-  int check_inner_stat_();
   int process_task_(
       const ObDRTaskTableUpdateTask &task);
 
@@ -156,7 +153,6 @@ private:
   const int64_t MINI_MODE_TASK_QUEUE_SIZE = 20 * 10000;
   const int64_t TASK_QUEUE_SIZE = 100 * 10000;
   bool inited_;
-  bool stopped_;
   ObDRTaskTableUpdateTaskQueue update_queue_;
   common::ObMySQLProxy *sql_proxy_;
   ObDRTaskMgr *task_mgr_;

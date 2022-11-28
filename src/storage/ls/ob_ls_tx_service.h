@@ -21,11 +21,13 @@
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/rcservice/ob_role_change_handler.h"
-#include "storage/tx/ob_keep_alive_ls_handler.h"
 
 namespace oceanbase
 {
-
+namespace palf
+{
+class SCN;
+}
 namespace storage
 {
 class ObLS;
@@ -80,7 +82,7 @@ public:
                          const bool read_latest,
                          const int64_t lock_timeout,
                          ObStoreCtx &store_ctx) const;
-  int get_read_store_ctx(const int64_t snapshot_version,
+  int get_read_store_ctx(const palf::SCN &snapshot_version,
                          const int64_t lock_timeout,
                          ObStoreCtx &store_ctx) const;
   int get_write_store_ctx(transaction::ObTxDesc &tx,
@@ -92,7 +94,7 @@ public:
   // submit next log when all trx in frozen memtable have submitted log
   int traverse_trans_to_submit_next_log();
   // check schduler status for gc
-  int check_scheduler_status(int64_t &min_start_scn, transaction::MinStartScnStatus &status);
+  int check_scheduler_status(share::ObLSID ls_id);
 
   // for ls gc
   // @return OB_SUCCESS, all the tx of this ls cleaned up
@@ -126,9 +128,9 @@ public:
   // get the obj lock op iterator from tx of this ls.
   int iterate_tx_obj_lock_op(transaction::tablelock::ObLockOpIterator &iter) const;
 public:
-  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const int64_t ts_ns);
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const palf::SCN &scn);
 
-  int replay_start_working_log(const transaction::ObTxStartWorkingLog &log, int64_t log_ts_ns);
+  int replay_start_working_log(const transaction::ObTxStartWorkingLog &log, palf::SCN &log_ts_ns);
   void switch_to_follower_forcedly();
   int switch_to_leader();
   int switch_to_follower_gracefully();
@@ -136,7 +138,6 @@ public:
 
   int64_t get_rec_log_ts();
   int flush(int64_t rec_log_ts);
-  int flush_ls_inner_tablet(const ObTabletID &tablet_id);
 
   int get_common_checkpoint_info(
     ObIArray<checkpoint::ObCommonCheckpointVTInfo> &common_checkpoint_array);
@@ -153,7 +154,7 @@ public:
                                    const checkpoint::ObCommonCheckpoint* common_checkpoint);
   // undertake dump
   int traversal_flush();
-  virtual int64_t get_ls_weak_read_ts();
+  virtual palf::SCN get_ls_weak_read_ts();
   int check_in_leader_serving_state(bool& bool_ret);
 
   transaction::ObTxRetainCtxMgr *get_retain_ctx_mgr();

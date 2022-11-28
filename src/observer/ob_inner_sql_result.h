@@ -177,6 +177,7 @@ private:
   int find_idx(const char *col_name, int64_t &idx) const;
   int build_column_map() const;
   int inner_close();
+  void inc_need_update_endtime() { need_update_cnt_++; }
 
   static inline int check_extend_value(const common::ObObj &obj);
 private:
@@ -221,6 +222,7 @@ private:
   bool iter_end_;
   bool is_read_; //for some write sql , do not need prefetch 1 row in open
   bool has_tenant_resource_;
+  int64_t need_update_cnt_; // used to mark wether need to update endtime for timereqguard
   omt::ObTenant *tenant_;
   ObLDHandle handle_;
 

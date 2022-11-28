@@ -78,16 +78,16 @@ void ObMvccEngine::destroy()
   memtable_ = NULL;
 }
 
-int ObMvccEngine::try_compact_row_when_mvcc_read_(const int64_t &snapshot_version,
+int ObMvccEngine::try_compact_row_when_mvcc_read_(const palf::SCN &snapshot_version,
                                                   ObMvccRow &row)
 {
   int ret = OB_SUCCESS;
   const int64_t latest_compact_ts = row.latest_compact_ts_;
   const int64_t WEAK_READ_COMPACT_THRESHOLD = 3 * 1000 * 1000;
-  if (0 >= snapshot_version) {
+  if (palf::SCN::min_scn() >= snapshot_version) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "invalid snapshot version", K(ret), K(snapshot_version));
-  } else if (INT64_MAX == snapshot_version
+  } else if (palf::SCN::max_scn() == snapshot_version
       || ObTimeUtility::current_time() < latest_compact_ts + WEAK_READ_COMPACT_THRESHOLD) {
     // do not compact row when merging
   } else {
@@ -306,7 +306,7 @@ int ObMvccEngine::create_kv(
 }
 
 int ObMvccEngine::mvcc_write(ObIMemtableCtx &ctx,
-                             const int64_t snapshot_version,
+                             const palf::SCN snapshot_version,
                              ObMvccRow &value,
                              const ObTxNodeArg &arg,
                              ObMvccWriteResult &res)
@@ -359,11 +359,11 @@ int ObMvccEngine::build_tx_node_(ObIMemtableCtx &ctx,
     TRANS_LOG(WARN, "MvccTranNode dup fail", K(ret), "node", node);
   } else {
     node->tx_id_ = ctx.get_tx_id();
-    node->trans_version_ = INT64_MAX;
+    node->trans_version_ = palf::SCN::max_scn();
     node->modify_count_ = arg.modify_count_;
     node->acc_checksum_ = arg.acc_checksum_;
     node->version_ = arg.memstore_version_;
-    node->log_timestamp_ = arg.log_ts_;
+    node->scn_ = arg.scn_;
     node->seq_no_ = arg.seq_no_;
     node->prev_ = NULL;
     node->next_ = NULL;

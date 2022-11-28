@@ -110,9 +110,16 @@ int ObUserProfileResolver::fill_arg(int64_t type, ObObj &value, obrpc::ObProfile
     }
   }
 
-  if (OB_SUCC(ret) &&
-      OB_FAIL(arg.schema_.set_value(type, schema_value))) {
-    LOG_WARN("fail to set schema value", K(ret));
+  if (OB_SUCC(ret)) {
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2276 &&
+        (type == ObProfileSchema::PASSWORD_LIFE_TIME ||
+        type == ObProfileSchema::PASSWORD_GRACE_TIME)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support profile type", K(type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "specified profile type");
+    } else if (OB_FAIL(arg.schema_.set_value(type, schema_value))) {
+      LOG_WARN("fail to set schema value", K(ret));
+    }
   }
   return ret;
 }

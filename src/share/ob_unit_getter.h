@@ -44,13 +44,6 @@ public:
     UNIT_ERROR_STAT,
   };
   static const char* get_unit_status_str(const ObUnitStatus status) { return unit_status_strs_[status]; }
-  //UNIT_NORMAL or UNIT_MIGRATE_IN or UNIT_MIGRATE_OUT is valid tenant,
-  //UNIT_MARK_DELETING, // mark deleting in __all_unit, unit is shrink, ls need migrate
-  //UNIT_WAIT_GC_IN_OBSERVER, // already deleted in __all_unit, but The migration or replica will be concurrent with the unit migration, and although RS has deemed it ready for deletion, there may be migration tasks and replica tasks executing concurrently, resulting in a log stream on the unit, so it is also valid to be in this state
-  static bool is_valid_tenant(const ObUnitStatus status)
-  {
-    return UNIT_DELETING_IN_OBSERVER != status && UNIT_ERROR_STAT != status;
-  }
 
   struct ObTenantConfig
   {

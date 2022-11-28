@@ -294,43 +294,29 @@ struct SchemaKey
 
 struct VersionHisKey
 {
-  VersionHisKey()
-    : schema_type_(OB_MAX_SCHEMA),
-      tenant_id_(common::OB_INVALID_TENANT_ID),
-      schema_id_(common::OB_INVALID_ID)
-  {}
-  // tenant_id should be OB_SYS_TENANT_ID when schema_type is TENANT_SCHEMA.
-  VersionHisKey(const ObSchemaType schema_type,
-                const uint64_t tenant_id,
-                const uint64_t schema_id)
-    : schema_type_(schema_type),
-      tenant_id_(tenant_id),
-      schema_id_(schema_id)
+  VersionHisKey(const ObSchemaType schema_type = OB_MAX_SCHEMA,
+                const uint64_t schema_id = common::OB_INVALID_ID)
+    : schema_type_(schema_type), schema_id_(schema_id)
   {}
   inline bool operator==(const VersionHisKey &other) const
   {
-    return schema_type_ == other.schema_type_
-           && tenant_id_ == other.tenant_id_
-           && schema_id_ == other.schema_id_;
+    return schema_type_ == other.schema_type_ && schema_id_ == other.schema_id_;
   }
   inline uint64_t hash() const
   {
     uint64_t hash_code = 0;
     hash_code = common::murmurhash(&schema_type_, sizeof(schema_type_), hash_code);
-    hash_code = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_code);
     hash_code = common::murmurhash(&schema_id_, sizeof(schema_id_), hash_code);
     return hash_code;
   }
   inline bool is_valid() const
   {
     return OB_MAX_SCHEMA != schema_type_
-           && common::OB_INVALID_TENANT_ID != tenant_id_
            && common::OB_INVALID_ID != schema_id_;
   }
   ObSchemaType schema_type_;
-  uint64_t tenant_id_;
   int64_t schema_id_;
-  TO_STRING_KV(K_(schema_type), K_(tenant_id), K_(schema_id));
+  TO_STRING_KV(K(schema_type_), K(schema_id_));
 };
 const static int MAX_CACHED_VERSION_CNT = 16;
 struct VersionHisVal

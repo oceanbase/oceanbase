@@ -964,30 +964,26 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
       }
     }
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(affinitize_rule.do_random(!partitions_info_.empty()))) {
-    LOG_WARN("failed to do random", K(ret));
-  } else {
-    const ObIArray<ObPxAffinityByRandom::TabletHashValue> &partition_worker_pairs = affinitize_rule.get_result();
-    ARRAY_FOREACH(partition_worker_pairs, rt_idx) {
-      int64_t task_id = partition_worker_pairs.at(rt_idx).worker_id_;
-      int64_t tablet_id = partition_worker_pairs.at(rt_idx).tablet_id_;
-      if (task_id >= parallelism) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Task id is invalid", K(ret), K(task_id), K(parallelism));
-      }
-      ARRAY_FOREACH(taskset.gi_task_set_, idx) {
-        const ObDASTabletLoc &tablet_key = *taskset.gi_task_set_.at(idx).tablet_loc_;
-        if (tablet_id == tablet_key.tablet_id_.id()) {
-          ObGITaskSet &real_task_set = taskset_array.at(task_id);
-          if (OB_FAIL(real_task_set.gi_task_set_.push_back(taskset.gi_task_set_.at(idx)))) {
-            LOG_WARN("Failed to push back task info", K(ret));
-          }
+  affinitize_rule.do_random(!partitions_info_.empty());
+  const ObIArray<ObPxAffinityByRandom::TabletHashValue> &partition_worker_pairs = affinitize_rule.get_result();
+  ARRAY_FOREACH(partition_worker_pairs, rt_idx) {
+    int64_t task_id = partition_worker_pairs.at(rt_idx).worker_id_;
+    int64_t tablet_id = partition_worker_pairs.at(rt_idx).tablet_id_;
+    if (task_id >= parallelism) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Task id is invalid", K(ret), K(task_id), K(parallelism));
+    }
+    ARRAY_FOREACH(taskset.gi_task_set_, idx) {
+      const ObDASTabletLoc &tablet_key = *taskset.gi_task_set_.at(idx).tablet_loc_;
+      if (tablet_id == tablet_key.tablet_id_.id()) {
+        ObGITaskSet &real_task_set = taskset_array.at(task_id);
+        if (OB_FAIL(real_task_set.gi_task_set_.push_back(taskset.gi_task_set_.at(idx)))) {
+          LOG_WARN("Failed to push back task info", K(ret));
         }
       }
-      LOG_TRACE("affinitize granule split a task_array",
-          K(tablet_id), K(task_id), K(parallelism), K(taskset_array), K(ret));
     }
+    LOG_TRACE("affinitize granule split a task_array",
+        K(tablet_id), K(task_id), K(parallelism), K(taskset_array), K(ret));
   }
   return ret;
 }

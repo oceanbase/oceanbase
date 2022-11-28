@@ -40,7 +40,6 @@
 #include "sql/ob_sql_trans_control.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "observer/ob_inner_sql_rpc_proxy.h"
-#include "observer/ob_req_time_service.h"
 
 namespace oceanbase
 {
@@ -279,6 +278,8 @@ public:
   bool is_returning() const { return is_returning_; }
   void set_user_sql(bool is_user_sql) { is_user_sql_ = is_user_sql; }
   bool is_user_sql() const { return is_user_sql_; }
+  // used to mark wether need to update endtime for timereqguard
+  void inc_need_update_endtime() { need_update_cnt_++; }
 
   // 往带？的field name填充参数信息
   // 要注意的是，除了cname_以外，其余的string都是从计划里面浅拷出来的，
@@ -344,22 +345,6 @@ private:
   int make_final_field_name(char *src, int64_t len, common::ObString &field_name);
   // 删除ParseNode中raw_text的多余的空格
   static int64_t remove_extra_space(char *buff, int64_t len);
-  // Always called in the ObResultSet constructor
-  void update_start_time() const 
-  {
-    oceanbase::observer::ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(observer::ObReqTimeInfo,
-                                                       observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    req_timeinfo->update_start_time();
-  }
-  // Always called at the end of the ObResultSet destructor
-  void update_end_time() const 
-  {
-    oceanbase::observer::ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(observer::ObReqTimeInfo,
-                                                       observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    req_timeinfo->update_end_time();
-  }
 
 protected:
   // 区分本ResultSet是为User还是Inner SQL服务, 服务于EndTrans异步回调
@@ -420,6 +405,9 @@ private:
   bool is_returning_;
   bool is_com_filed_list_; //used to mark COM_FIELD_LIST
   common::ObString wild_str_;//uesd to save filed wildcard in COM_FIELD_LIST;
+
+
+  int64_t need_update_cnt_; // used to mark wether need to update endtime for timereqguard
 };
 
 
@@ -490,11 +478,10 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       executor_(),
       is_returning_(false),
       is_com_filed_list_(false),
-      wild_str_()
+      wild_str_(),
+      need_update_cnt_(0)
 {
   message_[0] = '\0';
-  // Always called in the ObResultSet constructor
-  update_start_time();
 }
 
 inline int64_t ObResultSet::get_affected_rows() const

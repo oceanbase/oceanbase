@@ -18,6 +18,7 @@ namespace oceanbase
 {
 namespace palf
 {
+class SCN;
 template <class PalfIteratorStorage, class LogEntryType>
 class PalfIterator
 {
@@ -36,7 +37,7 @@ public:
     } else if (OB_FAIL(iterator_impl_.init(&iterator_storage_))) {
       PALF_LOG(WARN, "PalfIterator init failed", K(ret));
     } else {
-      PALF_LOG(TRACE, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
+      PALF_LOG(INFO, "PalfIterator init success", K(ret), K(start_offset), KPC(this));
       is_inited_ = true;
     }
     return ret;
@@ -87,7 +88,7 @@ public:
     }
     return ret;
   }
-  int get_entry(const char *&buffer, int64_t &nbytes, int64_t &ts, LSN &lsn, bool &is_raw_write)
+  int get_entry(const char *&buffer, int64_t &nbytes, SCN &scn, LSN &lsn, bool &is_raw_write)
   {
     int ret = OB_SUCCESS;
     LogEntryType entry;
@@ -99,12 +100,12 @@ public:
     } else {
       buffer = entry.get_data_buf();
       nbytes = entry.get_data_len();
-      ts = entry.get_log_ts();
+      scn = entry.get_log_scn();
       PALF_LOG(TRACE, "PalfIterator get_entry success", K(iterator_impl_), K(ret), KPC(this), K(entry), K(is_raw_write));
     }
     return ret;
   }
-  int get_entry(const char *&buffer, int64_t &nbytes, int64_t &ts, LSN &lsn)
+  int get_entry(const char *&buffer, int64_t &nbytes, SCN &scn, LSN &lsn)
   {
     int ret = OB_SUCCESS;
     LogEntryType entry;
@@ -117,7 +118,7 @@ public:
     } else {
       buffer = entry.get_data_buf();
       nbytes = entry.get_data_len();
-      ts = entry.get_log_ts();
+      scn = entry.get_log_scn();
       PALF_LOG(TRACE, "PalfIterator get_entry success", K(iterator_impl_), K(ret), KPC(this), K(entry));
     }
     return ret;

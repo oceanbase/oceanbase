@@ -18,6 +18,7 @@
 #include "share/ob_tenant_switchover_status.h"//ObTenantSwitchoverStatus
 #include "lib/container/ob_array.h"//ObArray
 #include "lib/container/ob_iarray.h"//ObIArray
+#include "logservice/palf/scn.h"
 //#include "share/ls/ob_ls_status_operator.h"
 
 
@@ -50,13 +51,13 @@ public:
   */
  int init(const uint64_t tenant_id, const ObTenantRole type);
  int init(const uint64_t tenant_id, const ObTenantRole &tenant_role, const ObTenantSwitchoverStatus &switchover_status, 
-          int64_t switchover_epoch, int64_t sync_scn, int64_t replayable_scn, int64_t standby_scn,
-          int64_t recovery_until_scn);
+          int64_t switchover_epoch, const palf::SCN &sync_scn, const palf::SCN &replayable_scn,
+          const palf::SCN &standby_scn, const palf::SCN &recovery_until_scn);
  ObAllTenantInfo &operator=(const ObAllTenantInfo &other);
  int assign(const ObAllTenantInfo &other);
  void reset();
  bool is_valid() const;
- int64_t get_ref_scn() const;
+ const palf::SCN get_ref_scn() const;
 
  // ObTenantRole related function
  bool is_standby() const { return tenant_role_.is_standby(); }
@@ -90,13 +91,13 @@ public:\
 
   Property_declare_var(uint64_t, tenant_id)
   Property_declare_var(int64_t, switchover_epoch)
-  Property_declare_var(int64_t, sync_scn)
-  Property_declare_var(int64_t, replayable_scn)
-  Property_declare_var(int64_t, standby_scn)
+  Property_declare_var(palf::SCN, sync_scn)
+  Property_declare_var(palf::SCN, replayable_scn)
+  Property_declare_var(palf::SCN, standby_scn)
+  //TODO msy164651 no use now
+  Property_declare_var(palf::SCN, recovery_until_scn)
 #undef Property_declare_var
 private:
-  //TODO msy164651 no use now
-  int64_t recovery_until_scn_;
   ObTenantRole tenant_role_;
   ObTenantSwitchoverStatus switchover_status_;
 };
@@ -130,14 +131,14 @@ public:
    * @param[in] status: the target status while update recovery status
    * @param[in] sync_scn : sync point 
    * @param[in] replay_scn : max replay point 
-   * @param[in] reabable_scn : standby readable ts
+   * @param[in] reabable_scn : standby readable scn
    */
   static int update_tenant_recovery_status(const uint64_t tenant_id,
                                            ObMySQLProxy *proxy,
                                            ObTenantSwitchoverStatus status,
-                                           int64_t sync_scn,
-                                           int64_t replay_scn,
-                                           int64_t reabable_scn);
+                                           const palf::SCN &sync_scn,
+                                           const palf::SCN &replay_scn,
+                                           const palf::SCN &reabable_scn);
   /**
    * @description: update tenant switchover status of __all_tenant_info
    * @param[in] tenant_id : user tenant id

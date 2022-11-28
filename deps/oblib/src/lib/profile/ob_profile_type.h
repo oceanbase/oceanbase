@@ -17,7 +17,7 @@ namespace oceanbase
 namespace common
 {
 /* common */
-//#define PCODE " pcode=[%d]"
+#define PCODE " pcode=[%d]"
 // Comment SELF since it conflicts with other macro utils.
 // Maybe should change these names for more identical.
 // #define SELF " self=[%s]"
@@ -63,7 +63,7 @@ namespace common
 /*The time that the mysql package waits in the ObMySQL queue. Unit: microseconds*/
 #define WAIT_TIME_US_IN_SQL_QUEUE " wait_time_us_in_sql_queue=[%ld]"
 /*The sql request sent by the client*/
-//#define SQL " sql=[%.*s]"
+#define SQL " sql=[%.*s]"
 /*The time spent processing a SQL request, not including the time waiting in the ObMySQL queue*/
 #define HANDLE_SQL_TIME_MS " handle_sql_time_ms=[%ld]"
 /*The time spent by obmysql worker thread interacting with IO thread is only related to SELECT*/

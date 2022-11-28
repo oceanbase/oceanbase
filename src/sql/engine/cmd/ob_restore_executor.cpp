@@ -122,8 +122,8 @@ int ObPhysicalRestoreTenantExecutor::physical_restore_preview(
   } else if (OB_FAIL(set_backup_dest_sql.assign_fmt("set @%s = '%.*s'",
       OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, restore_tenant_arg.uri_.length(), restore_tenant_arg.uri_.ptr()))) {
     LOG_WARN("failed to set backup dest", KR(ret), K(set_backup_dest_sql));
-  } else if (OB_FAIL(set_timestamp_sql.assign_fmt("set @%s = '%ld'",
-      OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, restore_tenant_arg.restore_timestamp_ns_))) {
+  } else if (OB_FAIL(set_timestamp_sql.assign_fmt("set @%s = '%lu'",
+      OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, restore_tenant_arg.restore_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to set timestamp", KR(ret), K(set_timestamp_sql));
   } else if (OB_FAIL(pool->acquire(session_info, conn))) {
     LOG_WARN("failed to get conn", K(ret));

@@ -182,18 +182,10 @@ struct ShareMemMgrTag { };
 /* Don't use this mode unless you know what it means. */
 struct UniqueMemMgrTag { };
 
-// avoid allocator destructed before HashMap
-template <typename Key, typename Value, typename MemMgrTag>
-struct ConstructGuard
-{
-public:
-  ConstructGuard();
-};
 
 template <typename Key, typename Value, typename MemMgrTag = ShareMemMgrTag>
-class ObLinearHashMap : public ConstructGuard<Key, Value, MemMgrTag>
+class ObLinearHashMap
 {
-  friend class ConstructGuard<Key, Value, MemMgrTag>;
 private:
   /* Entry. */
   struct Node
@@ -2378,12 +2370,6 @@ bool ObLinearHashMap<Key, Value, MemMgrTag>::DoRemoveIfOnBkt<Function>::operator
     }
   }
   return true;
-}
-
-template <typename Key, typename Value, typename MemMgrTag>
-ConstructGuard<Key, Value, MemMgrTag>::ConstructGuard()
-{
-  auto& t = ObLinearHashMap<Key, Value, MemMgrTag>::HashMapMemMgrCore::get_instance();
 }
 
 }

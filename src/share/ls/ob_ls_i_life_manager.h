@@ -18,6 +18,7 @@
 #include "share/config/ob_server_config.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/string/ob_sql_string.h"
+#include "logservice/palf/scn.h"
 namespace oceanbase
 {
 namespace common
@@ -35,10 +36,7 @@ namespace share
 {
 class ObLSID;
 struct ObLSStatusInfo;
-//TODO(yaoying.yyy) while SCN struct is ready, init with invalid_scn and min_scn
-const int64_t OB_LS_INVALID_SCN_VALUE = 0;
-const int64_t OB_LS_MIN_SCN_VALUE = 1;
-const int64_t OB_LS_MAX_SCN_VALUE = INT64_MAX;
+
 enum ObLSStatus
 {
   OB_LS_EMPTY = -1,
@@ -67,7 +65,7 @@ public:
   virtual ~ObLSLifeIAgent () {} 
   //create new ls
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
-                            const int64_t &create_ts_ns,
+                            const palf::SCN &create_scn,
                             const common::ObString &zone_priority,
                             ObMySQLTransaction &trans) = 0;
   //drop ls
@@ -78,7 +76,7 @@ public:
   virtual int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const share::ObLSStatus &ls_status,
-                      const int64_t &drop_ts_ns,
+                      const palf::SCN &drop_scn,
                       ObMySQLTransaction &trans) = 0;
   //update ls primary zone
   virtual int update_ls_primary_zone(

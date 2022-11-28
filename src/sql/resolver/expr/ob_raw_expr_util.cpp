@@ -892,10 +892,7 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
     SQL_LOG(WARN, "names array not equle to exprs array count",
              K(ret), K(udf_info.param_names_.count()), K(udf_info.param_exprs_.count()));
   } else if ((udf_info.udf_param_num_ + udf_info.param_names_.count()) > func_info->get_param_count()) {
-    ret = OB_ERR_SP_WRONG_ARG_NUM;
-    LOG_USER_ERROR(OB_ERR_SP_WRONG_ARG_NUM, "FUNCTION", udf_info.udf_name_.ptr(),
-                   static_cast<uint32_t>(func_info->get_param_count()),
-                   static_cast<uint32_t>(udf_info.udf_param_num_ + udf_info.param_names_.count()));
+    ret = OB_ERR_PARAM_SIZE;
     SQL_LOG(WARN, "params count mismatch",
              K(ret), K(udf_info.udf_name_), K(func_info->get_param_count()), K(udf_info));
   } else {
@@ -944,10 +941,7 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
                       *(params.allocator_), params.session_info_->get_dtc_params(), default_val))) {
           LOG_WARN("fail to get default value", K(ret));
         } else if (OB_UNLIKELY(default_val.empty())) {
-          ret = OB_ERR_SP_WRONG_ARG_NUM;
-          LOG_USER_ERROR(OB_ERR_SP_WRONG_ARG_NUM, "FUNCTION", udf_info.udf_name_.ptr(),
-                         static_cast<uint32_t>(func_info->get_param_count()),
-                         static_cast<uint32_t>(udf_info.udf_param_num_ + udf_info.param_names_.count()));
+          ret = OB_ERR_PARAM_SIZE;
           SQL_LOG(WARN, "param count mismatch", K(ret), K(i), K(default_val));
         } else if (OB_FAIL(ObRawExprUtils::parse_default_expr_from_str(
             default_val, params.session_info_->get_local_collation_connection(),
@@ -983,10 +977,7 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
   }
   if (OB_SUCC(ret)
       && (func_info->get_param_count() != udf_info.udf_param_num_ + param_exprs.count())) {
-    ret = OB_ERR_SP_WRONG_ARG_NUM;
-    LOG_USER_ERROR(OB_ERR_SP_WRONG_ARG_NUM, "FUNCTION", udf_info.udf_name_.ptr(),
-                   static_cast<uint32_t>(func_info->get_param_count()),
-                   static_cast<uint32_t>(udf_info.udf_param_num_ + udf_info.param_names_.count()));
+    ret = OB_ERR_PARAM_SIZE;
     SQL_LOG(WARN, "params count mismatch",
              K(ret), K(udf_info.udf_name_),
              K(func_info->get_param_count()), K(udf_info));

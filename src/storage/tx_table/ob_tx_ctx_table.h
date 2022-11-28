@@ -113,6 +113,8 @@ public:
 
   int check_with_tx_data(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn);
 
+  int get_min_start_scn(palf::SCN &min_start_scn);
+
   int dump_single_tx_data_2_text(const int64_t tx_id_int, FILE *fd);
 
 public:

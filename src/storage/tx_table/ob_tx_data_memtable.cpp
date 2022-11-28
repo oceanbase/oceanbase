@@ -25,6 +25,7 @@ namespace storage
 {
 
 using namespace oceanbase::transaction;
+using namespace oceanbase::palf;
 
 int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
                            SliceAllocator *slice_allocator,
@@ -41,9 +42,9 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
     STORAGE_LOG(WARN, "ObITable::init fail");
   } else {
     is_iterating_ = false;
-    min_tx_log_ts_ = INT64_MAX;
-    max_tx_log_ts_ = 0;
-    min_start_log_ts_ = INT64_MAX;
+    min_tx_scn_.set_max();
+    max_tx_scn_.set_min();
+    min_start_scn_.set_min();
     inserted_cnt_ = 0;
     deleted_cnt_ = 0;
     write_ref_ = 0;
@@ -81,9 +82,9 @@ void ObTxDataMemtable::reset()
   key_.reset();
   is_iterating_ = false;
   has_constructed_list_ = false;
-  min_tx_log_ts_ = INT64_MAX;
-  max_tx_log_ts_ = 0;
-  min_start_log_ts_ = INT64_MAX;
+  min_tx_scn_.set_max();
+  max_tx_scn_.set_min();
+  min_start_scn_.set_max();
   inserted_cnt_ = 0;
   deleted_cnt_ = 0;
   write_ref_ = 0;
@@ -107,18 +108,6 @@ void ObTxDataMemtable::reset()
 void ObTxDataMemtable::reset_thread_local_list_()
 {
   for (int i = 0; i < MAX_TX_DATA_TABLE_CONCURRENCY; i++) {
-    ObTxDataSortListNode *cur_node = local_sort_list_head_[i].next_;
-    while (OB_NOT_NULL(cur_node)) {
-      ObTxData *tx_data = ObTxData::get_tx_data_by_sort_list_node(cur_node);
-      cur_node = cur_node->next_;
-      if (false == tx_data->is_in_tx_data_table_) {
-        if (OB_ISNULL(tx_data_map_)) {
-          STORAGE_LOG(ERROR, "tx_data_map is unexpected nullptr", KP(tx_data_map_), KPC(tx_data));
-        } else {
-          tx_data_map_->revert(tx_data);
-        }
-      }
-    }
     local_sort_list_head_[i].reset();
   }
 }
@@ -152,9 +141,9 @@ int ObTxDataMemtable::insert(ObTxData *tx_data)
     tg.click();
     // insert_and_get success
     tx_data->is_in_tx_data_table_ = true;
-    common::inc_update(&max_tx_log_ts_, tx_data->end_log_ts_);
-    common::dec_update(&min_tx_log_ts_, tx_data->end_log_ts_);
-    common::dec_update(&min_start_log_ts_, tx_data->start_log_ts_);
+    max_tx_scn_.inc_update(tx_data->end_scn_);
+    min_tx_scn_.dec_update(tx_data->end_scn_);
+    min_start_scn_.dec_update(tx_data->start_scn_);
     ATOMIC_INC(&inserted_cnt_);
     tg.click();
 
@@ -277,14 +266,13 @@ int ObTxDataMemtable::construct_list_for_sort_()
   int64_t skip_list_node_cnt = 0;
   for (int i = 0; i < MAX_TX_DATA_TABLE_CONCURRENCY; i++) {
     cur_node = local_sort_list_head_[i].next_;
-    local_sort_list_head_[i].reset();
     while (OB_NOT_NULL(cur_node)) {
       ObTxData *tx_data = ObTxData::get_tx_data_by_sort_list_node(cur_node);
 
       if (false == tx_data->is_in_tx_data_table_) {
         cur_node = cur_node->next_;
         // TODO : @gengli remove log info after stable
-        // STORAGE_LOG(INFO, "skip one tx data", KPC(tx_data), KP(this), K(freezer_->get_ls_id()));
+        STORAGE_LOG(INFO, "skip one tx data", KPC(tx_data), KP(this), K(freezer_->get_ls_id()));
         skip_list_node_cnt++;
         // revert must behind move pointer
         tx_data_map_->revert(tx_data);
@@ -326,7 +314,7 @@ int ObTxDataMemtable::construct_list_for_sort_()
   return ret;
 }
 
-int ObTxDataMemtable::prepare_commit_version_list()
+int ObTxDataMemtable::prepare_commit_scn_list()
 {
   int ret = OB_SUCCESS;
 
@@ -339,7 +327,7 @@ int ObTxDataMemtable::prepare_commit_version_list()
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "Trying to dump a non-frozen tx data memtable.", KR(ret), KP(this));
     }
-  } else if (OB_FAIL(do_sort_by_start_log_ts_())) {
+  } else if (OB_FAIL(do_sort_by_start_scn_())) {
     STORAGE_LOG(ERROR, "prepare dump fail when do sort", KR(ret));
   }
 
@@ -420,7 +408,7 @@ bool ObTxDataMemtable::ready_for_flush()
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
-  int64_t max_consequent_callbacked_log_ts = 0;
+  SCN max_consequent_callbacked_scn = SCN::min_scn();
   if (OB_UNLIKELY(ObTxDataMemtable::State::RELEASED == state_
                   || ObTxDataMemtable::State::ACTIVE == state_
                   || ObTxDataMemtable::State::INVALID == state_)) {
@@ -429,16 +417,16 @@ bool ObTxDataMemtable::ready_for_flush()
   } else if (ObTxDataMemtable::State::FROZEN == state_) {
     bool_ret = true;
     STORAGE_LOG(INFO, "memtable is frozen yet.", KP(this));
-  } else if (OB_FAIL(freezer_->get_max_consequent_callbacked_log_ts(max_consequent_callbacked_log_ts))) {
+  } else if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(max_consequent_callbacked_scn))) {
     STORAGE_LOG(WARN, "get_max_consequent_callbacked_log_ts failed", K(ret), K(freezer_->get_ls_id()));
-  } else if (max_consequent_callbacked_log_ts >= key_.log_ts_range_.end_log_ts_) {
+  } else if (max_consequent_callbacked_scn >= key_.scn_range_.end_scn_) {
     state_ = ObTxDataMemtable::State::FROZEN;
-    set_snapshot_version(min_tx_log_ts_);
+    set_snapshot_version(min_tx_scn_.get_val_for_lsn_allocator());
     bool_ret = true;
   } else {
-    int64_t freeze_ts = key_.log_ts_range_.end_log_ts_;
+    int64_t freeze_ts = key_.scn_range_.end_scn_.get_val_for_inner_table_field();
     STORAGE_LOG(INFO, "tx data metmable is not ready for flush",
-                K(max_consequent_callbacked_log_ts), K(freeze_ts));
+                K(max_consequent_callbacked_scn), K(freeze_ts));
   }
 
   return bool_ret;
@@ -473,9 +461,12 @@ int ObTxDataMemtable::do_sort_by_tx_id_()
   return ret;
 }
 
-int64_t get_start_ts_(const ObTxData &tx_data) { return tx_data.start_log_ts_; }
+int64_t get_start_ts_(const ObTxData &tx_data)
+{
+  return tx_data.start_scn_.get_val_for_lsn_allocator();
+}
 
-int ObTxDataMemtable::do_sort_by_start_log_ts_()
+int ObTxDataMemtable::do_sort_by_start_scn_()
 {
   int ret = OB_SUCCESS;
   merge_sort_(&get_start_ts_, sort_list_head_.next_);
@@ -711,16 +702,16 @@ int ObTxDataMemtable::dump2text(const char *fname)
     auto tenant_id = MTL_ID();
     fprintf(fd, "tenant_id=%ld ls_id=%ld\n", tenant_id, ls_id);
     fprintf(fd,
-        "memtable: key=%s is_inited=%d is_iterating=%d has_constructed_list=%d min_tx_log_ts=%ld max_tx_log_ts=%ld "
-        "min_start_log_ts=%ld inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld last_insert_ts=%ld "
+        "memtable: key=%s is_inited=%d is_iterating=%d has_constructed_list=%d min_tx_log_scn=%s max_tx_log_scn=%s "
+        "min_start_log_scn=%s inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld last_insert_ts=%ld "
         "state=%d\n",
         S(key_),
         is_inited_,
         is_iterating_,
         has_constructed_list_,
-        min_tx_log_ts_,
-        max_tx_log_ts_,
-        min_start_log_ts_,
+        to_cstring(min_tx_scn_),
+        to_cstring(max_tx_scn_),
+        to_cstring(min_start_scn_),
         inserted_cnt_,
         deleted_cnt_,
         write_ref_,
@@ -765,16 +756,16 @@ void ObTxDataMemtable::DEBUG_dump_sort_list_node_2_text(const char *fname)
     auto tenant_id = MTL_ID();
     fprintf(fd, "tenant_id=%ld ls_id=%ld\n", tenant_id, ls_id);
     fprintf(fd,
-        "memtable: key=%s is_inited=%d is_iterating=%d has_constructed_list=%d min_tx_log_ts=%ld max_tx_log_ts=%ld "
-        "min_start_log_ts=%ld inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld last_insert_ts=%ld "
+        "memtable: key=%s is_inited=%d is_iterating=%d has_constructed_list=%d min_tx_log_scn=%s max_tx_log_scn=%s "
+        "min_start_log_scn=%s inserted_cnt=%ld deleted_cnt=%ld write_ref=%ld occupied_size=%ld last_insert_ts=%ld "
         "state=%d\n",
         S(key_),
         is_inited_,
         is_iterating_,
         has_constructed_list_,
-        min_tx_log_ts_,
-        max_tx_log_ts_,
-        min_start_log_ts_,
+        to_cstring(min_tx_scn_),
+        to_cstring(max_tx_scn_),
+        to_cstring(min_start_scn_),
         inserted_cnt_,
         deleted_cnt_,
         write_ref_,

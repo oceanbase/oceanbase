@@ -578,8 +578,7 @@ void ObRowWriter::loop_cells(
       total_nop_count += tmp_nop_count;
     } // end of while
 
-    if ((cell_cnt - total_nop_count) <= ObColClusterInfoMask::MAX_SPARSE_COL_CNT
-         && cell_cnt < ObRowHeader::MAX_CLUSTER_COLUMN_CNT) {
+    if ((cell_cnt - total_nop_count) <= ObColClusterInfoMask::MAX_SPARSE_COL_CNT) {
       // only few non-nop columns in whole row
       cluster_cnt = 1;
       output_sparse_row[0] = true;

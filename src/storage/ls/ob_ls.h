@@ -37,9 +37,7 @@
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/tx/ob_keep_alive_ls_handler.h"
 #include "storage/restore/ob_ls_restore_handler.h"
-#include "logservice/applyservice/ob_log_apply_service.h"
 #include "logservice/replayservice/ob_replay_handler.h"
-#include "logservice/replayservice/ob_replay_status.h"
 #include "logservice/rcservice/ob_role_change_handler.h"
 #include "logservice/restoreservice/ob_log_restore_handler.h"     // ObLogRestoreHandler
 #include "logservice/ob_log_handler.h"
@@ -62,9 +60,55 @@ namespace observer
 {
 class ObIMetaReport;
 }
+namespace palf
+{
+class SCN;
+}
 
 namespace storage
 {
+#define UPDATE_LS_META_CHECK()                                          \
+  if (IS_NOT_INIT) {                                                    \
+    ret = OB_NOT_INIT;                                                  \
+    STORAGE_LOG(WARN, "ls is not inited", K(ret), K(ls_meta_));         \
+  } else if (OB_UNLIKELY(is_stopped_)) {                                \
+    ret = OB_NOT_RUNNING;                                               \
+    STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));               \
+  } else if (!can_update_ls_meta(ls_meta_.ls_create_status_)) {         \
+    ret = OB_STATE_NOT_MATCH;                                           \
+    STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_)); \
+  }
+
+#define UPDATE_LS_META_CHECK_WITH_LOCK()                                \
+  int64_t read_lock = LSLOCKLS;                                         \
+  int64_t write_lock = 0;                                               \
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);              \
+  UPDATE_LS_META_CHECK();
+
+#define UPDATE_LSMETA_WITH_LOCK(delegate_obj, func_name)          \
+  template <typename ...Args>                                     \
+  int func_name(Args &&...args) {                                 \
+    int ret = OB_SUCCESS;                                         \
+    UPDATE_LS_META_CHECK_WITH_LOCK();                                       \
+    if (OB_FAIL(ret)) {                                           \
+    } else {                                                      \
+      ret = delegate_obj.func_name(std::forward<Args>(args)...);  \
+    }                                                             \
+    return ret;                                                   \
+  }
+
+#define UPDATE_LSMETA_WITHOUT_LOCK(delegate_obj, func_name)       \
+  template <typename ...Args>                                     \
+  int func_name##_without_lock(Args &&...args) {                  \
+    int ret = OB_SUCCESS;                                         \
+    UPDATE_LS_META_CHECK();                                       \
+    if (OB_FAIL(ret)) {                                           \
+    } else {                                                      \
+      ret = delegate_obj.func_name(std::forward<Args>(args)...);  \
+    }                                                             \
+    return ret;                                                   \
+  }
+
 const static int64_t LS_INNER_TABLET_FROZEN_TIMESTAMP = 1;
 
 struct ObLSVTInfo
@@ -74,38 +118,12 @@ struct ObLSVTInfo
   common::ObRole ls_state_;
   ObMigrationStatus migrate_status_;
   int64_t tablet_count_;
-  int64_t weak_read_timestamp_;
+  palf::SCN weak_read_scn_;
   bool need_rebuild_;
   //TODO SCN
   int64_t checkpoint_ts_;
   //TODO SCN
   int64_t checkpoint_lsn_;
-  int64_t rebuild_seq_;
-};
-
-// 诊断虚表统计信息
-struct DiagnoseInfo
-{
-  bool is_role_sync() {
-    return ((palf_diagnose_info_.election_role_ == palf_diagnose_info_.palf_role_)
-           && (palf_diagnose_info_.palf_role_ == log_handler_diagnose_info_.log_handler_role_));
-  }
-  int64_t ls_id_;
-  logservice::LogHandlerDiagnoseInfo log_handler_diagnose_info_;
-  palf::PalfDiagnoseInfo palf_diagnose_info_;
-  logservice::RCDiagnoseInfo rc_diagnose_info_;
-  logservice::ApplyDiagnoseInfo apply_diagnose_info_;
-  logservice::ReplayDiagnoseInfo replay_diagnose_info_;
-  logservice::GCDiagnoseInfo gc_diagnose_info_;
-  checkpoint::CheckpointDiagnoseInfo checkpoint_diagnose_info_;
-  TO_STRING_KV(K(ls_id_),
-               K(log_handler_diagnose_info_),
-               K(palf_diagnose_info_),
-               K(rc_diagnose_info_),
-               K(apply_diagnose_info_),
-               K(replay_diagnose_info_),
-               K(gc_diagnose_info_),
-               K(checkpoint_diagnose_info_));
 };
 
 class ObIComponentFactory;
@@ -144,12 +162,10 @@ public:
   // I am ready to work now.
   int start();
   int stop();
-  void wait();
   bool safe_to_destroy();
   void destroy();
   int offline();
   int online();
-  bool is_offline() const { return is_offlined_; } // mock function, TODO(@yanyuan)
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
   ObLockTable *get_lock_table() { return &lock_table_; }
@@ -166,8 +182,6 @@ public:
   checkpoint::ObDataCheckpoint *get_data_checkpoint() { return &data_checkpoint_; }
   transaction::ObKeepAliveLSHandler *get_keep_alive_ls_handler() { return &keep_alive_ls_handler_; }
   ObLSRestoreHandler *get_ls_restore_handler() { return &ls_restore_handler_; }
-  ObLSDDLLogHandler *get_ddl_log_handler() { return &ls_ddl_log_handler_; }
-
   // ObObLogHandler interface:
   // get the log_service pointer
   logservice::ObLogHandler *get_log_handler() { return &log_handler_; }
@@ -193,7 +207,7 @@ public:
   // set create state of ls.
   // @param[in] new_status, the new create state which will be set.
   void set_create_state(const ObInnerLSStatus new_status);
-  ObInnerLSStatus get_create_state() const;
+  ObInnerLSStatus get_create_state();
   bool is_need_gc() const;
   bool is_need_load_inner_tablet() const;
   // for rebuild
@@ -222,7 +236,7 @@ public:
   int remove_ls();
   // create all the inner tablet.
   int create_ls_inner_tablet(const lib::Worker::CompatMode compat_mode,
-                             const int64_t create_scn);
+                             const palf::SCN &create_scn);
   // load all the inner tablet.
   int load_ls_inner_tablet();
 
@@ -263,58 +277,67 @@ public:
                         ObTabletHandle &handle) const;
 
   int flush_if_need(const bool need_flush);
-  bool is_stopped() const { return is_stopped_; }
 
   TO_STRING_KV(K_(ls_meta), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler));
 private:
-  int stop_();
-  void wait_();
   int prepare_for_safe_destroy_();
   int flush_if_need_(const bool need_flush);
   int offline_();
-  int offline_compaction_();
-  int online_compaction_();
+  int offline_log_();
+  int online_log_();
   int offline_tx_();
   int online_tx_();
 public:
   // ObLSMeta interface:
-  int update_ls_meta(const bool update_restore_status,
-                     const ObLSMeta &src_ls_meta);
-
-  // int update_id_meta(const int64_t service_type,
-  //                    const int64_t limited_id,
-  //                    const int64_t latest_log_ts,
-  //                    const bool write_slog);
-  DELEGATE_WITH_RET(ls_meta_, update_id_meta, int);
-  int set_ls_rebuild();
+  int update_id_meta_with_writing_slog(const int64_t service_type,
+                                       const int64_t limited_id,
+                                       const palf::SCN &latest_log_scn);
+  int update_id_meta_without_writing_slog(const int64_t service_type,
+                                          const int64_t limited_id,
+                                          const palf::SCN &latest_log_scn);
+  // int set_ls_rebuild();
+  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_ls_rebuild);
   // protect in ls lock
   // int set_gc_state(const logservice::LSGCState &gc_state);
-  DELEGATE_WITH_RET(ls_meta_, set_gc_state, int);
+  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_gc_state);
   // int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
   //                         const int64_t clog_checkpoint_ts,
   //                         const bool write_slog = true);
-  DELEGATE_WITH_RET(ls_meta_, set_clog_checkpoint, int);
+  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_clog_checkpoint);
+  UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, set_clog_checkpoint);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_ts, int64_t);
   DELEGATE_WITH_RET(ls_meta_, get_clog_base_lsn, palf::LSN &);
   DELEGATE_WITH_RET(ls_meta_, get_saved_info, int);
   // int build_saved_info();
-  DELEGATE_WITH_RET(ls_meta_, build_saved_info, int);
+  UPDATE_LSMETA_WITH_LOCK(ls_meta_, build_saved_info);
   // int clear_saved_info_without_lock();
-  DELEGATE_WITH_RET(ls_meta_, clear_saved_info, int);
+  UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, clear_saved_info);
+  // int update_ls_meta(const bool update_restore_status,
+  //                    const ObLSMeta &src_ls_meta);
+  UPDATE_LSMETA_WITH_LOCK(ls_meta_, update_ls_meta);
+  // int update_ls_meta_without_lock(const bool update_restore_status,
+  //                                 const ObLSMeta &src_ls_meta);
+  UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, update_ls_meta);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_rebuild_seq, int64_t);
-  CONST_DELEGATE_WITH_RET(ls_meta_, get_tablet_change_checkpoint_ts, int64_t);
-
-  int set_restore_status(
-      const share::ObLSRestoreStatus &restore_status,
-      const int64_t rebuild_seq);
+  CONST_DELEGATE_WITH_RET(ls_meta_, get_tablet_change_checkpoint_scn, palf::SCN);
+  // set restore status
+  // @param [in] restore status.
+  // int set_restore_status(const share::ObLSRestoreStatus &status);
+  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_restore_status);
+  // int set_restore_status_without_lock(const share::ObLSRestoreStatus &status);
+  UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, set_restore_status);
   // get restore status
   // @param [out] restore status.
   // int get_restore_status(share::ObLSRestoreStatus &status);
   DELEGATE_WITH_RET(ls_meta_, get_restore_status, int);
-  int set_migration_status(
-      const ObMigrationStatus &migration_status,
-      const int64_t rebuild_seq,
-      const bool write_slog = true);
+  // set migration status
+  // @param [in] migration status.
+  // int set_migration_status_without_lock(const ObMigrationStatus &migration_status,
+  //                                       const bool write_slog = true);
+  UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, set_migration_status);
+  // int set_migration_status(const ObMigrationStatus &migration_status,
+  //                          const bool write_slog = true);
+  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_migration_status);
   // get migration status
   // @param [out] migration status.
   // int get_migration_status(ObMigrationstatus &status);
@@ -325,29 +348,27 @@ public:
   DELEGATE_WITH_RET(ls_meta_, get_gc_state, int);
   // set offline ts
   // @param [in] offline ts.
-  // int set_offline_ts_ns(const int64_t offline_ts_ns);
-  DELEGATE_WITH_RET(ls_meta_, set_offline_ts_ns, int);
+  // int set_offline_ts_ns(const int64_t offline_scn);
+  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_offline_scn);
   // get offline ts
   // @param [in] offline ts.
-  // int get_offline_ts_ns(int64_t &offline_ts_ns);
-  DELEGATE_WITH_RET(ls_meta_, get_offline_ts_ns, int);
+  // int get_offline_scn(const SCN &offline_scn);
+  DELEGATE_WITH_RET(ls_meta_, get_offline_scn, int);
   // update replayable point
   // @param [in] replayable point.
   // int update_ls_replayable_point(const int64_t replayable_point);
-  DELEGATE_WITH_RET(ls_meta_, update_ls_replayable_point, int);
-  // update replayable point
+  UPDATE_LSMETA_WITH_LOCK(ls_meta_, update_ls_replayable_point);
   // get replayable point
   // @param [in] replayable point
   // int get_ls_replayable_point(int64_t &replayable_point);
   DELEGATE_WITH_RET(ls_meta_, get_ls_replayable_point, int);
-  // set tablet_change_checkpoint_ts, add write lock of LSLOCKLOGMETA.
-  // @param [in] log_ts
-  int set_tablet_change_checkpoint_ts(const int64_t log_ts);
+  // set tablet_change_checkpoint_scn, add write lock of LSLOCKLOGMETA.
+  // @param [in] log_scn
+  int set_tablet_change_checkpoint_scn(const palf::SCN &log_scn);
   // get ls_meta_package and unsorted tablet_ids, add read lock of LSLOCKLOGMETA.
   // @param [out] meta_package
   // @param [out] tablet_ids
   int get_ls_meta_package_and_tablet_ids(ObLSMetaPackage &meta_package, common::ObIArray<common::ObTabletID> &tablet_ids);
-  DELEGATE_WITH_RET(ls_meta_, get_migration_and_restore_status, int);
 
   // ObLSTabletService interface:
   // create tablets in a ls
@@ -395,8 +416,7 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_ha_data_status, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_restore_status, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, create_or_update_migration_tablet, int);
-  DELEGATE_WITH_RET(ls_tablet_svr_, enable_to_read, void);
-  DELEGATE_WITH_RET(ls_tablet_svr_, disable_to_read, void);
+
 
   // ObLockTable interface:
   // check whether the lock op is conflict with exist lock.
@@ -468,6 +488,9 @@ public:
   // @brief, get max decided log ts considering both apply and replay.
   // @param[out] int64_t&, max decided log ts ns.
   DELEGATE_WITH_RET(log_handler_, get_max_decided_log_ts_ns, int);
+  // @brief, get max decided log scn considering both apply and replay.
+  // @param[out] palf::SCN&, max decided log scn.
+  DELEGATE_WITH_RET(log_handler_, get_max_decided_log_scn, int);
   // @breif, check request server is in self member list
   // @param[in] const common::ObAddr, request server.
   // @param[out] bool&, whether in self member list.
@@ -586,6 +609,8 @@ public:
   // ObFreezer interface:
   // logstream freeze
   // @param [in] null
+  // int logstream_freeze();
+  // DELEGATE_WITH_RET(ls_freezer_, logstream_freeze, int);
   int logstream_freeze();
   // tablet freeze
   // @param [in] tablet_id
@@ -605,11 +630,9 @@ public:
 
   // ObCheckpointExecutor interface:
   DELEGATE_WITH_RET(checkpoint_executor_, get_checkpoint_info, int);
-  int advance_checkpoint_by_flush(int64_t recycle_ts);
 
   // ObDataCheckpoint interface:
   DELEGATE_WITH_RET(data_checkpoint_, get_freezecheckpoint_info, int);
-  DELEGATE_WITH_RET(keep_alive_ls_handler_, get_min_start_scn, void);
 
   // update tablet table store here do not using Macro because need lock ls and tablet
   // update table store for tablet
@@ -624,7 +647,6 @@ public:
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
   int try_update_uppder_trans_version();
-  int diagnose(DiagnoseInfo &info) const;
 
 private:
   // StorageBaseUtil
@@ -683,7 +705,6 @@ private:
   bool is_inited_;
   uint64_t tenant_id_;
   bool is_stopped_;
-  bool is_offlined_;
   ObLSMeta ls_meta_;
   observer::ObIMetaReport *rs_reporter_;
   ObLSLock lock_;

@@ -20,7 +20,7 @@ namespace storage
 {
 /******************ObRestoreBaseInfo*********************/
 ObRestoreBaseInfo::ObRestoreBaseInfo()
-  : restore_scn_(0),
+  : restore_scn_(),
     backup_cluster_version_(0),
     backup_dest_(),
     backup_set_list_()
@@ -29,7 +29,7 @@ ObRestoreBaseInfo::ObRestoreBaseInfo()
 
 void ObRestoreBaseInfo::reset()
 {
-  restore_scn_ = 0;
+  restore_scn_.reset();
   backup_cluster_version_ = 0;
   backup_dest_.reset();
   backup_set_list_.reset();
@@ -37,7 +37,7 @@ void ObRestoreBaseInfo::reset()
 
 bool ObRestoreBaseInfo::is_valid() const
 {
-  return restore_scn_ > 0
+  return restore_scn_.is_valid()
       && backup_cluster_version_ > 0
       && backup_dest_.is_valid()
       && !backup_set_list_.empty();
@@ -118,7 +118,6 @@ const char *ObTabletRestoreAction::get_action_str(const ACTION &action)
       "RESTORE_TABLET_META",
       "RESTORE_MINOR",
       "RESTORE_MAJOR",
-      "RESTORE_NONE",
   };
   STATIC_ASSERT(MAX == ARRAYSIZEOF(action_strs), "action count mismatch");
   if (action < 0 || action >= MAX) {
@@ -155,20 +154,6 @@ bool ObTabletRestoreAction::is_restore_major(const ACTION &action)
     bool_ret = false;
     LOG_ERROR("restore action is unexpected", K(action));
   } else if (ACTION::RESTORE_MAJOR != action) {
-    bool_ret = false;
-  } else {
-    bool_ret = true;
-  }
-  return bool_ret;
-}
-
-bool ObTabletRestoreAction::is_restore_none(const ACTION &action)
-{
-  bool bool_ret = false;
-  if (!is_valid(action)) {
-    bool_ret = false;
-    LOG_ERROR("restore action is unexpected", K(action));
-  } else if (ACTION::RESTORE_NONE != action) {
     bool_ret = false;
   } else {
     bool_ret = true;
@@ -228,6 +213,27 @@ int ObTabletRestoreAction::trans_restore_action_to_restore_status(
 }
 
 /******************ObRestoreUtils*********************/
+bool ObRestoreUtils::is_need_retry_error(const int err)
+{
+  //TODO(yanfeng) here same with migration, need use one
+  bool bret = true;
+  switch (err) {
+    case OB_NOT_INIT :
+    case OB_INVALID_ARGUMENT :
+    case OB_ERR_UNEXPECTED :
+    case OB_ERR_SYS :
+    case OB_INIT_TWICE :
+    case OB_SRC_DO_NOT_ALLOWED_MIGRATE :
+    case OB_CANCELED :
+    case OB_NOT_SUPPORTED :
+    case OB_CS_OUTOF_DISK_SPACE :
+      bret = false;
+      break;
+    default:
+      break;
+  }
+  return bret;
+}
 
 int ObRestoreUtils::get_backup_data_type(
     const ObITable::TableKey &table_key,

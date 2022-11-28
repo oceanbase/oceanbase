@@ -518,16 +518,12 @@ int ObLogTenantMgr::add_tenant(const uint64_t tenant_id,
             K(sys_schema_version), K(timeout));
       }
     } else {
+      // NOTE: currently add_tenant is serialize executed, thus reset all info in add_tenant_start_ddl_info_map_ is safe.
+      add_tenant_start_ddl_info_map_.reset();
       // add tenant success
       add_tenant_succ = true;
     }
   }
-
-  // NOTE: currently add_tenant is NOT serialize executed, thus reset all info in add_tenant_start_ddl_info_map_ is NOT safe.
-  // (meta_tenant add_tenant_start -> user_tenant add_tenant_start -> meta_tenant add_tenant_end -> user_tenant add_tenant_end.)
-  // reset tenant_start_ddl_info for specified tenant_id regardless of ret(in case of tenant already dropped or not serve
-  // and other unexpected case, otherwise global_heartbeat will be stucked.)
-  try_del_tenant_start_ddl_info_(tenant_id);
 
   return ret;
 }
@@ -558,13 +554,8 @@ int ObLogTenantMgr::get_first_schema_version_of_tenant_(const uint64_t tenant_id
       timeout))) {
     // OB_TENANT_HAS_BEEN_DROPPED return caller
     if (OB_TIMEOUT != ret) {
-      if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
-        LOG_WARN("get_first_trans_end_schema_version fail cause tenant dropped", KR(ret), K(tenant_id),
-            K(first_schema_version));
-      } else {
-        LOG_ERROR("get_first_trans_end_schema_version fail", KR(ret), K(tenant_id),
-            K(first_schema_version));
-      }
+      LOG_ERROR("get_first_trans_end_schema_version fail", KR(ret), K(tenant_id),
+          K(first_schema_version));
     }
   } else if (OB_UNLIKELY(first_schema_version <= 0)) {
     LOG_ERROR("tenant first schema versioin is invalid", K(tenant_id), K(first_schema_version));
@@ -1178,7 +1169,7 @@ int ObLogTenantMgr::get_tenant_tz_wrap(const uint64_t tenant_id, ObTimeZoneInfoW
 {
   int ret = OB_SUCCESS;
   ObLogTenantGuard guard;
-  const uint64_t tz_tenant_id = tenant_id;
+  const uint64_t tz_tenant_id = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260 ? tenant_id : OB_SYS_TENANT_ID;
 
   if (OB_SYS_TENANT_ID == tz_tenant_id) {
     tz_info_wrap = &TCTX.tz_info_wrap_;
@@ -1208,7 +1199,7 @@ int ObLogTenantMgr::get_tenant_tz_map(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObLogTenantGuard guard;
-  //TODO:(madoll.tw) should use tenant_id as tz_tenant_id
+  //const uint64_t tz_tenant_id = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2260 ? tenant_id : OB_SYS_TENANT_ID;
   const uint64_t tz_tenant_id = OB_SYS_TENANT_ID;
 
   if (OB_SYS_TENANT_ID == tz_tenant_id) {
@@ -1491,20 +1482,6 @@ int ObLogTenantMgr::get_min_add_tenant_start_ddl_commit_version_(int64_t &commit
   }
 
   return ret;
-}
-
-void ObLogTenantMgr::try_del_tenant_start_ddl_info_(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  TenantID tid(tenant_id);
-  if (OB_FAIL(add_tenant_start_ddl_info_map_.del(tid))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("try_del_tenant_start_ddl_info_ failed, ignore", KR(ret), K(tenant_id));
-    } else {
-      LOG_INFO("add_tenant_start_ddl_info is not found, ignore", KR(ret), K(tenant_id));
-    }
-    // no need return error code.
-  }
 }
 
 bool ObLogTenantMgr::SetDataStartSchemaVersionFunc::operator()(const TenantID &tid, ObLogTenant *tenant)

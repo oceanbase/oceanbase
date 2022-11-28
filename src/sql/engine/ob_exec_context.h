@@ -207,9 +207,6 @@ public:
   inline ObSQLSessionInfo *get_my_session() const;
   //get the parent execute context in nested sql
   ObExecContext *get_parent_ctx() { return parent_ctx_; }
-  //get the root execute context in nested sql
-  int get_root_ctx(ObExecContext* &root_ctx);
-  bool is_root_ctx();
   int64_t get_nested_level() const { return nested_level_; }
   /**
    * @brief set sql proxy
@@ -289,7 +286,6 @@ public:
 
   bool has_non_trivial_expr_op_ctx() const { return has_non_trivial_expr_op_ctx_; }
   void set_non_trivial_expr_op_ctx(bool v) { has_non_trivial_expr_op_ctx_ = v; }
-  inline bool &get_tmp_alloc_used() { return tmp_alloc_used_; }
 
   VIRTUAL_NEED_SERIALIZE_AND_DESERIALIZE;
 protected:
@@ -372,8 +368,6 @@ public:
   // for granule iterator
   int get_gi_task_map(GIPrepareTaskMap *&gi_prepare_task_map);
 
-  void set_use_temp_expr_ctx_cache(bool v) { use_temp_expr_ctx_cache_ = v; }
-
   // for udf
   int get_udf_ctx_mgr(ObUdfCtxMgr *&udf_ctx_mgr);
 
@@ -394,8 +388,6 @@ public:
   void set_sqc_handler(ObPxSqcHandler *sqc_handler) { sqc_handler_ = sqc_handler; }
   void set_px_task_id(const int64_t task_id) { px_task_id_ = task_id; }
   int64_t get_px_task_id() const { return px_task_id_; }
-  void set_px_sqc_id(const int64_t sqc_id) { px_sqc_id_ = sqc_id; }
-  int64_t get_px_sqc_id() const { return px_sqc_id_; }
 
   ObJoinFilterDataCtx &get_bf_ctx() { return bf_ctx_; }
 
@@ -453,12 +445,6 @@ public:
   int64_t get_register_op_id() { return register_op_id_; }
   void set_register_op_id(int64_t id) { register_op_id_ = id; }
   bool is_rt_monitor_node_registered() { return OB_INVALID_ID != register_op_id_; }
-  void set_mem_attr(const common::ObMemAttr& attr)
-  {
-    sche_allocator_.set_attr(attr);
-    eval_res_allocator_.set_attr(attr);
-    eval_tmp_allocator_.set_attr(attr);
-  }
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
@@ -567,7 +553,6 @@ protected:
 
   // for ddl sstable insert
   int64_t px_task_id_;
-  int64_t px_sqc_id_;
 
   //bloom filter ctx
   ObJoinFilterDataCtx bf_ctx_;
@@ -604,7 +589,6 @@ protected:
   uint64_t admission_version_;
   hash::ObHashMap<ObAddr, int64_t> admission_addr_map_;
   // used for temp expr ctx manager
-  bool use_temp_expr_ctx_cache_;
   hash::ObHashMap<int64_t, int64_t> temp_expr_ctx_map_;
   // for pl/trigger
   ObDmlEventType dml_event_;
@@ -626,8 +610,6 @@ protected:
   bool is_ps_prepare_stage_;
   // for sql plan monitor
   int64_t register_op_id_;
-  // indicate if eval_tmp_allocator_ is used
-  bool tmp_alloc_used_;
   // -------------------
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);

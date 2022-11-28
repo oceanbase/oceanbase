@@ -24,6 +24,10 @@ namespace storage
 {
 class ObLS;
 }
+namespace palf
+{
+class SCN;
+}
 namespace logservice
 {
 class ObLogService;
@@ -38,6 +42,11 @@ public:
                        ObIReplaySubHandler *handler);
   void unregister_handler(const ObLogBaseType &type);
 
+  int replay(const ObLogBaseType &type,
+             const void *buffer,
+             const int64_t nbytes,
+             const palf::LSN &lsn,
+             const palf::SCN &scn);
   int replay(const ObLogBaseType &type,
              const void *buffer,
              const int64_t nbytes,

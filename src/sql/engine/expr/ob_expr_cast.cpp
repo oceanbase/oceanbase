@@ -294,7 +294,6 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   ObRawExpr *cast_raw_expr = NULL;
   const sql::ObSQLSessionInfo *session = NULL;
   bool is_explicit_cast = false;
-  bool is_to_column_cs_level = false;
   if (OB_ISNULL(session = type_ctx.get_session()) ||
       OB_ISNULL(cast_raw_expr = get_raw_expr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -311,7 +310,6 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
              "dst", ob_obj_type_str(dst_type.get_type()));
   } else if (FALSE_IT(is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr->get_extra()))) {
   // check cast supported in cast_map but not support here.
-  } else if (FALSE_IT(is_to_column_cs_level = CM_IS_TO_COLUMN_CS_LEVEL(cast_raw_expr->get_extra()))) {
   } else if (!check_cast_allowed(type1.get_type(), type1.get_collation_type(),
                                  dst_type.get_type(), dst_type.get_collation_type(),
                                  is_explicit_cast)) {
@@ -357,7 +355,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       type1.set_calc_type(get_calc_cast_type(type1.get_type(), dst_type.get_type()));
       int32_t length = 0;
       if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())) {
-        type.set_collation_level((is_explicit_cast || is_to_column_cs_level)
+        type.set_collation_level(is_explicit_cast
                                  ? CS_LEVEL_IMPLICIT
                                  : type1.get_collation_level());
         int32_t len = dst_type.get_length();
@@ -609,21 +607,46 @@ int ObExprCast::do_implicit_cast(ObExprCtx &expr_ctx,
 OB_DEF_SERIALIZE(ObExprCast)
 {
   int ret = OB_SUCCESS;
-  ret = ObExprOperator::serialize_(buf, buf_len, pos);
+  bool is_implicit_cast = (1 == extra_serialize_);
+  // ObExprCast最初没有定义自己的序列化方法，后来在2273中添加了序列化方法，导致序列化buf发生如下变化
+  // [ObExprOperator_ser_len, ObExprOperator_ser_data]  =>
+  // [ObExprCast_ser_len, [ObExprOperator_ser_len, ObExprOperator_ser_data], is_implicit_cast_]
+  // 导致与老版本不兼容。
+  // 为了与各个版本兼容这里做了版本判断，如果最小版本为2273，那么使用与2273兼容的序列化逻辑，
+  // 否则仍使用ObExprOperator的序列化逻辑
+  if (CLUSTER_VERSION_2273 == GET_MIN_CLUSTER_VERSION()) {
+    BASE_SER((ObExprCast, ObFuncExprOperator));
+    OB_UNIS_ENCODE(is_implicit_cast);
+  } else {
+    ret = ObExprOperator::serialize_(buf, buf_len, pos);
+  }
   return ret;
 }
 
 OB_DEF_DESERIALIZE(ObExprCast)
 {
   int ret = OB_SUCCESS;
-  ret = ObExprOperator::deserialize_(buf, data_len, pos);
+  if (CLUSTER_VERSION_2273 == GET_MIN_CLUSTER_VERSION()) {
+    bool is_implicit_cast = false;
+    BASE_DESER((ObExprCast, ObFuncExprOperator));
+    OB_UNIS_DECODE(is_implicit_cast);
+    extra_serialize_ = is_implicit_cast ? 1 : 0;
+  } else {
+    ret = ObExprOperator::deserialize_(buf, data_len, pos);
+  }
   return ret;
 }
 
 OB_DEF_SERIALIZE_SIZE(ObExprCast)
 {
   int64_t len = 0;
-  len = ObExprOperator::get_serialize_size_();
+  if (CLUSTER_VERSION_2273 == GET_MIN_CLUSTER_VERSION()) {
+    bool is_implicit_cast = false;
+    BASE_ADD_LEN((ObExprCast, ObFuncExprOperator));
+    OB_UNIS_ADD_LEN(is_implicit_cast);
+  } else {
+    len = ObExprOperator::get_serialize_size_();
+  }
   return len;
 }
 

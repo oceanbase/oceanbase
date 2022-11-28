@@ -16,6 +16,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"               // TO_STRING_KV
 #include "lsn.h"
+#include "scn.h"
 #include "palf_base_info.h"
 #include "log_meta_info.h"
 
@@ -26,16 +27,16 @@ namespace palf
 struct FlushLogCbCtx
 {
   FlushLogCbCtx();
-  FlushLogCbCtx(const int64_t log_id, const int64_t log_ts, const LSN &lsn,
+  FlushLogCbCtx(const int64_t log_id, const SCN &log_scn, const LSN &lsn,
                 const int64_t &log_proposal_id, const int64_t total_len,
                 const int64_t &curr_log_proposal_id, const int64_t begine_ts);
   ~FlushLogCbCtx();
-  bool is_valid() const { return true == lsn_.is_valid() && true == is_valid_log_ts(log_ts_); }
+  bool is_valid() const { return true == lsn_.is_valid() && true == log_scn_.is_valid(); }
   void reset();
   FlushLogCbCtx &operator=(const FlushLogCbCtx &flush_log_cb_ctx);
-  TO_STRING_KV(K_(log_id), K_(log_ts), K_(lsn), K_(log_proposal_id), K_(total_len), K_(curr_proposal_id), K_(begin_ts));
+  TO_STRING_KV(K_(log_id), K_(log_scn), K_(lsn), K_(log_proposal_id), K_(total_len), K_(curr_proposal_id), K_(begin_ts));
   int64_t log_id_;
-  int64_t log_ts_;
+  SCN log_scn_;
   LSN lsn_;
   int64_t log_proposal_id_;
   int64_t total_len_;

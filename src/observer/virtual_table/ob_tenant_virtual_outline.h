@@ -46,8 +46,6 @@ class ObTenantVirtualOutlineBase: public common::ObVirtualTableIterator
 protected:
   struct DBInfo
   {
-    DBInfo() : db_name_(), is_recycle_(false) {}
-
     common::ObString db_name_;
     bool is_recycle_;
   };

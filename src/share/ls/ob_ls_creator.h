@@ -40,6 +40,7 @@ class ObSchemaGetterGuard;
 namespace palf
 {
 struct PalfBaseInfo;
+class SCN;
 }
 namespace share
 {
@@ -104,7 +105,7 @@ public:
   int create_user_ls(const share::ObLSStatusInfo &status_info,
                      const int64_t paxos_replica_num,
                      const share::schema::ZoneLocalityIArray &zone_locality,
-                     const int64_t create_ts_ns,
+                     const palf::SCN &create_scn,
                      const common::ObCompatibilityMode &compat_mode,
                      const bool create_with_palf,
                      const palf::PalfBaseInfo &palf_base_info);
@@ -114,7 +115,7 @@ public:
 private:
  int do_create_ls_(const ObLSAddr &addr, const share::ObLSStatusInfo &info,
                    const int64_t paxos_replica_num,
-                   const int64_t create_ts_ns,
+                   const palf::SCN &create_scn,
                    const common::ObCompatibilityMode &compat_mode,
                    common::ObMemberList &member_list,
                    const bool create_with_palf,
@@ -123,7 +124,7 @@ private:
                                     const int64_t paxos_replica_num);
  int create_ls_(const ObILSAddr &addr, const int64_t paxos_replica_num,
                 const share::ObAllTenantInfo &tenant_info,
-                const int64_t create_ts_ns,
+                const palf::SCN &create_scn,
                 const common::ObCompatibilityMode &compat_mode,
                 const bool create_with_palf,
                 const palf::PalfBaseInfo &palf_base_info,

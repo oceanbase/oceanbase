@@ -589,7 +589,6 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
     STORAGE_LOG(WARN, "Fail to reserve column array", K(ret));
   }
   int col_idx = 0;
-  blocksstable::ObStorageDatum datum;
   for ( ; OB_SUCC(ret) && iter != input_schema.column_end(); iter++) {
     if (OB_ISNULL(col = *iter)) {
       ret = OB_ERR_UNEXPECTED;
@@ -602,10 +601,8 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       col_schema.meta_type_ = col->get_meta_type();
       if (ob_is_large_text(col->get_data_type())) {
         col_schema.default_checksum_ = 0;
-      } else if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
-        STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
       } else {
-        col_schema.default_checksum_ = datum.checksum(0);
+        col_schema.default_checksum_ = col->get_orig_default_value().checksum_v2(0);
       }
       if (OB_FAIL(col_schema.deep_copy_default_val(*allocator_, col->get_orig_default_value()))) {
         STORAGE_LOG(WARN, "failed to deep copy", K(ret), K(col->get_orig_default_value()));

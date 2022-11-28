@@ -2479,51 +2479,59 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2 &table_schema)
         }
       }
       if (OB_SUCC(ret) && (new_table_schema->is_table() || new_table_schema->is_oracle_tmp_table())) {
-        if (NULL != replaced_table) {
-          if (!replaced_table->is_user_hidden_table()
-              && new_table_schema->is_user_hidden_table()) {
-            if (OB_FAIL(delete_foreign_keys_in_table(*replaced_table))) {
-              LOG_WARN("delete foreign keys info from a hash map failed",
-              K(ret), K(*replaced_table));
+        if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
+          // do-nothing for liboblog
+        } else {
+          if (NULL != replaced_table) {
+            if (!replaced_table->is_user_hidden_table()
+                && new_table_schema->is_user_hidden_table()) {
+              if (OB_FAIL(delete_foreign_keys_in_table(*replaced_table))) {
+                LOG_WARN("delete foreign keys info from a hash map failed",
+                K(ret), K(*replaced_table));
+              }
+            // deal with the situation that alter table drop fk and truncate table enter the recycle bin,
+            // and delete the foreign key information dropped from the hash map
+            // First delete the foreign key information on the table from the hash map when truncate table,
+            // and add it back when rebuild_table_hashmap
+            } else if (OB_FAIL(check_and_delete_given_fk_in_table(replaced_table, new_table_schema))) {
+              LOG_WARN("check and delete given fk in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
             }
-          // deal with the situation that alter table drop fk and truncate table enter the recycle bin,
-          // and delete the foreign key information dropped from the hash map
-          // First delete the foreign key information on the table from the hash map when truncate table,
-          // and add it back when rebuild_table_hashmap
-          } else if (OB_FAIL(check_and_delete_given_fk_in_table(replaced_table, new_table_schema))) {
-            LOG_WARN("check and delete given fk in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
           }
-        }
-        if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
-          if (OB_FAIL(add_foreign_keys_in_table(new_table_schema->get_simple_foreign_key_info_array(), 1 /*over_write*/))) {
-            LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
-          } else {
-            // do nothing
+          if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
+            if (OB_FAIL(add_foreign_keys_in_table(new_table_schema->get_simple_foreign_key_info_array(), 1 /*over_write*/))) {
+              LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
+            } else {
+              // do nothing
+            }
           }
         }
       }
       if (OB_SUCC(ret) && (new_table_schema->is_table() || new_table_schema->is_oracle_tmp_table())) {
         // In mysql mode, check constraints in non-temporary tables don't share namespace with constraints in temporary tables
-        if (NULL != replaced_table) {
-          if (!replaced_table->is_user_hidden_table()
-              && new_table_schema->is_user_hidden_table()) {
-            if (OB_FAIL(delete_constraints_in_table(*replaced_table))) {
-              LOG_WARN("delete constraint info from a hash map failed",
-              K(ret), K(*replaced_table));
+        if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
+          // do-nothing for liboblog
+        } else {
+          if (NULL != replaced_table) {
+            if (!replaced_table->is_user_hidden_table()
+                && new_table_schema->is_user_hidden_table()) {
+              if (OB_FAIL(delete_constraints_in_table(*replaced_table))) {
+                LOG_WARN("delete constraint info from a hash map failed",
+                K(ret), K(*replaced_table));
+              }
+            // deal with the situation that alter table drop cst and truncate table enter the recycle bin,
+            // delete the constraint information dropped from the hash map
+            // When truncate table, delete the constraint information on the table from the hash map first,
+            // and add it back when rebuild_table_hashmap
+            } else if (OB_FAIL(check_and_delete_given_cst_in_table(replaced_table, new_table_schema))) {
+              LOG_WARN("check and delete given cst in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
             }
-          // deal with the situation that alter table drop cst and truncate table enter the recycle bin,
-          // delete the constraint information dropped from the hash map
-          // When truncate table, delete the constraint information on the table from the hash map first,
-          // and add it back when rebuild_table_hashmap
-          } else if (OB_FAIL(check_and_delete_given_cst_in_table(replaced_table, new_table_schema))) {
-            LOG_WARN("check and delete given cst in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
           }
-        }
-        if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
-          if (OB_FAIL(add_constraints_in_table(new_table_schema, 1 /*over_write*/))) {
-            LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
-          } else {
-            // do nothing
+          if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
+            if (OB_FAIL(add_constraints_in_table(new_table_schema, 1 /*over_write*/))) {
+              LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
+            } else {
+              // do nothing
+            }
           }
         }
       }
@@ -3210,12 +3218,16 @@ int ObSchemaMgr::del_table(const ObTenantTableId table)
           ret = OB_HASH_NOT_EXIST != hash_ret ? hash_ret : ret;
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(delete_foreign_keys_in_table(*schema_to_del))) {
+          if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
+            // do-nothing for liboblog
+          } else if (OB_FAIL(delete_foreign_keys_in_table(*schema_to_del))) {
             LOG_WARN("delete foreign keys info from a hash map failed", K(ret), K(*schema_to_del));
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(delete_constraints_in_table(*schema_to_del))) {
+          if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
+            // do-nothing for liboblog
+          } else if (OB_FAIL(delete_constraints_in_table(*schema_to_del))) {
             LOG_WARN("delete constraint info from a hash map failed", K(ret), K(*schema_to_del));
           }
         }
@@ -3396,31 +3408,35 @@ int ObSchemaMgr::get_table_schema(
   const ObSimpleTableSchemaV2 *&table_schema) const
 {
   int ret = OB_SUCCESS;
+  bool is_system_table = false;
   table_schema = NULL;
 
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+    LOG_WARN("not init", K(ret));
   } else if (OB_INVALID_ID == tenant_id
              || OB_INVALID_ID == database_id
              || table_name.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(database_id), K(table_name));
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(database_id), K(table_name));
+  } else if (OB_FAIL(ObSysTableChecker::is_sys_table_name(tenant_id, database_id, table_name, is_system_table))) {
+    LOG_WARN("fail to check if table is system table", K(ret), K(tenant_id), K(database_id), K(table_name));
   } else if (OB_INVALID_TENANT_ID != tenant_id_
              && OB_SYS_TENANT_ID != tenant_id_
              && tenant_id_ != tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant_id not matched", KR(ret), K(tenant_id), K_(tenant_id));
+    LOG_WARN("tenant_id not matched", K(ret), K(tenant_id), K_(tenant_id));
   } else {
     ObSimpleTableSchemaV2 *tmp_schema = NULL;
     ObNameCaseMode mode = OB_NAME_CASE_INVALID;
-    if (is_sys_tenant(tenant_id)) {
+    if (OB_SYS_TENANT_ID == tenant_id_ || is_system_table) {
+      // Scenarios for special handling of user tenant system tables
       mode = OB_ORIGIN_AND_INSENSITIVE;
     } else if (OB_FAIL(get_tenant_name_case_mode(tenant_id, mode))) {
-      LOG_WARN("fail to get_tenant_name_case_mode", K(tenant_id), KR(ret));
+      LOG_WARN("fail to get_tenant_name_case_mode", K(tenant_id), K(ret));
     } else if (OB_NAME_CASE_INVALID == mode) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid case mode", KR(ret), K(mode));
+      LOG_WARN("invalid case mode", K(ret), K(mode));
     }
     if (OB_SUCC(ret)) {
       const ObTableSchemaHashWrapper table_name_wrapper(tenant_id, database_id, session_id, mode, table_name);
@@ -3428,47 +3444,23 @@ int ObSchemaMgr::get_table_schema(
       if (OB_SUCCESS == hash_ret) {
         if (OB_ISNULL(tmp_schema)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL ptr", KR(ret), K(table_name_wrapper));
+          LOG_WARN("NULL ptr", K(ret), K(tmp_schema));
         } else {
           table_schema = tmp_schema;
         }
       } else if (OB_HASH_NOT_EXIST == hash_ret && 0 != session_id && OB_INVALID_ID != session_id) {
         // If session_id != 0, the search just now is based on the possible match of the temporary table.
         // If it is not found, then it will be searched according to session_id = 0, which is the normal table.
-        const ObTableSchemaHashWrapper table_name_wrapper1(tenant_id, database_id, 0, mode, table_name);
-        hash_ret = table_name_map_.get_refactored(table_name_wrapper1, tmp_schema);
+        const ObTableSchemaHashWrapper table_name_wrapper2(tenant_id, database_id, 0, mode, table_name);
+        hash_ret = table_name_map_.get_refactored(table_name_wrapper2, tmp_schema);
         if (OB_SUCCESS == hash_ret) {
           if (OB_ISNULL(tmp_schema)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("NULL ptr", KR(ret), K(table_name_wrapper1));
+            LOG_WARN("NULL ptr", K(ret), K(tmp_schema));
           } else {
             table_schema = tmp_schema;
           }
         }
-      }
-      // restrict creating duplicate table with existed inner table
-      if (OB_SUCC(ret) && OB_ISNULL(table_schema)) {
-         bool is_system_table = false;
-         if (OB_FAIL(ObSysTableChecker::is_sys_table_name(tenant_id, database_id, table_name, is_system_table))) {
-           LOG_WARN("fail to check if table is system table", KR(ret), K(tenant_id), K(database_id), K(table_name));
-         } else if (is_system_table) {
-           // Inner table's ObTableSchemaHashWrapper is stored with OB_ORIGIN_AND_INSENSITIVE. Actually,
-           // 1. For inner table in mysql database, comparision is insensitive.
-           // 2. For inner table in oracle database, comparision is sensitive.
-           const ObTableSchemaHashWrapper table_name_wrapper2(tenant_id, database_id,
-                                                              0, OB_ORIGIN_AND_INSENSITIVE, table_name);
-           hash_ret = table_name_map_.get_refactored(table_name_wrapper2, tmp_schema);
-           if (OB_SUCCESS == hash_ret) {
-             if (OB_ISNULL(tmp_schema)) {
-               ret = OB_ERR_UNEXPECTED;
-               LOG_WARN("NULL ptr", KR(ret), K(table_name_wrapper2));
-             } else {
-               table_schema = tmp_schema;
-             }
-           }
-         } else {
-           // not system table
-         }
       }
     }
   }
@@ -4536,15 +4528,12 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
     ObSimpleTableSchemaV2 *table_schema = NULL;
     // It is expected that OB_HASH_EXIST should not appear in the rebuild process
     int over_write = 0;
-    int tmp_ret = OB_SUCCESS;
-    ObSimpleTableSchemaV2 *exist_schema = NULL;
 
     for (ConstTableIterator iter = table_infos_.begin();
         iter != table_infos_.end() && OB_SUCC(ret);
         ++iter) {
       table_schema = *iter;
-      exist_schema = NULL;
-      LOG_TRACE("table_info is", "table_id", table_schema->get_table_id());
+      LOG_INFO("table_info is", "table_id", table_schema->get_table_id());
 
       if (OB_ISNULL(table_schema) || !table_schema->is_valid()) {
         ret = OB_ERR_UNEXPECTED;
@@ -4567,14 +4556,7 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
                                                            over_write);
           if (OB_SUCCESS != hash_ret) {
             ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-            tmp_ret = hidden_table_name_map_.get_refactored(table_name_wrapper, exist_schema);
-            LOG_ERROR("build hidden table name hashmap failed",
-                      KR(ret), KR(hash_ret), K(tmp_ret),
-                      "exist_table_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_id() : OB_INVALID_ID,
-                      "exist_database_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_database_id() : OB_INVALID_ID,
-                      "exist_session_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_session_id() : OB_INVALID_ID,
-                      "exist_name_case_mode", OB_NOT_NULL(exist_schema) ? exist_schema->get_name_case_mode() : OB_NAME_CASE_INVALID,
-                      "exist_table_name", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_name() : "",
+            LOG_ERROR("build hidden table name hashmap failed", K(ret), K(hash_ret),
                       "table_id", table_schema->get_table_id(),
                       "databse_id", table_schema->get_database_id(),
                       "session_id", table_schema->get_session_id(),
@@ -4586,9 +4568,9 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
           if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
             LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
           } else if (table_schema->is_index_table()) {
-            LOG_TRACE("index is", "table_id", table_schema->get_table_id(),
-                      "database_id", table_schema->get_database_id(),
-                      "table_name", table_schema->get_table_name_str());
+            LOG_INFO("index is", "table_id", table_schema->get_table_id(),
+                     "database_id", table_schema->get_database_id(),
+                     "table_name", table_schema->get_table_name_str());
             // oracle mode and index is not in recyclebin
             if (table_schema->is_in_recyclebin()) {
               ObIndexSchemaHashWrapper index_name_wrapper(table_schema->get_tenant_id(),
@@ -4598,12 +4580,7 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
               hash_ret = index_name_map_.set_refactored(index_name_wrapper, table_schema, over_write);
               if (OB_SUCCESS != hash_ret) {
                 ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-                tmp_ret = index_name_map_.get_refactored(index_name_wrapper, exist_schema);
-                LOG_ERROR("build index name hashmap failed",
-                          KR(ret), KR(hash_ret), K(tmp_ret),
-                          "exist_table_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_id() : OB_INVALID_ID,
-                          "exist_database_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_database_id() : OB_INVALID_ID,
-                          "index_name",  OB_NOT_NULL(exist_schema) ? exist_schema->get_table_name() : "",
+                LOG_ERROR("build index name hashmap failed", K(ret), K(hash_ret),
                           "table_id", table_schema->get_table_id(),
                           "databse_id", table_schema->get_database_id(),
                           "index_name", table_schema->get_table_name());
@@ -4619,12 +4596,7 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
                 hash_ret = index_name_map_.set_refactored(cutted_index_name_wrapper, table_schema, over_write);
                 if (OB_SUCCESS != hash_ret) {
                   ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-                  tmp_ret = index_name_map_.get_refactored(cutted_index_name_wrapper, exist_schema);
-                  LOG_ERROR("build index name hashmap failed",
-                            KR(ret), KR(hash_ret), K(tmp_ret),
-                            "exist_table_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_id() : OB_INVALID_ID,
-                            "exist_database_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_database_id() : OB_INVALID_ID,
-                            "index_name",  OB_NOT_NULL(exist_schema) ? exist_schema->get_origin_index_name_str() : "",
+                  LOG_ERROR("build index name hashmap failed", K(ret), K(hash_ret),
                             "table_id", table_schema->get_table_id(),
                             "databse_id", table_schema->get_database_id(),
                             "index_name", table_schema->get_origin_index_name_str());
@@ -4632,21 +4604,16 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
               }
             }
           } else if (table_schema->is_aux_vp_table()) {
-            LOG_TRACE("aux_vp is", "table_id", table_schema->get_table_id(),
-                      "database_id", table_schema->get_database_id(),
-                      "table_name", table_schema->get_table_name_str());
+            LOG_INFO("aux_vp is", "table_id", table_schema->get_table_id(),
+                     "database_id", table_schema->get_database_id(),
+                     "table_name", table_schema->get_table_name_str());
             ObAuxVPSchemaHashWrapper aux_vp_name_wrapper(table_schema->get_tenant_id(),
                                                          table_schema->get_database_id(),
                                                          table_schema->get_table_name_str());
             hash_ret = aux_vp_name_map_.set_refactored(aux_vp_name_wrapper, table_schema, over_write);
             if (OB_SUCCESS != hash_ret) {
               ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-              tmp_ret = aux_vp_name_map_.get_refactored(aux_vp_name_wrapper, exist_schema);
-              LOG_ERROR("build aux vp name hashmap failed",
-                        KR(ret), KR(hash_ret), K(tmp_ret),
-                        "exist_table_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_id() : OB_INVALID_ID,
-                        "exist_database_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_database_id() : OB_INVALID_ID,
-                        "index_name",  OB_NOT_NULL(exist_schema) ? exist_schema->get_table_name() : "",
+              LOG_ERROR("build aux vp name hashmap failed", K(ret), K(hash_ret),
                         "table_id", table_schema->get_table_id(),
                         "databse_id", table_schema->get_database_id(),
                         "aux_vp_name", table_schema->get_table_name());
@@ -4654,8 +4621,8 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
           } else if (table_schema->is_aux_lob_table()) {
             // do nothing
           } else {
-            LOG_TRACE("table is", "table_id", table_schema->get_table_id(),
-                      "database_id", table_schema->get_database_id(),
+            LOG_INFO("table is", "table_id", table_schema->get_table_id(),
+                     "database_id", table_schema->get_database_id(),
                      "table_name", table_schema->get_table_name_str());
             ObTableSchemaHashWrapper table_name_wrapper(table_schema->get_tenant_id(),
                                                         table_schema->get_database_id(),
@@ -4665,14 +4632,7 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
             hash_ret = table_name_map_.set_refactored(table_name_wrapper, table_schema, over_write);
             if (OB_SUCCESS != hash_ret) {
               ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-              tmp_ret = table_name_map_.get_refactored(table_name_wrapper, exist_schema);
-              LOG_ERROR("build table name hashmap failed",
-                        K(ret), K(hash_ret), K(tmp_ret),
-                        "exist_table_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_id() : OB_INVALID_ID,
-                        "exist_database_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_database_id() : OB_INVALID_ID,
-                        "exist_session_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_session_id() : OB_INVALID_ID,
-                        "exist_name_case_mode", OB_NOT_NULL(exist_schema) ? exist_schema->get_name_case_mode() : OB_NAME_CASE_INVALID,
-                        "exist_table_name", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_name() : "",
+              LOG_ERROR("build table name hashmap failed", K(ret), K(hash_ret),
                         "table_id", table_schema->get_table_id(),
                         "databse_id", table_schema->get_database_id(),
                         "session_id", table_schema->get_session_id(),
@@ -4680,14 +4640,18 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
                         "table_name", table_schema->get_table_name());
             }
             if (OB_SUCC(ret)) {
-              if (OB_FAIL(add_foreign_keys_in_table(table_schema->get_simple_foreign_key_info_array(), over_write))) {
+              if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
+                // do-nothing for liboblog
+              } else if (OB_FAIL(add_foreign_keys_in_table(table_schema->get_simple_foreign_key_info_array(), over_write))) {
                 LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(table_schema->get_table_name_str()));
               } else {
                 fk_cnt += table_schema->get_simple_foreign_key_info_array().count();
               }
             }
             if (OB_SUCC(ret)) {
-              if (table_schema->is_mysql_tmp_table()) {
+              if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
+                // do-nothing for liboblog
+              } else if (table_schema->is_mysql_tmp_table()) {
                 // check constraints in non-temporary tables don't share namespace with constraints in temporary tables, do nothing
               } else if (OB_FAIL(add_constraints_in_table(table_schema, over_write))) {
                 LOG_WARN("add constraint info to a hash map failed", K(ret), K(table_schema->get_table_name_str()));

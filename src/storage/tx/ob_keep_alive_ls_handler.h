@@ -29,70 +29,20 @@ class ObLogHandler;
 
 namespace transaction
 {
-
-enum class MinStartScnStatus
-{
-  UNKOWN = 0, // collect failed
-  NO_CTX,
-  HAS_CTX,
-
-  MAX
-};
-
 class ObKeepAliveLogBody
 {
 public:
   OB_UNIS_VERSION(1);
 
 public:
-  ObKeepAliveLogBody()
-      : compat_bit_(1), min_start_scn_(OB_INVALID_TIMESTAMP),
-        min_start_status_(MinStartScnStatus::UNKOWN)
-  {}
-  ObKeepAliveLogBody(int64_t compat_bit, int64_t min_start_scn, MinStartScnStatus min_status)
-      : compat_bit_(compat_bit), min_start_scn_(min_start_scn), min_start_status_(min_status)
-  {}
+  ObKeepAliveLogBody() : compat_bit_(1) {}
+  ObKeepAliveLogBody(int64_t compat_bit) : compat_bit_(compat_bit) {}
 
   static int64_t get_max_serialize_size();
-  int64_t get_min_start_scn() { return min_start_scn_; };
-  MinStartScnStatus get_min_start_status() { return min_start_status_; }
-
-  TO_STRING_KV(K_(compat_bit), K_(min_start_scn), K_(min_start_status));
+  TO_STRING_KV(K_(compat_bit));
 
 private:
   int64_t compat_bit_; // not used, only for compatibility
-  int64_t min_start_scn_;
-  MinStartScnStatus min_start_status_;
-};
-
-struct KeepAliveLsInfo
-{
-  int64_t log_ts_;
-  palf::LSN lsn_;
-  int64_t min_start_scn_;
-  MinStartScnStatus min_start_status_;
-
-  void reset()
-  {
-    log_ts_ = OB_INVALID_TIMESTAMP;
-    lsn_.reset();
-    min_start_scn_ = OB_INVALID_TIMESTAMP;
-    min_start_status_ = MinStartScnStatus::UNKOWN;
-  }
-
-  void replace(KeepAliveLsInfo info)
-  {
-    log_ts_ = info.log_ts_;
-    lsn_ = info.lsn_;
-
-    if (info.min_start_status_ == MinStartScnStatus::NO_CTX
-        || info.min_start_status_ == MinStartScnStatus::HAS_CTX) {
-      min_start_scn_ = info.min_start_scn_;
-      min_start_status_ = info.min_start_status_;
-    }
-  }
-
-  TO_STRING_KV(K(log_ts_), K(lsn_), K(min_start_scn_), K(min_start_status_));
 };
 
 class ObLSKeepAliveStatInfo
@@ -106,16 +56,8 @@ public:
     near_to_gts_cnt = 0;
     other_error_cnt = 0;
     submit_succ_cnt = 0;
-    stat_keepalive_info_.reset();
-  }
-
-  void clear_cnt()
-  {
-    cb_busy_cnt = 0;
-    not_master_cnt = 0;
-    near_to_gts_cnt = 0;
-    other_error_cnt = 0;
-    submit_succ_cnt = 0;
+    last_log_ts_.reset();
+    last_lsn_.reset();
   }
 
   int64_t cb_busy_cnt;
@@ -123,7 +65,8 @@ public:
   int64_t near_to_gts_cnt;
   int64_t other_error_cnt;
   int64_t submit_succ_cnt;
-  KeepAliveLsInfo stat_keepalive_info_;
+  palf::SCN last_log_ts_;
+  palf::LSN last_lsn_;
 
 private:
   // none
@@ -136,7 +79,7 @@ class ObKeepAliveLSHandler : public logservice::ObIReplaySubHandler,
                              public logservice::AppendCb 
 {
 public:
-  const int64_t KEEP_ALIVE_GTS_INTERVAL_NS = 100 * 1000 * 1000; 
+  const int64_t KEEP_ALIVE_GTS_INTERVAL = 100 * 1000;
 public:
   ObKeepAliveLSHandler() : submit_buf_(nullptr) { reset(); }
   int init(const share::ObLSID &ls_id,logservice::ObLogHandler * log_handler_ptr);
@@ -148,15 +91,22 @@ public:
 
   void reset();
   
-  int try_submit_log(int64_t min_start_scn, MinStartScnStatus status);
+  int try_submit_log();
   void print_stat_info();
 public:
 
   bool is_busy() { return ATOMIC_LOAD(&is_busy_); }
-  int on_success();
-  int on_failure();
+  int on_success() {ATOMIC_STORE(&is_busy_, false); return OB_SUCCESS;}
+  int on_failure() {ATOMIC_STORE(&is_busy_, false); return OB_SUCCESS;}
 
-  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const int64_t ts_ns);
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const palf::SCN &scn)
+  {
+    UNUSED(buffer);
+    UNUSED(nbytes);
+    UNUSED(lsn);
+    UNUSED(scn);
+    return OB_SUCCESS;
+  }
   void switch_to_follower_forcedly()
   {
    ATOMIC_STORE(&is_master_, false); 
@@ -167,13 +117,9 @@ public:
   int64_t get_rec_log_ts() { return INT64_MAX; }
   int flush(int64_t rec_log_ts) { return OB_SUCCESS;}
 
-  void get_min_start_scn(int64_t &min_start_scn, int64_t &keep_alive_scn, MinStartScnStatus &status);
 private:
   bool check_gts_();
-  int serialize_keep_alive_log_(int64_t min_start_scn, MinStartScnStatus status);
 private : 
-  SpinRWLock lock_;
-
   bool is_busy_;
   bool is_master_;
   bool is_stopped_;
@@ -185,10 +131,7 @@ private :
   int64_t submit_buf_len_;
   int64_t submit_buf_pos_;
 
-  int64_t last_gts_;
-
-  KeepAliveLsInfo tmp_keep_alive_info_;
-  KeepAliveLsInfo durable_keep_alive_info_;
+  palf::SCN last_gts_;
 
   ObLSKeepAliveStatInfo stat_info_;
 };

@@ -141,11 +141,11 @@ int ObTxTableMergePrepareTask::process()
         "tablet_id", ctx->param_.tablet_id_);
   } else if (OB_FAIL(build_merge_ctx())) {
     LOG_WARN("failed to build merge ctx", K(ret), K(ctx->param_));
-  } else if (ctx->log_ts_range_.is_empty()) {
+  } else if (ctx->scn_range_.is_empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("Unexcepted empty log ts range in minor merge", K(ret), K(ctx->log_ts_range_));
+    LOG_ERROR("Unexcepted empty log ts range in minor merge", K(ret), K(ctx->scn_range_));
   } else {
-    ctx->merge_log_ts_ = ctx->log_ts_range_.end_log_ts_;
+    ctx->merge_scn_ = ctx->scn_range_.end_scn_.get_val_for_inner_table_field();
   }
 
   if (OB_FAIL(ret)) {
@@ -196,7 +196,7 @@ int ObTxTableMergePrepareTask::build_merge_ctx()
     } else if (is_mini_merge(ctx.param_.merge_type_)) { // OB_NO_NEED_MERGE && mini merge
       int tmp_ret = OB_SUCCESS;
       // then release memtable
-      const int64_t clog_checkpoint_log_ts = tablet->get_tablet_meta().clog_checkpoint_ts_;
+      const int64_t clog_checkpoint_log_ts = tablet->get_tablet_meta().clog_checkpoint_scn_.get_val_for_gts();
       if (OB_TMP_FAIL(tablet->release_memtables(clog_checkpoint_log_ts))) {
         LOG_WARN("failed to release memtable", K(tmp_ret), K(clog_checkpoint_log_ts));
       }

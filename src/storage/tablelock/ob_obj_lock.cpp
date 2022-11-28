@@ -15,7 +15,6 @@
 #include "share/ob_define.h"
 #include "share/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
-#include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_part_ctx.h"
@@ -33,6 +32,7 @@ using namespace common;
 using namespace storage;
 using namespace memtable;
 using namespace share;
+using namespace palf;
 
 namespace transaction
 {
@@ -320,8 +320,8 @@ int ObOBJLock::recover_lock(
 
 int ObOBJLock::update_lock_status_(
     const ObTableLockOp &lock_op,
-    const int64_t commit_version,
-    const int64_t commit_log_ts,
+    const palf::SCN &commit_version,
+    const palf::SCN &commit_scn,
     const ObTableLockOpStatus status,
     ObTableLockOpList *op_list)
 {
@@ -335,7 +335,7 @@ int ObOBJLock::update_lock_status_(
       find = true;
       curr->lock_op_.lock_op_status_ = status;
       curr->lock_op_.commit_version_ = commit_version;
-      curr->lock_op_.commit_log_ts_ = commit_log_ts;
+      curr->lock_op_.commit_scn_ = commit_scn;
       LOG_DEBUG("update_lock_status_", K(curr->lock_op_));
     }
   }
@@ -345,12 +345,11 @@ int ObOBJLock::update_lock_status_(
   return ret;
 }
 
-int ObOBJLock::update_lock_status(
-    const ObTableLockOp &lock_op,
-    const int64_t commit_version,
-    const int64_t commit_log_ts,
-    const ObTableLockOpStatus status,
-    ObMalloc &allocator)
+int ObOBJLock::update_lock_status(const ObTableLockOp &lock_op,
+                                  const palf::SCN commit_version,
+                                  const palf::SCN commit_scn,
+                                  const ObTableLockOpStatus status,
+                                  ObMalloc &allocator)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -379,7 +378,7 @@ int ObOBJLock::update_lock_status(
       } else {
         ret = update_lock_status_(lock_op,
                                   commit_version,
-                                  commit_log_ts,
+                                  commit_scn,
                                   status,
                                   op_list);
       }
@@ -401,11 +400,6 @@ int ObOBJLock::update_lock_status(
                                                 unused_is_compacted))) {
         LOG_WARN("compact tablelock failed", K(tmp_ret), K(lock_op));
       }
-    }
-    if (OB_SUCC(ret) &&
-        lock_op.op_type_ == OUT_TRANS_UNLOCK &&
-        status == LOCK_OP_COMPLETE) {
-      wakeup_waiters_(lock_op);
     }
   }
   LOG_DEBUG("update lock status", K(ret), K(lock_op), K(commit_version), K(status));
@@ -476,7 +470,8 @@ int ObOBJLock::lock(
           // something else.
           need_retry = false;
           ret = OB_TRANS_KILLED;
-        } else if (lock_op.is_dml_lock_op() /* only dml lock will wait at lock wait mgr */) {
+        } else if (ENABLE_USE_LOCK_WAIT_MGR &&
+                   lock_op.is_dml_lock_op() /* only dml lock will wait at lock wait mgr */) {
           // wait at lock wait mgr but not retry at here.
           need_retry = false;
         } else {
@@ -595,28 +590,14 @@ void ObOBJLock::remove_lock_op(
     drop_op_list_if_empty_(lock_op.lock_mode_,
                            op_list,
                            allocator);
-    wakeup_waiters_(lock_op);
   }
   LOG_DEBUG("ObOBJLock::remove_lock_op finish.");
 }
 
-void ObOBJLock::wakeup_waiters_(const ObTableLockOp &lock_op)
-{
-  // dml in trans lock does not need do this.
-  if (OB_LIKELY(!lock_op.need_wakeup_waiter())) {
-    // do nothing
-  } else if (OB_ISNULL(MTL(ObLockWaitMgr*))) {
-    LOG_WARN("MTL(ObLockWaitMgr*) is null");
-  } else {
-    MTL(ObLockWaitMgr*)->wakeup(lock_op.lock_id_);
-    LOG_DEBUG("ObOBJLock::wakeup_waiters_ ", K(lock_op));
-  }
-}
-
-int64_t ObOBJLock::get_min_ddl_lock_committed_log_ts(const int64_t flushed_log_ts) const
+palf::SCN ObOBJLock::get_min_ddl_lock_committed_scn(const palf::SCN &flushed_scn) const
 {
   int ret = OB_SUCCESS;
-  int64_t min_rec_log_ts = INT64_MAX;
+  palf::SCN min_rec_scn = SCN::max_scn();
   RDLockGuard guard(rwlock_);
   for (int i = 0; i < TABLE_LOCK_MODE_COUNT; i++) {
     ObTableLockOpList *op_list = map_[i];
@@ -624,17 +605,19 @@ int64_t ObOBJLock::get_min_ddl_lock_committed_log_ts(const int64_t flushed_log_t
       DLIST_FOREACH(curr, *op_list) {
         if (curr->lock_op_.op_type_ ==  OUT_TRANS_LOCK
             && curr->lock_op_.lock_op_status_ == LOCK_OP_COMPLETE
-            && curr->lock_op_.commit_log_ts_ > flushed_log_ts
-            && curr->lock_op_.commit_log_ts_ < min_rec_log_ts) {
-          min_rec_log_ts = curr->lock_op_.commit_log_ts_;
+            && curr->lock_op_.commit_scn_ > flushed_scn
+            && curr->lock_op_.commit_scn_ < min_rec_scn) {
+          min_rec_scn = curr->lock_op_.commit_scn_;
         }
       }
     }
   }
-  return min_rec_log_ts;
+  return min_rec_scn;
 }
 
-int ObOBJLock::get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr, int64_t freeze_log_ts)
+int ObOBJLock::get_table_lock_store_info(
+    ObIArray<ObTableLockOp> &store_arr,
+    const palf::SCN &freeze_scn)
 {
   int ret = OB_SUCCESS;
   RDLockGuard guard(rwlock_);
@@ -642,7 +625,7 @@ int ObOBJLock::get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr, int
     ObTableLockOpList *op_list = map_[i];
     if (op_list != NULL) {
       DLIST_FOREACH(curr, *op_list) {
-        if (curr->lock_op_.commit_log_ts_ <= freeze_log_ts
+        if (curr->lock_op_.commit_scn_ <= freeze_scn
             && curr->is_complete_outtrans_lock()) {
           ObTableLockOp store_info;
           if(OB_FAIL(curr->get_table_lock_store_info(store_info))) {
@@ -674,7 +657,7 @@ bool ObOBJLockMap::GetTableLockStoreInfoFunctor::operator() (
   if (!lock_id.is_valid() || OB_ISNULL(obj_lock)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(lock_id), "map", OB_P(obj_lock));
-  } else if (OB_FAIL(obj_lock->get_table_lock_store_info(store_arr_, freeze_log_ts_))) {
+  } else if (OB_FAIL(obj_lock->get_table_lock_store_info(store_arr_, freeze_scn_))) {
     LOG_WARN("get table lock store info failed", K(ret));
   }
 
@@ -684,12 +667,10 @@ bool ObOBJLockMap::GetTableLockStoreInfoFunctor::operator() (
   return bool_ret;
 }
 
-int ObOBJLockMap::get_table_lock_store_info(
-    ObIArray<ObTableLockOp> &store_arr,
-    int64_t freeze_log_ts)
+int ObOBJLockMap::get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr, SCN freeze_scn)
 {
   int ret = OB_SUCCESS;
-  GetTableLockStoreInfoFunctor fn(store_arr, freeze_log_ts);
+  GetTableLockStoreInfoFunctor fn(store_arr, freeze_scn);
   if (OB_FAIL(lock_map_.for_each(fn))) {
     LOG_WARN("for each get_table_lock_store_info failed", KR(ret));
   }
@@ -757,8 +738,8 @@ bool ObOBJLockMap::GetMinCommittedDDLLogtsFunctor::operator() (
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(lock_id), "map", OB_P(obj_lock));
   } else {
-    min_committed_log_ts_ = min(min_committed_log_ts_,
-            obj_lock->get_min_ddl_lock_committed_log_ts(flushed_log_ts_));
+    min_committed_scn_ = std::min(min_committed_scn_,
+                                      obj_lock->get_min_ddl_lock_committed_scn(flushed_scn_));
   }
 
   if (OB_SUCCESS == ret) {
@@ -1698,19 +1679,19 @@ void ObOBJLockMap::print()
   lock_map_.for_each(fn);
 }
 
-int64_t ObOBJLockMap::get_min_ddl_committed_log_ts(int64_t &flushed_log_ts)
+palf::SCN ObOBJLockMap::get_min_ddl_committed_scn(palf::SCN &flushed_scn)
 {
   int ret = OB_SUCCESS;
-  int64_t min_ddl_committed_log_ts = INT64_MAX;
-  GetMinCommittedDDLLogtsFunctor fn(flushed_log_ts);
+  SCN min_ddl_committed_scn = SCN::max_scn();
+  GetMinCommittedDDLLogtsFunctor fn(flushed_scn);
   if (OB_FAIL(lock_map_.for_each(fn))) {
-    LOG_WARN("for each link_hash_map_ get_min_ddl_committed_log_ts error",
-                                            KR(ret), K(flushed_log_ts));
+    LOG_WARN("for each link_hash_map_ get_min_ddl_committed_scn error",
+                                            KR(ret), K(flushed_scn));
   } else {
-    min_ddl_committed_log_ts = fn.get_min_committed_log_ts();
+    min_ddl_committed_scn = fn.get_min_committed_scn();
   }
 
-  return min_ddl_committed_log_ts;
+  return min_ddl_committed_scn;
 }
 
 int ObOBJLockMap::get_or_create_obj_lock_with_ref_(
@@ -1976,11 +1957,10 @@ int ObOBJLockMap::recover_obj_lock(const ObTableLockOp &lock_op)
   return ret;
 }
 
-int ObOBJLockMap::update_lock_status(
-    const ObTableLockOp &lock_op,
-    const int64_t commit_version,
-    const int64_t commit_log_ts,
-    const ObTableLockOpStatus status)
+int ObOBJLockMap::update_lock_status(const ObTableLockOp &lock_op,
+                                     const palf::SCN commit_version,
+                                     const palf::SCN commit_scn,
+                                     const ObTableLockOpStatus status)
 {
   int ret = OB_SUCCESS;
   ObOBJLock *obj_lock = NULL;
@@ -1992,18 +1972,12 @@ int ObOBJLockMap::update_lock_status(
     LOG_WARN("invalid argument.", K(ret), K(lock_op));
   } else {
     obj_lock = NULL;
-    if (OB_FAIL(get_obj_lock_with_ref_(lock_op.lock_id_,
-                                       obj_lock))) {
-      LOG_WARN("the lock dose not exist, failed to update status.",
-               K(ret), K(lock_op));
+    if (OB_FAIL(get_obj_lock_with_ref_(lock_op.lock_id_, obj_lock))) {
+      LOG_WARN("the lock dose not exist, failed to update status.", K(ret), K(lock_op));
     } else if (OB_ISNULL(obj_lock)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("op list map should not be NULL.", K(lock_op));
-    } else if (OB_FAIL(obj_lock->update_lock_status(lock_op,
-                                                    commit_version,
-                                                    commit_log_ts,
-                                                    status,
-                                                    allocator_))) {
+    } else if (OB_FAIL(obj_lock->update_lock_status(lock_op, commit_version, commit_scn, status, allocator_))) {
       LOG_WARN("update lock status failed.", K(ret), K(lock_op));
     } else {
       LOG_DEBUG("succeed update lock status.", K(lock_op), K(status));

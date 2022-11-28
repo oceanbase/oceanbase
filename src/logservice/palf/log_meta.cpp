@@ -41,7 +41,8 @@ int LogMeta::generate_by_default(const AccessMode &access_mode)
   } else {
     const int64_t init_log_proposal_id(0);
     const LSN init_base_lsn(PALF_INITIAL_LSN_VAL);
-    const int64_t init_ref_ts_ns(0);
+    SCN init_ref_log_scn;
+    init_ref_log_scn.set_min();
     LogConfigInfo init_config_info;
     LogConfigVersion init_config_version;
     init_config_version.generate(init_log_proposal_id, 0);
@@ -53,7 +54,7 @@ int LogMeta::generate_by_default(const AccessMode &access_mode)
     log_config_meta_.proposal_id_ = init_log_proposal_id;
     log_config_meta_.curr_ = init_config_info;
     log_config_meta_.prev_ = init_config_info;
-    log_mode_meta_.generate(init_log_proposal_id, init_log_proposal_id, access_mode, init_ref_ts_ns);
+    log_mode_meta_.generate(init_log_proposal_id, init_log_proposal_id, access_mode, init_ref_log_scn);
     log_replica_property_meta_.generate(true, LogReplicaType::NORMAL_REPLICA);
     PALF_LOG(INFO, "generate_by_default success", KPC(this));
   }
@@ -70,9 +71,9 @@ int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info, cons
     PALF_LOG(WARN, "generate snapshot_meta failed", K(ret), K(palf_base_info));
   } else {
     const int64_t prev_log_proposal_id = palf_base_info.prev_log_info_.log_proposal_id_;
-    const int64_t prev_log_ts_ns = palf_base_info.prev_log_info_.log_ts_;
+    const SCN &prev_log_scn = palf_base_info.prev_log_info_.log_scn_;
     const int64_t init_log_proposal_id = (prev_log_proposal_id != INVALID_PROPOSAL_ID)? prev_log_proposal_id: 0;
-    const int64_t init_ref_ts_ns = (prev_log_ts_ns != OB_INVALID_TIMESTAMP)? prev_log_ts_ns: 0;
+    const SCN init_ref_log_scn = (prev_log_scn.is_valid() ? prev_log_scn: SCN::min_scn());
     LogConfigInfo init_config_info;
     LogConfigVersion init_config_version;
     init_config_version.generate(init_log_proposal_id, 0);
@@ -83,7 +84,7 @@ int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info, cons
     log_config_meta_.proposal_id_ = init_log_proposal_id;
     log_config_meta_.curr_ = init_config_info;
     log_config_meta_.prev_ = init_config_info;
-    log_mode_meta_.generate(init_log_proposal_id, init_log_proposal_id, access_mode, init_ref_ts_ns);
+    log_mode_meta_.generate(init_log_proposal_id, init_log_proposal_id, access_mode, init_ref_log_scn);
     log_replica_property_meta_.generate(true, LogReplicaType::NORMAL_REPLICA);
     PALF_LOG(INFO, "generate_by_palf_base_info success", KPC(this));
   }

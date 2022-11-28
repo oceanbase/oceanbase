@@ -93,7 +93,7 @@ constexpr int OB_OLD_SCHEMA_VERSION = -4177;
 constexpr int OB_RELEASE_SCHEMA_ERROR = -4178;
 constexpr int OB_NO_EMPTY_ENTRY = -4180;
 constexpr int OB_BEYOND_THE_RANGE = -4183;
-constexpr int OB_SERVER_OUTOF_DISK_SPACE = -4184;
+constexpr int OB_CS_OUTOF_DISK_SPACE = -4184;
 constexpr int OB_COLUMN_GROUP_NOT_FOUND = -4185;
 constexpr int OB_CS_COMPRESS_LIB_ERROR = -4186;
 constexpr int OB_SCHEDULER_TASK_CNT_MISMATCH = -4188;
@@ -378,7 +378,7 @@ constexpr int OB_TOO_MANY_TENANT_PARTITIONS_ERROR = -4684;
 constexpr int OB_ACTIVE_MEMTBALE_NOT_EXSIT = -4685;
 constexpr int OB_USE_DUP_FOLLOW_AFTER_DML = -4686;
 constexpr int OB_NO_DISK_NEED_REBUILD = -4687;
-constexpr int OB_STANDBY_READ_ONLY = -4688;
+constexpr int OB_STANDBY_WEAK_READ_ONLY = -4688;
 constexpr int OB_INVALD_WEB_SERVICE_CONTENT = -4689;
 constexpr int OB_PRIMARY_CLUSTER_EXIST = -4690;
 constexpr int OB_ARRAY_BINDING_SWITCH_ITERATOR = -4691;
@@ -433,7 +433,6 @@ constexpr int OB_WAIT_REPLAY_TIMEOUT = -4741;
 constexpr int OB_WAIT_TABLET_READY_TIMEOUT = -4742;
 constexpr int OB_FREEZE_SERVICE_EPOCH_MISMATCH = -4743;
 constexpr int OB_DELETE_SERVER_NOT_ALLOWED = -4745;
-constexpr int OB_PACKET_STATUS_UNKNOWN = -4746;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -763,7 +762,6 @@ constexpr int OB_ERR_OBJECT_STRING_DOES_NOT_EXIST = -5400;
 constexpr int OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED = -5401;
 constexpr int OB_ERR_GET_STACKED_DIAGNOSTICS = -5402;
 constexpr int OB_DDL_SCHEMA_VERSION_NOT_MATCH = -5403;
-constexpr int OB_ERR_COLUMN_GROUP_DUPLICATE = -5404;
 constexpr int OB_SQL_RETRY_SPM = -5434;
 constexpr int OB_OUTLINE_NOT_REPRODUCIBLE = -5435;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
@@ -1590,6 +1588,7 @@ constexpr int OB_ERR_STATEMENT_STRING_IN_EXECUTE_IMMEDIATE_IS_NULL_OR_ZERO_LENGT
 constexpr int OB_ERR_MISSING_INTO_KEYWORD = -9712;
 constexpr int OB_ERR_CLAUSE_RETURN_ILLEGAL = -9713;
 constexpr int OB_ERR_NAME_HAS_TOO_MANY_PARTS = -9714;
+constexpr int OB_ERR_SP_FETCH_NO_DATA = -9715;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -1628,7 +1627,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_EAGAIN__USER_ERROR_MSG "Try again"
 #define OB_BUF_NOT_ENOUGH__USER_ERROR_MSG "Buffer not enough"
 #define OB_PARTIAL_FAILED__USER_ERROR_MSG "Partial failed"
-#define OB_READ_NOTHING__USER_ERROR_MSG "No data - zero rows fetched, selected, or processed"
+#define OB_READ_NOTHING__USER_ERROR_MSG "Nothing to read"
 #define OB_FILE_NOT_EXIST__USER_ERROR_MSG "File not exist"
 #define OB_DISCONTINUOUS_LOG__USER_ERROR_MSG "Log entry not continuous"
 #define OB_SCHEMA_ERROR__USER_ERROR_MSG "Schema error"
@@ -1757,7 +1756,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ALREADY_EXISTS__USER_ERROR_MSG "Already exist"
 #define OB_SEARCH_NOT_FOUND__USER_ERROR_MSG "Value not found"
 #define OB_BEYOND_THE_RANGE__USER_ERROR_MSG "Key out of range"
-#define OB_SERVER_OUTOF_DISK_SPACE__USER_ERROR_MSG "Server out of disk space"
+#define OB_CS_OUTOF_DISK_SPACE__USER_ERROR_MSG "Server out of disk space"
 #define OB_COLUMN_GROUP_NOT_FOUND__USER_ERROR_MSG "Column group not found"
 #define OB_CS_COMPRESS_LIB_ERROR__USER_ERROR_MSG "Server failed to get compress library"
 #define OB_ITEM_NOT_MATCH__USER_ERROR_MSG "Item not match"
@@ -2070,7 +2069,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ACTIVE_MEMTBALE_NOT_EXSIT__USER_ERROR_MSG "active memtable not exist"
 #define OB_USE_DUP_FOLLOW_AFTER_DML__USER_ERROR_MSG "Should use leader replica for duplicate table after DML operator"
 #define OB_NO_DISK_NEED_REBUILD__USER_ERROR_MSG "no disk need rebuild"
-#define OB_STANDBY_READ_ONLY__USER_ERROR_MSG "standby tenant is read only"
+#define OB_STANDBY_WEAK_READ_ONLY__USER_ERROR_MSG "standby cluster support weak read only"
 #define OB_INVALD_WEB_SERVICE_CONTENT__USER_ERROR_MSG "web service content not valid"
 #define OB_PRIMARY_CLUSTER_EXIST__USER_ERROR_MSG "other primary cluster already exist, can not start as primary"
 #define OB_ARRAY_BINDING_SWITCH_ITERATOR__USER_ERROR_MSG "array binding needs to switch iterator"
@@ -2128,7 +2127,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_FREEZE_SERVICE_EPOCH_MISMATCH__USER_ERROR_MSG "freeze service epoch is not expected"
 #define OB_FROZEN_INFO_ALREADY_EXIST__USER_ERROR_MSG "%s"
 #define OB_DELETE_SERVER_NOT_ALLOWED__USER_ERROR_MSG "%s"
-#define OB_PACKET_STATUS_UNKNOWN__USER_ERROR_MSG "Network error and packet status unknown. Abort auto retry."
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -2492,7 +2490,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__USER_ERROR_MSG "resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__USER_ERROR_MSG "GET STACKED DIAGNOSTICS when handler not active"
 #define OB_DDL_SCHEMA_VERSION_NOT_MATCH__USER_ERROR_MSG "ddl schema version not match"
-#define OB_ERR_COLUMN_GROUP_DUPLICATE__USER_ERROR_MSG "Duplicate column group name '%.*s'"
 #define OB_ERR_INVALID_JSON_TEXT__USER_ERROR_MSG "Invalid JSON text."
 #define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__USER_ERROR_MSG "Invalid JSON text in argument."
 #define OB_ERR_INVALID_JSON_BINARY_DATA__USER_ERROR_MSG "The JSON binary value contains invalid data."
@@ -3422,6 +3419,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MISSING_INTO_KEYWORD__USER_ERROR_MSG "missing INTO keyword"
 #define OB_ERR_CLAUSE_RETURN_ILLEGAL__USER_ERROR_MSG "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements"
 #define OB_ERR_NAME_HAS_TOO_MANY_PARTS__USER_ERROR_MSG "name has too many parts"
+#define OB_ERR_SP_FETCH_NO_DATA__USER_ERROR_MSG "No data - zero rows fetched, selected, or processed"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -3589,7 +3587,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4181, Already exist"
 #define OB_SEARCH_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4182, Value not found"
 #define OB_BEYOND_THE_RANGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4183, Key out of range"
-#define OB_SERVER_OUTOF_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4184, Server out of disk space"
+#define OB_CS_OUTOF_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4184, Server out of disk space"
 #define OB_COLUMN_GROUP_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4185, Column group not found"
 #define OB_CS_COMPRESS_LIB_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4186, Server failed to get compress library"
 #define OB_ITEM_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4187, Item not match"
@@ -3902,7 +3900,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ACTIVE_MEMTBALE_NOT_EXSIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4685, active memtable not exist"
 #define OB_USE_DUP_FOLLOW_AFTER_DML__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4686, Should use leader replica for duplicate table after DML operator"
 #define OB_NO_DISK_NEED_REBUILD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4687, no disk need rebuild"
-#define OB_STANDBY_READ_ONLY__ORA_USER_ERROR_MSG "ORA-16000: standby tenant is read only"
+#define OB_STANDBY_WEAK_READ_ONLY__ORA_USER_ERROR_MSG "ORA-16000: standby cluster support weak read only"
 #define OB_INVALD_WEB_SERVICE_CONTENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4689, web service content not valid"
 #define OB_PRIMARY_CLUSTER_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4690, other primary cluster already exist, can not start as primary"
 #define OB_ARRAY_BINDING_SWITCH_ITERATOR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4691, array binding needs to switch iterator"
@@ -3960,7 +3958,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_FREEZE_SERVICE_EPOCH_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4743, freeze service epoch is not expected"
 #define OB_FROZEN_INFO_ALREADY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4744, %s"
 #define OB_DELETE_SERVER_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4745, %s"
-#define OB_PACKET_STATUS_UNKNOWN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4746, Network error and packet status unknown. Abort auto retry."
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -4324,7 +4321,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-54004: resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5402, GET STACKED DIAGNOSTICS when handler not active"
 #define OB_DDL_SCHEMA_VERSION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5403, ddl schema version not match"
-#define OB_ERR_COLUMN_GROUP_DUPLICATE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5404, Duplicate column group name '%.*s'"
 #define OB_ERR_INVALID_JSON_TEXT__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON text."
 #define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON text in argument."
 #define OB_ERR_INVALID_JSON_BINARY_DATA__ORA_USER_ERROR_MSG "ORA-00600: The JSON binary value contains invalid data."
@@ -5254,6 +5250,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MISSING_INTO_KEYWORD__ORA_USER_ERROR_MSG "ORA-00925: missing INTO keyword"
 #define OB_ERR_CLAUSE_RETURN_ILLEGAL__ORA_USER_ERROR_MSG "ORA-06547: RETURNING clause must be used with INSERT, UPDATE, or DELETE statements"
 #define OB_ERR_NAME_HAS_TOO_MANY_PARTS__ORA_USER_ERROR_MSG "ORA-06563: name has too many parts"
+#define OB_ERR_SP_FETCH_NO_DATA__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9715, No data - zero rows fetched, selected, or processed"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"

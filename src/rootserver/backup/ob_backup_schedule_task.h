@@ -296,7 +296,7 @@ protected:
   share::ObLSID ls_id_;
   int64_t turn_id_;
   int64_t retry_id_;
-  share::ObBackupSCN start_scn_;
+  palf::SCN start_scn_;
   share::ObBackupPathString backup_path_;
   share::ObBackupStatus backup_status_;
 private:
@@ -328,8 +328,8 @@ private:
   share::ObBackupType backup_type_;
   int64_t backup_date_;
   share::ObLSID ls_id_;
-  int64_t start_scn_;
-  int64_t end_scn_;
+  palf::SCN start_scn_;
+  palf::SCN end_scn_;
   share::ObBackupPathString backup_path_;
   share::ObBackupStatus backup_status_;
 private:
@@ -385,7 +385,6 @@ public:
   virtual int cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
 private:
   virtual int do_update_dst_and_doing_status_(common::ObMySQLProxy &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) override;
-  int set_optional_servers_();
 public:
   int build(const share::ObBackupCleanTaskAttr &task_attr, const share::ObBackupCleanLSTaskAttr &ls_attr);
   INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(job_id), K_(incarnation_id), K_(id), K_(round_id),

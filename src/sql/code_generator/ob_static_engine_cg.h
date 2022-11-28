@@ -124,7 +124,6 @@ class ObDuplicatedKeyChecker;
 struct ObTableScanCtDef;
 struct ObDASScanCtDef;
 struct InsertAllTableInfo;
-typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>,
                           1, common::ModulePageAllocator, true> RowParamMap;
 //
@@ -458,15 +457,6 @@ private:
   int add_output_datum_check_flag(ObOpSpec &spec);
   int generate_calc_part_id_expr(const ObRawExpr &src, const ObDASTableLocMeta *loc_meta, ObExpr *&dst);
   int check_only_one_unique_key(const ObLogPlan &log_plan, const ObTableSchema* table_schema, bool& only_one_unique_key);
-  bool is_simple_aggr_expr(const ObItemType &expr_type) { return T_FUN_COUNT == expr_type
-                                                                 || T_FUN_SUM == expr_type
-                                                                 || T_FUN_MAX == expr_type
-                                                                 || T_FUN_MIN == expr_type; }
-  int check_fk_nested_dup_del(const uint64_t table_id,
-                              const uint64_t root_table_id,
-                              DASTableIdList &parent_tables,
-                              bool &is_dup);
-  bool has_cycle_reference(DASTableIdList &parent_tables, const uint64_t table_id);
 private:
   ObPhysicalPlan *phy_plan_;
   ObOptimizerContext *opt_ctx_;

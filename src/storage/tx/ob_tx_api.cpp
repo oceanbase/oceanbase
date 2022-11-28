@@ -221,7 +221,7 @@ int ObTransService::start_tx(ObTxDesc &tx, const ObTxParam &tx_param)
       auto a = tx.timeout_us_ + tx.active_ts_;
       tx.expire_ts_       = a < 0 ? INT64_MAX : a;
       // start tx need reacquire snapshot
-      tx.snapshot_version_ = 0;
+      tx.snapshot_version_.reset();
       // setup correct active_scn, whatever its used or not
       tx.active_scn_      = ObSequence::get_max_seq_no();
       tx.state_           = ObTxDesc::State::ACTIVE;
@@ -458,7 +458,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
         OB_FAIL(tx.trace_info_.set_app_trace_info(*trace_info))) {
       TRANS_LOG(WARN, "set trace_info failed", K(ret), KPC(trace_info));
     }
-    int64_t commit_version = -1;
+    palf::SCN commit_version;
     if (OB_SUCC(ret) &&
         OB_FAIL(do_commit_tx_(tx, expire_ts, cb, commit_version))) {
       TRANS_LOG(WARN, "try to commit tx fail, tx will be aborted",
@@ -530,8 +530,9 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
              isolation == ObTxIsolationLevel::RR) {
       // only acquire snapshot once in these isolation level
     if (tx.isolation_ != isolation /*change isolation*/ ||
-        tx.snapshot_version_ <= 0 /*version invalid*/) {
-      int64_t version = -1, uncertain_bound = 0;
+        !tx.snapshot_version_.is_valid()/*version invalid*/) {
+      palf::SCN version;
+      int64_t uncertain_bound = 0;
       if (OB_FAIL(sync_acquire_global_snapshot_(tx, expire_ts, version, uncertain_bound))) {
         TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
       } else {
@@ -649,7 +650,7 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
 }
 
 int ObTransService::get_read_snapshot_version(const int64_t expire_ts,
-                                              int64_t &snapshot_version)
+                                              palf::SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   int64_t uncertain_bound = 0;
@@ -663,51 +664,44 @@ int ObTransService::get_read_snapshot_version(const int64_t expire_ts,
 }
 
 int ObTransService::get_ls_read_snapshot_version(const share::ObLSID &local_ls_id,
-                                                 int64_t &snapshot_version)
+                                                 palf::SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ret = acquire_local_snapshot_(local_ls_id, snapshot_version);
   return ret;
 }
 
-int ObTransService::get_weak_read_snapshot_version(int64_t &snapshot)
+int ObTransService::get_weak_read_snapshot_version(palf::SCN &snapshot)
 {
   int ret = OB_SUCCESS;
-  bool monotinic_read = true;;
-    // server weak read version
-  if (!ObWeakReadUtil::enable_monotonic_weak_read(tenant_id_)) {
-    if (OB_FAIL(GCTX.weak_read_service_->get_server_version(tenant_id_, snapshot))) {
-      TRANS_LOG(WARN, "get server read snapshot fail", K(ret), KPC(this));
-    }
-    monotinic_read = false;
-    // wrs cluster version
-  } else if (OB_FAIL(GCTX.weak_read_service_->get_cluster_version(tenant_id_, snapshot))) {
+  if (OB_FAIL(GCTX.weak_read_service_->get_cluster_version(tenant_id_, snapshot))) {
     TRANS_LOG(WARN, "get weak read snapshot fail", K(ret), KPC(this));
   } else {
     const int64_t snapshot_barrier = ObTimeUtility::current_time() -
       ObWeakReadUtil::max_stale_time_for_weak_consistency(tenant_id_);
-    if (snapshot < snapshot_barrier * 1000 /*ns*/) {
+    if (snapshot.get_val_for_gts() < snapshot_barrier * 1000 /*ns*/) {
       TRANS_LOG(WARN, "weak read snapshot too stale", K(snapshot),
-                K(snapshot_barrier), "delta_ns", (snapshot_barrier*1000 - snapshot));
+                K(snapshot_barrier), "delta_ns", (snapshot_barrier*1000 - snapshot.get_val_for_gts()));
       ret = OB_REPLICA_NOT_READABLE;
     }
   }
-  TRANS_LOG(TRACE, "get weak-read snapshot", K(ret), K(snapshot), K(monotinic_read));
+  TRANS_LOG(TRACE, "get weak-read snapshot", K(ret), K(snapshot));
   return ret;
 }
 
 int ObTransService::release_snapshot(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
-  int64_t snapshot = 0;
+  palf::SCN snapshot;
   ObSpinLockGuard guard(tx.lock_);
   tx.inc_op_sn();
   if (tx.state_ != ObTxDesc::State::IDLE) {
     ret = OB_NOT_SUPPORTED;
   } else if (ObTxIsolationLevel::SERIAL == tx.isolation_ ||
              ObTxIsolationLevel::RR == tx.isolation_) {
-    if ((snapshot = tx.snapshot_version_) > 0) {
-      tx.snapshot_version_ = 0;
+    snapshot = tx.snapshot_version_;
+    if (snapshot.is_valid()) {
+      tx.snapshot_version_.reset();
       tx.snapshot_uncertain_bound_ = 0;
     }
   }
@@ -833,7 +827,7 @@ int ObTransService::create_global_implicit_savepoint_(ObTxDesc &tx,
     tx.timeout_us_      = tx_param.timeout_us_;
     if (tx.isolation_ != tx_param.isolation_) {
       tx.isolation_ = tx_param.isolation_;
-      tx.snapshot_version_ = 0; // invalidate previouse snapshot
+      tx.snapshot_version_.reset(); // invalidate previouse snapshot
     }
   }
   // NOTE: the lock_timeout_us_ can be changed even tx active
@@ -964,7 +958,7 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
   tx.inc_op_sn();
   bool reset_tx = false, normal_rollback = false;
   // merge extra touched ls
-  if (OB_NOT_NULL(extra_touched_ls) && !extra_touched_ls->empty()) {
+  if (OB_NOT_NULL(extra_touched_ls)) {
     if (OB_FAIL(tx.update_parts(*extra_touched_ls))) {
       TRANS_LOG(WARN, "add tx part with extra_touched_ls fail", K(ret), K(tx), KPC(extra_touched_ls));
       abort_tx_(tx, ret);
@@ -1610,7 +1604,7 @@ void ObTransService::tx_post_terminate_(ObTxDesc &tx)
   tx.min_implicit_savepoint_ = INT64_MAX;
   tx.savepoints_.reset();
   // reset snapshot
-  tx.snapshot_version_ = -1;
+  tx.snapshot_version_.reset();
   tx.snapshot_scn_ = 0;
 }
 

@@ -30,12 +30,12 @@
 #include "observer/ob_server_struct.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_trans_service.h"
+#include "pl/ob_pl_warning.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "ob_nls_system_variable.h"
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
-
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -2083,11 +2083,49 @@ int ObSysVarOnCheckFuncs::check_and_convert_time_zone(ObExecContext &ctx,
                                                      common::ObObj &out_val)
 {
   int ret = OB_SUCCESS;
-  UNUSED(ctx);
-  UNUSED(set_var);
   UNUSED(sys_var);
-  UNUSED(in_val);
-  UNUSED(out_val);
+  UNUSED(set_var);
+
+  int32_t sec_val = 0;
+  int ret_more = OB_SUCCESS;
+  bool check_timezone_valid = false;
+  bool is_oralce_mode = false;
+  ObSQLSessionInfo *session = ctx.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get session info", K(ret), K(session));
+  } else {
+    is_oralce_mode = is_oracle_compatible(session->get_sql_mode());
+    ObString str = in_val.get_string();
+    if (OB_ISNULL(str.ptr()) || OB_UNLIKELY(str.length() <= 0)) {
+      ret = OB_ERR_UNKNOWN_TIME_ZONE;
+      LOG_WARN("invalid time zone offset", K(ret), K(str));
+    } else {
+      if (OB_FAIL(ObTimeConverter::str_to_offset(str, sec_val, ret_more, is_oralce_mode, check_timezone_valid))) {
+        if (ret != OB_ERR_UNKNOWN_TIME_ZONE) {
+          LOG_WARN("fail to convert time zone", K(sec_val), K(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        int64_t pos = 0;
+        const int64_t buf_len = 16;
+        char *tmp_buf = reinterpret_cast<char*>(ctx.get_allocator().alloc(buf_len));
+        if(OB_ISNULL(tmp_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory", K(ret), K(tmp_buf));
+        } else {
+          int32_t offset_min = static_cast<int32_t>(SEC_TO_MIN(sec_val));
+          const char *fmt_str = (offset_min < 0 ? "-%02d:%02d" : "+%02d:%02d");
+          if (OB_FAIL(databuff_printf(tmp_buf, buf_len, pos, fmt_str, abs(offset_min) / 60, abs(offset_min) % 60))) {
+            LOG_ERROR("fail to print offset_min information to tmp_buf", K(ret), K(tmp_buf), K(offset_min));
+          } else {
+            out_val.set_varchar(tmp_buf, pos);
+          }
+        }
+      }
+    }
+  }
 
   return ret;
 }
@@ -2286,8 +2324,18 @@ int ObSysVarOnCheckFuncs::check_and_convert_plsql_warnings(sql::ObExecContext &c
                                                  const common::ObObj &in_val,
                                                  common::ObObj &out_val)
 {
+  UNUSED(ctx);
+  UNUSED(set_var);
+  UNUSED(sys_var);
   int ret = OB_SUCCESS;
-  UNUSEDx(ctx, set_var, sys_var, in_val, out_val);
+
+  if (OB_FAIL(pl::PlCompilerWarningCategory::verify_warning_settings(in_val.get_string(), NULL))) {
+    ret = OB_ERR_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
+  } else {
+    out_val = in_val;
+  }
+
   return ret;
 }
 

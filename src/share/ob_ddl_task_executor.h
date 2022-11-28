@@ -20,7 +20,6 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/profile/ob_trace_id.h"
 #include "lib/thread/thread_mgr_interface.h"
-#include "share/location_cache/ob_location_struct.h"
 #include "share/ob_errno.h"
 #include "share/ob_thread_pool.h"
 
@@ -51,21 +50,14 @@ public:
   virtual ObIDDLTask *deep_copy(char *buf, const int64_t size) const = 0;
   virtual bool operator == (const ObIDDLTask &other) const = 0;
   ObIDDLTaskType get_type() const { return type_; }
-  static bool in_ddl_retry_white_list(const int ret_code)
+  static bool error_need_retry(const int ret_code)
   {
     return common::OB_TIMEOUT == ret_code || common::OB_STATE_NOT_MATCH == ret_code || common::OB_SERVER_IS_STOPPING == ret_code
       || common::OB_SERVER_IS_INIT == ret_code || common::OB_EAGAIN == ret_code || common::OB_NOT_MASTER == ret_code
       || common::OB_TRANS_STMT_TIMEOUT == ret_code || common::OB_RS_NOT_MASTER == ret_code || OB_TRANS_NEED_ROLLBACK == ret_code
       || common::OB_SCHEMA_EAGAIN == ret_code || common::OB_GTS_NOT_READY == ret_code || common::OB_ERR_SHARED_LOCK_CONFLICT == ret_code
       || common::OB_PARTITION_NOT_EXIST == ret_code || common::OB_PG_IS_REMOVED == ret_code || common::OB_TENANT_NOT_EXIST == ret_code
-      || common::OB_RPC_SEND_ERROR == ret_code || common::OB_RPC_CONNECT_ERROR == ret_code || common::OB_DDL_SCHEMA_VERSION_NOT_MATCH == ret_code
-      || OB_TRANS_ROLLBACKED == ret_code || OB_TRANS_TIMEOUT == ret_code || OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH == ret_code
-      || OB_PACKET_STATUS_UNKNOWN == ret_code || OB_TASK_EXPIRED == ret_code
-      || is_location_service_renew_error(ret_code);
-  }
-  static bool in_ddl_retry_black_list(const int ret_code)
-  {
-    return common::OB_SERVER_OUTOF_DISK_SPACE == ret_code || common::OB_DISK_ERROR == ret_code;
+      || common::OB_RPC_SEND_ERROR == ret_code;
   }
 protected:
   typedef common::ObCurTraceId::TraceId TaskId;

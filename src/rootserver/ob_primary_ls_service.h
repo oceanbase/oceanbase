@@ -14,6 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_PRIMARY_LS_SERVICE_H
 #include "lib/thread/ob_reentrant_thread.h"//ObRsReentrantThread
 #include "logservice/ob_log_base_type.h"
+#include "logservice/palf/scn.h"//SCN
 #include "share/ls/ob_ls_status_operator.h"//ObLSStatusOperator
 #include "share/ls/ob_ls_operator.h" //ObLSAttr
 #include "share/ob_thread_mgr.h" //OBTGDefIDEnum
@@ -164,7 +165,7 @@ public:
   //for recovery tenant, create new ls according to ls_id and ls_group_id
   int create_new_ls_for_recovery(const share::ObLSID &ls_id,
                                     const uint64_t ls_group_id,
-                                    const int64_t create_ts_ns,
+                                    const palf::SCN &create_scn,
                                     common::ObMySQLTransaction &trans);
   //for recovery tenant, if ls is in creating in __all_ls_status, create the ls
   int process_ls_stats_for_recovery();
@@ -178,7 +179,7 @@ public:
     @param[in] create_ls_with_palf: restore create init ls
     @param[in] palf_base_info : palf base info
   */
-  int create_ls_with_palf(const share::ObLSStatusInfo &info, const int64_t create_scn,
+  int create_ls_with_palf(const share::ObLSStatusInfo &info, const palf::SCN &create_scn,
                           const bool create_ls_with_palf,
                           const palf::PalfBaseInfo &palf_base_info);
 
@@ -223,7 +224,7 @@ private:
   int drop_ls_(const share::ObLSStatusInfo &ls_info);
   int do_drop_ls_(const share::ObLSStatusInfo &ls_info);
   int do_tenant_drop_ls_(const share::ObLSStatusInfo &ls_info);
-  int do_create_ls_(const share::ObLSStatusInfo &info, const int64_t create_ts_ns);
+  int do_create_ls_(const share::ObLSStatusInfo &info, const palf::SCN &create_scn);
   int sys_ls_tenant_drop_(const share::ObLSStatusInfo &info);
   int check_sys_ls_can_offline_(bool &can_offline);
   int check_ls_empty_(const share::ObLSStatusInfo &info, bool &empty);
@@ -319,14 +320,17 @@ public:
   virtual void do_work() override;
 
 public:
- virtual int64_t get_rec_log_ts() override { return INT64_MAX;}
+  //TODO(SCN)yaoying.yyy: get_rec_log_scn() and flush() override
+  virtual int64_t get_rec_log_ts() override { return INT64_MAX;}
+  virtual const palf::SCN get_rec_log_scn(){ return palf::SCN::max_scn();}
   virtual int flush(int64_t rec_log_ts) override { return OB_SUCCESS; }
-  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const int64_t ts_ns) override
+  virtual int flush(palf::SCN &scn) { return OB_SUCCESS; }
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const palf::SCN &scn) override
   {
     UNUSED(buffer);
     UNUSED(nbytes);
     UNUSED(lsn);
-    UNUSED(ts_ns);
+    UNUSED(scn);
     return OB_SUCCESS;
   }
 

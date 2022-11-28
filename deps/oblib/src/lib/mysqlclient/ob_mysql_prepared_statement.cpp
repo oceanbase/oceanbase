@@ -163,7 +163,7 @@ int ObMySQLPreparedStatement::bind_param_int(const int64_t col_idx, int64_t *in_
 {
   int ret = OB_SUCCESS;
   unsigned long res_len = 0;
-  if (OB_FAIL(param_.bind_param(col_idx, enum_field_types::MYSQL_TYPE_LONGLONG,
+  if (OB_FAIL(param_.bind_param(col_idx, MYSQL_TYPE_LONGLONG,
                                 reinterpret_cast<char *>(in_int_val), sizeof(int64_t), res_len))) {
     LOG_WARN("fail to bind int result", K(col_idx), K(ret));
   }
@@ -174,7 +174,7 @@ int ObMySQLPreparedStatement::bind_param_varchar(const int64_t col_idx, char *in
                                                  unsigned long &in_str_len)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(param_.bind_param(col_idx, enum_field_types::MYSQL_TYPE_VAR_STRING,
+  if (OB_FAIL(param_.bind_param(col_idx, MYSQL_TYPE_VAR_STRING,
                                 in_str_val, 0, in_str_len))) {
     LOG_WARN("fail to bind int result", K(col_idx), K(ret));
   }
@@ -185,7 +185,7 @@ int ObMySQLPreparedStatement::bind_result_int(const int64_t col_idx, int64_t *ou
 {
   int ret = OB_SUCCESS;
   unsigned long res_len = 0;
-  if (OB_FAIL(result_.bind_result(col_idx, enum_field_types::MYSQL_TYPE_LONGLONG,
+  if (OB_FAIL(result_.bind_result(col_idx, MYSQL_TYPE_LONGLONG,
                                   reinterpret_cast<char *>(out_buf), sizeof(int64_t), res_len))) {
     LOG_WARN("fail to bind int result", K(col_idx), K(ret));
   }
@@ -196,7 +196,7 @@ int ObMySQLPreparedStatement::bind_result_varchar(const int64_t col_idx, char *o
                                                   unsigned long &res_len)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(result_.bind_result(col_idx,enum_field_types::MYSQL_TYPE_VAR_STRING,
+  if (OB_FAIL(result_.bind_result(col_idx, MYSQL_TYPE_VAR_STRING,
                                   out_buf, buf_len, res_len))) {
     LOG_WARN("fail to bind int result", K(col_idx), K(ret));
   }

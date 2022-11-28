@@ -86,9 +86,6 @@ function get_os_release() {
       rocky)
         version_ge "8.0" && compat_centos8 && return
         ;;
-      tencentos)
-        version_ge "3.1" && compat_centos8 && return
-        ;;
     esac
   elif [[ "${OS_ARCH}x" == "aarch64x" ]]; then
     case "$ID" in
@@ -125,6 +122,8 @@ WORKSACPE_DEPS_DIR="$(cd $(dirname $0); cd ..; pwd)"
 WORKSPACE_DEPS_3RD=${WORKSACPE_DEPS_DIR}/3rd
 WORKSAPCE_DEPS_3RD_DONE=${WORKSPACE_DEPS_3RD}/DONE
 WORKSAPCE_DEPS_3RD_MD5=${WORKSPACE_DEPS_3RD}/${MD5}
+WORKSAPCE_DEPS_3RD_BUSINESS=${WORKSPACE_DEPS_3RD}/BUSINESS
+WORKSAPCE_DEPS_3RD_OPENSOURCE=${WORKSPACE_DEPS_3RD}/OPENSOURCE
 
 # 开始判断本地目录依赖目录是否存在
 if [ -f ${WORKSAPCE_DEPS_3RD_MD5} ]; then

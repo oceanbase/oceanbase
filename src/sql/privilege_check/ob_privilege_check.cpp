@@ -460,7 +460,7 @@ int get_proc_db_name(
   } else {
     uint64_t tenant_id = ctx.session_info_->get_login_tenant_id();
     ObSchemaGetterGuard &schema_guard = *ctx.schema_guard_;
-    uint64_t db_id = OB_INVALID_ID;
+    uint64_t db_id;
     const ObDatabaseSchema *db_schema = NULL;
     if (static_cast<uint64_t>(ObObjectType::FUNCTION) == need_priv.obj_type_) {
       const ObRoutineInfo *routine_schema = NULL;
@@ -494,7 +494,7 @@ int get_seq_db_name(
     ObString &db_name)
 {
   int ret = OB_SUCCESS;
-  uint64_t db_id = OB_INVALID_ID;
+  uint64_t db_id;
   const ObSequenceSchema *seq_schema = NULL;
   const ObDatabaseSchema *db_schema = NULL;
   OZ (schema_guard.get_sequence_schema(tenant_id, obj_id, seq_schema));

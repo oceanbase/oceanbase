@@ -60,7 +60,7 @@ public:
 public:
   int submit_log(const char *buf,
                  const int64_t size,
-                 const int64_t base_ts,
+                 const palf::SCN base_ts,
                  ObTxBaseLogCb *cb,
                  const bool need_block);
   int get_role(bool &is_leader, int64_t &epoch);
@@ -78,7 +78,7 @@ private:
   ObSpinLock log_file_lock_;
   ObSpinLock cbs_lock_;
   int64_t unfinish_cbs_cnt_;
-  int64_t max_allocated_log_ts;
+  uint64_t max_allocated_log_ts;
   int64_t lsn_;
   // int64_t max_success_log_ts;
   // common::ObSEArray<ObString, 100, TransModulePageAllocator> mock_log_file_;

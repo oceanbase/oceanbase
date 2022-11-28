@@ -161,8 +161,7 @@ ObLSMigrationHandler::ObLSMigrationHandler()
     task_list_(),
     lock_(),
     status_(ObLSMigrationHandlerStatus::INIT),
-    result_(OB_SUCCESS),
-    is_stop_(false)
+    result_(OB_SUCCESS)
 {
 }
 
@@ -397,13 +396,11 @@ int ObLSMigrationHandler::add_ls_migration_task(
     if (!task_list_.empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls already has migration task", K(ret), K(task_list_), K(arg), K(task_id));
-    } else if (is_stop_) {
-      ret = OB_IN_STOP_STATE;
-      LOG_WARN("ls migration handler is int stop status", K(ret), K(task_id), K(arg));
     } else {
       ObLSMigrationTask task;
       task.task_id_ = task_id;
       task.arg_ = arg;
+
       if (OB_FAIL(task_list_.push_back(task))) {
         LOG_WARN("failed to push task into list", K(ret), K(task));
       } else {
@@ -877,7 +874,6 @@ int ObLSMigrationHandler::schedule_complete_ls_dag_net_(
     ObLSCompleteMigrationParam param;
     param.arg_ = task.arg_;
     param.task_id_ = task.task_id_;
-    param.rebuild_seq_ = ls_->get_rebuild_seq();
 
     if (OB_FAIL(get_result_(result))) {
       LOG_WARN("failed to get result", K(ret), KPC(ls_), K(task));
@@ -932,8 +928,11 @@ int ObLSMigrationHandler::report_meta_table_()
     LOG_WARN("failed ot get result", K(ret));
   } else if (OB_SUCCESS != result) {
     //do nothing
-  } else if (OB_FAIL(ls_->report_replica_info())) {
-    LOG_WARN("failed to report replica info", K(ret), KPC(ls_));
+  } else {
+    ObLSLockGuard lock_ls(ls_);
+    if (OB_FAIL(ls_->report_replica_info())) {
+      LOG_WARN("failed to report replica info", K(ret), KPC(ls_));
+    }
   }
   return ret;
 }
@@ -1043,7 +1042,7 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
     LOG_WARN("failed to get ls required size", K(ret), K(arg));
   } else if (required_size > 0) {
     if (OB_FAIL(THE_IO_DEVICE->check_space_full(required_size))) {
-      if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
+      if (OB_CS_OUTOF_DISK_SPACE == ret) {
         ret = OB_SERVER_MIGRATE_IN_DENIED;
       }
       FLOG_ERROR( "failed to check_is_disk_full, cannot migrate in",
@@ -1152,50 +1151,6 @@ int ObLSMigrationHandler::get_ls_info_(
   }
   return ret;
 }
-
-void ObLSMigrationHandler::stop()
-{
-  int ret = OB_SUCCESS;
-  ObTenantDagScheduler *scheduler = nullptr;
-
-  common::SpinWLockGuard guard(lock_);
-  is_stop_ = true;
-  result_ = OB_SUCCESS != result_ ? result_ : OB_IN_STOP_STATE;
-  if (task_list_.empty()) {
-  } else if (task_list_.count() > 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls migration task count is unexpected", K(ret), K(task_list_));
-  } else {
-    ObLSMigrationTask &task = task_list_.at(0);
-    if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("failed to get ObTenantDagScheduler from MTL", K(ret), KPC(ls_));
-    } else if (OB_FAIL(scheduler->cancel_dag_net(task.task_id_))) {
-      LOG_ERROR("failed to cancel dag net", K(ret), K(task), KPC(ls_));
-    }
-  }
-}
-
-void ObLSMigrationHandler::wait(bool &wait_finished)
-{
-  int ret = OB_SUCCESS;
-  wait_finished = false;
-  ObLSMigrationTask task;
-
-  if (OB_FAIL(get_ls_migration_task_(task))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      wait_finished = true;
-    } else {
-      LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
-    }
-  } else {
-    wait_finished = false;
-    wakeup_();
-  }
-}
-
-
 
 }
 }

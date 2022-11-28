@@ -242,9 +242,9 @@ int ObLogSubPlanFilter::re_est_cost(EstimateCostInfo &param, double &card, doubl
              param.need_row_count_ < get_card() && 
              sel > OB_DOUBLE_EPSINON &&
              OB_FALSE_IT(param.need_row_count_ /= sel)) {
-  } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param,
+  } else if (OB_FAIL(child->re_est_cost(param,
                                         first_child_card,
-                                        child_cost)))) {
+                                        child_cost))) {
     LOG_WARN("failed to re-estimate cost", K(ret));
   } else if (OB_FAIL(inner_est_cost(first_child_card, op_cost))) {
     LOG_WARN("failed to est cost", K(ret));

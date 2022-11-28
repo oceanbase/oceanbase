@@ -55,7 +55,7 @@ int ObInterColSubStrDecoder::decode(ObColumnDecoderCtx &ctx, ObObj &cell, const 
           ctx.micro_block_header_->row_count_,
           ctx.is_bit_packing(), row_id,
           ctx.col_header_->length_ - sizeof(ObInterColSubStrMetaHeader),
-          ref, cell, ctx.col_header_->get_store_obj_type()))) {
+          ref, cell, ctx.obj_meta_))) {
         LOG_WARN("meta_reader_ read failed", K(ret), K(row_id));
       }
     }

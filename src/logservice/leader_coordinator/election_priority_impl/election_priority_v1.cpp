@@ -54,20 +54,20 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
   } else if (COMPARE_OUT(compare_fatal_failures_(ret, rhs_impl))) {// 比较致命的异常
     (void) reason.assign("FATAL FAILURE");
     COORDINATOR_LOG_(TRACE, "compare done! get compared result from fatal_failures_");
-  } else if (COMPARE_OUT(compare_log_ts_(ret, rhs_impl))) {// 避免切换至回放位点过小的副本
-    (void) reason.assign("LOG TS");
-    COORDINATOR_LOG_(TRACE, "compare done! get compared resultfrom log_ts_");
-  } else if (COMPARE_OUT(compare_in_blacklist_flag_(ret, rhs_impl, reason))) {// 比较是否被标记删除
-    COORDINATOR_LOG_(TRACE, "compare done! get compared result from in_blacklist_flag_");
-  } else if (COMPARE_OUT(compare_manual_leader_flag_(ret, rhs_impl))) {// 比较是否存在用户指定的leader
-    (void) reason.assign("MANUAL LEADER");
-    COORDINATOR_LOG_(TRACE, "compare done! get compared result from manual_leader_flag_");
   } else if (COMPARE_OUT(compare_primary_region_(ret, rhs_impl))) {// 通常Leader不能选出primary region
     (void) reason.assign("PRIMARY REGION");
     COORDINATOR_LOG_(TRACE, "compare done! get compared result from primary_region_");
   } else if (COMPARE_OUT(compare_serious_failures_(ret, rhs_impl))) {// 比较会导致切主的异常
     (void) reason.assign("SERIOUS FAILURE");
     COORDINATOR_LOG_(TRACE, "compare done! get compared result from serious_failures_");
+  } else if (COMPARE_OUT(compare_scn_(ret, rhs_impl))) {// 避免切换至回放位点过小的副本
+    (void) reason.assign("LOG TS");
+    COORDINATOR_LOG_(TRACE, "compare done! get compared resultfrom scn_");
+  } else if (COMPARE_OUT(compare_in_blacklist_flag_(ret, rhs_impl, reason))) {// 比较是否被标记删除
+    COORDINATOR_LOG_(TRACE, "compare done! get compared result from in_blacklist_flag_");
+  } else if (COMPARE_OUT(compare_manual_leader_flag_(ret, rhs_impl))) {// 比较是否存在用户指定的leader
+    (void) reason.assign("MANUAL LEADER");
+    COORDINATOR_LOG_(TRACE, "compare done! get compared result from manual_leader_flag_");
   } else if (COMPARE_OUT(compare_zone_priority_(ret, rhs_impl))) {// 比较RS设置的zone priority
     (void) reason.assign("ZONE PRIORITY");
     COORDINATOR_LOG_(TRACE, "compare done! get compared result from zone_priority_");
@@ -79,46 +79,40 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
   #undef PRINT_WRAPPER
 }
 
-int PriorityV1::get_log_ts_(const share::ObLSID &ls_id, int64_t &log_ts)
+int PriorityV1::get_scn_(const share::ObLSID &ls_id, palf::SCN &scn)
 {
-  LC_TIME_GUARD(100_ms);
-  #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(ls_id), K(*this)
+  #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(*this)
   int ret = OB_SUCCESS;
   palf::PalfHandleGuard palf_handle_guard;
-//  palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
+  palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
   if (OB_ISNULL(MTL(ObLogService*))) {
     COORDINATOR_LOG_(ERROR, "ObLogService is nullptr");
-  } else if (CLICK_FAIL(MTL(ObLogService*)->open_palf(ls_id, palf_handle_guard))) {
+  } else if (OB_FAIL(MTL(ObLogService*)->open_palf(ls_id, palf_handle_guard))) {
     COORDINATOR_LOG_(WARN, "open_palf failed");
-//  } else if (CLICK_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
-//    COORDINATOR_LOG_(WARN, "get_access_mode failed");
-//  } else if (palf::AccessMode::APPEND != access_mode) {
-//    // Set log_ts to 0 when current access mode is not APPEND.
-//    log_ts = 0;
+  } else if (OB_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
+    COORDINATOR_LOG_(WARN, "get_access_mode failed");
+  } else if (palf::AccessMode::APPEND != access_mode) {
+    // Set scn to 0 when current access mode is not APPEND.
+    scn.set_min();
   } else {
     common::ObRole role;
     int64_t unused_pid = -1;
-    int64_t min_unreplay_log_ts_ns = OB_INVALID_TIMESTAMP;
-    if (CLICK_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
+    palf::SCN min_unreplay_scn;
+    if (OB_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
       COORDINATOR_LOG_(WARN, "get_role failed");
-    } else if (CLICK_FAIL(palf_handle_guard.get_max_ts_ns(log_ts))) {
-      COORDINATOR_LOG_(WARN, "get_max_ts_ns failed");
-    } else if (FOLLOWER == role) {
-      if (CLICK_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_log_ts_ns(ls_id, min_unreplay_log_ts_ns))) {
-        COORDINATOR_LOG_(WARN, "failed to get_min_unreplayed_log_ts_ns");
+    } else if (LEADER == role) {
+      // return max_ts_ns for leader
+      if (OB_FAIL(palf_handle_guard.get_max_scn(scn))) {
+        COORDINATOR_LOG_(WARN, "get_max_ts_ns failed");
+      }
+    } else {
+      // Generate scn from replay_service for follower
+      if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_log_scn(ls_id, min_unreplay_scn))) {
+        COORDINATOR_LOG_(WARN, "failed to get_min_unreplayed_scn");
         ret = OB_SUCCESS;
-      } else if (min_unreplay_log_ts_ns - 1 < log_ts) {
-        // For restore case, min_unreplay_log_ts_ns may be larger than max_ts.
-        log_ts = min_unreplay_log_ts_ns - 1;
-      } else {}
-    } else {}
-    // log_ts may fallback because palf's role may be different with apply_service.
-    // So we need check it here to keep inc update semantic.
-    if (log_ts < log_ts_) {
-      COORDINATOR_LOG_(TRACE, "new log_ts is smaller than current, no need update", K(role), K(min_unreplay_log_ts_ns), K(log_ts));
-      log_ts = log_ts_;
+      }
+      scn = min_unreplay_scn > SCN::base_scn() ? SCN::scn_dec(min_unreplay_scn) : SCN::min_scn();
     }
-    COORDINATOR_LOG_(TRACE, "get_log_ts_ finished", K(role), K(min_unreplay_log_ts_ns), K(log_ts));
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -126,13 +120,13 @@ int PriorityV1::get_log_ts_(const share::ObLSID &ls_id, int64_t &log_ts)
 
 int PriorityV1::refresh_(const share::ObLSID &ls_id)
 {
-  LC_TIME_GUARD(100_ms);
+  LC_TIME_GUARD(1_s);
   #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(*this)
   int ret = OB_SUCCESS;
   ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
   ObFailureDetector* detector = MTL(ObFailureDetector*);
   LsElectionReferenceInfo election_reference_info;
-  int64_t log_ts = OB_INVALID_TIMESTAMP;
+  palf::SCN scn;
   if (OB_ISNULL(coordinator) || OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(ERROR, "unexpected nullptr");
@@ -144,8 +138,8 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
     COORDINATOR_LOG_(WARN, "fail to get ls election reference info");
   } else if (CLICK_FAIL(in_blacklist_reason_.assign(election_reference_info.element<3>().element<1>()))) {
     COORDINATOR_LOG_(WARN, "fail to copy removed reason string");
-  } else if (CLICK_FAIL(get_log_ts_(ls_id, log_ts))) {
-    COORDINATOR_LOG_(WARN, "get_log_ts failed");
+  } else if (CLICK_FAIL(get_scn_(ls_id, scn))) {
+    COORDINATOR_LOG_(WARN, "get_scn failed");
   } else {
     zone_priority_ = election_reference_info.element<1>();
     is_manual_leader_ = election_reference_info.element<2>();
@@ -155,10 +149,10 @@ int PriorityV1::refresh_(const share::ObLSID &ls_id)
     is_primary_region_ = election_reference_info.element<6>();
     is_observer_stopped_ = (observer::ObServer::get_instance().is_stopped()
         || observer::ObServer::get_instance().is_prepare_stopped());
-    log_ts_ = log_ts;
+    scn_ = scn;
   }
   return ret;
-  #undef PRINT_WRAPPER
+  #undef PRINT_WRAPPERd
 }
 
 int PriorityV1::compare_fatal_failures_(int &ret, const PriorityV1&rhs) const
@@ -315,13 +309,13 @@ int PriorityV1::compare_primary_region_(int &ret, const PriorityV1&rhs) const
   return compare_result;
 }
 
-int PriorityV1::compare_log_ts_(int &ret, const PriorityV1&rhs) const
+int PriorityV1::compare_scn_(int &ret, const PriorityV1&rhs) const
 {
   int compare_result = 0;
   if (OB_SUCC(ret)) {
-    if (std::max(log_ts_, rhs.log_ts_) - std::min(log_ts_, rhs.log_ts_) <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_NS) {
+    if (std::max(scn_, rhs.scn_).convert_to_ts() - std::min(scn_, rhs.scn_).convert_to_ts() <= MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_US) {
       compare_result = 0;
-    } else if (std::max(log_ts_, rhs.log_ts_) == log_ts_) {
+    } else if (std::max(scn_, rhs.scn_) == scn_) {
       compare_result = 1;
     } else {
       compare_result = -1;

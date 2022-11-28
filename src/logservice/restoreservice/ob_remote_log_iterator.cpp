@@ -43,7 +43,7 @@ ObRemoteLogIterator::ObRemoteLogIterator(GetSourceFunc &get_source_func,
   id_(),
   start_lsn_(),
   cur_lsn_(),
-  cur_log_ts_(OB_INVALID_TIMESTAMP),
+  cur_log_scn_(),
   end_lsn_(),
   source_guard_(),
   data_buffer_(),
@@ -68,14 +68,14 @@ ObRemoteLogIterator::~ObRemoteLogIterator()
   id_.reset();
   start_lsn_.reset();
   cur_lsn_.reset();
-  cur_log_ts_ = OB_INVALID_TIMESTAMP;
+  cur_log_scn_.reset();
   end_lsn_.reset();
   data_buffer_.reset();
 }
 
 int ObRemoteLogIterator::init(const uint64_t tenant_id,
     const ObLSID &id,
-    const int64_t pre_log_ts,
+    const palf::SCN &pre_log_scn,
     const LSN &start_lsn,
     const LSN &end_lsn)
 {
@@ -104,8 +104,8 @@ int ObRemoteLogIterator::init(const uint64_t tenant_id,
     id_ = id;
     start_lsn_ = start_lsn;
     end_lsn_ = end_lsn;
-    ret = build_data_generator_(pre_log_ts, source, refresh_storage_info_func_);
-    LOG_INFO("ObRemoteLogIterator init", K(ret), K(tenant_id), K(id), K(pre_log_ts), K(start_lsn), K(end_lsn));
+    ret = build_data_generator_(pre_log_scn, source, refresh_storage_info_func_);
+    LOG_INFO("ObRemoteLogIterator init", K(ret), K(tenant_id), K(id), K(pre_log_scn), K(start_lsn), K(end_lsn));
   }
 
   if (OB_SUCC(ret)) {
@@ -132,19 +132,19 @@ int ObRemoteLogIterator::next(LogGroupEntry &entry, LSN &lsn, char *&buf, int64_
   return ret;
 }
 
-int ObRemoteLogIterator::get_cur_lsn_ts(LSN &lsn, int64_t &timestamp) const
+int ObRemoteLogIterator::get_cur_lsn_scn(LSN &lsn, SCN &scn) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
   } else {
     lsn = cur_lsn_;
-    timestamp= cur_log_ts_;
+    scn = cur_log_scn_;
   }
   return ret;
 }
 
-int ObRemoteLogIterator::build_data_generator_(const int64_t pre_log_ts,
+int ObRemoteLogIterator::build_data_generator_(const SCN &pre_log_scn,
     ObRemoteLogParent *source,
     RefreshStorageInfoFunc &refresh_storage_info_func)
 {
@@ -155,10 +155,10 @@ int ObRemoteLogIterator::build_data_generator_(const int64_t pre_log_ts,
     ret = build_service_data_generator_(service_source);
   } else if (is_raw_path_log_source_type(type)) {
     ObRemoteRawPathParent *dest_source = static_cast<ObRemoteRawPathParent *>(source);
-    ret = build_dest_data_generator_(pre_log_ts, dest_source);
+    ret = build_dest_data_generator_(pre_log_scn, dest_source);
   } else if (is_location_log_source_type(type)) {
     ObRemoteLocationParent *location_source = static_cast<ObRemoteLocationParent *>(source);
-    ret = build_location_data_generator_(pre_log_ts, location_source, refresh_storage_info_func);
+    ret = build_location_data_generator_(pre_log_scn, location_source, refresh_storage_info_func);
   } else {
     ret = OB_NOT_SUPPORTED;
   }
@@ -171,10 +171,10 @@ int ObRemoteLogIterator::build_data_generator_(const int64_t pre_log_ts,
 int ObRemoteLogIterator::build_service_data_generator_(ObRemoteSerivceParent *source)
 {
   int ret = OB_SUCCESS;
-  int64_t end_log_ts = OB_INVALID_TIMESTAMP;
+  SCN end_log_scn;
   ObAddr server;
-  source->get(server, end_log_ts);
-  gen_ = MTL_NEW(ServiceDataGenerator, "ResDataGen", tenant_id_, id_, start_lsn_, end_lsn_, end_log_ts, server);
+  source->get(server, end_log_scn);
+  gen_ = MTL_NEW(ServiceDataGenerator, "ResDataGen", tenant_id_, id_, start_lsn_, end_lsn_, end_log_scn, server);
   if (OB_ISNULL(gen_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc service data generator failed", K(ret), KPC(this));
@@ -182,19 +182,19 @@ int ObRemoteLogIterator::build_service_data_generator_(ObRemoteSerivceParent *so
   return ret;
 }
 
-int ObRemoteLogIterator::build_dest_data_generator_(const int64_t pre_log_ts, ObRemoteRawPathParent *source)
+int ObRemoteLogIterator::build_dest_data_generator_(const SCN &pre_log_scn, ObRemoteRawPathParent *source)
 {
   int ret = OB_SUCCESS;
-  UNUSED(pre_log_ts);
+  UNUSED(pre_log_scn);
   logservice::DirArray array;
-  int64_t end_log_ts = OB_INVALID_TIMESTAMP;
+  SCN end_log_scn;
   int64_t piece_index = 0;
   int64_t min_file_id = 0;
   int64_t max_file_id = 0;
-  source->get(array, end_log_ts);
+  source->get(array, end_log_scn);
   source->get_locate_info(piece_index, min_file_id, max_file_id);
   gen_ = MTL_NEW(RawPathDataGenerator, "ResDataGen", tenant_id_, id_, start_lsn_, end_lsn_,
-      array, end_log_ts, piece_index, min_file_id, max_file_id);
+      array, end_log_scn, piece_index, min_file_id, max_file_id);
   if (OB_ISNULL(gen_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc dest data generator failed", K(ret), KPC(this));
@@ -202,18 +202,18 @@ int ObRemoteLogIterator::build_dest_data_generator_(const int64_t pre_log_ts, Ob
   return ret;
 }
 
-int ObRemoteLogIterator::build_location_data_generator_(const int64_t pre_log_ts,
+int ObRemoteLogIterator::build_location_data_generator_(const SCN &pre_log_scn,
     ObRemoteLocationParent *source,
     const std::function<int(share::ObBackupDest &dest)> &refresh_storage_info_func)
 {
   int ret = OB_SUCCESS;
   UNUSED(refresh_storage_info_func);
-  int64_t end_log_ts = OB_INVALID_TIMESTAMP;
+  SCN end_log_scn;
   share::ObBackupDest *dest = NULL;
   ObLogArchivePieceContext *piece_context = NULL;
-  source->get(dest, piece_context, end_log_ts);
-  gen_ = MTL_NEW(LocationDataGenerator, "ResDataGen", tenant_id_, pre_log_ts,
-      id_, start_lsn_, end_lsn_, end_log_ts, dest, piece_context);
+  source->get(dest, piece_context, end_log_scn);
+  gen_ = MTL_NEW(LocationDataGenerator, "ResDataGen", tenant_id_, pre_log_scn,
+      id_, start_lsn_, end_lsn_, end_log_scn, dest, piece_context);
   if (OB_ISNULL(gen_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc location data generator failed", K(ret), KPC(this));
@@ -237,7 +237,7 @@ int ObRemoteLogIterator::next_entry_(LogGroupEntry &entry, LSN &lsn, char *&buf,
 
   if (OB_SUCC(ret)) {
     cur_lsn_ = lsn + entry.get_serialize_size();
-    cur_log_ts_ = entry.get_header().get_max_timestamp();
+    cur_log_scn_ = entry.get_header().get_max_scn();
   }
 
   if (OB_FAIL(ret) && OB_ITER_END != ret && ! is_io_error(ret)) {

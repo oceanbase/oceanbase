@@ -58,6 +58,8 @@ static int64_t get_max_comp_pkt_size(const int64_t uncomp_pkt_size)
  *
  *  the body is compressed packet(orig header + orig body)
  *
+ * http://imysql.com/mysql-internal-manual/compressed-packet-header.html
+ *
  * NOTE: In standard mysql compress protocol, if src_pktlen < 50B, or compr_pktlen >= src_pktlen
  *       mysql will do not compress it and set pktlen_before_compression = 0,
  *       it can not ensure checksum.

@@ -40,18 +40,17 @@ private:
                               const ObString &database_name,
                               bool is_sys_view);
 
-  // in oracle mode, check_desc_priv_if_ness is called inside
   int resolve_show_from_table(const ParseNode *from_table_node,
-                              const ParseNode *from_database_clause_node,
-                              bool is_database_unselected,
-                              ObItemType node_type,
-                              uint64_t real_tenant_id,
-                              common::ObString &show_database_name,
-                              uint64_t &show_database_id,
-                              common::ObString &show_table_name,
-                              uint64_t &show_table_id,
-                              bool &is_view,
-                              ObSynonymChecker &synonym_checker);
+                                              const ParseNode *from_database_clause_node,
+                                              bool is_database_unselected,
+                                              ObItemType node_type,
+                                              uint64_t real_tenant_id,
+                                              common::ObString &show_database_name,
+                                              uint64_t &show_database_id,
+                                              common::ObString &show_table_name,
+                                              uint64_t &show_table_id,
+                                              bool &is_view,
+                                              ObSynonymChecker &synonym_checker);
   int resolve_show_from_database(const ParseNode &from_db_node,
                                  uint64_t real_tenant_id,
                                  uint64_t &show_database_id,

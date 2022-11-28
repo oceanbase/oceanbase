@@ -93,6 +93,7 @@ public:
   void set_table_location_uncertain(bool v) { table_location_uncertain_ = v; }
   bool is_table_location_uncertain() const { return table_location_uncertain_; }
   inline bool use_dist_das() const { return use_dist_das_; }
+  inline bool has_instead_of_trigger() const { return has_instead_of_trigger_; }
 public:
   // Expr frame info for partial expr serialization. (serialize is not need for it self)
   ObExprFrameInfo *expr_frame_info_;
@@ -106,7 +107,7 @@ public:
       uint64_t is_pdml_index_maintain_          : 1; // 表示当前dml算子是否是pdml中用于维护索引操作的算子（index maintain）
       uint64_t table_location_uncertain_        : 1; // 目标访问分区位置不确定，需要全表访问
       uint64_t use_dist_das_                    : 1;
-      uint64_t has_instead_of_trigger_          : 1; // abandoned, don't use again
+      uint64_t has_instead_of_trigger_          : 1;
       uint64_t is_pdml_update_split_            : 1; // 标记delete, insert op是否由update拆分而来
       uint64_t reserved_                        : 56;
     };
@@ -194,11 +195,9 @@ public:
   int execute_write(const char *sql);
   int execute_read(const char *sql, common::ObMySQLProxy::MySQLResult &res);
   int check_stack();
-  bool is_nested_session() { return ObSQLUtils::is_nested_sql(&ctx_); }
-  bool is_fk_nested_session() { return ObSQLUtils::is_fk_nested_sql(&ctx_); }
+  bool is_nested_session() { return is_nested_session_; }
   void set_foreign_key_checks() { foreign_key_checks_ = true; }
   bool need_foreign_key_checks() { return foreign_key_checks_; }
-  bool is_fk_root_session();
   const ObObjPrintParams &get_obj_print_params() { return obj_print_params_; }
   int init_foreign_key_operation();
   void log_user_error_inner(int ret, int64_t col_idx, int64_t row_num,
@@ -207,7 +206,6 @@ public:
   void clear_dml_evaluated_flag();
   void clear_dml_evaluated_flag(int64_t parent_cnt, ObExpr **parent_exprs);
   void clear_dml_evaluated_flag(ObExpr *clear_expr);
-  int submit_all_dml_task();
 protected:
   OperatorOpenOrder get_operator_open_order() const;
   virtual int inner_open();
@@ -220,29 +218,20 @@ protected:
   int calc_single_table_loc();
 
   virtual int inner_rescan() override;
-  virtual int inner_get_next_row() override;
-  int get_next_row_from_child();
-  //Override this interface to complete the write semantics of the DML operator,
-  //and write a row to the DAS Write Buffer according to the specific DML behavior
-  virtual int write_row_to_das_buffer() { return common::OB_NOT_IMPLEMENT; }
-  //Override this interface to post process the DML info after
-  //writing all data to the storage or returning one row
-  //such as: set affected_rows to query context, rewrite some error code
-  virtual int write_rows_post_proc(int last_errno)
-  { UNUSED(last_errno); return common::OB_NOT_IMPLEMENT; }
 
+  int submit_all_dml_task();
   int init_das_dml_ctx();
   //to merge array binding cusor info when array binding is executed in batch mode
   int merge_implict_cursor(int64_t insert_rows,
                            int64_t update_rows,
                            int64_t delete_rows,
                            int64_t found_rows);
-  int discharge_das_write_buffer();
 public:
   common::ObMySQLProxy *sql_proxy_;
   observer::ObInnerSQLConnection *inner_conn_;
   uint64_t tenant_id_;
   observer::ObInnerSQLConnection::SavedValue saved_conn_;
+  bool is_nested_session_;
   bool foreign_key_checks_;
   bool need_close_conn_;
 

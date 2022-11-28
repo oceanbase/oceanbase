@@ -94,6 +94,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
 {
   int ret = OB_SUCCESS;
   ObSSTable *sstable = nullptr;
+  palf::SCN tmp_scn;
   if (OB_UNLIKELY(nullptr == column_ids_ || nullptr == table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null column_ids", K(ret), KPC(this));
@@ -108,30 +109,39 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
   } else if (OB_FAIL(access_param_.init_merge_param(tablet_id_.id(), tablet_id_,
                                                     read_info_, merge_param.is_multi_version_minor_merge()))) {
     LOG_WARN("Failed to init table access param", K(ret), KPC(this));
-  } else if (OB_FAIL(store_ctx_.init_for_read(merge_param.ls_handle_,
-                                              INT64_MAX, // query_expire_ts
-                                              -1, // lock_timeout_us
-                                              merge_param.version_range_.snapshot_version_))) {
-    LOG_WARN("Failed to init store ctx", K(ret), K_(merge_param.ls_id));
   } else {
-    ObQueryFlag query_flag(ObQueryFlag::Forward,
-                           true, /*is daily merge scan*/
-                           true, /*is read multiple macro block*/
-                           true, /*sys task scan, read one macro block in single io*/
-                           false /*full row scan flag, obsoleted*/,
-                           false,/*index back*/
-                           false); /*query_stat*/
-    query_flag.multi_version_minor_merge_ = merge_param.is_multi_version_minor_merge();
-    query_flag.is_sstable_cut_ = merge_param.is_sstable_cut_;
-    if (merge_param.is_sstable_cut_ && !merge_param.is_multi_version_minor_merge()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected sstable cut parameter", K(ret), K(merge_param));
-    } else if (OB_FAIL(access_context_.init(query_flag, store_ctx_, allocator_, stmt_allocator_,
-                                            merge_param.version_range_))) {
-      LOG_WARN("Failed to init table access context", K(ret), K(query_flag));
+    if (merge_param.version_range_.snapshot_version_ >= palf::OB_MAX_SCN_TS_NS) {
+      tmp_scn.set_max();
+    } else if (OB_FAIL(tmp_scn.convert_for_lsn_allocator(merge_param.version_range_.snapshot_version_))) {
+      LOG_WARN("Failed to convert", K(ret), K_(merge_param.version_range_.snapshot_version));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(store_ctx_.init_for_read(merge_param.ls_handle_,
+                                                INT64_MAX, // query_expire_ts
+                                                -1, // lock_timeout_us
+                                                tmp_scn))) {
+      LOG_WARN("Failed to init store ctx", K(ret), K_(merge_param.ls_id));
     } else {
-      // always use end_log_ts for safety
-      access_context_.merge_log_ts_ = merge_param.log_ts_range_.end_log_ts_;
+      ObQueryFlag query_flag(ObQueryFlag::Forward,
+                            true, /*is daily merge scan*/
+                            true, /*is read multiple macro block*/
+                            true, /*sys task scan, read one macro block in single io*/
+                            false /*full row scan flag, obsoleted*/,
+                            false,/*index back*/
+                            false); /*query_stat*/
+      query_flag.multi_version_minor_merge_ = merge_param.is_multi_version_minor_merge();
+      query_flag.is_sstable_cut_ = merge_param.is_sstable_cut_;
+      if (merge_param.is_sstable_cut_ && !merge_param.is_multi_version_minor_merge()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected sstable cut parameter", K(ret), K(merge_param));
+      } else if (OB_FAIL(access_context_.init(query_flag, store_ctx_, allocator_, stmt_allocator_,
+                                              merge_param.version_range_))) {
+        LOG_WARN("Failed to init table access context", K(ret), K(query_flag));
+      } else {
+        // always use end_scn for safety
+        access_context_.merge_log_ts_ = merge_param.scn_range_.end_scn_.get_val_for_inner_table_field();
+      }
     }
   }
   return ret;

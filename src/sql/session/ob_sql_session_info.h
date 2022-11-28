@@ -676,7 +676,6 @@ public:
   pl::ObPLCursorInfo *get_cursor(int64_t cursor_id);
   pl::ObDbmsCursorInfo *get_dbms_cursor(int64_t cursor_id);
   int add_cursor(pl::ObPLCursorInfo *cursor);
-  int close_cursor(pl::ObPLCursorInfo *&cursor);
   int close_cursor(int64_t cursor_id);
   int make_cursor(pl::ObPLCursorInfo *&cursor);
   int init_cursor_cache();

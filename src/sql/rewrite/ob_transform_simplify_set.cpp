@@ -327,10 +327,12 @@ int ObTransformSimplifySet::check_exprs_constant_false(common::ObIArray<ObRawExp
   } else {
     ObSEArray<int64_t, 2> true_exprs;
     ObSEArray<int64_t, 2> false_exprs;
-    if (OB_FAIL(ObTransformUtils::extract_const_bool_expr_info(ctx_,
-                                                               exprs,
-                                                               true_exprs,
-                                                               false_exprs))) {
+    if (OB_FAIL(ObTransformUtils::flatten_expr(exprs))) {
+      LOG_WARN("fail to flatten exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::extract_const_bool_expr_info(ctx_,
+                                                                      exprs,
+                                                                      true_exprs,
+                                                                      false_exprs))) {
       LOG_WARN("fail to extract exprs info", K(ret));
     } else if (false_exprs.count() > 0) {
       /* do the check.

@@ -19,7 +19,8 @@
 #include "logservice/ob_log_base_header.h"          //ObLogBaseHeader
 #include "logservice/ob_log_handler.h"              //ObLogHandler
 #include "logservice/palf/log_entry.h"              //LogEntry
-#include "logservice/palf/log_define.h"//SCN
+#include "logservice/palf/log_define.h"
+#include "logservice/palf/scn.h"//SCN
 #include "logservice/ob_garbage_collector.h"//ObGCLSLog
 #include "logservice/restoreservice/ob_log_restore_handler.h"//ObLogRestoreHandler
 #include "observer/ob_server_struct.h"              //GCTX
@@ -89,7 +90,7 @@ void ObRecoveryLSService::do_work()
     palf::PalfBufferIterator iterator;
     int tmp_ret = OB_SUCCESS;
     const int64_t idle_time_us = 100 * 1000L;
-    int64_t start_scn = OB_LS_INVALID_SCN_VALUE;
+    SCN start_scn;
     while (!has_set_stop()) {
       ObCurTraceId::init(GCONF.self_addr_);
       uint64_t thread_idx = get_thread_idx();
@@ -105,12 +106,12 @@ void ObRecoveryLSService::do_work()
           LOG_WARN("failed to process recovery ls manager", KR(ret), KR(tmp_ret));
         }
       } else {
-        if (OB_LS_INVALID_SCN_VALUE == start_scn) {
+        if (!start_scn.is_valid()) {
           ObLSRecoveryStat ls_recovery_stat;
           if (OB_FAIL(ls_recovery.get_ls_recovery_stat(tenant_id_,
                   SYS_LS, false, ls_recovery_stat, *proxy_))) {
             LOG_WARN("failed to load sys recovery stat", KR(ret), K(tenant_id_));
-          } else if (OB_LS_MIN_SCN_VALUE == ls_recovery_stat.get_sync_scn()) {
+          } else if (SCN::base_scn() == ls_recovery_stat.get_sync_scn()) {
             //等待物理恢复设置完系统日志流初始同步点之后开始迭代
             ret = OB_EAGAIN;
             LOG_WARN("restore init sync scn has not setted, need wait", KR(ret), K(ls_recovery_stat));
@@ -127,9 +128,8 @@ void ObRecoveryLSService::do_work()
         if (FAILEDx(process_ls_log_(start_scn, iterator))) {
           LOG_WARN("failed to process ls log", KR(ret), K(start_scn));
         }
-         
         if (OB_FAIL(ret)) {
-          start_scn = OB_LS_INVALID_SCN_VALUE;
+          start_scn.reset();
           LOG_WARN("failed to do wowrk", KR(ret), K(start_scn));
         }
       }
@@ -139,13 +139,13 @@ void ObRecoveryLSService::do_work()
   }
 }
 
-int ObRecoveryLSService::seek_log_iterator_(const int64_t sync_scn, PalfBufferIterator &iterator)
+int ObRecoveryLSService::seek_log_iterator_(const SCN &sync_scn, PalfBufferIterator &iterator)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
-  } else if (OB_UNLIKELY(OB_LS_INVALID_SCN_VALUE == sync_scn)) {
+  } else if (OB_UNLIKELY(!sync_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("sync scn is invalid", KR(ret), K(sync_scn));
   } else {
@@ -162,7 +162,7 @@ int ObRecoveryLSService::seek_log_iterator_(const int64_t sync_scn, PalfBufferIt
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("ls or log handle is null", KR(ret), KP(ls),
                      KP(log_handler));
-      } else if (OB_FAIL(log_handler->locate_by_ts_ns_coarsely(sync_scn, start_lsn))) {
+      } else if (OB_FAIL(log_handler->locate_by_scn_coarsely(sync_scn, start_lsn))) {
         LOG_WARN("failed to locate lsn", KR(ret), K(sync_scn));
       } else if (OB_FAIL(log_handler->seek(start_lsn, iterator))) {
         LOG_WARN("failed to seek iterator", KR(ret), K(sync_scn));
@@ -172,12 +172,12 @@ int ObRecoveryLSService::seek_log_iterator_(const int64_t sync_scn, PalfBufferIt
   return ret;
 }
 
-int ObRecoveryLSService::process_ls_log_(const int64_t start_scn, PalfBufferIterator &iterator)
+int ObRecoveryLSService::process_ls_log_(const SCN &start_scn, PalfBufferIterator &iterator)
 {
   int ret = OB_SUCCESS;
   palf::LogEntry log_entry;
   palf::LSN target_lsn;
-  int64_t sync_scn = OB_INVALID_TIMESTAMP;
+  SCN sync_scn;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
@@ -190,7 +190,7 @@ int ObRecoveryLSService::process_ls_log_(const int64_t start_scn, PalfBufferIter
       LOG_WARN("log entry is null", KR(ret));
     } else {
       LOG_DEBUG("get log", K(log_entry), K(target_lsn), K(start_scn));
-      sync_scn = log_entry.get_log_ts();
+      sync_scn = log_entry.get_log_scn();
       const char *log_buf = log_entry.get_data_buf();
       const int64_t log_length = log_entry.get_data_len();
       logservice::ObLogBaseHeader header;
@@ -244,8 +244,7 @@ int ObRecoveryLSService::process_ls_log_(const int64_t start_scn, PalfBufferIter
   return ret;
 }
 
-int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block,
-                                     const int64_t sync_scn)
+int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SCN &sync_scn)
 {
   int ret = OB_SUCCESS;
   bool has_operation = false;
@@ -312,8 +311,7 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block,
   return ret;
 }
 
-int ObRecoveryLSService::process_gc_log_(logservice::ObGCLSLog &gc_log,
-                        const int64_t sync_scn)
+int ObRecoveryLSService::process_gc_log_(logservice::ObGCLSLog &gc_log, const SCN &sync_scn)
 {
   int ret = OB_SUCCESS;
   common::ObMySQLTransaction trans;
@@ -321,7 +319,7 @@ int ObRecoveryLSService::process_gc_log_(logservice::ObGCLSLog &gc_log,
   ObLSLifeAgentManager ls_life_agent(*proxy_);
   if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("proxy is null", KR(ret)); 
+    LOG_WARN("proxy is null", KR(ret));
    } else if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(meta_tenant_id));
   } else if (OB_FAIL(ls_life_agent.set_ls_offline_in_trans(
@@ -348,12 +346,12 @@ int ObRecoveryLSService::process_gc_log_(logservice::ObGCLSLog &gc_log,
   return ret;
 }
 
-int ObRecoveryLSService::construct_ls_recovery_stat(const int64_t sync_scn,
+int ObRecoveryLSService::construct_ls_recovery_stat(const SCN &sync_scn,
                                                     ObLSRecoveryStat &ls_stat)
 {
   int ret = OB_SUCCESS;
   ls_stat.reset();
-  int64_t readable_scn = 0;
+  SCN readable_scn;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
@@ -368,8 +366,7 @@ int ObRecoveryLSService::construct_ls_recovery_stat(const int64_t sync_scn,
 }
 
 //TODO check other ls is valid to process ls operator
-int ObRecoveryLSService::process_ls_operator_(const share::ObLSAttr &ls_attr,
-    const int64_t sync_scn)
+int ObRecoveryLSService::process_ls_operator_(const share::ObLSAttr &ls_attr, const SCN &sync_scn)
 {
   int ret = OB_SUCCESS;
   ObLSRecoveryStatOperator ls_recovery;
@@ -450,7 +447,7 @@ int ObRecoveryLSService::process_ls_operator_(const share::ObLSAttr &ls_attr,
   return ret;
 }
 
-int ObRecoveryLSService::check_valid_to_operator_ls_(const int64_t sync_scn)
+int ObRecoveryLSService::check_valid_to_operator_ls_(const SCN &sync_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -459,11 +456,11 @@ int ObRecoveryLSService::check_valid_to_operator_ls_(const int64_t sync_scn)
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy is null", KR(ret));
-  } else if (OB_UNLIKELY(OB_LS_INVALID_SCN_VALUE == sync_scn)) {
+  } else if (OB_UNLIKELY(!sync_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("syns scn is invalid", KR(ret), K(sync_scn));
   } else {
-    int64_t user_scn = OB_LS_INVALID_SCN_VALUE;
+    SCN user_scn;
     ObLSRecoveryStatOperator ls_recovery;
     if (OB_FAIL(ls_recovery.get_user_ls_sync_scn(tenant_id_, *proxy_, user_scn))) {
       LOG_WARN("failed to get user scn", KR(ret), K(tenant_id_));
@@ -474,14 +471,14 @@ int ObRecoveryLSService::check_valid_to_operator_ls_(const int64_t sync_scn)
       LOG_WARN("can not process ls operator, need wait other ls sync", KR(ret),
           K(user_scn), K(sync_scn));
     }
-  } 
+  }
 
   return ret;
 }
 
 int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
-                                        const int64_t sync_scn,
-                                 common::ObMySQLTransaction &trans)
+                                        const SCN &sync_scn,
+                                        common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   if (!share::is_ls_create_pre_op(ls_attr.get_ls_operatin_type())) {
@@ -507,7 +504,7 @@ int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
                                  GCTX.srv_rpc_proxy_, GCTX.lst_operator_);
       if (OB_FAIL(tenant_stat.gather_stat(true))) {
         LOG_WARN("failed to gather stat", KR(ret));
-      } else if (OB_FAIL(tenant_stat.create_new_ls_for_recovery(ls_attr.get_ls_id(), 
+      } else if (OB_FAIL(tenant_stat.create_new_ls_for_recovery(ls_attr.get_ls_id(),
               ls_attr.get_ls_group_id(), ls_attr.get_create_scn(), trans))) {
         LOG_WARN("failed to add new ls status info", KR(ret), K(ls_attr), K(sync_scn));
       }
@@ -591,7 +588,7 @@ int ObRecoveryLSService::check_can_do_recovery_()
   return ret;
 }
 
-int ObRecoveryLSService::report_sys_ls_recovery_stat_(const int64_t sync_scn)
+int ObRecoveryLSService::report_sys_ls_recovery_stat_(const SCN &sync_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
@@ -600,7 +597,7 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_(const int64_t sync_scn)
   } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql can't null", K(ret), K(proxy_));
-  } else if (OB_LS_MIN_SCN_VALUE != sync_scn) {
+  } else if (SCN::base_scn() != sync_scn) {
     ObLSRecoveryStatOperator ls_recovery;
     ObLSRecoveryStat ls_recovery_stat;
     if (OB_FAIL(construct_ls_recovery_stat(sync_scn, ls_recovery_stat))) {
@@ -643,29 +640,32 @@ int ObRecoveryLSService::update_sys_ls_restore_finish_()
       } else {
         ObLSRecoveryStatOperator ls_recovery;
         ObLSRecoveryStat ls_recovery_stat;
-        int64_t max_ls_scn = OB_LS_INVALID_SCN_VALUE;
-        int64_t recovery_until_scn = OB_LS_INVALID_SCN_VALUE;
+        SCN max_ls_scn;
+        SCN recovery_until_scn;
         if (OB_FAIL(ls_recovery.get_ls_recovery_stat(tenant_id_,
-                SYS_LS, false, ls_recovery_stat, *proxy_))) {
+                                                     SYS_LS, false, ls_recovery_stat, *proxy_))) {
           LOG_WARN("failed to load sys recovery stat", KR(ret), K(tenant_id_));
-        } else if (OB_FAIL(restore_handler->get_max_restore_log_ts(max_ls_scn))) {
+        } else if (OB_FAIL(restore_handler->get_max_restore_log_scn(max_ls_scn))) {
           LOG_WARN("failed to get max restore log ts", KR(ret));
         } else if (max_ls_scn == ls_recovery_stat.get_sync_scn()) {
           //restore finish, update sync scn to restore_unti_scn
-          if (OB_FAIL(restore_handler->get_upper_limit_ts(recovery_until_scn))) {
+          if (OB_FAIL(restore_handler->get_upper_limit_scn(recovery_until_scn))) {
             LOG_WARN("failed to get upper limit ts", KR(ret));
+          } else if (OB_UNLIKELY(!recovery_until_scn.is_valid())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid recovery_until_scn", KR(ret));
           } else if (ls_recovery_stat.get_sync_scn() == recovery_until_scn) {
             //nothing
           } else if (ls_recovery_stat.get_sync_scn() > recovery_until_scn) {
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("in restore status, sync scn can not larger than recovery until scn", KR(ret),
-                K(recovery_until_scn), K(ls_recovery_stat), K(max_ls_scn));
+                      K(recovery_until_scn), K(ls_recovery_stat), K(max_ls_scn));
           } else {
             ObLSRecoveryStat ls_recovery_stat_new;
             if (OB_FAIL(construct_ls_recovery_stat(recovery_until_scn, ls_recovery_stat_new))) {
               LOG_WARN("failed to construct ls recovery stat", KR(ret), K(recovery_until_scn));
             } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat(
-                    ls_recovery_stat_new, *proxy_))) {
+                        ls_recovery_stat_new, *proxy_))) {
               LOG_WARN("failed to update ls recovery stat", KR(ret), K(ls_recovery_stat));
             } else {
               LOG_INFO("[RECOVERY LS] SYS LS RESTORE FINISH", K(recovery_until_scn), K(max_ls_scn), K(ls_recovery_stat));
@@ -678,7 +678,7 @@ int ObRecoveryLSService::update_sys_ls_restore_finish_()
   return ret;
 }
 
-}
-}
+}//end of namespace rootserver
+}//end of namespace oceanbase
 
 

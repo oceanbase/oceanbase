@@ -37,7 +37,7 @@ int ObTxReplayExecutor::execute(storage::ObLS *ls,
                                 const int64_t size,
                                 const int skip_pos,
                                 const palf::LSN &lsn,
-                                const int64_t &log_timestamp,
+                                const palf::SCN &log_timestamp,
                                 const int64_t &replay_hint,
                                 const ObLSID &ls_id,
                                 const int64_t &tenant_id)
@@ -45,7 +45,7 @@ int ObTxReplayExecutor::execute(storage::ObLS *ls,
   int ret = OB_SUCCESS;
   ObTxReplayExecutor replay_executor(ls, ls_tx_srv, lsn, log_timestamp);
   if (OB_ISNULL(ls) || OB_ISNULL(ls_tx_srv) || OB_ISNULL(buf) || size <= 0
-      || 0 >= log_timestamp || INT64_MAX == log_timestamp || !lsn.is_valid()) {
+      || !log_timestamp.is_valid() || !lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invaild arguments", K(replay_executor), K(buf), K(size));
   } else if (OB_FAIL(replay_executor.do_replay_(buf,
@@ -239,7 +239,7 @@ int ObTxReplayExecutor::before_replay_redo_()
   if (!has_redo_) {
     if (OB_ISNULL(ctx_) || OB_ISNULL(mt_ctx_ = ctx_->get_memtable_ctx())) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (mt_ctx_->replay_begin(log_ts_ns_)) {
+    } else if (mt_ctx_->replay_begin(log_ts_ns_.get_val_for_lsn_allocator())) {
       TRANS_LOG(ERROR, "[Replay Tx] replay_begin fail or mt_ctx_ is NULL", K(ret), K(mt_ctx_));
     } else {
       has_redo_ = true;
@@ -253,11 +253,11 @@ void ObTxReplayExecutor::finish_replay_(const int retcode)
   if (has_redo_) {
     if (OB_SUCCESS != retcode) {
       mt_ctx_->replay_end(false, /*is_replay_succ*/
-                          log_ts_ns_);
+                          log_ts_ns_.get_val_for_lsn_allocator());
       TRANS_LOG(WARN, "[Replay Tx]Tx Redo replay error, rollback to start", K(*this));
     } else {
       mt_ctx_->replay_end(true, /*is_replay_succ*/
-                          log_ts_ns_);
+                          log_ts_ns_.get_val_for_lsn_allocator());
       // TRANS_LOG(INFO, "[Replay Tx] Tx Redo replay success, commit sub_trans", K(*this));
     }
   }
@@ -424,7 +424,7 @@ int ObTxReplayExecutor::replay_commit_()
   int ret = OB_SUCCESS;
   ObTxCommitLogTempRef temp_ref;
   ObTxCommitLog commit_log(temp_ref);
-  int64_t replay_compact_version = ls_tx_srv_->get_ls_weak_read_ts();
+  palf::SCN replay_compact_version = ls_tx_srv_->get_ls_weak_read_ts();
   if (OB_FAIL(log_block_.deserialize_log_body(commit_log))) {
     TRANS_LOG(WARN, "[Replay Tx] deserialize log body error", K(ret), K(commit_log), K(lsn_),
               K(log_ts_ns_));
@@ -541,7 +541,6 @@ int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo)
     TRANS_LOG(INFO,
               "[Replay Tx] Replay redo in MemTable cost too much time",
               K(ret),
-              K(timeguard.get_diff()),
               K(log_ts_ns_),
               K(ctx_->get_trans_id()),
               K(ctx_->get_ls_id()),
@@ -559,7 +558,7 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
   lib::Worker::CompatMode mode;
   ObTabletHandle tablet_handle;
 
-  if (OB_FAIL(ls_->replay_get_tablet(row_head.tablet_id_, log_ts_ns_, tablet_handle))) {
+  if (OB_FAIL(ls_->replay_get_tablet(row_head.tablet_id_, log_ts_ns_.get_val_for_lsn_allocator(), tablet_handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       ctx_->force_no_need_replay_checksum();
       ret = OB_SUCCESS;
@@ -584,7 +583,7 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
       *mt_ctx_,
       ctx_->get_trans_id()
     );
-    storeCtx.log_ts_ = log_ts_ns_;
+    storeCtx.replay_log_scn_ = log_ts_ns_;
     storeCtx.tablet_id_ = row_head.tablet_id_;
     storeCtx.ls_ = ls_;
 
@@ -669,9 +668,9 @@ int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
               KP(mmi_ptr));
   } else if (OB_FAIL(data_mem_ptr->replay_row(store_ctx, mmi_ptr, row_buf))) {
     TRANS_LOG(WARN, "[Replay Tx] replay row error", K(ret));
-  } else if (OB_FAIL(data_mem_ptr->set_max_end_log_ts(log_ts_ns_))) { // for freeze log_ts , may be
+  } else if (OB_FAIL(data_mem_ptr->set_max_end_log_ts(log_ts_ns_.get_val_for_lsn_allocator()))) { // for freeze log_ts , may be
     TRANS_LOG(WARN, "[Replay Tx] set memtable max end log ts failed", K(ret), KP(data_mem_ptr));
-  } else if (OB_FAIL(data_mem_ptr->set_rec_log_ts(log_ts_ns_))) {
+  } else if (OB_FAIL(data_mem_ptr->set_rec_log_ts(log_ts_ns_.get_val_for_lsn_allocator()))) {
     TRANS_LOG(WARN, "[Replay Tx] set rec_log_ts error", K(ret), KPC(data_mem_ptr));
   }
 
@@ -680,7 +679,7 @@ int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
     // in a freeze memtable which has a smaller end ts than this log.
     //
     // The rollback operation must hold write_ref to make memtable stay in memory.
-    mt_ctx_->rollback_redo_callbacks(log_ts_ns_);
+    mt_ctx_->rollback_redo_callbacks(log_ts_ns_.get_val_for_lsn_allocator());
   }
   return ret;
 }
@@ -726,7 +725,7 @@ int ObTxReplayExecutor::get_compat_mode_(const ObTabletID &tablet_id, lib::Worke
 void ObTxReplayExecutor::rewrite_replay_retry_code_(int &ret_code)
 {
   if (ret_code == OB_MINOR_FREEZE_NOT_ALLOW || ret_code == OB_LOG_TS_OUT_OF_BOUND ||
-      ret_code == OB_ALLOCATE_MEMORY_FAILED) {
+      ret_code == OB_ALLOCATE_MEMORY_FAILED || ret_code == OB_TIMEOUT) {
     TRANS_LOG(INFO, "rewrite replay error_code as OB_EAGAIN for retry", K(ret_code),
               K(ls_->get_ls_id()), K(log_ts_ns_));
     ret_code = OB_EAGAIN;

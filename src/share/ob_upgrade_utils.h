@@ -38,6 +38,7 @@ public:
   static int can_run_upgrade_job(rootserver::ObRsJobType job_type, bool &can);
   static int check_upgrade_job_passed(rootserver::ObRsJobType job_type);
   static int check_schema_sync(bool &is_sync);
+  /* physical restore related */
   // upgrade_sys_variable()/upgrade_sys_stat() can be called when enable_ddl = false.
   static int upgrade_sys_variable(
              obrpc::ObCommonRpcProxy &rpc_proxy,
@@ -50,16 +51,42 @@ private:
   static int check_rs_job_success(rootserver::ObRsJobType job_type, bool &success);
 
   /* upgrade sys variable */
-  static int calc_diff_sys_var_(
+  static int calc_diff_sys_var(
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       common::ObArray<int64_t> &update_list,
       common::ObArray<int64_t> &add_list);
-  static int update_sys_var_(
+  static int update_sys_var(
              obrpc::ObCommonRpcProxy &rpc_proxy,
              const uint64_t tenant_id,
-             const bool is_update,
              common::ObArray<int64_t> &update_list);
+  static int add_sys_var(common::ObISQLClient &sql_client,
+                         const uint64_t tenant_id,
+                         common::ObArray<int64_t> &add_list);
+  static int execute_update_sys_var_sql(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const share::schema::ObSysParam &sys_param);
+  static int execute_update_sys_var_history_sql(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const share::schema::ObSysParam &sys_param);
+  static int execute_add_sys_var_sql(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const share::schema::ObSysParam &sys_param);
+  static int execute_add_sys_var_history_sql(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const share::schema::ObSysParam &sys_param);
+  static int convert_sys_variable_value(
+      const int64_t var_store_idx,
+      common::ObIAllocator &allocator,
+      common::ObString &value);
+  static int gen_basic_sys_variable_dml(
+      const uint64_t tenant_id,
+      const share::schema::ObSysParam &sys_param,
+      share::ObDMLSqlSplicer &dml);
   /* upgrade sys variable end */
   static int filter_sys_stat(
       common::ObISQLClient &sql_client,
@@ -71,7 +98,7 @@ private:
 
 /* =========== upgrade processor ============= */
 
-// Special upgrade actions for specific data version,
+// Special upgrade actions for specific cluster version,
 // which should be stateless and reentrant.
 class ObBaseUpgradeProcessor
 {
@@ -85,24 +112,24 @@ public:
   ObBaseUpgradeProcessor();
   virtual ~ObBaseUpgradeProcessor() {};
 public:
-  int init(int64_t data_version,
+  int init(int64_t cluster_version,
            UpgradeMode mode,
            common::ObMySQLProxy &sql_proxy,
            obrpc::ObSrvRpcProxy &rpc_proxy,
            obrpc::ObCommonRpcProxy &common_proxy,
            share::schema::ObMultiVersionSchemaService &schema_service,
            share::ObCheckStopProvider &check_server_provider);
-  int64_t get_version() const { return data_version_; }
+  int64_t get_version() const { return cluster_version_; }
   void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   int64_t get_tenant_id() const { return tenant_id_; }
   virtual int pre_upgrade() = 0;
   virtual int post_upgrade() = 0;
-  TO_STRING_KV(K_(inited), K_(data_version), K_(tenant_id), K_(mode));
+  TO_STRING_KV(K_(inited), K_(cluster_version), K_(tenant_id), K_(mode));
 protected:
   virtual int check_inner_stat() const;
 protected:
   bool inited_;
-  int64_t data_version_;
+  int64_t cluster_version_;
   uint64_t tenant_id_;
   UpgradeMode mode_;
   common::ObMySQLProxy *sql_proxy_;
@@ -156,23 +183,157 @@ public: \
 };
 
 /*
- * NOTE: The Following code should be modified when DATA_CURRENT_VERSION changed.
- * 1. ObUpgradeChecker: DATA_VERSION_NUM, UPGRADE_PATH
- * 2. Implement new ObUpgradeProcessor by data_version.
+ * NOTE: The Following code should be modified when CLUSTER_CURRENT_VERSION changed.
+ * 1. ObUpgradeChecker: CLUTER_VERSION_NUM, UPGRADE_PATH
+ * 2. Implement new ObUpgradeProcessor by cluster version.
  * 3. Modify int ObUpgradeProcesserSet::init().
  */
 class ObUpgradeChecker
 {
 public:
-  static bool check_data_version_exist(const uint64_t version);
+  static bool check_cluster_version_exist(const uint64_t version);
 public:
-  static const int64_t DATA_VERSION_NUM = 1;
-  static const uint64_t UPGRADE_PATH[DATA_VERSION_NUM];
+  static const int64_t CLUTER_VERSION_NUM = 40;
+  static const uint64_t UPGRADE_PATH[CLUTER_VERSION_NUM];
 };
 
-/* =========== special upgrade processor start ============= */
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 1, 0, 0)
-/* =========== special upgrade processor end   ============= */
+// 2.2.60
+DEF_SIMPLE_UPGRARD_PROCESSER(2, 2, 0, 60);
+// 2.2.70
+class ObUpgradeFor22070Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor22070Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor22070Processor() {}
+  virtual int pre_upgrade() override;
+  virtual int post_upgrade() override;
+private:
+  int modify_trigger_package_source_body();
+  int modify_oracle_public_database_name();
+  int rebuild_subpart_partition_gc_info();
+};
+// 2.2.71
+DEF_SIMPLE_UPGRARD_PROCESSER(2, 2, 0, 71);
+// 2.2.72
+DEF_SIMPLE_UPGRARD_PROCESSER(2, 2, 0, 72);
+// 2.2.73
+DEF_SIMPLE_UPGRARD_PROCESSER(2, 2, 0, 73);
+// 2.2.74
+DEF_SIMPLE_UPGRARD_PROCESSER(2, 2, 0, 74);
+
+class ObUpgradeFor22075Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor22075Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor22075Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+};
+
+// 2.2.76
+DEF_SIMPLE_UPGRARD_PROCESSER(2, 2, 0, 76);
+// 2.2.77
+class ObUpgradeFor22077Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor22077Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor22077Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; };
+  virtual int post_upgrade() override;
+private:
+  int create_inner_keystore_for_sys_tenant();
+  int alter_default_profile();
+};
+
+// 3.1.0
+class ObUpgradeFor3100Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor3100Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor3100Processor() {}
+  virtual int pre_upgrade() override;
+  virtual int post_upgrade() override;
+private:
+  int compute_check_cst_counts_in_each_table(
+      const uint64_t tenant_id,
+      ObSArray<uint64_t> &table_ids,
+      ObSArray<int64_t> &check_cst_counts_in_each_table);
+  int generate_constraint_schema(
+      obrpc::ObSchemaReviseArg &arg,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObIAllocator &allocator,
+      bool &is_need_to_revise);
+  int update_check_csts(
+      const uint64_t tenant_id,
+      ObSArray<uint64_t> &table_ids,
+      ObSArray<int64_t> &check_cst_counts_in_each_tbl,
+      share::schema::ObSchemaGetterGuard &schema_guard);
+  int revise_check_cst_schema();
+};
+
+DEF_SIMPLE_UPGRARD_PROCESSER(3, 1, 0, 1);
+// 3.1.2
+class ObUpgradeFor3102Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor3102Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor3102Processor() {}
+  virtual int pre_upgrade() override;
+  virtual int post_upgrade() override;
+private:
+  int revise_not_null_cst_schema();
+  int get_all_table_with_not_null_column(
+    const uint64_t tenant_id,
+    schema::ObSchemaGetterGuard &schema_guard,
+    ObSArray<uint64_t> &table_ids);
+};
+
+// 3.2.0
+class ObUpgradeFor3200Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor3200Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor3200Processor() {}
+  virtual int pre_upgrade() override;
+  virtual int post_upgrade() override;
+private:
+  int grant_directory_privilege_for_dba_role(
+      const lib::Worker::CompatMode compat_mode,
+      const uint64_t tenant_id);
+};
+
+// 3.2.1
+class ObUpgradeFor3201Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor3201Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor3201Processor() {}
+  virtual int pre_upgrade() override;
+  virtual int post_upgrade() override;
+private:
+  int init_tenant_optstat_global_prefs(
+      const lib::Worker::CompatMode compat_mode,
+      const uint64_t tenant_id);
+};
+DEF_SIMPLE_UPGRARD_PROCESSER(3, 2, 0, 2);
+DEF_SIMPLE_UPGRARD_PROCESSER(3, 2, 3, 0);
+
+// 4.0.0.0
+class ObUpgradeFor4000Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4000Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4000Processor() {}
+  virtual int pre_upgrade() override;
+  virtual int post_upgrade() override;
+private:
+  int grant_debug_privilege_for_dba_role(
+      const lib::Worker::CompatMode compat_mode,
+      const uint64_t tenant_id);
+  int grant_context_privilege_for_dba_role(
+      const lib::Worker::CompatMode compat_mode,
+      const uint64_t tenant_id);
+};
 
 /* =========== upgrade processor end ============= */
 

@@ -18,6 +18,7 @@
 #include "share/ob_ddl_common.h"
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_snapshot_info_manager.h"
+#include "logservice/palf/scn.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -45,16 +46,31 @@ ObCheckConstraintValidationTask::ObCheckConstraintValidationTask(
 int ObCheckConstraintValidationTask::process()
 {
   int ret = OB_SUCCESS;
-  ObTraceIdGuard trace_id_guard(trace_id_);
+  int tmp_ret = OB_SUCCESS;
   ObRootService *root_service = GCTX.root_service_;
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else {
+    ObTabletID unused_tablet_id;
+    ObDDLTaskKey task_key(target_object_id_, schema_version_);
+    ret = ObDDLUtil::retry_with_ddl_schema_hint([this]() -> int { return this->check_constraint_by_send_sql(); });
+    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, ret))) {
+      LOG_WARN("fail to finish check constraint task", K(ret), K(tmp_ret));
+    }
+  }
+  return ret;
+}
+
+int ObCheckConstraintValidationTask::check_constraint_by_send_sql() const
+{
+  int ret = OB_SUCCESS;
+  ObTraceIdGuard trace_id_guard(trace_id_);
   const ObConstraint *constraint = nullptr;
   bool is_oracle_mode = false;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
   const ObDatabaseSchema *database_schema = nullptr;
-  int tmp_ret = OB_SUCCESS;
-  ObTabletID unused_tablet_id;
-  ObDDLTaskKey task_key(target_object_id_, schema_version_);
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id_, table_schema))) {
@@ -62,9 +78,6 @@ int ObCheckConstraintValidationTask::process()
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema not exist", K(ret));
-  } else if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (!check_table_empty_ && OB_ISNULL(constraint = table_schema->get_constraint(constraint_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, can not get constraint", K(ret));
@@ -94,9 +107,9 @@ int ObCheckConstraintValidationTask::process()
       if (check_expr_str.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("check_expr_str is empty", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_USER_SPECIFIED_TIMEOUT))) {
         LOG_WARN("set trx timeout failed", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_USER_SPECIFIED_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema->get_schema_version(), is_oracle_mode, ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint str", K(ret));
@@ -146,9 +159,6 @@ int ObCheckConstraintValidationTask::process()
       }
     }
   }
-  if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret))) {
-    LOG_WARN("fail to finish check constraint task", K(ret), K(tmp_ret));
-  }
   return ret;
 }
 
@@ -189,10 +199,8 @@ int ObForeignKeyConstraintValidationTask::process()
     ObTabletID unused_tablet_id;
     ObDDLTaskKey task_key(foregin_key_id_, schema_version_);
     int tmp_ret = OB_SUCCESS;
-    if (OB_FAIL(check_fk_by_send_sql())) {
-      LOG_WARN("failed to check fk", K(ret));
-    }
-    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret))) {
+    ret = ObDDLUtil::retry_with_ddl_schema_hint([this]() -> int { return this->check_fk_by_send_sql(); });
+    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, ret))) {
       LOG_WARN("fail to finish check constraint task", K(ret));
     }
     LOG_INFO("execute check foreign key task finish", K(ret), K(task_key), K(data_table_id_), K(foregin_key_id_));
@@ -338,9 +346,9 @@ int ObForeignKeyConstraintValidationTask::check_fk_constraint_data_valid(
       ObSqlString child_ddl_schema_hint_str;
       ObSqlString parent_ddl_schema_hint_str;
       // print str like "select c1, c2 from db.t2 where c1 is not null and c2 is not null minus select c3, c4 from db.t1"
-      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_USER_SPECIFIED_TIMEOUT))) {
         LOG_WARN("set trx timeout failed", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_USER_SPECIFIED_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(child_table_schema.get_table_name_str(), child_table_schema.get_schema_version(), is_oracle_mode, child_ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint", K(ret));
@@ -553,7 +561,6 @@ int ObConstraintTask::init(const ObDDLTaskRecord &task_record)
     task_id_ = task_record.task_id_;
     parent_task_id_ = task_record.parent_task_id_;
     is_table_hidden_ = table_schema->is_user_hidden_table();
-    ret_code_ = task_record.ret_code_;
     is_inited_ = true;
   }
   return ret;
@@ -601,32 +608,19 @@ int ObConstraintTask::hold_snapshot(const int64_t snapshot_version)
   int ret = OB_SUCCESS;
   ObDDLService &ddl_service = root_service_->get_ddl_service();
   ObSEArray<ObTabletID, 1> tablet_ids;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
+  palf::SCN snapshot_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObConstraintTask has not been inited", K(ret));
   } else if (OB_UNLIKELY(snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(snapshot_version));
-  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("get tenant schema guard failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, table_schema))) {
-    LOG_WARN("get table schema failed", K(ret), K(object_id_));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(table_schema));
+  } else if (OB_FAIL(snapshot_scn.convert_for_lsn_allocator(snapshot_version))) {
+    LOG_WARN("failed to convert", K(snapshot_version), K(ret));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
     LOG_WARN("failed to get tablet snapshots", K(ret));
-  } else if (table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
-             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
-    LOG_WARN("failed to get data lob meta table snapshot", K(ret));
-  } else if (table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
-             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
-    LOG_WARN("failed to get data lob piece table snapshot", K(ret));
   } else if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
-          ddl_service.get_sql_proxy(), SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot_version, nullptr, tablet_ids))) {
+          ddl_service.get_sql_proxy(), SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot_scn, nullptr, tablet_ids))) {
     LOG_WARN("acquire snapshot failed", K(ret), K(tablet_ids));
   } else {
     snapshot_version_ = snapshot_version;
@@ -639,30 +633,15 @@ int ObConstraintTask::release_snapshot(const int64_t snapshot_version)
   int ret = OB_SUCCESS;
   ObDDLService &ddl_service = root_service_->get_ddl_service();
   ObSEArray<ObTabletID, 1> tablet_ids;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObConstraintTask has not been inited", K(ret));
-  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
-    LOG_WARN("get tenant schema guard failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, table_schema))) {
-    LOG_WARN("get table schema failed", K(ret), K(object_id_));
-  } else if (OB_ISNULL(table_schema)) {
-    LOG_INFO("table not exist", K(ret), K(object_id_), K(target_object_id_));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
-    if (OB_TABLE_NOT_EXIST == ret || OB_TENANT_NOT_EXIST == ret) {
+    if (OB_TABLE_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get tablet snapshots", K(ret));
     }
-  } else if (table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
-             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
-    LOG_WARN("failed to get data lob meta table snapshot", K(ret));
-  } else if (table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
-             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
-    LOG_WARN("failed to get data lob piece table snapshot", K(ret));
   } else if (OB_FAIL(batch_release_snapshot(snapshot_version, tablet_ids))) {
     LOG_WARN("failed to release snapshots", K(ret));
   }
@@ -809,7 +788,7 @@ int ObConstraintTask::check_replica_end(bool &is_end)
     ret_code_ = check_job_ret_code_;
     is_end = true;
     LOG_WARN("complete sstable job failed", K(ret_code_), K(object_id_), K(target_object_id_));
-    if (is_replica_build_need_retry(ret_code_)) {
+    if (ObIDDLTask::error_need_retry(ret_code_) || OB_REPLICA_NOT_READABLE == ret_code_ || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code_) {
       check_replica_request_time_ = 0;
       check_job_ret_code_ = INT64_MAX;
       ret_code_ = OB_SUCCESS;
@@ -824,7 +803,7 @@ int ObConstraintTask::check_replica_end(bool &is_end)
   }
 
   if (OB_SUCC(ret) && !is_end) {
-    const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
+    const int64_t timeout = GCONF.global_index_build_single_replica_timeout;
     if (check_replica_request_time_ + timeout < ObTimeUtility::current_time()) {
       check_replica_request_time_ = 0;
     }
@@ -1315,7 +1294,6 @@ int ObConstraintTask::rollback_failed_check_constraint()
             ? CST_FK_NO_VALIDATE : CST_FK_VALIDATED;
           (*iter)->set_validate_flag(validate_flag);
         }
-        (*iter)->set_need_validate_data(false);
         alter_table_arg.alter_constraint_type_ = obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE;
         if (OB_FAIL(set_alter_constraint_ddl_stmt_str_for_check(alter_table_arg, allocator))) {
           LOG_WARN("fail to set alter constraint ddl_stmt_str", K(ret));
@@ -1686,6 +1664,19 @@ int ObConstraintTask::set_constraint_validated()
   return ret;
 }
 
+int ObConstraintTask::check_table_exist(bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  exist = false;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("get tanant schema guard failed", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, object_id_, exist))) {
+    LOG_WARN("check data table exist failed", K(ret), K_(tenant_id), K(object_id_));
+  }
+  return ret;
+}
+
 int ObConstraintTask::process()
 {
   int ret = OB_SUCCESS;
@@ -1752,8 +1743,6 @@ int ObConstraintTask::check_health()
     need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) { // refresh task status
     LOG_WARN("refresh status failed", K(ret));
-  } else if (OB_FAIL(refresh_schema_version())) {
-    LOG_WARN("refresh schema version failed", K(ret));
   } else {
     ObMultiVersionSchemaService &schema_service = root_service->get_schema_service();
     ObSchemaGetterGuard schema_guard;
@@ -1767,7 +1756,7 @@ int ObConstraintTask::check_health()
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("data table not exist", K(ret), K(is_source_table_exist));
     }
-    if (OB_FAIL(ret) && !ObIDDLTask::in_ddl_retry_white_list(ret)) {
+    if (OB_FAIL(ret) && !ObIDDLTask::error_need_retry(ret)) {
       const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
       const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
       switch_status(new_status, ret);

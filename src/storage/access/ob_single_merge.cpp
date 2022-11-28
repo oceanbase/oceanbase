@@ -46,7 +46,7 @@ int ObSingleMerge::open(const ObDatumRowkey &rowkey)
     LOG_WARN("ObSingleMerge has not been inited", K(ret), K_(get_table_param));
   } else {
     const ObTabletMeta &tablet_meta = get_table_param_.tablet_iter_.tablet_handle_.get_obj()->get_tablet_meta();
-    if (OB_FAIL(fuse_row_cache_fetcher_.init(access_param_->iter_param_.tablet_id_, access_param_->iter_param_.get_read_info(), tablet_meta.clog_checkpoint_ts_))) {
+    if (OB_FAIL(fuse_row_cache_fetcher_.init(access_param_->iter_param_.tablet_id_, access_param_->iter_param_.get_read_info(), tablet_meta.clog_checkpoint_scn_.get_val_for_gts()))) {
       STORAGE_LOG(WARN, "fail to init fuse row cache fetcher", K(ret));
     } else {
       rowkey_ = &rowkey;
@@ -236,7 +236,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;
     const bool enable_fuse_row_cache = access_ctx_->use_fuse_row_cache_ &&
                                        access_param_->iter_param_.enable_fuse_row_cache(access_ctx_->query_flag_) &&
-                                       read_snapshot_version >= tablet_meta.snapshot_version_;
+                                       read_snapshot_version >= tablet_meta.snapshot_version_.get_val_for_gts();
     bool need_update_fuse_cache = false;
     access_ctx_->query_flag_.set_not_use_row_cache();
     nop_pos_.reset();
@@ -273,7 +273,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
 #endif
     } else if (enable_fuse_row_cache) {
       if (OB_FAIL(get_and_fuse_cache_row(read_snapshot_version,
-                                         tablet_meta.multi_version_start_,
+                                         tablet_meta.multi_version_start_.get_val_for_gts(),
                                          full_row_,
                                          final_result,
                                          have_uncommited_row,
@@ -322,17 +322,15 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
 #ifdef ENABLE_DEBUG_LOG
     if (OB_SUCC(ret)) {
       access_ctx_->defensive_check_record_.query_flag_ = access_ctx_->query_flag_;
-      transaction::ObTransService *trx = MTL(transaction::ObTransService *);
-      bool trx_id_valid = (NULL != access_ctx_->store_ctx_
-                          && access_ctx_->store_ctx_->mvcc_acc_ctx_.tx_id_.is_valid());
-      if (OB_NOT_NULL(trx)
-          && trx_id_valid
-          && NULL != trx->get_defensive_check_mgr()) {
-        (void)trx->get_defensive_check_mgr()->put(tablet_meta.tablet_id_,
-                                                  access_ctx_->store_ctx_->mvcc_acc_ctx_.tx_id_,
-                                                  row,
-                                                  *rowkey_,
-                                                  access_ctx_->defensive_check_record_);
+      if (NULL != access_ctx_->store_ctx_
+        && NULL != access_ctx_->store_ctx_->mvcc_acc_ctx_.get_mem_ctx()) {
+        (void)access_ctx_->store_ctx_
+                         ->mvcc_acc_ctx_
+                         .get_mem_ctx()
+                         ->get_defensive_check_mgr()->put(tablet_meta.tablet_id_,
+                                                          row,
+                                                          *rowkey_,
+                                                          access_ctx_->defensive_check_record_);
       }
     }
     access_ctx_->defensive_check_record_.reset();

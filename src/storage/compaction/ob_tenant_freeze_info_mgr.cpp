@@ -43,6 +43,7 @@ using namespace share;
 using namespace share::schema;
 
 using common::hash::ObHashSet;
+using palf::SCN;
 
 namespace storage
 {
@@ -130,16 +131,16 @@ void ObTenantFreezeInfoMgr::destroy()
   TG_DESTROY(tg_id_);
 }
 
-int64_t ObTenantFreezeInfoMgr::get_latest_frozen_timestamp()
+palf::SCN ObTenantFreezeInfoMgr::get_latest_frozen_scn()
 {
-  int64_t frozen_timestamp = 0;
+  palf::SCN frozen_scn = palf::SCN::min_scn();
   RLockGuard lock_guard(lock_);
   ObIArray<FreezeInfo> &info_list = info_list_[cur_idx_];
 
   if (0 != info_list.count()) {
-    frozen_timestamp = info_list.at(info_list.count()-1).freeze_ts;
+    frozen_scn = info_list.at(info_list.count()-1).freeze_scn;
   }
-  return frozen_timestamp;
+  return frozen_scn;
 }
 
 int ObTenantFreezeInfoMgr::get_min_dependent_freeze_info(FreezeInfo &freeze_info)
@@ -152,7 +153,6 @@ int ObTenantFreezeInfoMgr::get_min_dependent_freeze_info(FreezeInfo &freeze_info
     idx = info_list.count() - MIN_DEPENDENT_FREEZE_INFO_GAP;
   }
   ret = get_info_nolock(idx, freeze_info);
-  LOG_INFO("get min dependent freeze info", K(ret), K(freeze_info)); // diagnose code for issue 45841468
   return ret;
 }
 
@@ -223,9 +223,9 @@ int64_t ObTenantFreezeInfoMgr::find_pos_in_list_(
   while (l < r && ret_pos < 0) {
     mid = (l + r) >> 1;
     const FreezeInfo &tmp_info = info_list.at(mid);
-    if (snapshot_version < tmp_info.freeze_ts) {
+    if (snapshot_version < tmp_info.freeze_scn.get_val_for_inner_table_field()) {
       r = mid;
-    } else if (snapshot_version > tmp_info.freeze_ts) {
+    } else if (snapshot_version > tmp_info.freeze_scn.get_val_for_inner_table_field()) {
       l = mid + 1;
     } else {
       ret_pos = mid;
@@ -293,7 +293,7 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_snapshot_version_(
     bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && !found && i < info_list.count(); ++i) {
       FreezeInfo &tmp_info = info_list.at(i);
-      if (snapshot_version < tmp_info.freeze_ts) {
+      if (snapshot_version < tmp_info.freeze_scn.get_val_for_inner_table_field()) {
         freeze_info = tmp_info;
         found = true;
       }
@@ -330,7 +330,7 @@ int ObTenantFreezeInfoMgr::inner_get_neighbour_major_freeze(
     bool found = false;
     for (int64_t i = 0; i < info_list.count() && OB_SUCC(ret) && !found; ++i) {
       FreezeInfo &next_info = info_list.at(i);
-      if (snapshot_version < next_info.freeze_ts) {
+      if (snapshot_version < next_info.freeze_scn.get_val_for_inner_table_field()) {
         found = true;
         if (0 == i) {
           ret = OB_ENTRY_NOT_EXIST;
@@ -344,7 +344,7 @@ int ObTenantFreezeInfoMgr::inner_get_neighbour_major_freeze(
     }
 
     if (OB_SUCC(ret) && !found) {
-      info.next.freeze_ts = INT64_MAX;
+      info.next.freeze_scn.set_max();
       info.prev = info_list.at(info_list.count() - 1);
     }
   }
@@ -436,24 +436,24 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     STORAGE_LOG(WARN, "fail to get multi version duration", K(ret), K(tablet_id));
   } else {
     if (merged_version < 1) {
-      freeze_info.freeze_ts = 0;
+      freeze_info.freeze_scn.set_min();
     } else if (OB_FAIL(get_freeze_info_behind_snapshot_version_(merged_version, freeze_info))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("failed to get freeze info behind snapshot", K(ret), K(merged_version));
       } else {
-        freeze_info.freeze_ts = INT64_MAX;
+        freeze_info.freeze_scn.set_max();
         ret = OB_SUCCESS;
       }
     }
     snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L *1000L);
-    snapshot_version = std::min(snapshot_version, freeze_info.freeze_ts);
+    snapshot_version = std::min(snapshot_version, static_cast<int64_t>(freeze_info.freeze_scn.get_val_for_inner_table_field()));
     for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
       bool related = false;
       const ObSnapshotInfo &snapshot = snapshots.at(i);
       if (OB_FAIL(is_snapshot_related_to_tablet(tablet_id, snapshot, related))) {
         STORAGE_LOG(WARN, "fail to check snapshot relation", K(ret), K(tablet_id), K(snapshot));
       } else if (related) {
-        snapshot_version = std::min(snapshot_version, snapshot.snapshot_ts_);
+        snapshot_version = std::min(snapshot_version, (int64_t)snapshot.snapshot_scn_.get_val_for_lsn_allocator());
       }
     }
   }
@@ -481,19 +481,19 @@ int ObTenantFreezeInfoMgr::diagnose_min_reserved_snapshot(
     STORAGE_LOG(WARN, "fail to get multi version duration", K(ret), K(tablet_id));
   } else {
     if (merge_snapshot_version < 1) {
-      freeze_info.freeze_ts = 0;
+      freeze_info.freeze_scn.set_min();
     } else if (OB_FAIL(get_freeze_info_behind_snapshot_version_(merge_snapshot_version, freeze_info))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("failed to get freeze info behind snapshot", K(ret), K(merge_snapshot_version));
       } else {
-        freeze_info.freeze_ts = INT64_MAX;
+        freeze_info.freeze_scn.set_max();
         ret = OB_SUCCESS;
       }
     }
-    snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L * 1000L);
+    snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L);
     snapshot_from_type = "undo_retention";
-    if (freeze_info.freeze_ts < snapshot_version) {
-      snapshot_version = freeze_info.freeze_ts;
+    if (freeze_info.freeze_scn.get_val_for_inner_table_field() < snapshot_version) {
+      snapshot_version = freeze_info.freeze_scn.get_val_for_inner_table_field();
       snapshot_from_type = "major_freeze_ts";
     }
     for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
@@ -501,8 +501,8 @@ int ObTenantFreezeInfoMgr::diagnose_min_reserved_snapshot(
       const ObSnapshotInfo &snapshot = snapshots.at(i);
       if (OB_FAIL(is_snapshot_related_to_tablet(tablet_id, snapshot, related))) {
         STORAGE_LOG(WARN, "fail to check snapshot relation", K(ret), K(tablet_id), K(snapshot));
-      } else if (related && snapshot.snapshot_ts_ < snapshot_version) {
-        snapshot_version = snapshot.snapshot_ts_;
+      } else if (related && snapshot.snapshot_scn_.get_val_for_lsn_allocator() < snapshot_version) {
+        snapshot_version = snapshot.snapshot_scn_.get_val_for_lsn_allocator();
         snapshot_from_type = snapshot.get_snapshot_type_str();
       }
     }
@@ -561,7 +561,7 @@ int ObTenantFreezeInfoMgr::get_reserve_points(
 //   return ret;
 // }
 
-int ObTenantFreezeInfoMgr::get_latest_freeze_ts(int64_t &freeze_ts)
+int ObTenantFreezeInfoMgr::get_latest_freeze_scn(palf::SCN &freeze_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -572,17 +572,17 @@ int ObTenantFreezeInfoMgr::get_latest_freeze_ts(int64_t &freeze_ts)
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else {
-    freeze_ts = 0;
+    freeze_scn.set_min();
 
     if (info_list.count() > 0) {
-      freeze_ts = info_list.at(info_list.count() - 1).freeze_ts;
+      freeze_scn = info_list.at(info_list.count() - 1).freeze_scn;
     }
   }
 
   return ret;
 }
 
-int ObTenantFreezeInfoMgr::prepare_new_info_list(const int64_t min_major_snapshot)
+int ObTenantFreezeInfoMgr::prepare_new_info_list(const palf::SCN &min_major_snapshot)
 {
   int ret = OB_SUCCESS;
 
@@ -591,9 +591,9 @@ int ObTenantFreezeInfoMgr::prepare_new_info_list(const int64_t min_major_snapsho
   snapshots_[next_idx].reset();
 
   for (int64_t i = 0; i < info_list_[cur_idx_].count() && OB_SUCC(ret); ++i) {
-    if (INT64_MAX == min_major_snapshot || // no garbage collection is necessary
+    if (palf::SCN::max_scn() == min_major_snapshot || // no garbage collection is necessary
         // or version is bigger or equal than the smallest major version currently
-        info_list_[cur_idx_].at(i).freeze_ts >= min_major_snapshot) {
+        info_list_[cur_idx_].at(i).freeze_scn >= min_major_snapshot) {
       if (OB_FAIL(info_list_[next_idx].push_back(info_list_[cur_idx_].at(i)))) {
         STORAGE_LOG(WARN, "fail to push back info", K(ret));
       }
@@ -616,7 +616,7 @@ int ObTenantFreezeInfoMgr::update_next_info_list(const ObIArray<FreezeInfo> &inf
     const FreezeInfo &next = info_list.at(i);
     if (next_info_list.count() > 0) {
       FreezeInfo &prev = next_info_list.at(next_info_list.count() - 1);
-      if (OB_UNLIKELY(prev.freeze_ts > next.freeze_ts)) {
+      if (OB_UNLIKELY(prev.freeze_scn > next.freeze_scn)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "freeze version decrease is not allowed", K(ret), K(prev), K(next));
       }
@@ -654,7 +654,7 @@ int ObTenantFreezeInfoMgr::update_info(
     const int64_t snapshot_gc_ts,
     const ObIArray<FreezeInfo> &info_list,
     const ObIArray<ObSnapshotInfo> &snapshots,
-    const int64_t min_major_snapshot,
+    const palf::SCN &min_major_snapshot,
     bool& gc_snapshot_ts_changed)
 {
   int ret = OB_SUCCESS;
@@ -721,39 +721,44 @@ int ObTenantFreezeInfoMgr::ReloadTask::get_global_info(int64_t &snapshot_gc_ts)
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
   ObGlobalStatProxy stat_proxy(*sql_proxy_, tenant_id);
-  if (OB_FAIL(stat_proxy.get_snapshot_gc_scn(snapshot_gc_ts))) {
+  palf::SCN snapshot_gc_scn;
+  if (OB_FAIL(stat_proxy.get_snapshot_gc_scn(snapshot_gc_scn))) {
     if (OB_TENANT_NOT_EXIST != ret) {
       STORAGE_LOG(WARN, "fail to get global info", K(ret), K(tenant_id));
     }
+  } else {
+    // TODO SCN
+    snapshot_gc_ts = snapshot_gc_scn.get_val_for_inner_table_field();
   }
 
   return ret;
 }
 
 int ObTenantFreezeInfoMgr::ReloadTask::get_freeze_info(
-    int64_t &min_major_version,
+    palf::SCN &min_major_version,
     ObIArray<FreezeInfo> &freeze_info)
 {
   int ret = OB_SUCCESS;
 
-  int64_t freeze_ts = 0;
-  min_major_version = INT64_MAX;
+  palf::SCN freeze_scn = palf::SCN::min_scn();
+  min_major_version.set_max();
   ObSEArray<ObSimpleFrozenStatus, 8> tmp;
   ObFreezeInfoProxy freeze_info_proxy(MTL_ID());
 
-  if (OB_FAIL(mgr_.get_latest_freeze_ts(freeze_ts))) {
+  if (OB_FAIL(mgr_.get_latest_freeze_scn(freeze_scn))) {
     STORAGE_LOG(WARN, "fail to get major version", K(ret));
   } else if (OB_FAIL(freeze_info_proxy.get_min_major_available_and_larger_info(
-          *sql_proxy_,
-          freeze_ts,
-          min_major_version,
-          tmp))) {
-    STORAGE_LOG(WARN, "fail to get freeze info", K(ret), K(freeze_ts));
+             *sql_proxy_,
+             freeze_scn,
+             min_major_version,
+             tmp))) {
+    STORAGE_LOG(WARN, "fail to get freeze info", K(ret), K(freeze_scn));
   } else {
     for (int64_t i = 0; i < tmp.count() && OB_SUCC(ret); ++i) {
       ObSimpleFrozenStatus &status = tmp.at(i);
+      const uint64_t frozen_scn_val = status.frozen_scn_.get_val_for_inner_table_field();
       if (OB_FAIL(freeze_info.push_back(
-            FreezeInfo(status.frozen_scn_, status.schema_version_, status.cluster_version_)))) {
+            FreezeInfo(frozen_scn_val, status.schema_version_, status.cluster_version_)))) {
         STORAGE_LOG(WARN, "fail to push back freeze info", K(ret), K(status));
       }
     }
@@ -761,12 +766,12 @@ int ObTenantFreezeInfoMgr::ReloadTask::get_freeze_info(
       compaction::ADD_COMPACTION_EVENT(
           MTL_ID(),
           MAJOR_MERGE,
-          tmp.at(tmp.count() - 1).frozen_scn_,
+          tmp.at(tmp.count() - 1).frozen_scn_.get_val_for_inner_table_field(),
           compaction::ObServerCompactionEvent::GET_FREEZE_INFO,
           ObTimeUtility::fast_current_time(),
           "new_freeze_info_cnt",
           tmp.count(),
-          "latest_freeze_ts",
+          "latest_freeze_scn",
           tmp.at(tmp.count() - 1).frozen_scn_);
     }
   }
@@ -796,16 +801,16 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
       LOG_WARN("fail to load zone merge info", KR(ret), K(zone_merge_info));
     } else {
       ObTenantTabletScheduler *scheduler = MTL(ObTenantTabletScheduler *);
-      if (global_merge_info.suspend_merging_) { // suspend_merge
+      if (global_merge_info.suspend_merging_.get_value()) { // suspend_merge
         scheduler->stop_major_merge();
         LOG_INFO("schedule zone to stop major merge", K(tenant_id), K(zone_merge_info), K(global_merge_info));
       } else {
         scheduler->resume_major_merge();
         const int64_t scheduler_frozen_version = scheduler->get_frozen_version();
-        if (zone_merge_info.broadcast_scn_ > scheduler_frozen_version) {
-          FLOG_INFO("try to schedule merge", K(tenant_id), "zone", zone_merge_info.zone_, "broadcast_scn", 
+        if (zone_merge_info.broadcast_scn_.get_scn_val() > scheduler_frozen_version) {
+          FLOG_INFO("try to schedule merge", K(tenant_id), "zone", zone_merge_info.zone_, "broadcast_scn",
             zone_merge_info.broadcast_scn_, K(scheduler_frozen_version));
-          if (OB_FAIL(scheduler->schedule_merge(zone_merge_info.broadcast_scn_))) {
+          if (OB_FAIL(scheduler->schedule_merge(zone_merge_info.broadcast_scn_.get_scn_val()))) {
             LOG_WARN("fail to schedule merge", K(ret), K(zone_merge_info));
           }
         }
@@ -813,7 +818,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
     }
 
     if (OB_SUCC(ret)) {
-      LOG_TRACE("refresh merge info", K(tenant_id), "zone", zone_merge_info.zone_, "broadcast_scn", 
+      LOG_TRACE("refresh merge info", K(tenant_id), "zone", zone_merge_info.zone_, "broadcast_scn",
         zone_merge_info.broadcast_scn_);
     }
   }
@@ -836,7 +841,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::try_update_info()
     ObSEArray<ObSnapshotInfo, 4> snapshots;
     bool changed = false;
     observer::ObService *ob_service = GCTX.ob_service_;
-    int64_t min_major_snapshot = INT64_MAX;
+    palf::SCN min_major_snapshot = palf::SCN::max_scn();
 
     if (OB_FAIL(get_global_info(snapshot_gc_ts))) {
       if (OB_TENANT_NOT_EXIST != ret) {

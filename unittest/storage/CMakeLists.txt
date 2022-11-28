@@ -70,6 +70,8 @@ storage_unittest(test_simple_rows_merger)
 storage_unittest(test_partition_incremental_range_spliter)
 storage_unittest(test_partition_major_sstable_range_spliter)
 
+storage_dml_unittest(test_compaction_policy)
 #storage_dml_unittest(test_table_scan_pure_index_table)
 
+storage_unittest(test_lob_seq_id)
 storage_unittest(test_sstable_log_ts_range_cut test_sstable_log_ts_range_cut.cpp)

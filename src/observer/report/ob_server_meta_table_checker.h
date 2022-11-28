@@ -89,8 +89,7 @@ private:
       int64_t &residual_count);
   int check_tablet_table_(
       const uint64_t tenant_id,
-      int64_t &meta_residual_count,
-      int64_t &checksum_residual_count);
+      int64_t &residual_count);
 
   bool inited_;
   bool stopped_;

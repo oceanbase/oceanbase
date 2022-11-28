@@ -16,6 +16,7 @@
 
 namespace oceanbase
 {
+using namespace palf;
 namespace logservice
 {
 ObReplayHandler::ObReplayHandler(storage::ObLS *ls)
@@ -72,17 +73,34 @@ int ObReplayHandler::replay(const ObLogBaseType &type,
                             const palf::LSN &lsn,
                             const int64_t ts_ns)
 {
+  //TODO(yaoying.yyy)
+  SCN scn;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(scn.convert_for_gts(ts_ns))) {
+    CLOG_LOG(WARN, "failed to convert_for_gts", K(ret), K(ts_ns));
+  } else {
+    ret = replay(type, buffer, nbytes, lsn, scn);
+  }
+  return ret;
+}
+
+int ObReplayHandler::replay(const ObLogBaseType &type,
+                            const void *buffer,
+                            const int64_t nbytes,
+                            const palf::LSN &lsn,
+                            const SCN &scn)
+{
   int ret = OB_SUCCESS;
 
   RLockGuard guard(lock_);
   if (!is_valid_log_base_type(type)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid arguments", K(ret), K(type));
-  } else if (NULL == handlers_[type]) {
+  } else if (OB_ISNULL(handlers_[type])) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "invalid base_log_type", K(type));
   } else {
-    ret = handlers_[type]->replay(buffer, nbytes, lsn, ts_ns);
+    ret = handlers_[type]->replay(buffer, nbytes, lsn, scn);
   }
 
   return ret;

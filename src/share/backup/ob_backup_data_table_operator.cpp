@@ -100,11 +100,11 @@ int ObBackupSetFileOperator::fill_dml_with_backup_set_(const ObBackupSetFileDesc
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_BACKUP_COMPATIBLE, backup_set_desc.backup_compatible_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_REPLAY_SCN, backup_set_desc.start_replay_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_REPLAY_SCN, backup_set_desc.start_replay_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, comment))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_MIN_RESTORE_SCN, backup_set_desc.min_restore_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_MIN_RESTORE_SCN, backup_set_desc.min_restore_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_INPUT_BYTES, backup_set_desc.stats_.input_bytes_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
@@ -304,6 +304,8 @@ int ObBackupSetFileOperator::do_parse_backup_set_(ObMySQLResult &result, ObBacku
 {
   int ret = OB_SUCCESS;
   int64_t real_length = 0;
+  uint64_t min_restore_scn = 0;
+  uint64_t start_replay_scn = 0;
   int64_t backup_compatible = 0;
   char backup_path[OB_MAX_BACKUP_DEST_LENGTH] = "";
   char encryption_mode_str[OB_DEFAULT_STATUS_LENTH] = "";
@@ -327,13 +329,13 @@ int ObBackupSetFileOperator::do_parse_backup_set_(ObMySQLResult &result, ObBacku
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_EXTRA_BYTES, backup_set_desc.stats_.extra_bytes_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_BACKUP_COMPATIBLE, backup_compatible, int64_t);
 
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MIN_RESTORE_SCN, backup_set_desc.min_restore_scn_, uint64_t);  
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_MIN_RESTORE_SCN, min_restore_scn, uint64_t);
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_BACKUP_TYPE, backup_type_str, OB_SYS_TASK_TYPE_LENGTH, real_length);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_PREV_FULL_BACKUP_SET_ID, backup_set_desc.prev_full_backup_set_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_PREV_INC_BACKUP_SET_ID, backup_set_desc.prev_inc_backup_set_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_START_TS, backup_set_desc.start_time_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RESULT, backup_set_desc.result_, int);
-  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_REPLAY_SCN, backup_set_desc.start_replay_scn_, uint64_t);
+  EXTRACT_UINT_FIELD_MYSQL(result, OB_STR_START_REPLAY_SCN, start_replay_scn, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_DATA_TURN_ID, backup_set_desc.data_turn_id_, int64_t); 
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_META_TURN_ID, backup_set_desc.meta_turn_id_, int64_t); 
   EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_BACKUP_ENCRYPTION_MODE, encryption_mode_str, OB_DEFAULT_STATUS_LENTH, real_length);
@@ -360,6 +362,10 @@ int ObBackupSetFileOperator::do_parse_backup_set_(ObMySQLResult &result, ObBacku
     LOG_WARN("[DATA_BACKUP]failed to parse plus_archivelog", K(ret), K(plus_archivelog_str)); 
   } else if (OB_FAIL(ObBackupUtils::convert_timestamp_to_date(backup_set_desc.start_time_, backup_set_desc.date_))) {
     LOG_WARN("[DATA_BACKUP]failed to parse date", K(ret));
+  } else if (OB_FAIL(backup_set_desc.min_restore_scn_.convert_for_inner_table_field(min_restore_scn))) {
+    LOG_WARN("fail to set min restore scn", K(ret), K(min_restore_scn));
+  } else if (OB_FAIL(backup_set_desc.start_replay_scn_.convert_for_inner_table_field(start_replay_scn))) {
+    LOG_WARN("fail to set start_replay_scn", K(ret), K(start_replay_scn));
   } else { 
     backup_set_desc.encryption_mode_ = ObBackupEncryptionMode::parse_str(encryption_mode_str);
     backup_set_desc.file_status_ = ObBackupFileStatus::get_status(file_status_str);
@@ -485,7 +491,7 @@ int ObBackupSetFileOperator::get_candidate_obsolete_backup_sets(
   return ret;
 }
 
-// TODO(yangyi.yyy): consider if need fetch this later in 4.1
+// TODO(yangyi.yyy): consider if need fetch this later
 int ObBackupSetFileOperator::get_all_backup_set_between(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
@@ -1189,13 +1195,13 @@ int ObBackupTaskOperator::fill_dml_with_backup_task_(
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_START_TS, backup_set_task.start_ts_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_USER_LS_START_SCN, backup_set_task.user_ls_start_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_USER_LS_START_SCN, backup_set_task.user_ls_start_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_END_TS, backup_set_task.end_ts_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_SCN, backup_set_task.start_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_START_SCN, backup_set_task.start_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_END_SCN, backup_set_task.end_scn_))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_END_SCN, backup_set_task.end_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_INCARNATION, backup_set_task.incarnation_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
@@ -1267,6 +1273,9 @@ int ObBackupTaskOperator::get_backup_task(
         }
       } else {
         int tmp_str_len = 0;
+        uint64_t start_scn = 0;
+        uint64_t end_scn = 0;
+        uint64_t user_ls_start_scn = 0;
         char status_str[OB_INNER_TABLE_DEFAULT_KEY_LENTH] = "";
         char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = "";
         EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_TENANT_ID, set_task_attr.tenant_id_, uint64_t);
@@ -1285,9 +1294,9 @@ int ObBackupTaskOperator::get_backup_task(
         EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_FINISH_MACRO_BLOCK_COUNT, set_task_attr.stats_.finish_macro_block_count_, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_FILE_COUNT, set_task_attr.stats_.finish_file_count_, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_EXTRA_BYTES, set_task_attr.stats_.extra_bytes_, int64_t);
-        EXTRACT_UINT_FIELD_MYSQL(*result, OB_STR_START_SCN, set_task_attr.start_scn_, uint64_t);
-        EXTRACT_UINT_FIELD_MYSQL(*result, OB_STR_END_SCN, set_task_attr.end_scn_, uint64_t);
-        EXTRACT_UINT_FIELD_MYSQL(*result, OB_STR_USER_LS_START_SCN, set_task_attr.user_ls_start_scn_, uint64_t);
+        EXTRACT_UINT_FIELD_MYSQL(*result, OB_STR_START_SCN, start_scn, uint64_t);
+        EXTRACT_UINT_FIELD_MYSQL(*result, OB_STR_END_SCN, end_scn, uint64_t);
+        EXTRACT_UINT_FIELD_MYSQL(*result, OB_STR_USER_LS_START_SCN, user_ls_start_scn, uint64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, OB_STR_INCARNATION, set_task_attr.incarnation_id_, int64_t);
         EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_STATUS, status_str, OB_INNER_TABLE_DEFAULT_KEY_LENTH, tmp_str_len);
         EXTRACT_STRBUF_FIELD_MYSQL(*result, OB_STR_PATH, backup_path_str, OB_MAX_BACKUP_DEST_LENGTH, tmp_str_len);
@@ -1296,6 +1305,12 @@ int ObBackupTaskOperator::get_backup_task(
           LOG_WARN("[DATA_BACKUP]failed to set status", K(ret), K(set_task_attr.status_), K(sql));
         } else if (OB_FAIL(set_task_attr.backup_path_.assign(backup_path_str))) {
           LOG_WARN("[DATA_BACKUP]failed to assign backup path", K(backup_path_str));
+        } else if (OB_FAIL(set_task_attr.start_scn_.convert_for_inner_table_field(start_scn))) {
+          LOG_WARN("fail to set start scn", K(ret), K(start_scn));
+        } else if (OB_FAIL(set_task_attr.end_scn_.convert_for_inner_table_field(end_scn))) {
+          LOG_WARN("fail to set end scn", K(ret), K(end_scn));
+        } else if (OB_FAIL(set_task_attr.user_ls_start_scn_.convert_for_inner_table_field(user_ls_start_scn))) {
+          LOG_WARN("fail to set user ls start scn", K(ret), K(user_ls_start_scn));
         } else {
           LOG_INFO("[DATA_BACKUP]succeed to get set task", K(set_task_attr));
         }
@@ -1310,7 +1325,7 @@ int ObBackupTaskOperator::advance_task_status(
     const ObBackupSetTaskAttr &set_task_attr,
     const ObBackupStatus &next_status, 
     const int result,
-    const ObBackupSCN &end_scn,
+    const palf::SCN &end_scn,
     const int64_t end_ts)
 {
   int ret = OB_SUCCESS;
@@ -1333,7 +1348,7 @@ int ObBackupTaskOperator::advance_task_status(
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_END_TS, end_ts))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_END_SCN, end_scn))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_END_SCN, end_scn.get_val_for_inner_table_field()))) {
     LOG_WARN("[DATA_BACKUP]failed to add column", K(ret));
   } else if (OB_FAIL(dml.get_extra_condition().assign_fmt("%s=%ld", OB_STR_JOB_ID, set_task_attr.job_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to get extra condition", K(ret));
@@ -1456,20 +1471,20 @@ int ObBackupTaskOperator::update_meta_turn_id(common::ObISQLClient &proxy, const
 }
 
 int ObBackupTaskOperator::update_user_ls_start_scn(common::ObISQLClient &proxy, const int64_t task_id, 
-    const uint64_t tenant_id, const share::ObBackupSCN &scn)
+    const uint64_t tenant_id, const palf::SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = -1;
   ObDMLSqlSplicer dml;
-  if (task_id <= 0 || tenant_id == OB_INVALID_TENANT_ID || scn <= 0) {
+  if (task_id <= 0 || tenant_id == OB_INVALID_TENANT_ID || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_id), K(tenant_id), K(scn));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, tenant_id))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_TASK_ID, task_id))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_USER_LS_START_SCN, scn))) {
+  } else if (OB_FAIL(dml.add_uint64_column(OB_STR_USER_LS_START_SCN, scn.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_TASK_TNAME, sql))) {
     LOG_WARN("failed to splice_update_sql", K(ret));
@@ -1647,7 +1662,6 @@ int ObBackupLSTaskOperator::get_ls_tasks(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  ls_attrs.reset();
   if (job_id <= 0 || tenant_id == OB_INVALID_TENANT_ID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(tenant_id), K(tenant_id));

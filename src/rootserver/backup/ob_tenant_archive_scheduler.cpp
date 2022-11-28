@@ -25,7 +25,7 @@
 #include "share/backup/ob_archive_store.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ls/ob_ls_i_life_manager.h"
-#include "share/ob_debug_sync.h"
+#include "logservice/palf/scn.h"
 
 using namespace oceanbase;
 using namespace rootserver;
@@ -134,7 +134,7 @@ static int record_piece_checkpoint(const ObTenantArchivePieceAttr &piece_info, c
     && ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE == piece_info.file_status_)) {
   } else {
     // persist piece checkpoint
-    // TODO: change overwrite to append
+    // TODO: wangxiaohui.wxh, change overwrite to append.
     ObPieceCheckpointDesc checkpoint_desc;
     checkpoint_desc.tenant_id_ = piece_info.key_.tenant_id_;
     checkpoint_desc.dest_id_ = piece_info.key_.dest_id_;
@@ -586,20 +586,14 @@ int ObArchiveHandler::checkpoint_(ObTenantArchiveRoundAttr &round_info)
     case ObArchiveRoundState::Status::INTERRUPTED:
       break;
     case ObArchiveRoundState::Status::PREPARE: {
-      DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_PREPARE);
       if (OB_FAIL(start_archive_(round_info))) {
         LOG_WARN("failed to prepare archive", K(ret), K(round_info));
       }
     }
       break;
-    case ObArchiveRoundState::Status::BEGINNING: {
-      DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_BEGINNING);
-    }
-    case ObArchiveRoundState::Status::DOING: {
-      DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_DOING);
-    }
+    case ObArchiveRoundState::Status::BEGINNING:
+    case ObArchiveRoundState::Status::DOING:
     case ObArchiveRoundState::Status::STOPPING: {
-      DEBUG_SYNC(BEFROE_LOG_ARCHIVE_SCHEDULE_STOPPING);
       if (OB_FAIL(do_checkpoint_(round_info))) {
         LOG_WARN("failed to checkpoint", K(ret), K(round_info));
       }
@@ -651,7 +645,7 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
   int64_t since_piece_id = 0;
   ObDestRoundSummary summary;
   ObDestRoundCheckpointer checkpointer;
-  ARCHIVE_SCN_TYPE max_checkpoint_scn = 0;
+  palf::SCN max_checkpoint_scn = palf::SCN::min_scn();
   if (OB_FAIL(ObTenantArchiveMgr::decide_piece_id(round_info.start_scn_, round_info.base_piece_id_, round_info.piece_switch_interval_, round_info.checkpoint_scn_, since_piece_id))) {
     LOG_WARN("failed to calc since piece id", K(ret), K(round_info));
   } else if (OB_FAIL(archive_table_op_.get_dest_round_summary(*sql_proxy_, round_info.dest_id_, round_info.round_id_, since_piece_id, summary))) {
@@ -671,21 +665,21 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
 int ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
 {
   int ret = OB_SUCCESS;
-  // TODO: notify each log stream.
+  // TODO: wangxiaohui.wxh notify each log stream.
   UNUSED(round);
   // Get all log streams, and try the best to notify each log stream event of archive start.
   return ret;
 }
 
-int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, ARCHIVE_SCN_TYPE &max_checkpoint_scn) const
+int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, palf::SCN &max_checkpoint_scn) const
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
   const bool for_update = false;
   if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy_, for_update, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-  } else if (OB_FALSE_IT(max_checkpoint_scn = tenant_info.get_standby_scn())){
-  } else if (OB_LS_MIN_SCN_VALUE >= max_checkpoint_scn) {
+  } else if (OB_FALSE_IT(max_checkpoint_scn = tenant_info.get_standby_scn())) {
+  } else if (palf::SCN::base_scn() >= max_checkpoint_scn) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("max_checkpoint_scn not valid", K(ret), K(tenant_info));
   }

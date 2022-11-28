@@ -18,6 +18,7 @@
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_rpc_struct.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -98,7 +99,7 @@ int ObTabletAutoincMgr::fetch_interval(const ObTabletAutoincParam &param, ObTabl
     }
     mutex_.unlock();
   }
-  return ret;  
+  return ret;
 }
 
 int ObTabletAutoincMgr::fetch_interval_without_cache(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval) {
@@ -113,7 +114,7 @@ int ObTabletAutoincMgr::fetch_interval_without_cache(const ObTabletAutoincParam 
   } else {
     interval.set(node.cache_start_, node.cache_end_);
   }
-  return ret;  
+  return ret;
 }
 
 int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
@@ -152,7 +153,7 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
     if (OB_FAIL(srv_rpc_proxy->to(leader_addr).fetch_tablet_autoinc_seq_cache(arg, res))) {
       LOG_WARN("fail to fetch autoinc cache for tablets", K(ret), K(arg));
     }
-    
+
     if (OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
       int64_t retry_times = 0;
@@ -181,7 +182,7 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
         ret = tmp_ret;
       }
     }
-    
+
     if (OB_SUCC(ret)) {
       node.cache_start_ = res.cache_interval_.start_;
       node.cache_end_ = res.cache_interval_.end_;
@@ -197,7 +198,7 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
     }
   }
 
-  
+
   return ret;
 }
 
@@ -252,8 +253,6 @@ int ObTabletAutoincrementService::get_autoinc_seq(const uint64_t tenant_id, cons
   }
   if (OB_SUCC(ret)) {
     ObTabletCacheInterval interval(tablet_id, 1/*cache size*/);
-    lib::ObMutex &mutex = init_node_mutexs_[tablet_id.id() % INIT_NODE_MUTEX_NUM];
-    lib::ObMutexGuard guard(mutex);
     if (OB_ISNULL(autoinc_mgr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("autoinc mgr is unexpected null", K(ret));
@@ -498,44 +497,12 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
           if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(autoinc_param.dest_tablet_id_, tablet_handle))) {
             LOG_WARN("failed to get tablet", K(tmp_ret), K(autoinc_param));
           } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_tablet_autoinc_seq(autoinc_param.autoinc_seq_,
-                                                                                    ObLogTsRange::MAX_TS))) {
+                                                                                    palf::SCN::max_scn()))) {
             LOG_WARN("failed to update tablet autoinc seq", K(tmp_ret), K(autoinc_param));
           }
           autoinc_param.ret_code_ = tmp_ret;
         }
       }
-    }
-  }
-  return ret;
-}
-
-int ObTabletAutoincSeqRpcHandler::replay_update_tablet_autoinc_seq(
-    const ObLS *ls,
-    const ObTabletID &tablet_id,
-    const uint64_t autoinc_seq,
-    const int64_t replay_log_ts)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(ls == nullptr || !tablet_id.is_valid() || autoinc_seq == 0 || replay_log_ts <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tablet_id), K(autoinc_seq), K(replay_log_ts));
-  } else {
-    ObTabletHandle tablet_handle;
-    ObBucketHashWLockGuard guard(bucket_lock_, tablet_id.hash());
-    if (OB_FAIL(ls->replay_get_tablet(tablet_id,
-                                      replay_log_ts,
-                                      tablet_handle))) {
-      if (OB_TABLET_NOT_EXIST == ret) {
-        LOG_INFO("tablet may be deleted, skip this log", K(ret), K(tablet_id), K(replay_log_ts));
-        ret = OB_SUCCESS;
-      } else if (OB_EAGAIN == ret) {
-        // retry replay again
-      } else {
-        LOG_WARN("fail to replay get tablet, retry again", K(ret), K(tablet_id), K(replay_log_ts));
-        ret = OB_EAGAIN;
-      }
-    } else if (OB_FAIL(tablet_handle.get_obj()->update_tablet_autoinc_seq(autoinc_seq, replay_log_ts))) {
-      LOG_WARN("failed to update tablet auto inc seq", K(ret), K(autoinc_seq), K(replay_log_ts));
     }
   }
   return ret;

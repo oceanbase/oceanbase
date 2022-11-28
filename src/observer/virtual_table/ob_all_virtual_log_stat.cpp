@@ -172,35 +172,50 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 10: {
-        cur_row_.cells_[i].set_bool(log_stat.in_sync_);
+        cur_row_.cells_[i].set_bool(palf_stat.allow_vote_);
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 11: {
-        cur_row_.cells_[i].set_uint64(palf_stat.base_lsn_.val_);
+        cur_row_.cells_[i].set_bool(log_stat.in_sync_);
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 12: {
-        cur_row_.cells_[i].set_uint64(palf_stat.begin_lsn_.val_);
+        if (OB_FAIL(palf::log_replica_type_to_string(palf_stat.replica_type_, replica_type_str_, sizeof(replica_type_str_)))) {
+          SERVER_LOG(WARN, "log_replica_type_to_string failed", K(ret), K(palf_stat));
+        } else {
+          cur_row_.cells_[i].set_varchar(ObString::make_string(replica_type_str_));
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                                ObCharset::get_default_charset()));
+        }
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 13: {
-        cur_row_.cells_[i].set_uint64(static_cast<uint64_t>(palf_stat.begin_ts_ns_));
+        //TODO SCN
+        cur_row_.cells_[i].set_uint64(palf_stat.base_lsn_.val_);
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 14: {
-        cur_row_.cells_[i].set_uint64(palf_stat.end_lsn_.val_);
+        cur_row_.cells_[i].set_uint64(palf_stat.begin_lsn_.val_);
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 15: {
-        cur_row_.cells_[i].set_uint64(static_cast<uint64_t>(palf_stat.end_ts_ns_));
+        cur_row_.cells_[i].set_uint64(palf_stat.begin_scn_.get_val_for_inner_table_field());
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 16: {
-        cur_row_.cells_[i].set_uint64(palf_stat.max_lsn_.val_);
+        cur_row_.cells_[i].set_uint64(palf_stat.end_lsn_.val_);
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 17: {
-        cur_row_.cells_[i].set_uint64(static_cast<uint64_t>(palf_stat.max_ts_ns_));
+        cur_row_.cells_[i].set_uint64(palf_stat.end_scn_.get_val_for_inner_table_field());
+        break;
+      }
+      case OB_APP_MIN_COLUMN_ID + 18: {
+        cur_row_.cells_[i].set_uint64(palf_stat.max_lsn_.val_);
+        break;
+      }
+      case OB_APP_MIN_COLUMN_ID + 19: {
+        cur_row_.cells_[i].set_uint64(palf_stat.max_scn_.get_val_for_inner_table_field());
         break;
       }
     }

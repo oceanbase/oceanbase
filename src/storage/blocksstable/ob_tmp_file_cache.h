@@ -106,14 +106,12 @@ public:
   int prefetch(
       const ObTmpPageCacheKey &key,
       const ObTmpBlockIOInfo &info,
-      ObMacroBlockHandle &mb_handle,
-      common::ObIAllocator &allocator);
+      ObMacroBlockHandle &mb_handle);
   // multi page prefetch
   int prefetch(
       const ObTmpBlockIOInfo &info,
       const common::ObIArray<ObTmpPageIOInfo> &page_io_infos,
-      ObMacroBlockHandle &mb_handle,
-      common::ObIAllocator &allocator);
+      ObMacroBlockHandle &mb_handle);
   int get_cache_page(const ObTmpPageCacheKey &key, ObTmpPageValueHandle &handle);
   int get_page(const ObTmpPageCacheKey &key, ObTmpPageValueHandle &handle);
   int put_page(const ObTmpPageCacheKey &key, const ObTmpPageCacheValue &value);
@@ -165,7 +163,7 @@ public:
     TO_STRING_KV(KP_(data_buf));
   private:
     friend class ObTmpPageCache;
-    common::ObArray<ObTmpPageIOInfo> page_io_infos_;
+    common::ObIArray<ObTmpPageIOInfo> *page_io_infos_;
   };
 private:
   ObTmpPageCache();
@@ -174,6 +172,7 @@ private:
       ObMacroBlockHandle &handle);
 
 private:
+  common::ObConcurrentFIFOAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpPageCache);
 };
 

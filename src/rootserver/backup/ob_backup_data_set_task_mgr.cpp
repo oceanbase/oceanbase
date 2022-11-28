@@ -110,7 +110,7 @@ int ObBackupSetTaskMgr::advance_status_(
     ObMySQLTransaction &trans,
     const ObBackupStatus &next_status, 
     const int result,
-    const ObBackupSCN &scn,
+    const palf::SCN &scn,
     const int64_t end_ts)
 {
   int ret = OB_SUCCESS;
@@ -387,15 +387,9 @@ int ObBackupSetTaskMgr::backup_user_meta_()
   int ret = OB_SUCCESS;
   ObArray<ObBackupLSTaskAttr> ls_task;
   int64_t finish_cnt = 0;
-  uint64_t backup_meta_start_ts = trans_scn_to_timestamp(set_task_attr_.user_ls_start_scn_);
-  int64_t backup_user_meta_timeout = OB_MAX_BACKUP_META_TIMEOUT;
-
-#ifdef ERRSIM
-  backup_user_meta_timeout = GCONF.errsim_max_backup_meta_retry_time_interval;
-#endif
-
+  uint64_t backup_meta_start_ts = set_task_attr_.user_ls_start_scn_.convert_to_ts();
   DEBUG_SYNC(BEFORE_BACKUP_UESR_META);
-  if (backup_meta_start_ts + backup_user_meta_timeout < ObTimeUtility::current_time()) {
+  if (backup_meta_start_ts + OB_MAX_BACKUP_META_TIMEOUT < ObTimeUtility::current_time()) {
     // backup meta overtime, need change meta turn.
     // get new ls list, and do backup meta in new turn.
     if (OB_FAIL(enable_transfer_())) {
@@ -544,7 +538,7 @@ int ObBackupSetTaskMgr::merge_tablet_to_ls_info_(const ObIArray<ObBackupLSTaskAt
   ObHashMap<ObLSID, const ObBackupLSTaskAttr *> ls_map;
   share::ObBackupDataTabletToLSDesc tablet_to_ls_desc;
   const int64_t OB_BACKUP_MAX_LS_BUCKET = 1024;
-  share::ObBackupSCN max_backup_scn = 0;
+  palf::SCN max_backup_scn;
   if (ls_tasks.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(ls_tasks));
@@ -566,7 +560,7 @@ int ObBackupSetTaskMgr::merge_tablet_to_ls_info_(const ObIArray<ObBackupLSTaskAt
       const ObLSID &ls_id = iter->first;
       const int64_t retry_id = iter->second->retry_id_;
       share::ObBackupDataTabletToLSInfo tablet_to_ls_info;
-      ObBackupSCN backup_scn = 0;
+      palf::SCN backup_scn = palf::SCN::min_scn();
       ObArray<ObTabletID> latest_tablet_id;
       if (OB_FAIL(get_extern_tablet_info_(ls_id, retry_id, tablet_to_ls_info, backup_scn))) {
         LOG_WARN("fail to get extern tablet info", K(ret), K(ls_id), K(retry_id));
@@ -605,7 +599,7 @@ int ObBackupSetTaskMgr::merge_tablet_to_ls_info_(const ObIArray<ObBackupLSTaskAt
 int ObBackupSetTaskMgr::get_extern_tablet_info_(
     const share::ObLSID &ls_id, const int64_t &retry_cnt, 
     share::ObBackupDataTabletToLSInfo &tablet_to_ls_info, 
-    ObBackupSCN &backup_scn)
+    palf::SCN &backup_scn)
 {
   int ret = OB_SUCCESS;
   share::ObBackupSetDesc backup_set_desc;
@@ -640,7 +634,7 @@ int ObBackupSetTaskMgr::check_tablets_match_(
     const ObLSID &ls_id,
     const ObIArray<ObTabletID> &cur_tablet_ids, 
     const ObIArray<ObTabletID> &user_tablet_ids, 
-    const ObBackupSCN &backup_scn)
+    const palf::SCN &backup_scn)
 {
   int ret = OB_SUCCESS;
   ObHashSet<ObTabletID> tablet_set;
@@ -686,7 +680,7 @@ int ObBackupSetTaskMgr::check_tablets_match_(
 int ObBackupSetTaskMgr::do_check_inc_tablets_(
     const ObLSID &ls_id, 
     const ObIArray<ObTabletID> &inc_tablets, 
-    const ObBackupSCN &backup_scn)
+    const palf::SCN &backup_scn)
 {
   int ret = OB_SUCCESS;
   ObAddr dst_server;
@@ -854,7 +848,7 @@ int ObBackupSetTaskMgr::backup_data_()
   } else if (OB_FAIL(do_backup_data_(ls_task, finish_cnt, build_index_attr))) {
     LOG_WARN("[DATA_BACKUP]failed to do backup ls task", K(ret), K(ls_task));
   } else if (ls_task.count() == finish_cnt) {
-    ObBackupSCN end_scn = 0;
+    palf::SCN end_scn = palf::SCN::min_scn();
     bool need_change_turn = false;
     bool finish_build_index = false;
     ObSArray<share::ObBackupDataTabletToLSInfo> tablets_to_ls;
@@ -1522,7 +1516,7 @@ int ObBackupSetTaskMgr::write_backup_set_info_(
 {
   int ret = OB_SUCCESS;
   int64_t dest_id = 0;
-  uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+  uint64_t cluster_version = ObClusterVersion::get_instance().get_cluster_version();
   ObBackupSetFileDesc &backup_set_file = backup_set_info.backup_set_file_;
   ObBackupDest backup_dest;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, set_task_attr.backup_path_, backup_dest))) {
@@ -1566,18 +1560,17 @@ int ObBackupSetTaskMgr::write_backup_set_info_(
   return ret;
 }
 
-int ObBackupSetTaskMgr::calculate_start_replay_scn_(ObBackupSCN &start_replay_scn)
+int ObBackupSetTaskMgr::calculate_start_replay_scn_(palf::SCN &start_replay_scn)
 {
   int ret = OB_SUCCESS;
   ObBackupLSMetaInfosDesc ls_meta_infos;
-  ObBackupSCN tmp_start_replay_scn = set_task_attr_.start_scn_;
+  palf::SCN tmp_start_replay_scn = set_task_attr_.start_scn_;
   if (OB_FAIL(store_.read_ls_meta_infos(ls_meta_infos))) {
     LOG_WARN("fail to read ls meta infos", K(ret));
   } else {
     ARRAY_FOREACH_X(ls_meta_infos.ls_meta_packages_, i, cnt, OB_SUCC(ret)) {
       const palf::PalfBaseInfo &palf_base_info = ls_meta_infos.ls_meta_packages_.at(i).palf_meta_;
-      ObBackupSCN prev_log_scn = palf_base_info.prev_log_info_.log_ts_;
-      tmp_start_replay_scn = std::min(tmp_start_replay_scn, prev_log_scn);
+      tmp_start_replay_scn = palf::SCN::min(tmp_start_replay_scn, palf_base_info.prev_log_info_.log_scn_);
     }
     if (OB_SUCC(ret)) {
       start_replay_scn = tmp_start_replay_scn;
@@ -1641,8 +1634,8 @@ int ObBackupSetTaskMgr::write_extern_diagnose_info_(
 int ObBackupSetTaskMgr::write_backup_set_placeholder(const bool is_start) 
 {
   int ret = OB_SUCCESS;
-  ObBackupSCN start_replay_scn = job_attr_->plus_archivelog_ ? set_task_attr_.end_scn_ : set_task_attr_.start_scn_;
-  ObBackupSCN min_restore_scn = set_task_attr_.end_scn_;
+  palf::SCN start_replay_scn = job_attr_->plus_archivelog_ ? set_task_attr_.end_scn_ : set_task_attr_.start_scn_;
+  palf::SCN min_restore_scn = set_task_attr_.end_scn_;
   bool is_inner = is_start ? false : true;
   bool is_success = OB_SUCCESS == job_attr_->result_ ? true : false;
   if (is_start) {

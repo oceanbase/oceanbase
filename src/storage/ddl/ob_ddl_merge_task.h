@@ -21,7 +21,6 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
-#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 namespace oceanbase
 {
@@ -43,26 +42,22 @@ public:
       tablet_id_(),
       rec_log_ts_(0),
       is_commit_(false),
-      start_log_ts_(0),
       table_id_(0),
-      execution_id_(0),
-      ddl_task_id_(0)
+      schema_version_(0)
   {}
   bool is_valid() const
   {
-    return ls_id_.is_valid() && tablet_id_.is_valid() && start_log_ts_ > 0;
+    return ls_id_.is_valid() && tablet_id_.is_valid();
   }
   virtual ~ObDDLTableMergeDagParam() = default;
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_log_ts), K_(is_commit), K_(start_log_ts), K_(table_id), K_(execution_id), K_(ddl_task_id));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_log_ts), K_(is_commit), K_(table_id), K_(schema_version));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   int64_t rec_log_ts_;
   bool is_commit_;
-  int64_t start_log_ts_; // start log ts at schedule, for skipping expired task
   uint64_t table_id_; // used for report ddl checksum
-  int64_t execution_id_; // used for report ddl checksum
-  int64_t ddl_task_id_; // used for report ddl checksum
+  int64_t schema_version_; // used for report ddl checksum
 };
 
 class ObDDLTableMergeDag : public share::ObIDag
@@ -78,7 +73,6 @@ public:
   virtual int64_t hash() const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual bool ignore_warning() override;
   virtual lib::Worker::CompatMode get_compat_mode() const override
   { return compat_mode_; }
 private:
@@ -168,12 +162,11 @@ public:
   static int report_ddl_checksum(const share::ObLSID &ls_id,
                                  const ObTabletID &tablet_id,
                                  const uint64_t table_id,
-                                 const int64_t execution_id,
-                                 const int64_t ddl_task_id,
+                                 const int64_t schema_version,
                                  const ObIArray<int64_t> &column_checksums);
-  static int check_and_get_major_sstable(const share::ObLSID &ls_id,
-                                         const ObTabletID &tablet_id,
-                                         const blocksstable::ObSSTable *&latest_major_sstable);
+  static int check_if_major_sstable_exist(const share::ObLSID &ls_id,
+                                          const ObTabletID &tablet_id,
+                                          bool &is_major_sstable_exist);
 
 };
 

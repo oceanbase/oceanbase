@@ -576,7 +576,7 @@ public:
   SampleInfo *get_sample_info_by_table_id(uint64_t table_id);
   // check if a table is using sample scan
   bool is_sample_scan(uint64_t table_id) const { return get_sample_info_by_table_id(table_id) != nullptr; }
-  virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const override;
+  virtual bool check_table_be_modified(uint64_t ref_table_id) const;
 
   // check aggregation has distinct or group concat e.g.:
   //  count(distinct c1)

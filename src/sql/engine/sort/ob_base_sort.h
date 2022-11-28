@@ -59,7 +59,9 @@ public:
       ObSortColumnExtra(),
       extra_info_(0)
   {
-    extra_info_ |= SORT_COL_EXTRA_BIT;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2240) {
+      extra_info_ |= SORT_COL_EXTRA_BIT;
+    }
   }
   ObSortColumn(int64_t index,
                common::ObCollationType cs_type,
@@ -73,7 +75,11 @@ public:
     } else {
       extra_info_ &= SORT_COL_ASC_MASK;
     }
-    extra_info_ |= SORT_COL_EXTRA_BIT;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2240) {
+      extra_info_ |= SORT_COL_EXTRA_BIT;
+    } else {
+      extra_info_ &= SORT_COL_EXTRA_MASK;
+    }
   }
   ObSortColumn(int64_t index,
                common::ObCollationType cs_type,
@@ -89,7 +95,9 @@ public:
       extra_info_ |= SORT_COL_ASC_BIT;
     }
     extra_info_ &= SORT_COL_EXTRA_MASK;
-    extra_info_ |= SORT_COL_EXTRA_BIT;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2240) {
+      extra_info_ |= SORT_COL_EXTRA_BIT;
+    }
   }
   bool is_ascending() const {
     return (extra_info_ & SORT_COL_ASC_BIT) > 0;

@@ -52,18 +52,29 @@ int ObGlobalMergeTableOperator::load_global_merge_info(
       } else {
         bool exist = false;
         while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          uint64_t frozen_scn_val = UINT64_MAX;
+          uint64_t global_broadcast_scn_val = UINT64_MAX;
+          uint64_t last_merged_scn_val = UINT64_MAX;
           info.tenant_id_ = tenant_id;
           EXTRACT_INT_FIELD_MYSQL(*result, "cluster", info.cluster_.value_, int64_t);
-          EXTRACT_UINT_FIELD_MYSQL(*result, "frozen_scn", info.frozen_scn_.value_, uint64_t);
-          EXTRACT_UINT_FIELD_MYSQL(*result, "global_broadcast_scn", info.global_broadcast_scn_.value_, uint64_t);
+          EXTRACT_UINT_FIELD_MYSQL(*result, "frozen_scn", frozen_scn_val, uint64_t);
+          EXTRACT_UINT_FIELD_MYSQL(*result, "global_broadcast_scn", global_broadcast_scn_val, uint64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "is_merge_error", info.is_merge_error_.value_, int64_t);
-          EXTRACT_UINT_FIELD_MYSQL(*result, "last_merged_scn", info.last_merged_scn_.value_, uint64_t);
+          EXTRACT_UINT_FIELD_MYSQL(*result, "last_merged_scn", last_merged_scn_val, uint64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "merge_status", info.merge_status_.value_, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "error_type", info.error_type_.value_, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "suspend_merging", info.suspend_merging_.value_, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "merge_start_time", info.merge_start_time_.value_, int64_t);
           EXTRACT_INT_FIELD_MYSQL(*result, "last_merged_time", info.last_merged_time_.value_, int64_t);
-          exist = true;
+          if (FAILEDx(info.frozen_scn_.set_scn(frozen_scn_val))) {
+            LOG_WARN("fail to set frozen scn val", KR(ret), K(frozen_scn_val));
+          } else if (OB_FAIL(info.global_broadcast_scn_.set_scn(global_broadcast_scn_val))) {
+            LOG_WARN("fail to set global broadcast scn val", KR(ret), K(global_broadcast_scn_val));
+          } else if (OB_FAIL(info.last_merged_scn_.set_scn(last_merged_scn_val))) {
+            LOG_WARN("fail to set last merged scn val", KR(ret), K(last_merged_scn_val));
+          } else {
+            exist = true;
+          }
         }
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -94,10 +105,10 @@ int ObGlobalMergeTableOperator::insert_global_merge_info(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(info));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
             || OB_FAIL(dml.add_uint64_column("cluster", info.cluster_.value_))
-            || OB_FAIL(dml.add_uint64_column("frozen_scn", info.frozen_scn_.value_))
-            || OB_FAIL(dml.add_uint64_column("global_broadcast_scn", info.global_broadcast_scn_.value_))
+            || OB_FAIL(dml.add_uint64_column("frozen_scn", info.frozen_scn_.get_scn_val()))
+            || OB_FAIL(dml.add_uint64_column("global_broadcast_scn", info.global_broadcast_scn_.get_scn_val()))
             || OB_FAIL(dml.add_uint64_column("is_merge_error", info.is_merge_error_.value_))
-            || OB_FAIL(dml.add_uint64_column("last_merged_scn", info.last_merged_scn_.value_))
+            || OB_FAIL(dml.add_uint64_column("last_merged_scn", info.last_merged_scn_.get_scn_val()))
             || OB_FAIL(dml.add_uint64_column("merge_status", info.merge_status_.value_))
             || OB_FAIL(dml.add_uint64_column("error_type", info.error_type_.value_))
             || OB_FAIL(dml.add_uint64_column("suspend_merging", info.suspend_merging_.value_))
@@ -139,11 +150,16 @@ int ObGlobalMergeTableOperator::update_partial_global_merge_info(
           LOG_WARN("null item", KR(ret), KP(it), K(tenant_id), K(info));
         } else {
           if (it->need_update_) {
-            if (OB_FAIL(dml.add_uint64_column(it->name_, it->value_))) {
-              LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(info), K(*it));
+            if (it->is_scn_) {
+              if (OB_FAIL(dml.add_uint64_column(it->name_, it->get_scn_val()))) {
+                LOG_WARN("fail to add scn column", KR(ret), K(tenant_id), K(info), K(*it));
+              }
             } else {
-              need_update = true;
+              if (OB_FAIL(dml.add_uint64_column(it->name_, it->value_))) {
+                LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(info), K(*it));
+              }
             }
+            need_update = true;
           }
           it = it->get_next();
         }

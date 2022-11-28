@@ -20,27 +20,26 @@
 #define _OB_CLUSTER_PARAMETER common::Scope::CLUSTER
 #define _OB_TENANT_PARAMETER common::Scope::TENANT
 
-#define _DEF_PARAMETER_SCOPE_EASY(access_specifier, param, name, SCOPE, args...)                        \
-  SCOPE(_DEF_PARAMETER_EASY(access_specifier, param, _ ## SCOPE, name, args))
-#define _DEF_PARAMETER_SCOPE_RANGE_EASY(access_specifier, param, name, SCOPE, args...)                  \
-  SCOPE(_DEF_PARAMETER_RANGE_EASY(access_specifier, param, _ ## SCOPE, name, args))
-#define _DEF_PARAMETER_SCOPE_CHECKER_EASY(access_specifier, param, name, SCOPE, args...)                \
-  SCOPE(_DEF_PARAMETER_CHECKER_EASY(access_specifier, param, _ ## SCOPE, name, args))
+#define _DEF_PARAMETER_SCOPE_EASY(param, name, SCOPE, args...)                 \
+  SCOPE(_DEF_PARAMETER_EASY(param, _ ## SCOPE, name, args))
+#define _DEF_PARAMETER_SCOPE_RANGE_EASY(param, name, SCOPE, args...)           \
+  SCOPE(_DEF_PARAMETER_RANGE_EASY(param, _ ## SCOPE, name, args))
+#define _DEF_PARAMETER_SCOPE_CHECKER_EASY(param, name, SCOPE, args...)         \
+  SCOPE(_DEF_PARAMETER_CHECKER_EASY(param, _ ## SCOPE, name, args))
 
-#define _DEF_PARAMETER_SCOPE_IP_EASY(access_specifier, param, name, SCOPE, def, args...)                \
-  SCOPE(_DEF_PARAMETER_CHECKER_EASY(access_specifier, param, _ ## SCOPE, name, def,                     \
+#define _DEF_PARAMETER_SCOPE_IP_EASY(param, name, SCOPE, def, args...)         \
+  SCOPE(_DEF_PARAMETER_CHECKER_EASY(param, _ ## SCOPE, name, def,              \
                                     common::ObConfigIpChecker, args))
-#define _DEF_PARAMETER_SCOPE_LOG_LEVEL_EASY(access_specifier, param, name, SCOPE, def, args...)         \
-  SCOPE(_DEF_PARAMETER_CHECKER_EASY(access_specifier, param, _ ## SCOPE, name, def,                     \
+#define _DEF_PARAMETER_SCOPE_LOG_LEVEL_EASY(param, name, SCOPE, def, args...)  \
+  SCOPE(_DEF_PARAMETER_CHECKER_EASY(param, _ ## SCOPE, name, def,              \
                                     common::ObConfigLogLevelChecker, args))
 
-#define _DEF_PARAMETER_SCOPE_WORK_AREA_POLICY_EASY(access_specifier, param, name, SCOPE, def, args...)  \
-  SCOPE(_DEF_PARAMETER_CHECKER_EASY(access_specifier, param, _ ## SCOPE, name, def,                     \
+#define _DEF_PARAMETER_SCOPE_WORK_AREA_POLICY_EASY(param, name, SCOPE, def, args...)  \
+  SCOPE(_DEF_PARAMETER_CHECKER_EASY(param, _ ## SCOPE, name, def,              \
                                     common::ObConfigWorkAreaPolicyChecker, args))
 
 // TODO: use parameter instead of config
-#define _DEF_PARAMETER_EASY(access_specifier, param, scope, name, args...)                 \
-access_specifier:                                                                          \
+#define _DEF_PARAMETER_EASY(param, scope, name, args...)                       \
   class ObConfig ## param ## Item ## _ ## name                                 \
       : public common::ObConfig ## param ## Item                               \
   {                                                                            \
@@ -57,8 +56,7 @@ access_specifier:                                                               
     TO_STRING_KV(K_(value_str))                                                \
   } name;
 
-#define _DEF_PARAMETER_RANGE_EASY(access_specifier, param, scope, name, args...)           \
-access_specifier:                                                                          \
+#define _DEF_PARAMETER_RANGE_EASY(param, scope, name, args...)                 \
   class ObConfig ## param ## Item ## _ ## name                                 \
       : public common::ObConfig ## param ## Item                               \
   {                                                                            \
@@ -74,8 +72,7 @@ access_specifier:                                                               
     }                                                                          \
   } name;
 
-#define _DEF_PARAMETER_CHECKER_EASY(access_specifier, param, scope, name, def, checker, args...) \
-access_specifier:                                                                          \
+#define _DEF_PARAMETER_CHECKER_EASY(param, scope, name, def, checker, args...) \
   class ObConfig ## param ## Item ## _ ## name                                 \
       : public common::ObConfig ## param ## Item                               \
   {                                                                            \
@@ -96,54 +93,54 @@ access_specifier:                                                               
 
 ////////////////////////////////////////////////////////////////////////////////
 #define DEF_INT(args...)                                                       \
-  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Int, args)
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(Int, args)
 
 #define DEF_INT_WITH_CHECKER(args...)                                          \
-  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, Int, args)
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(Int, args)
 
 #define DEF_DBL(args...)                                                       \
-  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Double, args)
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(Double, args)
 
 #define DEF_CAP(args...)                                                       \
-  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Capacity, args)
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(Capacity, args)
 
 #define DEF_CAP_WITH_CHECKER(args...)                                          \
-  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, Capacity, args)
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(Capacity, args)
 
 #define DEF_TIME(args...)                                                      \
-  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Time, args)
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(Time, args)
 
 #define DEF_TIME_WITH_CHECKER(args...)                                         \
-  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, Time, args)
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(Time, args)
 
 #define DEF_BOOL(args...)                                                      \
-  _DEF_PARAMETER_SCOPE_EASY(public, Bool, args)
+  _DEF_PARAMETER_SCOPE_EASY(Bool, args)
 
 #define DEF_STR(args...)                                                       \
-  _DEF_PARAMETER_SCOPE_EASY(public, String, args)
+  _DEF_PARAMETER_SCOPE_EASY(String, args)
 
 #define DEF_STR_WITH_CHECKER(args...)                                          \
-  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, String, args)
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(String, args)
 
 #define DEF_IP(args...)                                                        \
-  _DEF_PARAMETER_SCOPE_IP_EASY(public, String, args)
+  _DEF_PARAMETER_SCOPE_IP_EASY(String, args)
 
 #define DEF_MOMENT(args...)                                                    \
-  _DEF_PARAMETER_SCOPE_EASY(public, Moment, args)
+  _DEF_PARAMETER_SCOPE_EASY(Moment, args)
 
 #define DEF_INT_LIST(args...)                                                  \
-  _DEF_PARAMETER_SCOPE_EASY(public, IntList, args)
+  _DEF_PARAMETER_SCOPE_EASY(IntList, args)
 
 #define DEF_STR_LIST(args...)                                                  \
-  _DEF_PARAMETER_SCOPE_EASY(public, StrList, args)
+  _DEF_PARAMETER_SCOPE_EASY(StrList, args)
 
 #define DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(args...)                          \
-  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, LogArchiveOptions, args)
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(LogArchiveOptions, args)
 #define DEF_LOG_LEVEL(args...)                                                 \
-  _DEF_PARAMETER_SCOPE_LOG_LEVEL_EASY(public, String, args)
+  _DEF_PARAMETER_SCOPE_LOG_LEVEL_EASY(String, args)
 
 #define DEF_WORK_AREA_POLICY(args...)                                          \
-  _DEF_PARAMETER_SCOPE_WORK_AREA_POLICY_EASY(public, String, args)
+  _DEF_PARAMETER_SCOPE_WORK_AREA_POLICY_EASY(String, args)
 
 
 
@@ -152,55 +149,55 @@ access_specifier:                                                               
 #ifdef ERRSIM
 
 #define ERRSIM_DEF_INT(args...)                                                       \
-  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Int, args)
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(Int, args)
 
 #define ERRSIM_DEF_INT_WITH_CHECKER(args...)                                          \
-  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, Int, args)
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(Int, args)
 
 #define ERRSIM_DEF_DBL(args...)                                                       \
-  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Double, args)
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(Double, args)
 
 #define ERRSIM_DEF_CAP(args...)                                                       \
-  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Capacity, args)
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(Capacity, args)
 
 #define ERRSIM_DEF_CAP_WITH_CHECKER(args...)                                          \
-  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, Capacity, args)
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(Capacity, args)
 
 #define ERRSIM_DEF_TIME(args...)                                                      \
-  _DEF_PARAMETER_SCOPE_RANGE_EASY(public, Time, args)
+  _DEF_PARAMETER_SCOPE_RANGE_EASY(Time, args)
 
 #define ERRSIM_DEF_TIME_WITH_CHECKER(args...)                                         \
-  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, Time, args)
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(Time, args)
 
 #define ERRSIM_DEF_BOOL(args...)                                                      \
-  _DEF_PARAMETER_SCOPE_EASY(public, Bool, args)
+  _DEF_PARAMETER_SCOPE_EASY(Bool, args)
 
 #define ERRSIM_DEF_STR(args...)                                                       \
-  _DEF_PARAMETER_SCOPE_EASY(public, String, args)
+  _DEF_PARAMETER_SCOPE_EASY(String, args)
 
 #define ERRSIM_DEF_STR_WITH_CHECKER(args...)                                          \
-  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, String, args)
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(String, args)
 
 #define ERRSIM_DEF_IP(args...)                                                        \
-  _DEF_PARAMETER_SCOPE_IP_EASY(public, String, args)
+  _DEF_PARAMETER_SCOPE_IP_EASY(String, args)
 
 #define ERRSIM_DEF_MOMENT(args...)                                                    \
-  _DEF_PARAMETER_SCOPE_EASY(public, Moment, args)
+  _DEF_PARAMETER_SCOPE_EASY(Moment, args)
 
 #define ERRSIM_DEF_INT_LIST(args...)                                                  \
-  _DEF_PARAMETER_SCOPE_EASY(public, IntList, args)
+  _DEF_PARAMETER_SCOPE_EASY(IntList, args)
 
 #define ERRSIM_DEF_STR_LIST(args...)                                                  \
-  _DEF_PARAMETER_SCOPE_EASY(public, StrList, args)
+  _DEF_PARAMETER_SCOPE_EASY(StrList, args)
 
 #define ERRSIM_DEF_LOG_ARCHIVE_OPTIONS_WITH_CHECKER(args...)                          \
-  _DEF_PARAMETER_SCOPE_CHECKER_EASY(public, LogArchiveOptions, args)
+  _DEF_PARAMETER_SCOPE_CHECKER_EASY(LogArchiveOptions, args)
 
 #define ERRSIM_DEF_LOG_LEVEL(args...)                                                 \
-  _DEF_PARAMETER_SCOPE_LOG_LEVEL_EASY(public, String, args)
+  _DEF_PARAMETER_SCOPE_LOG_LEVEL_EASY(String, args)
 
 #define ERRSIM_DEF_WORK_AREA_POLICY(args...)                                          \
-  _DEF_PARAMETER_SCOPE_WORK_AREA_POLICY_EASY(public, String, args)
+  _DEF_PARAMETER_SCOPE_WORK_AREA_POLICY_EASY(String, args)
 
 #else
 #define ERRSIM_DEF_INT(args...)

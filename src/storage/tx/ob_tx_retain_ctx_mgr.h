@@ -36,7 +36,7 @@ class ObTxRetainCtxMgr;
 class ObAdvanceLSCkptTask : public ObTransTask
 {
 public:
-  ObAdvanceLSCkptTask(share::ObLSID ls_id, int64_t target_ts);
+  ObAdvanceLSCkptTask(share::ObLSID ls_id, palf::SCN target_ts);
   ~ObAdvanceLSCkptTask() { reset(); }
   void reset();
 
@@ -44,7 +44,7 @@ public:
 
 private:
   share::ObLSID ls_id_;
-  int64_t target_ckpt_ts_;
+  palf::SCN target_ckpt_ts_;
 };
 
 /**
@@ -79,16 +79,16 @@ class ObMDSRetainCtxFunctor : public ObIRetainCtxCheckFunctor
 public:
   ObMDSRetainCtxFunctor() : ObIRetainCtxCheckFunctor()
   {
-    final_log_ts_ = OB_INVALID_TIMESTAMP;
+    final_log_ts_.reset();
     final_log_lsn_.reset();
   }
-  int init(ObPartTransCtx *ctx, RetainCause cause, int64_t final_log_ts, palf::LSN final_log_lsn);
+  int init(ObPartTransCtx *ctx, RetainCause cause, const palf::SCN &final_log_ts, palf::LSN final_log_lsn);
 
   virtual int operator()(storage::ObLS *ls, ObTxRetainCtxMgr * retain_mgr) override;
   virtual bool is_valid() override;
 
 private:
-  int64_t final_log_ts_;
+  palf::SCN final_log_ts_;
   palf::LSN final_log_lsn_;
 };
 
@@ -116,8 +116,8 @@ public:
   int print_retain_ctx_info(share::ObLSID ls_id);
   int force_gc_retain_ctx();
 
-  void set_max_ckpt_ts(int64_t ckpt_ts) { inc_update(&max_wait_ckpt_ts_, ckpt_ts); }
-  int64_t get_max_ckpt_ts() { return ATOMIC_LOAD(&max_wait_ckpt_ts_); }
+  void set_max_ckpt_ts(palf::SCN ckpt_ts) { max_wait_ckpt_ts_.inc_update(ckpt_ts); }
+  //palf::SCN get_max_ckpt_ts() { return ATOMIC_LOAD(&max_wait_ckpt_ts_); }
   int64_t get_retain_ctx_cnt() { return retain_ctx_list_.size(); }
 
   void try_advance_retain_ctx_gc(share::ObLSID ls_id);
@@ -126,7 +126,7 @@ public:
 
 private:
   int remove_ctx_func_(RetainCtxList::iterator remove_iter);
-  int for_each_remove_(RetainFuncHandler remove_handler, storage::ObLS *ls, const int64_t max_run_us);
+  int for_each_remove_(RetainFuncHandler remove_handler, storage::ObLS *ls);
   int try_gc_(ObIRetainCtxCheckFunctor *func_ptr, bool &need_remove, storage::ObLS *ls);
   int force_gc_(ObIRetainCtxCheckFunctor *func_ptr, bool &need_remove, storage::ObLS *ls);
 
@@ -134,7 +134,7 @@ private:
   common::SpinRWLock retain_ctx_lock_;
   RetainCtxList retain_ctx_list_;
 
-  int64_t max_wait_ckpt_ts_;
+  palf::SCN max_wait_ckpt_ts_;
   int64_t last_push_gc_task_ts_;
 
   TransModulePageAllocator reserve_allocator_;

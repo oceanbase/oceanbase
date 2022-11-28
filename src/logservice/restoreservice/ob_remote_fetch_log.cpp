@@ -123,7 +123,7 @@ int ObRemoteFetchLogImpl::do_fetch_log_(ObLS &ls)
   bool need_schedule = false;
   int64_t proposal_id = -1;
   LSN lsn;
-  int64_t pre_log_ts = OB_INVALID_TIMESTAMP;   // log_ts to locate piece
+  SCN pre_log_scn;   // log_scn to locate piece
   LSN max_fetch_lsn;
   int64_t last_fetch_ts = OB_INVALID_TIMESTAMP;
   int64_t size = 0;
@@ -143,9 +143,9 @@ int ObRemoteFetchLogImpl::do_fetch_log_(ObLS &ls)
           proposal_id, max_fetch_lsn, last_fetch_ts))) {
     LOG_WARN("check need schedule failed", K(ret), K(id));
   } else if (! need_schedule) {
-  } else if (OB_FAIL(get_fetch_log_base_lsn_(ls, max_fetch_lsn, last_fetch_ts, pre_log_ts, lsn, size))) {
+  } else if (OB_FAIL(get_fetch_log_base_lsn_(ls, max_fetch_lsn, last_fetch_ts, pre_log_scn, lsn, size))) {
     LOG_WARN("get fetch log base lsn failed", K(ret), K(id));
-  } else if (OB_FAIL(submit_fetch_log_task_(ls, pre_log_ts, lsn, size, proposal_id))) {
+  } else if (OB_FAIL(submit_fetch_log_task_(ls, pre_log_scn, lsn, size, proposal_id))) {
     LOG_WARN("submit fetch log task failed", K(ret), K(id), K(lsn), K(size));
   } else {
     LOG_TRACE("do fetch log succ", K(id), K(lsn), K(size));
@@ -202,7 +202,7 @@ int ObRemoteFetchLogImpl::get_fetch_log_max_lsn_(ObLS &ls, palf::LSN &max_lsn)
 int ObRemoteFetchLogImpl::get_fetch_log_base_lsn_(ObLS &ls,
     const LSN &max_fetch_lsn,
     const int64_t last_fetch_ts,
-    int64_t &heuristic_log_ts,
+    SCN &heuristic_log_scn,
     LSN &lsn,
     int64_t &size)
 {
@@ -212,7 +212,7 @@ int ObRemoteFetchLogImpl::get_fetch_log_base_lsn_(ObLS &ls,
   const int64_t default_fetch_size = LEADER_DEFAULT_GROUP_BUFFER_SIZE;
   const bool ignore_restore = OB_INVALID_TIMESTAMP == last_fetch_ts
     || last_fetch_ts < ObTimeUtility::current_time() - 5 * 1000 * 1000L;
-  if (OB_FAIL(get_palf_base_lsn_ts_(ls, end_lsn, heuristic_log_ts))) {
+  if (OB_FAIL(get_palf_base_lsn_scn_(ls, end_lsn, heuristic_log_scn))) {
     LOG_WARN("get palf base lsn failed", K(ret), K(ls));
   } else {
     lsn = ignore_restore ? end_lsn : max_fetch_lsn;
@@ -221,26 +221,29 @@ int ObRemoteFetchLogImpl::get_fetch_log_base_lsn_(ObLS &ls,
   return ret;
 }
 
-// 如果日志流当前LSN为0, 以日志流create_ts作为基准时间戳
-int ObRemoteFetchLogImpl::get_palf_base_lsn_ts_(ObLS &ls, LSN &lsn, int64_t &log_ts)
+// 如果日志流当前LSN为0, 以日志流create_scn作为基准时间戳
+int ObRemoteFetchLogImpl::get_palf_base_lsn_scn_(ObLS &ls, LSN &lsn, SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   PalfHandleGuard palf_handle_guard;
   const ObLSID &id = ls.get_ls_id();
   if (OB_FAIL(log_service_->open_palf(id, palf_handle_guard))) {
     LOG_WARN("open palf failed", K(ret));
-  } else if (OB_FAIL(palf_handle_guard.get_end_ts_ns(log_ts))) {
-    LOG_WARN("get end log ts failed", K(ret), K(id));
+  } else if (OB_FAIL(palf_handle_guard.get_end_scn(log_scn))) {
+    LOG_WARN("get end log scn failed", K(ret), K(id));
   } else if (OB_FAIL(palf_handle_guard.get_end_lsn(lsn))) {
     LOG_WARN("get end lsn failed", K(ret), K(id));
   } else {
-    log_ts = std::max(log_ts, ls.get_clog_checkpoint_ts());
+    int64_t checkpoint_ts = ls.get_clog_checkpoint_ts();
+    SCN checkpoint_scn;
+    checkpoint_scn.convert_tmp(checkpoint_ts);
+    log_scn = SCN::max(log_scn, checkpoint_scn);
   }
   return ret;
 }
 
 int ObRemoteFetchLogImpl::submit_fetch_log_task_(ObLS &ls,
-    const int64_t log_ts,
+    const SCN &log_scn,
     const LSN &lsn,
     const int64_t size,
     const int64_t proposal_id)
@@ -255,7 +258,7 @@ int ObRemoteFetchLogImpl::submit_fetch_log_task_(ObLS &ls,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), K(id));
   } else {
-    task = new (data) ObFetchLogTask(id, log_ts, lsn, size, proposal_id);
+    task = new (data) ObFetchLogTask(id, log_scn, lsn, size, proposal_id);
     ObLogRestoreHandler *restore_handler = NULL;
     if (OB_ISNULL(restore_handler = ls.get_log_restore_handler())) {
       ret = OB_ERR_UNEXPECTED;

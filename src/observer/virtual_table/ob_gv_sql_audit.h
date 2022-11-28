@@ -10,9 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_GV_SQL_AUDIT_
-#define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_GV_SQL_AUDIT_
-
 #include "lib/container/ob_se_array.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "common/ob_range.h"
@@ -197,5 +194,3 @@ private:
 };
 }
 }
-
-#endif

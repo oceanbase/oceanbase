@@ -74,6 +74,7 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
   } else {
     helper.reset();
     ObMutatorWriter mmw;
+    mmw.get_meta().set_savepoint(0);
     mmw.set_buffer(buf, buf_len - buf_pos);
     RedoDataNode redo;
     TableLockRedoDataNode table_lock_redo;
@@ -218,8 +219,11 @@ int ObRedoLogGenerator::sync_log_succ(const int64_t log_ts, const ObCallbackScop
     do {
       ObITransCallback *iter = (ObITransCallback *)*cursor;
       if (iter->need_fill_redo()) {
-        iter->set_log_ts(log_ts);
-        if (OB_TMP_FAIL(iter->log_sync_cb(log_ts))) {
+        // TODO(handora.qc): fix it
+        palf::SCN scn;
+        scn.convert_for_lsn_allocator(log_ts);
+        iter->set_scn(scn);
+        if (OB_TMP_FAIL(iter->log_sync_cb(scn))) {
           if (OB_SUCC(ret)) {
             ret = tmp_ret;
           }

@@ -287,12 +287,12 @@ bool ObMemtableKeyInfo::operator==(const ObMemtableKeyInfo &other) const
 void ObElrTransInfo::reset()
 {
   trans_id_.reset();
-  commit_version_ = -1;
+  commit_version_.reset();
   result_ = ObTransResultState::UNKNOWN;
   ctx_id_ = 0;
 }
 
-int ObElrTransInfo::init(const ObTransID &trans_id, uint32_t ctx_id, const int64_t commit_version)
+int ObElrTransInfo::init(const ObTransID &trans_id, uint32_t ctx_id, const palf::SCN commit_version)
 {
   int ret = OB_SUCCESS;
 
@@ -988,11 +988,11 @@ void ObTxExecInfo::reset()
   prev_record_lsn_.reset();
   redo_lsns_.reset();
   scheduler_.reset();
-  prepare_version_ = ObTransVersion::INVALID_TRANS_VERSION;
+  prepare_version_.reset();
   trans_type_ = TransType::SP_TRANS;
   next_log_entry_no_ = 0;
-  max_applied_log_ts_ = OB_INVALID_TIMESTAMP;
-  max_applying_log_ts_ = OB_INVALID_TIMESTAMP;
+  max_applied_log_ts_.reset();
+  max_applying_log_ts_.reset();
   max_applying_part_log_no_ = INT64_MAX;
   max_submitted_seq_no_ = 0;
   checksum_ = 0;
@@ -1061,24 +1061,5 @@ bool ObMulSourceDataNotifyArg::is_redo_confirmed() const
 
 bool ObMulSourceDataNotifyArg::is_redo_synced() const { return redo_synced_; }
 
-const char *trans_type_to_cstr(const TransType &trans_type)
-{
-  const char *str;
-  switch (trans_type) {
-    case TransType::UNKNOWN_TRANS:
-      str = "UNKNOWN";
-      break;
-    case TransType::SP_TRANS:
-      str = "SP";
-      break;
-    case TransType::DIST_TRANS:
-      str = "DIST";
-      break;
-    default:
-      str = "TX_TYPE_UNKNOWN";
-      break;
-  }
-  return str;
-}
 } // transaction
 } // oceanbase

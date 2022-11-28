@@ -166,9 +166,7 @@ public:
            const int64_t task_map_size = TASK_MAP_SIZE,
            const int64_t total_mem_limit = TOTAL_LIMIT,
            const int64_t hold_mem_limit = HOLD_LIMIT,
-           const int64_t page_size = PAGE_SIZE,
-           const uint64_t tenant_id = OB_SERVER_TENANT_ID,
-           const lib::ObLabel &label = "DedupQueue");
+           const int64_t page_size = PAGE_SIZE);
   void destroy();
 public:
   int add_task(const IObDedupTask &task);

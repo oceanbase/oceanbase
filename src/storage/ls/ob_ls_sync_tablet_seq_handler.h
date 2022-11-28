@@ -17,7 +17,10 @@
 
 namespace oceanbase
 {
-
+namespace palf
+{
+class SCN;
+}
 namespace storage
 {
 class ObLS;
@@ -37,7 +40,7 @@ public:
   int replay(const void *buffer,
              const int64_t nbytes,
              const palf::LSN &lsn,
-             const int64_t ts_ns) override final;
+             const palf::SCN &scn) override final;
 
   // for role change
   void switch_to_follower_forcedly() override final;

@@ -41,9 +41,6 @@ public:
   ThreadCountPair(int64_t cnt, int64_t mini_mode_cnt)
     : cnt_(cnt), mini_mode_cnt_(mini_mode_cnt)
   {}
-  ThreadCountPair(int64_t dummy)
-    : cnt_(0), mini_mode_cnt_(0)
-  {}
   int64_t get_thread_cnt() const
   {
     return !is_mini_mode() ? cnt_ : mini_mode_cnt_;
@@ -622,9 +619,6 @@ template<>
 class TG<TGType::TIMER> : public ITG
 {
 public:
-  TG(int64_t max_task_num = 32)
-    : max_task_num_(max_task_num)
-  {}
   ~TG() { destroy(); }
   int thread_cnt() override { return 1; }
   int set_thread_cnt(int64_t thread_cnt) override
@@ -639,7 +633,7 @@ public:
     if (timer_ != nullptr) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
-      timer_ = new (buf_) common::ObTimer(max_task_num_);
+      timer_ = new (buf_) common::ObTimer();
       timer_->set_run_wrapper(tg_helper_, tg_cgroup_);
       if (OB_FAIL(timer_->init(attr_.name_))) {
         OB_LOG(WARN, "init failed", K(ret));
@@ -712,7 +706,6 @@ public:
 private:
   char buf_[sizeof(common::ObTimer)];
   common::ObTimer *timer_ = nullptr;
-  int64_t max_task_num_;
 };
 
 template<>

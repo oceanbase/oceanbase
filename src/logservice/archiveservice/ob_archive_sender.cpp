@@ -39,10 +39,12 @@
 #include "ob_archive_io.h"           // ObArchiveIO
 #include "share/backup/ob_backup_path.h"   // ObBackupPath
 #include "share/backup/ob_archive_path.h"   // ObArchivePathUtil
+#include "logservice/palf/scn.h"   // ObArchivePathUtil
 
 namespace oceanbase
 {
 using namespace share;
+using namespace palf;
 namespace archive
 {
 ObArchiveSender::ObArchiveSender() :
@@ -610,9 +612,9 @@ int ObArchiveSender::update_archive_progress_(const int64_t file_id,
   const int64_t end_offset = file_offset + task.get_buf_size();
   const ArchiveWorkStation &station = task.get_station();
   const LSN &lsn = task.get_end_lsn();
-  const int64_t log_ts = task.get_max_log_ts();
+  const SCN &log_scn = task.get_max_log_scn();
   const ObArchivePiece &piece = task.get_piece();
-  LogFileTuple tuple(lsn, log_ts, piece);
+  LogFileTuple tuple(lsn, log_scn, piece);
   return ls_archive_task.update_archive_progress(station, file_id, end_offset, tuple);
 }
 

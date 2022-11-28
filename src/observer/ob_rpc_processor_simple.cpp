@@ -48,6 +48,7 @@
 #include "share/sequence/ob_sequence_cache.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/ob_log_handler.h"
+#include "logservice/palf/scn.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
@@ -415,7 +416,7 @@ int ObCheckFrozenVersionP::process()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
-    ret = gctx_.ob_service_->check_frozen_version(arg_);
+    ret = gctx_.ob_service_->check_frozen_scn(arg_);
   }
   return ret;
 }
@@ -439,7 +440,7 @@ int ObCalcColumnChecksumRequestP::process()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
   } else {
-    ret = gctx_.ob_service_->calc_column_checksum_request(arg_, result_);
+    ret = gctx_.ob_service_->calc_column_checksum_request(arg_);
   }
   return ret;
 }
@@ -774,7 +775,7 @@ int ObDumpMemtableP::process()
       } else if (OB_ISNULL(ls->get_tablet_svr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get_tablet_svr is null", KR(ret), K(arg_.tenant_id_), K(arg_.tablet_id_));
-      } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(arg_.tablet_id_, tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+      } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(arg_.tablet_id_, tablet_handle))) {
         LOG_WARN("get tablet failed", KR(ret), K(arg_.tenant_id_), K(arg_.tablet_id_));
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1276,10 +1277,10 @@ int ObRpcGetLSAccessModeP::process()
       palf::AccessMode mode;
       int64_t mode_version = palf::INVALID_PROPOSAL_ID;
       int64_t second_proposal_id = 0;
-      const int64_t ref_ts = 0;
+      const palf::SCN ref_scn = palf::SCN::min_scn();
       if (OB_FAIL(log_handler->get_access_mode(mode_version, mode))) {
         LOG_WARN("failed to get access mode", KR(ret), K(ls_id));
-      } else if (OB_FAIL(result_.init(tenant_id, ls_id, mode_version, mode, ref_ts))) {
+      } else if (OB_FAIL(result_.init(tenant_id, ls_id, mode_version, mode, ref_scn))) {
         LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), K(mode_version), K(mode));
       } else if (OB_FAIL(log_ls_svr->get_palf_role(ls_id, role, second_proposal_id))) {
         COMMON_LOG(WARN, "failed to get palf role", KR(ret), K(ls_id));
@@ -1323,7 +1324,7 @@ int ObRpcChangeLSAccessModeP::process()
       const int64_t timeout = THIS_WORKER.get_timeout_remain();
       if (OB_FAIL(log_handler->change_access_mode(arg_.get_mode_version(),
                                       arg_.get_access_mode(),
-                                      arg_.get_ref_ts()))) {
+                                      arg_.get_ref_scn()))) {
         LOG_WARN("failed to change access mode", KR(ret), K(arg_), K(timeout));
       }
       int tmp_ret = OB_SUCCESS;
@@ -1910,7 +1911,7 @@ int ObRpcRemoteWriteDDLPrepareLogP::process()
     ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle ls_handle;
     ObTabletHandle tablet_handle;
-    ObDDLKvMgrHandle ddl_kv_mgr_handle;
+    ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
     if (OB_UNLIKELY(!arg_.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K_(arg));
@@ -1918,7 +1919,7 @@ int ObRpcRemoteWriteDDLPrepareLogP::process()
       LOG_WARN("get ls failed", K(ret), K(arg_));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(table_key.tablet_id_, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr))) {
       LOG_WARN("get ddl kv manager failed", K(ret));
     } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, table_key.tablet_id_))) {
       LOG_WARN("init sstable redo writer", K(ret), K(table_key));
@@ -1927,14 +1928,10 @@ int ObRpcRemoteWriteDDLPrepareLogP::process()
       int64_t prepare_log_ts = 0;
       if (OB_FAIL(sstable_redo_writer.write_prepare_log(table_key,
                                                         arg_.table_id_,
-                                                        arg_.execution_id_,
-                                                        arg_.ddl_task_id_,
+                                                        arg_.schema_version_,
                                                         prepare_log_ts))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
-      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(arg_.start_log_ts_,
-                                                                  prepare_log_ts,
-                                                                  arg_.table_id_,
-                                                                  arg_.ddl_task_id_))) {
+      } else if (OB_FAIL(ddl_kv_mgr->ddl_prepare(arg_.start_log_ts_, prepare_log_ts, arg_.table_id_, arg_.schema_version_))) {
         LOG_WARN("failed to do ddl kv prepare", K(ret), K(arg_));
       } else {
         result_ = prepare_log_ts;
@@ -1955,7 +1952,7 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
     ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle ls_handle;
     ObTabletHandle tablet_handle;
-    ObDDLKvMgrHandle ddl_kv_mgr_handle;
+    ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
     if (OB_UNLIKELY(!arg_.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K_(arg));
@@ -1963,14 +1960,14 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
       LOG_WARN("get ls failed", K(ret), K(arg_));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(table_key.tablet_id_, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr))) {
       LOG_WARN("get ddl kv manager failed", K(ret));
     } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, table_key.tablet_id_))) {
       LOG_WARN("init sstable redo writer", K(ret), K(table_key));
     } else if (FALSE_IT(sstable_redo_writer.set_start_log_ts(arg_.start_log_ts_))) {
     } else {
       // wait in rpc framework may cause rpc timeout, need sync commit via rs @xiajin
-      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(arg_.start_log_ts_, arg_.prepare_log_ts_))) {
+      if (OB_FAIL(ddl_kv_mgr->wait_ddl_commit(arg_.start_log_ts_, arg_.prepare_log_ts_))) {
         LOG_WARN("failed to wait ddl kv commit", K(ret), K(arg_));
       } else if (OB_FAIL(sstable_redo_writer.write_commit_log(table_key, arg_.prepare_log_ts_))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));

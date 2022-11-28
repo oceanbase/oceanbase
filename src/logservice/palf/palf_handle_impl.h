@@ -27,6 +27,7 @@
 #include "log_engine.h"                      // LogEngine
 #include "log_meta.h"
 #include "lsn.h"
+#include "scn.h"
 #include "log_config_mgr.h"
 #include "log_mode_mgr.h"
 #include "log_reconfirm.h"
@@ -73,28 +74,15 @@ struct PalfStat {
   bool allow_vote_;
   LogReplicaType replica_type_;
   LSN begin_lsn_;
-  int64_t begin_ts_ns_;
+  SCN begin_scn_;
   LSN base_lsn_;
   LSN end_lsn_;
-  int64_t end_ts_ns_;
+  SCN end_scn_;
   LSN max_lsn_;
-  int64_t max_ts_ns_;
+  SCN max_scn_;
   TO_STRING_KV(K_(self), K_(palf_id), K_(role), K_(log_proposal_id), K_(config_version),
       K_(access_mode), K_(paxos_member_list), K_(paxos_replica_num), K_(allow_vote),
-      K_(replica_type), K_(base_lsn), K_(end_lsn), K_(end_ts_ns), K_(max_lsn));
-};
-
-struct PalfDiagnoseInfo {
-  common::ObRole election_role_;
-  int64_t election_epoch_;
-  common::ObRole palf_role_;
-  palf::ObReplicaState palf_state_;
-  int64_t palf_proposal_id_;
-  TO_STRING_KV(K(election_role_),
-               K(election_epoch_),
-               K(palf_role_),
-               K(palf_state_),
-               K(palf_proposal_id_));
+      K_(replica_type), K_(base_lsn), K_(end_lsn), K_(end_scn), K_(max_lsn));
 };
 
 struct LSKey {
@@ -182,21 +170,21 @@ public:
   // @param [in] opts, 提交日志的一些可选项参数，具体参见PalfAppendOptions的定义
   // @param [in] buf, 待持久化内容的起点指针，::submit_log函数返回后buf即可被释放
   // @param [in] buf_len, 待持久化内容的长度，size的有效范围是[0, 2M]
-  // @param [in] ref_ts_ns, 日志对应的时间，满足弱读需求
+  // @param [in] ref_scn, 日志对应的时间，满足弱读需求
   //
   // 下述两个值通过submit_log出参，而不是on_success()和上层交互，好处是类似于lock_for_read逻辑可以更早
   // 的拿到准确的版本号信息
   // @param [out] lsn, 日志的唯一标识符
   //                          主要使用场景是prepare日志中记录redo日志的lsn，用于数据链路回拉历史日志时定位使用
-  // @param [out] log_timestamp, 日志对应的submit_timestamp，主要用于事务版本号，比如lock_for_read场景使用
+  // @param [out] log_scn, 日志对应的submit_scn，主要用于事务版本号，比如lock_for_read场景使用
   //
   // @return :TODO
   virtual int submit_log(const PalfAppendOptions &opts,
                          const char *buf,
                          const int64_t buf_len,
-                         const int64_t ref_ts_ns,
+                         const SCN &ref_scn,
                          LSN &lsn,
-                         int64_t &log_timestamp) = 0;
+                         SCN &log_scn) = 0;
   // 提交group_log到palf
   // 使用场景：备库leader处理从主库收到的日志
   // @param [in] opts, 提交日志的一些可选项参数，具体参见PalfAppendOptions的定义
@@ -398,45 +386,45 @@ public:
   // @param [in] palf_base_info，可回收的日志文件位点
   virtual int advance_base_info(const PalfBaseInfo &palf_base_info, const bool is_rebuild) = 0;
 
-  // @desc: query coarse lsn by ts(ns), that means there is a LogGroupEntry in disk,
-  // its lsn and log_ts are result_lsn and result_ts_ns, and result_ts_ns <= ts_ns.
-  //        result_lsn   result_ts_ns
+  // @desc: query coarse lsn by scn, that means there is a LogGroupEntry in disk,
+  // its lsn and log_scn are result_lsn and result_scn, and result_scn <= scn.
+  //        result_lsn   result_scn
   //                 \   /
   //      [log 1]     [log 2][log 3] ... [log n]  [log n+1]
   //  -------------------------------------------|-------------> time
-  //                                           ts_ns
+  //                                           scn
   // Note that this function may be time-consuming
   // Note that result_lsn always points to head of log file
-  // @params [in] ts_ns: timestamp(nano second)
-  // @params [out] result_lsn: the lower bound lsn which includes ts_ns
+  // @params [in] scn:
+  // @params [out] result_lsn: the lower bound lsn which includes scn
   // @return
-  // - OB_SUCCESS: locate_by_ts_ns_coarsely success
+  // - OB_SUCCESS: locate_by_scn_coarsely success
   // - OB_INVALID_ARGUMENT
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
-  // - OB_ERR_OUT_OF_LOWER_BOUND: ts_ns is too old, log files may have been recycled
+  // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
   // - others: bug
-  virtual int locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &result_lsn) = 0;
+  virtual int locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn) = 0;
 
-  // @desc: query coarse ts by lsn, that means there is a LogGroupEntry in disk,
-  // its lsn and log_ts are result_lsn and result_ts_ns, and result_lsn <= lsn.
-  //  result_lsn    result_ts_ns
+  // @desc: query coarse scn by lsn, that means there is a LogGroupEntry in disk,
+  // its lsn and log_scn are result_lsn and result_scn, and result_lsn <= lsn.
+  //  result_lsn    result_scn
   //           \    /
   //    [log 1][log 2][log 3][log 4][log 5]...[log n][log n+1]
   //  --------------------------------------------|-------------> lsn
   //                                             lsn
   // Note that this function may be time-consuming
   // @params [in] lsn: lsn
-  // @params [out] result_ts_ns: the lower bound timestamp which includes lsn
+  // @params [out] result_scn: the lower bound scn which includes lsn
   // - OB_SUCCESS; locate_by_lsn_coarsely success
   // - OB_INVALID_ARGUMENT
   // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
   // - others: bug
-  virtual int locate_by_lsn_coarsely(const LSN &lsn, int64_t &result_ts_ns) = 0;
+  virtual int locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn) = 0;
   virtual int get_begin_lsn(LSN &lsn) const = 0;
-  virtual int get_begin_ts_ns(int64_t &ts) const = 0;
+  virtual int get_begin_scn(SCN &scn) = 0;
   virtual int get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info) = 0;
 
-  virtual int get_min_block_info_for_gc(block_id_t &min_block_id, int64_t &max_ts_ns) = 0;
+  virtual int get_min_block_id_min_scn(block_id_t &block_id, SCN &log_scn) = 0;
   //begin lsn                          base lsn                                end lsn
   //   │                                │                                         │
   //   │                                │                                         │
@@ -452,8 +440,8 @@ public:
   // return the block length which the previous data was committed
   virtual const LSN get_end_lsn() const = 0;
   virtual LSN get_max_lsn() const = 0;
-  virtual int64_t get_max_ts_ns() const = 0;
-  virtual int64_t get_end_ts_ns() const = 0;
+  virtual const SCN get_max_scn() const = 0;
+  virtual const SCN get_end_scn() const = 0;
   virtual int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const = 0;
   virtual int64_t get_total_used_disk_space() const = 0;
   virtual const LSN &get_base_lsn_used_for_block_gc() const = 0;
@@ -470,10 +458,10 @@ public:
   virtual int advance_reuse_lsn(const LSN &flush_log_end_lsn) = 0;
   virtual int inner_append_log(const LSN &lsn,
                                const LogWriteBuf &write_buf,
-                               const int64_t log_ts) = 0;
+                               const SCN &log_scn) = 0;
   virtual int inner_append_log(const LSNArray &lsn_array,
                                const LogWriteBufArray &write_buf_array,
-                               const LogTsArray &log_ts_array) = 0;
+                               const SCNArray &scn_array) = 0;
   virtual int inner_append_meta(const char *buf,
                                 const int64_t buf_len) = 0;
   virtual int inner_truncate_log(const LSN &lsn) = 0;
@@ -548,7 +536,7 @@ public:
   virtual int change_access_mode(const int64_t proposal_id,
                                  const int64_t mode_version,
                                  const AccessMode &access_mode,
-                                 const int64_t ref_ts_ns) = 0;
+                                 const SCN &ref_scn) = 0;
   virtual int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const = 0;
   virtual int get_access_mode(AccessMode &access_mode) const = 0;
   virtual int handle_committed_info(const common::ObAddr &server,
@@ -570,7 +558,7 @@ public:
                                          PalfBufferIterator &iterator) = 0;
   virtual int alloc_palf_group_buffer_iterator(const LSN &offset,
                                                PalfGroupBufferIterator &iterator) = 0;
-  virtual int alloc_palf_group_buffer_iterator(const int64_t ts_ns,
+  virtual int alloc_palf_group_buffer_iterator(const SCN &scn,
                                                PalfGroupBufferIterator &iterator) = 0;
   // ===================== Iterator end =======================
 
@@ -588,8 +576,8 @@ public:
   // ==================== Callback end ========================
   virtual int revoke_leader(const int64_t proposal_id) = 0;
   virtual int stat(PalfStat &palf_stat) = 0;
+  virtual void set_diskspace_enough(const bool diskspace_enough) = 0;
   virtual int get_palf_epoch(int64_t &palf_epoch) const = 0;
-  virtual int diagnose(PalfDiagnoseInfo &diagnose_info) const = 0;
 };
 
 class PalfHandleImpl : public IPalfHandleImpl
@@ -639,9 +627,9 @@ public:
   int submit_log(const PalfAppendOptions &opts,
                  const char *buf,
                  const int64_t buf_len,
-                 const int64_t ref_ts_ns,
+                 const SCN &ref_scn,
                  LSN &lsn,
-                 int64_t &log_timestamp) override final;
+                 SCN &log_scn) override final;
 
   int submit_group_log(const PalfAppendOptions &opts,
                        const LSN &lsn,
@@ -690,8 +678,8 @@ public:
   int disable_sync();
   bool is_sync_enabled() const;
   int advance_base_info(const PalfBaseInfo &palf_base_info, const bool is_rebuild) override final;
-  int locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &result_lsn) override final;
-  int locate_by_lsn_coarsely(const LSN &lsn, int64_t &result_ts_ns) override final;
+  int locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn) override final;
+  int locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn) override final;
   void set_deleted();
   int disable_vote() override final;
   int enable_vote() override final;
@@ -705,13 +693,13 @@ public:
   int change_access_mode(const int64_t proposal_id,
                          const int64_t mode_version,
                          const AccessMode &access_mode,
-                         const int64_t ref_ts_ns) override final;
+                         const SCN &ref_scn) override final;
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const override final;
   int get_access_mode(AccessMode &access_mode) const override final;
   // =========================== Iterator start ============================
   int alloc_palf_buffer_iterator(const LSN &offset, PalfBufferIterator &iterator) override final;
   int alloc_palf_group_buffer_iterator(const LSN &offset, PalfGroupBufferIterator &iterator) override final;
-  int alloc_palf_group_buffer_iterator(const int64_t ts_ns, PalfGroupBufferIterator &iterator) override final;
+  int alloc_palf_group_buffer_iterator(const SCN &scn, PalfGroupBufferIterator &iterator) override final;
   // =========================== Iterator end ============================
 
   // ==================== Callback start ======================
@@ -728,9 +716,9 @@ public:
   // ==================== Callback end ========================
 public:
   int get_begin_lsn(LSN &lsn) const;
-  int get_begin_ts_ns(int64_t &ts) const;
+  int get_begin_scn(SCN &scn);
   int get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info);
-  int get_min_block_info_for_gc(block_id_t &min_block_id, int64_t &max_ts_ns) override final;
+  int get_min_block_id_min_scn(block_id_t &block_id, SCN &scn) override final;
   // return the block length which the previous data was committed
   const LSN get_end_lsn() const override final
   {
@@ -744,16 +732,16 @@ public:
     return sw_.get_max_lsn();
   }
 
-  int64_t get_max_ts_ns() const override final
+  const SCN get_max_scn() const override final
   {
-    return sw_.get_max_log_ts();
+    return sw_.get_max_log_scn();
   }
 
-  int64_t get_end_ts_ns() const override final
+  const SCN get_end_scn() const override final
   {
-    // 基于实现复杂度考虑，直接用last_slide_log_ts作为end_ts
-    // 否则需要在match_lsn_map中额外维护log_ts
-    return sw_.get_last_slide_log_ts();
+    // 基于实现复杂度考虑，直接用last_slide_log_scn作为end_scn
+    // 否则需要在match_lsn_map中额外维护log_scn
+    return sw_.get_last_slide_log_scn();
   }
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const override final;
   int64_t get_total_used_disk_space() const;
@@ -770,18 +758,17 @@ public:
   int advance_reuse_lsn(const LSN &flush_log_end_lsn);
   int inner_append_log(const LSN &lsn,
                        const LogWriteBuf &write_buf,
-                       const int64_t log_ts) override final;
+                       const SCN &log_scn) override final;
   int inner_append_log(const LSNArray &lsn_array,
                        const LogWriteBufArray &write_buf_array,
-                       const LogTsArray &log_ts_array);
+                       const SCNArray &scn_array);
   int inner_append_meta(const char *buf,
                         const int64_t buf_len) override final;
   int inner_truncate_log(const LSN &lsn) override final;
   int inner_truncate_prefix_blocks(const LSN &lsn);
   // ==================================================================
   int check_and_switch_state();
-  int check_and_switch_freeze_mode();
-  int period_freeze_last_log();
+  int try_freeze_last_log();
   int handle_prepare_request(const common::ObAddr &server,
                              const int64_t &proposal_id) override final;
   int handle_prepare_response(const common::ObAddr &server,
@@ -855,8 +842,8 @@ public:
                                   const LogCandidateList &candidate_list,
                                   const RegisterReturn reg_ret) override final;
   int handle_learner_req(const LogLearner &server, const LogLearnerReqType req_type) override final;
+  void set_diskspace_enough(const bool diskspace_enough) override final;
   int get_palf_epoch(int64_t &palf_epoch) const;
-  int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   TO_STRING_KV(K_(palf_id), K_(self), K_(has_set_deleted));
 private:
   int do_init_mem_(const int64_t palf_id,
@@ -883,10 +870,6 @@ private:
   int construct_palf_base_info_(const LSN &max_committed_lsn,
                                   PalfBaseInfo &palf_base_info);
   int append_disk_log_to_sw_(const LSN &start_lsn);
-  int try_send_committed_info_(const common::ObAddr &server,
-                               const LSN &log_lsn,
-                               const LSN &log_end_lsn,
-                               const int64_t &log_proposal_id);
   int fetch_log_from_storage_(const common::ObAddr &server,
                               const FetchLogType fetch_type,
                               const int64_t &msg_proposal_id,
@@ -905,12 +888,11 @@ private:
                                    const int64_t accepted_mode_pid);
   int try_update_proposal_id_(const common::ObAddr &server,
                               const int64_t &proposal_id);
-  //int get_binary_search_range_(const int64_t ts_ns, LSN &min_lsn, LSN &max_lsn, LSN &result_lsn);
-  int get_binary_search_range_(const int64_t ts_ns,
+  int get_binary_search_range_(const SCN &scn,
                                block_id_t &min_block_id,
                                block_id_t &max_block_id,
                                block_id_t &result_block_id);
-  void inc_update_last_locate_block_ts_(const block_id_t &block_id, const int64_t ts);
+  void inc_update_last_locate_block_scn_(const block_id_t &block_id, const SCN &scn);
   int can_change_config_(const LogConfigChangeArgs &args, int64_t &proposal_id);
   int check_args_and_generate_config_(const LogConfigChangeArgs &args,
                                       bool &is_already_finished,
@@ -1007,25 +989,24 @@ private:
   palf::PalfRoleChangeCbWrapper role_change_cb_wrpper_;
   palf::PalfRebuildCbWrapper rebuild_cb_wrapper_;
   PalfLocationCacheCb *lc_cb_;
-  // ======optimization for locate_by_ts_ns_coarsely=========
+  // ======optimization for locate_by_scn_coarsely=========
   mutable SpinLock last_locate_lock_;
-  int64_t last_locate_ts_ns_;
+  SCN last_locate_scn_;
   block_id_t last_locate_block_;
-  // ======optimization for locate_by_ts_ns_coarsely=========
+  // ======optimization for locate_by_scn_coarsely=========
   int64_t cannot_recv_log_warn_time_;
   int64_t cannot_handle_committed_info_time_;
   int64_t log_disk_full_warn_time_;
   int64_t last_check_parent_child_ts_us_;
   int64_t wait_slide_print_time_us_;
   int64_t append_size_stat_time_us_;
-  int64_t replace_member_print_time_us_;
-  int64_t config_change_print_time_us_;
   mutable SpinLock last_rebuild_lsn_lock_;
   LSN last_rebuild_lsn_;
   LSN last_record_append_lsn_;
   // NB: only set has_set_deleted_ to true when this palf_handle has been deleted.
   bool has_set_deleted_;
   PalfEnvImpl *palf_env_impl_;
+  bool diskspace_enough_;
   ObMiniStat::ObStatItem append_cost_stat_;
   ObMiniStat::ObStatItem flush_cb_cost_stat_;
   // a spin lock for read/write replica_meta mutex

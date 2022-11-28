@@ -345,7 +345,7 @@ bool ObServerBlacklist::is_in_blacklist(const share::ObCascadMember &member, boo
                 (server_start_time != 0 && svr_info.server_start_time_ != 0
                  && svr_info.server_start_time_ > server_start_time);
     if (bool_ret) {
-      SHARE_LOG(WARN, "server in blacklist", K(svr_info), K(server_start_time));
+      SHARE_LOG(TRACE, "server in blacklist", K(svr_info), K(server_start_time));
     }
   }
   return bool_ret;

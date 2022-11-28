@@ -35,7 +35,7 @@ struct ObStorageHATabletsBuilderParam final
 
   TO_STRING_KV(K_(tenant_id), KPC_(ls), K_(tablet_id_array), K_(src_info), K_(local_rebuild_seq),
       K_(need_check_seq), K_(is_leader_restore), K_(need_keep_old_tablet), KP_(ha_table_info_mgr),
-      K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
+      KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
 
   uint64_t tenant_id_;
   ObLS *ls_;
@@ -51,7 +51,6 @@ struct ObStorageHATabletsBuilderParam final
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;
   const ObRestoreBaseInfo *restore_base_info_;
-  ObTabletRestoreAction::ACTION restore_action_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletsBuilderParam);
@@ -91,13 +90,13 @@ private:
   int get_major_sstable_max_snapshot_(
       const ObSSTableArray &major_sstable_array,
       int64_t &max_snapshot_version);
-  int get_remote_logical_minor_log_ts_range_(
+  int get_remote_logical_minor_scn_range_(
       const ObSSTableArray &minor_sstable_array,
-      ObLogTsRange &log_ts_range);
+      share::ObScnRange &scn_range);
   int get_need_copy_ddl_sstable_range_(
       const ObTablet *tablet,
       const ObSSTableArray &ddl_sstable_array,
-      ObLogTsRange &log_ts_range);
+      share::ObScnRange &scn_range);
   int get_ddl_sstable_min_start_log_ts_(
       const ObSSTableArray &ddl_sstable_array,
       int64_t &min_start_log_ts);
@@ -160,9 +159,6 @@ public:
   int check_copy_tablet_exist(const common::ObTabletID &tablet_id, bool &is_exist);
   int check_tablet_table_info_exist(
       const common::ObTabletID &tablet_id, bool &is_exist);
-  int get_tablet_meta(
-      const common::ObTabletID &tablet_id,
-      const ObMigrationTabletParam *&tablet_meta);
   void reuse();
 
 public:
@@ -171,9 +167,7 @@ public:
   public:
     ObStorageHATabletTableInfoMgr();
     virtual ~ObStorageHATabletTableInfoMgr();
-    int init(const common::ObTabletID &tablet_id,
-        const storage::ObCopyTabletStatus::STATUS &status,
-        const ObMigrationTabletParam &tablet_meta);
+    int init(const common::ObTabletID &tablet_id, const storage::ObCopyTabletStatus::STATUS &status);
     int add_copy_table_info(const blocksstable::ObMigrationSSTableParam &copy_table_info);
     int get_copy_table_info(
         const ObITable::TableKey &table_key,
@@ -181,13 +175,12 @@ public:
     int get_table_keys(
         common::ObIArray<ObITable::TableKey> &table_keys);
     int check_copy_tablet_exist(bool &is_exist);
-    int get_tablet_meta(const ObMigrationTabletParam *&tablet_meta);
+
   private:
     bool is_inited_;
     common::ObTabletID tablet_id_;
     storage::ObCopyTabletStatus::STATUS status_;
     common::ObArray<blocksstable::ObMigrationSSTableParam> copy_table_info_array_;
-    ObMigrationTabletParam tablet_meta_;
     DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletTableInfoMgr);
   };
 
@@ -226,7 +219,6 @@ struct ObStorageHACopySSTableParam final
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;
   const ObRestoreBaseInfo *restore_base_info_;
-  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageHACopySSTableParam);
@@ -250,6 +242,9 @@ private:
   void free_sstable_macro_range_info_reader_(ObICopySSTableMacroInfoReader *&reader);
 
 private:
+  //TODO(muwei.ym) using config to set max macro count
+  // static const int64_t MACRO_RANGE_MAX_MACRO_COUNT = 128;
+  //TODO(muwei.ym) too small will fail because uncorrect handling corner case
   static const int64_t MACRO_RANGE_MAX_MACRO_COUNT = 1024;
   typedef hash::ObHashMap<ObITable::TableKey, ObCopySSTableMacroRangeInfo *> CopySSTableMacroRangeInfoMap;
   bool is_inited_;

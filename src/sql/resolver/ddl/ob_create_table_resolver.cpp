@@ -1162,12 +1162,16 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
               LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column.get_column_name(), static_cast<int32_t>(OB_MAX_VARCHAR_LENGTH));
             } else if (ob_is_text_tc(column.get_data_type())) {
               ObLength max_length = 0;
-              max_length = ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column.get_data_type()].get_length();
+              if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470) && !ObSchemaService::g_liboblog_mode_) {
+                max_length = ObAccuracy::MAX_ACCURACY_OLD[column.get_data_type()].get_length();
+              } else {
+                max_length = ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column.get_data_type()].get_length();
+              }
               if (length > max_length) {
                 ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
                 LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column.get_column_name(),
                     ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column.get_data_type()].get_length());
-              } else {
+              } else  if ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_1470) || ObSchemaService::g_liboblog_mode_) {
                 length = min(length, OB_MAX_LOB_HANDLE_LENGTH);
               }
             }
@@ -2034,13 +2038,23 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
 
     if (OB_SUCC(ret)) {
       if (0 == progressive_merge_round) {
-        progressive_merge_round = 1;
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2200) {
+          progressive_merge_round = 0;
+        } else {
+          progressive_merge_round = 1;
+        }
       }
     }
 
     if (OB_SUCC(ret)) {
       if (OB_STORAGE_FORMAT_VERSION_INVALID == storage_format_version_) {
-        storage_format_version_ = OB_STORAGE_FORMAT_VERSION_V4;
+        if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2200) {
+          storage_format_version_ = OB_STORAGE_FORMAT_VERSION_V2;
+        } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3000) {
+          storage_format_version_ = OB_STORAGE_FORMAT_VERSION_V3;
+        } else {
+          storage_format_version_ = OB_STORAGE_FORMAT_VERSION_V4;
+        }
       }
     }
 

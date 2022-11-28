@@ -357,7 +357,7 @@ template <typename Key, typename Value>
 int ObInfoManager<Key, Value>::get_with_no_lock(const Key key, Value *&ptr)
 {
   int ret = OB_SUCCESS;
-  int64_t node_index = -1;
+  int64_t node_index;
   ptr = NULL;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;

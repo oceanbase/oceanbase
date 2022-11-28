@@ -352,11 +352,10 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
     } else {
       hold = align_up2(chunk->alloc_bytes_ + ACHUNK_HEADER_SIZE, get_page_size());
     }
-    char label[AOBJECT_LABEL_SIZE + 1];
-    STRNCPY(label, object->label_, sizeof(label));
-    label[sizeof(label) - 1] = '\0';
-    int len = strlen(label);
-    ObString str(len, label);
+    void *label = &object->label_[0];
+    void *end = memchr(label, '\0', sizeof(object->label_));
+    int len = end ? (char*)end - (char*)label : sizeof(object->label_);
+    ObString str(len, (char*)label);
     LabelItem *litem = nullptr;
     LabelInfoItem *linfoitem = lmap.get(str);
     if (NULL != linfoitem) {

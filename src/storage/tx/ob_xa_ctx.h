@@ -157,7 +157,7 @@ public:
                K_(is_xa_readonly), K_(xa_trans_state), K_(is_xa_one_phase),
                K_(xa_branch_count), K_(xa_ref_count), K_(lock_grant),
                K_(is_tightly_coupled), K_(lock_xid), K_(is_terminated),
-               K_(executing_xid), "uref", get_uref(),
+               K_(has_submited), K_(executing_xid), "uref", get_uref(),
                K_(has_tx_level_temp_table));
 private:
   int register_timeout_task_(const int64_t interval_us);
@@ -255,6 +255,8 @@ private:
   bool is_executing_;
   ObITransTimer *timer_;
   ObXATimeoutTask timeout_task_;
+  //has submited to scheduler, TODO, maintains it
+  bool has_submited_;
   uint64_t tenant_id_;
   //=========================================================================================
   // receive xa commit or xa rollback

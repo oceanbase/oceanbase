@@ -761,10 +761,6 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
     const int64_t input_param_num = ps_session_info->get_param_count();
     stmt_type_ = ps_session_info->get_stmt_type();
     int8_t new_param_bound_flag = 0;
-    if (is_pl_stmt(stmt_type_)) {
-      // pl not support save exception
-      is_save_exception_ = 0;
-    }
     // for returning into,
     // all_param_num  = input_param_num + returning_param_num
     params_num_ = (all_param_num > input_param_num) ? all_param_num : input_param_num;
@@ -1427,7 +1423,6 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
     share::schema::ObSchemaGetterGuard schema_guard;
     int64_t tenant_version = 0;
     int64_t sys_version = 0;
-    retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
     OZ (gctx_.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(),
                                                        schema_guard));
     OZ (schema_guard.get_schema_version(session.get_effective_tenant_id(), tenant_version));
@@ -1437,6 +1432,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
     OX (retry_ctrl_.set_sys_local_schema_version(sys_version));
 
     if (OB_SUCC(ret) && !is_send_long_data()) {
+      retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
       if (OB_LIKELY(session.get_is_in_retry()) 
             || (is_arraybinding_ && (prepare_packet_sent_ || !is_prexecute()))) {
         ret = process_retry(session,
@@ -1515,8 +1511,6 @@ int ObMPStmtExecute::try_batch_multi_stmt_optimization(ObSQLSessionInfo &session
   } else if (!use_plan_cache) {
     LOG_TRACE("not enable the plan_cache", K(use_plan_cache));
     // plan_cache开关没打开
-  } else if (!is_prexecute()) {
-    // 只对二合一协议开启batch优化
   } else if (is_pl_stmt(stmt_type_)) {
     LOG_TRACE("is pl execution, can't do the batch optimization");
   } else if (1 == arraybinding_size_) {
@@ -1683,7 +1677,6 @@ int ObMPStmtExecute::process()
     ObSQLSessionInfo &session = *sess;
     int64_t tenant_version = 0;
     int64_t sys_version = 0;
-    THIS_WORKER.set_session(sess);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.get_raw_audit_record().request_memory_used_ = 0;
@@ -1812,7 +1805,6 @@ int ObMPStmtExecute::process()
     need_retry_ = true;
   }
 
-  THIS_WORKER.set_session(NULL);
   if (sess != NULL) {
     revert_session(sess); //current ignore revert session ret
   }
@@ -2177,11 +2169,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
               if (is_oracle_mode() && !is_complex_element) {
                 param.set_char(dst);
               } else {
-                if (is_complex_element && dst.length()== 0) {
-                  param.set_null();
-                } else {
-                  param.set_varchar(dst);
-                }
+                param.set_varchar(dst);
               }
             }
           }
@@ -2761,12 +2749,9 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbms
 
     // for obproxy, 最后一次要把 eof和OK包放一起
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(update_last_pkt_pos())) {
-        LOG_WARN("failed to update last packet pos", K(ret));
-      } else if (OB_FAIL(response_packet(eofp, &session))) {
+      OX (update_last_pkt_pos());
+      if (OB_FAIL(response_packet(eofp, &session))) {
         LOG_WARN("response packet fail", K(ret));
-      } else {
-        // do nothing
       }
     }
     // for obproxy

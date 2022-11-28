@@ -44,8 +44,7 @@ public:
             ParseResult &parse_result,
             bool is_inner_parse = false);
   int parse_routine_body(const common::ObString &routine_body,
-                         ObStmtNodeTree *&routine_stmt,
-                         bool is_for_trigger);
+                         ObStmtNodeTree *&routine_stmt);
   int parse_package(const common::ObString &source,
                     ObStmtNodeTree *&package_stmt,
                     const ObDataTypeCastParams &dtc_params,

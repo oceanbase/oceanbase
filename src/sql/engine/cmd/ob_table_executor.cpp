@@ -69,7 +69,7 @@ int ObCreateTableExecutor::prepare_stmt(ObCreateTableStmt &stmt,
   char *buf = static_cast<char*>(allocator.alloc(buf_len));
   int64_t pos = 0;
   const int64_t session_id = my_session.get_sessid();
-  const int64_t timestamp = ObTimeUtility::current_time();
+  const int64_t timestamp = my_session.get_sess_create_time();
   obrpc::ObCreateTableArg &create_table_arg = stmt.get_create_table_arg();
   create_table_name = create_table_arg.schema_.get_table_name_str();
   if (OB_FAIL(databuff_printf(buf, buf_len, pos, "__ctas_%ld_%ld", session_id, timestamp))) {
@@ -534,6 +534,144 @@ int ObAlterTableExecutor::refresh_schema_for_table(
   return ret;
 }
 
+/* 3100 之前的版本 alter table 逻辑
+  alter table 向 RS 发 RPC 时，如果有 add index 或者 add unqiue 操作，就发送 “两批” RPC：
+    第一批 RPC 只有一个 RPC，是不包含 add index 或者 add unqiue 操作以外的其他操作的 alter table 的 RPC
+    第二批 RPC 是 alter table 中每创建一个索引，就向 RS 发一个 rpc，observer 端同步等待索引建成功或者建失败
+      a）如果成功就继续发送下一个创建索引的 RPC；
+      b）如果失败，就报错结束，并终止发送后面还没有向 RS 发送 RPC（即还没有创建）的创建索引请求。前面已经发送和创建索引无关的 RPC 在 RS 端均已处理成功，不再回滚。但如果一条 alter table 同时建了多个 index，其中一个失败，就回滚所有已经建立的 index。
+*/
+int ObAlterTableExecutor::alter_table_rpc_v1(
+    obrpc::ObAlterTableArg &alter_table_arg,
+    obrpc::ObAlterTableRes &res,
+    common::ObIAllocator &allocator,
+    obrpc::ObCommonRpcProxy *common_rpc_proxy,
+    ObSQLSessionInfo *my_session,
+    const bool is_sync_ddl_user)
+{
+  int ret = OB_SUCCESS;
+  bool alter_table_add_index = false;
+  const ObSArray<obrpc::ObIndexArg *> index_arg_list = alter_table_arg.index_arg_list_;
+  if (OB_ISNULL(my_session)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
+            lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
+    obrpc::ObIndexArg *index_arg = index_arg_list.at(i);
+    if (OB_ISNULL(index_arg)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("index arg should not be null", K(ret));
+    } else if (obrpc::ObIndexArg::ADD_INDEX == index_arg->index_action_type_) {
+      alter_table_add_index = true;
+      break;
+    }
+  }
+  if (!alter_table_add_index) {
+  // alter table 中没有 add index 的情况
+  if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
+    LOG_WARN("rpc proxy alter table failed", K(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
+    }
+  } else {
+    // alter table 中有 add index 的情况
+    ObSArray<obrpc::ObIndexArg *> add_index_arg_list;
+    alter_table_arg.index_arg_list_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.size(); ++i) {
+      obrpc::ObIndexArg *index_arg = index_arg_list.at(i);
+      if (OB_ISNULL(index_arg)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("index arg should not be null", K(ret));
+      } else if (obrpc::ObIndexArg::ADD_INDEX == index_arg->index_action_type_) {
+        if (OB_FAIL(add_index_arg_list.push_back(index_arg))) {
+          LOG_WARN("fail to push back to arg_for_adding_index_list", K(ret));
+        }
+      } else { // not for adding index
+        if (OB_FAIL(alter_table_arg.index_arg_list_.push_back(index_arg))) {
+          LOG_WARN("fail to push back to arg_for_adding_index_list", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
+        LOG_WARN("rpc proxy alter table for not adding index failed", K(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObString empty_stmt;
+      alter_table_arg.is_alter_columns_ = false;
+      alter_table_arg.is_alter_options_ = false;
+      alter_table_arg.is_alter_partitions_ = false;
+      alter_table_arg.ddl_stmt_str_ = empty_stmt;
+      alter_table_arg.ddl_id_str_ = empty_stmt;
+      alter_table_arg.alter_constraint_type_ = obrpc::ObAlterTableArg::CONSTRAINT_NO_OPERATION;
+      ObSArray<uint64_t> added_index_table_ids;
+      ObCreateIndexExecutor create_index_executor;
+      for (int64_t i = 0; OB_SUCC(ret) && i < add_index_arg_list.size(); ++i) {
+        alter_table_arg.index_arg_list_.reset();
+        if (OB_FAIL(alter_table_arg.index_arg_list_.push_back(add_index_arg_list.at(i)))) {
+          LOG_WARN("fail to push back to arg_for_adding_index_list", K(ret));
+        } else if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
+          LOG_WARN("rpc proxy alter table for adding index failed", K(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
+        } else {
+          // 同步等索引建成功
+          obrpc::ObIndexArg *index_arg = alter_table_arg.index_arg_list_.at(0);
+          obrpc::ObCreateIndexArg *create_index_arg = NULL;
+          if (OB_ISNULL(index_arg)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("index arg is null", K(ret), K(i));
+          } else if (obrpc::ObIndexArg::ADD_INDEX != index_arg->index_action_type_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("index action type should be add index", K(ret), K(i));
+          } else if (OB_ISNULL(create_index_arg = static_cast<obrpc::ObCreateIndexArg *>(index_arg))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("create index arg is null", K(ret), K(i));
+          } else if (!is_sync_ddl_user) {
+            // 只考虑非备份恢复时的索引同步检查
+            create_index_arg->index_schema_.set_table_id(res.index_table_id_);
+            create_index_arg->index_schema_.set_schema_version(res.schema_version_);
+            if (OB_FAIL(create_index_executor.sync_check_index_status(*my_session, *common_rpc_proxy, *create_index_arg, res, allocator))) {
+              LOG_WARN("failed to sync_check_index_status", K(ret), K(*create_index_arg), K(i));
+            } else {
+              added_index_table_ids.push_back(res.index_table_id_);
+            }
+          }
+        }
+      }
+      // 如果一条 alter table 同时建了多个 index，其中一个失败，就回滚所有已经建立的 index
+      if (OB_FAIL(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < added_index_table_ids.size(); ++i) {
+          obrpc::ObDropIndexArg drop_index_arg;
+          obrpc::ObDropIndexRes drop_index_res;
+          obrpc::ObCreateIndexArg *create_index_arg = static_cast<obrpc::ObCreateIndexArg *>(add_index_arg_list.at(i));
+          drop_index_arg.tenant_id_ = create_index_arg->tenant_id_;
+          drop_index_arg.exec_tenant_id_ = create_index_arg->tenant_id_;
+          drop_index_arg.index_table_id_ = added_index_table_ids.at(i);
+          drop_index_arg.session_id_ = create_index_arg->session_id_;
+          drop_index_arg.index_name_ = create_index_arg->index_name_;
+          drop_index_arg.table_name_ = create_index_arg->table_name_;
+          drop_index_arg.database_name_ = create_index_arg->database_name_;
+          drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
+          drop_index_arg.is_add_to_scheduler_ = false;
+          if (OB_SUCCESS != (tmp_ret = create_index_executor.set_drop_index_stmt_str(drop_index_arg, allocator))) {
+            LOG_WARN("fail to set drop index ddl_stmt_str", K(tmp_ret));
+          } else if (OB_SUCCESS != (tmp_ret = common_rpc_proxy->drop_index(drop_index_arg, drop_index_res))) {
+            LOG_WARN("rpc proxy drop index failed", "dst", common_rpc_proxy->get_server(),
+                                                    K(tmp_ret),
+                                                    K(drop_index_arg.table_name_),
+                                                    K(drop_index_arg.index_name_));
+          }
+        }
+        LOG_INFO("added indexes failed, we rolled back all indexes added in this same alter table sql. But we didn't roll back other actions in this same alter table sql");
+      }
+    }
+  }
+
+  return ret;
+}
+
 /* 从 3100 开始的版本 alter table 逻辑是将建索引和其他操作放到同一个 rpc 里发到 rs，返回后对每个创建的索引进行同步等，如果一个索引创建失败，则回滚全部索引
    mysql 模式下支持 alter table 同时做建索引操作和其他操作，需要保证 rs 在处理 drop index 之后再处理 add index
    否则前缀索引会有问题：https://code.aone.alibaba-inc.com/oceanbase/oceanbase/codereview/1907077
@@ -547,8 +685,6 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
     const bool is_sync_ddl_user)
 {
   int ret = OB_SUCCESS;
-  // do not support cancel drop_index_task.
-  bool is_support_cancel = true;
   const ObSArray<obrpc::ObIndexArg *> index_arg_list = alter_table_arg.index_arg_list_;
   ObSArray<obrpc::ObIndexArg *> add_index_arg_list;
   ObSArray<obrpc::ObIndexArg *> drop_index_args;
@@ -578,7 +714,6 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
       } else {
         ObDropIndexArg *drop_index_arg = static_cast<ObDropIndexArg *>(index_arg);
         drop_index_arg->is_add_to_scheduler_ = true;
-        is_support_cancel = false;
       }
     } else { // for rename/drop index action
       if (OB_FAIL(alter_table_arg.index_arg_list_.push_back(index_arg))) {
@@ -609,7 +744,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
     ObIArray<obrpc::ObDDLRes> &ddl_ress = res.ddl_res_array_;
     for (int64_t i = 0; OB_SUCC(ret) && i < ddl_ress.count(); ++i) {
       ObDDLRes &ddl_res = ddl_ress.at(i);
-      if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ddl_res.tenant_id_, ddl_res.task_id_, *my_session, common_rpc_proxy, is_support_cancel))) {
+      if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ddl_res.tenant_id_, ddl_res.task_id_, *my_session, common_rpc_proxy))) {
         LOG_WARN("wait drop index finish", K(ret));
       }
     }
@@ -774,6 +909,9 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
             || (obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE == alter_table_arg.alter_constraint_type_))) {
           if (OB_FAIL(need_check_constraint_validity(alter_table_arg, need_check))) {
             LOG_WARN("check whether need check failed", K(ret));
+          } else if (need_check && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Such ddl operation during upgrade");
           }
         }
         // 如果追加 validate 属性的外键或者 modify 外键为 validate 属性时，不立即生效
@@ -786,7 +924,8 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
             need_modify_fk_validate = true;
           }
         }
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret)
+            && (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3100)) {
           if (OB_FAIL(alter_table_rpc_v2(
                       alter_table_arg,
                       res,
@@ -795,6 +934,17 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
                       my_session,
                       is_sync_ddl_user))) {
             LOG_WARN("Failed to alter table rpc v2", K(ret));
+          }
+        } else if (OB_SUCC(ret)
+                  && (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3100)) {
+          if (OB_FAIL(alter_table_rpc_v1(
+                      alter_table_arg,
+                      res,
+                      allocator,
+                      common_rpc_proxy,
+                      my_session,
+                      is_sync_ddl_user))) {
+            LOG_WARN("Failed to alter table rpc v1", K(ret));
           }
         }
       }
@@ -1668,9 +1818,6 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
                && FALSE_IT(const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).session_id_ = my_session->get_sessid_for_table())) {
       //impossible
     } else if (!stmt.is_truncate_oracle_temp_table()) {
-      int64_t foreign_key_checks = 0;
-      my_session->get_foreign_key_checks(foreign_key_checks);
-      const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).foreign_key_checks_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks);
       const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode()
         ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
       int64_t affected_rows = 0;

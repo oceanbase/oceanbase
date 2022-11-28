@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_TX_DATA_DEFINE
 
 #include "lib/allocator/ob_slice_alloc.h"
+#include "logservice/palf/scn.h"
 #include "storage/tx/ob_committer_define.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/ob_i_table.h"
@@ -121,7 +122,6 @@ static const int TX_DATA_OFFSET_BETWEEN_DATA_AND_SORT_NODE
   = TX_DATA_SLICE_SIZE - TX_DATA_HASH_NODE_SIZE - TX_DATA_SORT_LIST_NODE_SIZE;
 // Reserve 5KB to store the fields in tx data except undo_status
 static const int OB_MAX_TX_SERIALIZE_SIZE = OB_MAX_USER_ROW_LENGTH - 5120;
-static const int MAX_TX_DATA_MEMTABLE_CNT = 2;
 
 using TxDataHashNode = common::LinkHashNode<transaction::ObTransID>;
 using TxDataHashValue = common::LinkHashValue<transaction::ObTransID>;
@@ -177,6 +177,7 @@ public:
   { 
     head_ = nullptr;
     undo_node_cnt_ = 0;
+    lock_.unlock();
   }
 
 private:
@@ -187,7 +188,7 @@ private:
 public:
   ObUndoStatusNode *head_;
   int32_t undo_node_cnt_;
-  common::SpinRWLock lock_;
+  common::ObByteLock lock_;
 };
 
 // TODO: Redefine it
@@ -205,13 +206,19 @@ public:
   int64_t prepare_version_;
 };
 
+// FIXME : @gengli remove log ts
 class ObTxCommitData
 {
 public:
   ObTxCommitData() { reset(); }
   void reset();
-  TO_STRING_KV(K_(tx_id), K_(state), K_(is_in_tx_data_table),
-      K_(commit_version), K_(start_log_ts), K_(end_log_ts));
+  TO_STRING_KV(K_(tx_id),
+               K_(state),
+               K_(is_in_tx_data_table),
+               K_(commit_scn),
+               K_(start_scn),
+               K_(end_scn));
+
 public:
   enum : int32_t {
     RUNNING = 0,
@@ -227,9 +234,9 @@ public:
   transaction::ObTransID tx_id_;
   int32_t state_;
   bool is_in_tx_data_table_;
-  int64_t commit_version_;
-  int64_t start_log_ts_;
-  int64_t end_log_ts_;
+  palf::SCN commit_scn_;
+  palf::SCN start_scn_;
+  palf::SCN end_scn_;
 };
 
 // DONT : Modify this definition
@@ -238,6 +245,7 @@ class ObTxData : public ObTxCommitData, public TxDataHashValue
   friend TxDataHashMapAllocHandle;
 private:
   const static int64_t UNIS_VERSION = 1;
+
 public:
   ObTxData() { reset(); }
   ObTxData(const ObTxData &rhs);
@@ -251,9 +259,8 @@ public:
    * 
    * @param[in] tx_table, the tx table contains this tx data
    * @param[in & out] undo_action, the undo action which is waiting to be added. If this undo action contains exsiting undo actions, the existing undo actions will be deleted and this undo action will be modified to contain all the deleted undo actions.
-   * @param[in] undo_node, the undo status node can be used to extend undo status list if required, otherwise it will be released
    */
-  int add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &undo_action, ObUndoStatusNode *undo_node = nullptr);
+  int add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &undo_action);
   /**
    * @brief Check if this tx data is valid
    */
@@ -421,18 +428,14 @@ private:
 class ObTxDataMemtableWriteGuard
 {
 public:
-  ObTxDataMemtableWriteGuard() : size_(0)
-  {
-  }
+  ObTxDataMemtableWriteGuard() { handles_.reset(); }
   ~ObTxDataMemtableWriteGuard() { reset(); }
 
   void reset();
 
-  TO_STRING_KV(K(size_), K(handles_[0]), K(handles_[1]));
-
 public:
-  int64_t size_;
-  ObTableHandleV2 handles_[MAX_TX_DATA_MEMTABLE_CNT];
+  // reserve one slot because there is only one tx data memtable at most of time
+  ObSEArray<ObTableHandleV2, 1> handles_;
 };
 
 

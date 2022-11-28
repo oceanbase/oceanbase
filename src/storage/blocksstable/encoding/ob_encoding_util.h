@@ -324,15 +324,14 @@ OB_INLINE static int batch_load_number_data_to_datum(
   } else {
     for (int64_t i = 0; i < row_cap; ++i) {
       if (!datums[i].is_null()) {
-        MEMCPY(const_cast<char *>(datums[i].ptr_), cell_datas[i], sizeof(ObNumberDesc));
-        const uint8_t num_len = datums[i].num_->desc_.len_;
+        MEMCPY(const_cast<char *>(datums[i].ptr_), cell_datas[i],
+            sizeof(ObNumberDesc) + sizeof(uint32_t));
+        uint8_t num_len = datums[i].num_->desc_.len_;
         datums[i].len_ = sizeof(ObNumberDesc) + num_len * sizeof(uint32_t);
-        if (OB_LIKELY(1 == num_len)) {
-          MEMCPY(const_cast<char *>(datums[i].ptr_) + sizeof(ObNumberDesc),
-              cell_datas[i] + sizeof(ObNumberDesc), sizeof(uint32_t));
-        } else {
-          ENCODING_ADAPT_MEMCPY(const_cast<char *>(datums[i].ptr_) + sizeof(ObNumberDesc),
-              cell_datas[i] + sizeof(ObNumberDesc), num_len * sizeof(uint32_t));
+        if (OB_UNLIKELY(num_len > 1)) {
+          int64_t copy_offset = sizeof(ObNumberDesc) + sizeof(uint32_t);
+          ENCODING_ADAPT_MEMCPY(const_cast<char *>(datums[i].ptr_) + copy_offset,
+              cell_datas[i] + copy_offset, (num_len - 1) * sizeof(uint32_t));
         }
       } else {
         datums[i].set_null();

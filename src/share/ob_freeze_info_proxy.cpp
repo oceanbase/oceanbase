@@ -32,6 +32,7 @@ using namespace common;
 using namespace common::sqlclient;
 using namespace storage;
 using namespace share;
+using namespace palf;
 namespace share
 {
 
@@ -40,25 +41,25 @@ OB_SERIALIZE_MEMBER(ObSimpleFrozenStatus, frozen_scn_,
 
 int ObFreezeInfoProxy::get_freeze_info(
     ObISQLClient &sql_proxy,
-    const int64_t frozen_scn,
+    const SCN &frozen_scn,
     ObSimpleFrozenStatus &frozen_status)
 {
   int ret = OB_SUCCESS;
-  if (frozen_scn <= ObSimpleFrozenStatus::INVALID_FROZEN_SCN) {
+  if (OB_UNLIKELY(!frozen_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn));
   } else {
     ObSqlString sql;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObMySQLResult *result = nullptr;
-      if (frozen_scn == 0) {
+      if (frozen_scn == SCN::min_scn()) {
         if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s ORDER BY frozen_scn DESC LIMIT 1",
             OB_ALL_FREEZE_INFO_TNAME))) {
           LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K(frozen_scn));
         }
       } else {
         if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE frozen_scn = %lu",
-            OB_ALL_FREEZE_INFO_TNAME, (uint64_t)(frozen_scn)))) {
+            OB_ALL_FREEZE_INFO_TNAME, frozen_scn.get_val_for_inner_table_field()))) {
           LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K(frozen_scn));
         }
       }
@@ -127,15 +128,16 @@ int ObFreezeInfoProxy::get_all_freeze_info(
 
 int ObFreezeInfoProxy::get_freeze_info_larger_or_equal_than(
     ObISQLClient &sql_proxy,
-    const int64_t frozen_scn,
+    const SCN &frozen_scn,
     ObIArray<ObSimpleFrozenStatus> &frozen_statuses)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = nullptr;
+    const uint64_t frozen_scn_val = frozen_scn.get_val_for_inner_table_field();
     if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE frozen_scn >= %lu ORDER BY frozen_scn",
-        OB_ALL_FREEZE_INFO_TNAME, static_cast<uint64_t>(frozen_scn)))) {
+        OB_ALL_FREEZE_INFO_TNAME, frozen_scn_val))) {
       LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K(frozen_scn));
     } else if (OB_FAIL(sql_proxy.read(res, tenant_id_, sql.ptr()))) {
       LOG_WARN("fail to execute sql", KR(ret), K(sql), K_(tenant_id));
@@ -178,7 +180,7 @@ int ObFreezeInfoProxy::set_freeze_info(
   if (!frozen_status.is_valid() || !is_valid_tenant_id(tenant_id_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(frozen_status), K_(tenant_id));
-  } else if (OB_FAIL(dml.add_uint64_pk_column("frozen_scn", (uint64_t)(frozen_status.frozen_scn_)))
+  } else if (OB_FAIL(dml.add_uint64_pk_column("frozen_scn", frozen_status.frozen_scn_.get_val_for_inner_table_field()))
             || OB_FAIL(dml.add_column("cluster_version", frozen_status.cluster_version_))
             || OB_FAIL(dml.add_column("schema_version", frozen_status.schema_version_))) {
     LOG_WARN("fail to add column", KR(ret), K(frozen_status), K_(tenant_id));
@@ -193,14 +195,14 @@ int ObFreezeInfoProxy::set_freeze_info(
 
 int ObFreezeInfoProxy::get_min_major_available_and_larger_info(
     ObISQLClient &sql_proxy,
-    const int64_t frozen_scn,
-    int64_t &min_frozen_scn,
+    const SCN &frozen_scn,
+    SCN &min_frozen_scn,
     ObIArray<ObSimpleFrozenStatus> &frozen_statuses)
 {
   int ret = OB_SUCCESS;
   frozen_statuses.reset();
-  min_frozen_scn = ObSimpleFrozenStatus::INVALID_FROZEN_SCN;
-  if (frozen_scn <= ObSimpleFrozenStatus::INVALID_FROZEN_SCN) {
+  min_frozen_scn = SCN::min_scn();
+  if (OB_UNLIKELY(!frozen_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn));
   } else if (OB_FAIL(get_min_major_available_and_larger_info_inner_(sql_proxy,
@@ -213,16 +215,16 @@ int ObFreezeInfoProxy::get_min_major_available_and_larger_info(
 
 int ObFreezeInfoProxy::batch_delete(
     ObISQLClient &sql_proxy,
-    const int64_t upper_frozen_scn)
+    const SCN &upper_frozen_scn)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t affected_rows = 0;
-  if (OB_UNLIKELY(upper_frozen_scn <= ObSimpleFrozenStatus::INVALID_FROZEN_SCN)) {
+  if (OB_UNLIKELY(!upper_frozen_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(upper_frozen_scn));
   } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE frozen_scn <= %lu AND frozen_scn > 1",
-             OB_ALL_FREEZE_INFO_TNAME, (uint64_t)(upper_frozen_scn)))) {
+             OB_ALL_FREEZE_INFO_TNAME, upper_frozen_scn.get_val_for_inner_table_field()))) {
     LOG_WARN("fail to assign sql", KR(ret), K_(tenant_id), K(upper_frozen_scn));
   } else if (OB_FAIL(sql_proxy.write(tenant_id_, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to execute sql", KR(ret), K(sql), K_(tenant_id));
@@ -234,7 +236,7 @@ int ObFreezeInfoProxy::batch_delete(
 
 int ObFreezeInfoProxy::get_frozen_info_less_than(
     ObISQLClient &sql_proxy,
-    const int64_t frozen_scn,
+    const SCN &frozen_scn,
     ObSimpleFrozenStatus &frozen_status)
 {
   int ret = OB_SUCCESS;
@@ -252,12 +254,12 @@ int ObFreezeInfoProxy::get_frozen_info_less_than(
 
 int ObFreezeInfoProxy::get_frozen_info_less_than(
     ObISQLClient &sql_proxy,
-    const int64_t frozen_scn,
+    const SCN &frozen_scn,
     ObIArray<ObSimpleFrozenStatus> &frozen_status_arr,
     bool get_all)
 {
   int ret = OB_SUCCESS;
-  if (frozen_scn <= ObSimpleFrozenStatus::INVALID_FROZEN_SCN) {
+  if (OB_UNLIKELY(!frozen_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn));
   } else {
@@ -265,8 +267,9 @@ int ObFreezeInfoProxy::get_frozen_info_less_than(
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObMySQLResult *result = nullptr;
       int tmp_ret = OB_SUCCESS;
+      const uint64_t frozen_scn_val = frozen_scn.get_val_for_inner_table_field();
       if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE frozen_scn <= %lu ORDER BY frozen_scn DESC %s",
-          OB_ALL_FREEZE_INFO_TNAME, (uint64_t)(frozen_scn), (get_all ? "" : "LIMIT 1")))) {
+                                 OB_ALL_FREEZE_INFO_TNAME, frozen_scn_val, (get_all ? "" : "LIMIT 1")))) {
         LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K(frozen_scn), K(get_all));
       } else if (OB_FAIL(sql_proxy.read(res, tenant_id_, sql.ptr()))) {
         LOG_WARN("fail to execute sql", KR(ret), K(sql), K_(tenant_id));
@@ -332,17 +335,17 @@ int ObFreezeInfoProxy::get_max_freeze_info(
 
 int ObFreezeInfoProxy::get_min_major_available_and_larger_info_inner_(
     ObISQLClient &sql_proxy,
-    const int64_t frozen_scn,
-    int64_t &min_frozen_scn,
+    const SCN &frozen_scn,
+    SCN &min_frozen_scn,
     ObIArray<ObSimpleFrozenStatus> &frozen_statuses)
 {
   int ret = OB_SUCCESS;
-  if (frozen_scn <= ObSimpleFrozenStatus::INVALID_FROZEN_SCN) {
+  if (OB_UNLIKELY(!frozen_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(frozen_scn));
   } else {
     ObSqlString sql;
-    min_frozen_scn = INT64_MAX;
+    min_frozen_scn.set_max();
     SMART_VAR(ObISQLClient::ReadResult, res) {
       sqlclient::ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql.assign_fmt("SELECT *  FROM %s", OB_ALL_FREEZE_INFO_TNAME))) {
@@ -361,7 +364,8 @@ int ObFreezeInfoProxy::get_min_major_available_and_larger_info_inner_(
             }
           } else if (OB_FAIL(construct_frozen_status_(*result, frozen_status))) {
             LOG_WARN("fail to construct frozen_status", KR(ret));
-          } else if (FALSE_IT(min_frozen_scn = MIN(min_frozen_scn, frozen_status.frozen_scn_))) {
+          } else if (FALSE_IT(min_frozen_scn = (min_frozen_scn < frozen_status.frozen_scn_ ?
+                                                min_frozen_scn : frozen_status.frozen_scn_))) {
           } else if (frozen_status.frozen_scn_ > frozen_scn) {
             if (OB_FAIL(frozen_statuses.push_back(frozen_status))) {
               LOG_WARN("fail to push back", KR(ret), K(frozen_status), K_(tenant_id));
@@ -382,9 +386,13 @@ int ObFreezeInfoProxy::construct_frozen_status_(
     ObSimpleFrozenStatus &frozen_status)
 {
   int ret = OB_SUCCESS;
-  EXTRACT_UINT_FIELD_MYSQL(result, "frozen_scn", frozen_status.frozen_scn_, uint64_t);
+  uint64_t frozen_scn_val = OB_INVALID_SCN_VAL;
+  EXTRACT_UINT_FIELD_MYSQL(result, "frozen_scn", frozen_scn_val, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "cluster_version", frozen_status.cluster_version_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, "schema_version", frozen_status.schema_version_, int64_t);
+  if (FAILEDx(frozen_status.frozen_scn_.convert_for_inner_table_field(frozen_scn_val))) {
+    LOG_WARN("fail to convert val to SCN", KR(ret), K(frozen_scn_val));
+  }
   return ret;
 }
 

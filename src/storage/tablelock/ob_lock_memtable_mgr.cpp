@@ -35,9 +35,10 @@ int ObLockMemtableMgr::init(
     const common::ObTabletID &tablet_id,
     const ObLSID &ls_id,
     ObFreezer *freezer,
-    ObTenantMetaMemMgr *t3m)
+    ObTenantMetaMemMgr *t3m,
+    ObTabletDDLKvMgr *ddl_kv_mgr)
 {
-  UNUSEDx(tablet_id);
+  UNUSEDx(tablet_id, ddl_kv_mgr);
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -51,7 +52,6 @@ int ObLockMemtableMgr::init(
     ls_id_ = ls_id;
     freezer_ = freezer;
     t3m_ = t3m;
-    table_type_ = ObITable::TableType::LOCK_MEMTABLE;
     is_inited_ = true;
     LOG_INFO("lock memtable mgr init successfully", K(ls_id), K(tablet_id), K(this));
   }
@@ -65,9 +65,15 @@ void ObLockMemtableMgr::destroy()
 
 void ObLockMemtableMgr::reset()
 {
-  SpinWLockGuard lock_guard(lock_);
-  reset_tables();
+  TCWLockGuard lock_guard(lock_);
+  for (int64_t pos = memtable_head_; pos < memtable_tail_; pos++) {
+    memtables_[get_memtable_idx_(pos)].reset();
+  }
+
+  memtable_head_ = 0;
+  memtable_tail_ = 0;
   freezer_ = NULL;
+  t3m_ = NULL;
   is_inited_ = false;
 }
 
@@ -87,12 +93,12 @@ int ObLockMemtableMgr::create_memtable(
   ObLockMemtable *memtable = nullptr;
   ObLSTxService *ls_tx_svr = nullptr;
 
-  SpinWLockGuard lock_guard(lock_);
+  TCWLockGuard lock_guard(lock_);
 
   table_key.table_type_ = ObITable::LOCK_MEMTABLE;
   table_key.tablet_id_ = LS_LOCK_TABLET;
-  table_key.log_ts_range_.start_log_ts_ = 1; // fake
-  table_key.log_ts_range_.end_log_ts_ = 2; // fake
+  table_key.scn_range_.start_scn_.convert_for_gts(1); // fake
+  table_key.scn_range_.end_scn_.convert_for_gts(2); // fake
 
   if (get_memtable_count_() > 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -114,7 +120,7 @@ int ObLockMemtableMgr::create_memtable(
   } else if (OB_FAIL(ls_tx_svr->register_common_checkpoint(checkpoint::LOCK_MEMTABLE_TYPE, memtable))) {
     LOG_WARN("lock memtable register_common_checkpoint failed", K(ret), K(ls_id_));
   } else {
-    LOG_INFO("create lock memtable successfully", K_(ls_id), K(memtable));
+    LOG_INFO("create lock memtable successfully", K_(ls_id), K(this), K(memtable));
   }
 
   return ret;
@@ -123,16 +129,10 @@ int ObLockMemtableMgr::create_memtable(
 const ObLockMemtable *ObLockMemtableMgr::get_memtable_(const int64_t pos) const
 {
   int ret = OB_SUCCESS;
-  const ObIMemtable *imemtable = tables_[get_memtable_idx(pos)];
+
   const ObLockMemtable *memtable = nullptr;
-  if (OB_ISNULL(imemtable)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "not inited", K(ret));
-  } else if (!imemtable->is_lock_memtable()) {
-    ret = OB_ENTRY_NOT_EXIST;
-    STORAGE_LOG(WARN, "not lock memtable", K(ret), K(imemtable->get_key()));
-  } else {
-    memtable = static_cast<const ObLockMemtable*>(imemtable);
+  if (OB_FAIL(memtables_[get_memtable_idx_(pos)].get_lock_memtable(memtable))) {
+    LOG_WARN("fail to get memtable", K(ret));
   }
 
   return memtable;
@@ -144,6 +144,7 @@ int64_t ObLockMemtableMgr::to_string(char *buf, const int64_t buf_len) const
 
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
+    TCRLockGuard lock_guard(lock_);
     J_OBJ_START();
     J_ARRAY_START();
     for (int64_t i = memtable_head_; i < memtable_tail_; ++i) {
@@ -172,7 +173,7 @@ int ObLockMemtableMgr::unregister_from_common_checkpoint_(const ObLockMemtable *
                                                              memtable))) {
     LOG_WARN("lock memtable unregister_common_checkpoint failed", K(ret), K(ls_id_), K(memtable));
   } else {
-    LOG_INFO("unregister from common checkpoint successfully", K_(ls_id), K(memtable));
+    LOG_INFO("unregister from common checkpoint successfully", K_(ls_id), K(this), K(memtable));
   }
   return ret;
 }
@@ -187,13 +188,14 @@ int ObLockMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
   ObLockMemtable *memtable = static_cast<ObLockMemtable *>(imemtable);
   if (get_memtable_count_() > 0 && force) {
     // for force
-    const int64_t idx = get_memtable_idx(memtable_head_);
-    if (nullptr != tables_[idx] && memtable == tables_[idx]) {
+    const int64_t idx = get_memtable_idx_(memtable_head_);
+    if (memtables_[idx].is_valid() && memtable == memtables_[idx].get_table()) {
       LOG_INFO("release head memtable", K(ret), K_(ls_id), KP(memtable));
       if (OB_TMP_FAIL(unregister_from_common_checkpoint_(memtable))) {
         LOG_WARN("unregister from common checkpoint failed", K(tmp_ret), K_(ls_id), K(memtable));
       }
-      release_head_memtable();
+      memtables_[idx].reset();
+      ++memtable_head_;
       FLOG_INFO("succeed to release head lock table memtable", K(ret), K_(ls_id), KP(imemtable));
     }
   } else if (!force) {

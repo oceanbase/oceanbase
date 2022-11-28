@@ -460,12 +460,6 @@ public:
   {
     return OB_SUCCESS;
   }
-  void set_cancel();
-  bool is_cancel();
-  virtual int deal_with_cancel()
-  {
-    return OB_SUCCESS;
-  }
 public:
   friend class ObTenantDagScheduler;
 
@@ -490,7 +484,6 @@ private:
   int64_t start_time_;
   DagRecordMap dag_record_map_;
   ObDagId dag_id_;
-  bool is_cancel_;
 };
 
 struct ObDagInfo
@@ -797,11 +790,8 @@ public:
       ObIArray<compaction::ObTabletCompactionProgress *> &progress_array);
   int get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time);
   int diagnose_dag(const ObIDag *dag, compaction::ObDiagnoseTabletCompProgress &input_progress);
-  int check_ls_compaction_dag_exist(const ObLSID &ls_id, bool &exist);
   int check_dag_net_exist(
       const ObDagId &dag_id, bool &exist);
-  int cancel_dag_net(const ObDagId &dag_id);
-
 private:
   typedef common::ObDList<ObIDag> DagList;
   typedef common::ObDList<ObIDagNet> DagNetList;
@@ -926,6 +916,7 @@ private:
   DagNetIdMap dag_net_id_map_; // for HA to search dag_net of specified dag_id
   int tg_id_;
 };
+
 
 // ATTENTION! when alloc task success, the task is already added into task_list_!!!
 template <typename T>

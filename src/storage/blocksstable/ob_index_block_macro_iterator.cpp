@@ -116,6 +116,7 @@ int ObIndexBlockMacroIterator::open(
       } else {
         curr_key_ = range.get_end_key();
         if (start_beyond_range) {
+          ret = OB_BEYOND_THE_RANGE;
           is_iter_end_ = true;
         } else if (end_beyond_range) {
           // endkey beyond the open range
@@ -143,6 +144,7 @@ int ObIndexBlockMacroIterator::open(
         // for check reuse boundary during compaction
         curr_key_.set_min_rowkey();
         if (start_beyond_range) {
+          ret = OB_BEYOND_THE_RANGE;
           is_iter_end_ = true;
         } else if (end_beyond_range) {
         }

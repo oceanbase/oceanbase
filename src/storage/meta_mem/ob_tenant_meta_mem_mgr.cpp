@@ -44,7 +44,7 @@ ObTenantMetaMemStatus::ObTenantMetaMemStatus()
     free_obj_cnt_(0),
     each_obj_size_(0)
 {
-  name_[0] = '\0';
+  MEMSET(name_, 0x0, sizeof(name_));
 }
 
 void ObTenantMetaMemMgr::TableGCTask::runTimerTask()
@@ -130,20 +130,15 @@ int ObTenantMetaMemMgr::init()
 {
   int ret = OB_SUCCESS;
   lib::ObMemAttr mem_attr(tenant_id_, "MetaAllocator", ObCtxIds::META_OBJ_CTX_ID);
-  const int64_t mem_limit = get_tenant_memory_limit(tenant_id_);
-  const int64_t min_bkt_cnt = DEFAULT_BUCKET_NUM;
-  const int64_t max_bkt_cnt = 10000000L;
-  const int64_t tablet_bucket_num = std::min(std::max((mem_limit / (1024 * 1024 * 1024)) * 50000, min_bkt_cnt), max_bkt_cnt);
-  const int64_t bucket_num = common::hash::cal_next_prime(tablet_bucket_num);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantMetaMemMgr has been initialized", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::BLOCK_MANAGER_LOCK))) {
+  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT, ObLatchIds::BLOCK_MANAGER_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(),
       OB_MALLOC_NORMAL_BLOCK_SIZE, mem_attr))) {
     LOG_WARN("fail to init tenant fifo allocator", K(ret));
-  } else if (OB_FAIL(tablet_map_.init(bucket_num, "TabletMap", TOTAL_LIMIT, HOLD_LIMIT,
+  } else if (OB_FAIL(tablet_map_.init(DEFAULT_BUCKET_NUM, "TabletMap", TOTAL_LIMIT, HOLD_LIMIT,
         common::OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("fail to initialize tablet map", K(ret));
   } else if (OB_FAIL(last_min_minor_sstable_set_.create(DEFAULT_MINOR_SSTABLE_SET_COUNT))) {
@@ -382,7 +377,7 @@ int ObTenantMetaMemMgr::get_min_end_log_ts_for_ls(const share::ObLSID &ls_id, in
     SSTableSet::const_iterator iter = last_min_minor_sstable_set_.begin();
     while (OB_SUCC(ret) && iter != last_min_minor_sstable_set_.end()) {
       const MinMinorSSTableInfo &info = iter->first;
-      if (info.ls_id_ != ls_id || info.table_key_.tablet_id_.is_ls_inner_tablet()) {
+      if (info.ls_id_ != ls_id) {
         // just skip
       } else if (OB_UNLIKELY(!info.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
@@ -767,8 +762,7 @@ int ObTenantMetaMemMgr::acquire_tablet(
     const WashTabletPriority &priority,
     const ObTabletMapKey &key,
     ObLSHandle &ls_handle,
-    ObTabletHandle &tablet_handle,
-    const bool only_acquire)
+    ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   ObMetaObj<ObTablet> meta_obj;
@@ -793,7 +787,7 @@ int ObTenantMetaMemMgr::acquire_tablet(
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
     if (OB_FAIL(has_tablet(key, is_exist))) {
       LOG_WARN("fail to check tablet existence", K(ret), K(key));
-    } else if (is_exist || only_acquire) {
+    } else if (is_exist) {
       ObTabletPointerHandle ptr_handle(tablet_map_);
       if (OB_FAIL(tablet_map_.set_attr_for_obj(key, tablet_handle))) {
         LOG_WARN("fail to set attribute for tablet", K(ret), K(key), K(tablet_handle));
@@ -819,8 +813,7 @@ int ObTenantMetaMemMgr::acquire_tablet(
     const WashTabletPriority &priority,
     const ObTabletMapKey &key,
     common::ObIAllocator &allocator,
-    ObTabletHandle &tablet_handle,
-    const bool only_acquire)
+    ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
@@ -841,7 +834,7 @@ int ObTenantMetaMemMgr::acquire_tablet(
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
     if (OB_FAIL(has_tablet(key, is_exist))) {
       LOG_WARN("fail to check tablet existence", K(ret), K(key));
-    } else if (is_exist || only_acquire) {
+    } else if (is_exist) {
       ObTabletPointerHandle ptr_handle(tablet_map_);
       if (OB_FAIL(tablet_map_.set_attr_for_obj(key, tablet_handle))) {
         LOG_WARN("fail to set attribute for tablet", K(ret), K(key), K(tablet_handle));
@@ -868,6 +861,7 @@ int ObTenantMetaMemMgr::create_tablet(
 {
   int ret = OB_SUCCESS;
   ObMemtableMgrHandle memtable_mgr_hdl;
+  ObDDLKvMgrHandle ddl_kv_mgr_hdl;
   ObLS *ls = ls_handle.get_ls();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -875,6 +869,8 @@ int ObTenantMetaMemMgr::create_tablet(
   } else if (OB_UNLIKELY(!key.is_valid() || !ls_handle.is_valid() || !tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key), K(ls_handle), K(tablet_handle));
+  } else if (OB_FAIL(acquire_tablet_ddl_kv_mgr(ddl_kv_mgr_hdl))) {
+    LOG_WARN("fail to acquire tablet ddl kv mgr", K(ret));
   } else if (key.tablet_id_.is_ls_tx_data_tablet()) {
     if (OB_FAIL(ls->get_tablet_svr()->get_tx_data_memtable_mgr(memtable_mgr_hdl))) {
       LOG_WARN("fail to get tx data memtable mgr", K(ret));
@@ -892,7 +888,7 @@ int ObTenantMetaMemMgr::create_tablet(
   }
   if (OB_SUCC(ret)) {
     ObTabletPointerHandle ptr_handle(tablet_map_);
-    ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
+    ObTabletPointer tablet_ptr(ls_handle, ddl_kv_mgr_hdl, memtable_mgr_hdl);
     ObMetaDiskAddr addr;
     addr.set_none_addr();
     tablet_ptr.set_addr_with_reset_obj(addr);
@@ -931,7 +927,7 @@ int ObTenantMetaMemMgr::get_tablet(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(key));
   } else if (OB_FAIL(tablet_map_.get_meta_obj(key, allocator_, handle))) {
-    if (OB_ENTRY_NOT_EXIST != ret && OB_ITEM_NOT_SETTED != ret) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get tablet", K(ret), K(key));
     }
   } else if (OB_ISNULL(handle.get_obj())) {
@@ -1037,36 +1033,6 @@ int ObTenantMetaMemMgr::set_tablet_pointer_tx_data(
   return ret;
 }
 
-int ObTenantMetaMemMgr::get_tablet_ddl_kv_mgr(
-    const ObTabletMapKey &key,
-    ObDDLKvMgrHandle &ddl_kv_mgr_handle)
-{
-  int ret = OB_SUCCESS;
-  ObTabletPointerHandle ptr_handle(tablet_map_);
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
-  } else if (OB_UNLIKELY(!key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(key));
-  } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
-    LOG_WARN("failed to get ptr handle", K(ret), K(key));
-  } else {
-    ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(ptr_handle.get_resource_ptr());
-    if (OB_ISNULL(tablet_ptr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
-    } else {
-      tablet_ptr->get_ddl_kv_mgr(ddl_kv_mgr_handle);
-      if (!ddl_kv_mgr_handle.is_valid()) {
-        ret = OB_ENTRY_NOT_EXIST;
-        LOG_DEBUG("ddl kv mgr not exist", K(ret), K(ddl_kv_mgr_handle));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTenantMetaMemMgr::get_meta_mem_status(common::ObIArray<ObTenantMetaMemStatus> &info) const
 {
   int ret = OB_SUCCESS;
@@ -1105,6 +1071,9 @@ int ObTenantMetaMemMgr::del_tablet(const ObTabletMapKey &key)
     LOG_WARN("fail to erase tablet pointer", K(ret), K(key));
   } else if (OB_FAIL(erase_pinned_tablet(key))) {
     LOG_WARN("failed to erase from pinned tablet set", K(ret), K(key));
+  } else {
+    // TODO(@bowen.gbw): temproarily for debug
+    FLOG_INFO("succeeded to del tablet", K(ret), K(key), K(lbt()));
   }
   return ret;
 }
@@ -1464,7 +1433,7 @@ int64_t ObTenantMetaMemMgr::calc_wash_tablet_cnt() const
 {
   const int64_t used_tablet_cnt = tablet_pool_.get_used_obj_cnt();
   const double variable_mem_fragment_ratio = std::round(((allocator_.total() * 1.0) / allocator_.used()) * 10000) / 10000;
-  const int64_t wash_cnt = min(variable_mem_fragment_ratio > 3.75 ? INT64_MAX : static_cast<int64_t>(used_tablet_cnt * 0.2), 30000);
+  const int64_t wash_cnt = variable_mem_fragment_ratio > 3.75 ? INT64_MAX : static_cast<int64_t>(used_tablet_cnt * 0.2);
   FLOG_INFO("calculate wash tablet count", K(wash_cnt), K(variable_mem_fragment_ratio), K(used_tablet_cnt));
   return wash_cnt;
 }
@@ -1625,12 +1594,7 @@ int ObTenantMetaMemMgr::insert_pinned_tablet(const ObTabletMapKey &key)
   } else if (OB_UNLIKELY(!key.is_valid())) {
     LOG_WARN("invalid args", K(ret), K(key));
   } else if (OB_FAIL(pinned_tablet_set_.set_refactored(key, 0/*flag, not overwrite*/))) {
-    if (OB_HASH_EXIST == ret) {
-      LOG_DEBUG("tablet already exists", K(ret), K(key));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to insert into hash set", K(ret), K(key));
-    }
+    LOG_WARN("failed to insert into hash set", K(ret), K(key));
   }
 
   return ret;
@@ -1647,7 +1611,7 @@ int ObTenantMetaMemMgr::erase_pinned_tablet(const ObTabletMapKey &key)
     LOG_WARN("invalid args", K(ret), K(key));
   } else if (OB_FAIL(pinned_tablet_set_.erase_refactored(key))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      LOG_DEBUG("tablet does not exist in t3m pinned set", K(ret), K(key));
+      LOG_WARN("tablet does not exist in t3m pinned set", K(ret), K(key));
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to erase from hash set", K(ret), K(key));
@@ -1656,6 +1620,7 @@ int ObTenantMetaMemMgr::erase_pinned_tablet(const ObTabletMapKey &key)
 
   return ret;
 }
+
 
 ObTenantMetaMemMgr::MinMinorSSTableInfo::MinMinorSSTableInfo(
     const share::ObLSID &ls_id,

@@ -1231,8 +1231,6 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
       } else {
         ret = add_subquery_filter(qual);
       }
-    } else if (qual->is_const_expr()) {
-      ret = add_startup_filter(qual);
     } else if (qual->has_flag(CNT_RAND_FUNC) ||
                qual->has_flag(CNT_USER_VARIABLE) ||
                qual->has_flag(CNT_PL_UDF) ||
@@ -1240,6 +1238,8 @@ int ObLogPlan::pre_process_quals(const ObIArray<TableItem*> &table_items,
       ret = add_special_expr(qual);
     } else if (ObOptimizerUtil::has_hierarchical_expr(*qual)) {
       ret = normal_quals.push_back(qual);
+    } else if (0 == qual->get_relation_ids().num_members()) {
+      ret = add_startup_filter(qual);
     } else {
       ret = normal_quals.push_back(qual);
     }
@@ -1280,7 +1280,7 @@ int ObLogPlan::pre_process_quals(SemiInfo* semi_info)
     } else if (expr->has_flag(CNT_ROWNUM) || expr->has_flag(CNT_RAND_FUNC)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr in semi condition", K(ret), K(*expr));
-    } else if (!expr->has_flag(CNT_ONETIME) || expr->has_flag(CNT_SUB_QUERY)) {
+    } else if (!expr->has_flag(CNT_ONETIME)) {
       // do nothing
     } else if (OB_FAIL(add_subquery_filter(expr))) {
       LOG_WARN("failed to add subquery filter", K(ret));
@@ -1314,7 +1314,7 @@ int ObLogPlan::pre_process_quals(TableItem *table_item)
       if (OB_ISNULL(expr = joined_table->join_conditions_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL", K(ret), K(expr));
-      } else if (!expr->has_flag(CNT_ONETIME) || expr->has_flag(CNT_SUB_QUERY)) {
+      } else if (!expr->has_flag(CNT_ONETIME)) {
         // do nothing
       } else if (OB_FAIL(add_subquery_filter(expr))) {
         LOG_WARN("failed to add subquery filter", K(ret));
@@ -1515,9 +1515,6 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
         LOG_WARN("failed to push back qual", K(ret));
       } else if (OB_FAIL(detector->join_info_.table_set_.add_members(expr->get_relation_ids()))) {
         LOG_WARN("failed to add members", K(ret));
-      } else if (expr->has_flag(CNT_SUB_QUERY) && 
-                 OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
-        LOG_WARN("failed to add members", K(ret));
       } else if (OB_FAIL(inner_join_detectors.push_back(detector))) {
         LOG_WARN("failed to push back detector", K(ret));
       } else {
@@ -1540,10 +1537,7 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
     } else if (expr->has_flag(IS_JOIN_COND) &&
                OB_FAIL(detector->join_info_.equal_join_conditions_.push_back(expr))) {
         LOG_WARN("failed to push back qual", K(ret));
-    } else if (expr->has_flag(CNT_SUB_QUERY) && 
-               OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
-      LOG_WARN("failed to add members", K(ret));
-    } 
+    }
   }
   //3. 生成inner join的冲突规则
   for (int64_t i = 0; OB_SUCC(ret) && i < inner_join_detectors.count(); ++i) {
@@ -5237,6 +5231,10 @@ int ObLogPlan::create_plan_tree_from_path(Path *path,
       JoinPath *join_path = static_cast<JoinPath *>(path);
       if (OB_FAIL(allocate_join_path(join_path, op))) {
         LOG_WARN("failed to allocate join path", K(ret));
+      } else if (lib::is_mysql_mode() &&
+                 OB_FAIL(allocate_for_update_for_semi_anti_join(join_path,
+                                                                static_cast<ObLogJoin*>(op)))) {
+        LOG_WARN("failed to allocate allocate for update for semi anti join", K(ret));
       } else {/* do nothing */ }
     } else if (path->is_subquery_path()) {
       SubQueryPath *subquery_path = static_cast<SubQueryPath *>(path);
@@ -5597,6 +5595,8 @@ int ObLogPlan::create_temp_table_transformation_plan(ObLogicalOperator *&top,
         LOG_WARN("failed to allocate exchange as top", K(ret));
       } else if (OB_FAIL(child_ops.push_back(temp))) {
         LOG_WARN("failed to push back child ops", K(ret));
+      } else {
+        info->is_local_ = !temp_table_insert.at(i)->is_sharding();
       }
     }
     if (OB_FAIL(ret)) {
@@ -6757,7 +6757,7 @@ int ObLogPlan::adjust_sort_expr_ordering(ObIArray<ObRawExpr*> &sort_exprs,
   const ObDMLStmt *stmt = NULL;
   const EqualSets &equal_sets = child_op.get_output_equal_sets();
   const ObIArray<ObRawExpr *> &const_exprs = child_op.get_output_const_exprs();
-  int64_t prefix_count = -1;
+  bool input_ordering_used = false;
   bool input_ordering_all_used = false;
   if (OB_ISNULL(stmt = child_op.get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
@@ -6767,12 +6767,12 @@ int ObLogPlan::adjust_sort_expr_ordering(ObIArray<ObRawExpr*> &sort_exprs,
                                                                child_op.get_op_ordering(),
                                                                equal_sets,
                                                                const_exprs,
-                                                               prefix_count,
+                                                               input_ordering_used,
                                                                input_ordering_all_used,
                                                                sort_directions))) {
     LOG_WARN("failed to adjust exprs by ordering", K(ret));
-  } else if (input_ordering_all_used) {
-    /* sort_exprs use input ordering, need not sort */
+  } else if (input_ordering_used) {
+    // do nothing
   } else {
     bool adjusted = false;
     if (stmt->is_select_stmt() && check_win_func) {
@@ -6785,9 +6785,6 @@ int ObLogPlan::adjust_sort_expr_ordering(ObIArray<ObRawExpr*> &sort_exprs,
         } else if (cur_expr->get_partition_exprs().count() == 0 &&
                    cur_expr->get_order_items().count() == 0) {
           // win_func over(), do nothing
-        } else if (prefix_count > 0) {
-          /* used part of input ordering, do not adjust now*/
-          adjusted = true;
         } else if (OB_FAIL(adjust_exprs_by_win_func(sort_exprs,
                                                     *cur_expr,
                                                     equal_sets,
@@ -6795,138 +6792,19 @@ int ObLogPlan::adjust_sort_expr_ordering(ObIArray<ObRawExpr*> &sort_exprs,
                                                     sort_directions))) {
             LOG_WARN("failed to adjust exprs by win func", K(ret));
         } else {
-          /* use no input ordering, adjusted by win func*/
           adjusted = true;
         }
       }
     }
     if (OB_SUCC(ret) && !adjusted && stmt->get_order_item_size() > 0) {
-      if (prefix_count > 0) {
-        /* used part of input ordering, try adjust sort_exprs after prefix_count by order item */
-        if (OB_FAIL(adjust_postfix_sort_expr_ordering(stmt->get_order_items(),
-                                                      child_op.get_fd_item_set(),
-                                                      equal_sets,
-                                                      const_exprs,
-                                                      prefix_count,
-                                                      sort_exprs,
-                                                      sort_directions))) {
-          LOG_WARN("failed to adjust exprs by ordering", K(ret));
-        }  
-      } else if (OB_FAIL(ObOptimizerUtil::adjust_exprs_by_ordering(sort_exprs,
-                                                                   stmt->get_order_items(),
-                                                                   equal_sets,
-                                                                   const_exprs,
-                                                                   prefix_count,
-                                                                   input_ordering_all_used,
-                                                                   sort_directions))) {
+      if (OB_FAIL(ObOptimizerUtil::adjust_exprs_by_ordering(sort_exprs,
+                                                            stmt->get_order_items(),
+                                                            equal_sets,
+                                                            const_exprs,
+                                                            input_ordering_used,
+                                                            input_ordering_all_used,
+                                                            sort_directions))) {
         LOG_WARN("failed to adjust exprs by ordering", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::adjust_postfix_sort_expr_ordering(const ObIArray<OrderItem> &ordering,
-                                                  const ObFdItemSet &fd_item_set,
-                                                  const EqualSets &equal_sets,
-                                                  const ObIArray<ObRawExpr*> &const_exprs,
-                                                  const int64_t prefix_count,
-                                                  ObIArray<ObRawExpr*> &sort_exprs,
-                                                  ObIArray<ObOrderDirection> &sort_directions)
-{
-  int ret = OB_SUCCESS;
-  LOG_DEBUG("begin adjust postfix sort expr ordering", K(prefix_count), K(fd_item_set), K(equal_sets),
-                                              K(sort_exprs), K(sort_directions), K(ordering));
-  if (OB_UNLIKELY(prefix_count < 0 || prefix_count >= sort_exprs.count())
-      || OB_UNLIKELY(sort_directions.count() != sort_exprs.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected params", K(ret), K(prefix_count), K(sort_exprs.count()),
-                                          K(sort_directions.count()));
-  } else if (ordering.count() < prefix_count) {
-    /* do nothing */
-  } else {
-    ObSEArray<ObRawExpr*, 5> new_sort_exprs;
-    ObSEArray<ObOrderDirection, 5> new_sort_directions;
-    bool check_next = false;
-    bool can_adjust = true;
-    int64_t idx = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && can_adjust && i < prefix_count; ++i) {
-      check_next = true;
-      while (OB_SUCC(ret) && check_next && idx < ordering.count()) {
-        // after ObOptimizerUtil::adjust_exprs_by_ordering, there is not const exprs in sort_exprs.
-        if (sort_directions.at(i) == ordering.at(idx).order_type_
-            && ObOptimizerUtil::is_expr_equivalent(sort_exprs.at(i), ordering.at(idx).expr_, equal_sets)) {
-          check_next = false;
-        } else if (OB_FAIL(ObOptimizerUtil::is_const_or_equivalent_expr(ordering, equal_sets,
-                                                                  const_exprs, idx, check_next))) {
-          LOG_WARN("failed to check is const or equivalent exprs", K(ret));
-        } else if (!check_next &&
-                   OB_FAIL(ObOptimizerUtil::is_expr_is_determined(new_sort_exprs, fd_item_set,
-                                                                  equal_sets, const_exprs,
-                                                                  ordering.at(idx).expr_,
-                                                                  check_next))) {
-          LOG_WARN("failed to check is expr is determined", K(ret));
-        } else if (check_next) {
-          ++idx;
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (check_next) {
-        can_adjust = false;
-      } else if (OB_FAIL(new_sort_exprs.push_back(sort_exprs.at(i)))
-                 || OB_FAIL(new_sort_directions.push_back(sort_directions.at(i)))) {
-        LOG_WARN("failed to add prefix expr/direction", K(ret));
-      } else {
-        ++idx;
-      }
-    }
-    if (OB_SUCC(ret) && idx < ordering.count() && can_adjust) {
-      ObSqlBitSet<> added_sort_exprs;
-      for (int64_t i = idx; OB_SUCC(ret) && can_adjust && i < ordering.count(); ++i) {
-        can_adjust = false;
-        for (int64_t j = prefix_count; OB_SUCC(ret) && !can_adjust && j <  sort_exprs.count(); ++j) {
-          if (ObOptimizerUtil::is_expr_equivalent(sort_exprs.at(j), ordering.at(i).expr_, equal_sets)) {
-            can_adjust = true;
-            if (added_sort_exprs.has_member(j)) {
-              /* do nothing */
-            } else if (OB_FAIL(added_sort_exprs.add_member(j))) {
-              LOG_WARN("failed to add bit set", K(ret));
-            } else if (OB_FAIL(new_sort_exprs.push_back(sort_exprs.at(j)))
-                       || OB_FAIL(new_sort_directions.push_back(ordering.at(i).order_type_))) {
-              LOG_WARN("Failed to add prefix expr/direction", K(ret));
-            }
-          }
-        }
-        if (OB_FAIL(ret) || can_adjust) {
-        } else if (OB_FAIL(ObOptimizerUtil::is_const_or_equivalent_expr(ordering, equal_sets,
-                                                                        const_exprs, i, can_adjust))) {
-          LOG_WARN("failed to check is const or equivalent exprs", K(ret));
-        } else if (!can_adjust && OB_FAIL(ObOptimizerUtil::is_expr_is_determined(new_sort_exprs,
-                                                                                fd_item_set,
-                                                                                equal_sets,
-                                                                                const_exprs,
-                                                                                ordering.at(i).expr_,
-                                                                                can_adjust))) {
-          LOG_WARN("failed to check is expr is determined", K(ret));
-        }
-      }
-      if (OB_SUCC(ret) && can_adjust) {
-        for (int64_t i = prefix_count; OB_SUCC(ret) && i < sort_exprs.count(); ++i) {
-          if (added_sort_exprs.has_member(i)) {
-            /* do nothing */
-          } else if (OB_FAIL(new_sort_exprs.push_back(sort_exprs.at(i)))
-                     || OB_FAIL(new_sort_directions.push_back(sort_directions.at(i)))) {
-            LOG_WARN("failed to add prefix expr / direction", K(ret));
-          }
-        }
-        LOG_DEBUG("adjusted postfix sort expr ordering", K(new_sort_exprs), K(new_sort_directions));
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(sort_exprs.assign(new_sort_exprs))) {
-            LOG_WARN("assign adjusted exprs failed", K(ret));
-          } else if (OB_FAIL(sort_directions.assign(new_sort_directions))) {
-            LOG_WARN("failed to assign order types", K(ret));
-          }
-        }
       }
     }
   }
@@ -6988,13 +6866,13 @@ int ObLogPlan::adjust_exprs_by_win_func(ObIArray<ObRawExpr *> &exprs,
   if (OB_SUCC(ret) && all_part_used &&
       win_expr.get_order_items().count() > 0 &&
       rest_exprs.count() > 0) {
-    int64_t prefix_count = -1;
+    bool input_ordering_used = false;
     bool input_ordering_all_used = false;
     if (OB_FAIL(ObOptimizerUtil::adjust_exprs_by_ordering(rest_exprs,
                                                           win_expr.get_order_items(),
                                                           equal_sets,
                                                           const_exprs,
-                                                          prefix_count,
+                                                          input_ordering_used,
                                                           input_ordering_all_used,
                                                           rest_order_types))) {
       LOG_WARN("failed to adjust exprs by ordering", K(ret));
@@ -8146,6 +8024,7 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
         !is_virtual_table(table_scan->get_ref_table_id()) &&
         !(0 != table_scan->get_dblink_id() && NULL != offset_expr) &&
         !get_stmt()->is_calc_found_rows() && !table_scan->is_sample_scan() &&
+        !get_log_plan_hint().use_late_material() &&
         (NULL == table_scan->get_limit_expr() ||
          ObOptimizerUtil::is_point_based_sub_expr(limit_expr, table_scan->get_limit_expr()))) {
       if (!top->is_distributed()) {
@@ -9894,20 +9773,6 @@ int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
   int ret = OB_SUCCESS;
   bool should_add = true;
   DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
-  if (OB_ISNULL(new_plan.plan_tree_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (new_plan.plan_tree_->get_type() == LOG_SET && 
-             static_cast<ObLogSet*>(new_plan.plan_tree_)->is_recursive_union()) {
-    ObLogicalOperator* right_child = new_plan.plan_tree_->get_child(ObLogicalOperator::second_child);
-    if (OB_ISNULL(right_child)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (right_child->get_contains_match_all_fake_cte() &&
-               !new_plan.plan_tree_->is_remote()) {
-      should_add = false;
-    }
-  }
   for (int64_t i = current_plans.count() - 1;
        OB_SUCC(ret) && should_add && i >= 0; --i) {
     if (OB_FAIL(compute_plan_relationship(current_plans.at(i),
@@ -10867,18 +10732,6 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
       }
     }
 
-    if (OB_SUCC(ret) && op->get_type() == LOG_SET && 
-        static_cast<ObLogSet*>(op)->is_recursive_union()) {
-      ObLogicalOperator* right_child = NULL;
-      if (OB_UNLIKELY(2 != op->get_num_of_child()) ||
-          OB_ISNULL(right_child = op->get_child(ObLogicalOperator::second_child))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(op->get_name()));
-      } else if (OB_FAIL(allocate_material_for_recursive_cte_plan(right_child->get_child_list()))) {
-        LOG_WARN("faile to allocate material for recursive cte plan", K(ret));
-      }
-    }
-
     if (OB_SUCC(ret)) {
       if (op->is_plan_root() && OB_FAIL(op->set_plan_root_output_exprs())) {
         LOG_WARN("failed to add plan root exprs", K(ret));
@@ -11784,6 +11637,78 @@ int ObLogPlan::generate_column_expr(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObLogPlan::allocate_for_update_for_semi_anti_join(JoinPath *join_path,
+                                                      ObLogJoin *join_op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(join_path) || OB_ISNULL(join_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(join_path), K(join_op));
+  } else if (IS_SEMI_ANTI_JOIN(join_path->join_type_)) {
+    const Path *left_path = join_path->left_path_;
+    const Path *right_path = join_path->right_path_;
+    ObLogicalOperator *left_child = join_op->get_left_table();
+    ObLogicalOperator *right_child = join_op->get_right_table();
+    if (OB_ISNULL(left_path) || OB_ISNULL(right_path)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(left_path), K(right_path));
+    } else if (IS_LEFT_SEMI_ANTI_JOIN(join_path->join_type_)) {
+      //for update need allocate before rigth table which in left semi/anti join becauese
+      //it isn't pk preserving.
+      ObSEArray<uint64_t, 1> sfu_table_list;
+      if (OB_FAIL(recursive_collect_sfu_table_ids(right_path, sfu_table_list))) {
+        LOG_WARN("failed to recursive collect sfu table ids", K(ret));
+      } else if (sfu_table_list.empty()) {
+        //do nothing
+      } else if (OB_FAIL(allocate_for_update_as_top(right_child, sfu_table_list))) {
+        LOG_WARN("failed to allocate for update as top", K(ret));
+      } else {
+        join_op->set_right_child(right_child);
+      }
+    } else if (IS_RIGHT_SEMI_ANTI_JOIN(join_path->join_type_)) {
+      //for update need allocate before left table which in right semi/anti join becauese
+      //it isn't pk preserving.
+      ObSEArray<uint64_t, 1> sfu_table_list;
+      if (OB_FAIL(recursive_collect_sfu_table_ids(left_path, sfu_table_list))) {
+        LOG_WARN("failed to recursive collect sfu table ids", K(ret));
+      } else if (sfu_table_list.empty()) {
+        //do nothing
+      } else if (OB_FAIL(allocate_for_update_as_top(left_child, sfu_table_list))) {
+        LOG_WARN("failed to allocate for update as top", K(ret));
+      } else {
+        join_op->set_left_child(left_child);
+      }
+    } else {/*do nothing*/}
+  }
+  return ret;
+}
+
+int ObLogPlan::recursive_collect_sfu_table_ids(const Path *path, ObIArray<uint64_t> &sfu_table_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(path)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpecpted null", K(ret), K(path));
+  } else if (path->is_access_path()) {
+    const AccessPath* access_path = static_cast<const AccessPath*>(path);
+    if (access_path->for_update_ && !table_is_allocated_for_update(access_path->table_id_)) {
+      if (OB_FAIL(sfu_table_list.push_back(access_path->table_id_))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {/*do nothing*/}
+    }
+  } else if (path->is_join_path()) {
+    const JoinPath *join_path = static_cast<const JoinPath *>(path);
+    if (OB_FAIL(SMART_CALL(recursive_collect_sfu_table_ids(join_path->left_path_,
+                                                           sfu_table_list)))) {
+      LOG_WARN("failed to recursive collect sfu table ids", K(ret));
+    } else if (OB_FAIL(SMART_CALL(recursive_collect_sfu_table_ids(join_path->right_path_,
+                                                                  sfu_table_list)))) {
+      LOG_WARN("failed to recursive collect sfu table ids", K(ret));
+    } else {/*do nothing*/}
+  } else {/*do nothing*/}
+  return ret;
+}
+
 //mysql mode need distinguish different of for update, eg:
 /*
  * create table t1(c1 int primary key, c2 int);
@@ -12465,39 +12390,6 @@ int ObLogPlan::compute_subplan_filter_repartition_distribution_info(ObLogicalOpe
     } else {
       exch_info.unmatch_row_dist_method_ = ObPQDistributeMethod::DROP;
       LOG_TRACE("succeed to compute repartition distribution info", K(exch_info));
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperator*> &child_ops)
-{
-  int ret = OB_SUCCESS;
-  ObLogPlan *log_plan = NULL;
-  int64_t fake_cte_pos = -1;
-  for (int64_t i = 0; OB_SUCC(ret) && fake_cte_pos == -1 && i < child_ops.count(); i++) {
-    if (OB_ISNULL(child_ops.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (child_ops.at(i)->get_contains_fake_cte()) {
-      fake_cte_pos = i;
-    } else { /*do nothing*/ }
-  }
-  if (OB_SUCC(ret) && fake_cte_pos != -1) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < child_ops.count(); i++) {
-      if (OB_ISNULL(child_ops.at(i)) || OB_ISNULL(log_plan = child_ops.at(i)->get_plan())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (i == fake_cte_pos) {
-        if (OB_FAIL(SMART_CALL(allocate_material_for_recursive_cte_plan(child_ops.at(i)->get_child_list())))) {
-          LOG_WARN("failed to adjust recursive cte plan", K(ret));
-        } else { /*do nothing*/ }
-      } else if (log_op_def::LOG_MATERIAL != child_ops.at(i)->get_type() &&
-                 log_op_def::LOG_TABLE_SCAN != child_ops.at(i)->get_type() &&
-                 log_op_def::LOG_EXPR_VALUES != child_ops.at(i)->get_type() &&
-                 OB_FAIL(log_plan->allocate_material_as_top(child_ops.at(i)))) {
-        LOG_WARN("failed to allocate materialize as top", K(ret));
-      } else { /*do nothing*/ }
     }
   }
   return ret;

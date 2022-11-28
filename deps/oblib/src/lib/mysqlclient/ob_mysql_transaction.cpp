@@ -24,8 +24,7 @@ namespace common
 using namespace sqlclient;
 
 ObMySQLTransaction::ObMySQLTransaction(bool enable_query_stash)
-    :ObSingleConnectionProxy(),
-     start_time_(0),
+    :start_time_(0),
      in_trans_(false),
      enable_query_stash_(enable_query_stash)
 {

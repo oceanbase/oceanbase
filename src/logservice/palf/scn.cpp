@@ -11,6 +11,7 @@
  */
 
 #include "scn.h"
+#include "share/ob_table_range.h"
 #include "lib/utility/ob_macro_utils.h"         // OB_UNLIKELY
 namespace oceanbase
 {
@@ -19,13 +20,209 @@ namespace palf
 
 void SCN::reset()
 {
-  ts_ns_ = OB_INVALID_SCN_VAL;
-  v_ = SCN_VERSION;
+  ATOMIC_SET(&val_, OB_INVALID_SCN_VAL);
+}
+
+SCN SCN::atomic_get() const
+{
+  SCN result;
+  const uint64_t val = ATOMIC_LOAD(&val_);
+  result.val_ = val;
+  return result;
+}
+
+void SCN::atomic_set(const SCN &ref)
+{
+  ATOMIC_SET(&val_, ATOMIC_LOAD(&ref.val_));
+}
+
+bool SCN::atomic_bcas(const SCN &old_v, const SCN &new_val)
+{
+  return ATOMIC_BCAS(&val_, old_v.val_, new_val.val_);
 }
 
 bool SCN::is_valid() const
 {
-  return ((OB_INVALID_SCN_VAL != ts_ns_) && (SCN_VERSION == v_));
+  return ((OB_INVALID_SCN_VAL != val_) && (SCN_VERSION == v_));
+}
+
+void SCN::set_invalid()
+{
+  reset();
+}
+
+void SCN::set_max()
+{
+  v_ = SCN_VERSION;
+  ts_ns_ = OB_MAX_SCN_TS_NS;
+}
+
+bool SCN::is_max()
+{
+  bool bool_ret = false;
+  if (v_ == SCN_VERSION && ts_ns_ == OB_MAX_SCN_TS_NS) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
+void SCN::set_min()
+{
+  v_ = SCN_VERSION;
+  ts_ns_ = OB_MIN_SCN_TS_NS;
+}
+
+bool SCN::is_min()
+{
+  bool bool_ret = false;
+  if (v_ == SCN_VERSION && ts_ns_ == OB_MIN_SCN_TS_NS) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
+void SCN::set_base()
+{
+  v_ = SCN_VERSION;
+  ts_ns_ = OB_BASE_SCN_TS_NS;
+}
+
+SCN SCN::invalid_scn()
+{
+  SCN scn;
+  scn.set_invalid();
+  return scn;
+}
+
+SCN SCN::max_scn()
+{
+  SCN scn;
+  scn.set_max();
+  return scn;
+}
+
+SCN SCN::min_scn()
+{
+  SCN scn;
+  scn.set_min();
+  return scn;
+}
+
+SCN SCN::base_scn()
+{
+  SCN scn;
+  scn.set_base();
+  return scn;
+}
+
+SCN SCN::max(const SCN &left, const SCN &right)
+{
+  SCN result;
+  if (!left.is_valid()) {
+    result = right;
+  } else if (!right.is_valid()) {
+    result = left;
+  } else {
+    result = right > left ? right : left;
+  }
+  return result;
+}
+
+SCN SCN::min(const SCN &left, const SCN &right)
+{
+  SCN result;
+  if (!left.is_valid()) {
+    result = left;
+  } else if (!right.is_valid()) {
+    result = right;
+  } else {
+    result = right < left ? right : left;
+  }
+  return result;
+}
+
+SCN SCN::plus(const SCN &ref, uint64_t delta)
+{
+  int ret = OB_SUCCESS;
+  SCN result;
+  uint64_t new_val = OB_INVALID_SCN_VAL;
+  if (OB_UNLIKELY(delta >= OB_MAX_SCN_TS_NS || !ref.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "invalid argument", K(delta), K(ref), K(ret));
+  } else if (OB_UNLIKELY((new_val = ref.val_ + delta) > OB_MAX_SCN_TS_NS)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR , "new_val is not valid", K(new_val), K(ref), K(delta), K(ret));
+  } else {
+    result.val_ = new_val;
+  }
+  return result;
+}
+
+SCN SCN::minus(const SCN &ref, uint64_t delta)
+{
+  int ret = OB_SUCCESS;
+  SCN result;
+  uint64_t new_val = OB_INVALID_SCN_VAL;
+  if (OB_UNLIKELY(delta >= OB_MAX_SCN_TS_NS || !ref.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "invalid argument", K(delta), K(ref), K(ret));
+  } else if (OB_UNLIKELY((new_val = ref.val_ - delta) > ref.val_)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR , "new_val is not valid", K(new_val), K(ref), K(delta), K(ret));
+  } else {
+    result.val_ = new_val;
+  }
+  return result;
+}
+
+SCN SCN::inc_update(const SCN &ref_scn)
+{
+  SCN old_scn;
+  SCN new_scn;
+  new_scn.atomic_set(*this);
+  while ((old_scn = new_scn) < ref_scn) {
+    if ((new_scn.val_ = ATOMIC_VCAS(&val_, old_scn.val_, ref_scn.val_)) == old_scn.val_) {
+      new_scn = ref_scn;
+    }
+  }
+  return new_scn;
+}
+
+SCN SCN::dec_update(const SCN &ref_scn)
+{
+  SCN old_scn;
+  SCN new_scn;
+  new_scn.atomic_set(*this);
+  while ((old_scn = new_scn) > ref_scn) {
+    if ((new_scn.val_ = ATOMIC_VCAS(&val_, old_scn.val_, ref_scn.val_)) == old_scn.val_) {
+      new_scn = ref_scn;
+    }
+  }
+  return new_scn;
+}
+
+SCN SCN::scn_inc(const SCN &ref)
+{
+  uint64_t ref_val = ATOMIC_LOAD(&ref.val_);
+  SCN result;
+  if (ref_val >= OB_MAX_SCN_TS_NS) {
+    result.val_ = OB_INVALID_SCN_VAL;
+  } else {
+    result.val_ = ref_val + 1;
+  }
+  return result;
+}
+
+SCN SCN::scn_dec(const SCN &ref)
+{
+  uint64_t ref_val = ATOMIC_LOAD(&ref.val_);
+  SCN result;
+  if (OB_MIN_SCN_TS_NS == ref_val || !ref.is_valid()) {
+    result.val_ = OB_INVALID_SCN_VAL;
+  } else {
+    result.val_ = ref_val - 1;
+  }
+  return result;
 }
 
 int64_t SCN::convert_to_ts() const
@@ -33,11 +230,24 @@ int64_t SCN::convert_to_ts() const
   return ts_ns_ / 1000UL;
 }
 
+int SCN::convert_from_ts(uint64_t ts_us)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t ts_ns = ts_us * 1000L;
+  if (OB_UNLIKELY(ts_us >= OB_MAX_SCN_TS_NS / 1000L + 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_LOG(WARN, "invalid argument", K(ts_us), K(ret));
+  } else {
+    ts_ns_ = ts_ns;
+    v_ = SCN_VERSION;
+  }
+  return ret;
+}
+
 int SCN::convert_for_gts(int64_t ts_ns)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_SCN_VAL == ts_ns
-                  || 0 > ts_ns
+  if (OB_UNLIKELY(0 > ts_ns
                   || OB_MAX_SCN_TS_NS < ts_ns)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ts_ns), K(ret));
@@ -48,14 +258,22 @@ int SCN::convert_for_gts(int64_t ts_ns)
   return ret;
 }
 
-int SCN::convert_for_lsn_allocator(uint64_t id)
+// TODO(SCN):yaoying.yyy
+int SCN::convert_tmp(int64_t ts_ns)
+{
+  ts_ns_ = ts_ns;
+  v_ = SCN_VERSION;
+  return OB_SUCCESS;
+}
+
+int SCN::convert_for_lsn_allocator(uint64_t scn_val)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_SCN_VAL == id ||  OB_MAX_SCN_TS_NS < id)) {
+  if (OB_UNLIKELY(OB_MAX_SCN_TS_NS < scn_val)) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid argument", K(id), K(ret));
+    PALF_LOG(WARN, "invalid argument", K(scn_val), K(ret));
   } else {
-    val_ = id;
+    val_ = scn_val;
   }
   return ret;
 }
@@ -63,7 +281,7 @@ int SCN::convert_for_lsn_allocator(uint64_t id)
 int SCN::convert_for_inner_table_field(uint64_t value)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_SCN_VAL == value || OB_MAX_SCN_TS_NS < value)) {
+  if (OB_UNLIKELY(OB_MAX_SCN_TS_NS < value)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(value), K(ret));
   } else {
@@ -72,9 +290,53 @@ int SCN::convert_for_inner_table_field(uint64_t value)
   return ret;
 }
 
+void SCN::transform_max()
+{
+  if (share::ObScnRange::OLD_MAX_TS  == val_) {
+    this->set_max();
+  }
+}
+
 uint64_t SCN::get_val_for_inner_table_field() const
 {
   return val_;
+}
+
+uint64_t SCN::get_val_for_gts() const
+{
+  return val_;
+}
+
+uint64_t SCN::get_val_for_lsn_allocator() const
+{
+  return val_;
+}
+
+int SCN::convert_for_tx(int64_t val)
+{
+  int ret = OB_SUCCESS;
+  if (INT64_MAX == val) {
+    val_ = OB_MAX_SCN_TS_NS;
+  } else if (OB_UNLIKELY(OB_MAX_SCN_TS_NS < val || OB_MIN_SCN_TS_NS > val)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "invalid argument ", K(val));
+  } else {
+    val_ = val;
+  }
+  return ret;
+}
+
+int64_t SCN::get_val_for_tx() const
+{
+  int64_t result_val = 0;
+  if (OB_MAX_SCN_TS_NS == ts_ns_) {
+    result_val = INT64_MAX;
+  } else if (!is_valid()) {
+    PALF_LOG(ERROR, "invalid SCN", K(val_));
+  } else {
+    result_val = ts_ns_;
+  }
+  return result_val;
 }
 
 bool SCN::operator==(const SCN &scn) const
@@ -89,23 +351,62 @@ bool SCN::operator!=(const SCN &scn) const
 
 bool SCN::operator<(const SCN &scn) const
 {
-  return ts_ns_ < scn.ts_ns_;
+  bool result = false;
+  if (!is_valid() && !scn.is_valid()) {
+    result = false;
+  } else if (!is_valid()) {
+    result = true;
+  } else if (!scn.is_valid()) {
+    result = false;
+  } else {
+    result = ts_ns_ < scn.ts_ns_;
+  }
+  return result;
 }
 
 bool SCN::operator<=(const SCN &scn) const
 {
-
-  return ts_ns_ <= scn.ts_ns_;
+  bool result = false;
+  if (!is_valid() && !scn.is_valid()) {
+    result = true;
+  } else if (!is_valid()) {
+    result = true;
+  } else if (!scn.is_valid()) {
+    result = false;
+  } else {
+    result = ts_ns_ <= scn.ts_ns_;
+  }
+  return result;
 }
 
 bool SCN::operator>(const SCN &scn) const
 {
-  return ts_ns_ > scn.ts_ns_;
+  bool result = false;
+  if (!is_valid() && !scn.is_valid()) {
+    result = false;
+  } else if (!is_valid()) {
+    result = false;
+  } else if (!scn.is_valid()) {
+    result = true;
+  } else {
+    result = ts_ns_ > scn.ts_ns_;
+  }
+  return result;
 }
 
 bool SCN::operator>=(const SCN &scn) const
 {
-  return ts_ns_ >= scn.ts_ns_;
+  bool result = false;
+  if (!is_valid() && !scn.is_valid()) {
+    result = true;
+  } else if (!is_valid()) {
+    result = false;
+  } else if (!scn.is_valid()) {
+    result = true;
+  } else {
+    result = ts_ns_ >= scn.ts_ns_;
+  }
+  return result;
 }
 
 SCN &SCN::operator=(const SCN &scn)
@@ -114,7 +415,7 @@ SCN &SCN::operator=(const SCN &scn)
   return *this;
 }
 
-DEFINE_SERIALIZE(SCN)
+int SCN::fixed_serialize(char* buf, const int64_t buf_len, int64_t& pos) const
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
@@ -129,7 +430,12 @@ DEFINE_SERIALIZE(SCN)
   return ret;
 }
 
-DEFINE_DESERIALIZE(SCN)
+int SCN::to_yson(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  return oceanbase::yson::databuff_encode_elements(buf, buf_len, pos, OB_ID(scn_val), val_);
+}
+
+int SCN::fixed_deserialize(const char* buf, const int64_t data_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
@@ -145,10 +451,47 @@ DEFINE_DESERIALIZE(SCN)
   return ret;
 }
 
-DEFINE_GET_SERIALIZE_SIZE(SCN)
+int64_t SCN::get_fixed_serialize_size(void) const
 {
   int64_t size = 0 ;
   size += serialization::encoded_length_i64(val_);
+  return size;
+}
+
+int SCN::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  if (NULL == buf && buf_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(buf), K(buf_len), K(ret));
+  } else if (OB_FAIL(serialization::encode(buf, buf_len, new_pos, val_))) {
+    PALF_LOG(WARN, "failed to encode val_", K(buf), K(buf_len), K(new_pos), K(ret));
+  } else {
+    pos = new_pos;
+  }
+  return ret;
+}
+
+int SCN::deserialize(const char* buf, const int64_t data_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  if (NULL == buf && data_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(buf), K(data_len), K(ret));
+  } else if (OB_FAIL(serialization::decode(buf, data_len, new_pos, val_))) {
+    PALF_LOG(WARN, "failed to decode val_", K(buf), K(data_len), K(new_pos), K(ret));
+  } else {
+    pos = new_pos;
+  }
+  return ret;
+}
+
+int64_t SCN::get_serialize_size(void) const
+{
+  int64_t size = 0 ;
+  size += serialization::encoded_length(val_);
   return size;
 }
 

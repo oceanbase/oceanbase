@@ -60,7 +60,6 @@ public:
       const bool is_usr_column,
       const int16_t usr_column_idx,
       const bool is_heap_table_pk_increment_column,
-      const ObTimeZoneInfoWrap *tz_info_wrap,
       ObObj2strHelper &obj2str_helper,
       common::ObIAllocator &allocator);
   void destroy();
@@ -124,7 +123,6 @@ private:
       const share::schema::ObTableSchema &table_schema,
       const share::schema::ObColumnSchemaV2 &column_table_schema,
       const int16_t column_idx,
-      const ObTimeZoneInfoWrap *tz_info_wrap,
       ObObj2strHelper &obj2str_helper,
       common::ObIAllocator &allocator,
       common::ObString *&str);
@@ -255,7 +253,6 @@ public:
       const int16_t column_stored_idx,
       const bool is_usr_column,
       const int16_t usr_column_idx,
-      const ObTimeZoneInfoWrap *tz_info_wrap,
       ObObj2strHelper &obj2str_helper);
 
   int get_column_schema_info_of_column_id(

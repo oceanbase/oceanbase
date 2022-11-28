@@ -35,7 +35,7 @@ extern char *cp_str_value(const char *src, const size_t nbyte, void *malloc_pool
 extern char *parse_strdup_with_replace_multi_byte_char(const char *str, int *connection_collation_,
                                                        void *malloc_pool, int64_t *out_len);
 extern bool check_real_escape(const struct ObCharsetInfo *cs, char *str, int64_t str_len,
-                              int64_t last_escape_check_pos);
+                              int64_t *last_well_formed_len);
 extern void *parser_alloc(void *malloc_pool, const int64_t alloc_size);
 
 extern void *malloc_parentheses_info(const size_t nbyte, void *malloc_pool);

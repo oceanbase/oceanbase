@@ -15,6 +15,7 @@
 #include "lib/ob_errno.h"            // OB_INVALID_ARGUMENT
 #include "share/rc/ob_tenant_base.h" // mtl_malloc
 #include "log_reader_utils.h"        // ReadBuf
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -105,7 +106,7 @@ void LogStorage::destroy()
   PALF_LOG(INFO, "LogStorage destroy success");
 }
 
-int LogStorage::writev(const LSN &lsn, const LogWriteBuf &write_buf, const int64_t log_ts)
+int LogStorage::writev(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   int64_t write_size = write_buf.get_total_size();
@@ -131,7 +132,7 @@ int LogStorage::writev(const LSN &lsn, const LogWriteBuf &write_buf, const int64
     // For restart, the last block may have no data, however, we need append_block_header_
     // before first writev opt.
   } else if (true == need_append_block_header_
-             && OB_FAIL(append_block_header_(lsn, log_ts))) {
+             && OB_FAIL(append_block_header_(lsn, log_scn))) {
     PALF_LOG(ERROR, "append_block_header_ failed", K(ret), KPC(this));
   } else if (OB_FAIL(block_mgr_.writev(
                  lsn_2_block(lsn, logical_block_size_), get_phy_offset_(lsn), write_buf))) {
@@ -147,12 +148,12 @@ int LogStorage::writev(const LSN &lsn, const LogWriteBuf &write_buf, const int64
 
 int LogStorage::writev(const LSNArray &lsn_array,
                        const LogWriteBufArray &write_buf_array,
-                       const LogTsArray &log_ts_array)
+                       const SCNArray &scn_array)
 {
   int ret = OB_SUCCESS;
   int64_t count = lsn_array.count();
   if (count <= 0 || false == lsn_array[0].is_valid() || OB_ISNULL(write_buf_array[0])
-      || false == is_valid_log_ts(log_ts_array[0])) {
+      || (!scn_array[0].is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid argument", K(ret), K(count));
   } else {
@@ -161,7 +162,7 @@ int LogStorage::writev(const LSNArray &lsn_array,
     do {
       LSN lsn = lsn_array[merge_start_idx];
       LogWriteBuf *write_buf = write_buf_array[merge_start_idx];
-      int64_t log_ts = log_ts_array[merge_start_idx];
+      SCN log_scn = scn_array[merge_start_idx];
       int64_t writable_size =
           (0 == curr_block_writable_size_ ? logical_block_size_ : curr_block_writable_size_)
           - write_buf->get_total_size();
@@ -198,8 +199,8 @@ int LogStorage::writev(const LSNArray &lsn_array,
           }
         }
       }
-      if (OB_SUCC(ret) && OB_FAIL(writev(lsn, *write_buf, log_ts))) {
-        PALF_LOG(ERROR, "writev failed", K(ret), K(log_ts), K(lsn_array), K(write_buf_array));
+      if (OB_SUCC(ret) && OB_FAIL(writev(lsn, *write_buf, log_scn))) {
+        PALF_LOG(ERROR, "writev failed", K(ret), K(log_scn), K(lsn_array), K(write_buf_array));
       } else {
         // update 'merge_start_idx' to 'idx_to_be_merged' after writev successfully.
         merge_start_idx = idx_to_be_merged;
@@ -412,7 +413,7 @@ int LogStorage::get_block_id_range(block_id_t &min_block_id,
   return block_mgr_.get_block_id_range(min_block_id, max_block_id);
 }
 
-int LogStorage::get_block_min_ts_ns(const block_id_t &block_id, int64_t &min_ts) const
+int LogStorage::get_block_min_scn(const block_id_t &block_id, SCN &min_scn) const
 {
   int ret = OB_SUCCESS;
   LogBlockHeader block_header;
@@ -421,8 +422,8 @@ int LogStorage::get_block_min_ts_ns(const block_id_t &block_id, int64_t &min_ts)
   } else if (OB_FAIL(read_block_header_(block_id, block_header))) {
     PALF_LOG(WARN, "read_block_header_ failed", K(ret), K(block_id), KPC(this));
   } else {
-    min_ts = block_header.get_min_timestamp();
-    PALF_LOG(TRACE, "get_block_min_ts_ns success", K(block_id), K(min_ts), KPC(this));
+    min_scn = block_header.get_min_log_scn();
+    PALF_LOG(TRACE, "get_block_min_scn success", K(block_id), K(min_scn), KPC(this));
   }
   return ret;
 }
@@ -431,14 +432,11 @@ const LSN LogStorage::get_begin_lsn() const
 {
   int ret = OB_SUCCESS;
   LSN lsn;
+  lsn.val_ = 0;
   block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
   block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
   if (OB_FAIL(get_block_id_range(min_block_id, max_block_id))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      lsn = log_tail_;
-    } else {
-      PALF_LOG(WARN, "get_block_id_range failed", K(ret), KPC(this));
-    }
+    PALF_LOG(WARN, "get_block_id_range failed", K(ret), KPC(this));
   } else {
     lsn.val_ = logical_block_size_ * min_block_id;
   }
@@ -462,7 +460,7 @@ int LogStorage::update_manifest_used_for_meta_storage(const block_id_t expected_
   // log error in LogBlockMgr because 'log_tail_block_id' is not same as 'curr_writable_block_id'(LogBlockMgr)
   // assume 'log_tail_' is equal to PALF_PHY_BLOCK_SIZE, 'log_tail_block_id' is 1, however
   // 'curr_writable_block_id' is 0.
-  if (OB_FAIL(update_block_header_(last_block_id, LSN(expected_max_block_id*PALF_BLOCK_SIZE), 0))) {
+  if (OB_FAIL(update_block_header_(last_block_id, LSN(expected_max_block_id*PALF_BLOCK_SIZE), SCN::min_scn()))) {
     PALF_LOG(WARN, "append_block_header_ failed", K(ret), KPC(this), K(last_block_id), K(log_tail_block_id));
   } else {
     PALF_LOG(INFO, "update_manifest_used_for_meta_storage success", K(ret), KPC(this));
@@ -587,7 +585,7 @@ int LogStorage::append_block_header_used_for_meta_storage_()
 	//
 	// NB: nowdays, we no need to handle the case append block header into meta block failed.
   int ret = OB_SUCCESS;
-  if (OB_FAIL(append_block_header_(log_block_header_.get_min_lsn(), 0))) {
+  if (OB_FAIL(append_block_header_(log_block_header_.get_min_lsn(), SCN::min_scn()))) {
     PALF_LOG(WARN, "append_block_header_ failed", K(ret), KPC(this));
   } else {
     PALF_LOG(INFO, "append_block_header_used_for_meta_storage_ success", K(ret), KPC(this));
@@ -597,13 +595,13 @@ int LogStorage::append_block_header_used_for_meta_storage_()
 
 int LogStorage::update_block_header_(const block_id_t block_id,
                                      const LSN &block_min_lsn,
-                                     const int64_t block_min_ts_ns)
+                                     const SCN &block_min_scn)
 {
   int ret = OB_SUCCESS;
   char *block_header_seria_buf = NULL;
   int64_t pos = 0;
 
-  log_block_header_.update_lsn_and_ts(block_min_lsn, block_min_ts_ns);
+  log_block_header_.update_lsn_and_scn(block_min_lsn, block_min_scn);
   log_block_header_.update_palf_id_and_curr_block_id(
       palf_id_, lsn_2_block(log_tail_, logical_block_size_));
   log_block_header_.calc_checksum();
@@ -629,10 +627,10 @@ int LogStorage::update_block_header_(const block_id_t block_id,
 }
 
 int LogStorage::append_block_header_(const LSN &block_min_lsn,
-                                     const int64_t block_min_ts_ns)
+                                     const SCN &block_min_scn)
 {
   const block_id_t block_id = lsn_2_block(log_tail_, logical_block_size_);
-  return update_block_header_(block_id, block_min_lsn, block_min_ts_ns);
+  return update_block_header_(block_id, block_min_lsn, block_min_scn);
 }
 
 

@@ -654,12 +654,6 @@ public:
   {
     io_event_observer_ = observer;
   }
-  inline ObIArray<ObAggrInfo> &get_aggr_infos() { return aggr_infos_; }
-  int single_row_agg(GroupRow &group_row, ObEvalCtx &eval_ctx);
-  int single_row_agg_batch(GroupRow **group_rows, ObEvalCtx &eval_ctx, const int64_t batch_size, const ObBitVector *skip);
-  int fast_single_row_agg(ObEvalCtx &eval_ctx);
-  int fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const int64_t batch_size, const ObBitVector *skip);
-  inline void set_support_fast_single_row_agg(const bool flag) { support_fast_single_row_agg_ = flag; }
 private:
   template <typename T>
   int inner_process_batch(GroupRow &group_rows, T &selector, int64_t start_idx, int64_t end_idx);
@@ -917,7 +911,6 @@ private:
   ObChunkDatumStore::ShadowStoredRow *tmp_store_row_;
   ObIOEventObserver *io_event_observer_;
   RemovalInfo removal_info_;
-  bool support_fast_single_row_agg_;
 };
 
 struct ObAggregateCalcFunc

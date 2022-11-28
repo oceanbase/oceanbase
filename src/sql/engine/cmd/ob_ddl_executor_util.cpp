@@ -48,8 +48,7 @@ int ObDDLExecutorUtil::wait_ddl_finish(
     const uint64_t tenant_id,
     const int64_t task_id,
     ObSQLSessionInfo &session,
-    obrpc::ObCommonRpcProxy *common_rpc_proxy,
-    const bool is_support_cancel)
+    obrpc::ObCommonRpcProxy *common_rpc_proxy)
 {
   int ret = OB_SUCCESS;
   const int64_t retry_interval = 100 * 1000;
@@ -62,8 +61,6 @@ int ObDDLExecutorUtil::wait_ddl_finish(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id), KP(common_rpc_proxy));
   } else {
-    int tmp_ret = OB_SUCCESS;
-    bool is_tenant_dropped = false;
     while (OB_SUCC(ret)) {
       if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
           tenant_id, task_id, -1 /* target_object_id */, unused_addr, false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, unused_user_msg_len)) {
@@ -72,18 +69,10 @@ int ObDDLExecutorUtil::wait_ddl_finish(
           FORWARD_USER_ERROR(ret, error_message.user_message_);
         }
         break;
-      } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
-                               tenant_id, is_tenant_dropped))) {
-        LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id));
-      } else if (is_tenant_dropped) {
-        ret = OB_TENANT_HAS_BEEN_DROPPED;
-        LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
-        break;
       } else if (OB_FAIL(handle_session_exception(session))) {
-        LOG_WARN("session exeception happened", K(ret), K(is_support_cancel));
-        if (is_support_cancel && OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
-          LOG_WARN("cancel ddl task failed", K(tmp_ret));
-          ret = OB_SUCCESS;
+        LOG_WARN("session exeception happened", K(ret));
+        if (OB_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
+          LOG_WARN("cancel ddl task failed", K(ret));
         } else {
           break;
         }
@@ -98,8 +87,6 @@ int ObDDLExecutorUtil::wait_ddl_finish(
 int ObDDLExecutorUtil::wait_build_index_finish(const uint64_t tenant_id, const int64_t task_id, bool &is_finish)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  bool is_tenant_dropped = false;
   ObAddr unused_addr;
   int64_t unused_user_msg_len = 0;
   THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
@@ -116,12 +103,6 @@ int ObDDLExecutorUtil::wait_build_index_finish(const uint64_t tenant_id, const i
       FORWARD_USER_ERROR(ret, error_message.user_message_);
     }
     is_finish = true;
-  } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
-                 tenant_id, is_tenant_dropped))) {
-    LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id));
-  } else if (is_tenant_dropped) {
-    ret = OB_TENANT_HAS_BEEN_DROPPED;
-    LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
   }
   return ret;
 }
@@ -145,8 +126,6 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id), KP(common_rpc_proxy));
   } else {
-    bool is_tenant_dropped = false;
-    int tmp_ret = OB_SUCCESS;
     while (OB_SUCC(ret)) {
       if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
           tenant_id, task_id, -1 /* target_object_id */, unused_addr, true /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, forward_user_msg_len)) {
@@ -182,18 +161,10 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
           }
         }
         break;
-      } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
-                    tenant_id, is_tenant_dropped))) {
-        LOG_WARN("check if tenant has been dropped failed", K(tmp_ret), K(tenant_id));
-      } else if (is_tenant_dropped) {
-        ret = OB_TENANT_HAS_BEEN_DROPPED;
-        LOG_WARN("tenant has been dropped", K(ret), K(tenant_id));
-        break;
       } else if (OB_FAIL(handle_session_exception(session))) {
         LOG_WARN("session exeception happened", K(ret));
-        if (OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
-          LOG_WARN("cancel ddl task failed", K(tmp_ret));
-          ret = OB_SUCCESS;
+        if (OB_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
+          LOG_WARN("cancel ddl task failed", K(ret));
         } else {
           break;
         }

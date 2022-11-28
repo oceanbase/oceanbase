@@ -109,7 +109,7 @@ int ObSSTableRowLockChecker::check_row_locked(ObStoreRowLockState &lock_state)
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next row", K(ret), K_(multi_version_range));
         }
-      } else if (0 != lock_state.trans_version_ || lock_state.is_locked_) {
+      } else if (palf::SCN::min_scn() != lock_state.trans_version_ || lock_state.is_locked_) {
         break;
       }
     }
@@ -119,11 +119,15 @@ int ObSSTableRowLockChecker::check_row_locked(ObStoreRowLockState &lock_state)
   }
   if (OB_SUCC(ret) && 
         transaction::ObTransVersion::INVALID_TRANS_VERSION != prefetcher_.row_lock_check_version_) {
-    if (OB_UNLIKELY(lock_state.trans_version_ != 0 || lock_state.is_locked_)) {
+    if (OB_UNLIKELY(lock_state.trans_version_ != palf::SCN::min_scn() || lock_state.is_locked_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected lock state", K(ret), K_(lock_state.trans_version), K_(lock_state.is_locked)); 
     } else {
-      lock_state.trans_version_ = prefetcher_.row_lock_check_version_; 
+      // TODO: fix it
+      palf::SCN scn;
+      scn.convert_for_lsn_allocator(prefetcher_.row_lock_check_version_);
+
+      lock_state.trans_version_ = scn;
     }
   }
   return ret;

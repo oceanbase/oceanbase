@@ -49,9 +49,6 @@ ObMacroBlockReader::~ObMacroBlockReader()
     encryption_->~ObMicroBlockEncryption();
     encryption_ = nullptr;
   }
-  if (nullptr != compressor_) {
-    compressor_->reset_mem();
-  }
 }
 
 

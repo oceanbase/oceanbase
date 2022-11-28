@@ -129,7 +129,7 @@ public:
   // Get all frozen pieces whose piece ids are smaller than `upper_piece_id`.
   int get_frozen_pieces(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t upper_piece_id, 
       common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const;
-  int get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const ARCHIVE_SCN_TYPE &end_scn,
+  int get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const palf::SCN &end_scn,
       const char *backup_dest_str, ObIArray<ObTenantArchivePieceAttr> &pieces) const;
   int insert_or_update_piece(common::ObISQLClient &proxy, const ObTenantArchivePieceAttr &piece) const;
   // Usually, we need do it in a transaction.

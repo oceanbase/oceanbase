@@ -39,7 +39,7 @@ ObArchiveSequencer::ObArchiveSequencer() :
   archive_fetcher_(NULL),
   ls_mgr_(NULL),
   round_mgr_(NULL),
-  min_log_ts_(OB_INVALID_TIMESTAMP),
+  min_log_scn_(),
   seq_cond_()
 {}
 
@@ -83,7 +83,7 @@ void ObArchiveSequencer::destroy()
   round_ = OB_INVALID_ARCHIVE_ROUND_ID;
   archive_fetcher_ = NULL;
   ls_mgr_ = NULL;
-  min_log_ts_ = OB_INVALID_TIMESTAMP;
+  min_log_scn_.reset();
 }
 
 int ObArchiveSequencer::start()
@@ -189,7 +189,7 @@ bool GenFetchTaskFunctor::operator()(const ObLSID &id, ObLSArchiveTask *ls_archi
   LSN end_lsn;
 
   LSN fetch_lsn;
-  int64_t fetch_log_ts = OB_INVALID_TIMESTAMP;
+  SCN fetch_log_scn;
 
   if (OB_ISNULL(ls_archive_task)) {
     ret = OB_ERR_UNEXPECTED;
@@ -198,7 +198,7 @@ bool GenFetchTaskFunctor::operator()(const ObLSID &id, ObLSArchiveTask *ls_archi
     ARCHIVE_LOG(WARN, "get sequence progress failed", K(ret), K(id), KPC(ls_archive_task));
   } else if (OB_FAIL(get_commit_index_(id, commit_lsn))) {
     ARCHIVE_LOG(WARN, "get commit index failed", K(ret), K(id));
-  } else if (OB_FAIL(ls_archive_task->get_fetcher_progress(station, fetch_lsn, fetch_log_ts))) {
+  } else if (OB_FAIL(ls_archive_task->get_fetcher_progress(station, fetch_lsn, fetch_log_scn))) {
     ARCHIVE_LOG(WARN, "get fetch progress failed", K(ret), K(ls_archive_task));
   } else {
     LSN lsn = seq_lsn;

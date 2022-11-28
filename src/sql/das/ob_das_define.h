@@ -27,14 +27,6 @@
     (::oceanbase::sql::DAS_OP_TABLE_BATCH_SCAN != (_task_op)->get_type() ? \
         nullptr : static_cast<::oceanbase::sql::ObDASGroupScanOp*>(_task_op))
 
-#define IS_DAS_DML_OP(_task_op)                         \
-  ({                                                    \
-    DAS_OP_TABLE_INSERT == (_task_op).get_type() ||     \
-        DAS_OP_TABLE_UPDATE == (_task_op).get_type() || \
-        DAS_OP_TABLE_LOCK == (_task_op).get_type() ||   \
-        DAS_OP_TABLE_DELETE == (_task_op).get_type();   \
-  })
-
 namespace oceanbase
 {
 namespace sql
@@ -180,42 +172,10 @@ private:
   int assign(const ObDASTabletLoc &other);
 };
 
-static const int64_t DAS_TABLET_LOC_LOOKUP_THRESHOLD = 1000;
-static const int64_t DAS_TABLET_LOC_SIZE_THRESHOLD = 10;
-static const int64_t DAS_TABLET_LOC_MAP_BUCKET_SIZE = 5000;
-
 typedef common::ObList<ObDASTabletLoc*, common::ObIAllocator> DASTabletLocList;
-typedef common::ObList<ObDASTabletLoc*, common::ObIAllocator>::iterator DASTabletLocListIter;
 typedef common::ObIArray<ObDASTabletLoc*> DASTabletLocIArray;
 typedef common::ObSEArray<ObDASTabletLoc*, 1> DASTabletLocSEArray;
 typedef common::ObArray<ObDASTabletLoc*> DASTabletLocArray;
-
-class TabletHashMap
-{
-  struct TabletHashNode
-  {
-    ObTabletID key_;
-    ObDASTabletLoc *value_;
-    struct TabletHashNode *next_;
-  };
-public:
-  TabletHashMap(common::ObIAllocator &allocator)
-    : allocator_(allocator), bucket_num_(0), buckets_(NULL), is_inited_(false)
-  {}
-  virtual ~TabletHashMap() {} // does not free memory
-  int create(int64_t bucket_num);
-  bool created() const { return is_inited_; }
-  int set(const ObTabletID key, ObDASTabletLoc *value);
-  int get(const ObTabletID key, ObDASTabletLoc *&value);
-private:
-  int find_node(const ObTabletID key, TabletHashNode *head, TabletHashNode *&node) const;
-
-  common::ObIAllocator &allocator_;
-  int64_t bucket_num_;
-  TabletHashNode **buckets_;
-  bool is_inited_;
-};
-
 /**
  * store the location information of which tables are accessed in this plan
  * generate this table location when this plan is chosen in the plan cache or generated this plan by CG
@@ -228,10 +188,8 @@ public:
   ObDASTableLoc(common::ObIAllocator &allocator)
     : allocator_(allocator),
       loc_meta_(nullptr),
-      flags_(0),
       tablet_locs_(allocator),
-      tablet_locs_map_(allocator),
-      lookup_cnt_(0)
+      flags_(0)
   { }
   ~ObDASTableLoc() = default;
 
@@ -239,12 +197,6 @@ public:
   int64_t get_table_location_key() const { return loc_meta_->table_loc_id_; }
   int64_t get_ref_table_id() const { return loc_meta_->ref_table_id_; }
   bool empty() const { return tablet_locs_.size() == 0; }
-  const DASTabletLocList &get_tablet_locs() const { return tablet_locs_; }
-  ObDASTabletLoc *get_first_tablet_loc() { return tablet_locs_.get_first(); }
-  DASTabletLocListIter tablet_locs_begin() { return tablet_locs_.begin(); }
-  DASTabletLocListIter tablet_locs_end() { return tablet_locs_.end(); }
-  int get_tablet_loc_by_id(const ObTabletID &tablet_id, ObDASTabletLoc *&tablet_loc);
-  int add_tablet_loc(ObDASTabletLoc *table_loc);
 
   TO_STRING_KV(KPC_(loc_meta),
                K_(tablet_locs),
@@ -261,26 +213,6 @@ public:
    */
   common::ObIAllocator &allocator_;
   const ObDASTableLocMeta *loc_meta_;
-  union {
-    /**
-     * used to mark some status related to table access,
-     * and reserve some expansion bits for subsequent needs
-     */
-    uint64_t flags_;
-    struct {
-      uint64_t is_writing_                      : 1; //mark this table is writing
-      uint64_t is_reading_                      : 1; //mark this table is reading
-      uint64_t rebuild_reference_               : 1; //mark whether rebuild the related reference
-      uint64_t need_refresh_                    : 1;
-      uint64_t reserved_                        : 60;
-    };
-  };
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObDASTableLoc);
-  int assign(const ObDASTableLoc &other);
-  int create_tablet_locs_map();
-
   /**
    * The reason for using ObList to store ObTabletLoc objects is that
    * during the execution process,
@@ -296,11 +228,25 @@ private:
    * ObDList has more restrictions and is not suitable as a container for ObTabletLoc
    **/
   DASTabletLocList tablet_locs_;
-  TabletHashMap tablet_locs_map_;
-  int64_t lookup_cnt_;
+  union {
+    /**
+     * used to mark some status related to table access,
+     * and reserve some expansion bits for subsequent needs
+     */
+    uint64_t flags_;
+    struct {
+      uint64_t is_writing_                      : 1; //mark this table is writing
+      uint64_t is_reading_                      : 1; //mark this table is reading
+      uint64_t rebuild_reference_               : 1; //mark whether rebuild the related reference
+      uint64_t need_refresh_                    : 1;
+      uint64_t reserved_                        : 60;
+    };
+  };
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObDASTableLoc);
+  int assign(const ObDASTableLoc &other);
 };
 typedef common::ObList<ObDASTableLoc*, common::ObIAllocator> DASTableLocList;
-typedef common::ObList<uint64_t, common::ObIAllocator> DASTableIdList;
 typedef common::ObFixedArray<uint64_t, common::ObIAllocator> UIntFixedArray;
 typedef common::ObFixedArray<int64_t, common::ObIAllocator> IntFixedArray;
 typedef common::ObFixedArray<ObObjectID, common::ObIAllocator> ObjectIDFixedArray;

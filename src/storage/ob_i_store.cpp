@@ -74,13 +74,13 @@ void ObStoreCtx::reset()
   table_version_ = INT64_MAX;
   timeout_ = -1;
   mvcc_acc_ctx_.reset();
-  log_ts_ = INT64_MAX;
+  replay_log_scn_.set_max();
 }
 
 int ObStoreCtx::init_for_read(const ObLSID &ls_id,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
-                              const int64_t snapshot_version)
+                              const palf::SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_svr = MTL(ObLSService*);
@@ -96,12 +96,12 @@ int ObStoreCtx::init_for_read(const ObLSID &ls_id,
 int ObStoreCtx::init_for_read(const ObLSHandle &ls_handle,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
-                              const int64_t snapshot_version)
+                              const palf::SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObTxTableGuard tx_table_guard;
-  if (!ls_handle.is_valid() || timeout < 0 || snapshot_version < 0) {
+  if (!ls_handle.is_valid() || timeout < 0 || !snapshot_version.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get invalid arguments", K(ret), K(ls_handle), K(timeout), K(tx_lock_timeout), K(snapshot_version));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
@@ -130,7 +130,7 @@ void ObStoreCtx::force_print_trace_log()
 void ObStoreRowLockState::reset()
 {
   is_locked_ = false;
-  trans_version_ = 0;
+  trans_version_ = palf::SCN::min_scn();
   lock_trans_id_.reset();
   lock_data_sequence_ = 0;
   is_delayed_cleanout_ = false;

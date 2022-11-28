@@ -31,6 +31,10 @@ namespace storage
 {
 class ObLS;
 }
+namespace palf
+{
+class SCN;
+}
 namespace rootserver
 {
 /*description:
@@ -63,14 +67,14 @@ public:
  static int update_ls_recovery(storage::ObLS *ls, common::ObMySQLProxy *sql_proxy);
 
  int get_tenant_info(share::ObAllTenantInfo &tenant_info);
- static int get_readable_scn(const share::ObLSID &id, int64_t &read_scn);
+ static int get_readable_scn(const share::ObLSID &id, palf::SCN &read_scn);
 private:
   int load_tenant_info_();
-  static int get_sync_point_(const share::ObLSID &id, int64_t &sync_scn, int64_t &read_scn);
+  static int get_sync_point_(const share::ObLSID &id, palf::SCN &log_scn, palf::SCN &read_scn);
   int update_ls_recovery_stat_();
 
 public:
- static constexpr int64_t IDLE_TIME_US = 100 * 1000;
+ static constexpr int64_t IDLE_TIME_US = 500 * 1000;
  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(tenant_info));
 private:
   bool is_inited_;

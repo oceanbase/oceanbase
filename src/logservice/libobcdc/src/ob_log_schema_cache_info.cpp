@@ -58,7 +58,6 @@ int ColumnSchemaInfo::init(
     const bool is_usr_column,
     const int16_t usr_column_idx,
     const bool is_heap_table_pk_increment_column,
-    const ObTimeZoneInfoWrap *tz_info_wrap,
     ObObj2strHelper &obj2str_helper,
     common::ObIAllocator &allocator)
 {
@@ -69,7 +68,7 @@ int ColumnSchemaInfo::init(
       || OB_UNLIKELY(is_usr_column && (usr_column_idx < 0 || usr_column_idx > OB_USER_ROW_MAX_COLUMNS_COUNT))) {
     LOG_ERROR("invalid argument", K(column_stored_idx), K(is_usr_column), K(usr_column_idx));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(get_column_ori_default_value_(table_schema, column_table_schema, column_stored_idx, tz_info_wrap,
+  } else if (OB_FAIL(get_column_ori_default_value_(table_schema, column_table_schema, column_stored_idx,
             obj2str_helper, allocator, orig_default_value_str))) {
       LOG_ERROR("get_column_ori_default_value_ fail", KR(ret), K(table_schema), K(column_table_schema),
           K(column_stored_idx));
@@ -148,7 +147,6 @@ int ColumnSchemaInfo::get_column_ori_default_value_(
     const share::schema::ObTableSchema &table_schema,
     const share::schema::ObColumnSchemaV2 &column_table_schema,
     const int16_t column_idx,
-    const ObTimeZoneInfoWrap *tz_info_wrap,
     ObObj2strHelper &obj2str_helper,
     common::ObIAllocator &allocator,
     common::ObString *&str)
@@ -173,8 +171,7 @@ int ColumnSchemaInfo::get_column_ori_default_value_(
             orig_default_obj, *str, allocator, true,
             column_table_schema.get_extended_type_info(),
             column_table_schema.get_accuracy(),
-            column_table_schema.get_collation_type(),
-            tz_info_wrap))) {
+            column_table_schema.get_collation_type()))) {
       LOG_ERROR("obj2str cast orig_default_value fail", KR(ret), K(orig_default_obj), K(*str),
           "tenant_id", table_schema.get_tenant_id(),
           "table_id", table_schema.get_table_id(),
@@ -604,7 +601,6 @@ int TableSchemaInfo::init_column_schema_info(
     const int16_t column_stored_idx,
     const bool is_usr_column,
     const int16_t usr_column_idx,
-    const ObTimeZoneInfoWrap *tz_info_wrap,
     ObObj2strHelper &obj2str_helper)
 {
   int ret = OB_SUCCESS;
@@ -641,7 +637,6 @@ int TableSchemaInfo::init_column_schema_info(
       is_usr_column,
       usr_column_idx,
       is_heap_table_pk_increment_column,
-      tz_info_wrap,
       obj2str_helper,
       get_allocator()))) {
     LOG_ERROR("column_schema_info init fail", KR(ret),

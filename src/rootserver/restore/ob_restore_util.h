@@ -53,7 +53,7 @@ public:
   static int get_restore_source(
              const ObIArray<ObString>& tenant_path_array,
              const common::ObString &passwd_array,
-             const uint64_t restore_timestamp_ns,
+             const palf::SCN &restore_scn,
              ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
              ObIArray<share::ObBackupPiecePath> &backup_piece_list,
              ObIArray<share::ObBackupPathString> &log_path_list);
@@ -82,13 +82,13 @@ private:
   static int get_restore_backup_set_array_(
              const ObIArray<ObString> &tenant_path_array,
              const common::ObString &passwd_array,
-             const int64_t restore_timestamp_ns,
-             int64_t &restore_start_log_ts,
+             const palf::SCN &restore_scn,
+             palf::SCN &restore_start_log_scn,
              ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
   static int get_restore_log_piece_array_(
              const ObIArray<ObString> &tenant_path_array,
-             const int64_t restore_start_log_ts,
-             const int64_t restore_end_log_ts,
+             const palf::SCN &restore_start_log_scn,
+             const palf::SCN &restore_end_log_scn,
              ObIArray<share::ObBackupPiecePath> &backup_piece_list,
              ObIArray<share::ObBackupPathString> &log_path_list);
   static int get_restore_backup_piece_list_(

@@ -167,11 +167,10 @@ int ObDataCheckpoint::init(ObLS *ls)
   return OB_SUCCESS;
 }
 
-int ObDataCheckpoint::safe_to_destroy(bool &is_safe_destroy)
+int ObDataCheckpoint::safe_to_destroy()
 {
   int ret = OB_SUCCESS;
 
-  is_safe_destroy = true;
   // avoid start ls_freeze again after waiting ls_freeze finish
   is_inited_ = false;
   // wait until ls_freeze finish
@@ -191,10 +190,6 @@ int ObDataCheckpoint::safe_to_destroy(bool &is_safe_destroy)
   active_list_.reset();
   prepare_list_.reset();
   ls_ = nullptr;
-
-  if (OB_FAIL(ret)) {
-    is_safe_destroy = false;
-  }
 
   return ret;
 }
@@ -229,9 +224,7 @@ int ObDataCheckpoint::flush(int64_t recycle_log_ts, bool need_freeze)
   int ret = OB_SUCCESS;
   if (need_freeze) {
     if (get_rec_log_ts() <= recycle_log_ts) {
-      if (!is_flushing() &&
-          !has_prepared_flush_checkpoint() &&
-          OB_FAIL(ls_->logstream_freeze())) {
+      if (OB_FAIL(ls_->logstream_freeze())) {
         STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
       }
     }
@@ -491,11 +484,6 @@ int ObDataCheckpoint::unlink_from_prepare(ObFreezeCheckpoint *ob_freeze_checkpoi
     }
   }
   return ret;
-}
-
-bool ObDataCheckpoint::has_prepared_flush_checkpoint()
-{
-  return !prepare_list_.is_empty();
 }
 
 int ObDataCheckpoint::get_freezecheckpoint_info(

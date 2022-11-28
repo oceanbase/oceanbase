@@ -118,6 +118,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
   const static int MAX_IP_BUFFER_LEN = 32;
   char host[MAX_IP_BUFFER_LEN];
   host[0] = '\0';
+  // https://baike.baidu.com/item/mysql_real_connect/4007597
   // if db is NULL, the default database is used.
   if (OB_ISNULL(user) || OB_ISNULL(pass) /*|| OB_ISNULL(db)*/) {
     ret = OB_INVALID_ARGUMENT;
@@ -369,13 +370,6 @@ int ObMySQLConnection::switch_tenant(const uint64_t tenant_id)
     }
   }
   return ret;
-}
-
-int ObMySQLConnection::execute_write(const uint64_t tenant_id, const ObString &sql,
-                                     int64_t &affected_rows, bool is_user_sql)
-{
-  UNUSEDx(tenant_id, sql, affected_rows, is_user_sql);
-  return OB_NOT_SUPPORTED;
 }
 
 int ObMySQLConnection::execute_write(const uint64_t tenant_id, const char *sql,

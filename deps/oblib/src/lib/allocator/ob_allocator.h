@@ -93,8 +93,6 @@ public:
       alloc_->free(ptr); ptr = NULL;
     }
   }
-  virtual int64_t total() const { return alloc_ != nullptr ? alloc_->total() : 0; }
-  virtual int64_t used() const { return alloc_ != nullptr ? alloc_->used() : 0; }
   void set_alloc(ObIAllocator *alloc) { alloc_ = alloc; }
   ObWrapperAllocator &operator=(const ObWrapperAllocator &that)
   {

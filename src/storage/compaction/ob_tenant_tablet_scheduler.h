@@ -112,7 +112,6 @@ public:
   int merge_all();
   int schedule_merge(const int64_t broadcast_version);
   int update_upper_trans_version_and_gc_sstable();
-  int check_ls_compaction_finish(const share::ObLSID &ls_id);
 
   // Schedule an async task to build bloomfilter for the given macro block.
   // The bloomfilter build task will be ignored if a same build task exists in the queue.
@@ -179,12 +178,6 @@ public:
 
 private:
   static const int64_t BLOOM_FILTER_LOAD_BUILD_THREAD_CNT = 1;
-  static const int64_t BF_TASK_QUEUE_SIZE = 10L * 1000;
-  static const int64_t BF_TASK_MAP_SIZE = 10L * 1000;
-  static const int64_t BF_TASK_TOTAL_LIMIT = 512L * 1024L * 1024L;
-  static const int64_t BF_TASK_HOLD_LIMIT = 256L * 1024L * 1024L;
-  static const int64_t BF_TASK_PAGE_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE; //64K
-
   static const int64_t NO_MAJOR_MERGE_TYPE_CNT = 3;
   static constexpr ObMergeType MERGE_TYPES[] = {
       MINI_MINOR_MERGE, BUF_MINOR_MERGE, HISTORY_MINI_MINOR_MERGE};

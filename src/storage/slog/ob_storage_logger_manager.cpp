@@ -329,9 +329,6 @@ int ObStorageLoggerManager::get_using_disk_space(int64_t &using_space) const
           using_space += tenant_using_size;
         }
       }
-      if (OB_TENANT_NOT_IN_SERVER == ret) {
-        ret = OB_SUCCESS;
-      }
     }
   }
   return ret;

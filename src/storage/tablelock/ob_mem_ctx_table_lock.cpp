@@ -71,7 +71,7 @@ void ObLockMemCtx::reset()
     free_lock_op_(curr);
   }
   is_killed_ = false;
-  max_durable_log_ts_ = OB_INVALID_TIMESTAMP;
+  max_durable_scn_.reset();
   memtable_handle_.reset();
   node_pool_.reset();
   callback_pool_.reset();
@@ -113,7 +113,7 @@ void ObLockMemCtx::abort_table_lock_()
   }
 }
 
-int ObLockMemCtx::commit_table_lock_(const int64_t commit_version, const int64_t commit_log_ts)
+int ObLockMemCtx::commit_table_lock_(const palf::SCN &commit_version, const palf::SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   ObLockMemtable *memtable = nullptr;
@@ -134,7 +134,7 @@ int ObLockMemCtx::commit_table_lock_(const int64_t commit_version, const int64_t
         if (OB_FAIL(memtable->
                     update_lock_status(curr->lock_op_,
                                        commit_version,
-                                       commit_log_ts,
+                                       commit_scn,
                                        LOCK_OP_COMPLETE))) {
           LOG_WARN("update lock record status failed.", K(ret),
                    K(curr->lock_op_));
@@ -182,14 +182,14 @@ int ObLockMemCtx::get_table_lock_store_info(ObTableLockInfo &table_lock_info)
       break;
     }
   }
-  table_lock_info.max_durable_log_ts_ = max_durable_log_ts_;
+  table_lock_info.max_durable_scn_ = max_durable_scn_;
   return ret;
 }
 
 int ObLockMemCtx::clear_table_lock(
     const bool is_committed,
-    const int64_t commit_version,
-    const int64_t commit_log_ts)
+    const palf::SCN &commit_version,
+    const palf::SCN &commit_scn)
 {
   int ret = OB_SUCCESS;
   if (lock_list_.is_empty()) {
@@ -199,14 +199,14 @@ int ObLockMemCtx::clear_table_lock(
     LOG_WARN("memtable should not be null", K(ret), K(memtable_handle_));
   } else if (is_committed) {
     WRLockGuard guard(list_rwlock_);
-    if (OB_FAIL(commit_table_lock_(commit_version, commit_log_ts))) {
+    if (OB_FAIL(commit_table_lock_(commit_version, commit_scn))) {
       LOG_WARN("commit table lock failed.", K(ret));
     }
   } else {
     WRLockGuard guard(list_rwlock_);
     abort_table_lock_();
   }
-  LOG_DEBUG("ObLockMemCtx::clear_table_lock ", K(ret), K(is_committed), K(commit_log_ts));
+  LOG_DEBUG("ObLockMemCtx::clear_table_lock ", K(ret), K(is_committed), K(commit_scn));
   return ret;
 }
 
@@ -284,14 +284,14 @@ void ObLockMemCtx::remove_lock_record(
 
 void ObLockMemCtx::set_log_synced(
     ObMemCtxLockOpLinkNode *lock_op,
-    int64_t log_ts)
+    const palf::SCN &scn)
 {
   if (OB_ISNULL(lock_op)) {
     LOG_WARN("invalid argument.", K(lock_op));
   } else {
-    inc_update(&(max_durable_log_ts_), log_ts);
+    max_durable_scn_.inc_update(scn);
     lock_op->logged_ = true;
-    LOG_DEBUG("ObLockMemCtx::set_log_synced ", KPC(lock_op));
+    LOG_DEBUG("ObLockMemCtx::set_log_synced ", KPC(lock_op), K(scn));
   }
 }
 
@@ -394,15 +394,15 @@ int ObLockMemCtx::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
 }
 
 int ObLockMemCtx::check_lock_need_replay(
-    const int64_t log_ts,
+    const palf::SCN &scn,
     const ObTableLockOp &lock_op,
     bool &need_replay)
 {
   int ret = OB_SUCCESS;
   need_replay = true;
 
-  if (log_ts < max_durable_log_ts_) {
-    LOG_INFO("no need replay cat tx ctx", K(max_durable_log_ts_), K(log_ts), K(lock_op));
+  if (scn < max_durable_scn_) {
+    LOG_INFO("no need replay at tx ctx", K(max_durable_scn_), K(scn), K(lock_op));
     need_replay = false;
   } else if (OB_UNLIKELY(!lock_op.is_valid())) {
     ret = OB_INVALID_ARGUMENT;

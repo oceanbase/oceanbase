@@ -47,6 +47,10 @@ namespace logservice
 class ObLogHandler;
 class ObGCLSLog;
 }
+namespace palf
+{
+class SCN;
+}
 namespace transaction
 {
 class ObTxLogBlock;
@@ -71,28 +75,28 @@ public:
   virtual void do_work() override;
 private:
  //get log iterator by start_scn
- int seek_log_iterator_(const int64_t sync_scn,
+ int seek_log_iterator_(const palf::SCN &syn_scn,
                         palf::PalfBufferIterator &iterator);
- int process_ls_log_(const int64_t start_scn ,palf::PalfBufferIterator &iterator);
+ int process_ls_log_(const palf::SCN &start_scn,palf::PalfBufferIterator &iterator);
  int process_gc_log_(logservice::ObGCLSLog &gc_log,
-                     const int64_t sync_ts);
+                     const palf::SCN &syn_scn);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
-                        const int64_t sync_ts);
+                        const palf::SCN &syn_scn);
  int process_ls_operator_(const share::ObLSAttr &ls_attr,
-                          const int64_t sync_ts);
+                          const palf::SCN &syn_scn);
  int create_new_ls_(const share::ObLSAttr &ls_attr,
-                    const int64_t sync_ts,
+                    const palf::SCN &syn_scn,
                     common::ObMySQLTransaction &trans);
  int process_recovery_ls_manager();
- int construct_ls_recovery_stat(const int64_t sync_ts,
+ int construct_ls_recovery_stat(const palf::SCN &syn_scn,
                                 share::ObLSRecoveryStat &ls_stat);
  //wait other ls is larger than sycn ts
- int check_valid_to_operator_ls_(const int64_t sync_scn);
+ int check_valid_to_operator_ls_(const palf::SCN &syn_scn);
  int check_can_do_recovery_();
  //check restore finish and update sync scn to recovery_unitl_scn
  int update_sys_ls_restore_finish_();
  //readable scn need report
- int report_sys_ls_recovery_stat_(const int64_t sync_scn);
+ int report_sys_ls_recovery_stat_(const palf::SCN &sync_scn);
 private:
   bool inited_;
   uint64_t tenant_id_;

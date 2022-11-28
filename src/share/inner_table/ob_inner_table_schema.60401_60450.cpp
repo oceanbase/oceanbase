@@ -834,7 +834,7 @@ int ObInnerTableSchema::all_mock_fk_parent_table_column_history_aux_lob_piece_sc
   return ret;
 }
 
-int ObInnerTableSchema::all_log_restore_source_aux_lob_piece_schema(ObTableSchema &table_schema)
+int ObInnerTableSchema::all_log_archive_source_aux_lob_piece_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
@@ -843,7 +843,7 @@ int ObInnerTableSchema::all_log_restore_source_aux_lob_piece_schema(ObTableSchem
   table_schema.set_tenant_id(OB_SYS_TENANT_ID);
   table_schema.set_tablegroup_id(OB_SYS_TABLEGROUP_ID);
   table_schema.set_database_id(OB_SYS_DATABASE_ID);
-  table_schema.set_table_id(OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_PIECE_TID);
+  table_schema.set_table_id(OB_ALL_LOG_ARCHIVE_SOURCE_AUX_LOB_PIECE_TID);
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
@@ -854,7 +854,7 @@ int ObInnerTableSchema::all_log_restore_source_aux_lob_piece_schema(ObTableSchem
   table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_table_name(OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_PIECE_TNAME))) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ALL_LOG_ARCHIVE_SOURCE_AUX_LOB_PIECE_TNAME))) {
       LOG_ERROR("fail to set table_name", K(ret));
     }
   }
@@ -917,8 +917,8 @@ int ObInnerTableSchema::all_log_restore_source_aux_lob_piece_schema(ObTableSchem
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
   table_schema.set_progressive_merge_round(1);
   table_schema.set_storage_format_version(3);
-  table_schema.set_tablet_id(OB_ALL_LOG_RESTORE_SOURCE_AUX_LOB_PIECE_TID);
-  table_schema.set_data_table_id(OB_ALL_LOG_RESTORE_SOURCE_TID);
+  table_schema.set_tablet_id(OB_ALL_LOG_ARCHIVE_SOURCE_AUX_LOB_PIECE_TID);
+  table_schema.set_data_table_id(OB_ALL_LOG_ARCHIVE_SOURCE_TID);
 
   table_schema.set_max_used_column_id(column_id);
   return ret;

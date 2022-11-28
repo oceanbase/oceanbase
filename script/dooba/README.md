@@ -1,6 +1,6 @@
 # Description
 
-The latest dooba stable version is 1.0
+The latest dooba stable version is 1.0, download address: http://gitlab.alibaba-inc.com/fufeng.syd/dooba/repository/archive?ref=v1.0
 
 `dooba' is a easy tools monitoring oceanbase cluster for oceanbase admins. It's based on python curses library, and is a powerful tool for watching oceanbase cluster status with straightfoward vision.
 
@@ -52,33 +52,26 @@ Please look into dooba script file header.
 ## version 1.0
 
 ### dooba offline index
-
 ![screenshot v1.0](/fufeng.syd/dooba/raw/master/screenshot/v1_0-offline.png "screenshot for dooba v1_0 offline index")
 
 ### dooba machine
-
 ![screenshot v1.0](/fufeng.syd/dooba/raw/master/screenshot/v1_0-machine.png "screenshot for dooba v1_0 machine")
 
 ### dooba help
-
 ![screenshot v1.0](/fufeng.syd/dooba/raw/master/screenshot/v1_0-help.png "screenshot for dooba v1_0 help")
 
 ## version 0.4
 
 ### dooba shell
-
 ![screenshot v0.4](/fufeng.syd/dooba/raw/master/screenshot/v0_4-shell.png "screenshot for dooba v0.2 gallery")
 
 ### dooba sql
-
 ![screenshot v0.4](/fufeng.syd/dooba/raw/master/screenshot/v0_4-sql.png "screenshot for dooba v0.2 gallery")
 
 ### dooba UpdateServer
-
 ![screenshot v0.4](/fufeng.syd/dooba/raw/master/screenshot/v0_4-ups.png "screenshot for dooba v0.2 gallery")
 
 ### dooba ChunkServer
-
 ![screenshot v0.4](/fufeng.syd/dooba/raw/master/screenshot/v0_4-cs.png "screenshot for dooba v0.2 gallery")
 
 ## version 0.2, 0.3

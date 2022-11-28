@@ -20,7 +20,6 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_join_order.h"
 #include "share/ob_order_perserving_encoder.h"
-#include "common/ob_smart_call.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
@@ -355,7 +354,7 @@ int ObLogSort::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FALSE_IT(param.need_row_count_ = -1)) {
     //limit N在sort算子被阻塞
-  } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+  } else if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
     LOG_WARN("failed to re est cost", K(ret));
   } else if (OB_FAIL(inner_est_cost(child_card, double_topn_count, sort_cost))) {
     LOG_WARN("failed to est sort cost", K(ret));

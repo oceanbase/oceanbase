@@ -187,14 +187,11 @@ private:
   ObIOScheduler &io_scheduler_;
 };
 
-struct ObIOCategoryQueues final {
+struct ObTenantPhyQueues final {
 public:
-  ObIOCategoryQueues();
-  ~ObIOCategoryQueues();
-  int init();
-  void destroy();
+  ObTenantPhyQueues();
+  ~ObTenantPhyQueues();
 public:
-  bool is_inited_;
   ObPhyQueue phy_queues_[static_cast<int>(ObIOCategory::MAX_CATEGORY) + 1];
 };
 
@@ -215,7 +212,7 @@ public:
 
   int alloc_mclock_queue(ObIAllocator &allocator, ObMClockQueue *&io_queue);
   int enqueue_request(ObIORequest &req);
-  int enqueue_phy_queue(ObPhyQueue &phyqueue);
+  int enqueue_phy_queue(ObPhyQueue *phyqueue);
   int dequeue_request(ObIORequest *&req);
   int remove_phy_queue(const uint64_t tenant_id);
   int notify();
@@ -232,7 +229,7 @@ public:
   int tg_id_; // thread group id
   ObMClockQueue *io_queue_;
   ObThreadCond queue_cond_;
-  hash::ObHashMap<uint64_t, ObIOCategoryQueues *> tenant_map_;
+  hash::ObHashMap<uint64_t, ObTenantPhyQueues *> tenant_map_;
   int64_t sender_req_count_;
 };
 
@@ -315,7 +312,7 @@ private:
 
 private:
   static const int32_t MAX_AIO_EVENT_CNT = 512;
-  static const int64_t AIO_POLLING_TIMEOUT_NS = 1000L * 1000L * 1000L - 1L; // almost 1s, for timespec_valid check
+  static const int64_t AIO_POLLING_TIMEOUT_NS = 1000L * 1000L * 1000L; //1s
   ObIOContext *io_context_;
   ObIOEvents *io_events_;
   struct timespec polling_timeout_;

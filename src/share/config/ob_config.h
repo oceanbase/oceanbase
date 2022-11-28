@@ -115,15 +115,13 @@ public:
   }
   void set_name(const char *name)
   {
-    name_str_ = name;
+    int64_t pos = 0;
+    (void) databuff_printf(name_str_, sizeof(name_str_), pos, "%s", name);
   }
   void set_info(const char *info)
   {
-    info_str_ = info;;
-  }
-  void set_range(const char* range)
-  {
-    range_str_ = range;
+    int64_t pos = 0;
+    (void) databuff_printf(info_str_, sizeof(info_str_), pos, "%s", info);
   }
   void set_version(int64_t version) { version_ = version; }
   void set_dumped_version(int64_t version) { dumped_version_ = version; }
@@ -146,7 +144,6 @@ public:
   }
   const char *name() const { return name_str_; }
   const char *info() const { return info_str_; }
-  const char *range() const { return range_str_; }
 
   const char *section() const { return attr_.get_section(); }
   const char *scope() const { return attr_.get_scope(); }
@@ -193,9 +190,8 @@ protected:
   bool value_valid_;
   char value_str_[OB_MAX_CONFIG_VALUE_LEN];
   char value_reboot_str_[OB_MAX_CONFIG_VALUE_LEN];
-  const char* name_str_;
-  const char* info_str_;
-  const char* range_str_;
+  char name_str_[OB_MAX_CONFIG_NAME_LEN];
+  char info_str_[OB_MAX_CONFIG_INFO_LEN];
   common::ObLatch lock_;
 private:
   ObParameterAttr attr_;

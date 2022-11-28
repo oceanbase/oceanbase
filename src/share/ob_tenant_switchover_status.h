@@ -26,25 +26,22 @@ class ObTenantSwitchoverStatus
   OB_UNIS_VERSION(1);
 public:
   // Tenant Switchover Status
-  enum Status
-  {
-    INVALID_STATUS = 0,
-    NORMAL_STATUS = 1,
-    SWITCHING_STATUS = 2,
-    PREPARE_FLASHBACK_STATUS = 3,
-    FLASHBACK_STATUS = 4,
-    MAX_STATUS = 5,
-  };
+  static const int64_t INVALID_STATUS = 0;
+  static const int64_t NORMAL_STATUS = 1;
+  static const int64_t SWITCHING_STATUS = 2;
+  static const int64_t PREPARE_FLASHBACK_STATUS = 3;
+  static const int64_t FLASHBACK_STATUS = 4;
+  static const int64_t MAX_STATUS = 5;
 public:
   ObTenantSwitchoverStatus() : value_(INVALID_STATUS) {}
-  explicit ObTenantSwitchoverStatus(const ObTenantSwitchoverStatus::Status value) : value_(value) {}
+  explicit ObTenantSwitchoverStatus(const int64_t value) : value_(value) {}
   explicit ObTenantSwitchoverStatus(const ObString &str);
   ~ObTenantSwitchoverStatus() { reset(); }
 
 public:
   void reset() { value_ = INVALID_STATUS; }
   bool is_valid() const { return INVALID_STATUS != value_; }
-  ObTenantSwitchoverStatus::Status value() const { return value_; }
+  int64_t value() const { return value_; }
   const char* to_str() const;
 
   // compare operator
@@ -52,7 +49,7 @@ public:
   bool operator != (const ObTenantSwitchoverStatus &other) const { return value_ != other.value_; }
 
   // assignment
-  ObTenantSwitchoverStatus &operator=(const ObTenantSwitchoverStatus::Status value)
+  ObTenantSwitchoverStatus &operator=(const int64_t value)
   {
     value_ = value;
     return *this;
@@ -70,7 +67,7 @@ IS_TENANT_STATUS(FLASHBACK_STATUS, flashback)
 
   TO_STRING_KV(K_(value));
 private:
-  ObTenantSwitchoverStatus::Status value_;
+  int64_t value_;
 };
 
 static const ObTenantSwitchoverStatus NORMAL_SWITCHOVER_STATUS(ObTenantSwitchoverStatus::NORMAL_STATUS);

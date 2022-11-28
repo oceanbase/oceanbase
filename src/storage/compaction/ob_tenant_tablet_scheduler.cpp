@@ -178,29 +178,20 @@ int ObTenantTabletScheduler::init()
 {
   int ret = OB_SUCCESS;
   int64_t schedule_interval = DEFAULT_COMPACTION_SCHEDULE_INTERVAL;
-  {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (tenant_config.is_valid()) {
-      schedule_interval = tenant_config->ob_compaction_schedule_interval;
-      fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
-    }
-  } // end of ObTenantConfigGuard
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    schedule_interval = tenant_config->ob_compaction_schedule_interval;
+    fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
+  }
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantTabletScheduler has inited", K(ret));
   } else if (FALSE_IT(bf_queue_.set_run_wrapper(MTL_CTX()))) {
-  } else if (OB_FAIL(bf_queue_.init(BLOOM_FILTER_LOAD_BUILD_THREAD_CNT,
-                                    "BFBuildTask",
-                                    BF_TASK_QUEUE_SIZE,
-                                    BF_TASK_MAP_SIZE,
-                                    BF_TASK_TOTAL_LIMIT,
-                                    BF_TASK_HOLD_LIMIT,
-                                    BF_TASK_PAGE_SIZE,
-                                    MTL_ID(),
-                                    "bf_queue"))) {
+  } else if (OB_FAIL(bf_queue_.init(BLOOM_FILTER_LOAD_BUILD_THREAD_CNT, "BFBuildTask"))) {
     LOG_WARN("Fail to init bloom filter queue", K(ret));
   } else {
     schedule_interval_ = schedule_interval;
+    bf_queue_.set_label("bf_queue");
     is_inited_ = true;
   }
 
@@ -234,13 +225,11 @@ int ObTenantTabletScheduler::reload_tenant_config()
 {
   int ret = OB_SUCCESS;
   int64_t merge_schedule_interval = DEFAULT_COMPACTION_SCHEDULE_INTERVAL;
-  {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (tenant_config.is_valid()) {
-      merge_schedule_interval = tenant_config->ob_compaction_schedule_interval;
-      fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
-    }
-  } // end of ObTenantConfigGuard
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    merge_schedule_interval = tenant_config->ob_compaction_schedule_interval;
+    fast_freeze_checker_.reload_config(tenant_config->_ob_enable_fast_freeze);
+  }
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("The ObTenantTabletScheduler has not been inited", K(ret));
@@ -358,22 +347,6 @@ int ObTenantTabletScheduler::update_upper_trans_version_and_gc_sstable()
   return ret;
 }
 
-int ObTenantTabletScheduler::check_ls_compaction_finish(const share::ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  bool exist = false;
-  if (OB_UNLIKELY(!ls_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(MTL(ObTenantDagScheduler*)->check_ls_compaction_dag_exist(ls_id, exist))) {
-    LOG_WARN("failed to check ls compaction dag", K(ret), K(ls_id));
-  } else if (exist) {
-    // the compaction dag exists, need retry later.
-    ret = OB_EAGAIN;
-  }
-  return ret;
-}
-
 int ObTenantTabletScheduler::schedule_build_bloomfilter(
     const uint64_t table_id,
     const blocksstable::MacroBlockId &macro_id,
@@ -478,10 +451,10 @@ bool ObTenantTabletScheduler::check_weak_read_ts_ready(
     ObLS &ls)
 {
   bool is_ready_for_compaction = false;
-  int64_t weak_read_ts = 0;
+  palf::SCN weak_read_ts;
 
   if (FALSE_IT(weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts())) {
-  } else if (weak_read_ts < merge_version) {
+  } else if (weak_read_ts.get_val_for_lsn_allocator() < merge_version) {
     FLOG_INFO("current slave_read_ts is smaller than freeze_ts, try later",
               "ls_id", ls.get_ls_id(), K(merge_version), K(weak_read_ts));
   } else {
@@ -555,8 +528,6 @@ int ObTenantTabletScheduler::check_ls_state(ObLS &ls, bool &need_merge)
   need_merge = false;
   if (ls.is_deleted()) {
     LOG_INFO("ls is deleted", K(ret), K(ls));
-  } else if (ls.is_offline()) {
-    LOG_INFO("ls is offline", K(ret), K(ls));
   } else {
     need_merge = true;
   }
@@ -687,7 +658,9 @@ int ObTenantTabletScheduler::schedule_tablet_major_merge(
   }
 
   if (OB_SUCC(ret) && tablet_merge_finish && tablet.get_tablet_meta().report_status_.need_report()) {
-    if (OB_TMP_FAIL(GCTX.ob_service_->submit_tablet_update_task(MTL_ID(), ls_id, tablet_id))) {
+    if (OB_TMP_FAIL(GCTX.ob_service_->submit_tablet_checksums_task(MTL_ID(), ls_id, tablet_id))) {
+      LOG_WARN("failed to submit tablet checksums task to report", K(tmp_ret), K(MTL_ID()), K(tablet_id));
+    } else if (OB_TMP_FAIL(GCTX.ob_service_->submit_tablet_update_task(MTL_ID(), ls_id, tablet_id))) {
       LOG_WARN("failed to submit tablet update task to report", K(tmp_ret), K(MTL_ID()), K(tablet_id));
     } else if (OB_TMP_FAIL(ls.get_tablet_svr()->update_tablet_report_status(tablet_id))) {
       LOG_WARN("failed to update tablet report status", K(tmp_ret), K(MTL_ID()), K(tablet_id));

@@ -74,9 +74,9 @@ bool LogGroupEntry::check_integrity() const
   return header_.check_integrity(buf_, data_len);
 }
 
-int LogGroupEntry::truncate(const int64_t upper_limit_ts, const int64_t pre_accum_checksum)
+int LogGroupEntry::truncate(const SCN &upper_limit_scn, const int64_t pre_accum_checksum)
 {
-  return header_.truncate(buf_, get_data_len(), upper_limit_ts, pre_accum_checksum);
+  return header_.truncate(buf_, get_data_len(), upper_limit_scn, pre_accum_checksum);
 }
 
 DEFINE_SERIALIZE(LogGroupEntry)

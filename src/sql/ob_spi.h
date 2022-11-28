@@ -425,7 +425,6 @@ public:
 
   static int spi_build_record_type_by_result_set(common::ObIAllocator &allocator,
                                                  ObSQLSessionInfo &session,
-                                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                                  const sql::ObResultSet &result_set,
                                                  int64_t hidden_column_count,
                                                  pl::ObRecordType *&record_type,
@@ -527,8 +526,9 @@ public:
                         ParamStore &exec_params,
                         ObMySQLProxy::MySQLResult &mysql_result,
                         ObSPIOutParams &out_params,
-                        bool is_forall = false,
-                        int32_t array_binding_count = 0);
+                        bool is_forall = false);
+
+  static int get_batch_query_num(ParamStore &exec_params, int64_t &query_num);
 
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
 
@@ -578,7 +578,6 @@ private:
   static int spi_resolve_prepare(common::ObIAllocator &allocator,
                                  ObSQLSessionInfo &session,
                                  ObMySQLProxy &sql_proxy,
-                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                  sql::ObRawExprFactory &expr_factory,
                                  const ObString &sql,
                                  bool is_cursor,
@@ -626,8 +625,7 @@ private:
                                    const ObSqlExpression **into_exprs,
                                    int64_t into_count,
                                    ParamStore &exec_params,
-                                   ObSPIOutParams &out_params,
-                                   bool is_forall = false);
+                                   ObSPIOutParams &out_params);
 
   static int inner_open(pl::ObPLExecCtx *ctx,
                         ObIAllocator &param_allocator, //用于拷贝执行期参数
@@ -796,11 +794,6 @@ private:
                                      const int64_t *pl_integer_ranges,
                                      bool is_bulk,
                                      int64_t limit);
-
-  static int check_package_dest_and_deep_copy(pl::ObPLExecCtx &ctx,
-                                    const ObSqlExpression &expr,
-                                    ObIArray<ObObj> &src_array,
-                                    ObIArray<ObObj> &dst_array);
 };
 
 }

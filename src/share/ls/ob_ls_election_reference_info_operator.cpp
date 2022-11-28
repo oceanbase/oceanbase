@@ -21,6 +21,7 @@
 #include "common/ob_timeout_ctx.h"
 #include "share/ob_share_util.h"
 #include "share/ls/ob_ls_status_operator.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -30,12 +31,12 @@ namespace share
 using namespace common;
 
 int ObLsElectionReferenceInfoOperator::create_new_ls(const ObLSStatusInfo &ls_info,
-                                                     const int64_t &create_ls_ts_ns,
+                                                     const palf::SCN &create_ls_scn,
                                                      const common::ObString &zone_priority,
                                                      ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  UNUSED(create_ls_ts_ns);
+  UNUSED(create_ls_scn);
   if (OB_UNLIKELY(!ls_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid_argument", KR(ret), K(ls_info));
@@ -46,11 +47,11 @@ int ObLsElectionReferenceInfoOperator::create_new_ls(const ObLSStatusInfo &ls_in
             "values (%ld, %ld, '%s', '%s', '%s')",
             OB_ALL_LS_ELECTION_REFERENCE_INFO_TNAME, ls_info.tenant_id_,
             ls_info.ls_id_.id(), zone_priority.ptr(), "0.0.0.0:0", ""))) {
-      OB_LOG(WARN, "failed to assing sql", KR(ret), K(ls_info), K(create_ls_ts_ns));
+      OB_LOG(WARN, "failed to assing sql", KR(ret), K(ls_info), K(create_ls_scn));
     } else if (OB_FAIL(exec_write(ls_info.tenant_id_, sql, this, trans))) {
       OB_LOG(WARN, "failed to exec write", KR(ret), K(ls_info), K(sql));
     }
-    OB_LOG(INFO, "[LS_ELECTION] create new ls", KR(ret), K(ls_info), K(create_ls_ts_ns));
+    OB_LOG(INFO, "[LS_ELECTION] create new ls", KR(ret), K(ls_info), K(create_ls_scn));
   }
   return ret;
 }
@@ -79,7 +80,7 @@ int ObLsElectionReferenceInfoOperator::drop_ls(const uint64_t &tenant_id,
 int ObLsElectionReferenceInfoOperator::set_ls_offline(const uint64_t &,
                                                       const share::ObLSID &,
                                                       const ObLSStatus &,
-                                                      const int64_t &,
+                                                      const palf::SCN &,
                                                       ObMySQLTransaction &) { return OB_SUCCESS; }
 
 

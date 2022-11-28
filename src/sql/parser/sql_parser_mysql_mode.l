@@ -264,7 +264,7 @@ FALSE {
   check_value(yylval);
   malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
   yylval->node->str_len_ = 0;
-  p->last_escape_check_pos_ = 0;
+  p->last_well_formed_len_ = 0;
   yylval->node->str_value_ = NULL;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
     COPY_WRITE();
@@ -327,7 +327,6 @@ FALSE {
   } else {
     HANDLE_ESCAPE(p);
   }
-  p->last_escape_check_pos_ = yylval->node->str_len_;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
     COPY_WRITE();
   }
@@ -409,7 +408,7 @@ FALSE {
     }
     malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
     yylval->node->str_len_ = 0;
-    p->last_escape_check_pos_ = 0;
+    p->last_well_formed_len_ = 0;
     if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
       return OUTLINE_DEFAULT_TOKEN;
     }
@@ -477,7 +476,6 @@ FALSE {
   } else {
     HANDLE_ESCAPE(p);
   }
-  p->last_escape_check_pos_ = yylval->node->str_len_;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
     return OUTLINE_DEFAULT_TOKEN;
   }
@@ -879,8 +877,6 @@ Timestamp{whitespace}?\"[^\"]*\" {
 }
 <hint>INDEX { return INDEX_HINT; }
 <hint>NO_INDEX { return NO_INDEX_HINT; }
-<hint>USE_DAS { return USE_DAS_HINT; }
-<hint>NO_USE_DAS { return NO_USE_DAS_HINT; }
 <hint>USE_NL { return USE_NL; }
 <hint>NO_USE_NL { return NO_USE_NL; }
 <hint>USE_NL_MATERIALIZATION { return USE_NL_MATERIALIZATION; }
@@ -912,6 +908,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
     }
   }
 }
+<hint>HOTSPOT  { return HOTSPOT; }
 <hint>LOG_LEVEL  { return LOG_LEVEL; }
 <hint>LEADING  { return LEADING_HINT; }
 <hint>ORDERED  { return ORDERED; }
@@ -941,7 +938,6 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>END_OUTLINE_DATA { return END_OUTLINE_DATA; }
 <hint>OPTIMIZER_FEATURES_ENABLE { return OPTIMIZER_FEATURES_ENABLE; }
 <hint>NO_QUERY_TRANSFORMATION { return NO_QUERY_TRANSFORMATION; }
-<hint>NO_COST_BASED_QUERY_TRANSFORMATION { return NO_COST_BASED_QUERY_TRANSFORMATION; }
 <hint>TRANS_PARAM { return TRANS_PARAM; }
 <hint>PQ_DISTRIBUTE { return PQ_DISTRIBUTE; }
 <hint>PQ_DISTRIBUTE_WINDOW { return PQ_DISTRIBUTE_WINDOW; }
@@ -1061,7 +1057,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
   check_value(yylval);
   malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
   yylval->node->str_len_ = 0;
-  p->last_escape_check_pos_ = 0;
+  p->last_well_formed_len_ = 0;
   yylval->node->str_value_ = NULL;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE && !p->is_ignore_token_) {
     COPY_WRITE();

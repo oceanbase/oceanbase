@@ -21,7 +21,7 @@
 #include "lib/rc/context.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log_module.h"
-#include "sql/engine/expr/ob_expr_res_type.h"
+#include "objit/common/ob_expr_res_type.h"
 #include "objit/ob_llvm_helper.h"
 #include "objit/ob_llvm_di_helper.h"
 #include "share/ob_errno.h"
@@ -497,9 +497,7 @@ public:
   {
     return is_debug_mode()
         && get_tenant_id() != OB_SYS_TENANT_ID
-        && has_debug_priv()
-        && !ObTriggerInfo::is_trigger_package_id(get_package_id())
-        && !ObUDTObjectType::is_object_id(get_package_id());
+        && has_debug_priv();
   }
   bool should_init_as_session_cursor();
   /*
@@ -614,7 +612,6 @@ public:
   int add(ObObj &obj) {
     return objects_.push_back(obj);
   }
-  void reset_obj();
   common::ObIArray<ObObj>& get_objects() { return objects_; }
 private:
   // 用于收集在PL执行过程中使用到的Allocator,
@@ -1015,7 +1012,6 @@ public:
 
   // for normal routine or package routine
   int execute(sql::ObExecContext &ctx,
-              ObIAllocator &allocator,
               uint64_t package_id,
               uint64_t routine_id,
               const ObIArray<int64_t> &subprogram_path,
@@ -1060,7 +1056,6 @@ private:
 
   // for inner common execute
   int execute(sql::ObExecContext &ctx,
-              ObIAllocator &allocator,
               ObPLPackageGuard &package_guard,
               ObPLFunction &routine,
               ParamStore *params,
@@ -1091,8 +1086,7 @@ public:
 
   static int set_user_type_var(ObPLExecCtx *ctx,
                                int64_t var_index,
-                               int64_t var_addr,
-                               int64_t init_size);
+                               int64_t var_addr);
 
   static int set_implicit_cursor_in_forall(ObPLExecCtx *ctx, bool save_exception);
   static int unset_implicit_cursor_in_forall(ObPLExecCtx *ctx);

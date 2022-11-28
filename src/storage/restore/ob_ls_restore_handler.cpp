@@ -46,8 +46,7 @@ ObLSRestoreHandler::ObLSRestoreHandler()
     ls_(nullptr),
     ls_restore_arg_(),
     state_handler_(nullptr),
-    allocator_(),
-    rebuild_seq_(0)
+    allocator_()
 {
 }
 
@@ -71,7 +70,6 @@ int ObLSRestoreHandler::init(ObLS *ls)
   } else {
     allocator_.set_label(OB_LS_RESTORE_HANDLER);
     ls_ = ls;
-    rebuild_seq_ = ls->get_rebuild_seq();
     is_inited_ = true;
   }
   return ret;
@@ -169,7 +167,7 @@ int ObLSRestoreHandler::handle_pull_tablet(
 int ObLSRestoreHandler::process()
 {
   int ret = OB_SUCCESS;
-  
+
   bool can_do_restore;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -184,9 +182,9 @@ int ObLSRestoreHandler::process()
       LOG_WARN("fail to deal failed restore", K(ret), KPC(ls_));
     }
   } else if (result_mgr_.is_met_retry_time_interval()) {
-    // Some retrieable errors may be frequent in a short time，such as : 
-    // it tasks a period of time for the ls leader is ready after the shutdown and restart of observer usually, 
-    // and an ls leader not exist error will be returned before leader is ready. 
+    // Some retrieable errors may be frequent in a short time，such as :
+    // it tasks a period of time for the ls leader is ready after the shutdown and restart of observer usually,
+    // and an ls leader not exist error will be returned before leader is ready.
     // so in order to improve availability, we need control the retry frequency and the default retry time interval is 10s.
     if (OB_FAIL(state_handler_->do_restore())) {
       ObTaskId trace_id(*ObCurTraceId::get_trace_id());
@@ -452,7 +450,7 @@ int ObLSRestoreHandler::check_tablet_restore_finish_(
       break;
     }
     case ObLSRestoreStatus::QUICK_RESTORE: {
-      if (ObTabletRestoreStatus::is_minor_and_major_meta(restore_status) 
+      if (ObTabletRestoreStatus::is_minor_and_major_meta(restore_status)
           || ObTabletRestoreStatus::is_full(restore_status)) {
         // tablet restored from backup, expected status is MINOR_AND_MAJOR_DATA
         // tablet created from clog, expected status is FULL
@@ -511,25 +509,6 @@ int ObLSRestoreHandler::safe_to_destroy(bool &is_safe)
   }
   LOG_INFO("wait ls restore stop", K(ret), K(is_safe), KPC(ls_));
   return ret;
-}
-
-int ObLSRestoreHandler::update_rebuild_seq()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls restore handler do not init", K(ret));
-  } else {
-    lib::ObMutexGuard guard(mtx_);
-    rebuild_seq_ = ls_->get_rebuild_seq();
-  }
-  return ret;
-}
-
-int64_t ObLSRestoreHandler::get_rebuild_seq()
-{
-  lib::ObMutexGuard guard(mtx_);
-  return rebuild_seq_;
 }
 
 //================================ObILSRestoreState=======================================
@@ -620,44 +599,16 @@ int ObILSRestoreState::handle_pull_tablet(
   return ret;
 }
 
-int ObILSRestoreState::update_restore_status_(
-    storage::ObLS &ls, const share::ObLSRestoreStatus &next_status)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  storage::ObLSRestoreHandler *ls_restore_handler = ls.get_ls_restore_handler();
-  int64_t rebuild_seq = 0;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(ls_restore_handler)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls restore handler can't be nullptr", K(ret));
-  } else if (FALSE_IT(rebuild_seq = ls_restore_handler->get_rebuild_seq())) {
-  } else if (OB_FAIL(ls.set_restore_status(next_status, rebuild_seq))) {
-    LOG_WARN("fail to advance ls meta status", K(ret), K(next_status), K(ls), K(rebuild_seq));
-    if (OB_STATE_NOT_MATCH == ret) {
-      if (OB_SUCCESS != (tmp_ret = ls_restore_handler->update_rebuild_seq())) {
-        LOG_ERROR("failed to update rebuild seq", K(ret), K(tmp_ret), K(rebuild_seq));
-      }
-      //overwrite ret
-      ret = OB_SUCCESS;
-    }
-  }
-  return ret;
-}
-
 int ObILSRestoreState::deal_failed_restore(const ObLSRestoreResultMgr &result_mgr)
 {
   int ret = OB_SUCCESS;
   ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_FAILED);
   ObLSRestoreResultMgr::Comment comment;
-
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(update_restore_status_(*ls_, next_status))) {
-    LOG_WARN("failed to update restore status", K(ret), KPC(ls_), K(next_status));
+  } else if (OB_FAIL(ls_->set_restore_status(next_status))) {
+    LOG_WARN("fail to set restore status to failed", K(ret), K(next_status), KPC(ls_));
   } else if (OB_FAIL(result_mgr.get_comment_str(comment))) {
     LOG_WARN("fail to get comment str", K(ret));
   } else if (OB_FAIL(report_ls_restore_progress_(*ls_, next_status, result_mgr.get_trace_id(),
@@ -680,8 +631,8 @@ int ObILSRestoreState::advance_status_(
   } else if (OB_ISNULL(ls_restore_handler)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls restore handler can't be nullptr", K(ret));
-  } else if (OB_FAIL(update_restore_status_(ls, next_status))) {
-    LOG_WARN("failed to update restore status", K(ret), K(ls), K(next_status));
+  } else if (OB_FAIL(ls.set_restore_status(next_status))) {
+    LOG_WARN("fail to advance ls meta status", K(ret), K(next_status), K(ls));
   } else {
     ls_restore_handler->wakeup();
     LOG_INFO("success advance status", K(ls), K(next_status));
@@ -933,7 +884,7 @@ int ObILSRestoreState::upload_wait_restore_tablet_()
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid tablet meta", K(ret), K(tablet_meta));
         } else if (tablet_meta.tablet_id_.is_ls_inner_tablet()) {
-        } else if (OB_FAIL(ObLSRestoreHandler::check_tablet_restore_finish_(ls_restore_status_, 
+        } else if (OB_FAIL(ObLSRestoreHandler::check_tablet_restore_finish_(ls_restore_status_,
             tablet_meta, is_finish))) {
           LOG_WARN("fail to check tablet restore finish", K(ret));
         } else if (!is_finish && OB_FAIL(tablet_ids.push_back(tablet_meta.tablet_id_))) {
@@ -1109,14 +1060,14 @@ int ObILSRestoreState::request_follower_restore_status_(bool &finish)
   return ret;
 }
 
-int ObILSRestoreState::check_follower_restore_finish(const share::ObLSRestoreStatus &leader_status, 
+int ObILSRestoreState::check_follower_restore_finish(const share::ObLSRestoreStatus &leader_status,
     const share::ObLSRestoreStatus &follower_status, bool &is_finish)
 {
   int ret = OB_SUCCESS;
   is_finish = false;
   if (!leader_status.is_wait_status() && !leader_status.is_quick_restore_finish()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only leader wait status and quick restore finish status need to check follower restore status", 
+    LOG_WARN("only leader wait status and quick restore finish status need to check follower restore status",
         K(ret), K(leader_status));
   } else if (leader_status == follower_status) {
     is_finish = true;
@@ -1162,7 +1113,7 @@ int ObILSRestoreState::check_restore_concurrency_limit_()
     const int64_t restore_dag_net_count = scheduler->get_dag_net_count(restore_type);
 
     if (restore_dag_net_count > restore_concurrency) {
-      //TODO(yanfeng) Here need same value with ObLSRestoreHandler to control limit in 4.1.
+      //TODO(yanfeng) Here need same value with ObLSRestoreHandler to control limit.
       ret = OB_REACH_SERVER_DATA_COPY_IN_CONCURRENCY_LIMIT;
       LOG_WARN("ls restore reach limit", K(ret), K(restore_concurrency), K(restore_dag_net_count));
     }
@@ -1388,13 +1339,13 @@ int ObLSRestoreStartState::do_with_no_ls_meta_()
   int ret = OB_SUCCESS;
   // ls with no ls meta means it created after backup ls_attr_infos.
   // this ls doesn't have ls meta and tablet in backup, it only needs to replay clog.
-  // so just advance to qucik restore and start replay clog. 
+  // so just advance to qucik restore and start replay clog.
   ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::QUICK_RESTORE);
   if (OB_FAIL(enable_replay_())) {
     LOG_WARN("fail to enable log", K(ret));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), K(*ls_), K(next_status));
-  } 
+  }
 
   if (OB_FAIL(ret)) {
     disable_replay_();
@@ -1619,7 +1570,6 @@ int ObLSRestoreSysTabletState::leader_restore_sys_tablet_()
   int ret = OB_SUCCESS;
   ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_RESTORE_SYS_TABLETS);
   ObArray<common::ObTabletID> no_use_tablet_ids;
-  storage::ObLSRestoreHandler *ls_restore_handler = nullptr;
   LOG_INFO("ready to restore leader sys tablet", K(ls_restore_status_), KPC(ls_));
   if (tablet_mgr_.has_no_task()) {
     if (OB_FAIL(do_restore_sys_tablet())) {
@@ -1631,9 +1581,8 @@ int ObLSRestoreSysTabletState::leader_restore_sys_tablet_()
   } else if (is_need_retry_()) {
     // next term to retry
   } else if (OB_FAIL(ls_->load_ls_inner_tablet())) {
+    //TODO(chongrong.th) Need to handle reentrancy scenarios for load_inner_table_tablet
     LOG_WARN("fail to load ls inner tablet", K(ret));
-  } else if (OB_FAIL(ls_->get_ls_restore_handler()->update_rebuild_seq())) {
-    LOG_WARN("failed to update rebuild seq", K(ret), KPC(ls_));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
   } else {
@@ -1662,9 +1611,8 @@ int ObLSRestoreSysTabletState::follower_restore_sys_tablet_()
   } else if (is_need_retry_()) {
     // next term to retry
   } else if (OB_FAIL(ls_->load_ls_inner_tablet())) {
+    //TODO(chongrong.th) Need to handle reentrancy scenarios for load_inner_table_tablet
     LOG_WARN("fail to load ls inner tablet", K(ret));
-  } else if (OB_FAIL(ls_->get_ls_restore_handler()->update_rebuild_seq())) {
-    LOG_WARN("failed to update rebuild seq", K(ret), KPC(ls_));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
   } else {
@@ -2074,7 +2022,7 @@ int ObLSQuickRestoreState::check_tablet_checkpoint_()
         if (!tablet_meta.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid tablet meta", K(ret), K(tablet_meta));
-        } else if (tablet_meta.clog_checkpoint_ts_ > ls_restore_arg_->get_restore_scn()) {
+        } else if (tablet_meta.clog_checkpoint_scn_ > ls_restore_arg_->get_restore_scn()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tablet clog checkpoint ts should less than restore end ts", K(ret), K(tablet_meta),
               "ls restore end ts", ls_restore_arg_->get_restore_scn());
@@ -2381,7 +2329,7 @@ int ObLSRestoreWaitState::follower_wait_leader_()
     next_status = ObLSRestoreStatus::Status::RESTORE_NONE;
   } else if (leader_restore_status.is_quick_restore_finish() && ls_restore_status_.is_wait_quick_restore()) {
     next_status = ObLSRestoreStatus::Status::QUICK_RESTORE_FINISH;
-  } 
+  }
 
   LOG_INFO("follower is wait leader", K(leader_restore_status), K(next_status), KPC(ls_));
 
@@ -2391,6 +2339,7 @@ int ObLSRestoreWaitState::follower_wait_leader_()
   } else {
     LOG_INFO("follower success advance status", K(next_status), KPC(ls_));
   }
+
   return ret;
 }
 
@@ -2402,17 +2351,6 @@ ObLSRestoreResultMgr::ObLSRestoreResultMgr()
     trace_id_(),
     failed_type_(RestoreFailedType::MAX_FAILED_TYPE)
 {
-}
-
-bool ObLSRestoreResultMgr::can_retry() const
-{
-  int64_t max_retry_cnt = OB_MAX_RESTORE_RETRY_TIMES;
-#ifdef ERRSIM
-  if (0 != GCONF.errsim_max_restore_retry_count) {
-    max_retry_cnt = GCONF.errsim_max_restore_retry_count;
-  }
-#endif
-  return retry_cnt_ < max_retry_cnt &&  can_retrieable_err_(result_);
 }
 
 bool ObLSRestoreResultMgr::is_met_retry_time_interval()
@@ -2465,12 +2403,11 @@ bool ObLSRestoreResultMgr::can_retrieable_err_(const int err) const
     case OB_ERR_UNEXPECTED :
     case OB_ERR_SYS :
     case OB_INIT_TWICE :
+    case OB_SRC_DO_NOT_ALLOWED_MIGRATE :
     case OB_CANCELED :
     case OB_NOT_SUPPORTED :
     case OB_TENANT_HAS_BEEN_DROPPED :
-    case OB_SERVER_OUTOF_DISK_SPACE :
-    case OB_BACKUP_FILE_NOT_EXIST :
-    case OB_ARCHIVE_ROUND_NOT_CONTINUOUS :
+    case OB_CS_OUTOF_DISK_SPACE :
     case OB_HASH_NOT_EXIST:
       bret = false;
       break;

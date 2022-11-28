@@ -583,10 +583,6 @@ int ObKVCache<Key, Value>::put_and_fetch(
     if (OB_ENTRY_EXIST != ret) {
       COMMON_LOG(WARN, "Fail to put kv to ObKVGlobalCache, ", K_(cache_id), K(ret));
     }
-  } else {
-#ifdef ENABLE_DEBUG_LOG
-    ObKVCacheHandleRefChecker::get_instance().handle_ref_inc(handle);
-#endif
   }
   return ret;
 }

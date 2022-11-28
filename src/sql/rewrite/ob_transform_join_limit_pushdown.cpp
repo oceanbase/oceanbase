@@ -74,19 +74,6 @@ bool ObTransformJoinLimitPushDown::LimitPushDownHelper::is_table_lazy_join(Table
   return ret;
 }
 
-uint64_t ObTransformJoinLimitPushDown::LimitPushDownHelper::get_max_table_id() const
-{
-  uint64_t max_table_id = OB_INVALID_ID;
-  const TableItem *table = NULL;
-  for (int64_t i = 0; i < pushdown_tables_.count(); ++i) {
-    if (OB_NOT_NULL(table = pushdown_tables_.at(i))
-        && (max_table_id < table->table_id_ || OB_INVALID_ID == max_table_id)) {
-      max_table_id = table->table_id_;
-    }
-  }
-  return max_table_id;
-}
-
 int ObTransformJoinLimitPushDown::UnionFind::init() 
 {
   int ret = OB_SUCCESS;
@@ -208,10 +195,6 @@ int ObTransformJoinLimitPushDown::transform_one_stmt(common::ObIArray<ObParentDM
     // do nothing
   } else if (OB_FAIL(check_stmt_validity(stmt, helpers, is_valid))) {
     LOG_WARN("failed to check stmt validity", K(ret));
-  } else if (!is_valid) {
-    // do nothing
-  } else if (OB_FAIL(sort_pushdown_helpers(helpers))) {
-    LOG_WARN("failed to sort pushdown helpers", K(ret));
   } else if (is_valid) {
     LOG_TRACE("start to pushdown limit into join", K(helpers));
   }
@@ -226,10 +209,8 @@ int ObTransformJoinLimitPushDown::transform_one_stmt(common::ObIArray<ObParentDM
     }
   }
   if (OB_SUCC(ret) && trans_happened) {
-    if (OB_FAIL(stmt->rebuild_tables_hash())) {
-      LOG_WARN("failed to rebuild table hash", K(ret));
-    } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
-      LOG_WARN("failed to update column rel ids", K(ret));
+    if (OB_FAIL(rename_pushdown_exprs(static_cast<ObSelectStmt *>(stmt), helpers))) {
+      LOG_WARN("failed to rename pushdown exprs", K(ret));
     } else if (OB_FAIL(add_transform_hint(*stmt))) {
       LOG_WARN("failed to add transform hint", K(ret));
     }
@@ -244,20 +225,6 @@ int ObTransformJoinLimitPushDown::transform_one_stmt(common::ObIArray<ObParentDM
   return ret;
 }
 
-int ObTransformJoinLimitPushDown::sort_pushdown_helpers(ObSEArray<LimitPushDownHelper*, 4> &helpers)
-{
-  int ret = OB_SUCCESS;
-  auto cmp_func = [](LimitPushDownHelper* l_helper, LimitPushDownHelper* r_helper) {
-    if (OB_ISNULL(l_helper) || OB_ISNULL(r_helper)) {
-      return false;
-    } else {
-      return l_helper->get_max_table_id() > r_helper->get_max_table_id();
-    }
-  };
-  std::sort(helpers.begin(), helpers.end(), cmp_func);
-  return ret;
-}
-
 int ObTransformJoinLimitPushDown::check_stmt_validity(ObDMLStmt *stmt,
                                                       ObIArray<LimitPushDownHelper*> &helpers,
                                                       bool &is_valid)
@@ -267,6 +234,7 @@ int ObTransformJoinLimitPushDown::check_stmt_validity(ObDMLStmt *stmt,
   bool has_cartesian = false;
   bool has_rownum = false;
   bool is_valid_limit = false;
+  TableItem *table_item = NULL;
   ObSelectStmt *select_stmt = NULL;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -908,56 +876,33 @@ int ObTransformJoinLimitPushDown::do_transform(ObSelectStmt *select_stmt,
              OB_FAIL(remove_lazy_left_join(select_stmt, helper))) {
     LOG_WARN("failed to remove lazy left join table", K(ret));
     //pushdown other join table item
-  } else if (OB_FAIL(ObTransformUtils::construct_simple_view(select_stmt,
-                                                             helper.pushdown_tables_,
-                                                             helper.pushdown_semi_infos_,
-                                                             ctx_,
-                                                             ref_query))) {
-    LOG_WARN("failed to construct simple view", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::add_new_table_item(ctx_,
-                                                          select_stmt,
-                                                          ref_query,
-                                                          helper.view_table_))) {
-    LOG_WARN("failed to add new table item", K(ret));
-  } else if (OB_FAIL(select_stmt->add_from_item(helper.view_table_->table_id_, false))) {
-    LOG_WARN("failed to add from item", K(ret));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < helper.pushdown_tables_.count(); ++i) {
-    TableItem *table = helper.pushdown_tables_.at(i);
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table is null", K(ret), K(table));
-    } else if (OB_FAIL(ObTransformUtils::replace_table_in_semi_infos(
-                         select_stmt, helper.view_table_, table))) {
-      LOG_WARN("failed to replace table in semi infos", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::replace_table_in_joined_tables(
-                         select_stmt, helper.view_table_, table))) {
-      LOG_WARN("failed to replace table in joined tables", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (!helper.lazy_join_tables_.empty() &&
-        OB_FAIL(build_lazy_left_join(select_stmt, helper))) {
-      LOG_WARN("failed to build lazy left join table", K(ret));
-    } else if (OB_ISNULL(helper.view_table_) ||
-               OB_ISNULL(ref_query = helper.view_table_->ref_query_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("target table should not be null", K(ret));
-    } else if (OB_FAIL(append(ref_query->get_condition_exprs(), helper.pushdown_conds_))) {
-      LOG_WARN("failed to push back conditions", K(ret));
-    } else if (OB_FAIL(ObOptimizerUtil::remove_item(select_stmt->get_condition_exprs(),
-                                                    helper.pushdown_conds_))) {
-      LOG_WARN("failed to remove extracted conditions from stmt", K(ret));
-    } else if (OB_FAIL(add_order_by_limit_for_view(ref_query,
-                                                   select_stmt,
-                                                   helper.pushdown_order_items_,
-                                                   helper.all_lazy_join_is_unique_join_))) {
-      LOG_WARN("failed to add limit for generated view table", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::generate_select_list(ctx_, select_stmt, helper.view_table_))) {
-      LOG_WARN("failed to generate select list", K(ret), K(helper.view_table_));
-    }
+  } else if (OB_FAIL(ObTransformUtils::create_view_with_tables(select_stmt,
+                                                              ctx_,
+                                                              helper.pushdown_tables_,
+                                                              helper.pushdown_semi_infos_,
+                                                              helper.view_table_))) {
+    LOG_WARN("failed to create view with table", K(ret));
+    //create new left join with lazy left join
+  } else if (!helper.lazy_join_tables_.empty() &&
+             OB_FAIL(build_lazy_left_join(select_stmt, helper))) {
+    LOG_WARN("failed to build lazy left join table", K(ret));
+  } else if (OB_ISNULL(helper.view_table_) ||
+             OB_ISNULL(ref_query = helper.view_table_->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("target table should not be null", K(ret));
+  } else if (OB_FAIL(append(ref_query->get_condition_exprs(),
+                            helper.pushdown_conds_))) {
+    LOG_WARN("failed to push back conditions", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(select_stmt->get_condition_exprs(),
+                                                  helper.pushdown_conds_))) {
+    LOG_WARN("failed to remove extracted conditions from stmt", K(ret));
+  } else if (OB_FAIL(add_order_by_limit_for_view(ref_query,
+                                                select_stmt,
+                                                helper.pushdown_order_items_,
+                                                helper.all_lazy_join_is_unique_join_))) {
+    LOG_WARN("failed to add limit for generated view table", K(ret));
+  } else if (OB_FAIL(select_stmt->adjust_subquery_list())) {
+    LOG_WARN("failed to stmt adjust subquery list", K(ret));
   }
   return ret;
 }
@@ -1115,6 +1060,43 @@ int ObTransformJoinLimitPushDown::add_order_by_limit_for_view(ObSelectStmt *gene
       generated_view->set_has_fetch(upper_stmt->has_fetch());
     }
   } 
+  return ret;
+}
+
+int ObTransformJoinLimitPushDown::rename_pushdown_exprs(ObSelectStmt *select_stmt,
+                                                        ObIArray<LimitPushDownHelper*> &helpers)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> view_columns;
+  ObSEArray<ObRawExpr *, 4> view_selects;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < helpers.count(); ++i) {
+    if (OB_ISNULL(helpers.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null helper", K(ret));
+    } else if (OB_ISNULL(helpers.at(i)->view_table_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else if (OB_FAIL(select_stmt->get_view_output(*helpers.at(i)->view_table_,
+                                                    view_selects,
+                                                    view_columns))) {
+      LOG_WARN("failed to get view output exprs", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObRawExprCopier copier(*ctx_->expr_factory_);
+    if (OB_FAIL(copier.add_replaced_expr(view_selects, view_columns))) {
+      LOG_WARN("failed to add replaced expr", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::copy_subquery_params(copier,
+                                                              select_stmt->get_subquery_exprs()))) {
+      LOG_WARN("failed to copy subquery params", K(ret));
+    } else if (OB_FAIL(select_stmt->copy_and_replace_stmt_expr(copier))) {
+      LOG_WARN("failed to copy and replace stmt expr", K(ret));
+    }
+  }
   return ret;
 }
 

@@ -310,10 +310,6 @@ select * from oceanbase.DBA_OB_MAJOR_COMPACTION limit 1;
 select * from oceanbase.CDB_OB_ZONE_MAJOR_COMPACTION limit 1;
 select * from oceanbase.CDB_OB_MAJOR_COMPACTION limit 1;
 select * from oceanbase.DBA_OB_TABLET_REPLICAS limit 1;
-select * from oceanbase.DBA_OB_USERS limit 1;
-select * from oceanbase.CDB_OB_USERS limit 1;
-select * from oceanbase.DBA_OB_DATABASE_PRIVILEGE limit 1;
-select * from oceanbase.CDB_OB_DATABASE_PRIVILEGE limit 1;
 --enable_result_log
 
 ## Test all performance built-in views

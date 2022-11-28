@@ -18,6 +18,7 @@
 #include "sql/ob_spi.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/dml/ob_sequence_namespace_checker.h"
+#include "pl/ob_pl_warning.h"
 #include "objit/common/ob_item_type.h"
 
 #ifndef LOG_IN_CHECK_MODE

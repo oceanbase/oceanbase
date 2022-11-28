@@ -121,8 +121,7 @@ public:
       is_readonly_(false),
       is_not_null_(false),
       is_default_construct_(false),
-      is_formal_param_(false),
-      is_referenced_(false) {}
+      is_formal_param_(false) {}
   virtual ~ObPLVar() {}
 
   inline const common::ObString &get_name() const { return name_; }
@@ -147,8 +146,6 @@ public:
   int deep_copy(const ObPLVar &var, common::ObIAllocator &allocator);
   inline void set_dup_declare(bool dup_declare) { is_dup_declare_ = dup_declare; }
   inline bool is_dup_declare() const { return is_dup_declare_; }
-  inline void set_is_referenced(bool is_referenced) { is_referenced_ = is_referenced; }
-  inline bool is_referenced() const { return is_referenced_; }
 
   TO_STRING_KV(K_(name),
                K_(type),
@@ -167,7 +164,6 @@ private:
   bool is_default_construct_; //默认值是否是该变量的构造函数
   bool is_formal_param_; // this is formal param of a routine
   bool is_dup_declare_;
-  bool is_referenced_;
 };
 
 class ObPLSymbolTable

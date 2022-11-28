@@ -57,7 +57,6 @@ private:
     }
     int assign(const LimitPushDownHelper &other);
     bool is_table_lazy_join(TableItem* table);
-    uint64_t get_max_table_id() const;
     static int alloc_helper(ObIAllocator &allocator, LimitPushDownHelper* &helper);
 
     TO_STRING_KV(K(view_table_),
@@ -185,9 +184,6 @@ private:
 
   int rename_pushdown_exprs(ObSelectStmt *select_stmt,
                             ObIArray<LimitPushDownHelper*> &helpers);
-
-  int sort_pushdown_helpers(ObSEArray<LimitPushDownHelper*, 4> &helpers);
-
 };
 
 } //namespace sql

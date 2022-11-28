@@ -175,7 +175,6 @@ int ObMPStmtPrepare::process()
     LOG_WARN("update transmisson checksum flag failed", K(ret));
   } else {
     ObSQLSessionInfo &session = *sess;
-    THIS_WORKER.set_session(sess);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.get_raw_audit_record().request_memory_used_ = 0;
@@ -266,7 +265,6 @@ int ObMPStmtPrepare::process()
     }
 
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
-    THIS_WORKER.set_session(NULL);
     revert_session(sess); //current ignore revert session ret
   }
   return ret;
@@ -303,7 +301,6 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
       need_response_error = false;
       do {
         share::schema::ObSchemaGetterGuard schema_guard;
-        retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
         if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
                     session.get_effective_tenant_id(), schema_guard))) {
           LOG_WARN("get schema guard failed", K(ret));
@@ -319,6 +316,7 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
           retry_ctrl_.set_sys_local_schema_version(sys_version);
         }
         if (OB_SUCC(ret)) {
+          retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
           ret = do_process(session,
                            has_more_result,
                            force_sync_resp,
@@ -631,9 +629,8 @@ int ObMPStmtPrepare::send_column_packet(const ObSQLSessionInfo &session,
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(packet_sender_.update_last_pkt_pos())) {
-        LOG_WARN("failed to update last packet pos", K(ret));
-      } else if (OB_FAIL(send_eof_packet(session, result))) {
+      packet_sender_.update_last_pkt_pos();
+      if (OB_FAIL(send_eof_packet(session, result))) {
         LOG_WARN("send eof field failed", K(ret));
       }
     }

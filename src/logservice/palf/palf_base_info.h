@@ -15,6 +15,7 @@
 
 #include "lib/utility/ob_unify_serialize.h"                    // OB_UNIS_VERSION
 #include "lsn.h"
+#include "scn.h"
 
 namespace oceanbase
 {
@@ -33,13 +34,13 @@ public:
   bool operator!=(const LogInfo &log_info) const;
   void generate_by_default();
 
-  TO_STRING_KV(K_(log_id), K_(lsn), K_(log_ts), K_(log_proposal_id), K_(accum_checksum));
+  TO_STRING_KV(K_(log_id), K_(lsn), K_(log_scn), K_(log_proposal_id), K_(accum_checksum));
 
   static constexpr int64_t LOG_INFO_VERSION = 1;
   int64_t version_;
   int64_t log_id_;
   LSN lsn_;
-  int64_t log_ts_;
+  SCN log_scn_;
   int64_t log_proposal_id_;
   int64_t accum_checksum_;
 };

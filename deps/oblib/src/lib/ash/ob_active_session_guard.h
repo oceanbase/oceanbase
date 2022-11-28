@@ -31,7 +31,6 @@ public:
         tenant_id_(0),
         user_id_(0),
         session_id_(0),
-        plan_id_(0),
         sample_time_(0),
         event_no_(0),
         wait_time_(0),
@@ -76,7 +75,6 @@ public:
   uint64_t tenant_id_;
   uint64_t user_id_;
   uint64_t session_id_;
-  uint64_t plan_id_;
   int64_t sample_time_; // sample time
   int64_t event_no_; // wait event no
   uint64_t wait_time_; // how long the event waited in total

@@ -746,7 +746,6 @@ void ObLogTenant::print_stat_info()
         "SEQ(GB=%ld,CMT=%ld) "
         "SCHEMA(GB=%ld,CUR=%ld) "
         "CMT_SCHEMA(CUR=%ld,NEXT=%ld) "
-        "CHECKPOINT(TX=%ld(%s), GHB=%ld(%s)) "
         "DROP_TS=%s "
         "DDL_TABLE=%lu",
         tenant_id_, tenant_name_, print_state(get_tenant_state()), get_tenant_state(),
@@ -756,8 +755,6 @@ void ObLogTenant::print_stat_info()
         get_global_seq(), NULL == task_queue_ ? 0 : task_queue_->get_next_task_seq(),
         get_global_schema_version(), get_schema_version(),
         committer_cur_schema_version_, committer_next_trans_schema_version_,
-        committer_trans_commit_version_, NTS_TO_STR(committer_trans_commit_version_),
-        committer_global_heartbeat_, NTS_TO_STR(committer_global_heartbeat_),
         NTS_TO_STR(drop_tenant_tstamp_),
         ddl_table_id);
   }

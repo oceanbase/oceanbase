@@ -130,7 +130,7 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
     LOG_WARN("unexpected null", K(ret), K(stmt), K(ctx_));
   } else if (reached_max_times_for_or_expansion()) {
     /*do nothing*/
-  } else if (OB_FAIL(has_valid_condition(*stmt, ctx, stmt->get_condition_exprs(),
+  } else if (OB_FAIL(has_valid_condition(*stmt, stmt->get_condition_exprs(),
                                          is_valid, &expect_ordering))) {
     LOG_WARN("failed to check where condition", K(ret));
   } else if (!is_valid) {
@@ -146,12 +146,14 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
     LOG_WARN("unexpected null", K(ret), K(upper_stmt), K(spj_stmt));
   } else if (OB_FAIL(convert_expect_ordering(stmt, spj_stmt, expect_ordering))) {
     LOG_WARN("failed to convert expect ordering", K(ret));
-  } else if (OB_FAIL(gather_transform_infos(spj_stmt, ctx, spj_stmt->get_condition_exprs(),
-                                            expect_ordering, NULL, trans_infos))) {
+  } else if (OB_FAIL(gather_transform_infos(spj_stmt, spj_stmt->get_condition_exprs(),
+                                            expect_ordering, NULL,
+                                            trans_infos, ctx.is_unique_))) {
     LOG_WARN("failed to get conds trans infos", K(ret));
   } else if (OB_FAIL(try_trans_helper2.fill_helper(stmt->get_query_ctx()))) {
     LOG_WARN("failed to fill try trans helper after pre operate", K(ret));
   } else {
+    ctx.hint_ = static_cast<const ObOrExpandHint*>(get_hint(stmt->get_stmt_hint()));
     for (int64_t i = 0; OB_SUCC(ret) && !trans_happened && i < trans_infos.count(); ++i) {
       ctx.or_expand_type_ = trans_infos.at(i).or_expand_type_;
       ctx.is_set_distinct_ = trans_infos.at(i).is_set_distinct_;
@@ -211,7 +213,7 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
     LOG_WARN("unexpected null", K(ret), K(stmt), K(ctx_));
   } else if (reached_max_times_for_or_expansion()) {
     /*do nothing*/
-  } else if (OB_FAIL(has_valid_semi_anti_cond(*stmt, ctx, begin_idx))) {
+  } else if (OB_FAIL(has_valid_semi_anti_cond(*stmt, begin_idx))) {
     LOG_WARN("failed to check has valid semi anti condition", K(ret));
   } else if (OB_INVALID_INDEX == begin_idx) {
     /*do nothing*/
@@ -233,6 +235,7 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
     LOG_WARN("failed to fill try trans helper after pre operate", K(ret));
   } else {
     ctx.is_set_distinct_ = true;
+    ctx.hint_ = static_cast<const ObOrExpandHint*>(get_hint(stmt->get_stmt_hint()));
     const int64_t N = spj_stmt->get_semi_info_size();
     SemiInfo *semi_info = NULL;
     for (int64_t idx = begin_idx; OB_SUCC(ret) && !trans_happened && idx < N; ++idx) {
@@ -248,7 +251,7 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
           trans_stmt = upper_stmt;
           if (reached_max_times_for_or_expansion()) {
             /*do nothing*/
-          } else if (OB_FAIL(is_valid_semi_anti_cond(spj_stmt, ctx, conds.at(i), semi_info,
+          } else if (OB_FAIL(is_valid_semi_anti_cond(spj_stmt, conds.at(i), semi_info,
                                                      ctx.or_expand_type_))) {
             LOG_WARN("failed to check is valid semi anti cond", K(ret), K(*semi_info));
           } else if (INVALID_OR_EXPAND_TYPE == ctx.or_expand_type_) {
@@ -374,7 +377,7 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
       || OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(joined_table), K(ctx_));
-  } else if (OB_FAIL(has_valid_condition(*stmt, ctx, joined_table->get_join_conditions(),
+  } else if (OB_FAIL(has_valid_condition(*stmt, joined_table->get_join_conditions(),
                                          is_valid, NULL))) {
     LOG_WARN("failed to check has valid condition", K(ret));
   } else if (!is_valid) {
@@ -394,13 +397,14 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
     LOG_WARN("unexpected view table", K(ret), K(ref_query));
   } else if (OB_FAIL(ObTransformUtils::flatten_joined_table(ref_query))) {
     LOG_WARN("failed to flatten joined tbale", K(ret), K(ref_query));
-  } else if (OB_FAIL(gather_transform_infos(ref_query, ctx, ref_query->get_condition_exprs(),
-                                            dummy_exprs, NULL, trans_infos))) {
+  } else if (OB_FAIL(gather_transform_infos(ref_query, ref_query->get_condition_exprs(),
+                                            dummy_exprs, NULL, trans_infos, ctx.is_unique_))) {
     LOG_WARN("failed to get conds trans infos", K(ret));
   } else if (OB_FAIL(try_trans_helper2.fill_helper(stmt->get_query_ctx()))) {
     // after create_single_joined_table_stmt, may generate new stmt
     LOG_WARN("failed to fill try trans helper after pre operate", K(ret));
   } else {
+    ctx.hint_ = static_cast<const ObOrExpandHint*>(get_hint(stmt->get_stmt_hint()));
     ObIArray<ObRawExpr*> &conds = ref_query->get_condition_exprs();
     for (int64_t i = 0; OB_SUCC(ret) && !trans_happened && i < trans_infos.count(); ++i) {
       ctx.or_expand_type_ = trans_infos.at(i).or_expand_type_;
@@ -480,7 +484,7 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
       OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(joined_table), K(ctx_));
-  } else if (OB_FAIL(has_valid_condition(*stmt, ctx, joined_table->get_join_conditions(),
+  } else if (OB_FAIL(has_valid_condition(*stmt, joined_table->get_join_conditions(),
                                          is_valid, NULL))) {
     LOG_WARN("failed to check has valid condition", K(ret));
   } else if (!is_valid) {
@@ -504,8 +508,9 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected view table", K(ret), K(ref_query), K(cur_joined_table));
   } else if (OB_FALSE_IT(origin_select_item_count = ref_query->get_select_item_size())) {
-  } else if (OB_FAIL(gather_transform_infos(ref_query, ctx, cur_joined_table->get_join_conditions(),
-                                            dummy_exprs, cur_joined_table, trans_infos))) {
+  } else if (OB_FAIL(gather_transform_infos(ref_query, cur_joined_table->get_join_conditions(),
+                                            dummy_exprs, cur_joined_table,
+                                            trans_infos, ctx.is_unique_))) {
     LOG_WARN("failed to get conds trans infos", K(ret));
   } else if (OB_FAIL(add_select_item_to_ref_query(ref_query, not_null_side_table->table_id_,
                                                   left_unique_pos, right_flag_pos))) {
@@ -514,6 +519,7 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
     // after create_single_joined_table_stmt, may generate new stmt
     LOG_WARN("failed to fill try trans helper after pre operate", K(ret));
   } else {
+    ctx.hint_ = static_cast<const ObOrExpandHint*>(get_hint(stmt->get_stmt_hint()));
     for (int64_t i = 0; OB_SUCC(ret) && !trans_happened && i < trans_infos.count(); ++i) {
       ctx.or_expand_type_ = trans_infos.at(i).or_expand_type_;
       ctx.is_set_distinct_ = trans_infos.at(i).is_set_distinct_;
@@ -1010,8 +1016,6 @@ int ObTransformOrExpansion::check_basic_validity(const ObDMLStmt &stmt, bool &is
   bool has_odd_func = false;
   bool check_status = true;
   is_valid = false;
-  ObSEArray<ObRawExpr *, 4> sel_exprs;
-  bool has_lob = false;
   if (reached_max_times_for_or_expansion()) {
     is_valid = false;
     LOG_TRACE("reached max times for or expansion.", K(is_valid));
@@ -1027,15 +1031,8 @@ int ObTransformOrExpansion::check_basic_validity(const ObDMLStmt &stmt, bool &is
     /*do nothing */
   } else if (OB_FAIL(has_odd_function(stmt, has_odd_func))) {
     LOG_WARN("failed to check has odd function", K(ret));
-  } else if (has_odd_func) {
+} else if (has_odd_func) {
     /*do nothing */
-  } else if (stmt.is_select_stmt() && OB_FAIL(static_cast<const ObSelectStmt &>(stmt).get_select_exprs(sel_exprs))) {
-    LOG_WARN("get select exprs failed", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::check_exprs_contain_lob_type(sel_exprs, has_lob))) {
-    LOG_WARN("check exprs contain lob failed", K(ret));
-  } else if (has_lob) {
-    //do nothing
-    //  } else {
   } else {
     is_valid = true;
   }
@@ -1044,7 +1041,6 @@ int ObTransformOrExpansion::check_basic_validity(const ObDMLStmt &stmt, bool &is
 
 // pre-check conditions
 int ObTransformOrExpansion::has_valid_condition(ObDMLStmt &stmt,
-                                                ObCostBasedRewriteCtx &ctx,
                                                 const ObIArray<ObRawExpr*> &conds,
                                                 bool &has_valid,
                                                 ObIArray<ObRawExpr*> *expect_ordering)
@@ -1052,7 +1048,6 @@ int ObTransformOrExpansion::has_valid_condition(ObDMLStmt &stmt,
   int ret = OB_SUCCESS;
   has_valid = false;
   if (!conds.empty()) {
-    ctx.hint_ = static_cast<const ObOrExpandHint*>(get_hint(stmt.get_stmt_hint()));
     bool is_topk = false;
     bool can_set_distinct = false;
     if (NULL == expect_ordering) {
@@ -1070,7 +1065,7 @@ int ObTransformOrExpansion::has_valid_condition(ObDMLStmt &stmt,
     bool using_same_cols = false;
     ObSEArray<ObRawExpr*, 4> common_cols;
     for (int64_t i = 0; OB_SUCC(ret) && !has_valid && i < conds.count(); ++i) {
-      if (OB_FAIL(check_condition_valid_basic(&stmt, ctx, conds.at(i), is_topk,
+      if (OB_FAIL(check_condition_valid_basic(&stmt, conds.at(i), is_topk,
                                               has_valid, common_cols, using_same_cols))) {
         LOG_WARN("failed to check condition valid basic", K(ret));
       }
@@ -1796,7 +1791,6 @@ int ObTransformOrExpansion::is_valid_topk_cond(const ObDMLStmt &stmt,
  *  3. is IN expr, contains no subquery, right expr is a const row
  */
 int ObTransformOrExpansion::check_condition_valid_basic(const ObDMLStmt *stmt,
-                                                        ObCostBasedRewriteCtx &ctx,
                                                         const ObRawExpr *expr,
                                                         const bool is_topk,
                                                         bool &is_valid,
@@ -1852,7 +1846,8 @@ int ObTransformOrExpansion::check_condition_valid_basic(const ObDMLStmt *stmt,
   } else if (common_cols.empty() && using_same_cols && !expr->has_flag(CNT_SUB_QUERY)) {
     is_valid = false;
   } else {
-    is_valid = NULL == ctx.hint_ || ctx.hint_->enable_use_concat(*expr);
+    const ObOrExpandHint *hint = static_cast<const ObOrExpandHint*>(get_hint(stmt->get_stmt_hint()));
+    is_valid = NULL == hint || hint->enable_use_concat(*expr);
   }
   return ret;
 }
@@ -1864,7 +1859,6 @@ int ObTransformOrExpansion::check_condition_valid_basic(const ObDMLStmt *stmt,
  *  3.  can do subquery pullup/can generate join condition/can use different index
  */
 int ObTransformOrExpansion::is_condition_valid(const ObDMLStmt *stmt,
-                                               ObCostBasedRewriteCtx &ctx,
                                                const ObRawExpr *expr,
                                                const ObIArray<ObRawExpr*> &expect_ordering,
                                                const JoinedTable *joined_table,
@@ -1883,13 +1877,13 @@ int ObTransformOrExpansion::is_condition_valid(const ObDMLStmt *stmt,
       OB_UNLIKELY(NULL != joined_table && NULL == joined_table->right_table_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(expr), K(joined_table));
-  } else if (OB_FAIL(check_condition_valid_basic(stmt, ctx, expr,
+  } else if (OB_FAIL(check_condition_valid_basic(stmt, expr,
                                                  !expect_ordering.empty() && can_set_distinct,
                                                  is_valid, common_cols, using_same_cols))) {
     LOG_WARN("failed to check condition valid basic", K(ret));
   } else if (!is_valid) {
     /*do nothing*/
-  } else if (NULL != ctx.hint_ && ctx.hint_->is_enable_hint()) {
+  } else if (stmt->get_stmt_hint().has_enable_hint(T_USE_CONCAT)) {
     // 1. match basic condition, do transform if use hint.
     if (OB_FAIL(get_use_hint_expand_type(*expr, !common_cols.empty(),
                                          can_set_distinct, trans_info))) {
@@ -2296,7 +2290,6 @@ int ObTransformOrExpansion::create_expr_for_or_expr(ObRawExpr &transformed_expr,
 
 // pre-check conditions for semi/anti condition
 int ObTransformOrExpansion::has_valid_semi_anti_cond(ObDMLStmt &stmt,
-                                                     ObCostBasedRewriteCtx &ctx,
                                                      int64_t &begin_idx)
 {
   int ret = OB_SUCCESS;
@@ -2312,7 +2305,6 @@ int ObTransformOrExpansion::has_valid_semi_anti_cond(ObDMLStmt &stmt,
   } else if (!can_set_unique) {
     // do nothing
   } else {
-    ctx.hint_ = static_cast<const ObOrExpandHint*>(get_hint(stmt.get_stmt_hint()));
     bool has_valid = false;
     uint64_t trans_type = INVALID_OR_EXPAND_TYPE;
     SemiInfo *semi_info = NULL;
@@ -2323,7 +2315,7 @@ int ObTransformOrExpansion::has_valid_semi_anti_cond(ObDMLStmt &stmt,
       } else {
         const int64_t N = semi_info->semi_conditions_.count();
         for (int64_t j = 0; OB_SUCC(ret) && !has_valid && j < N; ++j) {
-          if (OB_FAIL(is_valid_semi_anti_cond(&stmt, ctx, semi_info->semi_conditions_.at(j),
+          if (OB_FAIL(is_valid_semi_anti_cond(&stmt, semi_info->semi_conditions_.at(j),
                                               semi_info, trans_type))) {
             LOG_WARN("failed to check has valid condition", K(ret));
           } else if (INVALID_OR_EXPAND_TYPE != trans_type) {
@@ -2344,7 +2336,6 @@ int ObTransformOrExpansion::has_valid_semi_anti_cond(ObDMLStmt &stmt,
  *  check expand expr can get join condition or table filter
  */
 int ObTransformOrExpansion::is_valid_semi_anti_cond(const ObDMLStmt *stmt,
-                                                    ObCostBasedRewriteCtx &ctx,
                                                     const ObRawExpr *expr,
                                                     const SemiInfo *semi_info,
                                                     uint64_t &trans_type)
@@ -2352,6 +2343,7 @@ int ObTransformOrExpansion::is_valid_semi_anti_cond(const ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   trans_type = INVALID_OR_EXPAND_TYPE;
   bool check_status = false;
+  const ObOrExpandHint *hint = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(semi_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt), K(expr), K(semi_info));
@@ -2365,8 +2357,8 @@ int ObTransformOrExpansion::is_valid_semi_anti_cond(const ObDMLStmt *stmt,
     LOG_WARN("failed to check condition on same columns", K(ret));
   } else if (check_status) {
     /* do nothing */
-  } else if (NULL != ctx.hint_) {
-    trans_type = ctx.hint_->enable_use_concat(*expr) ? OR_EXPAND_HINT : INVALID_OR_EXPAND_TYPE;
+  } else if (NULL != (hint = static_cast<const ObOrExpandHint*>(get_hint(stmt->get_stmt_hint())))) {
+    trans_type = hint->enable_use_concat(*expr) ? OR_EXPAND_HINT : INVALID_OR_EXPAND_TYPE;
   } else if (semi_info->is_anti_join() && OB_FAIL(is_expand_anti_or_cond(*expr, check_status))) {
     LOG_WARN("failed to check is expand anti or cond", K(ret));
   } else if (check_status) {
@@ -2405,14 +2397,14 @@ int ObTransformOrExpansion::is_valid_semi_anti_cond(const ObDMLStmt *stmt,
 }
 
 int ObTransformOrExpansion::gather_transform_infos(ObSelectStmt *stmt,
-                                                   ObCostBasedRewriteCtx &ctx,
                                                    const common::ObIArray<ObRawExpr*> &candi_conds,
                                                    const ObIArray<ObRawExpr*> &expect_ordering,
                                                    const JoinedTable *joined_table,
-                                                   ObIArray<OrExpandInfo> &trans_infos)
+                                                   ObIArray<OrExpandInfo> &trans_infos,
+                                                   bool &is_stmt_unique)
 {
   int ret = OB_SUCCESS;
-  ctx.is_unique_ = false;
+  is_stmt_unique = false;
   trans_infos.reuse();
   bool can_set_distinct = false;
   bool need_check_unique = false;
@@ -2442,7 +2434,7 @@ int ObTransformOrExpansion::gather_transform_infos(ObSelectStmt *stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < candi_conds.count(); ++i) {
     trans_info.pos_ = i;
     trans_info.is_set_distinct_ = can_set_distinct;
-    if (OB_FAIL(is_condition_valid(stmt, ctx, candi_conds.at(i), expect_ordering, joined_table,
+    if (OB_FAIL(is_condition_valid(stmt, candi_conds.at(i), expect_ordering, joined_table,
                                    equal_sets, const_exprs, trans_info))) {
       LOG_WARN("failed to check condition is valid", K(ret));
     } else if (INVALID_OR_EXPAND_TYPE == trans_info.or_expand_type_) {
@@ -2467,7 +2459,7 @@ int ObTransformOrExpansion::gather_transform_infos(ObSelectStmt *stmt,
   if (OB_SUCC(ret) && need_check_unique &&
       OB_FAIL(ObTransformUtils::check_stmt_unique(stmt, ctx_->session_info_,
                                                   ctx_->schema_checker_, true /* strict */,
-                                                  ctx.is_unique_))) {
+                                                  is_stmt_unique))) {
     LOG_WARN("failed to check stmt unique", K(ret));
   }
   return ret;

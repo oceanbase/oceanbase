@@ -19,7 +19,6 @@
 #include "lib/ob_define.h"
 #include "share/ob_ls_id.h"
 #include "storage/ob_i_table.h"
-#include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase
 {
@@ -37,8 +36,8 @@ public:
   ObTabletDDLKvMgr();
   ~ObTabletDDLKvMgr();
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
-  int ddl_start(const ObITable::TableKey &table_key, const int64_t start_log_ts, const int64_t cluster_version, const int64_t execution_id, const int64_t checkpoint_log_ts);
-  int ddl_prepare(const int64_t start_log_ts, const int64_t commit_log_ts, const uint64_t table_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
+  int ddl_start(const ObITable::TableKey &table_key, const int64_t start_log_ts, const int64_t cluster_version, const int64_t checkpoint_log_ts = 0);
+  int ddl_prepare(const int64_t start_log_ts, const int64_t prepare_log_ts, const uint64_t table_id = 0, const int64_t schema_version = 0); // schedule build a major sstable
   int ddl_commit(const int64_t start_log_ts, const int64_t prepare_log_ts, const bool is_replay); // try wait build major sstable
   int wait_ddl_commit(const int64_t start_log_ts, const int64_t prepare_log_ts);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
@@ -51,21 +50,17 @@ public:
   int get_ddl_kv_min_log_ts(int64_t &min_log_ts); // for calculate rec_log_ts of ls
   int64_t get_start_log_ts() const { return start_log_ts_; }
   bool is_started() const { return 0 != start_log_ts_; }
-  int set_commit_success(const int64_t start_log_ts);
-  bool is_commit_success() const;
-  common::ObTabletID get_tablet_id() const { return tablet_id_; }
+  int set_commit_success();
+  bool is_commit_success() const { return is_commit_success_; }
   int cleanup();
-  int online();
-  bool is_execution_id_older(const int64_t execution_id);
-  int register_to_tablet(const int64_t ddl_start_log_ts, ObDDLKvMgrHandle &kv_mgr_handle);
-  int unregister_from_tablet(const int64_t ddl_start_log_ts, ObDDLKvMgrHandle &kv_mgr_handle);
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
   OB_INLINE void reset() { destroy(); }
-  TO_STRING_KV(K_(is_inited), K_(success_start_log_ts), K_(ls_id), K_(tablet_id), K_(table_key),
+  TO_STRING_KV(K_(is_inited), K_(is_commit_success), K_(ls_id), K_(tablet_id), K_(table_key),
       K_(cluster_version), K_(start_log_ts), K_(max_freeze_log_ts),
-      K_(table_id), K_(execution_id), K_(ddl_task_id), K_(head), K_(tail), K_(ref_cnt));
+      K_(table_id), K_(schema_version),
+      K_(head), K_(tail), K_(ref_cnt));
 
 private:
   int64_t get_idx(const int64_t pos) const;
@@ -75,12 +70,11 @@ private:
   int get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle);
   void try_get_ddl_kv_unlock(const int64_t log_ts, ObDDLKV *&kv);
   int update_tablet(const int64_t start_log_ts, const int64_t snapshot_version, const int64_t ddl_checkpoint_ts);
-  void cleanup_unlock();
   void destroy();
 private:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 64;
   bool is_inited_;
-  int64_t success_start_log_ts_;
+  bool is_commit_success_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   ObITable::TableKey table_key_;
@@ -88,8 +82,7 @@ private:
   int64_t start_log_ts_;
   int64_t max_freeze_log_ts_;
   uint64_t table_id_; // used for ddl checksum
-  int64_t execution_id_; // used for ddl checksum
-  int64_t ddl_task_id_; // used for ddl checksum
+  int64_t schema_version_; // used for ddl checksum
   ObDDLKV *ddl_kvs_[MAX_DDL_KV_CNT_IN_STORAGE];
   int64_t head_;
   int64_t tail_;

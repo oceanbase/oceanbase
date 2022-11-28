@@ -57,7 +57,6 @@ ObRoleChangeService::ObRoleChangeService() : ls_service_(NULL),
                                              apply_service_(NULL),
                                              replay_service_(NULL),
                                              tg_id_(-1),
-                                             cur_task_info_(),
                                              is_inited_(false)
 {
 }
@@ -83,7 +82,6 @@ int ObRoleChangeService::init(storage::ObLSService *ls_service,
   } else if (OB_FAIL(TG_CREATE_TENANT(tg_id, tg_id_))) {
     CLOG_LOG(WARN, "ObRoleChangeService TG_CREATE failed", K(ret));
   } else {
-    cur_task_info_.reset();
     ls_service_ = ls_service;
     apply_service_ = apply_service;
     replay_service_ = replay_service;
@@ -130,7 +128,6 @@ void ObRoleChangeService::destroy()
     (void)wait();
     TG_DESTROY(tg_id_);
     is_inited_ = false;
-    cur_task_info_.reset();
     tg_id_ = -1;
     ls_service_ = NULL;
     apply_service_ = NULL;
@@ -261,16 +258,7 @@ int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  const bool log_handler_is_offline = ls->get_log_handler()->is_offline();
-
-  // If log handler is offline, need execute LEADER_2_FOLLOWER or FOLLOWER_2_FOLLOWER.
-  //
-  // when access mode is RAW_WRITE or FLASHBACK, restore_handler need execute leader to 
-  // follower or follower to leader. otherwise, only need execute leader to follower or 
-  // follower to follower, therefore, we set 'need_transform_by_access_mode' to false 
-  // when 'curr_access_mode' is RAW_WRITE or FLASHBACK
-  const bool only_need_change_to_follower = 
-    !is_raw_write_or_flashback_mode(curr_access_mode) || log_handler_is_offline;
+  const bool need_transform_by_access_mode = (curr_access_mode == AccessMode::RAW_WRITE ? false : true);
   RoleChangeOptType opt_type;
   ObRole curr_role = ObRole::INVALID_ROLE;
   ObRole new_role  = ObRole::INVALID_ROLE;
@@ -283,11 +271,11 @@ int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
           new_proposal_id, is_pending_state))) {
     CLOG_LOG(WARN, "ObRestoreHandler prepare_switch_role failed", K(ret), K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id));
-  } else if (false == need_execute_role_change(curr_proposal_id, curr_role, new_proposal_id,
-        new_role, is_pending_state, log_handler_is_offline)) {
+  } else if (true == is_pending_state
+      || false == check_need_execute_role_change_(curr_proposal_id, curr_role, new_proposal_id, new_role)) {
     CLOG_LOG(INFO, "no need change role", K(ret), K(is_pending_state), K(curr_role), K(curr_proposal_id),
-        K(new_role), K(new_proposal_id), K(is_pending_state), K(log_handler_is_offline));
-  } else if (FALSE_IT(opt_type = get_role_change_opt_type_(curr_role, new_role, only_need_change_to_follower))) {
+        K(new_role), K(new_proposal_id));
+  } else if (FALSE_IT(opt_type = get_role_change_opt_type_(curr_role, new_role, need_transform_by_access_mode))) {
   } else {
     switch (opt_type) {
       // leader -> follower
@@ -328,15 +316,7 @@ int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  const bool log_handler_is_offline = ls->get_log_handler()->is_offline();
-
-  // If log handler is offline, need execute LEADER_2_FOLLOWER or FOLLOWER_2_FOLLOWER
-  //
-  // when access mode is APPEND, log_handler need execute leader to follower or
-  // follower to leader. otherwise, only need execute leader to follower or  follower 
-  // to follower, therefore, we set 'need_transform_by_access_mode' to false when 
-  // 'curr_access_mode' is APPEND.
-  const bool only_need_change_to_follower = !is_append_mode(curr_access_mode) || log_handler_is_offline;
+  const bool need_transform_by_access_mode = (curr_access_mode == AccessMode::APPEND ? false : true);
   RoleChangeOptType opt_type;
   ObRole curr_role = ObRole::INVALID_ROLE;
   ObRole new_role  = ObRole::INVALID_ROLE;
@@ -350,11 +330,11 @@ int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
   } else if (true == is_pending_state) {
     CLOG_LOG(INFO, "curr state of palf is follower pending, need ignore this signal", K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id), K(is_pending_state));
-  } else if (false == need_execute_role_change(curr_proposal_id, curr_role, new_proposal_id,
-        new_role, is_pending_state, log_handler_is_offline)) {
+  } else if (true == is_pending_state
+      || false == check_need_execute_role_change_(curr_proposal_id, curr_role, new_proposal_id, new_role)) {
     CLOG_LOG(INFO, "no need change role", K(ret), K(is_pending_state), K(curr_role), K(curr_proposal_id),
-        K(new_role), K(new_proposal_id), K(is_pending_state), K(log_handler_is_offline));
-  } else if (FALSE_IT(opt_type = get_role_change_opt_type_(curr_role, new_role, only_need_change_to_follower))) {
+        K(new_role), K(new_proposal_id));
+  } else if (FALSE_IT(opt_type = get_role_change_opt_type_(curr_role, new_role, need_transform_by_access_mode))) {
   } else {
     switch (opt_type) {
       // leader -> follower
@@ -465,8 +445,6 @@ int ObRoleChangeService::switch_follower_to_leader_(
   ObTimeGuard time_guard("switch_to_leader", EACH_ROLE_CHANGE_COST_MAX_TIME);
   ObLogHandler *log_handler = ls->get_log_handler();
   ObRoleChangeHandler *role_change_handler = ls->get_role_change_handler();
-  ATOMIC_SET(&cur_task_info_.state_, TakeOverState::WAIT_REPLAY_DONE);
-  ATOMIC_SET(&cur_task_info_.id_, ls->get_ls_id().id());
   if (OB_FAIL(log_handler->get_end_lsn(end_lsn))) {
     CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(ls));
   // NB: order is vital!!!
@@ -482,13 +460,10 @@ int ObRoleChangeService::switch_follower_to_leader_(
       || OB_FAIL(replay_service_->switch_to_leader(ls_id))) {
   } else if (FALSE_IT(log_handler->switch_role(new_role, new_proposal_id))) {
     CLOG_LOG(WARN, "ObLogHandler switch role failed", K(ret), K(new_role), K(new_proposal_id));
-  } else if (FALSE_IT(ATOMIC_SET(&cur_task_info_.state_, TakeOverState::WAIT_RC_HANDLER_DONE))) {
   } else if (FALSE_IT(time_guard.click("role_change_handler->switch_to_leader"))
-      || OB_FAIL(role_change_handler->switch_to_leader(cur_task_info_))) {
+      || OB_FAIL(role_change_handler->switch_to_leader())) {
     CLOG_LOG(WARN, "ObRoleChangeHandler switch_to_leader failed", K(ret), KPC(ls));
   } else {
-    ATOMIC_SET(&cur_task_info_.state_, TakeOverState::TAKE_OVER_FINISH);
-    ATOMIC_SET(&cur_task_info_.log_type_, ObLogBaseType::INVALID_LOG_BASE_TYPE);
     CLOG_LOG(INFO, "switch_follower_to_leader_ success", K(ret), KPC(ls));
   }
   if (OB_FAIL(ret)) {
@@ -566,19 +541,11 @@ int ObRoleChangeService::switch_leader_to_follower_gracefully_(
   //     we must ensure that the 'end_lsn' provid by 'apply_service_' is correctly.
   // just switch_role to follower firstly, avoid sync log failed because palf has changed leader.
   } else if (FALSE_IT(log_handler->switch_role(new_role, curr_proposal_id))) {
-  // apply service will not update end_lsn after switch_to_follower, so wait apply done first here
   } else if (FALSE_IT(time_guard.click("wait_apply_service_apply_done_when_change_leader_"))
       || OB_FAIL(wait_apply_service_apply_done_when_change_leader_(log_handler, curr_proposal_id, ls_id, end_lsn))) {
     CLOG_LOG(WARN, "wait_apply_service_apply_done_when_change_leader_ failed", K(ret),
 				K(new_role), K(new_proposal_id), K(dst_addr));
-    // wait apply service done my fail, we need :
-    // 1. switch log handler to origin status.
-    // 2. resume role change handler
-    log_handler->switch_role(LEADER, curr_proposal_id);
-    if (OB_FAIL(role_change_handler->resume_to_leader())) {
-      CLOG_LOG(WARN, "resume to leader failed", K(ret), KPC(ls));
-    }
-  // NB: the following steps mustn't be failed.
+  // apply service will not update end_lsn after switch_to_follower, so wait apply done first here
   } else if (FALSE_IT(time_guard.click("apply_service->switch_to_follower"))
       || OB_FAIL(apply_service_->switch_to_follower(ls_id))) {
     CLOG_LOG(WARN, "apply_service_ switch_to_follower failed", K(ret), K(new_role), K(new_proposal_id), K(dst_addr));
@@ -638,17 +605,13 @@ int ObRoleChangeService::switch_follower_to_leader_restore_(
   const ObRole new_role = LEADER;
   ObLogRestoreHandler *log_restore_handler = ls->get_log_restore_handler();
   ObRoleChangeHandler *restore_role_change_handler = ls->get_restore_role_change_handler();
-  ATOMIC_SET(&cur_task_info_.state_, TakeOverState::WAIT_RC_HANDLER_DONE);
-  ATOMIC_SET(&cur_task_info_.id_, ls->get_ls_id().id());
   ObTimeGuard time_guard("switch_follower_to_leader_restore_", EACH_ROLE_CHANGE_COST_MAX_TIME);
   if (FALSE_IT(log_restore_handler->switch_role(new_role, new_proposal_id))) {
   } else if (FALSE_IT(time_guard.click("restore_role_change_handler->switch_to_leader"))
-      || OB_FAIL(restore_role_change_handler->switch_to_leader(cur_task_info_))) {
+      || OB_FAIL(restore_role_change_handler->switch_to_leader())) {
     CLOG_LOG(WARN, "restore_role_change_handler switch_to_leader failed", K(ret), K(new_role),
 				K(new_proposal_id), K(ls));
   } else {
-    ATOMIC_SET(&cur_task_info_.state_, TakeOverState::TAKE_OVER_FINISH);
-    ATOMIC_SET(&cur_task_info_.log_type_, ObLogBaseType::INVALID_LOG_BASE_TYPE);
   }
   if (OB_FAIL(ret)) {
     log_restore_handler->revoke_leader();
@@ -774,8 +737,6 @@ int ObRoleChangeService::wait_apply_service_apply_done_when_change_leader_(
   while (OB_SUCC(ret) && (false == is_done || end_lsn != max_lsn)) {
     if (OB_FAIL(apply_service_->is_apply_done(ls_id, is_done, end_lsn))) {
       CLOG_LOG(WARN, "apply_service_ is_apply_done failed", K(ret), K(is_done), K(end_lsn));
-      // NB: ApplyService execute on_failure only when it's FOLLOWER, therefore ApplyService my not return apply done
-      //     when it's LEADER, we need check the role of palf when has changed.
     } else if (OB_FAIL(log_handler->get_max_lsn(max_lsn))) {
       CLOG_LOG(WARN, "get_end_lsn from palf failed", K(ret), K(ls_id), K(end_lsn));
     } else if (OB_FAIL(log_handler->prepare_switch_role(unused_curr_role, unused_curr_proposal_id,
@@ -822,48 +783,14 @@ ObRoleChangeService::RoleChangeOptType ObRoleChangeService::get_role_change_opt_
   return rc_opt_type;
 }
 
-// NB: 
-// 1. when log handler is offline, need execute role change;
-// 2. when palf is not in pending:
-//   1. proposal_id is not same or
-//   2. role is not same.(If there are no pending logs in sliding window,
-//      leader to follower will not advance proposal_id)
-bool ObRoleChangeService::need_execute_role_change(const int64_t curr_proposal_id,
-                                                   const common::ObRole curr_role,
-                                                   const int64_t new_proposal_id,
-                                                   const common::ObRole new_role,
-                                                   const bool is_pending_state,
-                                                   const bool is_offline) const
+// NB: if there are no pending logs in palf, leader to follower no need wait new leader.
+// therefore, the proposal id of log handler and palf will be same, but we also need
+// change leader to follower.
+bool ObRoleChangeService::check_need_execute_role_change_(
+    const int64_t curr_proposal_id, const common::ObRole &curr_role,
+    const int64_t new_proposal_id, const common::ObRole &new_role) const
 {
-  return is_offline 
-         || (!is_pending_state
-             && (curr_proposal_id != new_proposal_id || curr_role != new_role));
-}
-
-int ObRoleChangeService::diagnose(RCDiagnoseInfo &diagnose_info)
-{
-  int ret = OB_SUCCESS;
-  if (diagnose_info.id_ == ATOMIC_LOAD(&cur_task_info_.id_)) {
-    // 当前日志流的切主任务正在被处理
-    diagnose_info.state_ = ATOMIC_LOAD(&cur_task_info_.state_);
-    diagnose_info.log_type_ = ATOMIC_LOAD(&cur_task_info_.log_type_);
-  } else {
-    // 当前日志流切主任务尚未被处理, 可能是因为其他日志流的切主任务卡住
-    diagnose_info.state_ = logservice::TakeOverState::UNKNOWN_TAKE_OVER_STATE;
-    diagnose_info.log_type_ = logservice::ObLogBaseType::INVALID_LOG_BASE_TYPE;
-  }
-  return ret;
-}
-
-bool ObRoleChangeService::is_append_mode(const palf::AccessMode &access_mode) const
-{
-  return palf::AccessMode::APPEND == access_mode;
-}
-
-bool ObRoleChangeService::is_raw_write_or_flashback_mode(const palf::AccessMode &access_mode) const
-{
-  return palf::AccessMode::RAW_WRITE == access_mode
-    || palf::AccessMode::FLASHBACK == access_mode;
+  return curr_proposal_id != new_proposal_id || curr_role != new_role;
 }
 } // end namespace logservice
 } // end namespace oceanbase

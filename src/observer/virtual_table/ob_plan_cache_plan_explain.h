@@ -10,10 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_PLAN_CACHE_PLAN_EXPLAIN_
-#define OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_PLAN_CACHE_PLAN_EXPLAIN_
-
-
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "sql/engine/ob_operator.h"
 
@@ -134,5 +130,3 @@ private:
 };
 }
 }
-
-#endif

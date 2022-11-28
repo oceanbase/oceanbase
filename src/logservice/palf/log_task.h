@@ -17,6 +17,7 @@
 #include "fixed_sliding_window.h"
 #include "log_define.h"                         // block_id_t
 #include "lsn.h"
+#include "scn.h"
 
 namespace oceanbase
 {
@@ -30,8 +31,8 @@ struct LogTaskHeaderInfo
   LSN begin_lsn_;
   LSN end_lsn_;
   int64_t log_id_;
-  int64_t min_log_ts_;
-  int64_t max_log_ts_;
+  SCN min_log_scn_;
+  SCN max_log_scn_;
   int64_t data_len_;             // total len without log_group_entry_header
   int64_t proposal_id_;  // leader's proposal_id when generate this log
   LSN prev_lsn_;
@@ -47,7 +48,7 @@ struct LogTaskHeaderInfo
   LogTaskHeaderInfo& operator=(const LogTaskHeaderInfo &rval);
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(begin_lsn), K_(end_lsn), K_(log_id), K_(min_log_ts), K_(max_log_ts), K_(data_len), K_(proposal_id),
+  TO_STRING_KV(K_(begin_lsn), K_(end_lsn), K_(log_id), K_(min_log_scn), K_(max_log_scn), K_(data_len), K_(proposal_id),
       K_(prev_lsn), K_(prev_proposal_id), K_(committed_end_lsn),
       K_(data_checksum), K_(accum_checksum), K_(is_padding_log), K_(is_raw_write));
 };
@@ -94,7 +95,7 @@ public:
   void unlock() const {
     lock_.unlock();
   }
-  void inc_update_max_log_ts(const int64_t log_ts);
+  void inc_update_max_log_scn(const SCN &log_scn);
   void update_data_len(const int64_t data_len);
   void set_end_lsn(const LSN &end_lsn);
   int try_freeze(const LSN &end_lsn);
@@ -119,7 +120,7 @@ public:
   int64_t get_log_cnt() const { return ATOMIC_LOAD(&log_cnt_); }
   int set_initial_header_info(const LogTaskHeaderInfo &header_info);
   int update_header_info(const LSN &committed_end_lsn, const int64_t accum_checksum);
-  int set_group_header(const LSN &lsn, const int64_t log_ts, const LogGroupEntryHeader &group_entry_header);
+  int set_group_header(const LSN &lsn, const SCN &log_scn, const LogGroupEntryHeader &group_entry_header);
   // update group log data_checksum
   void set_group_log_checksum(const int64_t data_checksum);
   void set_prev_lsn(const LSN &prev_lsn);
@@ -131,8 +132,8 @@ public:
   bool is_raw_write() const { return header_.is_raw_write_; }
   int64_t get_data_len() const { return ATOMIC_LOAD(&(header_.data_len_)); }
   int64_t get_log_id() const { return header_.log_id_; }
-  int64_t get_min_log_ts() const {return header_.min_log_ts_; }
-  int64_t get_max_log_ts() const { return ATOMIC_LOAD(&(header_.max_log_ts_)); }
+  const SCN get_min_log_scn() const {return header_.min_log_scn_; }
+  const SCN get_max_log_scn() const { return header_.max_log_scn_; }
   int64_t get_proposal_id() const { return header_.proposal_id_; }
   LSN get_begin_lsn() const { return header_.begin_lsn_; }
   LSN get_end_lsn() const { return header_.end_lsn_; }

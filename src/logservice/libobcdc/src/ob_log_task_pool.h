@@ -103,7 +103,6 @@ public:
       const int64_t prealloc_page_count)
   {
     int ret = common::OB_SUCCESS;
-    const int64_t start_ts = get_timestamp();
     if (OB_UNLIKELY(inited_)) {
       ret = common::OB_INIT_TWICE;
       OBLOG_LOG(WARN, "already init", KR(ret));
@@ -129,10 +128,8 @@ public:
     } else {
       task_large_allocator_.set_label(common::ObModIds::OB_LOG_PART_TRANS_TASK_LARGE);
       allow_dynamic_alloc_ = allow_dynamic_alloc;
-      const int64_t cost_ts_usec = get_timestamp() - start_ts;
       inited_ = true;
-      OBLOG_LOG(INFO, "task_pool init success", K(prealloc_page_count), K(prealloc_pool_size),
-          K(trans_task_page_size), K(cost_ts_usec));
+      OBLOG_LOG(INFO, "task_pool init success");
     }
     return ret;
   }

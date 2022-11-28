@@ -65,7 +65,8 @@ void ObOpKitStore::destroy()
 }
 
 ObExecContext::ObExecContext(ObIAllocator &allocator)
-  : allocator_(allocator),
+  : sche_allocator_("ExecCtx", OB_MALLOC_NORMAL_BLOCK_SIZE),
+    allocator_(allocator),
     phy_op_size_(0),
     phy_op_ctx_store_(NULL),
     phy_op_input_store_(NULL),
@@ -98,7 +99,6 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     is_direct_local_plan_(false),
     sqc_handler_(nullptr),
     px_task_id_(-1),
-    px_sqc_id_(-1),
     bf_ctx_(),
     frames_(NULL),
     frame_cnt_(0),
@@ -112,7 +112,6 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     px_batch_id_(0),
     admission_version_(UINT64_MAX),
     admission_addr_map_(),
-    use_temp_expr_ctx_cache_(false),
     temp_expr_ctx_map_(),
     dml_event_(ObDmlEventType::DE_INVALID),
     update_columns_(nullptr),
@@ -121,8 +120,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     parent_ctx_(nullptr),
     nested_level_(0),
     is_ps_prepare_stage_(false),
-    register_op_id_(OB_INVALID_ID),
-    tmp_alloc_used_(false)
+    register_op_id_(OB_INVALID_ID)
 {
 }
 
@@ -197,7 +195,7 @@ void ObExecContext::clean_resolve_ctx()
 
 uint64_t ObExecContext::get_ser_version() const
 {
-  return SER_VERSION_1;
+  return GET_UNIS_CLUSTER_VERSION() < CLUSTER_VERSION_2250 ? SER_VERSION_0 : SER_VERSION_1;
 }
 
 void ObExecContext::reset_op_ctx()
@@ -222,30 +220,6 @@ void ObExecContext::reset_op_env()
   if (OB_NOT_NULL(udf_ctx_mgr_)) {
     udf_ctx_mgr_->reset();
   }
-}
-
-int ObExecContext::get_root_ctx(ObExecContext* &root_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(this->get_parent_ctx())) {
-    root_ctx = this;
-  } else if (get_parent_ctx()->get_pl_stack_ctx() != nullptr && get_parent_ctx()->get_pl_stack_ctx()->in_autonomous()) {
-    root_ctx = this;
-  } else if (OB_FAIL( SMART_CALL(get_parent_ctx()->get_root_ctx(root_ctx)))) {
-    LOG_WARN("failed to get root ctx", K(ret));
-  }
-  return ret;
-}
-
-bool ObExecContext::is_root_ctx()
-{
-  bool ret = false;
-  if (OB_ISNULL(this->get_parent_ctx())) {
-    ret = true;
-  } else if (get_parent_ctx()->get_pl_stack_ctx() != nullptr && get_parent_ctx()->get_pl_stack_ctx()->in_autonomous()) {
-    ret = true;
-  }
-  return ret;
 }
 
 int ObExecContext::init_phy_op(const uint64_t phy_op_size)
@@ -319,36 +293,31 @@ void ObExecContext::destroy_eval_allocator()
 {
   eval_res_allocator_.reset();
   eval_tmp_allocator_.reset();
-  tmp_alloc_used_ = false;
 }
 
 int ObExecContext::get_temp_expr_eval_ctx(const ObTempExpr &temp_expr,
                                           ObTempExprCtx *&temp_expr_ctx)
 {
   int ret = OB_SUCCESS;
-  if (use_temp_expr_ctx_cache_) {
-    if (!temp_expr_ctx_map_.created()) {
-      OZ(temp_expr_ctx_map_.create(8, ObLabel("TempExprCtx")));
-    }
-    if (OB_SUCC(ret)) {
-      int64_t ctx_ptr = 0;
-      if (OB_FAIL(temp_expr_ctx_map_.get_refactored(reinterpret_cast<int64_t>(&temp_expr),
-                                                    ctx_ptr))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-          OZ(build_temp_expr_ctx(temp_expr, temp_expr_ctx));
-          CK(OB_NOT_NULL(temp_expr_ctx));
-          OZ(temp_expr_ctx_map_.set_refactored(reinterpret_cast<int64_t>(&temp_expr),
-                                               reinterpret_cast<int64_t>(temp_expr_ctx)));
-        } else {
-          LOG_WARN("fail to get temp expr ctx", K(temp_expr), K(ret));
-        }
+  if (!temp_expr_ctx_map_.created()) {
+    OZ(temp_expr_ctx_map_.create(8, ObLabel("TempExprCtx")));
+  }
+  if (OB_SUCC(ret)) {
+    int64_t ctx_ptr = 0;
+    if (OB_FAIL(temp_expr_ctx_map_.get_refactored(reinterpret_cast<int64_t>(&temp_expr),
+                                                  ctx_ptr))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        OZ(build_temp_expr_ctx(temp_expr, temp_expr_ctx));
+        CK(OB_NOT_NULL(temp_expr_ctx));
+        OZ(temp_expr_ctx_map_.set_refactored(reinterpret_cast<int64_t>(&temp_expr),
+                                             reinterpret_cast<int64_t>(temp_expr_ctx)));
       } else {
-        temp_expr_ctx = reinterpret_cast<ObTempExprCtx *>(ctx_ptr);
+        LOG_WARN("fail to get temp expr ctx", K(temp_expr), K(ret));
       }
+    } else {
+      temp_expr_ctx = reinterpret_cast<ObTempExprCtx *>(ctx_ptr);
     }
-  } else {
-    OZ(build_temp_expr_ctx(temp_expr, temp_expr_ctx));
   }
 
   return ret;
@@ -739,7 +708,8 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       }
     }
     if (OB_SUCC(ret)) {
-      if (!plan.is_remote_plan()) {
+      if (!plan.is_remote_plan() || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2250) {
+        //从2250版本后，remote sql会发送到远端执行，本地不会再touch数据，因此不需要去分配参数空间
         if (OB_FAIL(phy_plan_ctx_->reserve_param_space(plan.get_param_count()))) {
           LOG_WARN("reserve param space failed", K(ret), K(plan.get_param_count()));
         }

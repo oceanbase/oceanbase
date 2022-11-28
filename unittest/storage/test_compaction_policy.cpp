@@ -32,6 +32,7 @@
 #include "storage/test_dml_common.h"
 #include "storage/mockcontainer/mock_ob_iterator.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "logservice/palf/scn.h"
 
 
 namespace oceanbase
@@ -225,8 +226,8 @@ void TestCompactionPolicy::generate_table_key(
     table_key.version_range_.base_version_ = start_scn;
     table_key.version_range_.snapshot_version_ = end_scn;
   } else {
-    table_key.log_ts_range_.start_log_ts_ = start_scn;
-    table_key.log_ts_range_.end_log_ts_ = end_scn;
+    table_key.scn_range_.start_scn_.convert_for_gts(start_scn);
+    table_key.scn_range_.end_scn_.convert_for_gts(end_scn);
   }
 }
 
@@ -280,7 +281,13 @@ int TestCompactionPolicy::mock_memtable(
   ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(tablet.memtable_mgr_);
 
   ObITable::TableKey table_key;
-  int64_t end_border = (end_scn == 0) ? INT64_MAX : end_scn;
+  int64_t end_border = -1;
+  if (0 == end_scn || INT64_MAX == end_scn) {
+    end_border = palf::OB_MAX_SCN_TS_NS;
+  } else {
+    end_border = end_scn;
+  }
+
   generate_table_key(ObITable::DATA_MEMTABLE, start_scn, end_border, table_key);
   ObMemtable *memtable = nullptr;
 
@@ -297,7 +304,7 @@ int TestCompactionPolicy::mock_memtable(
   } else if (OB_FAIL(memtable->add_to_data_checkpoint(mt_mgr->freezer_->get_data_checkpoint()))) {
     LOG_WARN("add to data_checkpoint failed", K(ret), KPC(memtable));
     mt_mgr->clean_tail_memtable_();
-  } else if (INT64_MAX != end_border) { // frozen memtable
+  } else if (palf::OB_MAX_SCN_TS_NS != end_border) { // frozen memtable
     memtable->snapshot_version_ = snapshot_version;
     memtable->write_ref_cnt_ = 0;
     memtable->unsynced_cnt_ = 0;
@@ -352,8 +359,8 @@ int TestCompactionPolicy::mock_tablet(
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
               K(table_schema), K(compat_mode));
   } else {
-    tablet->tablet_meta_.clog_checkpoint_ts_ = clog_checkpoint_ts;
-    tablet->tablet_meta_.snapshot_version_ = snapshot_version;
+    tablet->tablet_meta_.clog_checkpoint_scn_.convert_tmp(clog_checkpoint_ts);
+    tablet->tablet_meta_.snapshot_version_.convert_tmp(snapshot_version);
   }
   return ret;
 }
@@ -526,10 +533,12 @@ int TestCompactionPolicy::prepare_freeze_info(
   int ret = OB_SUCCESS;
   ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
   bool changed = false;
+  palf::SCN min_major_snapshot = palf::SCN::max_scn();
+
   if (OB_ISNULL(mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mgr is unexpected null", K(ret));
-  } else if (OB_FAIL(mgr->update_info(snapshot_gc_ts, freeze_infos, snapshots, INT64_MAX, changed))) {
+  } else if (OB_FAIL(mgr->update_info(snapshot_gc_ts, freeze_infos, snapshots, min_major_snapshot, changed))) {
     LOG_WARN("failed to update info", K(ret));
   }
   return ret;
@@ -699,7 +708,6 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
       "table_type    start_scn    end_scn    max_ver    upper_ver\n"
       "10            0            1          1          1        \n"
       "11            1            160        150        150      \n"
-      "11            160          300        300        300      \n"
       "0             1            160        150        150      \n"
       "0             160          200        210        210      \n"
       "0             200          300        300        300      \n"
@@ -711,11 +719,15 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
   ObGetMergeTablesParam param;
   param.merge_type_ = ObMergeType::MINI_MERGE;
   ObGetMergeTablesResult result;
-  tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_ts_ = 300;
-  tablet_handle_.get_obj()->tablet_meta_.snapshot_version_ = 300;
+  ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(3, result.handle_.get_count());
+
+  tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_scn_.convert_tmp(300);
+  tablet_handle_.get_obj()->tablet_meta_.snapshot_version_.convert_tmp(300);
+  result.reset();
   ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
   ASSERT_EQ(OB_NO_NEED_MERGE, ret);
-  ASSERT_EQ(result.update_tablet_directly_, false);
 }
 
 TEST_F(TestCompactionPolicy, check_minor_merge_basic)
@@ -863,7 +875,7 @@ TEST_F(TestCompactionPolicy, check_no_need_major_merge)
 int main(int argc, char **argv)
 {
   system("rm -rf test_compaction_policy.log");
-  OB_LOGGER.set_file_name("test_compaction_policy.log");
+  OB_LOGGER.set_file_name("test_compaction_policy.log", true);
   OB_LOGGER.set_log_level("DEBUG");
   CLOG_LOG(INFO, "begin unittest: test_compaction_policy");
   ::testing::InitGoogleTest(&argc, argv);

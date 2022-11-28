@@ -24,6 +24,7 @@
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_base_header.h"
 #include "logservice/palf/lsn.h"
+#include "logservice/palf/scn.h"
 //#include <cstdint>
 
 namespace oceanbase
@@ -240,7 +241,7 @@ public:
                     palf::block_id_t block_id,
                     palf::LSN lsn,
                     int64_t tx_id,
-                    int64_t log_ts,
+                    palf::SCN log_ts,
                     bool &has_output);
   //------------
 
@@ -582,17 +583,15 @@ class ObTxDataBackup
   OB_UNIS_VERSION(1);
 
 public:
-  static const int64_t PENDING_START_LOG_TS = -1;
-public:
   ObTxDataBackup();
   int init(const storage::ObTxData * const tx_data);
   void reset();
 
-  int64_t get_start_log_ts() const { return start_log_ts_; }
+  palf::SCN get_start_log_ts() const { return start_log_ts_; }
 
   TO_STRING_KV(K(start_log_ts_));
 private:
-  int64_t start_log_ts_;
+  palf::SCN start_log_ts_;
 };
 
 class ObTxCommitLogTempRef
@@ -615,29 +614,30 @@ public:
 
 public:
   ObTxCommitLog(ObTxCommitLogTempRef &temp_ref)
-      : commit_version_(INVALID_COMMIT_VERSION), checksum_(0),
+      : commit_version_(), checksum_(0),
         incremental_participants_(temp_ref.incremental_participants_),
         multi_source_data_(temp_ref.multi_source_data_), trans_type_(TransType::SP_TRANS),
         tx_data_backup_(), prev_lsn_(), ls_log_info_arr_(temp_ref.ls_log_info_arr_)
   {
     before_serialize();
   }
-  ObTxCommitLog(int64_t commit_version,
+  ObTxCommitLog(palf::SCN commit_version,
                 uint64_t checksum,
                 share::ObLSArray &incremental_participants,
                 ObTxBufferNodeArray &multi_source_data,
                 int32_t trans_type,
                 LogOffSet prev_lsn,
                 ObLSLogInfoArray &ls_log_info_arr)
-      : commit_version_(commit_version), checksum_(checksum),
+      : checksum_(checksum),
         incremental_participants_(incremental_participants), multi_source_data_(multi_source_data),
         trans_type_(trans_type), prev_lsn_(prev_lsn), ls_log_info_arr_(ls_log_info_arr)
   {
+    commit_version_ = commit_version;
     before_serialize();
   }
   int init_tx_data_backup(const storage::ObTxData *const tx_data);
   const ObTxDataBackup &get_tx_data_backup() const { return tx_data_backup_; }
-  int64_t get_commit_version() const { return commit_version_; }
+  palf::SCN get_commit_version() const { return commit_version_; }
   uint64_t get_checksum() const { return checksum_; }
   const share::ObLSArray &get_incremental_participants() const { return incremental_participants_; }
   const ObTxBufferNodeArray &get_multi_source_data() const { return multi_source_data_; }
@@ -664,7 +664,7 @@ private:
 
 private:
   ObTxSerCompatByte compat_bytes_;
-  int64_t commit_version_; // equal to INVALID_COMMIT_VERSION in Single LS Transaction
+  palf::SCN commit_version_; // equal to INVALID_COMMIT_VERSION in Single LS Transaction
   uint64_t checksum_;
   share::ObLSArray &incremental_participants_;
   ObTxBufferNodeArray &multi_source_data_;

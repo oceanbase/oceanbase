@@ -104,10 +104,6 @@ public:
   {
     return ht_.size();
   }
-  int64_t bucket_count() const
-  {
-    return ht_.get_bucket_count();
-  }
   bool empty() const
   {
     return 0 == ht_.size();

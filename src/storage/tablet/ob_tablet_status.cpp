@@ -21,9 +21,11 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/tx/ob_trans_define.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
+using namespace palf;
 namespace storage
 {
 ObTabletStatus::ObTabletStatus()
@@ -135,7 +137,7 @@ int ObTabletStatusChecker::check(const uint64_t time_us)
 
 int ObTabletStatusChecker::wake_up(
     ObTabletTxMultiSourceDataUnit &tx_data,
-    const int64_t memtable_log_ts,
+    const SCN &memtable_scn,
     const bool for_replay,
     const memtable::MemtableRefOp ref_op)
 {
@@ -143,11 +145,28 @@ int ObTabletStatusChecker::wake_up(
   common::ObThreadCond &cond = tablet_.get_cond();
   ObThreadCondGuard guard(cond);
 
-  if (OB_FAIL(tablet_.set_tablet_final_status(tx_data, memtable_log_ts, for_replay, ref_op))) {
-    LOG_WARN("failed to set tablet status", K(ret), K(tx_data), K(memtable_log_ts),
+  if (OB_FAIL(tablet_.set_tablet_final_status(tx_data, memtable_scn, for_replay, ref_op))) {
+    LOG_WARN("failed to set tablet status", K(ret), K(tx_data), K(memtable_scn),
         K(for_replay), K(ref_op));
   } else if (OB_FAIL(cond.broadcast())) {
     LOG_WARN("failed to broadcast", K(ret));
+  }
+
+  return ret;
+}
+
+int ObTabletStatusChecker::wake_up(
+    ObTabletTxMultiSourceDataUnit &tx_data,
+    const int64_t memtable_log_ts,
+    const bool for_replay,
+    const memtable::MemtableRefOp ref_op)
+{
+  int ret = OB_SUCCESS;
+  SCN memtable_scn;
+  if (OB_FAIL(memtable_scn.convert_tmp(memtable_log_ts))) {
+    LOG_WARN("failed to convert scn", K(memtable_log_ts), K(ret));
+  } else if (OB_FAIL(wake_up(tx_data, memtable_scn, for_replay, ref_op))) {
+    LOG_WARN("failed to wake up", K(ret));
   }
 
   return ret;

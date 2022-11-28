@@ -836,14 +836,6 @@ public:
                                const ObIArray<ObRawExpr*> &conditions,
                                ObIArray<ObOrderDirection> &directions);
 
-  int adjust_postfix_sort_expr_ordering(const ObIArray<OrderItem> &ordering,
-                                        const ObFdItemSet &fd_item_set,
-                                        const EqualSets &equal_sets,
-                                        const ObIArray<ObRawExpr*> &const_exprs,
-                                        const int64_t prefix_count,
-                                        ObIArray<ObRawExpr*> &sort_exprs,
-                                        ObIArray<ObOrderDirection> &sort_directions);
-
   int get_minimal_cost_candidates(const ObIArray<CandidatePlan> &candidates,
                                   ObIArray<CandidatePlan> &best_candidates);
 
@@ -1287,6 +1279,10 @@ public:
 
   common::ObIArray<int64_t> &get_alloc_sfu_list() { return alloc_sfu_list_; }
 
+  int allocate_for_update_for_semi_anti_join(JoinPath *join_path, ObLogJoin *join_op);
+
+  int recursive_collect_sfu_table_ids(const Path *path, ObIArray<uint64_t> &sfu_table_list);
+
   int merge_same_sfu_table_list(uint64_t target_id,
                                 int64_t begin_idx,
                                 ObIArray<uint64_t> &src_table_list,
@@ -1332,8 +1328,6 @@ public:
                             ObRawExpr *&expr);
 
   int candi_allocate_material();
-
-  int allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperator*> &child_ops);
 
 protected:
   ObColumnRefRawExpr *get_column_expr_by_id(uint64_t table_id, uint64_t column_id) const;

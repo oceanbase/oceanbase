@@ -110,7 +110,7 @@ private:
 
 private:
   typedef common::ObLinkHashMap<ObTabletAutoincKey, ObTabletAutoincMgr> TabletAutoincMgrMap;
-  const static int INIT_NODE_MUTEX_NUM = 10243L;
+  const static int INIT_NODE_MUTEX_NUM = 1024;
   bool is_inited_;
   common::ObSmallAllocator node_allocator_;
   TabletAutoincMgrMap tablet_autoinc_mgr_map_;
@@ -131,16 +131,11 @@ public:
   int batch_set_tablet_autoinc_seq(
       const obrpc::ObBatchSetTabletAutoincSeqArg &arg,
       obrpc::ObBatchSetTabletAutoincSeqRes &res);
-  int replay_update_tablet_autoinc_seq(
-      const ObLS *ls,
-      const ObTabletID &tablet_id,
-      const uint64_t autoinc_seq,
-      const int64_t replay_log_ts);
 private:
   ObTabletAutoincSeqRpcHandler();
   ~ObTabletAutoincSeqRpcHandler();
 private:
-  static const int64_t BUCKET_LOCK_BUCKET_CNT = 10243L;
+  static const int64_t BUCKET_LOCK_BUCKET_CNT = 100;
   bool is_inited_;
   common::ObBucketLock bucket_lock_;
 };

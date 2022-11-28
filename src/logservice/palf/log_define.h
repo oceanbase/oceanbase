@@ -37,6 +37,7 @@ typedef uint64_t block_id_t ;
 typedef uint64_t offset_t;
 constexpr int64_t INVALID_PALF_ID = -1;
 class LSN;
+class SCN;
 class LogWriteBuf;
 
 // ==================== palf env start =============================
@@ -59,14 +60,14 @@ constexpr offset_t LOG_DIO_ALIGN_SIZE = 4 * 1024;
 constexpr offset_t LOG_DIO_ALIGNED_BUF_SIZE = MAX_LOG_BUFFER_SIZE + LOG_DIO_ALIGN_SIZE;
 constexpr block_id_t LOG_MAX_BLOCK_ID = UINT64_MAX/PALF_BLOCK_SIZE - 1;
 constexpr block_id_t LOG_INVALID_BLOCK_ID = LOG_MAX_BLOCK_ID + 1;
-typedef common::ObFixedArray<int64_t, ObIAllocator> LogTsArray;
+typedef common::ObFixedArray<SCN, ObIAllocator> SCNArray;
 typedef common::ObFixedArray<LSN, ObIAllocator> LSNArray;
 typedef common::ObFixedArray<LogWriteBuf *, ObIAllocator> LogWriteBufArray;
 // ==================== block and log end ===========================
 
 // ====================== Consensus begin ===========================
 const int64_t LEADER_DEFAULT_GROUP_BUFFER_SIZE = 1 << 25;                           // leader's group buffer size is 32M
-const int64_t MAX_ALLOWED_SKEW_FOR_REF_TS_NS = 3600L * 1000 * 1000 * 1000;          // 1h
+const int64_t MAX_ALLOWED_SKEW_FOR_REF_US = 3600L * 1000 * 1000;          // 1h
 // follower's group buffer size is 8MB larger than leader's.
 const int64_t FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE = LEADER_DEFAULT_GROUP_BUFFER_SIZE + 8 * 1024 * 1024L;
 const int64_t PALF_RECONFIRM_FETCH_MAX_LSN_INTERVAL = 1 * 1000 * 1000;
@@ -102,10 +103,6 @@ inline int64_t max_proposal_id(const int64_t a, const int64_t b)
 }
 // ====================== Consensus end ==============================
 
-//===== SCN related const begin======
-const uint64_t OB_INVALID_SCN_VAL = 0;
-const uint64_t OB_MAX_SCN_TS_NS = (1UL << 62) - 1;     //4611686018427387903
-//===== SCN related const end======
 // =========== LSN begin ==============
 const uint64_t LOG_INVALID_LSN_VAL = UINT64_MAX;
 const uint64_t LOG_MAX_LSN_VAL = LOG_INVALID_LSN_VAL - 1;
@@ -192,11 +189,6 @@ inline bool is_valid_log_id(const int64_t log_id)
 inline bool is_valid_block_id(block_id_t  block_id)
 {
   return block_id >= 0 && block_id < LOG_MAX_BLOCK_ID;
-}
-
-inline bool is_valid_log_ts(int64_t timestamp)
-{
-  return 0 < timestamp && OB_INVALID_TIMESTAMP != timestamp;
 }
 
 inline bool is_tmp_block(const char *block_name)

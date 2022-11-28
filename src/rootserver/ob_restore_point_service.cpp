@@ -53,7 +53,7 @@ int ObRestorePointService::init(
 int ObRestorePointService::create_restore_point(const uint64_t tenant_id, const char *name)
 {
   int ret = OB_SUCCESS;
-  int64_t snapshot_version = 0;
+  palf::SCN snapshot_version;
   int64_t snapshot_count = 0;
   int64_t retry_cnt = 0;
   share::ObSnapshotInfo tmp_info;
@@ -104,18 +104,17 @@ int ObRestorePointService::create_restore_point(const uint64_t tenant_id, const 
         LOG_WARN("failed to get publish version", K(ret), K(tenant_id));
       } else {
         if (retry_cnt > RETRY_CNT) {
-          snapshot_version = ObTimeUtility::current_time();
+          snapshot_version.convert_from_ts(ObTimeUtility::current_time());
         }
         share::ObSnapshotInfo info;
-        info.snapshot_type_ = share::ObSnapShotType::SNAPSHOT_FOR_RESTORE_POINT;
-        info.snapshot_ts_ = snapshot_version;
-        info.schema_version_ = schema_version;
-        info.tenant_id_ = tenant_id;
-        info.tablet_id_ = 0;
-        info.comment_ = name;
+        const uint64_t tablet_id = 0;
         ObMySQLTransaction trans;
         common::ObMySQLProxy &proxy = ddl_service_->get_sql_proxy();
-        if (OB_FAIL(trans.start(&proxy, tenant_id))) {
+
+        if (OB_FAIL(info.init(tenant_id, tablet_id, share::ObSnapShotType::SNAPSHOT_FOR_RESTORE_POINT,
+            snapshot_version, schema_version, name))) {
+          LOG_WARN("fail to init snapshot_info", KR(ret), K(tenant_id), K(schema_version), K(snapshot_version));
+        } else if (OB_FAIL(trans.start(&proxy, tenant_id))) {
           LOG_WARN("fail to start trans", K(ret));
         } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(
             trans, tenant_id, info))) {
@@ -156,6 +155,7 @@ int ObRestorePointService::create_backup_point(
   share::ObSnapshotInfo tmp_info;
   int64_t snapshot_gc_ts = 0;
   int get_snapshot_ret = OB_SUCCESS;
+  palf::SCN snapshot_scn;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -163,10 +163,12 @@ int ObRestorePointService::create_backup_point(
   } else if (OB_ISNULL(name) || OB_INVALID_ID == tenant_id || snapshot_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("create recovery point get invalid argument", K(ret), KP(name), K(snapshot_version));
+  } else if (OB_FAIL(snapshot_scn.convert_for_lsn_allocator((uint64_t)snapshot_version))) {
+    LOG_WARN("fail to convert_for_lsn_allocator", KR(ret), K(snapshot_version));
   } else if (FALSE_IT(get_snapshot_ret = ddl_service_->get_snapshot_mgr().get_snapshot(ddl_service_->get_sql_proxy(),
       tenant_id,
       share::ObSnapShotType::SNAPSHOT_FOR_BACKUP_POINT,
-      snapshot_version,
+      snapshot_scn,
       tmp_info))) {
   } else if (OB_SUCCESS == get_snapshot_ret) {
     ret = OB_ERR_BACKUP_POINT_EXIST;
@@ -183,16 +185,13 @@ int ObRestorePointService::create_backup_point(
     LOG_WARN("can not create backup point", K(ret), K(snapshot_gc_ts), K(snapshot_version));
   } else {
     share::ObSnapshotInfo info;
-    info.snapshot_type_ = share::SNAPSHOT_FOR_BACKUP_POINT;
-    info.snapshot_ts_ = snapshot_version;
-    info.schema_version_ = schema_version;
-    info.tenant_id_ = tenant_id;
-    info.tablet_id_ = 0;
-    info.comment_ = name;
-
+    const uint64_t tablet_id = 0;
     ObMySQLTransaction trans;
     common::ObMySQLProxy &proxy = ddl_service_->get_sql_proxy();
-    if (OB_FAIL(ret)) {
+
+    if (OB_FAIL(info.init(tenant_id, tablet_id, share::SNAPSHOT_FOR_BACKUP_POINT, snapshot_scn,
+        schema_version, name))) {
+      LOG_WARN("fail to init snapshot_info", KR(ret), K(tenant_id), K(schema_version), K(snapshot_version));
     } else if (OB_FAIL(trans.start(&proxy, tenant_id))) {
       LOG_WARN("fail to start trans", K(ret));
     } else if (OB_FAIL(ddl_service_->get_snapshot_mgr().acquire_snapshot(
@@ -270,16 +269,19 @@ int ObRestorePointService::drop_backup_point(
   int ret = OB_SUCCESS;
   share::ObSnapshotInfo tmp_info;
   int get_snapshot_ret = OB_SUCCESS;
+  palf::SCN snapshot_scn;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("restore point service do not init", K(ret));
   } else if (OB_INVALID_ID == tenant_id || snapshot_version <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(snapshot_version));
+  } else if (OB_FAIL(snapshot_scn.convert_for_lsn_allocator((uint64_t)snapshot_version))) {
+    LOG_WARN("fail to convert_for_lsn_allocator", KR(ret), K(snapshot_version));
   } else if (FALSE_IT(get_snapshot_ret = ddl_service_->get_snapshot_mgr().get_snapshot(ddl_service_->get_sql_proxy(),
                                                                    tenant_id,
                                                                    share::SNAPSHOT_FOR_BACKUP_POINT,
-                                                                   snapshot_version,
+                                                                   snapshot_scn,
                                                                    tmp_info))) {
   } else if (OB_ITER_END == get_snapshot_ret) {
     ret = OB_ERR_BACKUP_POINT_NOT_EXIST;

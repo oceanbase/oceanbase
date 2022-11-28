@@ -19,7 +19,6 @@
 #include "lib/ob_define.h"
 #include "lib/stat/ob_latch_define.h"
 #include "lib/lock/ob_latch.h"
-#include "lib/alloc/alloc_struct.h"
 
 namespace oceanbase
 {
@@ -35,12 +34,6 @@ public:
   ~SpinRWLock()
   {
   }
-  int init(const lib::ObMemAttr &mem_attr)
-  {
-    UNUSED(mem_attr);
-    return OB_SUCCESS;
-  }
-  void destroy() {}
 public:
   void set_latch_id(const uint32_t latch_id) { latch_id_ = latch_id; }
   inline bool try_rdlock() { return OB_SUCCESS == latch_.try_rdlock(latch_id_); }

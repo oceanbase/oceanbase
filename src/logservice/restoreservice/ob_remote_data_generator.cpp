@@ -114,12 +114,12 @@ RemoteDataGenerator::RemoteDataGenerator(const uint64_t tenant_id,
     const ObLSID &id,
     const LSN &start_lsn,
     const LSN &end_lsn,
-    const int64_t end_log_ts) :
+    const SCN &end_log_scn) :
   tenant_id_(tenant_id),
   id_(id),
   start_lsn_(start_lsn),
   next_fetch_lsn_(start_lsn),
-  end_log_ts_(end_log_ts),
+  end_log_scn_(end_log_scn),
   end_lsn_(end_lsn),
   to_end_(false),
   max_consumed_lsn_(start_lsn)
@@ -140,7 +140,7 @@ bool RemoteDataGenerator::is_valid() const
   return OB_INVALID_TENANT_ID != tenant_id_
     && id_.is_valid()
     && start_lsn_.is_valid()
-    && OB_INVALID_TIMESTAMP != end_log_ts_
+    && end_log_scn_.is_valid()
     && end_lsn_.is_valid()
     && end_lsn_ > start_lsn_;
 }
@@ -183,9 +183,9 @@ ServiceDataGenerator::ServiceDataGenerator(const uint64_t tenant_id,
     const ObLSID &id,
     const LSN &start_lsn,
     const LSN &end_lsn,
-    const int64_t end_log_ts,
+    const SCN &end_log_scn,
     const ObAddr &server) :
-  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_log_ts),
+  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_log_scn),
   server_(server),
   result_()
 {}
@@ -330,15 +330,15 @@ static int list_dir_files_(const ObString &base,
 }
 
 LocationDataGenerator::LocationDataGenerator(const uint64_t tenant_id,
-    const int64_t pre_log_ts,
+    const SCN &pre_log_scn,
     const ObLSID &id,
     const LSN &start_lsn,
     const LSN &end_lsn,
-    const int64_t end_log_ts,
+    const SCN &end_log_scn,
     share::ObBackupDest *dest,
     ObLogArchivePieceContext *piece_context) :
-  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_log_ts),
-  pre_log_ts_(pre_log_ts),
+  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_log_scn),
+  pre_log_scn_(pre_log_scn),
   base_lsn_(),
   data_len_(0),
   data_(),
@@ -353,7 +353,7 @@ LocationDataGenerator::LocationDataGenerator(const uint64_t tenant_id,
 
 LocationDataGenerator::~LocationDataGenerator()
 {
-  pre_log_ts_ = OB_INVALID_TIMESTAMP;
+  pre_log_scn_.reset();
   base_lsn_.reset();
   dest_ = NULL;
   piece_context_ = NULL;
@@ -441,7 +441,7 @@ int LocationDataGenerator::get_precise_file_and_offset_(int64_t &file_id,
 {
   int ret = OB_SUCCESS;
   if (FALSE_IT(file_id = cal_lsn_to_file_id_(start_lsn_))) {
-  } else if (OB_FAIL(piece_context_->get_piece(pre_log_ts_, start_lsn_, dest_id_, round_id_, piece_id_,
+  } else if (OB_FAIL(piece_context_->get_piece(pre_log_scn_, start_lsn_, dest_id_, round_id_, piece_id_,
           file_id, file_offset, lsn))) {
     if (OB_ARCHIVE_LOG_TO_END == ret) {
       ret = OB_ITER_END;
@@ -464,11 +464,11 @@ RawPathDataGenerator::RawPathDataGenerator(const uint64_t tenant_id,
     const LSN &start_lsn,
     const LSN &end_lsn,
     const DirArray &array,
-    const int64_t end_log_ts,
+    const SCN &end_log_scn,
     const int64_t piece_index,
     const int64_t min_file_id,
     const int64_t max_file_id) :
-  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_log_ts),
+  RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_log_scn),
   array_(array),
   data_len_(0),
   base_lsn_(),

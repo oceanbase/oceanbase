@@ -34,7 +34,7 @@ struct ObTabletChecksumItem
 public:
   ObTabletChecksumItem() 
     : tenant_id_(OB_INVALID_TENANT_ID), tablet_id_(), ls_id_(), data_checksum_(-1), 
-      row_count_(0), snapshot_version_(0), replica_type_(0), column_meta_() {}
+      row_count_(0), compaction_scn_(), replica_type_(0), column_meta_() {}
   virtual ~ObTabletChecksumItem() = default;
 
   void reset();
@@ -46,14 +46,14 @@ public:
   ObTabletChecksumItem &operator =(const ObTabletChecksumItem &other);
 
   TO_STRING_KV(K_(tenant_id), K_(tablet_id), K_(ls_id), K_(data_checksum), K_(row_count), 
-    K_(snapshot_version), K_(replica_type), K_(column_meta));
+    K_(compaction_scn), K_(replica_type), K_(column_meta));
   
   uint64_t tenant_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   int64_t data_checksum_;
   int64_t row_count_;
-  int64_t snapshot_version_;
+  palf::SCN compaction_scn_;
   int replica_type_;
   ObTabletReplicaReportColumnMeta column_meta_;
 };
@@ -63,16 +63,16 @@ class ObTabletChecksumOperator
 {
 public:
   // range get tablet checksum
-  // @snapshot_version:
-  //   if equals to 0, means get all snapshot_version
-  //   if greater than 0, means get specified snapshot_version
+  // @compaction_scn:
+  //   if equals to min_scn, means get all records
+  //   if greater than min_scn, means get record with this compaction_scn.
   //   else, invalid argument
   static int load_tablet_checksum_items(
       common::ObISQLClient &sql_client,
       const ObTabletLSPair &start_pair,
       const int64_t batch_cnt,
       const uint64_t tenant_id,
-      const int64_t snapshot_version,
+      const palf::SCN &compaction_scn,
       common::ObIArray<ObTabletChecksumItem> &items);
   // multi get tablet checksum
   static int load_tablet_checksum_items(
@@ -101,22 +101,22 @@ public:
   static int delete_tablet_checksum_items(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
-      const int64_t min_snapshot_version);
+      const palf::SCN &gc_compaction_scn);
   static int delete_tablet_checksum_items(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
       common::ObIArray<ObTabletChecksumItem> &items);
-  static int load_all_snapshot_versions(
+  static int load_all_compaction_scn(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
-      common::ObIArray<int64_t> &snapshot_versions);
+      common::ObIArray<palf::SCN> &compaction_scn_arr);
 
 private:
   static int construct_load_sql_str_(
       const uint64_t tenant_id,
       const ObTabletLSPair &start_pair,
       const int64_t batch_cnt,
-      const int64_t snapshot_version,
+      const palf::SCN &compaction_scn,
       common::ObSqlString &sql);
   static int construct_load_sql_str_(
       const uint64_t tenant_id,

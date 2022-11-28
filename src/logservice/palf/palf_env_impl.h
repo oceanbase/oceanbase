@@ -32,6 +32,7 @@
 #include "palf_handle_impl.h"
 #include "log_io_worker.h"
 #include "block_gc_timer_task.h"
+#include "scn.h"
 namespace oceanbase
 {
 namespace common
@@ -205,7 +206,6 @@ public:
                            PalfHandleImplGuard &palf_handle_impl_guard);
   void revert_palf_handle_impl(PalfHandleImpl *palf_handle_impl);
   int try_switch_state_for_all();
-  int check_and_switch_freeze_mode();
   int try_freeze_log_for_all();
   // =================== memory space management ==================
   bool check_tenant_memory_enough();
@@ -247,25 +247,18 @@ private:
     ~FreezeLogFunctor() {}
     bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
   };
-  class CheckFreezeModeFunctor
-  {
-  public:
-    CheckFreezeModeFunctor() {}
-    ~CheckFreezeModeFunctor() {}
-    bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
-  };
   struct LogGetRecycableFileCandidate {
     LogGetRecycableFileCandidate();
     ~LogGetRecycableFileCandidate();
     bool operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
     int64_t id_;
     block_id_t min_block_id_;
-    int64_t min_block_max_ts_;
+    SCN min_block_id_scn_;
     block_id_t min_using_block_id_;
     int64_t oldest_palf_id_;
-    int64_t oldest_block_ts_;
+    SCN oldest_block_scn_;
     int ret_code_;
-    TO_STRING_KV(K_(id), K_(min_block_max_ts), K_(min_block_id), K_(min_using_block_id), K_(oldest_palf_id), K_(oldest_block_ts), K_(ret_code));
+    TO_STRING_KV(K_(id), K_(min_block_id_scn), K_(min_block_id), K_(min_using_block_id), K_(oldest_palf_id), K_(oldest_block_scn), K_(ret_code));
   };
   struct GetTotalUsedDiskSpace
   {
@@ -276,6 +269,15 @@ private:
     int64_t total_used_disk_space_;
     int64_t maximum_used_size_;
     int64_t palf_id_;
+    int ret_code_;
+  };
+  struct NotifyDiskEnough
+  {
+    NotifyDiskEnough(const bool diskspace_enough);
+    ~NotifyDiskEnough();
+    bool operator()(const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
+    TO_STRING_KV(K_(diskspace_enough), K_(ret_code));
+    bool diskspace_enough_;
     int ret_code_;
   };
 
@@ -290,7 +292,8 @@ private:
   int get_disk_usage_(int64_t &used_size_byte,
                       int64_t &palf_id,
                       int64_t &maximum_used_size);
-  int recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, int64_t &oldest_ts);
+  int recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, SCN &oldest_scn);
+  int notify_diskspace_enough_(const bool diskspace_enough);
   int wait_until_reference_count_to_zero_(const int64_t palf_id);
   // check the diskspace whether is enough to hold a new palf instance.
   bool check_can_create_palf_handle_impl_() const;

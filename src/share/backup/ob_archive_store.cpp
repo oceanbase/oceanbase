@@ -34,14 +34,14 @@ ObRoundStartDesc::ObRoundStartDesc()
 {
   dest_id_ = 0;
   round_id_ = 0;
-  start_scn_ = 0;
+  start_scn_ = palf::SCN::min_scn();
   base_piece_id_ = 0;
   piece_switch_interval_ = 0;
 }
 
 bool ObRoundStartDesc::is_valid() const
 {
-  return 0 <= dest_id_ && 0 < round_id_ && 0 < start_scn_ && 0 < base_piece_id_ 
+  return 0 <= dest_id_ && 0 < round_id_ && start_scn_.is_valid() && 0 < base_piece_id_
          && 0 < piece_switch_interval_;
 }
 
@@ -56,15 +56,15 @@ ObRoundEndDesc::ObRoundEndDesc()
 {
   dest_id_ = 0;
   round_id_ = 0;
-  start_scn_ = 0;
-  checkpoint_scn_ = 0;
+  start_scn_ = palf::SCN::min_scn();
+  checkpoint_scn_ = palf::SCN::min_scn();
   base_piece_id_ = 0;
   piece_switch_interval_ = 0;
 }
 
 bool ObRoundEndDesc::is_valid() const
 {
-  return 0 <= dest_id_ && 0 < round_id_ && 0 < start_scn_ && start_scn_ <= checkpoint_scn_ && 0 < base_piece_id_ 
+  return 0 <= dest_id_ && 0 < round_id_ && start_scn_.is_valid() && start_scn_ <= checkpoint_scn_ && 0 < base_piece_id_
          && 0 < piece_switch_interval_;
 }
 
@@ -76,7 +76,7 @@ int ObRoundEndDesc::assign(const ObRoundStartDesc &round_start)
   start_scn_ = round_start.start_scn_;
   base_piece_id_ = round_start.base_piece_id_;
   piece_switch_interval_ = round_start.piece_switch_interval_;
-  checkpoint_scn_ = 0;
+  checkpoint_scn_ = palf::SCN::min_scn();
   return ret;
 }
 
@@ -97,13 +97,13 @@ ObPieceStartDesc::ObPieceStartDesc()
   dest_id_ = 0;
   round_id_ = 0;
   piece_id_ = 0;
-  start_scn_ = 0;
+  start_scn_ = palf::SCN::min_scn();
 }
 
 bool ObPieceStartDesc::is_valid() const
 {
   return 0 <= dest_id_ && OB_START_LOG_ARCHIVE_ROUND_ID < round_id_
-         && 0 < piece_id_ && 0 < start_scn_;
+         && 0 < piece_id_ && start_scn_.is_valid();
 }
 
 
@@ -118,13 +118,13 @@ ObPieceEndDesc::ObPieceEndDesc()
   dest_id_ = 0;
   round_id_ = 0;
   piece_id_ = 0;
-  end_scn_ = 0;
+  end_scn_ = palf::SCN::min_scn();
 }
 
 bool ObPieceEndDesc::is_valid() const
 {
   return 0 <= dest_id_ && OB_START_LOG_ARCHIVE_ROUND_ID < round_id_
-         && 0 < piece_id_ && 0 < end_scn_;
+         && 0 < piece_id_ && end_scn_.is_valid();
 }
 
 
@@ -143,14 +143,14 @@ ObTenantArchivePieceInfosDesc::ObTenantArchivePieceInfosDesc()
   piece_id_ = 0;
   incarnation_ = 0;
   dest_no_ = -1;
-  start_scn_ = 0;
-  end_scn_ = 0;
+  start_scn_ = palf::SCN::min_scn();
+  end_scn_ = palf::SCN::min_scn();
 }
 
 bool ObTenantArchivePieceInfosDesc::is_valid() const
 {
   return tenant_id_ != OB_INVALID_TENANT_ID && 0 < dest_id_ && OB_START_LOG_ARCHIVE_ROUND_ID < round_id_
-         && 0 < piece_id_ && 0 <= dest_no_ && 0 < start_scn_ && 0 < end_scn_;
+         && 0 < piece_id_ && 0 <= dest_no_ && start_scn_.is_valid() && end_scn_.is_valid();
 }
 
 
@@ -183,10 +183,10 @@ ObPieceCheckpointDesc::ObPieceCheckpointDesc()
   round_id_ = 0;
   piece_id_ = 0;
   incarnation_ = 0;
-  start_scn_ = 0;
-  checkpoint_scn_ = 0;
-  max_scn_ = 0;
-  end_scn_ = 0;
+  start_scn_ = palf::SCN::min_scn();
+  checkpoint_scn_ = palf::SCN::min_scn();
+  max_scn_ = palf::SCN::min_scn();
+  end_scn_ = palf::SCN::min_scn();
   MEMSET(reserved_, 0, sizeof(reserved_));
 }
 
@@ -244,10 +244,6 @@ int ObPieceCheckpointDesc::serialize_(char *buf, const int64_t buf_len, int64_t 
   int ret = OB_SUCCESS;
   int64_t compatible = static_cast<int64_t>(compatible_.version_);
   int64_t tenant_id = static_cast<int64_t>(tenant_id_);
-  int64_t start_scn = static_cast<int64_t>(start_scn_);
-  int64_t checkpoint_scn = static_cast<int64_t>(checkpoint_scn_);
-  int64_t max_scn = static_cast<int64_t>(max_scn_);
-  int64_t end_scn = static_cast<int64_t>(end_scn_); 
   if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, tenant_id))) {
     LOG_WARN("failed to encode tenant_id", K(ret));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, dest_id_))) {
@@ -260,14 +256,14 @@ int ObPieceCheckpointDesc::serialize_(char *buf, const int64_t buf_len, int64_t 
     LOG_WARN("failed to encode incarnation", K(ret));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, compatible))) {
     LOG_WARN("failed to encode compatible", K(ret));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, start_scn))) {
-    LOG_WARN("failed to encode start_ts", K(ret));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, checkpoint_scn))) {
-    LOG_WARN("failed to encode checkpoint_ts", K(ret));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, max_scn))) {
-    LOG_WARN("failed to encode max_scn", K(ret));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, end_scn))) {
-    LOG_WARN("failed to encode end_scn", K(ret));
+  } else if (OB_FAIL(start_scn_.fixed_serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize start scn", K(ret));
+  } else if (OB_FAIL(checkpoint_scn_.fixed_serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize checkpoint scn", K(ret));
+  } else if (OB_FAIL(max_scn_.fixed_serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize max scn", K(ret));
+  } else if (OB_FAIL(end_scn_.fixed_serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize end scn", K(ret));
   } else {
     constexpr int64_t reserverd_len = sizeof(reserved_) / sizeof(int64_t);
     for (int64_t i = 0; OB_SUCC(ret) && i < reserverd_len; i++) {
@@ -285,10 +281,6 @@ int ObPieceCheckpointDesc::deserialize_(const char *buf, const int64_t data_len,
   int ret = OB_SUCCESS;
   int64_t compatible = 0;
   int64_t tenant_id = 0;
-  int64_t start_scn = 0;
-  int64_t checkpoint_scn = 0;
-  int64_t max_scn = 0;
-  int64_t end_scn = 0;
   if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &tenant_id))) {
     LOG_WARN("failed to decode tenant_id", K(ret));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &dest_id_))) {
@@ -301,20 +293,18 @@ int ObPieceCheckpointDesc::deserialize_(const char *buf, const int64_t data_len,
     LOG_WARN("failed to decode incarnation", K(ret));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &compatible))) {
     LOG_WARN("failed to decode compatible", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &start_scn))) {
-    LOG_WARN("failed to decode start_ts", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &checkpoint_scn))) {
-    LOG_WARN("failed to decode checkpoint_ts", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &max_scn))) {
-    LOG_WARN("failed to decode max_scn", K(ret));
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &end_scn))) {
-    LOG_WARN("failed to decode end_scn", K(ret));
+  } else if (OB_FAIL(start_scn_.fixed_deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize start scn", K(ret));
+  } else if (OB_FAIL(checkpoint_scn_.fixed_deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize checkpoint scn", K(ret));
+  } else if (OB_FAIL(max_scn_.fixed_deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize max scn", K(ret));
+  } else if (OB_FAIL(end_scn_.fixed_deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize end scn", K(ret));
   } else if (OB_FAIL(compatible_.set_version(compatible))) {
     LOG_WARN("failed to set compatible", K(ret), K(compatible));
   } else {
     tenant_id_ = static_cast<uint64_t>(tenant_id);
-    start_scn_ = static_cast<uint64_t>(start_scn);
-    checkpoint_scn_ = static_cast<uint64_t>(checkpoint_scn);
     constexpr int64_t reserverd_len = sizeof(reserved_) / sizeof(int64_t);
     for (int64_t i = 0; OB_SUCC(ret) && i < reserverd_len; i++) {
       if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &reserved_[i]))) {
@@ -330,8 +320,8 @@ int64_t ObPieceCheckpointDesc::get_serialize_size_() const
 {
   return sizeof(tenant_id_) + sizeof(dest_id_) + sizeof(round_id_) + sizeof(piece_id_)
        + sizeof(incarnation_) + sizeof(compatible_.version_)
-       + sizeof(start_scn_) + sizeof(checkpoint_scn_) + sizeof(max_scn_)
-       + sizeof(end_scn_) + sizeof(reserved_);
+       + start_scn_.get_fixed_serialize_size() + checkpoint_scn_.get_fixed_serialize_size()
+       + max_scn_.get_fixed_serialize_size() + end_scn_.get_fixed_serialize_size() + sizeof(reserved_);
 }
 
 bool ObPieceCheckpointDesc::is_valid() const
@@ -352,14 +342,14 @@ ObPieceInnerPlaceholderDesc::ObPieceInnerPlaceholderDesc()
   dest_id_ = 0;
   round_id_ = 0;
   piece_id_ = 0;
-  start_scn_ = 0;
-  checkpoint_scn_ = 0;
+  start_scn_ = palf::SCN::min_scn();
+  checkpoint_scn_ = palf::SCN::min_scn();
 }
 
 bool ObPieceInnerPlaceholderDesc::is_valid() const
 {
   return 0 <= dest_id_ && OB_START_LOG_ARCHIVE_ROUND_ID < round_id_
-         && 0 < piece_id_ && 0 < start_scn_ && start_scn_ <= checkpoint_scn_;
+         && 0 < piece_id_ && start_scn_.is_valid() && start_scn_ <= checkpoint_scn_;
 }
 
 
@@ -375,8 +365,8 @@ ObSingleLSInfoDesc::ObSingleLSInfoDesc()
   dest_id_ = 0;
   round_id_ = 0;
   piece_id_ = 0;
-  start_scn_ = 0;
-  checkpoint_scn_ = 0;
+  start_scn_ = palf::SCN::min_scn();
+  checkpoint_scn_ = palf::SCN::min_scn();
   min_lsn_ = 0;
   max_lsn_ = 0;
 }
@@ -522,7 +512,7 @@ int ObArchiveStore::write_round_end(const int64_t dest_id, const int64_t round_i
   return ret;
 }
 
-int ObArchiveStore::get_round_id(const int64_t dest_id, const ARCHIVE_SCN_TYPE &scn, int64_t &round_id)
+int ObArchiveStore::get_round_id(const int64_t dest_id, const palf::SCN &scn, int64_t &round_id)
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
@@ -631,7 +621,7 @@ int ObArchiveStore::get_all_rounds(const int64_t dest_id, ObIArray<ObRoundEndDes
 
 // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000
 int ObArchiveStore::is_piece_start_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-    const int64_t create_timestamp, bool &is_exist) const
+    const palf::SCN &create_scn, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
@@ -641,8 +631,8 @@ int ObArchiveStore::is_piece_start_file_exist(const int64_t dest_id, const int64
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_start_file_path(dest, dest_id, round_id, piece_id, create_timestamp, full_path))) {
-    LOG_WARN("failed to get piece start file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_timestamp));
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_start_file_path(dest, dest_id, round_id, piece_id, create_scn, full_path))) {
+    LOG_WARN("failed to get piece start file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_scn));
   } else if (OB_FAIL(util.is_exist(full_path.get_ptr(), storage_info, is_exist))) {
     LOG_WARN("failed to check piece start file exist.", K(ret), K(full_path), K(dest));
   }
@@ -651,7 +641,7 @@ int ObArchiveStore::is_piece_start_file_exist(const int64_t dest_id, const int64
 }
 
 int ObArchiveStore::read_piece_start(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-    const int64_t create_timestamp, ObPieceStartDesc &desc) const
+    const palf::SCN &create_scn, ObPieceStartDesc &desc) const
 {
   int ret = OB_SUCCESS;
   const ObBackupDest &dest = get_backup_dest();
@@ -660,8 +650,8 @@ int ObArchiveStore::read_piece_start(const int64_t dest_id, const int64_t round_
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_start_file_path(dest, dest_id, round_id, piece_id, create_timestamp, full_path))) {
-    LOG_WARN("failed to get piece start file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_timestamp));
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_start_file_path(dest, dest_id, round_id, piece_id, create_scn, full_path))) {
+    LOG_WARN("failed to get piece start file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_scn));
   } else if (OB_FAIL(read_single_file(full_path.get_ptr(), desc))) {
     LOG_WARN("failed to read single file", K(ret), K(full_path));
   }
@@ -669,7 +659,7 @@ int ObArchiveStore::read_piece_start(const int64_t dest_id, const int64_t round_
 }
 
 int ObArchiveStore::write_piece_start(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-    const int64_t create_timestamp, const ObPieceStartDesc &desc) const
+    const palf::SCN &create_scn, const ObPieceStartDesc &desc) const
 {
   int ret = OB_SUCCESS;
   ObBackupPath full_path;
@@ -677,8 +667,8 @@ int ObArchiveStore::write_piece_start(const int64_t dest_id, const int64_t round
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_start_file_path(dest, dest_id, round_id, piece_id, create_timestamp, full_path))) {
-    LOG_WARN("failed to get piece start file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_timestamp));
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_start_file_path(dest, dest_id, round_id, piece_id, create_scn, full_path))) {
+    LOG_WARN("failed to get piece start file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_scn));
   } else if (OB_FAIL(write_single_file(full_path.get_ptr(), desc))) {
     LOG_WARN("failed to write single file", K(ret), K(full_path));
   }
@@ -687,7 +677,7 @@ int ObArchiveStore::write_piece_start(const int64_t dest_id, const int64_t round
 
 // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_end_20220601T120000
 int ObArchiveStore::is_piece_end_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-    const int64_t create_timestamp, bool &is_exist) const
+    const palf::SCN &create_scn, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
@@ -697,8 +687,8 @@ int ObArchiveStore::is_piece_end_file_exist(const int64_t dest_id, const int64_t
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_end_file_path(dest, dest_id, round_id, piece_id, create_timestamp, full_path))) {
-    LOG_WARN("failed to get piece end file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_timestamp));
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_end_file_path(dest, dest_id, round_id, piece_id, create_scn, full_path))) {
+    LOG_WARN("failed to get piece end file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_scn));
   } else if (OB_FAIL(util.is_exist(full_path.get_ptr(), storage_info, is_exist))) {
     LOG_WARN("failed to check piece end file exist.", K(ret), K(full_path), K(dest));
   }
@@ -707,7 +697,7 @@ int ObArchiveStore::is_piece_end_file_exist(const int64_t dest_id, const int64_t
 }
 
 int ObArchiveStore::read_piece_end(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-    const int64_t create_timestamp, ObPieceEndDesc &desc) const
+    const palf::SCN &create_scn, ObPieceEndDesc &desc) const
 {
   int ret = OB_SUCCESS;
   ObBackupPath full_path;
@@ -715,16 +705,16 @@ int ObArchiveStore::read_piece_end(const int64_t dest_id, const int64_t round_id
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_end_file_path(dest, dest_id, round_id, piece_id, create_timestamp, full_path))) {
-    LOG_WARN("failed to get piece end file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_timestamp));
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_end_file_path(dest, dest_id, round_id, piece_id, create_scn, full_path))) {
+    LOG_WARN("failed to get piece end file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_scn));
   } else if (OB_FAIL(read_single_file(full_path.get_ptr(), desc))) {
-    LOG_WARN("failed to read single file", K(ret), K(full_path), K(dest_id), K(round_id), K(piece_id), K(create_timestamp));
+    LOG_WARN("failed to read single file", K(ret), K(full_path), K(dest_id), K(round_id), K(piece_id), K(create_scn));
   }
   return ret;
 }
 
 int ObArchiveStore::write_piece_end(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
-    const int64_t create_timestamp, const ObPieceEndDesc &desc) const
+    const palf::SCN &create_scn, const ObPieceEndDesc &desc) const
 {
   int ret = OB_SUCCESS;
   ObBackupPath full_path;
@@ -732,10 +722,10 @@ int ObArchiveStore::write_piece_end(const int64_t dest_id, const int64_t round_i
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchiveStore not init", K(ret));
-  } else if (OB_FAIL(ObArchivePathUtil::get_piece_end_file_path(dest, dest_id, round_id, piece_id, create_timestamp, full_path))) {
-    LOG_WARN("failed to get piece end file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_timestamp));
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_end_file_path(dest, dest_id, round_id, piece_id, create_scn, full_path))) {
+    LOG_WARN("failed to get piece end file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(create_scn));
   } else if (OB_FAIL(write_single_file(full_path.get_ptr(), desc))) {
-    LOG_WARN("failed to write single file", K(ret), K(full_path), K(dest_id), K(round_id), K(piece_id), K(create_timestamp));
+    LOG_WARN("failed to write single file", K(ret), K(full_path), K(dest_id), K(round_id), K(piece_id), K(create_scn));
   }
   return ret;
 }
@@ -877,8 +867,8 @@ int ObArchiveStore::write_piece_checkpoint(const int64_t dest_id, const int64_t 
 }
 
 // oss://archive/d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000
-int ObArchiveStore::is_piece_inner_placeholder_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t start_scn, 
-    const int64_t end_scn, bool &is_exist) const
+int ObArchiveStore::is_piece_inner_placeholder_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const palf::SCN &start_scn,
+    const palf::SCN &end_scn, bool &is_exist) const
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
@@ -897,7 +887,7 @@ int ObArchiveStore::is_piece_inner_placeholder_file_exist(const int64_t dest_id,
   return ret;
 }
 
-int ObArchiveStore::read_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t start_scn, const int64_t end_scn, ObPieceInnerPlaceholderDesc &desc) const
+int ObArchiveStore::read_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const palf::SCN &start_scn, const palf::SCN &end_scn, ObPieceInnerPlaceholderDesc &desc) const
 {
   int ret = OB_SUCCESS;
   ObBackupPath full_path;
@@ -913,7 +903,7 @@ int ObArchiveStore::read_piece_inner_placeholder(const int64_t dest_id, const in
   return ret;
 }
 
-int ObArchiveStore::write_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const int64_t start_scn, const int64_t end_scn, const ObPieceInnerPlaceholderDesc &desc) const
+int ObArchiveStore::write_piece_inner_placeholder(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const palf::SCN &start_scn, const palf::SCN &end_scn, const ObPieceInnerPlaceholderDesc &desc) const
 {
   int ret = OB_SUCCESS;
   ObBackupPath full_path;
@@ -1186,7 +1176,7 @@ int ObArchiveStore::get_whole_piece_info(const int64_t dest_id, const int64_t ro
 
 
 // Get pieces needed in the specific interval indicated by 'start_scn' and 'end_scn'.
-int ObArchiveStore::get_piece_paths_in_range(const int64_t start_scn, const int64_t end_scn, ObIArray<share::ObBackupPath> &pieces)
+int ObArchiveStore::get_piece_paths_in_range(const palf::SCN &start_scn, const palf::SCN &end_scn, ObIArray<share::ObBackupPath> &pieces)
 {
   int ret = OB_SUCCESS;
   ObArray<ObPieceKey> piece_keys;
@@ -1218,7 +1208,6 @@ int ObArchiveStore::get_piece_paths_in_range(const int64_t start_scn, const int6
     // no piece exist
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("no piece is found", K(ret), K(start_scn), K(end_scn));
-    LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
   } else if (OB_FAIL(piece_whole_info.his_frozen_pieces_.push_back(piece_whole_info.current_piece_))) {
      LOG_WARN("failed to push backup piece", K(ret));
   } else {
@@ -1258,31 +1247,16 @@ int ObArchiveStore::get_piece_paths_in_range(const int64_t start_scn, const int6
         const ObTenantArchivePieceAttr &prev = piece_whole_info.his_frozen_pieces_.at(last_piece_idx);
         if (prev.checkpoint_scn_ != cur.start_scn_) {
           // piece not continous
-          pieces.reset();
+          ret = OB_ENTRY_NOT_EXIST;
           LOG_WARN("pieces are not continous", K(ret), K(prev), K(cur), K(start_scn), K(end_scn));
-        }
-        
-        if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
+          break;
+        } else if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(dest, cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_, piece_path))) {
           LOG_WARN("failed to get piece path", K(ret), K(dest), K(cur));
         } else if (OB_FAIL(pieces.push_back(piece_path))) {
           LOG_WARN("fail to push back path", K(ret), K(piece_path));
         } else {
           last_piece_idx = i;
         }
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (-1 == last_piece_idx) {
-      ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("no enough log for restore", K(ret), K(last_piece_idx), K(end_scn));
-      LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
-    } else {
-      const ObTenantArchivePieceAttr &last_piece = piece_whole_info.his_frozen_pieces_.at(last_piece_idx);
-      if (last_piece.checkpoint_scn_ < end_scn) {
-        ret = OB_ENTRY_NOT_EXIST;
-        LOG_WARN("no enough log for restore", K(ret), K(last_piece), K(end_scn));
-        LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
       }
     }
   }
@@ -1350,7 +1324,7 @@ int ObArchiveStore:: get_file_list_in_piece(const int64_t dest_id, const int64_t
 }
 
 int ObArchiveStore::get_max_checkpoint_scn(const int64_t dest_id, int64_t &round_id, 
-    int64_t &piece_id, uint64_t &max_checkpoint_scn)
+    int64_t &piece_id, palf::SCN &max_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   int64_t min_round_id = 0;
@@ -1369,7 +1343,7 @@ int ObArchiveStore::get_max_checkpoint_scn(const int64_t dest_id, int64_t &round
 }
 
 int ObArchiveStore::get_round_max_checkpoint_scn(const int64_t dest_id, const int64_t round_id, 
-    int64_t &piece_id, uint64_t &max_checkpoint_scn)
+    int64_t &piece_id, palf::SCN &max_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   int64_t min_piece_id = 0;
@@ -1388,7 +1362,7 @@ int ObArchiveStore::get_round_max_checkpoint_scn(const int64_t dest_id, const in
 }
 
 int ObArchiveStore::get_piece_max_checkpoint_scn(const int64_t dest_id, const int64_t round_id, 
-    const int64_t piece_id, uint64_t &max_checkpoint_scn)
+    const int64_t piece_id, palf::SCN &max_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   bool is_empty_piece = false;
@@ -1399,7 +1373,7 @@ int ObArchiveStore::get_piece_max_checkpoint_scn(const int64_t dest_id, const in
   } else if (OB_FAIL(get_single_piece_info(dest_id, round_id, piece_id, is_empty_piece, single_piece_desc))) {
     LOG_WARN("failed to get single piece info", K(ret), K(dest_id), K(round_id), K(piece_id));
   } else if (is_empty_piece) {
-    max_checkpoint_scn = 0;
+    max_checkpoint_scn = palf::SCN::min_scn();
   } else {
     max_checkpoint_scn = single_piece_desc.piece_.checkpoint_scn_;
   }
@@ -1662,10 +1636,10 @@ int ObArchiveStore::ObPieceFilter::func(const dirent *entry)
 
 
 ObArchiveStore::ObLocateRoundFilter::ObLocateRoundFilter()
-  : is_inited_(false), store_(nullptr), scn_(0), rounds_()
+  : is_inited_(false), store_(nullptr), scn_(), rounds_()
 {}
 
-int ObArchiveStore::ObLocateRoundFilter::init(ObArchiveStore *store, const ARCHIVE_SCN_TYPE &scn)
+int ObArchiveStore::ObLocateRoundFilter::init(ObArchiveStore *store, const palf::SCN &scn)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -1674,7 +1648,7 @@ int ObArchiveStore::ObLocateRoundFilter::init(ObArchiveStore *store, const ARCHI
   } else if (OB_ISNULL(store)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid store", K(ret), K(store));
-  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == scn)) {
+  } else if (!scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid scn", K(ret), K(scn));
   } else {

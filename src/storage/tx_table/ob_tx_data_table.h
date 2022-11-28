@@ -76,25 +76,6 @@ public:
     }
   };
 
-  struct CalcUpperInfo
-  {
-    CalcUpperInfo() : min_start_scn_in_ctx_(0), keep_alive_scn_(0), update_ts_(0) {}
-
-    void reset()
-    {
-      min_start_scn_in_ctx_ = 0;
-      keep_alive_scn_ = 0;
-      update_ts_ = 0;
-    }
-
-    int64_t min_start_scn_in_ctx_;
-    int64_t keep_alive_scn_;
-    int64_t update_ts_;
-    common::SpinRWLock lock_;
-
-    TO_STRING_KV(K(min_start_scn_in_ctx_), K(keep_alive_scn_), K(update_ts_));
-  };
-
   using SliceAllocator = ObSliceAlloc;
 
   static const int64_t TX_DATA_MAX_CONCURRENCY = 32;
@@ -123,6 +104,8 @@ public:  // ObTxDataTable
   ObTxDataTable()
     : is_inited_(false),
       is_started_(false),
+      min_start_scn_in_ctx_(),
+      last_update_min_start_scn_ts_(0),
       tablet_id_(0),
       mem_attr_(),
       slice_allocator_(),
@@ -132,8 +115,6 @@ public:  // ObTxDataTable
       memtable_mgr_(nullptr),
       tx_ctx_table_(nullptr),
       read_schema_(),
-      calc_upper_info_(),
-      calc_upper_trans_version_cache_(),
       memtables_cache_() {}
   ~ObTxDataTable() {}
 
@@ -142,7 +123,6 @@ public:  // ObTxDataTable
   virtual void stop();
   virtual void reset();
   virtual void destroy();
-  int offline();
 
   /**
    * @brief Allocate tx data with slice allocator
@@ -201,15 +181,16 @@ public:  // ObTxDataTable
   virtual int check_with_tx_data(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn);
 
   /**
-   * @brief See ObTxTable::get_recycle_ts
+   * @brief See ObTxTable::get_recycle_scn
    */
-  int get_recycle_ts(int64_t &recycle_ts);
+  int get_recycle_scn(palf::SCN &recycle_scn);
 
   /**
    * @brief see ObTxTable::get_upper_trans_version_before_given_log_ts()
    */
   int get_upper_trans_version_before_given_log_ts(const int64_t sstable_end_log_ts,
                                                   int64_t &upper_trans_version);
+  int get_upper_trans_scn_before_given_scn(const palf::SCN sstable_end_scn, palf::SCN &upper_trans_scn);
 
   /**
    * @brief see ObTxTable::supplement_undo_actions_if_exist
@@ -220,13 +201,13 @@ public:  // ObTxDataTable
 
   int update_memtables_cache();
 
-
   int prepare_for_safe_destroy();
 
   /**
    * @brief see ObTxTable::get_start_tx_scn
    */
-  int get_start_tx_scn(int64_t &start_tx_scn);
+  int get_start_tx_scn(palf::SCN &start_tx_scn);
+
   void reuse_memtable_handles_cache();
 
   int dump_single_tx_data_2_text(const int64_t tx_id_int, FILE *fd);
@@ -234,8 +215,12 @@ public:  // ObTxDataTable
   TO_STRING_KV(KP(this),
                K_(is_inited),
                K_(is_started),
+               K_(min_start_scn_in_ctx),
+               K_(last_update_min_start_scn_ts),
+               K_(self_freeze_min_limit_cnt),
+               K_(self_freeze_max_limit_cnt),
+               K_(self_freeze_tenant_remain_limit_size),
                K_(tablet_id),
-               K_(calc_upper_info),
                KP_(ls),
                KP_(ls_tablet_svr),
                KP_(memtable_mgr),
@@ -250,7 +235,7 @@ public: // getter and setter
 private:
   virtual ObTxDataMemtableMgr *get_memtable_mgr_() { return memtable_mgr_; }
 
-  int get_ls_min_end_log_ts_in_latest_tablets_(int64_t &min_end_ts);
+  int get_ls_min_end_scn_in_latest_tablets_(palf::SCN &min_end_ts);
 
   int init_sstable_cache_();
 
@@ -264,21 +249,21 @@ private:
 
   int get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData *&tx_data);
 
-  int insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write_guard);
+  int insert_(ObTxData *&tx_data, ObIArray<ObTableHandleV2> &memtable_handles);
 
   int insert_into_memtable_(ObTxDataMemtable *tx_data_memtable, ObTxData *&tx_data);
 
   // free the whole undo status list allocated by slice allocator
-  int get_min_end_ts_from_single_tablet_(ObTabletHandle &tablet_handle, int64_t &end_ts);
+  int get_min_end_scn_from_single_tablet_(ObTabletHandle &tablet_handle, palf::SCN &end_scn);
 
   int deep_copy_undo_status_list_(ObUndoStatusList &in_list, ObUndoStatusList &out_list);
   int init_tx_data_read_schema_();
 
   int update_cache_if_needed_(bool &skip_calc);
 
-  int update_calc_upper_trans_version_cache_(ObITable *table);
+  int update_calc_upper_trans_scn_cache_(ObITable *table);
 
-  int calc_upper_trans_version_(const int64_t sstable_end_log_ts, int64_t &upper_trans_version);
+  int calc_upper_trans_scn_(const palf::SCN sstable_end_scn, palf::SCN &upper_trans_version);
 
   int update_freeze_trigger_threshold_();
   
@@ -289,25 +274,19 @@ private:
                                       ObTxDataGuard &tx_data_guard,
                                       bool &find);
 
-  int clean_memtables_cache_();
-
   int dump_tx_data_in_memtable_2_text_(const transaction::ObTransID tx_id, FILE *fd);
   int dump_tx_data_in_sstable_2_text_(const transaction::ObTransID tx_id, FILE *fd);
 
-  int DEBUG_slowly_calc_upper_trans_version_(const int64_t sstable_end_log_ts,
-                                             int64_t &tmp_upper_trans_version);
+  // int DEBUG_slowly_calc_upper_trans_scn_(const int64_t sstable_end_log_ts,
+  //                                            int64_t &tmp_upper_trans_version);
 
-  int DEBUG_calc_with_all_sstables_(ObTableAccessContext &access_context,
-                                    const int64_t sstable_end_log_ts,
-                                    int64_t &tmp_upper_trans_version);
-  int DEBUG_calc_with_row_iter_(ObStoreRowIterator *row_iter,
-                                const int64_t sstable_end_log_ts,
-                                int64_t &tmp_upper_trans_version);
-  bool skip_this_sstable_end_log_ts_(const int64_t sstable_end_log_ts);
-  int check_min_start_in_ctx_(const int64_t sstable_end_log_ts, const int64_t max_decided_log_ts, bool &need_skip);
-  int check_min_start_in_tx_data_(const int64_t sstable_end_log_ts,
-                                  int64_t &min_start_ts_in_tx_data_memtable,
-                                  bool &need_skip);
+  // int DEBUG_calc_with_all_sstables_(ObTableAccessContext &access_context,
+  //                                   const int64_t sstable_end_log_ts,
+  //                                   int64_t &tmp_upper_trans_version);
+  // int DEBUG_calc_with_row_iter_(ObStoreRowIterator *row_iter,
+  //                               const int64_t sstable_end_log_ts,
+  //                               int64_t &tmp_upper_trans_version);
+  bool skip_this_sstable_end_scn_(palf::SCN sstable_end_scn);
 
   void print_alloc_size_for_test_();
 
@@ -315,7 +294,7 @@ private:
   void free_undo_status_list_(ObUndoStatusNode *node_ptr);
 
   void clean_sstable_cache_task_(int64_t cache_keeped_time);
-  void update_calc_upper_info_(const int64_t max_decided_log_ts);
+
 
   void TEST_print_alloc_size_()
   {
@@ -339,6 +318,11 @@ private:
   static const int64_t LS_TX_DATA_SCHEMA_COLUMN_CNT = 5;
   bool is_inited_;
   bool is_started_;
+  palf::SCN min_start_scn_in_ctx_;
+  int64_t last_update_min_start_scn_ts_;
+  int64_t self_freeze_min_limit_cnt_;
+  int64_t self_freeze_max_limit_cnt_;
+  int64_t self_freeze_tenant_remain_limit_size_;
   ObTabletID tablet_id_;
   ObMemAttr mem_attr_;
   // Allocator to allocate ObTxData and ObUndoStatus
@@ -351,8 +335,7 @@ private:
   ObTxDataMemtableMgr *memtable_mgr_;
   ObTxCtxTable *tx_ctx_table_;
   TxDataReadSchema read_schema_;
-  CalcUpperInfo calc_upper_info_;
-  CalcUpperTransVersionCache calc_upper_trans_version_cache_;
+  CalcUpperTransSCNCache calc_upper_trans_scn_cache_;
   MemtableHandlesCache memtables_cache_;
 };  // tx_table
 

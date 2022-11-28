@@ -108,7 +108,7 @@ public:
   inline int64_t calc_meta_size() const
   {
     int64_t size = sizeof(ObDictMetaHeader);
-    if (store_var_dict()) { // dict
+    if (0 > dict_fix_data_size_) { // dict
       // we do not store the index for the first
       // element, since it is always 0
       size += dict_index_byte_ * (count_ - 1) + var_data_size_;
@@ -127,7 +127,6 @@ private:
   {
     return sizeof(obj.nmb_desc_) + obj.nmb_desc_.len_ * sizeof(obj.v_.nmb_digits_[0]);
   }
-  bool store_var_dict() const { return 0 > dict_fix_data_size_ || UINT16_MAX < dict_fix_data_size_; }
 
   struct ColumnStoreFiller;
 private:

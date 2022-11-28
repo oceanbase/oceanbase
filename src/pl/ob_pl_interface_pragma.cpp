@@ -40,11 +40,7 @@ static const ObPLInterface OB_PL_INTERFACE[INTERFACE_END +1] =
 void *ObPLInterfaceService::get_entry(ObString &name) const
 {
   int64_t idx = get_type(name);
-  void *entry_res = NULL;
-  if (idx >= 0 && idx < sizeof(OB_PL_INTERFACE)/sizeof(ObPLInterface)) {
-    entry_res = OB_PL_INTERFACE[idx].entry;
-  }
-  return entry_res;
+  return OB_PL_INTERFACE[idx].entry;
 }
 
 int ObPLInterfaceService::init()

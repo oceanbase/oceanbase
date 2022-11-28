@@ -41,8 +41,7 @@ struct ObPhysicalCopyCtx
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(src_info), KP_(bandwidth_throttle),
-      KP_(svr_rpc_proxy), K_(is_leader_restore), KP_(restore_base_info),
-      KP_(meta_index_store), KP_(second_meta_index_store), KP_(ha_dag),
+      KP_(svr_rpc_proxy), K_(is_leader_restore), KP_(restore_base_info), KP_(second_meta_index_store), KP_(ha_dag),
       KP_(sstable_index_builder), KP_(restore_macro_block_id_mgr));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -52,13 +51,10 @@ struct ObPhysicalCopyCtx
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   bool is_leader_restore_;
   const ObRestoreBaseInfo *restore_base_info_;
-  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObStorageHADag *ha_dag_;
   ObSSTableIndexBuilder *sstable_index_builder_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
-  bool need_check_seq_;
-  int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyCtx);
 };
 
@@ -83,10 +79,7 @@ struct ObPhysicalCopyTaskInitParam final
   ObLS *ls_;
   bool is_leader_restore_;
   const ObRestoreBaseInfo *restore_base_info_;
-  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
-  bool need_check_seq_;
-  int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTaskInitParam);
 };
 
@@ -106,7 +99,6 @@ private:
   int fetch_macro_block_with_retry_(
       ObMacroBlocksWriteCtx &copied_ctx);
   int fetch_macro_block_(
-      const int64_t retry_times,
       ObMacroBlocksWriteCtx &copied_ctx);
   int build_macro_block_copy_info_(ObPhysicalCopyFinishTask *finish_task);
   int get_macro_block_reader_(
@@ -119,7 +111,6 @@ private:
       ObICopyMacroBlockReader *&reader);
   int get_macro_block_writer_(
       ObICopyMacroBlockReader *reader,
-      ObIndexBlockRebuilder *index_block_rebuilder,
       ObStorageHAMacroBlockWriter *&writer);
   void free_macro_block_reader_(ObICopyMacroBlockReader *&reader);
   void free_macro_block_writer_(ObStorageHAMacroBlockWriter *&writer);
@@ -135,6 +126,7 @@ private:
   ObPhysicalCopyFinishTask *finish_task_;
   ObITable::TableKey copy_table_key_;
   const ObCopyMacroRangeInfo *copy_macro_range_info_;
+  ObIndexBlockRebuilder index_block_rebuilder_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTask);
 };
@@ -213,9 +205,7 @@ public:
   int init(
       const common::ObTabletID &tablet_id,
       ObLS *ls,
-      observer::ObIMetaReport *reporter,
-      const ObTabletRestoreAction::ACTION &restore_action,
-      const ObMigrationTabletParam *src_tablet_meta);
+      observer::ObIMetaReport *reporter);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletCopyFinishTask"), KP(this));
   int add_sstable(ObTableHandleV2 &table_handle);
@@ -224,14 +214,7 @@ public:
       ObTableHandleV2 &table_handle);
 private:
   int create_new_table_store_();
-  int create_new_table_store_restore_major_();
   int update_tablet_data_status_();
-  int check_need_merge_tablet_meta_(
-      ObTablet *tablet,
-      bool &need_merge);
-  int check_remote_logical_sstable_exist_(
-      ObTablet *tablet,
-      bool &is_exist);
 
 private:
   bool is_inited_;
@@ -241,8 +224,6 @@ private:
   observer::ObIMetaReport *reporter_;
   ObStorageHADag *ha_dag_;
   ObTablesHandleArray tables_handle_;
-  ObTabletRestoreAction::ACTION restore_action_;
-  const ObMigrationTabletParam *src_tablet_meta_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletCopyFinishTask);
 };
 

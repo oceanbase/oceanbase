@@ -20,13 +20,12 @@
 #include "sql/das/ob_das_define.h"
 #include "sql/das/ob_das_factory.h"
 #include "sql/engine/ob_des_exec_context.h"
-
-namespace oceanbase
-{
 namespace observer
 {
 struct ObGlobalContext;
 }
+namespace oceanbase
+{
 namespace sql
 {
 typedef obrpc::ObRpcProcessor<obrpc::ObDASRpcProxy::ObRpc<obrpc::OB_DAS_SYNC_ACCESS> > ObDASSyncRpcProcessor;
@@ -69,8 +68,7 @@ class ObDASSyncFetchP : public ObDASSyncFetchResRpcProcessor
 public:
   ObDASSyncFetchP() {}
   ~ObDASSyncFetchP() {}
-  virtual int process() override;
-  virtual int after_process(int error_code);
+  int process();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDASSyncFetchP);
 };

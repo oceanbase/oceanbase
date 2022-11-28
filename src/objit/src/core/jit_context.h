@@ -39,7 +39,7 @@ public:
   void compile();
   int optimize();
 
-  ObLLVMContext& get_context() { return *TheContext; }
+  LLVMContext& get_context() { return *TheContext; }
   IRBuilder<>& get_builder() { return *Builder; }
   Module& get_module() { return *TheModule; }
   ObOrcJit* get_jit() { return TheJIT; }
@@ -47,7 +47,7 @@ public:
 public:
   bool Compile;
   
-  ObLLVMContext *TheContext;
+  LLVMContext *TheContext;
   std::unique_ptr<IRBuilder<>> Builder;
   std::unique_ptr<Module> TheModule;
   ObOrcJit *TheJIT;

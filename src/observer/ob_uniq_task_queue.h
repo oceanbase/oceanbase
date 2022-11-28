@@ -44,7 +44,7 @@ private:
   common::ObMemAttr attr_;
 };
 template<typename T>
-struct CompareT
+struct Compare
 {
 public:
   bool operator()(const T &a, const T &b) const
@@ -95,17 +95,10 @@ public:
                       task_count_(0), group_map_(), processing_task_map_(), cur_group_(NULL),
                       processing_thread_count_(0), barrier_task_count_(0),
   updater_(NULL) {}
-  virtual ~ObUniqTaskQueue() { }
+  virtual ~ObUniqTaskQueue() {}
 
   int init(Process *process, const int64_t thread_num, const int64_t queue_size,
            const char *thread_name = nullptr);
-  // init() will trigger start(), we only want to init and start later in some cases
-  int start() override;
-  int init_only(
-      Process *process,
-      const int64_t thread_num,
-      const int64_t queue_size,
-      const char* thread_name = nullptr);
 
   // Add task to queue, never block
   // return value:
@@ -164,7 +157,7 @@ private:
       int,
       common::hash::NoPthreadDefendMode,
       common::hash::hash_func<Task>,
-      CompareT<Task>,
+      Compare<Task>,
       common::hash::SimpleAllocer<typename common::hash::HashMapTypes<Task, int>::AllocType,
       common::hash::NodeNumTraits<IS_BIG_OBJ(Task), Task>::NODE_NUM,
       common::hash::NoPthreadDefendMode, ObHighPrioMemAllocator> > processing_task_map_;
@@ -179,22 +172,6 @@ private:
 template <typename Task, typename Process>
 int ObUniqTaskQueue<Task, Process>::init(Process *updater, const int64_t thread_num,
                                          const int64_t queue_size, const char *thread_name)
-{
-  int ret = common::OB_SUCCESS;
-  if (OB_FAIL(init_only(updater, thread_num, queue_size, thread_name))) {
-    SERVER_LOG(WARN, "fail to init only", K(ret), K(thread_num), K(queue_size));
-  } else if (OB_FAIL(start())) {
-    inited_ = false;
-    SERVER_LOG(WARN, "start thread failed", K(ret), K(thread_num));
-  } else {
-    inited_ = true;
-  }
-  return ret;
-}
-
-template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::init_only(Process *updater, const int64_t thread_num,
-                                              const int64_t queue_size, const char *thread_name)
 {
   int ret = common::OB_SUCCESS;
   const int64_t group_count = 128;
@@ -223,19 +200,12 @@ int ObUniqTaskQueue<Task, Process>::init_only(Process *updater, const int64_t th
     updater_ = updater;
     thread_name_ = thread_name;
     inited_ = true;
-  }
-  return ret;
-}
-
-template <typename Task, typename Process>
-int ObUniqTaskQueue<Task, Process>::start()
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "ObUniqTaskQueue is not inited", K(ret), K_(inited));
-  } else if (OB_FAIL(share::ObThreadPool::start())) {
-    SERVER_LOG(WARN, "start thread failed", K(ret));
+    if (OB_FAIL(start())) {
+      SERVER_LOG(WARN, "start thread failed", K(ret), K(thread_num));
+      inited_ = false;
+    } else {
+      inited_ = true;
+    }
   }
   return ret;
 }

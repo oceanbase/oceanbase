@@ -46,37 +46,23 @@ public:
   void get_tx_table(storage::ObTxTable *&tx_table);
 
   int set_state(int32_t state);
-  int set_commit_version(int64_t commit_version);
-  int set_start_log_ts(int64_t start_ts);
-  int set_end_log_ts(int64_t end_ts);
+  int set_commit_version(const palf::SCN &commit_version);
+  int set_start_log_ts(const palf::SCN &start_ts);
+  int set_end_log_ts(const palf::SCN &end_ts);
 
   int32_t get_state() const;
-  int64_t get_commit_version() const;
-  int64_t get_start_log_ts() const;
-  int64_t get_end_log_ts() const;
+  const palf::SCN get_commit_version() const;
+  const palf::SCN get_start_log_ts() const;
+  const palf::SCN get_end_log_ts() const;
 
   ObTransID get_tx_id() const;
 
-  int prepare_add_undo_action(ObUndoAction &undo_action,
-                              storage::ObTxData *&tmp_tx_data,
-                              storage::ObUndoStatusNode *&tmp_undo_status);
-  int cancel_add_undo_action(storage::ObTxData *tmp_tx_data, storage::ObUndoStatusNode *tmp_undo_status);
-  int commit_add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode &tmp_undo_status);
-  int add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status = NULL);
-
+  int add_undo_action(ObUndoAction &undo_action);
+  int get_tx_data(const storage::ObTxData *&tx_data) const;
   int get_tx_commit_data(const storage::ObTxCommitData *&tx_commit_data) const;
 
   TO_STRING_KV(KP(ctx_mgr_), KPC(tx_data_), K(tx_commit_data_), K(read_only_));
-public:
-  class Guard { // TODO(yunxing.cyx): remove it
-    friend class ObCtxTxData;
-    Guard(ObCtxTxData &host) : host_(host) { }
-    ObCtxTxData &host_;
-  public:
-    ~Guard() { }
-    int get_tx_data(const storage::ObTxData *&tx_data) const;
-  };
-  Guard get_tx_data() { return Guard(*this); }
+
 public:
   //only for unittest
   void test_init(storage::ObTxData &tx_data, ObLSTxCtxMgr *ctx_mgr)

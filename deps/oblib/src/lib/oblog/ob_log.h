@@ -235,7 +235,6 @@ enum class ProbeAction
  PROBE_NONE,
  PROBE_BT,
  PROBE_ABORT,
- PROBE_DISABLE,
 };
 
 //@class ObLogger
@@ -725,11 +724,10 @@ private:
               const uint64_t location_hash_val,
               Function &&log_data_func);
   void check_probe(
-      const char* file,
+      const char *file,
       int32_t line,
       const uint64_t location_hash_val,
-      bool& force_bt,
-      bool& disable);
+      bool &force_bt);
 private:
   static const char *const errstr_[];
   // default log rate limiter if there's no tl_log_limiger
@@ -770,7 +768,7 @@ private:
   bool redirect_flag_;//whether redirect, TRUE: redirect FALSE: no redirect.
   bool open_wf_flag_;//whether open warning log-file.
   bool enable_wf_flag_; //whether write waring log to wf log-file.
-  bool rec_old_file_flag_;//whether record old file.
+  bool rec_old_file_flag_;//whether recorde old file.
   volatile bool can_print_;//when disk has no space, logger control
 
   bool enable_async_log_;//if false, use sync way logging
@@ -912,6 +910,8 @@ void ObLogger::log_it(const char *mod_name,
         && OB_LIKELY(is_enable_logging())
         && OB_NOT_NULL(mod_name) && OB_NOT_NULL(file) && OB_NOT_NULL(function)
         && OB_NOT_NULL(function)) {
+      bool old_val = set_disable_logging(true);
+      DEFER(set_disable_logging(old_val));
       if (is_trace_mode()) {
         TraceBuffer *tb = nullptr;
         if (OB_NOT_NULL(tb = get_trace_buffer())) {
@@ -1073,14 +1073,12 @@ inline int ObLogger::set_mod_log_levels(const char *level_str, int64_t version)
 extern void __attribute__ ((noinline)) on_probe_abort();
 
 inline void ObLogger::check_probe(
-      const char* file,
+      const char *file,
       int32_t line,
       const uint64_t location_hash_val,
-      bool& force_bt,
-      bool& disable)
+      bool &force_bt)
 {
   force_bt = false;
-  disable = false;
   for (int i = 0; i < probe_cnt_; i++) {
     auto &probe = probes_[i];
     if (location_hash_val == probe.location_hash_val_ &&
@@ -1093,23 +1091,9 @@ inline void ObLogger::check_probe(
         filename++;
       }
       if (0 == strncmp(filename, probe.file_, sizeof probe.file_)) {
-        switch (probe.action_) {
-          case ProbeAction::PROBE_BT: {
-            force_bt = true;
-            break;
-          }
-          case ProbeAction::PROBE_ABORT: {
-            on_probe_abort();
-            break;
-          }
-          case ProbeAction::PROBE_DISABLE: {
-            disable = true;
-            break;
-          }
-          default: {
-            // do nothing
-            break;
-          }
+        force_bt = ProbeAction::PROBE_BT == probe.action_;
+        if (ProbeAction::PROBE_ABORT == probe.action_) {
+          on_probe_abort();
         }
         break;
       }
@@ -1129,15 +1113,10 @@ inline void ObLogger::do_log_message(const bool is_async,
                                      Function &log_data_func)
 {
   int ret = OB_SUCCESS;
-  if(!is_enable_logging()) return;
-  bool old_val = set_disable_logging(true);
-  DEFER(set_disable_logging(old_val));
   bool allow = true;
 
   bool force_bt = false;
-  bool disable = false;
-  check_probe(file, line, location_hash_val, force_bt, disable);
-  if(OB_UNLIKELY(disable)) return;
+  check_probe(file, line, location_hash_val, force_bt);
   const int64_t logging_time_us_begin = get_cur_us();
   auto fd_type = get_fd_type(mod_name);
   if (OB_FAIL(precheck_tl_log_limiter(level, allow))) {

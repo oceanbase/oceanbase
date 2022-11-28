@@ -186,13 +186,6 @@ int ObTableInsertOp::calc_tablet_loc(const ObInsCtDef &ins_ctdef,
   return ret;
 }
 
-int ObTableInsertOp::write_row_to_das_buffer()
-{
-  int ret = OB_SUCCESS;
-  ret = insert_row_to_das();
-  return ret;
-}
-
 OB_INLINE int ObTableInsertOp::insert_row_to_das()
 {
   int ret = OB_SUCCESS;
@@ -214,9 +207,7 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
       const ObInsCtDef &ins_ctdef = *(ctdefs.at(j));
       ObInsRtDef &ins_rtdef = rtdefs.at(j);
       ObDASTabletLoc *tablet_loc = nullptr;
-      if (!MY_SPEC.ins_ctdefs_.at(0).at(0)->has_instead_of_trigger_) {
-        ++ins_rtdef.cur_row_num_;
-      }
+      ++ins_rtdef.cur_row_num_;
       if (OB_FAIL(ObDMLService::init_heap_table_pk_for_ins(ins_ctdef, eval_ctx_))) {
         LOG_WARN("fail to init heap table pk to null", K(ret));
       } else if (OB_FAIL(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped))) {
@@ -281,52 +272,48 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
   if (OB_SUCC(ret)) {
     plan_ctx->record_last_insert_id_cur_stmt();
   }
+  if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+    plan_ctx->set_last_insert_id_cur_stmt(0);
+  }
   NG_TRACE(insert_end);
   return ret;
 }
 
-int ObTableInsertOp::write_rows_post_proc(int last_errno)
+int ObTableInsertOp::ins_rows_post_proc()
 {
-  int ret = last_errno;
-  if (iter_end_) {
-    ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
-    if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-      plan_ctx->set_last_insert_id_cur_stmt(0);
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  //iterator end, if das ref has task, need flush all task data to partition storage
+  if (OB_FAIL(submit_all_dml_task())) {
+    LOG_WARN("execute all insert das task failed", K(ret));
+  }
+  if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+    plan_ctx->set_last_insert_id_cur_stmt(0);
+  }
+  if (OB_SUCC(ret)) {
+    int64_t changed_rows = 0;
+    //for multi table
+    for (int64_t i = 0; i < ins_rtdefs_.count(); ++i) {
+      changed_rows += ins_rtdefs_.at(i).at(0).das_rtdef_.affected_rows_;
     }
-    if (OB_SUCC(ret)) {
-      int64_t changed_rows = 0;
-      //for multi table
-      for (int64_t i = 0; i < ins_rtdefs_.count(); ++i) {
-        changed_rows += ins_rtdefs_.at(i).at(0).das_rtdef_.affected_rows_;
-      }
-      plan_ctx->add_row_matched_count(changed_rows);
-      plan_ctx->add_affected_rows(changed_rows);
-      // sync last user specified value after iter ends(compatible with MySQL)
-      if (OB_FAIL(plan_ctx->sync_last_value_local())) {
-        LOG_WARN("failed to sync last value", K(ret));
-      }
-    }
-    int sync_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (sync_ret = plan_ctx->sync_last_value_global())) {
-      LOG_WARN("failed to sync value globally", K(sync_ret));
-    }
-    NG_TRACE(sync_auto_value);
-    if (OB_SUCC(ret)) {
-      ret = sync_ret;
-    }
-    if (OB_SUCC(ret) && GCONF.enable_defensive_check() && !is_error_logging_) {
-      if (OB_FAIL(check_insert_affected_row())) {
-        LOG_WARN("check index insert consistency failed", K(ret));
-      }
+    plan_ctx->add_row_matched_count(changed_rows);
+    plan_ctx->add_affected_rows(changed_rows);
+    // sync last user specified value after iter ends(compatible with MySQL)
+    if (OB_FAIL(plan_ctx->sync_last_value_local())) {
+      LOG_WARN("failed to sync last value", K(ret));
     }
   }
-  // all error, we must rollback with single execute when batch executed
-  if (OB_SUCCESS != ret && OB_ITER_END != ret) {
-    ObMultiStmtItem &multi_stmt_item = ctx_.get_sql_ctx()->multi_stmt_item_;
-    if (MY_SPEC.ins_ctdefs_.at(0).at(0)->das_ctdef_.is_batch_stmt_ && !multi_stmt_item.is_ins_multi_val_opt()) {
-      int tmp_ret = ret;
-      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
-      LOG_TRACE("batch exec with some exception, rollback with single execute", K(ret), K(tmp_ret));
+  int sync_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (sync_ret = plan_ctx->sync_last_value_global())) {
+    LOG_WARN("failed to sync value globally", K(sync_ret));
+  }
+  NG_TRACE(sync_auto_value);
+  if (OB_SUCC(ret)) {
+    ret = sync_ret;
+  }
+  if (OB_SUCC(ret) && GCONF.enable_defensive_check() && !is_error_logging_) {
+    if (OB_FAIL(check_insert_affected_row())) {
+      LOG_WARN("check index insert consistency failed", K(ret));
     }
   }
   return ret;
@@ -401,6 +388,95 @@ int ObTableInsertOp::inner_rescan()
     LOG_WARN("close table for each failed", K(ret));
   } else if (OB_FAIL(open_table_for_each())) {
     LOG_WARN("open table for each failed", K(ret));
+  }
+  return ret;
+}
+
+int ObTableInsertOp::get_next_row_from_child()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(child_->get_next_row())) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fail to get next row", K(ret));
+    }
+  } else {
+    clear_evaluated_flag();
+    LOG_TRACE("child output row", "row", ROWEXPR2STR(eval_ctx_, child_->get_spec().output_));
+  }
+  return ret;
+}
+
+int ObTableInsertOp::do_instead_of_trigger_insert()
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ins_ctdefs_.count(); ++i) {
+    const ObTableInsertSpec::InsCtDefArray &ctdefs = MY_SPEC.ins_ctdefs_.at(i);
+    InsRtDefArray &rtdefs = ins_rtdefs_.at(i);
+    // insert each table with fetched row
+    for (int64_t j = 0; OB_SUCC(ret) && j < ctdefs.count(); ++j) {
+      const ObInsCtDef &ins_ctdef = *(ctdefs.at(j));
+      ObInsRtDef &ins_rtdef = rtdefs.at(j);
+      if (ins_ctdef.is_primary_index_) {
+        if (OB_FAIL(ObDMLService::process_instead_of_trigger_insert(ins_ctdef, ins_rtdef, *this))) {
+          LOG_WARN("failed to process instead of trigger", K(ret));
+        } else {
+          plan_ctx->add_affected_rows(1);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableInsertOp::inner_get_next_row()
+{
+  int ret = OB_SUCCESS;
+  if (iter_end_) {
+    LOG_DEBUG("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
+    ret = OB_ITER_END;
+  } else {
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(try_check_status())) {
+        LOG_WARN("check status failed", K(ret));
+      } else if (OB_FAIL(get_next_row_from_child())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to get next row", K(ret));
+        } else {
+          iter_end_ = true;
+        }
+      } else if (MY_SPEC.has_instead_of_trigger_) {
+        if (OB_FAIL(do_instead_of_trigger_insert())) {
+          LOG_WARN("failed to do instead of trigger", K(ret));
+        }
+      } else if (OB_FAIL(insert_row_to_das())) {
+        LOG_WARN("insert row to das failed", K(ret));
+      } else if (is_error_logging_ && err_log_rt_def_.first_err_ret_ != OB_SUCCESS) {
+        clear_evaluated_flag();
+        err_log_rt_def_.curr_err_log_record_num_++;
+        err_log_rt_def_.reset();
+        continue;
+      } else if (MY_SPEC.is_returning_) {
+        break;
+      }
+    }
+
+    if (OB_ITER_END == ret) {
+      if (!MY_SPEC.has_instead_of_trigger_ && OB_FAIL(ins_rows_post_proc())) {
+        LOG_WARN("do insert rows post process failed", K(ret));
+      } else {
+        ret = OB_ITER_END;
+      }
+    }
+    // all error, we must rollback with single execute when batch executed
+    if (OB_SUCCESS != ret && OB_ITER_END != ret) {
+      ObMultiStmtItem &multi_stmt_item = ctx_.get_sql_ctx()->multi_stmt_item_;
+      if (MY_SPEC.ins_ctdefs_.at(0).at(0)->das_ctdef_.is_batch_stmt_ && !multi_stmt_item.is_ins_multi_val_opt()) {
+        int tmp_ret = ret;
+        ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+        LOG_TRACE("batch exec with some exception, rollback with single execute", K(ret), K(tmp_ret));
+      }
+    }
   }
   return ret;
 }

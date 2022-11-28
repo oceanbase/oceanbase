@@ -64,43 +64,27 @@ bool ObAllVirtualLSInfo::is_need_process(uint64_t tenant_id)
   return false;
 }
 
-int ObAllVirtualLSInfo::next_ls_info_(ObLSVTInfo &ls_info)
-{
-  int ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
-  do {
-    if (OB_FAIL(ls_iter_guard_->get_next(ls))) {
-      if (OB_ITER_END != ret) {
-        SERVER_LOG(WARN, "get_next_ls failed", K(ret));
-      }
-    } else if (NULL == ls) {
-      SERVER_LOG(WARN, "ls shouldn't NULL here", K(ls));
-      // try another ls
-      ret = OB_EAGAIN;
-    } else if (FALSE_IT(ls_id_ = ls->get_ls_id().id())) {
-    } else if (OB_FAIL(ls->get_ls_info(ls_info))) {
-      SERVER_LOG(WARN, "get ls info failed", K(ret), KPC(ls));
-      // try another ls
-      ret = OB_EAGAIN;
-    }
-  } while (OB_EAGAIN == ret);
-  return ret;
-}
-
 int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   ObLSVTInfo ls_info;
+  ObLS *ls = nullptr;
   if (NULL == allocator_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
   } else if (FALSE_IT(start_to_read_ = true)) {
   } else if (ls_iter_guard_.get_ptr() == nullptr && OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
     SERVER_LOG(WARN, "get_ls_iter fail", K(ret));
-  } else if (OB_FAIL(next_ls_info_(ls_info))) {
+  } else if (OB_FAIL(ls_iter_guard_->get_next(ls))) {
     if (OB_ITER_END != ret) {
-      SERVER_LOG(WARN, "get next_ls_info failed", K(ret));
+      SERVER_LOG(WARN, "get_next_ls failed", K(ret));
     }
+  } else if (NULL == ls) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "ls shouldn't NULL here", K(ret), K(ls));
+  } else if (FALSE_IT(ls_id_ = ls->get_ls_id().id())) {
+  } else if (OB_FAIL(ls->get_ls_info(ls_info))) {
+    SERVER_LOG(WARN, "get ls info failed", K(ret), KPC(ls));
   } else {
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -162,7 +146,7 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 7:
           // weak_read_timestamp
-          cur_row_.cells_[i].set_uint64(ls_info.weak_read_timestamp_ < 0 ? 0 : ls_info.weak_read_timestamp_);
+          cur_row_.cells_[i].set_uint64(ls_info.weak_read_scn_.get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // need_rebuild
@@ -178,14 +162,10 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           // clog_checkpoint_lsn
           cur_row_.cells_[i].set_uint64(ls_info.checkpoint_lsn_ < 0 ? 0 : ls_info.checkpoint_lsn_);
           break;
-        case OB_APP_MIN_COLUMN_ID + 11:
-          // migrate_status
-          cur_row_.cells_[i].set_int(ls_info.migrate_status_);
-          break;
-        case OB_APP_MIN_COLUMN_ID + 12:
-          // rebuild_seq
-          cur_row_.cells_[i].set_int(ls_info.rebuild_seq_);
-          break;
+      case OB_APP_MIN_COLUMN_ID + 11:
+        // migrate_status
+        cur_row_.cells_[i].set_int(ls_info.migrate_status_);
+        break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

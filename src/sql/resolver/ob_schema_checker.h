@@ -73,7 +73,7 @@ public:
   int init(ObSqlSchemaGuard &schema_guard, uint64_t session_id = common::OB_INVALID_ID);
   ObSqlSchemaGuard *get_sql_schema_guard() { return sql_schema_mgr_; }
   share::schema::ObSchemaGetterGuard *get_schema_guard() { return schema_mgr_; }
-  // need satifing each priv in stmt_need_privs
+
   int check_priv(const share::schema::ObSessionPrivInfo &session_priv,
                  const share::schema::ObStmtNeedPrivs &stmt_need_privs) const;
 
@@ -81,7 +81,7 @@ public:
                      const uint64_t uid,
                      const share::schema::ObStmtOraNeedPrivs &stmt_need_privs,
                      const ObIArray<uint64_t> &role_id_array) const;
-  // need satifing one of stmt_need_privs
+
   int check_priv_or(const share::schema::ObSessionPrivInfo &session_priv,
                     const share::schema::ObStmtNeedPrivs &stmt_need_privs);
 

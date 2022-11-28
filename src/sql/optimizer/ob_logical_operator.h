@@ -1497,15 +1497,10 @@ public:
   {
     contain_fake_cte_ = contain_fake_cte;
   }
-  inline bool get_contains_pw_merge_op() const { return contain_pw_merge_op_; }
-  inline void set_contains_pw_merge_op(bool contain_pw_merge_op)
+  inline bool get_contains_merge_op() const { return contain_merge_op_; }
+  inline void set_contains_merge_op(bool contain_merge_op)
   {
-    contain_pw_merge_op_ = contain_pw_merge_op;
-  }
-  inline bool get_contains_match_all_fake_cte() const { return contain_match_all_fake_cte_; }
-  inline void set_contains_match_all_fake_cte(bool contain_match_all_fake_cte) 
-  {
-    contain_match_all_fake_cte_ = contain_match_all_fake_cte;
+    contain_merge_op_ = contain_merge_op;
   }
   inline bool get_contains_das_op() const { return contain_das_op_; }
   inline void set_contains_das_op(bool contain_das_op)
@@ -1784,7 +1779,6 @@ private:
                                      int64_t &filter_id);
   int allocate_normal_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                   int64_t &filter_id);
-  int mark_bloom_filter_id_to_receive_op(ObLogicalOperator *filter_use, int64_t filter_id);
   int push_down_bloom_filter_expr(ObLogicalOperator *op,
       ObLogicalOperator *join_filter_op, double join_filter_rate);
   /* manual set dop for each dfo */
@@ -1825,9 +1819,8 @@ protected:
   uint64_t dblink_id_;
   int64_t plan_depth_;
   bool contain_fake_cte_;
-  bool contain_pw_merge_op_;
+  bool contain_merge_op_;
   bool contain_das_op_;
-  bool contain_match_all_fake_cte_; 
   common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> dup_table_pos_; // for duplicated table
   ObShardingInfo *strong_sharding_;
   common::ObSEArray<ObShardingInfo*, 8, common::ModulePageAllocator, true> weak_sharding_;

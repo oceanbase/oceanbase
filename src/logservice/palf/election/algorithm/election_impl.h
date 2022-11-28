@@ -64,7 +64,7 @@ public:
                      const int64_t restart_counter,
                      const ObFunction<int(const int64_t, const ObAddr &)> &prepare_change_leader_cb,
                      const ObFunction<void(ElectionImpl *, common::ObRole, common::ObRole, RoleChangeReason)> &role_change_cb = DefaultRoleChangeCallBack());
-  int revoke(const RoleChangeReason &reason) override;
+  int revoke();
   virtual void stop() override final;
   virtual int set_memberlist(const MemberList &new_memberlist) override final;
   virtual int change_leader_to(const common::ObAddr &dest_addr) override final;
@@ -220,18 +220,15 @@ private:// 定向暴露给友元类
             } else if (CLICK_FAIL(lhs_priority->compare_with(*rhs_priority, compare_result, reason))) {
               LOG_PHASE(WARN, phase, "compare priority failed");
               (void) reason.assign("COMPARE FAIL");
-            } else {
-              if (compare_result < 0) {
+            } else if (compare_result < 0) {
+              rhs_is_higher = true;
+            } else if (compare_result == 0 && compare_with_ip_port) {
+              if (rhs.get_sender() < lhs.get_sender()) {
                 rhs_is_higher = true;
-              } else if (compare_result == 0 && compare_with_ip_port) {
-                if (rhs.get_sender() < lhs.get_sender()) {
-                  rhs_is_higher = true;
-                  (void) reason.assign("IP-PORT(priority equal)");
-                } else {
-                  (void) reason.assign("IP-PORT(priority equal)");
-                }
+                (void) reason.assign("IP-PORT(priority equal)");
+              } else {
+                (void) reason.assign("IP-PORT(priority equal)");
               }
-              LOG_PHASE(TRACE, phase, "compare priority done");
             }
           }
         }

@@ -80,5 +80,9 @@ select repeat(1.414, 2);
 +------------------+
 
 select repeat("abc", 200000000);
-ERROR HY000: Result of repeat() was larger than max_allowed_packet (4194304) - truncated
++--------------------------+
+| repeat("abc", 200000000) |
++--------------------------+
+| NULL                     |
++--------------------------+
 

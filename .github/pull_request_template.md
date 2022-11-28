@@ -13,6 +13,7 @@ If possible, please consider writing useful notes for better and faster reviews 
   4. If there is a discussion in the mailing list, please add the link.
 -->
 
+
 ### Why are the changes needed?
 
 <!--
@@ -21,14 +22,17 @@ Please clarify why the changes are needed. For instance,
   2. If you fix a bug, you can clarify why it is a bug.
 -->
 
+
 ### Will break the compatibility? How if so?
 
+
 <!--
-Please make sure it do not break the system compatibility, such as
+Please label `alert/break' if so, such as
   1. nGQL grammar changes;
-  2. RPC protocol can't be compatible with previous;
+  2. RPC protocol can't be compatible with previous, refer to https://diwakergupta.github.io/thrift-missing-guide/#_versioning_compatibility;
   3. Storage format; etc.
 -->
+
 
 ### Does this PR introduce any user-facing change?
 
@@ -36,6 +40,7 @@ Please make sure it do not break the system compatibility, such as
 If yes, please clarify the previous behavior and the change this PR proposes - provide the console output, description and/or an example to show the behavior difference if possible.
 If no, write 'No'.
 -->
+
 
 ### How was this patch tested?
 

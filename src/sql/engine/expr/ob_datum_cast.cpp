@@ -250,7 +250,7 @@ int ObDatumHexUtils::hex(const ObExpr &expr, const ObString &in_str, ObEvalCtx &
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret), K(alloc_length));
       } else {
-        const char *HEXCHARS = upper_case ? "0123456789ABCDEF" : "0123456789abcdef";
+        static const char *HEXCHARS = upper_case ? "0123456789ABCDEF" : "0123456789abcdef";
         int32_t pos = 0;
         for (int32_t i = 0; i < in_str.length(); ++i) {
           buf[pos++] = HEXCHARS[in_str[i] >> 4 & 0xF];
@@ -515,10 +515,16 @@ static int common_copy_string(const ObExpr &expr,
   int ret = OB_SUCCESS;
   char *out_ptr = NULL;
   int64_t len = align_offset + src.length();
-  if (OB_ISNULL(out_ptr = expr.get_str_res_mem(ctx, len))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
+  if (expr.res_buf_len_ < len) {
+    if (OB_ISNULL(out_ptr = expr.get_str_res_mem(ctx, len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    }
   } else {
+    out_ptr = const_cast<char*>(res_datum.ptr_);
+  }
+
+  if (OB_SUCC(ret)) {
     MEMMOVE(out_ptr + align_offset, src.ptr(), len - align_offset);
     MEMSET(out_ptr, 0, align_offset);
     res_datum.set_string(out_ptr, len);
@@ -546,10 +552,16 @@ static int common_copy_string_zf(const ObExpr &expr,
   } else if (CM_IS_ZERO_FILL(expr.extra_) && out_len > src.length()) {
     char *out_ptr = NULL;
     // out_ptr may overlap with src, so memmove is used.
-    if (OB_ISNULL(out_ptr = expr.get_str_res_mem(ctx, out_len))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret));
+    if (expr.res_buf_len_ < out_len) {
+      if (OB_ISNULL(out_ptr = expr.get_str_res_mem(ctx, out_len))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      }
     } else {
+      out_ptr = const_cast<char*>(res_datum.ptr_);
+    }
+
+    if (OB_SUCC(ret)) {
       int64_t zf_len = out_len - src.length();
       if (0 < zf_len) {
         MEMMOVE(out_ptr + zf_len, src.ptr(), src.length());
@@ -9903,7 +9915,6 @@ static_assert(ObMaxTC * 2 == sizeof(OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT) / size
 REG_SER_FUNC_ARRAY(OB_SFA_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT,
                    OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT,
                    sizeof(OB_DATUM_CAST_MYSQL_ENUMSET_IMPLICIT) / sizeof(void *));
-#undef CAST_FAIL
-#undef EVAL_ARG
 } // namespace sql
 } // namespace oceanbase
+#undef EVAL_ARG

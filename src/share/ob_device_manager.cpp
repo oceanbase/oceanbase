@@ -46,6 +46,8 @@ int ObDeviceManager::init_devices_env()
     } else if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(),
                                       OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
       OB_LOG(WARN, "Fail to init allocator ", K(ret));
+    } else if (OB_FAIL(init_cos_env())) {
+      OB_LOG(WARN, "fail to init cos storage", K(ret));
     } else if (OB_FAIL(init_oss_env())) {
       OB_LOG(WARN, "fail to init oss storage", K(ret));
     }
@@ -75,6 +77,7 @@ void ObDeviceManager::destroy()
     }
     //free the arena
     allocator_.reset();
+    fin_cos_env();
     fin_oss_env();
     is_init_ = false;
     device_count_ = 0;

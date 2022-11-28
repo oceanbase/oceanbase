@@ -18,6 +18,7 @@
 #include "ob_archive_define.h"                     // ArchiveWorkStation
 #include "share/backup/ob_archive_piece.h"         // ObArchivePiece
 #include "logservice/palf/lsn.h"         // LSN
+#include "logservice/palf/scn.h"         // SCN
 #include <cstdint>
 
 namespace oceanbase
@@ -51,7 +52,7 @@ class ObArchiveSendTask;
  * 另外由于每个observer可能为多个日志流归档服务, 所以多个日志流之间保存整体齐步走是有必要的.
  * ObArchiveSequencer根据ObArchiveLogFetchTask消费进度协调不同日志流归档进度.
  *
- * NB: 由于ObArchiveSequencer无法感知到日志log ts信息, 因此初始LogFetchTask其piece info是空的,
+ * NB: 由于ObArchiveSequencer无法感知到日志log scn信息, 因此初始LogFetchTask其piece info是空的,
  * 由ObArchiveFetcher在消费时, 为跨piece任务归档数据到多个piece下
  * 对于跨piece的归档文件, 相同编号的归档文件可能会出现在多个piece, 其中每个piece仅包含该piece所属日志范围
  *
@@ -76,7 +77,7 @@ public:
   const LSN &get_start_offset() const { return start_offset_; }
   const LSN &get_cur_offset() const { return cur_offset_; }
   const LSN &get_end_offset() const { return end_offset_; }
-  int64_t get_max_log_ts() const { return max_log_ts_; }
+  const palf::SCN &get_max_log_scn() const { return max_log_scn_; }
   int64_t get_log_fetch_size() const { return (int64_t)(end_offset_ - cur_offset_); }
   const ObArchivePiece &get_piece() const { return cur_piece_; }
   int set_next_piece(const ObArchivePiece &piece);
@@ -88,7 +89,7 @@ public:
   int back_fill(const ObArchivePiece &cur_piece,
                   const LSN &start_offset,
                   const LSN &end_offset,
-                  const int64_t max_log_ts,
+                  const palf::SCN &max_log_scn,
                   ObArchiveSendTask *send_task);
   bool has_fetch_log() const { return NULL != send_task_; }
   bool is_continuous_with(const LSN &lsn) const;
@@ -101,7 +102,7 @@ public:
                K_(end_offset),
                K_(cur_offset),
                "unfinished_data_size", get_log_fetch_size(),
-               K_(max_log_ts),
+               K_(max_log_scn),
                K_(send_task));
 
 private:
@@ -113,7 +114,7 @@ private:
   LSN start_offset_; // 起始拉日志文件起始offset
   LSN end_offset_;   // 拉取日志文件结束offset(如果是拉取完整文件任务，该值为infoblock起点)
   LSN cur_offset_;
-  int64_t max_log_ts_;        // 任务包含最大日志log ts
+  palf::SCN max_log_scn_;        // 任务包含最大日志log scn
 
   ObArchiveSendTask *send_task_;
 };
@@ -158,7 +159,7 @@ public:
            const ObArchivePiece &piece,
            const LSN &start_offset,
            const LSN &end_offset,
-           const int64_t max_log_ts,
+           const palf::SCN &max_log_scn,
            char *data,
            const int64_t data_len);
   bool is_valid() const;
@@ -170,7 +171,7 @@ public:
   const LSN &get_end_lsn() const { return end_offset_; };
   int get_buffer(char *&data, int64_t &data_len) const;
   int64_t get_buf_size() const { return data_len_;}
-  int64_t get_max_log_ts() const { return max_log_ts_; }
+  const palf::SCN &get_max_log_scn() const { return max_log_scn_; }
   int set_buffer(char *buf, const int64_t buf_size);
   bool is_continuous_with(const ObArchiveSendTask &pre_task) const;
   TO_STRING_KV(K_(tenant_id),
@@ -179,7 +180,7 @@ public:
                K_(piece),
                K_(start_offset),
                K_(end_offset),
-               K_(max_log_ts),
+               K_(max_log_scn),
                K_(data),
                K_(data_len));
 private:
@@ -189,7 +190,7 @@ private:
   ObArchivePiece piece_;
   LSN start_offset_;       // 归档数据在文件起始offset
   LSN end_offset_;         // 归档数据在文件终止offset
-  int64_t max_log_ts_;     // 该task包含数据最大log ts
+  palf::SCN max_log_scn_;     // 该task包含数据最大log scn
   char *data_;             // 发送数据
   int64_t data_len_;       // 发送数据长度
 };

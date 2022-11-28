@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_LOGSERVICE_OB_APPEND_CALLBACK_
 #define OCEANBASE_LOGSERVICE_OB_APPEND_CALLBACK_
 #include "palf/lsn.h"
+#include "palf/scn.h"
 #include "lib/utility/utility.h"
 
 namespace oceanbase
@@ -24,25 +25,25 @@ class AppendCbBase {
 public:
   AppendCbBase() : __next_(NULL),
                    __start_lsn_(),
-                   __ts_ns_(common::OB_INVALID_TIMESTAMP)
+                   __scn_()
   {
   }
   virtual ~AppendCbBase()
   {
     __reset();
   }
-  void __reset() { __start_lsn_.reset(); __next_ = NULL; __ts_ns_ = common::OB_INVALID_TIMESTAMP;}
+  void __reset() { __start_lsn_.reset(); __next_ = NULL; __scn_.reset();}
   const palf::LSN &__get_lsn() const { return __start_lsn_; }
   void __set_lsn(const palf::LSN &lsn) { __start_lsn_ = lsn; }
-  int64_t __get_ts_ns() const { return __ts_ns_; }
-  void __set_ts_ns(const int64_t ts_ns) { __ts_ns_ = ts_ns; }
+  const palf::SCN& __get_scn() const { return __scn_; }
+  void __set_scn(const palf::SCN& scn) { __scn_ = scn; }
   static AppendCb* __get_class_address(ObLink *ptr);
   static ObLink* __get_member_address(AppendCb *ptr);
   ObLink *__next_;
-  VIRTUAL_TO_STRING_KV(KP(__next_), K(__start_lsn_), K(__ts_ns_));
+  VIRTUAL_TO_STRING_KV(KP(__next_), K(__start_lsn_), K(__scn_));
 private:
   palf::LSN __start_lsn_;
-  int64_t __ts_ns_;
+  palf::SCN __scn_;
 };
 
 class AppendCb : public AppendCbBase

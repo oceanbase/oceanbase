@@ -78,4 +78,4 @@ struct ObSimpleBatch
 } // end of namespace common
 } // end of namespace oceanbase
 
-#endif /*OCEANBASE_SHARE_OB_COMMON_BATCH_H_*/
+#endif /* OCEABASE_OBSERVER_OB_CLUSTER_VERSION_H_*/

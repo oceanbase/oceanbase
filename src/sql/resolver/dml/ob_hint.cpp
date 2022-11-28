@@ -243,6 +243,7 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || -1 != topk_precision_
          || 0 != sharding_minimum_row_count_
          || UNSET_QUERY_TIMEOUT != query_timeout_
+         || false != hotspot_
          || common::INVALID_CONSISTENCY != read_consistency_
          || OB_USE_PLAN_CACHE_INVALID != plan_cache_policy_
          || false != force_trace_log_
@@ -265,6 +266,7 @@ void ObGlobalHint::reset()
   topk_precision_ = -1;
   sharding_minimum_row_count_ = 0;
   query_timeout_ = UNSET_QUERY_TIMEOUT;
+  hotspot_ = false;
   read_consistency_ = common::INVALID_CONSISTENCY;
   plan_cache_policy_ = OB_USE_PLAN_CACHE_INVALID;
   force_trace_log_ = false;
@@ -280,7 +282,6 @@ void ObGlobalHint::reset()
   dops_.reuse();
   opt_features_version_ = UNSET_OPT_FEATURES_VERSION;
   disable_transform_ = false;
-  disable_cost_based_transform_ = false;
   opt_params_.reset();
   ob_ddl_schema_versions_.reuse();
 }
@@ -288,6 +289,7 @@ void ObGlobalHint::reset()
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
 {
   int ret = OB_SUCCESS;
+  hotspot_ |= other.hotspot_;
   merge_read_consistency_hint(other.read_consistency_, other.frozen_version_);
   merge_topk_hint(other.topk_precision_, other.sharding_minimum_row_count_);
   merge_query_timeout_hint(other.query_timeout_);
@@ -304,7 +306,6 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_param_option_hint(other.param_option_);
   merge_opt_features_version_hint(other.opt_features_version_);
   disable_transform_ |= other.disable_transform_;
-  disable_cost_based_transform_ |= other.disable_cost_based_transform_;
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
   } else if (OB_FAIL(merge_dop_hint(other.dops_))) {
@@ -323,9 +324,7 @@ int ObGlobalHint::assign(const ObGlobalHint &other)
   return merge_global_hint(other);
 }
 
-// hints below not print
-// MAX_CONCURRENT
-// ObDDLSchemaVersionHint
+// zhanyue todo: add some hint
 int ObGlobalHint::print_global_hint(planText &plan_text) const
 {
   int ret = OB_SUCCESS;
@@ -334,6 +333,12 @@ int ObGlobalHint::print_global_hint(planText &plan_text) const
   int64_t &pos = plan_text.pos;
   const char* outline_indent = ObQueryHint::get_outline_indent(plan_text.is_oneline_);
 
+  const char *HOTSPOT = "HOTSPOT";
+  const char *TOPK = "TOPK";
+  const char *MAX_CONCURRENT = "MAX_CONCURRENT";
+  const char *TRACING_HINT = "TRACING";
+  const char *STAT_HINT = "STAT";
+
   #define PRINT_GLOBAL_HINT_STR(hint_str)           \
   if (OB_FAIL(BUF_PRINTF("%s%s", outline_indent, hint_str))) {  \
     LOG_WARN("failed to print hint", K(ret), K(hint_str)); }    \
@@ -341,30 +346,6 @@ int ObGlobalHint::print_global_hint(planText &plan_text) const
   #define PRINT_GLOBAL_HINT_NUM(hint_name, num)           \
   if (OB_FAIL(BUF_PRINTF("%s%s(%ld)", outline_indent, hint_name, num))) { \
     LOG_WARN("failed to print hint", K(ret), K(hint_name)); }             \
-
-  //TOPK
-  if (OB_SUCC(ret) && (-1 < topk_precision_ || 0 < sharding_minimum_row_count_)) {
-    if (OB_FAIL(BUF_PRINTF("%sTOPK(%ld %ld)", outline_indent, topk_precision_,
-                                                sharding_minimum_row_count_))) {
-      LOG_WARN("failed to print topk hint", K(ret));
-    }
-  }
-
-  // TRACING & STAT
-  if (OB_SUCC(ret) && !monitoring_ids_.empty()) {
-    if (OB_FAIL(print_monitoring_hints(plan_text))) {
-      LOG_WARN("failed to print monitoring hints", K(ret));
-    }
-  }
-
-  //DOP
-  if (OB_SUCC(ret) && !dops_.empty()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < dops_.count(); ++i) {
-      if (OB_FAIL(BUF_PRINTF("%sDOP(%lu %lu)", outline_indent, dops_.at(i).dfo_, dops_.at(i).dop_))) {
-        LOG_WARN("failed to print dop hint", K(ret));
-      }
-    }
-  }
 
   //READ_CONSISTENCY && FROZEN_VERSION
   if (OB_SUCC(ret) && (read_consistency_ != UNSET_CONSISTENCY)) {
@@ -449,63 +430,12 @@ int ObGlobalHint::print_global_hint(planText &plan_text) const
     } else if (OB_FAIL(BUF_PRINTF("\')"))) {
     }
   }
+  // OPTIMIZER_FEATURES_ENABLE
   if (OB_SUCC(ret) && disable_query_transform()) {
     PRINT_GLOBAL_HINT_STR("NO_QUERY_TRANSFORMATION");
   }
-  if (OB_SUCC(ret) && disable_cost_based_transform()) {
-    PRINT_GLOBAL_HINT_STR("NO_COST_BASED_QUERY_TRANSFORMATION");
-  }
   if (OB_SUCC(ret) && OB_FAIL(opt_params_.print_opt_param_hint(plan_text))) {
     LOG_WARN("failed to print opt param hint", K(ret));
-  }
-  return ret;
-}
-
-int ObGlobalHint::print_monitoring_hints(planText &plan_text) const
-{
-  int ret = OB_SUCCESS;
-  if (!monitoring_ids_.empty()) {
-    char *buf = plan_text.buf;
-    int64_t &buf_len = plan_text.buf_len;
-    int64_t &pos = plan_text.pos;
-    const char* outline_indent = ObQueryHint::get_outline_indent(plan_text.is_oneline_);
-    ObSEArray<uint64_t, 4> tracing_ids;
-    ObSEArray<uint64_t, 4> stat_ids;
-    for (int64_t i = 0; OB_SUCC(ret) && i < monitoring_ids_.count(); ++i) {
-      if ((monitoring_ids_.at(i).flags_ & ObMonitorHint::OB_MONITOR_TRACING)
-          && OB_FAIL(tracing_ids.push_back(monitoring_ids_.at(i).id_))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else if ((monitoring_ids_.at(i).flags_ & ObMonitorHint::OB_MONITOR_STAT)
-                 && OB_FAIL(stat_ids.push_back(monitoring_ids_.at(i).id_))) {
-        LOG_WARN("failed to push back", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && !tracing_ids.empty()) {
-      if (OB_FAIL(BUF_PRINTF("%sTRACING(%lu", outline_indent, tracing_ids.at(0)))) {
-        LOG_WARN("failed to print tracing hint", K(ret));
-      }
-      for (int64_t i = 1; OB_SUCC(ret) && i < tracing_ids.count(); ++i) {
-        if (OB_FAIL(BUF_PRINTF(" %lu", tracing_ids.at(i)))) {
-          LOG_WARN("failed to print tracing hint", K(ret));
-        } 
-      }
-      if (OB_FAIL(BUF_PRINTF(")"))) {
-        LOG_WARN("failed to print tracing hint", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && !stat_ids.empty()) {
-      if (OB_FAIL(BUF_PRINTF("%sSTAT(%lu", outline_indent, stat_ids.at(0)))) {
-        LOG_WARN("failed to print tracing hint", K(ret));
-      }
-      for (int64_t i = 1; OB_SUCC(ret) && i < stat_ids.count(); ++i) {
-        if (OB_FAIL(BUF_PRINTF(" %lu", stat_ids.at(i)))) {
-          LOG_WARN("failed to print tracing hint", K(ret));
-        } 
-      }
-      if (OB_FAIL(BUF_PRINTF(")"))) {
-        LOG_WARN("failed to print tracing hint", K(ret));
-      }
-    }
   }
   return ret;
 }
@@ -598,14 +528,6 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     }
     case ROWSETS_MAX_ROWS: {
       is_valid = val.is_int() && (0 <= val.get_int() && 65535 >= val.get_int());
-      break;
-    }
-    case DDL_EXECUTION_ID: {
-      is_valid = val.is_int() && (0 < val.get_int());
-      break;
-    }
-    case DDL_TASK_ID: {
-      is_valid = val.is_int() && (0 < val.get_int());
       break;
     }
     default:
@@ -723,7 +645,6 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_PULLUP_EXPR :       return T_PULLUP_EXPR;
 
     // optimize hint
-    case T_NO_USE_DAS_HINT:     return T_USE_DAS_HINT;
     case T_ORDERED:             return T_LEADING;
     case T_NO_USE_MERGE:        return T_USE_MERGE;
     case T_NO_USE_HASH:         return T_USE_HASH;
@@ -779,7 +700,6 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_INDEX_HINT:          return "INDEX";
     case T_FULL_HINT:           return "FULL";
     case T_NO_INDEX_HINT:       return "NO_INDEX";
-    case T_USE_DAS_HINT:        return is_enable_hint ? "USE_DAS" : "NO_USE_DAS";
     case T_LEADING:             return is_enable_hint ? "LEADING" : "ORDERED";
     case T_USE_MERGE:           return is_enable_hint ? "USE_MERGE" : "NO_USE_MERGE";
     case T_USE_HASH:            return is_enable_hint ? "USE_HASH" : "NO_USE_HASH";
@@ -1553,7 +1473,7 @@ int ObSemiToInnerHint::print_hint_desc(planText &plan_text) const
     //do nothing
   } else if (tables_.count() > 1 && OB_FAIL(BUF_PRINTF("("))) {
     LOG_WARN("failed to print hint", K(ret));
-  } else if (OB_FAIL(ObTableInHint::print_join_tables_in_hint(plan_text, tables_, true))) {
+  } else if (OB_FAIL(ObTableInHint::print_join_tables_in_hint(plan_text, tables_))) {
     LOG_WARN("failed to print tables", K(ret));
   } else if (tables_.count() > 1 && OB_FAIL(BUF_PRINTF(")"))) {
     LOG_WARN("failed to print hint", K(ret));
@@ -1701,9 +1621,8 @@ int ObIndexHint::print_hint_desc(planText &plan_text) const
   int64_t &pos = plan_text.pos;
   if (OB_FAIL(table_.print_table_in_hint(plan_text))) {
     LOG_WARN("fail to print table in hint", K(ret));
-  } else if (T_FULL_HINT == hint_type_ || T_USE_DAS_HINT == hint_type_) {
-    /* do nothing */
-  } else if (OB_FAIL(BUF_PRINTF(" \"%.*s\"", index_name_.length(), index_name_.ptr()))) {
+  } else if (T_FULL_HINT != hint_type_ &&
+             OB_FAIL(BUF_PRINTF(" \"%.*s\"", index_name_.length(), index_name_.ptr()))) {
     LOG_WARN("fail to print index name", K(ret));
   }
   return ret;
@@ -1727,7 +1646,6 @@ int ObJoinHint::print_hint_desc(planText &plan_text) const
   char *buf = plan_text.buf;
   int64_t &buf_len = plan_text.buf_len;
   int64_t &pos = plan_text.pos;
-  const char* algo_str = get_dist_algo_str();
   if (OB_UNLIKELY(tables_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected join hint", K(ret));
@@ -1737,8 +1655,7 @@ int ObJoinHint::print_hint_desc(planText &plan_text) const
     LOG_WARN("failed to print join tables", K(ret));
   } else if (tables_.count() > 1 && OB_FAIL(BUF_PRINTF(")"))) {
     LOG_WARN("failed to print hint", K(ret));
-  } else if (T_PQ_DISTRIBUTE == hint_type_ && NULL != algo_str
-             && OB_FAIL(BUF_PRINTF(" %s", get_dist_algo_str()))) {
+  } else if (T_PQ_DISTRIBUTE == hint_type_ && OB_FAIL(BUF_PRINTF(" %s", get_dist_algo_str()))) {
     LOG_WARN("failed to print dist algo", K(ret));
   }
   return ret;
@@ -1823,7 +1740,6 @@ int ObJoinFilterHint::print_hint_desc(planText &plan_text) const
 int ObPQSetHint::assign(const ObPQSetHint &other)
 {
   int ret = OB_SUCCESS;
-  left_branch_ = other.left_branch_;
   if (OB_FAIL(dist_methods_.assign(other.dist_methods_))) {
     LOG_WARN("fail to assign dist methods", K(ret));
   } else if (OB_FAIL(ObOptHint::assign(other))) {
@@ -1927,9 +1843,6 @@ int ObPQSetHint::print_hint_desc(planText &plan_text) const
   if (OB_UNLIKELY(false == is_valid_dist_methods(dist_methods_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected pq set hint", K(ret));
-  } else if (!left_branch_.empty()
-             && OB_FAIL(BUF_PRINTF(" \"%.*s\"", left_branch_.length(), left_branch_.ptr()))) {
-    LOG_WARN("failed to print left branch qb name", K(ret));
   }
   for (int i = 0; OB_SUCC(ret) && i < dist_methods_.count(); ++i) {
     if (OB_FAIL(BUF_PRINTF(" %s", get_dist_method_str(dist_methods_.at(i))))) {
@@ -1951,9 +1864,7 @@ DistAlgo ObPQSetHint::get_dist_algo(const ObIArray<ObItemType> &dist_methods,
 {
   DistAlgo dist_algo = DistAlgo::DIST_INVALID_METHOD;
   random_none_idx = OB_INVALID_INDEX;
-  if (dist_methods.empty()) {
-    dist_algo = DistAlgo::DIST_BASIC_METHOD;
-  } else if (dist_methods.count() < 2) {
+  if (dist_methods.count() < 2) {
     /* do nothing */
   } else if (2 == dist_methods.count()) {
     const ObItemType method1 = dist_methods.at(0);
@@ -2340,13 +2251,11 @@ bool ObTableInHint::is_match_table_items(ObCollationType cs_type,
   return bret;
 }
 
-void ObTableInHint::set_table(const TableItem& table)
+void ObTableInHint::reset(const TableItem& table)
 {
-  qb_name_.assign_ptr(table.qb_name_.ptr(), table.qb_name_.length());
+  qb_name_.reset();
+  db_name_.assign_ptr(table.database_name_.ptr(), table.database_name_.length());
   table_name_.assign_ptr(table.get_table_name().ptr(), table.get_table_name().length());
-  if (table.is_basic_table()) {
-    db_name_.assign_ptr(table.database_name_.ptr(), table.database_name_.length());
-  }
 }
 
 const char *ObWindowDistHint::get_dist_algo_str(WinDistAlgo dist_algo)

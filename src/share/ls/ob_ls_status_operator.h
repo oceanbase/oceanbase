@@ -39,6 +39,10 @@ namespace sqlclient
 class ObMySQLResult;
 }
 }
+namespace palf
+{
+class SCN;
+}
 namespace rootserver
 {
 class ObZoneManager;
@@ -200,11 +204,11 @@ public:
   /*
    * description: override of ObLSLifeIAgent
    * @param[in] ls_info: ls info
-   * @param[in] create_ls_ts_ns: ls's create ts
+   * @param[in] create_ls_scn: ls's create scn
    * @param[in] zone_priority: for __all_ls_election_reference_info
    * @param[in] trans:*/
   virtual int create_new_ls(const ObLSStatusInfo &ls_info,
-                            const int64_t &current_tenant_ts,
+                            const palf::SCN &current_tenant_scn,
                             const common::ObString &zone_priority,
                             ObMySQLTransaction &trans) override;
   /*
@@ -220,13 +224,13 @@ public:
    * @param[in] tenant_id: tenant_id
    * @param[in] ls_id: need delete ls
    * @param[in] ls_status: tenant_dropping or dropping status 
-   * @param[in] drop_ts_ns: there is no user data after drop_ts_ns except offline
+   * @param[in] drop_scn: there is no user data after drop_scn except offline
    * @param[in] trans
    * */
   virtual int set_ls_offline(const uint64_t &tenant_id,
                       const share::ObLSID &ls_id,
                       const ObLSStatus &ls_status,
-                      const int64_t &drop_ts_ns,
+                      const palf::SCN &drop_scn,
                       ObMySQLTransaction &trans) override;
   /*
    * description: update ls primary zone, need update __all_ls_status and __all_ls_election_reference 

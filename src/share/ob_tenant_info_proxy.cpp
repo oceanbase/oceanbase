@@ -24,6 +24,7 @@
 
 using namespace oceanbase;
 using namespace oceanbase::common;
+using namespace oceanbase::palf;
 namespace oceanbase
 {
 namespace share
@@ -32,17 +33,21 @@ namespace share
 bool ObAllTenantInfo::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
-         && OB_LS_INVALID_SCN_VALUE != sync_scn_
-         && OB_LS_INVALID_SCN_VALUE != replayable_scn_
-         && OB_LS_INVALID_SCN_VALUE != standby_scn_
-         && OB_LS_INVALID_SCN_VALUE != recovery_until_scn_
-         && tenant_role_.is_valid(); 
+         && sync_scn_.is_valid()
+         && (sync_scn_ != SCN::min_scn())
+         && replayable_scn_.is_valid()
+         && (replayable_scn_ != SCN::min_scn())
+         && standby_scn_.is_valid()
+         && (standby_scn_ != SCN::min_scn())
+         && recovery_until_scn_.is_valid()
+         && (recovery_until_scn_ != SCN::min_scn())
+         && tenant_role_.is_valid();
 }
 
-int64_t ObAllTenantInfo::get_ref_scn() const
+const SCN ObAllTenantInfo::get_ref_scn() const
 {
-  int64_t ref_scn = OB_LS_INVALID_SCN_VALUE;
-  if (OB_LS_INVALID_SCN_VALUE == sync_scn_) {
+  SCN ref_scn;
+  if (!sync_scn_.is_valid()) {
     LOG_WARN("sync scn is invalid", K(sync_scn_));
   } else {
     ref_scn = sync_scn_;
@@ -64,18 +69,18 @@ int ObAllTenantInfo::init(const uint64_t tenant_id, const ObTenantRole tenant_ro
     tenant_role_ = tenant_role;
     switchover_status_ = ObTenantSwitchoverStatus::NORMAL_STATUS;
     switchover_epoch_ = 0;
-    sync_scn_ = OB_LS_MIN_SCN_VALUE;
-    replayable_scn_ = OB_LS_MIN_SCN_VALUE;
-    standby_scn_ = OB_LS_MIN_SCN_VALUE;
-    recovery_until_scn_ = OB_LS_MAX_SCN_VALUE;
+    sync_scn_.set_base();
+    replayable_scn_.set_base();
+    standby_scn_.set_base();
+    recovery_until_scn_.set_max();
   }
   return ret;
 }
 
 int ObAllTenantInfo::init(
     const uint64_t tenant_id, const ObTenantRole &tenant_role, const ObTenantSwitchoverStatus &switchover_status,
-      int64_t switchover_epoch, int64_t sync_scn, int64_t replayable_scn,
-      int64_t standby_scn, int64_t recovery_until_scn)
+    int64_t switchover_epoch, const palf::SCN &sync_scn, const palf::SCN &replayable_scn,
+    const palf::SCN &standby_scn, const palf::SCN &recovery_until_scn)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -121,10 +126,10 @@ void ObAllTenantInfo::reset()
   tenant_role_ = ObTenantRole::INVALID_TENANT;
   switchover_status_ = ObTenantSwitchoverStatus::INVALID_STATUS;
   switchover_epoch_ = OB_INVALID_VERSION;
-  sync_scn_ = OB_LS_INVALID_SCN_VALUE;
-  replayable_scn_ = OB_LS_INVALID_SCN_VALUE;
-  standby_scn_ = OB_LS_INVALID_SCN_VALUE;
-  recovery_until_scn_ = OB_LS_INVALID_SCN_VALUE;
+  sync_scn_.set_min();
+  replayable_scn_.set_min();
+  standby_scn_.set_min() ;
+  recovery_until_scn_.set_min();
 }
 OB_SERIALIZE_MEMBER(ObAllTenantInfo, tenant_id_, tenant_role_,
                     switchover_status_, switchover_epoch_, sync_scn_,
@@ -163,12 +168,14 @@ int ObAllTenantInfoProxy::init_tenant_info(
                  "insert into %s (tenant_id, tenant_role, "
                  "switchover_status, switchover_epoch, "
                  "sync_scn, replayable_scn, readable_scn) "
-                 "values(%lu, '%s', '%s', %ld, %ld, %ld, %ld)",
+                 "values(%lu, '%s', '%s', %ld, %lu, %lu, %lu)",
                  OB_ALL_TENANT_INFO_TNAME, tenant_info.get_tenant_id(),
                  tenant_info.get_tenant_role().to_str(),
                  tenant_info.get_switchover_status().to_str(),
-                 tenant_info.get_switchover_epoch(), tenant_info.get_sync_scn(),
-                 tenant_info.get_replayable_scn(), tenant_info.get_standby_scn()))) {
+                 tenant_info.get_switchover_epoch(),
+                 tenant_info.get_sync_scn().get_val_for_inner_table_field(),
+                 tenant_info.get_replayable_scn().get_val_for_inner_table_field(),
+                 tenant_info.get_standby_scn().get_val_for_inner_table_field()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(tenant_info), K(sql));
   } else if (OB_FAIL(proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("failed to execute sql", KR(ret), K(exec_tenant_id), K(sql));
@@ -226,8 +233,8 @@ int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
 
 int ObAllTenantInfoProxy::update_tenant_recovery_status(
     const uint64_t tenant_id, ObMySQLProxy *proxy,
-    ObTenantSwitchoverStatus status, int64_t sync_scn, int64_t replay_scn,
-    int64_t reabable_scn)
+    ObTenantSwitchoverStatus status, const palf::SCN &sync_scn,
+    const palf::SCN &replay_scn, const palf::SCN &readable_scn)
 {
   int ret = OB_SUCCESS;
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
@@ -250,22 +257,25 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status(
   } else if (OB_FAIL(load_tenant_info(tenant_id, &trans, true, old_tenant_info))) {
     LOG_WARN("failed to load all tenant info", KR(ret), K(tenant_id));
   } else {
-    //TODO msy164651 sync_scn and replay_scn can not larger than recovery_scn
-    int64_t new_sync_ts = max(old_tenant_info.get_sync_scn(), sync_scn);
-    int64_t new_replay_ts = min(max(old_tenant_info.get_replayable_scn(), replay_scn),
-                                new_sync_ts);
-    int64_t new_sts =
-        min(max(old_tenant_info.get_standby_scn(), reabable_scn), new_replay_ts);
+    const SCN new_sync_scn = old_tenant_info.get_sync_scn() > sync_scn ? old_tenant_info.get_sync_scn() : sync_scn;
 
-    if (old_tenant_info.get_sync_scn() == new_sync_ts
-        && old_tenant_info.get_replayable_scn() == new_replay_ts
+    SCN new_replay_scn_tmp = old_tenant_info.get_replayable_scn() > replay_scn ? old_tenant_info.get_replayable_scn() : replay_scn;
+    SCN new_replay_scn = new_replay_scn_tmp < new_sync_scn ? new_replay_scn_tmp : new_sync_scn;
+
+    SCN new_sts_tmp = old_tenant_info.get_standby_scn() > readable_scn ? old_tenant_info.get_standby_scn() : readable_scn;
+    SCN new_sts = new_sts_tmp < new_replay_scn ? new_sts_tmp : new_replay_scn;
+
+    if (old_tenant_info.get_sync_scn() == new_sync_scn
+        && old_tenant_info.get_replayable_scn() == new_replay_scn
         && old_tenant_info.get_standby_scn() == new_sts) {
-      LOG_DEBUG("no need update", K(old_tenant_info), K(new_sync_ts), K(new_replay_ts), K(new_sts));
+      LOG_DEBUG("no need update", K(old_tenant_info), K(new_sync_scn), K(new_replay_scn), K(new_sts));
     } else if (OB_FAIL(sql.assign_fmt(
-                 "update %s set sync_scn = %ld, replayable_scn = %ld, "
-                 "readable_scn = %ld where tenant_id = %lu "
+                 "update %s set sync_scn = %lu, replayable_scn = %lu, "
+                 "readable_scn = %lu where tenant_id = %lu "
                  "and switchover_status = '%s'", OB_ALL_TENANT_INFO_TNAME,
-                 new_sync_ts, new_replay_ts, new_sts,
+                 new_sync_scn.get_val_for_inner_table_field(),
+                 new_replay_scn.get_val_for_inner_table_field(),
+                 new_sts.get_val_for_inner_table_field(),
                  tenant_id, status.to_str()))) {
       LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(status),
                K(sql));
@@ -283,7 +293,6 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status(
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
-
   return ret; 
 }
 
@@ -298,12 +307,15 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     ObString tenant_role_str;
     ObString status_str;
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
-    int64_t switchover_epoch = OB_LS_INVALID_SCN_VALUE;
-    int64_t sync_ts = OB_LS_INVALID_SCN_VALUE;
-    int64_t replay_ts = OB_LS_INVALID_SCN_VALUE;
-    int64_t sts = OB_LS_INVALID_SCN_VALUE;
-    //TODO msy164651 recovery_scn no use now
-    int64_t recovery_ts = OB_LS_MIN_SCN_VALUE;
+    int64_t switchover_epoch = OB_INVALID_TIMESTAMP;
+    int64_t sync_ts = OB_INVALID_SCN_VAL;
+    int64_t replay_ts = OB_INVALID_SCN_VAL;
+    int64_t sts = OB_INVALID_SCN_VAL;
+    SCN sync_scn;
+    SCN replay_scn;
+    SCN sts_scn;
+    SCN recovery_scn;
+    recovery_scn.set_base();
     EXTRACT_VARCHAR_FIELD_MYSQL(*result, "tenant_role", tenant_role_str);
     EXTRACT_VARCHAR_FIELD_MYSQL(*result, "switchover_status", status_str);
     EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", tenant_id, uint64_t);
@@ -316,12 +328,18 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get result", KR(ret));
       //tenant_id in inner table can be used directly
+    } else if (OB_FAIL(sync_scn.convert_for_inner_table_field(sync_ts))) {
+      LOG_WARN("failed to convert_for_inner_table_field", KR(ret), K(sync_ts));
+    } else if (OB_FAIL(replay_scn.convert_for_inner_table_field(replay_ts))) {
+      LOG_WARN("failed to convert_for_inner_table_field", KR(ret), K(replay_ts));
+    } else if (OB_FAIL(sts_scn.convert_for_inner_table_field(sts))) {
+      LOG_WARN("failed to convert_for_inner_table_field", KR(ret), K(sts));
     } else if (OB_FAIL(tenant_info.init(
             tenant_id, tmp_tenant_role,
             tmp_tenant_sw_status, switchover_epoch,
-            sync_ts, replay_ts, sts, recovery_ts))) {
+            sync_scn, replay_scn, sts_scn, recovery_scn))) {
       LOG_WARN("failed to init tenant info", KR(ret), K(tenant_id), K(tmp_tenant_role), K(tenant_role_str),
-          K(tmp_tenant_sw_status), K(status_str), K(switchover_epoch), K(sync_ts), K(recovery_ts));
+          K(tmp_tenant_sw_status), K(status_str), K(switchover_epoch), K(sync_ts));
     }
   }
   return ret;

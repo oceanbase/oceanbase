@@ -123,26 +123,6 @@ public:
     }
     return ret;
   }
-  int push_with_imme_seq(void* p, int64_t& seq) {
-    int ret = OB_SUCCESS;
-    if (NULL == array_) {
-      ret = OB_NOT_INIT;
-    } else if (NULL == p) {
-      ret = OB_INVALID_ARGUMENT;
-    } else {
-      uint64_t push_limit = ATOMIC_LOAD(&pop_) + capacity_;
-      uint64_t push_idx = faa_bounded(&push_, &push_limit, push_limit);
-      if (push_idx < push_limit) {
-        void** addr = get_addr(push_idx);
-        seq = push_idx;
-        while(!ATOMIC_BCAS(addr, NULL, p))
-          ;
-      } else {
-        ret = OB_ENTRY_NOT_EXIST;
-      }
-    }
-    return ret;
-  }
   void* get(uint64_t seq, Ref* ref) {
     void* ret = NULL;
     if (NULL != array_) {

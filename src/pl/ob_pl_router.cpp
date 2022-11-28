@@ -181,7 +181,7 @@ int ObPLRouter::simple_resolve(ObPLFunctionAST &func_ast)
     if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(
                   inner_allocator_, session_info_.get_dtc_params(), body))) {
       LOG_WARN("fail to get routine body", K(ret));
-    } else if (OB_FAIL(parser.parse_routine_body(body, parse_tree, session_info_.is_for_trigger_package()))) {
+    } else if (OB_FAIL(parser.parse_routine_body(body, parse_tree))) {
       LOG_WARN("parse routine body failed", K(ret), K(body));
     }
   }

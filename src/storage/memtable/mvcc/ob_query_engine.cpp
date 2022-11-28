@@ -176,7 +176,7 @@ void ObQueryEngine::destroy()
 {
   if (IS_NOT_INIT) {
     // do nothing
-  } else if (OB_NOT_NULL(index_) && NOT_PLACE_HOLDER(index_)) {
+  } else if (OB_NOT_NULL(index_)) {
     index_->destroy();
     memstore_allocator_.free(index_);
     index_ = nullptr;
@@ -704,9 +704,8 @@ int ObQueryEngine::estimate_row_count(const ObMemtableKey *start_key, const int 
 
 void ObQueryEngine::dump2text(FILE *fd)
 {
-  TableIndex *index = ATOMIC_LOAD(&index_);
-  if (OB_NOT_NULL(index) && NOT_PLACE_HOLDER(index)) {
-    index->dump2text(fd);
+  if (OB_NOT_NULL(index_)) {
+    index_->dump2text(fd);
   }
 }
 

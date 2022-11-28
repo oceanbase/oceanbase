@@ -77,7 +77,6 @@ public:
   ExprFixedArray child_exprs_;
   int64_t repartition_table_id_;
   ExprFixedArray dynamic_const_exprs_; // const expr which contain dynamic param
-  common::ObFixedArray<int64_t, common::ObIAllocator> bloom_filter_id_array_; //record bloom filter id will send by this pxreceive op.
 };
 
 class ObPxReceiveOp : public ObReceiveOp
@@ -155,20 +154,6 @@ public:
       ++ts_cnt_;
     }
     return ts_;
-  }
-protected:
-  OB_INLINE bool need_send_bloom_filter() {
-    bool is_match = false;
-    int64_t filter_id = ctx_.get_bf_ctx().filter_id_;
-    if (ctx_.get_bf_ctx().filter_ready_) {
-      for (int64_t i = 0; i < (static_cast<const ObPxReceiveSpec &>(get_spec())).bloom_filter_id_array_.count(); ++i) {
-        if (filter_id == (static_cast<const ObPxReceiveSpec &>(get_spec())).bloom_filter_id_array_.at(i)) {
-          is_match = true;
-          break;
-        }
-      }
-    }
-    return is_match;
   }
 protected:
   ObPxTaskChSet task_ch_set_;

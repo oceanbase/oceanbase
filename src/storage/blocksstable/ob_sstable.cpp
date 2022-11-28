@@ -498,7 +498,6 @@ int ObSSTable::exist(ObRowsInfo &rows_info, bool &is_exist, bool &all_rows_found
       }
       iter->~ObStoreRowIterator();
       rows_info.exist_helper_.table_access_context_.allocator_->free(iter);
-      rows_info.reuse_scan_mem_allocator();
     }
   }
   return ret;
@@ -663,9 +662,9 @@ int ObSSTable::check_row_locked(ObStoreCtx &ctx,
   int ret = OB_SUCCESS;
   void *buf = NULL;
   ObSSTableRowLockChecker *row_checker = NULL;
-  const int64_t read_snapshot = ctx.mvcc_acc_ctx_.get_snapshot_version();
+  const int64_t read_snapshot = ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator();
   ObArenaAllocator allocator(ObModIds::OB_STORE_ROW_LOCK_CHECKER);
-  lock_state.trans_version_ = 0;
+  lock_state.trans_version_ = palf::SCN::min_scn();
   lock_state.is_locked_ = false;
 
   if (OB_UNLIKELY(!is_valid())) {
@@ -681,7 +680,7 @@ int ObSSTable::check_row_locked(ObStoreCtx &ctx,
     if (!meta_.is_empty()) {
       // skip reference upper_trans_version of empty_sstable, which may greater than real
       // committed transaction's version
-      lock_state.trans_version_ = get_upper_trans_version();
+      lock_state.trans_version_.convert_for_lsn_allocator(get_upper_trans_version());
     }
   } else if (NULL == (buf = allocator.alloc(sizeof(ObSSTableRowLockChecker)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

@@ -403,6 +403,8 @@ public:
   int64_t get_cur_stmt_id() const { return cur_stmt_id_; }
   int switch_implicit_cursor();
   const ObIArray<int64_t> *get_part_param_idxs(int64_t part_id) const;
+  void set_large_query(bool v) { is_large_query_ = v; }
+  bool is_large_query() { return is_large_query_; }
   void add_px_dml_row_info(const ObPxDmlRowInfo &dml_row_info);
   TO_STRING_KV("tenant_id", tenant_id_);
   void set_field_array(const common::ObIArray<common::ObField> *field_array) { field_array_ = field_array; }
@@ -419,12 +421,6 @@ public:
   void set_plan_start_time(int64_t t) { plan_start_time_ = t; }
   int64_t get_plan_start_time() const { return plan_start_time_; }
   int replace_batch_param_datum(int64_t cur_group_id);
-  void set_last_trace_id(const common::ObCurTraceId::TraceId &trace_id)
-  {
-    last_trace_id_ = trace_id;
-  }
-  const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
-  common::ObCurTraceId::TraceId &get_last_trace_id() { return last_trace_id_; }
 
 private:
   void reset_datum_frame(char *frame, int64_t expr_cnt);
@@ -487,7 +483,6 @@ private:
   //在存储层，如果table_id是系统表，则会跳过对tenant_schema_version的检查，还是使用原来的办法获取table schema version（见ObRelativeTables::check_schema_version）
   int64_t tenant_schema_version_;
   int64_t orig_question_mark_cnt_;
-  common::ObCurTraceId::TraceId last_trace_id_;
 
 private:
   /**
@@ -550,6 +545,7 @@ private:
   bool is_multi_dml_;
 
   ObRemoteSqlInfo remote_sql_info_;
+  bool is_large_query_; // 存储层使用该标记决定是否进行io限流
   //used for expr output pack, do encode according to its field
   const common::ObIArray<ObField> *field_array_;
   //used for expr output pack, do bianry encode or text encode

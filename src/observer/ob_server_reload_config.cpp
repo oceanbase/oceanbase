@@ -126,8 +126,7 @@ int ObServerReloadConfig::operator()()
     }
   }
   {
-    GMEMCONF.reload_config(GCONF);
-    const int64_t limit_memory = GMEMCONF.get_server_memory_limit();
+    const int64_t limit_memory = GCONF.get_server_memory_limit();
     const int64_t reserved_memory = GCONF.cache_wash_threshold;
     const int64_t reserved_urgent_memory = GCONF.memory_reserved;
     LOG_INFO("set limit memory", K(limit_memory));
@@ -173,7 +172,7 @@ int ObServerReloadConfig::operator()()
 
 
   const int64_t cache_size = GCONF.memory_chunk_cache_size;
-  const int cache_cnt = (cache_size > 0 ? cache_size : GMEMCONF.get_server_memory_limit()) / INTACT_ACHUNK_SIZE;
+  const int cache_cnt = (cache_size > 0 ? cache_size : GCONF.get_server_memory_limit()) / INTACT_ACHUNK_SIZE;
   lib::AChunkMgr::instance().set_max_chunk_cache_cnt(cache_cnt);
   if (GCONF.cluster_id.get_value() >= 0) {
     obrpc::ObRpcNetHandler::CLUSTER_ID = GCONF.cluster_id.get_value();
@@ -251,8 +250,9 @@ int ObServerReloadConfig::operator()()
   }
 
   get_unis_global_compat_version() = GET_MIN_CLUSTER_VERSION();
-  lib::g_runtime_enabled = true;
-
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2100) {
+    lib::g_runtime_enabled = true;
+  }
   common::ObKVGlobalCache::get_instance().reload_wash_interval();
   {
     int tmp_ret = OB_SUCCESS;

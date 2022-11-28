@@ -41,7 +41,7 @@ OB_SERIALIZE_MEMBER(ObTableLockOp, lock_id_,
                     lock_op_status_,
                     lock_seq_no_,
                     commit_version_,
-                    commit_log_ts_,
+                    commit_scn_,
                     create_timestamp_,
                     create_schema_version_);
 
@@ -173,12 +173,12 @@ bool ObTableLockOp::operator ==(const ObTableLockOp &other) const
 void ObTableLockInfo::reset()
 {
   table_lock_ops_.reset();
-  max_durable_log_ts_ = OB_INVALID_TIMESTAMP;
+  max_durable_scn_.reset();
 }
 
 OB_SERIALIZE_MEMBER(ObTableLockInfo,
                     table_lock_ops_,
-                    max_durable_log_ts_);
+                    max_durable_scn_);
 
 } // tablelock
 } // transaction

@@ -82,7 +82,7 @@ void SafeTaskWithRecordQueue::update_dispatch_progress_by_task_queue(
   common::ObByteLockGuard guard(lock_);
   if (dispatching_task_info_.is_dispatching_) {
     if (OB_INVALID_TIMESTAMP != dispatching_task_info_.task_timestamp_) {
-      dispatch_progress = std::min(dispatch_progress, dispatching_task_info_.task_timestamp_ - 1);
+      dispatch_progress = dispatching_task_info_.task_timestamp_ - 1;
 
       dispatch_info.next_task_type_ = PartTransTask::print_task_type(dispatching_task_info_.task_type_);
       dispatch_info.next_trans_log_lsn_ = dispatching_task_info_.prepare_log_lsn_;
@@ -95,7 +95,7 @@ void SafeTaskWithRecordQueue::update_dispatch_progress_by_task_queue(
       // Queue is empty and not processed
     } else if (OB_INVALID_TIMESTAMP != task->get_prepare_ts()) {
       // If there is a task to be output, take the "task to be output timestamp - 1" as the output progress
-      dispatch_progress = std::min(dispatch_progress, task->get_prepare_ts() - 1);
+      dispatch_progress = task->get_prepare_ts() - 1;
 
       // Update information for the next transaction
       // Note: Only DML and DDL are valid

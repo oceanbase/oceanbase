@@ -35,27 +35,17 @@ int ObExprFindInSet::calc_result_type2(ObExprResType &type,
 																			 ObExprResType &type2,
 																			 ObExprTypeCtx &type_ctx) const
 {
+	UNUSED(type_ctx);
 	int ret = OB_SUCCESS;
 	type1.set_calc_type(ObVarcharType);
+  type1.set_calc_collation_type(ObCharset::get_system_collation());
 	type2.set_calc_type(ObVarcharType);
+  type2.set_calc_collation_type(ObCharset::get_system_collation());
 	if (OB_LIKELY(NOT_ROW_DIMENSION == row_dimension_)) {
 		type.set_uint64();
 		type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].precision_);
 		type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObUInt64Type].scale_);
-    type.set_calc_type(ObVarcharType);
 		ObExprOperator::calc_result_flag2(type, type1, type2);
-    ObObjMeta coll_types[2];
-    coll_types[0].set_collation(type1);
-    coll_types[1].set_collation(type2);
-    if (OB_FAIL(aggregate_charsets_for_comparison(type.get_calc_meta(),
-                 coll_types, 2, type_ctx.get_coll_type()))) {
-      LOG_WARN("failed to aggregate_charsets_for_comparison", K(ret));
-    } else {
-      type1.set_calc_collation_type(type.get_collation_type());
-      type1.set_calc_collation_level(type.get_collation_level());
-      type2.set_calc_collation_type(type.get_collation_type());
-      type2.set_calc_collation_level(type.get_collation_level());
-    }
 	} else {
 		ret = OB_ERR_INVALID_TYPE_FOR_OP;
 	}

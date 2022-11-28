@@ -174,7 +174,6 @@
 #include "observer/virtual_table/ob_all_virtual_dtl_interm_result_monitor.h"
 #include "observer/virtual_table/ob_all_virtual_log_stat.h"
 #include "observer/virtual_table/ob_all_virtual_apply_stat.h"
-#include "observer/virtual_table/ob_all_virtual_ha_diagnose.h"
 #include "observer/virtual_table/ob_all_virtual_replay_stat.h"
 #include "observer/virtual_table/ob_all_virtual_unit.h"
 #include "observer/virtual_table/ob_all_virtual_server.h"
@@ -1601,19 +1600,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
-          case OB_ALL_VIRTUAL_HA_DIAGNOSE_TID: {
-            ObAllVirtualHADiagnose *diagnose_info = NULL;
-            omt::ObMultiTenant *omt = GCTX.omt_;
-            if (OB_UNLIKELY(NULL == omt)) {
-              ret = OB_ERR_UNEXPECTED;
-              SERVER_LOG(WARN, "get tenant fail", K(ret));
-            } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualHADiagnose, diagnose_info, omt))) {
-              SERVER_LOG(ERROR, "ObAllVirtualHADiagnose construct fail", K(ret));
-            } else {
-              vt_iter = static_cast<ObAllVirtualHADiagnose *>(diagnose_info);
-            }
-            break;
-          }
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
         BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
@@ -1998,6 +1984,8 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               open_cursors->set_allocator(&allocator);
               open_cursors->set_session_mgr(GCTX.session_mgr_);
+              open_cursors->set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager());
+              open_cursors->set_tenant_id(real_tenant_id);
               OZ (open_cursors->set_addr(addr_));
               OX (vt_iter = static_cast<ObVirtualOpenCursorTable*>(open_cursors));
             }

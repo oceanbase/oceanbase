@@ -306,7 +306,7 @@ int ObTxCommitLog::before_serialize()
   if (OB_FAIL(compat_bytes_.init(8))) {
     TRANS_LOG(WARN, "init compat_bytes_ failed", K(ret));
   } else {
-    TX_NO_NEED_SER(commit_version_ == OB_INVALID_TIMESTAMP, 1, compat_bytes_);
+    TX_NO_NEED_SER(!commit_version_.is_valid(), 1, compat_bytes_);
     TX_NO_NEED_SER(checksum_ == 0, 2, compat_bytes_);
     TX_NO_NEED_SER(incremental_participants_.empty(), 3, compat_bytes_);
     TX_NO_NEED_SER(multi_source_data_.empty(), 4, compat_bytes_);
@@ -459,7 +459,7 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
                                palf::block_id_t block_id,
                                palf::LSN lsn,
                                int64_t tx_id,
-                               int64_t log_ts,
+                               palf::SCN log_ts,
                                bool &has_dumped_tx_id)
 {
   int ret = OB_SUCCESS;
@@ -491,7 +491,7 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
     } else {
       if (!has_dumped_tx_id) {
         databuff_printf(arg.buf_, arg.buf_len_, arg.pos_, "{BlockID: %ld; LSN:%ld, TxID:%ld; log_ts:%ld",
-                        block_id, lsn.val_, tx_id, log_ts);
+                        block_id, lsn.val_, tx_id, log_ts.get_val_for_lsn_allocator());
       }
       databuff_printf(arg.buf_, arg.buf_len_, arg.pos_,
                       "<TxRedoLog>: {TxCtxInfo: {%s}; MutatorMeta: {%s}; MutatorRows: {",
@@ -861,19 +861,14 @@ int ObTxDataBackup::init(const storage::ObTxData *const tx_data)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KP(tx_data));
   } else {
-    if (INT64_MAX != tx_data->start_log_ts_) {
-      start_log_ts_ = tx_data->start_log_ts_;
-    } else {
-      start_log_ts_ = PENDING_START_LOG_TS;
-    }
-
+    start_log_ts_ = tx_data->start_scn_;
   }
   return ret;
 }
 
 void ObTxDataBackup::reset()
 {
-  start_log_ts_ = INT64_MAX;
+  start_log_ts_.reset();
 }
 
 

@@ -31,6 +31,7 @@ class ObILogAllocator;
 }
 namespace palf
 {
+class SCN;
 class ReadBuf;
 class LogStorage : public ILogStorage
 {
@@ -60,8 +61,8 @@ public:
   int load_manifest_for_meta_storage(block_id_t &expected_next_block_id);
   void destroy();
 
-  int writev(const LSNArray &lsn_array, const LogWriteBufArray &write_buf_array, const LogTsArray &log_ts_array);
-  int writev(const LSN &lsn, const LogWriteBuf &write_buf, const int64_t log_ts);
+  int writev(const LSNArray &lsn_array, const LogWriteBufArray &write_buf_array, const SCNArray &scn_array);
+  int writev(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &log_scn);
 
   int append_meta(const char *buf, const int64_t buf_len);
 
@@ -91,7 +92,7 @@ public:
   //   OB_ERR_OUT_OF_UPPER_BOUND, 'block_id' is the active block, and there is no data in this
   //   block. OB_ERR_UNEXPECTED, file maybe deleted by human. OB_INVALID_DATA, data has been
   //   corrupted
-  int get_block_min_ts_ns(const block_id_t &block_id, int64_t &min_ts) const;
+  int get_block_min_scn(const block_id_t &block_id, SCN &min_scn) const;
   const LSN get_begin_lsn() const;
   const LSN get_end_lsn() const;
 
@@ -114,8 +115,8 @@ private:
   bool check_read_out_of_lower_bound_(const block_id_t &block_id) const;
   int inner_switch_block_();
   int append_block_header_used_for_meta_storage_();
-  int append_block_header_(const LSN &block_min_lsn, const int64_t block_min_ts_ns);
-  int update_block_header_(const block_id_t block_id, const LSN &block_min_lsn, const int64_t block_min_ts_ns);
+  int append_block_header_(const LSN &block_min_lsn, const SCN &block_min_scn);
+  int update_block_header_(const block_id_t block_id, const LSN &block_min_lsn, const SCN &block_min_scn);
   bool need_switch_block_() const;
   // 1. 使用group_entry_iterator迭代最后一个文件, 重建block_header;
   // 2. 从iterator中获取终点信息；

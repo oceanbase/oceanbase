@@ -399,15 +399,11 @@ int ObPxSQCProxy::report(int end_ret) const
     finish_msg.dml_row_info_.add_px_dml_row_info(task.dml_row_info_);
     finish_msg.temp_table_id_ = task.temp_table_id_;
     if (OB_NOT_NULL(session)) {
-      transaction::ObTxDesc *&sqc_tx_desc = session->get_tx_desc();
+      transaction::ObTxDesc *sqc_tx_desc = session->get_tx_desc();
       transaction::ObTxDesc *&task_tx_desc = tasks.at(i).get_tx_desc();
-      if (OB_NOT_NULL(task_tx_desc)) {
-        if (OB_NOT_NULL(sqc_tx_desc)) {
-          (void)MTL(transaction::ObTransService*)->merge_tx_state(*sqc_tx_desc, *task_tx_desc);
-          (void)MTL(transaction::ObTransService*)->release_tx(*task_tx_desc);
-        } else {
-          sqc_tx_desc = task_tx_desc;
-        }
+      if (OB_NOT_NULL(sqc_tx_desc) && OB_NOT_NULL(task_tx_desc)) {
+        (void)MTL(transaction::ObTransService*)->merge_tx_state(*sqc_tx_desc, *task_tx_desc);
+        (void)MTL(transaction::ObTransService*)->release_tx(*task_tx_desc);
         task_tx_desc = NULL;
       }
     }

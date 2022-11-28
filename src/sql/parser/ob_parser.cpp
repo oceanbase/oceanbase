@@ -638,7 +638,7 @@ int ObParser::split_multiple_stmt(const ObString &stmt,
       ObString part(str_len, stmt.ptr() + offset);
       ObString remain_part(remain, stmt.ptr() + offset);
       //first try parse part str, because it's have less length and need less memory
-      if (OB_FAIL(tmp_ret = parse(part, parse_result, parse_mode, false, true))) {
+      if (OB_FAIL(tmp_ret = parse(part, parse_result, parse_mode, false, false, true))) {
         //if parser part str failed, then try parse all remain part, avoid parse many times
         //bug: https://work.aone.alibaba-inc.com/issue/34642901
         tmp_ret = OB_SUCCESS;
@@ -720,7 +720,7 @@ int ObParser::reconstruct_insert_sql(const common::ObString &stmt,
     allocator.set_label("InsMultiValOpt");
     ObIAllocator *bak_allocator = allocator_;
     allocator_ = &allocator;
-    if (OB_FAIL(parse(stmt, parse_result, parse_mode, false, true))) {
+    if (OB_FAIL(parse(stmt, parse_result, parse_mode, false, false, true))) {
       // if parser SQL failed，then we won't rewrite it and keep it as it is
       LOG_WARN("failed to parser insert sql", K(ret));
     } else if (parse_result.ins_multi_value_res_->values_count_ == 1) {
@@ -944,6 +944,7 @@ int ObParser::parse(const ObString &query,
                     ParseResult &parse_result,
                     ParseMode parse_mode,
                     const bool is_batched_multi_stmt_split_on,
+                    const bool is_normal_ps_prepare,
                     const bool no_throw_parser_error)
 {
   int ret = OB_SUCCESS;
@@ -978,15 +979,12 @@ int ObParser::parse(const ObString &query,
   parse_result.is_for_trigger_ = (TRIGGER_MODE == parse_mode);
   parse_result.is_dynamic_sql_ = (DYNAMIC_SQL_MODE == parse_mode);
   parse_result.is_dbms_sql_ = (DBMS_SQL_MODE == parse_mode);
+  parse_result.is_normal_ps_prepare_ = is_normal_ps_prepare;
   parse_result.is_batched_multi_enabled_split_ = is_batched_multi_stmt_split_on;
   parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(connection_collation_) ?
         (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4) : false;
   parse_result.malloc_pool_ = allocator_;
-  if (lib::is_oracle_mode()) {
-    parse_result.sql_mode_ = sql_mode_ | SMO_ORACLE;
-  } else {
-    parse_result.sql_mode_ = sql_mode_ & (~SMO_ORACLE);
-  }
+  parse_result.sql_mode_ = sql_mode_;
   parse_result.need_parameterize_ = (FP_MODE == parse_mode
                          || FP_PARAMERIZE_AND_FILTER_HINT_MODE == parse_mode);
   parse_result.minus_ctx_.pos_ = -1;
@@ -1006,7 +1004,7 @@ int ObParser::parse(const ObString &query,
     }
   }
 
-  if (parse_result.is_fp_ || parse_result.is_dynamic_sql_) {
+  if (parse_result.is_fp_ || parse_result.is_dynamic_sql_ || parse_result.is_normal_ps_prepare_) {
     int64_t new_length = parse_result.is_fp_ ? stmt.length() + 1 : stmt.length() * 2;
     char *buf = (char *)parse_malloc(new_length, parse_result.malloc_pool_);
     if (OB_UNLIKELY(NULL == buf)) {

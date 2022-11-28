@@ -84,7 +84,6 @@ ObDMLResolver::ObDMLResolver(ObResolverParams &params)
       with_clause_without_record_(false),
       is_prepare_stage_(params.is_prepare_stage_),
       in_pl_(params.secondary_namespace_ || params.is_dynamic_sql_ || params.is_dbms_sql_),
-      resolve_alias_for_subquery_(true),
       current_view_level_(0),
       view_ref_id_(OB_INVALID_ID),
       is_resolving_view_(false),
@@ -726,15 +725,12 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
   }
   if (OB_SUCC(ret) && NULL != select_stmt) {
     ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
-    CK(OB_NOT_NULL(params_.session_info_));
     for (int64_t i = 0; i < select_items.count() && OB_SUCC(ret); i++) {
       SelectItem &item = select_items.at(i);
       ObRawExpr *expr = NULL;
       if (OB_ISNULL(expr = item.expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr of select item is null", K(ret));
-      } else if (OB_FAIL(expr->formalize(params_.session_info_))) {
-        LOG_WARN("formailize column reference expr failed", K(ret));
       } else if (ob_is_temporal_type(expr->get_data_type())) {
         // add implicit cast to varchar type
         ObCastMode cast_mode = CM_NONE;
@@ -1622,8 +1618,7 @@ int ObDMLResolver::resolve_basic_table(const ParseNode &parse_tree, TableItem *&
         } else { }
       }
       if (OB_SUCCESS == ret && sample_node != NULL && T_SAMPLE_SCAN == sample_node->type_) {
-        if (is_virtual_table(table_item->ref_id_) &&
-            !is_oracle_mapping_real_virtual_table(table_item->ref_id_)) {
+        if (is_virtual_table(table_item->ref_id_)) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "sampling virtual table");
         } else if (OB_FAIL(resolve_sample_clause(sample_node, table_item->table_id_))) {
@@ -5441,7 +5436,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
                                                        table_name, synonym_name,
                                                        synonym_db_name, db_name,
                                                        is_db_explicit, synonym_checker))) {
-        LOG_WARN("resolve table relation factor failed", K(ret), K(table_name));
+        LOG_WARN("resolve table relation factor failed", K(ret));
         // table_name may be dblink table, here to test is,
         if (OB_ERR_SYNONYM_TRANSLATION_INVALID == ret ||
             OB_TABLE_NOT_EXIST == ret) {
@@ -5493,7 +5488,7 @@ int ObDMLResolver::resolve_dblink_with_synonym(uint64_t tenant_id, ObString &tab
   int ret = OB_SUCCESS;
    // dblink name must be something like 'db_name.tbl_name@dblink', or 'tbl_name@dblink'
   ObString tmp_table_name;
-  ObString dblink_user_name;
+  ObString tmp_db_name;
   CK (OB_NOT_NULL(allocator_));
   OZ (ob_write_string(*allocator_, table_name, tmp_table_name));
   ObString tbl_sch_name = tmp_table_name.split_on('@');
@@ -5501,16 +5496,13 @@ int ObDMLResolver::resolve_dblink_with_synonym(uint64_t tenant_id, ObString &tab
     // do nothing; not a valid dblink name format
   } else if (tmp_table_name.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tmp_table_name is empty", K(ret));
   } else {
     OZ (schema_checker_->get_dblink_id(tenant_id, tmp_table_name, dblink_id));
-    OZ (schema_checker_->get_dblink_user(tenant_id, tmp_table_name, dblink_user_name, *allocator_));
+    OZ (schema_checker_->get_dblink_user(tenant_id, tmp_table_name, tmp_db_name, *allocator_));
     if (OB_FAIL(ret)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", K(ret));
     } else if (OB_INVALID_ID == dblink_id) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalide dblink_id", K(ret));
     } else {
       OZ (ob_write_string(*allocator_, tmp_table_name, dblink_name));
       ObString remote_schema_name;
@@ -5518,11 +5510,11 @@ int ObDMLResolver::resolve_dblink_with_synonym(uint64_t tenant_id, ObString &tab
       OX (remote_schema_name = tbl_sch_name.split_on('.'));
       if (OB_FAIL(ret)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error", K(ret));
       } else {
-        ObString &tmp_db_name = dblink_user_name;
-        if (!remote_schema_name.empty() && (0 != dblink_user_name.case_compare(remote_schema_name))) {
-          tmp_db_name = remote_schema_name;
+        if (!remote_schema_name.empty()) {
+          if (0 != tmp_db_name.case_compare(remote_schema_name)) {
+            ret = OB_ERR_UNEXPECTED;
+          } else { /*do nothing*/ }
         }
         // convert db_name to upper, for the field in all_object is upper
         if (OB_SUCC(ret)) {
@@ -7653,6 +7645,7 @@ int ObDMLResolver::check_oracle_outer_join_condition(const ObRawExpr *expr)
   return ret;
 }
 
+// bugfix: https://workitem.aone.alibaba-inc.com/req/37137663
 // in some cases, oracle_outer_join is allowed in IN/OR
 int ObDMLResolver::check_oracle_outer_join_in_or_validity(const ObRawExpr *expr,
                                                           ObIArray<uint64_t> &right_tables)
@@ -9084,6 +9077,10 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
 
 
   switch (hint_node.type_) {
+    case T_HOTSPOT: {
+      global_hint.hotspot_ = true;
+      break;
+    }
     case T_TOPK: {
       CHECK_HINT_PARAM(hint_node, 2) {
         global_hint.merge_topk_hint(child0->value_, child1->value_);
@@ -9266,10 +9263,6 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       global_hint.disable_transform_ = true;
       break;
     }
-    case T_NO_COST_BASED_QUERY_TRANSFORMATION: {
-      global_hint.disable_cost_based_transform_ = true;
-      break;
-    }
     default: {
       resolved_hint = false;
       break;
@@ -9417,9 +9410,7 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
   switch (hint_node.type_) {
     case T_INDEX_HINT:
     case T_NO_INDEX_HINT:
-    case T_FULL_HINT:
-    case T_USE_DAS_HINT:
-    case T_NO_USE_DAS_HINT: {
+    case T_FULL_HINT: {
       if (OB_FAIL(resolve_index_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve index hint", K(ret));
       }
@@ -9564,11 +9555,11 @@ int ObDMLResolver::resolve_index_hint(const ParseNode &index_node,
     LOG_WARN("Failed to resolve qb name node", K(ret));
   } else if (OB_FAIL(resolve_table_relation_in_hint(*table_node, index_hint->get_table()))) {
     LOG_WARN("Resolve table relation fail", K(ret));
-  } else if (T_FULL_HINT == index_hint->get_hint_type() ||
-             T_USE_DAS_HINT == index_hint->get_hint_type()) {
+  } else if (T_FULL_HINT == index_hint->get_hint_type()) {
     index_hint->set_qb_name(qb_name);
     opt_hint = index_hint;
-  } else if (OB_UNLIKELY(3 != index_node.num_child_) ||
+  } else if (OB_UNLIKELY(!index_hint->is_access_path_hint()) ||
+             OB_UNLIKELY(3 != index_node.num_child_) ||
              OB_ISNULL(index_name_node = index_node.children_[2])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected index hint", K(ret), K(index_node.type_), K(index_node.num_child_),
@@ -9741,40 +9732,35 @@ int ObDMLResolver::resolve_pq_distribute_hint(const ParseNode &hint_node,
   int ret = OB_SUCCESS;
   opt_hint = NULL;
   if (OB_UNLIKELY(4 != hint_node.num_child_)
-      || OB_ISNULL(hint_node.children_[1])) {
+      || OB_ISNULL(hint_node.children_[1])
+      || OB_ISNULL(hint_node.children_[2])
+      || OB_ISNULL(hint_node.children_[3])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected PQ Distribute hint node", K(ret), K(hint_node.num_child_));
   } else {
+    ObItemType outer = hint_node.children_[2]->type_;
+    ObItemType inner = hint_node.children_[3]->type_;
     DistAlgo dist_algo = DistAlgo::DIST_INVALID_METHOD;
-    if (OB_ISNULL(hint_node.children_[2]) && OB_ISNULL(hint_node.children_[3])) {
-      dist_algo = DistAlgo::DIST_BASIC_METHOD;
-    } else if (OB_ISNULL(hint_node.children_[2]) || OB_ISNULL(hint_node.children_[3])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected PQ Distribute null child", K(ret), K(hint_node.children_[2]), K(hint_node.children_[2]));
-    } else {
-      ObItemType outer = hint_node.children_[2]->type_;
-      ObItemType inner = hint_node.children_[3]->type_;
-      if (T_DISTRIBUTE_HASH == outer && T_DISTRIBUTE_HASH == inner) {
-        dist_algo = DistAlgo::DIST_HASH_HASH;
-      } else if (T_DISTRIBUTE_BROADCAST == outer && T_DISTRIBUTE_NONE == inner) {
-        dist_algo = DistAlgo::DIST_BROADCAST_NONE;
-      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_BROADCAST == inner) {
-        dist_algo = DistAlgo::DIST_NONE_BROADCAST;
-      } else if (T_DISTRIBUTE_PARTITION == outer && T_DISTRIBUTE_NONE == inner) {
-        dist_algo = DistAlgo::DIST_PARTITION_NONE;
-      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_PARTITION == inner) {
-        dist_algo = DistAlgo::DIST_NONE_PARTITION;
-      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_NONE == inner) {
-        dist_algo = DistAlgo::DIST_PARTITION_WISE;
-      } else if (T_DISTRIBUTE_LOCAL == outer && T_DISTRIBUTE_LOCAL == inner) {
-        dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
-      } else if (T_DISTRIBUTE_BC2HOST == outer && T_DISTRIBUTE_NONE == inner) {
-        dist_algo = DistAlgo::DIST_BC2HOST_NONE;
-      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_ALL == inner) {
-        dist_algo = DistAlgo::DIST_NONE_ALL;
-      } else if (T_DISTRIBUTE_ALL == outer && T_DISTRIBUTE_NONE == inner) {
-        dist_algo = DistAlgo::DIST_ALL_NONE;
-      }
+    if (T_DISTRIBUTE_HASH == outer && T_DISTRIBUTE_HASH == inner) {
+      dist_algo = DistAlgo::DIST_HASH_HASH;
+    } else if (T_DISTRIBUTE_BROADCAST == outer && T_DISTRIBUTE_NONE == inner) {
+      dist_algo = DistAlgo::DIST_BROADCAST_NONE;
+    } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_BROADCAST == inner) {
+      dist_algo = DistAlgo::DIST_NONE_BROADCAST;
+    } else if (T_DISTRIBUTE_PARTITION == outer && T_DISTRIBUTE_NONE == inner) {
+      dist_algo = DistAlgo::DIST_PARTITION_NONE;
+    } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_PARTITION == inner) {
+      dist_algo = DistAlgo::DIST_NONE_PARTITION;
+    } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_NONE == inner) {
+      dist_algo = DistAlgo::DIST_PARTITION_WISE;
+    } else if (T_DISTRIBUTE_LOCAL == outer && T_DISTRIBUTE_LOCAL == inner) {
+      dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
+    } else if (T_DISTRIBUTE_BC2HOST == outer && T_DISTRIBUTE_NONE == inner) {
+      dist_algo = DistAlgo::DIST_BC2HOST_NONE;
+    } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_ALL == inner) {
+      dist_algo = DistAlgo::DIST_NONE_ALL;
+    } else if (T_DISTRIBUTE_ALL == outer && T_DISTRIBUTE_NONE == inner) {
+      dist_algo = DistAlgo::DIST_ALL_NONE;
     }
 
     if (DistAlgo::DIST_INVALID_METHOD != dist_algo) {
@@ -9802,22 +9788,21 @@ int ObDMLResolver::resolve_pq_set_hint(const ParseNode &hint_node,
 {
   int ret = OB_SUCCESS;
   opt_hint = NULL;
+  const ParseNode *dist_methods_node = NULL;
   ObSEArray<ObItemType, 2> dist_methods;
   ObString qb_name;
-  ObString left_branch;
   ObPQSetHint *pq_dis_hint = NULL;
   int64_t random_none_idx = OB_INVALID_INDEX;
-  bool is_valid = false;
-  if (OB_UNLIKELY(3 != hint_node.num_child_)) {
+  if (OB_UNLIKELY(2 != hint_node.num_child_)
+      || OB_ISNULL(dist_methods_node = hint_node.children_[1])
+      || OB_UNLIKELY(T_DISTRIBUTE_METHOD_LIST != dist_methods_node->type_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected pq_set hint node", K(ret), K(hint_node.num_child_));
+    LOG_WARN("unexpected pq_set hint node", K(ret), K(hint_node.num_child_), K(dist_methods_node));
   } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
     LOG_WARN("failed to resolve query block name", K(ret));
-  } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[1], left_branch))) {
-    LOG_WARN("failed to resolve query block name", K(ret));
-  } else if (OB_FAIL(get_valid_dist_methods(hint_node.children_[2], dist_methods, is_valid))) {
+  } else if (OB_FAIL(get_valid_dist_methods(*dist_methods_node, dist_methods))) {
     LOG_WARN("failed to get valid dist methods", K(ret));
-  } else if (!is_valid) {
+  } else if (dist_methods.empty()) {
     /* do nothing */
   } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, pq_dis_hint))) {
     LOG_WARN("failed to create hint", K(ret));
@@ -9825,40 +9810,26 @@ int ObDMLResolver::resolve_pq_set_hint(const ParseNode &hint_node,
     LOG_WARN("failed to assign dist methods", K(ret));
   } else {
     pq_dis_hint->set_qb_name(qb_name);
-    pq_dis_hint->set_left_branch(left_branch);
     opt_hint = pq_dis_hint;
   }
   return ret;
 }
 
-int ObDMLResolver::get_valid_dist_methods(const ParseNode *dist_methods_node,
-                                          ObIArray<ObItemType> &dist_methods,
-                                          bool &is_valid)
+int ObDMLResolver::get_valid_dist_methods(const ParseNode &dist_methods_node,
+                                          ObIArray<ObItemType> &dist_methods)
 {
   int ret = OB_SUCCESS;
   dist_methods.reuse();
-  is_valid = false;
-  if (OB_ISNULL(dist_methods_node)) {
-    is_valid = true;
-  } else if (OB_UNLIKELY(T_DISTRIBUTE_METHOD_LIST != dist_methods_node->type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected pq_set hint node", K(ret), K(get_type_name(dist_methods_node->type_)));
-  } else if (OB_UNLIKELY(2 > dist_methods_node->num_child_)) {
-    /* do nothing */
-  } else {
-    is_valid = true;
-    for (int64_t i = 0; OB_SUCC(ret) && i < dist_methods_node->num_child_; ++i) {
-      if (OB_ISNULL(dist_methods_node->children_[i])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), K(i));
-      } else if (OB_FAIL(dist_methods.push_back(dist_methods_node->children_[i]->type_))) {
-        LOG_WARN("failed to push back", K(ret));
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && i < dist_methods_node.num_child_; ++i) {
+    if (OB_ISNULL(dist_methods_node.children_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(i));
+    } else if (OB_FAIL(dist_methods.push_back(dist_methods_node.children_[i]->type_))) {
+      LOG_WARN("failed to push back", K(ret));
     }
-    if (OB_SUCC(ret) && !ObPQSetHint::is_valid_dist_methods(dist_methods)) {
-      dist_methods.reuse();
-      is_valid = false;
-    }
+  }
+  if (OB_SUCC(ret) && !ObPQSetHint::is_valid_dist_methods(dist_methods)) {
+    dist_methods.reuse();
   }
   return ret;
 }

@@ -850,12 +850,10 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end, int64_t &ins
     default_row_batch_cnt = 1;
   }
   LOG_DEBUG("simulate lookup row batch count", K(simulate_batch_row_cnt), K(default_row_batch_cnt));
-  while (OB_SUCC(ret) && ++row_cnt <= default_row_batch_cnt) {
+  while (OB_SUCC(ret) &&  ++row_cnt <= default_row_batch_cnt) {
     if (OB_FAIL(get_next_row_from_child())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to load next row from child", K(ret));
-      } else {
-        iter_end_ = true;
       }
     } else if (OB_FAIL(try_insert_row())) {
       LOG_WARN("try insert row to das", K(ret));

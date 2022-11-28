@@ -52,7 +52,7 @@ protected:
 class ThreadGuard
 {
 public:
-  [[nodiscard]] ThreadGuard(ThreadMutex *mutex)
+  ThreadGuard(ThreadMutex *mutex)
   {
     mutex_ = NULL;
     if (mutex) {

@@ -44,9 +44,7 @@ void crash_restore_handler(int sig, siginfo_t *s, void *p)
   if (SIGSEGV == sig || SIGABRT == sig ||
       SIGBUS == sig || SIGFPE == sig) {
     int64_t len = 0;
-#ifdef __x86_64__
     safe_backtrace(crash_restore_buffer, 255, &len);
-#endif
     crash_restore_buffer[len++] = '\0';
     siglongjmp(*g_jmp, 1);
   } else {

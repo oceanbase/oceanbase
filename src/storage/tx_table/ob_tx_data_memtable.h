@@ -15,6 +15,7 @@
 
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/tx/ob_tx_data_define.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -56,9 +57,9 @@ public:  // ObTxDataMemtable
       is_inited_(false),
       is_iterating_(false),
       has_constructed_list_(false),
-      min_tx_log_ts_(0),
-      max_tx_log_ts_(0),
-      min_start_log_ts_(0),
+      min_tx_scn_(),
+      max_tx_scn_(),
+      min_start_scn_(),
       inserted_cnt_(0),
       deleted_cnt_(0),
       write_ref_(0),
@@ -111,10 +112,10 @@ public:  // ObTxDataMemtable
 
   /**
    * @brief This function is used by ObTxDataMemtableScanIterator after all tx data is dumped. It
-   * performs sorting similarly to prepare_tx_data_list() function by start_log_ts of tx data
+   * performs sorting similarly to prepare_tx_data_list() function by start_scn of tx data
    *
    */
-  int prepare_commit_version_list();
+  int prepare_commit_scn_list();
 
   /**
    * @brief Check if this tx data memtable can be minor merge
@@ -159,9 +160,9 @@ public:  // ObTxDataMemtable
                        K_(is_inited),
                        K_(is_iterating),
                        K_(has_constructed_list),
-                       K_(min_tx_log_ts),
-                       K_(max_tx_log_ts),
-                       K_(min_start_log_ts),
+                       K_(min_tx_scn),
+                       K_(max_tx_scn),
+                       K_(min_start_scn),
                        K_(snapshot_version),
                        K_(inserted_cnt),
                        K_(write_ref),
@@ -239,6 +240,7 @@ public: /* derived from ObIMemtable */
 
 public:  // checkpoint
   int64_t get_rec_log_ts();
+  palf::SCN get_rec_scn();
 
   // int freeze();
 
@@ -246,13 +248,13 @@ public:  // checkpoint
   
   /**
    * @brief Because of the random order of clog callbacks, the tx data in a freezing tx data
-   * memtable may not completed. We must wait until the max_consequent_callbacked_log_ts is larger
-   * than the end_log_ts of tx data memtable which means this memtable is now completed.
+   * memtable may not completed. We must wait until the max_consequent_callbacked_scn is larger
+   * than the end_scn of tx data memtable which means this memtable is now completed.
    */
   bool ready_for_flush();
 
 public:  // getter && setter
-  int64_t get_min_start_log_ts() { return ATOMIC_LOAD(&min_start_log_ts_); }
+  palf::SCN get_min_start_scn() { return min_start_scn_.atomic_get(); }
   int64_t get_tx_data_count() { return tx_data_map_->count(); }
   int64_t size() { return get_tx_data_count(); }
   int64_t get_inserted_count() { return inserted_cnt_; }
@@ -265,20 +267,29 @@ public:  // getter && setter
   const char* get_state_string();
   ObTxDataMemtableMgr *get_tx_data_memtable_mgr() { return memtable_mgr_; }
 
-  int64_t get_min_tx_log_ts() { return min_tx_log_ts_; }
-  int64_t get_max_tx_log_ts() { return max_tx_log_ts_; }
+  palf::SCN get_min_tx_scn() { return min_tx_scn_; }
+  palf::SCN get_max_tx_scn() { return max_tx_scn_; }
   int set_freezer(ObFreezer *handler);
-  void set_start_log_ts(const int64_t start_log_ts) {key_.log_ts_range_.start_log_ts_ = start_log_ts;}
-  void set_end_log_ts() { key_.log_ts_range_.end_log_ts_ = max_tx_log_ts_; }
+  void set_start_scn(const palf::SCN start_scn) {key_.scn_range_.start_scn_ = start_scn; }
+  void set_end_scn() { key_.scn_range_.end_scn_ = max_tx_scn_; }
   void set_state(const ObTxDataMemtable::State &state) { state_ = state; }
   void set_has_constructed_list(bool val) { has_constructed_list_ = val; }
   void reset_is_iterating() { ATOMIC_STORE(&is_iterating_, false); }
 
+
+  // FIXME : @gengli remove
+  palf::SCN get_end_scn() { return key_.scn_range_.end_scn_;}
+
+
 private:  // ObTxDataMemtable
   int do_sort_by_tx_id_();
+
+  int do_sort_by_start_scn_();
+
   void merge_sort_(int64_t (*get_key)(const ObTxData &), ObTxDataSortListNode *&head);
 
   ObTxDataSortListNode *quick_sort_(int64_t (*get_key)(const ObTxData &), ObTxDataSortListNode *head);
+
   ObTxDataSortListNode *merge_sorted_list_(int64_t (*get_key)(const ObTxData &),
                                            ObTxDataSortListNode *left_list,
                                            ObTxDataSortListNode *right_list);
@@ -286,29 +297,26 @@ private:  // ObTxDataMemtable
                    ObTxDataSortListNode *&left_list,
                    ObTxDataSortListNode *&right_list);
 
-  int do_sort_by_start_log_ts_();
-
   int cmp_key_(const int64_t &lhs, const int64_t &rhs);
 
-  int DEBUG_check_sort_result_(int64_t (*get_key)(const ObTxData &));
-
   int construct_list_for_sort_();
+
   void reset_thread_local_list_();
 
-
+  int DEBUG_check_sort_result_(int64_t (*get_key)(const ObTxData &));
 private:  // ObTxDataMemtable
   bool is_inited_;
   bool is_iterating_;
   bool has_constructed_list_;
 
-  // the minimum log ts of commit_log_ts in this tx data memtable
-  int64_t min_tx_log_ts_;
+  // the minimum log ts of commit_scn in this tx data memtable
+  palf::SCN min_tx_scn_;
 
   // the maximum log ts in this tx data memtable
-  int64_t max_tx_log_ts_;
+  palf::SCN max_tx_scn_;
 
   // the minimum start log ts in this tx data memtable
-  int64_t min_start_log_ts_;
+  palf::SCN min_start_scn_;
 
   int64_t inserted_cnt_;
 
@@ -372,12 +380,15 @@ public:
     UNUSED(key);
     // printf basic info
     fprintf(fd_,
-            "ObTxData : tx_id=%-19ld is_in_memtable=%-3d state=%-8s start_log_ts=%-19ld "
-            "end_log_ts=%-19ld "
-            "commit_version=%-19ld ",
-            tx_data->tx_id_.get_id(), tx_data->is_in_tx_data_table_,
-            ObTxData::get_state_string(tx_data->state_), tx_data->start_log_ts_,
-            tx_data->end_log_ts_, tx_data->commit_version_);
+            "ObTxData : tx_id=%-19ld is_in_memtable=%-3d state=%-8s start_scn=%-19ld "
+            "end_scn=%-19ld "
+            "commit_scn=%-19ld ",
+            tx_data->tx_id_.get_id(),
+            tx_data->is_in_tx_data_table_,
+            ObTxData::get_state_string(tx_data->state_),
+            tx_data->start_scn_.get_val_for_lsn_allocator(),
+            tx_data->end_scn_.get_val_for_lsn_allocator(),
+            tx_data->commit_scn_.get_val_for_lsn_allocator());
 
     // printf undo status list
     fprintf(fd_, "Undo Actions : {");
@@ -402,11 +413,21 @@ private:
 OB_INLINE int64_t ObTxDataMemtable::get_rec_log_ts()
 {
   // TODO : @gengli
-  // rec_log_ts changes constantly. The rec_log_ts obtained by checkpoint mgr
+  // rec_scn changes constantly. The rec_scn obtained by checkpoint mgr
   // may be greater than the actual checkpoint of tx_data_memtable because the
   // callback functions are not sequential. The checkpoint is determined both on
-  // the max-sequential callback point of the log and the rec_log_ts.
-  return min_tx_log_ts_;
+  // the max-sequential callback point of the log and the rec_scn.
+  return min_tx_scn_.get_val_for_lsn_allocator();
+}
+
+OB_INLINE palf::SCN ObTxDataMemtable::get_rec_scn()
+{
+  // TODO : @gengli
+  // rec_scn changes constantly. The rec_scn obtained by checkpoint mgr
+  // may be greater than the actual checkpoint of tx_data_memtable because the
+  // callback functions are not sequential. The checkpoint is determined both on
+  // the max-sequential callback point of the log and the rec_scn.
+  return min_tx_scn_;
 }
 
 }  // namespace storage

@@ -43,18 +43,18 @@ void LSNAllocator::reset()
 }
 
 int LSNAllocator::init(const int64_t log_id,
-                       const int64_t log_ts,
+                       const SCN &log_scn,
                        const LSN &start_lsn)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-  } else if (OB_INVALID_LOG_ID == log_id || OB_INVALID_TIMESTAMP == log_ts || !start_lsn.is_valid()) {
+  } else if (OB_INVALID_LOG_ID == log_id || !log_scn.is_valid() || !start_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(log_id), K(log_ts), K(start_lsn));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(log_id), K(log_scn), K(start_lsn));
   } else {
     log_id_base_ = log_id;
-    log_ts_base_ = log_ts;
+    log_ts_base_ = log_scn.get_val_for_lsn_allocator();
     lsn_ts_meta_.v128_.lo = 0;
     lsn_ts_meta_.lsn_val_ = start_lsn.val_;
     lsn_ts_meta_.is_need_cut_ = 1;
@@ -68,14 +68,14 @@ int LSNAllocator::init(const int64_t log_id,
   return ret;
 }
 
-int LSNAllocator::truncate(const LSN &lsn, const int64_t log_id, const int64_t log_ts)
+int LSNAllocator::truncate(const LSN &lsn, const int64_t log_id, const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || OB_INVALID_LOG_ID == log_id || OB_INVALID_TIMESTAMP == log_ts) {
+  } else if (!lsn.is_valid() || OB_INVALID_LOG_ID == log_id || !log_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(log_id), K(log_ts));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(log_id), K(log_scn));
   } else {
     LSNTsMeta last;
     LSNTsMeta next;
@@ -88,8 +88,8 @@ int LSNAllocator::truncate(const LSN &lsn, const int64_t log_id, const int64_t l
       next.is_need_cut_ = 1;
       if (CAS128(&lsn_ts_meta_, last, next)) {
         log_id_base_ = log_id;
-        log_ts_base_ = log_ts;
-        PALF_LOG(INFO, "truncate success", K(lsn), K(log_id), K(log_ts));
+        log_ts_base_ = log_scn.get_val_for_lsn_allocator();
+        PALF_LOG(INFO, "truncate success", K(lsn), K(log_id), K(log_scn));
         break;
       } else {
         PAUSE();
@@ -99,14 +99,14 @@ int LSNAllocator::truncate(const LSN &lsn, const int64_t log_id, const int64_t l
   return ret;
 }
 
-int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id, const int64_t log_ts)
+int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id, const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || OB_INVALID_TIMESTAMP == log_ts || OB_INVALID_LOG_ID == log_id) {
+  } else if (!lsn.is_valid() || !log_scn.is_valid() || OB_INVALID_LOG_ID == log_id) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(log_ts), K(log_id));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(log_scn), K(log_id));
   } else {
     LSNTsMeta last;
     LSNTsMeta next;
@@ -126,8 +126,8 @@ int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id,
         break;
       } else if (CAS128(&lsn_ts_meta_, last, next)) {
         log_id_base_ = log_id;
-        log_ts_base_ = log_ts;
-        PALF_LOG(TRACE, "inc_update_last_log_info success", K(lsn), K(log_ts), K(log_id));
+        log_ts_base_ = log_scn.get_val_for_lsn_allocator();
+        PALF_LOG(TRACE, "inc_update_last_log_info success", K(lsn), K(log_scn), K(log_id));
         break;
       } else {
         PAUSE();
@@ -137,17 +137,18 @@ int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id,
   return ret;
 }
 
-int LSNAllocator::inc_update_log_ts_base(const int64_t log_ts)
+int LSNAllocator::inc_update_log_scn_base(const SCN &log_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_INVALID_TIMESTAMP == log_ts) {
+  } else if (!log_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(log_ts));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(log_scn));
   } else {
     LSNTsMeta last;
     LSNTsMeta next;
+    const uint64_t log_ts = log_scn.get_val_for_lsn_allocator();
     while (true) {
       WLockGuard guard(lock_);
       LOAD128(last, &lsn_ts_meta_);
@@ -159,7 +160,7 @@ int LSNAllocator::inc_update_log_ts_base(const int64_t log_ts)
         break;
       } else if (CAS128(&lsn_ts_meta_, last, next)) {
         log_ts_base_ = log_ts;
-        PALF_LOG(INFO, "inc_update_log_ts_base success", K(log_ts));
+        PALF_LOG(INFO, "inc_update_log_scn_base success", K(log_ts), K(log_scn));
         break;
       } else {
         PAUSE();
@@ -182,17 +183,23 @@ int64_t LSNAllocator::get_max_log_id() const
   return max_log_id;
 }
 
-int64_t LSNAllocator::get_max_log_ts() const
+SCN LSNAllocator::get_max_log_scn() const
 {
-  int64_t max_log_ts = OB_INVALID_TIMESTAMP;
+  SCN result;
+  uint64_t max_log_ts = 0;
   if (IS_NOT_INIT) {
   } else {
     RLockGuard guard(lock_);
     LSNTsMeta last;
     LOAD128(last, &lsn_ts_meta_);
     max_log_ts = log_ts_base_ + last.log_ts_delta_;
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(result.convert_for_lsn_allocator(max_log_ts))) {
+      PALF_LOG(ERROR, "failed to convert_for_lsn_allocator", K(max_log_ts),
+               K(log_ts_base_), K(last.log_ts_delta_));
+    }
   }
-  return max_log_ts;
+  return result;
 }
 
 int LSNAllocator::get_curr_end_lsn(LSN &curr_end_lsn) const
@@ -211,7 +218,6 @@ int LSNAllocator::get_curr_end_lsn(LSN &curr_end_lsn) const
 int LSNAllocator::try_freeze_by_time(LSN &last_lsn, int64_t &last_log_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t now = ObTimeUtility::current_time_ns();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
@@ -279,21 +285,21 @@ int LSNAllocator::try_freeze(LSN &last_lsn, int64_t &last_log_id)
   return ret;
 }
 
-int LSNAllocator::alloc_lsn_ts(const int64_t base_ts,
-                               const int64_t size, // 已包含LogHeader size
-                               LSN &lsn,
-                               int64_t &log_id,
-                               int64_t &log_ts,
-                               bool &is_new_group_log,
-                               bool &need_gen_padding_entry,
-                               int64_t &padding_len)
+int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
+                                const int64_t size, // 已包含LogHeader size
+                                LSN &lsn,
+                                int64_t &log_id,
+                                SCN &log_scn,
+                                bool &is_new_group_log,
+                                bool &need_gen_padding_entry,
+                                int64_t &padding_len)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (size <= 0) {
+  } else if (size <= 0 || !base_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(base_ts), K(size));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(base_scn), K(size));
   } else {
     // 生成新日志时需加上log_group_entry_header的size
     const int64_t new_group_log_size = size + LogGroupEntryHeader::HEADER_SER_SIZE;
@@ -306,8 +312,8 @@ int LSNAllocator::alloc_lsn_ts(const int64_t base_ts,
         WLockGuard guard(lock_);
         LOAD128(last, &lsn_ts_meta_);
         const int64_t last_log_id = log_id_base_ + last.log_id_delta_;
-        const int64_t last_log_ts = log_ts_base_ + last.log_ts_delta_;
-        const int64_t new_log_ts = std::max(base_ts, last_log_ts);
+        const uint64_t last_log_ts = log_ts_base_ + last.log_ts_delta_;
+        const uint64_t new_log_ts = std::max(base_scn.get_val_for_lsn_allocator(), last_log_ts);
 
         log_id_base_ = last_log_id;
         log_ts_base_ = new_log_ts;
@@ -332,8 +338,8 @@ int LSNAllocator::alloc_lsn_ts(const int64_t base_ts,
         padding_len = 0;
         LOAD128(last, &lsn_ts_meta_);
         const int64_t last_log_id = log_id_base_ + last.log_id_delta_;
-        const int64_t last_log_ts = log_ts_base_ + last.log_ts_delta_;
-        const int64_t tmp_next_log_ts = std::max(base_ts, last_log_ts + 1);
+        const uint64_t last_log_ts = log_ts_base_ + last.log_ts_delta_;
+        const uint64_t tmp_next_log_ts = std::max(base_scn.get_val_for_lsn_allocator(), last_log_ts + 1);
 
         if ((tmp_next_log_ts + 1) - log_ts_base_ >= LOG_TS_DELTA_UPPER_BOUND) {
           // 对于可能生成的padding log, 也会占用一个log_ts
@@ -346,16 +352,12 @@ int LSNAllocator::alloc_lsn_ts(const int64_t base_ts,
         }
 
         if (need_update_base) {
-          // PALF_LOG(INFO, "need update base value", K(base_ts), K_(log_ts_base), K_(log_id_base), K(last_log_id),
-          //     K(last_log_ts), K(now), "log_ts_delta", last.log_ts_delta_,
-          //     "log_id_delta", last.log_id_delta_, K(LOG_TS_DELTA_UPPER_BOUND), K(LOG_ID_DELTA_UPPER_BOUND));
-          // need update base value, break inner loop
           break;
         }
 
         uint64_t tmp_next_block_id = lsn_2_block(last.lsn_val_, PALF_BLOCK_SIZE);
         uint64_t tmp_next_log_id_delta = last.log_id_delta_;
-        int64_t tmp_next_log_ts_delta = tmp_next_log_ts - log_ts_base_;
+        uint64_t tmp_next_log_ts_delta = tmp_next_log_ts - log_ts_base_;
         // 下一条日志是否需要cut
         bool is_next_need_cut = false;
         const uint64_t last_block_offset = lsn_2_offset(last.lsn_val_, PALF_BLOCK_SIZE);
@@ -452,8 +454,13 @@ int LSNAllocator::alloc_lsn_ts(const int64_t base_ts,
           } else {
             log_id = last_log_id;
           }
-          log_ts = log_ts_base_ + output_next_log_ts_delta;
-          PALF_LOG(TRACE, "alloc_lsn_ts succ", K(ret), K(base_ts), K(size), K(lsn), K(last.lsn_val_),
+
+          uint64_t log_ts = log_ts_base_ + output_next_log_ts_delta;
+          if (OB_FAIL(log_scn.convert_for_lsn_allocator(log_ts))) {
+            PALF_LOG(ERROR, "failed to convert log_scn", K(ret), K(base_scn), K(log_ts));
+          }
+
+          PALF_LOG(TRACE, "alloc_lsn_ts succ", K(ret), K(base_scn), K(size), K(lsn), K(last.lsn_val_),
                K(next.lsn_val_), "next.is_need_cut", next.is_need_cut_, K(log_id), K(log_ts));
           break;
         } else {

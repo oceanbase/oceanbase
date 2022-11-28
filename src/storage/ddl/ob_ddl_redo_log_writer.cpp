@@ -23,7 +23,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -32,7 +31,19 @@ using namespace oceanbase::blocksstable;
 using namespace oceanbase::logservice;
 using namespace oceanbase::share;
 
-int ObDDLCtrlSpeedItem::init(const share::ObLSID &ls_id)
+int ObDDLCtrlSpeedHandleItem::assign(const ObDDLCtrlSpeedHandleItem &speed_handle_item)
+{
+  int ret = OB_SUCCESS;
+  is_inited_ = speed_handle_item.is_inited_;
+  ls_id_ = speed_handle_item.ls_id_;
+  next_available_write_ts_ = speed_handle_item.next_available_write_ts_;
+  write_speed_ = speed_handle_item.write_speed_;
+  disk_used_stop_write_threshold_ = speed_handle_item.disk_used_stop_write_threshold_;
+  need_stop_write_ = speed_handle_item.need_stop_write_;
+  return ret;
+}
+
+int ObDDLCtrlSpeedHandleItem::init(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -48,7 +59,7 @@ int ObDDLCtrlSpeedItem::init(const share::ObLSID &ls_id)
       LOG_WARN("fail to init write speed and clog disk used threshold", K(ret));
     } else {
       is_inited_ = true;
-      LOG_INFO("succeed to init ObDDLCtrlSpeedItem", K(ret), K(is_inited_), K(ls_id_), 
+      LOG_INFO("succeed to init ObDDLCtrlSpeedHandleItem", K(ret), K(is_inited_), K(ls_id_),
         K(next_available_write_ts_), K(write_speed_), K(disk_used_stop_write_threshold_));
     }
   }
@@ -56,11 +67,10 @@ int ObDDLCtrlSpeedItem::init(const share::ObLSID &ls_id)
 }
 
 // refrese ddl clog write speed and disk used threshold on tenant level.
-int ObDDLCtrlSpeedItem::refresh()
+int ObDDLCtrlSpeedHandleItem::refresh()
 {
   int ret = OB_SUCCESS;
-  int64_t archive_speed = 0;
-  int64_t refresh_speed = 0;
+  int64_t archive_speed;
   bool ignore = false;
   bool force_wait = false;
   int64_t total_used_space = 0; // for current tenant, used bytes.
@@ -94,21 +104,21 @@ int ObDDLCtrlSpeedItem::refresh()
   } else if (OB_ISNULL(GCTX.bandwidth_throttle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, bandwidth throttle is null", K(ret), KP(GCTX.bandwidth_throttle_));
-  } else if (OB_FAIL(GCTX.bandwidth_throttle_->get_rate(refresh_speed))) {
-    LOG_WARN("fail to get rate", K(ret), K(refresh_speed));
+  } else if (OB_FAIL(GCTX.bandwidth_throttle_->get_rate(write_speed_))) {
+    LOG_WARN("fail to get rate", K(ret), K(write_speed_));
   } else {
     // archive is not on if ignore = true.
-    write_speed_ = ignore ? std::max(refresh_speed, 1 * MIN_WRITE_SPEED) : std::max(archive_speed, 1 * MIN_WRITE_SPEED);
+    write_speed_ = ignore ? write_speed_ : std::max(archive_speed, 1 * MIN_WRITE_SPEED);
     disk_used_stop_write_threshold_ = (disk_opt.log_disk_utilization_threshold_ + disk_opt.log_disk_utilization_limit_threshold_) / 2;
     need_stop_write_ = 100.0 * total_used_space / total_disk_space >= disk_used_stop_write_threshold_ ? true : false;
   }
   LOG_DEBUG("current ddl clog write speed", K(ret), K(need_stop_write_), K(ls_id_), K(archive_speed), K(write_speed_), 
-    K(total_used_space), K(total_disk_space), K(disk_used_stop_write_threshold_), K(refresh_speed));
+    K(total_used_space), K(total_disk_space), K(disk_used_stop_write_threshold_));
   return ret;
 }
 
 // calculate the sleep time for the input bytes, and return next available write timestamp.
-int ObDDLCtrlSpeedItem::cal_limit(const int64_t bytes, int64_t &next_available_ts)
+int ObDDLCtrlSpeedHandleItem::cal_limit(const int64_t bytes, int64_t &next_available_ts)
 {
   int ret = OB_SUCCESS;
   next_available_ts = 0;
@@ -133,7 +143,7 @@ int ObDDLCtrlSpeedItem::cal_limit(const int64_t bytes, int64_t &next_available_t
   return ret;
 }
 
-int ObDDLCtrlSpeedItem::do_sleep(
+int ObDDLCtrlSpeedHandleItem::do_sleep(
   const int64_t next_available_ts,
   int64_t &real_sleep_us)
 {
@@ -147,13 +157,8 @@ int ObDDLCtrlSpeedItem::do_sleep(
     LOG_WARN("invalid argument.", K(ret), K(next_available_ts));
   } else if (OB_UNLIKELY(need_stop_write_)) /*clog disk used exceeds threshold*/ {
     while (OB_SUCC(ret) && need_stop_write_) {
-      // TODO YIREN (FIXME-20221017), exit when task is canceled, etc.
       ob_usleep(SLEEP_INTERVAL);
-      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-        ObTaskController::get().allow_next_syslog();
-        FLOG_INFO("stop write ddl clog", K(ret), K(ls_id_), 
-          K(write_speed_), K(need_stop_write_), K(ref_cnt_), K(disk_used_stop_write_threshold_));
-      }
+      LOG_INFO("stop write ddl clog", K(ret), K(disk_used_stop_write_threshold_));
     }
   }
   if (OB_SUCC(ret)) {
@@ -164,7 +169,7 @@ int ObDDLCtrlSpeedItem::do_sleep(
 }
 
 // calculate the sleep time for the input bytes, sleep.
-int ObDDLCtrlSpeedItem::limit_and_sleep(
+int ObDDLCtrlSpeedHandleItem::limit_and_sleep(
   const int64_t bytes,
   int64_t &real_sleep_us)
 {
@@ -195,55 +200,16 @@ int ObDDLCtrlSpeedItem::limit_and_sleep(
   return ret;
 }
 
-int ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedItemHandle::set_ctrl_speed_item(
-    ObDDLCtrlSpeedItem *item)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(item)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected err, item is nullptr", K(ret));
-  } else {
-    item->inc_ref();
-    item_ = item;
-  }
-  return ret;
-}
-
-int ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedItemHandle::get_ctrl_speed_item(
-    ObDDLCtrlSpeedItem *&item) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(item_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, speed handle item is nullptr", K(ret));
-  } else {
-    item = item_;
-  }
-  return ret;
-}
-
-void ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedItemHandle::reset()
-{
-  if (nullptr != item_) {
-    if (0 == item_->dec_ref()) {
-      item_->~ObDDLCtrlSpeedItem();
-    }
-    item_ = nullptr;
-  }
-}
-
 ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedHandle()
-  : is_inited_(false), speed_handle_map_(), allocator_("DDLClogCtrl"), bucket_lock_(), refreshTimerTask_()
+  : is_inited_(false), speed_handle_map_(), refreshTimerTask_()
 {
 }
 
 ObDDLCtrlSpeedHandle::~ObDDLCtrlSpeedHandle()
 {
-  bucket_lock_.destroy();
   if (speed_handle_map_.created()) {
     speed_handle_map_.destroy();
   }
-  allocator_.reset();
 }
 
 ObDDLCtrlSpeedHandle &ObDDLCtrlSpeedHandle::get_instance()
@@ -261,8 +227,6 @@ int ObDDLCtrlSpeedHandle::init()
   } else if (OB_UNLIKELY(speed_handle_map_.created())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, speed handle map is created", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(MAP_BUCKET_NUM))) {
-    LOG_WARN("init bucket lock failed", K(ret));
   } else if (OB_FAIL(speed_handle_map_.create(MAP_BUCKET_NUM, "DDLSpeedCtrl"))) {
     LOG_WARN("fail to create speed handle map", K(ret));
   } else {
@@ -283,9 +247,7 @@ int ObDDLCtrlSpeedHandle::limit_and_sleep(
 {
   int ret = OB_SUCCESS;
   SpeedHandleKey speed_handle_key;
-  ObDDLCtrlSpeedItem *speed_handle_item = nullptr;
-  ObDDLCtrlSpeedItemHandle item_handle;
-  item_handle.reset();
+  ObDDLCtrlSpeedHandleItem speed_handle_item;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -297,31 +259,21 @@ int ObDDLCtrlSpeedHandle::limit_and_sleep(
   } else if (OB_UNLIKELY(!speed_handle_map_.created())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("speed handle map is not created", K(ret));
-  } else if (OB_FAIL(add_ctrl_speed_item(speed_handle_key, item_handle))) {
-    LOG_WARN("add speed item failed", K(ret));
-  } else if (OB_FAIL(item_handle.get_ctrl_speed_item(speed_handle_item))) {
-    LOG_WARN("get speed handle item failed", K(ret));
-  } else if (OB_ISNULL(speed_handle_item)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected err, ctrl speed item is nullptr", K(ret), K(speed_handle_key));
-  } else if (OB_FAIL(speed_handle_item->limit_and_sleep(bytes,
-                                                        real_sleep_us))) {
+  } else if (OB_FAIL(ObDDLCtrlSpeedHandle::get_instance().add_speed_handle_item(speed_handle_key))) {
+    LOG_WARN("fail to add speed handle item", K(ret), K(ls_id));
+  } else if (OB_FAIL(speed_handle_map_.get_refactored(speed_handle_key, speed_handle_item))) {
+    LOG_WARN("fail to get refactored", K(ret), K(speed_handle_key));
+  } else if (OB_FAIL(speed_handle_item.limit_and_sleep(bytes,
+                                                       real_sleep_us))) {
     LOG_WARN("fail to limit and sleep", K(ret), K(bytes), K(real_sleep_us));
   }
   return ret;
 }
 
-// add entry in speed_handle_map if it does not exist.
-// set entry in ctrl_speed_item_handle.
-int ObDDLCtrlSpeedHandle::add_ctrl_speed_item(
-    const SpeedHandleKey &speed_handle_key, 
-    ObDDLCtrlSpeedItemHandle &item_handle)
+int ObDDLCtrlSpeedHandle::add_speed_handle_item(const SpeedHandleKey &speed_handle_key)
 {
   int ret = OB_SUCCESS;
-  common::ObBucketHashWLockGuard guard(bucket_lock_, speed_handle_key.hash());
-  char *buf = nullptr;
-  ObDDLCtrlSpeedItem *speed_handle_item = nullptr;
-  item_handle.reset();
+  ObDDLCtrlSpeedHandleItem speed_handle_item;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -332,77 +284,11 @@ int ObDDLCtrlSpeedHandle::add_ctrl_speed_item(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected, speed handle map is not created", K(ret));
   } else if (nullptr != speed_handle_map_.get(speed_handle_key)) {
-    // do nothing, speed handle item has already exist.
-  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(sizeof(ObDDLCtrlSpeedItem))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", K(ret));
-  } else {
-    speed_handle_item = new (buf) ObDDLCtrlSpeedItem();
-    if (OB_ISNULL(speed_handle_item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nullptr", K(ret));
-    } else if (OB_FAIL(speed_handle_item->init(speed_handle_key.ls_id_))) {
-        LOG_WARN("fail to init new speed handle item", K(ret), K(speed_handle_key));
-    } else if (OB_FAIL(speed_handle_map_.set_refactored(speed_handle_key, speed_handle_item))) {
-      LOG_WARN("fail to add speed handle item", K(ret), K(speed_handle_key));
-    } else {
-      speed_handle_item->inc_ref();
-    }
-  }
-
-  // set entry for ctrl_speed_item_handle.
-  if (OB_SUCC(ret)) {
-    ObDDLCtrlSpeedItem *curr_speed_handle_item = nullptr;
-    if (OB_FAIL(speed_handle_map_.get_refactored(speed_handle_key, curr_speed_handle_item))) {
-      LOG_WARN("get refactored failed", K(ret), K(speed_handle_key));
-    } else if (OB_ISNULL(curr_speed_handle_item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected err, speed handle item is nullptr", K(ret), K(speed_handle_key));
-    } else if (OB_FAIL(item_handle.set_ctrl_speed_item(curr_speed_handle_item))) {
-      LOG_WARN("set ctrl speed item failed", K(ret), K(speed_handle_key));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    if (nullptr != speed_handle_item) {
-      speed_handle_item->~ObDDLCtrlSpeedItem();
-      speed_handle_item = nullptr;
-    }
-    if (nullptr != buf) {
-      allocator_.free(buf);
-      buf = nullptr;
-    }
-  }
-  return ret;
-}
-
-// remove entry from speed_handle_map.
-int ObDDLCtrlSpeedHandle::remove_ctrl_speed_item(const SpeedHandleKey &speed_handle_key)
-{
-  int ret = OB_SUCCESS;
-  common::ObBucketHashWLockGuard guard(bucket_lock_, speed_handle_key.hash());
-  char *buf = nullptr;
-  ObDDLCtrlSpeedItem *speed_handle_item = nullptr;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!speed_handle_key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls id is invalid", K(ret), K(speed_handle_key));
-  } else if (OB_UNLIKELY(!speed_handle_map_.created())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected, speed handle map is not created", K(ret));
-  } else if (OB_FAIL(speed_handle_map_.get_refactored(speed_handle_key, speed_handle_item))) {
-    LOG_WARN("get refactored failed", K(ret), K(speed_handle_key));
-  } else if (OB_FAIL(speed_handle_map_.erase_refactored(speed_handle_key))) {
-    LOG_WARN("fail to erase_refactored", K(ret), K(speed_handle_key));
-  } else if (OB_ISNULL(speed_handle_item)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, speed handle item is nullptr", K(ret), K(speed_handle_key));
-  } else {
-    if (0 == speed_handle_item->dec_ref()) {
-      speed_handle_item->~ObDDLCtrlSpeedItem();
-      speed_handle_item = nullptr;
-    }
+    // do nothing, speed handle item already exist.
+  } else if (OB_FAIL(speed_handle_item.init(speed_handle_key.ls_id_))) {
+    LOG_WARN("fail to init new speed handle item", K(ret), K(speed_handle_key));
+  } else if (OB_FAIL(speed_handle_map_.set_refactored(speed_handle_key, speed_handle_item))) {
+    LOG_WARN("fail to add speed handle item", K(ret), K(speed_handle_key));
   }
   return ret;
 }
@@ -414,7 +300,7 @@ int ObDDLCtrlSpeedHandle::refresh()
 {
   int ret = OB_SUCCESS;
   // 1. remove speed_handle_item whose ls/tenant does not exist;
-  for (hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedItem*>::const_iterator iter = speed_handle_map_.begin();
+  for (hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedHandleItem>::const_iterator iter = speed_handle_map_.begin();
       OB_SUCC(ret) && iter != speed_handle_map_.end(); ++iter) {
     bool erase = false;
     const SpeedHandleKey &speed_handle_key = iter->first;
@@ -442,8 +328,8 @@ int ObDDLCtrlSpeedHandle::refresh()
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (erase && OB_FAIL(remove_ctrl_speed_item(speed_handle_key))) {
-      LOG_WARN("remove speed handle item failed", K(ret), K(speed_handle_key));
+    } else if (erase && OB_FAIL(speed_handle_map_.erase_refactored(speed_handle_key))) {
+      LOG_WARN("fail to erase_refactored", K(ret), K(speed_handle_key));
     }
   }
   
@@ -459,24 +345,15 @@ int ObDDLCtrlSpeedHandle::refresh()
 
 // UpdateSpeedHandleItemFn update ddl clog write speed and disk used config
 int ObDDLCtrlSpeedHandle::UpdateSpeedHandleItemFn::operator() (
-    hash::HashMapPair<SpeedHandleKey, ObDDLCtrlSpeedItem*> &entry)
+    hash::HashMapPair<SpeedHandleKey, ObDDLCtrlSpeedHandleItem> &entry)
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(entry.first.tenant_id_) {
-    if (OB_ISNULL(entry.second)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nulptr", K(ret), K(entry.first));
-    } else if (OB_FAIL(entry.second->refresh())) {
+    if (OB_FAIL(entry.second.refresh())) {
       LOG_WARN("refresh speed and disk config failed", K(ret), K(entry));
     }
   } else if (OB_TENANT_NOT_IN_SERVER == ret || OB_IN_STOP_STATE == ret) { // tenant deleted or on deleting
-    if (OB_ISNULL(entry.second)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nulptr", K(ret), K(entry.first));
-    } else {
-      entry.second->reset_need_stop_write();
-      ret = OB_SUCCESS;
-    }
+    ret = OB_SUCCESS;
   } else {
     LOG_WARN("switch tenant id failed", K(ret), K(MTL_ID()), K(entry));
   }
@@ -518,7 +395,7 @@ void ObDDLCtrlSpeedHandle::RefreshSpeedHandleTask::runTimerTask()
   }
 }
 
-ObDDLRedoLogWriter::ObDDLRedoLogWriter() : is_inited_(false), bucket_lock_()
+ObDDLRedoLogWriter::ObDDLRedoLogWriter()
 {
 }
 
@@ -530,19 +407,6 @@ ObDDLRedoLogWriter &ObDDLRedoLogWriter::get_instance()
 {
   static ObDDLRedoLogWriter instance;
   return instance;
-}
-
-int ObDDLRedoLogWriter::init()
-{
-  int ret = OB_SUCCESS;
-  const int64_t bucket_num = 10243L;
-  if (is_inited_) {
-  } else if (OB_FAIL(bucket_lock_.init(bucket_num))) {
-    LOG_WARN("init bucket lock failed", K(ret), K(bucket_num));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
 }
 
 int ObDDLRedoLogWriter::write(
@@ -584,12 +448,12 @@ int ObDDLRedoLogWriter::write(
   } else if (OB_FAIL(log.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("fail to seriaize ddl redo log", K(ret));
   } else if (OB_FAIL(log_handler->append(buffer,
-                                        buffer_size,
-                                        base_log_ts,
-                                        need_nonblock,
-                                        cb,
-                                        lsn,
-                                        log_ts))) {
+                                         buffer_size,
+                                         base_log_ts,
+                                         need_nonblock,
+                                         cb,
+                                         lsn,
+                                         log_ts))) {
     LOG_WARN("fail to submit ddl redo log", K(ret), K(buffer), K(buffer_size));
   } else {
     handle.cb_ = cb;
@@ -612,10 +476,7 @@ int ObDDLRedoLogWriter::write(
   return ret;
 }
 
-int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
-                                            const ObDDLStartLog &log,
-                                            ObLogHandler *log_handler,
-                                            int64_t &start_log_ts)
+int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandler *log_handler, int64_t &start_log_ts)
 {
   int ret = OB_SUCCESS;
   start_log_ts = 0;
@@ -635,11 +496,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
   int64_t base_log_ts = 0;
   int64_t log_ts = 0;
   bool is_external_consistent = false;
-  ObBucketHashWLockGuard guard(bucket_lock_, log.get_table_key().get_tablet_id().hash());
-  if (ddl_kv_mgr_handle.get_obj()->is_execution_id_older(log.get_execution_id())) {
-    ret = OB_TASK_EXPIRED;
-    LOG_INFO("receive a old execution id, don't do ddl start", K(ret), K(log));
-  } else if (OB_ISNULL(cb = op_alloc(ObDDLClogCb))) {
+  if (OB_ISNULL(cb = op_alloc(ObDDLClogCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
   } else if (OB_FAIL(base_header.serialize(buffer, buffer_size, pos))) {
@@ -649,17 +506,13 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
   } else if (OB_FAIL(log.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("fail to seriaize ddl start log", K(ret));
   } else if (OB_FAIL(log_handler->append(buffer,
-                                        buffer_size,
-                                        base_log_ts,
-                                        need_nonblock,
-                                        cb,
-                                        lsn,
-                                        log_ts))) {
+                                         buffer_size,
+                                         base_log_ts,
+                                         need_nonblock,
+                                         cb,
+                                         lsn,
+                                         log_ts))) {
     LOG_WARN("fail to submit ddl start log", K(ret), K(buffer_size));
-    if (ObDDLUtil::need_remote_write(ret)) {
-      ret = OB_NOT_MASTER;
-      LOG_INFO("overwrite return to OB_NOT_MASTER");
-    }
   } else {
     ObDDLClogCb *tmp_cb = cb;
     cb = nullptr;
@@ -669,7 +522,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
       if (tmp_cb->is_success()) {
         finish = true;
       } else if (tmp_cb->is_failed()) {
-        ret = OB_NOT_MASTER;
+        ret = OB_ERR_SYS;
       }
       if (OB_SUCC(ret) && !finish) {
         const int64_t current_time = ObTimeUtility::current_time();
@@ -683,13 +536,6 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
     }
     if (OB_SUCC(ret)) {
       start_log_ts = log_ts;
-      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(log.get_table_key(),
-                                                          start_log_ts,
-                                                          log.get_cluster_version(),
-                                                          log.get_execution_id(),
-                                                          0/*checkpoint_log_ts*/))) {
-        LOG_WARN("start ddl log failed", K(ret), K(start_log_ts), K(log));
-      }
     }
     tmp_cb->try_release(); // release the memory no matter succ or not
   }
@@ -720,8 +566,7 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  int64_t base_log_ts = 0;
-  int64_t log_ts = 0;
+  palf::SCN base_log_ts, log_ts;
   bool is_external_consistent = false;
   if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -738,12 +583,12 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
   } else if (OB_FAIL(OB_TS_MGR.get_ts_sync(MTL_ID(), ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT, base_log_ts, is_external_consistent))) {
     LOG_WARN("fail to get gts sync", K(ret), K(log));
   } else if (OB_FAIL(log_handler->append(buffer,
-                                        buffer_size,
-                                        base_log_ts,
-                                        need_nonblock,
-                                        cb,
-                                        lsn,
-                                        log_ts))) {
+                                         buffer_size,
+                                         base_log_ts,
+                                         need_nonblock,
+                                         cb,
+                                         lsn,
+                                         log_ts))) {
     LOG_WARN("fail to submit ddl commit log", K(ret), K(buffer), K(buffer_size));
   } else {
     ObDDLClogCb *tmp_cb = cb;
@@ -762,7 +607,7 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
     }
     if (OB_SUCC(ret)) {
       handle.cb_ = tmp_cb;
-      handle.commit_log_ts_ = log_ts;
+      handle.commit_log_ts_ = log_ts.get_val_for_lsn_allocator();
       LOG_INFO("submit ddl commit log succeed", K(lsn), K(base_log_ts), K(log_ts));
     } else {
       tmp_cb->try_release(); // release the memory
@@ -810,7 +655,7 @@ int ObDDLRedoLogHandle::wait(const int64_t timeout)
       if (cb_->is_success()) {
         finish = true;
       } else if (cb_->is_failed()) {
-        ret = OB_NOT_MASTER;
+        ret = OB_ERR_SYS;
       }
       if (OB_SUCC(ret) && !finish) {
         const int64_t current_time = ObTimeUtility::current_time();
@@ -847,7 +692,7 @@ int ObDDLCommitLogHandle::wait(const int64_t timeout)
       if (cb_->is_success()) {
         finish = true;
       } else if (cb_->is_failed()) {
-        ret = OB_NOT_MASTER;
+        ret = OB_ERR_SYS;
       }
       if (OB_SUCC(ret) && !finish) {
         const int64_t current_time = ObTimeUtility::current_time();
@@ -920,60 +765,64 @@ int ObDDLMacroBlockRedoWriter::remote_write_macro_redo(const ObAddr &leader_addr
 
 ObDDLSSTableRedoWriter::ObDDLSSTableRedoWriter()
   : is_inited_(false), remote_write_(false), start_log_ts_(0),
-    ls_id_(), tablet_id_(), ddl_redo_handle_(), leader_addr_(), leader_ls_id_(), buffer_(nullptr)
+    ls_handle_(), tablet_handle_(), ddl_redo_handle_(), leader_addr_(), leader_ls_id_(), tablet_id_(), buffer_(nullptr)
 {
 }
 
 int ObDDLSSTableRedoWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  ObLSService *ls_service = nullptr;
+  bool is_cache_hit = false;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDDLSSTableRedoWriter has been inited twice", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls service should not be null", K(ret));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle_, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("get ls failed", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls should not be null", K(ret));
+  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_))) {
+    LOG_WARN("fail to get tablet handle", K(ret), K(tablet_id));
   } else {
-    ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     is_inited_ = true;
   }
   return ret;
 }
 
-int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
-                                           const int64_t execution_id,
-                                           ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key)
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ObTabletHandle tablet_handle;
   ObDDLStartLog log;
-  ddl_kv_mgr_handle.reset();
+  ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
   int64_t tmp_log_ts = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || execution_id <= 0)) {
+  } else if (OB_UNLIKELY(!table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(table_key), K(execution_id));
-  } else if (OB_FAIL(log.init(table_key, GET_MIN_CLUSTER_VERSION(), execution_id))) {
-    LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), K(execution_id), "cluster_version", GET_MIN_CLUSTER_VERSION());
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("get ls failed", K(ret), K(ls_id_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    LOG_WARN("invalid arguments", K(ret), K(table_key));
+  } else if (OB_FAIL(log.init(table_key, GET_MIN_CLUSTER_VERSION()))) {
+    LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), "cluster_version", GET_MIN_CLUSTER_VERSION());
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
-  } else if (OB_FAIL(ls->get_tablet(tablet_id_, tablet_handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
-    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
-    LOG_WARN("create ddl kv mgr failed", K(ret));
-  } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_start_log(ddl_kv_mgr_handle, log, ls->get_log_handler(), tmp_log_ts))) {
+  } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_start_log(log, ls->get_log_handler(), tmp_log_ts))) {
     LOG_WARN("fail to write ddl start log", K(ret), K(table_key));
   } else if (FALSE_IT(set_start_log_ts(tmp_log_ts))) {
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->register_to_tablet(get_start_log_ts(), ddl_kv_mgr_handle))) {
-    LOG_WARN("register ddl kv mgr to tablet failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else if (OB_FAIL(tablet_handle_.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr))) {
+    LOG_WARN("get ddl kv mgr failed", K(ret));
+  } else if (OB_FAIL(ddl_kv_mgr->ddl_start(table_key, get_start_log_ts(), log.get_cluster_version()))) {
+    LOG_WARN("start ddl log failed", K(ret), K(table_key), K(start_log_ts_), K(log));
   }
   return ret;
 }
@@ -981,7 +830,6 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
 int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_info, const blocksstable::MacroBlockId &macro_block_id)
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   const int64_t BUF_SIZE = 2 * 1024 * 1024 + 16 * 1024;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -990,9 +838,7 @@ int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_i
   } else if (OB_UNLIKELY(!redo_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("get ls failed", K(ret), K(ls_id_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret));
   } else if (nullptr == buffer_ && OB_ISNULL(buffer_ = static_cast<char *>(ob_malloc(BUF_SIZE)))) {
@@ -1000,7 +846,7 @@ int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_i
     LOG_WARN("allocate memory failed", K(ret), K(BUF_SIZE));
   } else if (!remote_write_) {
     if (OB_FAIL(ObDDLMacroBlockRedoWriter::write_macro_redo(redo_info, ls->get_ls_id(), ls->get_log_handler(), macro_block_id, buffer_, ddl_redo_handle_))) {
-      if (ObDDLUtil::need_remote_write(ret)) {
+      if (need_remote_write(ret)) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret));
         }
@@ -1043,22 +889,11 @@ int ObDDLSSTableRedoWriter::wait_redo_log_finish(const ObDDLMacroBlockRedoInfo &
 
 int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_key,
                                               const int64_t table_id,
-                                              const int64_t execution_id,
-                                              const int64_t ddl_task_id,
+                                              const int64_t schema_version,
                                               int64_t &prepare_log_ts)
-
 {
   int ret = OB_SUCCESS;
-#ifdef ERRSIM
-  SERVER_EVENT_SYNC_ADD("storage_ddl", "before_write_prepare_log",
-                        "table_key", table_key,
-                        "table_id", table_id,
-                        "execution_id", execution_id,
-                        "ddl_task_id", ddl_task_id);
-  DEBUG_SYNC(BEFORE_DDL_WRITE_PREPARE_LOG);
-#endif
   prepare_log_ts = 0;
-  ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObDDLPrepareLog log;
   ObDDLCommitLogHandle handle;
@@ -1070,14 +905,12 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_log_ts_));
   } else if (OB_FAIL(log.init(table_key, get_start_log_ts()))) {
     LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_log_ts_));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("get ls failed", K(ret), K(ls_id_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
   } else if (!remote_write_) {
     if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_finish_log(log, ObDDLClogType::DDL_PREPARE_LOG, ls->get_log_handler(), handle))) {
-      if (ObDDLUtil::need_remote_write(ret)) {
+      if (need_remote_write(ret)) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(table_key));
         }
@@ -1094,13 +927,17 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
     ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
     obrpc::ObRpcRemoteWriteDDLPrepareLogArg arg;
     obrpc::Int64 log_ts;
-    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_log_ts(), table_id, execution_id, ddl_task_id))) {
+    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_log_ts(), table_id, schema_version))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLPrepareLogArg", K(ret));
     } else if (OB_ISNULL(srv_rpc_proxy)) {
       ret = OB_ERR_SYS;
       LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
     } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_prepare_log(arg, log_ts))) {
-      LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
+      if (OB_TASK_EXPIRED == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
+      }
     } else {
       prepare_log_ts = log_ts;
     }
@@ -1112,7 +949,6 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
                                              const int64_t prepare_log_ts)
 {
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObDDLCommitLog log;
   ObDDLCommitLogHandle handle;
@@ -1124,14 +960,12 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_log_ts_), K(prepare_log_ts));
   } else if (OB_FAIL(log.init(table_key, get_start_log_ts(), prepare_log_ts))) {
     LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_log_ts_), K(prepare_log_ts));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("get ls failed", K(ret), K(ls_id_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
   } else if (!remote_write_) {
     if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_finish_log(log, ObDDLClogType::DDL_COMMIT_LOG, ls->get_log_handler(), handle))) {
-      if (ObDDLUtil::need_remote_write(ret)) {
+      if (need_remote_write(ret)) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(table_key));
         }
@@ -1152,10 +986,21 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
       ret = OB_ERR_SYS;
       LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
     } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_commit_log(arg, log_ts))) {
-      LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
+      if (OB_TASK_EXPIRED == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
+      }
     }
   }
   return ret;
+}
+
+bool ObDDLSSTableRedoWriter::need_remote_write(int ret_code)
+{
+  return OB_NOT_MASTER == ret_code
+    || OB_NOT_RUNNING == ret_code
+    || OB_LS_LOCATION_LEADER_NOT_EXIST == ret_code;
 }
 
 int ObDDLSSTableRedoWriter::switch_to_remote_write()

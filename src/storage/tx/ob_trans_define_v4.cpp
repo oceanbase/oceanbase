@@ -23,7 +23,6 @@
 #include "share/ob_define.h"
 #include "common/storage/ob_sequence.h"
 #include "lib/oblog/ob_log_module.h"
-#include "lib/stat/ob_latch_define.h"
 
 #define USING_LOG_PREFIX TRANS
 namespace oceanbase
@@ -197,7 +196,7 @@ ObTxDesc::ObTxDesc()
     xid_(),
     isolation_(ObTxIsolationLevel::RC), // default is RC
     access_mode_(ObTxAccessMode::RW),   // default is RW
-    snapshot_version_(-1),
+    snapshot_version_(),
     snapshot_uncertain_bound_(0),
     snapshot_scn_(0),
     sess_id_(0),
@@ -209,8 +208,6 @@ ObTxDesc::ObTxDesc()
     timeout_us_(-1),
     lock_timeout_us_(-1),
     expire_ts_(INT64_MAX),              // never expire by default
-    commit_ts_(-1),
-    finish_ts_(-1),
     active_scn_(-1),
     min_implicit_savepoint_(INT64_MAX),
     parts_(),
@@ -219,12 +216,11 @@ ObTxDesc::ObTxDesc()
     coord_id_(),
     commit_expire_ts_(0),
     commit_parts_(),
-    commit_version_(-1),
+    commit_version_(),
     commit_out_(-1),
     abort_cause_(0),
     can_elr_(false),
-    lock_(common::ObLatchIds::TX_DESC_LOCK),
-    commit_cb_lock_(common::ObLatchIds::TX_DESC_COMMIT_LOCK),
+    lock_(),
     commit_cb_(NULL),
     exec_info_reap_ts_(0),
     brpc_mask_set_(),
@@ -260,7 +256,7 @@ int ObTxDesc::switch_to_idle()
   cflict_txs_.reset();
   coord_id_.reset();
   commit_parts_.reset();
-  commit_version_ = 0;
+  commit_version_.reset();
   commit_out_ = 0;
   abort_cause_ = 0;
   can_elr_ = false;
@@ -288,11 +284,8 @@ void ObTxDesc::reset()
 #ifndef NDEBUG
   FORCE_PRINT_TRACE(&tlog_, "[tx desc trace]");
 #else
-  if (state_ == State::IDLE || state_ == State::COMMITTED) {
-    if (finish_ts_ - commit_ts_ > 5 * 1000 * 1000) {
-      FORCE_PRINT_TRACE(&tlog_, "[tx slow commit][tx desc trace]");
-    }
-  } else if (flags_.SHADOW_) { /* skip clone's destory */}
+  if (state_ == State::IDLE || state_ == State::COMMITTED) { /* skip */}
+  else if (flags_.SHADOW_) { /* skip clone's destory */}
   else {
     FORCE_PRINT_TRACE(&tlog_, "[tx desc trace]");
   }
@@ -310,7 +303,7 @@ void ObTxDesc::reset()
   xid_.reset();
   isolation_ = ObTxIsolationLevel::INVALID;
   access_mode_ = ObTxAccessMode::INVL;
-  snapshot_version_ = -1;
+  snapshot_version_.reset();
   snapshot_uncertain_bound_ = 0;
   snapshot_scn_ = 0;
 
@@ -337,7 +330,7 @@ void ObTxDesc::reset()
   coord_id_.reset();
   commit_expire_ts_ = -1;
   commit_parts_.reset();
-  commit_version_ = -1;
+  commit_version_.reset();
   commit_out_ = -1;
   abort_cause_ = 0;
   can_elr_ = false;
@@ -354,7 +347,6 @@ void ObTxDesc::reset()
 const ObString &ObTxDesc::get_tx_state_str() const {
   static const ObString TxStateName[] =
     {
-     ObString("INVALID"),
      ObString("IDLE"),
      ObString("ACTIVE"),
      ObString("IMPLICIT_ACTIVE"),
@@ -401,7 +393,7 @@ bool ObTxDesc::can_free_route() const
     || savepoints_.count() > 0  // FIXME: acc valid snapshot only
     || ((isolation_ == ObTxIsolationLevel::RR
          || isolation_ == ObTxIsolationLevel::SERIAL)
-        && snapshot_version_ > 0
+        && snapshot_version_.is_valid()
         );
   return !can_not;
 }
@@ -722,10 +714,10 @@ void ObTxDesc::release_implicit_savepoint(const int64_t savepoint)
     min_implicit_savepoint_ = INT64_MAX;
   }
   // invalid txn snapshot if it was created after the savepoint
-  if (snapshot_version_ > 0 && savepoint < snapshot_scn_) {
-    snapshot_version_ = -1;
+  if (snapshot_version_.is_valid() && savepoint < snapshot_scn_) {
     TRANS_LOG(INFO, "release txn snapshot_version", K_(snapshot_version),
               K(savepoint), K_(snapshot_scn), K_(tx_id));
+    snapshot_version_.reset();
   }
 }
 
@@ -777,18 +769,17 @@ ObTxParam::~ObTxParam()
 }
 
 ObTxSnapshot::ObTxSnapshot()
-  : version_(-1), tx_id_(), scn_(-1), elr_(false) {}
+  : version_(), tx_id_(), scn_(-1), elr_(false) {}
 
 ObTxSnapshot::~ObTxSnapshot()
 {
-  version_ = -1;
   scn_ = -1;
   elr_ = false;
 }
 
 void ObTxSnapshot::reset()
 {
-  version_ = -1;
+  version_.reset();
   tx_id_.reset();
   scn_ = -1;
   elr_ = false;
@@ -843,7 +834,7 @@ int ObTxReadSnapshot::assign(const ObTxReadSnapshot &from)
   return ret;
 }
 
-void ObTxReadSnapshot::init_weak_read(const int64_t snapshot)
+void ObTxReadSnapshot::init_weak_read(const palf::SCN snapshot)
 {
   core_.version_ = snapshot;
   core_.tx_id_.reset();
@@ -854,7 +845,7 @@ void ObTxReadSnapshot::init_weak_read(const int64_t snapshot)
   valid_ = true;
 }
 
-void ObTxReadSnapshot::init_special_read(const int64_t snapshot)
+void ObTxReadSnapshot::init_special_read(const palf::SCN snapshot)
 {
   core_.version_ = snapshot;
   core_.tx_id_.reset();
@@ -1001,12 +992,12 @@ ObTxPart::~ObTxPart()
   last_touch_ts_ = 0;
 }
 
-int ObTxDescMgr::init(std::function<int(ObTransID&)> tx_id_allocator, const lib::ObMemAttr &mem_attr)
+int ObTxDescMgr::init(std::function<int(ObTransID&)> tx_id_allocator)
 {
   int ret = OB_SUCCESS;
   OV(!inited_, OB_INIT_TWICE);
   OV(stoped_);
-  OZ(map_.init(mem_attr));
+  OZ(map_.init());
   if (OB_SUCC(ret)) {
     tx_id_allocator_ = tx_id_allocator;
     inited_ = true;
@@ -1049,22 +1040,6 @@ public:
   ObTransService &txs_;
 };
 
-class PrintTxDescFunctor
-{
-public:
-  explicit PrintTxDescFunctor(const int64_t max_print_cnt) : max_print_cnt_(max_print_cnt) {}
-  bool operator()(ObTxDesc *tx_desc)
-  {
-    bool bool_ret = false;
-    if (OB_NOT_NULL(tx_desc) && max_print_cnt_-- > 0) {
-      tx_desc->print_trace();
-      bool_ret = true;
-    }
-    return bool_ret;
-  }
-  int64_t max_print_cnt_;
-};
-
 int ObTxDescMgr::stop()
 {
   int ret = OB_SUCCESS;
@@ -1089,7 +1064,7 @@ int ObTxDescMgr::wait()
   if (inited_) {
     int i = 0;
     bool done = false;
-    while (!done && i++ < MAX_RETRY_TIMES) {
+    while(!done && i++ < MAX_RETRY_TIMES) {
       active_cnt = map_.alloc_cnt();
       if (!active_cnt) {
         TRANS_LOG(INFO, "txDescMgr.wait done.");
@@ -1100,16 +1075,13 @@ int ObTxDescMgr::wait()
       ob_usleep(SLEEP_US);
     }
     if (!done) {
+      TRANS_LOG(WARN, "txDescMgr.wait timeout");
       ret = OB_TIMEOUT;
-      TRANS_LOG(WARN, "txDescMgr.wait timeout", K(ret));
-      PrintTxDescFunctor fn(128);
-      (void)map_.for_each(fn);
     }
   }
   TRANS_LOG(INFO, "txDescMgr.wait", K(ret), K(inited_), K(stoped_), K(active_cnt));
   return ret;
 }
-
 void ObTxDescMgr::destroy() { inited_ = false; }
 int ObTxDescMgr::alloc(ObTxDesc *&tx_desc)
 {

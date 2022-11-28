@@ -46,7 +46,6 @@ private:
   int check_multi_update_table_conflict();
   int check_join_update_conflict();
   int is_join_table_update(const ObDMLStmt *stmt, bool &is_multi_table);
-  int check_update_assign_duplicated(const ObUpdateStmt *update_stmt);
   int check_view_updatable();
   int try_expand_returning_exprs();
   int try_add_remove_const_expr_for_assignments();

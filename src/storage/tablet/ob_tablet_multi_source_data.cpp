@@ -20,6 +20,7 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::memtable;
+using namespace oceanbase::palf;
 
 namespace oceanbase
 {
@@ -29,9 +30,9 @@ ObTabletTxMultiSourceDataUnit::ObTabletTxMultiSourceDataUnit()
   : version_(TX_DATA_VERSION),
     length_(0),
     tx_id_(ObTabletCommon::FINAL_TX_ID),
-    tx_log_ts_(ObLogTsRange::MAX_TS),
     tablet_status_()
 {
+  tx_scn_.set_max();
 }
 
 ObTabletTxMultiSourceDataUnit::~ObTabletTxMultiSourceDataUnit()
@@ -40,11 +41,10 @@ ObTabletTxMultiSourceDataUnit::~ObTabletTxMultiSourceDataUnit()
 }
 
 ObTabletTxMultiSourceDataUnit::ObTabletTxMultiSourceDataUnit(const ObTabletTxMultiSourceDataUnit &other)
-  : ObIMultiSourceDataUnit(other),
-    version_(other.version_),
+  : version_(other.version_),
     length_(other.length_),
     tx_id_(other.tx_id_),
-    tx_log_ts_(other.tx_log_ts_),
+    tx_scn_(other.tx_scn_),
     tablet_status_(other.tablet_status_)
 {
 }
@@ -52,11 +52,10 @@ ObTabletTxMultiSourceDataUnit::ObTabletTxMultiSourceDataUnit(const ObTabletTxMul
 ObTabletTxMultiSourceDataUnit &ObTabletTxMultiSourceDataUnit::operator=(const ObTabletTxMultiSourceDataUnit &other)
 {
   if (this != &other) {
-    ObIMultiSourceDataUnit::operator=(other);
     version_ = other.version_;
     length_ = other.length_;
     tx_id_ = other.tx_id_;
-    tx_log_ts_ = other.tx_log_ts_;
+    tx_scn_ = other.tx_scn_;
     tablet_status_ = other.tablet_status_;
   }
   return *this;
@@ -77,7 +76,7 @@ int ObTabletTxMultiSourceDataUnit::deep_copy(const ObIMultiSourceDataUnit *src, 
     version_ = data->version_;
     length_ = data->length_;
     tx_id_ = data->tx_id_;
-    tx_log_ts_ = data->tx_log_ts_;
+    tx_scn_ = data->tx_scn_;
     tablet_status_ = data->tablet_status_;
   }
 
@@ -89,7 +88,8 @@ void ObTabletTxMultiSourceDataUnit::reset()
   version_ = TX_DATA_VERSION;
   length_ = 0;
   tx_id_.reset();
-  tx_log_ts_ = ObLogTsRange::MAX_TS;
+  tx_scn_.reset();
+  tx_scn_.set_max();
   tablet_status_ = ObTabletStatus::MAX;
 }
 
@@ -100,7 +100,7 @@ int64_t ObTabletTxMultiSourceDataUnit::to_string(char *buf, const int64_t buf_le
   J_KV(K_(version),
        K_(length),
        K_(tx_id),
-       K_(tx_log_ts),
+       K_(tx_scn),
        K_(tablet_status),
        K_(is_tx_end),
        K_(unsynced_cnt_for_multi_data));
@@ -111,7 +111,7 @@ int64_t ObTabletTxMultiSourceDataUnit::to_string(char *buf, const int64_t buf_le
 bool ObTabletTxMultiSourceDataUnit::is_valid() const
 {
   return //tx_id_.is_valid()
-      // && tx_log_ts_ > OB_INVALID_TIMESTAMP
+      // && tx_scn_ > OB_INVALID_TIMESTAMP
       tablet_status_.is_valid();
 }
 
@@ -141,8 +141,8 @@ int ObTabletTxMultiSourceDataUnit::serialize(
     LOG_WARN("failed to serialize length", K(ret), K(len), K(new_pos), K_(length));
   } else if (OB_FAIL(tx_id_.serialize(buf, len, new_pos))) {
     LOG_WARN("failed to serialize tx id", K(ret), K(len), K(new_pos));
-  } else if (OB_FAIL(serialization::encode_i64(buf, len, new_pos, tx_log_ts_))) {
-    LOG_WARN("failed to serialize tx log ts", K(ret), K(len), K(new_pos), K_(tx_log_ts));
+  } else if (OB_FAIL(tx_scn_.fixed_serialize(buf, len, new_pos))) {
+    LOG_WARN("failed to serialize tx scn", K(ret), K(len), K(new_pos), K_(tx_scn));
   } else if (OB_FAIL(tablet_status_.serialize(buf, len, new_pos))) {
     LOG_WARN("failed to serialize tablet status", K(ret), K(len), K(new_pos));
   } else if (OB_UNLIKELY(pos + length_ != new_pos)) {
@@ -175,8 +175,8 @@ int ObTabletTxMultiSourceDataUnit::deserialize(
   } else if (TX_DATA_VERSION == version_) {
     if (OB_FAIL(new_pos - pos < length_ && tx_id_.deserialize(buf, len, new_pos))) {
       LOG_WARN("failed to deserialize tx id", K(ret), K(len), K(new_pos));
-    } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &tx_log_ts_))) {
-      LOG_WARN("failed to deserialize tx log ts", K(ret), K(len), K(new_pos));
+    } else if (new_pos - pos < length_ && OB_FAIL(tx_scn_.fixed_deserialize(buf, len, new_pos))) {
+      LOG_WARN("failed to deserialize tx scn", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(tablet_status_.deserialize(buf, len, new_pos))) {
       LOG_WARN("failed to deserialize tablet status", K(ret), K(len), K(new_pos));
     }
@@ -188,6 +188,7 @@ int ObTabletTxMultiSourceDataUnit::deserialize(
     LOG_WARN("unexpected error, deserialize size does not match length", K(ret), K(pos), K_(length), K(new_pos));
   } else {
     pos = new_pos;
+    (void)tx_scn_.transform_max();
   }
 
   return ret;
@@ -199,14 +200,14 @@ int64_t ObTabletTxMultiSourceDataUnit::get_serialize_size() const
   size += serialization::encoded_length_i32(version_);
   size += serialization::encoded_length_i32(length_);
   size += tx_id_.get_serialize_size();
-  size += serialization::encoded_length_i64(tx_log_ts_);
+  size += tx_scn_.get_fixed_serialize_size();
   size += tablet_status_.get_serialize_size();
   return size;
 }
 
-int ObTabletTxMultiSourceDataUnit::set_log_ts(const int64_t log_ts)
+int ObTabletTxMultiSourceDataUnit::set_scn(const palf::SCN &scn)
 {
-  tx_log_ts_ = log_ts;
+  tx_scn_ = scn;
 
   return OB_SUCCESS;
 }

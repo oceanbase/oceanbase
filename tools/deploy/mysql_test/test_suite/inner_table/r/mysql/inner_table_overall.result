@@ -212,7 +212,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 406	__all_mock_fk_parent_table_history	0	201001	1
 407	__all_mock_fk_parent_table_column	0	201001	1
 408	__all_mock_fk_parent_table_column_history	0	201001	1
-409	__all_log_restore_source	0	201001	1
+409	__all_log_archive_source	0	201001	1
 412	__all_service_epoch	0	201001	1
 416	__all_column_checksum_error_info	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
@@ -545,7 +545,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12321	__all_virtual_mock_fk_parent_table_history	2	201001	1
 12322	__all_virtual_mock_fk_parent_table_column	2	201001	1
 12323	__all_virtual_mock_fk_parent_table_column_history	2	201001	1
-12324	__all_virtual_log_restore_source	2	201001	1
+12324	__all_virtual_log_archive_source	2	201001	1
 12325	__all_virtual_query_response_time	2	201001	1
 12330	__all_virtual_column_checksum_error_info	2	201001	1
 12331	__all_virtual_kvcache_handle_leak_info	2	201001	1
@@ -553,7 +553,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12336	__all_virtual_schema_memory	2	201001	1
 12337	__all_virtual_schema_slot	2	201001	1
 12338	__all_virtual_minor_freeze_info	2	201001	1
-12340	__all_virtual_ha_diagnose	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -736,6 +735,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21240	V$OB_IO_CALIBRATION_STATUS	1	201001	1
 21241	GV$OB_IO_BENCHMARK	1	201001	1
 21242	V$OB_IO_BENCHMARK	1	201001	1
+21243	GV$OB_IO_QUOTA	1	201001	1
+21244	V$OB_IO_QUOTA	1	201001	1
 21245	CDB_OB_BACKUP_DELETE_JOBS	1	201001	1
 21246	CDB_OB_BACKUP_DELETE_JOB_HISTORY	1	201001	1
 21247	CDB_OB_BACKUP_DELETE_TASKS	1	201001	1
@@ -808,10 +809,6 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21333	CDB_OB_AUTO_INCREMENT	1	201001	1
 21334	DBA_SEQUENCES	1	201001	1
 21335	DBA_SCHEDULER_WINDOWS	1	201001	1
-21336	DBA_OB_USERS	1	201001	1
-21337	CDB_OB_USERS	1	201001	1
-21338	DBA_OB_DATABASE_PRIVILEGE	1	201001	1
-21339	CDB_OB_DATABASE_PRIVILEGE	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;
@@ -1043,7 +1040,3 @@ select * from oceanbase.DBA_OB_MAJOR_COMPACTION limit 1;
 select * from oceanbase.CDB_OB_ZONE_MAJOR_COMPACTION limit 1;
 select * from oceanbase.CDB_OB_MAJOR_COMPACTION limit 1;
 select * from oceanbase.DBA_OB_TABLET_REPLICAS limit 1;
-select * from oceanbase.DBA_OB_USERS limit 1;
-select * from oceanbase.CDB_OB_USERS limit 1;
-select * from oceanbase.DBA_OB_DATABASE_PRIVILEGE limit 1;
-select * from oceanbase.CDB_OB_DATABASE_PRIVILEGE limit 1;

@@ -261,8 +261,7 @@ public:
     last_calibrate_token_ts_(0),
     tenant_(tenant),
     worker_pool_(worker_pool),
-    cgroup_ctrl_(cgroup_ctrl),
-    has_stop_(false)
+    cgroup_ctrl_(cgroup_ctrl)
   {
   }
   ~ObResourceGroup() {}
@@ -314,7 +313,6 @@ private:
   ObTenant *tenant_;
   ObWorkerPool *worker_pool_;
   share::ObCgroupCtrl *cgroup_ctrl_;
-  bool has_stop_;
 };
 
 typedef common::FixedHash2<ObResourceGroupNode> GroupHash;

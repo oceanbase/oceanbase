@@ -147,8 +147,8 @@ int ObExprRepeat::repeat(ObString &output,
     if ((length > max_result_size / count) || (length > INT_MAX / count)) {
       LOG_WARN("Result of repeat was larger than max_allow_packet_size",
           K(ret), K(length), K(count), K(max_result_size));
-      ret = OB_ERR_FUNC_RESULT_TOO_LARGE;
-      LOG_USER_ERROR(OB_ERR_FUNC_RESULT_TOO_LARGE, "repeat", static_cast<int>(max_result_size));
+      LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "repeat", static_cast<int>(max_result_size));
+      is_null = true;
     } else {
       //avoid realloc
       if (1 == count) {

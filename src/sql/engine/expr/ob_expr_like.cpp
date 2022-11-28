@@ -732,40 +732,35 @@ int64_t ObExprLike::match_with_instr_mode(const ObString &text, const InstrInfo 
   const char **instr_pos = instr_info.instr_starts_;
   const uint32_t *instr_len = instr_info.instr_lengths_;
   bool match = true;
-  int64_t idx = 0;
-  int64_t idx_end = percent_sign_end ? instr_info.instr_cnt_ : instr_info.instr_cnt_ - 1;
+  int64_t pos = 0;
+  int64_t end = percent_sign_end ? instr_info.instr_cnt_ : instr_info.instr_cnt_ - 1;
   // if not start with %, memcmp for first instr.
   if (!percent_sign_start) {
-    if (text_len < instr_len[0]) {
-      match = false;
-    } else {
-      int cmp = MEMCMP(text_ptr, instr_pos[0], instr_len[0]);
-      match = 0 == cmp;
-      text_ptr += instr_len[0];
-      text_len -= instr_len[0];
-      idx++;
-    }
+    int cmp = MEMCMP(text_ptr, instr_pos[0], instr_len[0]);
+    match = 0 == cmp;
+    text_ptr += instr_len[0];
+    pos++;
   }
   // memmem for str surrounded by %
-  for (; idx < idx_end && match; idx++) {
-    char *new_text = static_cast<char*>(MEMMEM(text_ptr, text_len, instr_pos[idx], instr_len[idx]));
-    text_len -= new_text != NULL ? new_text - text_ptr + instr_len[idx] : 0;
+  for (; pos < end && match; pos++) {
+    char *new_text = static_cast<char*>(MEMMEM(text_ptr, text_len, instr_pos[pos], instr_len[pos]));
+    text_len -= new_text != NULL ? new_text - text_ptr + instr_len[pos] : 0;
     if (OB_UNLIKELY(text_len < 0)) {
       match = false;
       LOG_ERROR("unexpected result of memmem", K(text),
-                K(ObString(instr_len[idx], instr_pos[idx])));
+                K(ObString(instr_len[pos], instr_pos[pos])));
     } else {
       match = new_text != NULL;
-      text_ptr = new_text + instr_len[idx];
+      text_ptr = new_text + instr_len[pos];
     }
   }
   // if not end with %, memcmp for last instr
   if (match && !percent_sign_end) {
-    if (text_len < instr_len[idx]) {
+    if (text_len < instr_len[pos]) {
       match = false;
     } else {
-      match = 0 == MEMCMP(text.ptr() + text.length() - instr_len[idx],
-                          instr_pos[idx], instr_len[idx]);
+      match = 0 == MEMCMP(text.ptr() + text.length() - instr_len[pos],
+                          instr_pos[pos], instr_len[pos]);
     }
   }
   res = match ? 1 : 0;

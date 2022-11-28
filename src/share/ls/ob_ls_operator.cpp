@@ -31,12 +31,14 @@
 #include "share/ob_max_id_fetcher.h"//ObMaxIdFetcher
 #include "share/ob_global_stat_proxy.h"//get gc
 #include "logservice/palf/log_define.h"//SCN
+#include "logservice/palf/scn.h"//SCN
 
 using namespace oceanbase;
 using namespace oceanbase::common;
 namespace oceanbase
 {
 using namespace transaction;
+using namespace palf;
 namespace share
 {
 ////////////ObLSAttr
@@ -46,7 +48,7 @@ bool ObLSAttr::is_valid() const
          && (OB_INVALID_ID != ls_group_id_ || SYS_LS == id_)
          && is_valid_status_in_ls(status_)
          && OB_LS_OP_INVALID_TYPE != operation_type_
-         && OB_LS_INVALID_SCN_VALUE != create_scn_;
+         && create_scn_.is_valid() && create_scn_ > SCN::min_scn();
 }
 
 int ObLSAttr::init(const ObLSID &id,
@@ -54,12 +56,12 @@ int ObLSAttr::init(const ObLSID &id,
            const ObLSFlag &flag,
            const ObLSStatus &status,
            const ObLSOperationType &type,
-           const int64_t create_scn)
+           const SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!id.is_valid()
                   || !is_valid_status_in_ls(status)
-                  || OB_LS_INVALID_SCN_VALUE == create_scn)) {
+                  || !create_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(id), K(ls_group_id), K(status),
                                  K(create_scn));
@@ -95,7 +97,7 @@ void ObLSAttr::reset()
   status_ = OB_LS_EMPTY;
   flag_ = OB_LS_FLAG_NORMAL;
   operation_type_ = OB_LS_OP_INVALID_TYPE;
-  create_scn_ = OB_LS_INVALID_SCN_VALUE;
+  create_scn_.reset();
 }
 
 OB_SERIALIZE_MEMBER(ObLSAttr, id_, ls_group_id_, flag_, status_, operation_type_, create_scn_);
@@ -198,7 +200,7 @@ int ObLSAttrOperator::insert_ls(
             "%ld, '%s', '%s', '%lu')",
             OB_ALL_LS_TNAME, ls_attr.get_ls_id().id(), ls_attr.get_ls_group_id(),
             ObLSStatusOperator::ls_status_to_str(ls_attr.get_ls_status()), "",
-            ls_attr.get_create_scn()))) {
+            ls_attr.get_create_scn().get_val_for_inner_table_field()))) {
       LOG_WARN("failed to assign sql", KR(ret), K(ls_attr), K(sql));
     } else if (OB_FAIL(operator_ls_(ls_attr, sql, max_ls_group_id))) {
       LOG_WARN("failed to operator ls", KR(ret), K(ls_attr), K(sql));
@@ -240,7 +242,7 @@ int ObLSAttrOperator::delete_ls(
                                              : OB_LS_OP_DROP_END;
       if (OB_FAIL(new_ls_attr.init(ls_id, ls_attr.get_ls_group_id(),
                                    ls_attr.get_ls_flag(), ls_attr.get_ls_status(),
-                                   operation_type, OB_LS_MIN_SCN_VALUE))) {
+                                   operation_type, SCN::base_scn()))) {
         LOG_WARN("failed to init new ls attr", KR(ret), K(ls_id), K(ls_attr), K(operation_type));
       } else if (OB_FAIL(operator_ls_(new_ls_attr, sql, new_ls_attr.get_ls_group_id()))) {
         LOG_WARN("failed to operator ls", KR(ret), K(new_ls_attr), K(sql));
@@ -332,7 +334,7 @@ int ObLSAttrOperator::update_ls_status(const ObLSID &id,
       ObLSOperationType operation_type = get_ls_operation_by_status(new_status);
       if (OB_FAIL(new_ls_attr.init(id, ls_attr.get_ls_group_id(),
                                    ls_attr.get_ls_flag(), new_status,
-                                   operation_type, OB_LS_MIN_SCN_VALUE))) {
+                                   operation_type, SCN::base_scn()))) {
         LOG_WARN("failed to init new ls attr", KR(ret), K(id), K(ls_attr),
                  K(operation_type));
       } else if (OB_FAIL(operator_ls_(new_ls_attr, sql, new_ls_attr.get_ls_group_id()))) {
@@ -403,11 +405,11 @@ int ObLSAttrOperator::get_all_ls_by_order(
 }
 
 int ObLSAttrOperator::load_all_ls_and_snapshot(
-    int64_t &read_scn, ObLSAttrIArray &ls_array)
+    SCN &read_scn, ObLSAttrIArray &ls_array)
 {
   int ret = OB_SUCCESS;
   ls_array.reset();
-  read_scn = OB_LS_INVALID_SCN_VALUE;
+  read_scn.reset();
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("operation is not valid", KR(ret), "operation", *this);
@@ -416,11 +418,11 @@ int ObLSAttrOperator::load_all_ls_and_snapshot(
       LOG_WARN("failed to get tenant gts", KR(ret), K(tenant_id_));
     } else {
       ObSqlString sql;
-      if (OB_UNLIKELY(OB_LS_INVALID_SCN_VALUE == read_scn)) {
+      if (OB_UNLIKELY(!read_scn.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("read scn is invalid", KR(ret), K(read_scn));
-      } else if (OB_FAIL(sql.assign_fmt("select * from %s as of snapshot %ld",
-              OB_ALL_LS_TNAME, read_scn))) {
+      } else if (OB_FAIL(sql.assign_fmt("select * from %s as of snapshot %lu",
+              OB_ALL_LS_TNAME, read_scn.get_val_for_inner_table_field()))) {
         LOG_WARN("failed to assign sql", KR(ret), K(sql), K(read_scn));
       } else if (OB_FAIL(exec_read(tenant_id_, sql, *proxy_, this, ls_array))) {
         LOG_WARN("failed to construct ls attr", KR(ret), K(sql));
@@ -444,15 +446,19 @@ int ObLSAttrOperator::fill_cell(common::sqlclient::ObMySQLResult *result, ObLSAt
     ObString status_str;
     int64_t id_value = OB_INVALID_ID;
     uint64_t ls_group_id = OB_INVALID_ID;
-    int64_t create_scn = OB_LS_INVALID_SCN_VALUE;
+    uint64_t create_scn_val = OB_INVALID_SCN_VAL;
     ObLSFlag flag;  // TODO no used
+    SCN create_scn;
     EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", id_value, int64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "ls_group_id", ls_group_id, uint64_t);
     EXTRACT_VARCHAR_FIELD_MYSQL(*result, "status", status_str);
-    EXTRACT_UINT_FIELD_MYSQL(*result, "create_scn", create_scn, int64_t);
+    EXTRACT_UINT_FIELD_MYSQL(*result, "create_scn", create_scn_val, uint64_t);
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get result", KR(ret), K(ls_group_id), K(status_str),
                K(id_value));
+    } else if (OB_FAIL(create_scn.convert_for_inner_table_field(create_scn_val))) {
+      LOG_WARN("failed to convert create_scn", KR(ret), K(ls_group_id), K(status_str),
+               K(id_value), K(create_scn));
     } else {
       ObLSID ls_id(id_value);
       ObLSStatus status = ObLSStatusOperator::str_to_ls_status(status_str);
@@ -495,7 +501,7 @@ ObLSOperationType ObLSAttrOperator::get_ls_operation_by_status(const ObLSStatus 
 }
 #undef OPERATOR_LS
 
-int ObLSAttrOperator::get_tenant_gts(const uint64_t &tenant_id, int64_t &gts_ts_ns)
+int ObLSAttrOperator::get_tenant_gts(const uint64_t &tenant_id, SCN &gts_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
@@ -512,7 +518,7 @@ int ObLSAttrOperator::get_tenant_gts(const uint64_t &tenant_id, int64_t &gts_ts_
         ret = OB_TIMEOUT;
         LOG_WARN("stmt is timeout", KR(ret), K(start_time), K(TIMEOUT));
       } else if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id, stc, NULL,
-                                           gts_ts_ns, unused_ts))) {
+                                           gts_scn, unused_ts))) {
         if (OB_EAGAIN != ret) {
           LOG_WARN("failed to get gts", KR(ret), K(tenant_id));
         } else {
@@ -522,7 +528,7 @@ int ObLSAttrOperator::get_tenant_gts(const uint64_t &tenant_id, int64_t &gts_ts_
       }
     }
   }
-  LOG_INFO("[LS_OPERATOR] get tenant gts", KR(ret), K(tenant_id), K(gts_ts_ns));
+  LOG_INFO("[LS_OPERATOR] get tenant gts", KR(ret), K(tenant_id), K(gts_scn));
   return ret;
 }
 

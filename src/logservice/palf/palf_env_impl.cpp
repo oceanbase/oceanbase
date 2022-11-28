@@ -556,19 +556,8 @@ bool PalfEnvImpl::FreezeLogFunctor::operator() (const LSKey &palf_id, PalfHandle
   int tmp_ret = OB_SUCCESS;
   if (NULL == palf_handle_impl) {
     PALF_LOG(ERROR, "palf_handle_impl is NULL", KP(palf_handle_impl), K(palf_id));
-  } else if (OB_SUCCESS != (tmp_ret = palf_handle_impl->period_freeze_last_log())) {
-    PALF_LOG(WARN, "period_freeze_last_log failed", K(tmp_ret), K(palf_id));
-  } else {}
-  return true;
-}
-
-bool PalfEnvImpl::CheckFreezeModeFunctor::operator() (const LSKey &palf_id, PalfHandleImpl *palf_handle_impl)
-{
-  int tmp_ret = OB_SUCCESS;
-  if (NULL == palf_handle_impl) {
-    PALF_LOG(ERROR, "palf_handle_impl is NULL", KP(palf_handle_impl), K(palf_id));
-  } else if (OB_SUCCESS != (tmp_ret = palf_handle_impl->check_and_switch_freeze_mode())) {
-    PALF_LOG(WARN, "check_and_switch_freeze_mode failed", K(tmp_ret), K(palf_id));
+  } else if (OB_SUCCESS != (tmp_ret = palf_handle_impl->try_freeze_last_log())) {
+    PALF_LOG(WARN, "try_freeze_last_log failed", K(tmp_ret), K(palf_id));
   } else {}
   return true;
 }
@@ -581,19 +570,6 @@ int PalfEnvImpl::try_switch_state_for_all()
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfEnvImpl is not inited", K(ret));
   } else if (OB_FAIL(palf_handle_impl_map_.for_each(switch_state_functor))) {
-    PALF_LOG(WARN, "palf_handle_impl_map_ for_each failed", K(ret));
-  } else {}
-  return ret;
-}
-
-int PalfEnvImpl::check_and_switch_freeze_mode()
-{
-  int ret = OB_SUCCESS;
-  CheckFreezeModeFunctor check_freeze_mode_functor;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(WARN, "PalfEnvImpl is not inited", K(ret));
-  } else if (OB_FAIL(palf_handle_impl_map_.for_each(check_freeze_mode_functor))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ for_each failed", K(ret));
   } else {}
   return ret;
@@ -615,10 +591,10 @@ int PalfEnvImpl::try_freeze_log_for_all()
 PalfEnvImpl::LogGetRecycableFileCandidate::LogGetRecycableFileCandidate()
   : id_(-1),
     min_block_id_(LOG_INVALID_BLOCK_ID),
-    min_block_max_ts_(OB_INVALID_TIMESTAMP),
+    min_block_id_scn_(),
     min_using_block_id_(LOG_INVALID_BLOCK_ID),
     oldest_palf_id_(INVALID_PALF_ID),
-    oldest_block_ts_(OB_INVALID_TIMESTAMP),
+    oldest_block_scn_(),
     ret_code_(OB_SUCCESS)
 {}
 
@@ -626,10 +602,10 @@ PalfEnvImpl::LogGetRecycableFileCandidate::~LogGetRecycableFileCandidate()
 {
   ret_code_ = OB_SUCCESS;
   min_using_block_id_ = LOG_INVALID_BLOCK_ID;
-  min_block_max_ts_ = OB_INVALID_TIMESTAMP;
+  min_block_id_scn_.reset();
   min_block_id_ = LOG_INVALID_BLOCK_ID;
   oldest_palf_id_ = INVALID_PALF_ID;
-  oldest_block_ts_ = OB_INVALID_TIMESTAMP;
+  oldest_block_scn_.reset();
   id_ = -1;
 }
 
@@ -644,46 +620,41 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
     const LSN base_lsn = palf_handle_impl->get_base_lsn_used_for_block_gc();
     const block_id_t min_using_block_id = lsn_2_block(base_lsn, PALF_BLOCK_SIZE);
     block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
-    int64_t min_block_max_ts = OB_INVALID_TIMESTAMP;
-    // OB_ENTRY_NOT_EXIST means there is not any block;
-    // OB_NO_SUCH_FILE_OR_DIRECTORY means there is concurrently with rebuild.
-    // OB_ERR_OUT_OF_UPPER_BOUND means there is one block
-    auto need_skip_by_ret = [](const int ret ){
-      return OB_ENTRY_NOT_EXIST == ret  || OB_NO_SUCH_FILE_OR_DIRECTORY == ret 
-          || OB_ERR_OUT_OF_UPPER_BOUND == ret;
-    };
+    SCN min_block_id_scn;
     if (false == base_lsn.is_valid()) {
       PALF_LOG(WARN, "base_lsn is invalid", K(base_lsn), KPC(palf_handle_impl));
-    } else if (OB_FAIL(palf_handle_impl->get_min_block_info_for_gc(min_block_id, min_block_max_ts))
-               && !need_skip_by_ret(ret)) {
+      // OB_ENTRY_EXIST means there is not any block;
+      // OB_NO_SUCH_FILE_OR_DIRECTORY means there is concurrently with rebuild.
+    } else if (OB_FAIL(palf_handle_impl->get_min_block_id_min_scn(min_block_id, min_block_id_scn))
+               && OB_ENTRY_NOT_EXIST != ret
+               && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
       ret_code_ = ret;
       bool_ret = false;
-      PALF_LOG(WARN, "LogGetRecycableFileCandidate get_min_block_id_min_ts_ns failed", K(ret), K(palf_id));
+      PALF_LOG(ERROR, "LogGetRecycableFileCandidate get_min_block_id_min_ts_ns failed", K(ret), K(palf_id));
       // recycable conditions:
       // 1. current palf_handle_impl must have some block can be recycable;
       // 2. current palf_handle_impl must have older blocks(at least two blocks).
       // Always keep there are at least two blocks in range [begin_lsn, base_lsn], because for restart, we will read
       // first uncommitted log before base_lsn.
-    } else if (need_skip_by_ret(ret)
-               || min_using_block_id < min_block_id
+    } else if (OB_ENTRY_NOT_EXIST == ret
+               || OB_NO_SUCH_FILE_OR_DIRECTORY == ret
                || min_using_block_id - min_block_id < 2) {
       PALF_LOG(TRACE, "can not recycle blocks, need keep at least two blocks or has been concurrently"
           " with rebuild, skip it",
           K(ret), KPC(palf_handle_impl), K(min_block_id), K(min_using_block_id));
-    } else if (OB_INVALID_TIMESTAMP != min_block_max_ts_ && min_block_max_ts_ < min_block_max_ts) {
-      PALF_LOG(TRACE, "current palf_handle_impl is not older than previous, skip it", K(min_block_max_ts),
-          K(min_block_max_ts_), KPC(palf_handle_impl), K(min_block_id));
+    } else if (min_block_id_scn_.is_valid() && min_block_id_scn_ < min_block_id_scn) {
+      PALF_LOG(TRACE, "current palf_handle_impl is not older than previous, skip it", K(min_block_id_scn),
+          K(min_block_id_scn_), KPC(palf_handle_impl), K(min_block_id));
     } else {
       id_ = palf_id.id_;
       min_block_id_ = min_block_id;
-      min_block_max_ts_ = min_block_max_ts;
+      min_block_id_scn_ = min_block_id_scn;
       min_using_block_id_ = min_using_block_id;
       PALF_LOG(TRACE, "can be recycable palf_handle_impl", K(id_), K(min_block_id_), K(min_using_block_id_),
-          K(min_block_max_ts_), K(base_lsn));
+          K(min_block_id_scn_), K(base_lsn));
     }
-    if (OB_INVALID_TIMESTAMP != min_block_max_ts
-        && (OB_INVALID_TIMESTAMP == oldest_block_ts_ || oldest_block_ts_ > min_block_max_ts)) {
-      oldest_block_ts_ = min_block_max_ts;
+    if (min_block_id_scn.is_valid() && (!oldest_block_scn_.is_valid() || oldest_block_scn_ > min_block_id_scn)) {
+      oldest_block_scn_ = min_block_id_scn;
       oldest_palf_id_ = palf_id.id_;
     }
   }
@@ -730,7 +701,6 @@ int PalfEnvImpl::try_recycle_blocks()
     // 2. the snapshot of status is SHRINKING_STATUS.
     bool has_recycled = false;
     int64_t oldest_palf_id = INVALID_PALF_ID;
-    int64_t oldest_ts = OB_INVALID_TIMESTAMP;
     if (OB_SUCC(ret) && PalfDiskOptionsWrapper::Status::SHRINKING_STATUS == status) {
       if (total_used_size_byte < usable_disk_size_to_recycle_blocks) {
         disk_options_wrapper_.change_to_normal();
@@ -739,17 +709,23 @@ int PalfEnvImpl::try_recycle_blocks()
       }
     }
 
+    SCN oldest_scn;
     // step2. try recycle blocks
     if (true == need_recycle) {
-      if (OB_FAIL(recycle_blocks_(has_recycled, oldest_palf_id, oldest_ts))) {
+      if (OB_FAIL(recycle_blocks_(has_recycled, oldest_palf_id, oldest_scn))) {
         PALF_LOG(WARN, "recycle_blocks_ failed", K(usable_disk_size_to_recycle_blocks),
                  K(total_used_size_byte), KPC(this));
       }
     }
 
-    // step3. reset diskspace_enough_.
+    // step3. notify each palf instance stop writing when reach limit usage threshold.
     if (diskspace_enough_ != curr_diskspace_enough) {
-      ATOMIC_STORE(&diskspace_enough_, curr_diskspace_enough);
+      if (OB_FAIL(notify_diskspace_enough_(curr_diskspace_enough))) {
+        PALF_LOG(WARN, "notify_diskspace_enough_ failed", K(ret), KPC(this),
+                 K(usable_disk_limit_size_to_stop_writing), K(total_used_size_byte));
+      } else {
+        diskspace_enough_ = curr_diskspace_enough;
+      }
     }
     if ((true == need_recycle && false == has_recycled && false == is_shrinking) || false == diskspace_enough_) {
       PALF_LOG(ERROR, "clog disk space is almost full",
@@ -763,7 +739,7 @@ int PalfEnvImpl::try_recycle_blocks()
           "maximum_used_size(MB)", maximum_used_size/MB,
           "maximum_log_stream", palf_id,
           "oldest_log_stream", oldest_palf_id,
-          "oldest_timestamp", oldest_ts);
+          "oldest_scn", oldest_scn);
     }
   }
   return ret;
@@ -771,7 +747,26 @@ int PalfEnvImpl::try_recycle_blocks()
 
 bool PalfEnvImpl::check_disk_space_enough()
 {
-  return true == ATOMIC_LOAD(&diskspace_enough_);
+  int ret = OB_SUCCESS;
+  bool bool_ret = true;
+  int64_t total_used_disk_space = 0;
+  int64_t total_size_byte = 0;
+  if (OB_FAIL(get_disk_usage(total_used_disk_space, total_size_byte))) {
+    PALF_LOG(WARN, "get_disk_usage failed", K(ret), KPC(this));
+  } else {
+    PalfDiskOptions disk_opts_for_stopping_writing;
+    PalfDiskOptions disk_opts_for_recycling_blocks;
+    PalfDiskOptionsWrapper::Status status = PalfDiskOptionsWrapper::Status::INVALID_STATUS;
+    disk_options_wrapper_.get_disk_opts(disk_opts_for_stopping_writing,
+                                        disk_opts_for_recycling_blocks,
+                                        status);
+    const int64_t usable_limit_disk_size =
+      total_size_byte * disk_opts_for_stopping_writing.log_disk_utilization_limit_threshold_ / 100LL;
+    if (usable_limit_disk_size < total_used_disk_space) {
+      bool_ret = false;
+    }
+  }
+  return bool_ret;
 }
 
 // TODO by yunlong
@@ -804,6 +799,25 @@ bool PalfEnvImpl::GetTotalUsedDiskSpace::operator() (const LSKey &ls_key, PalfHa
     }
     total_used_disk_space_ += palf_handle_impl->get_total_used_disk_space();
     PALF_LOG(TRACE, "get_total_used_disk_space success", K(ls_key), "total_used_disk_space(MB):", total_used_disk_space_/MB);
+  }
+  return bool_ret;
+}
+
+PalfEnvImpl::NotifyDiskEnough::NotifyDiskEnough(const bool diskspace_enough)
+    : diskspace_enough_(diskspace_enough),
+      ret_code_(OB_SUCCESS) {}
+
+PalfEnvImpl::NotifyDiskEnough::~NotifyDiskEnough() {}
+
+bool PalfEnvImpl::NotifyDiskEnough::operator()(const LSKey &palf_id, PalfHandleImpl *palf_handle_impl)
+{
+  bool bool_ret = true;
+  if (NULL == palf_handle_impl) {
+    ret_code_ = OB_ERR_UNEXPECTED;
+    bool_ret = false;
+  } else {
+    (void) palf_handle_impl->set_diskspace_enough(diskspace_enough_);
+    PALF_LOG(WARN, "NotifyDiskEnough execute", K(palf_id), K(palf_handle_impl));
   }
   return bool_ret;
 }
@@ -1006,7 +1020,7 @@ int PalfEnvImpl::get_disk_usage_(int64_t &used_size_byte)
   return ret;
 }
 
-int PalfEnvImpl::recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, int64_t &oldest_ts)
+int PalfEnvImpl::recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, SCN &oldest_scn)
 {
   int ret = OB_SUCCESS;
   has_recycled = false;
@@ -1032,7 +1046,19 @@ int PalfEnvImpl::recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, in
       PALF_LOG(INFO, "recycle_blocks success", K(functor));
     }
     oldest_palf_id = functor.oldest_palf_id_;
-    oldest_ts = functor.oldest_block_ts_;
+    oldest_scn = functor.oldest_block_scn_;
+  }
+  return ret;
+}
+
+int PalfEnvImpl::notify_diskspace_enough_(const bool diskspace_enough)
+{
+  int ret = OB_SUCCESS;
+  NotifyDiskEnough functor(diskspace_enough);
+  if (OB_FAIL(palf_handle_impl_map_.for_each(functor))) {
+    PALF_LOG(WARN, "palf_handle_impl_map_ for_each failed", K(ret), K(functor));
+  } else {
+    PALF_LOG(INFO, "notify_diskspace_enough_ success", K(ret), K(diskspace_enough), KPC(this));
   }
   return ret;
 }

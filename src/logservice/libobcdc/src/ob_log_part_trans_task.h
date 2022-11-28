@@ -217,7 +217,6 @@ public:
       ObObj2strHelper *obj2str_helper = NULL,
       const share::schema::ObSimpleTableSchemaV2 *simple_table_schema = NULL,
       const TableSchemaInfo *tb_schema_info = NULL,
-      const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
       const bool enable_output_hidden_primary_key = false,
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL);
 
@@ -250,7 +249,6 @@ private:
       ObObj2strHelper *obj2str_helper,
       const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
       const TableSchemaInfo *tb_schema_info,
-      const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool enable_output_hidden_primary_key,
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
       ColValueList &cols);
@@ -260,7 +258,6 @@ private:
       ObObj2strHelper *obj2str_helper,
       const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
       const TableSchemaInfo *tb_schema_info,
-      const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool enable_output_hidden_primary_key);
   // 1. get column_id and column_schema_info for user table;
   // 2. get column_id for all_ddl_operation_table
@@ -278,7 +275,6 @@ private:
       const share::schema::ObSimpleTableSchemaV2 *simple_table_schema,
       const ColumnSchemaInfo *column_schema,
       const ObObj2strHelper *obj2str_helper,
-      const ObTimeZoneInfoWrap *tz_info_wrap,
       ColValueList &cols);
   int set_obj_propertie_(
       const uint64_t column_id,
@@ -405,10 +401,9 @@ public:
       ObObj2strHelper *obj2str_helper = NULL,
       const share::schema::ObSimpleTableSchemaV2 *simple_table_schema = NULL,
       const TableSchemaInfo *tb_schema_info = NULL,
-      const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
       const bool enable_output_hidden_primary_key = false)
   {
-    return row_.parse_cols(obj2str_helper, simple_table_schema, tb_schema_info, tz_info_wrap, enable_output_hidden_primary_key);
+    return row_.parse_cols(obj2str_helper, simple_table_schema, tb_schema_info, enable_output_hidden_primary_key);
   }
 
   int parse_aux_meta_table_cols(
@@ -721,6 +716,13 @@ struct TransCommitInfo;
 class PartTransTask : public TransTaskBase<PartTransTask>, public ObLogResourceRecycleTask, public ObILogCallback
 {
 public:
+  // TODO, 需要替换为事务层统一定义的结构
+  enum CDCTransType
+  {
+    UNKNOWN = -1,
+    SINGLE_LS_TRANS = 0,
+    DIST_TRANS = 1
+  };
   enum TaskType
   {
     TASK_TYPE_UNKNOWN = 0,
@@ -815,7 +817,7 @@ public:
       const uint64_t cluster_id,
       const transaction::ObTransID &tx_id,
       const int64_t trans_commit_version,
-      const transaction::TransType &trans_type,
+      const CDCTransType &trans_type,
       const transaction::ObLSLogInfoArray &ls_info_array,
       const palf::LSN &commit_log_lsn,
       const int64_t commit_log_submit_ts);
@@ -987,14 +989,14 @@ public:
 
   common::ObIAllocator &get_allocator() { return allocator_; }
 
-  const transaction::ObLSLogInfoArray &get_participants() const
+  const transaction::ObLSLogInfo *get_participants() const
   {
     return participants_;
   }
 
   int64_t get_participant_count() const
   {
-    return participants_.count();
+    return participant_count_;
   }
 
   // for unittest start
@@ -1015,8 +1017,8 @@ public:
   const ObString &get_part_trans_info() const { return part_trans_info_str_; }
 
   bool is_served() const { return SERVED == serve_state_; }
-  bool is_single_ls_trans() const { return transaction::TransType::SP_TRANS == trans_type_; }
-  bool is_dist_trans() const { return transaction::TransType::DIST_TRANS == trans_type_; }
+  bool is_single_ls_trans() const { return CDCTransType::SINGLE_LS_TRANS == trans_type_; }
+  bool is_dist_trans() const { return CDCTransType::DIST_TRANS == trans_type_; }
   void is_part_trans_sort_finish() const { sorted_redo_list_.is_dml_stmt_iter_end(); }
   bool is_part_dispatch_finish() const { return sorted_redo_list_.is_dispatch_finish(); }
   void inc_sorted_br() { ATOMIC_INC(&output_br_count_by_turn_); }
@@ -1087,7 +1089,7 @@ public:
       K_(exec_tenant_id),
       K_(tls_id),
       K_(trans_id),
-      "trans_type", transaction::trans_type_to_cstr(trans_type_),
+      K_(trans_type),
       K_(is_xa_or_dup),
       K_(is_trans_committed),
       K_(trans_commit_version),
@@ -1095,8 +1097,8 @@ public:
       K_(prepare_log_lsn),
       K_(commit_ts),
       K_(commit_log_lsn),
-      "participant_count", participants_.count(),
-      K_(participants),
+      K_(participant_count),
+      KP_(participants),
       K_(trace_id),
       K_(trace_info),
       K_(sorted_log_entry_info),
@@ -1186,11 +1188,12 @@ private:
   palf::LSN               prepare_log_lsn_;       // PrepareLog LSN(same with commit_log_lsn_ if SINGLE_LS_TRANS)
   int64_t                 commit_ts_;             // Transaction timestamp, usually set to the Commit log timestamp
   palf::LSN               commit_log_lsn_;        // CommitLog LSN
-  transaction::TransType  trans_type_;
+  CDCTransType            trans_type_;
   bool                    is_xa_or_dup_;          // true if xa dist trans or duplicate table trans.
 
+  int64_t                   participant_count_;
   // participants info, used for determine the sequence of trans at sequencer moudle.
-  transaction::ObLSLogInfoArray participants_;
+  transaction::ObLSLogInfo  *participants_;
   // App Trace ID (get from commit_info log)
   ObString                trace_id_;
   // App Trace Info (get from commit_info log)

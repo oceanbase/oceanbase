@@ -113,7 +113,6 @@ public:
       const common::ObTabletID &tablet_id,
       const ObDDLTaskKey &task_key,
       const int64_t snapshot_version,
-      const int64_t execution_id,
       const int ret_code);
 
   int on_ddl_task_finish(
@@ -221,7 +220,6 @@ private:
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *index_schema,
       const int64_t parent_task_id,
-      const obrpc::ObDropIndexArg *drop_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
   

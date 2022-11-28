@@ -24,9 +24,6 @@
 #include "share/location_cache/ob_location_service.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/table/ob_table_scan_op.h"
-#include "storage/tablet/ob_tablet.h"
-#include "storage/tx_storage/ob_ls_handle.h"
-#include "storage/tx_storage/ob_ls_map.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -427,8 +424,6 @@ int ObDDLUtil::generate_build_replica_sql(
     const int64_t dest_table_id,
     const int64_t schema_version,
     const int64_t snapshot_version,
-    const int64_t execution_id,
-    const int64_t task_id,
     const int64_t parallelism,
     const bool use_heap_table_ddl_plan,
     const bool use_schema_version_hint_for_src_table,
@@ -440,11 +435,9 @@ int ObDDLUtil::generate_build_replica_sql(
   const ObTableSchema *source_table_schema = nullptr;
   const ObTableSchema *dest_table_schema = nullptr;
   bool oracle_mode = false;
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id || OB_INVALID_ID == dest_table_id
-      || schema_version <= 0 || snapshot_version <= 0 || execution_id <= 0 || task_id <= 0)) {
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id || OB_INVALID_ID == dest_table_id || schema_version <= 0 || snapshot_version <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(data_table_id), K(dest_table_id), K(schema_version),
-                                  K(snapshot_version), K(execution_id), K(task_id));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(data_table_id), K(dest_table_id), K(schema_version), K(snapshot_version));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
       tenant_id, schema_guard, schema_version))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(data_table_id));
@@ -643,8 +636,8 @@ int ObDDLUtil::generate_build_replica_sql(
 
       if (OB_FAIL(ret)) {
       } else if (oracle_mode) {
-        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) use_px */INTO \"%.*s\".\"%.*s\"(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" as of scn %ld %.*s",
-            real_parallelism, execution_id, task_id,
+        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) use_px */INTO \"%.*s\".\"%.*s\"(%.*s) SELECT /*+ index(\"%.*s\" primary) %.*s */ %.*s from \"%.*s\".\"%.*s\" as of scn %ld %.*s",
+            real_parallelism,
             static_cast<int>(dest_database_name.length()), dest_database_name.ptr(), static_cast<int>(dest_table_name.length()), dest_table_name.ptr(),
             static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
             static_cast<int>(source_table_name.length()), source_table_name.ptr(),
@@ -655,8 +648,8 @@ int ObDDLUtil::generate_build_replica_sql(
           LOG_WARN("fail to assign sql string", K(ret));
         }
       } else {
-        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) use_px */INTO `%.*s`.`%.*s`(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` as of snapshot %ld %.*s",
-            real_parallelism, execution_id, task_id,
+        if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ monitor enable_parallel_dml parallel(%ld) use_px */INTO `%.*s`.`%.*s`(%.*s) SELECT /*+ index(`%.*s` primary) %.*s */ %.*s from `%.*s`.`%.*s` as of snapshot %ld %.*s",
+            real_parallelism,
             static_cast<int>(dest_database_name.length()), dest_database_name.ptr(), static_cast<int>(dest_table_name.length()), dest_table_name.ptr(),
             static_cast<int>(insert_column_sql_string.length()), insert_column_sql_string.ptr(),
             static_cast<int>(source_table_name.length()), source_table_name.ptr(),
@@ -714,7 +707,7 @@ int ObDDLUtil::clear_ddl_checksum(ObPhysicalPlan *phy_plan)
   if (OB_ISNULL(phy_plan)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    const int64_t execution_id = phy_plan->get_ddl_execution_id();
+    const int64_t execution_id = phy_plan->get_ddl_schema_version();
     const ObOpSpec *root_op_spec = phy_plan->get_root_op_spec();
     uint64_t table_scan_table_id = OB_INVALID_ID;
     if (OB_FAIL(find_table_scan_table_id(root_op_spec, table_scan_table_id))) {
@@ -723,7 +716,6 @@ int ObDDLUtil::clear_ddl_checksum(ObPhysicalPlan *phy_plan)
                                                               execution_id,
                                                               table_scan_table_id,
                                                               phy_plan->get_ddl_table_id(),
-                                                              phy_plan->get_ddl_task_id(),
                                                               *GCTX.sql_proxy_))) {
       LOG_WARN("failed to delete checksum", K(ret));
     }
@@ -745,37 +737,4 @@ int ObDDLUtil::find_table_scan_table_id(const ObOpSpec *spec, uint64_t &table_id
     }
   }
   return ret;
-}
-
-int ObDDLUtil::ddl_get_tablet(
-    ObLSHandle &ls_handle,
-    const ObTabletID &tablet_id,
-    storage::ObTabletHandle &tablet_handle,
-    const int64_t get_timeout_ts)
-{
-  int ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
-  const int64_t DDL_GET_TABLET_RETRY_TIMEOUT = 30 * 1000 * 1000; // 30s
-  const int64_t timeout_ts = ObTimeUtility::current_time() + DDL_GET_TABLET_RETRY_TIMEOUT;
-  if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls should not be null", K(ret));
-  } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet_with_timeout(tablet_id,
-                                                                   tablet_handle,
-                                                                   timeout_ts,
-                                                                   get_timeout_ts))) {
-    LOG_WARN("fail to get tablet handle", K(ret), K(tablet_id));
-    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-      ret = OB_TIMEOUT;
-    }
-  }
-  return ret;
-}
-
-bool ObDDLUtil::need_remote_write(const int ret_code)
-{
-  return OB_NOT_MASTER == ret_code
-    || OB_NOT_RUNNING == ret_code
-    || OB_LS_LOCATION_LEADER_NOT_EXIST == ret_code
-    || OB_EAGAIN == ret_code;
 }

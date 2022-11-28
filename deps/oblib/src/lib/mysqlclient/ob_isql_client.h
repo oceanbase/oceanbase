@@ -66,7 +66,6 @@ public:
   }
 
   virtual sqlclient::ObISQLConnectionPool *get_pool() = 0;
-  virtual sqlclient::ObISQLConnection *get_connection() = 0;
 
   virtual bool is_oracle_mode() const = 0;
 

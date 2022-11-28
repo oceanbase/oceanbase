@@ -64,7 +64,7 @@ private:
   int start_trans_(common::ObMySQLTransaction &trans);
   int prepare_new_dest_round_(const int64_t dest_no, ObMySQLTransaction &trans, ObTenantArchiveRoundAttr &round);
   int prepare_beginning_dest_round_(const ObTenantArchiveRoundAttr &round, ObTenantArchiveRoundAttr &new_round);
-  int decide_start_scn_(ARCHIVE_SCN_TYPE &start_ts);
+  int decide_start_scn_(palf::SCN &start_ts);
 
   bool is_inited_;
   uint64_t tenant_id_; // user tenant id

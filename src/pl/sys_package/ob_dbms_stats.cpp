@@ -117,7 +117,7 @@ int ObDbmsStats::gather_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
 }
 
 /**
- * @brief ObDbmsStat::gather_schema_stats
+ * @brief ObDbmsStat::gather_table_stats
  * @param ctx
  * @param params
  *      0. ownname       VARCHAR2,
@@ -3217,14 +3217,10 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
       col_param.set_size_manual();
       col_param.bucket_num_ = -1;
       col_param.column_attribute_ = 0;
-      if (lib::is_oracle_mode() && col->get_meta_type().is_varbinary_or_binary()) {
-        //oracle don't have this type. but agent table will have this type, such as "SYS"."ALL_VIRTUAL_COLUMN_REAL_AGENT"
-      } else {
-        col_param.is_valid_hist_type_ =
+      col_param.is_valid_hist_type_ =
           ObColumnStatParam::is_valid_histogram_type(col->get_meta_type().get_type());
-        col_param.need_truncate_str_ = ob_is_string_type(col->get_meta_type().get_type()) &&
+      col_param.need_truncate_str_ = ob_is_string_type(col->get_meta_type().get_type()) &&
                                               col->get_data_length() > OPT_STATS_MAX_VALUE_CAHR_LEN;
-      }
       if (col->is_rowkey_column() && !table_schema.is_heap_table()) {
         col_param.set_is_index_column();
         if (1 == table_schema.get_rowkey_column_num()) {
@@ -3738,7 +3734,7 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   UNUSED(ctx);
-  int64_t stat_options = StatOptionFlags::OPT_APPROXIMATE_NDV | StatOptionFlags::OPT_ESTIMATE_BLOCK;
+  int64_t stat_options = StatOptionFlags::OPT_APPROXIMATE_NDV;
   number::ObNumber num_est_percent;
   number::ObNumber num_degree;
   double percent = 0.0;
@@ -3935,14 +3931,6 @@ int ObDbmsStats::get_default_stat_options(ObExecContext &ctx,
       LOG_WARN("failed to push back", K(ret));
     }
   }
-  if (OB_SUCC(ret) && stat_options & StatOptionFlags::OPT_ESTIMATE_BLOCK) {
-    ObEstimateBlockPrefs *tmp_pref = NULL;
-    if (OB_FAIL(new_stat_prefs(ctx.get_allocator(), ctx.get_my_session(), ObString(), tmp_pref))) {
-      LOG_WARN("failed to new stat prefs", K(ret));
-    } else if (OB_FAIL(stat_prefs.push_back(tmp_pref))) {
-      LOG_WARN("failed to push back", K(ret));
-    }
-  }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObDbmsStatsPreferences::get_sys_default_stat_options(ctx, stat_prefs, param))) {
       LOG_WARN("failed to get sys default stat options", K(ret));
@@ -4124,7 +4112,7 @@ int ObDbmsStats::parse_set_column_stats_options(ObExecContext &ctx,
      - AUTO : Oracle determines the columns to collect histograms based on data distribution and the workload of the columns
      - SKEWONLY : Oracle determines the columns to collect histograms based on the data distribution of the columns
      - column_name : name of a column
-     - extension : can be either a column group in the format of (column_name, column_name [, ...]) or an expressionThe default is FOR ALL COLUMNS SIZE AUTO.
+     - extension : can be either a column group in the format of (column_name, colume_name [, ...]) or an expressionThe default is FOR ALL COLUMNS SIZE AUTO.
  * @return
  */
 int ObDbmsStats::parse_method_opt(sql::ObExecContext &ctx,
@@ -4898,7 +4886,8 @@ int ObDbmsStats::check_statistic_table_writeable(sql::ObExecContext &ctx)
                                                            in_restore))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (OB_UNLIKELY(in_restore) ||
-             GCTX.is_standby_cluster()) {
+             GCTX.is_standby_cluster() ||
+             GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_321) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "use dbms_stats during restore or standby cluster");
   }
@@ -5510,16 +5499,13 @@ int ObDbmsStats::gather_tables_stats_with_default_param(ObExecContext &ctx,
       LOG_WARN("failed to gather table stats with default param", K(ret));
     }
     if (OB_FAIL(ret)) {
-      if (OB_ERR_QUERY_INTERRUPTED == ret) {
-        LOG_WARN("query interrupted", K(ret));
-      } else if (OB_TABLE_NOT_EXIST == ret || OB_TIMEOUT == ret) {
+      if (OB_TABLE_NOT_EXIST == ret || OB_TIMEOUT == ret) {
         // do nothing
-        ret = OB_SUCCESS;
       } else {
         ++failed_count;
         LOG_WARN("failed to gather table stats with some unknown reason", K(ret));
-        ret = OB_SUCCESS;
       }
+      ret = OB_SUCCESS;
     } else {
       ++ succeed_count;
     }
@@ -5596,7 +5582,6 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
  *     CONCURRENT, DEBUG, ENABLE_HYBRID_HISTOGRAMS, INCREMENTAL_INTERNAL_CONTROL, JOB_OVERHEAD,
  *     JOB_OVERHEAD_PERC, PREFERENCE_OVERRIDES_PARAMETER, SCAN_RATE, STAT_CATEGORY, SYS_FLAGS,
  *     TRACE, WAIT_TIME_TO_UPDATE_STATS
- *  add new prefs for OceanBase: ESTIMATE_BLOCK
    https://docs.oracle.com/database/121/ARPLS/d_stats.htm#ARPLS68674
 */
 int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
@@ -5685,20 +5670,13 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
     } else {
       stat_pref = tmp_pref;
     }
-  } else if (is_global_prefs && 0 == opt_name.case_compare("ESTIMATE_BLOCK")) {
-    ObEstimateBlockPrefs *tmp_pref = NULL;
-    if (OB_FAIL(new_stat_prefs(ctx.get_allocator(), ctx.get_my_session(), opt_value, tmp_pref))) {
-      LOG_WARN("failed to new stat prefs", K(ret));
-    } else {
-      stat_pref = tmp_pref;
-    }
   } else {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Invalid input values for pname", K(ret), K(opt_name));
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid input values for pname, Only Support CASCADE |"\
                                        "DEGREE | ESTIMATE_PERCENT | GRANULARITY | INCREMENTAL |"\
                                        "INCREMENTAL_LEVEL | METHOD_OPT | NO_INVALIDATE | OPTIONS"\
-                                      "STALE_PERCENT | ESTIMATE_BLOCK | APPROXIMATE_NDV(global prefs unique) prefs");
+                                      "STALE_PERCENT | APPROXIMATE_NDV(global prefs unique) prefs");
   }
   return ret;
 }

@@ -82,16 +82,27 @@ int ObDatabaseResolver<T>::resolve_primary_zone(T *stmt, ParseNode *node)
     ret = common::OB_INVALID_ARGUMENT;
     SQL_LOG(WARN, "invalid primary_zone argument", K(ret), K(node));
   } else if (node->type_ == T_DEFAULT) {
-    // do nothing
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
+      ret = OB_OP_NOT_ALLOW;
+      SQL_RESV_LOG(WARN, "set primary_zone DEFAULT is not allowed now", K(ret));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone DEFAULT");
+    }
   } else if (T_RANDOM == node->type_) {
-    if (OB_FAIL(stmt->set_primary_zone(common::ObString(common::OB_RANDOM_PRIMARY_ZONE)))) {
-      SQL_RESV_LOG(WARN, "fail to set primary zone", K(ret));
+    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
+      ret = OB_OP_NOT_ALLOW;
+      SQL_RESV_LOG(WARN, "set primary_zone RANDOM is not allowed now", K(ret));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone RANDOM");
+    } else {
+      if (OB_FAIL(stmt->set_primary_zone(common::ObString(common::OB_RANDOM_PRIMARY_ZONE)))) {
+        SQL_RESV_LOG(WARN, "fail to set primary zone", K(ret));
+      }
     }
   } else {
     common::ObString primary_zone;
     primary_zone.assign_ptr(const_cast<char *>(node->str_value_),
                             static_cast<int32_t>(node->str_len_));
-    if (OB_UNLIKELY(primary_zone.empty())) {
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2000
+        && primary_zone.empty()) {
       ret = OB_OP_NOT_ALLOW;
       SQL_RESV_LOG(WARN, "set primary_zone empty is not allowed now", K(ret));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone empty");

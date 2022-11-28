@@ -39,14 +39,14 @@ void ObDestRoundCheckpointer::Counter::reset()
   interrupted_cnt_ = 0;
   doing_cnt_ = 0;
   stopped_cnt_ = 0;
-  max_scn_ = 0;
-  checkpoint_scn_ = UINT64_MAX;
+  max_scn_ = palf::SCN::min_scn();
+  checkpoint_scn_ = palf::SCN::max_scn();
   max_active_piece_id_ = INT64_MAX;
 }
 
 
 int ObDestRoundCheckpointer::init(ObArchiveRoundHandler *round_handler, const PieceGeneratedCb &piece_generated_cb, 
-    const RoundCheckpointCb &round_checkpoint_cb, const ARCHIVE_SCN_TYPE &max_checkpoint_scn)
+    const RoundCheckpointCb &round_checkpoint_cb, const palf::SCN &max_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -55,7 +55,7 @@ int ObDestRoundCheckpointer::init(ObArchiveRoundHandler *round_handler, const Pi
   } else if (OB_ISNULL(round_handler)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("round_handler is null.", K(ret));
-  } else if (0 >= max_checkpoint_scn) {
+  } else if (palf::SCN::min_scn() >= max_checkpoint_scn) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid max_checkpoint_scn.", K(ret), K(max_checkpoint_scn));
   } else {
@@ -165,12 +165,10 @@ int ObDestRoundCheckpointer::gen_new_round_info_(const ObTenantArchiveRoundAttr 
   int ret = OB_SUCCESS;
   // Current existing log stream count.
   int64_t actual_count = counter.ls_count_ - counter.deleted_ls_count_;
-  ARCHIVE_SCN_TYPE next_checkpoint_scn = 0;
+  palf::SCN next_checkpoint_scn = palf::SCN::min_scn();
   need_checkpoint = true;
   if (OB_FAIL(new_round_info.deep_copy_from(old_round_info))) {
     LOG_WARN("failed to deep copy round info", K(ret), K(old_round_info), K(counter));
-  } else if (counter.ls_count_ == counter.not_start_cnt_) {
-    // no log stream is archiving.
   } else if (OB_FAIL(ObTenantArchiveMgr::decide_piece_id(old_round_info.start_scn_, old_round_info.base_piece_id_, 
       old_round_info.piece_switch_interval_, counter.max_scn_, new_round_info.used_piece_id_))) {
     LOG_WARN("failed to calc MAX piece id", K(ret), K(old_round_info), K(counter));
@@ -178,9 +176,6 @@ int ObDestRoundCheckpointer::gen_new_round_info_(const ObTenantArchiveRoundAttr 
   } else if (OB_FALSE_IT(next_checkpoint_scn = MIN(max_checkpoint_scn_, counter.checkpoint_scn_))) {
     // Checkpoint can not over limit ts. However, if old round goes into STOPPING, then we will not 
     // move checkpoint_scn on.
-  } 
-  
-  if (OB_FAIL(ret)) {
   } else if (old_round_info.state_.is_beginning()) {
     if (counter.not_start_cnt_ > 0) {
       need_checkpoint = false;
@@ -259,45 +254,40 @@ int ObDestRoundCheckpointer::generate_pieces_(const ObTenantArchiveRoundAttr &ol
 {
   int ret = OB_SUCCESS;
 
-  if (result.new_round_info_.max_scn_ == old_round_info.start_scn_) {
-    // No log stream started archive before disable archive, then no piece generated in the round.
-    LOG_INFO("no piece generated.", K(old_round_info), K(result));
-  } else {
-    int64_t active_input_bytes = 0;
-    int64_t active_output_bytes = 0;
-    int64_t frozen_input_bytes = 0;
-    int64_t frozen_output_bytes = 0;
+  int64_t active_input_bytes = 0;
+  int64_t active_output_bytes = 0;
+  int64_t frozen_input_bytes = 0;
+  int64_t frozen_output_bytes = 0;
 
-    int64_t since_piece_id = 0;
-    if (OB_FAIL(ObTenantArchiveMgr::decide_piece_id(old_round_info.start_scn_, old_round_info.base_piece_id_, old_round_info.piece_switch_interval_, old_round_info.checkpoint_scn_, since_piece_id))) {
-      LOG_WARN("failed to calc since piece id", K(ret), K(old_round_info));
-    }
+  int64_t since_piece_id = 0;
+  if (OB_FAIL(ObTenantArchiveMgr::decide_piece_id(old_round_info.start_scn_, old_round_info.base_piece_id_, old_round_info.piece_switch_interval_, old_round_info.checkpoint_scn_, since_piece_id))) {
+    LOG_WARN("failed to calc since piece id", K(ret), K(old_round_info));
+  }
 
-    // generate pieces from last active and valid piece id to 'to_piece_id'
-    for (int64_t piece_id = since_piece_id; OB_SUCC(ret) && piece_id <= result.new_round_info_.used_piece_id_; piece_id++) {
-      GeneratedPiece piece;
-      if (OB_FAIL(generate_one_piece_(old_round_info, result.new_round_info_, summary, piece_id, piece))) {
-        LOG_WARN("failed to generate one piece", K(ret), K(old_round_info), K(result), K(summary), K(piece_id));
-      } else if (OB_FAIL(piece_generated_cb_(round_handler_->get_sql_proxy(), old_round_info, result, piece))) {
-        LOG_WARN("call piece_generated_cb_ failed", K(ret), K(old_round_info), K(piece));
-      } else if (OB_FAIL(result.piece_list_.push_back(piece))) {
-        LOG_WARN("failed to push back piece", K(ret), K(result), K(piece));
-      } else if (piece.piece_info_.status_.is_frozen()) {
-        frozen_input_bytes += piece.piece_info_.input_bytes_;
-        frozen_output_bytes += piece.piece_info_.output_bytes_;
-      } else {
-        // active piece
-        active_input_bytes += piece.piece_info_.input_bytes_;
-        active_output_bytes += piece.piece_info_.output_bytes_;
-      }
+  // generate pieces from last active and valid piece id to 'to_piece_id'
+  for (int64_t piece_id = since_piece_id; OB_SUCC(ret) && piece_id <= result.new_round_info_.used_piece_id_; piece_id++) {
+    GeneratedPiece piece;
+    if (OB_FAIL(generate_one_piece_(old_round_info, result.new_round_info_, summary, piece_id, piece))) {
+      LOG_WARN("failed to generate one piece", K(ret), K(old_round_info), K(result), K(summary), K(piece_id));
+    } else if (OB_FAIL(piece_generated_cb_(round_handler_->get_sql_proxy(), old_round_info, result, piece))) {
+      LOG_WARN("call piece_generated_cb_ failed", K(ret), K(old_round_info), K(piece));
+    } else if (OB_FAIL(result.piece_list_.push_back(piece))) {
+      LOG_WARN("failed to push back piece", K(ret), K(result), K(piece));
+    } else if (piece.piece_info_.status_.is_frozen()) {
+      frozen_input_bytes += piece.piece_info_.input_bytes_;
+      frozen_output_bytes += piece.piece_info_.output_bytes_;
+    } else {
+      // active piece
+      active_input_bytes += piece.piece_info_.input_bytes_;
+      active_output_bytes += piece.piece_info_.output_bytes_;
     }
+  }
 
-    if (OB_SUCC(ret)) {
-      result.new_round_info_.frozen_input_bytes_ += frozen_input_bytes;
-      result.new_round_info_.frozen_output_bytes_ += frozen_output_bytes;
-      result.new_round_info_.active_input_bytes_ = active_input_bytes;
-      result.new_round_info_.active_output_bytes_ = active_output_bytes;
-    }
+  if (OB_SUCC(ret)) {
+    result.new_round_info_.frozen_input_bytes_ += frozen_input_bytes;
+    result.new_round_info_.frozen_output_bytes_ += frozen_output_bytes;
+    result.new_round_info_.active_input_bytes_ = active_input_bytes;
+    result.new_round_info_.active_output_bytes_ = active_output_bytes;
   }
 
   return ret;
@@ -329,7 +319,7 @@ int ObDestRoundCheckpointer::generate_one_piece_(const ObTenantArchiveRoundAttr 
 
   // stat data amount and checkpoint ts for current piece.
   const ObArray<ObLSDestRoundSummary> &ls_round_list = summary.ls_round_list_;
-  piece.piece_info_.max_scn_ = 0;
+  piece.piece_info_.max_scn_ = palf::SCN::min_scn();
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_round_list.count(); i++) {
     const ObLSDestRoundSummary &ls_round = ls_round_list.at(i);
     // search the piece

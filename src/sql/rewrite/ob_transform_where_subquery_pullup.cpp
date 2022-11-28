@@ -342,6 +342,7 @@ int ObWhereSubQueryPullup::check_basic_validity(ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   bool &is_valid = trans_param.can_be_transform_;
   ObSelectStmt *subquery = trans_param.subquery_;
+  bool check_status = false;
   if (OB_ISNULL(expr) || OB_ISNULL(stmt) || OB_ISNULL(subquery)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL pointer error", K(ret), K(expr), K(stmt), K(subquery));

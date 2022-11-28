@@ -1271,7 +1271,6 @@ public:
   void reset();
   int64_t get_convert_size() const;
   bool is_equal_except_value(const ObSysVarSchema &other) const;
-  bool is_equal_for_add(const ObSysVarSchema &other) const;
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   const common::ObString &get_name() const { return name_; }
@@ -1939,10 +1938,6 @@ public:
   PartitionType get_partition_type() const  { return partition_type_; }
   virtual bool is_normal_partition() const = 0;
   virtual bool is_hidden_partition() const { return share::schema::is_hidden_partition(partition_type_); }
-
-  // convert character set.
-  int convert_character_for_range_columns_part(const ObCollationType &to_collation);
-  int convert_character_for_list_columns_part(const ObCollationType &to_collation);
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(low_bound_val),
                        K_(high_bound_val), K_(list_row_values), K_(part_idx),
                        K_(is_empty_partition_name), K_(tablet_id));
@@ -5663,10 +5658,6 @@ private:
   int ob_write_string(
       const common::ObString &src,
       common::ObString &dst);
-  static int append_table_(
-             const uint64_t tenant_id,
-             share::schema::ObTableSchema &index_schema,
-             common::ObIArray<share::schema::ObTableSchema> &tables);
 public:
   static ObSysTableChecker &instance();
   int init();
@@ -5692,12 +5683,9 @@ public:
 
   static bool is_sys_table_index_tid(const int64_t index_id);
   static bool is_sys_table_has_index(const int64_t table_id);
-  static int fill_sys_index_infos(share::schema::ObTableSchema &table);
-  static int get_sys_table_index_tids(const int64_t table_id, common::ObIArray<uint64_t> &index_tids);
-  static int append_sys_table_index_schemas(
-             const uint64_t tenant_id,
-             const uint64_t data_table_id,
-             common::ObIArray<share::schema::ObTableSchema> &tables);
+  static int64_t get_sys_table_index_tid(const int64_t table_id);
+  static int get_sys_table_index_schema(const int64_t data_table_id,
+                                        share::schema::ObTableSchema &index_schema);
   static int add_sys_table_index_ids(
              const uint64_t tenant_id,
              common::ObIArray<uint64_t> &table_ids);

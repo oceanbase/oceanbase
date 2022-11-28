@@ -32,6 +32,7 @@ class ObIMultiSourceDataUnit;
 namespace storage
 {
 class ObFreezer;
+class ObTabletDDLKvMgr;
 
 using ObTableHdlArray = common::ObIArray<ObTableHandleV2>;
 
@@ -40,19 +41,15 @@ class ObIMemtableMgr
 
 public:
   ObIMemtableMgr()
-    : is_inited_(false),
-      ref_cnt_(0),
-      tablet_id_(),
-      freezer_(nullptr),
-      table_type_(ObITable::TableType::MAX_TABLE_TYPE),
+    : ref_cnt_(0),
+      is_inited_(false),
       memtable_head_(0),
       memtable_tail_(0),
+      freezer_(nullptr),
       t3m_(nullptr),
-      lock_()
-  {
-    memset(tables_, 0, sizeof(tables_));
-  }
-  virtual ~ObIMemtableMgr() { reset_tables(); }
+      ddl_kv_mgr_(nullptr)
+  {}
+  virtual ~ObIMemtableMgr() = default;
 
   int init(
       const ObTabletID &tablet_id,
@@ -60,10 +57,20 @@ public:
       const int64_t max_saved_schema_version,
       logservice::ObLogHandler *log_handler,
       ObFreezer *freezer,
-      ObTenantMetaMemMgr *t3m);
+      ObTenantMetaMemMgr *t3m,
+      ObTabletDDLKvMgr *ddl_kv_mgr);
   virtual int create_memtable(const int64_t clog_checkpoint_ts,
                               const int64_t schema_version,
                               const bool for_replay=false) = 0;
+  virtual int create_memtable(const palf::SCN clog_checkpoint_scn,
+                              const int64_t schema_version,
+                              const bool for_replay = false)
+  {
+    UNUSED(clog_checkpoint_scn);
+    UNUSED(schema_version);
+    UNUSED(for_replay);
+    return OB_NOT_SUPPORTED;
+  }
 
   virtual int get_active_memtable(ObTableHandleV2 &handle) const;
 
@@ -75,7 +82,7 @@ public:
 
   virtual int get_boundary_memtable(ObTableHandleV2 &handle) { return OB_SUCCESS; }
 
-  virtual int get_memtable_for_replay(int64_t replay_log_ts, ObTableHandleV2 &handle)
+  virtual int get_memtable_for_replay(palf::SCN replay_scn, ObTableHandleV2 &handle)
   {
     return OB_SUCCESS;
   }
@@ -95,13 +102,13 @@ public:
 
   bool has_memtable()
   {
-    SpinRLockGuard lock_guard(lock_);
+    TCRLockGuard lock_guard(lock_);
     return has_memtable_();
   }
 
-  int get_newest_clog_checkpoint_ts(int64_t &clog_checkpoint_ts);
+  int get_newest_clog_checkpoint_scn(palf::SCN &clog_checkpoint_scn);
 
-  int get_newest_snapshot_version(int64_t &snapshot_version);
+  int get_newest_snapshot_version(palf::SCN &snapshot_version);
 
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
@@ -111,6 +118,28 @@ public:
     destroy();
     ATOMIC_STORE(&ref_cnt_, 0);
   }
+
+  VIRTUAL_TO_STRING_KV(KP(this), K_(ref_cnt),
+                       K_(is_inited),
+                       K_(memtable_head),
+                       K_(memtable_tail),
+                       K_(tablet_id),
+                       KP_(freezer),
+                       KP_(t3m));
+
+protected:
+  virtual int release_head_memtable_(memtable::ObIMemtable *memtable, const bool force = false) = 0;
+  int64_t get_memtable_idx_(const int64_t pos) const { return pos & (MAX_MEMSTORE_CNT - 1); }
+  int add_memtable_(ObTableHandleV2 &memtable);
+  int64_t get_memtable_count_() const { return memtable_tail_ - memtable_head_; }
+  bool has_memtable_() const { return get_memtable_count_() > 0; }
+  //for test
+  void set_freezer(ObFreezer *freezer) { freezer_ = freezer; }
+  virtual int init(const ObTabletID &tablet_id,
+                   const share::ObLSID &ls_id,
+                   ObFreezer *freezer,
+                   ObTenantMetaMemMgr *t3m,
+                   ObTabletDDLKvMgr *ddl_kv_mgr) = 0;
   virtual int init_storage_schema_recorder(
       const ObTabletID &tablet_id,
       const share::ObLSID &ls_id,
@@ -123,41 +152,22 @@ public:
     UNUSED(log_handler);
     return OB_NOT_SUPPORTED;
   }
-  virtual int reset_storage_schema_recorder()
-  { // do nothing
-    return OB_NOT_SUPPORTED;
-  }
-
-  DECLARE_VIRTUAL_TO_STRING;
-protected:
-  static int64_t get_memtable_idx(const int64_t pos) { return pos & (MAX_MEMSTORE_CNT - 1); }
-  virtual int release_head_memtable_(memtable::ObIMemtable *memtable, const bool force = false) = 0;
-  int add_memtable_(ObTableHandleV2 &memtable);
-  int get_ith_memtable(const int64_t pos, ObTableHandleV2 &handle) const;
-  int64_t get_memtable_count_() const { return memtable_tail_ - memtable_head_; }
-  bool has_memtable_() const { return get_memtable_count_() > 0; }
-  //for test
-  void set_freezer(ObFreezer *freezer) { freezer_ = freezer; }
-  void reset_tables();
-  void release_head_memtable();
-  void release_tail_memtable();
-  virtual int init(const ObTabletID &tablet_id,
-                   const share::ObLSID &ls_id,
-                   ObFreezer *freezer,
-                   ObTenantMetaMemMgr *t3m) = 0;
 
 protected:
+  volatile int64_t ref_cnt_ CACHE_ALIGNED;
   bool is_inited_;
-  volatile int64_t ref_cnt_;
-  common::ObTabletID tablet_id_;
-  // FIXME : whether freeze_handler on base class or not ?
-  ObFreezer *freezer_;
-  ObITable::TableType table_type_;
   int64_t memtable_head_;
   int64_t memtable_tail_;
+  ObTableHandleV2 memtables_[MAX_MEMSTORE_CNT];
+  mutable common::TCRWLock lock_;
+
+  common::ObTabletID tablet_id_;
+
+  // FIXME : whether freeze_handler on base class or not ?
+  ObFreezer *freezer_;
   ObTenantMetaMemMgr *t3m_;
-  memtable::ObIMemtable *tables_[MAX_MEMSTORE_CNT];
-  mutable common::SpinRWLock lock_;
+  ObTabletDDLKvMgr *ddl_kv_mgr_;
+  // checkpoint::ObCheckPointExecutor *checkpoint_executor_;
 };
 
 class ObMemtableMgrHandle final

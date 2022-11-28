@@ -243,7 +243,6 @@ public:
                          bool in_warning,
                          bool signal);
   int raise_exception(jit::ObLLVMValue &exception,
-                      jit::ObLLVMValue &error_code,
                       jit::ObLLVMValue &sql_staten,
                       jit::ObLLVMBasicBlock &normal,
                       bool in_notfound,
@@ -318,8 +317,7 @@ public:
   int check_success(jit::ObLLVMValue &ret_err,
                     int64_t stmt_id = OB_INVALID_ID,
                     bool in_notfound = false,
-                    bool in_warning = false,
-                    bool signal = false);
+                    bool in_warning = false);
   int finish_current(const jit::ObLLVMBasicBlock &next);
   jit::ObLLVMValue stack_save();
   void stack_restore(jit::ObLLVMValue &stack);
@@ -482,7 +480,7 @@ public:
   typedef common::hash::ObPlacementHashMap<uint64_t, jit::ObLLVMType, 733> ObLLVMTypeMap;
   typedef common::hash::ObPlacementHashMap<uint64_t, jit::ObLLVMDIType, 733> ObLLVMDITypeMap;
   inline ObLLVMTypeMap &get_user_type_map() { return user_type_map_; }
-  int set_var_addr_to_param_store(int64_t var_index, jit::ObLLVMValue &var, jit::ObLLVMValue &init_value);
+  int set_var_addr_to_param_store(int64_t var_index, jit::ObLLVMValue &var);
   int get_llvm_type(const ObPLDataType &pl_type, jit::ObLLVMType &ir_type);
   int get_datum_type(const ObPLDataType &pl_type, jit::ObLLVMType &ir_type);
   int64_t get_param_size() const { return ast_.is_routine() ? get_ast().get_arg_count() : 0; }

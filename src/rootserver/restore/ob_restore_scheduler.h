@@ -24,6 +24,10 @@
 
 namespace oceanbase
 {
+namespace palf
+{
+class SCN;
+}
 namespace share
 {
 class ObLSTableOperator;
@@ -55,12 +59,12 @@ public:
 public:
   virtual int64_t get_rec_log_ts() override { return INT64_MAX;}
   virtual int flush(int64_t rec_log_ts) override { return OB_SUCCESS; }
-  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const int64_t ts_ns) override
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const palf::SCN &scn) override
   {
     UNUSED(buffer);
     UNUSED(nbytes);
     UNUSED(lsn);
-    UNUSED(ts_ns);
+    UNUSED(scn);
     return OB_SUCCESS;
   }
   enum TenantRestoreStatus

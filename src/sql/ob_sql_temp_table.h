@@ -65,7 +65,8 @@ public:
   ObSqlTempTableInfo() : temp_table_id_(OB_INVALID_ID),
                          table_name_(),
                          table_query_(NULL),
-                         table_plan_(NULL) {}
+                         table_plan_(NULL),
+                         is_local_(true) {}
   virtual ~ObSqlTempTableInfo() {}
 
   TO_STRING_KV(K_(temp_table_id),
@@ -76,6 +77,7 @@ public:
   common::ObString table_name_;
   ObSelectStmt *table_query_;
   ObLogicalOperator *table_plan_;
+  bool is_local_;
 };
 
 } /* ns sql*/

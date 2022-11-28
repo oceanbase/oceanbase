@@ -214,7 +214,7 @@ int ObDependencyInfo::get_object_create_time(ObISQLClient &sql_client,
             sqlclient::ObMySQLResult *result = res.get_result();
             if (NULL != result) {
               ObString tmp_ref_name;
-              common::ObTimeZoneInfo *tz_info = nullptr;
+              common::ObTimeZoneInfo *tz_info;
               OZ (result->next());
               OZ (result->get_timestamp("gmt_create", tz_info, create_time));
               OZ (result->get_varchar(field_obj_name, tmp_ref_name));
@@ -244,32 +244,37 @@ int ObDependencyInfo::delete_schema_object_dependency(common::ObISQLClient &tran
 {
   UNUSED(schema_version);
   int ret = OB_SUCCESS;
-  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  const uint64_t extract_tid = ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id);
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  if (OB_INVALID_ID == tenant_id
-    || OB_INVALID_ID == dep_obj_id
-    || ObObjectType::MAX_TYPE == dep_obj_type) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("delete error info unexpected.", K(ret), K(tenant_id),
-                                              K(dep_obj_id), K(dep_obj_type));
-  } else if (sql.assign_fmt("delete FROM %s WHERE dep_obj_id = %ld \
-                                                  AND tenant_id = %ld  \
-                                                  AND dep_obj_type = %ld",
-            OB_ALL_TENANT_DEPENDENCY_TNAME,
-            extract_obj_id(tenant_id, dep_obj_id),
-            extract_tid,
-            static_cast<uint64_t>(dep_obj_type))) {
-    LOG_WARN("delete from __all_tenant_dependency table failed.", K(ret), K(tenant_id),
-                                                                  K(extract_tid),
-                                                                  K(dep_obj_id),
-                                                                  K(dep_obj_type));
+  if (IS_CLUSTER_VERSION_BEFORE_3100) {
+    // do nothing
+    LOG_DEBUG("all_dependency schema only support after version 3.1");
   } else {
-    if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("execute query failed", K(ret), K(sql));
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    const uint64_t extract_tid = ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id);
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    if (OB_INVALID_ID == tenant_id
+      || OB_INVALID_ID == dep_obj_id
+      || ObObjectType::MAX_TYPE == dep_obj_type) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("delete error info unexpected.", K(ret), K(tenant_id),
+                                                K(dep_obj_id), K(dep_obj_type));
+    } else if (sql.assign_fmt("delete FROM %s WHERE dep_obj_id = %ld \
+                                                    AND tenant_id = %ld  \
+                                                    AND dep_obj_type = %ld",
+              OB_ALL_TENANT_DEPENDENCY_TNAME,
+              extract_obj_id(tenant_id, dep_obj_id),
+              extract_tid,
+              static_cast<uint64_t>(dep_obj_type))) {
+      LOG_WARN("delete from __all_tenant_dependency table failed.", K(ret), K(tenant_id),
+                                                                    K(extract_tid),
+                                                                    K(dep_obj_id),
+                                                                    K(dep_obj_type));
     } else {
-      // do nothing
+      if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+        LOG_WARN("execute query failed", K(ret), K(sql));
+      } else {
+        // do nothing
+      }
     }
   }
   return ret;
@@ -280,39 +285,44 @@ int ObDependencyInfo::insert_schema_object_dependency(common::ObISQLClient &tran
 {
   int ret = OB_SUCCESS;
 
-  ObDependencyInfo& dep_info = *this;
-  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(dep_info.get_tenant_id());
-  ObDMLSqlSplicer dml;
-  //这块暂时注释掉，因为系统租户下的__all_package的虚拟表没有实现。
-  //int64_t ref_obj_create_time = -1;
-  //ObString ref_obj_name;
-  // OZ (get_object_create_time(trans, dep_info.get_ref_obj_type(),
-  // ref_obj_create_time, ref_obj_name));
-  // OX (dep_info.set_ref_timestamp(ref_obj_create_time));
-  // OZ (dep_info.set_ref_obj_name(ref_obj_name));
-  if (OB_FAIL(ret)) {
-    LOG_WARN("get ref object time failed", K(ret),
-                                          K(dep_info.get_ref_obj_type()),
-                                          K(dep_info.get_ref_obj_id()));
-  } else if (OB_FAIL(gen_dependency_dml(exec_tenant_id, dml))) {
-    LOG_WARN("gen table dml failed", K(ret));
+  if (IS_CLUSTER_VERSION_BEFORE_3100) {
+    // do nothing
+    LOG_DEBUG("all_dependency schema only support after version 3.1");
   } else {
-    ObDMLExecHelper exec(trans, exec_tenant_id);
-    int64_t affected_rows = 0;
-    if (!only_history) {
+    ObDependencyInfo& dep_info = *this;
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(dep_info.get_tenant_id());
+    ObDMLSqlSplicer dml;
+    //这块暂时注释掉，因为系统租户下的__all_package的虚拟表没有实现。
+    //int64_t ref_obj_create_time = -1;
+    //ObString ref_obj_name;
+    // OZ (get_object_create_time(trans, dep_info.get_ref_obj_type(),
+    // ref_obj_create_time, ref_obj_name));
+    // OX (dep_info.set_ref_timestamp(ref_obj_create_time));
+    // OZ (dep_info.set_ref_obj_name(ref_obj_name));
+    if (OB_FAIL(ret)) {
+      LOG_WARN("get ref object time failed", K(ret),
+                                            K(dep_info.get_ref_obj_type()),
+                                            K(dep_info.get_ref_obj_id()));
+    } else if (OB_FAIL(gen_dependency_dml(exec_tenant_id, dml))) {
+      LOG_WARN("gen table dml failed", K(ret));
+    } else {
       ObDMLExecHelper exec(trans, exec_tenant_id);
-      if (is_replace) {
-        if (OB_FAIL(exec.exec_update(OB_ALL_TENANT_DEPENDENCY_TNAME, dml, affected_rows))) {
-          LOG_WARN("execute update failed", K(ret));
+      int64_t affected_rows = 0;
+      if (!only_history) {
+        ObDMLExecHelper exec(trans, exec_tenant_id);
+        if (is_replace) {
+          if (OB_FAIL(exec.exec_update(OB_ALL_TENANT_DEPENDENCY_TNAME, dml, affected_rows))) {
+            LOG_WARN("execute update failed", K(ret));
+          }
+        } else {
+          if (OB_FAIL(exec.exec_insert(OB_ALL_TENANT_DEPENDENCY_TNAME, dml, affected_rows))) {
+            LOG_WARN("execute insert failed", K(ret));
+          }
         }
-      } else {
-        if (OB_FAIL(exec.exec_insert(OB_ALL_TENANT_DEPENDENCY_TNAME, dml, affected_rows))) {
-          LOG_WARN("execute insert failed", K(ret));
+        if (OB_SUCC(ret) && !is_single_row(affected_rows)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
         }
-      }
-      if (OB_SUCC(ret) && !is_single_row(affected_rows)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("affected_rows unexpected to be one", K(affected_rows), K(ret));
       }
     }
   }
@@ -328,37 +338,42 @@ int ObDependencyInfo::collect_dep_infos(const ObIArray<ObSchemaObjVersion> &sche
                                bool is_pl)
 {
   int ret = OB_SUCCESS;
-  int64_t order = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < schema_objs.count(); ++i) {
-    ObDependencyInfo dep;
-    const ObSchemaObjVersion &s_objs = schema_objs.at(i);
-    if (!s_objs.is_valid()
-        // object may depend on self
-        || (is_pl
-        && dep_obj_type == s_objs.get_schema_object_type())) {
-      continue;
+  if (IS_CLUSTER_VERSION_BEFORE_3100) {
+    // do nothing
+    LOG_DEBUG("all_dependency schema only support after version 3.1");
+  } else {
+    int64_t order = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < schema_objs.count(); ++i) {
+      ObDependencyInfo dep;
+      const ObSchemaObjVersion &s_objs = schema_objs.at(i);
+      if (!s_objs.is_valid()
+          // object may depend on self
+          || (is_pl
+          && dep_obj_type == s_objs.get_schema_object_type())) {
+        continue;
+      }
+      dep.set_dep_obj_id(OB_INVALID_ID);
+      dep.set_dep_obj_type(dep_obj_type);
+      dep.set_dep_obj_owner_id(OB_INVALID_ID);
+      dep.set_ref_obj_id(s_objs.get_object_id());
+      dep.set_ref_obj_type(s_objs.get_schema_object_type());
+      dep.set_order(order);
+      ++order;
+      dep.set_dep_timestamp(-1);
+      dep.set_ref_timestamp(s_objs.get_version());
+      dep.set_property(property);
+      if (dep_attrs.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH
+      || dep_reason.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dep attrs or dep reason is too long", K(ret),
+                                                        K(dep_attrs.length()),
+                                                        K(dep_reason.length()));
+      } else {
+        if (!dep_attrs.empty()) OZ (dep.set_dep_attrs(dep_attrs));
+        if (!dep_reason.empty()) OZ (dep.set_dep_reason(dep_reason));
+      }
+      OZ (deps.push_back(dep));
     }
-    dep.set_dep_obj_id(OB_INVALID_ID);
-    dep.set_dep_obj_type(dep_obj_type);
-    dep.set_dep_obj_owner_id(OB_INVALID_ID);
-    dep.set_ref_obj_id(s_objs.get_object_id());
-    dep.set_ref_obj_type(s_objs.get_schema_object_type());
-    dep.set_order(order);
-    ++order;
-    dep.set_dep_timestamp(-1);
-    dep.set_ref_timestamp(s_objs.get_version());
-    dep.set_property(property);
-    if (dep_attrs.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH
-    || dep_reason.length() >= OB_MAX_ORACLE_RAW_SQL_COL_LENGTH) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("dep attrs or dep reason is too long", K(ret),
-                                                      K(dep_attrs.length()),
-                                                      K(dep_reason.length()));
-    } else {
-      if (!dep_attrs.empty()) OZ (dep.set_dep_attrs(dep_attrs));
-      if (!dep_reason.empty()) OZ (dep.set_dep_reason(dep_reason));
-    }
-    OZ (deps.push_back(dep));
   }
   return ret;
 }
@@ -711,7 +726,7 @@ int ObReferenceObjTable::batch_execute_insert_or_update_obj_dependency(
   if (OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
-  } else if (is_standby) {
+  } else if (is_standby || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_322) {
     // do nothing
   } else {
     ObSqlString sql;
@@ -766,7 +781,7 @@ int ObReferenceObjTable::batch_execute_delete_obj_dependency(
   if (OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
-  } else if (is_standby) {
+  } else if (is_standby || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_322) {
     // do nothing
   } else {
     share::ObDMLSqlSplicer dml;

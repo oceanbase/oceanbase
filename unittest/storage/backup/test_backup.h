@@ -20,6 +20,7 @@
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/backup/ob_backup_index_cache.h"
 #include "storage/backup/ob_backup_data_struct.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -101,8 +102,8 @@ static void make_random_table_key(storage::ObITable::TableKey &table_key)
 {
   table_key.table_type_ = storage::ObITable::MINOR_SSTABLE;
   make_random_tablet_id(table_key.tablet_id_);
-  table_key.log_ts_range_.start_log_ts_ = 1;
-  table_key.log_ts_range_.end_log_ts_ = 100;
+  table_key.scn_range_.start_scn_.convert_for_gts(1);
+  table_key.scn_range_.end_scn_.convert_for_gts(100);
 }
 
 static void make_random_pair(ObBackupMacroBlockIDPair &pair)

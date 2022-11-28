@@ -198,16 +198,19 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
 
       //push into queue
       if (OB_SUCC(ret)) {
+        int64_t req_id = 0;
         if (is_sensitive) {
           free(record);
           record = NULL;
-        } else if (OB_FAIL(queue_.push_with_imme_seq(record, record->data_.request_id_))) {
+        } else if (OB_FAIL(queue_.push(record, req_id))) {
           //sql audit槽位已满时会push失败, 依赖后台线程进行淘汰获得可用槽位
           if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
             SERVER_LOG(WARN, "push into queue failed", K(ret));
           }
           free(record);
           record = NULL;
+        } else {
+          record->data_.request_id_ = req_id;
         }
       }
     }

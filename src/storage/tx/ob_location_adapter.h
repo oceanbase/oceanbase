@@ -51,6 +51,8 @@ public:
       share::ObLocationService *location_service) = 0;
   virtual void destroy() = 0;
 public:
+  virtual int get_leader(const int64_t cluster_id, const int64_t tenant_id, const share::ObLSID &ls_id,
+      common::ObAddr &leader) = 0;
   virtual int nonblock_get_leader(const int64_t cluster_id, const int64_t tenant_id, const share::ObLSID &ls_id,
       common::ObAddr &leader) = 0;
   virtual int nonblock_renew(const int64_t cluster_id, const int64_t tenant_id, const share::ObLSID &ls_id) = 0;
@@ -68,6 +70,8 @@ public:
       share::ObLocationService *location_service);
   void destroy();
 public:
+  int get_leader(const int64_t cluster_id, const int64_t tenant_id, const share::ObLSID &ls_id,
+      common::ObAddr &leader);
   int nonblock_get_leader(const int64_t cluster_id, const int64_t tenant_id, const share::ObLSID &ls_id,
       common::ObAddr &leader);
   int nonblock_renew(const int64_t cluster_id, const int64_t tenant_id, const share::ObLSID &ls_id);

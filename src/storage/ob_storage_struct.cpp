@@ -140,7 +140,7 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
     suggest_merge_type_(INVALID_MERGE_TYPE),
     update_tablet_directly_(false),
     schedule_major_(false),
-    log_ts_range_(),
+    scn_range_(),
     dump_memtable_timestamp_(0),
     read_base_version_(0)
 {
@@ -148,7 +148,7 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
 
 bool ObGetMergeTablesResult::is_valid() const
 {
-  return log_ts_range_.is_valid()
+  return scn_range_.is_valid()
       && handle_.get_count() >= 1
       && merge_version_ >= 0
       && base_schema_version_ >= 0
@@ -162,7 +162,7 @@ void ObGetMergeTablesResult::reset_handle_and_range()
 {
   handle_.reset();
   version_range_.reset();
-  log_ts_range_.reset();
+  scn_range_.reset();
 }
 
 void ObGetMergeTablesResult::reset()
@@ -176,7 +176,7 @@ void ObGetMergeTablesResult::reset()
   suggest_merge_type_ = INVALID_MERGE_TYPE;
   schedule_major_ = false;
   checksum_method_ = INVALID_INT_VALUE;
-  log_ts_range_.reset();
+  scn_range_.reset();
   dump_memtable_timestamp_ = 0;
   read_base_version_ = 0;
 }
@@ -198,7 +198,7 @@ int ObGetMergeTablesResult::deep_copy(const ObGetMergeTablesResult &src)
     checksum_method_ = src.checksum_method_;
     suggest_merge_type_ = src.suggest_merge_type_;
     schedule_major_ = src.schedule_major_;
-    log_ts_range_ = src.log_ts_range_;
+    scn_range_ = src.scn_range_;
     dump_memtable_timestamp_ = src.dump_memtable_timestamp_;
   }
   return ret;
@@ -221,12 +221,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_sstable_(false),
     ddl_checkpoint_ts_(0),
     ddl_start_log_ts_(0),
-    ddl_snapshot_version_(0),
-    ddl_execution_id_(0),
-    ddl_cluster_version_(0),
-    tx_data_(),
-    binding_info_(),
-    auto_inc_seq_()
+    ddl_snapshot_version_(0)
 {
 }
 
@@ -251,12 +246,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_sstable_(need_check_sstable),
     ddl_checkpoint_ts_(0),
     ddl_start_log_ts_(0),
-    ddl_snapshot_version_(0),
-    ddl_execution_id_(0),
-    ddl_cluster_version_(0),
-    tx_data_(),
-    binding_info_(),
-    auto_inc_seq_()
+    ddl_snapshot_version_(0)
 {
 }
 
@@ -280,12 +270,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_sstable_(false),
     ddl_checkpoint_ts_(0),
     ddl_start_log_ts_(0),
-    ddl_snapshot_version_(0),
-    ddl_execution_id_(0),
-    ddl_cluster_version_(0),
-    tx_data_(),
-    binding_info_(),
-    auto_inc_seq_()
+    ddl_snapshot_version_(0)
 {
 }
 
@@ -293,6 +278,7 @@ bool ObUpdateTableStoreParam::is_valid() const
 {
   return multi_version_start_ >= ObVersionRange::MIN_VERSION
       && snapshot_version_ >= ObVersionRange::MIN_VERSION
+      && clog_checkpoint_ts_ >= 0
       && nullptr != storage_schema_
       && storage_schema_->is_valid()
       && rebuild_seq_ >= 0;
@@ -303,11 +289,11 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
   : tables_handle_(),
     snapshot_version_(0),
     multi_version_start_(0),
+    storage_schema_(nullptr),
     need_report_(false),
     rebuild_seq_(OB_INVALID_VERSION),
     update_logical_minor_sstable_(false),
-    start_scn_(0),
-    tablet_meta_(nullptr)
+    start_scn_(0)
 {
 }
 
@@ -315,20 +301,20 @@ void ObBatchUpdateTableStoreParam::reset()
 {
   tables_handle_.reset();
   multi_version_start_ = 0;
+  storage_schema_ = nullptr;
   need_report_ = false;
   rebuild_seq_ = OB_INVALID_VERSION;
   update_logical_minor_sstable_ = false;
   start_scn_ = 0;
-  tablet_meta_ = nullptr;
 }
 
 bool ObBatchUpdateTableStoreParam::is_valid() const
 {
   return snapshot_version_ >= 0
       && multi_version_start_ >= 0
+      && OB_NOT_NULL(storage_schema_)
       && rebuild_seq_ > OB_INVALID_VERSION
-      && (!update_logical_minor_sstable_
-          || (update_logical_minor_sstable_ && start_scn_ > 0 && OB_ISNULL(tablet_meta_)));
+      && (!update_logical_minor_sstable_ || (update_logical_minor_sstable_ && start_scn_ > 0));
 }
 
 int ObBatchUpdateTableStoreParam::assign(
@@ -342,11 +328,11 @@ int ObBatchUpdateTableStoreParam::assign(
     LOG_WARN("failed to assign tables handle", K(ret), K(param));
   } else {
     multi_version_start_ = param.multi_version_start_;
+    storage_schema_ = param.storage_schema_;
     need_report_ = param.need_report_;
     rebuild_seq_ = param.rebuild_seq_;
     update_logical_minor_sstable_ = param.update_logical_minor_sstable_;
     start_scn_ = param.start_scn_;
-    tablet_meta_ = param.tablet_meta_;
   }
   return ret;
 }
@@ -373,6 +359,7 @@ int ObBatchUpdateTableStoreParam::get_max_clog_checkpoint_ts(int64_t &clog_check
   }
   return ret;
 }
+
 
 ObPartitionReadableInfo::ObPartitionReadableInfo()
   : min_log_service_ts_(0),

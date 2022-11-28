@@ -72,7 +72,7 @@ static constexpr int64_t sanity_max_canonical_addr = 0x4f210376cf1c;
 
 static inline bool sanity_addr_in_range(const void *ptr)
 {
-  return (int64_t)ptr < sanity_max_canonical_addr && (int64_t)ptr >= sanity_min_canonical_addr;
+  return (int64_t)ptr >= sanity_min_canonical_addr && (int64_t)ptr < sanity_max_canonical_addr;
 }
 
 static inline void* sanity_to_shadow(const void *ptr)
@@ -139,12 +139,12 @@ static inline void sanity_check_range(const void *ptr, ssize_t len)
   char *start_align = (char*)sanity_align_up((uint64_t)start, 8);
   char *end_align = (char*)sanity_align_down((uint64_t)end, 8);
   if (start_align > start &&
-      (*(int8_t*)sanity_to_shadow(start_align - 8) != 0x0 &&
-       *(int8_t*)sanity_to_shadow(start_align - 8) < (len + start - (start_align - 8)))) {
+      (*(uint8_t*)sanity_to_shadow(start_align - 8) != 0x0 &&
+       *(uint8_t*)sanity_to_shadow(start_align - 8) < (len + start - (start_align - 8)))) {
     memory_sanity_abort();
   }
   if (end_align >= start_align + 8) {
-    if (*(int8_t*)sanity_to_shadow(start_align) != 0x0) {
+    if (*(uint8_t*)sanity_to_shadow(start_align) != 0x0) {
       memory_sanity_abort();
     }
     if (end_align > start_align + 8) {
@@ -157,8 +157,8 @@ static inline void sanity_check_range(const void *ptr, ssize_t len)
     }
   }
   if (end_align < end &&
-      (*(int8_t*)sanity_to_shadow(end_align) != 0x0 &&
-       *(int8_t*)sanity_to_shadow(end_align) < (end - end_align))) {
+      (*(uint8_t*)sanity_to_shadow(end_align) != 0x0 &&
+       *(uint8_t*)sanity_to_shadow(end_align) < (end - end_align))) {
     memory_sanity_abort();
   }
 }

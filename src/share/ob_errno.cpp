@@ -361,10 +361,10 @@ static const _error _error_OB_READ_NOTHING = {
       .error_name            = "OB_READ_NOTHING",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
-      .mysql_errno           = ER_SP_FETCH_NO_DATA,
+      .mysql_errno           = -1,
       .sqlstate              = "02000",
-      .str_error             = "No data - zero rows fetched, selected, or processed",
-      .str_user_error        = "No data - zero rows fetched, selected, or processed",
+      .str_error             = "Nothing to read",
+      .str_user_error        = "Nothing to read",
       .oracle_errno          = 1403,
       .oracle_str_error      = "ORA-01403: no data found",
       .oracle_str_user_error = "ORA-01403: no data found"
@@ -1905,8 +1905,8 @@ static const _error _error_OB_BEYOND_THE_RANGE = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4183, Key out of range",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4183, Key out of range"
 };
-static const _error _error_OB_SERVER_OUTOF_DISK_SPACE = {
-      .error_name            = "OB_SERVER_OUTOF_DISK_SPACE",
+static const _error _error_OB_CS_OUTOF_DISK_SPACE = {
+      .error_name            = "OB_CS_OUTOF_DISK_SPACE",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
@@ -5661,17 +5661,17 @@ static const _error _error_OB_NO_DISK_NEED_REBUILD = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4687, no disk need rebuild",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4687, no disk need rebuild"
 };
-static const _error _error_OB_STANDBY_READ_ONLY = {
-      .error_name            = "OB_STANDBY_READ_ONLY",
+static const _error _error_OB_STANDBY_WEAK_READ_ONLY = {
+      .error_name            = "OB_STANDBY_WEAK_READ_ONLY",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
-      .str_error             = "standby tenant is read only",
-      .str_user_error        = "standby tenant is read only",
+      .str_error             = "standby cluster support weak read only",
+      .str_user_error        = "standby cluster support weak read only",
       .oracle_errno          = 16000,
-      .oracle_str_error      = "ORA-16000: standby tenant is read only",
-      .oracle_str_user_error = "ORA-16000: standby tenant is read only"
+      .oracle_str_error      = "ORA-16000: standby cluster support weak read only",
+      .oracle_str_user_error = "ORA-16000: standby cluster support weak read only"
 };
 static const _error _error_OB_INVALD_WEB_SERVICE_CONTENT = {
       .error_name            = "OB_INVALD_WEB_SERVICE_CONTENT",
@@ -6356,18 +6356,6 @@ static const _error _error_OB_DELETE_SERVER_NOT_ALLOWED = {
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4745, delete server not allowed",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4745, %s"
-};
-static const _error _error_OB_PACKET_STATUS_UNKNOWN = {
-      .error_name            = "OB_PACKET_STATUS_UNKNOWN",
-      .error_cause           = "Internal Error",
-      .error_solution        = "Contact OceanBase Support",
-      .mysql_errno           = -1,
-      .sqlstate              = "HY000",
-      .str_error             = "Network error and packet status unknown. Abort auto retry.",
-      .str_user_error        = "Network error and packet status unknown. Abort auto retry.",
-      .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4746, Network error and packet status unknown. Abort auto retry.",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4746, Network error and packet status unknown. Abort auto retry."
 };
 static const _error _error_OB_ERR_PARSER_INIT = {
       .error_name            = "OB_ERR_PARSER_INIT",
@@ -10724,18 +10712,6 @@ static const _error _error_OB_DDL_SCHEMA_VERSION_NOT_MATCH = {
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -5403, ddl schema version not match",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5403, ddl schema version not match"
-};
-static const _error _error_OB_ERR_COLUMN_GROUP_DUPLICATE = {
-      .error_name            = "OB_ERR_COLUMN_GROUP_DUPLICATE",
-      .error_cause           = "Internal Error",
-      .error_solution        = "Contact OceanBase Support",
-      .mysql_errno           = ER_DUP_FIELDNAME,
-      .sqlstate              = "42S21",
-      .str_error             = "Duplicate column group name",
-      .str_user_error        = "Duplicate column group name '%.*s'",
-      .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5404, Duplicate column group name",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5404, Duplicate column group name '%.*s'"
 };
 static const _error _error_OB_ERR_INVALID_JSON_TEXT = {
       .error_name            = "OB_ERR_INVALID_JSON_TEXT",
@@ -21885,6 +21861,18 @@ static const _error _error_OB_ERR_NAME_HAS_TOO_MANY_PARTS = {
       .oracle_str_error      = "ORA-06563: name has too many parts",
       .oracle_str_user_error = "ORA-06563: name has too many parts"
 };
+static const _error _error_OB_ERR_SP_FETCH_NO_DATA = {
+      .error_name            = "OB_ERR_SP_FETCH_NO_DATA",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = ER_SP_FETCH_NO_DATA,
+      .sqlstate              = "HY000",
+      .str_error             = "No data - zero rows fetched, selected, or processed",
+      .str_user_error        = "No data - zero rows fetched, selected, or processed",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9715, No data - zero rows fetched, selected, or processed",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9715, No data - zero rows fetched, selected, or processed"
+};
 static const _error _error_OB_SP_RAISE_APPLICATION_ERROR = {
       .error_name            = "OB_SP_RAISE_APPLICATION_ERROR",
       .error_cause           = "Internal Error",
@@ -22133,7 +22121,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_ALREADY_EXISTS] = &_error_OB_ERR_ALREADY_EXISTS;
     _errors[-OB_SEARCH_NOT_FOUND] = &_error_OB_SEARCH_NOT_FOUND;
     _errors[-OB_BEYOND_THE_RANGE] = &_error_OB_BEYOND_THE_RANGE;
-    _errors[-OB_SERVER_OUTOF_DISK_SPACE] = &_error_OB_SERVER_OUTOF_DISK_SPACE;
+    _errors[-OB_CS_OUTOF_DISK_SPACE] = &_error_OB_CS_OUTOF_DISK_SPACE;
     _errors[-OB_COLUMN_GROUP_NOT_FOUND] = &_error_OB_COLUMN_GROUP_NOT_FOUND;
     _errors[-OB_CS_COMPRESS_LIB_ERROR] = &_error_OB_CS_COMPRESS_LIB_ERROR;
     _errors[-OB_ITEM_NOT_MATCH] = &_error_OB_ITEM_NOT_MATCH;
@@ -22446,7 +22434,7 @@ struct ObStrErrorInit
     _errors[-OB_ACTIVE_MEMTBALE_NOT_EXSIT] = &_error_OB_ACTIVE_MEMTBALE_NOT_EXSIT;
     _errors[-OB_USE_DUP_FOLLOW_AFTER_DML] = &_error_OB_USE_DUP_FOLLOW_AFTER_DML;
     _errors[-OB_NO_DISK_NEED_REBUILD] = &_error_OB_NO_DISK_NEED_REBUILD;
-    _errors[-OB_STANDBY_READ_ONLY] = &_error_OB_STANDBY_READ_ONLY;
+    _errors[-OB_STANDBY_WEAK_READ_ONLY] = &_error_OB_STANDBY_WEAK_READ_ONLY;
     _errors[-OB_INVALD_WEB_SERVICE_CONTENT] = &_error_OB_INVALD_WEB_SERVICE_CONTENT;
     _errors[-OB_PRIMARY_CLUSTER_EXIST] = &_error_OB_PRIMARY_CLUSTER_EXIST;
     _errors[-OB_ARRAY_BINDING_SWITCH_ITERATOR] = &_error_OB_ARRAY_BINDING_SWITCH_ITERATOR;
@@ -22504,7 +22492,6 @@ struct ObStrErrorInit
     _errors[-OB_FREEZE_SERVICE_EPOCH_MISMATCH] = &_error_OB_FREEZE_SERVICE_EPOCH_MISMATCH;
     _errors[-OB_FROZEN_INFO_ALREADY_EXIST] = &_error_OB_FROZEN_INFO_ALREADY_EXIST;
     _errors[-OB_DELETE_SERVER_NOT_ALLOWED] = &_error_OB_DELETE_SERVER_NOT_ALLOWED;
-    _errors[-OB_PACKET_STATUS_UNKNOWN] = &_error_OB_PACKET_STATUS_UNKNOWN;
     _errors[-OB_ERR_PARSER_INIT] = &_error_OB_ERR_PARSER_INIT;
     _errors[-OB_ERR_PARSE_SQL] = &_error_OB_ERR_PARSE_SQL;
     _errors[-OB_ERR_RESOLVE_SQL] = &_error_OB_ERR_RESOLVE_SQL;
@@ -22868,7 +22855,6 @@ struct ObStrErrorInit
     _errors[-OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED] = &_error_OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED;
     _errors[-OB_ERR_GET_STACKED_DIAGNOSTICS] = &_error_OB_ERR_GET_STACKED_DIAGNOSTICS;
     _errors[-OB_DDL_SCHEMA_VERSION_NOT_MATCH] = &_error_OB_DDL_SCHEMA_VERSION_NOT_MATCH;
-    _errors[-OB_ERR_COLUMN_GROUP_DUPLICATE] = &_error_OB_ERR_COLUMN_GROUP_DUPLICATE;
     _errors[-OB_ERR_INVALID_JSON_TEXT] = &_error_OB_ERR_INVALID_JSON_TEXT;
     _errors[-OB_ERR_INVALID_JSON_TEXT_IN_PARAM] = &_error_OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
     _errors[-OB_ERR_INVALID_JSON_BINARY_DATA] = &_error_OB_ERR_INVALID_JSON_BINARY_DATA;
@@ -23798,6 +23784,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_MISSING_INTO_KEYWORD] = &_error_OB_ERR_MISSING_INTO_KEYWORD;
     _errors[-OB_ERR_CLAUSE_RETURN_ILLEGAL] = &_error_OB_ERR_CLAUSE_RETURN_ILLEGAL;
     _errors[-OB_ERR_NAME_HAS_TOO_MANY_PARTS] = &_error_OB_ERR_NAME_HAS_TOO_MANY_PARTS;
+    _errors[-OB_ERR_SP_FETCH_NO_DATA] = &_error_OB_ERR_SP_FETCH_NO_DATA;
     _errors[-OB_SP_RAISE_APPLICATION_ERROR] = &_error_OB_SP_RAISE_APPLICATION_ERROR;
     _errors[-OB_SP_RAISE_APPLICATION_ERROR_NUM] = &_error_OB_SP_RAISE_APPLICATION_ERROR_NUM;
     _errors[-OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN] = &_error_OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN;

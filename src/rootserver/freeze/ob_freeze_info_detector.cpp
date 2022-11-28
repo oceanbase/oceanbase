@@ -32,7 +32,7 @@ namespace rootserver
 {
 ObFreezeInfoDetector::ObFreezeInfoDetector()
   : ObFreezeReentrantThread(), is_inited_(false),
-    is_gc_ts_inited_(false), last_gc_timestamp_(0),
+    is_gc_scn_inited_(false), last_gc_timestamp_(0),
     freeze_info_mgr_(nullptr), major_scheduler_idling_(nullptr)
 {}
 
@@ -98,9 +98,9 @@ void ObFreezeInfoDetector::run3()
       } else if (OB_FAIL(can_start_work(can_work))) {
         LOG_WARN("fail to judge can start work", KR(ret),K_(tenant_id));
       } else if (can_work) {
-        // In freeze_info_mgr, we use 'select snapshot_gc_ts for update' to execute sequentially, 
+        // In freeze_info_mgr, we use 'select snapshot_gc_scn for update' to execute sequentially,
         // avoiding multi-writing when switch-role.
-        if (OB_FAIL(try_renew_snapshot_gc_ts())) {
+        if (OB_FAIL(try_renew_snapshot_gc_scn())) {
           LOG_WARN("fail to renew gc snapshot", KR(ret), K_(tenant_id));
         }
         // TODO oushen, consider STANDBY_TENANT later
@@ -124,7 +124,7 @@ void ObFreezeInfoDetector::run3()
         }
 
         ret = OB_SUCCESS;
-        if (OB_FAIL(freeze_info_mgr_->check_snapshot_gc_ts())) {
+        if (OB_FAIL(freeze_info_mgr_->check_snapshot_gc_scn())) {
           LOG_WARN("fail to check_snapshot_gc_ts", KR(ret), K_(tenant_id));
         }
         
@@ -169,7 +169,7 @@ int ObFreezeInfoDetector::try_broadcast_freeze_info(const int64_t expected_epoch
   return ret;
 }
 
-int ObFreezeInfoDetector::try_renew_snapshot_gc_ts()
+int ObFreezeInfoDetector::try_renew_snapshot_gc_scn()
 {
   int ret = OB_SUCCESS;
   int64_t now = ObTimeUtility::current_time();
@@ -178,8 +178,8 @@ int ObFreezeInfoDetector::try_renew_snapshot_gc_ts()
     LOG_WARN("not init", KR(ret), K_(tenant_id));
   } else if ((now - last_gc_timestamp_) < MODIFY_GC_SNAPSHOT_INTERVAL) {
     // nothing
-  } else if (OB_FAIL(freeze_info_mgr_->renew_snapshot_gc_ts())) {
-    LOG_WARN("fail to renew snapshot gc ts", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(freeze_info_mgr_->renew_snapshot_gc_scn())) {
+    LOG_WARN("fail to renew snapshot gc scn", KR(ret), K_(tenant_id));
   } else {
     last_gc_timestamp_ = now;
   }
@@ -246,10 +246,10 @@ int ObFreezeInfoDetector::can_start_work(bool &can_work)
     // 3. sys tenant init global stat(snpshot_gc_ts) in ObBootstrap(ObBootstrap::init_global_stat()), 
     //    after tenant_state set to normal; 
     //    in order to avoid racing, detector will wait, until global_stat init complete;
-    if (is_gc_ts_inited_) {
+    if (is_gc_scn_inited_) {
       // ...
     } else {
-      int64_t snapshot_gc_scn = 0;
+      palf::SCN snapshot_gc_scn;
       ObGlobalStatProxy global_stat_proxy(*sql_proxy_, tenant_id_);
       if (OB_FAIL(global_stat_proxy.get_snapshot_gc_scn(snapshot_gc_scn))) {
         LOG_WARN("can not get snapshot gc ts", KR(ret), K_(tenant_id));
@@ -257,7 +257,7 @@ int ObFreezeInfoDetector::can_start_work(bool &can_work)
         can_work = false;
       } else {
         LOG_INFO("snapshot_gc_scn init succ", K(snapshot_gc_scn), K_(tenant_id));
-        is_gc_ts_inited_ = true;
+        is_gc_scn_inited_ = true;
       }
     }
   }

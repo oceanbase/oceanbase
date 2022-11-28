@@ -45,7 +45,8 @@ public:
   virtual int init(const common::ObTabletID &tablet_id,
                    const share::ObLSID &ls_id,
                    ObFreezer *freezer,
-                   ObTenantMetaMemMgr *t3m) override;
+                   ObTenantMetaMemMgr *t3m,
+                   ObTabletDDLKvMgr *ddl_kv_mgr) override;
 
   virtual int create_memtable(const int64_t clog_checkpoint_ts,
                               const int64_t schema_version,
@@ -57,7 +58,7 @@ public:
 
   bool has_active_memtable();
   int64_t get_memtable_count() const;
-  virtual int get_memtable_for_replay(int64_t replay_log_ts,
+  virtual int get_memtable_for_replay(palf::SCN replay_scn,
                                       ObTableHandleV2 &handle) override;
   memtable::ObMemtable *get_last_frozen_memtable() const;
   memtable::ObMemtable *get_last_frozen_memtable_() const;
@@ -86,22 +87,22 @@ public:
   int unset_logging_blocked_for_active_memtable(memtable::ObIMemtable *memtable);
   int set_is_tablet_freeze_for_active_memtable(memtable::ObIMemtable *&memtable,
                                                bool is_force_freeze = false);
+  int release_head_empty_memtable(memtable::ObIMemtable *flush_memtable);
 
   ObStorageSchemaRecorder &get_storage_schema_recorder()
   {
     return schema_recorder_;
   }
-  virtual int init_storage_schema_recorder(
-      const ObTabletID &tablet_id,
-      const share::ObLSID &ls_id,
-      const int64_t max_saved_schema_version,
-      logservice::ObLogHandler *log_handler) override;
-  virtual int reset_storage_schema_recorder() override;
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
   virtual int release_head_memtable_(memtable::ObIMemtable *memtable,
                                      const bool force = false) override;
+  virtual int init_storage_schema_recorder(
+      const ObTabletID &tablet_id,
+      const share::ObLSID &ls_id,
+      const int64_t max_saved_schema_version,
+      logservice::ObLogHandler *log_handler) override;
 
 private:
   //minor freeze
@@ -131,8 +132,8 @@ private:
   static const int64_t PRINT_READABLE_INFO_DURATION_US = 1000 * 1000 * 60 * 10L; //10min
 
 private:
-  ObLS *ls_; //8B
-  ObStorageSchemaRecorder schema_recorder_;// 136B
+  ObLS *ls_;
+  ObStorageSchemaRecorder schema_recorder_;
 };
 }
 }

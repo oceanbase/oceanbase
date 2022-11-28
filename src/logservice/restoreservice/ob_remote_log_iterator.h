@@ -22,7 +22,8 @@
 #include "ob_remote_log_source.h"              // ObRemoteLogParent
 #include "logservice/palf/log_group_entry.h"   // LogGroupEntry
 #include "logservice/palf/lsn.h"               // LSN
-#include "logservice/palf/log_iterator_storage.h"  // MemoryStorage
+#include "logservice/palf/scn.h"               // SCN
+#include "logservice/palf/log_iterator_storage.h" // MemoryStorage
 #include "ob_remote_data_generator.h"          // RemoteDataBuffer
 
 namespace oceanbase
@@ -52,7 +53,7 @@ public:
   // init remote log iterator
   // @param[in] tenant_id, the tenant id of the LS
   // @param[in] id, the id of the LS
-  // @param[in] pre_log_ts, the log ts of the previous one, which is used to locate piece, this is an optional value
+  // @param[in] pre_log_scn, the log scn of the previous one, which is used to locate piece, this is an optional value
   //            if this param can not be provided, set it with OB_INVALID_TIMESTAMP
   // @param[in] start_lsn, the LSN of the first log to iterate
   // @param[in] end_lsn, the LSN of the last log to iterate, which can be set a limited or INT64_MAX
@@ -66,7 +67,7 @@ public:
   //            iteraotr should be inited again to follow this change
   int init(const uint64_t tenant_id,
       const ObLSID &id,
-      const int64_t pre_log_ts,
+      const palf::SCN &pre_log_scn,
       const LSN &start_lsn,
       const LSN &end_lsn);
     // = [](share::ObBackupDest &dest) -> int { return OB_NOT_SUPPORTED; });
@@ -78,17 +79,17 @@ public:
   // @param[out] entry 迭代的LogGroupEntry
   // @param[out] lsn LogGroupEntry在日志流起始offset
   int next(LogGroupEntry &entry, LSN &lsn, char *&buf, int64_t &buf_size);
-  int get_cur_lsn_ts(LSN &lsn, int64_t &timestamp) const;
+  int get_cur_lsn_scn(LSN &lsn, palf::SCN &scn) const;
 
   TO_STRING_KV(K_(inited), K_(tenant_id), K_(id), K_(start_lsn), K_(cur_lsn), K_(end_lsn), K_(gen));
 
 private:
-  int build_data_generator_(const int64_t pre_log_ts,
+  int build_data_generator_(const palf::SCN &pre_log_scn,
       ObRemoteLogParent *source,
       const std::function<int(share::ObBackupDest &dest)> &refresh_storage_info_func);
   int build_service_data_generator_(ObRemoteSerivceParent *source);
-  int build_dest_data_generator_(const int64_t pre_log_ts, ObRemoteRawPathParent *source);
-  int build_location_data_generator_(const int64_t pre_log_ts,
+  int build_dest_data_generator_(const palf::SCN &pre_log_scn, ObRemoteRawPathParent *source);
+  int build_location_data_generator_(const palf::SCN &pre_log_scn,
       ObRemoteLocationParent *source,
       const std::function<int(share::ObBackupDest &dest)> &refresh_storage_info_func);
   int next_entry_(LogGroupEntry &entry, LSN &lsn, char *&buf, int64_t &buf_size);
@@ -104,7 +105,7 @@ private:
   ObLSID id_;
   LSN start_lsn_;
   LSN cur_lsn_;            // 迭代最新一条日志所对应终点LSN
-  int64_t cur_log_ts_;     // 迭代最新一条日志log_ts
+  palf::SCN cur_log_scn_;     // 迭代最新一条日志log_scn
   LSN end_lsn_;
   ObRemoteSourceGuard source_guard_;
   RemoteDataBuffer data_buffer_;

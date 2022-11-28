@@ -495,7 +495,7 @@ protected:
 	int64_t copy_end_pos_;
 	char *tmp_buf_;
 	int64_t tmp_buf_len_;
-	int64_t last_escape_check_pos_;
+	int64_t last_well_formed_len_;
 	ParamList *param_node_list_;
 	ParamList *tail_param_node_;
 	TokenType cur_token_type_;

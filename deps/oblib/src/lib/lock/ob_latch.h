@@ -364,7 +364,7 @@ private:
 class ObLatchMutexGuard
 {
 public:
-  [[nodiscard]] ObLatchMutexGuard(ObLatchMutex &lock, const uint32_t latch_id)
+  ObLatchMutexGuard(ObLatchMutex &lock, const uint32_t latch_id)
       : lock_(lock), ret_(OB_SUCCESS)
   {
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.lock(latch_id)))) {
@@ -390,7 +390,7 @@ private:
 class ObLatchRGuard
 {
 public:
-  [[nodiscard]] ObLatchRGuard(ObLatch &lock, const uint32_t latch_id)
+  ObLatchRGuard(ObLatch &lock, const uint32_t latch_id)
       : lock_(lock),
         ret_(OB_SUCCESS)
   {
@@ -418,7 +418,7 @@ private:
 class ObLatchWGuard
 {
 public:
-  [[nodiscard]] ObLatchWGuard(ObLatch &lock, const uint32_t latch_id)
+  ObLatchWGuard(ObLatch &lock, const uint32_t latch_id)
       : lock_(lock),
         ret_(OB_SUCCESS)
   {

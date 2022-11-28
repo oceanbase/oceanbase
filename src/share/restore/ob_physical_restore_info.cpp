@@ -329,7 +329,7 @@ void ObPhysicalRestoreJob::reset()
   status_ = PhysicalRestoreStatus::PHYSICAL_RESTORE_MAX_STATUS;
   comment_.reset();
   restore_start_ts_ = 0;
-  restore_scn_ = 0;
+  restore_scn_ = palf::SCN::min_scn();
   post_cluster_version_ = 0;
   source_cluster_version_ = 0;
   restore_option_.reset();
@@ -369,7 +369,7 @@ int ObPhysicalRestoreJob::copy_to(ObSimplePhysicalRestoreJob &simple_job_info) c
     simple_job_info.job_id_ = restore_key_.job_id_;
     simple_job_info.restore_info_.backup_dest_[share::OB_MAX_BACKUP_DEST_LENGTH - 1] = '\0';
     simple_job_info.restore_info_.tenant_id_ = backup_tenant_id_;
-    simple_job_info.restore_info_.restore_snapshot_version_ = restore_scn_;
+    simple_job_info.restore_info_.restore_snapshot_version_ = restore_scn_.get_val_for_inner_table_field();
     simple_job_info.restore_info_.restore_start_ts_ = restore_start_ts_;
     simple_job_info.restore_info_.compatible_ = compatible_;
     simple_job_info.restore_info_.cluster_version_ = source_cluster_version_;

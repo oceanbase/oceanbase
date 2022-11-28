@@ -22,7 +22,7 @@ namespace oceanbase
 {
 namespace sql
 {
-const int64_t MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS= 256;
+const int64_t MAX_TO_CHAR_BUFFER_SIZE = 256;
 
 const ObNFMKeyWord ObNFMElem::NFM_KEYWORDS[MAX_TYPE_NUMBER] =
 {
@@ -1434,7 +1434,7 @@ int ObNFMBase::cast_obj_to_num_str(const ObNFMObj &nfm_obj,
   int64_t num_str_len = 0;
   number::ObNumber nmb;
   char *num_str_buf = NULL;
-  const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
+  const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE;
   ObObjType obj_type = nfm_obj.get_obj_type();
   if (OB_ISNULL(num_str_buf = static_cast<char *>(
                               allocator_.alloc(alloc_size)))) {
@@ -1689,7 +1689,7 @@ int ObNFMToChar::process_mul_format(const ObNFMObj &nfm_obj, common::ObString &n
   int64_t origin_str_len = 0;
   char *origin_str_buf = NULL;
   int64_t exponent = fmt_desc_.multi_;
-  const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
+  const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE;
   if (OB_ISNULL(origin_str_buf = static_cast<char *>(
                 allocator_.alloc(alloc_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1764,7 +1764,7 @@ int ObNFMToChar::process_tm_format(const ObNFMObj &nfm_obj, char *buf,
   char *num_str_buf = NULL;
   ObString num_str;
   const int32_t scale = -1;
-  const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
+  const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE;
   if (OB_ISNULL(num_str_buf = static_cast<char *>(
                               allocator_.alloc(alloc_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1816,7 +1816,7 @@ int ObNFMToChar::process_tme_format(const ObNFMObj &nfm_obj, char *buf,
   char *num_str_buf = NULL;
   ObString num_str;
   const int32_t scale = -1;
-  const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
+  const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE;
   if (OB_ISNULL(num_str_buf = static_cast<char *>(
                               allocator_.alloc(alloc_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1860,7 +1860,7 @@ int ObNFMToChar::process_sci_format(const common::ObString &origin_str, const in
   int ret = OB_SUCCESS;
   int64_t sci_str_len = 0;
   char *sci_str_buf = NULL;
-  const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
+  const int64_t alloc_size = MAX_TO_CHAR_BUFFER_SIZE;
   if (fmt_desc_.pre_num_count_ < 1) {
     ret = OB_ERR_INVALID_NUMBER_FORMAT_MODEL;
     LOG_WARN("invalid number fmt model", K_(fmt_str));
@@ -2224,7 +2224,7 @@ int ObNFMToChar::convert_num_to_fmt_str(const ObObj &obj,
   char *res_buf = NULL;
   ObNFMObj nfm_obj;
   ObSQLSessionInfo *session = expr_ctx.my_session_;
-  const int64_t res_buf_len = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
+  const int64_t res_buf_len = MAX_TO_CHAR_BUFFER_SIZE;
   if (OB_ISNULL(fmt_str) || OB_ISNULL(expr_ctx.calc_buf_) || OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(fmt_str), K(expr_ctx.calc_buf_),
@@ -2278,7 +2278,7 @@ int ObNFMToChar::convert_num_to_fmt_str(const common::ObObjMeta &obj_meta,
   int64_t offset = 0;
   char *res_buf = NULL;
   ObNFMObj nfm_obj;
-  const int64_t res_buf_len = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
+  const int64_t res_buf_len = MAX_TO_CHAR_BUFFER_SIZE;
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   if (OB_ISNULL(fmt_str) || OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2392,7 +2392,7 @@ int ObNFMToNumber::process_output_fmt(const ObString &in_str,
   int64_t offset = 0;
   bool is_negative = false;
   char *buf = NULL;
-  const int64_t buf_len = MAX_TO_CHAR_BUFFER_SIZE_IN_FORMAT_MODELS;
+  const int64_t buf_len = MAX_TO_CHAR_BUFFER_SIZE;
   // skip leading spaces
   while (str_pos < str_len && ' ' == str[str_pos]) {
     ++str_pos;

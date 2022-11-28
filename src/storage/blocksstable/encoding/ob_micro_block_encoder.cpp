@@ -272,7 +272,6 @@ void ObMicroBlockEncoder::dump_diagnose_info() const
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected encoding ctx", K_(ctx));
   } else {
-    print_micro_block_encoder_status();
     ObDatumRow datum_row;
     ObStoreRow store_row;
     int64_t orig_checksum = 0;
@@ -316,9 +315,9 @@ int ObMicroBlockEncoder::init_all_col_values(const ObMicroBlockEncodingCtx &ctx)
   return ret;
 }
 
-void ObMicroBlockEncoder::print_micro_block_encoder_status() const
+void ObMicroBlockEncoder::print_micro_block_encoder_status()
 {
-  FLOG_INFO("Build micro block failed, print encoder status: ", K_(ctx),
+  FLOG_INFO("Build micro block failed, print encoder status: ",
       K_(header), K_(estimate_size), K_(estimate_size_limit), K_(header_size),
       K_(expand_pct), K_(string_col_cnt), K_(estimate_base_store_size), K_(length));
   int64_t idx = 0;
@@ -355,8 +354,7 @@ void ObMicroBlockEncoder::update_estimate_size_limit(const ObMicroBlockEncodingC
 int ObMicroBlockEncoder::try_to_append_row(const int64_t &store_size)
 {
   int ret = OB_SUCCESS;
-  // header_size_ = micro_header_size + column_header_size
-  if (OB_UNLIKELY(store_size + estimate_size_ + header_size_ > block_size_upper_bound_)) {
+  if (OB_UNLIKELY(store_size + estimate_size_ > block_size_upper_bound_)) {
     ret = OB_BUF_NOT_ENOUGH;
   }
   return ret;
@@ -521,15 +519,15 @@ int ObMicroBlockEncoder::store_encoding_meta_and_fix_cols(int64_t &encoding_meta
         if (OB_FAIL(encoders_.at(i)->store_meta(data_buffer_))) {
           LOG_WARN("store encoding meta failed", K(ret));
         } else {
-          ObColumnHeader &ch = encoders_.at(i)->get_column_header();
           if (data_buffer_.pos() > pos_bak) {
+            ObColumnHeader &ch = encoders_.at(i)->get_column_header();
             ch.offset_ = static_cast<uint32_t>(pos_bak - encoding_meta_offset);
             ch.length_ = static_cast<uint32_t>(data_buffer_.pos() - pos_bak);
           } else if (ObColumnHeader::RAW == encoders_.at(i)->get_type()) {
             // column header offset records the start pos of the fix data, if needed
+            ObColumnHeader &ch = encoders_.at(i)->get_column_header();
             ch.offset_ = static_cast<uint32_t>(pos_bak - encoding_meta_offset);
           }
-          ch.obj_type_ = static_cast<uint8_t>(encoders_.at(i)->get_obj_type());
         }
 
         if (OB_SUCC(ret) && !desc.is_var_data_ && desc.need_data_store_) {
@@ -576,7 +574,7 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
       if (OB_FAIL(set_row_data_pos(fix_data_size))) {
         LOG_WARN("set row data position failed", K(ret));
       } else {
-        header_->var_column_count_ = static_cast<uint16_t>(var_data_encoders_.count());
+        header_->var_column_count_ = static_cast<int16_t>(var_data_encoders_.count());
       }
     }
 
@@ -613,7 +611,7 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
 
     // <5> fill header
     if (OB_SUCC(ret)) {
-      header_->row_count_ = static_cast<uint32_t>(datum_rows_.count());
+      header_->row_count_ = static_cast<int16_t>(datum_rows_.count());
       header_->encoding_has_out_row_column_ = has_out_row_column_;
 
       const int64_t header_size = header_->header_size_;

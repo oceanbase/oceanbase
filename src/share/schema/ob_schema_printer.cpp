@@ -3840,16 +3840,6 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
     OX (routine_param = static_cast<const ObRoutineParam*>(routine_info->get_ret_info()));
     OZ (print_routine_param_type(routine_param, return_type, buf, buf_len, pos, tz_info));
   }
-  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
-    OZ (databuff_printf(buf, buf_len, pos, "%s",
-        routine_info->is_deterministic() ? "\nDETERMINISTIC\n" : ""));
-    if (OB_SUCC(ret) && OB_NOT_NULL(routine_info->get_comment())) {
-      OZ (databuff_printf(buf, buf_len, pos, "%s%.*s%s\n","COMMENT `",
-          routine_info->get_comment().length(),
-          routine_info->get_comment().ptr(),
-          "`"));
-    }
-  }
   OZ (databuff_printf(buf, buf_len, pos, lib::is_oracle_mode() ? " IS\n%.*s" : " %.*s", body.length(), body.ptr()));
   return ret;
 }
@@ -3880,7 +3870,7 @@ int ObSchemaPrinter::print_routine_definition(
     const ObStmtNodeTree *param_list = NULL;
     const ObStmtNodeTree *return_type = NULL;
     CK (!routine_body.empty());
-    OZ (parser.parse_routine_body(routine_body, parse_tree, false));
+    OZ (parser.parse_routine_body(routine_body, parse_tree));
     CK (OB_NOT_NULL(parse_tree));
     CK (T_STMT_LIST == parse_tree->type_);
     CK (1 == parse_tree->num_child_);

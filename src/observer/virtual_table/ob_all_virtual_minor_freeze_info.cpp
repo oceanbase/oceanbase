@@ -164,7 +164,7 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 7:
           // freeze_snapshot_version
-          cur_row_.cells_[i].set_int(freezer->get_freeze_snapshot_version());
+          cur_row_.cells_[i].set_int(freezer->get_freeze_snapshot_version().get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // start_time
@@ -242,12 +242,12 @@ int ObAllVirtualMinorFreezeInfo::generate_memtables_info()
       // tablet_id
       strcat(memtables_info_string_, "tablet_id:");
       strcat(memtables_info_string_, to_cstring(memtables_info_[i].tablet_id_.id()));
-      // start_log_ts
-      strcat(memtables_info_string_, ", start_log_ts:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].start_log_ts_));
-      // end_log_ts
-      strcat(memtables_info_string_, ", end_log_ts:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].end_log_ts_));
+      // start_log_scn
+      strcat(memtables_info_string_, ", start_log_scn:");
+      strcat(memtables_info_string_, to_cstring(memtables_info_[i].start_log_scn_));
+      // end_log_scn
+      strcat(memtables_info_string_, ", end_log_scn:");
+      strcat(memtables_info_string_, to_cstring(memtables_info_[i].end_log_scn_));
       // write_ref_cnt
       strcat(memtables_info_string_, ", write_ref_cnt:");
       strcat(memtables_info_string_, to_cstring(memtables_info_[i].write_ref_cnt_));

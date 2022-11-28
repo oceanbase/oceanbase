@@ -35,19 +35,18 @@ public:
       schema_version_(0),
       snapshot_version_(0),
       task_id_(0),
-      parallelism_(0),
-      execution_id_(0)
+      parallelism_(0)
   {}
   ~ObDDLSingleReplicaExecutorParam() = default;
   bool is_valid() const {
     return common::OB_INVALID_TENANT_ID != tenant_id_ && share::DDL_INVALID != type_
            && source_tablet_ids_.count() > 0 && dest_tablet_ids_.count() > 0
            && common::OB_INVALID_ID != source_table_id_ && common::OB_INVALID_ID != dest_table_id_
-           && schema_version_ > 0 && snapshot_version_ > 0 && task_id_ > 0 && execution_id_ > 0;
+           && schema_version_ > 0 && snapshot_version_ > 0 && task_id_ > 0;
   }
   TO_STRING_KV(K_(tenant_id), K_(type), K_(source_tablet_ids), K_(dest_tablet_ids),
                K_(source_table_id), K_(dest_table_id), K_(schema_version),
-               K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id));
+               K_(snapshot_version), K_(task_id), K_(parallelism));
 public:
   uint64_t tenant_id_;
   share::ObDDLType type_;
@@ -59,7 +58,6 @@ public:
   int64_t snapshot_version_;
   int64_t task_id_;
   int64_t parallelism_;
-  int64_t execution_id_;
 };
 
 class ObDDLSingleReplicaExecutor
@@ -82,35 +80,26 @@ private:
   struct ObPartitionBuildInfo final
   {
   public:
-    static const int64_t PARTITION_BUILD_HEART_BEAT_TIME = 10 * 1000 * 1000;
     ObPartitionBuildInfo()
-      : ret_code_(common::OB_SUCCESS), stat_(ObPartitionBuildStat::BUILD_INIT), heart_beat_time_(0)
+      : ret_code_(common::OB_SUCCESS), stat_(ObPartitionBuildStat::BUILD_INIT)
     {}
     ~ObPartitionBuildInfo() = default;
-    bool need_schedule() const {
-      return ObPartitionBuildStat::BUILD_RETRY == stat_
-        || (ObPartitionBuildStat::BUILD_REQUESTED == stat_
-          && ObTimeUtility::current_time() - heart_beat_time_ > PARTITION_BUILD_HEART_BEAT_TIME);
-    }
-    TO_STRING_KV(K_(ret_code), K_(stat), K_(heart_beat_time));
+    TO_STRING_KV(K_(ret_code), K_(stat));
   public:
     int64_t ret_code_;
     ObPartitionBuildStat stat_;
-    int64_t heart_beat_time_;
   };
 private:
   uint64_t tenant_id_;
   share::ObDDLType type_;
   common::ObArray<common::ObTabletID> source_tablet_ids_;
   common::ObArray<common::ObTabletID> dest_tablet_ids_;
-  common::ObArray<int64_t> tablet_task_ids_;
   int64_t source_table_id_;
   int64_t dest_table_id_;
   int64_t schema_version_;
   int64_t snapshot_version_;
   int64_t task_id_;
   int64_t parallelism_;
-  int64_t execution_id_;
   common::ObArray<ObPartitionBuildInfo> partition_build_stat_;
   common::ObSpinLock lock_;
 };

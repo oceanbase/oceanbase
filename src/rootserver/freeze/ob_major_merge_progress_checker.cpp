@@ -21,6 +21,8 @@
 #include "share/ob_all_server_tracer.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "share/tablet/ob_tablet_table_iterator.h"
+#include "share/ob_freeze_info_proxy.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -62,7 +64,7 @@ int ObMajorMergeProgressChecker::init(
 
 int ObMajorMergeProgressChecker::check_merge_progress(
     const volatile bool &stop,
-    const int64_t global_broadcast_scn,
+    const palf::SCN &global_broadcast_scn,
     ObAllZoneMergeProgress &all_progress)
 {
   int ret = OB_SUCCESS;
@@ -73,7 +75,7 @@ int ObMajorMergeProgressChecker::check_merge_progress(
   } else if (stop) {
     ret = OB_CANCELED;
     LOG_WARN("already stop", KR(ret), K_(tenant_id));
-  } else if ((global_broadcast_scn <= 0) || all_progress.error()) {
+  } else if ((!global_broadcast_scn.is_valid()) || all_progress.error()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(global_broadcast_scn),
               "array_error", all_progress.error());
@@ -153,7 +155,7 @@ int ObMajorMergeProgressChecker::check_tablet(
     const ObTabletInfo &tablet,
     const common::hash::ObHashMap<ObTabletID, uint64_t> &tablet_map,
     ObAllZoneMergeProgress &all_progress,
-    const int64_t global_broadcast_scn,
+    const palf::SCN &global_broadcast_scn,
     ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
@@ -207,7 +209,7 @@ int ObMajorMergeProgressChecker::check_tablet(
 
 int ObMajorMergeProgressChecker::check_tablet_data_version(
     ObAllZoneMergeProgress &all_progress,
-    const int64_t global_broadcast_scn,
+    const palf::SCN &global_broadcast_scn,
     const ObTabletInfo &tablet,
     const share::ObLSInfo &ls_info)
 {
@@ -228,22 +230,28 @@ int ObMajorMergeProgressChecker::check_tablet_data_version(
             || (REPLICA_TYPE_ENCRYPTION_LOGONLY == ls_r->get_replica_type())) {
           // logonly replica no need check
         } else {
-          if ((p->smallest_snapshot_version_ <= 0)
-              || (p->smallest_snapshot_version_ > r->get_snapshot_version())) {
-            p->smallest_snapshot_version_ = r->get_snapshot_version();
-          }
-          if (r->get_snapshot_version() < global_broadcast_scn) {
-            // only log the first replica not merged
-            if (0 == p->unmerged_tablet_cnt_) {
-              LOG_INFO("replica not merged to target version", K_(tenant_id), 
-                       "current_version", r->get_snapshot_version(), K(global_broadcast_scn), 
-                       "replica", *r);
-            }
-            ++(p->unmerged_tablet_cnt_);
-            p->unmerged_data_size_ += r->get_data_size();
+          palf::SCN rep_snapshot_scn;
+          if (OB_FAIL(rep_snapshot_scn.convert_for_inner_table_field((uint64_t)(r->get_snapshot_version())))) {
+            LOG_WARN("fail to convert val to SCN", KR(ret), "snapshot_version", r->get_snapshot_version());
           } else {
-            ++(p->merged_tablet_cnt_);
-            p->merged_data_size_ += r->get_data_size();
+            if ((p->smallest_snapshot_scn_ <= palf::SCN::min_scn())
+                || (p->smallest_snapshot_scn_ > rep_snapshot_scn)) {
+              p->smallest_snapshot_scn_ = rep_snapshot_scn;
+            }
+
+            if (rep_snapshot_scn < global_broadcast_scn) {
+              // only log the first replica not merged
+              if (0 == p->unmerged_tablet_cnt_) {
+                LOG_INFO("replica not merged to target version", K_(tenant_id),
+                        "current_version", r->get_snapshot_version(), K(global_broadcast_scn),
+                        "replica", *r);
+              }
+              ++(p->unmerged_tablet_cnt_);
+              p->unmerged_data_size_ += r->get_data_size();
+            } else {
+              ++(p->merged_tablet_cnt_);
+              p->merged_data_size_ += r->get_data_size();
+            }
           }
         }
       }

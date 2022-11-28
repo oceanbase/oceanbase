@@ -190,26 +190,26 @@ public:
   VIRTUAL_TO_STRING_KV("ObITxDataCheckFunctor", "tx_table");
 };
 
-class ObCommitVersionsArray
+class ObCommitSCNsArray
 {
 private:
   const static int64_t UNIS_VERSION = 1;
 
 public:
   struct Node {
-    int64_t start_log_ts_;
-    int64_t commit_version_;
+    palf::SCN start_scn_;
+    palf::SCN commit_scn_;
 
-    Node() : start_log_ts_(0), commit_version_(0) {}
+    Node() : start_scn_(), commit_scn_() {}
 
-    Node(int64_t start_log_ts, int64_t commit_version)
-      : start_log_ts_(start_log_ts), commit_version_(commit_version) {}
+    Node(const palf::SCN start_scn, const palf::SCN commit_scn)
+      : start_scn_(start_scn), commit_scn_(commit_scn) {}
 
     bool operator==(const Node &rhs) const 
     {
       bool is_equal = true;
-      if (this->start_log_ts_ != rhs.start_log_ts_
-          || this->commit_version_ != rhs.commit_version_) {
+      if (this->start_scn_ != rhs.start_scn_
+          || this->commit_scn_ != rhs.commit_scn_) {
         is_equal = false;
       }
       return is_equal;
@@ -220,7 +220,7 @@ public:
 
   void reset() { array_.reset(); }
 
-  ObCommitVersionsArray &operator=(const ObCommitVersionsArray& rhs)
+  ObCommitSCNsArray &operator=(const ObCommitSCNsArray& rhs)
   {
     this->array_.reset();
     for (int i = 0; i < rhs.array_.count(); i++) {
@@ -236,7 +236,7 @@ public:
 
   bool is_valid();
 
-  static void print_to_stderr(const ObCommitVersionsArray &commit_versions)
+  static void print_to_stderr(const ObCommitSCNsArray &commit_versions)
   {
     fprintf(stderr, "pre-process data for upper trans version calculation : ");
     for (int i = 0; i < commit_versions.array_.count(); i++) {
@@ -244,8 +244,8 @@ public:
         fprintf(stderr, "\n        ");
       }
       fprintf(stderr, "(start_log_ts=%-20ld, commit_version=%-20ld) ",
-              commit_versions.array_.at(i).start_log_ts_,
-              commit_versions.array_.at(i).commit_version_);
+              commit_versions.array_.at(i).start_scn_.get_val_for_lsn_allocator(),
+              commit_versions.array_.at(i).commit_scn_.get_val_for_lsn_allocator());
     }
     fprintf(stderr, "\npre-process data end.\n");
   }
@@ -261,29 +261,29 @@ public:
   ObSEArray<Node, 128> array_;
 };
 
-class CalcUpperTransVersionCache
+class CalcUpperTransSCNCache
 {
 public:
-  CalcUpperTransVersionCache() : is_inited_(false), cache_version_(0), commit_versions_() {}
+  CalcUpperTransSCNCache() : is_inited_(false), cache_version_scn_(), commit_scns_() {}
 
   void reset()
   {
     is_inited_ = false;
-    cache_version_ = 0;
-    commit_versions_.reset();
+    cache_version_scn_.reset();
+    commit_scns_.reset();
   }
 
-  TO_STRING_KV(K_(is_inited), K_(cache_version), K_(commit_versions));
+  TO_STRING_KV(K_(is_inited), K_(cache_version_scn), K_(commit_scns));
 
 public:
   bool is_inited_;
 
   // The end_log_ts of the sstable will be used as the cache_version
-  int64_t cache_version_;
+  palf::SCN cache_version_scn_;
   
   mutable common::TCRWLock lock_;
 
-  ObCommitVersionsArray commit_versions_;
+  ObCommitSCNsArray commit_scns_;
 };
 
 } // storage

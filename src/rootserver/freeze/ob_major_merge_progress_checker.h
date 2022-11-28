@@ -53,17 +53,17 @@ public:
            share::ObIServerTrace &server_trace);
 
   int check_merge_progress(const volatile bool &stop,
-                           const int64_t global_broadcast_scn,
+                           const palf::SCN &global_broadcast_scn,
                            share::ObAllZoneMergeProgress &all_progress);
 
 private:
   int check_tablet(const share::ObTabletInfo &tablet,
                    const common::hash::ObHashMap<ObTabletID, uint64_t> &tablet_map,
                    share::ObAllZoneMergeProgress &all_progress,
-                   const int64_t global_broadcast_scn,
+                   const palf::SCN &global_broadcast_scn,
                    share::schema::ObSchemaGetterGuard &schema_guard);
   int check_tablet_data_version(share::ObAllZoneMergeProgress &all_progress,
-                                const int64_t global_broadcast_scn,
+                                const palf::SCN &global_broadcast_scn,
                                 const share::ObTabletInfo &tablet,
                                 const share::ObLSInfo &ls_info);
   int check_majority_integrated(share::schema::ObSchemaGetterGuard &schema_guard, 

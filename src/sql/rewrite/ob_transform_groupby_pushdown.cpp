@@ -158,23 +158,6 @@ int ObTransformGroupByPushdown::adjust_transform_types(uint64_t &transform_types
   return ret;
 }
 
-int ObTransformGroupByPushdown::check_join_condition_contain_lob(ObDMLStmt &stmt, bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-  bool has_lob = false;;
-  ObSEArray<ObRawExpr *, 4> conditions;
-  if (OB_FAIL(append(conditions, stmt.get_condition_exprs()))) {
-    LOG_WARN("extract colum failed", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_on_conditions(stmt, conditions))) {
-    LOG_WARN("failed to get all on conditions", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::check_exprs_contain_lob_type(conditions, has_lob))) {
-    LOG_WARN("check lob failed", K(ret));
-  } else {
-    is_valid = !has_lob;
-  }
-  return ret;
-}
-
 int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *stmt,
                                                                   bool &is_valid)
 {
@@ -220,10 +203,6 @@ int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *s
     // do nothing
   } else if (OB_FAIL(check_collation_validity(*stmt, is_valid))) {
     LOG_WARN("failed to check collation validity", K(ret));
-  } else if (!is_valid) {
-    // do nothing
-  } else if (OB_FAIL(check_join_condition_contain_lob(*stmt, is_valid))) {
-     LOG_WARN("check join condition contain clob failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt->get_aggr_item_size(); ++i) {
     ObAggFunRawExpr *aggr_expr = NULL;
@@ -357,33 +336,22 @@ int ObTransformGroupByPushdown::compute_push_down_param(ObSelectStmt *stmt,
   }
 
   /// 2. merge tables according to filterable join conditions
-  if (OB_SUCC(ret) && is_valid) {
+  if (OB_SUCC(ret) && is_valid && stmt->get_table_size() > 2) {
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_condition_size(); ++i) {
-      bool need_merge = false;
-      bool is_valid_filter = false;
+      bool is_valid = false;
       ObRawExpr *cond = NULL;
       ObSqlBitSet<> table_set;
       if (OB_ISNULL(cond = stmt->get_condition_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("stmt is null", K(ret), K(cond));
-      } else if (cond->get_relation_ids().num_members() <= 1) {
-        // do nothing
-      } else if (OB_FAIL(is_filterable_join(stmt, cond, params, is_valid_filter))) {
+      } else if (OB_FAIL(is_filterable_join(stmt, cond, params, is_valid))) {
         LOG_WARN("failed to check is filterable join", K(ret));
-      } else if (is_valid_filter && stmt->get_table_size() > 2) {
-        need_merge = true;
-      } else if (OB_FAIL(is_lob_filter(cond, is_valid_filter))) {
-        LOG_WARN("failed to check is lob filter", K(ret));
-      } else if (is_valid_filter) {
-        need_merge = true;
-      }
-       
-      if (OB_SUCC(ret) && need_merge) {
-        if (OB_FAIL(table_set.add_members2(cond->get_relation_ids()))) {
-          LOG_WARN("failed to add table indexes", K(ret));
-        } else if (OB_FAIL(merge_tables(params, table_set))) {
-          LOG_WARN("failed to merge tables", K(ret));
-        }
+      } else if (!is_valid) {
+        // do nothing
+      } else if (OB_FAIL(table_set.add_members2(cond->get_relation_ids()))) {
+        LOG_WARN("failed to add table indexes", K(ret));
+      } else if (OB_FAIL(merge_tables(params, table_set))) {
+        LOG_WARN("failed to merge tables", K(ret));
       }
     }
   }
@@ -416,17 +384,6 @@ int ObTransformGroupByPushdown::compute_push_down_param(ObSelectStmt *stmt,
         LOG_WARN("failed to check outer join aggr", K(ret));
       } else if (!is_valid_aggr) {
         should_merge = true;
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < joined_table->join_conditions_.count(); ++j) {
-          ObRawExpr *join_cond = joined_table->join_conditions_.at(j);
-          bool has_lob = false;
-          if (OB_FAIL(is_lob_filter(join_cond, has_lob))) {
-            LOG_WARN("failed to is lob filter", K(ret));
-          } else if (has_lob) {
-            should_merge = true;
-            break;
-          }
-        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -579,30 +536,6 @@ int ObTransformGroupByPushdown::is_filterable_join(ObSelectStmt *stmt,
   }
   if (OB_SUCC(ret) && is_valid) {
     LOG_TRACE("filter join", K(*join_cond));
-  }
-  return ret;
-}
-
-int ObTransformGroupByPushdown::is_lob_filter(ObRawExpr *expr, bool &has)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObRawExpr *> column_exprs;
-  has = false;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, column_exprs))) {
-    LOG_WARN("failed to extract column exprs", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
-    if (OB_ISNULL(column_exprs.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column expr is null", K(ret));
-    } else if (column_exprs.at(i)->get_result_type().is_lob() ||
-               column_exprs.at(i)->get_result_type().is_lob_locator()) {
-      has = true;
-      break;
-    }
   }
   return ret;
 }

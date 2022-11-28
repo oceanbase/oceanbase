@@ -1322,16 +1322,11 @@ int ObJsonBin::deserialize_json_object_v0(const char *data, uint64_t length, ObJ
       } else {
         // TODO if with key dict, read key from dict
         // to consider, add option to controll need alloc or not
-        void *key_buf = nullptr;
-        if (key_len > 0) { 
-          key_buf = allocator_->alloc(key_len);
-          if (key_buf == NULL) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to alloc memory for data buf", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
+        void *key_buf = allocator_->alloc(key_len);
+        if (key_buf == NULL) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc memory for data buf", K(ret));
+        } else {
           MEMCPY(key_buf, data + key_offset, key_len);
           ObString key(key_len, reinterpret_cast<const char*>(key_buf));
           const char *val = data + value_offset;
@@ -2403,7 +2398,7 @@ int ObJsonBin::rebuild_with_meta(const char *data, uint64_t length, ObJsonBuffer
         old_val_entry += key_entry_size * count;
       }
 
-      uint64_t new_val_entry_offset = 0;
+      uint64_t new_val_entry_offset;
       if (OB_FAIL(result.append(reinterpret_cast<const char*>(&new_header), OB_JSON_BIN_HEADER_LEN))) {
         LOG_WARN("failed to append header", K(ret));
       } else if (OB_FAIL(ObJsonVar::append_var(count, new_header.count_size_, result))) {
@@ -2845,7 +2840,7 @@ int ObJsonBin::insert_internal_v0(ObJBNodeMeta& meta, int64_t pos, const ObStrin
     meta_len += key_entry_size * count;
   }
 
-  uint64_t new_val_entry_offset = 0;
+  uint64_t new_val_entry_offset;
   if (OB_FAIL(result.reserve(meta.obj_size_))) {
     LOG_WARN("failed to reserve mem", K(ret), K(meta.obj_size_));
   } else if (OB_FAIL(result.append(reinterpret_cast<const char*>(&new_header), OB_JSON_BIN_HEADER_LEN))) {
@@ -3305,7 +3300,7 @@ int ObJsonBin::remove_v0(size_t index)
   ObJsonNodeType node_type = this->json_type();
   ObJBVerType ver_type = this->get_vertype();
   // 1. move into element index, get used bytes
-  uint64_t used_bytes = 0;
+  uint64_t used_bytes;
   if (OB_FAIL(this->element(index))) {
     LOG_WARN("failed to get element ", K(index), K(ret));
   } else {

@@ -60,7 +60,7 @@ AChunkMgr &AChunkMgr::instance()
 
 AChunkMgr::AChunkMgr()
   : free_list_(), chunk_bitmap_(nullptr), limit_(DEFAULT_LIMIT), urgent_(0), hold_(0),
-    total_hold_(0), maps_(0), unmaps_(0), large_maps_(0), large_unmaps_(0), shadow_hold_(0)
+    total_hold_(0), maps_(0), unmaps_(0), large_maps_(0), large_unmaps_(0)
 {
 }
 
@@ -130,7 +130,7 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
   void *ptr = nullptr;
   huge_page_used = false;
   const int prot = PROT_READ | PROT_WRITE;
-  int flags = MAP_PRIVATE | MAP_ANONYMOUS | (SANITY_BOOL_EXPR(alloc_shadow) ? MAP_FIXED : 0);
+  const int flags = MAP_PRIVATE | MAP_ANONYMOUS | (SANITY_BOOL_EXPR(alloc_shadow) ? MAP_FIXED : 0);
   int huge_flags = flags;
 #ifdef MAP_HUGETLB
   if (OB_LIKELY(can_use_huge_page)) {
@@ -143,11 +143,8 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
   if (SANITY_BOOL_EXPR(alloc_shadow)) {
     int64_t new_addr = ATOMIC_FAA(&global_canonical_addr, size);
     if (!SANITY_ADDR_IN_RANGE((void*)new_addr)) {
-      LOG_WARN("sanity address exhausted", K(errno), KP(new_addr));
-      ATOMIC_FAA(&global_canonical_addr, -size);
+      LOG_ERROR("sanity address exhausted", K(errno), KP(new_addr));
       ptr = NULL; // let it goon, it means no shadow, same as out of checker!
-      // in aarch64, mmap will return EPERM error when NULL address and MAP_FIXED are privided at the same time
-      flags &= ~MAP_FIXED;
     } else {
       ptr = (void*)new_addr;
     }
@@ -176,7 +173,6 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
       LOG_ERROR("sanity alloc shadow failed", K(errno), KP(shad_ptr));
       abort();
     } else {
-      IGNORE_RETURN ATOMIC_FAA(&shadow_hold_, shad_size);
       //memset(shad_ptr, 0, shad_size);
       //SANITY_UNPOISON(shad_ptr, shad_size); // maybe no need?
       //SANITY_UNPOISON(ptr, size); // maybe no need?
@@ -190,7 +186,6 @@ void AChunkMgr::low_free(const void *ptr, const uint64_t size)
   if (SANITY_ADDR_IN_RANGE(ptr)) {
     void *shad_ptr  = SANITY_TO_SHADOW((void*)ptr);
     ssize_t shad_size = SANITY_TO_SHADOW_SIZE(size);
-    IGNORE_RETURN ATOMIC_FAA(&shadow_hold_, -shad_size);
     ::munmap(shad_ptr, shad_size);
   }
   ::munmap((void*)ptr, size);

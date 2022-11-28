@@ -19,48 +19,50 @@
 
 namespace oceanbase
 {
+using namespace palf;
 namespace logservice
 {
 ObFetchLogTask::ObFetchLogTask(const share::ObLSID &id,
-    const int64_t pre_log_ts,
+    const SCN &pre_log_scn,
     const palf::LSN &lsn,
     const int64_t size,
     const int64_t proposal_id) :
   id_(id),
   proposal_id_(proposal_id),
-  pre_log_ts_(pre_log_ts),
   start_lsn_(lsn),
   cur_lsn_(lsn),
   end_lsn_(lsn + size),
-  max_fetch_log_ts_(OB_INVALID_TIMESTAMP),
-  max_submit_log_ts_(OB_INVALID_TIMESTAMP),
+  max_fetch_log_scn_(),
+  max_submit_log_scn_(),
   status_(Status::NORMAL)
-{}
+{
+  pre_log_scn_ = pre_log_scn;
+}
 
 bool ObFetchLogTask::is_valid() const
 {
   return id_.is_valid()
     && proposal_id_ > 0
-    && OB_INVALID_TIMESTAMP != pre_log_ts_
+    && pre_log_scn_.is_valid()
     && start_lsn_.is_valid()
     && cur_lsn_.is_valid()
     && end_lsn_.is_valid()
     && end_lsn_ > start_lsn_;
 }
 
-int ObFetchLogTask::update_cur_lsn_ts(const palf::LSN &lsn, const int64_t max_submit_ts, const int64_t max_fetch_ts)
+int ObFetchLogTask::update_cur_lsn_scn(const palf::LSN &lsn, const SCN &max_submit_scn, const SCN &max_fetch_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! lsn.is_valid() || OB_INVALID_TIMESTAMP == max_fetch_ts)) {
+  if (OB_UNLIKELY(! lsn.is_valid() || ! max_fetch_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
   } else {
     cur_lsn_ = lsn;
-    max_submit_log_ts_ = std::max(max_submit_ts, max_submit_log_ts_);
-    max_fetch_log_ts_ = std::max(max_fetch_ts, max_fetch_log_ts_);
+    max_submit_log_scn_ = max_submit_scn > max_submit_log_scn_ ? max_submit_scn : max_submit_log_scn_;
+    max_fetch_log_scn_ = max_fetch_scn > max_fetch_log_scn_ ? max_fetch_scn: max_fetch_log_scn_;
     if (cur_lsn_ >= end_lsn_) {
       status_ = Status::FINISH;
     }
-    if (max_submit_ts != max_fetch_ts) {
+    if (max_submit_scn != max_fetch_scn) {
       status_ = Status::TO_END;
     }
   }

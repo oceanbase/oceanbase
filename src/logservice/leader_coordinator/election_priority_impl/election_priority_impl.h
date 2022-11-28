@@ -20,6 +20,7 @@
 #include "lib/guard/ob_unique_guard.h"
 #include "lib/utility/ob_unify_serialize.h"
 #include "logservice/palf/election/interface/election_priority.h"
+#include "logservice/palf/scn.h"
 #include "share/ob_ls_id.h"
 #include "share/ob_cluster_version.h"
 #include <type_traits>
@@ -91,13 +92,12 @@ OB_SERIALIZE_MEMBER_TEMP(inline, PriorityV0, is_valid_, port_number_);
 // 适用于[4_0_0, latest]
 struct PriorityV1 : public AbstractPriority
 {
-/*********************************************************************************/
-  static constexpr int64_t MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_NS = 2 * 1000 * 1000 * 1000L;
+  static constexpr int64_t MAX_UNREPLAYED_LOG_TS_DIFF_THRESHOLD_US = 2 * 1000 * 1000L;
   friend class unittest::TestElectionPriority;
   OB_UNIS_VERSION(1);
 public:
   PriorityV1() : is_observer_stopped_(false), is_server_stopped_(false), is_zone_stopped_(false),
-                 is_primary_region_(false), log_ts_(0), is_in_blacklist_(false),  is_manual_leader_(false),
+                 is_primary_region_(false), is_in_blacklist_(false),  is_manual_leader_(false),
                  zone_priority_(INT64_MAX) {}
   // 判断该优先级策略是否适用于特定的版本
   virtual uint64_t get_started_version() const override { return CLUSTER_VERSION_4_0_0_0; }
@@ -106,11 +106,11 @@ public:
   // int assign(const PriorityV1 &rhs);
   TO_STRING_KV(K_(is_valid), K_(is_observer_stopped), K_(is_server_stopped), K_(is_zone_stopped),
                K_(fatal_failures), K_(is_primary_region), K_(serious_failures), K_(is_in_blacklist),
-               K_(in_blacklist_reason), K_(log_ts), K_(is_manual_leader), K_(zone_priority));
+               K_(in_blacklist_reason), K_(scn), K_(is_manual_leader), K_(zone_priority));
 protected:
   // 刷新优先级的方法
   virtual int refresh_(const share::ObLSID &ls_id) override;
-  int get_log_ts_(const share::ObLSID &ls_id, int64_t &log_ts);
+  int get_scn_(const share::ObLSID &ls_id, palf::SCN &scn);
 private:
   int compare_observer_stopped_(int &ret, const PriorityV1&) const;
   int compare_server_stopped_flag_(int &ret, const PriorityV1&) const;
@@ -118,7 +118,7 @@ private:
   int compare_fatal_failures_(int &ret, const PriorityV1&) const;
   int compare_primary_region_(int &ret, const PriorityV1&) const;
   int compare_serious_failures_(int &ret, const PriorityV1&) const;
-  int compare_log_ts_(int &ret, const PriorityV1&) const;
+  int compare_scn_(int &ret, const PriorityV1&) const;
   int compare_in_blacklist_flag_(int &ret, const PriorityV1&, ObStringHolder &) const;
   int compare_manual_leader_flag_(int &ret, const PriorityV1&) const;
   int compare_zone_priority_(int &ret, const PriorityV1&) const;
@@ -129,7 +129,7 @@ private:
   common::ObSArray<FailureEvent> fatal_failures_;// negative infos
   bool is_primary_region_;
   common::ObSArray<FailureEvent> serious_failures_;// negative infos
-  int64_t log_ts_;
+  palf::SCN scn_;
   bool is_in_blacklist_;
   common::ObStringHolder in_blacklist_reason_;
   bool is_manual_leader_;
@@ -137,7 +137,7 @@ private:
 };
 OB_SERIALIZE_MEMBER_TEMP(inline, PriorityV1, is_valid_, is_observer_stopped_, is_server_stopped_,
                          is_zone_stopped_, fatal_failures_, is_primary_region_, serious_failures_,
-                         log_ts_, is_in_blacklist_, in_blacklist_reason_,
+                         scn_, is_in_blacklist_, in_blacklist_reason_,
                          is_manual_leader_, zone_priority_);
 
 class ElectionPriorityImpl : public palf::election::ElectionPriority

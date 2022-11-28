@@ -2627,7 +2627,6 @@ int ObCharset::charset_convert(const ObCollationType from_type,
                                char *to_str,
                                uint32_t to_len,
                                uint32_t &result_len,
-                               bool trim_incomplete_tail,
                                bool report_error /*true*/,
                                const ob_wc_t replaced_char /*'?'*/) {
   int ret = OB_SUCCESS;
@@ -2649,10 +2648,9 @@ int ObCharset::charset_convert(const ObCollationType from_type,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected collation type", K(ret), K(from_type), K(to_type));
     } else {
-      uint errors = 0;
-      result_len = ob_convert(to_str, to_len, to_cs, from_str, from_len, from_cs,
-                              trim_incomplete_tail, replaced_char, &errors);
-      if (OB_UNLIKELY(errors != 0 && report_error)) {
+      uint errors;
+      result_len = ob_convert(to_str, to_len, to_cs, from_str, from_len, from_cs, replaced_char, &errors);
+      if (errors != 0 && report_error) {
         ret = OB_ERR_INCORRECT_STRING_VALUE;
         LOG_WARN("ob_convert failed", K(ret), K(errors),
                 K(from_type), K(to_type),

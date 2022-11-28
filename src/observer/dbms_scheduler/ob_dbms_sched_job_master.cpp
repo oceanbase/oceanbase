@@ -677,7 +677,6 @@ int ObDBMSSchedJobMaster::register_job(
   CK (OB_LIKELY(inited_));
   CK (job_info.valid());
   OZ (table_operator_.check_job_timeout(job_info));
-  OZ (table_operator_.check_auto_drop(job_info));
   if (OB_FAIL(ret)) {
   } else if (job_info.is_broken() || job_info.is_running() || job_info.is_disabled()) {
     execute_at = now + MIN_SCHEDULER_INTERVAL;

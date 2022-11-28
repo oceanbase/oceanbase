@@ -66,7 +66,6 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
     task_version_ = OB_COLUMN_REDEFINITION_TASK_VERSION;
     task_id_ = task_id;
     parallelism_ = parallelism;
-    execution_id_ = 1L;
     is_inited_ = true;
   }
   return ret;
@@ -97,9 +96,7 @@ int ObColumnRedefinitionTask::init(const ObDDLTaskRecord &task_record)
     schema_version_ = schema_version;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
     snapshot_version_ = task_record.snapshot_version_;
-    execution_id_ = task_record.execution_id_;
     tenant_id_ = task_record.tenant_id_;
-    ret_code_ = task_record.ret_code_;
     is_inited_ = true;
   }
   return ret;
@@ -123,7 +120,7 @@ int ObColumnRedefinitionTask::wait_data_complement(const ObDDLTaskStatus next_ta
   DEBUG_SYNC(COLUMN_REDEFINITION_REPLICA_BUILD);
   if (is_build_replica_end) {
     ret = complete_sstable_job_ret_code_;
-    if (OB_SUCC(ret) && OB_FAIL(check_data_dest_tables_columns_checksum(1/*execution_id*/))) {
+    if (OB_SUCC(ret) && OB_FAIL(check_data_dest_tables_columns_checksum())) {
       LOG_WARN("fail to check the columns checkum between data table and hidden one", K(ret));
     }
     if (OB_FAIL(switch_status(next_task_status, ret))) {
@@ -151,7 +148,6 @@ int ObColumnRedefinitionTask::send_build_single_replica_request()
     param.snapshot_version_ = snapshot_version_;
     param.task_id_ = task_id_;
     param.parallelism_ = alter_table_arg_.parallelism_;
-    param.execution_id_ = execution_id_;
     if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, param.source_tablet_ids_))) {
       LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(object_id_));
     } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, target_object_id_, param.dest_tablet_ids_))) {
@@ -178,7 +174,7 @@ int ObColumnRedefinitionTask::check_build_single_replica(bool &is_end)
   } else if (OB_FAIL(replica_builder_.check_build_end(is_end, complete_sstable_job_ret_code_))) {
     LOG_WARN("fail to check build end", K(ret));
   } else if (!is_end) {
-    if (sstable_complete_request_time_ + OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT < ObTimeUtility::current_time()) {   // timeout, retry
+    if (sstable_complete_request_time_ + GCONF.global_index_build_single_replica_timeout < ObTimeUtility::current_time()) {   // timeout, retry
       is_sstable_complete_task_submitted_ = false;
       sstable_complete_request_time_ = 0;
     }
@@ -187,13 +183,9 @@ int ObColumnRedefinitionTask::check_build_single_replica(bool &is_end)
 }
 
 // update sstable complement status for all leaders
-int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
-                                                                 const int64_t snapshot_version,
-                                                                 const int64_t execution_id,
-                                                                 const int ret_code)
+int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id, const int64_t snapshot_version, const int ret_code)
 {
   int ret = OB_SUCCESS;
-  bool is_latest_execution_id = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObColumnRedefinitionTask has not been inited", K(ret));
@@ -202,10 +194,6 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
   } else if (snapshot_version != snapshot_version_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
-  } else if (OB_FAIL(check_is_latest_execution_id(execution_id, is_latest_execution_id))) {
-    LOG_WARN("failed to check latest execution id", K(ret), K(execution_id));
-  } else if (!is_latest_execution_id) {
-    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(execution_id_));
   } else if (OB_FAIL(replica_builder_.set_partition_task_status(tablet_id, ret_code))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }
@@ -424,7 +412,6 @@ int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus
   int ret = OB_SUCCESS;
   ObRootService *root_service = GCTX.root_service_;
   int64_t finished_task_cnt = 0;
-  bool state_finish = false;
   ObSchemaGetterGuard schema_guard;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -442,11 +429,7 @@ int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus
     } else if (OB_FAIL(copy_table_foreign_keys())) {
       LOG_WARN("fail to copy table foreign keys", K(ret));
     }
-  }
 
-  if (OB_FAIL(ret)) {
-    state_finish = true;
-  } else {
     // wait copy dependent objects to be finished
     ObAddr unused_addr;
     for (common::hash::ObHashMap<ObDDLTaskKey, DependTaskStatus>::const_iterator iter = dependent_task_result_map_.begin();
@@ -481,11 +464,8 @@ int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus
         }
       }
     }
-    if (finished_task_cnt == dependent_task_result_map_.size()) {
-      state_finish = true;
-    }
   }
-  if (state_finish) {
+  if (finished_task_cnt == dependent_task_result_map_.size()) {
     if (OB_FAIL(switch_status(next_task_status, ret))) {
       LOG_WARN("fail to switch status", K(ret));
     }

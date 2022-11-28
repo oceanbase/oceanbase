@@ -91,7 +91,7 @@ public:
     bool with_check_;
   };
 
-  // A callback struct used to get ColumnUsageMap or ObOptDmlStat, and allocate a new one
+  // A callback struct used to get ColumnUsageMap and allocate a new one
   struct SwapMapAtomicOp
   {
   public:
@@ -107,7 +107,7 @@ public:
     DmlStatMap *dml_stat_map_;
   };
 
-   // A callback struct used to update ColumnUsageMap value or DmlStatMap value
+  // A callback struct used to update ColumnUsageMap value
   struct UpdateValueAtomicOp
   {
   public:
@@ -119,22 +119,6 @@ public:
   private:
     DISALLOW_COPY_AND_ASSIGN(UpdateValueAtomicOp);
     int64_t flags_;
-    ObOptDmlStat dml_stat_;
-  };
-
-  // A callback struct used to read ColumnUsageMaps value or DmlStatMaps value
-  struct ReadMapAtomicOp
-  {
-  public:
-    ReadMapAtomicOp(common::ObIArray<ColumnUsageArg> *col_usage_args) :
-      col_usage_args_(col_usage_args), dml_stat_() {};
-    ReadMapAtomicOp(ObOptDmlStat &dml_stat) : col_usage_args_(NULL), dml_stat_(dml_stat) {};
-    virtual ~ReadMapAtomicOp() {};
-    int operator() (common::hash::HashMapPair<uint64_t, ColumnUsageMap *> &entry);
-    int operator() (common::hash::HashMapPair<uint64_t, DmlStatMap *> &entry);
-  private:
-    DISALLOW_COPY_AND_ASSIGN(ReadMapAtomicOp);
-    common::ObIArray<ColumnUsageArg> *col_usage_args_;
     ObOptDmlStat dml_stat_;
   };
 
@@ -158,6 +142,8 @@ public:
   int update_dml_stat_info(const bool with_check);
   int update_tenant_column_usage_info(uint64_t tenant_id);
   int update_tenant_dml_stat_info(uint64_t tenant_id);
+  ColumnUsageMap *get_or_create_column_usage_map(uint64_t tenant_id);
+  DmlStatMap *get_or_create_dml_stat_map(uint64_t tenant_id);
   int erase_opt_stat_monitoring_info_map(uint64_t tenant_id);
   int erase_column_usage_map(uint64_t tenant_id);
   int erase_dml_stat_map(uint64_t tenant_id);

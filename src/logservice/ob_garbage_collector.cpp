@@ -16,6 +16,7 @@
 #include "ob_log_service.h"
 #include "ob_switch_leader_adapter.h"
 #include "archiveservice/ob_archive_service.h"
+#include "palf/scn.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "storage/high_availability/ob_storage_ha_struct.h"
 #include "storage/ls/ob_ls.h"
@@ -36,6 +37,7 @@ using namespace archive;
 using namespace common;
 using namespace share;
 using namespace storage;
+using namespace palf;
 namespace logservice
 {
 class ObGarbageCollector::InsertLSFunctor
@@ -298,8 +300,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObGCLSLog)
 ObGCHandler::ObGCHandler() : is_inited_(false),
                              rwlock_(),
                              ls_(NULL),
-                             gc_seq_invalid_member_(-1),
-                             gc_start_ts_(OB_INVALID_TIMESTAMP)
+                             gc_seq_invalid_member_(-1)
 {
 }
 
@@ -313,7 +314,6 @@ void ObGCHandler::reset()
   WLockGuard wlock_guard(rwlock_);
   gc_seq_invalid_member_ = -1;
   ls_ = NULL;
-  gc_start_ts_ = OB_INVALID_TIMESTAMP;
   is_inited_ = false;
 }
 
@@ -402,7 +402,7 @@ int ObGCHandler::gc_check_invalid_member_seq(const int64_t gc_seq,
 int ObGCHandler::replay(const void *buffer,
                         const int64_t nbytes,
                         const palf::LSN &lsn,
-                        const int64_t ts_ns)
+                        const SCN &scn)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -414,21 +414,25 @@ int ObGCHandler::replay(const void *buffer,
     CLOG_LOG(WARN, "gc_handler not inited", K(ret));
   } else if (OB_ISNULL(log_buf)
       || OB_UNLIKELY(nbytes <= 0)
-      || OB_UNLIKELY(!lsn.is_valid()
-      || OB_UNLIKELY(ts_ns <= 0)
-      || OB_UNLIKELY(INT64_MAX == ts_ns))) {
+      || OB_UNLIKELY(!lsn.is_valid())
+      || OB_UNLIKELY(!scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid arguments", K(buffer), K(nbytes), K(pos),
-             K(lsn), K(ts_ns), K(ret));
+             K(lsn), K(scn), K(ret));
   } else if (OB_FAIL(gc_log.deserialize(log_buf, nbytes, pos))) {
     CLOG_LOG(WARN, "gc_log deserialize error", K(ret));
   } else {
     WLockGuard wlock_guard(rwlock_);
     ObGCLSLOGType log_type = static_cast<ObGCLSLOGType>(gc_log.get_log_type());
-    (void)update_ls_gc_state_after_submit_log_(log_type, ts_ns);
+    (void)update_ls_gc_state_after_submit_log_(log_type, scn);
     CLOG_LOG(INFO, "replay gc log", K(log_type));
   }
   return ret;
+}
+
+void ObGCHandler::get_rec_log_scn(SCN &scn)
+{
+  scn.set_max();
 }
 
 int64_t ObGCHandler::get_rec_log_ts()
@@ -436,6 +440,11 @@ int64_t ObGCHandler::get_rec_log_ts()
   return INT64_MAX;
 }
 
+int ObGCHandler::flush(const SCN &scn)
+{
+  // do nothing
+  return OB_SUCCESS;
+}
 int ObGCHandler::flush(int64_t rec_log_ts)
 {
   // do nothing
@@ -508,16 +517,14 @@ bool ObGCHandler::is_ls_offline_finished_(const LSGCState &state)
   return LSGCState::LS_OFFLINE <= state;
 }
 
-int ObGCHandler::get_gts_(const int64_t timeout_ns,
-                          int64_t &gts)
+int ObGCHandler::get_gts_(const int64_t timeout_ns, SCN &gts_scn)
 {
   int ret = OB_SUCCESS;
-  const transaction::MonotonicTs stc_ahead = transaction::MonotonicTs::current_time() -
-                                             transaction::MonotonicTs(GCONF._ob_get_gts_ahead_interval);
+  const transaction::MonotonicTs stc_ahead = transaction::MonotonicTs::current_time() ;
   transaction::MonotonicTs tmp_receive_gts_ts(0);
   const int64_t expire_ts_ns = common::ObTimeUtility::current_time_ns() + timeout_ns;
   do {
-    ret = OB_TS_MGR.get_gts(MTL_ID(), stc_ahead, NULL, gts, tmp_receive_gts_ts);
+    ret = OB_TS_MGR.get_gts(MTL_ID(), stc_ahead, NULL, gts_scn, tmp_receive_gts_ts);
     if (ret == OB_EAGAIN) {
       if (common::ObTimeUtility::current_time_ns() > expire_ts_ns) {
         ret = OB_TIMEOUT;
@@ -526,11 +533,11 @@ int ObGCHandler::get_gts_(const int64_t timeout_ns,
       }
     } else if (OB_FAIL(ret)) {
       CLOG_LOG(WARN, "get gts fail", KR(ret));
-    } else if (gts <= 0) {
+    } else if (!gts_scn.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "get gts fail", K(gts), K(ret));
+      CLOG_LOG(WARN, "get gts fail", K(gts_scn), K(ret));
     } else {
-      CLOG_LOG(TRACE, "get gts", K(gts));
+      CLOG_LOG(TRACE, "get gts", K(gts_scn));
     }
   } while (ret == OB_EAGAIN);
   return ret;
@@ -582,40 +589,40 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
   ObArchiveService *archive_service = MTL(ObArchiveService*);
   bool force_wait = true;
   bool ignore = true;
-  bool ts_ns = 0;
+  SCN scn = SCN::min_scn();
   LSN lsn;
-  int64_t current_gts = 0;
+  SCN current_gts_scn = SCN::min_scn();
   LSGCState gc_state = INVALID_LS_GC_STATE;
   ObLSID ls_id = ls_->get_ls_id();
-  int64_t offline_ts_ns = OB_INVALID_TIMESTAMP;
+  SCN offline_scn;
   if (OB_FAIL(ls_->get_gc_state(gc_state))) {
     CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(ret));
-  } else if (OB_FAIL(ls_->get_offline_ts_ns(offline_ts_ns))) {
+  } else if (OB_FAIL(ls_->get_offline_scn(offline_scn))) {
     CLOG_LOG(WARN, "get_gc_state failed", K(ls_id), K(gc_state), K(ret));
-  } else if (OB_FAIL(get_gts_(GET_GTS_TIMEOUT_NS, current_gts))) {
-    CLOG_LOG(WARN, "get_gts_ failed", K(ls_id), K(gc_state), K(current_gts), K(ret));
-  } else if (current_gts < offline_ts_ns + LS_CLOG_ALIVE_TIMEOUT_NS) {
-    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait clog remove", K(ls_id), K(gc_state), K(current_gts), K(offline_ts_ns), K(ts_ns));
+  } else if (OB_FAIL(get_gts_(GET_GTS_TIMEOUT_NS, current_gts_scn))) {
+    CLOG_LOG(WARN, "get_gts_ failed", K(ls_id), K(gc_state), K(current_gts_scn), K(ret));
+  } else if (current_gts_scn.convert_to_ts() < offline_scn.convert_to_ts() + LS_CLOG_ALIVE_TIMEOUT_US) {
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait clog remove", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn));
   // TODO: 归档暂不支持时间戳进度
   } else if (OB_FAIL(archive_service->get_ls_archive_progress(ls_id, lsn, force_wait, ignore))){
-    CLOG_LOG(WARN, "get_ls_archive_progress failed", K(ls_id), K(gc_state), K(offline_ts_ns), K(ret));
+    CLOG_LOG(WARN, "get_ls_archive_progress failed", K(ls_id), K(gc_state), K(offline_scn), K(ret));
   } else if (ignore) {
     if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
       CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
-    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(current_gts), K(offline_ts_ns), K(ts_ns));
-  } else if (ts_ns == offline_ts_ns) {
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn), K(scn));
+  } else if (scn == offline_scn) {
     if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
       CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
-    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(current_gts), K(offline_ts_ns), K(ts_ns));
-  } else if (ts_ns > offline_ts_ns) {
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn), K(scn));
+  } else if (scn > offline_scn) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "ls_archive_progress larger than offline ts", K(ls_id), K(gc_state), K(current_gts), K(offline_ts_ns), K(ts_ns));
+    CLOG_LOG(ERROR, "ls_archive_progress larger than offline scn", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn), K(scn));
   } else {
-    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait archive", K(ls_id), K(gc_state), K(current_gts), K(offline_ts_ns), K(ts_ns));
+    CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait archive", K(ls_id), K(gc_state), K(current_gts_scn), K(offline_scn), K(scn));
   }
 }
 
@@ -628,9 +635,9 @@ void ObGCHandler::submit_log_(const ObGCLSLOGType log_type)
   int64_t buffer_size = gc_log.get_serialize_size();
   ObGCLSLogCb cb;
   const bool need_nonblock = false;
-  int64_t ref_ts_ns = 0;
+  SCN ref_scn;
   palf::LSN lsn;
-  int64_t ts_ns = 0;
+  SCN scn;
   ObMemAttr attr(MTL_ID(), ObModIds::OB_GC_LOG_BUFF);
   if (OB_ISNULL(ls_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -640,15 +647,15 @@ void ObGCHandler::submit_log_(const ObGCLSLOGType log_type)
     CLOG_LOG(WARN, "failed to alloc buffer", K(ret), K(log_type));
   } else if (OB_FAIL(gc_log.serialize(buffer, buffer_size, pos))) {
     CLOG_LOG(WARN, "failed to serialize log header", K(ret), K(buffer_size), K(pos));
-  } else if (OB_FAIL(get_gts_(GET_GTS_TIMEOUT_NS, ref_ts_ns))) {
-    CLOG_LOG(WARN, "failed to get gts", K(ret), K(ref_ts_ns));
+  } else if (OB_FAIL(get_gts_(GET_GTS_TIMEOUT_NS, ref_scn))) {
+    CLOG_LOG(WARN, "failed to get gts", K(ret), K(ref_scn));
   } else if (OB_FAIL(ls_->append(buffer,
                                  buffer_size,
-                                 ref_ts_ns,
+                                 ref_scn,
                                  need_nonblock,
                                  &cb,
                                  lsn,
-                                 ts_ns))) {
+                                 scn))) {
     CLOG_LOG(WARN, "failed to submit log", K(ret), K(buffer_size), K(pos));
   } else {
     // 此处需要考虑能否做成异步
@@ -657,7 +664,7 @@ void ObGCHandler::submit_log_(const ObGCLSLOGType log_type)
     bool is_finished = false;
     while (!is_finished) {
       if (cb.is_succeed()) {
-        (void)update_ls_gc_state_after_submit_log_(log_type, ts_ns);
+        (void)update_ls_gc_state_after_submit_log_(log_type, scn);
         is_finished = true;
         CLOG_LOG(INFO, "write GC ls log success", K(ret), K(log_type));
       } else if (cb.is_failed()) {
@@ -679,14 +686,14 @@ void ObGCHandler::submit_log_(const ObGCLSLOGType log_type)
 }
 
 void ObGCHandler::update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_type,
-                                                       const int64_t log_ts_ns)
+                                                       const SCN &log_scn)
 {
   switch(log_type) {
   case ObGCLSLOGType::BLOCK_TABLET_TRANSFER_IN:
-    (void)block_ls_transfer_in_(log_ts_ns);
+    (void)block_ls_transfer_in_(log_scn);
     break;
   case ObGCLSLOGType::OFFLINE_LS:
-    (void)offline_ls_(log_ts_ns);
+    (void)offline_ls_(log_scn);
     break;
   default:
     //do nothing
@@ -695,7 +702,7 @@ void ObGCHandler::update_ls_gc_state_after_submit_log_(const ObGCLSLOGType log_t
   }
 }
 
-void ObGCHandler::block_ls_transfer_in_(const int64_t block_ts_ns)
+void ObGCHandler::block_ls_transfer_in_(const SCN &block_scn)
 {
   int ret = OB_SUCCESS;
   LSGCState gc_state = INVALID_LS_GC_STATE;
@@ -706,18 +713,18 @@ void ObGCHandler::block_ls_transfer_in_(const int64_t block_ts_ns)
   } else if (!is_valid_ls_gc_state(gc_state)) {
     CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
   } else if (is_ls_blocked_finished_(gc_state)) {
-    CLOG_LOG(INFO, "ls already blocked, ignore", K(ls_id), K(gc_state), K(block_ts_ns));
+    CLOG_LOG(INFO, "ls already blocked, ignore", K(ls_id), K(gc_state), K(block_scn));
   //TODO: @keqing.llt transfer功能完成之前,先用杀事务代替transfer out
   } else if (OB_FAIL(ls_->block_tx_start())) {
     CLOG_LOG(WARN, "block_tx_start failed", K(ls_id), K(ret));
   } else if (OB_FAIL(ls_->set_gc_state(LSGCState::LS_BLOCKED))) {
     CLOG_LOG(WARN, "set_gc_state block failed", K(ls_id), K(ret));
   } else {
-    CLOG_LOG(INFO, "block_ls_transfer_in_ success", K(ls_id), K(block_ts_ns));
+    CLOG_LOG(INFO, "block_ls_transfer_in_ success", K(ls_id), K(block_scn));
   }
 }
 
-void ObGCHandler::offline_ls_(const int64_t offline_ts_ns)
+void ObGCHandler::offline_ls_(const SCN &offline_scn)
 {
   int ret = OB_SUCCESS;
   LSGCState gc_state = INVALID_LS_GC_STATE;
@@ -728,21 +735,20 @@ void ObGCHandler::offline_ls_(const int64_t offline_ts_ns)
   } else if (!is_valid_ls_gc_state(gc_state)) {
     CLOG_LOG(WARN, "ls check gc state invalid", K(ls_id), K(gc_state));
   } else if (is_ls_offline_finished_(gc_state)) {
-    int64_t pre_offline_ts_ns = 0;
-    if (OB_FAIL(ls_->get_offline_ts_ns(pre_offline_ts_ns))) {
-      CLOG_LOG(WARN, "get_offline_ts_ns failed", K(ls_id), K(gc_state));
+    SCN pre_offline_scn;
+    if (OB_FAIL(ls_->get_offline_scn(pre_offline_scn))) {
+      CLOG_LOG(WARN, "get_offline_scn failed", K(ls_id), K(gc_state));
     } else {
-      CLOG_LOG(INFO, "ls already offline, ignore", K(ls_id), K(offline_ts_ns), K(gc_state), K(pre_offline_ts_ns));
+      CLOG_LOG(INFO, "ls already offline, ignore", K(ls_id), K(offline_scn), K(gc_state), K(pre_offline_scn));
     }
   } else if (OB_FAIL(ls_->set_gc_state(LSGCState::LS_OFFLINE))) {
     //TODO: @yanyuan 需要调用ObLS的offline_ls_接口
-    //offline_ts依赖gc_state写slog, 顺序必须为先设置offline_ts再设置gc状态
+    //offline_scn依赖gc_state写slog, 顺序必须为先设置offline_scn再设置gc状态
     CLOG_LOG(WARN, "set_gc_state failed", K(ls_->get_ls_id()), K(ret));
-  } else if (OB_FAIL(ls_->set_offline_ts_ns(offline_ts_ns))) {
+  } else if (OB_FAIL(ls_->set_offline_scn(offline_scn))) {
     CLOG_LOG(WARN, "set_gc_state failed", K(ls_->get_ls_id()), K(ret));
   } else {
-    CLOG_LOG(INFO, "offline_ls success",  K(ls_->get_ls_id()), K(offline_ts_ns));
-  }
+    CLOG_LOG(INFO, "offline_ls success",  K(ls_->get_ls_id()), K(offline_scn)); }
 }
 
 int ObGCHandler::get_palf_role_(common::ObRole &role)
@@ -772,7 +778,6 @@ void ObGCHandler::handle_gc_ls_dropping_(const ObGarbageCollector::LSStatus &ls_
     ObRole role;
     ObLSID ls_id = ls_->get_ls_id();
     LSGCState gc_state = INVALID_LS_GC_STATE;
-    gc_start_ts_ = ObTimeUtility::current_time();
     if (OB_FAIL(get_palf_role_(role))) {
       CLOG_LOG(WARN, "get_palf_role_ failed", K(ls_id));
     } else if (ObRole::LEADER != role) {
@@ -825,22 +830,6 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
     }
     CLOG_LOG(INFO, "ls handle_gc_ls_offline finished", K(ls_id), K(role));
   }
-}
-
-int ObGCHandler::diagnose(GCDiagnoseInfo &diagnose_info) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    CLOG_LOG(WARN, "GC handler not init");
-  } else {
-    RLockGuard wlock_guard(rwlock_);
-    if (OB_FAIL(ls_->get_gc_state(diagnose_info.gc_state_))) {
-      CLOG_LOG(WARN, "get_gc_state failed", K(ls_id));
-    } else {
-      diagnose_info.gc_start_ts_ = gc_start_ts_;
-    }
-  }
-  return ret;
 }
 
 //---------------ObGarbageCollector---------------//

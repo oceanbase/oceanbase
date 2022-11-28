@@ -135,7 +135,6 @@ public:
   }
   int64_t get_evo_perf() const;
   int64_t get_cpu_time() const { return stat_.evolution_stat_.cpu_time_; }
-  int64_t get_elapsed_time() const { return stat_.evolution_stat_.elapsed_time_; }
   int64_t get_executions() const { return stat_.evolution_stat_.executions_; }
   void set_evolution(bool v) { stat_.is_evolution_ = v; }
   bool get_evolution() const { return stat_.is_evolution_; }
@@ -331,10 +330,6 @@ public:
   inline int64_t get_ddl_schema_version() const { return ddl_schema_version_; }
   inline void set_ddl_table_id(const int64_t ddl_table_id) { ddl_table_id_ = ddl_table_id; }
   inline int64_t get_ddl_table_id() const { return ddl_table_id_; }
-  inline void set_ddl_execution_id(const int64_t ddl_execution_id) { ddl_execution_id_ = ddl_execution_id; }
-  inline int64_t get_ddl_execution_id() const { return ddl_execution_id_; }
-  inline void set_ddl_task_id(const int64_t ddl_task_id) { ddl_task_id_ = ddl_task_id; }
-  inline int64_t get_ddl_task_id() const { return ddl_task_id_; }
 public:
   int inc_concurrent_num();
   void dec_concurrent_num();
@@ -584,8 +579,6 @@ public:
   bool contain_pl_udf_or_trigger_;//mark if need sync pkg variables
   int64_t ddl_schema_version_;
   int64_t ddl_table_id_;
-  int64_t ddl_execution_id_;
-  int64_t ddl_task_id_;
   //parallel encoding of output_expr in advance to speed up packet response
   bool is_packed_;
   bool has_instead_of_trigger_; // mask if has instead of trigger on view
@@ -606,7 +599,13 @@ inline int32_t *ObPhysicalPlan::alloc_projector(int64_t projector_size)
 
 inline ObPhyPlanType ObPhysicalPlan::get_location_type() const
 {
-  return location_type_;
+  ObPhyPlanType location_type = location_type_;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000 && OB_PHY_PLAN_UNINITIALIZED == location_type) {
+    //在集群升级过程中，不是所有Server都升级到2.0版本，有可能是1.4x老版本发送的计划，只有plan type，而没有location type，
+    //这个时候location type和plan type相等
+    location_type = plan_type_;
+  }
+  return location_type;
 }
 
 } //namespace sql

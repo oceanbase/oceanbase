@@ -845,7 +845,7 @@ int ObTableParam::construct_columns_and_projector(
         tmp_col_desc.col_order_ = column->get_column_order();
         if (OB_FAIL(tmp_access_cols_param.push_back(column))) {
           LOG_WARN("fail to push_back tmp_access_cols_param", K(ret));
-        } else if (OB_FAIL(tmp_access_cols_desc.push_back(tmp_col_desc))) {
+        } else if (tmp_access_cols_desc.push_back(tmp_col_desc)) {
           LOG_WARN("fail to push_back tmp_access_cols_desc", K(ret));
         } else if (OB_FAIL(tmp_access_cols_index.push_back(col_index))) {
           LOG_WARN("fail to push_back tmp_access_cols_index", K(ret));

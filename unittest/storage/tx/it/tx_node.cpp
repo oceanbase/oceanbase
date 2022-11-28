@@ -12,11 +12,12 @@
 
 #define USING_LOG_PREFIX TRANS
 #include "tx_node.h"
+#include "logservice/palf/scn.h"
 #define FAST_FAIL() \
-  do {                                                          \
+do {                                                            \
   if (OB_FAIL(ret)) {                                           \
-    TRANS_LOG(ERROR, "[tx node crash] fast-fail for easy debug", K(ret)); \
     ob_abort();                                                 \
+    TRANS_LOG(ERROR, "fast-fail for easy debug", K(ret));       \
   }                                                             \
 } while(0);
 
@@ -77,10 +78,8 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   lock_memtable_handle.set_table(&lock_memtable_, &t3m_, ObITable::LOCK_MEMTABLE);
   fake_lock_table_.is_inited_ = true;
   fake_lock_table_.parent_ = &fake_ls_;
-  lock_memtable_.key_.table_type_ = ObITable::LOCK_MEMTABLE;
-  fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.t3m_ = &t3m_;
-  fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.table_type_ = ObITable::TableType::LOCK_MEMTABLE;
   fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.add_memtable_(lock_memtable_handle);
+  lock_memtable_.key_.table_type_ = ObITable::LOCK_MEMTABLE;
   fake_tenant_freezer_.is_inited_ = true;
   fake_tenant_freezer_.tenant_info_.is_loaded_ = true;
   fake_tenant_freezer_.tenant_info_.mem_memstore_limit_ = INT64_MAX;
@@ -208,10 +207,10 @@ void ObTxNode::dump_msg_queue_()
 
 ObTxNode::~ObTxNode() __attribute__((optnone)) {
   int ret = OB_SUCCESS;
-  TRANS_LOG(INFO, "destroy TxNode", KPC(this));
-  ObTenantEnv::set_tenant(&tenant_);
+  fake_tx_table_.is_inited_ = false;
   OZ(txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_));
   fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_ = nullptr;
+  ObTenantEnv::set_tenant(&tenant_);
   OX(txs_.stop());
   OZ(txs_.wait_());
   if (role_ == Leader && fake_tx_log_adapter_) {
@@ -219,16 +218,13 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
     fake_tx_log_adapter_->stop();
     fake_tx_log_adapter_->wait();
     fake_tx_log_adapter_->destroy();
+    delete fake_tx_log_adapter_;
   }
   msg_consumer_.stop();
   msg_consumer_.wait();
   dump_msg_queue_();
-  //fake_tx_table_.is_inited_ = false;
   if (memtable_) {
     delete memtable_;
-  }
-  if (role_ == Leader && fake_tx_log_adapter_) {
-    delete fake_tx_log_adapter_;
   }
   FAST_FAIL();
 }
@@ -238,8 +234,8 @@ memtable::ObMemtable *ObTxNode::create_memtable_(const int64_t tablet_id) {
   ObITable::TableKey table_key;
   table_key.table_type_ = ObITable::DATA_MEMTABLE;
   table_key.tablet_id_ = tablet_id;
-  table_key.log_ts_range_.start_log_ts_ = 100;
-  table_key.log_ts_range_.end_log_ts_ = ObLogTsRange::MAX_TS;
+  table_key.scn_range_.start_scn_.convert_for_gts(100);
+  table_key.scn_range_.end_scn_.set_max();
   t->init(table_key, &fake_ls_, &fake_freezer_, &fake_memtable_mgr_, 0, 0);
   return t;
 }
@@ -344,7 +340,6 @@ int ObTxNode::handle_msg_(MsgPack *pkt)
   TX_MSG_HANDLER__(TX_COMMIT_RESP, ObTxCommitRespMsg, handle_trans_commit_response);
   TX_MSG_HANDLER__(TX_ABORT, ObTxAbortMsg, handle_trans_abort_request);
   TX_MSG_HANDLER__(KEEPALIVE, ObTxKeepaliveMsg, handle_trans_keepalive);
-  TX_MSG_HANDLER__(KEEPALIVE_RESP, ObTxKeepaliveRespMsg, handle_trans_keepalive_response);
 #undef TX_MSG_HANDLER__
   case ROLLBACK_SAVEPOINT:
     {
@@ -494,7 +489,7 @@ int ObTxNode::write(ObTxDesc &tx,
   row.capacity_ = 2;
   row.row_val_.cells_ = cols;
   row.row_val_.count_ = 2;
-  row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
+  row.flag_ = blocksstable::ObDmlFlag::DF_INSERT;
   row.trans_id_.reset();
   OZ(memtable_->set(write_store_ctx, 1, read_info, columns_, row));
   OZ(txs_.revert_store_ctx(write_store_ctx));

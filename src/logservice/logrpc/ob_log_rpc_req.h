@@ -16,6 +16,7 @@
 #include "lib/utility/ob_unify_serialize.h"                    // OB_UNIS_VERSION
 #include "lib/utility/ob_print_utils.h"                        // TO_STRING_KV
 #include "common/ob_member_list.h"                             // ObMemberList
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -130,12 +131,12 @@ struct LogGetPalfStatResp {
   OB_UNIS_VERSION(1);
 public:
   LogGetPalfStatResp() {};
-  LogGetPalfStatResp(const int64_t max_ts_ns);
+  LogGetPalfStatResp(const palf::SCN &max_scn);
   ~LogGetPalfStatResp();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(max_ts_ns));
-  int64_t max_ts_ns_;
+  TO_STRING_KV(K_(max_scn));
+  palf::SCN max_scn_;
 };
 
 } // end namespace logservice

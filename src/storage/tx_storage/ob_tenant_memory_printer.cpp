@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "lib/utility/ob_print_utils.h"
-#include "lib/alloc/memory_dump.h"
 #include "observer/omt/ob_multi_tenant.h"                  // ObMultiTenant
 #include "share/ob_tenant_mgr.h"                           // get_virtual_memory_used
 #include "share/allocator/ob_memstore_allocator_mgr.h"     // ObMemstoreAllocatorMgr
@@ -91,28 +90,6 @@ int ObTenantMemoryPrinter::print_tenant_usage()
           LOG_WARN("print mtl tenant usage failed", K(tmp_ret), K(tenant_id));
         }
       }
-      static int64_t last_print_ts = 0;
-      const int64_t now = ObTimeUtility::current_time();
-      const int64_t INTERVAL = 10 * 60 * 1000000L;
-      if (now - last_print_ts >= INTERVAL) {
-        omt::TenantIdList current_ids(nullptr, ObModIds::OMT);
-        omt->get_tenant_ids(current_ids);
-        int tenant_cnt = 0;
-        static uint64_t all_tenant_ids[OB_MAX_SERVER_TENANT_CNT] = {0};
-        common::get_tenant_ids(all_tenant_ids, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);
-        for (int64_t i = 0; OB_SUCC(ret) && i < tenant_cnt; ++i) {
-          uint64_t id = all_tenant_ids[i];
-          if (OB_SERVER_TENANT_ID != id && current_ids.find(id) == current_ids.end()) {
-            // id is deleted tenant
-            lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
-            if (OB_NOT_NULL(mallocator)) {
-              mallocator->print_tenant_memory_usage(id);
-              mallocator->print_tenant_ctx_memory_usage(id);
-            }
-          }
-        }
-        last_print_ts = now;
-      }
     }
 
     if (OB_SIZE_OVERFLOW == ret) {
@@ -130,12 +107,7 @@ int ObTenantMemoryPrinter::print_tenant_usage()
     _STORAGE_LOG(INFO,
         "[CHUNK_MGR] free=%ld pushes=%ld pops=%ld limit=%'15ld hold=%'15ld total_hold=%'15ld used=%'15ld" \
         " freelist_hold=%'15ld maps=%'15ld unmaps=%'15ld large_maps=%'15ld large_unmaps=%'15ld" \
-        " memalign=%d"
-#ifndef ENABLE_SANITY
-        " virtual_memory_used=%'15ld\n",
-#else
-        " virtual_memory_used=%'15ld actual_virtual_memory_used=%'15ld\n",
-#endif
+        " memalign=%d virtual_memory_used=%'15ld\n",
         CHUNK_MGR.get_free_chunk_count(),
         CHUNK_MGR.get_free_chunk_pushes(),
         CHUNK_MGR.get_free_chunk_pops(),
@@ -149,12 +121,7 @@ int ObTenantMemoryPrinter::print_tenant_usage()
         CHUNK_MGR.get_large_maps(),
         CHUNK_MGR.get_large_unmaps(),
         0,
-#ifndef ENABLE_SANITY
-        memory_used
-#else
-        memory_used - CHUNK_MGR.get_shadow_hold(), memory_used
-#endif
-        );
+        memory_used);
     print_mutex_.unlock();
   }
 

@@ -17,7 +17,6 @@
 // or may cause MACRO pollution
 #include "lib/oblog/ob_log_module.h"
 #include "share/ob_occam_time_guard.h"
-#include <algorithm>
 
 #define LOG_PHASE(level, phase, info, args...) \
 do {\
@@ -84,16 +83,15 @@ enum class LogPhase
   SET_MEMBER = 7,
 };
 
-constexpr int64_t MSG_DELAY_WARN_THRESHOLD = 200_ms;
+constexpr int64_t MSG_DELAY_WARN_THRESTHOLD = 200_ms;
 constexpr int64_t MAX_LEASE_TIME = 10_s;
 constexpr int64_t PRIORITY_BUFFER_SIZE = 512;
 constexpr int64_t INVALID_VALUE = -1;// 所有int64_t变量的初始默认无效值
 extern int64_t MAX_TST; // 最大单程消息延迟，暂设为750ms，在单测中会将其调低，日后可改为配置项，现阶段先用全局变量代替
-inline int64_t CALCULATE_RENEW_LEASE_INTERVAL() { return  std::min<int64_t>(0.5 * MAX_TST, 250_ms); }// 续约周期固定为消息延迟的一半，最大不超过250ms
-inline int64_t CALCULATE_TIME_WINDOW_SPAN_TS() { return  2 * MAX_TST; }// 时间窗口的长度，为两个最大单程消息延迟， 默认为2s
-inline int64_t CALCULATE_MAX_ELECT_COST_TIME() { return  10 * MAX_TST; }// 一次选举可能出现的最大耗时设置，默认为10s
-inline int64_t CALCULATE_LEASE_INTERVAL() { return 4 * MAX_TST; }// 4个消息延迟，默认是4s
-inline int64_t CALCULATE_TRIGGER_ELECT_WATER_MARK() { return std::min<int64_t>(MAX_TST, 1_s); }// 触发无主选举的Lease剩余水位线，1个最大消息延迟，最大不超过1s
+inline int64_t CALCULATE_RENEW_LEASE_INTERVAL() { return  0.5 * MAX_TST; }// 续约的周期，目前是325ms，在暂时没有切主流程优化的情况下，设置的间隔短一些，为了及时切主
+inline int64_t CALCULATE_TIME_WINDOW_SPAN_TS() { return  2 * MAX_TST; }// 时间窗口的长度，为两个最大单程消息延迟
+inline int64_t CALCULATE_MAX_ELECT_COST_TIME() { return  10 * MAX_TST; }// 一次选举可能出现的最大耗时设置，设置为10s
+inline int64_t CALCULATE_LEASE_INTERVAL() { return 4 * MAX_TST; }// 4个消息延迟是3s
 
 }// namespace election
 }// namespace palf

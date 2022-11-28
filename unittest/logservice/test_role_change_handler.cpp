@@ -44,9 +44,8 @@ TEST(TestRoleChangeHander, test_basic_func)
   ObRoleChangeHandler handler;
   ObLogBaseType type = ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE;
   MockRoleChangeHandler mock_handler;
-  RCDiagnoseInfo unused_diagnose_info;
   handler.register_handler(type, &mock_handler);
-  handler.switch_to_leader(unused_diagnose_info);
+  handler.switch_to_leader();
   handler.switch_to_follower_forcedly();
   handler.switch_to_follower_gracefully();
 }

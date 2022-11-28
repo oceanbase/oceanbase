@@ -666,7 +666,7 @@ int ObLockWaitMgr::repost(Node* node)
                                                                       UnregisterPath::
                                                                       LOCK_WAIT_MGR_REPOST);
     if (OB_FAIL(OBSERVER.get_net_frame().get_deliver().repost((void*)node))) {
-      TRANS_LOG(WARN, "report error", K(ret));
+      TRANS_LOG(WARN, "report error", K(ret), K(*node));
     }
   }
 

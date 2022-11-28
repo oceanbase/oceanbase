@@ -19,6 +19,7 @@ namespace oceanbase
 {
 
 using namespace storage;
+using namespace palf;
 
 namespace transaction
 {
@@ -175,9 +176,6 @@ int ObCtxTxData::deep_copy_tx_data_out(ObTxData *&tmp_tx_data)
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(deep_copy_tx_data_(tx_table, tmp_tx_data))) {
       TRANS_LOG(WARN, "deep copy tx data failed", K(ret), KPC(tmp_tx_data), K(*this));
-    } else if (OB_ISNULL(tmp_tx_data)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "copied tmp tx data is null", KR(ret), K(*this));
     }
   }
 
@@ -265,13 +263,13 @@ int ObCtxTxData::set_state(int32_t state)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    ATOMIC_STORE(&tx_data_->state_, state);
+    tx_data_->state_ = state;
   }
 
   return ret;
 }
 
-int ObCtxTxData::set_commit_version(int64_t commit_version)
+int ObCtxTxData::set_commit_version(const palf::SCN &commit_version)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -279,28 +277,28 @@ int ObCtxTxData::set_commit_version(int64_t commit_version)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    ATOMIC_STORE(&tx_data_->commit_version_, commit_version);
+    tx_data_->commit_scn_ = commit_version;
   }
 
   return ret;
 }
 
-int ObCtxTxData::set_start_log_ts(int64_t start_ts)
+int ObCtxTxData::set_start_log_ts(const palf::SCN &start_ts)
 {
   int ret = OB_SUCCESS;
-  const int64_t tmp_start_ts = (OB_INVALID_TIMESTAMP == start_ts ? INT64_MAX : start_ts);
+  const palf::SCN tmp_start_ts = (start_ts.is_valid() ? start_ts : palf::SCN::max_scn());
   RLockGuard guard(lock_);
 
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    ATOMIC_STORE(&tx_data_->start_log_ts_, tmp_start_ts);
+    tx_data_->start_scn_ = tmp_start_ts;
   }
 
   return ret;
 }
 
-int ObCtxTxData::set_end_log_ts(int64_t end_ts)
+int ObCtxTxData::set_end_log_ts(const palf::SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -308,7 +306,7 @@ int ObCtxTxData::set_end_log_ts(int64_t end_ts)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    ATOMIC_STORE(&tx_data_->end_log_ts_, end_ts);
+    tx_data_->end_scn_ = end_scn;
   }
 
   return ret;
@@ -317,33 +315,28 @@ int ObCtxTxData::set_end_log_ts(int64_t end_ts)
 int32_t ObCtxTxData::get_state() const
 {
   RLockGuard guard(lock_);
-  return (NULL != tx_data_ ? ATOMIC_LOAD(&tx_data_->state_): ATOMIC_LOAD(&tx_commit_data_.state_));
+  return (NULL != tx_data_ ? tx_data_->state_: tx_commit_data_.state_);
 }
 
-int64_t ObCtxTxData::get_commit_version() const
+const palf::SCN ObCtxTxData::get_commit_version() const
 {
   RLockGuard guard(lock_);
-  return (NULL != tx_data_ ? ATOMIC_LOAD(&tx_data_->commit_version_) : ATOMIC_LOAD(&tx_commit_data_.commit_version_));
+  SCN commit_version = (NULL != tx_data_ ? tx_data_->commit_scn_ : tx_commit_data_.commit_scn_);
+  return commit_version;
 }
 
-int64_t ObCtxTxData::get_start_log_ts() const
+const palf::SCN ObCtxTxData::get_start_log_ts() const
 {
   RLockGuard guard(lock_);
-  int64_t ctx_log_ts = (NULL != tx_data_ ? ATOMIC_LOAD(&tx_data_->start_log_ts_) : ATOMIC_LOAD(&tx_commit_data_.start_log_ts_));
-  if (INT64_MAX == ctx_log_ts) {
-    ctx_log_ts = OB_INVALID_TIMESTAMP;
-  }
-  return ctx_log_ts;
+  palf::SCN start_log_scn = (NULL != tx_data_ ? tx_data_->start_scn_ : tx_commit_data_.start_scn_);
+  return start_log_scn;
 }
 
-int64_t ObCtxTxData::get_end_log_ts() const
+const palf::SCN ObCtxTxData::get_end_log_ts() const
 {
   RLockGuard guard(lock_);
-  int64_t ctx_log_ts = (NULL != tx_data_ ? ATOMIC_LOAD(&tx_data_->end_log_ts_) : ATOMIC_LOAD(&tx_commit_data_.end_log_ts_));
-  if (INT64_MAX == ctx_log_ts) {
-    ctx_log_ts = OB_INVALID_TIMESTAMP;
-  }
-  return ctx_log_ts;
+  palf::SCN end_log_scn = (NULL != tx_data_ ? tx_data_->end_scn_ : tx_commit_data_.end_scn_);
+  return end_log_scn;
 }
 
 ObTransID ObCtxTxData::get_tx_id() const
@@ -352,67 +345,7 @@ ObTransID ObCtxTxData::get_tx_id() const
   return (NULL != tx_data_ ? tx_data_->tx_id_ : tx_commit_data_.tx_id_);
 }
 
-int ObCtxTxData::prepare_add_undo_action(ObUndoAction &undo_action,
-                                         storage::ObTxData *&tmp_tx_data,
-                                         storage::ObUndoStatusNode *&tmp_undo_status)
-{
-  int ret = OB_SUCCESS;
-  RLockGuard guard(lock_);
-  /*
-   * alloc undo_status_node used on commit stage
-   * alloc tx_data and add undo_action to it, which will be inserted
-   *       into tx_data_table after RollbackSavepoint log sync success
-   */
-  if (OB_FAIL(check_tx_data_writable_())) {
-    TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
-  } else {
-    ObTxTable *tx_table = nullptr;
-    GET_TX_TABLE_(tx_table);
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(tx_table->get_tx_data_table()->alloc_undo_status_node(tmp_undo_status))) {
-      TRANS_LOG(WARN, "alloc undo status fail", K(ret), KPC(this));
-    } else if (OB_ISNULL(tmp_undo_status)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "undo status is null", KR(ret), KPC(this));
-    } else if (OB_FAIL(tx_table->deep_copy_tx_data(tx_data_, tmp_tx_data))) {
-      TRANS_LOG(WARN, "copy tx data fail", K(ret), KPC(this));
-    } else if (OB_ISNULL(tmp_tx_data)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "copied tx_data is null", KR(ret), KPC(this));
-    } else if (OB_FAIL(tmp_tx_data->add_undo_action(tx_table, undo_action))) {
-      TRANS_LOG(WARN, "add undo action fail", K(ret), KPC(this));
-    }
-
-    if (OB_FAIL(ret)) {
-      if (tmp_undo_status) {
-        tx_table->get_tx_data_table()->free_undo_status_node(tmp_undo_status);
-      }
-      if (tmp_tx_data) {
-        tx_table->free_tx_data(tmp_tx_data);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObCtxTxData::cancel_add_undo_action(storage::ObTxData *tmp_tx_data, storage::ObUndoStatusNode *tmp_undo_status)
-{
-  int ret = OB_SUCCESS;
-  ObTxTable *tx_table = nullptr;
-  GET_TX_TABLE_(tx_table);
-  if (OB_SUCC(ret)) {
-    tx_table->free_tx_data(tmp_tx_data);
-    ret = tx_table->get_tx_data_table()->free_undo_status_node(tmp_undo_status);
-  }
-  return ret;
-}
-
-int ObCtxTxData::commit_add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode &tmp_undo_status)
-{
-  return add_undo_action(undo_action, &tmp_undo_status);
-}
-
-int ObCtxTxData::add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status)
+int ObCtxTxData::add_undo_action(ObUndoAction &undo_action)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -424,22 +357,22 @@ int ObCtxTxData::add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatu
     GET_TX_TABLE_(tx_table);
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(tx_data_->add_undo_action(tx_table, undo_action, tmp_undo_status))) {
-      TRANS_LOG(WARN, "add undo action failed", K(ret), K(undo_action), KP(tmp_undo_status), K(*this));
+    } else if (OB_FAIL(tx_data_->add_undo_action(tx_table, undo_action))) {
+      TRANS_LOG(WARN, "add undo action failed", K(ret), K(undo_action), K(*this));
     };
   }
 
   return ret;
 }
 
-int ObCtxTxData::Guard::get_tx_data(const ObTxData *&tx_data) const
+int ObCtxTxData::get_tx_data(const ObTxData *&tx_data) const
 {
+  RLockGuard guard(lock_);
   int ret = OB_SUCCESS;
-  auto tmp_tx_data = host_.tx_data_;
-  if (NULL == tmp_tx_data) {
+  if (NULL == tx_data_) {
     ret = OB_TRANS_CTX_NOT_EXIST;
   } else {
-    tx_data = tmp_tx_data;
+    tx_data = tx_data_;
   }
   return ret;
 }

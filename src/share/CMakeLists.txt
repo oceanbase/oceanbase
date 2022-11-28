@@ -7,7 +7,6 @@ ob_set_subtarget(ob_share ALONE
   schema/ob_sequence_sql_service.cpp
   schema/ob_server_schema_service.cpp
   schema/ob_table_schema.cpp
-  parameter/ob_parameter_attr.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -124,6 +123,7 @@ ob_set_subtarget(ob_share common
   ob_locality_priority.cpp
   ob_locality_table_operator.cpp
   ob_ls_id.cpp
+  ob_table_range.cpp
   ob_max_id_fetcher.cpp
   ob_occam_time_guard.cpp
   ob_order_perserving_encoder.cpp
@@ -205,6 +205,7 @@ ob_set_subtarget(ob_share common_mixed
   inner_table/ob_inner_table_schema.lob.cpp
   inner_table/ob_inner_table_schema_misc.ipp
   object/ob_obj_cast.cpp
+  parameter/ob_parameter_attr.cpp
   parameter/ob_parameter_seed.ipp
   ratelimit/ob_rl_mgr.cpp
   ratelimit/ob_rl_rpc.cpp

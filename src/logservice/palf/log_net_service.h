@@ -188,11 +188,7 @@ public:
   int submit_retire_child_req(const common::ObAddr &server, const LogLearner &parent_itself);
   int submit_learner_keepalive_req(const common::ObAddr &server, const LogLearner &sender_itself);
   int submit_learner_keepalive_resp(const common::ObAddr &server, const LogLearner &sender_itself);
-  int submit_committed_info_req(const common::ObAddr &server,
-      const int64_t &msg_proposal_id,
-      const int64_t prev_log_id,
-      const int64_t &prev_log_proposal_id,
-      const LSN &committed_end_lsn);
+
   template<class List>
   int submit_committed_info_req(
       const List &member_list,

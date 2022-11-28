@@ -115,7 +115,7 @@ public:
   void get_ctx_guard(CtxLockGuard &guard);
   void print_trace_log();
   // ATTENTION! There is no lock protect
-  bool is_too_long_transaction() const
+  bool is_too_slow_transaction() const
   { return ObClockGenerator::getRealClock() >= ctx_create_time_ + OB_TRANS_WARN_USE_TIME; }
   bool is_readonly() const { return false; }
   void set_for_replay(const bool for_replay) { for_replay_ = for_replay; }
@@ -184,12 +184,19 @@ protected:
   void print_trace_log_if_necessary_();
   bool is_trans_expired_() const { return ObClockGenerator::getRealClock() >= trans_expired_time_; }
   bool is_slow_query_() const;
+  bool cluster_version_after_2200_() const { return cluster_version_ >= CLUSTER_VERSION_2200; }
+  bool cluster_version_after_2230_() const { return cluster_version_ >= CLUSTER_VERSION_2230; }
+  bool cluster_version_after_2250_() const { return cluster_version_ >= CLUSTER_VERSION_2250; }
+  bool cluster_version_before_2271_() const { return cluster_version_ < CLUSTER_VERSION_2271; }
+  bool cluster_version_before_3200_() const { return cluster_version_ < CLUSTER_VERSION_3200; }
+  bool cluster_version_after_3200_() const { return cluster_version_ >= CLUSTER_VERSION_3200; }
+  inline bool cluster_version_before_400_() const { return cluster_version_ < CLUSTER_VERSION_4_0_0_0; }
+  inline bool cluster_version_after_400_() const { return cluster_version_ >= CLUSTER_VERSION_4_0_0_0; }
   void set_stc_(const MonotonicTs stc);
   void set_stc_by_now_();
   MonotonicTs get_stc_();
   ObITsMgr *get_ts_mgr_();
-  bool has_callback_scheduler_();
-  int defer_callback_scheduler_(const int ret, const int64_t commit_version);
+  int defer_commit_callback_(const int ret, const palf::SCN commit_version);
   int64_t get_remaining_wait_interval_us_()
   {
     return trans_need_wait_wrap_.get_remaining_wait_interval_us();

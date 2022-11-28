@@ -1200,10 +1200,6 @@ int ObPLBlockNS::check_dup_symbol(const ObString &name, const ObPLDataType &type
           is_dup = true;
           ObPLVar *pl_var = const_cast<ObPLVar *>(symbol_table_->get_symbol(symbols_.at(i)));
           pl_var->set_dup_declare(is_dup);
-          if (pl_var->is_referenced()) {
-            ret = OB_ERR_DECL_MORE_THAN_ONCE;
-            LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, name.length(), name.ptr());
-          }
         }
       } else { /*do nothing*/ }
     }
@@ -2375,13 +2371,11 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
          && OB_INVALID_INDEX == var_idx
          && OB_INVALID_INDEX == parent_id
          && i < get_symbols().count(); ++i) {
-      ObPLVar *pl_var = const_cast<ObPLVar *>(symbol_table_->get_symbol(get_symbols().at(i)));
+      const ObPLVar *pl_var = symbol_table_->get_symbol(get_symbols().at(i));
       if (OB_ISNULL(pl_var)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("PL var ns is null", K(i), K(get_symbols().at(i)), K(ret));
       } else if (ObCharset::case_compat_mode_equal(var_name, pl_var->get_name())) {
-        bool is_referenced = true;
-        pl_var->set_is_referenced(is_referenced);
         if (pl_var->is_dup_declare()) {
           ret = OB_ERR_DECL_MORE_THAN_ONCE;
           LOG_USER_ERROR(OB_ERR_DECL_MORE_THAN_ONCE, var_name.length(), var_name.ptr());
@@ -3966,10 +3960,6 @@ int ObPLStmtBlock::generate_symbol_debuginfo(
       ObPLLoop *loop_stmt = static_cast<ObPLLoop *>(stmt);
       CK (OB_NOT_NULL(loop_stmt));
       CK (OB_NOT_NULL(loop_stmt->get_body()));
-      if (OB_SUCC(ret) && PL_CURSOR_FOR_LOOP == stmt->get_type()) {
-        OZ (loop_stmt->get_body()
-          ->get_block()->generate_symbol_debuginfo(symbol_debuginfo_table));
-      }
       OZ (loop_stmt->get_body()->generate_symbol_debuginfo(symbol_debuginfo_table));
     } else if (PL_HANDLER == stmt->get_type()) {
       ObPLDeclareHandlerStmt *handler_stmt = static_cast<ObPLDeclareHandlerStmt *>(stmt);
@@ -4526,8 +4516,7 @@ int lookup_pl_symbol(const void *pl_ns, const char *symbol, size_t len, int64_t 
    const oceanbase::pl::ObPLBlockNS *ns = static_cast<const oceanbase::pl::ObPLBlockNS *>(pl_ns);
    if (OB_FAIL(ns->resolve_symbol(var_name, type, pl_data_type, parent_id, var_index))) {
      LOG_WARN("failed to get var index", K(var_name), K(ret));
-   } else if (oceanbase::pl::ObPLExternalNS::LOCAL_VAR == type
-              && !pl_data_type.is_cursor_type()) { // mysql can not access explicit cursor in sql/expression
+   } else if (oceanbase::pl::ObPLExternalNS::LOCAL_VAR == type) {
      *idx = var_index;
    } else { /*do nothing*/ }
  }

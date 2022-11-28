@@ -170,7 +170,7 @@ private:
 private:
   BatchIOTaskArray io_task_array_;
   LogWriteBufArray log_write_buf_array_;
-  LogTsArray log_ts_array_;
+  SCNArray scn_array_;
   LSNArray lsn_array_;
   int64_t palf_id_;
   bool is_inited_;

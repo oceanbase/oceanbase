@@ -92,7 +92,7 @@ public:
   virtual ~ObIMPPacketSender() { }
   virtual void disconnect() = 0;
   virtual void force_disconnect() = 0;
-  virtual int update_last_pkt_pos() = 0;
+  virtual void update_last_pkt_pos() = 0;
   virtual int response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSessionInfo* session) = 0;
   virtual int send_error_packet(int err,
                                 const char* errmsg,
@@ -113,7 +113,12 @@ public:
   void reset();
   virtual void disconnect() override;
   virtual void force_disconnect() override;
-  virtual int update_last_pkt_pos() override;
+  virtual void update_last_pkt_pos() override
+  {
+    if (NULL != ez_buf_) {
+      comp_context_.update_last_pkt_pos(ez_buf_->last);
+    }
+  }
   virtual int response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSessionInfo* session) override;
   // when connect with proxy, need to append extra ok packet to last statu packet
   int response_compose_packet(obmysql::ObMySQLPacket &pkt,
@@ -148,12 +153,12 @@ public:
   bool is_disable_response() const { return req_has_wokenup_; }
   int clean_buffer();
   bool has_pl();
-  int alloc_ezbuf();
 
 private:
-  static const int64_t MAX_TRY_STEPS = 8;
+  static const int64_t MAX_TRY_STEPS = 6;
   static int64_t TRY_EZ_BUF_SIZES[MAX_TRY_STEPS];
 
+  int alloc_ezbuf();
   int try_encode_with(obmysql::ObMySQLPacket &pkt,
                       int64_t current_size,
                       int64_t &seri_size,

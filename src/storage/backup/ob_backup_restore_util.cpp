@@ -34,6 +34,9 @@ int ObLSBackupRestoreUtil::read_tablet_meta(const common::ObString &path, const 
   } else if (BACKUP_TABLET_META != meta_index.meta_key_.meta_type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("meta type do not match", K(meta_index));
+  } else if (!backup_data_type.is_sys_backup() && !backup_data_type.is_minor_backup()) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("incorrect backup data type", K(ret), K(backup_data_type));
   } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(meta_index.length_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc read buf", K(ret), K(meta_index));

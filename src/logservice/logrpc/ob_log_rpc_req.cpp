@@ -167,8 +167,8 @@ OB_SERIALIZE_MEMBER(LogGetPalfStatReq, src_, palf_id_);
 
 // ============= LogGetPalfStatResp begin ===========
 LogGetPalfStatResp::LogGetPalfStatResp(
-    const int64_t max_ts_ns)
-  : max_ts_ns_(max_ts_ns) { }
+    const palf::SCN &max_scn)
+  : max_scn_(max_scn) { }
 
 LogGetPalfStatResp::~LogGetPalfStatResp()
 {
@@ -177,14 +177,14 @@ LogGetPalfStatResp::~LogGetPalfStatResp()
 
 bool LogGetPalfStatResp::is_valid() const
 {
-  return max_ts_ns_ != OB_INVALID_TIMESTAMP;
+  return max_scn_.is_valid();
 }
 
 void LogGetPalfStatResp::reset()
 {
-  max_ts_ns_ = OB_INVALID_TIMESTAMP;
+  max_scn_.reset();
 }
-OB_SERIALIZE_MEMBER(LogGetPalfStatResp, max_ts_ns_);
+OB_SERIALIZE_MEMBER(LogGetPalfStatResp, max_scn_);
 // ============= LogGetPalfStatResp end =============
 } // end namespace logservice
 }// end namespace oceanbase

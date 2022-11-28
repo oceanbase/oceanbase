@@ -1108,7 +1108,7 @@ int ObLSBackupCtx::release_tablet(const common::ObTabletID &tablet_id)
 void ObLSBackupCtx::set_result_code(const int64_t result, bool &is_set)
 {
   ObMutexGuard guard(mutex_);
-  // TODO(yangyi.yyy): change the report result logic to one place in 4.1
+  // TODO(yangyi.yyy): change the report result logic to one place
   if (OB_SUCCESS == result_code_ && OB_SUCCESS != result) {
     result_code_ = result;
     is_finished_ = true;

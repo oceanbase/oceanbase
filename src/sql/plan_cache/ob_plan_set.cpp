@@ -144,7 +144,6 @@ int ObPlanSet::match_params_info(const ParamStore *params,
       } else if (fetch_cur_time_ && FALSE_IT(plan_ctx->set_cur_time(
                                 ObClockGenerator::getClock(), *session))) {
         // never reach
-      } else if (FALSE_IT(plan_ctx->set_last_trace_id(session->get_last_trace_id()))) {
       } else if (params->count() != params_info_.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("param info count is different", K(params_info_), K(*params), K(ret));
@@ -491,7 +490,7 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
       }
     }
 
-    if (is_sql_planset() && OB_SUCC(ret) && is_same) {
+    if (OB_SUCC(ret) && is_same) {
       CK( OB_NOT_NULL(pc_ctx.exec_ctx_.get_physical_plan_ctx()) );
       if (OB_SUCC(ret)) {
         const ParamStore &params = pc_ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();
@@ -739,8 +738,6 @@ int ObPlanSet::set_equal_param_constraint(common::ObIArray<ObPCParamEqualInfo> &
   for (int64_t i = 0; OB_SUCC(ret) && i < equal_param_constraint.count(); ++i) {
     ObPCParamEqualInfo &equal_info = equal_param_constraint.at(i);
     if (equal_info.first_param_idx_ < 0 || equal_info.second_param_idx_ < 0 ||
-        equal_info.first_param_idx_ > params_info_.count() ||
-        equal_info.second_param_idx_ > params_info_.count() ||
         equal_info.first_param_idx_ == equal_info.second_param_idx_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get invalid equal param constraint", K(ret), K(equal_info));

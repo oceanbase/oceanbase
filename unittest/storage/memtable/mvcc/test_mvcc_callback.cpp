@@ -34,16 +34,16 @@ public:
   ObMockTxCallback(ObMemtable *mt,
                    bool need_submit_log = true,
                    bool need_fill_redo = true,
-                   int64_t log_ts = INT64_MAX,
+                   palf::SCN scn = palf::SCN::max_scn(),
                    int64_t seq_no = INT64_MAX)
     : ObITransCallback(need_fill_redo, need_submit_log),
-      mt_(mt), seq_no_(seq_no) { log_ts_ = log_ts; }
+      mt_(mt), seq_no_(seq_no) { scn_ = scn; }
 
   virtual ObIMemtable* get_memtable() const override { return mt_; }
   virtual int64_t get_seq_no() const override { return seq_no_; }
   virtual int checkpoint_callback() override;
   virtual int rollback_callback() override;
-  virtual int calc_checksum(const int64_t checksum_log_ts,
+  virtual int calc_checksum(const palf::SCN checksum_scn,
                             ObBatchChecksum *checksumer) override;
 
   ObMemtable *mt_;
@@ -138,13 +138,13 @@ public:
   ObMockTxCallback *create_callback(ObMemtable *mt,
                                     bool need_submit_log = true,
                                     bool need_fill_redo = true,
-                                    int64_t log_ts = INT64_MAX)
+                                    palf::SCN scn = palf::SCN::max_scn())
   {
     int64_t seq_no = ++seq_counter_;
     ObMockTxCallback *cb = new ObMockTxCallback(mt,
                                                 need_submit_log,
                                                 need_fill_redo,
-                                                log_ts,
+                                                scn,
                                                 seq_no);
     return cb;
   }
@@ -152,12 +152,12 @@ public:
   void create_and_append_callback(ObMemtable *mt,
                                   bool need_submit_log = true,
                                   bool need_fill_redo = true,
-                                  int64_t log_ts = INT64_MAX)
+                                  palf::SCN scn = palf::SCN::max_scn())
   {
     ObMockTxCallback *cb = create_callback(mt,
                                            need_submit_log,
                                            need_fill_redo,
-                                           log_ts);
+                                           scn);
     EXPECT_NE(NULL, (long)cb);
     EXPECT_EQ(OB_SUCCESS, callback_list_.append_callback(cb));
   }
@@ -215,14 +215,14 @@ int ObMockTxCallback::rollback_callback()
   return OB_SUCCESS;
 }
 
-int ObMockTxCallback::calc_checksum(const int64_t checksum_log_ts,
+int ObMockTxCallback::calc_checksum(const palf::SCN checksum_scn,
                                     ObBatchChecksum *)
 {
-  if (checksum_log_ts <= log_ts_) {
+  if (checksum_scn <= scn_) {
     TestTxCallbackList::checksum_.add_bit(seq_no_);
-    TRANS_LOG(INFO, "need to calc checksum", K(checksum_log_ts), K(log_ts_), K(seq_no_));
+    TRANS_LOG(INFO, "need to calc checksum", K(checksum_scn), K(scn_), K(seq_no_));
   } else {
-    TRANS_LOG(INFO, "no need to calc checksum", K(checksum_log_ts), K(log_ts_), K(seq_no_));
+    TRANS_LOG(INFO, "no need to calc checksum", K(checksum_scn), K(scn_), K(seq_no_));
   }
   return OB_SUCCESS;
 }
@@ -230,18 +230,21 @@ int ObMockTxCallback::calc_checksum(const int64_t checksum_log_ts,
 TEST_F(TestTxCallbackList, remove_callback_by_tx_commit)
 {
   ObMemtable *memtable = create_memtable();
+  palf::SCN scn_1;
+  scn_1.convert_for_lsn_allocator(1);
+
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
 
   EXPECT_EQ(3, callback_list_.get_length());
 
@@ -254,14 +257,16 @@ TEST_F(TestTxCallbackList, remove_callback_by_tx_commit)
 TEST_F(TestTxCallbackList, remove_callback_by_tx_abort)
 {
   ObMemtable *memtable = create_memtable();
+  palf::SCN scn_1;
+  scn_1.convert_for_lsn_allocator(1);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              true   /*need_fill_redo*/);
@@ -279,26 +284,32 @@ TEST_F(TestTxCallbackList, remove_callback_by_release_memtable)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  palf::SCN scn_100;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+  scn_100.convert_for_lsn_allocator(100);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              true /*need_fill_redo*/);
@@ -311,7 +322,7 @@ TEST_F(TestTxCallbackList, remove_callback_by_release_memtable)
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false,  /*need_fill_redo*/
-                             100     /*log_ts*/);
+                             scn_100 /*scn*/);
 
   EXPECT_EQ(9, callback_list_.get_length());
 
@@ -341,27 +352,35 @@ TEST_F(TestTxCallbackList, remove_callback_by_fast_commit)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  palf::SCN scn_3;
+  palf::SCN scn_100;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+  scn_3.convert_for_lsn_allocator(3);
+  scn_100.convert_for_lsn_allocator(100);
 
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              true /*need_fill_redo*/);
@@ -374,7 +393,7 @@ TEST_F(TestTxCallbackList, remove_callback_by_fast_commit)
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false,  /*need_fill_redo*/
-                             100     /*log_ts*/);
+                             scn_100 /*scn*/);
 
   EXPECT_EQ(9, callback_list_.get_length());
 
@@ -411,29 +430,35 @@ TEST_F(TestTxCallbackList, remove_callback_by_rollback_to)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  palf::SCN scn_3;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+  scn_3.convert_for_lsn_allocator(3);
 
   int64_t savepoint0 = get_seq_no();
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   int64_t savepoint1 = get_seq_no();
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable3,
                              true, /*need_submit_log*/
                              true /*need_fill_redo*/);
@@ -475,27 +500,33 @@ TEST_F(TestTxCallbackList, remove_callback_by_clean_unlog_callbacks)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  palf::SCN scn_3;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+  scn_3.convert_for_lsn_allocator(3);
 
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable3,
                              true, /*need_submit_log*/
                              true /*need_fill_redo*/);
@@ -523,47 +554,55 @@ TEST_F(TestTxCallbackList, remove_callback_by_replay_fail)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  palf::SCN scn_3;
+  palf::SCN scn_4;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+  scn_3.convert_for_lsn_allocator(3);
+  scn_4.convert_for_lsn_allocator(4);
 
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             4/*log_ts*/);
+                             scn_4/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             4/*log_ts*/);
+                             scn_4/*scn*/);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             4/*log_ts*/);
+                             scn_4/*scn*/);
 
   EXPECT_EQ(9, callback_list_.get_length());
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.replay_fail(4 /*log_timestamp*/));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.replay_fail(scn_4 /*log_timestamp*/));
   EXPECT_EQ(6, callback_list_.get_length());
 
   EXPECT_EQ(3, rollback_cnt_);
@@ -573,6 +612,7 @@ TEST_F(TestTxCallbackList, checksum_leader_tx_end_basic)
 {
   TRANS_LOG(INFO, "CASE: checksum_leader_tx_end_basic");
   ObMemtable *memtable = create_memtable();
+
   create_and_append_callback(memtable,
                              true, /*need_submit_log*/
                              true /*need_fill_redo*/);
@@ -588,49 +628,61 @@ TEST_F(TestTxCallbackList, checksum_leader_tx_end_basic)
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
 
   EXPECT_EQ(true, is_checksum_equal(3, checksum_));
-  EXPECT_EQ(INT64_MAX, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_follower_tx_end)
 {
   ObMemtable *memtable = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  palf::SCN scn_3;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+  scn_3.convert_for_lsn_allocator(3);
+
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1 /*log_ts*/);
+                             scn_1 /*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2 /*log_ts*/);
+                             scn_2 /*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3 /*log_ts*/);
+                             scn_3 /*scn*/);
 
   EXPECT_EQ(3, callback_list_.get_length());
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
 
   EXPECT_EQ(true, is_checksum_equal(3, checksum_));
-  EXPECT_EQ(INT64_MAX, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_leader_tx_end_harder)
 {
   TRANS_LOG(INFO, "CASE: checksum_leader_tx_end_harder");
   ObMemtable *memtable = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1 /*log_ts*/);
+                             scn_1 /*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1 /*log_ts*/);
+                             scn_1 /*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2 /*log_ts*/);
+                             scn_2 /*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              true /*need_fill_redo*/);
@@ -643,29 +695,34 @@ TEST_F(TestTxCallbackList, checksum_leader_tx_end_harder)
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
 
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(INT64_MAX, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_leader_tx_end_harderer)
 {
   TRANS_LOG(INFO, "CASE: checksum_leader_tx_end_harderer");
   ObMemtable *memtable = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1 /*log_ts*/);
+                             scn_1 /*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1 /*log_ts*/);
+                             scn_1 /*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2 /*log_ts*/);
+                             scn_2 /*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1 /*log_ts*/);
+                             scn_1 /*scn*/);
   create_and_append_callback(memtable,
                              false, /*need_submit_log*/
                              true /*need_fill_redo*/);
@@ -678,7 +735,7 @@ TEST_F(TestTxCallbackList, checksum_leader_tx_end_harderer)
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
 
   EXPECT_EQ(true, is_checksum_equal(6, checksum_));
-  EXPECT_EQ(INT64_MAX, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_remove_memtable_and_tx_end)
@@ -687,26 +744,33 @@ TEST_F(TestTxCallbackList, checksum_remove_memtable_and_tx_end)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  palf::SCN scn_3;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+  scn_3.convert_for_lsn_allocator(3);
+
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              true /*need_fill_redo*/);
@@ -725,20 +789,20 @@ TEST_F(TestTxCallbackList, checksum_remove_memtable_and_tx_end)
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable2));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(3, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable3));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(3, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
 
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable1));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(3, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
   EXPECT_EQ(true, is_checksum_equal(9, checksum_));
-  EXPECT_EQ(INT64_MAX, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 
@@ -748,27 +812,35 @@ TEST_F(TestTxCallbackList, checksum_fast_commit_and_tx_end)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  palf::SCN scn_3;
+  palf::SCN scn_4;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+  scn_3.convert_for_lsn_allocator(3);
+  scn_4.convert_for_lsn_allocator(4);
 
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              true /*need_fill_redo*/);
@@ -788,26 +860,26 @@ TEST_F(TestTxCallbackList, checksum_fast_commit_and_tx_end)
   bool has_remove = false;
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
   EXPECT_EQ(true, is_checksum_equal(1, checksum_));
-  EXPECT_EQ(2, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_2, callback_list_.checksum_scn_);
 
   fast_commit_reserve_cnt_ = 14;
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
   EXPECT_EQ(true, is_checksum_equal(3, checksum_));
-  EXPECT_EQ(3, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
 
   fast_commit_reserve_cnt_ = 1;
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(4, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
   fast_commit_reserve_cnt_ = 1;
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(has_remove));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(4, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
   EXPECT_EQ(true, is_checksum_equal(9, checksum_));
-  EXPECT_EQ(INT64_MAX, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
@@ -816,29 +888,37 @@ TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
   ObMemtable *memtable1 = create_memtable();
   ObMemtable *memtable2 = create_memtable();
   ObMemtable *memtable3 = create_memtable();
+  palf::SCN scn_1;
+  palf::SCN scn_2;
+  palf::SCN scn_3;
+  palf::SCN scn_4;
+  scn_1.convert_for_lsn_allocator(1);
+  scn_2.convert_for_lsn_allocator(2);
+  scn_3.convert_for_lsn_allocator(3);
+  scn_4.convert_for_lsn_allocator(4);
 
   int64_t savepoint0 = get_seq_no();
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             1/*log_ts*/);
+                             scn_1/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   create_and_append_callback(memtable1,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             2/*log_ts*/);
+                             scn_2/*scn*/);
   int64_t savepoint1 = get_seq_no();
   create_and_append_callback(memtable3,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable2,
                              false, /*need_submit_log*/
                              false, /*need_fill_redo*/
-                             3/*log_ts*/);
+                             scn_3/*scn*/);
   create_and_append_callback(memtable3,
                              true, /*need_submit_log*/
                              true /*need_fill_redo*/);
@@ -858,23 +938,23 @@ TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint3));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(4, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint2));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(4, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint1));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(4, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint0));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(4, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(INT64_MAX, callback_list_.checksum_log_ts_);
+  EXPECT_EQ(palf::SCN::max_scn(), callback_list_.checksum_scn_);
 }
 
 TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
@@ -914,7 +994,7 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
         i++;
         it->need_submit_log_ = false;
         it->need_fill_redo_ = false;
-        it->log_ts_ = cur_log;
+        it->scn_.convert_for_lsn_allocator(cur_log);
         enable = true;
         need_submit_head = it;
         my_calculate.add_bit(it->get_seq_no());
@@ -1043,14 +1123,14 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
   const int64_t need_remove_count = length_ - recommand_reserve_count;
 
   ObRemoveCallbacksForFastCommitFunctor functor(need_remove_count);
-  functor.set_checksumer(checksum_log_ts_, &batch_checksum_);
+  functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
   if (OB_FAIL(callback_(functor))) {
     TRANS_LOG(ERROR, "remove callbacks for fast commit wont report error", K(ret), K(functor));
   } else {
     callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
-    ensure_checksum_(functor.get_checksum_last_log_ts());
-    has_remove = OB_INVALID_TIMESTAMP != functor.get_checksum_last_log_ts();
+    ensure_checksum_(functor.get_checksum_last_scn());
+    has_remove = palf::SCN::min_scn() != functor.get_checksum_last_scn();
     if (has_remove) {
       TRANS_LOG(INFO, "remove callbacks for fast commit", K(functor), K(*this));
     }
@@ -1077,13 +1157,13 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable
       return false;
     },
     false /*need_remove_data*/);
-  functor.set_checksumer(checksum_log_ts_, &batch_checksum_);
+  functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
   if (OB_FAIL(callback_(functor))) {
     TRANS_LOG(ERROR, "remove callbacks for remove memtable wont report error", K(ret), K(functor));
   } else {
     callback_mgr_.add_release_memtable_callback_remove_cnt(functor.get_remove_cnt());
-    ensure_checksum_(functor.get_checksum_last_log_ts());
+    ensure_checksum_(functor.get_checksum_last_scn());
     if (functor.get_remove_cnt() > 0) {
       TRANS_LOG(INFO, "remove callbacks for remove memtable", KP(memtable_for_remove),
                 K(functor), K(*this));

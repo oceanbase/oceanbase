@@ -23,6 +23,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_table_store.h"
 #include "observer/ob_server_struct.h"
+#include "logservice/palf/scn.h"
 
 
 using namespace oceanbase;
@@ -654,7 +655,7 @@ int ObMemtableArray::find(
 }
 
 int ObMemtableArray::find(
-    const int64_t start_log_ts,
+    const palf::SCN &start_scn,
     const int64_t base_version,
     ObITable *&table,
     int64_t &mem_pos) const
@@ -666,10 +667,10 @@ int ObMemtableArray::find(
   if (OB_UNLIKELY(empty())) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("no memtable", K(ret), KPC(this));
-  } else if (OB_UNLIKELY(start_log_ts < 0)) {
+  } else if (OB_UNLIKELY(!start_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(start_log_ts), K(base_version));
-  } else if (0 == start_log_ts) {
+    LOG_WARN("get invalid arguments", K(ret), K(start_scn), K(base_version));
+  } else if (palf::SCN::min_scn() == start_scn) {
     mem_pos = 0;
     table = get_table(0);
   } else {
@@ -678,13 +679,13 @@ int ObMemtableArray::find(
       if (OB_ISNULL(memtable)) {
         ret = OB_ERR_SYS;
         LOG_WARN("table must not null", K(ret), KPC(memtable), KPC(this));
-      } else if (memtable->get_end_log_ts() == start_log_ts) {
+      } else if (memtable->get_end_scn() == start_scn) {
         if (static_cast<memtable::ObIMemtable *>(memtable)->get_snapshot_version() > base_version) {
           mem_pos = i;
           table = memtable;
           break;
         }
-      } else if (memtable->get_end_log_ts() > start_log_ts) {
+      } else if (memtable->get_end_scn() > start_scn) {
         mem_pos = i;
         table = memtable;
         break;
@@ -905,7 +906,7 @@ int64_t ObPrintTableStoreIterator::to_string(char *buf, const int64_t buf_len) c
       BUF_PRINTF(" ] ");
       BUF_PRINTF(" %-10s %-19s %-19s %-19s %-19s %-19s %-4s %-16s \n",
           "table_type", "table_addr", "upper_trans_ver", "max_merge_ver",
-          "start_log_ts", "end_log_ts", "ref", "uncommit_row");
+          "start_scn", "end_scn", "ref", "uncommit_row");
       for (int64_t i = 0; i < array_.count(); ++i) {
         if (i > 0) {
           J_NEWLINE();
@@ -945,8 +946,8 @@ void ObPrintTableStoreIterator::table_to_string(
       reinterpret_cast<const void *>(table),
       table->get_upper_trans_version(),
       table->get_max_merged_trans_version(),
-      table->get_start_log_ts(),
-      table->get_end_log_ts(),
+      table->get_start_scn().get_val_for_inner_table_field(),
+      table->get_end_scn().get_val_for_inner_table_field(),
       table->get_ref(),
       uncommit_row);
   } else {
@@ -962,7 +963,7 @@ bool ObTableStoreUtil::ObITableLogTsRangeCompare::operator()(
 {
   bool bret = false;
   if (OB_SUCCESS != result_code_) {
-  } else if (OB_SUCCESS != (result_code_ = compare_table_by_log_ts_range(ltable, rtable, bret))) {
+  } else if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, bret))) {
     LOG_WARN("failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
   }
   return bret;
@@ -987,7 +988,7 @@ bool ObTableStoreUtil::ObTableHandleV2LogTsRangeCompare::operator()(
   } else {
     const ObITable *ltable = lhandle.get_table();
     const ObITable *rtable = rhandle.get_table();
-    if (OB_SUCCESS != (result_code_ = compare_table_by_log_ts_range(ltable, rtable, bret))) {
+    if (OB_SUCCESS != (result_code_ = compare_table_by_scn_range(ltable, rtable, bret))) {
       LOG_WARN("failed to compare table with LogTsRange", K(result_code_), KPC(ltable), KPC(rtable));
     }
   }
@@ -1012,7 +1013,7 @@ bool ObTableStoreUtil::ObTableHandleV2SnapshotVersionCompare::operator()(
 }
 
 
-int ObTableStoreUtil::compare_table_by_log_ts_range(const ObITable *ltable, const ObITable *rtable, bool &bret)
+int ObTableStoreUtil::compare_table_by_scn_range(const ObITable *ltable, const ObITable *rtable, bool &bret)
 {
   int ret = OB_SUCCESS;
   bret = false;
@@ -1030,12 +1031,12 @@ int ObTableStoreUtil::compare_table_by_log_ts_range(const ObITable *ltable, cons
     bret = true;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid rtable type", K(ret), KPC(rtable));
-  } else if (ltable->get_end_log_ts() == rtable->get_end_log_ts()) {
+  } else if (ltable->get_end_scn() == rtable->get_end_scn()) {
     bret = true;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table end log ts shouldn't be equal", KPC(ltable), KPC(rtable));
   } else { // log ts not equal
-    bret = ltable->get_end_log_ts() < rtable->get_end_log_ts();
+    bret = ltable->get_end_scn() < rtable->get_end_scn();
   }
   return ret;
 }
@@ -1083,7 +1084,7 @@ int ObTableStoreUtil::sort_minor_tables(ObArray<ObITable *> &tables)
   if (tables.empty()) {
     // no need sort
   } else {
-    // There is an assumption: either all tables are with log_ts range, or none
+    // There is an assumption: either all tables are with scn range, or none
     ObITableLogTsRangeCompare comp(ret);
     std::sort(tables.begin(), tables.end(), comp);
     if (OB_FAIL(ret)) {
@@ -1093,20 +1094,20 @@ int ObTableStoreUtil::sort_minor_tables(ObArray<ObITable *> &tables)
   return ret;
 }
 
-bool ObTableStoreUtil::check_include_by_log_ts_range(const ObITable &a, const ObITable &b)
+bool ObTableStoreUtil::check_include_by_scn_range(const ObITable &a, const ObITable &b)
 {
   bool bret = false;
-  if (a.get_end_log_ts() >= b.get_end_log_ts() && a.get_start_log_ts() <= b.get_start_log_ts()) {
+  if (a.get_end_scn() >= b.get_end_scn() && a.get_start_scn() <= b.get_start_scn()) {
     bret = true;
   }
   return bret;
 }
 
-bool ObTableStoreUtil::check_intersect_by_log_ts_range(const ObITable &a, const ObITable &b)
+bool ObTableStoreUtil::check_intersect_by_scn_range(const ObITable &a, const ObITable &b)
 {
   bool bret = false;
-  if (!(a.get_end_log_ts() <= b.get_start_log_ts()
-        || a.get_start_log_ts() >= b.get_end_log_ts())) {
+  if (!(a.get_end_scn() <= b.get_start_scn()
+        || a.get_start_scn() >= b.get_end_scn())) {
     bret = true;
   }
   return bret;

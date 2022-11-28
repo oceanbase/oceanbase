@@ -58,8 +58,7 @@ public:
        const bool string_deep_copy,
        const common::ObIArray<common::ObString> &extended_type_info,
        const common::ObAccuracy &accuracy,
-       const common::ObCollationType &collation_type,
-       const ObTimeZoneInfoWrap *tz_info_wrap) const;
+       const common::ObCollationType &collation_type) const;
 
 public:
   int init(IObLogTimeZoneInfoGetter &timezone_info_getter,

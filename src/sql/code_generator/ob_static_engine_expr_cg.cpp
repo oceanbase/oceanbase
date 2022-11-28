@@ -401,18 +401,22 @@ int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_e
         || OB_ISNULL(rt_expr = get_rt_expr(*raw_expr))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("arg is null", K(raw_expr), K(rt_expr), K(ret));
-    } else if (T_QUESTIONMARK == rt_expr->type_ &&
-              (raw_expr->has_flag(IS_TABLE_ASSIGN) || rt_question_mark_eval_)) {
+    } else if (T_QUESTIONMARK == rt_expr->type_ && rt_question_mark_eval_) {
       // generate question mark expr for get param from param store directly
-      // if the questionmark is from TABLE_ASSIGN, use eval_assign_question_mark_func
       ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(raw_expr);
       int64_t param_idx = 0;
       OZ(c_expr->get_value().get_unknown(param_idx));
       if (OB_SUCC(ret)) {
         rt_expr->extra_ = param_idx;
-        rt_expr->eval_func_ = raw_expr->has_flag(IS_TABLE_ASSIGN) ?
-                              &eval_assign_question_mark_func:
-                              &eval_question_mark_func;
+        rt_expr->eval_func_ = &eval_question_mark_func;
+      }
+    } else if (T_QUESTIONMARK == rt_expr->type_ && raw_expr->has_flag(IS_TABLE_ASSIGN)) {
+      ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(raw_expr);
+      int64_t param_idx = 0;
+      OZ(c_expr->get_value().get_unknown(param_idx));
+      if (OB_SUCC(ret)) {
+        rt_expr->extra_ = param_idx;
+        rt_expr->eval_func_ = &eval_assign_question_mark_func;
       }
     } else if (!IS_EXPR_OP(rt_expr->type_) || IS_AGGR_FUN(rt_expr->type_)) {
       // do nothing
@@ -1260,6 +1264,28 @@ int ObStaticEngineExprCG::alloc_so_check_exprs(const ObIArray<ObRawExpr *> &raw_
     if (OB_SUCC(ret) && stack_check_expr_cnt > 0) {
       LOG_TRACE("stack check expr needed",
                 K(exprs.count()), K(stack_check_expr_cnt), K(max_call_depth));
+      ObExpr *ori_base = exprs.get_data();
+      OZ(exprs.reserve(exprs.count() + stack_check_expr_cnt));
+      ObExpr *base = exprs.get_data();
+      // relocate expr ptr
+      if (OB_SUCC(ret) && ori_base != base) {
+        const int64_t offset = reinterpret_cast<char *>(base) - reinterpret_cast<char *>(ori_base);
+        FOREACH_CNT(e, raw_exprs) {
+          (*e)->set_rt_expr(reinterpret_cast<ObExpr *>(
+                  reinterpret_cast<char *>(get_rt_expr(**e)) + offset));
+        }
+        FOREACH_CNT(e, exprs_call_depth) {
+          *reinterpret_cast<char **>(&e->expr_) += offset;
+        }
+        FOREACH_CNT(e, exprs) {
+          for (int64_t i = 0; i < e->parent_cnt_; i++) {
+            *reinterpret_cast<char **>(&e->parents_[i]) += offset;
+          }
+          for (int64_t i = 0; i < e->arg_cnt_; i++) {
+            *reinterpret_cast<char **>(&e->args_[i]) += offset;
+          }
+        }
+      }
 
       FOREACH_CNT_X(ecd, exprs_call_depth, OB_SUCC(ret)) {
         if (ecd->need_stack_check_) {
@@ -1273,10 +1299,56 @@ int ObStaticEngineExprCG::alloc_so_check_exprs(const ObIArray<ObRawExpr *> &raw_
             }
           }
           if (OB_SUCC(ret) && e->parent_cnt_ > 0) {
-            e->need_stack_check_ = true;
+            OZ(add_so_check_expr_above(exprs, e));
           }
         }
       } // END FOREACH_CNT_X
+    }
+  }
+  return ret;
+}
+
+int ObStaticEngineExprCG::add_so_check_expr_above(ObIArray<ObExpr> &exprs, ObExpr *e)
+{
+  int ret = OB_SUCCESS;
+  ObExpr *base = exprs.get_data();
+  CK(NULL != e);
+  CK(e->parent_cnt_ > 0 && e->arg_cnt_ > 0);
+  OZ(exprs.push_back(*e));
+  CK(base == exprs.get_data());
+  if (OB_SUCC(ret)) {
+    // stack overflow check expr point to the same ObDatum of child.
+    ObExpr *so = &exprs.at(exprs.count() - 1);
+    so->type_ = T_OP_STACK_OVERFLOW_CHECK;
+    so->extra_ = 0;
+    so->inner_functions_ = 0;
+    so->inner_func_cnt_ = 0;
+    ObExpr **parents = static_cast<ObExpr **>(allocator_.alloc(sizeof(ObExpr *) * 2));
+    if (NULL == parents) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      ObExpr **args = parents + 1;
+
+      parents[0] = so;
+      args[0] = e;
+
+      e->parents_ = parents;
+      e->parent_cnt_ = 1;
+      so->args_ = args;
+      so->arg_cnt_ = 1;
+
+      for (int64_t i = 0; i < so->parent_cnt_; i++) {
+        ObExpr *p = so->parents_[i];
+        for (int64_t j = 0; j < p->arg_cnt_; j++) {
+          if (p->args_[j] == e) {
+            p->args_[j] = so;
+          }
+        }
+      }
+
+      so->eval_func_ = ObExprUtil::eval_stack_overflow_check;
+      so->eval_batch_func_ = ObExprUtil::eval_batch_stack_overflow_check;
     }
   }
   return ret;

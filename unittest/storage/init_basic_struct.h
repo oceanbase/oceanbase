@@ -16,6 +16,7 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/ob_tenant_info_proxy.h"
 #include "logservice/palf/palf_base_info.h"
+#include "logservice/palf/scn.h"
 namespace oceanbase
 {
 namespace storage
@@ -60,7 +61,7 @@ int gen_create_ls_arg(const int64_t tenant_id,
   palf::PalfBaseInfo palf_base_info;
   if (OB_FAIL(tenant_info.init(tenant_id, share::PRIMARY_TENANT_ROLE))) {
     STORAGE_LOG(WARN, "failed to init tenant info", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(arg.init(tenant_id, ls_id, replica_type, property, tenant_info, create_ts_ns, compat_mode, false, palf_base_info))) {
+  } else if (OB_FAIL(arg.init(tenant_id, ls_id, replica_type, property, tenant_info, palf::SCN::min_scn(), compat_mode, false, palf_base_info))) {
    STORAGE_LOG(WARN, "failed to init arg", KR(ret), K(tenant_id), K(ls_id), K(tenant_info), K(create_ts_ns), K(compat_mode), K(palf_base_info));
   }
   return ret;

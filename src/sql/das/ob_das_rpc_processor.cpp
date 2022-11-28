@@ -68,14 +68,11 @@ int ObDASSyncAccessP::before_process()
 int ObDASSyncAccessP::process()
 {
   int ret = OB_SUCCESS;
-  NG_TRACE(das_rpc_process_begin);
-  FLTSpanGuard(das_rpc_process);
   ObDASTaskArg &task = arg_;
   ObDASTaskResp &task_resp = result_;
   ObIDASTaskOp *task_op = task.get_task_op();
   ObIDASTaskResult *task_result = task_resp.get_op_result();
   bool has_more = false;
-  ObDASOpType task_type = DAS_OP_INVALID;
   //regardless of the success of the task execution, the fllowing meta info must be set
   task_result->set_task_id(task_op->get_task_id());
   task_resp.set_ctrl_svr(task.get_ctrl_svr());
@@ -90,7 +87,6 @@ int ObDASSyncAccessP::process()
   } else if (OB_UNLIKELY(has_more) && OB_FAIL(task_op->fill_extra_result())) {
     LOG_WARN("fill extra result to controller failed", KR(ret));
   } else {
-    task_type = task_op->get_type();
     task_resp.set_has_more(has_more);
     ObWarningBuffer *wb = ob_get_tsi_warning_buffer();
     if (wb != nullptr) {
@@ -126,19 +122,14 @@ int ObDASSyncAccessP::process()
     }
   }
   LOG_DEBUG("process das sync access task", K(ret), K(task), KPC(task_result), K(has_more));
-  NG_TRACE_EXT(das_rpc_process_end, OB_ID(type), task_type);
   return OB_SUCCESS;
 }
 
 int ObDASSyncAccessP::after_process(int error_code)
 {
   int ret = OB_SUCCESS;
-  const int64_t elapsed_time = common::ObTimeUtility::current_time() - get_receive_timestamp();
   if (OB_FAIL(ObDASSyncRpcProcessor::after_process(error_code))) {
     LOG_WARN("do das sync base rpc process failed", K(ret));
-  } else if (elapsed_time >= ObServerConfig::get_instance().trace_log_slow_query_watermark) {
-    //slow das task, print trace info
-    FORCE_PRINT_TRACE(THE_TRACE, "[slow das rpc process]");
   }
   //执行相关的错误信息不用传递给RPC框架，RPC框架不处理具体的RPC执行错误信息，始终返回OB_SUCCESS
   return OB_SUCCESS;
@@ -159,8 +150,6 @@ void ObDASSyncAccessP::cleanup()
 int ObDASSyncFetchP::process()
 {
   int ret = OB_SUCCESS;
-  NG_TRACE(fetch_das_result_process_begin);
-  FLTSpanGuard(fetch_das_result_process);
   ObDASDataFetchReq &req = arg_;
   ObDASDataFetchRes &res = result_;
   ObDataAccessService *das = NULL;
@@ -179,37 +168,13 @@ int ObDASSyncFetchP::process()
   } else if (OB_FAIL(das->get_task_res_mgr().iterator_task_result(task_id,
                                                                   datum_store,
                                                                   has_more))) {
-    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST == ret)) {
-      // After server reboot, the hash map containing task results was gone.
-      // We need to retry for such cases.
-      LOG_WARN("task result was gone due to server reboot, will retry", KR(ret), K(res));
-      ret = OB_RPC_SEND_ERROR;
-    } else {
-      LOG_WARN("get task result failed", KR(ret), K(res));
-    }
+    LOG_WARN("get task result failed", KR(ret), K(res));
   } else {
     res.set_has_more(has_more);
   }
-  NG_TRACE(fetch_das_result_process_end);
   return ret;
 }
-
-int ObDASSyncFetchP::after_process(int error_code)
-{
-  int ret = OB_SUCCESS;
-  const int64_t elapsed_time = common::ObTimeUtility::current_time() - get_receive_timestamp();
-  if (OB_FAIL(ObDASSyncFetchResRpcProcessor::after_process(error_code))) {
-    LOG_WARN("do das sync base rpc process failed", K(ret));
-  } else if (elapsed_time >= ObServerConfig::get_instance().trace_log_slow_query_watermark) {
-    //slow das task, print trace info
-    FORCE_PRINT_TRACE(THE_TRACE, "[slow das rpc process]");
-  }
-  //执行相关的错误信息不用传递给RPC框架，RPC框架不处理具体的RPC执行错误信息，始终返回OB_SUCCESS
-  return OB_SUCCESS;
-}
-
-int ObDASAsyncEraseP::process()
-{
+int ObDASAsyncEraseP::process() {
   int ret = OB_SUCCESS;
   ObDASDataEraseReq &req = arg_;
   ObDataAccessService *das = NULL;

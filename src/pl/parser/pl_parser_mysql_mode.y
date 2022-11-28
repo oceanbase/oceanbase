@@ -289,8 +289,7 @@ outer_stmt:
  *
  *****************************************************************************/
 sql_keyword:
-    '(' sql_keyword { $$ = NULL; }
-  | SQL_KEYWORD { $$ = NULL; }
+    SQL_KEYWORD { $$ = NULL; }
   | TABLE { $$ = NULL; }
   | INSERT { $$ = NULL; }
   | DELETE { $$ = NULL; }
@@ -1138,12 +1137,7 @@ sp_create_chistic:
 ;
 
 sp_chistic:
-    COMMENT STRING
-  { 
-    malloc_terminal_node($$, parse_ctx->mem_pool_, T_COMMENT);
-    $$->str_value_ = $2->str_value_;
-    $$->str_len_ = $2->str_len_;
-  }
+    COMMENT STRING { }
   | LANGUAGE SQL { /* Just parse it, we only have one language for now. */ $$ = NULL; }
   | NO SQL {}
   | CONTAINS SQL {}

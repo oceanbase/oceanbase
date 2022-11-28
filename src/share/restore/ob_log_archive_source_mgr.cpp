@@ -40,23 +40,23 @@ int ObLogArchiveSourceMgr::init(const uint64_t tenant_id, ObISQLClient *proxy)
   return ret;
 }
 
-int ObLogArchiveSourceMgr::update_recovery_until_ts(const int64_t recovery_until_ts_ns)
+int ObLogArchiveSourceMgr::update_recovery_until_ts(const palf::SCN &recovery_until_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLogArchiveSourceMgr not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == recovery_until_ts_ns)) {
+  } else if (OB_UNLIKELY(!recovery_until_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(recovery_until_ts_ns));
+    LOG_WARN("invalid argument", K(ret), K(recovery_until_scn));
   } else {
     ObLogArchiveSourceItem item(tenant_id_,
                                 OB_DEFAULT_LOG_ARCHIVE_SOURCE_ID,
-                                recovery_until_ts_ns);
+                                recovery_until_scn);
     if (OB_FAIL(table_operator_.update_source_until_ts(item))) {
-      LOG_WARN("table_operator_ update_source_until_ts failed", K(ret), K(recovery_until_ts_ns));
+      LOG_WARN("table_operator_ update_source_until_ts failed", K(ret), K(recovery_until_scn));
     } else {
-      LOG_INFO("update log archive source recovery until ts succ", K(recovery_until_ts_ns));
+      LOG_INFO("update log archive source recovery until ts succ", K(recovery_until_scn));
     }
   }
   return ret;
@@ -76,7 +76,7 @@ int ObLogArchiveSourceMgr::delete_source()
   return ret;
 }
 
-int ObLogArchiveSourceMgr::add_service_source(const int64_t recovery_until_ts_ns,
+int ObLogArchiveSourceMgr::add_service_source(const palf::SCN &recovery_until_scn,
     const ObAddr &addr)
 {
   int ret = OB_SUCCESS;
@@ -92,7 +92,7 @@ int ObLogArchiveSourceMgr::add_service_source(const int64_t recovery_until_ts_ns
   return ret;
 }
 
-int ObLogArchiveSourceMgr::add_location_source(const int64_t recovery_until_ts_ns,
+int ObLogArchiveSourceMgr::add_location_source(const palf::SCN &recovery_until_scn,
     const ObString &archive_dest)
 {
   int ret = OB_SUCCESS;
@@ -101,9 +101,9 @@ int ObLogArchiveSourceMgr::add_location_source(const int64_t recovery_until_ts_n
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLogArchiveSourceMgr not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(archive_dest.empty() || recovery_until_ts_ns <= 0)) {
+  } else if (OB_UNLIKELY(archive_dest.empty() || !recovery_until_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(archive_dest), K(recovery_until_ts_ns));
+    LOG_WARN("invalid argument", K(ret), K(archive_dest), K(recovery_until_scn));
   } else if (OB_FAIL(dest.set(archive_dest.ptr()))) {
     // use backup dest to manage oss key
     LOG_WARN("set backup dest failed", K(ret), K(archive_dest));
@@ -114,17 +114,17 @@ int ObLogArchiveSourceMgr::add_location_source(const int64_t recovery_until_ts_n
                                 OB_DEFAULT_LOG_ARCHIVE_SOURCE_ID,
                                 ObLogArchiveSourceType::LOCATION,
                                 ObString(dest_buf),
-                                recovery_until_ts_ns);
+                                recovery_until_scn);
     if (OB_FAIL(table_operator_.insert_source(item))) {
       LOG_WARN("table_operator_ insert_source failed", K(ret), K(item));
     } else {
-      LOG_INFO("add location source succ", K(recovery_until_ts_ns), K(archive_dest));
+      LOG_INFO("add location source succ", K(recovery_until_scn), K(archive_dest));
     }
   }
   return ret;
 }
 
-int ObLogArchiveSourceMgr::add_rawpath_source(const int64_t recovery_until_ts_ns, const DirArray &array)
+int ObLogArchiveSourceMgr::add_rawpath_source(const palf::SCN &recovery_until_scn, const DirArray &array)
 {
   return OB_NOT_SUPPORTED;
 }

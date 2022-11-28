@@ -977,7 +977,7 @@ alias_file_name ="ob_system_variable_alias.h"
 sys_var_class_type_head_file_name = "ob_sys_var_class_type.h"
 sys_var_fac_head_file_name = "ob_system_variable_factory.h"
 sys_var_fac_cpp_file_name = "ob_system_variable_factory.cpp"
-#sys_vars_dict_script_file_name = "../../../tools/upgrade/sys_vars_dict.py"
+sys_vars_dict_script_file_name = "../../../tools/upgrade/sys_vars_dict.py"
 
 (json_Dict, list_sorted_by_name, list_sorted_by_id) = parse_json(json_file_name)
 
@@ -989,5 +989,5 @@ make_sys_var_class_type_h(pdir, sys_var_class_type_head_file_name, list_sorted_b
 make_sys_var_h(pdir, sys_var_fac_head_file_name, list_sorted_by_id)
 make_sys_var_cpp(pdir, sys_var_fac_cpp_file_name, list_sorted_by_name, list_sorted_by_id)
 
-#gen_sys_vars_dict_script_for_upgrade(sys_vars_dict_script_file_name, list_sorted_by_id)
-#gen_upgrade_script()
+gen_sys_vars_dict_script_for_upgrade(sys_vars_dict_script_file_name, list_sorted_by_id)
+gen_upgrade_script()

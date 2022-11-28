@@ -80,19 +80,21 @@ public:
   virtual ~ObTableDeleteOp() {}
 protected:
   virtual int inner_open() override;
+  virtual int inner_get_next_row() override;
   virtual int inner_rescan() override;
   virtual int inner_close() override;
 protected:
   int inner_open_with_das();
   int delete_row_to_das();
-  virtual int write_rows_post_proc(int last_errno);
+  int del_rows_post_proc();
   int calc_tablet_loc(const ObDelCtDef &del_ctdef,
                       ObDelRtDef &del_rtdef,
                       ObDASTabletLoc *&tablet_loc);
   int open_table_for_each();
   int close_table_for_each();
+  int get_next_row_from_child();
+  int do_instead_of_trigger_delete();
   int check_delete_affected_row();
-  virtual int write_row_to_das_buffer() override;
 protected:
   DelRtDef2DArray del_rtdefs_;  //see the comment of DelCtDef2DArray
   ObErrLogService err_log_service_;

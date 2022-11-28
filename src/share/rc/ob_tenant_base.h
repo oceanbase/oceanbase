@@ -21,7 +21,6 @@
 #include "lib/thread/threads.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/allocator/ob_malloc.h"
-#include "share/ob_tenant_role.h"//ObTenantRole
 
 namespace oceanbase
 {
@@ -154,8 +153,6 @@ namespace detector
       storage::ObStorageLogger*,                   \
       storage::ObTenantMetaMemMgr*,                  \
       transaction::ObTransService*,                  \
-      logservice::coordinator::ObLeaderCoordinator*, \
-      logservice::coordinator::ObFailureDetector*,   \
       logservice::ObLogService*,                     \
       storage::ObLSService*,                         \
       storage::ObTenantCheckpointSlogHandler*,       \
@@ -172,6 +169,8 @@ namespace detector
       rootserver::ObRecoveryLSService*,              \
       rootserver::ObRestoreService*,                 \
       storage::ObLSRestoreService*,                  \
+      logservice::coordinator::ObLeaderCoordinator*, \
+      logservice::coordinator::ObFailureDetector*,   \
       storage::ObTenantSSTableMergeInfoMgr*,         \
       storage::ObLobManager*,                        \
       share::ObGlobalAutoIncService*,                \
@@ -208,12 +207,6 @@ namespace detector
 
 // 获取租户ID
 #define MTL_ID() share::ObTenantEnv::get_tenant_local()->id()
-// 获取是否为主租户
-#define MTL_IS_PRIMARY_TENANT() share::ObTenantEnv::get_tenant()->is_primary_tenant()
-// 更新租户role
-#define MTL_SET_TENANT_ROLE(tenant_role) share::ObTenantEnv::get_tenant()->set_tenant_role(tenant_role)
-// 获取租户role
-#define MTL_GET_TENANT_ROLE() share::ObTenantEnv::get_tenant()->get_tenant_role()
 // 获取租户模块
 #define MTL_CTX() (share::ObTenantEnv::get_tenant())
 // 获取租户初始化参数,仅在初始化时使用
@@ -346,28 +339,6 @@ public:
 
   const ObTenantModuleInitCtx *get_mtl_init_ctx() const { return mtl_init_ctx_; }
 
-  void set_tenant_role(const share::ObTenantRole::Role tenant_role_value)
-  {
-    (void)ATOMIC_STORE(&tenant_role_value_, tenant_role_value);
-    return ;
-  }
-
-  share::ObTenantRole::Role get_tenant_role() const
-  {
-    return ATOMIC_LOAD(&tenant_role_value_);
-  }
-
- /**
-  * @description:
-  *    Only when it is clear that it is a standby/restore tenant, it returns not primary tenant.
-  *    The correct value can be obtained after the tenant role loaded in subsequent retry.
-  * @return whether allow strong consistency read write
-  */
-  bool is_primary_tenant()
-  {
-    return share::is_primary_tenant(ATOMIC_LOAD(&tenant_role_value_));
-  }
-
   template<class T>
   T get() { return inner_get(Identity<T>()); }
 
@@ -438,7 +409,6 @@ protected:
   bool inited_;
   bool created_;
   share::ObTenantModuleInitCtx *mtl_init_ctx_;
-  share::ObTenantRole::Role tenant_role_value_;
 
 private:
   common::hash::ObHashSet<int64_t> tg_set_;
@@ -460,20 +430,12 @@ public:
   static void set_tenant(ObTenantBase *ctx);
   static inline ObTenantBase *&get_tenant()
   {
-#ifdef ENABLE_INITIAL_EXEC_TLS_MODEL
     static thread_local ObTenantBase* __attribute__((tls_model("initial-exec"))) ctx = nullptr;
-#else
-    static thread_local ObTenantBase* __attribute__((tls_model("local-dynamic"))) ctx = nullptr;
-#endif
     return ctx;
   }
   static inline ObTenantBase *get_tenant_local()
   {
-#ifdef ENABLE_INITIAL_EXEC_TLS_MODEL
     static thread_local ObTenantBase __attribute__((tls_model("initial-exec"))) ctx(OB_INVALID_TENANT_ID);
-#else
-    static thread_local ObTenantBase __attribute__((tls_model("local-dynamic"))) ctx(OB_INVALID_TENANT_ID);
-#endif
     return &ctx;
   }
   template<class T>

@@ -62,19 +62,17 @@ int ObDedupQueue::init(int32_t thread_num /*= DEFAULT_THREAD_NUM*/,
                        const int64_t task_map_size /*= TASK_MAP_SIZE*/,
                        const int64_t total_mem_limit /*= TOTAL_LIMIT*/,
                        const int64_t hold_mem_limit /*= HOLD_LIMIT*/,
-                       const int64_t page_size /*= PAGE_SIZE*/,
-                       const uint64_t tenant_id /*= OB_SERVER_TENANT_ID*/,
-                       const lib::ObLabel &label /*= "DedupQueue"*/)
+                       const int64_t page_size /*= PAGE_SIZE*/)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
   } else if (thread_num <= 0 || thread_num > MAX_THREAD_NUM
              || total_mem_limit <= 0 || hold_mem_limit <= 0
-             || page_size <= 0 || OB_INVALID_TENANT_ID == tenant_id) {
+             || page_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", K(thread_num), K(queue_size),
-               K(total_mem_limit), K(hold_mem_limit), K(page_size), K(tenant_id));
+               K(total_mem_limit), K(hold_mem_limit), K(page_size));
   } else if (OB_FAIL(task_queue_sync_.init(ObWaitEventIds::DEDUP_QUEUE_COND_WAIT))) {
     COMMON_LOG(WARN, "fail to init task queue sync cond, ", K(ret));
   } else if (OB_FAIL(work_thread_sync_.init(ObWaitEventIds::DEFAULT_COND_WAIT))) {
@@ -84,18 +82,14 @@ int ObDedupQueue::init(int32_t thread_num /*= DEFAULT_THREAD_NUM*/,
     thread_num_ = thread_num;
     work_thread_num_ = thread_num;
     set_thread_count(thread_num);
-
-    if (OB_SUCCESS != (ret = allocator_.init(page_size, label, tenant_id, total_mem_limit))) {
-      COMMON_LOG(WARN, "allocator init fail", K(page_size), K(label), K(tenant_id),
-                K(total_mem_limit), K(ret));
+    if (OB_SUCCESS != (ret = allocator_.init(total_mem_limit, hold_mem_limit, page_size))) {
+      COMMON_LOG(WARN, "allocator init fail", K(total_mem_limit), K(hold_mem_limit), K(page_size),
+                 K(ret));
     } else if (OB_SUCCESS != (ret = task_map_.create(task_map_size, &hash_allocator_,
-                                                      ObModIds::OB_HASH_BUCKET_TASK_MAP))) {
+                                                     ObModIds::OB_HASH_BUCKET_TASK_MAP))) {
       COMMON_LOG(WARN, "task_map create fail", K(ret));
-    } else if (OB_SUCCESS != (ret = task_queue_.init(queue_size, &allocator_))) {
+    } else if (OB_SUCCESS != (ret = task_queue_.init(queue_size))) {
       COMMON_LOG(WARN, "task_queue init fail", K(ret));
-    }
-
-    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(start())) {
       COMMON_LOG(WARN, "start thread fail", K(ret));
     } else {

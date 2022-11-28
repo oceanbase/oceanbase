@@ -476,7 +476,7 @@ int ObAdminDumpBackupDataUtil::read_backup_info_file(const common::ObString &bac
 
 /* ObAdminDumpBackupDataExecutor */
 
-ObAdminDumpBackupDataExecutor::ObAdminDumpBackupDataExecutor() : offset_(), length_(), file_type_(), is_quiet_(false), 
+ObAdminDumpBackupDataExecutor::ObAdminDumpBackupDataExecutor() : offset_(), length_(), file_type_(), is_quiet_(false),
     allocator_()
 {
   MEMSET(backup_path_, 0, common::OB_MAX_URI_LENGTH);
@@ -499,8 +499,8 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
     OB_LOGGER.set_log_level("ERROR");
   } else {
     OB_LOGGER.set_log_level("INFO");
-  } 
-  
+  }
+
   if (OB_FAIL(ret)) {
   } else if (check_exist_) {
     // ob_admin dump_backup -d'xxxxx' -c
@@ -609,7 +609,7 @@ int ObAdminDumpBackupDataExecutor::do_check_exist_()
   if (OB_SUCC(ret) && !is_exist) {
     if (OB_FAIL(check_dir_exist_(backup_path_, storage_info_, is_exist))) {
       STORAGE_LOG(WARN, "fail to check dir exist", K(ret));
-    } 
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -621,7 +621,7 @@ int ObAdminDumpBackupDataExecutor::do_check_exist_()
 }
 
 int ObAdminDumpBackupDataExecutor::check_dir_exist_(
-    const char *backup_path, const char *storage_info_str, bool &is_exist) 
+    const char *backup_path, const char *storage_info_str, bool &is_exist)
 {
   int ret = OB_SUCCESS;
   is_exist = false;
@@ -635,7 +635,7 @@ int ObAdminDumpBackupDataExecutor::check_dir_exist_(
   } else if (!is_empty_dir) {
     is_exist = true;
   }
-  return ret; 
+  return ret;
 }
 
 int ObAdminDumpBackupDataExecutor::check_file_exist_(const char *backup_path, const char *storage_info_str)
@@ -871,9 +871,9 @@ int ObAdminDumpBackupDataExecutor::print_usage_()
   printf("\tob_admin dump_backup -f/home/admin/macro_block_1.0 -o1024 -l2048\n");
   printf("  dump data with -s: \n");
   printf("\tob_admin dump_backup -d'oss://home/admin/backup_info' "
-         "-s'host=xxx.com&access_id=111&access_key=222'\n");
+         "-s'host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&access_key=222'\n");
   printf("\tob_admin dump_backup -d'cos://home/admin/backup_info' "
-         "-s'host=xxx.com&access_id=111&access_key=222&appid=333'\n");
+         "-s'host=http://cos.ap-nanjing.myqcloud.com&access_id=111&access_key=222&appid=333'\n");
   return ret;
 }
 
@@ -2061,8 +2061,8 @@ int ObAdminDumpBackupDataExecutor::dump_backup_tablet_meta_(const backup::ObBack
   PrintHelper::print_dump_line("tablet_meta:tablet_id", tablet_meta.tablet_meta_.tablet_id_.id());
   PrintHelper::print_dump_line("tablet_meta:data_tablet_id", tablet_meta.tablet_meta_.data_tablet_id_.id());
   PrintHelper::print_dump_line("tablet_meta:ref_tablet_id", tablet_meta.tablet_meta_.ref_tablet_id_.id());
-  PrintHelper::print_dump_line("tablet_meta:clog_checkpoint_ts", tablet_meta.tablet_meta_.clog_checkpoint_ts_);
-  PrintHelper::print_dump_line("tablet_meta:ddl_checkpoint_ts", tablet_meta.tablet_meta_.ddl_checkpoint_ts_);
+  PrintHelper::print_dump_line("tablet_meta:clog_checkpoint_scn", tablet_meta.tablet_meta_.clog_checkpoint_scn_.get_val_for_lsn_allocator());
+  PrintHelper::print_dump_line("tablet_meta:ddl_checkpoint_scn", tablet_meta.tablet_meta_.ddl_checkpoint_scn_.get_val_for_lsn_allocator());
   PrintHelper::print_dump_line("tablet_meta:tablet_status", tablet_meta.tablet_meta_.tx_data_.tablet_status_);
   PrintHelper::print_end_line();
   return ret;
@@ -2238,8 +2238,8 @@ int ObAdminDumpBackupDataExecutor::dump_backup_set_info(const share::ObBackupSet
   PrintHelper::print_dump_line("passwd", backup_set_info.passwd_.ptr());
   PrintHelper::print_dump_line("file_status", backup_set_info.file_status_);
   PrintHelper::print_dump_line("backup_path", backup_set_info.backup_path_.ptr());
-  PrintHelper::print_dump_line("start_replay_scn", backup_set_info.start_replay_scn_);
-  PrintHelper::print_dump_line("min_restore_scn", backup_set_info.min_restore_scn_);
+  PrintHelper::print_dump_line("start_replay_scn", backup_set_info.start_replay_scn_.get_val_for_lsn_allocator());
+  PrintHelper::print_dump_line("min_restore_scn", backup_set_info.min_restore_scn_.get_val_for_lsn_allocator());
   PrintHelper::print_dump_line("tenant_compatible", backup_set_info.tenant_compatible_);
   PrintHelper::print_dump_line("backup_compatible", backup_set_info.backup_compatible_);
   PrintHelper::print_dump_line("meta_turn_id", backup_set_info.meta_turn_id_);
@@ -2254,7 +2254,7 @@ int ObAdminDumpBackupDataExecutor::dump_archive_round_start_file_(const share::O
   PrintHelper::print_dump_title("archive round start info");
   PrintHelper::print_dump_line("dest_id", round_start_file.dest_id_);
   PrintHelper::print_dump_line("round_id", round_start_file.round_id_);
-  PrintHelper::print_dump_line("start_scn", round_start_file.start_scn_);
+  PrintHelper::print_dump_line("start_scn", round_start_file.start_scn_.get_val_for_lsn_allocator());
   PrintHelper::print_dump_line("base_piece_id", round_start_file.base_piece_id_);
   PrintHelper::print_dump_line("piece_switch_interval", round_start_file.piece_switch_interval_);
   PrintHelper::print_end_line();
@@ -2267,8 +2267,8 @@ int ObAdminDumpBackupDataExecutor::dump_archive_round_end_file_(const share::ObR
   PrintHelper::print_dump_title("archive round end info");
   PrintHelper::print_dump_line("dest_id", round_end_file.dest_id_);
   PrintHelper::print_dump_line("round_id", round_end_file.round_id_);
-  PrintHelper::print_dump_line("start_scn", round_end_file.start_scn_);
-  PrintHelper::print_dump_line("checkpoint_scn", round_end_file.checkpoint_scn_);
+  PrintHelper::print_dump_line("start_scn", round_end_file.start_scn_.get_val_for_lsn_allocator());
+  PrintHelper::print_dump_line("checkpoint_scn", round_end_file.checkpoint_scn_.get_val_for_lsn_allocator());
   PrintHelper::print_dump_line("base_piece_id", round_end_file.base_piece_id_);
   PrintHelper::print_dump_line("piece_switch_interval", round_end_file.piece_switch_interval_);
   PrintHelper::print_end_line();
@@ -2282,7 +2282,7 @@ int ObAdminDumpBackupDataExecutor::dump_archive_piece_start_file_(const share::O
   PrintHelper::print_dump_line("dest_id", piece_start_file.dest_id_);
   PrintHelper::print_dump_line("round_id", piece_start_file.round_id_);
   PrintHelper::print_dump_line("piece_id", piece_start_file.piece_id_);
-  PrintHelper::print_dump_line("start_scn", piece_start_file.start_scn_);
+  PrintHelper::print_dump_line("start_scn", piece_start_file.start_scn_.get_val_for_lsn_allocator());
   PrintHelper::print_end_line();
   return ret;
 }
@@ -2294,7 +2294,7 @@ int ObAdminDumpBackupDataExecutor::dump_archive_piece_end_file_(const share::ObP
   PrintHelper::print_dump_line("dest_id", piece_end_file.dest_id_);
   PrintHelper::print_dump_line("round_id", piece_end_file.round_id_);
   PrintHelper::print_dump_line("piece_id", piece_end_file.piece_id_);
-  PrintHelper::print_dump_line("end_scn", piece_end_file.end_scn_);
+  PrintHelper::print_dump_line("end_scn", piece_end_file.end_scn_.get_val_for_lsn_allocator());
   PrintHelper::print_end_line();
   return ret;
 }
@@ -2309,8 +2309,8 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_archive_piece_infos_file_(const s
   PrintHelper::print_dump_line("incarnation", piece_infos_file.incarnation_);
   PrintHelper::print_dump_line("dest_no", piece_infos_file.dest_no_);
   PrintHelper::print_dump_line("compatible", static_cast<int64_t>(piece_infos_file.compatible_.version_));
-  PrintHelper::print_dump_line("start_scn", piece_infos_file.start_scn_);
-  PrintHelper::print_dump_line("end_scn", piece_infos_file.end_scn_);
+  PrintHelper::print_dump_line("start_scn", piece_infos_file.start_scn_.get_val_for_lsn_allocator());
+  PrintHelper::print_dump_line("end_scn", piece_infos_file.end_scn_.get_val_for_lsn_allocator());
   PrintHelper::print_dump_line("path", piece_infos_file.path_.ptr());
   ARRAY_FOREACH_X(piece_infos_file.his_frozen_pieces_, i , cnt, OB_SUCC(ret)) {
     const ObTenantArchivePieceAttr &piece = piece_infos_file.his_frozen_pieces_.at(i);
@@ -2337,10 +2337,10 @@ int ObAdminDumpBackupDataExecutor::dump_one_piece_(const share::ObTenantArchiveP
   PrintHelper::print_dump_line("incarnation", piece.incarnation_);
   PrintHelper::print_dump_line("dest_no", piece.dest_no_);
   PrintHelper::print_dump_line("file_count", piece.file_count_);
-  PrintHelper::print_dump_line("start_scn", piece.start_scn_);
-  PrintHelper::print_dump_line("checkpoint_scn", piece.checkpoint_scn_);
-  PrintHelper::print_dump_line("max_scn", piece.max_scn_);
-  PrintHelper::print_dump_line("end_scn", piece.end_scn_);
+  PrintHelper::print_dump_line("start_scn", piece.start_scn_.get_val_for_lsn_allocator());
+  PrintHelper::print_dump_line("checkpoint_scn", piece.checkpoint_scn_.get_val_for_lsn_allocator());
+  PrintHelper::print_dump_line("max_scn", piece.max_scn_.get_val_for_lsn_allocator());
+  PrintHelper::print_dump_line("end_scn", piece.end_scn_.get_val_for_lsn_allocator());
   PrintHelper::print_dump_line("compatible", static_cast<int64_t>(piece.compatible_.version_));
   PrintHelper::print_dump_line("input_bytes", piece.input_bytes_);
   PrintHelper::print_dump_line("output_bytes", piece.output_bytes_);
@@ -2368,8 +2368,8 @@ int ObAdminDumpBackupDataExecutor::dump_archive_piece_inner_placeholder_file_(co
   PrintHelper::print_dump_line("dest_id", piece_inner_placeholder.dest_id_);
   PrintHelper::print_dump_line("round_id", piece_inner_placeholder.round_id_);
   PrintHelper::print_dump_line("piece_id", piece_inner_placeholder.piece_id_);
-  PrintHelper::print_dump_line("start_scn", piece_inner_placeholder.start_scn_);
-  PrintHelper::print_dump_line("checkpoint_scn", piece_inner_placeholder.checkpoint_scn_);
+  PrintHelper::print_dump_line("start_scn", piece_inner_placeholder.start_scn_.get_val_for_lsn_allocator());
+  PrintHelper::print_dump_line("checkpoint_scn", piece_inner_placeholder.checkpoint_scn_.get_val_for_lsn_allocator());
   PrintHelper::print_end_line();
   return ret;
 }
@@ -2382,7 +2382,7 @@ int ObAdminDumpBackupDataExecutor::dump_archive_single_ls_info_file_(const share
   PrintHelper::print_dump_line("round_id", single_ls_info_file.round_id_);
   PrintHelper::print_dump_line("piece_id", single_ls_info_file.piece_id_);
   PrintHelper::print_dump_line("ls_id", single_ls_info_file.ls_id_.id());
-  PrintHelper::print_dump_line("checkpoint_scn", single_ls_info_file.checkpoint_scn_);
+  PrintHelper::print_dump_line("checkpoint_scn", single_ls_info_file.checkpoint_scn_.get_val_for_lsn_allocator());
   PrintHelper::print_dump_line("max_lsn", single_ls_info_file.max_lsn_);
   ARRAY_FOREACH_X(single_ls_info_file.filelist_, i , cnt, OB_SUCC(ret)) {
     const ObSingleLSInfoDesc::OneFile &one_file = single_ls_info_file.filelist_.at(i);
@@ -2451,11 +2451,11 @@ int ObAdminDumpBackupDataExecutor::print_tablet_autoinc_seq_(const share::ObTabl
 }
 
 int ObAdminDumpBackupDataExecutor::get_tenant_backup_set_infos_path_(
-    const share::ObBackupSetDesc &backup_set_dir_name, 
+    const share::ObBackupSetDesc &backup_set_dir_name,
     share::ObBackupPath &target_path)
 {
   int ret = OB_SUCCESS;
-  target_path.reset(); 
+  target_path.reset();
   if (OB_FAIL(target_path.init(backup_path_))) {
     STORAGE_LOG(WARN, "fail to init tmp_path", K(ret));
   } else if (OB_FAIL(target_path.join_backup_set(backup_set_dir_name))) {
@@ -2527,7 +2527,7 @@ int ObAdminDumpBackupDataExecutor::check_tenant_backup_path_type_(const char *da
 }
 
 int ObAdminDumpBackupDataExecutor::build_rounds_info_(
-    const share::ObPieceKey &first_piece, 
+    const share::ObPieceKey &first_piece,
     const common::ObIArray<share::ObTenantArchivePieceAttr> &pieces,
     common::ObIArray<share::ObTenantArchiveRoundAttr> &rounds)
 {
@@ -2561,7 +2561,7 @@ int ObAdminDumpBackupDataExecutor::build_rounds_info_(
         round.compatible_ = current_piece.compatible_;
         round.base_piece_id_ = current_piece.key_.piece_id_;
         round.used_piece_id_ = current_piece.key_.piece_id_;
-        round.piece_switch_interval_ = current_piece.end_scn_ - current_piece.start_scn_;
+        round.piece_switch_interval_ = current_piece.end_scn_.convert_to_ts() - current_piece.start_scn_.convert_to_ts();
         round.path_ = current_piece.path_;
 
         if (current_piece.is_active()) {
@@ -2653,7 +2653,7 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_archive_path_()
     }
     PrintHelper::print_end_line();
   }
-  
+
   return ret;
 }
 

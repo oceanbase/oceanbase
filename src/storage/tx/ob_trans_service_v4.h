@@ -72,7 +72,7 @@ int get_read_store_ctx(const ObTxReadSnapshot &snapshot,
                        const bool read_latest,
                        const int64_t lock_timeout,
                        ObStoreCtx &store_ctx);
-int get_read_store_ctx(const int64_t snapshot_version,
+int get_read_store_ctx(const palf::SCN snapshot_version,
                        const int64_t lock_timeout,
                        ObStoreCtx &store_ctx);
 int get_write_store_ctx(ObTxDesc &tx,
@@ -103,19 +103,18 @@ int handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                               const int status,
                               const ObAddr &receiver_addr,
                               const int64_t request_id,
-                              const int64_t private_data);
+                              const palf::SCN &private_data);
 int handle_trans_keepalive(const ObTxKeepaliveMsg &msg, obrpc::ObTransRpcResult &result);
-int handle_trans_keepalive_response(const ObTxKeepaliveRespMsg &msg, obrpc::ObTransRpcResult &result);
 int handle_tx_batch_req(int type, const char* buf, int32_t size, const bool need_check_leader = true);
 int refresh_location_cache(const share::ObLSID ls);
 int handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay);
 int handle_tx_commit_result(const ObTransID &tx_id,
                             const int result,
-                            const int64_t commit_version = -1);
+                            const palf::SCN commit_version = palf::SCN());
 
 ObTxCtxMgr &get_tx_ctx_mgr() { return tx_ctx_mgr_; }
 
-int get_min_uncommit_tx_prepare_version(const share::ObLSID& ls_id, int64_t &min_prepare_version);
+int get_min_uncommit_tx_prepare_version(const share::ObLSID& ls_id, palf::SCN &min_prepare_version);
 
 int kill_all_tx(const share::ObLSID &ls_id, const KillTransArg &arg,
     bool &is_all_tx_cleaned_up);
@@ -190,10 +189,10 @@ int get_tx_ctx_(const share::ObLSID &ls_id,
 
 int revert_tx_ctx_(ObLS *ls, ObPartTransCtx *ctx);
 int revert_tx_ctx_(ObPartTransCtx *ctx);
-int validate_snapshot_version_(const int64_t snapshot,
+int validate_snapshot_version_(const palf::SCN snapshot,
                                const int64_t expire_ts,
                                ObLS &ls);
-int check_replica_readable_(const int64_t snapshot,
+int check_replica_readable_(const palf::SCN snapshot,
                             const bool elr,
                             const ObTxReadSnapshot::SRC src,
                             const share::ObLSID &ls_id,
@@ -201,14 +200,14 @@ int check_replica_readable_(const int64_t snapshot,
                             ObLS &ls);
 int build_tx_commit_msg_(const ObTxDesc &tx, ObTxCommitMsg &msg);
 int abort_participants_(const ObTxDesc &tx_desc);
-int acquire_local_snapshot_(const share::ObLSID &ls_id, int64_t &snapshot);
+int acquire_local_snapshot_(const share::ObLSID &ls_id, palf::SCN &snapshot);
 int sync_acquire_global_snapshot_(ObTxDesc &tx,
                                   const int64_t expire_ts,
-                                  int64_t &snapshot,
+                                  palf::SCN &snapshot,
                                   int64_t &uncertain_bound);
 int acquire_global_snapshot__(const int64_t expire_ts,
                               const int64_t gts_ahead,
-                              int64_t &snapshot,
+                              palf::SCN &snapshot,
                               int64_t &uncertain_bound,
                               ObFunction<bool()> interrupt_checker);
 int batch_post_tx_msg_(ObTxRollbackSPMsg &msg, const ObIArray<ObTxLSEpochPair> &pl);
@@ -223,17 +222,17 @@ void handle_orphan_2pc_msg_(const ObTxMsg &msg, const bool need_check_leader);
 
 int update_max_read_ts_(const uint64_t tenant_id,
                         const share::ObLSID &lsid,
-                        const int64_t ts);
+                        const palf::SCN ts);
 int do_commit_tx_(ObTxDesc &tx,
                   const int64_t expire_ts,
                   ObITxCallback &cb,
-                  int64_t &commit_version);
+                  palf::SCN &commit_version);
 int do_commit_tx_slowpath_(ObTxDesc &tx, const int64_t expire_ts);
 int register_commit_retry_task_(ObTxDesc &tx, const int64_t max_delay = INT64_MAX);
 int unregister_commit_retry_task_(ObTxDesc &tx);
 int handle_tx_commit_result_(ObTxDesc &tx,
                              const int result,
-                             const int64_t commit_version = -1);
+                             const palf::SCN commit_version = palf::SCN());
 int decide_tx_commit_info_(ObTxDesc &tx, ObTxPart *&coord);
 int local_ls_commit_tx_(const ObTransID &tx_id,
                         const share::ObLSID &coord,
@@ -241,11 +240,11 @@ int local_ls_commit_tx_(const ObTransID &tx_id,
                         const int64_t &expire_ts,
                         const common::ObString &app_trace_info,
                         const int64_t &request_id,
-                        int64_t &commit_version);
+                        palf::SCN &commit_version);
 int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                 const ObTransID &tx_id,
                                 int &state,
-                                int64_t &commit_version);
+                                palf::SCN &commit_version);
 int gen_trans_id_(ObTransID &trans_id);
 bool commit_need_retry_(const int ret);
 // for xa
@@ -315,7 +314,7 @@ int get_tx_table_guard_(ObLS *ls,
 void fetch_cflict_tx_ids_from_mem_ctx_to_desc_(memtable::ObMvccAccessCtx &acc_ctx);
 int wait_follower_readable_(ObLS &ls,
                             const int64_t expire_ts,
-                            const int64_t snapshot);
+                            const palf::SCN snapshot);
 // include tx api refacored for future
 public:
 #include "ob_tx_api.h"

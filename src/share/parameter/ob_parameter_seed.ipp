@@ -73,14 +73,14 @@ DEF_INT(rdma_io_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,8]",
 DEF_INT(tenant_task_queue_size, OB_CLUSTER_PARAMETER, "65536", "[1024,]",
         "the size of the task queue for each tenant. Range: [1024,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-_DEF_PARAMETER_SCOPE_CHECKER_EASY(private, Capacity, memory_limit, OB_CLUSTER_PARAMETER, "0",
+DEF_CAP_WITH_CHECKER(memory_limit, OB_CLUSTER_PARAMETER, "0",
         common::ObConfigMemoryLimitChecker, "[0M,)",
         "the size of the memory reserved for internal use(for testing purpose), 0 means follow memory_limit_percentage. Range: 0, [4G,).",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(rootservice_memory_limit, OB_CLUSTER_PARAMETER, "2G", "[2G,)",
         "max memory size which can be used by rs tenant The default value is 2G. Range: [2G,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-_DEF_PARAMETER_SCOPE_RANGE_EASY(private, Capacity, system_memory, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
+DEF_CAP(system_memory, OB_CLUSTER_PARAMETER, "30G", "[0M,)",
         "the memory reserved for internal use which cannot be allocated to any outer-tenant, "
         "and should be determined to guarantee every server functions normally. Range: [0M,)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -96,7 +96,7 @@ DEF_TIME(trace_log_sampling_interval, OB_CLUSTER_PARAMETER, "10ms", "[0ms,]",
         "logging info regarding ‘slow query’ and ‘white list’ will be printed out. "
         "Range: [0ms,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "1s", "[1ms,]",
+DEF_TIME(trace_log_slow_query_watermark, OB_CLUSTER_PARAMETER, "100ms", "[1ms,]",
         "the threshold of execution time (in milliseconds) of a query beyond "
         "which it is considered to be a \\'slow query\\'. Range: [1ms,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -359,7 +359,7 @@ DEF_INT(default_progressive_merge_num, OB_TENANT_PARAMETER, "0", "[0,)",
          "default progressive_merge_num when tenant create table"
          "Range:[0,)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(_parallel_min_message_pool, OB_TENANT_PARAMETER, "64M", "[16M, 8G]",
+DEF_CAP(_parallel_min_message_pool, OB_TENANT_PARAMETER, "400M", "[16M, 8G]",
         "DTL message buffer pool reserve the mininum size after extend the size. Range: [16M,8G]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(_parallel_server_sleep_time, OB_TENANT_PARAMETER, "1", "[0, 2000]",
@@ -457,12 +457,14 @@ DEF_TIME(tablet_meta_table_check_interval, OB_CLUSTER_PARAMETER, "30m", "[1m,)",
          "the time interval that observer compares tablet meta table with local ls replica info "
          "and make adjustments to ensure the correctness of tablet meta table. Range: [1m,+∞)",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "4.1.0.0", "the min observer version",
-        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(compatible, OB_TENANT_PARAMETER, "4.1.0.0", "compatible version for persisted data",
+DEF_STR(min_observer_version, OB_CLUSTER_PARAMETER, "4.0.0.0", "the min observer version",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_ddl, OB_CLUSTER_PARAMETER, "True", "specifies whether DDL operation is turned on. "
          "Value:  True:turned on;  False: turned off",
+         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(global_index_build_single_replica_timeout, OB_CLUSTER_PARAMETER, "48h", "[1h,)",
+         "build single replica task timeout "
+         "when rootservice schedule to build global index. Range: [1h,+∞)",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_major_freeze, OB_CLUSTER_PARAMETER, "True", "specifies whether major_freeze function is turned on. "
          "Value:  True:turned on;  False: turned off",
@@ -637,7 +639,7 @@ DEF_TIME(clog_sync_time_warn_threshold, OB_CLUSTER_PARAMETER, "100ms", "[1ms, 10
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(row_compaction_update_limit, OB_CLUSTER_PARAMETER, "6", "[1, 6400]",
         "maximum update count before trigger row compaction. "
-        "Range: [1, 6400]",
+        "Range: [1, 64]",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(ignore_replay_checksum_error, OB_CLUSTER_PARAMETER, "False",
          "specifies whether error raised from the memtable replay checksum validation can be ignored. "
@@ -862,12 +864,6 @@ ERRSIM_DEF_INT(errsim_max_backup_retry_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "max backup retry count in errsim mode"
         "Range: [0,) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
-ERRSIM_DEF_TIME(errsim_max_backup_meta_retry_time_interval, OB_CLUSTER_PARAMETER, "10s", "[1s,5m]",
-        "max backup meta retry time interval in errsim mode"
-        "Range: [1s, 5m]",
-        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 ERRSIM_DEF_INT(errsim_tablet_batch_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "batch tablet count when in errsim mode"
         "Range: [0,) in integer",
@@ -923,11 +919,6 @@ ERRSIM_DEF_TIME(trigger_auto_backup_delete_interval, OB_CLUSTER_PARAMETER, "1h",
          "trigger auto backup delete interval."
          "The default value is 1h. Range: [1s,)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
-ERRSIM_DEF_INT(errsim_max_restore_retry_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
-        "max restore retry count in errsim mode"
-        "Range: [0,) in integer",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 #ifdef TRANS_MODULE_TEST
 DEF_INT(module_test_trx_memory_errsim_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100]",
@@ -1180,6 +1171,10 @@ DEF_INT(connection_control_max_connection_delay, OB_TENANT_PARAMETER, "214748364
         "The maximum delay in milliseconds for server response to failed connection attempts, "
         "if connection_control_failed_connections_threshold is greater than zero",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ob_enable_px_for_inner_sql, OB_CLUSTER_PARAMETER, "true",
+         "specifies whether inner sql uses px. "
+         "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(ob_proxy_readonly_transaction_routing_policy, OB_TENANT_PARAMETER, "false",
          "Proxy route policy for readonly sql: whether regard begining read only stmts as in transaction",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1293,25 +1288,3 @@ DEF_STR_LIST(sanity_whitelist, OB_CLUSTER_PARAMETER, "", "vip who wouldn't leadi
 DEF_TIME(_advance_checkpoint_timeout, OB_CLUSTER_PARAMETER, "30m", "[10s,180m]",
          "the timeout for backup/migrate advance checkpoint Range: [10s,180m]",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-ERRSIM_DEF_INT(errsim_migration_tablet_id, OB_CLUSTER_PARAMETER, "0", "[0,)",
-        "the tablet id that migration want to insert error"
-        "Range: [0,) in integer",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-ERRSIM_DEF_INT(errsim_max_ddl_sstable_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
-        "max ddl sstable count in errsim mode"
-        "Range: [0,) in integer",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-ERRSIM_DEF_INT(errsim_max_ddl_block_count, OB_CLUSTER_PARAMETER, "0", "[0,)",
-        "max ddl block count in errsim mode"
-        "Range: [0,) in integer",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-ERRSIM_DEF_STR(errsim_migration_src_server_addr, OB_CLUSTER_PARAMETER, "",
-        "the server dest ls choose as src when in errsim mode",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
-DEF_BOOL(enable_cgroup, OB_CLUSTER_PARAMETER, "True",
-         "when set to false, cgroup will not init; when set to true but cgroup root dir is not ready, print ERROR",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
-DEF_TIME(_ob_plan_cache_auto_flush_interval, OB_CLUSTER_PARAMETER, "0s", "[0s,)",
-         "time interval for auto periodic flush plan cache. Range: [0s, +∞)",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

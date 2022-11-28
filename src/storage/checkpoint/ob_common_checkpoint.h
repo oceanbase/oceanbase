@@ -16,6 +16,8 @@
 #include <cstdint>
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
+#include "logservice/palf/scn.h"
+
 namespace oceanbase
 {
 namespace storage
@@ -27,13 +29,13 @@ enum ObCommonCheckpointType
 {
   INVALID_BASE_TYPE = 0,
 
-  TX_CTX_MEMTABLE_TYPE = 1,
+  DATA_CHECKPOINT_TYPE = 1,
 
-  TX_DATA_MEMTABLE_TYPE = 2,
+  TX_CTX_MEMTABLE_TYPE = 2,
 
-  LOCK_MEMTABLE_TYPE = 3,
+  TX_DATA_MEMTABLE_TYPE = 3,
 
-  DATA_CHECKPOINT_TYPE = 4,
+  LOCK_MEMTABLE_TYPE = 4,
 
   // for unittest
   TEST_COMMON_CHECKPOINT = 5,
@@ -90,7 +92,9 @@ class ObCommonCheckpoint
 {
 public:
   virtual int64_t get_rec_log_ts() = 0;
+  virtual palf::SCN get_rec_scn() { return palf::SCN::min_scn(); }
   virtual int flush(int64_t recycle_log_ts, bool need_freeze = true) = 0;
+  virtual int flush(palf::SCN recycle_scn, bool need_freeze = true) { return OB_NOT_SUPPORTED; }
 
   virtual ObTabletID get_tablet_id() const = 0;
   virtual bool is_flushing() const = 0;

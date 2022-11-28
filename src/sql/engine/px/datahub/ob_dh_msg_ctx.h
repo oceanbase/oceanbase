@@ -26,7 +26,6 @@ public:
   ObPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts)
       : op_id_(op_id), task_cnt_(task_cnt), timeout_ts_(timeout_ts) {}
   VIRTUAL_TO_STRING_KV(K_(op_id), K_(task_cnt));
-  virtual void destroy() {}
   uint64_t op_id_;    // 哪个算子使用 datahub 服务
   int64_t task_cnt_;  // 这个 dfo 下实际执行的 task 数, 即：期望收到的 piece 数量
   int64_t timeout_ts_; //超时时间, DTL发送消息时会使用
@@ -39,11 +38,6 @@ public:
   ~ObPieceMsgCtxMgr() = default;
   void reset()
   {
-    for (int i = 0; i < ctxs_.count(); ++i) {
-      if (OB_NOT_NULL(ctxs_[i])) {
-        ctxs_[i]->destroy();
-      }
-    }
     ctxs_.reset();
   }
   int find_piece_ctx(uint64_t op_id, ObPieceMsgCtx *&ctx)

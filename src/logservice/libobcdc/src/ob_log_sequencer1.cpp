@@ -678,9 +678,7 @@ int ObLogSequencer::push_task_into_redo_dispatcher_(TransCtx &trans_ctx, volatil
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(redo_dispatcher_->dispatch_trans_redo(trans_ctx, stop_flag))) {
-    if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("failed to dispatch trans redo", KR(ret), K(trans_ctx), K(stop_flag));
-    }
+    LOG_ERROR("failed to dispatch trans redo", KR(ret), K(trans_ctx), K(stop_flag));
   }
 
   return ret;

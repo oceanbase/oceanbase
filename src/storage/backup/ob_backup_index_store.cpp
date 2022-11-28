@@ -205,7 +205,7 @@ int ObIBackupIndexStore::fetch_block_(const ObBackupFileType &backup_file_type, 
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(*pvalue));
   } else {
-    // TODO(yangyi.yyy): refine this method, remove the need of memory copying in 4.1
+    // TODO(yangyi.yyy): refine this method, remove the need of memory copying
     MEMCPY(buf, pvalue->buf(), pvalue->len());
     buffer_reader.assign(buf, pvalue->len());
   }

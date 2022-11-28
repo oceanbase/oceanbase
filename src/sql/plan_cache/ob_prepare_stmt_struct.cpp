@@ -289,6 +289,7 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator)
     is_expired_evicted_(false),
     allocator_(inner_allocator),
     external_allocator_(inner_allocator),
+    is_dynamic_sql_(false),
     num_of_returning_into_(-1),
     no_param_sql_(),
     is_sensitive_sql_(false),
@@ -318,6 +319,7 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator,
     is_expired_evicted_(false),
     allocator_(inner_allocator),
     external_allocator_(external_allocator),
+    is_dynamic_sql_(false),
     num_of_returning_into_(-1),
     no_param_sql_(),
     is_sensitive_sql_(false),
@@ -448,6 +450,7 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     ps_stmt_checksum_ = other.ps_stmt_checksum_;
     db_id_ = other.db_id_;
     question_mark_count_ = other.question_mark_count_;
+    is_dynamic_sql_ = other.is_dynamic_sql_;
     num_of_returning_into_ = other.num_of_returning_into_;
     is_sensitive_sql_ = other.is_sensitive_sql_;
     can_direct_use_param_ = other.can_direct_use_param();

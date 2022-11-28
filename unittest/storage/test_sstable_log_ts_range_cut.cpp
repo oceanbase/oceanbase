@@ -20,6 +20,7 @@
 #include "storage/tablet/ob_tablet_table_store.h"
 #include "storage/ob_i_table.h"
 #include "storage/ob_storage_struct.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -39,8 +40,8 @@ public:
   {
     sstable.key_.table_type_ = ObITable::MINOR_SSTABLE;
     sstable.key_.tablet_id_ = 1;
-    sstable.key_.log_ts_range_.start_log_ts_ = start_log_ts;
-    sstable.key_.log_ts_range_.end_log_ts_ = end_log_ts;
+    sstable.key_.scn_range_.start_scn_.convert_for_gts(start_log_ts);
+    sstable.key_.scn_range_.end_scn_.convert_for_gts(end_log_ts);
   }
 };
 
@@ -51,7 +52,7 @@ public:
 //sstable1 log_ts: [0,100)
 //sstable2 log_ts: [100, 200)
 //sstable3 log_ts: [200,300)
-TEST(ObTabletTableStore, sstable_log_ts_range_no_cross_and_continue)
+TEST(ObTabletTableStore, sstable_scn_range_no_cross_and_continue)
 {
   int ret = OB_SUCCESS;
   ObTabletTableStore tablet_table_store;
@@ -72,17 +73,17 @@ TEST(ObTabletTableStore, sstable_log_ts_range_no_cross_and_continue)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = minor_sstables.push_back(&sstable3);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = tablet_table_store.cut_ha_sstable_log_ts_range_(minor_sstables);
+  ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ASSERT_EQ(0, sstable1.key_.log_ts_range_.start_log_ts_);
-  ASSERT_EQ(100, sstable1.key_.log_ts_range_.end_log_ts_);
+  ASSERT_EQ(0, sstable1.key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(100, sstable1.key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(100, sstable2.key_.log_ts_range_.start_log_ts_);
-  ASSERT_EQ(200, sstable2.key_.log_ts_range_.end_log_ts_);
+  ASSERT_EQ(100, sstable2.key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(200, sstable2.key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(200, sstable3.key_.log_ts_range_.start_log_ts_);
-  ASSERT_EQ(300, sstable3.key_.log_ts_range_.end_log_ts_);
+  ASSERT_EQ(200, sstable3.key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(300, sstable3.key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 }
 
 
@@ -91,7 +92,7 @@ TEST(ObTabletTableStore, sstable_log_ts_range_no_cross_and_continue)
 //sstable2 log_ts: [200, 300)
 //sstable3 log_ts: [300,500)
 
-TEST(ObTabletTableStore, sstable_log_ts_range_is_not_continue)
+TEST(ObTabletTableStore, sstable_scn_range_is_not_continue)
 {
   int ret = OB_SUCCESS;
   ObTabletTableStore tablet_table_store;
@@ -112,7 +113,7 @@ TEST(ObTabletTableStore, sstable_log_ts_range_is_not_continue)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = minor_sstables.push_back(&sstable3);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = tablet_table_store.cut_ha_sstable_log_ts_range_(minor_sstables);
+  ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables);
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 }
 
@@ -122,7 +123,7 @@ TEST(ObTabletTableStore, sstable_log_ts_range_is_not_continue)
 //sstable2 log_ts: [0, 200)
 //sstable3 log_ts: [200,500)
 
-TEST(ObTabletTableStore, sstable_log_ts_range_contain)
+TEST(ObTabletTableStore, sstable_scn_range_contain)
 {
   int ret = OB_SUCCESS;
   ObTabletTableStore tablet_table_store;
@@ -143,17 +144,17 @@ TEST(ObTabletTableStore, sstable_log_ts_range_contain)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = minor_sstables.push_back(&sstable3);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = tablet_table_store.cut_ha_sstable_log_ts_range_(minor_sstables);
+  ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ASSERT_EQ(0, sstable1.key_.log_ts_range_.start_log_ts_);
-  ASSERT_EQ(100, sstable1.key_.log_ts_range_.end_log_ts_);
+  ASSERT_EQ(0, sstable1.key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(100, sstable1.key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(100, sstable2.key_.log_ts_range_.start_log_ts_);
-  ASSERT_EQ(200, sstable2.key_.log_ts_range_.end_log_ts_);
+  ASSERT_EQ(100, sstable2.key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(200, sstable2.key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(200, sstable3.key_.log_ts_range_.start_log_ts_);
-  ASSERT_EQ(500, sstable3.key_.log_ts_range_.end_log_ts_);
+  ASSERT_EQ(200, sstable3.key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(500, sstable3.key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
 }
 
@@ -162,7 +163,7 @@ TEST(ObTabletTableStore, sstable_log_ts_range_contain)
 //sstable2 log_ts: [50, 200)
 //sstable3 log_ts: [200,500)
 
-TEST(ObTabletTableStore, sstable_log_ts_range_has_overlap)
+TEST(ObTabletTableStore, sstable_scn_range_has_overlap)
 {
   int ret = OB_SUCCESS;
   ObTabletTableStore tablet_table_store;
@@ -183,17 +184,17 @@ TEST(ObTabletTableStore, sstable_log_ts_range_has_overlap)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = minor_sstables.push_back(&sstable3);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = tablet_table_store.cut_ha_sstable_log_ts_range_(minor_sstables);
+  ret = tablet_table_store.cut_ha_sstable_scn_range_(minor_sstables);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ASSERT_EQ(0, sstable1.key_.log_ts_range_.start_log_ts_);
-  ASSERT_EQ(100, sstable1.key_.log_ts_range_.end_log_ts_);
+  ASSERT_EQ(0, sstable1.key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(100, sstable1.key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(100, sstable2.key_.log_ts_range_.start_log_ts_);
-  ASSERT_EQ(200, sstable2.key_.log_ts_range_.end_log_ts_);
+  ASSERT_EQ(100, sstable2.key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(200, sstable2.key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 
-  ASSERT_EQ(200, sstable3.key_.log_ts_range_.start_log_ts_);
-  ASSERT_EQ(500, sstable3.key_.log_ts_range_.end_log_ts_);
+  ASSERT_EQ(200, sstable3.key_.scn_range_.start_scn_.get_val_for_inner_table_field());
+  ASSERT_EQ(500, sstable3.key_.scn_range_.end_scn_.get_val_for_inner_table_field());
 }
 
 

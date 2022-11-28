@@ -131,7 +131,7 @@ int ObRADatumStore::StoredRow::to_expr(const common::ObIArray<ObExpr*> &exprs,
     LOG_WARN("datum count mismatch", K(ret), K(cnt_), K(exprs.count()));
   } else {
     for (uint32_t i = 0; i < cnt_; ++i) {
-      if (exprs.at(i)->is_const_expr()) {
+      if (exprs.at(i)->is_static_const_) {
         continue;
       } else {
         exprs.at(i)->locate_expr_datum(ctx) = cells()[i];

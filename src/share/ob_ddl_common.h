@@ -16,7 +16,6 @@
 #include "lib/allocator/page_arena.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service.h"
-#include "storage/tablet/ob_tablet_common.h"
 
 namespace oceanbase
 {
@@ -29,11 +28,6 @@ namespace sql
 {
 class ObPhysicalPlan;
 class ObOpSpec;
-}
-namespace storage
-{
-class ObTabletHandle;
-class ObLSHandle;
 }
 namespace share
 {
@@ -234,8 +228,6 @@ public:
       const int64_t dest_table_id,
       const int64_t schema_version,
       const int64_t snapshot_version,
-      const int64_t execution_id,
-      const int64_t task_id,
       const int64_t parallelism,
       const bool use_heap_table_ddl_plan,
       const bool use_schema_version_hint_for_src_table,
@@ -261,12 +253,6 @@ public:
       const bool is_oracle_mode,
       ObSqlString &sql_string);
 
-  static int ddl_get_tablet(
-      storage::ObLSHandle &ls_handle,
-      const ObTabletID &tablet_id,
-      storage::ObTabletHandle &tablet_handle,
-      const int64_t timeout_us = storage::ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
-
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
   
   static bool is_table_lock_retry_ret_code(int ret)
@@ -274,12 +260,22 @@ public:
     return OB_TRY_LOCK_ROW_CONFLICT == ret || OB_NOT_MASTER == ret || OB_TIMEOUT == ret
            || OB_EAGAIN == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret;
   }
-  static bool need_remote_write(const int ret_code);
 
-  static int check_can_convert_character(const ObObjMeta &obj_meta)
-  {
-    return (obj_meta.is_string_type() || obj_meta.is_enum_or_set())
-              && CS_TYPE_BINARY != obj_meta.get_collation_type();
+  template<typename F>
+  static int retry_with_ddl_schema_hint(F func) {
+    int ret = OB_SUCCESS;
+    int64_t retry_cnt = 10;
+    while (OB_SUCC(ret) && retry_cnt > 0) {
+      if (OB_FAIL(func())) {
+        if (OB_DDL_SCHEMA_VERSION_NOT_MATCH == ret && retry_cnt > 1) {
+          ret = OB_SUCCESS;
+          retry_cnt -= 1;
+        }
+      } else {
+        retry_cnt = 0;
+      }
+    }
+    return ret;
   }
 
 private:

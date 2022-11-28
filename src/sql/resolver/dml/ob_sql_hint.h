@@ -223,8 +223,7 @@ struct ObStmtHint
   int merge_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
   int merge_normal_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
   int reset_explicit_trans_hint(ObItemType hint_type);
-  int get_max_table_parallel(const ObDMLStmt &stmt, int64_t &max_table_parallel) const;
-
+  int64_t get_max_table_parallel() const;
 
   bool has_enable_hint(ObItemType hint_type) const;
   bool has_disable_hint(ObItemType hint_type) const;
@@ -281,18 +280,15 @@ struct LogTableHint
 {
   LogTableHint() :  table_(NULL),
                     index_type_(T_INVALID),
-                    parallel_hint_(NULL),
-                    use_das_hint_(NULL) {}
+                    parallel_hint_(NULL) {}
   LogTableHint(const TableItem *table) :  table_(table),
                                           index_type_(T_INVALID),
-                                          parallel_hint_(NULL),
-                                          use_das_hint_(NULL) {}
+                                          parallel_hint_(NULL) {}
   int assign(const LogTableHint &other);
   int init_index_hints(ObSqlSchemaGuard &schema_guard);
   bool is_no_index_hint() const { return T_NO_INDEX_HINT == index_type_; }
   bool is_index_hint() const { return T_INDEX_HINT == index_type_; }
-  bool is_valid() const { return !index_list_.empty() || NULL != parallel_hint_
-                                || NULL != use_das_hint_ || !join_filter_hints_.empty(); }
+  bool is_valid() const { return !index_list_.empty() || NULL != parallel_hint_ || !join_filter_hints_.empty(); }
   int get_join_filter_hint(const ObRelIds &left_tables,
                            bool part_join_filter,
                            const ObJoinFilterHint *&hint) const;
@@ -302,7 +298,7 @@ struct LogTableHint
 
   TO_STRING_KV(K_(table), K_(index_type),
                K_(index_list), K_(index_hints),
-               K_(parallel_hint), K_(use_das_hint),
+               K_(parallel_hint),
                K_(join_filter_hints), K_(left_tables));
 
   const TableItem *table_;
@@ -310,7 +306,6 @@ struct LogTableHint
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> index_list_;
   common::ObSEArray<const ObIndexHint*, 4, common::ModulePageAllocator, true> index_hints_;
   const ObTableParallelHint *parallel_hint_;
-  const ObIndexHint *use_das_hint_;
   ObSEArray<const ObJoinFilterHint*, 1, common::ModulePageAllocator, true> join_filter_hints_;
   ObSEArray<ObRelIds, 1, common::ModulePageAllocator, true> left_tables_; // left table relids in join filter hint
 };
@@ -396,14 +391,10 @@ struct ObLogPlanHint
                             bool config_disable,
                             bool &can_use,
                             const ObJoinFilterHint *&force_hint) const;
-  int check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const;
   const LogJoinHint* get_join_hint(const ObRelIds &join_tables) const;
   const ObIArray<LogJoinHint> &get_join_hints() const { return join_hints_; }
   SetAlgo get_valid_set_algo() const;
   DistAlgo get_valid_set_dist_algo(int64_t *random_none_idx = NULL) const;
-  int check_valid_set_left_branch(const ObSelectStmt *select_stmt,
-                                  bool &hint_valid,
-                                  bool &need_swap) const;
   const ObHint* get_normal_hint(ObItemType hint_type) const;
   bool has_enable_hint(ObItemType hint_type) const;
   bool has_disable_hint(ObItemType hint_type) const;

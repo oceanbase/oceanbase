@@ -22,8 +22,6 @@
 #include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
 #include "observer/omt/ob_multi_tenant.h" // ObMultiTenant
 #include "share/tablet/ob_tablet_info.h" // ObTabletInfo
-#include "share/ob_tablet_replica_checksum_operator.h" // for ObTabletReplicaChecksumItem
-#include "lib/mysqlclient/ob_mysql_transaction.h" // ObMySQLTransaction
 
 namespace oceanbase
 {
@@ -199,8 +197,7 @@ int ObServerMetaTableChecker::check_meta_table(const ObMetaTableCheckType check_
   } else {
     ARRAY_FOREACH_NORET(nonlocal_tenant_ids, idx) { // ignore ret between each tenant
       int64_t ls_residual_count = 0;
-      int64_t meta_residual_count = 0;
-      int64_t checksum_residual_count = 0;
+      int64_t tablet_residual_count = 0;
       const uint64_t tenant_id = nonlocal_tenant_ids.at(idx);
       if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
           || is_virtual_tenant_id(tenant_id))) {
@@ -216,12 +213,11 @@ int ObServerMetaTableChecker::check_meta_table(const ObMetaTableCheckType check_
               KR(ret), K(tenant_id), K(ls_residual_count));
         }
       } else if (CHECK_TABLET_META_TABLE == check_type) {
-        if (OB_FAIL(check_tablet_table_(tenant_id, meta_residual_count, checksum_residual_count))) {
+        if (OB_FAIL(check_tablet_table_(tenant_id, tablet_residual_count))) {
           LOG_WARN("fail to check tablet meta table", KR(ret), K(tenant_id));
-        } else if ((0 != meta_residual_count) || (0 != checksum_residual_count)) {
-          LOG_INFO("ObServerMetaTableChecker found residual tablet, and corrected tablet"
-            " meta table and tablet replica checksum table for a tenant", KR(ret), K(tenant_id),
-            K(meta_residual_count), K(checksum_residual_count));
+        } else if (tablet_residual_count != 0) {
+          LOG_INFO("ObServerMetaTableChecker found residual tablet and corrected tablet meta table for a tenant",
+              KR(ret), K(tenant_id), K(tablet_residual_count));
         }
       } else { // can't be here
         ret = OB_INVALID_ARGUMENT;
@@ -263,15 +259,11 @@ int ObServerMetaTableChecker::check_ls_table_(
 
 int ObServerMetaTableChecker::check_tablet_table_(
     const uint64_t tenant_id,
-    int64_t &meta_residual_count,
-    int64_t &checksum_residual_count)
+    int64_t &residual_count)
 {
   int ret = OB_SUCCESS;
-  int trans_ret = OB_SUCCESS;
-  meta_residual_count = 0;
-  checksum_residual_count = 0;
-  int64_t affected_rows_meta = 0;
-  int64_t affected_rows_checksum = 0;
+  residual_count  = 0;
+  int64_t affected_rows = 0;
   const int64_t limit = 1024;
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(tt_operator_)) {
     ret = OB_NOT_INIT;
@@ -279,40 +271,25 @@ int ObServerMetaTableChecker::check_tablet_table_(
   } else if (OB_UNLIKELY(stopped_)) {
     ret = OB_CANCELED;
     LOG_WARN("ObServerMetaTableChecker is stopped", KR(ret), K_(tablet_tg_id));
-  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || is_virtual_tenant_id(tenant_id))) {
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || is_virtual_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
   } else {
     do {
-      common::ObMySQLTransaction trans;
-      const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-      if (OB_FAIL(trans.start(GCTX.sql_proxy_, meta_tenant_id))) {
-        LOG_WARN("fail to start transaction", KR(ret), K(tenant_id), K(meta_tenant_id));
-      } else if (OB_UNLIKELY(stopped_)) {
+      if (OB_UNLIKELY(stopped_)) {
         ret = OB_CANCELED;
         LOG_WARN("ObServerMetaTableChecker is stopped", KR(ret), K_(tablet_tg_id));
-      } else if (OB_FAIL(tt_operator_->remove_residual_tablet(trans, tenant_id, GCONF.self_addr_,
-                 limit, affected_rows_meta))) {
+      } else if (OB_FAIL(tt_operator_->remove_residual_tablet(
+          tenant_id,
+          GCONF.self_addr_,
+          limit,
+          affected_rows))) {
         LOG_WARN("fail to remove residual tablet by operator", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(ObTabletReplicaChecksumOperator::remove_residual_checksum(trans,
-                 tenant_id, GCONF.self_addr_, limit, affected_rows_checksum))) {
-        LOG_WARN("fail to remove residual checksum by operator", KR(ret), K(tenant_id));
       } else {
-        meta_residual_count += affected_rows_meta;
-        checksum_residual_count += affected_rows_checksum;
+        residual_count += affected_rows;
       }
-      if (OB_UNLIKELY(affected_rows_meta != affected_rows_checksum)) {
-        LOG_WARN("affected_rows_meta is not equal to affected_rows_checksum, may due to cluster"
-          "upgrade", K(tenant_id), K(affected_rows_meta), K(affected_rows_checksum));
-      }
-      if (trans.is_started()) {
-        trans_ret = trans.end(OB_SUCCESS == ret);
-        if (OB_UNLIKELY(OB_SUCCESS != trans_ret)) {
-          LOG_WARN("fail to end transaction", KR(trans_ret));
-          ret = ((OB_SUCCESS == ret) ? trans_ret : ret);
-        }
-      }
-    } while (OB_SUCC(ret) && ((limit == affected_rows_meta) || (limit == affected_rows_checksum)));
+    } while (OB_SUCC(ret) && (limit == affected_rows));
   }
   return ret;
 }

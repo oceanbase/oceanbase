@@ -37,7 +37,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 using namespace oceanbase::share;
 
-OB_SERIALIZE_MEMBER(ObExprExtraSerializeInfo, *current_time_, *last_trace_id_);
+OB_SERIALIZE_MEMBER(ObExprExtraSerializeInfo, *current_time_);
 
 // 物理分布策略：对于叶子节点，dfo 分布一般直接按照数据分布来
 // Note：如果 dfo 中有两个及以上的 scan，仅仅考虑第一个。并且，要求其余 scan
@@ -189,7 +189,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get phy table location", K(ret));
     } else {
-      const DASTabletLocList &locations = table_loc->get_tablet_locs();
+      const DASTabletLocList &locations = table_loc->tablet_locs_;
       if (locations.size() <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the location array is empty", K(locations.size()), K(ret));
@@ -511,8 +511,7 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
   DASTabletLocArray locations;
   FOREACH_X(tmp_node, table_locs, OB_SUCC(ret)) {
     ObDASTableLoc *table_loc = *tmp_node;
-    for (DASTabletLocListIter tablet_node = table_loc->tablet_locs_begin();
-         OB_SUCC(ret) && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
+    FOREACH_X(tablet_node, table_loc->tablet_locs_, OB_SUCC(ret)) {
       OZ(locations.push_back(*tablet_node));
     }
   }
@@ -793,7 +792,7 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   common::ObArray<ObPxSqcMeta *> sqcs;
   int n_locations = 0;
-  const DASTabletLocList &locations = table_loc->get_tablet_locs();
+  const DASTabletLocList &locations = table_loc->tablet_locs_;
   DASTabletLocSEArray temp_locations;
   if (OB_ISNULL(table_loc) || OB_ISNULL(phy_op)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1348,7 +1347,6 @@ int ObPxTreeSerializer::serialize_expr_frame_info(char *buf,
   OB_UNIS_ENCODE(expr_frame_info.need_ctx_cnt_);
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   expr_info.current_time_ = &plan_ctx->get_cur_time();
-  expr_info.last_trace_id_ = &plan_ctx->get_last_trace_id();
   // rt exprs
   ObExpr::get_serialize_array() = &exprs;
 
@@ -1509,7 +1507,6 @@ int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
   ObExprExtraSerializeInfo expr_info;
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   expr_info.current_time_ = &plan_ctx->get_cur_time();
-  expr_info.last_trace_id_ = &plan_ctx->get_last_trace_id();
   if (OB_FAIL(expr_info.deserialize(buf, data_len, pos))) {
     LOG_WARN("fail to deserialize expr extra info", K(ret));
   } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &expr_cnt))) {
@@ -1625,7 +1622,6 @@ int64_t ObPxTreeSerializer::get_serialize_expr_frame_info_size(
   ObExprExtraSerializeInfo expr_info;
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   expr_info.current_time_ = &plan_ctx->get_cur_time();
-  expr_info.last_trace_id_ = &plan_ctx->get_last_trace_id();
   ObIArray<ObExpr> &exprs = expr_frame_info.rt_exprs_;
   int32_t expr_cnt = expr_frame_info.is_mark_serialize()
       ? expr_frame_info.ser_expr_marks_.count()
@@ -3127,21 +3123,17 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
           LOG_WARN("fail calc task_id", K(location.tablet_id_), K(sqc), K(ret));
         }
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(affinitize_rule.do_random(!sqc.get_partitions_info().empty()))) {
-        LOG_WARN("failed to do random", K(ret));
-      } else {
-        const ObIArray<ObPxAffinityByRandom::TabletHashValue> &partition_worker_pairs =
-          affinitize_rule.get_result();
-        int64_t prefix_task_count = prefix_task_counts.at(idx);
-        ARRAY_FOREACH(partition_worker_pairs, idx) {
-          int64_t tablet_id = partition_worker_pairs.at(idx).tablet_id_;
-          int64_t task_id = partition_worker_pairs.at(idx).worker_id_;
-          OZ(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, task_id)));
-          LOG_DEBUG("debug push partition map", K(tablet_id), K(task_id));
-        }
-        LOG_DEBUG("Get all partition rows info", K(ret), K(sqc.get_partitions_info()));
+      affinitize_rule.do_random(!sqc.get_partitions_info().empty());
+      const ObIArray<ObPxAffinityByRandom::TabletHashValue> &partition_worker_pairs =
+        affinitize_rule.get_result();
+      int64_t prefix_task_count = prefix_task_counts.at(idx);
+      ARRAY_FOREACH(partition_worker_pairs, idx) {
+        int64_t tablet_id = partition_worker_pairs.at(idx).tablet_id_;
+        int64_t task_id = partition_worker_pairs.at(idx).worker_id_;
+        OZ(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, task_id)));
+        LOG_DEBUG("debug push partition map", K(tablet_id), K(task_id));
       }
+      LOG_DEBUG("Get all partition rows info", K(ret), K(sqc.get_partitions_info()));
     }
   }
   return ret;
@@ -3505,11 +3497,9 @@ int ObExtraServerAliveCheck::do_check() const
               sqcs.at(j).set_need_report(false);
               sqcs.at(j).set_thread_finish(true);
               sqcs.at(j).set_server_not_alive();
-              if (!sqcs.at(j).is_ignore_vtable_error()) {
-                ret = OB_RPC_CONNECT_ERROR;
-                LOG_WARN("server not in communication, maybe crashed.", K(ret),
-                          KPC(dfos.at(i)), K(sqcs.at(j)));
-              }
+              ret = OB_RPC_CONNECT_ERROR;
+              LOG_WARN("server not in communication, maybe crashed.", K(ret),
+                        KPC(dfos.at(i)), K(sqcs.at(j)));
             }
           }
         }

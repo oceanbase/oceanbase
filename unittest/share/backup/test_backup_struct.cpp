@@ -76,7 +76,7 @@ TEST(ObBackupDest, nfs)
 
 TEST(ObBackupDest, oss)
 {
-  const char *backup_test = "oss://backup_dir/?host=xxx.com&access_id=111&access_key=222&delete_mode=tagging";
+  const char *backup_test = "oss://backup_dir/?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&access_key=222&delete_mode=tagging";
   ObBackupDest dest;
   ObBackupDest dest1;
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
@@ -88,9 +88,9 @@ TEST(ObBackupDest, oss)
   ASSERT_TRUE(dest.storage_info_->device_type_ == 0);
 
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
-  ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&delete_mode=tagging"));
+  ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&delete_mode=tagging"));
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
-  ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com")); 
+  ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=http://oss-cn-hangzhou-zmf.aliyuncs.com"));
   ASSERT_TRUE(dest.is_root_path_equal(dest1));
   bool is_equal = false;
   ASSERT_EQ(OB_SUCCESS, dest.is_backup_path_equal(dest1, is_equal));
@@ -103,14 +103,14 @@ TEST(ObBackupDest, oss)
 
 TEST(ObBackupDest, oss_encrypt)
 {
-  const char *backup_test = "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
+  const char *backup_test = "oss://backup_dir?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
   ObBackupDest dest;
   ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
   LOG_INFO("dump backup dest", K(dest.get_root_path()), K(*(dest.get_storage_info())));
   ASSERT_EQ(0, strcmp(dest.root_path_, "oss://backup_dir"));
   ASSERT_TRUE(dest.storage_info_->device_type_ == 0);
   const char *path = "oss://backup_dir/";
-  const char *endpoint = "host=xxx.com";
+  const char *endpoint = "host=http://oss-cn-hangzhou-zmf.aliyuncs.com";
   const char *authorization = "access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
   const char *extension = "";
   ObBackupDest dest1;
@@ -120,13 +120,41 @@ TEST(ObBackupDest, oss_encrypt)
   char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
-  ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F"));
+  ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F"));
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
-  ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=xxx.com")); 
+  ASSERT_EQ(0, strcmp(backup_path_str, "oss://backup_dir?host=http://oss-cn-hangzhou-zmf.aliyuncs.com"));
   
   dest1.reset();
   ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
   ASSERT_TRUE(dest == dest1);
+}
+
+TEST(ObBackupDest, cos_encrypt)
+{
+  const char *backup_test = "cos://backup_dir/?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&appid=333";
+  ObBackupDest dest;
+  ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
+  ASSERT_EQ(0, strcmp(dest.root_path_, "cos://backup_dir"));
+  ASSERT_TRUE(dest.storage_info_->device_type_ == 2);
+  const char *path = "cos://backup_dir/";
+  const char *endpoint = "host=http://oss-cn-hangzhou-zmf.aliyuncs.com";
+  const char *authorization = "access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
+  const char *extension = "appid=333";
+
+  ObBackupDest dest1;
+  ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
+  ASSERT_TRUE(dest == dest1);
+  char backup_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+  char backup_path_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+  ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
+  ASSERT_EQ(0, strcmp(backup_dest_str, "cos://backup_dir?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&appid=333"));
+  ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
+  ASSERT_EQ(0, strcmp(backup_path_str, "cos://backup_dir?host=http://oss-cn-hangzhou-zmf.aliyuncs.com"));
+
+  ASSERT_EQ(OB_SUCCESS, dest1.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
+  ASSERT_EQ(0, strcmp(backup_dest_str, "cos://backup_dir?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&appid=333"));
+  ASSERT_EQ(OB_SUCCESS, dest1.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
+  ASSERT_EQ(0, strcmp(backup_path_str, "cos://backup_dir?host=http://oss-cn-hangzhou-zmf.aliyuncs.com"));
 }
 
 int main(int argc, char **argv)

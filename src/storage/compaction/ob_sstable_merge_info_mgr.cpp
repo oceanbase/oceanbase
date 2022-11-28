@@ -177,7 +177,7 @@ int ObTenantSSTableMergeInfoMgr::init(const int64_t memory_limit)
     STORAGE_LOG(WARN, "Invalid argument", K(ret), K(memory_limit));
   } else {
     void *buf = NULL;
-    int64_t max_info_cnt = min(GMEMCONF.get_server_memory_limit(), memory_limit) / (sizeof(ObSSTableMergeInfo));
+    int64_t max_info_cnt = min(GCONF.get_server_memory_limit(), memory_limit) / (sizeof(ObSSTableMergeInfo));
     if (max_info_cnt < 2) {
       max_info_cnt = 2;
     }
