@@ -107,9 +107,9 @@ ObMemtable::ObMemtable()
       logging_blocked_start_time(0),
       unset_active_memtable_logging_blocked_(false),
       resolve_active_memtable_left_boundary_(true),
-      freeze_log_ts_(INT64_MAX),
-      max_end_log_ts_(ObScnRange::MIN_TS),
-      rec_log_ts_(INT64_MAX),
+      freeze_scn_(palf::SCN::max_scn()),
+      max_end_scn_(ObScnRange::MIN_SCN),
+      rec_scn_(palf::SCN::max_scn()),
       state_(ObMemtableState::INVALID),
       freeze_state_(ObMemtableFreezeState::INVALID),
       timestamp_(0),
@@ -194,7 +194,7 @@ int ObMemtable::remove_unused_callback_for_uncommited_txn_()
   transaction::ObTransService *txs_svr = MTL(transaction::ObTransService *);
 
   if (NULL != txs_svr
-      && share::ObScnRange::MAX_TS != get_end_log_ts()
+      && share::ObScnRange::MAX_SCN != get_end_scn()
       && OB_FAIL(txs_svr->remove_callback_for_uncommited_txn(this))) {
     TRANS_LOG(WARN, "remove callback for uncommited txn failed", K(ret), K(*this));
   }
@@ -245,15 +245,15 @@ void ObMemtable::destroy()
   logging_blocked_start_time = 0;
   unset_active_memtable_logging_blocked_ = false;
   resolve_active_memtable_left_boundary_ = true;
-  max_end_log_ts_ = ObScnRange::MIN_TS;
-  rec_log_ts_ = INT64_MAX;
+  max_end_scn_ = ObScnRange::MIN_SCN;
+  rec_scn_ = palf::SCN::max_scn();
   read_barrier_ = false;
   is_tablet_freeze_ = false;
   is_force_freeze_ = false;
   is_flushed_ = false;
   is_inited_ = false;
   contain_hotspot_row_ = false;
-  snapshot_version_ = INT64_MAX;
+  snapshot_version_.set_max();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -365,15 +365,15 @@ int ObMemtable::lock_(ObStoreCtx &ctx,
   } else {
     ObMemtableData mtd(blocksstable::ObDmlFlag::DF_LOCK, len, buf);
     ObTxNodeArg arg(&mtd,        /*memtable_data*/
-        NULL,        /*old_data*/
-        timestamp_,  /*memstore_version*/
-        ctx.mvcc_acc_ctx_.tx_scn_  /*seq_no*/);
+                    NULL,        /*old_data*/
+                    timestamp_,  /*memstore_version*/
+                    ctx.mvcc_acc_ctx_.tx_scn_  /*seq_no*/);
     if (OB_FAIL(mvcc_write_(ctx,
-            &mtk,
-            /*used for mvcc_write on sstable*/
-            read_info,
-            arg,
-            is_new_locked))) {
+                            &mtk,
+                            /*used for mvcc_write on sstable*/
+                            read_info,
+                            arg,
+                            is_new_locked))) {
     } else if (OB_UNLIKELY(!is_new_locked)) {
       TRANS_LOG(DEBUG, "lock twice, no need to store lock trans node", K(table_id), K(ctx));
     }
@@ -550,7 +550,6 @@ int ObMemtable::check_row_locked_by_myself(
   } else {
     bool is_locked = false;
     bool tmp_is_locked = false;
-    int64_t trans_version = 0;
     ObStoreRowLockState lock_state;
     const ObIArray<ObITable *> *stores = nullptr;
     common::ObSEArray<ObITable *, 4> iter_tables;
@@ -1092,7 +1091,7 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
                     seq_no,       /*seq_no*/
                     modify_count, /*modify_count*/
                     acc_checksum, /*acc_checksum*/
-                    scn           /*log_ts*/);
+                    scn           /*scn*/);
 
     if (OB_FAIL(mtk.encode(&rowkey))) {
       TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
@@ -1105,7 +1104,7 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
         TRANS_LOG(WARN, "m_replay_row fail", K(ret), K(table_id), K(rowkey), K(row), K(dml_flag),
                   K(modify_count), K(acc_checksum));
       }
-    } else if (part_ctx->need_update_schema_version(log_id, scn.get_val_for_lsn_allocator())) {
+    } else if (part_ctx->need_update_schema_version(log_id, scn)) {
       ctx.mvcc_acc_ctx_.mem_ctx_->set_table_version(table_version);
       set_max_schema_version(table_version);
     }
@@ -1131,7 +1130,7 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
   } else if (value->is_lower_lock_scaned()) {
   } else {
     bool row_locked = false;
-    int64_t max_trans_version = 0;
+    palf::SCN max_trans_version = palf::SCN::min_scn();
     const ObIArray<ObITable *> *stores = nullptr;
     common::ObSEArray<ObITable *, 4> iter_tables;
     ctx.table_iter_->resume();
@@ -1184,8 +1183,8 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
           row_locked |= lock_state.is_locked_;
           if (lock_state.is_locked_ && my_tx_id != lock_state.lock_trans_id_) {
             ret = OB_TRY_LOCK_ROW_CONFLICT;
-          } else if (max_trans_version < lock_state.trans_version_.get_val_for_lsn_allocator()) {
-            max_trans_version = lock_state.trans_version_.get_val_for_lsn_allocator();
+          } else if (max_trans_version < lock_state.trans_version_) {
+            max_trans_version = lock_state.trans_version_;
           }
         }
         TRANS_LOG(DEBUG, "check_row_locked", K(ret), K(i),
@@ -1197,13 +1196,10 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
     if (OB_SUCC(ret)) {
       // use tx_id = 0 indicate MvccRow's max_trans_version inherit from old table
       transaction::ObTransID tx_id(0);
-      // TODO(handora.qc): fix it
-      palf::SCN max_trans_scn;
-      max_trans_scn.convert_for_lsn_allocator(max_trans_version);
-      value->update_max_trans_version(max_trans_scn, tx_id);
+      value->update_max_trans_version(max_trans_version, tx_id);
       if (!row_locked) {
         // there is no locks on frozen stores
-        if (max_trans_scn > ctx.mvcc_acc_ctx_.get_snapshot_version()) {
+        if (max_trans_version > ctx.mvcc_acc_ctx_.get_snapshot_version()) {
           ret = OB_TRANSACTION_SET_VIOLATION;
           TRANS_LOG(WARN, "TRANS_SET_VIOLATION", K(ret), K(max_trans_version), "ctx", ctx);
         }
@@ -1273,7 +1269,7 @@ ObDatumRange &ObMemtable::m_get_real_range(ObDatumRange &real_range, const ObDat
 
 int ObMemtable::row_compact(ObMvccRow *row,
                             const bool for_replay,
-                            const int64_t snapshot_version)
+                            const palf::SCN snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObMemtableRowCompactor row_compactor;
@@ -1368,7 +1364,7 @@ int64_t ObMemtable::dec_write_ref()
     } else {
       if (0 == get_unsynced_cnt()) {
         resolve_right_boundary();
-        if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, get_end_log_ts(), get_snapshot_version()))) {
+        if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, get_end_scn(), get_snapshot_version_scn()))) {
           TRANS_LOG(WARN, "fail to resolve left boundary for active memtable", K(ret), K(ls_id), KPC(this));
         }
       }
@@ -1401,7 +1397,7 @@ int ObMemtable::dec_unsynced_cnt()
   } else if (is_frozen && 0 == write_ref_cnt && 0 == unsynced_cnt) {
     resolve_right_boundary();
     TRANS_LOG(INFO, "[resolve_right_boundary] dec_unsynced_cnt", K(ls_id), KPC(this));
-    if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, get_end_log_ts(), get_snapshot_version()))) {
+    if (OB_FAIL(memtable_mgr_->resolve_left_boundary_for_active_memtable(this, get_end_scn(), get_snapshot_version_scn()))) {
       TRANS_LOG(WARN, "fail to set start log ts for active memtable", K(ret), K(ls_id), KPC(this));
     }
     TRANS_LOG(INFO, "memtable log synced", K(ret), K(ls_id), KPC(this));
@@ -1441,24 +1437,24 @@ int ObMemtable::get_frozen_schema_version(int64_t &schema_version) const
   return OB_NOT_SUPPORTED;
 }
 
-int ObMemtable::set_snapshot_version(const int64_t snapshot_version)
+int ObMemtable::set_snapshot_version(const palf::SCN snapshot_version)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (ObVersionRange::MAX_VERSION == snapshot_version
-             || ObVersionRange::MIN_VERSION >= snapshot_version) {
+  } else if (snapshot_version.is_max()
+             || !snapshot_version.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", K(ret), K(snapshot_version));
-  } else if (snapshot_version_ == ObVersionRange::MAX_VERSION) {
+  } else if (snapshot_version_.is_max()) {
     snapshot_version_ = snapshot_version;
   }
   return ret;
 }
 
-int ObMemtable::set_rec_log_ts(int64_t rec_log_ts)
+int ObMemtable::set_rec_scn(palf::SCN rec_scn)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = freezer_->get_ls_id();
@@ -1466,19 +1462,19 @@ int ObMemtable::set_rec_log_ts(int64_t rec_log_ts)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (ObScnRange::MAX_TS ==rec_log_ts) {
+  } else if (rec_scn.is_max()) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret), K(rec_log_ts));
-  } else if (rec_log_ts <= get_start_log_ts()) {
+    TRANS_LOG(WARN, "invalid args", K(ret), K(rec_scn));
+  } else if (rec_scn <= get_start_scn()) {
     ret = OB_LOG_TS_OUT_OF_BOUND;
-    TRANS_LOG(ERROR, "cannot set freeze log ts smaller to start log ts", K(ret), K(rec_log_ts), K(ls_id), KPC(this));
+    TRANS_LOG(ERROR, "cannot set freeze log ts smaller to start log ts", K(ret), K(rec_scn), K(ls_id), KPC(this));
   } else {
-    int64_t old_rec_log_ts = 0;
-    int64_t new_rec_log_ts = get_rec_log_ts();
-    while ((old_rec_log_ts = new_rec_log_ts) > rec_log_ts) {
-      if ((new_rec_log_ts = ATOMIC_VCAS(&rec_log_ts_, old_rec_log_ts, rec_log_ts))
-          == old_rec_log_ts) {
-        new_rec_log_ts = rec_log_ts;
+    palf::SCN old_rec_scn;
+    palf::SCN new_rec_scn = get_rec_scn();
+    while ((old_rec_scn = new_rec_scn) > rec_scn) {
+      if ((new_rec_scn = rec_scn_.atomic_vcas(old_rec_scn, rec_scn))
+          == old_rec_scn) {
+        new_rec_scn = rec_scn;
       }
     }
   }
@@ -1486,7 +1482,7 @@ int ObMemtable::set_rec_log_ts(int64_t rec_log_ts)
   return ret;
 }
 
-int ObMemtable::set_start_log_ts(const int64_t start_ts)
+int ObMemtable::set_start_scn(const palf::SCN start_scn)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = freezer_->get_ls_id();
@@ -1494,24 +1490,22 @@ int ObMemtable::set_start_log_ts(const int64_t start_ts)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (ObScnRange::MAX_TS == start_ts) {
+  } else if (ObScnRange::MAX_SCN == start_scn) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret), K(start_ts));
-  } else if (start_ts >= get_end_log_ts()
-             || (max_end_log_ts_ != 0 && start_ts >= max_end_log_ts_)
-             || start_ts >= rec_log_ts_) {
+    TRANS_LOG(WARN, "invalid args", K(ret), K(start_scn));
+  } else if (start_scn >= get_end_scn()
+             || (max_end_scn_ != palf::SCN::min_scn() && start_scn >= max_end_scn_)
+             || start_scn >= rec_scn_) {
     ret = OB_LOG_TS_OUT_OF_BOUND;
-    TRANS_LOG(ERROR, "cannot set start ts now", K(ret), K(start_ts), K(ls_id), KPC(this));
+    TRANS_LOG(ERROR, "cannot set start ts now", K(ret), K(start_scn), K(ls_id), KPC(this));
   } else {
-    palf::SCN tmp;
-    tmp.convert_for_gts(start_ts);
-    key_.scn_range_.start_scn_.atomic_set(tmp);
+    key_.scn_range_.start_scn_ = start_scn;
   }
 
   return ret;
 }
 
-int ObMemtable::set_end_log_ts(const int64_t freeze_ts)
+int ObMemtable::set_end_scn(const palf::SCN freeze_scn)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = freezer_->get_ls_id();
@@ -1519,36 +1513,31 @@ int ObMemtable::set_end_log_ts(const int64_t freeze_ts)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (ObScnRange::MAX_TS == freeze_ts) {
+  } else if (ObScnRange::MAX_SCN == freeze_scn) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret), K(freeze_ts));
-  } else if (freeze_ts < get_start_log_ts()) {
+    TRANS_LOG(WARN, "invalid args", K(ret), K(freeze_scn));
+  } else if (freeze_scn < get_start_scn()) {
     ret = OB_LOG_TS_OUT_OF_BOUND;
     TRANS_LOG(ERROR, "cannot set freeze log ts smaller to start log ts",
-              K(ret), K(freeze_ts), K(ls_id), KPC(this));
+              K(ret), K(freeze_scn), K(ls_id), KPC(this));
   } else {
-    int64_t old_end_log_ts = 0;
-    int64_t new_end_log_ts = get_end_log_ts();
-    while ((old_end_log_ts = new_end_log_ts) < freeze_ts
-           || new_end_log_ts == ObScnRange::MAX_TS) {
-      //TODO(SCN) TMP Code for compiling, fix AOTIMIC opt with SCN
-      if (key_.scn_range_.end_scn_.get_val_for_inner_table_field() == old_end_log_ts) {
-        key_.scn_range_.end_scn_.convert_for_gts(freeze_ts);
-        new_end_log_ts = freeze_ts;
+    palf::SCN old_end_scn;
+    palf::SCN new_end_scn = get_end_scn();
+    while ((old_end_scn = new_end_scn) < freeze_scn
+           || new_end_scn == ObScnRange::MAX_SCN) {
+      if ((new_end_scn =
+           key_.scn_range_.end_scn_.atomic_vcas(old_end_scn, freeze_scn))
+          == old_end_scn) {
+        new_end_scn = freeze_scn;
       }
-      // if ((new_end_log_ts =
-      //      ATOMIC_VCAS(&(key_.scn_range_.end_scn_), old_end_log_ts, freeze_ts))
-      //     == old_end_log_ts) {
-      //   new_end_log_ts = freeze_ts;
-      // }
     }
-    freeze_log_ts_ =  freeze_ts;
+    freeze_scn_ =  freeze_scn;
   }
 
   return ret;
 }
 
-int ObMemtable::set_max_end_log_ts(const int64_t log_ts)
+int ObMemtable::set_max_end_scn(const palf::SCN scn)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = freezer_->get_ls_id();
@@ -1556,21 +1545,21 @@ int ObMemtable::set_max_end_log_ts(const int64_t log_ts)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (ObScnRange::MAX_TS == log_ts) {
+  } else if (ObScnRange::MAX_SCN == scn) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret), K(log_ts));
-  } else if (log_ts <= get_start_log_ts() || log_ts > get_end_log_ts()) {
+    TRANS_LOG(WARN, "invalid args", K(ret), K(scn));
+  } else if (scn <= get_start_scn() || scn > get_end_scn()) {
     ret = OB_LOG_TS_OUT_OF_BOUND;
     TRANS_LOG(WARN, "cannot set max end log ts smaller to start log ts",
-              K(ret), K(log_ts), K(ls_id), KPC(this));
+              K(ret), K(scn), K(ls_id), KPC(this));
   } else {
-    int64_t old_max_end_log_ts = 0;
-    int64_t new_max_end_log_ts = get_max_end_log_ts();
-    while ((old_max_end_log_ts = new_max_end_log_ts) < log_ts) {
-      if ((new_max_end_log_ts =
-           ATOMIC_VCAS(&max_end_log_ts_, old_max_end_log_ts, log_ts))
-          == old_max_end_log_ts) {
-        new_max_end_log_ts = log_ts;
+    palf::SCN old_max_end_scn;
+    palf::SCN new_max_end_scn = get_max_end_scn();
+    while ((old_max_end_scn = new_max_end_scn) < scn) {
+      if ((new_max_end_scn =
+           max_end_scn_.atomic_vcas(old_max_end_scn, scn))
+          == old_max_end_scn) {
+        new_max_end_scn = scn;
       }
     }
   }
@@ -1581,41 +1570,41 @@ int ObMemtable::set_max_end_log_ts(const int64_t log_ts)
 bool ObMemtable::rec_scn_is_stable()
 {
   int ret = OB_SUCCESS;
-  bool rec_log_ts_is_stable = false;
-  if (INT64_MAX == rec_log_ts_) {
-    rec_log_ts_is_stable = (is_frozen_memtable() && write_ref_cnt_ == 0 && unsynced_cnt_ == 0);
+  bool rec_scn_is_stable = false;
+  if (palf::SCN::max_scn() == rec_scn_) {
+    rec_scn_is_stable = (is_frozen_memtable() && write_ref_cnt_ == 0 && unsynced_cnt_ == 0);
   } else {
-    int64_t max_consequent_callbacked_log_ts = INT64_MAX;
-    if (OB_FAIL(freezer_->get_max_consequent_callbacked_log_ts(max_consequent_callbacked_log_ts))) {
-      STORAGE_LOG(WARN, "get_max_consequent_callbacked_log_ts failed", K(ret), K(freezer_->get_ls_id()));
+    palf::SCN max_consequent_callbacked_scn;
+    if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(max_consequent_callbacked_scn))) {
+      STORAGE_LOG(WARN, "get_max_consequent_callbacked_scn failed", K(ret), K(freezer_->get_ls_id()));
     } else {
-      rec_log_ts_is_stable = (max_consequent_callbacked_log_ts >= rec_log_ts_);
+      rec_scn_is_stable = (max_consequent_callbacked_scn >= rec_scn_);
     }
 
-    if (!rec_log_ts_is_stable &&
+    if (!rec_scn_is_stable &&
         (mt_stat_.frozen_time_ != 0 &&
         ObTimeUtility::current_time() - mt_stat_.frozen_time_ > 10 * 1000 * 1000L)) {
-      STORAGE_LOG(WARN, "memtable rec_log_ts not stable for long time",
+      STORAGE_LOG(WARN, "memtable rec_scn not stable for long time",
                   K(freezer_->get_ls_id()), K(*this), K(mt_stat_.frozen_time_),
-                  K(max_consequent_callbacked_log_ts));
+                  K(max_consequent_callbacked_scn));
       ADD_SUSPECT_INFO(MINI_MERGE,
                       freezer_->get_ls_id(), get_tablet_id(),
-                      "memtable rec_log_ts not stable",
-                      K(rec_log_ts_),
-                      K(max_consequent_callbacked_log_ts));
+                      "memtable rec_scn not stable",
+                      K(rec_scn_),
+                      K(max_consequent_callbacked_scn));
     }
   }
-  return rec_log_ts_is_stable;
+  return rec_scn_is_stable;
 }
 
-int ObMemtable::get_current_right_boundary(int64_t &current_right_boundary)
+int ObMemtable::get_current_right_boundary(palf::SCN &current_right_boundary)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(freezer_)) {
     ret = OB_ENTRY_NOT_EXIST;
     TRANS_LOG(WARN, "freezer should not be null", K(ret));
-  } else if (OB_FAIL(freezer_->get_max_consequent_callbacked_log_ts(current_right_boundary))) {
-    TRANS_LOG(WARN, "fail to get min_unreplay_log_ts", K(ret), K(current_right_boundary));
+  } else if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(current_right_boundary))) {
+    TRANS_LOG(WARN, "fail to get min_unreplay_scn", K(ret), K(current_right_boundary));
   }
 
   return ret;
@@ -1638,12 +1627,12 @@ bool ObMemtable::ready_for_flush_()
   bool bool_ret = is_frozen_memtable() && 0 == get_write_ref() && 0 == get_unsynced_cnt();
 
   int ret = OB_SUCCESS;
-  int64_t current_right_boundary = ObScnRange::MIN_TS;
+  palf::SCN current_right_boundary = ObScnRange::MIN_SCN;
   share::ObLSID ls_id = freezer_->get_ls_id();
   if (bool_ret) {
     if (OB_FAIL(resolve_snapshot_version_())) {
       TRANS_LOG(WARN, "fail to resolve snapshot version", K(ret), KPC(this), K(ls_id));
-    } else if (OB_FAIL(resolve_max_end_log_ts_())) {
+    } else if (OB_FAIL(resolve_max_end_scn_())) {
       TRANS_LOG(WARN, "fail to resolve snapshot version", K(ret), KPC(this), K(ls_id));
     } else {
       resolve_right_boundary();
@@ -1651,7 +1640,7 @@ bool ObMemtable::ready_for_flush_()
       if (OB_FAIL(get_current_right_boundary(current_right_boundary))) {
         TRANS_LOG(WARN, "fail to get current right boundary", K(ret));
       }
-      bool_ret = current_right_boundary >= get_end_log_ts() &&
+      bool_ret = current_right_boundary >= get_end_scn() &&
         (is_empty() || get_resolve_active_memtable_left_boundary());
       if (bool_ret) {
         freeze_state_ = ObMemtableFreezeState::READY_FOR_FLUSH;
@@ -1681,14 +1670,14 @@ bool ObMemtable::ready_for_flush_()
                     K(get_write_ref()),
                     K(get_unsynced_cnt()),
                     K(current_right_boundary),
-                    K(get_end_log_ts()));
+                    K(get_end_scn()));
     freezer_->get_stat().add_memtable_info(get_tablet_id(),
-                                           get_start_log_scn(),
-                                           get_end_log_scn(),
+                                           get_start_scn(),
+                                           get_end_scn(),
                                            get_write_ref(),
                                            get_unsubmitted_cnt(),
                                            get_unsynced_cnt(),
-                                           current_right_boundary);
+                                           current_right_boundary.get_val_for_tx());
   }
 
   return bool_ret;
@@ -1702,8 +1691,8 @@ void ObMemtable::print_ready_for_flush()
   bool frozen_memtable_flag = is_frozen_memtable();
   int64_t write_ref = get_write_ref();
   int64_t unsynced_cnt = get_unsynced_cnt();
-  int64_t end_log_ts = get_end_log_ts();
-  int64_t current_right_boundary = ObScnRange::MIN_TS;
+  palf::SCN end_scn = get_end_scn();
+  palf::SCN current_right_boundary;
   uint32_t logstream_freeze_clock = freezer_->get_freeze_clock();
   uint32_t memtable_freeze_clock = freeze_clock_;
   if (OB_FAIL(get_current_right_boundary(current_right_boundary))) {
@@ -1712,13 +1701,13 @@ void ObMemtable::print_ready_for_flush()
   bool bool_ret = frozen_memtable_flag &&
                   0 == write_ref &&
                   0 == unsynced_cnt &&
-                  current_right_boundary >= end_log_ts;
+                  current_right_boundary >= end_scn;
 
   TRANS_LOG(INFO, "[ObFreezer] print_ready_for_flush",
             KP(this), K(ls_id), K(tablet_id),
             K(ret), K(bool_ret),
             K(frozen_memtable_flag), K(write_ref), K(unsynced_cnt),
-            K(current_right_boundary), K(end_log_ts),
+            K(current_right_boundary), K(end_scn),
             K(logstream_freeze_clock), K(memtable_freeze_clock));
 }
 
@@ -1756,16 +1745,16 @@ void ObMemtable::print_ready_for_flush()
 int ObMemtable::resolve_snapshot_version_()
 {
   int ret = OB_SUCCESS;
-  int64_t freeze_snapshot_version = OB_INVALID_TIMESTAMP;
+  palf::SCN freeze_snapshot_version;
 
-  if (snapshot_version_ != ObVersionRange::MAX_VERSION) {
+  if (snapshot_version_ != palf::SCN::max_scn()) {
     // Pass if snapshot is already set
   } else if (OB_ISNULL(freezer_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "freezer should not be null", K(ret));
-  } else if (FALSE_IT(freeze_snapshot_version = freezer_->get_freeze_snapshot_version().get_val_for_lsn_allocator())) {
+  } else if (FALSE_IT(freeze_snapshot_version = freezer_->get_freeze_snapshot_version())) {
     TRANS_LOG(ERROR, "fail to get freeze_snapshot_version", K(ret));
-  } else if (OB_INVALID_TIMESTAMP == freeze_snapshot_version) {
+  } else if (palf::SCN::invalid_scn() == freeze_snapshot_version) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "fail to get freeze_snapshot_version", K(ret), KPC(this));
   } else if (OB_FAIL(set_snapshot_version(freeze_snapshot_version))) {
@@ -1775,30 +1764,30 @@ int ObMemtable::resolve_snapshot_version_()
   return ret;
 }
 
-// The max_decided log ts is used to push up the end_log_ts of the memtable
+// The max_decided log ts is used to push up the end_scn of the memtable
 // using the max decided log ts.
-// Before the revision, the end_log_ts of the memtable is the max committed log
+// Before the revision, the end_scn of the memtable is the max committed log
 // ts of the data on the memtable. So for all 2pc txn and some 1pc txn whose
-// data log is seperated with the commit log, the end_log_ts of the memtable is
-// smaller than the commit_log_ts of the txn. And when the merge happens, the
+// data log is seperated with the commit log, the end_scn of the memtable is
+// smaller than the commit_scn of the txn. And when the merge happens, the
 // txn node will therefore not be cleanout. And the read after merge will be
 // very slow due to tx data table lookup.
 // So finally we decide to use the max decoded log ts of the ls to update the
-// end_log_ts of the memtable
-int ObMemtable::resolve_max_end_log_ts_()
+// end_scn of the memtable
+int ObMemtable::resolve_max_end_scn_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  int64_t max_decided_log_ts = OB_INVALID_TIMESTAMP;
+  palf::SCN max_decided_scn;
 
   if (OB_ISNULL(freezer_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "freezer should not be null", K(ret));
-  } else if (FALSE_IT(max_decided_log_ts = freezer_->get_max_decided_scn().get_val_for_lsn_allocator())) {
+  } else if (FALSE_IT(max_decided_scn = freezer_->get_max_decided_scn())) {
     TRANS_LOG(ERROR, "fail to get freeze_snapshot_version", K(ret));
-  } else if (OB_INVALID_TIMESTAMP == max_decided_log_ts) {
+  } else if (palf::SCN::invalid_scn() == max_decided_scn) {
     // Pass if not necessary
-  } else if (OB_TMP_FAIL(set_max_end_log_ts(max_decided_log_ts))) {
+  } else if (OB_TMP_FAIL(set_max_end_scn(max_decided_scn))) {
     // ignore the error code
   }
 
@@ -1807,25 +1796,25 @@ int ObMemtable::resolve_max_end_log_ts_()
 
 int ObMemtable::resolve_right_boundary()
 {
-  int64_t max_end_log_ts = get_max_end_log_ts();
-  int64_t end_log_ts = max_end_log_ts;
-  int64_t start_log_ts = get_start_log_ts();
+  palf::SCN max_end_scn = get_max_end_scn();
+  palf::SCN end_scn = max_end_scn;
+  palf::SCN start_scn = get_start_scn();
   int ret = OB_SUCCESS;
 
-  if (ObScnRange::MIN_TS == max_end_log_ts) {
-    end_log_ts = start_log_ts;
+  if (ObScnRange::MIN_SCN == max_end_scn) {
+    end_scn = start_scn;
     (void)freezer_->inc_empty_memtable_cnt();
   }
-  if (OB_FAIL(set_end_log_ts(end_log_ts))) {
-    TRANS_LOG(ERROR, "fail to set end_log_ts", K(ret));
+  if (OB_FAIL(set_end_scn(end_scn))) {
+    TRANS_LOG(ERROR, "fail to set end_scn", K(ret));
   }
 
   return ret;
 }
 
-void ObMemtable::resolve_left_boundary(int64_t end_log_ts)
+void ObMemtable::resolve_left_boundary(palf::SCN end_scn)
 {
-  set_start_log_ts(end_log_ts);
+  set_start_scn(end_scn);
 }
 
 void ObMemtable::set_freeze_state(const int64_t state)
@@ -1888,13 +1877,6 @@ int ObMemtable::flush(share::ObLSID ls_id)
   }
 
   return ret;
-}
-
-palf::SCN ObMemtable::get_rec_scn()
-{
-  palf::SCN tmp;
-  tmp.convert_for_lsn_allocator(get_rec_log_ts());
-  return tmp;
 }
 
 bool ObMemtable::is_active_memtable() const

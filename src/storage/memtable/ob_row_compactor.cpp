@@ -272,17 +272,17 @@ int ObMemtableRowCompactor::init(ObMvccRow *row,
 // So modification is guaranteed to be safety with another modification,
 // while we need pay attention to the concurrency between lock_for_read
 // and modification(such as compact)
-int ObMemtableRowCompactor::compact(const int64_t snapshot_version)
+int ObMemtableRowCompactor::compact(const palf::SCN snapshot_version)
 {
   int ret = OB_SUCCESS;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-  } else if (0 >= snapshot_version || INT64_MAX == snapshot_version) {
+  } else if (!snapshot_version.is_valid() || palf::SCN::max_scn() == snapshot_version) {
     STORAGE_LOG(ERROR, "unexpected snapshot version", K(ret), K(snapshot_version));
     ret = OB_ERR_UNEXPECTED;
   } else if (NULL != row_->latest_compact_node_ &&
-             snapshot_version <= row_->latest_compact_node_->trans_version_.get_val_for_lsn_allocator()) {
+             snapshot_version <= row_->latest_compact_node_->trans_version_) {
     // concurrent do compact
   } else {
     ObTimeGuard tg("row compact", 50L * 1000L);
@@ -306,7 +306,7 @@ int ObMemtableRowCompactor::compact(const int64_t snapshot_version)
 
 // Find position from where compaction started forward or backward until reached
 // oldest node or latest compaction node
-void ObMemtableRowCompactor::find_start_pos_(const int64_t snapshot_version,
+void ObMemtableRowCompactor::find_start_pos_(const palf::SCN snapshot_version,
                                              ObMvccTransNode *&start)
 {
   int64_t search_cnt = 0;
@@ -318,7 +318,7 @@ void ObMemtableRowCompactor::find_start_pos_(const int64_t snapshot_version,
       // Traverse forward from list_head
       //   We go from head to find the suitable node for compact node start
       if (palf::SCN::max_scn() == start->trans_version_          // skip uncommited
-          || snapshot_version < start->trans_version_.get_val_for_lsn_allocator() // skip bigger txn
+          || snapshot_version < start->trans_version_ // skip bigger txn
           || !start->is_committed()) {                // skip uncommited
         start = start->prev_;
         search_cnt++;
@@ -330,7 +330,7 @@ void ObMemtableRowCompactor::find_start_pos_(const int64_t snapshot_version,
       //   We need handle the bad case when elr, so we traverse from backward
       //   when there exists latest_compact_node
       if (NULL != start->next_                                // stop at null
-          && snapshot_version >= start->next_->trans_version_.get_val_for_lsn_allocator() // stop at bigger txn
+          && snapshot_version >= start->next_->trans_version_ // stop at bigger txn
           && start->next_->is_committed()                     // stop at uncommitted
           && palf::SCN::max_scn() != start->next_->trans_version_) {     // stop at uncommitted
         start = start->next_;
@@ -395,7 +395,7 @@ int ObMemtableRowCompactor::try_cleanout_tx_node_during_compact_(ObTxTableGuard 
   return ret;
 }
 
-ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const int64_t snapshot_version,
+ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const palf::SCN snapshot_version,
                                                                  ObMvccTransNode *save)
 {
   int ret = OB_SUCCESS;
@@ -437,7 +437,7 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const int64_t s
       TRANS_LOG(INFO, "ignore aborted node when compact", K(*cur), K(*row_));
       cur = cur->prev_;
       find_committed_tnode = false;
-    } else if (snapshot_version < cur->trans_version_.get_val_for_lsn_allocator()) {
+    } else if (snapshot_version < cur->trans_version_) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected snapshot version", K(snapshot_version), K(*cur), K(*row_));
     } else if (NULL == (mtd = reinterpret_cast<const ObMemtableDataHeader *>(cur->buf_))) {
@@ -539,9 +539,6 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const int64_t s
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "unexpected trans version", K(ret), "node", *save);
         } else {
-          // TODO(handora.qc):: fix it
-          palf::SCN snapshot_scn;
-          snapshot_scn.convert_for_lsn_allocator(snapshot_version);
           trans_node->tx_id_ = save->tx_id_;
           trans_node->seq_no_ = save->seq_no_;
           trans_node->trans_version_ = save->trans_version_;
@@ -551,7 +548,7 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const int64_t s
           trans_node->type_ = NDT_COMPACT;
           trans_node->flag_ = save->flag_;
           trans_node->scn_ = save->scn_;
-          trans_node->set_snapshot_version_barrier(snapshot_scn);
+          trans_node->set_snapshot_version_barrier(snapshot_version);
           TRANS_LOG(DEBUG, "success to compact row, ", K(trans_node->tx_id_), K(dml_flag), K(compact_row_cnt), KPC(save));
         }
       }

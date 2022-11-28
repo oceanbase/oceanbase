@@ -235,7 +235,7 @@ int ObMulSourceTxDataNotifier::notify_table_lock(
     // TABLELOCK only need deal with replay process, but not apply.
     // the replay process will produce a lock op and will be dealt at trans end.
   } else if (OB_FAIL(mt_ctx->replay_lock(lock_op,
-                                         arg.log_ts_))) {
+                                         arg.scn_))) {
     TRANS_LOG(WARN, "replay lock failed", K(ret));
   } else {
     // do nothing

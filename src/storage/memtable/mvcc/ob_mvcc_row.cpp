@@ -560,7 +560,7 @@ int ObMvccRow::row_compact(ObMemtable *memtable,
     ObMemtableRowCompactor row_compactor;
     if (OB_FAIL(row_compactor.init(this, memtable, node_alloc, for_replay))) {
       TRANS_LOG(WARN, "row compactor init error", K(ret));
-    } else if (OB_FAIL(row_compactor.compact(snapshot_version.get_val_for_lsn_allocator()))) {
+    } else if (OB_FAIL(row_compactor.compact(snapshot_version))) {
       TRANS_LOG(WARN, "row compact error", K(ret), K(snapshot_version));
     } else {
       // do nothing

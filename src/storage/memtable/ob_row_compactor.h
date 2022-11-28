@@ -19,6 +19,7 @@
 #include "lib/allocator/ob_small_allocator.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "common/object/ob_object.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -117,11 +118,11 @@ public:
            common::ObIAllocator *node_alloc,
            const bool for_replay);
   // compact and refresh the update counter by snapshot version
-  int compact(const int64_t snapshot_version);
+  int compact(const palf::SCN snapshot_version);
 private:
-  void find_start_pos_(const int64_t snapshot_version,
+  void find_start_pos_(const palf::SCN snapshot_version,
                        ObMvccTransNode *&save);
-  ObMvccTransNode *construct_compact_node_(const int64_t snapshot_version,
+  ObMvccTransNode *construct_compact_node_(const palf::SCN snapshot_version,
                                            ObMvccTransNode *save);
   int try_cleanout_tx_node_during_compact_(storage::ObTxTableGuard &tx_table_guard,
                                             ObMvccTransNode *tnode);

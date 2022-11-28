@@ -212,6 +212,13 @@ public:
   virtual OB_INLINE share::ObScnRange &get_scn_range() { return key_.scn_range_; }
   virtual OB_INLINE bool is_trans_state_deterministic() { return get_upper_trans_version() < INT64_MAX; }
   virtual int64_t get_snapshot_version() const { return key_.get_snapshot_version(); }
+  // TODO: remove it
+  virtual palf::SCN get_snapshot_version_scn() const
+  {
+    palf::SCN scn;
+    scn.convert_for_tx(key_.get_snapshot_version());
+    return scn;
+  }
   virtual int64_t get_upper_trans_version() const { return get_snapshot_version(); }
   virtual int64_t get_max_merged_trans_version() const { return get_snapshot_version(); }
   virtual int get_frozen_schema_version(int64_t &schema_version) const = 0;

@@ -196,7 +196,7 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
   common::databuff_printf(buf, buf_len, pos,
                           " end_code=%d is_readonly=%s ref=%ld trans_id=%s ls_id=%ld "
                           "callback_alloc_count=%ld callback_free_count=%ld "
-                          "checksum=%lu tmp_checksum=%lu checksum_log_ts=%s "
+                          "checksum=%lu tmp_checksum=%lu checksum_scn=%s "
                           "redo_filled_count=%ld redo_sync_succ_count=%ld "
                           "redo_sync_fail_count=%ld main_list_length=%ld "
                           "unsynced_cnt=%ld unsubmitted_cnt_=%ld "
@@ -438,26 +438,20 @@ int ObMemtableCtx::trans_begin()
   return ret;
 }
 
-int ObMemtableCtx::replay_begin(const int64_t log_timestamp)
+int ObMemtableCtx::replay_begin(const palf::SCN scn)
 {
   ObByteLockGuard guard(lock_);
-  // TODO(handora.qc): fix it
-  palf::SCN scn;
-  scn.convert_for_lsn_allocator(log_timestamp);
 
   set_redo_scn(scn);
-  // TODO set redo log id
+
   return OB_SUCCESS;
 }
 
 int ObMemtableCtx::replay_end(const bool is_replay_succ,
-                              const int64_t log_timestamp)
+                              const palf::SCN scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
-  // TODO(handora.qc): fix it
-  palf::SCN scn;
-  scn.convert_for_lsn_allocator(log_timestamp);
 
   if (!is_replay_succ) {
     ret = trans_mgr_.replay_fail(scn);
@@ -468,13 +462,10 @@ int ObMemtableCtx::replay_end(const bool is_replay_succ,
   return ret;
 }
 
-int ObMemtableCtx::rollback_redo_callbacks(const int64_t log_timestamp)
+int ObMemtableCtx::rollback_redo_callbacks(const palf::SCN scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
-  // TODO(handora.qc): fix it
-  palf::SCN scn;
-  scn.convert_for_lsn_allocator(log_timestamp);
 
   ret = trans_mgr_.replay_fail(scn);
 
@@ -483,14 +474,14 @@ int ObMemtableCtx::rollback_redo_callbacks(const int64_t log_timestamp)
 
 int ObMemtableCtx::trans_end(
     const bool commit,
-    const int64_t trans_version,
-    const int64_t final_log_ts)
+    const palf::SCN trans_version,
+    const palf::SCN final_scn)
 {
   int ret = OB_SUCCESS;
 
   ret = do_trans_end(commit,
                      trans_version,
-                     final_log_ts,
+                     final_scn,
                      commit ? OB_TRANS_COMMITED : OB_TRANS_ROLLBACKED);
 
   return ret;
@@ -513,8 +504,8 @@ int ObMemtableCtx::elr_trans_preparing()
 
 int ObMemtableCtx::do_trans_end(
     const bool commit,
-    const int64_t trans_version,
-    const int64_t final_log_ts,
+    const palf::SCN trans_version,
+    const palf::SCN final_scn,
     const int end_code)
 {
   int ret = OB_SUCCESS;
@@ -527,12 +518,8 @@ int ObMemtableCtx::do_trans_end(
     ob_abort();
   }
   if (partial_rollbacked || OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
-    // TODO(handora.qc): fix it
-    palf::SCN commit_scn;
-    commit_scn.convert_for_lsn_allocator(trans_version);
-
     ATOMIC_STORE(&end_code_, end_code);
-    set_commit_version(commit_scn);
+    set_commit_version(trans_version);
     if (OB_FAIL(trans_mgr_.trans_end(commit))) {
       TRANS_LOG(WARN, "trans end error", K(ret), K(*this));
     }
@@ -543,9 +530,9 @@ int ObMemtableCtx::do_trans_end(
     }
     // release durable table lock
     if (OB_FAIL(ret)) {
-      UNUSED(final_log_ts);
+      UNUSED(final_scn);
       //commit or abort log ts for clear table lock
-    } else if (OB_FAIL(clear_table_lock_(commit, trans_version, final_log_ts))) {
+    } else if (OB_FAIL(clear_table_lock_(commit, trans_version, final_scn))) {
       TRANS_LOG(ERROR, "clear table lock failed.", K(ret), K(*this));
     }
     (void)partition_audit_info_cache_.stmt_end_update_audit_info(commit);
@@ -562,7 +549,7 @@ int ObMemtableCtx::trans_kill()
 {
   int ret = OB_SUCCESS;
   bool commit = false;
-  ret = do_trans_end(commit, INT64_MAX, INT64_MAX, OB_TRANS_KILLED);
+  ret = do_trans_end(commit, palf::SCN::max_scn(), palf::SCN::max_scn(), OB_TRANS_KILLED);
   return ret;
 }
 
@@ -585,15 +572,15 @@ int ObMemtableCtx::trans_replay_begin()
 }
 
 int ObMemtableCtx::trans_replay_end(const bool commit,
-                                    const int64_t trans_version,
-                                    const int64_t final_log_ts,
+                                    const palf::SCN trans_version,
+                                    const palf::SCN final_scn,
                                     const uint64_t log_cluster_version,
                                     const uint64_t checksum)
 {
   int ret = OB_SUCCESS;
   int cs_ret = OB_SUCCESS;
 
-  // We must calculate the checksum and generate the checksum_log_ts even when
+  // We must calculate the checksum and generate the checksum_scn even when
   // the checksum verification is unnecessary. This because the trans table
   // merge may be triggered after clear state in which the callback has already
 
@@ -610,7 +597,7 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
     }
   }
 
-  if (OB_FAIL(trans_end(commit, trans_version, final_log_ts))) {
+  if (OB_FAIL(trans_end(commit, trans_version, final_scn))) {
     TRANS_LOG(ERROR, "trans_end fail", K(ret), K(*this));
   } else {
     ret = cs_ret;
@@ -696,11 +683,11 @@ int ObMemtableCtx::log_submitted(const ObRedoLogSubmitHelper &helper)
   return log_gen_.log_submitted(helper.callbacks_);
 }
 
-int ObMemtableCtx::sync_log_succ(const int64_t log_ts, const ObCallbackScope &callbacks)
+int ObMemtableCtx::sync_log_succ(const palf::SCN scn, const ObCallbackScope &callbacks)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(log_gen_.sync_log_succ(log_ts, callbacks))) {
+  if (OB_FAIL(log_gen_.sync_log_succ(scn, callbacks))) {
     TRANS_LOG(WARN, "sync log failed", K(ret));
   }
 
@@ -1022,33 +1009,24 @@ int ObMemtableCtx::reuse_log_generator_()
   return ret;
 }
 
-int ObMemtableCtx::calc_checksum_before_log_ts(const int64_t log_ts,
-                                               uint64_t &checksum,
-                                               int64_t &checksum_log_ts)
+int ObMemtableCtx::calc_checksum_before_scn(const palf::SCN scn,
+                                            uint64_t &checksum,
+                                            palf::SCN &checksum_scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
-  // TODO(handora.qc): fix it
-  palf::SCN checksum_scn;
-  palf::SCN scn;
-  scn.convert_for_lsn_allocator(log_ts);
 
   if (OB_FAIL(trans_mgr_.calc_checksum_before_scn(scn, checksum, checksum_scn))) {
-    TRANS_LOG(ERROR, "calc checksum before log ts should not report error", K(ret), K(log_ts));
+    TRANS_LOG(ERROR, "calc checksum before log ts should not report error", K(ret), K(scn));
   }
-
-  checksum_log_ts = checksum_scn.get_val_for_lsn_allocator();
 
   return ret;
 }
 
 void ObMemtableCtx::update_checksum(const uint64_t checksum,
-                                    const int64_t checksum_log_ts)
+                                    const palf::SCN checksum_scn)
 {
   ObByteLockGuard guard(lock_);
-  // TODO(handora.qc): fix it
-  palf::SCN checksum_scn;
-  checksum_scn.convert_for_lsn_allocator(checksum_log_ts);
 
   trans_mgr_.update_checksum(checksum, checksum_scn);
 }
@@ -1268,20 +1246,6 @@ void ObMemtableCtx::set_log_synced(ObMemCtxLockOpLinkNode *lock_op, const palf::
 }
 
 int ObMemtableCtx::clear_table_lock_(const bool is_commit,
-                                     const int64_t commit_version,
-                                     const int64_t commit_log_ts)
-{
-  int ret = OB_SUCCESS;
-  // TODO: cxf remove it
-  palf::SCN version;
-  palf::SCN scn;
-  version.convert_for_lsn_allocator(commit_version);
-  scn.convert_for_lsn_allocator(commit_log_ts);
-  ret = clear_table_lock_(is_commit, version, scn);
-  return ret;
-}
-
-int ObMemtableCtx::clear_table_lock_(const bool is_commit,
                                      const palf::SCN &commit_version,
                                      const palf::SCN &commit_scn)
 {
@@ -1344,17 +1308,6 @@ int ObMemtableCtx::register_multi_source_data_if_need_(
     }
     TABLELOCK_LOG(DEBUG, "register table lock to multi source data", K(ret), K(lock_op));
   }
-  return ret;
-}
-
-int ObMemtableCtx::replay_lock(const tablelock::ObTableLockOp &lock_op,
-                               const int64_t log_ts)
-{
-  int ret = OB_SUCCESS;
-  // TODO: remove this
-  palf::SCN tmp;
-  tmp.convert_for_lsn_allocator(log_ts);
-  ret = replay_lock(lock_op, tmp);
   return ret;
 }
 

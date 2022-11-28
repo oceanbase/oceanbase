@@ -283,7 +283,7 @@ public:
       storage::ObStoreRowIterator *&row_iter) override;
 
   // replay_row is used to replay rows in redo log for follower
-  // ctx is the writer tx's context, we need the log_ts, tx_id for fulfilling the tx node
+  // ctx is the writer tx's context, we need the scn, tx_id for fulfilling the tx node
   // mmi is mutator iterator for replay
   // decrypt_buf is used for decryption
   virtual int replay_row(
@@ -319,7 +319,7 @@ public:
   inline bool not_empty() const { return INT64_MAX != get_protection_clock(); };
   void set_max_schema_version(const int64_t schema_version);
   virtual int64_t get_max_schema_version() const override;
-  int row_compact(ObMvccRow *value, const bool for_replay, const int64_t snapshot_version);
+  int row_compact(ObMvccRow *value, const bool for_replay, const palf::SCN snapshot_version);
   int64_t get_hash_item_count() const;
   int64_t get_hash_alloc_memory() const;
   int64_t get_btree_item_count() const;
@@ -330,12 +330,12 @@ public:
   virtual bool is_active_memtable() const override;
   virtual bool is_inner_tablet() const { return key_.tablet_id_.is_inner_tablet(); }
   ObTabletID get_tablet_id() const { return key_.tablet_id_; }
-  int set_snapshot_version(const int64_t snapshot_version);
+  int set_snapshot_version(const palf::SCN snapshot_version);
   int64_t get_memtable_state() const { return state_; }
   int64_t get_freeze_state() const { return freeze_state_; }
   int64_t get_protection_clock() const { return local_allocator_.get_protection_clock(); }
   int64_t get_retire_clock() const { return local_allocator_.get_retire_clock(); }
-  int get_current_right_boundary(int64_t &current_right_boundary);
+  int get_current_right_boundary(palf::SCN &current_right_boundary);
 
   inline bool& get_read_barrier() { return read_barrier_; }
   inline void set_write_barrier() { write_barrier_ = true; }
@@ -374,49 +374,32 @@ public:
   virtual bool ready_for_flush() override;
   void print_ready_for_flush();
   virtual int flush(share::ObLSID ls_id) override;
-  virtual int64_t get_rec_log_ts() { return ATOMIC_LOAD(&rec_log_ts_); }
-  virtual palf::SCN get_rec_scn();
+  palf::SCN get_rec_scn() { return rec_scn_.atomic_get(); }
   virtual bool is_frozen_checkpoint() const override { return is_frozen_memtable();}
   virtual bool is_active_checkpoint() const override { return is_active_memtable();}
 
-  virtual OB_INLINE palf::SCN get_end_log_scn() const
+  virtual OB_INLINE palf::SCN get_end_scn() const
   {
-    palf::SCN end_scn = palf::SCN::max_scn();
-    end_scn.atomic_set(key_.scn_range_.end_scn_);
-    return end_scn;
+    return key_.scn_range_.end_scn_;
   }
-  virtual OB_INLINE palf::SCN get_start_log_scn() const
+  virtual OB_INLINE palf::SCN get_start_scn() const
   {
-    palf::SCN start_scn = palf::SCN::min_scn();
-    start_scn.atomic_set(key_.scn_range_.start_scn_);
-    return start_scn;
-  }
-  virtual OB_INLINE int64_t get_end_log_ts() const override
-  {
-    palf::SCN end_scn = palf::SCN::max_scn();
-    end_scn.atomic_set(key_.scn_range_.end_scn_);
-    return end_scn.get_val_for_inner_table_field();
-  }
-  virtual OB_INLINE int64_t get_start_log_ts() const override
-  {
-    palf::SCN start_scn = palf::SCN::min_scn();
-    start_scn.atomic_set(key_.scn_range_.start_scn_);
-    return start_scn.get_val_for_inner_table_field();
+    return key_.scn_range_.start_scn_;
   }
   bool is_empty()
   {
-    return get_end_log_ts() == get_start_log_ts() &&
-      share::ObScnRange::MIN_TS == get_max_end_log_ts();
+    return get_end_scn() == get_start_scn() &&
+      share::ObScnRange::MIN_SCN == get_max_end_scn();
   }
   int resolve_right_boundary();
-  void resolve_left_boundary(int64_t end_log_ts);
+  void resolve_left_boundary(palf::SCN end_scn);
   int resolve_snapshot_version_();
-  int resolve_max_end_log_ts_();
-  int64_t get_max_end_log_ts() const { return ATOMIC_LOAD(&max_end_log_ts_); }
-  int set_rec_log_ts(int64_t rec_log_ts);
-  int set_start_log_ts(const int64_t start_ts);
-  int set_end_log_ts(const int64_t freeze_ts);
-  int set_max_end_log_ts(const int64_t log_ts);
+  int resolve_max_end_scn_();
+  palf::SCN get_max_end_scn() const { return max_end_scn_.atomic_get(); }
+  int set_rec_scn(palf::SCN rec_scn);
+  int set_start_scn(const palf::SCN start_ts);
+  int set_end_scn(const palf::SCN freeze_ts);
+  int set_max_end_scn(const palf::SCN scn);
   inline int set_logging_blocked()
   {
     logging_blocked_start_time = common::ObTimeUtility::current_time();
@@ -455,7 +438,7 @@ public:
 
   template<class T>
   int save_multi_source_data_unit(const T *const multi_source_data_unit,
-                                  const int64_t log_ts,
+                                  const palf::SCN scn,
                                   const bool for_replay,
                                   const MemtableRefOp ref_op = MemtableRefOp::NONE,
                                   const bool is_callback = false);
@@ -467,7 +450,7 @@ public:
                        K_(freeze_clock), K_(max_schema_version), K_(write_ref_cnt), K_(local_allocator),
                        K_(unsubmitted_cnt), K_(unsynced_cnt),
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
-                       K_(contain_hotspot_row), K_(max_end_log_ts), K_(rec_log_ts), K_(snapshot_version),
+                       K_(contain_hotspot_row), K_(max_end_scn), K_(rec_scn), K_(snapshot_version),
                        K_(is_tablet_freeze), K_(is_force_freeze), K_(contain_hotspot_row),
                        K_(read_barrier), K_(is_flushed), K_(freeze_state));
 private:
@@ -542,9 +525,9 @@ private:
   int64_t logging_blocked_start_time; // record the start time of logging blocked
   bool unset_active_memtable_logging_blocked_;
   bool resolve_active_memtable_left_boundary_;
-  int64_t freeze_log_ts_;
-  int64_t max_end_log_ts_;
-  int64_t rec_log_ts_;
+  palf::SCN freeze_scn_;
+  palf::SCN max_end_scn_;
+  palf::SCN rec_scn_;
   int64_t state_;
   int64_t freeze_state_;
   int64_t timestamp_;
@@ -563,7 +546,7 @@ private:
 
 template<class T>
 int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_unit,
-                                            const int64_t log_ts,
+                                            const palf::SCN scn,
                                             const bool for_replay,
                                             const MemtableRefOp ref_op,
                                             const bool is_callback)
@@ -597,19 +580,19 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
           TRANS_LOG(WARN, "fail to inc_cnt_for_multi_data", K(multi_source_data_unit), K(type), KPC(this));
         }
       }
-      if (log_ts > get_start_log_ts() && log_ts < share::ObScnRange::MAX_TS) {
+      if (scn > get_start_scn() && scn < share::ObScnRange::MAX_SCN) {
         if (OB_FAIL(ret)) {
         } 
-        // skip updating max_end_log_ts of frozen memtable for commit/abort when replay clog.
-        else if ((share::ObScnRange::MAX_TS == get_end_log_ts() || !for_replay || !is_callback)
-                 && OB_FAIL(set_max_end_log_ts(log_ts))) {
-          TRANS_LOG(WARN, "failed to set max_end_log_ts", K(ret), K(log_ts), KPC(this));
-        } else if (OB_FAIL(set_rec_log_ts(log_ts))) {
-          TRANS_LOG(WARN, "failed to set rec_log_ts", K(ret), K(log_ts), KPC(this));
+        // skip updating max_end_scn of frozen memtable for commit/abort when replay clog.
+        else if ((share::ObScnRange::MAX_SCN == get_end_scn() || !for_replay || !is_callback)
+                 && OB_FAIL(set_max_end_scn(scn))) {
+          TRANS_LOG(WARN, "failed to set max_end_scn", K(ret), K(scn), KPC(this));
+        } else if (OB_FAIL(set_rec_scn(scn))) {
+          TRANS_LOG(WARN, "failed to set rec_scn", K(ret), K(scn), KPC(this));
         }
-      } else if (-1 != log_ts &&  share::ObScnRange::MAX_TS != log_ts) {
+      } else if (palf::SCN::invalid_scn() != scn && share::ObScnRange::MAX_SCN != scn) {
         ret = common::OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "invalid log_ts", K(ret), K(log_ts), KPC(this));
+        TRANS_LOG(WARN, "invalid scn", K(ret), K(scn), KPC(this));
       }
 
       if (MemtableRefOp::DEC_REF == ref_op) {
@@ -621,7 +604,7 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
         }
       }
     }
-    TRANS_LOG(INFO, "memtable save multi source data unit", K(ret), K(log_ts), K(ref_op),
+    TRANS_LOG(INFO, "memtable save multi source data unit", K(ret), K(scn), K(ref_op),
               KPC(multi_source_data_unit), K(type), KPC(this));
   }
 

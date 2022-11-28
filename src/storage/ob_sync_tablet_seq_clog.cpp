@@ -173,7 +173,7 @@ int ObSyncTabletSeqLogCb::on_failure()
   } else if (OB_FAIL(tablet_handle.get_obj()->get_latest_autoinc_seq(autoinc_seq))) {
     LOG_WARN("fail to get latest autoinc seq", K(ret));
   } else if (OB_FAIL(tablet_handle.get_obj()->save_multi_source_data_unit(&autoinc_seq,
-                                                                          -1/*clog_ts*/,
+                                                                          palf::SCN::invalid_scn()/*scn*/,
                                                                           false/*for_replay*/,
                                                                           memtable::MemtableRefOp::DEC_REF,
                                                                           true/*is_callback*/))) {

@@ -328,7 +328,9 @@ TEST_F(TestMemtable, mt_set)
   print(mvcc_row);
   EXPECT_EQ(2, rg.mem_ctx_.trans_mgr_.get_main_list_length());
 
-  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, 1000, 1000, 0));
+  palf::SCN val_1000;
+  val_1000.convert_for_lsn_allocator(1000);
+  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_1000, val_1000, 0));
   print(mvcc_row);
 }
 
@@ -347,13 +349,17 @@ TEST_F(TestMemtable, conflict)
   EXPECT_EQ(OB_SUCCESS, rg2.init(2, this));
   EXPECT_EQ(OB_ERR_EXCLUSIVE_LOCK_CONFLICT, rg2.write(1, 3, mt));
 
-  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, 1000, 1000, 0));
+  palf::SCN val_1000;
+  val_1000.convert_for_lsn_allocator(1000);
+  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_1000, val_1000, 0));
 
   EXPECT_EQ(OB_TRANSACTION_SET_VIOLATION, rg2.write(1, 3, mt, 900));
   EXPECT_EQ(OB_SUCCESS, rg2.write(1, 3, mt, 1000));
   EXPECT_EQ(OB_SUCCESS, rg2.write(1, 4, mt, 1001));
 
-  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, 1002, 1002, 0));
+  palf::SCN val_1002;
+  val_1002.convert_for_lsn_allocator(1002);
+  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, val_1002, val_1002, 0));
 
   print(mvcc_row);
 }
@@ -367,22 +373,24 @@ TEST_F(TestMemtable, except)
   EXPECT_EQ(OB_SUCCESS, rg.init(1, this));
 
   ObMvccRow *mvcc_row = nullptr;
-  EXPECT_EQ(OB_SUCCESS, rg.write(1, 2, mt, mvcc_row, 1000));
-  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, 900, 900, 0));
+  palf::SCN val_900;
+  val_900.convert_for_lsn_allocator(900);
 
+  EXPECT_EQ(OB_SUCCESS, rg.write(1, 2, mt, mvcc_row, 1000));
+  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
 
   RunCtxGuard rg2;
   EXPECT_EQ(OB_SUCCESS, rg2.init(2, this));
 
   EXPECT_EQ(OB_SUCCESS, rg2.write(1, 3, mt, 1000));
-  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, 900, 900, 0));
+  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
   print(mvcc_row);
 
   RunCtxGuard rg3;
   EXPECT_EQ(OB_SUCCESS, rg3.init(3, this));
 
   EXPECT_EQ(OB_SUCCESS, rg3.write(1, 4, mt, 900));
-  EXPECT_EQ(OB_SUCCESS, rg3.mem_ctx_.do_trans_end(true, 900, 900, 0));
+  EXPECT_EQ(OB_SUCCESS, rg3.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
   print(mvcc_row);
 }
 
@@ -395,11 +403,14 @@ TEST_F(TestMemtable, multi_key)
   RunCtxGuard rg;
   EXPECT_EQ(OB_SUCCESS, rg.init(1, this));
 
+  palf::SCN val_900;
+  val_900.convert_for_lsn_allocator(900);
+
   ObMvccRow *mvcc_row = nullptr;
   ObMvccRow *mvcc_row2 = nullptr;
   EXPECT_EQ(OB_SUCCESS, rg.write(1, 10, mt, mvcc_row, 1000));
   EXPECT_EQ(OB_SUCCESS, rg.write(2, 20, mt, mvcc_row2, 1000));
-  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, 900, 900, 0));
+  EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
   print(mvcc_row);
   print(mvcc_row2);
 
@@ -409,7 +420,7 @@ TEST_F(TestMemtable, multi_key)
 
   EXPECT_EQ(OB_SUCCESS, rg2.write(1, 100, mt, 1000));
   EXPECT_EQ(OB_SUCCESS, rg2.write(2, 200, mt, 1000));
-  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, 900, 900, 0));
+  EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
   print(mvcc_row);
   print(mvcc_row2);
 }

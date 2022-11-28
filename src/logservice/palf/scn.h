@@ -33,8 +33,8 @@ public:
   void set_invalid();
   void set_max();
   void set_min();
-  bool is_max();
-  bool is_min();
+  bool is_max() const;
+  bool is_min() const;
   void set_base();
   static SCN invalid_scn();
   static SCN max_scn();
@@ -48,6 +48,7 @@ public:
   void atomic_set(const SCN &ref);
   SCN atomic_get() const;
   bool atomic_bcas(const SCN &old_v, const SCN &new_val);
+  SCN atomic_vcas(const SCN &old_v, const SCN &new_val);
   SCN inc_update(const SCN &ref_scn);
   SCN dec_update(const SCN &ref_scn);
   static SCN scn_inc(const SCN &ref);

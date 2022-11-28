@@ -305,7 +305,9 @@ int TestCompactionPolicy::mock_memtable(
     LOG_WARN("add to data_checkpoint failed", K(ret), KPC(memtable));
     mt_mgr->clean_tail_memtable_();
   } else if (palf::OB_MAX_SCN_TS_NS != end_border) { // frozen memtable
-    memtable->snapshot_version_ = snapshot_version;
+    palf::SCN snapshot_scn;
+    snapshot_scn.convert_for_lsn_allocator(snapshot_version);
+    memtable->snapshot_version_ = snapshot_scn;
     memtable->write_ref_cnt_ = 0;
     memtable->unsynced_cnt_ = 0;
     memtable->is_tablet_freeze_ = true;

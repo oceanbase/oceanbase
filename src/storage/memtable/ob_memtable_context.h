@@ -346,23 +346,23 @@ public:
   virtual int write_auth(const bool exclusive);
   virtual int write_done();
   virtual int trans_begin();
-  virtual int replay_begin(const int64_t log_timestamp);
+  virtual int replay_begin(const palf::SCN scn);
   virtual int replay_end(const bool is_replay_succ,
-                         const int64_t log_timestamp);
-  int rollback_redo_callbacks(const int64_t log_timestamp);
+                         const palf::SCN scn);
+  int rollback_redo_callbacks(const palf::SCN scn);
   virtual uint64_t calc_checksum_all();
   virtual void print_callbacks();
   virtual int trans_end(const bool commit,
-                        const int64_t trans_version,
-                        const int64_t final_log_ts);
+                        const palf::SCN trans_version,
+                        const palf::SCN final_scn);
   virtual int trans_clear();
   virtual int elr_trans_preparing();
   virtual int trans_kill();
   virtual int trans_publish();
   virtual int trans_replay_begin();
   virtual int trans_replay_end(const bool commit,
-                               const int64_t trans_version,
-                               const int64_t final_log_ts,
+                               const palf::SCN trans_version,
+                               const palf::SCN final_scn,
                                const uint64_t log_cluster_version = 0,
                                const uint64_t checksum = 0);
   //method called when leader takeover
@@ -389,17 +389,17 @@ public:
                             int64_t &buf_pos,
                             ObRedoLogSubmitHelper &helper,
                             const bool log_for_lock_node = true);
-  int calc_checksum_before_log_ts(const int64_t log_ts,
-                                  uint64_t &checksum,
-                                  int64_t &checksum_log_ts);
+  int calc_checksum_before_scn(const palf::SCN scn,
+                               uint64_t &checksum,
+                               palf::SCN &checksum_scn);
   void update_checksum(const uint64_t checksum,
-                       const int64_t checksum_log_ts);
+                       const palf::SCN checksum_scn);
   int log_submitted(const ObRedoLogSubmitHelper &helper);
   // the function apply the side effect of dirty txn and return whether
   // remaining pending callbacks.
   // NB: the fact whether there remains pending callbacks currently is only used
   // for continuing logging when minor freeze
-  int sync_log_succ(const int64_t log_ts, const ObCallbackScope &callbacks);
+  int sync_log_succ(const palf::SCN scn, const ObCallbackScope &callbacks);
   void sync_log_fail(const ObCallbackScope &callbacks);
   bool is_slow_query() const;
   virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx);
@@ -454,7 +454,7 @@ public:
   void replay_done();
   int64_t get_checksum() const { return trans_mgr_.get_checksum(); }
   int64_t get_tmp_checksum() const { return trans_mgr_.get_tmp_checksum(); }
-  palf::SCN get_checksum_log_ts() const { return trans_mgr_.get_checksum_scn(); }
+  palf::SCN get_checksum_scn() const { return trans_mgr_.get_checksum_scn(); }
 public:
   // table lock.
   int enable_lock_table(storage::ObTableHandleV2 &handle);
@@ -479,8 +479,6 @@ public:
   // replay lock to lock map and trans part ctx.
   // used by the replay process of multi data source.
   int replay_lock(const transaction::tablelock::ObTableLockOp &lock_op,
-                  const int64_t log_ts);
-  int replay_lock(const transaction::tablelock::ObTableLockOp &lock_op,
                   const palf::SCN &scn);
   int recover_from_table_lock_durable_info(const ObTableLockInfo &table_lock_info);
   int get_table_lock_store_info(ObTableLockInfo &table_lock_info);
@@ -493,12 +491,9 @@ public:
 private:
   int do_trans_end(
       const bool commit,
-      const int64_t trans_version,
-      const int64_t final_log_ts,
+      const palf::SCN trans_version,
+      const palf::SCN final_scn,
       const int end_code);
-  int clear_table_lock_(const bool is_commit,
-                        const int64_t commit_version,
-                        const int64_t commit_log_ts);
   int clear_table_lock_(const bool is_commit,
                         const palf::SCN &commit_version,
                         const palf::SCN &commit_scn);

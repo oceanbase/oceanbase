@@ -345,10 +345,7 @@ int ObTabletBindingHelper::add_tablet_binding(
     }
 
     if (OB_SUCC(ret)) {
-      SCN scn;
-      if (OB_FAIL(scn.convert_tmp(trans_flags.log_ts_))) {
-        LOG_WARN("failed to convert_scn", K(trans_flags), K(ret));
-      } else if (OB_FAIL(tablet->set_multi_data_for_commit(info, scn, trans_flags.for_replay_, MemtableRefOp::NONE))) {
+      if (OB_FAIL(tablet->set_multi_data_for_commit(info, trans_flags.scn_, trans_flags.for_replay_, MemtableRefOp::NONE))) {
         LOG_WARN("failed to save multi source data", K(ret));
       }
     }
@@ -452,7 +449,7 @@ int ObTabletBindingHelper::check_skip_tx_end(const ObTabletID &tablet_id, const 
   ObTabletTxMultiSourceDataUnit tx_data;
   ObTabletBindingHelper helper(ls, trans_flags);
 
-  if (OB_INVALID_TIMESTAMP == trans_flags.log_ts_) {
+  if (palf::SCN::invalid_scn() == trans_flags.scn_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(ls));
   } else if (OB_FAIL(helper.get_tablet(tablet_id, tablet_handle))) {
@@ -465,7 +462,7 @@ int ObTabletBindingHelper::check_skip_tx_end(const ObTabletID &tablet_id, const 
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
   } else if (OB_FAIL(tablet->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", KR(ret));
-  } else if (tx_data.tx_scn_.get_val_for_lsn_allocator() >= trans_flags.log_ts_) {
+  } else if (tx_data.tx_scn_ >= trans_flags.scn_) {
     skip = true;
   }
   return ret;
@@ -612,13 +609,10 @@ int ObTabletBindingHelper::modify_tablet_binding_for_unbind(
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   const ObTransID &tx_id = trans_flags.tx_id_;
-  const int64_t log_ts = trans_flags.log_ts_;
+  const palf::SCN scn = trans_flags.scn_;
   const bool for_replay = trans_flags.for_replay_;
   const palf::SCN commit_version = trans_flags.trans_version_;
-  SCN scn;
-  if (OB_FAIL(scn.convert_tmp(log_ts))) {
-    LOG_WARN("failed to get data", K(trans_flags), K(ret));
-  } else if (OB_FAIL(get_ls(arg.ls_id_, ls_handle))) {
+  if (OB_FAIL(get_ls(arg.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret));
   } else {
     ObTabletBindingHelper helper(*ls_handle.get_ls(), trans_flags);
@@ -764,7 +758,7 @@ int ObTabletBindingHelper::get_tablet(const ObTabletID &tablet_id, ObTabletHandl
     ObTabletTxMultiSourceDataUnit tx_data;
     if (OB_FAIL(handle.get_obj()->get_tx_data(tx_data))) {
       LOG_WARN("failed to get tx data", K(ret), K(key));
-    } else if (OB_INVALID_TIMESTAMP != trans_flags_.log_ts_ && trans_flags_.log_ts_ <= tx_data.tx_scn_.get_val_for_lsn_allocator()) {
+    } else if (palf::SCN::invalid_scn() != trans_flags_.scn_ && trans_flags_.scn_ <= tx_data.tx_scn_) {
       ret = OB_NO_NEED_UPDATE;
       LOG_INFO("tablet frozen", K(ret), K(key), K(trans_flags_), K(tx_data));
     }
@@ -784,7 +778,7 @@ int ObTabletBindingHelper::replay_get_tablet(const ObTabletMapKey &key, ObTablet
   if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_WARN("failed to get tablet", K(ret), K(key));
-    } else if (trans_flags_.log_ts_ < tablet_change_checkpoint_scn.get_val_for_lsn_allocator()) {
+    } else if (trans_flags_.scn_ < tablet_change_checkpoint_scn) {
       LOG_WARN("tablet already deleted", K(ret), K(key), K(trans_flags_), K(tablet_change_checkpoint_scn));
     } else {
       ret = OB_EAGAIN;
@@ -876,14 +870,11 @@ int ObTabletBindingHelper::lock_tablet_binding(ObTabletHandle &handle, const ObM
 {
   int ret = OB_SUCCESS;
   const ObTransID &tx_id = trans_flags.tx_id_;
-  const int64_t log_ts = trans_flags.log_ts_;
+  const palf::SCN scn = trans_flags.scn_;
   const bool for_replay = trans_flags.for_replay_;
   ObTablet *tablet = handle.get_obj();
   ObTabletTxMultiSourceDataUnit tx_data;
-  SCN scn;
-  if (OB_FAIL(scn.convert_tmp(log_ts))) {
-    LOG_WARN("failed to get data", K(trans_flags), K(ret));
-  } else if (OB_FAIL(tablet->get_tx_data(tx_data))) {
+  if (OB_FAIL(tablet->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret));
   } else {
     const ObTransID old_tx_id = tx_data.tx_id_;
@@ -904,7 +895,7 @@ int ObTabletBindingHelper::lock_tablet_binding(ObTabletHandle &handle, const ObM
     if (OB_FAIL(ret)) {
     } else if (need_update && OB_FAIL(tablet->set_tx_data(tx_data, memtable_scn, for_replay,
         update_cache, ref_op, false/*is_callback*/))) {
-      LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(log_ts), K(for_replay), K(ref_op));
+      LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(scn), K(for_replay), K(ref_op));
     }
   }
   return ret;
@@ -944,14 +935,11 @@ int ObTabletBindingHelper::set_scn(ObTabletHandle &handle, const ObMulSourceData
 {
   int ret = OB_SUCCESS;
   const ObTransID &tx_id = trans_flags.tx_id_;
-  const int64_t log_ts = trans_flags.log_ts_;
+  const palf::SCN scn = trans_flags.scn_;
   const bool for_replay = trans_flags.for_replay_;
   ObTablet *tablet = handle.get_obj();
   ObTabletTxMultiSourceDataUnit data;
-  SCN scn;
-  if (OB_FAIL(scn.convert_tmp(log_ts))) {
-    LOG_WARN("failed to get data", K(trans_flags), K(ret));
-  } else if (OB_FAIL(tablet->get_tx_data(data))) {
+  if (OB_FAIL(tablet->get_tx_data(data))) {
     LOG_WARN("failed to get data", K(ret));
   } else if (OB_UNLIKELY(data.tx_id_ != tx_id)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1004,17 +992,15 @@ int ObTabletBindingHelper::unlock_tablet_binding(ObTabletHandle &handle, const O
 {
   int ret = OB_SUCCESS;
   const ObTransID &tx_id = trans_flags.tx_id_;
-  const int64_t log_ts = trans_flags.log_ts_;
+  const palf::SCN scn = trans_flags.scn_;
   const bool for_replay = trans_flags.for_replay_;
   const bool for_commit = trans_flags.notify_type_ == NotifyType::ON_COMMIT;
   ObTablet *tablet = handle.get_obj();
   ObTabletTxMultiSourceDataUnit tx_data;
-  SCN scn;
+
   LOG_INFO("unlock_tablet_binding", KPC(tablet), K(trans_flags));
   if (OB_FAIL(tablet->get_tx_data(tx_data))) {
     LOG_WARN("failed to get tx data", K(ret));
-  } else if (OB_FAIL(scn.convert_tmp(log_ts))) {
-    LOG_WARN("failed to convert_scn", K(trans_flags), K(ret));
   } else {
     const SCN old_scn = tx_data.tx_scn_;
     if (tx_data.tx_id_ == tx_id) {

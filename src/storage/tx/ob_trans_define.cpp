@@ -996,7 +996,7 @@ void ObTxExecInfo::reset()
   max_applying_part_log_no_ = INT64_MAX;
   max_submitted_seq_no_ = 0;
   checksum_ = 0;
-  checksum_log_ts_ = 0;
+  checksum_scn_.set_min();
   max_durable_lsn_.reset();
   data_complete_ = false;
   is_dup_tx_ = false;
@@ -1035,7 +1035,7 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     max_applying_part_log_no_,
                     max_submitted_seq_no_,
                     checksum_,
-                    checksum_log_ts_,
+                    checksum_scn_,
                     max_durable_lsn_,
                     data_complete_,
                     is_dup_tx_,

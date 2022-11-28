@@ -197,7 +197,7 @@ public:
   { mt_ctx_.set_table_lock_killed(); }
   bool is_table_lock_killed() const;
   bool need_update_schema_version(const int64_t log_id,
-                                  const int64_t log_ts);
+                                  const palf::SCN log_ts);
 
   void set_trans_table_status(const obrpc::ObTrxToolArg &arg);
   share::ObLSID get_ls_id() const { return ls_id_; }
