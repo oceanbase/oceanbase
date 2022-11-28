@@ -125,6 +125,10 @@ ObJitMemoryBlock ObJitMemory::allocate_mapped_memory(int64_t num_bytes,
         addr = MAP_FAILED;
       }
 #endif
+    } else {
+      LOG_DEBUG("allocate mapped memory success!",
+                K(addr), K(start),
+                K(page_size), K(num_pages), K(num_pages*page_size), K(num_bytes), K(p_flags));
     }
   } while (MAP_FAILED == addr);
 
@@ -141,6 +145,7 @@ int ObJitMemory::release_mapped_memory(ObJitMemoryBlock &block)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("jit block munmap failed", K(block), K(ret));
   } else {
+    LOG_DEBUG("release mapped memory done!", KP((void*)block.addr_), K(block.size_));
     block.reset();
   }
 
@@ -210,6 +215,7 @@ void *ObJitMemoryGroup::alloc_align(int64_t sz, int64_t align, int64_t p_flags)
        } else {
          tailer_->next_ = cur;
          cur->next_ = NULL;
+         tailer_ = cur;
        }
 
        avail_block = cur;
@@ -272,6 +278,7 @@ void ObJitMemoryGroup::reserve(int64_t sz, int64_t align, int64_t p_flags)
     } else {
       tailer_->next_ = cur;
       cur->next_ = NULL;
+      tailer_ = cur;
     }
 
     block_cnt_++;
@@ -288,15 +295,16 @@ void ObJitMemoryGroup::free()
   int ret = OB_SUCCESS;
   ObJitMemoryBlock *cur = header_;
   ObJitMemoryBlock *tmp = NULL;
+  ObJitMemoryBlock *next = NULL;
   for (int64_t i = 0;
        NULL != cur; //ignore ret
        i++) {
+    next = cur->next_;
     if (OB_FAIL(ObJitMemory::release_mapped_memory(*cur))) {
       LOG_WARN("jit fail to free mem", K(*cur), K(ret));
     }
-
     tmp = cur;
-    cur = cur->next_;
+    cur = next;
     delete tmp;
   }
   MEMSET(this, 0, sizeof(*this));

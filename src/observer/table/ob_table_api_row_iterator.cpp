@@ -413,6 +413,7 @@ int ObTableApiRowIterator::add_column_type(const share::schema::ObColumnSchemaV2
   } else {
     column_desc.col_id_ = column_schema.get_column_id();
     column_desc.col_type_ = column_schema.get_meta_type();
+    column_desc.col_order_ = common::ObOrderType::ASC;
     if (OB_FAIL(column_descs_.push_back(column_desc))) {
       LOG_WARN("failed to push back column desc, ", K(ret));
     }

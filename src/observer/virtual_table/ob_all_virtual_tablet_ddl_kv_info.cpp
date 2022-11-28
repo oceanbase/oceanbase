@@ -122,14 +122,19 @@ int ObAllVirtualTabletDDLKVInfo::get_next_ddl_kv(ObDDLKV *&ddl_kv)
   ObTabletHandle tablet_handle;
   while (OB_SUCC(ret)) {
     if (ddl_kv_idx_ < 0 || ddl_kv_idx_ >= ddl_kvs_handle_.get_count()) {
-      ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
+      ObDDLKvMgrHandle ddl_kv_mgr_handle;
       if (OB_FAIL(get_next_tablet(tablet_handle))) {
         if (OB_ITER_END != ret) {
           SERVER_LOG(WARN, "get_next_tablet failed", K(ret));
         }
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr))) {
-        SERVER_LOG(WARN, "fail to get freezed ddl kv", K(ret));
-      } else if (OB_FAIL(ddl_kv_mgr->get_ddl_kvs(false/*frozen_only*/, ddl_kvs_handle_))) {
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          SERVER_LOG(WARN, "fail to get freezed ddl kv", K(ret));
+        } else {
+          ddl_kv_idx_ = -1; // to get next tablet
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(false/*frozen_only*/, ddl_kvs_handle_))) {
         SERVER_LOG(WARN, "fail to get ddl kvs", K(ret));
       } else if (ddl_kvs_handle_.get_count() > 0) {
         ddl_kv_idx_ = 0;
@@ -195,16 +200,16 @@ int ObAllVirtualTabletDDLKVInfo::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(curr_tablet_id_.id());
           break;
         case OB_APP_MIN_COLUMN_ID + 5:
-          // freeze_log_scn
-          cur_row_.cells_[i].set_uint64(cur_kv->get_freeze_log_ts());
+          // freeze_scn
+          cur_row_.cells_[i].set_uint64(cur_kv->get_freeze_scn().get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 6:
-          // start_log_scn
-          cur_row_.cells_[i].set_uint64(cur_kv->get_ddl_start_log_ts());
+          // start_scn
+          cur_row_.cells_[i].set_uint64(cur_kv->get_ddl_start_scn().get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 7:
-          // min_log_scn
-          cur_row_.cells_[i].set_uint64(cur_kv->get_min_log_ts());
+          // min_scn
+          cur_row_.cells_[i].set_uint64(cur_kv->get_min_scn().get_val_for_inner_table_field());
           break;
         case OB_APP_MIN_COLUMN_ID + 8:
           // macro_block_cnt

@@ -616,6 +616,7 @@ int ObPLPackageManager::get_package_condition(const ObPLResolveCtx &resolve_ctx,
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
     LOG_WARN("package spec does not exist", K(ret), K(package_id));
   }
+  CK (OB_NOT_NULL(tmp_package));
   OZ (tmp_package->get_condition(condition_name, value));
   return ret;
 }
@@ -876,8 +877,13 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
                               NULL));
     OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
           resolve_ctx.allocator_, resolve_ctx.session_info_.get_dtc_params(), source));
-    OZ (compiler.analyze_package(source, null_parent_ns,
-                                 package_spec_ast, package_spec_info.is_for_trigger()));
+    {
+      ObPLCompilerEnvGuard guard(
+        package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, ret);
+      OZ (compiler.analyze_package(source, null_parent_ns,
+                                   package_spec_ast, package_spec_info.is_for_trigger()));
+    }
+
     OZ (package_body_ast.init(db_schema->get_database_name_str(),
                               package_body_info.get_package_name(),
                               PL_PACKAGE_BODY,
@@ -1315,7 +1321,7 @@ int ObPLPackageManager::add_package_to_plan_cache(const ObPLResolveCtx &resolve_
         }
       } else {
         LOG_INFO("add pl package to plan cache success",
-                 K(ret), K(package_id), K(package->get_dependency_table()));
+                 K(ret), K(package_id), K(package->get_dependency_table()), K(pc_ctx.fp_result_));
       }
       exec_ctx.set_physical_plan_ctx(NULL);
     }

@@ -512,9 +512,11 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
     if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
                         share::ObCascadMember(addr, cluster_id), true /* add_server */,
                         session->get_process_query_time()))) {
-      ret = OB_RPC_CONNECT_ERROR;
-      LOG_WARN("peer no in communication, maybe crashed", K(ret), K(sqc), K(cluster_id),
-               K(session->get_process_query_time()));
+      if (!ignore_vtable_error) {
+        ret = OB_RPC_CONNECT_ERROR;
+        LOG_WARN("peer no in communication, maybe crashed", K(ret), K(sqc), K(cluster_id),
+                K(session->get_process_query_time()));
+      }
     } else {
       SMART_VAR(ObPxRpcInitSqcArgs, args) {
         int64_t timeout_us = phy_plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time();
@@ -1229,9 +1231,11 @@ int ObParallelDfoScheduler::fast_dispatch_sqc(ObExecContext &exec_ctx,
     if (OB_UNLIKELY(share::ObServerBlacklist::get_instance().is_in_blacklist(
                       share::ObCascadMember(addr, cluster_id), true /* add_server */,
                       session->get_process_query_time()))) {
-      ret = OB_RPC_CONNECT_ERROR;
-      LOG_WARN("peer no in communication, maybe crashed", K(ret), K(sqc), K(cluster_id),
-               K(session->get_process_query_time()));
+      if (!sqc.is_ignore_vtable_error()) {
+        ret = OB_RPC_CONNECT_ERROR;
+        LOG_WARN("peer no in communication, maybe crashed", K(ret), K(sqc), K(cluster_id),
+                K(session->get_process_query_time()));
+      }
     } else {
       SMART_VAR(ObPxRpcInitSqcArgs, args) {
         ObPxRpcInitSqcResponse resp;

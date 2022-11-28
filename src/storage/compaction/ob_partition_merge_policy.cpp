@@ -133,15 +133,12 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
   // TODO: @dengzhi.ldz, remove max_snapshot_version, merge all forzen memtables
   // Keep max_snapshot_version currently because major merge must be done step by step
   int64_t max_snapshot_version = freeze_info.next.freeze_scn.get_val_for_inner_table_field();
-  const palf::SCN clog_checkpoint_scn = tablet.get_clog_checkpoint_scn();
+  ObITable *last_table = tablet.get_table_store().get_minor_sstables().get_boundary_table(true/*last*/);
+  const palf::SCN last_minor_scn = nullptr == last_table ? tablet.get_clog_checkpoint_scn() : last_table->get_end_scn();
 
   // Freezing in the restart phase may not satisfy end >= last_max_sstable,
   // so the memtable cannot be filtered by scn
   // can only take out all frozen memtable
-  if (OB_UNLIKELY(!clog_checkpoint_scn.is_valid())) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("unexpected tablet info", K(ret), K(clog_checkpoint_scn));
-  }
   ObIMemtable *memtable = nullptr;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   int64_t log_ts_included_memtable_cnt = 0;
@@ -155,15 +152,9 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
     } else if (!memtable->can_be_minor_merged()) {
       FLOG_INFO("memtable cannot mini merge now", K(ret), K(i), KPC(memtable), K(max_snapshot_version), K(memtable_handles), K(param));
       break;
-    } else if (memtable->get_end_log_ts() <= clog_checkpoint_scn.get_val_for_inner_table_field()) {
+    } else if (memtable->get_end_scn() <= last_minor_scn) {
       if (!tablet_id.is_special_merge_tablet()) {
-        ObMemtable *data_memtable = static_cast<ObMemtable *>(memtable);
-        if (memtable->get_snapshot_version() > tablet.get_snapshot_version()) {
-          // for force_freeze empty memtable & log_ts included non-empty memtable
-          ++log_ts_included_memtable_cnt;
-        } else {
-          continue;
-        }
+        ++log_ts_included_memtable_cnt;
       } else {
         LOG_DEBUG("memtable wait to release", K(param), KPC(memtable));
         continue;
@@ -1028,9 +1019,9 @@ int ObPartitionMergePolicy::refine_mini_merge_result(
     LOG_ERROR("Unexpected uncontinuous scn_range in mini merge", K(ret), K(result), KPC(last_table));
   } else if (result.scn_range_.start_scn_ < last_table->get_end_scn()
       && !tablet.get_tablet_meta().tablet_id_.is_special_merge_tablet()) {
-    // fix start_log_ts to make scn_range continuous in migrate phase for issue 42832934
+    // fix start_scn to make scn_range continuous in migrate phase for issue 42832934
     if (result.scn_range_.end_scn_ <= last_table->get_end_scn()) {
-      ret = OB_NEED_REMOVE_UNNEED_TABLE;
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("No need mini merge memtable which is covered by existing sstable", K(ret), K(result), KPC(last_table));
     } else {
       result.scn_range_.start_scn_ = last_table->get_end_scn();

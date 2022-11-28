@@ -711,7 +711,7 @@ int ObDDLUtil::clear_ddl_checksum(ObPhysicalPlan *phy_plan)
   if (OB_ISNULL(phy_plan)) {
     ret = OB_ERR_UNEXPECTED;
   } else {
-    const int64_t execution_id = phy_plan->get_ddl_schema_version();
+    const int64_t execution_id = phy_plan->get_ddl_execution_id();
     const ObOpSpec *root_op_spec = phy_plan->get_root_op_spec();
     uint64_t table_scan_table_id = OB_INVALID_ID;
     if (OB_FAIL(find_table_scan_table_id(root_op_spec, table_scan_table_id))) {

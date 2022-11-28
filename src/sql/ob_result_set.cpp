@@ -893,15 +893,28 @@ int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCPa
              && OB_FAIL(construct_field_name(raw_params, false))) {
     LOG_WARN("failed to construct field name", K(ret));
   } else {
+    int64_t ps_param_count = plan_ctx->get_orig_question_mark_cnt();
     p_field_columns_ = phy_plan.contain_paramed_column_field()
                                   ? &field_columns_
                                   : &phy_plan.get_field_columns();
-    p_param_columns_ = &phy_plan.get_param_fields();
     p_returning_param_columns_ = &phy_plan.get_returning_param_fields();
     stmt_type_ = phy_plan.get_stmt_type();
     literal_stmt_type_ = phy_plan.get_literal_stmt_type();
     is_returning_ = phy_plan.is_returning();
     plan_ctx->set_is_affect_found_row(phy_plan.is_affect_found_row());
+    if (plan_ctx->is_ps_protocol() && ps_param_count != phy_plan.get_param_fields().count()) {
+      if (OB_FAIL(reserve_param_columns(ps_param_count))) {
+        LOG_WARN("reserve param columns failed", K(ret), K(ps_param_count));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < ps_param_count; ++i) {
+        ObField param_field;
+        param_field.type_.set_type(ObIntType); // @bug
+        param_field.cname_ = ObString::make_string("?");
+        OZ (add_param_column(param_field), K(param_field), K(i), K(ps_param_count));
+      }
+    } else {
+      p_param_columns_ = &phy_plan.get_param_fields();
+    }
   }
   return ret;
 }

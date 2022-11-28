@@ -30,7 +30,8 @@ class ObTabletGCHandler
 {
 public:
   ObTabletGCHandler()
-    : tablet_persist_trigger_(0),
+    : ls_(NULL),
+      tablet_persist_trigger_(0),
       is_inited_(false)
   {}
   ~ObTabletGCHandler() { reset(); }

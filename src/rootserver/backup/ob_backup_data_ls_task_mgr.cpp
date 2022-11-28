@@ -335,7 +335,7 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
   if (OB_ISNULL(job_attr_) || OB_ISNULL(ls_attr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]attr should not be null", K(ret), KP_(job_attr), KP_(ls_attr));
-  } else if (OB_SUCCESS == ls_attr_->result_/* || OB_LS_NOT_EXIST == ls_attr_->result_*/) { // TODO(yangyi.yyy): change turn need use another error code
+  } else if (OB_SUCCESS == ls_attr_->result_/* || OB_LS_NOT_EXIST == ls_attr_->result_*/) { // TODO(yangyi.yyy): change turn need use another error code in 4.1
     finish_cnt++;
   } else {
     bool ls_can_retry = true;

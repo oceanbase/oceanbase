@@ -148,7 +148,7 @@ private:
 
   int store_encoding_meta_and_fix_cols(int64_t &encoding_meta_offset);
   int init_all_col_values(const ObMicroBlockEncodingCtx &ctx);
-  void print_micro_block_encoder_status();
+  void print_micro_block_encoder_status() const;
 
 private:
   ObMicroBlockEncodingCtx ctx_;

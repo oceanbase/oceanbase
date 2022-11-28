@@ -16,7 +16,6 @@
 #include "share/schema/ob_schema_utils.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "ob_rs_event_history_table_operator.h"
-#include "logservice/palf/scn.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;

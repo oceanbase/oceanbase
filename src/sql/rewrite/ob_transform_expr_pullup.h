@@ -32,6 +32,7 @@ public:
   int init();
   int add_expr_map(ObRawExpr *expr);
   int is_exist(ObRawExpr *expr, bool &is_exist);
+  int get_ref_count(ObRawExpr *expr, int64_t &ref_count);
 private:
   uint64_t get_hash_value(ObRawExpr *expr) {
     return (uint64_t)(expr);
@@ -74,7 +75,9 @@ private:
                             bool stmt_may_reduce_row_count, bool &trans_happened);
   int extract_params(ObRawExpr *expr, ObExprNodeMap &child_reject_map,
                      common::ObIArray<ObRawExpr*> &param_exprs);
-  int search_expr_cannot_pullup(ObRawExpr *expr, common::ObIArray<ObRawExpr *> &expr_cannot_pullup);
+  int search_expr_cannot_pullup(ObRawExpr *expr,
+                                ObExprNodeMap &expr_map,
+                                common::ObIArray<ObRawExpr *> &expr_cannot_pullup);
   int adjust_subquery(ObRawExpr *expr, ObSelectStmt &child, ObSelectStmt &parent);
   int is_stmt_may_reduce_row_count(const ObSelectStmt &stmt, bool &is_true);
 

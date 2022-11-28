@@ -311,7 +311,7 @@ public:
                               jit::ObLLVMValue &upper_value,
                               jit::ObLLVMValue &is_true);
 
-  int generate_sql(const ObPLSqlStmt &s, jit::ObLLVMValue &ret_err, jit::ObLLVMValue &array_bind_count);
+  int generate_sql(const ObPLSqlStmt &s, jit::ObLLVMValue &ret_err);
   int generate_after_sql(const ObPLSqlStmt &s, jit::ObLLVMValue &ret_err);
   int generate_new_objparam(jit::ObLLVMValue &result, int64_t udt_id = OB_INVALID_ID);
   int check_success(jit::ObLLVMValue &ret_err,

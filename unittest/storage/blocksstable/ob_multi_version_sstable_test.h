@@ -544,6 +544,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
+  param.ddl_scn_.set_min();
   if (merge_type_ == MAJOR_MERGE) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   }

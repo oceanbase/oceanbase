@@ -49,7 +49,7 @@ ObCDCFactory::~ObCDCFactory()
   curl_global_cleanup();
 }
 
-IObCDCInstance *ObCDCFactory::construct_oblog()
+IObCDCInstance *ObCDCFactory::construct_obcdc()
 {
   return ObLogInstance::get_instance();
 }

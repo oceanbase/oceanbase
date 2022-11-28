@@ -710,6 +710,7 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
       "table_type    start_scn    end_scn    max_ver    upper_ver\n"
       "10            0            1          1          1        \n"
       "11            1            160        150        150      \n"
+      "11            160          300        300        300      \n"
       "0             1            160        150        150      \n"
       "0             160          200        210        210      \n"
       "0             200          300        300        300      \n"
@@ -729,7 +730,17 @@ TEST_F(TestCompactionPolicy, check_mini_merge_basic)
   tablet_handle_.get_obj()->tablet_meta_.snapshot_version_ = 300;
   result.reset();
   ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
-  ASSERT_EQ(OB_NO_NEED_MERGE, ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(result.update_tablet_directly_, true);
+
+  tablet_handle_.get_obj()->tablet_meta_.clog_checkpoint_scn_.convert_for_lsn_allocator(280);
+  tablet_handle_.get_obj()->tablet_meta_.snapshot_version_ = 280;
+  result.reset();
+  ret = ObPartitionMergePolicy::get_mini_merge_tables(param, 0, *tablet_handle_.get_obj(), result);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(3, result.handle_.get_count());
+  ASSERT_EQ(300, result.scn_range_.end_scn_.get_val_for_lsn_allocator());
+  ASSERT_EQ(result.update_tablet_directly_, true);
 }
 
 TEST_F(TestCompactionPolicy, check_minor_merge_basic)

@@ -17,6 +17,7 @@ NEED_MAKE=false
 NEED_INIT=false
 LLD_OPTION=ON
 ASAN_OPTION=ON
+STATIC_LINK_LGPL_DEPS_OPTION=ON
 
 echo "$0 ${ALL_ARGS[@]}"
 
@@ -30,28 +31,25 @@ function echo_err() {
 
 function usage
 {
-    echo -e "Usage:
-\t./build.sh -h
-\t./build.sh init
-\t./build.sh clean
-\t./build.sh --ce
-\t./build.sh [BuildType] [--init] [--make [MakeOptions]]
-\t./build.sh [BuildType] [--init] [--ob-make [MakeOptions]]
+    echo -e "Usage:"
+    echo -e "\t./build.sh -h"
+    echo -e "\t./build.sh init"
+    echo -e "\t./build.sh clean"
+    echo -e "\t./build.sh [BuildType] [--init] [--make [MakeOptions]]"
 
-OPTIONS:
-    BuildType => debug(default), release, errsim, dissearray, rpm
-    MakeOptions => Options to make command, default: -j N
+    echo -e "\nOPTIONS:"
+    echo -e "\tBuildType => debug(default), release, errsim, dissearray, rpm"
+    echo -e "\tMakeOptions => Options to make command, default: -j N"
 
-Examples:
-\t# Build by debug mode and make with -j24.
-\t./build.sh debug --make -j24
+    echo -e "\nExamples:"
+    echo -e "\t# Build by debug mode and make with -j24."
+    echo -e "\t./build.sh debug --make -j24"
 
-\t# Init and build with release mode but not compile.
-\t./build.sh release --init
+    echo -e "\n\t# Init and build with release mode but not compile."
+    echo -e "\t./build.sh release --init"
 
-\t# Build with rpm mode and make with default arguments.
-\t./build.sh rpm --make
-"
+    echo -e "\n\t# Build with rpm mode and make with default arguments."
+    echo -e "\t./build.sh rpm --make"
 }
 
 # parse arguments
@@ -64,10 +62,6 @@ function parse_args
         elif [[ "$i" == "--make" ]]
         then
             NEED_MAKE=make
-        elif [[ "$i" == "--ob-make" ]]
-        then
-            NEED_MAKE=ob-make
-            MAKE_ARGS=()
         elif [[ $NEED_MAKE == false ]]
         then
             BUILD_ARGS+=("$i")
@@ -116,7 +110,7 @@ function do_init
       exit $?
     fi
     time2_ms=$(echo $[$(date +%s%N)/1000000])
-    # 计算时间差值
+
     cost_time_ms=$(($time2_ms - $time1_ms))
     cost_time_s=`expr $cost_time_ms / 1000`
     let min=cost_time_s/60
@@ -198,7 +192,8 @@ function build
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_DEBUG_LOG=ON -DENABLE_OBJ_LEAK_CHECK=ON -DOB_USE_LLD=$LLD_OPTION
         ;;
       xrpm)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_FATAL_ERROR_HANG=OFF
+        STATIC_LINK_LGPL_DEPS_OPTION=OFF
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_FATAL_ERROR_HANG=OFF -DOB_STATIC_LINK_LGPL_DEPS=$STATIC_LINK_LGPL_DEPS_OPTION
         ;;
       xenable_smart_var_check)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DENABLE_SMART_VAR_CHECK=ON -DOB_ENABLE_AVX2=ON

@@ -98,6 +98,7 @@ private:
   int process_dump();
   int dump_all_datum_store();
   bool need_dump() const;
+  int free_datum_store_memory();
 private:
   typedef common::hash::ObHashMap<common::ObTabletID, ObChunkDatumStore *,
                                   common::hash::NoPthreadDefendMode> PartitionStoreMap;

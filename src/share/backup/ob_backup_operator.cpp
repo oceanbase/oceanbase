@@ -167,18 +167,6 @@ int ObTenantBackupInfoOperation::insert_info(ObISQLClient &sql_client, T &info)
   return ret;
 }
 
-int ObTenantBackupInfoOperation::insert_base_backup_info(ObISQLClient &sql_client, ObBaseBackupInfo &info)
-{
-  int ret = OB_SUCCESS;
-  if (!info.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(info));
-  } else if (OB_FAIL(insert_info(sql_client, info))) {
-    LOG_WARN("insert info failed", K(ret), K(info));
-  }
-  return ret;
-}
-
 int ObTenantBackupInfoOperation::load_info_item(
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,

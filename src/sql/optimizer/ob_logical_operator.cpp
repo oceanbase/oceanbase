@@ -940,7 +940,7 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
       double op_cost = ObOptEstCost::cost_get_rows(child_card / parallel,
                                                    opt_ctx.get_cost_model_type());
-      if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
+      if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
         LOG_WARN("failed to re est exchange cost", K(ret));
       } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
                                                                 get_plan()->get_selectivity_ctx(),

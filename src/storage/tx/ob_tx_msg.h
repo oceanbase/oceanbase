@@ -52,7 +52,8 @@ namespace transaction
       TX_2PC_CLEAR_RESP        = 53,
       /* for others */
       ROLLBACK_SAVEPOINT       = 60,
-      KEEPALIVE                = 61
+      KEEPALIVE                = 61,
+      KEEPALIVE_RESP           = 62
     };
 
     struct ObTxMsg : public obrpc::ObIFill
@@ -261,6 +262,16 @@ namespace transaction
       OB_UNIS_VERSION(1);
     };
 
+    struct ObTxKeepaliveRespMsg : public ObTxMsg {
+      ObTxKeepaliveRespMsg() :
+          ObTxMsg(KEEPALIVE_RESP)
+      {}
+      int64_t status_;
+      bool is_valid() const;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(status));
+      OB_UNIS_VERSION(1);
+    };
+
     struct Ob2pcPrepareReqMsg : public ObTxMsg
     {
     public:
@@ -456,7 +467,7 @@ namespace transaction
             || (20 <= msg_type && 22 >= msg_type)
             || (40 <= msg_type && 49 >= msg_type)
             || (50 <= msg_type && 53 >= msg_type)
-            || (60 <= msg_type && 61 >= msg_type));
+            || (60 <= msg_type && 62 >= msg_type));
       }
 
       static bool is_2pc_msg_type(const int16_t msg_type)

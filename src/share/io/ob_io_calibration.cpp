@@ -477,7 +477,7 @@ void ObIOBenchController::run1()
   const int64_t total_block_count = OB_SERVER_BLOCK_MGR.get_total_macro_block_count();
   if (free_block_count <= MIN_CALIBRATION_BLOCK_COUNT
       || 1.0 * free_block_count / total_block_count < MIN_FREE_SPACE_PERCENTAGE) {
-    ret = OB_CS_OUTOF_DISK_SPACE;
+    ret = OB_SERVER_OUTOF_DISK_SPACE;
     LOG_WARN("out of space", K(ret), K(free_block_count), K(total_block_count));
   } else {
     int64_t benchmark_block_count = free_block_count * 0.2;
@@ -865,7 +865,7 @@ int ObIOCalibration::parse_calibration_string(const ObString &calibration_string
   } else {
     // duplicate and replace ':' with ' '
     char dup_str[MAX_IO_CALIBRAITON_STRING_LENGTH] = { 0 };
-    strncpy(dup_str, calibration_string.ptr(), sizeof(dup_str));
+    strncpy(dup_str, calibration_string.ptr(), sizeof(dup_str) - 1);
     for (int64_t i = 0; i < sizeof(dup_str); ++i) {
       if (':' == dup_str[i]) {
         dup_str[i] = ' ';

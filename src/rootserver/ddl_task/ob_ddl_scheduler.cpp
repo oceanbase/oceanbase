@@ -364,6 +364,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   task_record.reset();
   const obrpc::ObAlterTableArg *alter_table_arg = nullptr;
   const obrpc::ObCreateIndexArg *create_index_arg = nullptr;
+  const obrpc::ObDropIndexArg *drop_index_arg = nullptr;
   ObRootService *root_service = GCTX.root_service_;
   LOG_INFO("create ddl task", K(param));
   if (OB_UNLIKELY(!is_inited_)) {
@@ -392,9 +393,11 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
         break;
       case DDL_DROP_INDEX:
         // in this case, src_table_schema is data table, dest_table_schema is index table
+        drop_index_arg = static_cast<const obrpc::ObDropIndexArg *>(param.ddl_arg_);
         if (OB_FAIL(create_drop_index_task(proxy,
                                            param.src_table_schema_,
                                            param.parent_task_id_,
+                                           drop_index_arg,
                                            *param.allocator_,
                                            task_record))) {
           LOG_WARN("fail to create drop index task failed", K(ret));
@@ -593,6 +596,7 @@ int ObDDLScheduler::create_drop_index_task(
     common::ObISQLClient &proxy,
     const share::schema::ObTableSchema *index_schema,
     const int64_t parent_task_id,
+    const obrpc::ObDropIndexArg *drop_index_arg,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
@@ -602,9 +606,9 @@ int ObDDLScheduler::create_drop_index_task(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(index_schema)) {
+  } else if (OB_ISNULL(index_schema) || OB_ISNULL(drop_index_arg)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), KP(index_schema));
+    LOG_WARN("invalid argument", K(ret), KP(index_schema), KP(drop_index_arg));
   } else if (index_schema->is_domain_index()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("drop domain index is not supported", K(ret));
@@ -618,7 +622,8 @@ int ObDDLScheduler::create_drop_index_task(
                                 data_table_id,
                                 index_table_id,
                                 index_schema->get_schema_version(),
-                                parent_task_id))) {
+                                parent_task_id,
+                                *drop_index_arg))) {
       LOG_WARN("init drop index task failed", K(ret), K(data_table_id), K(index_table_id));
     } else if (OB_FAIL(index_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
       LOG_WARN("set trace id failed", K(ret));
@@ -991,6 +996,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
         break;
       }
     }
+    LOG_INFO("schedule ddl task", K(ret), K(record));
   }
   return ret;
 }
@@ -1014,8 +1020,6 @@ int ObDDLScheduler::schedule_build_index_task(
       if (OB_ENTRY_EXIST != ret) {
         LOG_WARN("inner schedule task failed", K(ret), K(*build_index_task));
       }
-    } else {
-      LOG_INFO("schedule build index task successfully", K(*build_index_task));
     }
   }
   if (OB_FAIL(ret) && nullptr != build_index_task) {
@@ -1046,8 +1050,6 @@ int ObDDLScheduler::schedule_drop_primary_key_task(const ObDDLTaskRecord &task_r
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret), K(*drop_pk_task));
     }
-  } else {
-    LOG_INFO("schedule drop primary key task successfully", K(*drop_pk_task));
   }
   if (OB_FAIL(ret) && nullptr != drop_pk_task) {
     drop_pk_task->~ObDropPrimaryKeyTask();
@@ -1077,8 +1079,6 @@ int ObDDLScheduler::schedule_table_redefinition_task(const ObDDLTaskRecord &task
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret), K(*redefinition_task));
     }
-  } else {
-    LOG_INFO("schedule table redefinition task successfully", K(*redefinition_task));
   }
   if (OB_FAIL(ret) && nullptr != redefinition_task) {
     redefinition_task->~ObTableRedefinitionTask();
@@ -1108,8 +1108,6 @@ int ObDDLScheduler::schedule_column_redefinition_task(const ObDDLTaskRecord &tas
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret), K(*redefinition_task));
     }
-  } else {
-    LOG_INFO("schedule column redefinition task successfully", K(*redefinition_task));
   }
   if (OB_FAIL(ret) && nullptr != redefinition_task) {
     redefinition_task->~ObColumnRedefinitionTask();
@@ -1139,8 +1137,6 @@ int ObDDLScheduler::schedule_ddl_retry_task(const ObDDLTaskRecord &task_record)
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret));
     }
-  } else {
-    LOG_INFO("schedule ddl retry task successfully", K(*ddl_retry_task));
   }
   if (OB_FAIL(ret) && nullptr != ddl_retry_task) {
     ddl_retry_task->~ObDDLRetryTask();
@@ -1170,8 +1166,6 @@ int ObDDLScheduler::schedule_constraint_task(const ObDDLTaskRecord &task_record)
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret));
     }
-  } else {
-    LOG_INFO("schedule constraint task", K(*constraint_task));
   }
   if (OB_FAIL(ret) && nullptr != constraint_task) {
     constraint_task->~ObConstraintTask();
@@ -1201,8 +1195,6 @@ int ObDDLScheduler::schedule_modify_autoinc_task(const ObDDLTaskRecord &task_rec
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret));
     }
-  } else {
-    LOG_INFO("schedule constraint task", K(*modify_autoinc_task));
   }
   if (OB_FAIL(ret) && nullptr != modify_autoinc_task) {
     modify_autoinc_task->~ObModifyAutoincTask();
@@ -1232,8 +1224,6 @@ int ObDDLScheduler::schedule_drop_index_task(const ObDDLTaskRecord &task_record)
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret));
     }
-  } else {
-    LOG_INFO("schedule drop index task successfully", K(*drop_index_task));
   }
   if (OB_FAIL(ret) && nullptr != drop_index_task) {
     drop_index_task->~ObDropIndexTask();

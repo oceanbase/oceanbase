@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_DDL_MERGE_TASK_
 #define OCEANBASE_STORAGE_DDL_MERGE_TASK_
 
+#include "logservice/palf/scn.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "share/scheduler/ob_dag_scheduler.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
@@ -40,7 +41,7 @@ public:
   ObDDLTableMergeDagParam()
     : ls_id_(),
       tablet_id_(),
-      rec_log_ts_(0),
+      rec_scn_(),
       is_commit_(false),
       table_id_(0),
       execution_id_(0),
@@ -51,11 +52,11 @@ public:
     return ls_id_.is_valid() && tablet_id_.is_valid();
   }
   virtual ~ObDDLTableMergeDagParam() = default;
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_log_ts), K_(is_commit), K_(table_id), K_(execution_id), K_(ddl_task_id));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_scn), K_(is_commit), K_(table_id), K_(execution_id), K_(ddl_task_id));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
-  int64_t rec_log_ts_;
+  palf::SCN rec_scn_;
   bool is_commit_;
   uint64_t table_id_; // used for report ddl checksum
   int64_t execution_id_; // used for report ddl checksum
@@ -93,14 +94,14 @@ class ObDDLTableDumpTask : public share::ObITask
 public:
   ObDDLTableDumpTask();
   virtual ~ObDDLTableDumpTask();
-  int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id, const int64_t freeze_log_ts);
+  int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id, const palf::SCN &freeze_scn);
   virtual int process() override;
-  TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id), K_(freeze_log_ts));
+  TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id), K_(freeze_scn));
 private:
   bool is_inited_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
-  int64_t freeze_log_ts_;
+  palf::SCN freeze_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObDDLTableDumpTask);
 };
 
@@ -112,8 +113,8 @@ public:
   int init(const ObDDLTableMergeDagParam &ddl_dag_param);
   virtual int process() override;
   static int check_data_integrity(const ObTablesHandleArray &ddl_sstables,
-                                  const int64_t start_log_ts,
-                                  const int64_t prepare_log_ts,
+                                  const palf::SCN &start_scn,
+                                  const palf::SCN &prepare_scn,
                                   bool &is_data_complete);
   TO_STRING_KV(K_(is_inited), K_(merge_param));
 private:
@@ -128,12 +129,12 @@ public:
   ObTabletDDLParam();
   ~ObTabletDDLParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_log_ts), K_(snapshot_version), K_(cluster_version));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(snapshot_version), K_(cluster_version));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   ObITable::TableKey table_key_;
-  int64_t start_log_ts_;
+  palf::SCN start_scn_;
   int64_t snapshot_version_;
   int64_t cluster_version_;
 };

@@ -6582,21 +6582,21 @@ Query Plan
 =============================================================
 |ID|OPERATOR                        |NAME    |EST. ROWS|COST|
 -------------------------------------------------------------
-|0 |SCALAR GROUP BY                 |        |1        |866 |
-|1 | SUBPLAN SCAN                   |result  |1        |866 |
-|2 |  LIMIT                         |        |1        |866 |
-|3 |   TOP-N SORT                   |        |1        |866 |
-|4 |    HASH DISTINCT               |        |1        |865 |
-|5 |     NESTED-LOOP JOIN CARTESIAN |        |1        |865 |
-|6 |      NESTED-LOOP JOIN CARTESIAN|        |1        |728 |
-|7 |       DISTRIBUTED TABLE SCAN   |t1(i430)|1        |46  |
-|8 |       MATERIAL                 |        |1        |683 |
-|9 |        PX COORDINATOR          |        |1        |683 |
-|10|         EXCHANGE OUT DISTR     |:EX10000|1        |683 |
-|11|          PX PARTITION ITERATOR |        |1        |682 |
-|12|           TABLE SCAN           |t0      |1        |682 |
-|13|      MATERIAL                  |        |1        |137 |
-|14|       DISTRIBUTED TABLE SCAN   |t2(i950)|1        |137 |
+|0 |SCALAR GROUP BY                 |        |1        |34  |
+|1 | SUBPLAN SCAN                   |result  |1        |34  |
+|2 |  LIMIT                         |        |1        |34  |
+|3 |   TOP-N SORT                   |        |1        |34  |
+|4 |    HASH DISTINCT               |        |1        |34  |
+|5 |     NESTED-LOOP JOIN CARTESIAN |        |1        |34  |
+|6 |      NESTED-LOOP JOIN CARTESIAN|        |1        |29  |
+|7 |       DISTRIBUTED TABLE SCAN   |t1(i430)|1        |2   |
+|8 |       MATERIAL                 |        |1        |27  |
+|9 |        PX COORDINATOR          |        |1        |27  |
+|10|         EXCHANGE OUT DISTR     |:EX10000|1        |27  |
+|11|          PX PARTITION ITERATOR |        |1        |26  |
+|12|           TABLE SCAN           |t0      |1        |26  |
+|13|      MATERIAL                  |        |1        |6   |
+|14|       DISTRIBUTED TABLE SCAN   |t2(i950)|1        |6   |
 =============================================================
 
 Outputs & filters:

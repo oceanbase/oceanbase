@@ -109,6 +109,10 @@ endif()
 
 target_compile_features(oblib_base_base INTERFACE cxx_std_11)
 
+set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -lmariadb")
+if (OB_STATIC_LINK_LGPL_DEPS)
+  set(LGPL_DEPS "-L${DEP_DIR}/lib/mariadb -l:libmariadbclient.a")
+endif()
 target_link_libraries(oblib_base_base_base
   INTERFACE
   oss
@@ -116,7 +120,7 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libisal.a
   ${DEP_DIR}/lib/libssl.a
   ${DEP_DIR}/lib/libcrypto.a
-  ${DEP_DIR}/lib/mariadb/libmariadbclient.a
+  ${LGPL_DEPS}
   ${DEP_DIR}/lib/libunwind.a
   ${DEP_DIR}/lib/libz.a
   -L${DEP_DIR}/var/usr/lib64

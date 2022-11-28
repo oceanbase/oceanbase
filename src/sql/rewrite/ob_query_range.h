@@ -714,6 +714,7 @@ private:
   //this flag used by optimizer, so don't need to serialize it
   common::ObFixedArray<ObRawExpr*, common::ObIAllocator> range_exprs_;
   bool has_exec_param_;
+  bool unused_is_rowid_range_;//serialize compatibility preserved
   bool is_equal_and_;
   common::ObFixedArray<ObEqualOff, common::ObIAllocator> equal_offs_;
   common::ObFixedArray<ExprFinalInfo, common::ObIAllocator> expr_final_infos_;

@@ -99,6 +99,7 @@ int ObExprNLSSort::convert_to_coll_code(ObEvalCtx &ctx,
                                                   conv_buf_len,
                                                   result_len,
                                                   false,
+                                                  false,
                                                   0xFFFD /*�*/))) {
       LOG_WARN("charset convert failed", K(ret));
     } else {

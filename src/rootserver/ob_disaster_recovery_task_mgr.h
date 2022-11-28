@@ -208,6 +208,7 @@ public:
 public:
   ObDRTaskMgr() : ObRsReentrantThread(true),
                   inited_(false),
+                  stopped_(true),
                   loaded_(false),
                   config_(nullptr),
                   concurrency_limited_ts_(0),
@@ -339,6 +340,7 @@ public:
 private:
   ObDRTaskQueue &get_high_priority_queue_() { return high_task_queue_; }
   ObDRTaskQueue &get_low_priority_queue_() { return low_task_queue_; }
+  int check_inner_stat_() const;
 
   // get a task by task id
   // @param [in] task_id, to identify a certain task
@@ -412,6 +414,7 @@ private:
 
 private:
   bool inited_;
+  bool stopped_;
   bool loaded_;
   common::ObServerConfig *config_;
   /* has waiting task but cannot be scheduled,

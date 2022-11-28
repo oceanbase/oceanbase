@@ -41,7 +41,6 @@ public:
   ObTabletPointer();
   ObTabletPointer(
       const ObLSHandle &ls_handle,
-      const ObDDLKvMgrHandle &ddl_kv_mgr_handle,
       const ObMemtableMgrHandle &memtable_mgr_handle);
   virtual ~ObTabletPointer();
   virtual void reset() override;
@@ -57,6 +56,9 @@ public:
 public:
   int set_tx_data(const ObTabletTxMultiSourceDataUnit &tx_data);
   int get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data) const;
+  int create_ddl_kv_mgr(const share::ObLSID &ls_id, const ObTabletID &tablet_id, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  void get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  void remove_ddl_kv_mgr();
 private:
   int wash_obj();
   virtual int do_post_work_for_load() override;
@@ -68,6 +70,7 @@ private:
   ObTabletTxMultiSourceDataUnit tx_data_;
   common::ObThreadCond cond_;
   mutable common::TCRWLock msd_lock_;
+  lib::ObMutex ddl_kv_mgr_lock_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletPointer);
 };
 } // namespace storage

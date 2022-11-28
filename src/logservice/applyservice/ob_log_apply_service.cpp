@@ -872,20 +872,23 @@ void ObApplyStatus::statistics_cb_cost_(const LSN &lsn,
                                         const int64_t cb_first_handle_time,
                                         const int64_t cb_start_time)
 {
-  const int64_t cb_finish_time = ObTimeUtility::fast_current_time();
-  int64_t total_cost_time = cb_finish_time - append_start_time;
-  int64_t append_cost_time = append_finish_time - append_start_time;
-  int64_t cb_wait_thread_time = cb_first_handle_time - append_finish_time;
-  int64_t cb_wait_commit_time = cb_start_time - cb_first_handle_time;
-  int64_t cb_cost_time = cb_finish_time - cb_start_time;
-  cb_append_stat_.stat(append_cost_time);
-  cb_wait_thread_stat_.stat(cb_wait_thread_time);
-  cb_wait_commit_stat_.stat(cb_wait_commit_time);
-  cb_execute_stat_.stat(cb_cost_time);
-  if (total_cost_time > 1000 * 1000) { //1s
-    CLOG_LOG(WARN, "cb cost too much time", K(lsn), K(scn), K(total_cost_time), K(append_cost_time),
-             K(cb_wait_thread_time), K(cb_wait_commit_time), K(cb_cost_time), K(append_start_time), K(append_finish_time),
-             K(cb_first_handle_time), K(cb_first_handle_time), K(cb_finish_time));
+  // no need to print debug log when config [default value is true] is false;
+  if (GCONF.enable_record_trace_log) {
+    const int64_t cb_finish_time = ObTimeUtility::fast_current_time();
+    int64_t total_cost_time = cb_finish_time - append_start_time;
+    int64_t append_cost_time = append_finish_time - append_start_time;
+    int64_t cb_wait_thread_time = cb_first_handle_time - append_finish_time;
+    int64_t cb_wait_commit_time = cb_start_time - cb_first_handle_time;
+    int64_t cb_cost_time = cb_finish_time - cb_start_time;
+    cb_append_stat_.stat(append_cost_time);
+    cb_wait_thread_stat_.stat(cb_wait_thread_time);
+    cb_wait_commit_stat_.stat(cb_wait_commit_time);
+    cb_execute_stat_.stat(cb_cost_time);
+    if (total_cost_time > 1000 * 1000) { //1s
+      CLOG_LOG(WARN, "cb cost too much time", K(lsn), K(scn), K(total_cost_time), K(append_cost_time),
+               K(cb_wait_thread_time), K(cb_wait_commit_time), K(cb_cost_time), K(append_start_time), K(append_finish_time),
+               K(cb_first_handle_time), K(cb_first_handle_time), K(cb_finish_time));
+    }
   }
 }
 

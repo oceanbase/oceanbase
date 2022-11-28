@@ -37,6 +37,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::observer;
 using namespace oceanbase::omt;
+using namespace oceanbase::palf;
 
 ObUniqueIndexChecker::ObUniqueIndexChecker()
   : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), tablet_id_(),
@@ -165,7 +166,9 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
       } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, ls must not be nullptr", K(ret));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(tablet_id_, param.snapshot_version_, iterator, allow_not_ready))) {
+      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(tablet_id_,
+                                                                               param.snapshot_version_,
+                                                                               iterator, allow_not_ready))) {
         if (OB_REPLICA_NOT_READABLE == ret) {
           ret = OB_EAGAIN;
         } else {
@@ -482,7 +485,7 @@ int ObUniqueIndexChecker::report_column_checksum(
         item.table_id_ = report_table_id;
         item.ddl_task_id_ = task_id_;
         item.column_id_ = column_ids.at(i).col_id_;
-        item.task_id_ = -1;
+        item.task_id_ = -tablet_id_.id();
         item.checksum_ = column_checksum.at(i);
         if (OB_FAIL(checksum_items.push_back(item))) {
           LOG_WARN("fail to push back item", K(ret));

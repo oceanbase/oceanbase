@@ -606,9 +606,9 @@ int ObDRTaskMgr::init(
 {
   int ret = OB_SUCCESS;
   static const int64_t thread_count = 1;
-  if (OB_UNLIKELY(inited_)) {
+  if (OB_UNLIKELY(inited_ || !stopped_)) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", KR(ret), K(inited_));
+    LOG_WARN("init twice", KR(ret), K(inited_), K_(stopped));
   } else if (OB_UNLIKELY(!server.is_valid())
           || OB_ISNULL(server_mgr)
           || OB_ISNULL(rpc_proxy)
@@ -650,12 +650,18 @@ int ObDRTaskMgr::start()
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("task mgr not inited", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!stopped_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can not start ObDRTaskMgr twice", KR(ret), K_(stopped));
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(sql_proxy_));
   } else if (OB_FAIL(ObRsReentrantThread::start())) {
     LOG_WARN("fail to start ObRsReentrantThread", KR(ret));
+  } else if (OB_FAIL(disaster_recovery_task_table_updater_.start())) {
+    LOG_WARN("fail to start disaster_recovery_task_table_updater", KR(ret));
   } else {
+    stopped_ = false;
     FLOG_INFO("success to start ObDRTaskMgr");
   }
   return ret;
@@ -663,18 +669,13 @@ int ObDRTaskMgr::start()
 
 void ObDRTaskMgr::stop()
 {
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else {
-    loaded_ = false;
-    ObRsReentrantThread::stop();
-    disaster_recovery_task_table_updater_.stop();
-    ObThreadCondGuard guard(cond_);
-    cond_.broadcast();
-    FLOG_INFO("success to stop ObDRTaskMgr");
-  }
+  loaded_ = false;
+  stopped_ = true;
+  ObRsReentrantThread::stop();
+  disaster_recovery_task_table_updater_.stop();
+  ObThreadCondGuard guard(cond_);
+  cond_.broadcast();
+  FLOG_INFO("success to stop ObDRTaskMgr");
 }
 
 void ObDRTaskMgr::wait()
@@ -683,11 +684,21 @@ void ObDRTaskMgr::wait()
   disaster_recovery_task_table_updater_.wait(); 
 }
 
+int ObDRTaskMgr::check_inner_stat_() const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_ || stopped_ || !loaded_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDRTaskMgr is not inited or is stopped or not loaded", KR(ret), K_(inited), K_(stopped), K_(loaded));
+  }
+  return ret;
+}
+
 void ObDRTaskMgr::run3()
 {
   FLOG_INFO("Disaster recovery task mgr start");
-  if (OB_UNLIKELY(!inited_)) {
-    LOG_ERROR("ObDRTaskMgr not init", K(inited_));
+  if (OB_UNLIKELY(!inited_ || stopped_)) {
+    LOG_WARN("ObDRTaskMgr not init", K(inited_), K_(stopped));
   } else {
     int64_t last_dump_ts = ObTimeUtility::current_time();
     int64_t last_check_task_in_progress_ts = ObTimeUtility::current_time();
@@ -736,9 +747,8 @@ int ObDRTaskMgr::check_task_in_executing(
     bool &task_in_executing)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else if (ObDRTaskPriority::HIGH_PRI != priority
              && ObDRTaskPriority::LOW_PRI != priority) {
     ret = OB_INVALID_ARGUMENT;
@@ -761,9 +771,8 @@ int ObDRTaskMgr::check_task_exist(
     bool &task_exist)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else if (ObDRTaskPriority::HIGH_PRI != priority
              && ObDRTaskPriority::LOW_PRI != priority) {
     ret = OB_INVALID_ARGUMENT;
@@ -784,9 +793,9 @@ int ObDRTaskMgr::add_task(
     const ObDRTask &task)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_FAIL(check_inner_stat_())) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(inited), K_(loaded));
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(loaded), K_(stopped));
   } else if (OB_UNLIKELY(!task.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid dr task", KR(ret), K(task));
@@ -831,9 +840,9 @@ int ObDRTaskMgr::deal_with_task_reply(
 {
   int ret = OB_SUCCESS;
   ObDRTaskKey task_key;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_FAIL(check_inner_stat_())) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(inited), K_(loaded));
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(loaded), K_(stopped));
   } else if (OB_FAIL(task_key.init(
           reply.tenant_id_,
           reply.ls_id_.id(),
@@ -884,9 +893,8 @@ int ObDRTaskMgr::async_add_cleaning_task_to_updater(
 {
   int ret = OB_SUCCESS;
   ObDRTask *task = nullptr;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else if (OB_FAIL(get_task_by_id_(task_id, task_key, task))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       LOG_WARN("fail to get task, task may be cleaned earlier", KR(ret), K(task_id), K(task_key));
@@ -923,9 +931,8 @@ int ObDRTaskMgr::do_cleaning(
 {
   int ret = OB_SUCCESS;
   ObThreadCondGuard guard(cond_);
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else {
     ObDRTaskQueue *task_queue = nullptr;
     ObDRTask *task = nullptr;
@@ -969,9 +976,9 @@ int ObDRTaskMgr::get_all_task_count(
     int64_t &low_schedule_cnt)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_ || !loaded_)) {
+  if (OB_FAIL(check_inner_stat_())) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(inited), K_(loaded));
+    LOG_WARN("not init", KR(ret), K_(inited), K_(loaded), K_(stopped));
   } else {
     ObThreadCondGuard guard(cond_);
     high_wait_cnt = get_high_priority_queue_().get_wait_list().get_size();
@@ -1037,9 +1044,11 @@ int ObDRTaskMgr::load_task_to_schedule_list_()
   ObThreadCondGuard guard(cond_);
   ObArray<uint64_t> tenant_id_array;
 
-  if (OB_UNLIKELY(!inited_) || OB_ISNULL(schema_service_) || OB_ISNULL(sql_proxy_)) {
-    ret = OB_NOT_INIT;
-    LOG_ERROR("ObDRTaskMgr not init", KR(ret));
+  if (OB_UNLIKELY(!inited_ || stopped_)) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped));
+  } else if (OB_ISNULL(schema_service_) || OB_ISNULL(sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema_service_ or sql_proxy_ is nullptr", KR(ret), KP(schema_service_), KP(sql_proxy_));
   } else if (OB_UNLIKELY(ObTenantUtils::get_tenant_ids(schema_service_, tenant_id_array))) {
     LOG_WARN("fail to get tenant id array", KR(ret));
   } else {
@@ -1086,9 +1095,8 @@ int ObDRTaskMgr::load_single_tenant_task_infos_(
     sqlclient::ObMySQLResult &res)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_ERROR("ObDRTaskMgr not init", KR(ret));
+  if (OB_UNLIKELY(!inited_ || stopped_)) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped));
   } else {
     while (OB_SUCC(ret)) {
       if (OB_FAIL(res.next())) {
@@ -1110,16 +1118,15 @@ int ObDRTaskMgr::load_task_info_(
     sqlclient::ObMySQLResult &res)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_ERROR("ObDRTaskMgr not init", KR(ret));
+  if (OB_UNLIKELY(!inited_ || stopped_)) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped));
   } else {
     common::ObString task_type;
     int64_t priority = 2;
     (void)GET_COL_IGNORE_NULL(res.get_varchar, "task_type", task_type);
     (void)GET_COL_IGNORE_NULL(res.get_int, "priority", priority);
     if (OB_FAIL(ret)) {
-    } else if (task_type == common::ObString("LS_MIGRATE_REPLICA")) {
+    } else if (task_type == common::ObString("MIGRATE REPLICA")) {
       SMART_VAR(ObMigrateLSReplicaTask, tmp_task) {
         if (OB_FAIL(tmp_task.build_task_from_sql_result(res))) {
           LOG_WARN("fail to build migrate task info from res", KR(ret));
@@ -1127,7 +1134,7 @@ int ObDRTaskMgr::load_task_info_(
           LOG_WARN("fail to load a ObMigrateLSReplicaTask into schedule list", KR(ret));
         }
       }
-    } else if (task_type == common::ObString("LS_ADD_REPLICA")) {
+    } else if (task_type == common::ObString("ADD REPLICA")) {
       SMART_VAR(ObAddLSReplicaTask, tmp_task) {
         if (OB_FAIL(tmp_task.build_task_from_sql_result(res))) {
           LOG_WARN("fail to build ObAddLSReplicaTask from res", KR(ret));
@@ -1135,7 +1142,7 @@ int ObDRTaskMgr::load_task_info_(
           LOG_WARN("fail to load ObAddLSReplicaTask into schedule list", KR(ret));
         }
       }
-    } else if (task_type == common::ObString("LS_TYPE_TRANSFORM")) {
+    } else if (task_type == common::ObString("TYPE TRANSFORM")) {
       SMART_VAR(ObLSTypeTransformTask, tmp_task) {
         if (OB_FAIL(tmp_task.build_task_from_sql_result(res))) {
           LOG_WARN("fail to build ObLSTypeTransformTask from res", KR(ret));
@@ -1143,7 +1150,7 @@ int ObDRTaskMgr::load_task_info_(
           LOG_WARN("fail to load ObLSTypeTransformTask into schedule list", KR(ret));
         }
       }
-    } else if (task_type == common::ObString("LS_REMOVE_PAXOS_REPLICA")) {
+    } else if (task_type == common::ObString("REMOVE PAXOS REPLICA")) {
       SMART_VAR(ObRemoveLSPaxosReplicaTask, tmp_task) {
         if (OB_FAIL(tmp_task.build_task_from_sql_result(res))) {
           LOG_WARN("fail to build ObRemoveLSPaxosReplicaTask from res", KR(ret));
@@ -1151,7 +1158,7 @@ int ObDRTaskMgr::load_task_info_(
           LOG_WARN("fail to load ObRemoveLSPaxosReplicaTask into schedule list", KR(ret));
         }
       }
-    } else if (task_type == common::ObString("LS_REMOVE_NON_PAXOS_REPLICA")) {
+    } else if (task_type == common::ObString("REMOVE NON PAXOS REPLICA")) {
       SMART_VAR(ObRemoveLSNonPaxosReplicaTask, tmp_task) {
         if (OB_FAIL(tmp_task.build_task_from_sql_result(res))) {
           LOG_WARN("fail to build ObRemoveLSNonPaxosReplicaTask from res", KR(ret));
@@ -1159,7 +1166,7 @@ int ObDRTaskMgr::load_task_info_(
           LOG_WARN("fail to load ObRemoveLSNonPaxosReplicaTask into schedule list", KR(ret));
         }
       }
-    } else if (task_type == common::ObString("LS_MODIFY_PAXOS_REPLICA_NUMBER")) {
+    } else if (task_type == common::ObString("MODIFY PAXOS REPLICA NUMBER")) {
       SMART_VAR(ObLSModifyPaxosReplicaNumberTask, tmp_task) {
         if (OB_FAIL(tmp_task.build_task_from_sql_result(res))) {
           LOG_WARN("fail to build ObLSModifyPaxosReplicaNumberTask from res", KR(ret));
@@ -1167,6 +1174,9 @@ int ObDRTaskMgr::load_task_info_(
           LOG_WARN("fail to load ObLSModifyPaxosReplicaNumberTask into schedule list", KR(ret));
         }
       }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("unexpected task type", KR(ret), K(task_type));
     }
   }
   return ret;
@@ -1180,9 +1190,8 @@ int ObDRTaskMgr::persist_task_info_(
   ObSqlString sql;
   int64_t affected_rows = 0;
   const uint64_t sql_tenant_id = gen_meta_tenant_id(task.get_tenant_id());
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else if (OB_ISNULL(sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
@@ -1202,9 +1211,8 @@ int ObDRTaskMgr::try_dump_statistic_(
     int64_t &last_dump_ts) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else {
     ObThreadCondGuard guard(cond_);
     const int64_t now = ObTimeUtility::current_time();
@@ -1222,9 +1230,8 @@ int ObDRTaskMgr::try_dump_statistic_(
 int ObDRTaskMgr::inner_dump_statistic_() const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else {
     LOG_INFO("[DRTASK_NOTICE] disaster recovery task manager statistics",
         "waiting_high_priority_task_cnt", high_task_queue_.wait_task_cnt(),
@@ -1245,9 +1252,8 @@ int ObDRTaskMgr::try_clean_not_in_schedule_task_in_schedule_list_(
     int64_t &last_check_task_in_progress_ts)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else {
     int64_t wait = 0;
     int64_t schedule = 0;
@@ -1273,9 +1279,8 @@ int ObDRTaskMgr::try_clean_not_in_schedule_task_in_schedule_list_(
 int ObDRTaskMgr::inner_clean_not_in_schedule_task_in_schedule_list_()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else {
     for (int64_t i = 0; i < ARRAYSIZEOF(queues_); ++i) {
       // ignore error to make sure checking two queues 
@@ -1294,9 +1299,8 @@ int ObDRTaskMgr::inner_get_task_cnt_(
     int64_t &in_schedule_cnt) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else {
     wait_cnt = 0;
     in_schedule_cnt = 0;
@@ -1318,9 +1322,8 @@ int ObDRTaskMgr::try_pop_task(
   int64_t in_schedule_cnt = 0;
   ObDRTask *my_task = nullptr;
   void *raw_ptr = nullptr;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else if (OB_FAIL(inner_get_task_cnt_(wait_cnt, in_schedule_cnt))) {
     LOG_WARN("fail to get task cnt", KR(ret));
   } else if (wait_cnt > 0
@@ -1369,9 +1372,8 @@ int ObDRTaskMgr::pop_task(
 {
   int ret = OB_SUCCESS;
   int64_t wait_cnt = 0;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else {
     task = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(queues_); ++i) {
@@ -1408,9 +1410,8 @@ int ObDRTaskMgr::execute_task(
   FLOG_INFO("execute disaster recovery task", K(task));
   int dummy_ret = OB_SUCCESS;
   ObDRTaskRetComment ret_comment = ObDRTaskRetComment::MAX;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else if (OB_FAIL(persist_task_info_(task))) {
     LOG_WARN("fail to persist task info into table", KR(ret));
   } else if (OB_FAIL(task_executor_->execute(task, dummy_ret, ret_comment))) {
@@ -1441,9 +1442,8 @@ int ObDRTaskMgr::set_sibling_in_schedule(
     const bool in_schedule)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(queues_); ++i) {
       if (OB_FAIL(queues_[i].set_sibling_in_schedule(task, in_schedule))) {

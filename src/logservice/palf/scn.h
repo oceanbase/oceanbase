@@ -30,6 +30,7 @@ public:
   //TODO(SCN):yaoying.yyy 拷贝构造?
   void reset();
   bool is_valid() const;
+  bool is_valid_and_not_min() const;
   void set_invalid();
   void set_max();
   void set_min();

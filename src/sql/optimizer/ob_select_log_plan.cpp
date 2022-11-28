@@ -707,162 +707,162 @@ int ObSelectLogPlan::create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_e
       } else { /*do nothing*/ }
     }
 
-// allocate exchange
-if (OB_SUCC(ret)) {
-ObExchangeInfo exch_info;
-if (OB_FAIL(get_grouping_style_exchange_info(group_by_exprs,
-					   top->get_output_equal_sets(),
-					   exch_info))) {
-LOG_WARN("failed to get grouping style exchange info", K(ret));
-} else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
-LOG_WARN("failed to allocate exchange as top", K(ret));
-} else { /*do nothing*/ }
-}
-// allocate final group by
-if (OB_SUCC(ret)) {
-if (OB_FAIL(allocate_group_by_as_top(top,
-				   AggregateAlgo::HASH_AGGREGATE,
-				   group_by_exprs,
-				   rollup_exprs,
-				   aggr_items,
-				   having_exprs,
-				   is_from_povit,
-				   groupby_helper.group_ndv_,
-				   origin_child_card))) {
-LOG_WARN("failed to allocate scala group by as top", K(ret));
-} else { /*do nothing*/ }
-}
-}
-return ret;
+    // allocate exchange
+    if (OB_SUCC(ret)) {
+      ObExchangeInfo exch_info;
+      if (OB_FAIL(get_grouping_style_exchange_info(group_by_exprs,
+                                                  top->get_output_equal_sets(),
+                                                  exch_info))) {
+        LOG_WARN("failed to get grouping style exchange info", K(ret));
+      } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
+        LOG_WARN("failed to allocate exchange as top", K(ret));
+      } else { /*do nothing*/ }
+    }
+    // allocate final group by
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(allocate_group_by_as_top(top,
+                                          AggregateAlgo::HASH_AGGREGATE,
+                                          group_by_exprs,
+                                          rollup_exprs,
+                                          aggr_items,
+                                          having_exprs,
+                                          is_from_povit,
+                                          groupby_helper.group_ndv_,
+                                          origin_child_card))) {
+      LOG_WARN("failed to allocate scala group by as top", K(ret));
+      } else { /*do nothing*/ }
+    }
+  }
+  return ret;
 }
 
 int ObSelectLogPlan::allocate_topk_for_hash_group_plan(ObLogicalOperator *&top)
 {
-int ret = OB_SUCCESS;
-ObSEArray<ObRawExpr*, 16> order_by_exprs;
-ObSEArray<ObOrderDirection, 16> directions;
-const ObSelectStmt *select_stmt = NULL;
-const ObGlobalHint &global_hint = get_optimizer_context().get_global_hint();
-if (OB_ISNULL(top) || OB_ISNULL(select_stmt = get_stmt())) {
-ret = OB_ERR_UNEXPECTED;
-LOG_WARN("get unexpected null", K(top), K(select_stmt), K(ret));
-} else if (!select_stmt->is_match_topk()) {
-/*do nothing*/
-} else if (OB_FAIL(get_order_by_exprs(top, order_by_exprs, &directions))) {
-LOG_WARN("failed to get order by exprs", K(ret));
-} else if (order_by_exprs.empty()) {
-// no need order by, directly allocate topk
-if (OB_FAIL(allocate_topk_as_top(top,
-			     select_stmt->get_limit_expr(),
-			     select_stmt->get_offset_expr(),
-			     global_hint.sharding_minimum_row_count_,
-			     global_hint.topk_precision_))) {
-LOG_WARN("failed to allocate topk as top", K(ret));
-} else { /*do nothing*/ }
-} else {
-// allocate sort
-ObSEArray<OrderItem, 8> sort_keys;
-ObSEArray<OrderItem, 8> topk_sort_keys;
-if (OB_FAIL(make_order_items(order_by_exprs, directions, sort_keys))) {
-LOG_WARN("failed to make order items", K(ret));
-} else if (OB_FAIL(clone_sort_keys_for_topk(sort_keys,
-					topk_sort_keys))) {
-LOG_WARN("failed to clone sort keys for topk", K(ret));
-} else if (OB_FAIL(allocate_topk_sort_as_top(top,
-					 topk_sort_keys,
-					 select_stmt->get_limit_expr(),
-					 select_stmt->get_offset_expr(),
-					 global_hint.sharding_minimum_row_count_,
-					 global_hint.topk_precision_))) {
-LOG_WARN("failed to allocate topk sort as top", K(ret));
-} else { /*do nothing*/ }
-}
-return ret;
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 16> order_by_exprs;
+  ObSEArray<ObOrderDirection, 16> directions;
+  const ObSelectStmt *select_stmt = NULL;
+  const ObGlobalHint &global_hint = get_optimizer_context().get_global_hint();
+  if (OB_ISNULL(top) || OB_ISNULL(select_stmt = get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(top), K(select_stmt), K(ret));
+  } else if (!select_stmt->is_match_topk()) {
+    /*do nothing*/
+  } else if (OB_FAIL(get_order_by_exprs(top, order_by_exprs, &directions))) {
+    LOG_WARN("failed to get order by exprs", K(ret));
+  } else if (order_by_exprs.empty()) {
+    // no need order by, directly allocate topk
+    if (OB_FAIL(allocate_topk_as_top(top,
+                                    select_stmt->get_limit_expr(),
+                                    select_stmt->get_offset_expr(),
+                                    global_hint.sharding_minimum_row_count_,
+                                    global_hint.topk_precision_))) {
+      LOG_WARN("failed to allocate topk as top", K(ret));
+    } else { /*do nothing*/ }
+  } else {
+    // allocate sort
+    ObSEArray<OrderItem, 8> sort_keys;
+    ObSEArray<OrderItem, 8> topk_sort_keys;
+    if (OB_FAIL(make_order_items(order_by_exprs, directions, sort_keys))) {
+    LOG_WARN("failed to make order items", K(ret));
+    } else if (OB_FAIL(clone_sort_keys_for_topk(sort_keys,
+              topk_sort_keys))) {
+    LOG_WARN("failed to clone sort keys for topk", K(ret));
+    } else if (OB_FAIL(allocate_topk_sort_as_top(top,
+                                                topk_sort_keys,
+                                                select_stmt->get_limit_expr(),
+                                                select_stmt->get_offset_expr(),
+                                                global_hint.sharding_minimum_row_count_,
+                                                global_hint.topk_precision_))) {
+    LOG_WARN("failed to allocate topk sort as top", K(ret));
+    } else { /*do nothing*/ }
+  }
+  return ret;
 }
 
 int ObSelectLogPlan::allocate_topk_sort_as_top(ObLogicalOperator *&top,
-				       const ObIArray<OrderItem> &sort_keys,
-				       ObRawExpr *limit_expr,
-				       ObRawExpr *offset_expr,
-				       int64_t minimum_row_count,
-				       int64_t topk_precision)
+                                              const ObIArray<OrderItem> &sort_keys,
+                                              ObRawExpr *limit_expr,
+                                              ObRawExpr *offset_expr,
+                                              int64_t minimum_row_count,
+                                              int64_t topk_precision)
 {
-int ret = OB_SUCCESS;
-ObLogSort *sort = NULL;
-if (OB_ISNULL(top) || OB_ISNULL(limit_expr)) {
-ret = OB_ERR_UNEXPECTED;
-LOG_WARN("get unexpected null", K(top), K(limit_expr), K(ret));
-} else if (OB_ISNULL(sort = static_cast<ObLogSort*>(get_log_op_factory().allocate(*this, LOG_SORT)))) {
-ret = OB_ALLOCATE_MEMORY_FAILED;
-LOG_ERROR("failed to allocate sort for order by", K(ret));
-} else {
-sort->set_child(ObLogicalOperator::first_child, top);
-sort->set_topk_limit_expr(limit_expr);
-sort->set_topk_offset_expr(offset_expr);
-sort->set_minimal_row_count(minimum_row_count);
-sort->set_topk_precision(topk_precision);
-if (OB_FAIL(sort->set_sort_keys(sort_keys))) {
-LOG_WARN("failed to set sort keys", K(ret));
-} else if (OB_FAIL(sort->compute_property())) {
-LOG_WARN("failed to compute property", K(ret));
-} else {
-top = sort;
-}
-}
-return ret;
+  int ret = OB_SUCCESS;
+  ObLogSort *sort = NULL;
+  if (OB_ISNULL(top) || OB_ISNULL(limit_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(top), K(limit_expr), K(ret));
+  } else if (OB_ISNULL(sort = static_cast<ObLogSort*>(get_log_op_factory().allocate(*this, LOG_SORT)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("failed to allocate sort for order by", K(ret));
+  } else {
+    sort->set_child(ObLogicalOperator::first_child, top);
+    sort->set_topk_limit_expr(limit_expr);
+    sort->set_topk_offset_expr(offset_expr);
+    sort->set_minimal_row_count(minimum_row_count);
+    sort->set_topk_precision(topk_precision);
+    if (OB_FAIL(sort->set_sort_keys(sort_keys))) {
+      LOG_WARN("failed to set sort keys", K(ret));
+    } else if (OB_FAIL(sort->compute_property())) {
+      LOG_WARN("failed to compute property", K(ret));
+    } else {
+      top = sort;
+    }
+  }
+  return ret;
 }
 
 int ObSelectLogPlan::clone_sort_keys_for_topk(const ObIArray<OrderItem> &sort_keys,
-				      ObIArray<OrderItem> &topk_sort_keys)
+				                                      ObIArray<OrderItem> &topk_sort_keys)
 {
-int ret = OB_SUCCESS;
-for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys.count(); ++i) {
-ObRawExpr *new_sort_expr = NULL;
-if (OB_FAIL(ObOptimizerUtil::clone_expr_for_topk(get_optimizer_context().get_expr_factory(),
-					     sort_keys.at(i).expr_,
-					     new_sort_expr))) {
-LOG_WARN("failed to copy expr", K(ret));
-} else if (OB_ISNULL(new_sort_expr)) {
-ret = OB_ERR_UNEXPECTED;
-LOG_WARN("get unexpected null", K(new_sort_expr), K(ret));
-} else {
-OrderItem new_order_item;
-new_order_item.expr_ = new_sort_expr;
-new_order_item.order_type_ = sort_keys.at(i).order_type_;
-if (OB_FAIL(topk_sort_keys.push_back(new_order_item))) {
-LOG_WARN("failed to push back order_item", K(ret));
-} else { /*do nothing*/ }
-}
-}
-return ret;
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys.count(); ++i) {
+    ObRawExpr *new_sort_expr = NULL;
+    if (OB_FAIL(ObOptimizerUtil::clone_expr_for_topk(get_optimizer_context().get_expr_factory(),
+                                                    sort_keys.at(i).expr_,
+                                                    new_sort_expr))) {
+      LOG_WARN("failed to copy expr", K(ret));
+    } else if (OB_ISNULL(new_sort_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(new_sort_expr), K(ret));
+    } else {
+      OrderItem new_order_item;
+      new_order_item.expr_ = new_sort_expr;
+      new_order_item.order_type_ = sort_keys.at(i).order_type_;
+      if (OB_FAIL(topk_sort_keys.push_back(new_order_item))) {
+        LOG_WARN("failed to push back order_item", K(ret));
+      } else { /*do nothing*/ }
+    }
+  }
+  return ret;
 }
 
 int ObSelectLogPlan::allocate_topk_as_top(ObLogicalOperator *&top,
-				  ObRawExpr *topk_limit_count,
-				  ObRawExpr *topk_limit_offset,
-				  int64_t minimum_row_count,
-				  int64_t topk_precision)
+                                          ObRawExpr *topk_limit_count,
+                                          ObRawExpr *topk_limit_offset,
+                                          int64_t minimum_row_count,
+                                          int64_t topk_precision)
 {
-int ret = OB_SUCCESS;
-ObLogTopk *topk_op = NULL;
-if (OB_ISNULL(top)) {
-ret = OB_ERR_UNEXPECTED;
-LOG_WARN("get unexpected null", K(ret));
-} else if (OB_ISNULL(topk_op = static_cast<ObLogTopk*>(log_op_factory_.allocate(
-			 *this, log_op_def::LOG_TOPK)))) {
-ret = OB_ALLOCATE_MEMORY_FAILED;
-LOG_WARN("failed to allocate topk operator", K(ret));
-} else {
-topk_op->set_child(ObLogicalOperator::first_child, top);
-topk_op->set_topk_params(topk_limit_count, topk_limit_offset,
-		     minimum_row_count, topk_precision);
-if (OB_FAIL(topk_op->compute_property())) {
-LOG_WARN("failed to compute property", K(ret));
-} else {
-top = topk_op;
-}
-}
-return ret;
+  int ret = OB_SUCCESS;
+  ObLogTopk *topk_op = NULL;
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_ISNULL(topk_op = static_cast<ObLogTopk*>(log_op_factory_.allocate(
+        *this, log_op_def::LOG_TOPK)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate topk operator", K(ret));
+  } else {
+    topk_op->set_child(ObLogicalOperator::first_child, top);
+    topk_op->set_topk_params(topk_limit_count, topk_limit_offset,
+                            minimum_row_count, topk_precision);
+    if (OB_FAIL(topk_op->compute_property())) {
+      LOG_WARN("failed to compute property", K(ret));
+    } else {
+      top = topk_op;
+    }
+  }
+  return ret;
 }
 
 int ObSelectLogPlan::create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,

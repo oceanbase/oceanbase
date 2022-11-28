@@ -2747,8 +2747,8 @@ int ObDDLService::create_hidden_table_with_pk_changed(
     LOG_WARN("failed to add pk", K(ret), K(index_columns), K(new_table_schema));
   } else if (is_drop_pk && OB_FAIL(drop_primary_key(new_table_schema))) {
     LOG_WARN("failed to add hidden pk column for heap table", K(ret));
-  } else if (OB_FAIL(create_user_hidden_table_now
-                  && create_user_hidden_table(origin_table_schema,
+  } else if (create_user_hidden_table_now
+          && OB_FAIL(create_user_hidden_table(origin_table_schema,
                                               new_table_schema,
                                               &alter_table_arg.sequence_ddl_arg_,
                                               bind_tablets,
@@ -9785,8 +9785,6 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         }
 
         //table indexs
-        common::ObSArray<uint64_t> drop_index_id_arr;
-        drop_index_id_arr.reset();
         if (OB_SUCC(ret) && alter_table_arg.is_alter_indexs_) {
           if (OB_FAIL(check_restore_point_allow(tenant_id, *orig_table_schema))) {
             LOG_WARN("check restore point allow failed,", K(ret), K(tenant_id), K(orig_table_schema->get_table_id()));
@@ -10426,11 +10424,14 @@ int ObDDLService::check_fk_related_table_ddl(
           : foreign_key_info.parent_table_id_;
       bool has_long_running_ddl = false;
       const ObTableSchema *related_schema = nullptr;
-      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, related_table_id, related_schema))) {
+      if (foreign_key_info.is_parent_table_mock_
+        || data_table_schema.get_table_id() == related_table_id) {
+        // mock table and self reference foreign key table, no need to check.
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, related_table_id, related_schema))) {
         LOG_WARN("get schema failed", K(ret), K(tenant_id), K(related_table_id));
       } else if (OB_ISNULL(related_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null schema", K(ret));
+        LOG_WARN("unexpected error, related schema is nullptr", K(ret), K(related_table_id), K(foreign_key_info));
       } else if (!related_schema->check_can_do_ddl()) {
         ret = OB_OP_NOT_ALLOW;
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "execute ddl while foreign key related table is executing offline ddl");
@@ -16294,7 +16295,7 @@ int ObDDLService::drop_table_in_trans(
         if (foreign_key_info.is_parent_table_mock_) {
           // TODO:@xiaofeng.lby, delete this restriction, https://yuque.antfin-inc.com/ob/product_functionality_review/si89mc
           if (OB_NOT_NULL(drop_table_set)) {
-            if (drop_table_set->count() > 0) {
+            if (drop_table_set->count() > 1) {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("drop muti tables with mock fks in one sql is not supported ", K(ret));
             }
@@ -17950,7 +17951,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
     bool is_db_in_recyclebin = false;
     int64_t refreshed_schema_version = 0;
     ObDDLSQLTransaction trans(schema_service_);
-
+    DropTableIdHashSet drop_table_set;
     if (TMP_TABLE == drop_table_arg.table_type_
         || TMP_TABLE_ORA_TRX == drop_table_arg.table_type_
         || TMP_TABLE_ORA_SESS == drop_table_arg.table_type_
@@ -17995,6 +17996,8 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table_schema should not be null", KR(ret));
+        } else if (OB_FAIL(drop_table_set.set_refactored(table_schema->get_table_id()))) {
+          LOG_WARN("set table_id to hash set failed", K(table_schema->get_table_id()), K(ret));
         } else if (OB_FAIL(lock_table(trans, *table_schema))) {
           LOG_WARN("fail to lock_table", KR(ret), KPC(table_schema));
           // for ddl retry task, upper layer only focus on `OB_TRY_LOCK_ROW_CONFLICT`, and then retry it.
@@ -18004,7 +18007,6 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
       }
     }
 
-    DropTableIdHashSet drop_table_set;
     ObMockFKParentTableSchema mock_fk_parent_table_schema;
     SMART_VAR(ObTableSchema, tmp_table_schema) {
       for (int64_t i = 0; OB_SUCC(ret) && i < drop_table_arg.tables_.count(); ++i) {
@@ -18157,11 +18159,6 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
                           mock_fk_parent_table_ptr /* will use it when drop a fk_parent_table */))) {
                 LOG_WARN("ddl_service_ drop_table failed", K(table_item), K(tenant_id), K(ret));
               }
-            }
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(drop_table_set.set_refactored(table_schema->get_table_id()))) {
-              LOG_WARN("set table_id to hash set failed", K(table_schema->get_table_id()), K(ret));
             }
           }
         }

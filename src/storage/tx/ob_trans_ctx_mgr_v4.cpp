@@ -171,7 +171,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
   } else if (OB_UNLIKELY(!ls_id.is_valid()) || OB_ISNULL(ts_mgr) || OB_ISNULL(txs)) {
     TRANS_LOG(WARN, "invalid argument", K(ls_id), KP(ts_mgr), KP(txs));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(ls_tx_ctx_map_.init())) {
+  } else if (OB_FAIL(ls_tx_ctx_map_.init(lib::ObMemAttr(tenant_id, "LSTxCtxMgr")))) {
     TRANS_LOG(WARN, "ctx_map_mgr init fail", KR(ret));
   } else if (OB_ISNULL(log_adapter) && OB_FAIL(log_adapter_def_.init(param))) {
     TRANS_LOG(WARN, "tx log adapter init error", KR(ret));

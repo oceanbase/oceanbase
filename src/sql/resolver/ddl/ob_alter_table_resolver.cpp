@@ -4459,6 +4459,11 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
         if (lib::is_oracle_mode() && !is_same) {
           ret = OB_ERR_MODIFY_PART_COLUMN_TYPE;
           SQL_RESV_LOG(WARN, "data type or len of a part column may not be changed", K(ret));
+        } else if (cur_table_schema.is_global_index_table()) {
+          // FIXME YIREN (20221019), allow to alter part key of global index table by refilling part info when rebuilding it.
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("alter part key column of global index table is disallowed", K(ret), KPC(column_schema), K(cur_table_schema));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter part key of global index is");
         } else if (OB_FAIL(check_alter_part_key_allowed(cur_table_schema, *column_schema, dst_col_schema))) {
           LOG_WARN("check alter partition key allowed failed", K(ret));
         } 

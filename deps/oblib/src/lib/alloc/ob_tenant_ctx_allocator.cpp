@@ -216,9 +216,7 @@ void ObTenantCtxAllocator::print_usage() const
         return mgr->get_ctx_hold(ctx_id_, ctx_hold_bytes);
       });
     }
-    if (ctx_hold_bytes * 0.8 >= sum_item.hold_) {
-      _LOG_WARN("there has too much memory fragments");
-    }
+
     if (ctx_hold_bytes > 0 || sum_item.used_ > 0) {
       _LOG_INFO("\n[MEMORY] tenant_id=%5ld ctx_id=%25s hold=% '15ld used=% '15ld limit=% '15ld"
                 "\n[MEMORY] idle_size=% '10ld free_size=% '10ld"

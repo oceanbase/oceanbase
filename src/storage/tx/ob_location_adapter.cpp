@@ -73,42 +73,6 @@ void ObLocationAdapter::statistics()
   }
 }
 
-int ObLocationAdapter::get_leader(const int64_t cluster_id,
-                                  const int64_t tenant_id,
-                                  const ObLSID &ls_id,
-                                  common::ObAddr &leader)
-{
-  int ret = OB_SUCCESS;
-  const bool is_sync = true;
-#ifdef TRANS_ERROR
-  int64_t random = ObRandom::rand(0, 100);
-  static int64_t total_alloc_cnt = 0;
-  static int64_t random_cnt = 0;
-  ++total_alloc_cnt;
-  if (0 == random % 50) {
-    ret = OB_LS_LOCATION_NOT_EXIST;
-    ++random_cnt;
-    if (EXECUTE_COUNT_PER_SEC(16)) {
-      TRANS_LOG(INFO, "get error for random", K(ls_id),
-          K(total_alloc_cnt), K(random_cnt));
-    }
-    return ret;
-  }
-#endif
-
-  if (!is_inited_) {
-    TRANS_LOG(WARN, "ob location adapter not inited");
-    ret = OB_NOT_INIT;
-  } else if (!ls_id.is_valid()) {
-    TRANS_LOG(WARN, "invalid argument", K(ls_id));
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    ret = get_leader_(cluster_id, tenant_id, ls_id, leader, is_sync);
-  }
-
-  return ret;
-}
-
 int ObLocationAdapter::nonblock_get_leader(const int64_t cluster_id,
                                            const int64_t tenant_id,
                                            const ObLSID &ls_id,

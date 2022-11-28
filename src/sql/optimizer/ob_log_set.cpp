@@ -511,7 +511,7 @@ int ObLogSet::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
       if (OB_ISNULL(get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(get_child(i)->re_est_cost(param, child_card, child_cost))) {
+      } else if (OB_FAIL(SMART_CALL(get_child(i)->re_est_cost(param, child_card, child_cost)))) {
         LOG_WARN("failed to re-est cost", K(ret));
       } else {
         cost += child_cost;

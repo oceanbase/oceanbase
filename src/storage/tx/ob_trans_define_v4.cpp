@@ -284,8 +284,11 @@ void ObTxDesc::reset()
 #ifndef NDEBUG
   FORCE_PRINT_TRACE(&tlog_, "[tx desc trace]");
 #else
-  if (state_ == State::IDLE || state_ == State::COMMITTED) { /* skip */}
-  else if (flags_.SHADOW_) { /* skip clone's destory */}
+  if (state_ == State::IDLE || state_ == State::COMMITTED) {
+    if (finish_ts_ - commit_ts_ > 5 * 1000 * 1000) {
+      FORCE_PRINT_TRACE(&tlog_, "[tx slow commit][tx desc trace]");
+    }
+  } else if (flags_.SHADOW_) { /* skip clone's destory */}
   else {
     FORCE_PRINT_TRACE(&tlog_, "[tx desc trace]");
   }
@@ -992,12 +995,12 @@ ObTxPart::~ObTxPart()
   last_touch_ts_ = 0;
 }
 
-int ObTxDescMgr::init(std::function<int(ObTransID&)> tx_id_allocator)
+int ObTxDescMgr::init(std::function<int(ObTransID&)> tx_id_allocator, const lib::ObMemAttr &mem_attr)
 {
   int ret = OB_SUCCESS;
   OV(!inited_, OB_INIT_TWICE);
   OV(stoped_);
-  OZ(map_.init());
+  OZ(map_.init(mem_attr));
   if (OB_SUCC(ret)) {
     tx_id_allocator_ = tx_id_allocator;
     inited_ = true;

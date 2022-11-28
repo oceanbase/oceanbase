@@ -777,6 +777,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_merge_log_plan.cpp
   optimizer/ob_opt_est_cost.cpp
   optimizer/ob_opt_est_cost_model.cpp
+  optimizer/ob_opt_est_cost_model_vector.cpp
   optimizer/ob_opt_est_utils.cpp
   optimizer/ob_opt_selectivity.cpp
   optimizer/ob_optimizer.cpp

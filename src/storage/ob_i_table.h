@@ -216,6 +216,7 @@ public:
   virtual palf::SCN get_snapshot_version_scn() const
   {
     palf::SCN scn;
+    // TODO qianchen, ret_code for convert_for_tx.
     scn.convert_for_tx(key_.get_snapshot_version());
     return scn;
   }
@@ -393,7 +394,7 @@ public:
   ObTableHandleV2(const ObTableHandleV2 &other);
   ObTableHandleV2 &operator= (const ObTableHandleV2 &other);
 
-  int set_table(ObITable *table, ObTenantMetaMemMgr *t3m, const ObITable::TableType table_type);
+  int set_table(ObITable *const table, ObTenantMetaMemMgr *const t3m, const ObITable::TableType table_type);
   int set_table(ObITable *table, common::ObIAllocator *allocator);
 
   TO_STRING_KV(KP_(table), KP(t3m_), KP(allocator_), K(table_type_));

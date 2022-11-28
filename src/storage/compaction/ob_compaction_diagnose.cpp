@@ -631,7 +631,7 @@ int ObCompactionDiagnoseMgr::get_suspect_and_warning_info(
               "error_no", warning_info->dag_ret_,
               "last_error_time", warning_info->gmt_modified_,
               "error_trace", warning_info->task_id_,
-              "waring", warning_info->warning_info_))) {
+              "warning", warning_info->warning_info_))) {
         LOG_WARN("failed to add diagnose info", K(ret), K(ls_id), K(tablet_id), KPC(warning_info));
       }
     }

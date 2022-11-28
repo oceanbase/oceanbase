@@ -27,16 +27,6 @@ using namespace ::testing;
 using namespace transaction;
 using namespace share;
 
-namespace memtable
-{
-int ObMvccRow::check_double_insert_(const palf::SCN ,
-                                    ObMvccTransNode &,
-                                    ObMvccTransNode *)
-{
-  return OB_SUCCESS;
-}
-}
-
 namespace common
 {
 void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
@@ -74,7 +64,7 @@ void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
   }
   return is_out_of_mem ? nullptr : arena_.alloc(handle.id_, handle.arena_handle_, align_size);
 }
-} // end memtable
+}
 
 class ObTestTx : public ::testing::Test
 {
@@ -1192,7 +1182,6 @@ TEST_F(ObTestTx, get_gts_block_and_switch_to_follower_gracefully)
   ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr));
   ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_follower_gracefully());
   n1->wait_all_redolog_applied();
-  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr));
 
   ObTxNode::get_ts_mgr_().clear_get_gts_waiting_mode();
   ReplayLogEntryFunctor functor(n2);

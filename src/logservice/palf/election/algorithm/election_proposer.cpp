@@ -282,7 +282,7 @@ int ElectionProposer::reschedule_or_register_prepare_task_after_(const int64_t d
   }))) {
     LOG_INIT(ERROR, "first time register devote task failed");
   }
-  LOG_NONE(TRACE, "call reschedule_or_register_prepare_task_after_");
+  LOG_NONE(DEBUG, "call reschedule_or_register_prepare_task_after_");
   return ret;
   #undef PRINT_WRAPPER
 }

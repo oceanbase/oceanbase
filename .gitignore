@@ -18,6 +18,7 @@ unittest/**/unittest_*
 *.la
 *.lo
 *.log
+!tools/timezone_V1.log
 *.log.wf
 *.o
 *.orig
@@ -149,6 +150,16 @@ src/sql/parser/sql_parser_oracle_utf8_mode_tab.c
 src/sql/parser/sql_parser_oracle_utf8_mode_tab.h
 src/sql/parser/_gen_parser.output
 src/sql/parser/_gen_parser.error
+src/pl/parser/pl_parser_mysql_mode_lex.c
+src/pl/parser/pl_parser_mysql_mode_lex.h
+src/pl/parser/pl_parser_mysql_mode_tab.c
+src/pl/parser/pl_parser_mysql_mode_tab.h
+src/pl/parser/pl_parser_oracle_mode_lex.c
+src/pl/parser/pl_parser_oracle_mode_lex.h
+src/pl/parser/pl_parser_oracle_mode_tab.c
+src/pl/parser/pl_parser_oracle_mode_tab.h
+src/pl/parser/_gen_parser.error
+src/pl/parser/_gen_pl_parser.output
 tags
 test-driver
 tools/ObRestore/mvn_repository
@@ -261,8 +272,6 @@ unittest/obproxy/etc/
 unittest/obproxy/failed.result
 unittest/obproxy/failed.sql
 unittest/rpc/rpc_bench
-unittest/sql/engine/*/test_*
-unittest/sql/engine/expr/*_test
 unittest/sql/engine/expr/arithmatic.out
 unittest/sql/executor/rpc_remote_scheduler
 unittest/sql/executor/stress_interm_result_manager

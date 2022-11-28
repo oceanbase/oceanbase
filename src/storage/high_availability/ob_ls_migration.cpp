@@ -1033,9 +1033,8 @@ int ObStartMigrationTask::deal_with_local_ls_()
     LOG_WARN("failed to get role", K(ret), "arg", ctx_->arg_);
   } else if (is_strong_leader(role)) {
     if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
-      //TODO(yanfeng) need turn off rebuild flag
-      ret = OB_NO_NEED_REBUILD;
-      LOG_WARN("leader can not as rebuild dst", K(ret), K(role), "myaddr", MYADDR, "arg", ctx_->arg_);
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("leader can not as rebuild dst", K(ret), K(role), "myaddr", MYADDR, "arg", ctx_->arg_);
     } else if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_
         || ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_
         || ObMigrationOpType::CHANGE_LS_OP == ctx_->arg_.type_) {
@@ -1084,7 +1083,6 @@ int ObStartMigrationTask::choose_src_()
     ObStorageHASrcInfo src_info;
     obrpc::ObCopyLSInfo ls_info;
     int64_t local_clog_checkpoint_ts = 0;
-    //TODO(yangyi.yyy) use more ls info to check src
     if (OB_FAIL(get_local_ls_checkpoint_ts_(local_clog_checkpoint_ts))) {
       LOG_WARN("failed to get local ls checkpoint ts", K(ret));
     } else if (OB_FAIL(src_provider.init(tenant_id, storage_rpc_))) {

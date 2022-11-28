@@ -142,6 +142,15 @@ public:
   void set_dst_cluster(int64_t dst_cluster_id) { dst_cluster_id_ = dst_cluster_id; }
   void set_transport_impl(int transport_impl) { transport_impl_ = transport_impl; }
 
+  bool need_increment_request_level(int pcode) const {
+    return (pcode > OB_SQL_PCODE_START && pcode < OB_SQL_PCODE_END)
+          || pcode == OB_OUT_TRANS_LOCK_TABLE || pcode == OB_OUT_TRANS_UNLOCK_TABLE || pcode == OB_TABLE_LOCK_TASK
+          || pcode == OB_HIGH_PRIORITY_TABLE_LOCK_TASK || pcode == OB_REGISTER_TX_DATA
+          || pcode == OB_REFRESH_SYNC_VALUE || pcode == OB_CLEAR_AUTOINC_CACHE || pcode == OB_CLEAN_SEQUENCE_CACHE || pcode == OB_FETCH_TABLET_AUTOINC_SEQ_CACHE
+          || pcode == OB_BATCH_GET_TABLET_AUTOINC_SEQ || pcode == OB_BATCH_SET_TABLET_AUTOINC_SEQ
+          || pcode == OB_CALC_COLUMN_CHECKSUM_REQUEST || pcode == OB_REMOTE_WRITE_DDL_REDO_LOG || pcode == OB_REMOTE_WRITE_DDL_COMMIT_LOG;
+  }
+
   // when active is set as false, all RPC calls will simply return OB_INACTIVE_RPC_PROXY.
   void active(const bool active) { active_ = active; }
 

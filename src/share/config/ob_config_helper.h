@@ -284,18 +284,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigWorkAreaPolicyChecker);
 };
 
-class ObConfigBackupRegionChecker
-  : public ObConfigChecker
-{
-public:
-  ObConfigBackupRegionChecker() {}
-  virtual ~ObConfigBackupRegionChecker() {}
-  //TODO(yanfeng): backup fix it
-  bool check(const ObConfigItem &t) const { UNUSED(t); return true; }
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObConfigBackupRegionChecker);
-};
-
 class ObConfigLogArchiveOptionsChecker
   : public ObConfigChecker
 {

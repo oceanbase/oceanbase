@@ -709,14 +709,12 @@ int ObBackupDataStore::get_backup_set_array(
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list)
 {
   int ret = OB_SUCCESS;
+  backup_set_list.reset();
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDataStore not init", K(ret));
   } else {
-    int64_t cur_max_backup_set_id = -1;
     int64_t global_max_backup_set_id = -1;
-    common::ObArray<share::ObRestoreBackupSetBriefInfo> tmp_backup_set_list;
-    palf::SCN tmp_restore_start_scn;
     ObBackupIoAdapter util;
     ObBackupSetFilter op;
     share::ObBackupPath tenant_backup_placeholder_dir_path;
@@ -727,18 +725,9 @@ int ObBackupDataStore::get_backup_set_array(
       LOG_WARN("fail to get simple backup placeholder dir", K(ret));
     } else if (OB_FAIL(util.list_files(tenant_backup_placeholder_dir_path.get_obstr(), storage_info, op))) {
       LOG_WARN("fail to list files", K(ret), K(tenant_backup_placeholder_dir_path));
-    } else if (OB_FAIL(do_get_backup_set_array_(passwd_array, restore_scn, op, tmp_backup_set_list,
-        cur_max_backup_set_id, tmp_restore_start_scn))) {
+    } else if (OB_FAIL(do_get_backup_set_array_(passwd_array, restore_scn, op, backup_set_list,
+        global_max_backup_set_id, restore_start_scn))) {
       LOG_WARN("fail to do get backup set array", K(ret), K(op));
-    } else if (global_max_backup_set_id == -1 || global_max_backup_set_id < cur_max_backup_set_id) {
-      //update backup set list
-      backup_set_list.reset();
-      if (OB_FAIL(backup_set_list.assign(tmp_backup_set_list))) {
-        LOG_WARN("fail to assign backup set list", K(ret));
-      } else {
-        restore_start_scn = tmp_restore_start_scn;
-        global_max_backup_set_id = cur_max_backup_set_id;
-      }
     }
   }
   return ret;

@@ -869,8 +869,13 @@ int ObSSTableIndexBuilder::close(const int64_t column_cnt, ObSSTableMergeRes &re
         data_blocks_cnt += roots_.at(i)->data_blocks_cnt_;
       }
     }
-    STORAGE_LOG(ERROR, "fail to close sstable index builder", K(ret), K(data_blocks_cnt),
-        K(allocator_.total()), K(allocator_.used()), K(self_allocator_.total()), K(self_allocator_.used()));
+    if (OB_TIMEOUT == ret || OB_ALLOCATE_MEMORY_FAILED == ret || OB_EAGAIN == ret) {
+      STORAGE_LOG(WARN, "fail to close sstable index builder", K(ret), K(data_blocks_cnt),
+          K(allocator_.total()), K(allocator_.used()), K(self_allocator_.total()), K(self_allocator_.used()));
+    } else {
+      STORAGE_LOG(ERROR, "fail to close sstable index builder", K(ret), K(data_blocks_cnt),
+          K(allocator_.total()), K(allocator_.used()), K(self_allocator_.total()), K(self_allocator_.used()));
+    }
     clean_status(); // clear since re-entrant
   }
   return ret;

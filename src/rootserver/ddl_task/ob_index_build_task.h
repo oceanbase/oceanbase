@@ -33,22 +33,25 @@ public:
       const int64_t execution_id,
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
-      obrpc::ObCreateIndexArg *create_index_arg,
       ObRootService *root_service)
       : task_id_(task_id), tenant_id_(tenant_id), data_table_id_(data_table_id), dest_table_id_(dest_table_id),
         schema_version_(schema_version), snapshot_version_(snapshot_version), execution_id_(execution_id),
-        trace_id_(trace_id), parallelism_(parallelism), create_index_arg_(create_index_arg),
+        trace_id_(trace_id), parallelism_(parallelism), allocator_("IdxSSTBuildTask"),
         root_service_(root_service)
   {
     set_retry_times(0);
   }
 
   int send_build_replica_sql() const;
+  int set_nls_format(const ObString &nls_date_format,
+                     const ObString &nls_timestamp_format,
+                     const ObString &nls_timestamp_tz_format);
   virtual int process() override;
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
   TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
-               K_(execution_id), K_(trace_id), K_(parallelism));
+               K_(execution_id), K_(trace_id), K_(parallelism), K_(nls_date_format),
+               K_(nls_timestamp_format), K_(nls_timestamp_tz_format));
 
 private:
   int64_t task_id_;
@@ -60,7 +63,10 @@ private:
   int64_t execution_id_;
   common::ObCurTraceId::TraceId trace_id_;
   int64_t parallelism_;
-  obrpc::ObCreateIndexArg *create_index_arg_;
+  common::ObArenaAllocator allocator_;
+  ObString nls_date_format_;
+  ObString nls_timestamp_format_;
+  ObString nls_timestamp_tz_format_;
   ObRootService *root_service_;
 
   DISALLOW_COPY_AND_ASSIGN(ObIndexSSTableBuildTask);

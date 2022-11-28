@@ -1010,7 +1010,7 @@ int ObMvccRow::check_double_insert_(const palf::SCN snapshot_version,
         && prev->is_committed()
         && snapshot_version >= prev->trans_version_) {
       ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
-      TRANS_LOG(WARN, "find double insert node", K(node), KPC(prev), K(snapshot_version), K(*this));
+      TRANS_LOG(WARN, "find double insert node", K(ret), K(node), KPC(prev), K(snapshot_version), K(*this));
     }
   }
 

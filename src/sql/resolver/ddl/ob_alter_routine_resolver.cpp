@@ -264,6 +264,7 @@ int ObAlterRoutineResolver::parse_routine(
   pl::ObPLParser parser(*(params_.allocator_), dtc_params.connection_collation_);
   ParseResult parse_result;
   ObString body = source;
+  MEMSET(&parse_result, 0, SIZEOF(ParseResult));
   OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
                                   *(params_.allocator_), dtc_params, body));
   OZ (parser.parse(body, body, parse_result));

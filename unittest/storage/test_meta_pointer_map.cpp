@@ -139,7 +139,7 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_handle)
 
   ObLSHandle ls_handle;
   ls_handle.ls_ = &fake_ls;
-  ObTabletPointer tablet_ptr(ls_handle, ddl_kv_mgr_hdl, memtable_mgr_hdl);
+  ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
   tablet_ptr.set_addr_with_reset_obj(phy_addr);
@@ -205,7 +205,7 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 
   ObLSHandle ls_handle;
   ls_handle.ls_ = &fake_ls;
-  ObTabletPointer tablet_ptr(ls_handle, ddl_kv_mgr_hdl, memtable_mgr_hdl);
+  ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
   tablet_ptr.set_addr_with_reset_obj(phy_addr);
@@ -286,7 +286,7 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
 
   ObLSHandle ls_handle;
   ls_handle.ls_ = &fake_ls;
-  ObTabletPointer tablet_ptr(ls_handle, ddl_kv_mgr_hdl, memtable_mgr_hdl);
+  ObTabletPointer tablet_ptr(ls_handle, memtable_mgr_hdl);
   ObMetaDiskAddr phy_addr;
   phy_addr.set_none_addr();
   tablet_ptr.set_addr_with_reset_obj(phy_addr);

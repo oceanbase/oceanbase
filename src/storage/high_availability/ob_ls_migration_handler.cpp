@@ -1042,7 +1042,7 @@ int ObLSMigrationHandler::check_disk_space_(const ObMigrationOpArg &arg)
     LOG_WARN("failed to get ls required size", K(ret), K(arg));
   } else if (required_size > 0) {
     if (OB_FAIL(THE_IO_DEVICE->check_space_full(required_size))) {
-      if (OB_CS_OUTOF_DISK_SPACE == ret) {
+      if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
         ret = OB_SERVER_MIGRATE_IN_DENIED;
       }
       FLOG_ERROR( "failed to check_is_disk_full, cannot migrate in",

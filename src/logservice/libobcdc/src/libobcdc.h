@@ -141,7 +141,7 @@ public:
   ObCDCFactory();
   ~ObCDCFactory();
 public:
-  IObCDCInstance *construct_oblog();
+  IObCDCInstance *construct_obcdc();
   void deconstruct(IObCDCInstance *log);
 };
 }

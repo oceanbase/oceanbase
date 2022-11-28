@@ -330,6 +330,10 @@ int ObTableRedefinitionTask::copy_table_indexes()
       }
       DEBUG_SYNC(TABLE_REDEFINITION_COPY_TABLE_INDEXES);
       if (OB_SUCC(ret) && index_ids.count() > 0) {
+        ObSchemaGetterGuard new_schema_guard;
+        if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, new_schema_guard))) {
+          LOG_WARN("failed to refresh schema guard", K(ret));
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count(); ++i) {
           const uint64_t index_id = index_ids.at(i);	
           const ObTableSchema *index_schema = nullptr;
@@ -340,7 +344,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
             create_index_arg.nls_date_format_ = alter_table_arg_.nls_formats_[0];
             create_index_arg.nls_timestamp_format_ = alter_table_arg_.nls_formats_[1];
             create_index_arg.nls_timestamp_tz_format_ = alter_table_arg_.nls_formats_[2];
-            if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_ids.at(i), index_schema))) {
+            if (OB_FAIL(new_schema_guard.get_table_schema(tenant_id_, index_ids.at(i), index_schema))) {
               LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(index_ids.at(i)));
             } else if (OB_ISNULL(index_schema)) {
               ret = OB_ERR_SYS;

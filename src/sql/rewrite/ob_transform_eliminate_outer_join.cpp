@@ -103,7 +103,6 @@ int ObTransformEliminateOuterJoin::recursive_eliminate_outer_join_in_table_item(
                                                 bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  bool do_trans = false;
   bool is_stack_overflow = false;
   bool is_my_joined_table_type = false;
   JoinedTable *process_join = NULL;
@@ -125,15 +124,19 @@ int ObTransformEliminateOuterJoin::recursive_eliminate_outer_join_in_table_item(
   } else if (is_my_joined_table_type) {
     //子表无法从stmt中查找，只能通过指针转换得到joined_table
     process_join = static_cast<JoinedTable*>(cur_table_item);
+    bool is_happened = false;
     ret = do_eliminate_outer_join(stmt,
                                   process_join,
                                   from_item_list,
                                   joined_table_list,
                                   conditions,
                                   should_move_to_from_list,
-                                  do_trans);
+                                  is_happened);
     //继续处理左右子表
     if (OB_SUCC(ret)) {
+      trans_happened |= is_happened;
+      bool child_should_move_to_from_list = is_happened && should_move_to_from_list
+                                            && INNER_JOIN == process_join->joined_type_;
       TableItem *l_child = process_join->left_table_;
       TableItem *r_child = process_join->right_table_;
       ObSEArray<ObRawExpr*, 4> left_child_conditions;
@@ -147,7 +150,7 @@ int ObTransformEliminateOuterJoin::recursive_eliminate_outer_join_in_table_item(
                                                                                 from_item_list,
                                                                                 joined_table_list,
                                                                                 left_child_conditions,
-                                                                                do_trans & should_move_to_from_list,
+                                                                                child_should_move_to_from_list,
                                                                                 trans_happened)))) {
         LOG_WARN("failed to process the left child", K(ret), K(r_child));
       } else {
@@ -162,17 +165,12 @@ int ObTransformEliminateOuterJoin::recursive_eliminate_outer_join_in_table_item(
                                                                                   from_item_list,
                                                                                   joined_table_list,
                                                                                   right_child_conditions,
-                                                                                  do_trans & should_move_to_from_list,
+                                                                                  child_should_move_to_from_list,
                                                                                   trans_happened)))) {
           LOG_WARN("failed to process the right child", K(ret), K(r_child));
         } else {
           /*do nothing*/
         }
-      }
-      if (do_trans && should_move_to_from_list) {
-        trans_happened = true;
-      } else {
-        /*do nothing*/
       }
     } else {
       /*do nothing*/
@@ -263,6 +261,7 @@ int ObTransformEliminateOuterJoin::do_eliminate_outer_join(ObDMLStmt *stmt,
         LOG_WARN("failed to test eliminated left join condition", K(ret));
       } else if (can_eliminate) {
         //left join消除后，旋转right join为左连接
+        trans_happened = true;
         TableItem* temp = cur_joined_table->left_table_;
         cur_joined_table->left_table_ = cur_joined_table->right_table_;
         cur_joined_table->right_table_ = temp;
@@ -278,6 +277,7 @@ int ObTransformEliminateOuterJoin::do_eliminate_outer_join(ObDMLStmt *stmt,
         if (OB_FAIL(can_be_eliminated(stmt, cur_joined_table, conditions, can_eliminate))) {
             LOG_WARN("failed to test eliminated right join condition", K(ret));
         } else if (can_eliminate) {
+            trans_happened = true;
             if (cur_joined_table->joined_type_ == LEFT_OUTER_JOIN) {
               cur_joined_table->joined_type_ = INNER_JOIN;
             } else {
@@ -304,6 +304,7 @@ int ObTransformEliminateOuterJoin::do_eliminate_outer_join(ObDMLStmt *stmt,
       if (OB_FAIL(can_be_eliminated(stmt, cur_joined_table, conditions, can_eliminate))) {
           LOG_WARN("failed to test eliminated left join condition", K(ret));
       } else if (can_eliminate) {
+        trans_happened = true;
         cur_joined_table->joined_type_ = INNER_JOIN;
       } else {
         /*do nothing*/

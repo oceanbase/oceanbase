@@ -6846,6 +6846,7 @@ int ObTableSchema::init_column_meta_array(
   if (OB_FAIL(get_multi_version_column_descs(columns))) {
     STORAGE_LOG(WARN, "fail to get store column ids", K(ret));
   } else {
+    blocksstable::ObStorageDatum datum;
     for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
       const uint64_t col_id = columns.at(i).col_id_;
       col_meta.column_id_ = col_id;
@@ -6869,8 +6870,10 @@ int ObTableSchema::init_column_meta_array(
         } else {
           if (ob_is_large_text(col_schema->get_data_type())) {
             col_meta.column_default_checksum_ = 0;
+          } else if (OB_FAIL(datum.from_obj_enhance(col_schema->get_orig_default_value()))) {
+            STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
           } else {
-            col_meta.column_default_checksum_ = col_schema->get_orig_default_value().checksum_v2(0);
+            col_meta.column_default_checksum_ = datum.checksum(0);
           }
         }
       }

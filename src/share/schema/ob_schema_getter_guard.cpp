@@ -1521,10 +1521,13 @@ int ObSchemaGetterGuard::get_table_id(uint64_t tenant_id,
       LOG_WARN("get simple table failed", KR(ret), K(tenant_id),
                K(tenant_id), K(database_id), K(session_id), K(table_name), K(is_index));
     } else if (NULL == simple_table) {
-      LOG_INFO("table not exist", K(tenant_id), K(tenant_id), K(database_id),
-               K(session_id), K(table_name), K(is_index),
-               "schema_version", mgr->get_schema_version(),
-               "schema_mgr_tenant_id", mgr->get_tenant_id());
+      if (OB_CORE_SCHEMA_VERSION != mgr->get_schema_version()) {
+        // this log is useless when observer restarts.
+        LOG_INFO("table not exist", K(tenant_id), K(tenant_id), K(database_id),
+                 K(session_id), K(table_name), K(is_index),
+                 "schema_version", mgr->get_schema_version(),
+                 "schema_mgr_tenant_id", mgr->get_tenant_id());
+      }
     } else {
       if (TEMP_TABLE_TYPE == check_type
           && false == simple_table->is_tmp_table()) {

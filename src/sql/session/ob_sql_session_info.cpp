@@ -28,7 +28,6 @@
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
 #include "pl/sys_package/ob_dbms_sql.h"
-#include "pl/sys_package/ob_pl_utl_file.h"
 #include "observer/mysql/ob_mysql_request_manager.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
 #include "observer/mysql/ob_query_driver.h"

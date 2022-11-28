@@ -107,7 +107,7 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
     ObServer &server = ObServer::get_instance();
     uint64_t cell_idx = 0;
     char ip_buf[common::OB_IP_STR_BUFF];
-    char peer_buf[common::OB_IP_STR_BUFF];
+    char peer_buf[common::OB_IP_PORT_STR_BUFF];
     char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
     //If you are in system tenant, you can see all thread.
     if (true) {

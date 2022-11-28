@@ -27,6 +27,27 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
+int ObIndexSSTableBuildTask::set_nls_format(const ObString &nls_date_format,
+                                            const ObString &nls_timestamp_format,
+                                            const ObString &nls_timestamp_tz_format)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(deep_copy_ob_string(allocator_,
+                                  nls_date_format,
+                                  nls_date_format_))) {
+    LOG_WARN("fail to deep copy nls date format", K(ret));
+  } else if (OB_FAIL(deep_copy_ob_string(allocator_,
+                                         nls_timestamp_format,
+                                         nls_timestamp_format_))) {
+    LOG_WARN("fail to deep copy nls timestamp format", K(ret));
+  } else if (OB_FAIL(deep_copy_ob_string(allocator_,
+                                         nls_timestamp_tz_format,
+                                         nls_timestamp_tz_format_))) {
+    LOG_WARN("fail to deep copy nls timestamp tz format", K(ret));
+  }
+  return ret;
+}
+
 int ObIndexSSTableBuildTask::process()
 {
   int ret = OB_SUCCESS;
@@ -82,9 +103,9 @@ int ObIndexSSTableBuildTask::process()
     session_param.ddl_info_.set_is_ddl(true);
     session_param.ddl_info_.set_source_table_hidden(table_schema->is_user_hidden_table());
     session_param.ddl_info_.set_dest_table_hidden(table_schema->is_user_hidden_table());
-    session_param.nls_formats_[ObNLSFormatEnum::NLS_DATE] = create_index_arg_->nls_date_format_;
-    session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = create_index_arg_->nls_timestamp_format_;
-    session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = create_index_arg_->nls_timestamp_tz_format_;
+    session_param.nls_formats_[ObNLSFormatEnum::NLS_DATE] = nls_date_format_;
+    session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format_;
+    session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format_;
     int tmp_ret = OB_SUCCESS;
     if (oracle_mode) {
       user_sql_proxy = GCTX.ddl_oracle_sql_proxy_;
@@ -132,7 +153,6 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
         execution_id_,
         trace_id_,
         parallelism_,
-        create_index_arg_,
         root_service_);
   }
   return task;
@@ -579,9 +599,12 @@ int ObIndexBuildTask::send_build_single_replica_request()
         redefinition_execution_id_,
         trace_id_,
         parallelism_,
-        &create_index_arg_,
         root_service_);
-    if (OB_FAIL(root_service_->submit_ddl_single_replica_build_task(task))) {
+    if (OB_FAIL(task.set_nls_format(create_index_arg_.nls_date_format_,
+                                    create_index_arg_.nls_timestamp_format_,
+                                    create_index_arg_.nls_timestamp_tz_format_))) {
+      LOG_WARN("failed to set nls format", K(ret), K(create_index_arg_));
+    } else if (OB_FAIL(root_service_->submit_ddl_single_replica_build_task(task))) {
       LOG_WARN("fail to submit task", K(ret), K(*this), K(timeout));
     } else {
       is_sstable_complete_task_submitted_ = true;

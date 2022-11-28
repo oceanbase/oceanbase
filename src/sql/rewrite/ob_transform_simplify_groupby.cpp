@@ -305,8 +305,8 @@ int ObTransformSimplifyGroupby::get_upper_column_exprs(ObSelectStmt &upper_stmt,
 {
   int ret = OB_SUCCESS;
   is_valid = true;
-  TableItem *table_item;
-  ObSelectStmt *ref_query;
+  TableItem *table_item = NULL;
+  ObSelectStmt *ref_query = NULL;
   if (OB_UNLIKELY(!upper_stmt.is_single_table_stmt())
       || OB_ISNULL(table_item = upper_stmt.get_table_item(0))
       || OB_UNLIKELY(!table_item->is_generated_table())

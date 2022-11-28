@@ -1113,7 +1113,7 @@ int ObILSRestoreState::check_restore_concurrency_limit_()
     const int64_t restore_dag_net_count = scheduler->get_dag_net_count(restore_type);
 
     if (restore_dag_net_count > restore_concurrency) {
-      //TODO(yanfeng) Here need same value with ObLSRestoreHandler to control limit.
+      //TODO(yanfeng) Here need same value with ObLSRestoreHandler to control limit in 4.1.
       ret = OB_REACH_SERVER_DATA_COPY_IN_CONCURRENCY_LIMIT;
       LOG_WARN("ls restore reach limit", K(ret), K(restore_concurrency), K(restore_dag_net_count));
     }
@@ -1581,7 +1581,6 @@ int ObLSRestoreSysTabletState::leader_restore_sys_tablet_()
   } else if (is_need_retry_()) {
     // next term to retry
   } else if (OB_FAIL(ls_->load_ls_inner_tablet())) {
-    //TODO(chongrong.th) Need to handle reentrancy scenarios for load_inner_table_tablet
     LOG_WARN("fail to load ls inner tablet", K(ret));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
@@ -1611,7 +1610,6 @@ int ObLSRestoreSysTabletState::follower_restore_sys_tablet_()
   } else if (is_need_retry_()) {
     // next term to retry
   } else if (OB_FAIL(ls_->load_ls_inner_tablet())) {
-    //TODO(chongrong.th) Need to handle reentrancy scenarios for load_inner_table_tablet
     LOG_WARN("fail to load ls inner tablet", K(ret));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
@@ -2407,7 +2405,7 @@ bool ObLSRestoreResultMgr::can_retrieable_err_(const int err) const
     case OB_CANCELED :
     case OB_NOT_SUPPORTED :
     case OB_TENANT_HAS_BEEN_DROPPED :
-    case OB_CS_OUTOF_DISK_SPACE :
+    case OB_SERVER_OUTOF_DISK_SPACE :
     case OB_HASH_NOT_EXIST:
       bret = false;
       break;

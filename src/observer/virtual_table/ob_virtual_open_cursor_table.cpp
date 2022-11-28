@@ -303,104 +303,101 @@ int ObVirtualOpenCursorTable::FillScanner::fill_cur_plan_cell(ObSQLSessionInfo &
   const int64_t col_count = output_column_ids_.count();
   ObCharsetType default_charset = ObCharset::get_default_charset();
   ObCollationType default_collation = ObCharset::get_default_collation(default_charset);
-  ObPlanCache *plan_cache = sess_info.get_plan_cache();
-  if (OB_NOT_NULL(plan_cache)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
-      const uint64_t col_id = output_column_ids_.at(i);
-      switch (col_id) {
-        case TENANT_ID: {
-          cur_row_->cells_[i].set_int(sess_info.get_priv_tenant_id());
-          break;
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
+    const uint64_t col_id = output_column_ids_.at(i);
+    switch (col_id) {
+      case TENANT_ID: {
+        cur_row_->cells_[i].set_int(sess_info.get_priv_tenant_id());
+        break;
+      }
+      case SVR_IP: {
+        cur_row_->cells_[i].set_varchar(ipstr_);
+        cur_row_->cells_[i].set_collation_type(default_collation);
+        break;
+      }
+      case SVR_PORT: {
+        cur_row_->cells_[i].set_int(port_);
+        break;
+      }
+      case SADDR: {
+        ObSqlString addr;
+        ObString tmp_saddr;
+        addr.append_fmt("%lx", reinterpret_cast<uint64_t>(&sess_info));
+        OZ (ob_write_string(*allocator_, addr.string(), tmp_saddr));
+        // get last 8 char, for oracle compatiable
+        int64_t offset = tmp_saddr.length() > 8 ? tmp_saddr.length() - 8 : 0;
+        // if tmp_saddr.length() - offset > 8, offset is 0
+        // the length make sure (tmp_saddr.ptr() + offset) do not have out-of-bounds access
+        int64_t length = tmp_saddr.length() - offset > 8 ? 8 : tmp_saddr.length() - offset;
+        ObString saddr(length, tmp_saddr.ptr() + offset);
+        cur_row_->cells_[i].set_varchar(saddr);
+        cur_row_->cells_[i].set_collation_type(default_collation);
+        break;
+      }
+      case SID: {
+        cur_row_->cells_[i].set_int(sess_info.get_sessid());
+        break;
+      }
+      case USER_NAME: {
+        cur_row_->cells_[i].set_varchar(sess_info.get_user_name());
+        cur_row_->cells_[i].set_collation_type(default_collation);
+        break;
+      }
+      case ADDRESS: {
+        // plan not set now
+        cur_row_->cells_[i].set_null();
+        break;
+      }
+      case HASH_VALUE: {
+        // cur_row_->cells_[i].set_int(sess_info.id);
+        cur_row_->cells_[i].set_null();
+        break;
+      }
+      case SQL_ID: {
+        char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
+        if (obmysql::COM_QUERY == sess_info.get_mysql_cmd() ||
+            obmysql::COM_STMT_EXECUTE == sess_info.get_mysql_cmd() ||
+            obmysql::COM_STMT_PREPARE == sess_info.get_mysql_cmd() ||
+            obmysql::COM_STMT_PREXECUTE == sess_info.get_mysql_cmd()) {
+          sess_info.get_cur_sql_id(sql_id, OB_MAX_SQL_ID_LENGTH + 1);
+        } else {
+          sql_id[0] = '\0';
         }
-        case SVR_IP: {
-          cur_row_->cells_[i].set_varchar(ipstr_);
-          cur_row_->cells_[i].set_collation_type(default_collation);
-          break;
-        }
-        case SVR_PORT: {
-          cur_row_->cells_[i].set_int(port_);
-          break;
-        }
-        case SADDR: {
-          ObSqlString addr;
-          ObString tmp_saddr;
-          addr.append_fmt("%lx", reinterpret_cast<uint64_t>(&sess_info));
-          OZ (ob_write_string(*allocator_, addr.string(), tmp_saddr));
-          // get last 8 char, for oracle compatiable
-          int64_t offset = tmp_saddr.length() > 8 ? tmp_saddr.length() - 8 : 0;
-          // if tmp_saddr.length() - offset > 8, offset is 0
-          // the length make sure (tmp_saddr.ptr() + offset) do not have out-of-bounds access
-          int64_t length = tmp_saddr.length() - offset > 8 ? 8 : tmp_saddr.length() - offset;
-          ObString saddr(length, tmp_saddr.ptr() + offset);
-          cur_row_->cells_[i].set_varchar(saddr);
-          cur_row_->cells_[i].set_collation_type(default_collation);
-          break;
-        }
-        case SID: {
-          cur_row_->cells_[i].set_int(sess_info.get_sessid());
-          break;
-        }
-        case USER_NAME: {
-          cur_row_->cells_[i].set_varchar(sess_info.get_user_name());
-          cur_row_->cells_[i].set_collation_type(default_collation);
-          break;
-        }
-        case ADDRESS: {
-          // plan not set now
-          cur_row_->cells_[i].set_null();
-          break;
-        }
-        case HASH_VALUE: {
-          // cur_row_->cells_[i].set_int(sess_info.id);
-          cur_row_->cells_[i].set_null();
-          break;
-        }
-        case SQL_ID: {
-          char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
-          if (obmysql::COM_QUERY == sess_info.get_mysql_cmd() ||
-              obmysql::COM_STMT_EXECUTE == sess_info.get_mysql_cmd() ||
-              obmysql::COM_STMT_PREPARE == sess_info.get_mysql_cmd() ||
-              obmysql::COM_STMT_PREXECUTE == sess_info.get_mysql_cmd()) {
-            sess_info.get_cur_sql_id(sql_id, OB_MAX_SQL_ID_LENGTH + 1);
-          } else {
-            sql_id[0] = '\0';
-          }
-          cur_row_->cells_[i].set_varchar(ObString::make_string(sql_id));
-          cur_row_->cells_[i].set_collation_type(default_collation);
-          break;
-        }
-        case SQL_TEXT: {
-          ObString sql = sess_info.get_current_query_string();
-          int64_t len = 60 > sql.length() ? sql.length() : 60;
-          cur_row_->cells_[i].set_varchar(ObString(len, sql.ptr()));
-          cur_row_->cells_[i].set_collation_type(default_collation);
-          break;
-        }
-        case LAST_SQL_ACTIVE_TIME: {
-          // session cursor not set now
-          cur_row_->cells_[i].set_timestamp(sess_info.get_query_start_time());
-          break;
-        }
-        case SQL_EXEC_ID: {
-          cur_row_->cells_[i].set_null();
-          break;
-        }
-        case CURSOR_TYPE: {
-          cur_row_->cells_[i].set_varchar("OPEN");
-          cur_row_->cells_[i].set_collation_type(default_collation);
-          break;
-        }
-        case CHILD_ADDRESS: {
-          cur_row_->cells_[i].set_null();
-          break;
-        }
-        case CON_ID: {
-          cur_row_->cells_[i].set_int(1);
-          break;
-        }
-        default: {
-          break;
-        }
+        cur_row_->cells_[i].set_varchar(ObString::make_string(sql_id));
+        cur_row_->cells_[i].set_collation_type(default_collation);
+        break;
+      }
+      case SQL_TEXT: {
+        ObString sql = sess_info.get_current_query_string();
+        int64_t len = 60 > sql.length() ? sql.length() : 60;
+        cur_row_->cells_[i].set_varchar(ObString(len, sql.ptr()));
+        cur_row_->cells_[i].set_collation_type(default_collation);
+        break;
+      }
+      case LAST_SQL_ACTIVE_TIME: {
+        // session cursor not set now
+        cur_row_->cells_[i].set_timestamp(sess_info.get_query_start_time());
+        break;
+      }
+      case SQL_EXEC_ID: {
+        cur_row_->cells_[i].set_null();
+        break;
+      }
+      case CURSOR_TYPE: {
+        cur_row_->cells_[i].set_varchar("OPEN");
+        cur_row_->cells_[i].set_collation_type(default_collation);
+        break;
+      }
+      case CHILD_ADDRESS: {
+        cur_row_->cells_[i].set_null();
+        break;
+      }
+      case CON_ID: {
+        cur_row_->cells_[i].set_int(1);
+        break;
+      }
+      default: {
+        break;
       }
     }
   }

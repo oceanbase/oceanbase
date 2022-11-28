@@ -1050,6 +1050,9 @@ int LogStateMgr::disable_sync()
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (true == is_follower_pending_()) {
+    ret = OB_STATE_NOT_MATCH;
+    PALF_LOG(WARN, "can not disable sycn in follower pending", K(ret), KPC(this));
   } else {
     ATOMIC_STORE(&is_sync_enabled_, false);
     PALF_LOG(INFO, "disable_sync success", K(ret), K_(palf_id), K(self_));

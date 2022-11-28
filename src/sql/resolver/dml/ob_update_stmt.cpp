@@ -102,15 +102,15 @@ int ObUpdateStmt::inner_get_relation_exprs(RelExprCheckerBase &expr_checker)
   return ret;
 }
 
-bool ObUpdateStmt::check_table_be_modified(uint64_t ref_table_id) const
+int ObUpdateStmt::check_table_be_modified(uint64_t ref_table_id, bool& found) const
 {
-  bool found = false;
+  found = false;
   for (int64_t i = 0; !found && i < table_info_.count(); i++) {
     if (NULL != table_info_.at(i) && table_info_.at(i)->ref_table_id_ == ref_table_id) {
       found = true;
     }
   }
-  return found;
+  return OB_SUCCESS;
 }
 
 int ObUpdateStmt::get_assign_values(ObIArray<ObRawExpr *> &exprs,

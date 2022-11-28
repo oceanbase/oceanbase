@@ -260,7 +260,7 @@ int ObSSTableInsertTabletContext::update(const int64_t snapshot_version)
     } else if (OB_UNLIKELY(!table_key.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(table_key));
-    } else if (data_sstable_redo_writer_.get_start_log_ts() > 0) {
+    } else if (data_sstable_redo_writer_.get_start_scn().is_valid()) {
       // ddl start log is already written, do nothing
     } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(table_key))) {
       LOG_WARN("fail write start log", K(ret), K(table_key), K(build_param_));
@@ -326,7 +326,7 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
   ObDataStoreDesc data_desc;
   const int64_t tenant_id = MTL_ID();
   int64_t snapshot_version = 0;
-  palf::SCN snapshot_scn; // TODO SCN
+  palf::SCN snapshot_scn;
   {
     lib::ObMutexGuard guard(mutex_);
     snapshot_version = build_param_.snapshot_version_;
@@ -348,9 +348,9 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
     LOG_WARN("prepare sstable index builder failed", K(ret), K(build_param));
   } else if (OB_FAIL(data_redo_writer.init(ls_id, tablet_id))) {
     LOG_WARN("fail to init sstable redo writer", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(snapshot_scn.convert_for_inner_table_field((uint64_t)snapshot_version))) {
+  } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version))) {
     LOG_WARN("fail to convert val to SCN", KR(ret), K(snapshot_version));
-  } else if (FALSE_IT(data_redo_writer.set_start_log_ts(data_sstable_redo_writer_.get_start_log_ts()))) {
+  } else if (FALSE_IT(data_redo_writer.set_start_scn(data_sstable_redo_writer_.get_start_scn()))) {
   } else if (OB_FAIL(freeze_info_proxy.get_frozen_info_less_than(
           *sql_proxy, snapshot_scn, frozen_status))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
@@ -365,7 +365,7 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
                                     ls_id,
                                     tablet_id, // TODO(shuangcan): confirm this
                                     build_param.write_major_ ? storage::MAJOR_MERGE : storage::MINOR_MERGE,
-                                    frozen_status.frozen_scn_.get_val_for_inner_table_field()))) {
+                                    frozen_status.frozen_scn_.get_val_for_tx()))) {
     LOG_WARN("init data store desc failed", K(ret), K(tablet_id));
   } else {
     // index builder is need for write macro meta block.
@@ -655,7 +655,7 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
   share::schema::ObMultiVersionSchemaService *schema_service = nullptr;
   const share::schema::ObTableSchema *table_schema = nullptr;
   const uint64_t tenant_id = MTL_ID();
-  int64_t prepare_log_ts = 0;
+  palf::SCN prepare_scn;
   ObSchemaGetterGuard schema_guard;
   if (OB_UNLIKELY(!table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -680,35 +680,37 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
                                                                  table_schema->get_table_id(),
                                                                  build_param_.execution_id_,
                                                                  build_param_.ddl_task_id_,
-                                                                 prepare_log_ts))) {
+                                                                 prepare_scn))) {
     LOG_WARN("fail write ddl prepare log", K(ret), K(table_key));
   } else {
     DEBUG_SYNC(AFTER_REMOTE_WRITE_DDL_PREPARE_LOG);
     ObTabletHandle tablet_handle;
-    ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
+    ObDDLKvMgrHandle ddl_kv_mgr_handle;
     ObLS *ls = ls_handle_.get_ls();
     const ObLSID &ls_id = ls->get_ls_id();
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    const int64_t ddl_start_log_ts = data_sstable_redo_writer_.get_start_log_ts();
+    const palf::SCN &ddl_start_scn = data_sstable_redo_writer_.get_start_scn();
     if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr))) {
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       LOG_WARN("get ddl kv manager failed", K(ret));
-    } else if (OB_FAIL(ddl_kv_mgr->ddl_prepare(ddl_start_log_ts,
-                                               prepare_log_ts,
-                                               table_schema->get_table_id(),
-                                               build_param_.execution_id_,
-                                               build_param_.ddl_task_id_))) {
-      LOG_WARN("failed to do ddl kv prepare", K(ret), K(ddl_start_log_ts), K(prepare_log_ts), K(build_param_));
-    } else if (OB_FAIL(ddl_kv_mgr->wait_ddl_commit(ddl_start_log_ts, prepare_log_ts))) {
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_scn,
+                                                                prepare_scn,
+                                                                table_schema->get_table_id(),
+                                                                build_param_.execution_id_,
+                                                                build_param_.ddl_task_id_))) {
+      LOG_WARN("failed to do ddl kv prepare", K(ret), K(ddl_start_scn), K(prepare_scn), K(build_param_));
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_scn, prepare_scn))) {
       if (OB_TASK_EXPIRED == ret) {
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("failed to wait ddl kv commit", K(ret), K(ddl_start_log_ts), K(build_param_));
+        LOG_WARN("failed to wait ddl kv commit", K(ret), K(ddl_start_scn), K(build_param_));
       }
     } else if (OB_FAIL(data_sstable_redo_writer_.write_commit_log(table_key,
-                                                                  prepare_log_ts))) {
+                                                                  prepare_scn))) {
       LOG_WARN("fail write ddl commit log", K(ret), K(table_key));
+    } else {
+      tablet_handle.get_obj()->remove_ddl_kv_mgr();
     }
   }
   return ret;

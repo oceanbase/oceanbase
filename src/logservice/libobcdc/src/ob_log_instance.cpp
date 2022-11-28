@@ -398,8 +398,10 @@ int ObLogInstance::init_logger_()
   if (OB_FAIL(common::FileDirectoryUtils::create_full_path(log_dir))) {
     LOG_ERROR("FileDirectoryUtils create_full_path fail", KR(ret), K(log_dir));
   } else {
+    const int64_t max_log_file_count = TCONF.max_log_file_count;
     easy_log_level = EASY_LOG_INFO;
     OB_LOGGER.set_max_file_size(MAX_LOG_FILE_SIZE);
+    OB_LOGGER.set_max_file_index(max_log_file_count);
     OB_LOGGER.set_file_name(log_file, disable_redirect_log_, false);
     OB_LOGGER.set_log_level("INFO");
     OB_LOGGER.disable_thread_log_level();
@@ -1983,8 +1985,10 @@ void ObLogInstance::reload_config_()
   if (OB_FAIL(config.load_from_file(default_config_fpath))) {
     LOG_ERROR("load_from_file fail", KR(ret), K(default_config_fpath));
   } else {
-    LOG_INFO("reset log level", "log_level", config.log_level.str());
+    const int64_t max_log_file_count = config.max_log_file_count;
+    LOG_INFO("reset log config", "log_level", config.log_level.str(), K(max_log_file_count));
     OB_LOGGER.set_mod_log_levels(config.log_level.str());
+    OB_LOGGER.set_max_file_index(max_log_file_count);
 
     ATOMIC_STORE(&log_clean_cycle_time_us_, config.log_clean_cycle_time_in_hours * _HOUR_);
 
@@ -2411,7 +2415,7 @@ int ObLogInstance::get_task_count_(int64_t &ready_to_seq_task_count,
             committer_pending_dml_trans_count,
             committer_ddl_part_trans_task_count,
             committer_dml_part_trans_task_count);
-        _LOG_INFO("[TASK_COUNT_STAT] [USER_QUEQUE] [PART_TRANS_TASK=%ld] [DDL_BR=%ld] [DML_BR=%ld]",
+        _LOG_INFO("[TASK_COUNT_STAT] [USER_QUEUE] [PART_TRANS_TASK=%ld] [DDL_BR=%ld] [DML_BR=%ld]",
             br_queue_part_trans_task_count,
             ddl_br_count_in_user_queue,
             dml_br_count_in_user_queue);

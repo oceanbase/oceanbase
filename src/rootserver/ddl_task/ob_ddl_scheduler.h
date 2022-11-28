@@ -221,6 +221,7 @@ private:
       common::ObISQLClient &proxy,
       const share::schema::ObTableSchema *index_schema,
       const int64_t parent_task_id,
+      const obrpc::ObDropIndexArg *drop_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
   

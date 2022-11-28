@@ -53,8 +53,7 @@ public:
   virtual int init(const common::ObTabletID &tablet_id,
                    const share::ObLSID &ls_id,
                    ObFreezer *freezer,
-                   ObTenantMetaMemMgr *t3m,
-                   ObTabletDDLKvMgr *ddl_kv_mgr) override;
+                   ObTenantMetaMemMgr *t3m) override;
   virtual void destroy() override;
 
   // create_memtable is used for creating the only memtable for CheckpointMgr
@@ -62,13 +61,9 @@ public:
                               const int64_t schema_version,
                               const bool for_replay=false) override;
 
-  // Derived function for get the memtables
-  virtual int get_active_memtable(ObTableHandleV2 &handle) const override;
-  virtual int get_all_memtables(ObTableHdlArray &handles) override;
-
   const ObTxCtxMemtable *get_tx_ctx_memtable_(const int64_t pos) const;
 
-  DECLARE_TO_STRING;
+  DECLARE_VIRTUAL_TO_STRING;
 protected:
   virtual int release_head_memtable_(memtable::ObIMemtable *imemtable,
                                      const bool force) override;

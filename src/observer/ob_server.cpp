@@ -492,10 +492,6 @@ void ObServer::destroy()
     fin_oss_env();
     FLOG_INFO("oss storage destroyed");
 
-    FLOG_INFO("begin to destroy cos storage");
-    fin_cos_env();
-    FLOG_INFO("cos storage destroyed");
-
     FLOG_INFO("begin to destroy io manager");
     ObIOManager::get_instance().destroy();
     FLOG_INFO("io manager destroyed");

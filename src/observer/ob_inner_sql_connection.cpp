@@ -2013,6 +2013,8 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
    * 内部sql，req_timeinfo_guard一定要在进入sql引擎定义
    * !!!
    */
+  bool need_res_update_endtime = true;
+  observer::ObReqTimeGuard req_timeinfo_guard(!need_res_update_endtime);
   const static int64_t ctx_size = sizeof(ObInnerSQLReadContext);
   static_assert(ctx_size <= ObISQLClient::ReadResult::BUF_SIZE, "buffer not enough");
   ObSqlQueryExecutor executor(sql);

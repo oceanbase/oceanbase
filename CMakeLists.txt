@@ -125,3 +125,11 @@ elseif(OB_INCLUDE_UNITTEST)
   add_subdirectory(unittest EXCLUDE_FROM_ALL)
 endif()
 
+
+if (OB_BUILD_TOOLS)
+  add_subdirectory(tools)
+elseif (OB_INCLUDE_TOOLS)
+  add_subdirectory(tools EXCLUDE_FROM_ALL)
+endif()
+
+include(cmake/RPM.cmake)

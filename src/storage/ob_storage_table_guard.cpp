@@ -361,7 +361,9 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter, int 
     } else {
       LOG_WARN("unexpect exit_flag", K(exit_flag), K(ret), K(ls_id), K(tablet_id));
     }
-    bool_ret = false;
+    if (0 != exit_flag || OB_FAIL(ret)) {
+      bool_ret = false;
+    }
   }
 
   return bool_ret;

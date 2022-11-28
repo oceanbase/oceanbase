@@ -474,8 +474,9 @@ public:
                K_(can_elr),
                K_(cflict_txs),
                K_(abort_cause),
-               K_(ref),
-               K_(commit_expire_ts));
+               K_(commit_expire_ts),
+               K(commit_task_.is_registered()),
+               K_(ref));
 
   int get_conflict_txs(ObIArray<ObTransIDAndAddr> &array)
   { ObSpinLockGuard guard(lock_); return array.assign(cflict_txs_); }
@@ -566,7 +567,7 @@ class ObTxDescMgr final
 public:
   ObTxDescMgr(ObTransService &txs): inited_(false), stoped_(true), tx_id_allocator_(), txs_(txs) {}
  ~ObTxDescMgr() { inited_ = false; stoped_ = true; }
-  int init(std::function<int(ObTransID&)> tx_id_allocator);
+  int init(std::function<int(ObTransID&)> tx_id_allocator, const lib::ObMemAttr &mem_attr);
   int start();
   int stop();
   int wait();
@@ -580,6 +581,8 @@ public:
   int remove(ObTxDesc &tx);
   int acquire_tx_ref(const ObTransID &trans_id);
   int release_tx_ref(ObTxDesc *tx_desc);
+  int64_t get_alloc_count() const { return map_.alloc_cnt(); }
+  int64_t get_total_count() const { return map_.count(); }
 private:
   struct {
     bool inited_: 1;
@@ -605,7 +608,7 @@ private:
   private:
     int64_t alloc_cnt_;
   };
-  ObTransHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock> map_;
+  ObTransHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;
   ObTransService &txs_;
 };

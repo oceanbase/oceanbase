@@ -1,7 +1,7 @@
 [target-default]
 os=8
 arch=aarch64
-repo=http://yum-test.obvos.alibaba-inc.com/oceanbase/development-kit/el/8/aarch64/
+repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/8/aarch64/
 
 [target-community]
 os=8

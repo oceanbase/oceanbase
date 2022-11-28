@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_DDL_REDO_LOG_WRITER_H
 #define OCEANBASE_STORAGE_OB_DDL_REDO_LOG_WRITER_H
 #include "common/ob_tablet_id.h"
+#include "logservice/palf/scn.h"
 #include "share/ob_ls_id.h"
 #include "storage/ddl/ob_ddl_clog.h"
 #include "storage/ddl/ob_ddl_struct.h"
@@ -162,10 +163,10 @@ public:
   ~ObDDLRedoLogHandle();
   int wait(const int64_t timeout = DDL_REDO_LOG_TIMEOUT);
   void reset();
-  bool is_valid() const { return nullptr != cb_  && log_ts_ >= 0; }
+  bool is_valid() const { return nullptr != cb_  && log_scn_.is_valid(); }
 public:
   ObDDLMacroBlockClogCb *cb_;
-  int64_t log_ts_;
+  palf::SCN log_scn_;
 };
 
 class ObDDLCommitLogHandle final
@@ -175,10 +176,10 @@ public:
   ~ObDDLCommitLogHandle();
   int wait(const int64_t timeout = ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT);
   void reset();
-  int64_t get_commit_log_ts() const { return commit_log_ts_; }
+  palf::SCN get_commit_scn() const { return commit_scn_; }
 public:
   ObDDLClogCb *cb_;
-  int64_t commit_log_ts_;
+  palf::SCN commit_scn_;
 };
 
 class ObDDLRedoLogWriter final
@@ -192,7 +193,7 @@ public:
             const blocksstable::MacroBlockId &macro_block_id,
             char *buffer,
             ObDDLRedoLogHandle &handle);
-  int write_ddl_start_log(const ObDDLStartLog &log, logservice::ObLogHandler *log_handler, int64_t &start_log_ts);
+  int write_ddl_start_log(const ObDDLStartLog &log, logservice::ObLogHandler *log_handler, palf::SCN &start_scn);
   template <typename T>
   int write_ddl_finish_log(const T &log,
                           const ObDDLClogType clog_type,
@@ -245,18 +246,18 @@ public:
                         const int64_t table_id,
                         const int64_t execution_id,
                         const int64_t ddl_task_id,
-                        int64_t &prepare_log_ts);
+                        palf::SCN &prepare_scn);
   int write_commit_log(const ObITable::TableKey &table_key,
-                       const int64_t prepare_log_ts);
-  OB_INLINE void set_start_log_ts(const int64_t start_log_ts) { ATOMIC_SET(&start_log_ts_, start_log_ts); }
-  OB_INLINE int64_t get_start_log_ts() const { return ATOMIC_LOAD(&start_log_ts_); }
+                       const palf::SCN &prepare_scn);
+  OB_INLINE void set_start_scn(const palf::SCN &start_scn) { start_scn_.atomic_set(start_scn); }
+  OB_INLINE palf::SCN get_start_scn() const { return start_scn_.atomic_get(); }
 private:
   bool need_remote_write(int ret_code);
   int switch_to_remote_write();
 private:
   bool is_inited_;
   bool remote_write_;
-  int64_t start_log_ts_;
+  palf::SCN start_scn_;
   ObLSHandle ls_handle_;
   ObTabletHandle tablet_handle_;
   ObDDLRedoLogHandle ddl_redo_handle_;

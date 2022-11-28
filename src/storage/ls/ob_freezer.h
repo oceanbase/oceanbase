@@ -249,6 +249,25 @@ public:
   ObFreezerStat& get_stat() { return stat_; }
 
 private:
+  class ObLSFreezeGuard
+  {
+  public:
+    ObLSFreezeGuard(ObFreezer &parent);
+    ~ObLSFreezeGuard();
+  private:
+    ObFreezer &parent_;
+  };
+  class ObTabletFreezeGuard
+  {
+  public:
+    ObTabletFreezeGuard(ObFreezer &parent, const bool try_guard = false);
+    ~ObTabletFreezeGuard();
+    int try_set_tablet_freeze_begin();
+  private:
+    bool need_release_;
+    ObFreezer &parent_;
+  };
+private:
   /* freeze_flag */
   int set_freeze_flag();
   int set_freeze_flag_without_inc_freeze_clock();
@@ -264,6 +283,11 @@ private:
   int handle_memtable_for_tablet_freeze(memtable::ObIMemtable *imemtable);
   int create_memtable_if_no_active_memtable(ObTablet *tablet);
 
+  int try_set_tablet_freeze_begin_();
+  void set_tablet_freeze_begin_();
+  void set_tablet_freeze_end_();
+  void set_ls_freeze_begin_();
+  void set_ls_freeze_end_();
 private:
   // flag whether the logsteram is freezing
   // the first bit: 1, freeze; 0, not freeze
@@ -286,6 +310,10 @@ private:
   ObFreezerStat stat_;
 
   int64_t empty_memtable_cnt_;
+
+  // make sure ls freeze has higher priority than tablet freeze
+  int64_t high_priority_freeze_cnt_; // waiting and freeze cnt
+  int64_t low_priority_freeze_cnt_; // freeze tablet cnt
 
   bool is_inited_;
 };

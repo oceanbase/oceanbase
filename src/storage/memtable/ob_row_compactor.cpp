@@ -347,7 +347,9 @@ void ObMemtableRowCompactor::find_start_pos_(const palf::SCN snapshot_version,
       ob_abort();
     }*/
 
-    if (search_cnt > 100 && NULL != row_->latest_compact_node_) {
+    if (search_cnt >= 100
+        && 0 == search_cnt % 100
+        && NULL != row_->latest_compact_node_) {
       TRANS_LOG(WARN, "too much trans node scaned when row compact",
                 K(search_cnt), K(snapshot_version), KPC(start), K(*row_),
                 K(*(row_->list_head_)), K(*(row_->latest_compact_node_)));

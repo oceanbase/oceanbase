@@ -142,7 +142,8 @@ int ObLSCreator::create_sys_tenant_ls(
 
 #define REPEAT_CREATE_LS()                     \
   do {                                                                         \
-    if (0 >= member_list.get_member_number()) {                       \
+    if (OB_FAIL(ret)) {\
+    } else if (0 >= member_list.get_member_number()) {                       \
       if (OB_FAIL(do_create_ls_(addr, status_info, paxos_replica_num, \
               create_scn, compat_mode, member_list, create_with_palf, palf_base_info))) {         \
         LOG_WARN("failed to create log stream", KR(ret), K_(id),             \
@@ -261,7 +262,9 @@ int ObLSCreator::create_tenant_sys_ls(
             LOG_WARN("failed to create new ls", KR(ret), K(status_info), K(create_scn), K(zone_priority));
           }
         }
-        REPEAT_CREATE_LS();
+        if (OB_SUCC(ret)) {
+          REPEAT_CREATE_LS();
+        }
       }
     }
   }

@@ -33,8 +33,16 @@ struct ObRowStat
   int64_t result_row_count_;
   int64_t filt_del_count_;
 
-  ObRowStat() { reset(); }
-  void reset() { MEMSET(this, 0, sizeof(ObRowStat)); }
+  ObRowStat() : base_row_count_(0), inc_row_count_(0), merge_row_count_(0), result_row_count_(0), filt_del_count_(0) {}
+
+  void reset()
+  {
+    base_row_count_ = 0;
+    inc_row_count_ = 0;
+    merge_row_count_ = 0;
+    result_row_count_ = 0;
+    filt_del_count_ = 0;
+  }
   TO_STRING_KV(K_(base_row_count), K_(inc_row_count), K_(merge_row_count), K_(result_row_count), K_(filt_del_count));
 };
 

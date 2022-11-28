@@ -16,6 +16,7 @@
 #include "logservice/archiveservice/ob_archive_service.h"
 #include "logservice/ob_log_handler.h"
 #include "logservice/ob_log_service.h"
+#include "logservice/palf/scn.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
@@ -60,7 +61,8 @@ int ObDDLCtrlSpeedItem::init(const share::ObLSID &ls_id)
 int ObDDLCtrlSpeedItem::refresh()
 {
   int ret = OB_SUCCESS;
-  int64_t archive_speed;
+  int64_t archive_speed = 0;
+  int64_t refresh_speed = 0;
   bool ignore = false;
   bool force_wait = false;
   int64_t total_used_space = 0; // for current tenant, used bytes.
@@ -94,16 +96,16 @@ int ObDDLCtrlSpeedItem::refresh()
   } else if (OB_ISNULL(GCTX.bandwidth_throttle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, bandwidth throttle is null", K(ret), KP(GCTX.bandwidth_throttle_));
-  } else if (OB_FAIL(GCTX.bandwidth_throttle_->get_rate(write_speed_))) {
-    LOG_WARN("fail to get rate", K(ret), K(write_speed_));
+  } else if (OB_FAIL(GCTX.bandwidth_throttle_->get_rate(refresh_speed))) {
+    LOG_WARN("fail to get rate", K(ret), K(refresh_speed));
   } else {
     // archive is not on if ignore = true.
-    write_speed_ = ignore ? write_speed_ : std::max(archive_speed, 1 * MIN_WRITE_SPEED);
+    write_speed_ = ignore ? std::max(refresh_speed, 1 * MIN_WRITE_SPEED) : std::max(archive_speed, 1 * MIN_WRITE_SPEED);
     disk_used_stop_write_threshold_ = (disk_opt.log_disk_utilization_threshold_ + disk_opt.log_disk_utilization_limit_threshold_) / 2;
     need_stop_write_ = 100.0 * total_used_space / total_disk_space >= disk_used_stop_write_threshold_ ? true : false;
   }
   LOG_DEBUG("current ddl clog write speed", K(ret), K(need_stop_write_), K(ls_id_), K(archive_speed), K(write_speed_),
-    K(total_used_space), K(total_disk_space), K(disk_used_stop_write_threshold_));
+    K(total_used_space), K(total_disk_space), K(disk_used_stop_write_threshold_), K(refresh_speed));
   return ret;
 }
 
@@ -554,8 +556,8 @@ int ObDDLRedoLogWriter::write(
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  const int64_t base_log_ts = 0;
-  int64_t log_ts = 0;
+  palf::SCN base_log_scn = palf::SCN::min_scn();
+  palf::SCN log_scn;
   if (!log.is_valid() || nullptr == log_handler || !ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id || nullptr == buffer) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(log), K(ls_id), K(tenant_id), KP(buffer));
@@ -572,17 +574,17 @@ int ObDDLRedoLogWriter::write(
     LOG_WARN("fail to seriaize ddl redo log", K(ret));
   } else if (OB_FAIL(log_handler->append(buffer,
                                          buffer_size,
-                                         base_log_ts,
+                                         base_log_scn,
                                          need_nonblock,
                                          cb,
                                          lsn,
-                                         log_ts))) {
+                                         log_scn))) {
     LOG_WARN("fail to submit ddl redo log", K(ret), K(buffer), K(buffer_size));
   } else {
     handle.cb_ = cb;
     cb = nullptr;
-    handle.log_ts_ = log_ts;
-    LOG_INFO("submit ddl redo log succeed", K(lsn), K(base_log_ts), K(log_ts));
+    handle.log_scn_ = log_scn;
+    LOG_INFO("submit ddl redo log succeed", K(lsn), K(base_log_scn), K(log_scn));
   }
   if (OB_SUCC(ret)) {
     int64_t real_sleep_us = 0;
@@ -599,10 +601,10 @@ int ObDDLRedoLogWriter::write(
   return ret;
 }
 
-int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandler *log_handler, int64_t &start_log_ts)
+int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandler *log_handler, palf::SCN &start_scn)
 {
   int ret = OB_SUCCESS;
-  start_log_ts = 0;
+  start_scn.reset();
   const enum ObReplayBarrierType replay_barrier_type = ObReplayBarrierType::STRICT_BARRIER;
   logservice::ObLogBaseHeader base_header(logservice::ObLogBaseType::DDL_LOG_BASE_TYPE,
                                           replay_barrier_type);
@@ -616,8 +618,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandl
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  int64_t base_log_ts = 0;
-  int64_t log_ts = 0;
+  palf::SCN log_scn;
   bool is_external_consistent = false;
   if (OB_ISNULL(cb = op_alloc(ObDDLClogCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -630,11 +631,11 @@ int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandl
     LOG_WARN("fail to seriaize ddl start log", K(ret));
   } else if (OB_FAIL(log_handler->append(buffer,
                                          buffer_size,
-                                         base_log_ts,
+                                         palf::SCN::base_scn(),
                                          need_nonblock,
                                          cb,
                                          lsn,
-                                         log_ts))) {
+                                         log_scn))) {
     LOG_WARN("fail to submit ddl start log", K(ret), K(buffer_size));
   } else {
     ObDDLClogCb *tmp_cb = cb;
@@ -658,7 +659,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandl
       }
     }
     if (OB_SUCC(ret)) {
-      start_log_ts = log_ts;
+      start_scn = log_scn;
     }
     tmp_cb->try_release(); // release the memory no matter succ or not
   }
@@ -689,7 +690,8 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  palf::SCN base_log_ts, log_ts;
+  palf::SCN base_scn = palf::SCN::base_scn();
+  palf::SCN log_scn;
   bool is_external_consistent = false;
   if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -703,22 +705,22 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
     LOG_WARN("fail to seriaize ddl commit log", K(ret));
   } else if (OB_FAIL(log.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("fail to seriaize ddl commit log", K(ret));
-  } else if (OB_FAIL(OB_TS_MGR.get_ts_sync(MTL_ID(), ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT, base_log_ts, is_external_consistent))) {
+  } else if (OB_FAIL(OB_TS_MGR.get_ts_sync(MTL_ID(), ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT, base_scn, is_external_consistent))) {
     LOG_WARN("fail to get gts sync", K(ret), K(log));
   } else if (OB_FAIL(log_handler->append(buffer,
                                          buffer_size,
-                                         base_log_ts,
+                                         base_scn,
                                          need_nonblock,
                                          cb,
                                          lsn,
-                                         log_ts))) {
+                                         log_scn))) {
     LOG_WARN("fail to submit ddl commit log", K(ret), K(buffer), K(buffer_size));
   } else {
     ObDDLClogCb *tmp_cb = cb;
     cb = nullptr;
     bool need_retry = true;
     while (need_retry) {
-      if (OB_FAIL(OB_TS_MGR.wait_gts_elapse(MTL_ID(), log_ts))) {
+      if (OB_FAIL(OB_TS_MGR.wait_gts_elapse(MTL_ID(), log_scn))) {
         if (OB_EAGAIN != ret) {
           LOG_WARN("fail to wait gts elapse", K(ret), K(log));
         } else {
@@ -730,8 +732,8 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
     }
     if (OB_SUCC(ret)) {
       handle.cb_ = tmp_cb;
-      handle.commit_log_ts_ = log_ts.get_val_for_lsn_allocator();
-      LOG_INFO("submit ddl commit log succeed", K(lsn), K(base_log_ts), K(log_ts));
+      handle.commit_scn_ = log_scn;
+      LOG_INFO("submit ddl commit log succeed", K(lsn), K(base_scn), K(log_scn));
     } else {
       tmp_cb->try_release(); // release the memory
     }
@@ -750,7 +752,7 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
 }
 
 ObDDLRedoLogHandle::ObDDLRedoLogHandle()
-  : cb_(nullptr), log_ts_(0)
+  : cb_(nullptr), log_scn_()
 {
 }
 
@@ -795,7 +797,7 @@ int ObDDLRedoLogHandle::wait(const int64_t timeout)
 }
 
 ObDDLCommitLogHandle::ObDDLCommitLogHandle()
-  : cb_(nullptr), commit_log_ts_(0)
+  : cb_(nullptr), commit_scn_()
 {
 }
 
@@ -887,7 +889,7 @@ int ObDDLMacroBlockRedoWriter::remote_write_macro_redo(const ObAddr &leader_addr
 }
 
 ObDDLSSTableRedoWriter::ObDDLSSTableRedoWriter()
-  : is_inited_(false), remote_write_(false), start_log_ts_(0),
+  : is_inited_(false), remote_write_(false), start_scn_(),
     ls_handle_(), tablet_handle_(), ddl_redo_handle_(), leader_addr_(), leader_ls_id_(), tablet_id_(), buffer_(nullptr)
 {
 }
@@ -926,8 +928,8 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key)
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObDDLStartLog log;
-  ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
-  int64_t tmp_log_ts = 0;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle;
+  palf::SCN tmp_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
@@ -939,13 +941,13 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key)
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
-  } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_start_log(log, ls->get_log_handler(), tmp_log_ts))) {
+  } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_start_log(log, ls->get_log_handler(), tmp_scn))) {
     LOG_WARN("fail to write ddl start log", K(ret), K(table_key));
-  } else if (FALSE_IT(set_start_log_ts(tmp_log_ts))) {
-  } else if (OB_FAIL(tablet_handle_.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr))) {
-    LOG_WARN("get ddl kv mgr failed", K(ret));
-  } else if (OB_FAIL(ddl_kv_mgr->ddl_start(table_key, get_start_log_ts(), log.get_cluster_version()))) {
-    LOG_WARN("start ddl log failed", K(ret), K(table_key), K(start_log_ts_), K(log));
+  } else if (FALSE_IT(set_start_scn(tmp_scn))) {
+  } else if (OB_FAIL(tablet_handle_.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
+    LOG_WARN("create ddl kv mgr failed", K(ret));
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(table_key, get_start_scn(), log.get_cluster_version()))) {
+    LOG_WARN("start ddl log failed", K(ret), K(table_key), K(start_scn_), K(log));
   }
   return ret;
 }
@@ -1014,22 +1016,22 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
                                               const int64_t table_id,
                                               const int64_t execution_id,
                                               const int64_t ddl_task_id,
-                                              int64_t &prepare_log_ts)
+                                              palf::SCN &prepare_scn)
 
 {
   int ret = OB_SUCCESS;
-  prepare_log_ts = 0;
+  prepare_scn.reset();
   ObLS *ls = nullptr;
   ObDDLPrepareLog log;
   ObDDLCommitLogHandle handle;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || 0 == start_log_ts_)) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_log_ts_));
-  } else if (OB_FAIL(log.init(table_key, get_start_log_ts()))) {
-    LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_log_ts_));
+    LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_));
+  } else if (OB_FAIL(log.init(table_key, get_start_scn()))) {
+    LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn_));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
@@ -1045,33 +1047,33 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
     } else if (OB_FAIL(handle.wait())) {
       LOG_WARN("wait ddl commit log finish failed", K(ret), K(table_key));
     } else {
-      prepare_log_ts = handle.get_commit_log_ts();
+      prepare_scn = handle.get_commit_scn();
     }
   }
   if (OB_SUCC(ret) && remote_write_) {
     ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
     obrpc::ObRpcRemoteWriteDDLPrepareLogArg arg;
-    obrpc::Int64 log_ts;
-    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_log_ts(), table_id, execution_id, ddl_task_id))) {
+    obrpc::Int64 log_ns;
+    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_scn(), table_id, execution_id, ddl_task_id))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLPrepareLogArg", K(ret));
     } else if (OB_ISNULL(srv_rpc_proxy)) {
       ret = OB_ERR_SYS;
       LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
-    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_prepare_log(arg, log_ts))) {
+    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_prepare_log(arg, log_ns))) {
       if (OB_TASK_EXPIRED == ret) {
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
       }
-    } else {
-      prepare_log_ts = log_ts;
+    } else if (OB_FAIL(prepare_scn.convert_for_tx(log_ns))) {
+      LOG_WARN("convert for tx failed", K(ret));
     }
   }
   return ret;
 }
 
 int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key,
-                                             const int64_t prepare_log_ts)
+                                             const palf::SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -1080,11 +1082,11 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || 0 == start_log_ts_ || prepare_log_ts <= 0)) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || palf::SCN::min_scn() == start_scn_ || !prepare_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_log_ts_), K(prepare_log_ts));
-  } else if (OB_FAIL(log.init(table_key, get_start_log_ts(), prepare_log_ts))) {
-    LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_log_ts_), K(prepare_log_ts));
+    LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_), K(prepare_scn));
+  } else if (OB_FAIL(log.init(table_key, get_start_scn(), prepare_scn))) {
+    LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn_), K(prepare_scn));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
@@ -1104,13 +1106,13 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
   if (OB_SUCC(ret) && remote_write_) {
     ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
     obrpc::ObRpcRemoteWriteDDLCommitLogArg arg;
-    obrpc::Int64 log_ts;
-    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_log_ts(), prepare_log_ts))) {
+    obrpc::Int64 log_ns;
+    if (OB_FAIL(arg.init(MTL_ID(), leader_ls_id_, table_key, get_start_scn(), prepare_scn))) {
       LOG_WARN("fail to init ObRpcRemoteWriteDDLCommitLogArg", K(ret));
     } else if (OB_ISNULL(srv_rpc_proxy)) {
       ret = OB_ERR_SYS;
       LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
-    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_commit_log(arg, log_ts))) {
+    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_commit_log(arg, log_ns))) {
       if (OB_TASK_EXPIRED == ret) {
         ret = OB_SUCCESS;
       } else {
@@ -1211,14 +1213,13 @@ int ObDDLRedoLogWriterCallback::write(const ObMacroBlockHandle &macro_handle,
     LOG_WARN("ObDDLRedoLogWriterCallback is not inited", K(ret));
   } else if (OB_FAIL(prepare_block_buffer_if_need())) {
     LOG_WARN("prepare block buffer failed", K(ret));
-  } else if (OB_FAIL(redo_info_.start_scn_.convert_for_lsn_allocator(ddl_writer_->get_start_log_ts()))) {
-    LOG_WARN("fail to convert scn", K(ret), K(ddl_writer_->get_start_log_ts()));
   } else {
     macro_block_id_ = macro_handle.get_macro_id();
     redo_info_.table_key_ = table_key_;
     redo_info_.data_buffer_.assign(buf, OB_SERVER_BLOCK_MGR.get_macro_block_size());
     redo_info_.block_type_ = block_type_;
     redo_info_.logic_id_ = logic_id;
+    redo_info_.start_scn_ = ddl_writer_->get_start_scn();
     if (OB_FAIL(ddl_writer_->write_redo_log(redo_info_, macro_block_id_))) {
       LOG_WARN("fail to write ddl redo log", K(ret));
     }

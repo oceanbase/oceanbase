@@ -478,7 +478,7 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
 #ifndef NDEBUG
   TRANS_LOG(INFO, "handle tx commit result", K(ret), K(tx), K(commit_fin), K(result));
 #else
-  if (OB_FAIL(ret) || (OB_SUCCESS != result)) {
+  if (OB_FAIL(ret) || (OB_SUCCESS != result) || (ObClockGenerator::getClock() - tx.commit_ts_) > 5 * 1000 * 1000) {
     TRANS_LOG(INFO, "handle tx commit result", K(ret), K(tx), K(commit_fin), K(result));
   }
 #endif
@@ -764,7 +764,7 @@ int ObTransService::interrupt(ObTxDesc &tx, int cause)
       break;
     }
   }
-  TRANS_LOG(INFO, "interrupt tx done", K(ret), KPC(this), K(cause));
+  TRANS_LOG(INFO, "interrupt tx done", KR(ret), KPC(this), K(cause));
   return ret;
 }
 
@@ -792,14 +792,46 @@ int ObTransService::handle_trans_keepalive(const ObTxKeepaliveMsg &msg, ObTransR
       TRANS_LOG(WARN, "do abort tx fail", K(ret), KPC(tx));
     }
   }
+  ObTxKeepaliveRespMsg resp;
+  resp.cluster_version_ = GET_MIN_CLUSTER_VERSION();
+  resp.tenant_id_ = tenant_id_;
+  resp.cluster_id_ = GCONF.cluster_id;
+  resp.request_id_ = ObClockGenerator::getClock();
+  resp.tx_id_ = tx_id;
+  resp.sender_addr_ = self_;
+  resp.sender_ = share::SCHEDULER_LS;
+  resp.receiver_ = msg.sender_;
+  resp.status_ = ret;
+  if (OB_FAIL(rpc_->post_msg(resp.receiver_, resp))) {
+    TRANS_LOG(WARN, "post tx keepalive resp fail", K(ret), K(resp), KPC(this));
+  }
   result.reset();
-  result.init(ret, msg.get_timestamp());
+  result.init(ret, resp.get_timestamp());
   if (OB_NOT_NULL(tx)) {
     tx_desc_mgr_.revert(*tx);
   }
   if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
     TRANS_LOG(INFO, "handle trans keepalive", K(ret), K(msg));
   }
+  return ret;
+}
+
+int ObTransService::handle_trans_keepalive_response(const ObTxKeepaliveRespMsg &msg, obrpc::ObTransRpcResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObPartTransCtx *ctx = NULL;
+  const ObTransID &tx_id = msg.tx_id_;
+  const share::ObLSID &ls_id = msg.receiver_;
+  if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
+    TRANS_LOG(WARN, "get tx ctx fail", K(tx_id), K(ls_id));
+  } else {
+    (void)ctx->tx_keepalive_response_(msg.status_);
+  }
+  if (OB_NOT_NULL(ctx)) {
+    revert_tx_ctx_(ctx);
+  }
+  result.reset();
+  result.init(ret, msg.get_timestamp());
   return ret;
 }
 
@@ -1391,8 +1423,13 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
   tx.flags_.BLOCK_ = false;
   if (OB_SUCC(ret)) {
     if (op_sn != tx.op_sn_) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "txn has disturbed", K(ret), K(interrupted), K(tx));
+      if (interrupted) {
+        ret = OB_ERR_INTERRUPTED;
+        TRANS_LOG(WARN, "txn has been interrupted", KR(ret), K(tx));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "txn has been disturbed", KR(ret), K(tx));
+      }
     }
   }
   return ret;
@@ -1852,16 +1889,6 @@ int ObTransService::handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id),
               K(msg_type), K(status), K(receiver_addr), K(request_id));
-  } else if (KEEPALIVE == msg_type) {
-    ObPartTransCtx *ctx = NULL;
-    if (OB_FAIL(get_tx_ctx_(sender_ls_id, tx_id, ctx))) {
-      TRANS_LOG(WARN, "get tx ctx fail", K(tx_id), K(sender_ls_id));
-    } else {
-      (void)ctx->tx_keepalive_response_(status);
-    }
-    if (OB_NOT_NULL(ctx)) {
-      revert_tx_ctx_(ctx);
-    }
   } else if (common::OB_TENANT_NOT_IN_SERVER == status
              || common::OB_TRANS_RPC_TIMEOUT == status) {
     // upper layer do retry

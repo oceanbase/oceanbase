@@ -77,17 +77,6 @@ public:
   LsElectionReferenceInfoRow(const uint64_t tenant_id, const share::ObLSID &ls_id);
   ~LsElectionReferenceInfoRow();
   /**
-   * @description: 创建日志流的时候同步调用该接口在__all_ls_election_reference_info表中创建出日志流对应的选举参考信息，当对应的行已经存在时，将行中的内容替换为指定的信息
-   * @param {const ObArray<ObArray<ObStringHolder>> &} zone_list_list 选举参考的zone优先级，表示为二维数组，形如{{z1,z2},{z3},{z4,z5}}：z1和z2具有最高优先级，z3次之，z4和z5最低
-   * @param {const common::ObAddr &} manual_leader_server 指定某个server成为该日志流的leader
-   * @param {const ObArray<ObTuple<ObAddr, ObStringHolder>> &} remove_member_info 指定需要删除的副本的列表及其原因，形如{{127.0.0.1:1080, 'migrate'}, {127.0.0.1:1080, 'remove member'}}
-   * @return {int} 错误码
-   * @Date: 2022-01-29 16:32:11
-   */
-  int insert_or_replace_row(const ObArray<ObArray<ObStringHolder>> &zone_list_list = ObArray<ObArray<ObStringHolder>>(),
-                            const common::ObAddr &manual_leader_server = ObAddr(ObAddr::VER::IPV4, "0.0.0.0", 0),
-                            const ObArray<ObTuple<ObAddr, ObStringHolder>> &remove_member_info = ObArray<ObTuple<ObAddr, ObStringHolder>>());
-  /**
    * @description: 当且仅当对应的行在__all_ls_election_reference_info表存在时，修改zone_priority列的内容
    * @param {ObArray<ObArray<ObStringHolder>>} &zone_list_list 选举参考的zone优先级，表示为二维数组，形如{{z1,z2},{z3},{z4,z5}}：z1和z2具有最高优先级，z3次之，z4和z5最低
    * @return {int} 错误码
@@ -122,7 +111,7 @@ private:
   int end_(const bool true_to_commit);
   int convert_table_info_to_user_info_();
   int convert_user_info_to_table_info_();
-  int insert_or_update_row_to_table_();
+  int update_row_to_table_();
   int get_row_from_table_();
   int start_and_read_();
   int write_and_commit_();

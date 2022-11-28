@@ -438,6 +438,7 @@ public:
                              char *to_str,
                              uint32_t to_len,
                              uint32_t &result_len,
+                             bool trim_incomplete_tail = true,
                              bool report_error = true,
                              const ob_wc_t replaced_char = '?');
   enum CONVERT_FLAG : int64_t {

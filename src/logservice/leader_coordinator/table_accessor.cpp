@@ -86,42 +86,6 @@ int LsElectionReferenceInfoRow::end_(const bool true_to_commit)
   return trans_.end(true_to_commit);
 }
 
-int LsElectionReferenceInfoRow::insert_or_replace_row(const ObArray<ObArray<ObStringHolder>> &zone_list_list,
-                                                      const common::ObAddr &manual_leader_server,
-                                                      const ObArray<ObTuple<ObAddr, ObStringHolder>> &blacklist)
-{
-  LC_TIME_GUARD(1_s);
-  #define PRINT_WRAPPER K(*this), KR(ret), K(zone_list_list), K(manual_leader_server), K(blacklist)
-  int ret = OB_SUCCESS;
-  row_for_user_.element<0>() = tenant_id_;
-  row_for_user_.element<1>() = ls_id_.id();
-  if (CLICK_FAIL(row_for_user_.element<2>().assign(zone_list_list))) {
-    COORDINATOR_LOG_(WARN, "copy zone list failed");
-  } else {
-    row_for_user_.element<3>() = manual_leader_server;
-    if (CLICK_FAIL(row_for_user_.element<4>().assign(blacklist))) {
-      COORDINATOR_LOG_(WARN, "copy remove member info failed");
-    } else if (CLICK_FAIL(convert_user_info_to_table_info_())) {
-      COORDINATOR_LOG_(WARN, "convert user info to table info failed");
-    } else if (CLICK_FAIL(begin_())) {
-      COORDINATOR_LOG_(WARN, "start trans failed");
-    } else if (CLICK_FAIL(insert_or_update_row_to_table_())) {
-      COORDINATOR_LOG_(WARN, "insert or update failed");
-    } else if (CLICK_FAIL(end_(true))) {
-      COORDINATOR_LOG_(WARN, "commit failed");
-    }
-  }
-  if (trans_.is_started()) {
-    COORDINATOR_LOG_(WARN, "transaction execute failed");
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = end_(false))) {
-      COORDINATOR_LOG_(WARN, "fail to roll back transaction");
-    }
-  }
-  return ret;
-  #undef PRINT_WRAPPER
-}
-
 int LsElectionReferenceInfoRow::change_zone_priority(const ObArray<ObArray<ObStringHolder>> &zone_list_list)
 {
   LC_TIME_GUARD(1_s);
@@ -257,7 +221,7 @@ int LsElectionReferenceInfoRow::start_and_read_()
   int ret = OB_SUCCESS;
   if (CLICK_FAIL(begin_())) {
     COORDINATOR_LOG_(WARN, "start transaction failed");
-  } else if (CLICK_FAIL(get_row_from_table_()) && ret != OB_ENTRY_NOT_EXIST) {
+  } else if (CLICK_FAIL(get_row_from_table_())) {
     COORDINATOR_LOG_(WARN, "read row from table failed");
   } else if (CLICK_FAIL(convert_table_info_to_user_info_())) {
     COORDINATOR_LOG_(WARN, "convert table info to user info failed");
@@ -273,7 +237,7 @@ int LsElectionReferenceInfoRow::write_and_commit_()
   int ret = OB_SUCCESS;
   if (CLICK_FAIL(convert_user_info_to_table_info_())) {
     COORDINATOR_LOG_(WARN, "convert user info to table info failed");
-  } else if (CLICK_FAIL(insert_or_update_row_to_table_())) {
+  } else if (CLICK_FAIL(update_row_to_table_())) {
     COORDINATOR_LOG_(WARN, "update column failed");
   } else if (CLICK_FAIL(end_(true))) {
     COORDINATOR_LOG_(WARN, "commit change failed");
@@ -398,7 +362,7 @@ int LsElectionReferenceInfoRow::convert_table_info_to_user_info_()
   #undef PRINT_WRAPPER
 }
 
-int LsElectionReferenceInfoRow::insert_or_update_row_to_table_()
+int LsElectionReferenceInfoRow::update_row_to_table_()
 {
   LC_TIME_GUARD(1_s);
   #define PRINT_WRAPPER KR(ret), K(*this), K(sql), K(affected_rows)
@@ -406,11 +370,10 @@ int LsElectionReferenceInfoRow::insert_or_update_row_to_table_()
   ObSqlString sql;
   int64_t affected_rows = 0;
   if (CLICK_FAIL(sql.append_fmt(
-    "INSERT INTO %s (tenant_id, ls_id, zone_priority, manual_leader_server, blacklist)"
-    "VALUES (%ld, %ld, '%s', '%s', '%s')"
-    "ON DUPLICATE KEY UPDATE tenant_id=%ld, ls_id=%ld, zone_priority='%s', manual_leader_server='%s', blacklist='%s'", share::OB_ALL_LS_ELECTION_REFERENCE_INFO_TNAME,
-    row_for_table_.element<0>(), row_for_table_.element<1>(), to_cstring(row_for_table_.element<2>()), to_cstring(row_for_table_.element<3>()), to_cstring(row_for_table_.element<4>()),
-    row_for_table_.element<0>(), row_for_table_.element<1>(), to_cstring(row_for_table_.element<2>()), to_cstring(row_for_table_.element<3>()), to_cstring(row_for_table_.element<4>())))) {
+    "UPDATE %s SET zone_priority='%s', manual_leader_server='%s', blacklist='%s' WHERE tenant_id=%ld and ls_id=%ld",
+    share::OB_ALL_LS_ELECTION_REFERENCE_INFO_TNAME,
+    to_cstring(row_for_table_.element<2>()), to_cstring(row_for_table_.element<3>()), to_cstring(row_for_table_.element<4>()),
+    row_for_table_.element<0>(), row_for_table_.element<1>()))) {
     COORDINATOR_LOG_(WARN, "format insert or update sql failed");
   } else if (!trans_.is_started()) {
     ret = OB_ERR_UNEXPECTED;

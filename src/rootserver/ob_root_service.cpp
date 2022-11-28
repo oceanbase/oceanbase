@@ -6350,7 +6350,8 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
           if (old_package_info->get_source().length() == new_package_info.get_source().length()
               && (0 == MEMCMP(old_package_info->get_source().ptr(),
                               new_package_info.get_source().ptr(),
-                              old_package_info->get_source().length()))) {
+                              old_package_info->get_source().length()))
+              && old_package_info->get_exec_env() == new_package_info.get_exec_env()) {
             need_create = false;
             LOG_INFO("do not recreate package with same source",
                      K(ret),
@@ -9144,20 +9145,9 @@ int ObRootService::handle_backup_manage(const obrpc::ObBackupManageArg &arg)
   } else {
     switch (arg.type_) {
     case ObBackupManageArg::CANCEL_BACKUP: {
-      //TODO(yanfeng): compelte it
       if (OB_FAIL(handle_backup_database_cancel(arg))) {
         LOG_WARN("failed to handle backup database cancel", K(ret), K(arg));
       }
-      break;
-    };
-    case ObBackupManageArg::SUSPEND_BACKUP: {
-      //TODO(yanfeng): compelte it
-      ret = OB_NOT_SUPPORTED;
-      break;
-    };
-    case ObBackupManageArg::RESUME_BACKUP: {
-      //TODO(yanfeng): compelte it
-      ret = OB_NOT_SUPPORTED;
       break;
     };
     case ObBackupManageArg::VALIDATE_DATABASE: {

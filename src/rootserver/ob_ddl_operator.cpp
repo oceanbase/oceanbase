@@ -4034,7 +4034,7 @@ int ObDDLOperator::drop_table(
   } else if (table_schema.is_index_table() && !is_inner_table(table_schema.get_table_id())) {
     ObSnapshotInfoManager snapshot_mgr;
     ObArray<ObTabletID> tablet_ids;
-    palf::SCN scn;
+    palf::SCN invalid_scn;
     if (OB_FAIL(snapshot_mgr.init(GCTX.self_addr()))) {
       LOG_WARN("fail to init snapshot mgr", K(ret));
     } else if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
@@ -4043,7 +4043,7 @@ int ObDDLOperator::drop_table(
     // if a building index is dropped in another session, the index build task cannot release snapshots
     // because the task needs schema to know tablet ids.
     } else if (OB_FAIL(snapshot_mgr.batch_release_snapshot_in_trans(
-            trans, SNAPSHOT_FOR_DDL, tenant_id, -1/*schema_version*/, scn, tablet_ids))) {
+            trans, SNAPSHOT_FOR_DDL, tenant_id, -1/*schema_version*/, invalid_scn/*snapshot_scn*/, tablet_ids))) {
       LOG_WARN("fail to release ddl snapshot acquired by this table", K(ret));
     }
   }
@@ -4278,7 +4278,7 @@ int ObDDLOperator::drop_table_to_recyclebin(const ObTableSchema &table_schema,
         }
       }
       new_table_schema.set_schema_version(new_schema_version);
-      ObSchemaOperationType op_type;
+      ObSchemaOperationType op_type = OB_INVALID_DDL_OP;
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(construct_new_name_for_recyclebin(new_table_schema, new_table_name))) {
         LOG_WARN("failed to construct new name for table", K(ret));

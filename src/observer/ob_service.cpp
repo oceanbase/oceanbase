@@ -1034,9 +1034,9 @@ int ObService::check_modify_time_elapsed(
   } else {
     MTL_SWITCH(arg.tenant_id_) {
       ObLSHandle ls_handle;
+      palf::SCN tmp_scn;
       transaction::ObTransService *txs = MTL(transaction::ObTransService *);
       ObLSService *ls_service = MTL(ObLSService *);
-      palf::SCN tmp_scn;
       if (OB_FAIL(ls_service->get_ls(ObLSID(arg.ls_id_), ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls failed", K(ret), K(arg.ls_id_));
       } else if (OB_FAIL(ls_handle.get_ls()->check_modify_time_elapsed(arg.tablet_id_,
@@ -1048,7 +1048,7 @@ int ObService::check_modify_time_elapsed(
       } else if (OB_FAIL(txs->get_max_commit_version(tmp_scn))) {
         LOG_WARN("fail to get max commit version", K(ret));
       } else {
-        result.snapshot_ = tmp_scn.get_val_for_lsn_allocator();
+        result.snapshot_ = tmp_scn.get_val_for_tx();
         LOG_INFO("succeed to wait transaction end", K(arg));
       }
     }
@@ -2017,7 +2017,10 @@ int ObService::inner_fill_tablet_replica_checksum_item_(
   } else if (OB_ISNULL(ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get_tablet_svr is null", KR(ret), K(tenant_id), K(tablet_id));
-  } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(tablet_id, tablet_handle))) {
+  } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(
+      tablet_id,
+      tablet_handle,
+      ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_WARN("get tablet failed", KR(ret), K(tenant_id), K(tablet_id));
     }

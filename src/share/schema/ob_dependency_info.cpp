@@ -214,7 +214,7 @@ int ObDependencyInfo::get_object_create_time(ObISQLClient &sql_client,
             sqlclient::ObMySQLResult *result = res.get_result();
             if (NULL != result) {
               ObString tmp_ref_name;
-              common::ObTimeZoneInfo *tz_info;
+              common::ObTimeZoneInfo *tz_info = nullptr;
               OZ (result->next());
               OZ (result->get_timestamp("gmt_create", tz_info, create_time));
               OZ (result->get_varchar(field_obj_name, tmp_ref_name));

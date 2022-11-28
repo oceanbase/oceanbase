@@ -289,14 +289,23 @@ int ObExprNodeMap::init()
 int ObExprNodeMap::is_exist(ObRawExpr *expr, bool &is_exist)
 {
   int ret = OB_SUCCESS;
+  int64_t ref_count = 0;
+  ret = get_ref_count(expr, ref_count);
+  is_exist = (ref_count > 0);
+  return ret;
+}
+
+int ObExprNodeMap::get_ref_count(ObRawExpr *expr, int64_t &ref_count)
+{
+  int ret = OB_SUCCESS;
   ExprCounter counter;
+  ref_count = 0;
   ret = expr_map_.get_refactored(get_hash_value(expr), counter);
 
   if (OB_SUCCESS == ret) {
-    is_exist = true;
+    ref_count = counter.count_;
   } else if (OB_HASH_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
-    is_exist = false;
   } else {
     LOG_WARN("fail to get hash map", K(ret));
   }
@@ -463,18 +472,28 @@ int ObTransformExprPullup::check_stmt_validity(const ObDMLStmt *stmt, bool &is_v
 }
 
 int ObTransformExprPullup::search_expr_cannot_pullup(ObRawExpr *expr,
+                                                     ObExprNodeMap &expr_map,
                                                      ObIArray<ObRawExpr *> &expr_cannot_pullup)
 {
   int ret = OB_SUCCESS;
+  int64_t ref_count = 0;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (!ObTransformExprPullup::expr_can_pullup(expr)) {
+  } else if (!expr_can_pullup(expr)) {
     if (OB_FAIL(expr_cannot_pullup.push_back(expr))) {
       LOG_WARN("fail to push back expr", K(ret));
     }
+  } else if (expr_map.get_ref_count(expr, ref_count)) {
+    LOG_WARN("failed to get expr ref count", K(ret));
+  } else if (ref_count > 1)  {
+    if (OB_FAIL(expr_cannot_pullup.push_back(expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
-      if (OB_FAIL(SMART_CALL(search_expr_cannot_pullup(expr->get_param_expr(i), expr_cannot_pullup)))) {
+      if (OB_FAIL(SMART_CALL(search_expr_cannot_pullup(expr->get_param_expr(i),
+                                                       expr_map,
+                                                       expr_cannot_pullup)))) {
         LOG_WARN("fail to preorder search expr", K(ret));
       }
     }
@@ -617,7 +636,7 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
     ObSEArray<ObRawExpr *, 16> select_exprs;
     ObSqlBitSet<> select_expr_idxs;
     ObExprNodeMap child_reject_map;
-    ObExprNodeMap child_reject_map2;
+    ObExprNodeMap child_select_map;
     ObSEArray<ObRawExpr *, 16> expr_params;
     ObSEArray<ObRawExpr*, 4> old_child_project_columns;
     ObSEArray<ObRawExpr*, 4> select_exprs_can_pullup;
@@ -632,11 +651,20 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
       ObSEArray<ObRawExpr *, 16> expr_cannot_pullup;
       if (OB_FAIL(child_reject_map.init())) {
         LOG_WARN("fail to init shared exprs", K(ret));
+      } else if (OB_FAIL(child_select_map.init())) {
+        LOG_WARN("failed to init select map", K(ret));
       } else if (OB_FAIL(child.get_relation_exprs(expr_cannot_pullup, RelExprCheckerBase::FIELD_LIST_SCOPE))) {
         LOG_WARN("fail to get relation exprs", K(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
-        if (OB_FAIL(search_expr_cannot_pullup(select_exprs.at(i), expr_cannot_pullup))) {
+        if (OB_FAIL(child_select_map.add_expr_map(select_exprs.at(i)))) {
+          LOG_WARN("failed to add expr map", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
+        if (OB_FAIL(search_expr_cannot_pullup(select_exprs.at(i),
+                                              child_select_map,
+                                              expr_cannot_pullup))) {
           LOG_WARN("fail to get relation exprs", K(ret));
         }
       }
@@ -692,8 +720,6 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
                                                           parent,
                                                           select_expr_idxs))) {
           LOG_WARN("fail to remove select items", K(ret));
-        } else if (OB_FAIL(child.adjust_subquery_list())) {
-          LOG_WARN("fail to adjust subquery list", K(ret));
         }
       }
 
@@ -705,6 +731,8 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
                                                               expr_params,
                                                               new_child_project_columns))) {
           LOG_WARN("failed to create select item", K(ret));
+        } else if (OB_FAIL(child.adjust_subquery_list())) {
+          LOG_WARN("fail to adjust subquery list", K(ret));
         }
       }
 

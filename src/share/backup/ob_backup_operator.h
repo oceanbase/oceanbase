@@ -49,7 +49,6 @@ public:
   static int get_tenant_list(
       common::ObISQLClient &sql_client, common::ObIArray<uint64_t> &tenant_id_list);
   static int load_base_backup_info(common::ObISQLClient &sql_client, ObBaseBackupInfo &info);
-  static int insert_base_backup_info(common::ObISQLClient &sql_client, ObBaseBackupInfo &info);
   static int remove_base_backup_info(common::ObISQLClient &sql_client, const uint64_t tenant_id);
   static int load_info_item(
       common::ObISQLClient &sql_client,

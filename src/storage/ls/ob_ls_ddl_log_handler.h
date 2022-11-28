@@ -54,14 +54,13 @@ public:
 
   // for checkpoint
   int flush(palf::SCN &rec_scn) override final;
-  int64_t get_rec_log_ts();
   palf::SCN get_rec_scn() override final;
 private:
-  int replay_ddl_redo_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
-  int replay_ddl_prepare_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
-  int replay_ddl_commit_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
-  int replay_ddl_tablet_schema_version_change_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
-  int replay_ddl_start_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
+  int replay_ddl_redo_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const palf::SCN &scn);
+  int replay_ddl_prepare_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const palf::SCN &scn);
+  int replay_ddl_commit_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const palf::SCN &scn);
+  int replay_ddl_tablet_schema_version_change_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const palf::SCN &scn);
+  int replay_ddl_start_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const palf::SCN &scn);
 private:
   bool is_inited_;
   bool is_online_;

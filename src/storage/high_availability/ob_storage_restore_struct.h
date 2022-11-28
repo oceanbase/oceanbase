@@ -75,7 +75,6 @@ struct ObTabletRestoreAction
 
 struct ObRestoreUtils
 {
-  static bool is_need_retry_error(const int err);
   static int  get_backup_data_type(
       const ObITable::TableKey &table_key,
       share::ObBackupDataType &data_type);

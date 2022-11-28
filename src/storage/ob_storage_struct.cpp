@@ -219,8 +219,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     rebuild_seq_(rebuild_seq),
     update_with_major_flag_(false),
     need_check_sstable_(false),
-    ddl_checkpoint_scn_(palf::SCN::min_scn()),
-    ddl_start_log_ts_(0),
+    ddl_checkpoint_scn_(),
+    ddl_start_scn_(),
     ddl_snapshot_version_(0)
 {
 }
@@ -244,8 +244,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     rebuild_seq_(rebuild_seq),
     update_with_major_flag_(false),
     need_check_sstable_(need_check_sstable),
-    ddl_checkpoint_scn_(palf::SCN::min_scn()),
-    ddl_start_log_ts_(0),
+    ddl_checkpoint_scn_(),
+    ddl_start_scn_(),
     ddl_snapshot_version_(0)
 {
 }
@@ -268,8 +268,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     rebuild_seq_(rebuild_seq),
     update_with_major_flag_(update_with_major_flag),
     need_check_sstable_(false),
-    ddl_checkpoint_scn_(palf::SCN::min_scn()),
-    ddl_start_log_ts_(0),
+    ddl_checkpoint_scn_(),
+    ddl_start_scn_(),
     ddl_snapshot_version_(0)
 {
 }

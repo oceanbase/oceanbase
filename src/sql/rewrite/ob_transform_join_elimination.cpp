@@ -245,11 +245,14 @@ int ObTransformJoinElimination::check_eliminate_delupd_table_valid(const ObDelUp
                                                                    bool &is_valid)
 {
   int ret = OB_SUCCESS;
+  bool is_modified = false;
   is_valid = true;
   if (OB_ISNULL(del_up_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null stmt", K(ret));
-  } else if (del_up_stmt->check_table_be_modified(table_id)) {
+  } else if (OB_FAIL(del_up_stmt->check_table_be_modified(table_id, is_modified))) {
+    LOG_WARN("failed to check table be modified", K(ret));
+  } else if (is_modified){
     is_valid = false;
   }
   return ret;

@@ -50,7 +50,7 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     upper_trans_version_(0),
     max_merged_trans_version_(0),
     recycle_version_(0),
-    ddl_scn_(palf::SCN::min_scn()),
+    ddl_scn_(),
     filled_tx_scn_(palf::SCN::min_scn()),
     data_index_tree_height_(0),
     table_mode_(),
@@ -153,7 +153,7 @@ void ObSSTableBasicMeta::reset()
   upper_trans_version_ = 0;
   max_merged_trans_version_ = 0;
   recycle_version_ = 0;
-  ddl_scn_.set_min();
+  ddl_scn_.reset();
   filled_tx_scn_.set_min();
   data_index_tree_height_ = 0;
   table_mode_.reset();

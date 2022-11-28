@@ -723,7 +723,7 @@ ObBackupBuildTenantIndexDagNet::ObBackupBuildTenantIndexDagNet()
 ObBackupBuildTenantIndexDagNet::~ObBackupBuildTenantIndexDagNet()
 {}
 
-// TODO(yangyi.yyy): check if param can be casted
+// TODO(yangyi.yyy): check if param can be casted in 4.1
 int ObBackupBuildTenantIndexDagNet::init_by_param(const share::ObIDagInitParam *param)
 {
   int ret = OB_SUCCESS;
@@ -2423,7 +2423,7 @@ ObLSBackupDataTask::ObLSBackupDataTask()
 ObLSBackupDataTask::~ObLSBackupDataTask()
 {}
 
-// TODO(yangyi.yyy): extract parameters later
+// TODO(yangyi.yyy): extract parameters later in 4.1
 int ObLSBackupDataTask::init(const int64_t task_id, const share::ObBackupDataType &backup_data_type,
     const common::ObIArray<ObBackupProviderItem> &backup_items, const ObLSBackupDataParam &param,
     const ObBackupReportCtx &report_ctx, common::ObInOutBandwidthThrottle &bandwidth_throttle,
@@ -4467,7 +4467,7 @@ int ObLSBackupComplementLogTask::locate_archive_file_id_by_ts_(const uint64_t te
     const int64_t piece_id, const palf::SCN &scn, const bool is_upper_bound, int64_t &file_id)
 {
   int ret = OB_SUCCESS;
-  // TODO(yangyi.yyy): duotian has provide this interface, wait merge code
+  // TODO(yangyi.yyy): duotian has provide this interface, wait merge code in 4.1
   UNUSEDx(tenant_id, round_id, piece_id, scn, is_upper_bound, file_id);
   // const common::ObString &root_path = backup_dest_;
   // const int64_t incarnation = OB_START_INCARNATION;
@@ -4613,7 +4613,7 @@ int ObLSBackupComplementLogTask::inner_backup_complement_log_(
   return ret;
 }
 
-// TODO(yangyi.yyy): refine this method later
+// TODO(yangyi.yyy): refine this method later in 4.1
 int ObLSBackupComplementLogTask::transfer_clog_file_(const ObBackupPath &src_path, const ObBackupPath &dst_path)
 {
   int ret = OB_SUCCESS;

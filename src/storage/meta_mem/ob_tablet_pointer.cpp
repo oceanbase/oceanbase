@@ -38,22 +38,22 @@ ObTabletPointer::ObTabletPointer()
     ddl_info_(),
     tx_data_(),
     cond_(),
-    msd_lock_()
+    msd_lock_(),
+    ddl_kv_mgr_lock_()
 {
 }
 
 ObTabletPointer::ObTabletPointer(
     const ObLSHandle &ls_handle,
-    const ObDDLKvMgrHandle &ddl_kv_mgr_handle,
     const ObMemtableMgrHandle &memtable_mgr_handle)
   : ObMetaPointer<ObTablet>(),
     ls_handle_(ls_handle),
-    ddl_kv_mgr_handle_(ddl_kv_mgr_handle),
     memtable_mgr_handle_(memtable_mgr_handle),
     ddl_info_(),
     tx_data_(),
     cond_(),
-    msd_lock_(ObLatchIds::TABLET_MULTI_SOURCE_DATA_LOCK)
+    msd_lock_(ObLatchIds::TABLET_MULTI_SOURCE_DATA_LOCK),
+    ddl_kv_mgr_lock_()
 {
 }
 
@@ -65,7 +65,10 @@ ObTabletPointer::~ObTabletPointer()
 void ObTabletPointer::reset()
 {
   ls_handle_.reset();
-  ddl_kv_mgr_handle_.reset();
+  {
+    ObMutexGuard guard(ddl_kv_mgr_lock_);
+    ddl_kv_mgr_handle_.reset();
+  }
   memtable_mgr_handle_.reset();
   ddl_info_.reset();
   tx_data_.reset();
@@ -202,5 +205,47 @@ int ObTabletPointer::get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data) const
   tx_data = tx_data_;
   return ret;
 }
+
+int ObTabletPointer::create_ddl_kv_mgr(const share::ObLSID &ls_id, const ObTabletID &tablet_id, ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  ddl_kv_mgr_handle.reset();
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+    ObMutexGuard guard(ddl_kv_mgr_lock_);
+    if (ddl_kv_mgr_handle_.is_valid()) {
+      // do nothing
+    } else {
+      ObDDLKvMgrHandle tmp_handle;
+      if (OB_FAIL(t3m->acquire_tablet_ddl_kv_mgr(tmp_handle))) {
+        LOG_WARN("fail to acquire tablet ddl kv mgr", K(ret));
+      } else if (OB_FAIL(tmp_handle.get_obj()->init(ls_id, tablet_id))) {
+        LOG_WARN("init ddl kv mgr failed", K(ret), K(ls_id),K(tablet_id));
+      } else {
+        ddl_kv_mgr_handle_ = tmp_handle;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ddl_kv_mgr_handle = ddl_kv_mgr_handle_;
+    }
+  }
+  return ret;
+}
+
+void ObTabletPointer::get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+{
+  ObMutexGuard guard(ddl_kv_mgr_lock_);
+  ddl_kv_mgr_handle = ddl_kv_mgr_handle_;
+}
+
+void ObTabletPointer::remove_ddl_kv_mgr()
+{
+  ObMutexGuard guard(ddl_kv_mgr_lock_);
+  ddl_kv_mgr_handle_.reset();
+}
+
 } // namespace storage
 } // namespace oceanbase

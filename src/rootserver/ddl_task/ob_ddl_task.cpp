@@ -880,12 +880,12 @@ int ObDDLWaitTransEndCtx::get_snapshot(int64_t &snapshot_version)
       }
       if (OB_SUCC(ret)) {
         int tmp_ret = OB_SUCCESS;
-        snapshot_version = max(max_snapshot, (int64_t)curr_ts.get_val_for_lsn_allocator() - INDEX_SNAPSHOT_VERSION_DIFF);
+        snapshot_version = max(max_snapshot, curr_ts.get_val_for_tx() - INDEX_SNAPSHOT_VERSION_DIFF);
         if (OB_SUCCESS != (tmp_ret = freeze_info_proxy.get_freeze_info(
             root_service->get_sql_proxy(), palf::SCN::min_scn(), frozen_status))) {
           LOG_WARN("get freeze info failed", K(ret));
         } else {
-          const int64_t frozen_scn_val = (int64_t)(frozen_status.frozen_scn_.get_val_for_inner_table_field());
+          const int64_t frozen_scn_val = frozen_status.frozen_scn_.get_val_for_tx();
           snapshot_version = max(snapshot_version, frozen_scn_val);
         }
       }
@@ -1538,7 +1538,13 @@ int ObDDLTaskRecordOperator::fill_task_record(
     EXTRACT_VARCHAR_FIELD_MYSQL(*result_row, "message_unhex", task_message);
     EXTRACT_VARCHAR_FIELD_MYSQL(*result_row, "ddl_stmt_str_unhex", ddl_stmt_str);
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(task_record.trace_id_.parse_from_buf(trace_id_str.ptr()))) {
+      palf::SCN check_snapshot_version;
+      if (OB_FAIL(check_snapshot_version.convert_for_inner_table_field(task_record.snapshot_version_))) {
+        LOG_WARN("convert for inner table field failed", K(ret), K(task_record.snapshot_version_));
+      } else if (!check_snapshot_version.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected snapshot version from inner table", K(ret), K(check_snapshot_version));
+      } else if (OB_FAIL(task_record.trace_id_.parse_from_buf(trace_id_str.ptr()))) {
         LOG_WARN("failed to parse trace id from buf", K(ret));
       } else if (!ddl_stmt_str.empty()) {
         if (OB_ISNULL(buf_ddl_stmt_str = static_cast<char *>(allocator.alloc(ddl_stmt_str.length())))) {

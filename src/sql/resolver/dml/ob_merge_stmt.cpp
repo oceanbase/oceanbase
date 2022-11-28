@@ -90,9 +90,10 @@ int ObMergeStmt::replace_inner_stmt_expr(const common::ObIArray<ObRawExpr*> &oth
   return ret;
 }
 
-bool ObMergeStmt::check_table_be_modified(uint64_t ref_table_id) const
+int ObMergeStmt::check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const
 {
-  return table_info_.ref_table_id_ == ref_table_id;
+  is_modified = (table_info_.ref_table_id_ == ref_table_id);
+  return OB_SUCCESS;
 }
 
 int64_t ObMergeStmt::to_string(char *buf, const int64_t buf_len) const

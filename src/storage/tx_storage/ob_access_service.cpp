@@ -224,6 +224,10 @@ int ObAccessService::table_scan(
   } else if (!vparam.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(vparam), K(lbt()));
+  } else if (OB_NOT_NULL(result)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("The result_ is already pointed to an valid object",
+        K(ret), K(vparam), KPC(result), K(lbt()));
   } else if (OB_ISNULL(iter = common::sop_borrow(ObTableScanIterator))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("alloc table scan iterator fail", K(ret));

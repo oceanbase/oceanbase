@@ -232,6 +232,7 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObTabletMergeCtx &ctx,
     param.master_key_id_ = res.master_key_id_;
     param.data_block_ids_ = res.data_block_ids_;
     param.other_block_ids_ = res.other_block_ids_;
+    param.ddl_scn_.set_min();
     MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     if (ctx.param_.is_major_merge()) {
       if (FAILEDx(res.fill_column_checksum(ctx.schema_ctx_.table_schema_, param.column_checksums_))) {
@@ -712,7 +713,7 @@ int ObTabletMergeCtx::inner_init_for_minor(bool &skip_rest_operation)
   } else if (FALSE_IT(time_guard_.click(ObCompactionTimeGuard::COMPACTION_POLICY))) {
   } else if (get_merge_table_result.update_tablet_directly_) {
     skip_rest_operation = true;
-    if (OB_FAIL(update_tablet_directly(get_merge_table_result))) {
+    if (OB_FAIL(update_tablet_or_release_memtable(get_merge_table_result))) {
       LOG_WARN("failed to update tablet directly", K(ret), K(get_merge_table_result));
     }
   } else if (!ObTenantTabletScheduler::check_tx_table_ready(
@@ -731,11 +732,42 @@ int ObTabletMergeCtx::inner_init_for_minor(bool &skip_rest_operation)
   return ret;
 }
 
+int ObTabletMergeCtx::update_tablet_or_release_memtable(const ObGetMergeTablesResult &get_merge_table_result)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *old_tablet = tablet_handle_.get_obj();
+  // check whether snapshot is updated or have storage_schema
+  bool update_table_store_flag = false;
+  if (OB_UNLIKELY(!is_mini_merge(param_.merge_type_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can only update tablet in mini merge", K(ret), KPC(this));
+  } else if (OB_FAIL(get_storage_schema_to_merge(get_merge_table_result.handle_, true/*get_schema_on_memtable*/))) {
+    LOG_WARN("failed to get storage schema", K(ret), K(get_merge_table_result));
+  } else if (OB_ISNULL(schema_ctx_.storage_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage schema is unexpected null", K(ret), KPC(this));
+  } else if (schema_ctx_.storage_schema_->get_schema_version() > old_tablet->get_storage_schema().get_schema_version()) {
+    update_table_store_flag = true;
+  } else if (get_merge_table_result.version_range_.snapshot_version_ > old_tablet->get_snapshot_version()) {
+    update_table_store_flag = true;
+  }
+
+  const palf::SCN release_memtable_scn = get_merge_table_result.scn_range_.end_scn_;
+  if (OB_FAIL(ret)) {
+  } else if (update_table_store_flag && OB_FAIL(update_tablet_directly(get_merge_table_result))) {
+    LOG_WARN("failed to update tablet directly", K(ret), K(get_merge_table_result), K(update_table_store_flag));
+  } else if (OB_FAIL(old_tablet->release_memtables(release_memtable_scn))) {
+    LOG_WARN("failed to release memtable", K(ret), K(release_memtable_scn));
+  } else {
+    LOG_INFO("success to release memtable", K(ret), K_(param), K(release_memtable_scn));
+  }
+  return ret;
+}
+
 int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_merge_table_result)
 {
   int ret = OB_SUCCESS;
   const int64_t rebuild_seq = ls_handle_.get_ls()->get_rebuild_seq();
-  palf::SCN clog_checkpoint_scn = get_merge_table_result.scn_range_.end_scn_;
   scn_range_ = get_merge_table_result.scn_range_;
 
   ObTableHandleV2 empty_table_handle;
@@ -743,11 +775,10 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
       empty_table_handle,
       get_merge_table_result.version_range_.snapshot_version_,
       get_merge_table_result.version_range_.multi_version_start_,
-      &tablet_handle_.get_obj()->get_storage_schema(),
+      schema_ctx_.storage_schema_,
       rebuild_seq,
       param_.is_major_merge(),
-      clog_checkpoint_scn.get_val_for_inner_table_field());
-  ObTablet *old_tablet = tablet_handle_.get_obj();
+      0/*clog_checkpoint_ts*/);
   ObTabletHandle new_tablet_handle;
   if (OB_FAIL(ls_handle_.get_ls()->update_tablet_table_store(
       param_.tablet_id_, param, new_tablet_handle))) {
@@ -856,8 +887,10 @@ int ObTabletMergeCtx::cal_major_merge_param(
     LOG_WARN("failed to check formal guard", K(ret));
   } else if (OB_FAIL(base_schema_guard.get_table_schema(MTL_ID(),
              schema_ctx_.table_schema_->get_table_id(), base_table_schema))) {
-    LOG_WARN("failed to get base table schema", K(ret));
+    LOG_WARN("failed to get base table schema", K(ret), K(schema_ctx_.base_schema_version_), K(schema_ctx_.table_schema_->get_table_id()));
   } else if (OB_ISNULL(base_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get base table schema", K(ret), K(schema_ctx_.base_schema_version_), K(schema_ctx_.table_schema_->get_table_id()));
   } else if (FALSE_IT(is_schema_changed = (base_table_schema->get_column_count() != main_table_schema->get_column_count()
       || 0 != strcmp(base_table_schema->get_compress_func_name(), main_table_schema->get_compress_func_name())
       || base_table_schema->get_row_store_type() != main_table_schema->get_row_store_type()))) {

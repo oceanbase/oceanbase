@@ -18,15 +18,15 @@
 
 namespace obutil
 {
-class Mutex
+class ObUtilMutex
 {
 public:
 
-  typedef ObLockT<Mutex> Lock;
-  typedef ObTryLockT<Mutex> TryLock;
+  typedef ObLockT<ObUtilMutex> Lock;
+  typedef ObTryLockT<ObUtilMutex> TryLock;
 
-  Mutex();
-  ~Mutex();
+  ObUtilMutex();
+  ~ObUtilMutex();
 
   void lock() const;
   bool trylock() const;
@@ -35,8 +35,8 @@ public:
 
 private:
 
-  Mutex(const Mutex&);
-  Mutex& operator=(const Mutex&);
+  ObUtilMutex(const ObUtilMutex&);
+  ObUtilMutex& operator=(const ObUtilMutex&);
 
   struct LockState
   {
@@ -49,5 +49,6 @@ private:
 
   friend class Cond;
 };
+typedef ObUtilMutex Mutex;
 }//end namespace
 #endif

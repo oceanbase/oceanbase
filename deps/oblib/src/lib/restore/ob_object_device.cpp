@@ -19,7 +19,7 @@ namespace common
 
 const char *OB_STORAGE_ACCESS_TYPES_STR[] = {"reader", "overwriter", "appender", "random_write"};
 
-ObObjectDevice::ObObjectDevice() : oss_account_(), cos_base_(), base_info_(NULL), is_started_(false), lock_()
+ObObjectDevice::ObObjectDevice() : oss_account_(), base_info_(NULL), is_started_(false), lock_()
 {
 }
 
@@ -72,11 +72,6 @@ int ObObjectDevice::start(const ObIODOpts &opts)
         OB_LOG(WARN, "fail to init oss base", K(storage_info) ,K(ret));
       }
       base_info_ = (void*)&oss_account_;
-    } else if (OB_STORAGE_COS == device_type_) {
-      if (OB_FAIL(cos_base_.build_account(storage_info))) {
-        OB_LOG(WARN, "fail to build cos account", K(storage_info), K(ret));
-      }
-      base_info_ = (void*)&cos_base_;
     } else if (OB_STORAGE_FILE == device_type_) {
       //do nothing
       base_info_ = NULL;

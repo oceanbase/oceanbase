@@ -97,6 +97,7 @@ int ObDASGroupScanOp::do_local_index_lookup()
     op->set_rowkey_iter(&this->iter_);
     group_lookup_op_ = op;
     result_iter_ = group_lookup_op_;
+    result_ = group_lookup_op_; //release scan iterator by result_, so need to hold lookup op by result_
     OZ(op->init(get_lookup_ctdef(),
              get_lookup_rtdef(),
              scan_ctdef_,

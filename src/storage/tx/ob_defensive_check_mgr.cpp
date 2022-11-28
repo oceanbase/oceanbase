@@ -93,14 +93,14 @@ int ObSingleTabletDefensiveCheckInfo::add_record(SingleRowDefensiveRecord *recor
 
 int64_t ObDefensiveCheckMgr::max_record_cnt_ = 128;
 
-int ObDefensiveCheckMgr::init()
+int ObDefensiveCheckMgr::init(const lib::ObMemAttr &mem_attr)
 {
   int ret = OB_SUCCESS;
   
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     TRANS_LOG(WARN, "ObDefensiveCheckMgr init twince", K(ret));
-  } else if (OB_FAIL(map_.init())) {
+  } else if (OB_FAIL(map_.init(mem_attr))) {
     TRANS_LOG(WARN, "ObDefensiveCheckMgr map init error", K(ret));
   } else {
     is_inited_ = true;

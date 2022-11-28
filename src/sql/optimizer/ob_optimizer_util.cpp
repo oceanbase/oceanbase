@@ -4568,7 +4568,6 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
   order_exprs.reset();
   ObSEArray<ObRawExpr *, 8> extended_order_exprs;
   ObSEArray<ObRawExpr *, 8> fd_set_parent_exprs;
-  ObSEArray<ObRawExpr *, 8> subquery_exprs;
   ObRawExpr *first_removed_expr = NULL;
   if (OB_FAIL(get_fd_set_parent_exprs(fd_item_set, fd_set_parent_exprs))) {
     LOG_WARN("failed to get fd set parent exprs ", K(ret));
@@ -4615,13 +4614,10 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
                 LOG_WARN("failed to check expr in fd child", K(ret));
               } else if (!is_in_child) {
                 /*do nothing*/
+              } else if (candi_exprs.at(j)->has_flag(CNT_SUB_QUERY)) {
+                /* to check output more than one row, do not remove subquery in order expr. */
               } else if (OB_FAIL(eliminate_set.add_member(j))) {
                 LOG_WARN("failed to add member", K(ret));
-              } else if (candi_exprs.at(j)->has_flag(CNT_SUB_QUERY)
-                         && OB_FAIL(subquery_exprs.push_back(candi_exprs.at(j)))) {
-                /* to check output more than one row, do not remove subquery in order expr.
-                  append subqueries to end of order_exprs */
-                LOG_WARN("failed to push back exprs", K(ret));
               }
             }
             if (OB_FAIL(ret)) {
@@ -4637,11 +4633,8 @@ int ObOptimizerUtil::simplify_ordered_exprs(const ObFdItemSet &fd_item_set,
       }
     }
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(append(order_exprs, subquery_exprs))) {
-    LOG_WARN("failed to append exprs", K(ret));
-  } else if (order_exprs.empty() && NULL != first_removed_expr
-             && OB_FAIL(order_exprs.push_back(first_removed_expr))) {
+  if (OB_FAIL(ret) && order_exprs.empty() && NULL != first_removed_expr
+      && OB_FAIL(order_exprs.push_back(first_removed_expr))) {
     LOG_WARN("failed to push back exprs", K(ret));
   }
   return ret;

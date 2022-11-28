@@ -15,7 +15,6 @@
 #include "ob_i_storage.h"
 #include "ob_storage_file.h"
 #include "ob_storage_oss_base.h"
-#include "ob_storage_cos.h"
 
 namespace oceanbase
 {
@@ -44,7 +43,7 @@ public:
   static const int64_t FLYING_IO_WAIT_TIMEOUT = 120000000; // default 120s.
 
 private:
-  static int64_t flying_io_cnt_; // cos/oss doing io counter.
+  static int64_t flying_io_cnt_; // oss doing io counter.
 };
 
 class ObExternalIOCounterGuard final
@@ -59,10 +58,13 @@ private:
 };
 
 
-class ObStorageGlobalIns : public qcloud_cos::ObSingleton<ObStorageGlobalIns>
+class ObStorageGlobalIns
 {
 public:
   ObStorageGlobalIns();
+
+  // not thread safe
+  static ObStorageGlobalIns& get_instance();
 
   int init();
   
@@ -129,7 +131,6 @@ private:
 
   ObStorageFileUtil file_util_;
   ObStorageOssUtil oss_util_;
-  ObCosUtil cos_util_;
   ObIStorageUtil* util_;
   void* obj_base_info_;
   bool init_state;
@@ -150,7 +151,6 @@ private:
   ObIStorageReader *reader_;
   ObStorageFileReader file_reader_;
   ObStorageOssReader oss_reader_;
-  ObCosRandomAccessReader cos_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   DISALLOW_COPY_AND_ASSIGN(ObStorageReader);
@@ -168,7 +168,6 @@ private:
   ObIStorageWriter *writer_;
   ObStorageFileWriter file_writer_;
   ObStorageOssWriter oss_writer_;
-  ObCosOverWriteObject cos_writer_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
   DISALLOW_COPY_AND_ASSIGN(ObStorageWriter);
@@ -199,7 +198,6 @@ private:
   ObIStorageWriter *appender_;
   ObStorageFileAppender file_appender_;
   ObStorageOssAppendWriter oss_appender_;
-  ObCosAppender cos_appender_;
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];

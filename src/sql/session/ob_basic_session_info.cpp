@@ -121,7 +121,6 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       database_id_(OB_INVALID_ID),
       retry_info_(),
       last_query_trace_id_(),
-      last_consistency_level_(ObConsistencyLevel::INVALID_CONSISTENCY),
       nested_count_(-1),
       inf_pc_configs_(),
       curr_trans_last_stmt_end_time_(0),
@@ -4677,7 +4676,6 @@ void ObBasicSessionInfo::reset_tx_variable()
   reset_tx_read_only();
   reset_trans_flags();
   clear_app_trace_id();
-  last_consistency_level_ = ObConsistencyLevel::INVALID_CONSISTENCY;
 }
 
 ObTxIsolationLevel ObBasicSessionInfo::get_tx_isolation() const

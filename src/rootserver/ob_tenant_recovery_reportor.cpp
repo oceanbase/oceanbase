@@ -193,6 +193,14 @@ int ObTenantRecoveryReportor::update_ls_recovery_stat_()
             LOG_WARN("failed to update ls recovery", KR(ret), KPC(ls));
           }
         }
+      }//end while
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      } else if (OB_FAIL(ret)) {
+        LOG_WARN("failed to get next ls", KR(ret));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("return code not expected", KR(ret));
       }
     }
   }

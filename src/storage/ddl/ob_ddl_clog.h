@@ -151,14 +151,14 @@ public:
   ObDDLPrepareLog();
   ~ObDDLPrepareLog() = default;
   int init(const ObITable::TableKey &table_key,
-           const int64_t start_log_ts);
-  bool is_valid() const { return table_key_.is_valid() && start_log_ts_ >= 0; }
+           const palf::SCN &start_scn);
+  bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid(); }
   ObITable::TableKey get_table_key() const { return table_key_; }
-  int64_t get_start_log_ts() const { return start_log_ts_; }
-  TO_STRING_KV(K_(table_key), K_(start_log_ts));
+  palf::SCN get_start_scn() const { return start_scn_; }
+  TO_STRING_KV(K_(table_key), K_(start_scn));
 private:
   ObITable::TableKey table_key_;
-  int64_t start_log_ts_;
+  palf::SCN start_scn_;
 };
 
 class ObDDLCommitLog final
@@ -168,17 +168,17 @@ public:
   ObDDLCommitLog();
   ~ObDDLCommitLog() = default;
   int init(const ObITable::TableKey &table_key,
-           const int64_t start_log_ts,
-           const int64_t prepare_log_ts);
-  bool is_valid() const { return table_key_.is_valid() && start_log_ts_ >= 0 && prepare_log_ts_ >= 0; }
+           const palf::SCN &start_scn,
+           const palf::SCN &prepare_scn);
+  bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid() && prepare_scn_.is_valid(); }
   ObITable::TableKey get_table_key() const { return table_key_; }
-  int64_t get_start_log_ts() const { return start_log_ts_; }
-  int64_t get_prepare_log_ts() const { return prepare_log_ts_; }
-  TO_STRING_KV(K_(table_key), K_(start_log_ts), K_(prepare_log_ts));
+  palf::SCN get_start_scn() const { return start_scn_; }
+  palf::SCN get_prepare_scn() const { return prepare_scn_; }
+  TO_STRING_KV(K_(table_key), K_(start_scn), K_(prepare_scn));
 private:
   ObITable::TableKey table_key_;
-  int64_t start_log_ts_;
-  int64_t prepare_log_ts_;
+  palf::SCN start_scn_;
+  palf::SCN prepare_scn_;
 };
 
 class ObTabletSchemaVersionChangeLog final

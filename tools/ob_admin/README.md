@@ -13,18 +13,9 @@
 即可,拷贝到obadmin_ssl_bkmi.cfg文件内的内容如下，需要包括两个花括号：
 {
 "ssl_mode":"bkmi",
-"kms_host":"http://bkmi.stable.alipay.net/bkmi/api",
-"root_cert":
-"-----BEGIN CERTIFICATE-----
------END CERTIFICATE-----
-",
-"private_key":
-"-----BEGIN RSA PRIVATE KEY-----
-Proc-Type: 4,ENCRYPTED
-DEK-Info: AES-128-CBC,0E89B082F30023211058CEA54450408C
-
------END RSA PRIVATE KEY-----
-",
+"kms_host":"",
+"root_cert":"",
+"private_key":"",
 "PRIVATE_KEY_PHRASE":"123456",
 "SCENE":"ANT",
 "CALLER":"ob_ssl_crypt",

@@ -910,8 +910,6 @@ void ObLogger::log_it(const char *mod_name,
         && OB_LIKELY(is_enable_logging())
         && OB_NOT_NULL(mod_name) && OB_NOT_NULL(file) && OB_NOT_NULL(function)
         && OB_NOT_NULL(function)) {
-      bool old_val = set_disable_logging(true);
-      DEFER(set_disable_logging(old_val));
       if (is_trace_mode()) {
         TraceBuffer *tb = nullptr;
         if (OB_NOT_NULL(tb = get_trace_buffer())) {
@@ -1113,6 +1111,7 @@ inline void ObLogger::do_log_message(const bool is_async,
                                      Function &log_data_func)
 {
   int ret = OB_SUCCESS;
+  if(!is_enable_logging()) return;
   bool old_val = set_disable_logging(true);
   DEFER(set_disable_logging(old_val));
   bool allow = true;

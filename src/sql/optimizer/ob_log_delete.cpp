@@ -17,6 +17,7 @@
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/optimizer/ob_del_upd_log_plan.h"
 #include "sql/optimizer/ob_join_order.h"
+#include "common/ob_smart_call.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -69,7 +70,7 @@ int ObLogDelete::re_est_cost(EstimateCostInfo &param, double &card, double &cost
     double child_card = child->get_card();
     double child_cost = child->get_cost();
     double op_cost = 0.0;
-    if (OB_FAIL(child->re_est_cost(param, child_card, child_cost))) {
+    if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est exchange cost", K(ret));
     } else if (OB_FAIL(inner_est_cost(child_card, op_cost))) {
       LOG_WARN("failed to get delete cost", K(ret));

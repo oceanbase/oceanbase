@@ -88,6 +88,7 @@ public:
       const int64_t ddl_checkpoint_scn = 0,
       const int64_t ddl_start_scn = 0,
       const int64_t ddl_snapshot_version = 0);
+
   int init(
       common::ObIAllocator &allocator,
       const ObTabletMeta &old_tablet_meta,
@@ -163,7 +164,7 @@ public:
   bool has_next_tablet_;
   palf::SCN create_scn_;
   palf::SCN start_scn_;
-  palf::SCN clog_checkpoint_scn_;
+  palf::SCN clog_checkpoint_scn_; // may less than last_minor->end_log_ts
   palf::SCN ddl_checkpoint_scn_;
   // snapshot_version of last minor
   int64_t snapshot_version_;
@@ -214,6 +215,8 @@ public:
                K_(start_scn),
                K_(clog_checkpoint_scn),
                K_(ddl_checkpoint_scn),
+               K_(ddl_snapshot_version),
+               K_(ddl_start_scn),
                K_(snapshot_version),
                K_(multi_version_start),
                K_(autoinc_seq),

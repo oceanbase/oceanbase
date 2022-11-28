@@ -152,33 +152,48 @@ int ObDRTaskTableUpdater::init(
   } else if (OB_ISNULL(sql_proxy) || OB_ISNULL(task_mgr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("sql proxy is nullptr", KR(ret));
-  } else if (OB_FAIL(update_queue_.init(this,
-                                        thread_cnt,
-                                        queue_size,
-                                        "DRTaskTbUp"))) {
+  } else if (OB_FAIL(update_queue_.init_only(this,
+                                             thread_cnt,
+                                             queue_size,
+                                             "DRTaskTbUp"))) {
     LOG_WARN("init update_queue_set failed", KR(ret));
   } else {
     inited_ = true;
+    stopped_ = true;
     sql_proxy_ = sql_proxy;
     task_mgr_ = task_mgr;
   }
   return ret;
 }
 
+int ObDRTaskTableUpdater::start()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDRTaskTableUpdater is not inited", KR(ret), K_(inited));
+  } else if (OB_UNLIKELY(!stopped_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can not start ObDRTaskTableUpdater twice", KR(ret), K_(stopped));
+  } else if (OB_FAIL(update_queue_.start())) {
+    LOG_WARN("fail to start update queue", KR(ret));
+  } else {
+    stopped_ = false;
+  }
+  return ret;
+}
+
 void ObDRTaskTableUpdater::stop()
 {
-  if (inited_) {
-    update_queue_.stop();
-    LOG_INFO("stop ObDRTaskTableUpdater success");
-  }
+  update_queue_.stop();
+  stopped_ = true;
+  LOG_INFO("stop ObDRTaskTableUpdater success");
 }
 
 void ObDRTaskTableUpdater::wait()
 {
-  if (inited_) {
-    update_queue_.wait();
-    LOG_INFO("wait ObDRTaskTableUpdater");
-  }
+  update_queue_.wait();
+  LOG_INFO("wait ObDRTaskTableUpdater");
 }
 
 void ObDRTaskTableUpdater::destroy()
@@ -186,8 +201,19 @@ void ObDRTaskTableUpdater::destroy()
   stop();
   wait();
   inited_ = false;
+  stopped_ = true;
   sql_proxy_ = nullptr;
   task_mgr_ = nullptr;
+}
+
+int ObDRTaskTableUpdater::check_inner_stat_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_ || stopped_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDRTaskTableUpdater is not inited or is stopped", KR(ret), K_(inited), K_(stopped));
+  }
+  return ret;
 }
 
 int ObDRTaskTableUpdater::async_update(
@@ -204,9 +230,8 @@ int ObDRTaskTableUpdater::async_update(
   int ret = OB_SUCCESS;
   int64_t now = ObTimeUtility::current_time();
   ObDRTaskTableUpdateTask task;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDRTaskTableUpdater is not inited", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped));
   } else if (OB_FAIL(task.init(tenant_id, ls_id, task_type, task_id,
                                task_key, ret_code, need_clear_server_data_in_limit,
                                need_record_event, ret_comment, now))) {
@@ -233,9 +258,8 @@ int ObDRTaskTableUpdater::batch_process_tasks(
   int ret = OB_SUCCESS;
   common::ObMySQLTransaction trans;
   ObCurTraceId::init(GCONF.self_addr_);
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDRTaskTableUpdater is not inited", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped));
   } else {
     int64_t end_idx = tasks.count();
     int tmp_ret = OB_SUCCESS;
@@ -262,9 +286,11 @@ int ObDRTaskTableUpdater::process_task_(
   ObSqlString sql;
   bool has_dropped = false;
 
-  if (OB_UNLIKELY(!inited_) || OB_ISNULL(sql_proxy_) || OB_ISNULL(task_mgr_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDRTaskTableUpdater is not inited", KR(ret));
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped));
+  } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(task_mgr_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql_proxy_ or task_mgr_ is nullptr", KR(ret), KP(sql_proxy_), KP(task_mgr_));
   } else if (!task.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(task));

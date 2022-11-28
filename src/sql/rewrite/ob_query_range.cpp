@@ -67,6 +67,7 @@ ObQueryRange::ObQueryRange()
       key_part_store_(allocator_),
       range_exprs_(allocator_),
       has_exec_param_(true),
+      unused_is_rowid_range_(false),
       is_equal_and_(false),
       equal_offs_(allocator_),
       expr_final_infos_(allocator_)
@@ -83,6 +84,7 @@ ObQueryRange::ObQueryRange(ObIAllocator &alloc)
       key_part_store_(allocator_),
       range_exprs_(allocator_),
       has_exec_param_(true),
+      unused_is_rowid_range_(false),
       is_equal_and_(false),
       equal_offs_(allocator_),
       expr_final_infos_(allocator_)
@@ -119,6 +121,7 @@ void ObQueryRange::reset()
   range_exprs_.reset();
   inner_allocator_.reset();
   has_exec_param_ = true;
+  unused_is_rowid_range_= false;
   is_equal_and_ = false;
   equal_offs_.reset();
   expr_final_infos_.reset();
@@ -5566,6 +5569,7 @@ OB_DEF_SERIALIZE(ObQueryRange)
   //新增对contain_row_序列化，放到最后面
   OB_UNIS_ENCODE(contain_row_);
   OB_UNIS_ENCODE(has_exec_param_);
+  OB_UNIS_ENCODE(unused_is_rowid_range_);
   //新增 equal_query_range 序列化
   OB_UNIS_ENCODE(is_equal_and_);
   OB_UNIS_ENCODE(equal_offs_);
@@ -5594,6 +5598,7 @@ OB_DEF_SERIALIZE_SIZE(ObQueryRange)
   //新增对contain_row_序列化，放到最后面
   OB_UNIS_ADD_LEN(contain_row_);
   OB_UNIS_ADD_LEN(has_exec_param_);
+  OB_UNIS_ADD_LEN(unused_is_rowid_range_);
   //新增 equal_query_range 序列化
   OB_UNIS_ADD_LEN(is_equal_and_);
   OB_UNIS_ADD_LEN(equal_offs_);
@@ -5623,6 +5628,7 @@ OB_DEF_DESERIALIZE(ObQueryRange)
     state_ = static_cast<ObQueryRangeState>(state);
   }
   OB_UNIS_DECODE(has_exec_param_);
+  OB_UNIS_DECODE(unused_is_rowid_range_);
   // 新增 equal_query_range 反序列化
   OB_UNIS_DECODE(is_equal_and_);
   OB_UNIS_DECODE(equal_offs_);
@@ -5739,6 +5745,7 @@ OB_NOINLINE int ObQueryRange::deep_copy(const ObQueryRange &other,
   contain_row_ = other.contain_row_;
   column_count_ = other.column_count_;
   has_exec_param_ = other.has_exec_param_;
+  unused_is_rowid_range_= other.unused_is_rowid_range_;
   is_equal_and_ = other.is_equal_and_;
   if (OB_FAIL(range_exprs_.assign(other.range_exprs_))) {
     LOG_WARN("assign range exprs failed", K(ret));

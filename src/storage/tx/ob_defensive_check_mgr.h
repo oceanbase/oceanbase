@@ -112,14 +112,14 @@ public:
 typedef ObTransHashMap<ObTabletID,
                        ObSingleTabletDefensiveCheckInfo,
                        ObSingleTabletDefensiveCheckInfoAlloc,
-                       common::SpinRWLock> ObTxDefensiveCheckInfoMap;
+                       common::SpinRWLock, 64 /*bucket_num*/> ObTxDefensiveCheckInfoMap;
 
 class ObDefensiveCheckMgr
 {
 public:
   ObDefensiveCheckMgr() : is_inited_(false)  { }
   ~ObDefensiveCheckMgr() { destroy(); }
-  int init();
+  int init(const lib::ObMemAttr &mem_attr);
   void reset();
   void destroy() { reset(); }
   int put(const ObTabletID &tablet_id,

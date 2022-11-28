@@ -856,25 +856,29 @@ int ObTabletCreateDeleteHelper::roll_back_remove_tablet(
     ObSEArray<ObTableHandleV2, MAX_MEMSTORE_CNT> memtable_handle_array;
     if (OB_FAIL(memtable_mgr->get_all_memtables(memtable_handle_array))) {
       LOG_WARN("failed to get all memtables", K(ret), K(ls_id), K(tablet_id));
-    } else if (0 == memtable_handle_array.count()) {
+    } else if (memtable_handle_array.empty()) {
       // tablet does not have memtable, do nothing
-    } else if (1 == memtable_handle_array.count()) {
-      ObMemtable *memtable = nullptr;
+    } else {
+      const int64_t cnt = memtable_handle_array.count();
+      ObTableHandleV2 &last_table_handle = memtable_handle_array.at(cnt - 1);
+      ObMemtable *last_memtable = nullptr;
       ObTabletTxMultiSourceDataUnit tx_data;
-      if (OB_FAIL(memtable_handle_array.at(0).get_data_memtable(memtable))) {
-        LOG_WARN("failed to get memtable", K(ret), K(ls_id), K(tablet_id));
-      } else if (!memtable->has_multi_source_data_unit(MultiSourceDataUnitType::TABLET_TX_DATA)) {
-        LOG_INFO("memtable does not have msd, do nothing", K(ret), K(ls_id), K(tablet_id));
+
+      if (OB_FAIL(last_table_handle.get_data_memtable(last_memtable))) {
+        LOG_WARN("failed to get memtable", K(ret), K(ls_id), K(tablet_id), K(cnt));
+      } else if (OB_ISNULL(last_memtable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("last memtable is null", K(ret), K(ls_id), K(tablet_id), K(cnt));
+      } else if (!last_memtable->has_multi_source_data_unit(MultiSourceDataUnitType::TABLET_TX_DATA)) {
+        LOG_INFO("last memtable does not have msd, do nothing", K(ret), K(ls_id), K(tablet_id), K(cnt));
       } else if (OB_FAIL(tablet->get_tx_data(tx_data))) {
         LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id));
       } else if (OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, ObScnRange::MAX_SCN,
           trans_flags.for_replay_, MemtableRefOp::DEC_REF, true/*is_callback*/))) {
-        LOG_WARN("failed to save msd", K(ret), K(ls_id), K(tablet_id));
+        LOG_WARN("failed to save msd", K(ret), K(ls_id), K(tablet_id), K(cnt));
+      } else {
+        LOG_INFO("succeeded to dec ref for memtable in roll back operation", K(ret), K(ls_id), K(tablet_id), K(cnt));
       }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet should not have more than one memtable", K(ret), K(ls_id), K(tablet_id),
-          "memtable_cnt", memtable_handle_array.count());
     }
   }
 
@@ -1924,6 +1928,7 @@ int ObTabletCreateDeleteHelper::build_batch_create_tablet_arg(
     ObCreateTabletInfo new_info;
     new_info.data_tablet_id_ = old_info.data_tablet_id_;
     new_info.compat_mode_ = old_info.compat_mode_;
+    new_info.is_create_bind_hidden_tablets_ = old_info.is_create_bind_hidden_tablets_;
 
     for (int64_t j = 0; OB_SUCC(ret) && j < old_tablet_id_array.count(); ++j) {
       const ObTabletID &old_tablet_id = old_tablet_id_array[j];
@@ -2073,12 +2078,9 @@ int ObTabletCreateDeleteHelper::build_mixed_tablets(
   ObTabletID lob_meta_tablet_id;
   ObTabletID lob_piece_tablet_id;
   ObTabletID empty_lob_tablet_id;
-  ObTabletMapKey key;
-  key.ls_id_ = ls_id;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
     const ObTabletID &tablet_id = tablet_ids[i];
-    key.tablet_id_ = tablet_id;
     if (tablet_id == data_tablet_id) {
       data_tablet_index = i;
     } else if (table_schemas.at(info.table_schema_index_.at(i)).is_aux_lob_meta_table()) {
@@ -2123,7 +2125,6 @@ int ObTabletCreateDeleteHelper::build_mixed_tablets(
   } else if (OB_UNLIKELY(data_tablet_index < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, data tablet index is invalid", K(ret), K(data_tablet_index));
-  } else if (FALSE_IT(key.tablet_id_ = data_tablet_id)) {
   } else if (OB_FAIL(do_create_tablet(data_tablet_id, data_tablet_id, lob_meta_tablet_id,
       lob_piece_tablet_id, index_tablet_array, arg, trans_flags,
       table_schemas[info.table_schema_index_[data_tablet_index]], compat_mode, data_tablet_handle))) {
@@ -2148,12 +2149,9 @@ int ObTabletCreateDeleteHelper::build_pure_aux_tablets(
   ObTabletID lob_piece_tablet_id;
   ObTabletID empty_lob_tablet_id;
   ObTabletHandle aux_tablet_handle;
-  ObTabletMapKey key;
-  key.ls_id_ = ls_id;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
     const ObTabletID &aux_tablet_id = tablet_ids[i];
-    key.tablet_id_ = aux_tablet_id;
     if (table_schemas.at(info.table_schema_index_.at(i)).is_aux_lob_meta_table()) {
       lob_meta_tablet_id = aux_tablet_id;
     } else if (table_schemas.at(info.table_schema_index_.at(i)).is_aux_lob_piece_table()) {
@@ -2185,15 +2183,12 @@ int ObTabletCreateDeleteHelper::build_pure_hidden_tablets(
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
   ObSArray<ObTabletID> empty_array;
   ObTabletHandle hidden_tablet_handle;
-  ObTabletMapKey key;
-  key.ls_id_ = ls_id;
   ObMetaDiskAddr mem_addr;
   if (OB_FAIL(mem_addr.set_mem_addr(0, sizeof(ObTablet)))) {
     LOG_WARN("fail to set memory address", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < hidden_tablet_ids.count(); ++i) {
     const ObTabletID &hidden_tablet_id = hidden_tablet_ids[i];
-    key.tablet_id_ = hidden_tablet_id;
     int64_t aux_idx = -1;
     ObTabletID lob_meta_tablet_id;
     ObTabletID lob_piece_tablet_id;
@@ -2381,6 +2376,7 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
     param.ddl_scn_.set_min();
     param.filled_tx_scn_.set_min();
     param.original_size_ = 0;
+    param.ddl_scn_.set_min();
     param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
     if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_,
         param.column_checksums_))) {

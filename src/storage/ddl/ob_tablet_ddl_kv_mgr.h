@@ -17,6 +17,7 @@
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/ob_define.h"
+#include "logservice/palf/scn.h"
 #include "share/ob_ls_id.h"
 #include "storage/ob_i_table.h"
 
@@ -36,21 +37,20 @@ public:
   ObTabletDDLKvMgr();
   ~ObTabletDDLKvMgr();
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
-  int ddl_start(const ObITable::TableKey &table_key, const int64_t start_log_ts, const int64_t cluster_version, const int64_t checkpoint_log_ts = 0);
-  int ddl_prepare(const int64_t start_log_ts, const int64_t commit_log_ts, const uint64_t table_id = 0, const int64_t execution_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
-  int ddl_commit(const int64_t start_log_ts, const int64_t prepare_log_ts, const bool is_replay); // try wait build major sstable
-  int wait_ddl_commit(const int64_t start_log_ts, const int64_t prepare_log_ts);
+  int ddl_start(const ObITable::TableKey &table_key, const palf::SCN &start_scn, const int64_t cluster_version, const palf::SCN &checkpoint_scn = palf::SCN::invalid_scn());
+  int ddl_prepare(const palf::SCN &start_scn, const palf::SCN &commit_scn, const uint64_t table_id = 0, const int64_t execution_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
+  int ddl_commit(const palf::SCN &start_scn, const palf::SCN &prepare_scn, const bool is_replay); // try wait build major sstable
+  int wait_ddl_commit(const palf::SCN &start_scn, const palf::SCN &prepare_scn);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
-  int get_or_create_ddl_kv(const int64_t log_ts, ObDDLKVHandle &kv_handle); // used in active ddl kv guard
-  int get_freezed_ddl_kv(const int64_t freeze_log_ts, ObDDLKVHandle &kv_handle); // locate ddl kv with exeact freeze log ts
+  int get_or_create_ddl_kv(const palf::SCN &log_scn, ObDDLKVHandle &kv_handle); // used in active ddl kv guard
+  int get_freezed_ddl_kv(const palf::SCN &freeze_scn, ObDDLKVHandle &kv_handle); // locate ddl kv with exeact freeze log ts
   int get_ddl_kvs(const bool frozen_only, ObDDLKVsHandle &ddl_kvs_handle); // get all freeze ddl kvs
-  int freeze_ddl_kv(const int64_t freeze_log_ts = 0); // freeze the active ddl kv, when memtable freeze or ddl commit
-  int release_ddl_kvs(const int64_t rec_log_ts); // release persistent ddl kv, used in ddl merge task for free ddl kv
+  int freeze_ddl_kv(const palf::SCN &freeze_scn = palf::SCN::invalid_scn()); // freeze the active ddl kv, when memtable freeze or ddl commit
+  int release_ddl_kvs(const palf::SCN &rec_scn); // release persistent ddl kv, used in ddl merge task for free ddl kv
   int check_has_effective_ddl_kv(bool &has_ddl_kv); // used in ddl log handler for checkpoint
-  int get_ddl_kv_min_log_ts(int64_t &min_log_ts); // for calculate rec_log_ts of ls
-  int64_t get_start_log_ts() const { return start_log_ts_; }
-
-  bool is_started() const { return 0 != start_log_ts_; }
+  int get_ddl_kv_min_scn(palf::SCN &min_scn); // for calculate rec_scn of ls
+  palf::SCN get_start_scn() const { return start_scn_; }
+  bool is_started() const { return start_scn_.is_valid(); }
   int set_commit_success();
   bool is_commit_success() const { return is_commit_success_; }
   int cleanup();
@@ -59,7 +59,7 @@ public:
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
   OB_INLINE void reset() { destroy(); }
   TO_STRING_KV(K_(is_inited), K_(is_commit_success), K_(ls_id), K_(tablet_id), K_(table_key),
-      K_(cluster_version), K_(start_log_ts), K_(max_freeze_log_ts),
+      K_(cluster_version), K_(start_scn), K_(max_freeze_scn),
       K_(table_id), K_(execution_id), K_(ddl_task_id), K_(head), K_(tail), K_(ref_cnt));
 
 private:
@@ -68,8 +68,8 @@ private:
   int alloc_ddl_kv(ObDDLKV *&kv);
   void free_ddl_kv(const int64_t idx);
   int get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle);
-  void try_get_ddl_kv_unlock(const int64_t log_ts, ObDDLKV *&kv);
-  int update_tablet(const int64_t start_log_ts, const int64_t snapshot_version, const int64_t ddl_checkpoint_ts);
+  void try_get_ddl_kv_unlock(const palf::SCN &log_scn, ObDDLKV *&kv);
+  int update_tablet(const palf::SCN &start_scn, const int64_t snapshot_version, const palf::SCN &ddl_checkpoint_scn);
   void destroy();
 private:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 64;
@@ -79,8 +79,8 @@ private:
   common::ObTabletID tablet_id_;
   ObITable::TableKey table_key_;
   int64_t cluster_version_;
-  int64_t start_log_ts_;
-  int64_t max_freeze_log_ts_;
+  palf::SCN start_scn_;
+  palf::SCN max_freeze_scn_;
   uint64_t table_id_; // used for ddl checksum
   int64_t execution_id_; // used for ddl checksum
   int64_t ddl_task_id_; // used for ddl checksum

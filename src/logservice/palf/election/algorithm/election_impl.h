@@ -220,15 +220,18 @@ private:// 定向暴露给友元类
             } else if (CLICK_FAIL(lhs_priority->compare_with(*rhs_priority, compare_result, reason))) {
               LOG_PHASE(WARN, phase, "compare priority failed");
               (void) reason.assign("COMPARE FAIL");
-            } else if (compare_result < 0) {
-              rhs_is_higher = true;
-            } else if (compare_result == 0 && compare_with_ip_port) {
-              if (rhs.get_sender() < lhs.get_sender()) {
+            } else {
+              if (compare_result < 0) {
                 rhs_is_higher = true;
-                (void) reason.assign("IP-PORT(priority equal)");
-              } else {
-                (void) reason.assign("IP-PORT(priority equal)");
+              } else if (compare_result == 0 && compare_with_ip_port) {
+                if (rhs.get_sender() < lhs.get_sender()) {
+                  rhs_is_higher = true;
+                  (void) reason.assign("IP-PORT(priority equal)");
+                } else {
+                  (void) reason.assign("IP-PORT(priority equal)");
+                }
               }
+              LOG_PHASE(TRACE, phase, "compare priority done");
             }
           }
         }

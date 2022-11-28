@@ -122,6 +122,7 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxAbortP);
   RPC_PROCESSOR(ObTxRollbackSPP);
   RPC_PROCESSOR(ObTxKeepaliveP);
+  RPC_PROCESSOR(ObTxKeepaliveRespP);
   RPC_PROCESSOR(ObDupTableLeaseRequestMsgP, gctx_);
   RPC_PROCESSOR(ObDupTableLeaseResponseMsgP, gctx_);
   RPC_PROCESSOR(ObRedoLogSyncRequestP, gctx_);

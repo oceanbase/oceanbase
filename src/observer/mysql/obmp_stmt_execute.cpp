@@ -1511,6 +1511,8 @@ int ObMPStmtExecute::try_batch_multi_stmt_optimization(ObSQLSessionInfo &session
   } else if (!use_plan_cache) {
     LOG_TRACE("not enable the plan_cache", K(use_plan_cache));
     // plan_cache开关没打开
+  } else if (!is_prexecute()) {
+    // 只对二合一协议开启batch优化
   } else if (is_pl_stmt(stmt_type_)) {
     LOG_TRACE("is pl execution, can't do the batch optimization");
   } else if (1 == arraybinding_size_) {

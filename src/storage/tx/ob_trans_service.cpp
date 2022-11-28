@@ -140,7 +140,8 @@ int ObTransService::init(const ObAddr &self,
   } else if (OB_FAIL(ObSimpleThreadPool::init(2, msg_task_cnt, "TransService", tenant_id))) {
     TRANS_LOG(WARN, "thread pool init error", KR(ret));
   } else if (OB_FAIL(tx_desc_mgr_.init(std::bind(&ObTransService::gen_trans_id_,
-                                        this, std::placeholders::_1)))) {
+                                                 this, std::placeholders::_1),
+                                       lib::ObMemAttr(tenant_id, "TransService")))) {
     TRANS_LOG(WARN, "ObTxDescMgr init error", K(ret));
   } else if (OB_FAIL(tx_ctx_mgr_.init(tenant_id, ts_mgr, this))) {
     TRANS_LOG(WARN, "tx_ctx_mgr_ init error", KR(ret));
@@ -470,6 +471,9 @@ void ObTransService::handle(void *task)
       TRANS_LOG(INFO, "[statisic] trans service task queue statisic : ", K(queue_num), K_(input_queue_count), K_(output_queue_count));
       ATOMIC_STORE(&input_queue_count_, 0);
       ATOMIC_STORE(&output_queue_count_, 0);
+      TRANS_LOG(INFO, "[statisic] tx desc statisic : ",
+                "alloc_count", tx_desc_mgr_.get_alloc_count(),
+                "total_count", tx_desc_mgr_.get_total_count());
     }
   }
   UNUSED(ret); //make compiler happy
@@ -665,7 +669,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
         ret = OB_TIMEOUT;
         TRANS_LOG(WARN, "register tx data timeout", KR(ret), K(tx_desc), K(ls_id), K(type),K(retry_cnt));
       } else if (OB_ISNULL(location_adapter_)
-                 || OB_FAIL(location_adapter_->get_leader(tx_desc.cluster_id_, tx_desc.tenant_id_,
+                 || OB_FAIL(location_adapter_->nonblock_get_leader(tx_desc.cluster_id_, tx_desc.tenant_id_,
                                                           ls_id, ls_leader_addr))) {
         TRANS_LOG(WARN, "get leader failed", KR(ret), K(ls_id));
       } else if (ls_leader_addr == self_) {

@@ -50,7 +50,7 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     occupy_size_(0),
     original_size_(0),
     max_merged_trans_version_(0),
-    ddl_scn_(palf::SCN::min_scn()),
+    ddl_scn_(),
     filled_tx_scn_(palf::SCN::min_scn()),
     contain_uncommitted_row_(false),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),

@@ -81,7 +81,7 @@ typedef common::ObSimpleIterator<ObLSTxCtxMgrStat,
 typedef common::ObSimpleIterator<ObTxLockStat,
         ObModIds::OB_TRANS_VIRTUAL_TABLE_TRANS_STAT, 16> ObTxLockStatIterator;
 
-typedef ObTransHashMap<ObTransID, ObTransCtx, TransCtxAlloc, common::SpinRWLock> ObLSTxCtxMap;
+typedef ObTransHashMap<ObTransID, ObTransCtx, TransCtxAlloc, common::SpinRWLock, 1 << 14 /*bucket_num*/> ObLSTxCtxMap;
 
 typedef common::LinkHashNode<share::ObLSID> ObLSTxCtxMgrHashNode;
 typedef common::LinkHashValue<share::ObLSID> ObLSTxCtxMgrHashValue;

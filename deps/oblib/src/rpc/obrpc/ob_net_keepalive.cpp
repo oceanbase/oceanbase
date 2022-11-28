@@ -312,7 +312,7 @@ void ObNetKeepAlive::do_server_loop()
   int ret = OB_SUCCESS;
   struct epoll_event events[512];
   struct epoll_event ev;
-  ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
+  ev.events = EPOLLIN | EPOLLOUT;
   ev.data.ptr = NULL;
   int epfd = -1;
   if (pipefd_ < 0) {
