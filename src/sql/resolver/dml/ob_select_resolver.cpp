@@ -856,9 +856,30 @@ int ObSelectResolver::check_group_by()
   // 1. select item/having/order item中的表达式树(子树)需要每个都在group by列中找到
   // 2. 递归查找是否在groupby列中，将在groupby的列的指针替换。
   if (OB_SUCC(ret)) {
-    if (ObTransformUtils::replace_stmt_expr_with_groupby_exprs(select_stmt)) {
+    if (OB_FAIL(replace_stmt_expr_with_groupby_exprs(select_stmt, params_.query_ctx_))) {
       LOG_WARN("failed to replace stmt expr with groupby columns", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObSelectResolver::replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
+                                                           ObQueryCtx *query_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObPCConstParamInfo, 4> pc_constraints;
+  ObSEArray<ObPCParamEqualInfo, 4> eq_constraints;
+  if (OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(query_ctx));
+  } else if (OB_FAIL(ObTransformUtils::inner_replace_stmt_expr_with_groupby_exprs(select_stmt, params_.param_list_, pc_constraints, eq_constraints))) {
+    LOG_WARN("failed to replace stmt expr with groupby columns", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(query_ctx->all_plan_const_param_constraints_, pc_constraints))) {
+    LOG_WARN("failed to append const param info", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(query_ctx->all_possible_const_param_constraints_, pc_constraints))) {
+    LOG_WARN("failed to append const param info", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(query_ctx->all_equal_param_constraints_, eq_constraints))) {
+    LOG_WARN("failed to append const param info", K(ret));
   }
   return ret;
 }

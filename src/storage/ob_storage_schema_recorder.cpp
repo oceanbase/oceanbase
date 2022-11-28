@@ -106,6 +106,15 @@ ObStorageSchemaRecorder::~ObStorageSchemaRecorder()
 
 void ObStorageSchemaRecorder::reset()
 {
+  if (is_inited_) {
+    wait_to_lock(OB_INVALID_VERSION); // lock
+    max_saved_table_version_ = 0;
+    ATOMIC_STORE(&lock_, false); // unlock
+  }
+}
+
+void ObStorageSchemaRecorder::destroy()
+{
   is_inited_ = false;
   max_saved_table_version_ = OB_INVALID_VERSION;
   lock_ = false;

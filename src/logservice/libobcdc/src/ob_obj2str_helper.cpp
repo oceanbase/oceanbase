@@ -117,7 +117,8 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
     const bool string_deep_copy,
     const common::ObIArray<common::ObString> &extended_type_info,
     const common::ObAccuracy &accuracy,
-    const common::ObCollationType &collation_type) const
+    const common::ObCollationType &collation_type,
+    const ObTimeZoneInfoWrap *tz_info_wrap) const
 {
   int ret = OB_SUCCESS;
   ObObjType obj_type = obj.get_type();
@@ -210,14 +211,11 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
       common::ObObj str_obj;
       common::ObObjType target_type = common::ObMaxType;
 
-      //libobcdc need use_standard_format
-      ObTimeZoneInfoWrap *tz_info_wrap = nullptr;
+      // OBCDC need use_standard_format
       const common::ObTimeZoneInfo *tz_info = nullptr;
-      if (OB_FAIL(tenant_mgr_->get_tenant_tz_wrap(tenant_id, tz_info_wrap))) {
-        OBLOG_LOG(ERROR, "get_tenant_tz_wrap failed", KR(ret), K(tenant_id));
-      } else if (OB_ISNULL(tz_info_wrap)) {
+      if (OB_ISNULL(tz_info_wrap)) {
         ret = OB_ERR_UNEXPECTED;
-        OBLOG_LOG(ERROR, "tenant not exist", KR(ret), K(tenant_id));
+        OBLOG_LOG(ERROR, "tz_info_wrap is null", KR(ret), K(tenant_id));
       } else {
         tz_info = tz_info_wrap->get_time_zone_info();
         const ObDataTypeCastParams dtc_params(tz_info);

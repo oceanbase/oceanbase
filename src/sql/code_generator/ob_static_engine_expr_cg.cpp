@@ -401,22 +401,18 @@ int ObStaticEngineExprCG::cg_expr_by_operator(const ObIArray<ObRawExpr *> &raw_e
         || OB_ISNULL(rt_expr = get_rt_expr(*raw_expr))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("arg is null", K(raw_expr), K(rt_expr), K(ret));
-    } else if (T_QUESTIONMARK == rt_expr->type_ && rt_question_mark_eval_) {
+    } else if (T_QUESTIONMARK == rt_expr->type_ &&
+              (raw_expr->has_flag(IS_TABLE_ASSIGN) || rt_question_mark_eval_)) {
       // generate question mark expr for get param from param store directly
+      // if the questionmark is from TABLE_ASSIGN, use eval_assign_question_mark_func
       ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(raw_expr);
       int64_t param_idx = 0;
       OZ(c_expr->get_value().get_unknown(param_idx));
       if (OB_SUCC(ret)) {
         rt_expr->extra_ = param_idx;
-        rt_expr->eval_func_ = &eval_question_mark_func;
-      }
-    } else if (T_QUESTIONMARK == rt_expr->type_ && raw_expr->has_flag(IS_TABLE_ASSIGN)) {
-      ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(raw_expr);
-      int64_t param_idx = 0;
-      OZ(c_expr->get_value().get_unknown(param_idx));
-      if (OB_SUCC(ret)) {
-        rt_expr->extra_ = param_idx;
-        rt_expr->eval_func_ = &eval_assign_question_mark_func;
+        rt_expr->eval_func_ = raw_expr->has_flag(IS_TABLE_ASSIGN) ?
+                              &eval_assign_question_mark_func:
+                              &eval_question_mark_func;
       }
     } else if (!IS_EXPR_OP(rt_expr->type_) || IS_AGGR_FUN(rt_expr->type_)) {
       // do nothing

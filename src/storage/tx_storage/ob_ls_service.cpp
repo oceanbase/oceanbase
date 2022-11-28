@@ -137,14 +137,15 @@ int ObLSService::stop()
           LOG_ERROR("ls is null", K(ret));
         } else if (OB_FAIL(ls->offline())) {
           LOG_WARN("ls offline failed", K(ret), K(ls->get_ls_id()), KP(ls));
+        } else if (OB_FAIL(ls->stop())) {
+          LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls_id));
+        } else if (FALSE_IT(ls->wait())) {
         } else if (OB_FAIL(handle.set_ls(ls_map_, *ls, ObLSGetMod::TXSTORAGE_MOD))) {
           LOG_WARN("get ls handle failed", K(ret), KPC(ls));
         } else {
           ObLSLockGuard lock_ls(ls);
-          if (OB_FAIL(ls->stop())) {
-            LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls_id));
-          } else if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
-                                                                      "LSSafeDestroy"))) {
+          if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
+                                                               "LSSafeDestroy"))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc memory failed", K(ret));
           } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {
@@ -636,9 +637,10 @@ int ObLSService::gc_ls_after_replay_slog()
         ls_status = ls->get_create_state();
         if (ObInnerLSStatus::CREATING == ls_status || ObInnerLSStatus::REMOVED == ls_status) {
           do {
-            ObLSLockGuard lock_ls(ls);
             if (OB_TMP_FAIL(ls->stop())) {
               LOG_WARN("ls stop failed", K(tmp_ret), K(ls->get_ls_id()), KP(ls));
+            } else {
+              ls->wait();
             }
             if (OB_SUCCESS != tmp_ret) {
               usleep(SLEEP_TS);
@@ -873,14 +875,15 @@ int ObLSService::remove_ls(
   // ls leader gc must has block tx start, gracefully kill tx and write offline log before here.
   } else if (OB_FAIL(ls->offline())) {
     LOG_WARN("ls offline failed", K(ret), K(ls_id), KP(ls));
+  } else if (OB_FAIL(ls->stop())) {
+    LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls_id));
+  } else if (FALSE_IT(ls->wait())) {
   } else {
     ObLSSafeDestroyTask *task = nullptr;
     static const int64_t SLEEP_TS = 100_ms;
     ObLSLockGuard lock_ls(ls);
-    if (OB_FAIL(ls->stop())) {
-      LOG_WARN("stop ls failed", K(ret), KP(ls), K(ls_id));
-    } else if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
-                                                                "LSSafeDestroy"))) {
+    if (OB_ISNULL(task = (ObLSSafeDestroyTask*)ob_malloc(sizeof(ObLSSafeDestroyTask),
+                                                         "LSSafeDestroy"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));
     } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {

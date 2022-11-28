@@ -432,11 +432,14 @@ const LSN LogStorage::get_begin_lsn() const
 {
   int ret = OB_SUCCESS;
   LSN lsn;
-  lsn.val_ = 0;
   block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
   block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
   if (OB_FAIL(get_block_id_range(min_block_id, max_block_id))) {
-    PALF_LOG(WARN, "get_block_id_range failed", K(ret), KPC(this));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      lsn = log_tail_;
+    } else {
+      PALF_LOG(WARN, "get_block_id_range failed", K(ret), KPC(this));
+    }
   } else {
     lsn.val_ = logical_block_size_ * min_block_id;
   }

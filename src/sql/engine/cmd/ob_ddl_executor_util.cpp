@@ -62,6 +62,7 @@ int ObDDLExecutorUtil::wait_ddl_finish(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id), KP(common_rpc_proxy));
   } else {
+    int tmp_ret = OB_SUCCESS;
     while (OB_SUCC(ret)) {
       if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
           tenant_id, task_id, -1 /* target_object_id */, unused_addr, false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, unused_user_msg_len)) {
@@ -72,8 +73,9 @@ int ObDDLExecutorUtil::wait_ddl_finish(
         break;
       } else if (OB_FAIL(handle_session_exception(session))) {
         LOG_WARN("session exeception happened", K(ret), K(is_support_cancel));
-        if (is_support_cancel && OB_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
-          LOG_WARN("cancel ddl task failed", K(ret));
+        if (is_support_cancel && OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
+          LOG_WARN("cancel ddl task failed", K(tmp_ret));
+          ret = OB_SUCCESS;
         } else {
           break;
         }
@@ -127,6 +129,7 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id), KP(common_rpc_proxy));
   } else {
+    int tmp_ret = OB_SUCCESS;
     while (OB_SUCC(ret)) {
       if (OB_SUCCESS == ObDDLErrorMessageTableOperator::get_ddl_error_message(
           tenant_id, task_id, -1 /* target_object_id */, unused_addr, true /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, forward_user_msg_len)) {
@@ -164,8 +167,9 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
         break;
       } else if (OB_FAIL(handle_session_exception(session))) {
         LOG_WARN("session exeception happened", K(ret));
-        if (OB_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
-          LOG_WARN("cancel ddl task failed", K(ret));
+        if (OB_TMP_FAIL(cancel_ddl_task(tenant_id, common_rpc_proxy))) {
+          LOG_WARN("cancel ddl task failed", K(tmp_ret));
+          ret = OB_SUCCESS;
         } else {
           break;
         }

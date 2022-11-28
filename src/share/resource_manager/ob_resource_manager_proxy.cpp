@@ -119,12 +119,6 @@ int ObResourceManagerProxy::create_plan(
         }
       }
     }
-
-    if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3200) {
-      if (OB_SUCCESS != ret) {
-        LOG_WARN("fail init default consumer groups", K(tenant_id) , K(ret));
-      }
-    }
   }
   return ret;
 }

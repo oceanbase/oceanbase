@@ -136,13 +136,9 @@ int ObExprColumnConv::convert_with_null_check(ObObj &result,
   if (OB_FAIL(ObExprColumnConv::convert_skip_null_check(result, obj, res_type, is_strict,
                                                         cast_ctx, type_infos))) {
     LOG_WARN("fail to convert skip null check", K(ret));
-  } else {
-//  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2220) {
-      if (is_not_null && (result.is_null() || (lib::is_oracle_mode() && result.is_null_oracle()))) {
-        ret = OB_BAD_NULL_ERROR;
-        LOG_WARN("Column should not be null", K(ret));
-//    }
-    }
+  } else if (is_not_null && (result.is_null() || (lib::is_oracle_mode() && result.is_null_oracle()))) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("Column should not be null", K(ret));
   }
   return ret;
 }

@@ -726,12 +726,15 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
   }
   if (OB_SUCC(ret) && NULL != select_stmt) {
     ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
+    CK(OB_NOT_NULL(params_.session_info_));
     for (int64_t i = 0; i < select_items.count() && OB_SUCC(ret); i++) {
       SelectItem &item = select_items.at(i);
       ObRawExpr *expr = NULL;
       if (OB_ISNULL(expr = item.expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr of select item is null", K(ret));
+      } else if (OB_FAIL(expr->formalize(params_.session_info_))) {
+        LOG_WARN("formailize column reference expr failed", K(ret));
       } else if (ob_is_temporal_type(expr->get_data_type())) {
         // add implicit cast to varchar type
         ObCastMode cast_mode = CM_NONE;

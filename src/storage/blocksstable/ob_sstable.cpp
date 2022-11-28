@@ -499,6 +499,7 @@ int ObSSTable::exist(ObRowsInfo &rows_info, bool &is_exist, bool &all_rows_found
       }
       iter->~ObStoreRowIterator();
       rows_info.exist_helper_.table_access_context_.allocator_->free(iter);
+      rows_info.reuse_scan_mem_allocator();
     }
   }
   return ret;

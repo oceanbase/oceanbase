@@ -335,8 +335,8 @@ int ObHashSetOp::init_hash_partition_infras()
                   &ctx_))) {
     LOG_WARN("failed to init sql mem processor", K(ret));
   } else if (OB_FAIL(hp_infras_.init(ctx_.get_my_session()->get_effective_tenant_id(),
-      GCONF.is_sql_operator_dump_enabled() && !(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2250),
-      true, true, 2, &sql_mem_processor_))) {
+                                     GCONF.is_sql_operator_dump_enabled(),
+                                     true, true, 2, &sql_mem_processor_))) {
     LOG_WARN("failed to init hash partition infrastructure", K(ret));
   } else {
     const ObHashSetSpec &spec = static_cast<const ObHashSetSpec&>(get_spec());

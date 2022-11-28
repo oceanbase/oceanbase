@@ -59,6 +59,22 @@ private:
   int64_t bar_;
 };
 
+TEST(ObLogTransTaskPool, Init)
+{
+  const int64_t part_trans_task_prealloc_count = 300000;
+  const int64_t page_size = 8 * 1024;
+  const int64_t prealloc_page_count = 20000;
+
+  ObConcurrentFIFOAllocator fifo;
+  int64_t G = 1024 * 1024 * 1024;
+  fifo.init(1 * G, 1 * G, OB_MALLOC_BIG_BLOCK_SIZE);
+
+  ObLogTransTaskPool<MockTransTask> pool;
+
+  int ret = pool.init(&fifo, part_trans_task_prealloc_count, page_size, true, prealloc_page_count);
+  EXPECT_EQ(OB_SUCCESS, ret);
+}
+
 TEST(ObLogTransTaskPool, Function1)
 {
   const int64_t task_cnt = 1024 * 32;

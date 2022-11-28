@@ -15,6 +15,7 @@
 #include "share/ob_errno.h"
 #include "share/ob_define.h"      // is_valid_read_snapshot_version
 #include "ob_tenant_weak_read_server_version_mgr.h"
+#include "lib/stat/ob_latch_define.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -25,7 +26,7 @@ namespace transaction
 
 ObTenantWeakReadServerVersionMgr::ObTenantWeakReadServerVersionMgr() :
     server_version_(),
-    rwlock_(),
+    rwlock_(common::ObLatchIds::WRS_SERVER_VERSION_LOCK),
     server_version_for_stat_()
 {}
 

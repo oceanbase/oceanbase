@@ -161,6 +161,7 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
         session->set_query_start_time(ObTimeUtility::current_time());
 
         do {
+          retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
           if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(),
                                                                   schema_guard))) {
             LOG_WARN("get schema guard failed", K(ret));
@@ -172,7 +173,6 @@ int ObExprOpSubQueryInPl::eval_subquery(const ObExpr &expr,
           } else {
             retry_ctrl.set_tenant_local_schema_version(tenant_version);
             retry_ctrl.set_sys_local_schema_version(sys_version);
-            retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
 
             mysql_result.reset();
 

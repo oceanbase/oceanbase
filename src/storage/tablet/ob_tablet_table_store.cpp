@@ -131,9 +131,7 @@ int ObTabletTableStore::deserialize(
   } else {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = init_read_cache())) {
-      if (OB_SNAPSHOT_DISCARDED != tmp_ret) {
-        LOG_WARN("failed to init read cache iterator", K(tmp_ret));
-      }
+      LOG_WARN("failed to init read cache iterator", K(tmp_ret));
     }
   }
 
@@ -193,8 +191,8 @@ int ObTabletTableStore::init(
       LOG_WARN("Failed to add table to major_tables", K(ret));
     } else {
       is_ready_for_read_ = true; // exist major sstable and no minor sstable, must be ready for read
-      int tmp_ret = init_read_cache();
-      if (OB_SUCCESS != tmp_ret && OB_SNAPSHOT_DISCARDED != tmp_ret) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = init_read_cache())) {
         LOG_WARN("failed to init read cache, just skip", K(tmp_ret));
       }
     }
@@ -316,8 +314,17 @@ int ObTabletTableStore::prepare_memtables()
 int ObTabletTableStore::update_memtables()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(pull_memtables())) {
-    LOG_WARN("failed to update memtables from memtable_mgr", K(ret));
+  ObTableHandleArray inc_memtables;
+
+  if (OB_ISNULL(tablet_ptr_) || OB_ISNULL(tablet_ptr_->get_memtable_mgr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected tablet_ptr or memtable_mgr", K(ret), KP(tablet_ptr_));
+  } else if (!tablet_ptr_->get_memtable_mgr()->has_memtable()) {
+    LOG_INFO("no memtable in memtable mgr", K(ret));
+  } else if (OB_FAIL(tablet_ptr_->get_memtable_mgr()->get_all_memtables(inc_memtables))) {
+    LOG_WARN("failed to get all memtables from memtable_mgr", K(ret));
+  } else if (OB_FAIL(memtables_.rebuild(inc_memtables))) {
+    LOG_ERROR("failed to rebuild table store memtables", K(ret), K(inc_memtables), KPC(this));
   } else {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = init_read_cache())) {
@@ -512,9 +519,16 @@ int ObTabletTableStore::calculate_read_tables(
       LOG_WARN("exist base table, but no read table found for specific version", K(ret), K(snapshot_version), K(iterator), K(PRINT_TS(*this)));
     }
   } else { // not find base table
-    if (!allow_no_ready_read || !major_tables_.empty()) {
-      ret = OB_SNAPSHOT_DISCARDED;
-      LOG_WARN("no base table, not allow no ready read, no table found for specific version", K(ret), K(snapshot_version), K(PRINT_TS(*this)));
+    if (!allow_no_ready_read) {
+      if (major_tables_.empty()) {
+        ret = OB_REPLICA_NOT_READABLE;
+        LOG_WARN("no base table, not allow no ready read, tablet is not readable",
+                 K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
+      } else {
+        ret = OB_SNAPSHOT_DISCARDED;
+        LOG_WARN("no base table found for specific version",
+                 K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
+      }
     } else if (!minor_tables_.empty() && OB_FAIL(iterator.add_tables(minor_tables_.array_, minor_tables_.count_))) {
       LOG_WARN("failed to add all minor tables to iterator", K(ret));
     } else {
@@ -641,9 +655,7 @@ int ObTabletTableStore::build_new_table_store(
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = init_read_cache())) {
-        if (OB_SNAPSHOT_DISCARDED != tmp_ret) {
-          LOG_WARN("failed to cache read iterator", K(tmp_ret));
-        }
+        LOG_WARN("failed to cache read iterator", K(tmp_ret));
       }
       FLOG_INFO("succeed to build new table store", K(major_tables_), K(minor_tables_), K(memtables_), K(PRINT_TS(*this)));
     }
@@ -786,12 +798,13 @@ int ObTabletTableStore::build_minor_tables(
           ObSSTable *sstable = static_cast<ObSSTable *>(table);
           ObSSTable *new_sstable = static_cast<ObSSTable *>(new_table);
           if (sstable->get_meta().get_basic_meta().max_merged_trans_version_
-              < new_sstable->get_meta().get_basic_meta().max_merged_trans_version_) {
+              <= new_sstable->get_meta().get_basic_meta().max_merged_trans_version_) {
             need_add = false;
-            LOG_INFO("new sstable max merge trans version not equal to old sstable, "
-                "need add new sstable when table key is same", KPC(sstable), KPC(new_sstable));
+            LOG_INFO("new table's max merge trans version is not less than the old table, "
+                "add new table when table key is same", KPC(sstable), KPC(new_sstable));
           } else {
-            need_add = true; // just keep old sstable
+            ret = OB_NO_NEED_MERGE;
+            LOG_WARN("new table with old max merged trans version, no need to merge", K(ret), KPC(sstable), KPC(new_sstable));
           }
         } else if (ObTableStoreUtil::check_include_by_scn_range(*new_table, *table)) {
           LOG_DEBUG("table purged", K(*new_table), K(*table));
@@ -955,9 +968,9 @@ int ObTabletTableStore::check_ready_for_read()
   int ret = OB_SUCCESS;
   is_ready_for_read_ = false;
 
-  if (IS_NOT_INIT) {
-    ret = OB_ERR_SYS;
-    LOG_ERROR("table store not init", K(ret), K(*this));
+  if (OB_UNLIKELY(!is_inited_ || nullptr == tablet_ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("table store not init", K(ret), KPC(this), KPC(tablet_ptr_));
   } else if (major_tables_.empty()) {
     LOG_INFO("no valid major sstable, not ready for read", K(*this));
   } else if (OB_FAIL(check_continuous())) {
@@ -968,11 +981,19 @@ int ObTabletTableStore::check_ready_for_read()
   } else if (get_table_count() > ObTabletTableStore::MAX_SSTABLE_CNT) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("Too Many sstables, cannot add another sstable any more", K(ret), KPC(this), KPC(tablet_ptr_));
-    if (OB_NOT_NULL(tablet_ptr_)) {
-      ObPartitionMergePolicy::diagnose_table_count_unsafe(MAJOR_MERGE, *tablet_ptr_);
-    }
-  } else {
+    ObPartitionMergePolicy::diagnose_table_count_unsafe(MAJOR_MERGE, *tablet_ptr_);
+  } else if (minor_tables_.empty()) {
     is_ready_for_read_ = true;
+  } else {
+    const SCN &clog_checkpoint_scn = tablet_ptr_->get_clog_checkpoint_scn();
+    const SCN &last_minor_end_scn = minor_tables_.get_boundary_table(true/*last*/)->get_end_scn();
+    if (OB_UNLIKELY(clog_checkpoint_scn != last_minor_end_scn)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("last minor table's end_scn must be equal to clog_checkpoint_scn",
+          K(ret), K(last_minor_end_scn), K(clog_checkpoint_scn), KPC(this), KPC(tablet_ptr_));
+    } else {
+      is_ready_for_read_ = true;
+    }
   }
   return ret;
 }
@@ -1184,9 +1205,7 @@ int ObTabletTableStore::build_ha_new_table_store_(
   } else {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = init_read_cache())) {
-      if (OB_SNAPSHOT_DISCARDED != tmp_ret) {
-        LOG_WARN("failed to cache read iterator", K(tmp_ret));
-      }
+      LOG_WARN("failed to cache read iterator", K(tmp_ret));
     }
     FLOG_INFO("succeed to build ha new table store", K(major_tables_), K(minor_tables_), K(memtables_), K(PRINT_TS(*this)));
   }

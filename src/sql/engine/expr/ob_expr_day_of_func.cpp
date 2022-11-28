@@ -635,11 +635,14 @@ int ObExprDayName::calc_result_type1(ObExprResType &type,
 {
   ObCollationType cs_type = type_ctx.get_coll_type();
   type.set_varchar();
+  type.set_full_length(DAYNAME_MAX_LENGTH, type1.get_length_semantics());
   type.set_collation_type(cs_type);
   type.set_collation_level(CS_LEVEL_IMPLICIT);
   common::ObObjTypeClass tc1 = ob_obj_type_class(type1.get_type());
   if (ob_is_enumset_tc(type1.get_type())) {
     type1.set_calc_type(common::ObVarcharType);
+    type1.set_collation_type(cs_type);
+    type1.set_collation_level(CS_LEVEL_IMPLICIT);
   } else if ((common::ObFloatTC == tc1) || (common::ObDoubleTC == tc1)) {
     type1.set_calc_type(common::ObIntType);
   }

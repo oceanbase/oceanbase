@@ -473,7 +473,7 @@ public:
     } else if (CLICK_FAIL(get_values_from_row_<FLOOR + 1>(row, columns, others...))) {
       OB_LOG(WARN, "get others value failed", KR(ret), K(MTL_ID()), K(FLOOR), K(columns[FLOOR]));
     } else {
-      OB_LOG(INFO, "get value success", KR(ret), K(MTL_ID()), K(FLOOR), K(columns[FLOOR]), K(value));// DUBUG
+      OB_LOG(TRACE, "get value success", KR(ret), K(MTL_ID()), K(FLOOR), K(columns[FLOOR]), K(value));// DUBUG
     }
     return ret;
   }

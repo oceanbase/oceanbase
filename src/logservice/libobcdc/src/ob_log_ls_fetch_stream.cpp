@@ -950,14 +950,14 @@ int FetchStream::handle_fetch_log_error_(
   if (OB_SUCCESS != rcode.rcode_) {
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_RPC;
-    LOG_ERROR("fetch log fail on rpc", K(svr_), K(rcode), "fetch_stream", this);
+    LOG_ERROR("fetch log fail on rpc, need_switch_server", K(svr_), K(rcode), "fetch_stream", this);
   }
   // server return error
   else if (OB_SUCCESS != resp.get_err()) {
     // Other errors, switch server directly
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_SERVER;
-    LOG_ERROR("fetch log fail on server", "fetch_stream", this, K(svr_),
+    LOG_ERROR("fetch log fail on server, need_switch_server", "fetch_stream", this, K(svr_),
         "svr_err", resp.get_err(), "svr_debug_err", resp.get_debug_err(),
         K(rcode), K(resp));
   } else {

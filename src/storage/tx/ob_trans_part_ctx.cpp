@@ -366,13 +366,15 @@ int ObPartTransCtx::trans_kill_()
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "trans killed", K(trans_id_));
 
-  mt_ctx_.trans_kill();
+  mt_ctx_.set_tx_rollbacked();
 
   if (ctx_tx_data_.get_state() == ObTxData::RUNNING) {
     if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::ABORT))) {
       TRANS_LOG(WARN, "set abort state in ctx_tx_data_ failed", K(ret));
     }
   }
+
+  mt_ctx_.trans_kill();
 
   return ret;
 }
@@ -381,6 +383,19 @@ int ObPartTransCtx::trans_clear_()
 {
   int ret = OB_SUCCESS;
 
+  // For the purpose of the durability(ACID) of the tx ctx, we need to store the
+  // rec_log_ts even after the tx ctx has been released. So we decide to store
+  // it into aggre_rec_log_ts in the ctx_mgr.
+  //
+  // While To meet the demand, we should obey two rules:
+  // 1. We must push rec_log_ts to aggre_rec_log_ts before tx ctx has been
+  //    removed from ctx_mgr(in trans_clear_)
+  // 2. We must disallow dump tx_ctx_table after we already push rec_log_ts(in
+  //    get_tx_ctx_table_info)
+  //
+  // What's more, we need not to care about the retain tx_ctx, because it has
+  // already meet the durability requirement and is just used for multi-source
+  // data.
   if (is_ctx_table_merged_
       && OB_FAIL(ls_tx_ctx_mgr_->update_aggre_log_ts_wo_lock(get_rec_log_ts_()))) {
     TRANS_LOG(ERROR, "update aggre log ts wo lock failed", KR(ret), "context", *this);
@@ -670,7 +685,10 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
     } else {
       set_stc_by_now_();
     }
-    if (parts.count() == 1 && parts[0] == ls_id_) {
+    if (parts.count() <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "the size of participant is 0 when commit", KPC(this));
+    } else if (parts.count() == 1 && parts[0] == ls_id_) {
       exec_info_.trans_type_ = TransType::SP_TRANS;
       if (OB_FAIL(one_phase_commit_())) {
         TRANS_LOG(WARN, "start sp coimit fail", K(ret), KPC(this));
@@ -1325,17 +1343,24 @@ int ObPartTransCtx::get_tx_ctx_table_info(ObTxCtxTableInfo &info)
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
 
-  // 1. Tx ctx has no persisted log, so donot need persisting
-  if (!exec_info_.max_applying_log_ts_.is_valid()) {
+  // 1. Tx ctx has already exited, so it means that it may have no chance to
+  //    push its rec_log_ts to aggre_rec_log_ts, so we must not persist it
+  // NB: You need take note that retained tx ctx should be dumped due to
+  //     multi-source data.
+  if (is_exiting_ && get_retain_cause() == RetainCause::UNKOWN) {
+    ret = OB_TRANS_CTX_NOT_EXIST;
+    TRANS_LOG(INFO, "tx ctx has exited", K(ret), KPC(this));
+  // 2. Tx ctx has no persisted log, so donot need persisting
+  } else if (!exec_info_.max_applying_log_ts_.is_valid()) {
     ret = OB_TRANS_CTX_NOT_EXIST;
     TRANS_LOG(INFO, "tx ctx has no persisted log", K(ret), KPC(this));
-    // 2. Fetch the current state of the tx ctx table
+  // 3. Fetch the current state of the tx ctx table
   } else if (OB_FAIL(get_tx_ctx_table_info_(info))) {
     TRANS_LOG(WARN, "get tx ctx table info failed", K(ret), K(*this));
   } else if (OB_UNLIKELY(!info.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "tx ctx info invalid", K(ret), K(info));
-    // 3. Refresh the rec_log_ts for the next checkpoint
+  // 4. Refresh the rec_log_ts for the next checkpoint
   } else if (OB_FAIL(refresh_rec_log_ts_())) {
     TRANS_LOG(WARN, "refresh rec log ts failed", K(ret), K(*this));
   } else {
@@ -1524,7 +1549,7 @@ int ObPartTransCtx::update_max_commit_version_()
 }
 
 // Unified interface for normal transaction end(both commit and abort). We We
-// want to integrate the following five things that all txn commits should do.
+// want to integrate the following six things that all txn commits should do.
 //
 // 1.end_log_ts: We set end_log_ts during final log state is synced which must
 // have been done, so we check the validation of end_log_ts here(Maybe set it in
@@ -1536,9 +1561,10 @@ int ObPartTransCtx::update_max_commit_version_()
 // 3.mt_ctx.tx_end: We need callback all txn ops for all data in txn after final
 // state is synced. It must be called for all txns to clean and release its data
 // resource.
-// 4.set_state: We need set state after final state is synced. It tells others
+// 4.set_status: We need set status to kill the concurrent read and write.
+// 5.set_state: We need set state after final state is synced. It tells others
 // that all data for this txn is decided and visible.
-// 5.insert_tx_data: We need insert into tx_data in order to cleanot data which
+// 6.insert_tx_data: We need insert into tx_data in order to cleanot data which
 // need be delay cleanout
 //
 // NB: You need pay much attention to the order of the following steps
@@ -1548,7 +1574,6 @@ int ObPartTransCtx::tx_end_(const bool commit)
   int ret = OB_SUCCESS;
 
   // NB: The order of the following steps is critical
-  // We need first set end_code_ for the s
   int32_t state = commit ? ObTxData::COMMIT : ObTxData::ABORT;
   const SCN &commit_version = ctx_tx_data_.get_commit_version();
   const SCN &end_scn = ctx_tx_data_.get_end_log_ts();
@@ -1567,19 +1592,22 @@ int ObPartTransCtx::tx_end_(const bool commit)
   } else if (commit && !commit_version.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "commit version is invalid when tx end", K(ret), KPC(this));
-  // STEP3: We need invoke mt_ctx_.trans_end before state is filled in here
-  // because we relay on the end_code_ in mt_ctx_ to report the suicide before
-  // the tnode can be cleanout by concurrent read.
-  } else if (OB_FAIL(mt_ctx_.trans_end(commit, commit_version, end_scn))) {
-    TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), "context", *this);
+  // STEP3: We need set status in order to kill concurrent read and write. What
+  // you need pay attention to is that we rely on the status to report the
+  // suicide before the tnode can be cleanout by concurrent read using state in
+  // ctx_tx_data.
   // STEP4: We need set state in order to informing others of the final status
   // of my txn. What you need pay attention to is that after this action, others
-  // can cleanout the unfinished txn state and see all your data.
-  // TODO: we can move set_state before mt_ctx_.trans_end for commit state in
-  // order to accelerate users to see the data state.
+  // can cleanout the unfinished txn state and see all your data. We currently
+  // move set_state before mt_ctx_.trans_end for the commit state in order to
+  // accelerate users to see the data state.
   } else if (OB_FAIL(ctx_tx_data_.set_state(state))) {
     TRANS_LOG(WARN, "set tx data state failed", K(ret), KPC(this));
-  // STEP5: We need insert into the tx_data after all states are filled
+  // STEP5: We need invoke mt_ctx_.trans_end before state is filled in here
+  // because we relay on the state in the ctx_tx_data_ to callback all txn ops.
+  } else if (OB_FAIL(mt_ctx_.trans_end(commit, commit_version, end_scn))) {
+    TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), "context", *this);
+  // STEP6: We need insert into the tx_data after all states are filled
   } else if (has_persisted_log_() && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
     TRANS_LOG(WARN, "insert to tx table failed", KR(ret), KPC(this));
   }
@@ -4432,7 +4460,7 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
     const bool contain_table_lock = is_contain_mds_type_(ObTxDataSourceType::TABLE_LOCK);
     if (ObTxState::INIT == exec_info_.state_) {
       if (exec_info_.data_complete_ && !contain_table_lock) {
-        if (OB_FAIL(mt_ctx_.replay_to_commit())) {
+        if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
           TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
         }
       } else {
@@ -4446,7 +4474,7 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
         }
       }
     } else {
-      if (OB_FAIL(mt_ctx_.replay_to_commit())) {
+      if (OB_FAIL(mt_ctx_.replay_to_commit(false /*is_resume*/))) {
         TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
       }
     }
@@ -4481,6 +4509,9 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
       state_helper.restore_state();
     }
     timeguard.click();
+  }
+  if (OB_SUCC(ret)) {
+    (void)try_submit_next_log_();
   }
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "switch to leader failed", KR(ret), K(ret), KPC(this));
@@ -4604,7 +4635,10 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
   CtxLockGuard guard(lock_);
   timeguard.click();
   TxCtxStateHelper state_helper(role_state_);
-  if (is_exiting_) {
+  if (MTL_ID() != tenant_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "tenant not match", K(ret), K(*this));
+  } else if (is_exiting_) {
     // do nothing
   } else if (sub_state_.is_force_abort()) {
     // is aborting, skip
@@ -4647,11 +4681,21 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
     if (OB_SUCC(ret) && need_submit_log) {
       // We need merge all callbacklists before submitting active info
       (void)mt_ctx_.merge_multi_callback_lists_for_changing_leader();
-      if (OB_FAIL(submit_log_impl_(log_type))) {
-        // currently, if there is no log callback, switch leader would fail,
-        // and resume leader would be called.
-        // TODO dingxi, improve this logic
-        TRANS_LOG(WARN, "submit active/commit info log failed", KR(ret), K(*this));
+      if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
+        if (OB_FAIL(submit_redo_commit_info_log_())) {
+          // currently, if there is no log callback, switch leader would fail,
+          // and resume leader would be called.
+          TRANS_LOG(WARN, "submit commit info log failed", KR(ret), K(*this));
+        }
+      } else if (ObTxLogType::TX_ACTIVE_INFO_LOG == log_type) {
+        if (OB_FAIL(submit_redo_active_info_log_())) {
+          // currently, if there is no log callback, switch leader would fail,
+          // and resume leader would be called.
+          TRANS_LOG(WARN, "submit active info log failed", KR(ret), K(*this));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "unexpected log type", K(ret));
       }
     }
 
@@ -4704,7 +4748,7 @@ int ObPartTransCtx::resume_leader(const SCN &start_working_ts)
   } else if (OB_FAIL(state_helper.switch_state(TxCtxOps::RESUME))) {
     TRANS_LOG(WARN, "switch role state error", KR(ret), K(*this));
   } else {
-    if (OB_FAIL(mt_ctx_.replay_to_commit())) {
+    if (OB_FAIL(mt_ctx_.replay_to_commit(true /*is_resume*/))) {
       TRANS_LOG(WARN, "replay to commit failed", KR(ret), K(*this));
     } else {
       if (ObTxState::INIT == exec_info_.state_) {
@@ -4729,6 +4773,9 @@ int ObPartTransCtx::resume_leader(const SCN &start_working_ts)
     if (OB_FAIL(ret)) {
       state_helper.restore_state();
     }
+  }
+  if (OB_SUCC(ret)) {
+    (void)try_submit_next_log_();
   }
   REC_TRANS_TRACE_EXT2(tlog_, resume_leader, OB_ID(ret), ret,
                                              OB_ID(used), timeguard.get_diff(),
@@ -4819,11 +4866,16 @@ int ObPartTransCtx::refresh_rec_log_ts_()
     prev_rec_log_ts_ = rec_log_ts_;
 
     if (is_follower_()) {
-      // Case 1: As follower, the replay is in order, so we can simply reset it
-      // because all state changes in logs before max_durable_log_ts all
-      // successfully contained in this checkpoint and no new state changes
-      // after max_durable_log_ts is contained in the checkpoint.
-      rec_log_ts_.reset();
+      // Case 1: As follower, the replay is indead in order, while we cannot
+      // simply reset it because the replay is not atomic, and it may be in the
+      // middle stage that the replay is currently on-going. So the necessary
+      // state before the log ts that is replaying may not be contained, so we
+      // need replay from the on-going log ts.
+      if (exec_info_.max_applied_log_ts_ != exec_info_.max_applying_log_ts_) {
+        rec_log_ts_ = exec_info_.max_applying_log_ts_;
+      } else {
+        rec_log_ts_.reset();
+      }
     } else {
       // Case 2: As leader, the application is discrete and not in order, so we
       // rely on the first lo(we call it FCL later)g hasnot been applied as
@@ -5697,7 +5749,7 @@ int ObPartTransCtx::rollback_to_savepoint_(const int64_t from_scn,
     ObUndoAction undo_action(from_scn, to_scn);
     ObUndoStatusNode *undo_status = NULL;
     ObTxData *tmp_tx_data = NULL;
-    if (ctx_tx_data_.prepare_add_undo_action(undo_action, tmp_tx_data, undo_status)) {
+    if (OB_FAIL(ctx_tx_data_.prepare_add_undo_action(undo_action, tmp_tx_data, undo_status))) {
       TRANS_LOG(WARN, "prepare add undo action fail", K(ret), KPC(this));
     } else if (OB_FAIL(submit_rollback_to_log_(from_scn, to_scn, tmp_tx_data))) {
       TRANS_LOG(WARN, "submit undo redolog fail", K(ret), K(from_scn), K(to_scn), KPC(this));

@@ -606,13 +606,7 @@ inline int32_t *ObPhysicalPlan::alloc_projector(int64_t projector_size)
 
 inline ObPhyPlanType ObPhysicalPlan::get_location_type() const
 {
-  ObPhyPlanType location_type = location_type_;
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000 && OB_PHY_PLAN_UNINITIALIZED == location_type) {
-    //在集群升级过程中，不是所有Server都升级到2.0版本，有可能是1.4x老版本发送的计划，只有plan type，而没有location type，
-    //这个时候location type和plan type相等
-    location_type = plan_type_;
-  }
-  return location_type;
+  return location_type_;
 }
 
 } //namespace sql

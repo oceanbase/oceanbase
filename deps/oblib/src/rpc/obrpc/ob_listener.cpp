@@ -28,15 +28,6 @@ using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common::serialization;
 
-struct sockaddr_in* make_unix_sockaddr(struct sockaddr_in *sin, in_addr_t ip, int port) {
-  if (NULL != sin) {
-    sin->sin_port = (uint16_t)htons((uint16_t)port);
-    sin->sin_addr.s_addr = ip;
-    sin->sin_family = AF_INET;
-  }
-  return sin;
-}
-
 ObListener::ObListener()
 {
   listen_fd_ = -1;

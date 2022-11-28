@@ -111,12 +111,12 @@ int TriggerHandle::init_trigger_params(
   int64_t param_store_size = sizeof(ParamStore);
   // TODO: 这个接口还可以进一步精细化，比如在没有when条件时，tg_when_point_params_相关逻辑都不需要执行的，
   //       或者在insert/delete操作时，tg_init_point_params_也不需要执行的。
-  if (OB_ISNULL(when_point_params_buf = das_ctx.get_das_alloc().alloc(param_store_size)) ||
-      OB_ISNULL(row_point_params_buf = das_ctx.get_das_alloc().alloc(param_store_size))) {
+  if (OB_ISNULL(when_point_params_buf = das_ctx.get_exec_ctx().get_allocator().alloc(param_store_size)) ||
+      OB_ISNULL(row_point_params_buf = das_ctx.get_exec_ctx().get_allocator().alloc(param_store_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
-    ObIAllocator &allocator = das_ctx.get_das_alloc();
+    ObIAllocator &allocator = das_ctx.get_exec_ctx().get_allocator();
     trig_rtdef.tg_when_point_params_ = new(when_point_params_buf)ParamStore(ObWrapperAllocator(allocator));
     trig_rtdef.tg_row_point_params_ = new(row_point_params_buf)ParamStore(ObWrapperAllocator(allocator));
     OZ (trig_rtdef.tg_when_point_params_->prepare_allocate(WHEN_POINT_PARAM_COUNT));
@@ -129,8 +129,8 @@ int TriggerHandle::init_trigger_params(
     int64_t rowtype_col_count = trig_ctdef.trig_col_info_.get_rowtype_count();
     int64_t init_size = pl::ObRecordType::get_init_size(rowtype_col_count);
     if (trig_ctdef.all_tm_points_.has_when_condition() || trig_ctdef.all_tm_points_.has_row_point()) {
-      OZ (init_trigger_row(das_ctx.get_das_alloc(), rowtype_col_count, old_record));
-      OZ (init_trigger_row(das_ctx.get_das_alloc(), rowtype_col_count, new_record));
+      OZ (init_trigger_row(das_ctx.get_exec_ctx().get_allocator(), rowtype_col_count, old_record));
+      OZ (init_trigger_row(das_ctx.get_exec_ctx().get_allocator(), rowtype_col_count, new_record));
     }
     LOG_DEBUG("trigger init", K(rowtype_col_count), K(ret));
 

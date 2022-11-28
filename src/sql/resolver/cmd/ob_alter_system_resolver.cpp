@@ -1149,10 +1149,6 @@ int ObAdminZoneResolver::resolve(const ParseNode &parse_tree)
                 LOG_WARN("unexpected zone_type info", "info", zone_type_info->value_);
               } else if (OB_FAIL(admin_zone_stmt->set_alter_zone_type_option())) {
                 SQL_RESV_LOG(WARN, "fail to set alter zone_type option", K(ret));
-              } else if (zone_type == ObZoneType::ZONE_TYPE_ENCRYPTION
-                  && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2277) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "zone with encryption type under 3.1.x");
               } else {
                 admin_zone_stmt->set_zone_type(zone_type);
               }

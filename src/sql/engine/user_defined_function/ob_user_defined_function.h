@@ -15,8 +15,7 @@
 
 #include "ob_udf_registration_types.h"
 #include "share/schema/ob_udf.h"
-/* 是不是不应该依赖objit里面的头文件？*/
-#include "objit/common/ob_expr_res_type.h"
+#include "sql/engine/expr/ob_expr_res_type.h"
 #include "sql/engine/expr/ob_expr.h"
 
 

@@ -1100,11 +1100,6 @@ public:
                                     TableItem *table,
                                     TableItem *&view_table);
 
-  static int create_view_with_tables(ObDMLStmt *stmt,
-                                     ObTransformerCtx *ctx,
-                                     const ObIArray<TableItem *> &tables,
-                                     const ObIArray<SemiInfo *> &semi_infos,
-                                     TableItem *&view_table);
   static int extract_right_tables_from_semi_infos(ObDMLStmt *stmt,
                                                   const ObIArray<SemiInfo *> &semi_infos, 
                                                   ObIArray<TableItem *> &tables);
@@ -1232,6 +1227,10 @@ public:
                                      const ObIArray<TableItem*> &table_items,
                                      ObRelIds &rel_ids);
 
+  static int get_rel_ids_from_table(const ObDMLStmt *stmt,
+                                    const TableItem *table_item,
+                                    ObRelIds &rel_ids);
+
   static int get_left_rel_ids_from_semi_info(const ObDMLStmt *stmt,
                                              SemiInfo *info,
                                              ObSqlBitSet<> &rel_ids);
@@ -1338,12 +1337,20 @@ public:
   static int add_const_param_constraints(ObRawExpr *expr,
                                          ObTransformerCtx *ctx);
 
-  static int replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
+  static int inner_replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
+                                                  const ParamStore *param_store,
+                                                  ObIArray<ObPCConstParamInfo>& pc_constrants,
+                                                  ObIArray<ObPCParamEqualInfo> & eq_constraints,
                                                   ObTransformerCtx *trans_ctx = NULL);
+
+  static int replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt,
+                                                  ObTransformerCtx *trans_ctx,
+                                                  bool need_check_add_expr = false);
 
   static int replace_add_exprs_with_groupby_exprs(ObRawExpr *&expr_l,
                                                   ObRawExpr *expr_r,
                                                   ObTransformerCtx *trans_ctx,
+                                                  ObIArray<ObPCParamEqualInfo> & eq_constraints,
                                                   bool &is_existed);
 
   static bool check_objparam_abs_equal(const ObObjParam &obj1, const ObObjParam &obj2);
@@ -1357,8 +1364,11 @@ public:
   static int replace_with_groupby_exprs(ObSelectStmt *select_stmt,
                                         ObRawExpr *&expr,
                                         bool need_query_compare,
+                                        ObIArray<int64_t>& param_expr_idxs,
+                                        ObIArray<ObPCParamEqualInfo> & eq_constraints,
                                         ObTransformerCtx *tran_ctx = NULL,
                                         bool in_add_expr = false);
+  static int add_constraint_for_groupby_expr(ObTransformerCtx *trans_ctx, ObSelectStmt *select_stmt, ObRawExpr* groupby_expr, ObRawExpr* old_expr);
 
   static int add_param_not_null_constraint(ObTransformerCtx &ctx, 
                                            ObIArray<ObRawExpr *> &not_null_exprs);
@@ -1570,6 +1580,30 @@ public:
 
   static int check_expr_valid_for_stmt_merge(ObIArray<ObRawExpr*> &select_exprs,
                                              bool &is_valid);
+
+  static int construct_simple_view(ObDMLStmt *stmt,
+                                   const ObIArray<TableItem *> &tables,
+                                   const ObIArray<SemiInfo *> &semi_infos,
+                                   ObTransformerCtx *ctx,
+                                   ObSelectStmt *&simple_stmt);
+
+  static int generate_select_list(ObTransformerCtx *ctx,
+                                  ObDMLStmt *stmt,
+                                  TableItem *table);
+
+  static int remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
+                                ObIArray<ObRawExpr *> &output_exprs);
+
+  static int check_table_contain_in_semi(const ObDMLStmt *stmt,
+                                         const TableItem *table,
+                                         bool &is_contain);
+
+  static int check_has_assignment(const ObDMLStmt &stmt, bool &has_assignment);
+
+  static int check_exprs_contain_lob_type(ObIArray<ObRawExpr *> &exprs, bool &has_lob);
+
+  static int check_expr_contain_lob_type(ObRawExpr *expr, bool &has_lob);
+
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
@@ -1600,11 +1634,18 @@ private:
 
   static int add_non_duplicated_select_expr(ObIArray<ObRawExpr*> &add_select_exprs,
                                             ObIArray<ObRawExpr*> &org_select_exprs);
-  static int construct_simple_view(ObDMLStmt *stmt,
-                                   const ObIArray<TableItem *> &tables,
-                                   const ObIArray<SemiInfo *> &semi_infos,
-                                   ObTransformerCtx *ctx,
-                                   ObSelectStmt *&simple_stmt);
+
+  static int extract_shared_exprs(ObDMLStmt *parent,
+                                  ObSelectStmt *view_stmt,
+                                  ObIArray<ObRawExpr *> &common_exprs);
+
+  static int append_hashset(ObRawExpr *expr,
+                            hash::ObHashSet<uint64_t> &expr_set);
+
+  static int find_hashset(ObRawExpr *expr,
+                          hash::ObHashSet<uint64_t> &expr_set,
+                          ObIArray<ObRawExpr *> &common_exprs);
+
   static int generate_col_exprs(ObDMLStmt *stmt,
                                 const ObIArray<TableItem *> &tables,
                                 const ObIArray<ObRawExpr *> &tmp_select_exprs,

@@ -48,16 +48,7 @@ ObSqlExpression::~ObSqlExpression()
 int ObSqlExpression::set_item_count(int64_t count)
 {
   int ret = OB_SUCCESS;
-  if (ObSqlExpressionUtil::should_gen_postfix_expr()) {
-    if (OB_FAIL(post_expr_.set_item_count(count))) {
-      LOG_WARN("failed to set item count", K(ret));
-    } else {
-      // do nothing
-    }
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(infix_expr_.set_item_count(count))) {
+  if (OB_FAIL(infix_expr_.set_item_count(count))) {
     LOG_WARN("set expr item count failed", K(ret));
   }
   return ret;
@@ -166,13 +157,6 @@ int ObSqlExpression::calc(ObExprCtx &expr_ctx, const common::ObNewRow &row1,
 int ObSqlExpression::generate_idx_for_regexp_ops(int16_t &cur_regexp_op_count)
 {
   int ret = OB_SUCCESS;
-  if (ObSqlExpressionUtil::should_gen_postfix_expr()) {
-    if (OB_FAIL(post_expr_.generate_idx_for_regexp_ops(cur_regexp_op_count))) {
-      LOG_WARN("generate idx for regexp failed", K(ret));
-    } else {
-      // do nothing
-    }
-  }
   if (OB_FAIL(infix_expr_.generate_idx_for_regexp_ops(cur_regexp_op_count))) {
     LOG_WARN("generate idx for regexp failed", K(ret));
   }
@@ -610,15 +594,5 @@ int ObSqlExpressionUtil::expand_array_params(ObExprCtx &expr_ctx,
   return ret;
 }
 
-bool ObSqlExpressionUtil::should_gen_postfix_expr()
-{
-  bool bool_ret = false;
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2230) {
-    bool_ret = true;
-  } else {
-    bool_ret = false;
-  }
-  return bool_ret;
-}
 } // namespace sql
 } // namespace oceanbase

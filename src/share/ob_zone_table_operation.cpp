@@ -162,44 +162,6 @@ int ObZoneTableOperation::insert_zone_info(ObISQLClient &sql_client, ObZoneInfo 
   return ret;
 }
 
-int ObZoneTableOperation::select_gc_timestamp_for_update(common::ObISQLClient &sql_client,
-                                                        int64_t &gc_timestamp)
-{
-  int ret = OB_SUCCESS;
-  if (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_2000) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not supported now", K(ret));
-  } else {
-    gc_timestamp = 0;
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
-      ObSqlString sql;
-      if (OB_FAIL(sql.assign_fmt(
-                  "SELECT zone, name, value, info FROM %s WHERE NAME = 'snapshot_gc_ts' FOR UPDATE",
-                  OB_ALL_ZONE_TNAME))) {
-        LOG_WARN("assign sql failed", K(ret));
-      } else if (OB_FAIL(sql_client.read(res, sql.ptr()))) {
-        LOG_WARN("execute sql failed", K(ret), K(sql));
-      } else if (NULL == (result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get sql result", K(ret));
-      } else if (OB_FAIL(result->next())) {
-        LOG_WARN("fail to get next row", K(ret));
-      } else {
-        EXTRACT_INT_FIELD_MYSQL(*result, "value", gc_timestamp, int64_t);
-      }
-      if (OB_FAIL(ret)) {
-        //nothing todo
-      } else if (OB_ITER_END != result->next()) {
-        LOG_WARN("get more row than one", K(ret));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObZoneTableOperation::update_info_item(common::ObISQLClient &sql_client,
     const common::ObZone &zone, const ObZoneInfoItem &item, bool insert /* = false */)
 {

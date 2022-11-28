@@ -40,7 +40,7 @@ struct ObStorageHATabletsBuilderParam final
 
   TO_STRING_KV(K_(tenant_id), KPC_(ls), K_(tablet_id_array), K_(src_info), K_(local_rebuild_seq),
       K_(need_check_seq), K_(is_leader_restore), K_(need_keep_old_tablet), KP_(ha_table_info_mgr),
-      KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
+      K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
 
   uint64_t tenant_id_;
   ObLS *ls_;
@@ -56,6 +56,7 @@ struct ObStorageHATabletsBuilderParam final
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;
   const ObRestoreBaseInfo *restore_base_info_;
+  ObTabletRestoreAction::ACTION restore_action_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletsBuilderParam);
@@ -230,6 +231,7 @@ struct ObStorageHACopySSTableParam final
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;
   const ObRestoreBaseInfo *restore_base_info_;
+  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageHACopySSTableParam);
@@ -253,9 +255,6 @@ private:
   void free_sstable_macro_range_info_reader_(ObICopySSTableMacroInfoReader *&reader);
 
 private:
-  //TODO(muwei.ym) using config to set max macro count
-  // static const int64_t MACRO_RANGE_MAX_MACRO_COUNT = 128;
-  //TODO(muwei.ym) too small will fail because uncorrect handling corner case
   static const int64_t MACRO_RANGE_MAX_MACRO_COUNT = 1024;
   typedef hash::ObHashMap<ObITable::TableKey, ObCopySSTableMacroRangeInfo *> CopySSTableMacroRangeInfoMap;
   bool is_inited_;

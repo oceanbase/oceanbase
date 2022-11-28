@@ -422,8 +422,7 @@ for RHEL4 support (GCC 3 doesn't support this instruction) */
 #define crc32_sse42_byte crc = __crc32cb(crc, (uint8_t)*buf); len--, buf++
 #endif /* defined(__GNUC__) && defined(__x86_64__) */
 
-uint64_t crc64_sse42(uint64_t uCRC64,
-                                   const char *buf, int64_t len)
+uint64_t crc64_sse42(uint64_t uCRC64, const char* buf, int64_t len)
 {
   uint64_t crc = uCRC64;
 
@@ -1142,6 +1141,7 @@ uint64_t crc64_sse42_dispatch(uint64_t crc, const char *buf, int64_t len)
       _OB_LOG(WARN, "Use manual crc32 table lookup for crc64 calculate");
     }
   }
+
   #elif defined(__aarch64__)
     #if 1
     ob_crc64_sse42_func = &crc64_sse42;

@@ -39,7 +39,7 @@ int ObMemtableCompactWriter::init()
   } else {
     buffer_ = buf_;
     buf_size_ = SMALL_BUFFER_SIZE;
-    if (OB_FAIL(ObCellWriter::init(buffer_, buf_size_, SPARSE, GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470))) {
+    if (OB_FAIL(ObCellWriter::init(buffer_, buf_size_, SPARSE, false))) {
       TRANS_LOG(WARN, "ObCellWriter::init fail", "ret", ret);
     }
   }
@@ -61,7 +61,7 @@ void ObMemtableCompactWriter::reset()
     }
   }
   ObCellWriter::reuse();
-  ObCellWriter::reset_text_format(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1470);
+  ObCellWriter::reset_text_format(false);
   ObCellWriter::set_store_type(common::SPARSE);
 }
 

@@ -289,7 +289,8 @@ outer_stmt:
  *
  *****************************************************************************/
 sql_keyword:
-    SQL_KEYWORD { $$ = NULL; }
+    '(' sql_keyword { $$ = NULL; }
+  | SQL_KEYWORD { $$ = NULL; }
   | TABLE { $$ = NULL; }
   | INSERT { $$ = NULL; }
   | DELETE { $$ = NULL; }

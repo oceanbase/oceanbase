@@ -56,7 +56,7 @@ const char *ObLSTxCtxMgrFactory::mod_type_ = "OB_PARTITION_TRANS_CTX_MGR";
   object_name *object_name##alloc() \
   {  \
     object_name *object = NULL;  \
-    object = (object_name*)ob_malloc(sizeof(object_name), ObModIds::LABEL);  \
+    object = (object_name*)ob_malloc(sizeof(object_name), LABEL);  \
     return object == NULL ? object : new(object) object_name(); \
   }  \
 
@@ -74,7 +74,7 @@ const char *ObLSTxCtxMgrFactory::mod_type_ = "OB_PARTITION_TRANS_CTX_MGR";
                 "label", #LABEL,                   \
                 K_(alloc_count), K_(release_count), "used", alloc_count_ - release_count_);  \
     }  \
-    if (!ObTransErrsim::is_memory_errsim() && NULL != (object = allocator_type##_ALLOC(object_name, ObModIds::LABEL))) { \
+    if (!ObTransErrsim::is_memory_errsim() && NULL != (object = allocator_type##_ALLOC(object_name, LABEL))) { \
       (void)ATOMIC_FAA(&alloc_count_, 1);  \
     }  \
     return object;  \
@@ -85,7 +85,7 @@ const char *ObLSTxCtxMgrFactory::mod_type_ = "OB_PARTITION_TRANS_CTX_MGR";
       TRANS_LOG(WARN, "object is null", KP(object));\
     } else {\
       object->destroy();  \
-      allocator_type##_FREE(object, ObModIds::LABEL);        \
+      allocator_type##_FREE(object, LABEL);        \
       object = NULL;\
       (void)ATOMIC_FAA(&release_count_, 1);\
     }\
@@ -245,26 +245,26 @@ const char *TransRpcTaskFactory::get_mod_type()
 }
 */
 
-MAKE_OB_ALLOC(ObDupTablePartitionMgr, OB_DUP_TABLE_PARTITION_MGR)
-MAKE_OB_ALLOC(ObGtsRpcProxy, OB_GTS_RPC_PROXY)
-MAKE_OB_ALLOC(ObGtsRequestRpc, OB_GTS_REQUEST_RPC)
-MAKE_OB_ALLOC(ObGtiRpcProxy, OB_GTI_RPC_PROXY)
-MAKE_OB_ALLOC(ObGtiRequestRpc, OB_GTI_REQUEST_RPC)
+MAKE_OB_ALLOC(ObDupTablePartitionMgr, ObModIds::OB_DUP_TABLE_PARTITION_MGR)
+MAKE_OB_ALLOC(ObGtsRpcProxy, ObModIds::OB_GTS_RPC_PROXY)
+MAKE_OB_ALLOC(ObGtsRequestRpc, ObModIds::OB_GTS_REQUEST_RPC)
+MAKE_OB_ALLOC(ObGtiRpcProxy, ObModIds::OB_GTI_RPC_PROXY)
+MAKE_OB_ALLOC(ObGtiRequestRpc, ObModIds::OB_GTI_REQUEST_RPC)
 
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ClogBuf, OB_TRANS_CLOG_BUF)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(MutatorBuf, OB_TRANS_MUTATOR_BUF)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObTransTraceLog, OB_TRANS_AUDIT_RECORD)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObPartitionAuditInfo, OB_PARTITION_AUDIT_INFO)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObCoreLocalPartitionAuditInfo, OB_CORE_LOCAL_STORAGE)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObDupTablePartitionInfo, OB_DUP_TABLE_PARTITION_INFO)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObDupTablePartitionMgr, OB_DUP_TABLE_PARTITION_MGR)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObDupTableLeaseInfo, OB_DUP_TABLE_LEASE_INFO)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObDupTableRedoSyncTask, OB_DUP_TABLE_REDO_SYNC_TASK)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtsRpcProxy, OB_GTS_RPC_PROXY)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtsRequestRpc, OB_GTS_REQUEST_RPC)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtiRpcProxy, OB_GTI_RPC_PROXY)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtiRequestRpc, OB_GTI_REQUEST_RPC)
-MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObTxCommitCallbackTask, OB_END_TRANS_CB_TASK)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ClogBuf, ObModIds::OB_TRANS_CLOG_BUF)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(MutatorBuf, ObModIds::OB_TRANS_MUTATOR_BUF)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObTransTraceLog, ObModIds::OB_TRANS_AUDIT_RECORD)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObPartitionAuditInfo, ObModIds::OB_PARTITION_AUDIT_INFO)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObCoreLocalPartitionAuditInfo, ObModIds::OB_CORE_LOCAL_STORAGE)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObDupTablePartitionInfo, ObModIds::OB_DUP_TABLE_PARTITION_INFO)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObDupTablePartitionMgr, ObModIds::OB_DUP_TABLE_PARTITION_MGR)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObDupTableLeaseInfo, ObModIds::OB_DUP_TABLE_LEASE_INFO)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObDupTableRedoSyncTask, ObModIds::OB_DUP_TABLE_REDO_SYNC_TASK)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtsRpcProxy, ObModIds::OB_GTS_RPC_PROXY)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtsRequestRpc, ObModIds::OB_GTS_REQUEST_RPC)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtiRpcProxy, ObModIds::OB_GTI_RPC_PROXY)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_OB_ALLOC(ObGtiRequestRpc, ObModIds::OB_GTI_REQUEST_RPC)
+MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(ObTxCommitCallbackTask, ObModIds::OB_END_TRANS_CB_TASK)
 
 } // transaction
 } // oceanbase

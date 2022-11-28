@@ -314,7 +314,9 @@ int ObArchivePersistMgr::persist_archive_progress_()
   bool need_do = false;
 
   if (OB_FAIL(load_archive_round_attr(attr))) {
-    ARCHIVE_LOG(WARN, "load archive round attr failed", K(ret), K(attr));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      ARCHIVE_LOG(WARN, "load archive round attr failed", K(ret), K(attr));
+    }
   } else if (OB_UNLIKELY(! attr.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "round attr is not valid", K(ret), K(attr));

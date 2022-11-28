@@ -197,8 +197,8 @@ private:
   // 析构前调用,归还所有日志流的replay status计数
   int remove_all_ls_();
 private:
-  const int64_t MAX_REPLAY_TIME_PER_ROUND = 100 * 1000; //100ms
-  const int64_t MAX_SUBMIT_TIME_PER_ROUND = 1000 * 1000; //1s
+  const int64_t MAX_REPLAY_TIME_PER_ROUND = 10 * 1000; //10ms
+  const int64_t MAX_SUBMIT_TIME_PER_ROUND = 100 * 1000; //100ms
   const int64_t TASK_QUEUE_WAIT_IN_GLOBAL_QUEUE_TIME_THRESHOLD = 5 * 1000 * 1000; //5s
   const int64_t PENDING_TASK_MEMORY_LIMIT = 128 * (1LL << 20); //128MB
 

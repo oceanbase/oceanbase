@@ -422,9 +422,8 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
             EXTRACT_VARCHAR_FIELD_MYSQL(*result, "message", err_msg);
             EXTRACT_INT_FIELD_MYSQL(*result, "ori_code", err_ret, int);
             EXTRACT_VARCHAR_FIELD_MYSQL(*result, "sql_state", sqlstate);
-            if (OB_FAIL(pool->acquire(session_info, conn))) {
-              LOG_WARN("failed to get conn", K(ret));
-            } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), err_msg, err_msg_c, true))) {
+            if (OB_FAIL(ret)) {
+	          } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), err_msg, err_msg_c, true))) {
               //when using ptr(), char *'s end should be '\0'
               LOG_WARN("ob write string failed", K(ret));
             } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), sqlstate, sqlstate_c, true))) { 

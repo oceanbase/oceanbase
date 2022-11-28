@@ -516,10 +516,7 @@ int ObUniqueIndexChecker::check_unique_index(ObIDag *dag)
       ObLSHandle ls_handle;
       if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
         LOG_WARN("fail to get log stream", K(ret), K(ls_id_));
-      } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls is null", K(ret), K(ls_handle));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id_, tablet_handle_))) {
+      } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id_, tablet_handle_))) {
         LOG_WARN("fail to get tablet", K(ret), K(tablet_id_), K(tablet_handle_));
       } else if (index_schema_->is_domain_index()) {
         STORAGE_LOG(INFO, "do not need to check unique for domain index", "index_id", index_schema_->get_table_id());
@@ -966,7 +963,14 @@ int ObGlobalUniqueIndexCallback::operator()(const int ret_code)
   arg.source_table_id_ = data_table_id_;
   arg.schema_version_ = schema_version_;
   arg.task_id_ = task_id_;
-  if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = E(EventTable::EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL) OB_SUCCESS;
+      LOG_INFO("report replica build status errsim", K(ret));
+    }
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
     ret = OB_ERR_SYS;
     STORAGE_LOG(WARN, "innner system error, rootserver rpc proxy or rs mgr must not be NULL", K(ret), K(GCTX));
   } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {

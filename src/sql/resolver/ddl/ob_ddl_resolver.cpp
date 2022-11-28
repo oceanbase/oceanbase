@@ -1397,8 +1397,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
       case T_COLLATION: {
         if (!is_index_option) {
           if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
-              && (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0
-              || lib::is_oracle_mode())) {
+              && lib::is_oracle_mode()) {
             ret = OB_ERR_PARSE_SQL;
             SQL_RESV_LOG(WARN, "Not support to alter collation", K(ret));
           } else if (CS_TYPE_INVALID == collation_type_) {
@@ -1529,26 +1528,15 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), K(ret));
           } else if (T_DEFAULT == option_node->children_[0]->type_) {
-            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
-              ret = OB_OP_NOT_ALLOW;
-              SQL_RESV_LOG(WARN, "set primary_zone DEFAULT is not allowed now", K(ret));
-              LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone DEFAULT");
-            }
+            // do nothing
           } else if (T_RANDOM == option_node->children_[0]->type_) {
-            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
-              ret = OB_OP_NOT_ALLOW;
-              SQL_RESV_LOG(WARN, "set primary_zone RANDOM is not allowed now", K(ret));
-              LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone RANDOM");
-            } else {
-              primary_zone_.assign_ptr(common::OB_RANDOM_PRIMARY_ZONE,
+            primary_zone_.assign_ptr(common::OB_RANDOM_PRIMARY_ZONE,
                                        static_cast<int32_t>(strlen(common::OB_RANDOM_PRIMARY_ZONE)));
-            }
           } else {
             tmp_str.assign_ptr(const_cast<char *>(option_node->children_[0]->str_value_),
                                static_cast<int32_t>(option_node->children_[0]->str_len_));
             primary_zone_ = tmp_str.trim();
-            if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2000
-                && primary_zone_.empty()) {
+            if (primary_zone_.empty()) {
               ret = OB_OP_NOT_ALLOW;
               SQL_RESV_LOG(WARN, "set primary_zone empty is not allowed now", K(ret));
               LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set primary_zone empty");
@@ -1810,11 +1798,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           ret = common::OB_INVALID_ARGUMENT;
           SQL_RESV_LOG(WARN, "invalid locality argument", K(ret), "num_child", option_node->num_child_);
         } else if (T_DEFAULT == option_node->children_[0]->type_) {
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2000) {
-            ret = OB_OP_NOT_ALLOW;
-            SQL_RESV_LOG(WARN, "set locality DEFAULT is not allowed now", K(ret));
-            LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set locality DEFAULT");
-          }
+          // do nothing
         } else {
           int64_t locality_length = option_node->children_[0]->str_len_;
           const char *locality_str = option_node->children_[0]->str_value_;
@@ -1823,8 +1807,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             ret = common::OB_ERR_TOO_LONG_IDENT;
             SQL_RESV_LOG(WARN, "locality length is beyond limit", K(ret), K(locality));
             LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, locality.length(), locality.ptr());
-          } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2000
-                     && 0 == locality_length) {
+          } else if (0 == locality_length) {
             ret = OB_OP_NOT_ALLOW;
             SQL_RESV_LOG(WARN, "set locality empty is not allowed now", K(ret));
             LOG_USER_ERROR(OB_OP_NOT_ALLOW, "set locality empty");
@@ -2069,10 +2052,6 @@ int ObDDLResolver::resolve_identity_column_definition(ObColumnSchemaV2 &column,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid option node type or child num", K(ret),
              K(generated_option->type_), K(generated_option->num_child_));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3200) {
-    ret = OB_OP_NOT_ALLOW;
-    SQL_RESV_LOG(WARN, "create identity column on table is not allowed now", K(ret));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "create identity column on table");
   } else {
     column.erase_identity_column_flags();
     if (generated_option->type_ == T_CONSTR_ALWAYS) {
@@ -5592,9 +5571,9 @@ int ObDDLResolver::check_column_in_foreign_key_for_oracle(
               ret = OB_ALLOCATE_MEMORY_FAILED;
               SQL_RESV_LOG(ERROR, "failed to allocate memory", K(ret));
             } else if (FALSE_IT(foreign_key_arg = new (tmp_ptr)ObDropForeignKeyArg())) {
-            } else if (FALSE_IT(foreign_key_arg->foreign_key_name_.assign_ptr(
-                                foreign_key_info.foreign_key_name_.ptr(),
-                                foreign_key_info.foreign_key_name_.length()))) {
+            } else if (OB_FAIL(deep_copy_str(foreign_key_info.foreign_key_name_,
+                                             foreign_key_arg->foreign_key_name_))) {
+              LOG_WARN("failed to deep copy foreign_key_name", K(ret), K(foreign_key_info));
             } else if (OB_ISNULL(alter_table_stmt)) {
               ret = OB_ERR_UNEXPECTED;
               SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
@@ -7991,8 +7970,7 @@ int ObDDLResolver::resolve_hash_or_key_partition_basic_infos(ParseNode *node,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(node), K(partition_fun_node),
                                     K(schema_checker_), K(session_info_));
-  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_3000 &&
-             !table_schema.get_tablegroup_name().empty() &&
+  } else if (!table_schema.get_tablegroup_name().empty() &&
              OB_FAIL(schema_checker_->get_tablegroup_schema(session_info_->get_effective_tenant_id(),
                                                             table_schema.get_tablegroup_name(),
                                                             tablegroup_schema))) {

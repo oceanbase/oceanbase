@@ -576,7 +576,7 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
       if (OB_FAIL(set_row_data_pos(fix_data_size))) {
         LOG_WARN("set row data position failed", K(ret));
       } else {
-        header_->var_column_count_ = static_cast<int16_t>(var_data_encoders_.count());
+        header_->var_column_count_ = static_cast<uint16_t>(var_data_encoders_.count());
       }
     }
 
@@ -613,7 +613,7 @@ int ObMicroBlockEncoder::build_block(char *&buf, int64_t &size)
 
     // <5> fill header
     if (OB_SUCC(ret)) {
-      header_->row_count_ = static_cast<int16_t>(datum_rows_.count());
+      header_->row_count_ = static_cast<uint32_t>(datum_rows_.count());
       header_->encoding_has_out_row_column_ = has_out_row_column_;
 
       const int64_t header_size = header_->header_size_;

@@ -16,6 +16,7 @@
 #include "lib/allocator/page_arena.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service.h"
+#include "storage/tablet/ob_tablet_common.h"
 
 namespace oceanbase
 {
@@ -28,6 +29,11 @@ namespace sql
 {
 class ObPhysicalPlan;
 class ObOpSpec;
+}
+namespace storage
+{
+class ObTabletHandle;
+class ObLSHandle;
 }
 namespace share
 {
@@ -255,12 +261,25 @@ public:
       const bool is_oracle_mode,
       ObSqlString &sql_string);
 
+  static int ddl_get_tablet(
+      storage::ObLSHandle &ls_handle,
+      const ObTabletID &tablet_id,
+      storage::ObTabletHandle &tablet_handle,
+      const int64_t timeout_us = storage::ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
+
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
   
   static bool is_table_lock_retry_ret_code(int ret)
   {
     return OB_TRY_LOCK_ROW_CONFLICT == ret || OB_NOT_MASTER == ret || OB_TIMEOUT == ret
            || OB_EAGAIN == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret;
+  }
+  static bool need_remote_write(const int ret_code);
+
+  static int check_can_convert_character(const ObObjMeta &obj_meta)
+  {
+    return (obj_meta.is_string_type() || obj_meta.is_enum_or_set())
+              && CS_TYPE_BINARY != obj_meta.get_collation_type();
   }
 
 private:

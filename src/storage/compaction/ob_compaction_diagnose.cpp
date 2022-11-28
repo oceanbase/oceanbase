@@ -61,6 +61,13 @@ ObScheduleSuspectInfo & ObScheduleSuspectInfo::operator = (const ObScheduleSuspe
   return *this;
 }
 
+int64_t ObScheduleSuspectInfo::gen_hash(int64_t tenant_id, int64_t dag_hash)
+{
+  int64_t hash_value = dag_hash;
+  hash_value = common::murmurhash(&tenant_id, sizeof(tenant_id), hash_value);
+  return hash_value;
+}
+
 ObScheduleSuspectInfoMgr::ObScheduleSuspectInfoMgr()
   : is_inited_(false),
     allocator_("scheSuspectInfo", OB_SERVER_TENANT_ID),
@@ -616,7 +623,7 @@ int ObCompactionDiagnoseMgr::get_suspect_and_warning_info(
 
   ObDagWarningInfo *warning_info = nullptr;
   bool add_schedule_info = false;
-  if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().get_suspect_info(dag.hash(), info))) {
+  if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().get_suspect_info(ObScheduleSuspectInfo::gen_hash(MTL_ID(), dag.hash()), info))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get suspect info", K(ret), K(ls_id), K(tablet_id));
     } else { // no schedule suspect info

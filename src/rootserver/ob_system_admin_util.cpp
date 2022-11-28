@@ -1388,7 +1388,7 @@ int ObAdminUpgradeCmd::execute(const Bool &upgrade)
         LOG_WARN("assign enable_upgrade_mode config value failed", KR(ret));
       } else if (OB_FAIL(set_config_arg.items_.push_back(item))) {
         LOG_WARN("add enable_upgrade_mode config item failed", KR(ret));
-      } else if (current_version >= CLUSTER_VERSION_2250) {
+      } else {
         const char *upgrade_stage_name = "_upgrade_stage";
         obrpc::ObUpgradeStage stage = upgrade ?
                                       obrpc::OB_UPGRADE_STAGE_PREUPGRADE :

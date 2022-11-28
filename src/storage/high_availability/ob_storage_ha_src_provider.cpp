@@ -36,9 +36,10 @@ int ObStorageHASrcProvider::init(const uint64_t tenant_id, const ObMigrationOpTy
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("storage ha src provider init twice", K(ret));
-  } else if (OB_INVALID_ID == tenant_id || OB_ISNULL(storage_rpc)) {
+  } else if (OB_INVALID_ID == tenant_id || OB_ISNULL(storage_rpc)
+      || type < ObMigrationOpType::ADD_LS_OP || type >= ObMigrationOpType::MAX_LS_OP) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(tenant_id), K(ls_id), KP(storage_rpc));
+    LOG_WARN("get invalid argument", K(ret), K(tenant_id), K(ls_id), K(type), KP(storage_rpc));
   } else {
     tenant_id_ = tenant_id;
     type_ = type;
@@ -89,7 +90,6 @@ int ObStorageHASrcProvider::choose_ob_src(const share::ObLSID &ls_id, const SCN 
                      "ls_id", ls_id.id(),
                      "src_addr", src_info.src_addr_,
                      "op_type", ObMigrationOpType::get_str(type_));
-
   }
   return ret;
 }

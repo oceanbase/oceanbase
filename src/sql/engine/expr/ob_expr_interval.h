@@ -15,7 +15,6 @@
 
 #include <cstdint>
 
-#include "objit/common/ob_expr_res_type.h"
 #include "objit/common/ob_item_type.h"
 #include "ob_expr_operator.h"
 

@@ -1292,6 +1292,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             row_count = 0;
             spi_result.get_mysql_result().reset();
             out_params.reset();
+            retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
             if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
               LOG_WARN("get schema guard failed", K(ret));
             } else if (OB_FAIL(schema_guard.get_schema_version(session->get_effective_tenant_id(), tenant_version))) {
@@ -1301,7 +1302,6 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             } else {
               retry_ctrl.set_tenant_local_schema_version(tenant_version);
               retry_ctrl.set_sys_local_schema_version(sys_version);
-              retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
               ObArenaAllocator allocator;
               if (OB_FAIL(inner_open(ctx,
                                     allocator,
@@ -1500,6 +1500,7 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
           row_count = 0;
           spi_result.get_mysql_result().reset();
           out_params.reset();
+          retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
           if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(eff_tenant_id, schema_guard))) {
             LOG_WARN("get schema guard failed", K(ret));
           } else if (OB_FAIL(schema_guard.get_schema_version(eff_tenant_id, tenant_version))) {
@@ -1509,7 +1510,6 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
           } else {
             retry_ctrl.set_tenant_local_schema_version(tenant_version);
             retry_ctrl.set_sys_local_schema_version(sys_version);
-            retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
             if (OB_FAIL(inner_open(ctx,
                                    exec_params.count() > 0 ? NULL : sql_stmt.ptr(),
                                    stmt_id,
@@ -1708,6 +1708,7 @@ int ObSPIService::spi_prepare(common::ObIAllocator &allocator,
       spi_resolve_prepare(allocator,
                           session,
                           sql_proxy,
+                          schema_guard,
                           expr_factory,
                           sql,
                           is_cursor,
@@ -1807,6 +1808,7 @@ int ObSPIService::spi_parse_prepare(common::ObIAllocator &allocator,
 
 int ObSPIService::spi_build_record_type_by_result_set(common::ObIAllocator &allocator,
                                                       ObSQLSessionInfo &session,
+                                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                                       const sql::ObResultSet &result_set,
                                                       int64_t hidden_column_count,
                                                       ObRecordType *&record_type,
@@ -1854,8 +1856,6 @@ int ObSPIService::spi_build_record_type_by_result_set(common::ObIAllocator &allo
     if (OB_SUCC(ret) && 1 == hidden_column_count) {
         const common::ObField &field = columns->at(columns->count() - 1);
         uint64_t table_id = OB_INVALID_ID;
-        share::schema::ObSchemaGetterGuard schema_guard;
-        OZ (GCTX.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(), schema_guard));
         OZ (schema_guard.get_table_id(session.get_effective_tenant_id(), field.dname_, field.org_tname_,
                                       false, ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id));
         OX (rowid_table_id = table_id);
@@ -1869,6 +1869,7 @@ int ObSPIService::spi_build_record_type_by_result_set(common::ObIAllocator &allo
 int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                       ObSQLSessionInfo &session,
                                       ObMySQLProxy &sql_proxy,
+                                      share::schema::ObSchemaGetterGuard &schema_guard,
                                       sql::ObRawExprFactory &expr_factory,
                                       const ObString &sql,
                                       bool is_cursor,
@@ -1921,6 +1922,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                        && inner_result->result_set().get_field_columns()->count() > 0) {
               OZ (spi_build_record_type_by_result_set(allocator,
                                                       session,
+                                                      schema_guard,
                                                       inner_result->result_set(),
                                                       prepare_result.has_hidden_rowid_ ? 1 : 0,
                                                       prepare_result.record_type_,
@@ -1948,6 +1950,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                 CK (OB_NOT_NULL(result = static_cast<observer::ObInnerSQLResult*>(proxy_result.get_result())));
                 OZ (spi_build_record_type_by_result_set(allocator,
                                                         session,
+                                                        schema_guard,
                                                         result->result_set(),
                                                         prepare_result.has_hidden_rowid_ ? 1 : 0,
                                                         prepare_result.record_type_,
@@ -2381,6 +2384,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             }
 
             ret = OB_SUCCESS;
+            retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
             OZ (GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(),
                                                               schema_guard));
             OZ (schema_guard.get_schema_version(session->get_effective_tenant_id(), tenant_version));
@@ -2388,7 +2392,6 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
 
             OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
             OX (retry_ctrl.set_sys_local_schema_version(sys_version));
-            OX (retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update()));
 
             if (OB_NOT_NULL(spi_conn)) {
               sql_proxy->close(spi_conn, OB_SUCCESS == ret);
@@ -3354,6 +3357,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         share::schema::ObSchemaGetterGuard schema_guard;
         do {
           ret = OB_SUCCESS;
+          retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
           OZ (cursor.prepare_spi_cursor(spi_cursor,
                                         session->get_effective_tenant_id(),
                                         size));
@@ -3362,7 +3366,6 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
           OZ (schema_guard.get_schema_version(OB_SYS_TENANT_ID, sys_version));
           OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
           OX (retry_ctrl.set_sys_local_schema_version(sys_version));
-          OX (retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update()));
           if (OB_SUCC(ret)) {
             OZ (inner_open(ctx, sql_str, stmt_id, stmt_type, exec_params,
                           spi_result.get_mysql_result(), spi_result.get_out_params()),
@@ -5032,6 +5035,7 @@ int ObSPIService::inner_fetch_with_retry(ObPLExecCtx *ctx,
     if (OB_SUCC(ret)) {
       do {
         ret = OB_SUCCESS;
+        retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update());
         if (THIS_WORKER.is_timeout()) {
           ret = OB_TIMEOUT;
           LOG_WARN("inner fetch with retry already timeout!",
@@ -5047,7 +5051,6 @@ int ObSPIService::inner_fetch_with_retry(ObPLExecCtx *ctx,
         OZ (schema_guard.get_schema_version(OB_SYS_TENANT_ID, sys_version));
         OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
         OX (retry_ctrl.set_sys_local_schema_version(sys_version));
-        OX (retry_ctrl.clear_state_before_each_retry(session->get_retry_info_for_update()));
         CK (OB_NOT_NULL(result_set));
         CK (OB_NOT_NULL(static_cast<observer::ObInnerSQLResult*>(result_set)->get_result_set()));
         if (OB_SUCC(ret)) {
@@ -5558,6 +5561,40 @@ int ObSPIService::collect_cells(ObNewRow &row,
   return ret;
 }
 
+int ObSPIService::check_package_dest_and_deep_copy(
+  ObPLExecCtx &ctx,
+  const ObSqlExpression &expr, ObIArray<ObObj> &src_array, ObIArray<ObObj> &dst_array)
+{
+  int ret = OB_SUCCESS;
+  if (is_obj_access_expression(expr)) {
+    if (expr.get_expr_items().count() > 1
+        && T_OP_GET_PACKAGE_VAR == expr.get_expr_items().at(1).get_item_type()
+        && OB_NOT_NULL(expr.get_expr_items().at(1).get_expr_operator())
+        && expr.get_expr_items().at(1).get_expr_operator()->get_result_type().is_ext()) {
+      uint16_t param_pos = expr.get_expr_items().at(1).get_param_idx();
+      uint64_t package_id = OB_INVALID_ID;
+      ObIAllocator *allocator = NULL;
+      OX (package_id = expr.get_expr_items().at(param_pos).get_obj().get_uint64());
+      OZ (spi_get_package_allocator(&ctx, package_id, allocator));
+      CK (OB_NOT_NULL(allocator));
+      for (int64_t i = 0; OB_SUCC(ret) && i < src_array.count(); ++i) {
+        ObObj tmp;
+        if (src_array.at(i).is_pl_extend()) {
+          pl::ObUserDefinedType::deep_copy_obj(*allocator, src_array.at(i), tmp);
+        } else {
+          OZ (ob_write_obj(*allocator, src_array.at(i), tmp));
+        }
+        OZ (dst_array.push_back(tmp));
+      }
+    } else {
+      OZ (dst_array.assign(src_array));
+    }
+  } else {
+    OZ (dst_array.assign(src_array));
+  }
+  return ret;
+}
+
 int ObSPIService::store_result(ObPLExecCtx *ctx,
                                const ObSqlExpression *result_expr,
                                const ObDataType *result_types,
@@ -5700,8 +5737,10 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
     ParamStore *params = ctx->params_;
     ObObjParam result_address;
     if (is_obj_access_expression(*result_expr)) { //通过ObjAccess访问得到的基础变量或record
+      ObSEArray<ObObj, 16> dst_array;
       OZ (spi_calc_expr(ctx, result_expr, OB_INVALID_INDEX, &result_address));
-      OZ (store_datums(result_address, *calc_array));
+      OZ (check_package_dest_and_deep_copy(*ctx, *result_expr, *calc_array, dst_array));
+      OZ (store_datums(result_address, dst_array));
     } else if (is_question_mark_expression(*result_expr)) { //通过question mark访问得到的基础变量
       int64_t param_idx = get_const_value(*result_expr).get_unknown();
       ObAccuracy accuracy;
@@ -5722,7 +5761,8 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
       OX (params->at(param_idx).set_accuracy(accuracy));
       OZ (spi_pad_char_or_varchar(ctx->exec_ctx_->get_my_session(), result_types[0].get_obj_type(),
                                   accuracy, ctx->allocator_, &(params->at(param_idx))));
-    } else if (is_get_var_func_expression(*result_expr) || is_get_package_or_subprogram_var_expression(*result_expr)) {
+    } else if (is_get_var_func_expression(*result_expr)
+              || is_get_package_or_subprogram_var_expression(*result_expr)) {
       //通过系统函数访问的基础变量(user var/sys var) 或 访问的package/subprogram 变量
       ObObjParam value;
       OX (value = calc_array->at(0));

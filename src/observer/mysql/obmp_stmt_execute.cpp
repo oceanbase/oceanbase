@@ -1427,6 +1427,7 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
     share::schema::ObSchemaGetterGuard schema_guard;
     int64_t tenant_version = 0;
     int64_t sys_version = 0;
+    retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
     OZ (gctx_.schema_service_->get_tenant_schema_guard(session.get_effective_tenant_id(),
                                                        schema_guard));
     OZ (schema_guard.get_schema_version(session.get_effective_tenant_id(), tenant_version));
@@ -1436,7 +1437,6 @@ int ObMPStmtExecute::do_process_single(ObSQLSessionInfo &session,
     OX (retry_ctrl_.set_sys_local_schema_version(sys_version));
 
     if (OB_SUCC(ret) && !is_send_long_data()) {
-      retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
       if (OB_LIKELY(session.get_is_in_retry()) 
             || (is_arraybinding_ && (prepare_packet_sent_ || !is_prexecute()))) {
         ret = process_retry(session,

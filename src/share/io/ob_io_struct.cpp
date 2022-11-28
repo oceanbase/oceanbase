@@ -721,7 +721,7 @@ struct DestroyPhyqueueMapFn
 {
 public:
   DestroyPhyqueueMapFn(ObIAllocator &allocator) : allocator_(allocator) {}
-  int operator () (hash::HashMapPair<uint64_t, ObIOCategoryQueues *> &entry) {
+  int operator () (oceanbase::common::hash::HashMapPair<uint64_t, ObIOCategoryQueues *> &entry) {
     if (nullptr != entry.second) {
       entry.second->~ObIOCategoryQueues();
       allocator_.free(entry.second);

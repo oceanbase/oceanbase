@@ -1939,6 +1939,10 @@ public:
   PartitionType get_partition_type() const  { return partition_type_; }
   virtual bool is_normal_partition() const = 0;
   virtual bool is_hidden_partition() const { return share::schema::is_hidden_partition(partition_type_); }
+
+  // convert character set.
+  int convert_character_for_range_columns_part(const ObCollationType &to_collation);
+  int convert_character_for_list_columns_part(const ObCollationType &to_collation);
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(low_bound_val),
                        K_(high_bound_val), K_(list_row_values), K_(part_idx),
                        K_(is_empty_partition_name), K_(tablet_id));

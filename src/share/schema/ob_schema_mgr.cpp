@@ -2479,59 +2479,51 @@ int ObSchemaMgr::add_table(const ObSimpleTableSchemaV2 &table_schema)
         }
       }
       if (OB_SUCC(ret) && (new_table_schema->is_table() || new_table_schema->is_oracle_tmp_table())) {
-        if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
-          // do-nothing for liboblog
-        } else {
-          if (NULL != replaced_table) {
-            if (!replaced_table->is_user_hidden_table()
-                && new_table_schema->is_user_hidden_table()) {
-              if (OB_FAIL(delete_foreign_keys_in_table(*replaced_table))) {
-                LOG_WARN("delete foreign keys info from a hash map failed",
-                K(ret), K(*replaced_table));
-              }
-            // deal with the situation that alter table drop fk and truncate table enter the recycle bin,
-            // and delete the foreign key information dropped from the hash map
-            // First delete the foreign key information on the table from the hash map when truncate table,
-            // and add it back when rebuild_table_hashmap
-            } else if (OB_FAIL(check_and_delete_given_fk_in_table(replaced_table, new_table_schema))) {
-              LOG_WARN("check and delete given fk in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
+        if (NULL != replaced_table) {
+          if (!replaced_table->is_user_hidden_table()
+              && new_table_schema->is_user_hidden_table()) {
+            if (OB_FAIL(delete_foreign_keys_in_table(*replaced_table))) {
+              LOG_WARN("delete foreign keys info from a hash map failed",
+              K(ret), K(*replaced_table));
             }
+          // deal with the situation that alter table drop fk and truncate table enter the recycle bin,
+          // and delete the foreign key information dropped from the hash map
+          // First delete the foreign key information on the table from the hash map when truncate table,
+          // and add it back when rebuild_table_hashmap
+          } else if (OB_FAIL(check_and_delete_given_fk_in_table(replaced_table, new_table_schema))) {
+            LOG_WARN("check and delete given fk in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
           }
-          if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
-            if (OB_FAIL(add_foreign_keys_in_table(new_table_schema->get_simple_foreign_key_info_array(), 1 /*over_write*/))) {
-              LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
-            } else {
-              // do nothing
-            }
+        }
+        if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
+          if (OB_FAIL(add_foreign_keys_in_table(new_table_schema->get_simple_foreign_key_info_array(), 1 /*over_write*/))) {
+            LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
+          } else {
+            // do nothing
           }
         }
       }
       if (OB_SUCC(ret) && (new_table_schema->is_table() || new_table_schema->is_oracle_tmp_table())) {
         // In mysql mode, check constraints in non-temporary tables don't share namespace with constraints in temporary tables
-        if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
-          // do-nothing for liboblog
-        } else {
-          if (NULL != replaced_table) {
-            if (!replaced_table->is_user_hidden_table()
-                && new_table_schema->is_user_hidden_table()) {
-              if (OB_FAIL(delete_constraints_in_table(*replaced_table))) {
-                LOG_WARN("delete constraint info from a hash map failed",
-                K(ret), K(*replaced_table));
-              }
-            // deal with the situation that alter table drop cst and truncate table enter the recycle bin,
-            // delete the constraint information dropped from the hash map
-            // When truncate table, delete the constraint information on the table from the hash map first,
-            // and add it back when rebuild_table_hashmap
-            } else if (OB_FAIL(check_and_delete_given_cst_in_table(replaced_table, new_table_schema))) {
-              LOG_WARN("check and delete given cst in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
+        if (NULL != replaced_table) {
+          if (!replaced_table->is_user_hidden_table()
+              && new_table_schema->is_user_hidden_table()) {
+            if (OB_FAIL(delete_constraints_in_table(*replaced_table))) {
+              LOG_WARN("delete constraint info from a hash map failed",
+              K(ret), K(*replaced_table));
             }
+          // deal with the situation that alter table drop cst and truncate table enter the recycle bin,
+          // delete the constraint information dropped from the hash map
+          // When truncate table, delete the constraint information on the table from the hash map first,
+          // and add it back when rebuild_table_hashmap
+          } else if (OB_FAIL(check_and_delete_given_cst_in_table(replaced_table, new_table_schema))) {
+            LOG_WARN("check and delete given cst in table failed", K(ret), K(*replaced_table), K(*new_table_schema));
           }
-          if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
-            if (OB_FAIL(add_constraints_in_table(new_table_schema, 1 /*over_write*/))) {
-              LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
-            } else {
-              // do nothing
-            }
+        }
+        if (OB_SUCC(ret) && !new_table_schema->is_user_hidden_table()) {
+          if (OB_FAIL(add_constraints_in_table(new_table_schema, 1 /*over_write*/))) {
+            LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(*new_table_schema));
+          } else {
+            // do nothing
           }
         }
       }
@@ -3218,16 +3210,12 @@ int ObSchemaMgr::del_table(const ObTenantTableId table)
           ret = OB_HASH_NOT_EXIST != hash_ret ? hash_ret : ret;
         }
         if (OB_SUCC(ret)) {
-          if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
-            // do-nothing for liboblog
-          } else if (OB_FAIL(delete_foreign_keys_in_table(*schema_to_del))) {
+          if (OB_FAIL(delete_foreign_keys_in_table(*schema_to_del))) {
             LOG_WARN("delete foreign keys info from a hash map failed", K(ret), K(*schema_to_del));
           }
         }
         if (OB_SUCC(ret)) {
-          if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
-            // do-nothing for liboblog
-          } else if (OB_FAIL(delete_constraints_in_table(*schema_to_del))) {
+          if (OB_FAIL(delete_constraints_in_table(*schema_to_del))) {
             LOG_WARN("delete constraint info from a hash map failed", K(ret), K(*schema_to_del));
           }
         }
@@ -4692,18 +4680,14 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
                         "table_name", table_schema->get_table_name());
             }
             if (OB_SUCC(ret)) {
-              if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2100) {
-                // do-nothing for liboblog
-              } else if (OB_FAIL(add_foreign_keys_in_table(table_schema->get_simple_foreign_key_info_array(), over_write))) {
+              if (OB_FAIL(add_foreign_keys_in_table(table_schema->get_simple_foreign_key_info_array(), over_write))) {
                 LOG_WARN("add foreign keys info to a hash map failed", K(ret), K(table_schema->get_table_name_str()));
               } else {
                 fk_cnt += table_schema->get_simple_foreign_key_info_array().count();
               }
             }
             if (OB_SUCC(ret)) {
-              if (ObSchemaService::g_liboblog_mode_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2110) {
-                // do-nothing for liboblog
-              } else if (table_schema->is_mysql_tmp_table()) {
+              if (table_schema->is_mysql_tmp_table()) {
                 // check constraints in non-temporary tables don't share namespace with constraints in temporary tables, do nothing
               } else if (OB_FAIL(add_constraints_in_table(table_schema, over_write))) {
                 LOG_WARN("add constraint info to a hash map failed", K(ret), K(table_schema->get_table_name_str()));

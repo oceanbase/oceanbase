@@ -139,9 +139,9 @@ public:
   virtual int execute_write(const uint64_t tenant_id, const char *sql,
                             int64_t &affected_rows,
                             bool is_user_sql = false) override;
-  int execute_write(const uint64_t tenant_id, const ObString &sql,
-                    int64_t &affected_rows,
-                    bool is_user_sql = false);
+  virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
+                            int64_t &affected_rows,
+                            bool is_user_sql = false) override;
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int register_multi_data_source(const uint64_t &tenant_id,
                                          const share::ObLSID ls_id,

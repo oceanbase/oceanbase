@@ -574,6 +574,16 @@ void ObExpr::reset_datums_ptr(char *frame, const int64_t size) const
   }
 }
 
+void ObExpr::reset_datum_ptr(char *frame, const int64_t size, const int64_t idx) const
+{
+  ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
+  datum += idx;
+  char *ptr = frame + res_buf_off_ + (batch_idx_mask_ & idx) * res_buf_len_;
+  if (datum->ptr_ != ptr && idx < size) {
+    datum->ptr_ = ptr;
+  }
+}
+
 int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) const
 {
   int ret = OB_SUCCESS;
@@ -599,6 +609,7 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
   }
   datum = reinterpret_cast<ObDatum *>(frame + datum_off_) + ctx.get_batch_idx();
   if (need_evaluate) {
+    reset_datum_ptr(frame, ctx.get_batch_size(), ctx.get_batch_idx());
     ret = eval_func_(*this, ctx, *datum);
     if (OB_SUCC(ret)) {
       ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);

@@ -58,7 +58,6 @@ int ObDDLTableMergeDag::init_by_param(const share::ObIDagInitParam *param)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
   ObTablet *tablet = nullptr;
   ObTabletHandle tablet_handle;
   if (OB_UNLIKELY(is_inited_)) {
@@ -71,12 +70,10 @@ int ObDDLTableMergeDag::init_by_param(const share::ObIDagInitParam *param)
     ddl_param_ = *static_cast<const ObDDLTableMergeDagParam *>(param);
     if (OB_FAIL(MTL(ObLSService *)->get_ls(ddl_param_.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
       LOG_WARN("failed to get log stream", K(ret), K(ddl_param_));
-    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls is unexpected null", K(ret));
-    } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(ddl_param_.tablet_id_,
-                                                        tablet_handle,
-                                                        ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                                 ddl_param_.tablet_id_,
+                                                 tablet_handle,
+                                                 ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
       LOG_WARN("failed to get tablet", K(ret), K(ddl_param_));
     } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
       ret = OB_ERR_UNEXPECTED;
@@ -101,9 +98,10 @@ int ObDDLTableMergeDag::create_first_task()
   ObDDLTableMergeTask *merge_task = nullptr;
   if (OB_FAIL(ls_service->get_ls(ddl_param_.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ddl_param_));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(ddl_param_.tablet_id_,
-                                                    tablet_handle,
-                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                               ddl_param_.tablet_id_,
+                                               tablet_handle,
+                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("get tablet failed", K(ret), K(ddl_param_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -248,9 +246,10 @@ int ObDDLTableDumpTask::process()
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
-                                                    tablet_handle,
-                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                               tablet_id_,
+                                               tablet_handle,
+                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -328,9 +327,10 @@ int ObDDLTableMergeTask::process()
     LOG_WARN("not init", K(ret));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(merge_param_.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(merge_param_));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(merge_param_.tablet_id_,
-                                                    tablet_handle,
-                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                               merge_param_.tablet_id_,
+                                               tablet_handle,
+                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("failed to get tablet", K(ret), K(merge_param_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -497,9 +497,10 @@ int ObTabletDDLUtil::prepare_index_data_desc(const share::ObLSID &ls_id,
     LOG_WARN("ls service is null", K(ret), K(ls_id));
   } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id,
-                                                    tablet_handle,
-                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                               tablet_id,
+                                               tablet_handle,
+                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("get tablet failed", K(ret));
   } else if (OB_FAIL(data_desc.init(tablet_handle.get_obj()->get_storage_schema(),
                                     ls_id,
@@ -598,9 +599,10 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
       LOG_WARN("ls service is null", K(ret), K(ddl_param));
     } else if (OB_FAIL(ls_service->get_ls(ddl_param.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
       LOG_WARN("get ls failed", K(ret), K(ddl_param));
-    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(ddl_param.table_key_.tablet_id_,
-                                                      tablet_handle,
-                                                      ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                                 ddl_param.table_key_.tablet_id_,
+                                                 tablet_handle,
+                                                 ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
       LOG_WARN("get tablet failed", K(ret), K(ddl_param));
     } else {
       const ObStorageSchema &storage_schema = tablet_handle.get_obj()->get_storage_schema();
@@ -842,9 +844,10 @@ int ObTabletDDLUtil::check_and_get_major_sstable(const share::ObLSID &ls_id,
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id,
-                                                    tablet_handle,
-                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                               tablet_id,
+                                               tablet_handle,
+                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_UNLIKELY(nullptr == tablet_handle.get_obj())) {
     ret = OB_ERR_SYS;

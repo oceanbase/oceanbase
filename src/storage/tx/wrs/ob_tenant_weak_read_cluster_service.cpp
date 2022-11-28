@@ -14,6 +14,7 @@
 
 #include "share/inner_table/ob_inner_table_schema_constants.h"  // OB_ALL_WEAK_READ_SERVICE_TNAME
 #include "lib/mysqlclient/ob_mysql_result.h"                    // ObMySQLResult
+#include "lib/stat/ob_latch_define.h"
 #include "ob_weak_read_util.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -54,7 +55,7 @@ ObTenantWeakReadClusterService::ObTenantWeakReadClusterService() :
     min_version_(),
     max_version_(),
     cluster_version_mgr_(),
-    rwlock_()
+    rwlock_(common::ObLatchIds::WRS_CLUSTER_SERVICE_LOCK)
 {}
 
 ObTenantWeakReadClusterService::~ObTenantWeakReadClusterService()

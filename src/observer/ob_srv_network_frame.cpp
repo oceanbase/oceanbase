@@ -105,13 +105,8 @@ int ObSrvNetworkFrame::init()
   } else {
     opts.enable_tcp_keepalive_ = 0;
   }
-  if (IS_CLUSTER_VERSION_BEFORE_4_0_0_0) {
-      LOG_INFO("io thread connection negotiation not enabled!");
-      negotiation_enable = 0;
-  } else {
-      LOG_INFO("io thread connection negotiation enabled!");
-      negotiation_enable = 1;
-  }
+  LOG_INFO("io thread connection negotiation enabled!");
+  negotiation_enable = 1;
 
   deliver_.set_host(gctx_.self_addr());
 

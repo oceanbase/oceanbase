@@ -4521,9 +4521,9 @@ int JoinPath::compute_hash_hash_sharding_info()
         } else {
           target_sharding = new (target_sharding) ObShardingInfo();
           target_sharding->set_distributed();
-          if (use_left) {
+          if (use_left && FULL_OUTER_JOIN != join_type_ && RIGHT_OUTER_JOIN != join_type_) {
             ret = target_sharding->get_partition_keys().assign(left_join_exprs);
-          } else if (use_right) {
+          } else if (use_right && FULL_OUTER_JOIN != join_type_ && LEFT_OUTER_JOIN != join_type_) {
             ret = target_sharding->get_partition_keys().assign(right_join_exprs);
           } else { /*do nothing*/ }
 
@@ -7834,7 +7834,8 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
       LOG_WARN("failed to append join filters", K(ret));
     } else if (OB_FAIL(append(join_path->filter_, filters))) {
       LOG_WARN("failed to append join quals", K(ret));
-    } else if (OB_FAIL(generate_join_filter_infos(left_path,
+    } else if (DistAlgo::DIST_PULL_TO_LOCAL != join_dist_algo &&
+               OB_FAIL(generate_join_filter_infos(left_path,
                                                   right_path,
                                                   join_type,
                                                   join_dist_algo,

@@ -335,11 +335,12 @@ int ObExprMonthName::calc_result_type1(ObExprResType &type,
   type.set_varchar();
   type.set_collation_type(cs_type);
   type.set_collation_level(CS_LEVEL_IMPLICIT);
-
+  type.set_full_length(MONTHNAME_MAX_LENGTH, type1.get_length_semantics());
   common::ObObjTypeClass tc1 = ob_obj_type_class(type1.get_type());
   if (common::ObEnumSetTC == tc1) {
     type1.set_calc_type(common::ObVarcharType);
-    type1.set_calc_collation_type(cs_type);
+    type1.set_collation_type(cs_type);
+    type1.set_collation_level(CS_LEVEL_IMPLICIT);
   } else if ((common::ObFloatTC == tc1) || (common::ObDoubleTC == tc1)) {
     type1.set_calc_type(common::ObIntType);
   }

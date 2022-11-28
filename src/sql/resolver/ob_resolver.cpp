@@ -1053,6 +1053,14 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
     }  // end switch
 
+    if (OB_SUCC(ret)) {
+      if (ObStmt::is_write_stmt(stmt->get_stmt_type(), stmt->has_global_variable())
+          && !MTL_IS_PRIMARY_TENANT()) {
+        ret = OB_STANDBY_READ_ONLY;
+        TRANS_LOG(WARN, "standby tenant support read only", K(ret), K(stmt));
+      }
+    }
+
     if (OB_SUCC(ret) && stmt->is_dml_write_stmt()) {
       // todo yanli:检查主备库
     }

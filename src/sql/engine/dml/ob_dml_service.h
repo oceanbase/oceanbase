@@ -13,6 +13,7 @@
 #ifndef DEV_SRC_SQL_ENGINE_DML_OB_DML_SERVICE_H_
 #define DEV_SRC_SQL_ENGINE_DML_OB_DML_SERVICE_H_
 #include "sql/engine/dml/ob_dml_ctx_define.h"
+#include "sql/das/ob_das_context.h"
 namespace oceanbase
 {
 namespace sql
@@ -41,8 +42,13 @@ public:
                                            int64_t estimate_row,
                                            DistinctType distinct_algo,
                                            ObEvalCtx &eval_ctx,
-                                           SeRowkeyDistCtx *&rowkey_dist_ctx,
+                                           ObExecContext &root_ctx,
+                                           SeRowkeyDistCtx *rowkey_dist_ctx,
                                            bool &is_dist);
+
+  static int create_rowkey_check_hashset(int64_t estimate_row,
+                                           ObExecContext *root_ctx,
+                                           SeRowkeyDistCtx *&rowkey_dist_ctx);
   static int check_row_whether_changed(const ObUpdCtDef &upd_ctdef, ObUpdRtDef &upd_rtdef, ObEvalCtx &eval_ctx);
   static int filter_row_for_check_cst(const ExprFixedArray &cst_exprs,
                                       ObEvalCtx &eval_ctx,
@@ -200,6 +206,11 @@ public:
                                        const ExprFixedArray &row,
                                        const ObDMLBaseCtDef &dml_ctdef,
                                        ObDMLBaseRtDef &dml_rtdef);
+  static bool is_nested_dup_table(const uint64_t table_id,DASDelCtxList& del_ctx_list);
+  static int get_nested_dup_table_ctx(const uint64_t table_id,
+                                      DASDelCtxList& del_ctx_list,
+                                      SeRowkeyDistCtx* &rowkey_dist_ctx);
+
 private:
   template <int N>
   static int write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,

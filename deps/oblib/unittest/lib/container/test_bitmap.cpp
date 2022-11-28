@@ -142,6 +142,15 @@ TEST_F(TestObBitmap, load_from_array)
   EXPECT_EQ(OB_SUCCESS, bitmap.load_blocks_from_array(data, 64 * 5));
   EXPECT_EQ(64 * 5, bitmap.size());
   EXPECT_EQ(3 * 5, bitmap.popcnt());
+
+  bitmap.expand_size(4096);
+  ObBitmap::size_type data2[64];
+  for (int64_t i = 0; i < 64; i++) {
+    data2[i] = 7;
+  }
+  EXPECT_EQ(OB_SUCCESS, bitmap.load_blocks_from_array(data2, 64 * 64));
+  EXPECT_EQ(64 * 64, bitmap.size());
+  EXPECT_EQ(3 * 64, bitmap.popcnt());
 }
 
 } // end of namespace unittest

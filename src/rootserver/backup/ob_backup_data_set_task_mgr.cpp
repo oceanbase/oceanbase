@@ -1522,7 +1522,7 @@ int ObBackupSetTaskMgr::write_backup_set_info_(
 {
   int ret = OB_SUCCESS;
   int64_t dest_id = 0;
-  uint64_t cluster_version = ObClusterVersion::get_instance().get_cluster_version();
+  uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
   ObBackupSetFileDesc &backup_set_file = backup_set_info.backup_set_file_;
   ObBackupDest backup_dest;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, set_task_attr.backup_path_, backup_dest))) {

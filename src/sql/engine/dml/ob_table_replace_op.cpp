@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "common/ob_smart_call.h"
 #include "sql/engine/dml/ob_table_replace_op.h"
 #include "share/ob_autoincrement_service.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
@@ -92,6 +93,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
   OB_UNIS_ADD_LEN(conflict_checker_ctdef_);
   return len;
 }
+
 
 int ObTableReplaceOp::inner_open()
 {
@@ -401,8 +403,7 @@ int ObTableReplaceOp::get_next_conflict_rowkey(DASTaskIter &task_iter)
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("stored row is null", K(ret));
     } else if (OB_FAIL(stored_row->to_expr_skip_const(
-            conflict_checker_.checker_ctdef_.data_table_rowkey_expr_,
-            conflict_checker_.eval_ctx_))) {
+            conflict_checker_.checker_ctdef_.data_table_rowkey_expr_, conflict_checker_.eval_ctx_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("get next row from result iterator failed", K(ret));
       }
@@ -498,56 +499,70 @@ int ObTableReplaceOp::replace_conflict_row_cache()
   ObReplaceRtDef &replace_rtdef = replace_rtdefs_.at(0);
   ObInsRtDef &ins_rtdef = replace_rtdef.ins_rtdef_;
   ObDelRtDef &del_rtdef = replace_rtdef.del_rtdef_;
+  const ObChunkDatumStore::StoredRow *replace_row = NULL;
 
   NG_TRACE_TIMES(2, replace_start_shuff);
-  OZ(replace_row_store_.begin(replace_row_iter));
-  const ObChunkDatumStore::StoredRow *replace_row = NULL;
+  if (OB_FAIL(replace_row_store_.begin(replace_row_iter))) {
+    LOG_WARN("begin replace_row_store failed", K(ret), K(replace_row_store_.get_row_cnt()));
+  }
   // 构建冲突的hash map的时候也使用的是column_ref， 回表也是使用的column_ref expr来读取scan的结果
   // 因为constarain_info中使用的column_ref expr，所以此处需要使用table_column_old_exprs (column_ref exprs)
-  while (OB_SUCC(ret) && OB_SUCC(replace_row_iter.get_next_row(get_primary_table_new_row(),
-                                                               eval_ctx_,
-                                                               &replace_row))) {
+  while (OB_SUCC(ret) && OB_SUCC(replace_row_iter.get_next_row(replace_row))) {
     constraint_values.reuse();
     ObChunkDatumStore::StoredRow *insert_new_row = NULL;
-    OZ(conflict_checker_.check_duplicate_rowkey(replace_row,
-                                                constraint_values,
-                                                false));
+    if (OB_ISNULL(replace_row)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("replace_row is null", K(ret));
+    } else if (OB_FAIL(conflict_checker_.check_duplicate_rowkey(replace_row,
+                                                                constraint_values,
+                                                                false))) {
+      LOG_WARN("check rowkey from conflict_checker failed", K(ret), KPC(replace_row));
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < constraint_values.count(); ++i) {
       //delete duplicated row
       const ObChunkDatumStore::StoredRow *delete_row = constraint_values.at(i).current_datum_row_;
       bool same_row = false;
-      CK(OB_NOT_NULL(delete_row));
-      // dup checker依赖table column exprs
-      OZ(delete_row->to_expr(get_primary_table_old_row(), eval_ctx_));
-
-      // 外键的检查已经下方到dml_service逻辑中了
-      OZ(ObDMLService::process_delete_row(del_ctdef, del_rtdef, skip_delete, *this));
-      OZ(conflict_checker_.delete_old_row(delete_row, ObNewRowSource::FROM_INSERT));
-      if (OB_SUCC(ret) && OB_LIKELY(MY_SPEC.only_one_unique_key_)) {
-        OZ(check_values(same_row, replace_row, delete_row));
+      if (OB_ISNULL(delete_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("delete row failed", K(ret));
+      } else if (OB_FAIL(delete_row->to_expr_skip_const(get_primary_table_old_row(), eval_ctx_))) {
+        // dup checker依赖table column exprs
+        LOG_WARN("flush delete_row to old_row failed", K(ret), KPC(delete_row), K(get_primary_table_old_row()));
+      } else if (OB_FAIL(ObDMLService::process_delete_row(del_ctdef, del_rtdef, skip_delete, *this))) {
+        LOG_WARN("process delete row failed", K(ret), KPC(delete_row), K(get_primary_table_old_row()));
+      } else if (OB_FAIL(conflict_checker_.delete_old_row(delete_row, ObNewRowSource::FROM_INSERT))) {
+        LOG_WARN("delete old_row from conflict checker failed", K(ret), KPC(delete_row));
+      } else if (MY_SPEC.only_one_unique_key_) {
+        if (OB_FAIL(check_values(same_row, replace_row, delete_row))) {
+          LOG_WARN("check value failed", K(ret), KPC(replace_row), KPC(delete_row));
+        }
       }
       if (OB_SUCC(ret) && !same_row) {
         delete_rows_++;
       }
     }
 
-    OZ(replace_row->to_expr(get_primary_table_new_row(), eval_ctx_));
-    OZ(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped));
-    // TODO(yikang): fix trigger related for heap table
-    if (OB_SUCC(ret) && ins_ctdef.is_primary_index_ && OB_FAIL(TriggerHandle::do_handle_after_row(*this,
-                                                                   ins_ctdef.trig_ctdef_,
-                                                                   ins_rtdef.trig_rtdef_,
-                                                                   ObTriggerEvents::get_insert_event()))) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(replace_row->to_expr_skip_const(get_primary_table_new_row(), eval_ctx_))) {
+      LOG_WARN("flush replace_row to exprs failed", K(ret), KPC(replace_row));
+    } else if (OB_FAIL(ObDMLService::process_insert_row(ins_ctdef, ins_rtdef, *this, is_skipped))) {
+      LOG_WARN("convert exprs to stored_row failed", K(ret), KPC(insert_new_row));
+    } else if (ins_ctdef.is_primary_index_ &&
+        OB_FAIL(TriggerHandle::do_handle_after_row(*this,
+                                                   ins_ctdef.trig_ctdef_,
+                                                   ins_rtdef.trig_rtdef_,
+                                                   ObTriggerEvents::get_insert_event()))) {
       LOG_WARN("failed to handle before trigger", K(ret));
-    }
-    if (OB_SUCC(ret) && OB_UNLIKELY(is_skipped)) {
+    } else if (OB_UNLIKELY(is_skipped)) {
       continue;
+    } else if (OB_FAIL(conflict_checker_.convert_exprs_to_stored_row(get_primary_table_new_row(),
+                                                                     insert_new_row))) {
+      LOG_WARN("convert exprs to stored_row failed", K(ret), KPC(insert_new_row));
+    } else if (OB_FAIL(conflict_checker_.insert_new_row(insert_new_row, ObNewRowSource::FROM_INSERT))) {
+      LOG_WARN("insert new to conflict_checker failed", K(ret), KPC(insert_new_row));
     }
-    OZ(conflict_checker_.convert_exprs_to_stored_row(get_primary_table_new_row(),
-                                                     insert_new_row));
-    // add new row to conflict_checker map
-    // 在insert_new_row 函数内部，会把replace_row to_expr到table_column_exprs<column_ref type>中
-    OZ(conflict_checker_.insert_new_row(insert_new_row, ObNewRowSource::FROM_INSERT));
   } // while row store end
   ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
   return ret;
@@ -576,8 +591,8 @@ int ObTableReplaceOp::do_delete(ObConflictRowMap *primary_map)
     LOG_DEBUG("get one constraint_value from primary hash map", K(constraint_value));
     if (NULL != constraint_value.baseline_datum_row_) {
       //baseline row is not empty, delete it
-      if (OB_FAIL(constraint_value.baseline_datum_row_->to_expr(get_primary_table_old_row(),
-                                                                eval_ctx_))) {
+      if (OB_FAIL(constraint_value.baseline_datum_row_->to_expr_skip_const(
+          get_primary_table_old_row(), eval_ctx_))) {
         LOG_WARN("stored row to expr faild", K(ret));
       } else if (OB_FAIL(delete_row_to_das(false))) {
         LOG_WARN("shuffle delete row failed", K(ret), K(constraint_value));
@@ -600,8 +615,8 @@ int ObTableReplaceOp::do_insert(ObConflictRowMap *primary_map)
     ObConflictValue &constraint_value = start_row_iter->second;
     if (OB_SUCC(ret) && NULL != constraint_value.current_datum_row_) {
       //current row is not empty, insert new row
-      if (OB_FAIL(constraint_value.current_datum_row_->to_expr(get_primary_table_new_row(),
-                                                               eval_ctx_))) {
+      if (OB_FAIL(constraint_value.current_datum_row_->to_expr_skip_const(
+          get_primary_table_new_row(), eval_ctx_))) {
         LOG_WARN("stored row to expr faild", K(ret));
       } else if (OB_FAIL(insert_row_to_das(false))) {
         LOG_WARN("shuffle insert row failed", K(ret), K(constraint_value));

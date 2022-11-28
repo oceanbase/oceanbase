@@ -279,6 +279,7 @@ int ObConnectByOpBFSPump::init(ObNLConnectByWithIndexSpec &connect_by,
   } else {
     uint64_t tenant_id = eval_ctx.exec_ctx_.get_my_session()->get_effective_tenant_id();
     allocator_.set_tenant_id(tenant_id);
+    allocator_.set_ctx_id(ObCtxIds::WORK_AREA);
     connect_by_ = &connect_by_op;
     connect_by_prior_exprs_ = &connect_by.connect_by_prior_exprs_;
     left_prior_exprs_ = &connect_by.left_prior_exprs_;

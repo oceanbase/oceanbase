@@ -86,6 +86,9 @@ function get_os_release() {
       rocky)
         version_ge "8.0" && compat_centos8 && return
         ;;
+      tencentos)
+        version_ge "3.1" && compat_centos8 && return
+        ;;
     esac
   elif [[ "${OS_ARCH}x" == "aarch64x" ]]; then
     case "$ID" in

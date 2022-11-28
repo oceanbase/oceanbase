@@ -60,7 +60,7 @@ AChunkMgr &AChunkMgr::instance()
 
 AChunkMgr::AChunkMgr()
   : free_list_(), chunk_bitmap_(nullptr), limit_(DEFAULT_LIMIT), urgent_(0), hold_(0),
-    total_hold_(0), maps_(0), unmaps_(0), large_maps_(0), large_unmaps_(0)
+    total_hold_(0), maps_(0), unmaps_(0), large_maps_(0), large_unmaps_(0), shadow_hold_(0)
 {
 }
 
@@ -176,6 +176,7 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
       LOG_ERROR("sanity alloc shadow failed", K(errno), KP(shad_ptr));
       abort();
     } else {
+      IGNORE_RETURN ATOMIC_FAA(&shadow_hold_, shad_size);
       //memset(shad_ptr, 0, shad_size);
       //SANITY_UNPOISON(shad_ptr, shad_size); // maybe no need?
       //SANITY_UNPOISON(ptr, size); // maybe no need?
@@ -189,6 +190,7 @@ void AChunkMgr::low_free(const void *ptr, const uint64_t size)
   if (SANITY_ADDR_IN_RANGE(ptr)) {
     void *shad_ptr  = SANITY_TO_SHADOW((void*)ptr);
     ssize_t shad_size = SANITY_TO_SHADOW_SIZE(size);
+    IGNORE_RETURN ATOMIC_FAA(&shadow_hold_, -shad_size);
     ::munmap(shad_ptr, shad_size);
   }
   ::munmap((void*)ptr, size);

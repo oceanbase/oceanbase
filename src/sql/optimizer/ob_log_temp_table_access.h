@@ -45,6 +45,9 @@ public:
                                        int64_t &buf_len,
                                        int64_t &pos,
                                        ExplainType type);
+
+  int get_temp_table_plan(ObLogicalOperator *& insert_op);
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTempTableAccess);
 

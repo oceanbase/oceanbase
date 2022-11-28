@@ -21,6 +21,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -241,10 +242,36 @@ void ObTabletPointer::get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle)
   ddl_kv_mgr_handle = ddl_kv_mgr_handle_;
 }
 
-void ObTabletPointer::remove_ddl_kv_mgr()
+int ObTabletPointer::set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(!ddl_kv_mgr_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_kv_mgr_handle));
+  } else {
+    ObMutexGuard guard(ddl_kv_mgr_lock_);
+    if (ddl_kv_mgr_handle_.get_obj() != ddl_kv_mgr_handle.get_obj()) {
+      LOG_INFO("ddl kv mgr changed", KPC(ddl_kv_mgr_handle_.get_obj()));
+    }
+    ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
+  }
+  return ret;
+}
+
+int ObTabletPointer::remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
   ObMutexGuard guard(ddl_kv_mgr_lock_);
-  ddl_kv_mgr_handle_.reset();
+  if (OB_FAIL(!ddl_kv_mgr_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_kv_mgr_handle));
+  } else if (ddl_kv_mgr_handle_.get_obj() != ddl_kv_mgr_handle.get_obj()) {
+    ret = OB_ITEM_NOT_MATCH;
+    LOG_WARN("ddl kv mgr changed", K(ret));
+  } else {
+    ddl_kv_mgr_handle_.reset();
+  }
+  return ret;
 }
 
 } // namespace storage

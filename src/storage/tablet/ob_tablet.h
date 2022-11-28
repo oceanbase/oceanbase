@@ -80,6 +80,7 @@ class ObDDLKVHandle;
 class ObDDLKVsHandle;
 class ObStorageSchema;
 class ObTabletTableIterator;
+class ObMetaDiskAddr;
 
 class ObTablet
 {
@@ -218,7 +219,7 @@ public:
   // force release all memtables
   // just for rebuild or migrate retry.
   int release_memtables();
-  int destroy_storage_related_member();
+  int reset_storage_related_member();
 
   // multi-source data operation
   int check_tx_data(bool &is_valid) const;
@@ -229,7 +230,10 @@ public:
   template<class T>
   int prepare_data(T &multi_source_data_unit, const transaction::ObMulSourceDataNotifyArg &trans_flags);
   template<class T>
-  int back_fill_scn_for_commit(T &multi_source_data_unit);
+  int clear_unsynced_cnt_for_tx_end_if_need(
+      T &multi_source_data_unit,
+      const share::SCN &scn,
+      const bool for_replay);
   template<class T>
   int set_multi_data_for_commit(T &multi_source_data_unit, const share::SCN &log_scn, const bool for_replay, const memtable::MemtableRefOp ref_op);
 
@@ -281,7 +285,8 @@ public:
   int check_has_sstable(bool &has_sstable) const;
 
   int get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_create = false);
-  void remove_ddl_kv_mgr();
+  int set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int start_ddl_if_need();
   int get_ddl_sstable_handles(ObTablesHandleArray &ddl_sstable_handles);
   int get_migration_sstable_size(int64_t &data_size);
@@ -305,6 +310,7 @@ public:
   const ObTabletPointerHandle &get_pointer_handle() { return pointer_hdl_; }
   const compaction::ObMediumCompactionInfoList &get_medium_compaction_info_list() const { return medium_info_list_; }
 
+  int get_meta_disk_addr(ObMetaDiskAddr &addr) const;
 
   int assign_pointer_handle(const ObTabletPointerHandle &ptr_hdl);
 
@@ -334,6 +340,7 @@ public:
       transaction::ObTransID &pending_tx_id);
   int replay_schema_version_change_log(const int64_t schema_version);
   int get_tablet_report_info(
+      const int64_t snapshot_version,
       common::ObIArray<int64_t> &column_checksums,
       int64_t &data_size,
       int64_t &required_size,
@@ -345,7 +352,7 @@ public:
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
       const bool is_callback = false);
   int set_tx_data_in_tablet_pointer();
-  int set_memtable_clog_checkpoint_ts(
+  int set_memtable_clog_checkpoint_scn(
       const ObMigrationTabletParam *tablet_meta);
 
   TO_STRING_KV(KP(this), K_(wash_score), K_(ref_cnt), K_(tablet_meta), K_(table_store), K_(storage_schema));
@@ -362,10 +369,6 @@ private:
       const common::ObTabletID &tablet_id,
       const int64_t max_saved_schema_version,
       ObFreezer *freezer);
-  int init_storage_related_member(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const int64_t max_saved_schema_version);
   int build_read_info(common::ObIAllocator &allocator);
   int create_memtable(const int64_t schema_version, const bool for_replay=false);
   int try_update_start_scn();
@@ -450,6 +453,17 @@ private:
   int set_tx_data_in_tablet_pointer(const ObTabletTxMultiSourceDataUnit &tx_data);
   int get_max_sync_storage_schema_version(int64_t &max_schema_version) const;
   int check_max_sync_schema_version() const;
+  template<class T>
+  int dec_unsynced_cnt_for_if_need(
+      T &multi_source_data_unit,
+      const bool for_replay,
+      const memtable::MemtableRefOp ref_op);
+  template<class T>
+  int inner_set_multi_data_for_commit(
+      T &multi_source_data_unit,
+      const share::SCN &scn,
+      const bool for_replay,
+      const memtable::MemtableRefOp ref_op);
 
 private:
   static const int32_t TABLET_VERSION = 1;
@@ -608,7 +622,7 @@ int ObTablet::prepare_data(T &multi_source_data_unit, const transaction::ObMulSo
 template<class T>
 int ObTablet::set_multi_data_for_commit(
     T &multi_source_data_unit,
-    const share::SCN &log_scn,
+    const share::SCN &scn,
     const bool for_replay,
     const memtable::MemtableRefOp ref_op)
 {
@@ -622,23 +636,105 @@ int ObTablet::set_multi_data_for_commit(
   } else if (OB_UNLIKELY(!multi_source_data_unit.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", K(ret), K(multi_source_data_unit));
-  } else {
-    if (OB_FAIL(save_multi_source_data_unit(&multi_source_data_unit, log_scn, for_replay, ref_op, is_callback))) {
+  } else if (!multi_source_data_unit.is_tx_end()) {
+    if (OB_FAIL(save_multi_source_data_unit(&multi_source_data_unit, scn, for_replay, ref_op, is_callback))) {
       TRANS_LOG(WARN, "failed to save tx data", K(ret), K(multi_source_data_unit), K(for_replay), K(ref_op));
-    } else if (OB_FAIL(back_fill_scn_for_commit(multi_source_data_unit))) {
-      TRANS_LOG(WARN, "failed to back_fill_scn_for_commit", K(ret), K(multi_source_data_unit));
     }
+  } else if (OB_FAIL(inner_set_multi_data_for_commit(multi_source_data_unit, scn, for_replay, ref_op))) {
+    TRANS_LOG(WARN, "failed to back_fill_log_ts_for_ddl_data", K(ret), K(multi_source_data_unit));
+  }
+  return ret;
+}
+
+template<class T>
+int ObTablet::dec_unsynced_cnt_for_if_need(
+    T &multi_source_data_unit,
+    const bool for_replay,
+    const memtable::MemtableRefOp ref_op)
+{
+  int ret = OB_SUCCESS;
+  const share::SCN scn = share::SCN::max_scn();
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!multi_source_data_unit.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid args", K(ret), K(multi_source_data_unit));
+  } else if (memtable::MultiSourceDataUnitType::TABLET_TX_DATA == multi_source_data_unit.type()) {
+    ObTabletTxMultiSourceDataUnit tx_data;
+    if (OB_FAIL(get_tx_data(tx_data))) {
+      TRANS_LOG(WARN, "failed to get tx data", K(ret));
+    } else if (OB_FAIL(save_multi_source_data_unit(&tx_data, scn, for_replay, ref_op, true/*is_callback*/))) {
+      TRANS_LOG(WARN, "failed to save tx data", K(ret), K(tx_data), K(scn));
+    }
+  } else if (memtable::MultiSourceDataUnitType::TABLET_BINDING_INFO == multi_source_data_unit.type()) {
+    ObTabletBindingInfo binding_info;
+    if (OB_FAIL(get_ddl_data(binding_info))) {
+      TRANS_LOG(WARN, "failed to get binding info", K(ret));
+    } else if (OB_FAIL(save_multi_source_data_unit(&binding_info, scn, for_replay, ref_op, true/*is_callback*/))) {
+      TRANS_LOG(WARN, "failed to binding info", K(ret), K(binding_info), K(scn));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "multi-data type not support", K(ret), K(multi_source_data_unit));
+  }
+  return ret;
+}
+
+template<class T>
+int ObTablet::inner_set_multi_data_for_commit(
+    T &multi_source_data_unit,
+    const share::SCN &scn,
+    const bool for_replay,
+    const memtable::MemtableRefOp ref_op)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!multi_source_data_unit.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid args", K(ret), K(multi_source_data_unit));
+  } else if (OB_FAIL(dec_unsynced_cnt_for_if_need(multi_source_data_unit, for_replay, ref_op))) {
+    TRANS_LOG(WARN, "failed to dec_unsynced_cnt_for_ddl_data_if_need", K(ret), K(multi_source_data_unit), K(for_replay), K(ref_op));
+  } else if (memtable::MultiSourceDataUnitType::TABLET_TX_DATA == multi_source_data_unit.type()) {
+    ObTabletTxMultiSourceDataUnit tx_data;
+    if (OB_FAIL(get_tx_data(tx_data))) {
+      TRANS_LOG(WARN, "failed to get tx data", K(ret));
+    } else if (OB_FAIL(tx_data.deep_copy(&multi_source_data_unit))) {
+      TRANS_LOG(WARN, "fail to deep_copy", K(ret), K(multi_source_data_unit), K(tx_data), K(get_tablet_meta()));
+    } else if (OB_FAIL(clear_unsynced_cnt_for_tx_end_if_need(tx_data, scn, for_replay))) {
+      TRANS_LOG(WARN, "failed to save tx data", K(ret), K(tx_data), K(scn));
+    }
+  } else if (memtable::MultiSourceDataUnitType::TABLET_BINDING_INFO == multi_source_data_unit.type()) {
+    ObTabletBindingInfo binding_info;
+    if (OB_FAIL(get_ddl_data(binding_info))) {
+      TRANS_LOG(WARN, "failed to get binding info", K(ret));
+
+    } else if (OB_FAIL(binding_info.deep_copy(&multi_source_data_unit))) {
+      TRANS_LOG(WARN, "fail to deep_copy", K(ret), K(multi_source_data_unit), K(binding_info), K(get_tablet_meta()));
+    } else if (OB_FAIL(clear_unsynced_cnt_for_tx_end_if_need(binding_info, scn, for_replay))) {
+      TRANS_LOG(WARN, "failed to save ddl data", K(ret), K(multi_source_data_unit), K(scn));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "multi-data type not support", K(ret), K(multi_source_data_unit));
   }
 
   return ret;
 }
 
+
 template<class T>
-int ObTablet::back_fill_scn_for_commit(T &multi_source_data_unit)
+int ObTablet::clear_unsynced_cnt_for_tx_end_if_need(
+    T &multi_source_data_unit,
+    const share::SCN &scn,
+    const bool for_replay)
 {
   int ret = OB_SUCCESS;
 
-  const share::SCN scn = share::SCN::max_scn();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret), K_(is_inited));
@@ -646,13 +742,10 @@ int ObTablet::back_fill_scn_for_commit(T &multi_source_data_unit)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", K(ret), K(multi_source_data_unit));
   } else if (OB_UNLIKELY(!multi_source_data_unit.is_tx_end())) {
-    TRANS_LOG(INFO, "skip for is_tx_end is false", K(multi_source_data_unit));
   } else if (FALSE_IT(multi_source_data_unit.set_tx_end(false))) {
-  } else if (OB_FAIL(save_multi_source_data_unit(&multi_source_data_unit, scn, false/*for_replay*/, memtable::MemtableRefOp::DEC_REF, true/*is_callback*/))) {
+  } else if (OB_FAIL(save_multi_source_data_unit(&multi_source_data_unit, scn, for_replay, memtable::MemtableRefOp::DEC_REF, true/*is_callback*/))) {
     TRANS_LOG(WARN, "failed to save tx data", K(ret), K(multi_source_data_unit), K(scn));
   }
-
-  TRANS_LOG(INFO, "back fill scn for commit", K(ret), K(multi_source_data_unit));
   return ret;
 }
 

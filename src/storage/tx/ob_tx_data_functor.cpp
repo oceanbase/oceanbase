@@ -65,9 +65,10 @@ namespace storage
 int CheckSqlSequenceCanReadFunctor::operator() (const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx) {
   UNUSED(tx_cc_ctx);
   int ret = OB_SUCCESS;
+  const int32_t state = ATOMIC_LOAD(&tx_data.state_);
 
   // NB: The functor is only used during minor merge
-  if (ObTxData::ABORT == tx_data.state_) {
+  if (ObTxData::ABORT == state) {
     // Case 1: data is aborted, so we donot need it during merge
     can_read_ = false;
   } else if (tx_data.undo_status_list_.is_contain(sql_sequence_)) {
@@ -85,13 +86,15 @@ int CheckRowLockedFunctor::operator() (const ObTxData &tx_data, ObTxCCCtx *tx_cc
 {
   UNUSED(tx_cc_ctx);
   int ret = OB_SUCCESS;
+  const int32_t state = ATOMIC_LOAD(&tx_data.state_);
+  const SCN commit_version = tx_data.commit_version_.atomic_load();
 
-  switch (tx_data.state_) {
+  switch (state) {
   case ObTxData::COMMIT: {
     // Case 1: data is committed, so the lock is locked by the data and we
     // also need return the commit version for tsc check
     lock_state_.is_locked_ = false;
-    lock_state_.trans_version_ = tx_data.commit_version_;
+    lock_state_.trans_version_ = commit_version;
     break;
   }
   case ObTxData::RUNNING: {
@@ -135,26 +138,29 @@ int GetTxStateWithSCNFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_
 {
   UNUSED(tx_cc_ctx);
   int ret = OB_SUCCESS;
+  const int32_t state = ATOMIC_LOAD(&tx_data.state_);
+  const SCN commit_version = tx_data.commit_version_.atomic_load();
+  const SCN end_scn = tx_data.end_scn_.atomic_load();
 
   // return the transaction state_ according to the merge log ts.
   // the detailed document is available as follows.
   // https://yuque.antfin-inc.com/docs/share/a3160d5e-6e1a-4980-a12e-4af653c6cf57?#
-  if (ObTxData::RUNNING == tx_data.state_) {
+  if (ObTxData::RUNNING == state) {
     // Case 1: data is during execution, so we return the running state with
     // INT64_MAX as version
     state_ = ObTxData::RUNNING;
     trans_version_ = SCN::max_scn();
-  } else if (scn_ < tx_data.end_scn_) {
+  } else if (scn_ < end_scn) {
     // Case 2: data is decided while the required state is before the merge log
     // ts, so we return the running state with INT64_MAX as txn version
     state_ = ObTxData::RUNNING;
-    trans_version_ = SCN::max_scn();
-  } else if (ObTxData::COMMIT == tx_data.state_) {
+    trans_version_.set_max();
+  } else if (ObTxData::COMMIT == state) {
     // Case 3: data is committed and the required state is after the merge log
     // ts, so we return the commit state with commit version as txn version
     state_ = ObTxData::COMMIT;
-    trans_version_ = tx_data.commit_version_;
-  } else if (ObTxData::ABORT == tx_data.state_) {
+    trans_version_ = commit_version;
+  } else if (ObTxData::ABORT == state) {
     // Case 4: data is aborted and the required state is after the merge log
     // ts, so we return the abort state with 0 as txn version
     state_ = ObTxData::ABORT;
@@ -171,31 +177,42 @@ int GetTxStateWithSCNFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_
 int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx)
 {
   int ret = OB_SUCCESS;
+  const transaction::ObTxSnapshot &snapshot = lock_for_read_arg_.mvcc_acc_ctx_.snapshot_;
+  const SCN &snapshot_version = snapshot.version_;
+  const transaction::ObTransID snapshot_tx_id = snapshot.tx_id_;
+  const int64_t snapshot_sql_sequence = snapshot.scn_;
+
+  const transaction::ObTransID data_tx_id = lock_for_read_arg_.data_trans_id_;
+  const int64_t data_sql_sequence = lock_for_read_arg_.data_sql_sequence_;
+  const bool read_latest = lock_for_read_arg_.read_latest_;
+  const transaction::ObTransID reader_tx_id = lock_for_read_arg_.mvcc_acc_ctx_.tx_id_;
+
+  // NB: We need pay much attention to the order of the reads to the different
+  // variables. Although we update the version before the state for the tnodes
+  // and read the state before the version. It may appear that the compiled code
+  // execution may rearrange its order and fail to obey its origin logic(You can
+  // read the Dependency Definiation of the ARM architecture book to understand
+  // it). So the synchronization primitive below is much important.
+  const int32_t state = ATOMIC_LOAD(&tx_data.state_);
+  const SCN commit_version = tx_data.commit_version_.atomic_load();
+
   can_read_ = false;
   trans_version_ = SCN::invalid_scn();
   is_determined_state_ = false;
-  auto &snapshot = lock_for_read_arg_.mvcc_acc_ctx_.snapshot_;
-  auto snapshot_version = snapshot.version_;
-  auto snapshot_tx_id = snapshot.tx_id_;
-  auto data_tx_id = lock_for_read_arg_.data_trans_id_;
-  auto snapshot_sql_sequence = snapshot.scn_;
-  auto data_sql_sequence = lock_for_read_arg_.data_sql_sequence_;
-  bool read_latest = lock_for_read_arg_.read_latest_;
-  auto reader_tx_id = lock_for_read_arg_.mvcc_acc_ctx_.tx_id_;
 
-  switch (tx_data.state_) {
+  switch (state) {
     case ObTxData::COMMIT: {
       // Case 1: data is committed, so the state is decided and whether we can read
       // depends on whether undo status contains the data. Then we return the commit
       // version as data version.
       can_read_ = !tx_data.undo_status_list_.is_contain(data_sql_sequence);
-      trans_version_ = tx_data.commit_version_;
+      trans_version_ = commit_version;
       is_determined_state_ = true;
       break;
     }
     case ObTxData::ELR_COMMIT: {
       can_read_ = !tx_data.undo_status_list_.is_contain(data_sql_sequence);
-      trans_version_ = tx_data.commit_version_;
+      trans_version_ = commit_version;
       is_determined_state_ = false;
       break;
     }
@@ -290,7 +307,9 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
   auto &acc_ctx = lock_for_read_arg_.mvcc_acc_ctx_;
   auto lock_expire_ts = acc_ctx.eval_lock_expire_ts();
 
-  if (OB_ISNULL(tx_cc_ctx) && (ObTxData::RUNNING == tx_data.state_)) {
+  const int32_t state = ATOMIC_LOAD(&tx_data.state_);
+
+  if (OB_ISNULL(tx_cc_ctx) && (ObTxData::RUNNING == state)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "lock for read functor need prepare version.", KR(ret));
   } else {
@@ -351,8 +370,11 @@ bool ObReCheckNothingOperation::operator()()
 int ObCleanoutTxNodeOperation::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx)
 {
   int ret = OB_SUCCESS;
+  const int32_t state = ATOMIC_LOAD(&tx_data.state_);
+  const SCN commit_version = tx_data.commit_version_.atomic_load();
+  const SCN end_scn = tx_data.end_scn_.atomic_load();
 
-  if (ObTxData::RUNNING == tx_data.state_
+  if (ObTxData::RUNNING == state
       && !tx_data.undo_status_list_.is_contain(tnode_.seq_no_)
       // NB: we need pay attention to the choice condition when issuing the
       // lock_for_read, we cannot only treat state in exec_info as judgement
@@ -378,26 +400,26 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxData &tx_data, ObTxCCCtx *tx
         } else {
           (void)tnode_.trans_abort(tx_data.end_scn_);
         }
-      } else if (ObTxData::RUNNING == tx_data.state_) {
+      } else if (ObTxData::RUNNING == state) {
         if (!tx_cc_ctx->prepare_version_.is_max()) {
           // Case 3: data is prepared, we also donot write back the prepare state
         }
-      } else if (ObTxData::COMMIT == tx_data.state_) {
+      } else if (ObTxData::COMMIT == state) {
         // Case 4: data is committed, so we should write back the commit state
-        if (OB_FAIL(value_.trans_commit(tx_data.commit_version_, tnode_))) {
+        if (OB_FAIL(value_.trans_commit(commit_version, tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K(value_), K(tnode_));
-        } else if (FALSE_IT(tnode_.trans_commit(tx_data.commit_version_, tx_data.end_scn_))) {
+        } else if (FALSE_IT(tnode_.trans_commit(commit_version, end_scn))) {
         } else if (blocksstable::ObDmlFlag::DF_LOCK == tnode_.get_dml_flag()
                    && OB_FAIL(value_.unlink_trans_node(tnode_))) {
           TRANS_LOG(WARN, "unlink lock node failed", K(ret), K(value_), K(tnode_));
         }
-      } else if (ObTxData::ABORT == tx_data.state_) {
+      } else if (ObTxData::ABORT == state) {
         // Case 6: data is aborted, so we write back the abort state
 
         if (OB_FAIL(value_.unlink_trans_node(tnode_))) {
           TRANS_LOG(WARN, "mvcc trans ctx trans commit error", K(ret), K(value_), K(tnode_));
         } else {
-          (void)tnode_.trans_abort(tx_data.end_scn_);
+          (void)tnode_.trans_abort(end_scn);
         }
       } else {
         ret = OB_ERR_UNEXPECTED;

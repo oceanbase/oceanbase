@@ -38,6 +38,7 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/ls/ob_ls.h"
 #include "ob_xa_service.h"
+#include "rootserver/ob_tenant_recovery_reportor.h"
 
 /*  interface(s)  */
 namespace oceanbase {
@@ -1392,10 +1393,13 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
     // XXX In standby cluster mode, the failure to call acquire_local_snapshot_ is an
     // normal situation, no error log needs to be printed
     // TRANS_LOG(WARN, "check ls tx service leader serving state fail", K(ret), K(ls_id), K(ret));
+  } else if (OB_FAIL(ls_tx_ctx_mgr->get_ls_log_adapter()->get_role(leader, epoch))) {
+    TRANS_LOG(WARN, "get replica role fail", K(ret), K(ls_id));
+  } else if (!leader) {
+    ret = OB_NOT_MASTER;
   } else if (FALSE_IT(snapshot0 = tx_version_mgr_.get_max_commit_ts(true))) {
-  } else if (!snapshot0.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "max commit ts invalid", K(ret), K(snapshot0), KPC(this));
+  } else if (!snapshot0.is_valid_and_not_min()) {
+    ret = OB_EAGAIN;
   } else {
     snapshot = snapshot0;
   }
@@ -2006,24 +2010,30 @@ int ObTransService::refresh_location_cache(const share::ObLSID ls)
 int ObTransService::gen_trans_id_(ObTransID &trans_id)
 {
   int ret = OB_SUCCESS;
-  const int MAX_RETRY_TIMES = 50;
+
   int retry_times = 0;
-  int64_t tx_id = 0;
-  do {
-    if (OB_SUCC(gti_source_->get_trans_id(tx_id))) {
-    } else if (OB_EAGAIN == ret) {
-      if (retry_times++ > MAX_RETRY_TIMES) {
-        ret = OB_GTI_NOT_READY;
-        TRANS_LOG(WARN, "get trans id not ready", K(ret), K(retry_times), KPC(this));
+  if (!MTL_IS_PRIMARY_TENANT()) {
+    ret = OB_STANDBY_READ_ONLY;
+    TRANS_LOG(WARN, "standby tenant support read only", K(ret));
+  } else {
+    const int MAX_RETRY_TIMES = 50;
+    int64_t tx_id = 0;
+    do {
+      if (OB_SUCC(gti_source_->get_trans_id(tx_id))) {
+      } else if (OB_EAGAIN == ret) {
+        if (retry_times++ > MAX_RETRY_TIMES) {
+          ret = OB_GTI_NOT_READY;
+          TRANS_LOG(WARN, "get trans id not ready", K(ret), K(retry_times), KPC(this));
+        } else {
+          ob_usleep(1000);
+        }
       } else {
-        ob_usleep(1000);
+        TRANS_LOG(WARN, "get trans id fail", KR(ret));
       }
-    } else {
-      TRANS_LOG(WARN, "get trans id fail", KR(ret));
+    } while (OB_EAGAIN == ret);
+    if (OB_SUCC(ret)) {
+      trans_id = ObTransID(tx_id);
     }
-  } while (OB_EAGAIN == ret);
-  if (OB_SUCC(ret)) {
-    trans_id = ObTransID(tx_id);
   }
   TRANS_LOG(TRACE, "gen trans id", K(ret), K(trans_id), K(retry_times));
   return ret;

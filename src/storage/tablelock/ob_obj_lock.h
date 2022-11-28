@@ -155,6 +155,7 @@ private:
       const share::SCN &commit_scn,
       const ObTableLockOpStatus status,
       ObTableLockOpList *op_list);
+  void wakeup_waiters_(const ObTableLockOp &lock_op);
   int recover_(
       const ObTableLockOp &lock_op,
       ObMalloc &allocator);

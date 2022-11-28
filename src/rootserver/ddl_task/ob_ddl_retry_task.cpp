@@ -207,6 +207,7 @@ int ObDDLRetryTask::init(const ObDDLTaskRecord &task_record)
     task_type_ = task_record.ddl_type_;
     parent_task_id_ = task_record.parent_task_id_;
     task_version_ = task_record.task_version_;
+    ret_code_ = task_record.ret_code_;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
     if (nullptr != task_record.message_) {
       int64_t pos = 0;
@@ -580,11 +581,12 @@ int ObDDLRetryTask::update_task_status_succ(
   int64_t affected_rows = 0;
   ObSqlString sql_string;
   int64_t curr_task_status = 0;
+  int64_t execution_id = 0; /*unused*/
   const int64_t new_task_status = ObDDLTaskStatus::SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status))) {
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, curr_task_status, execution_id))) {
     LOG_WARN("select for update failed", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(ObDDLTaskRecordOperator::update_task_status(trans, tenant_id, task_id, new_task_status))) {
     LOG_WARN("update task status failed", K(ret));

@@ -83,7 +83,7 @@ class ObTableHandleV2;
 class ObTableScanIterator;
 class ObSingleRowGetter;
 class ObLSTabletIterator;
-class ObLSTabletIDIterator;
+class ObHALSTabletIDIterator;
 class ObTabletMapKey;
 struct ObStorageLogParam;
 struct ObTabletCreateSSTableParam;
@@ -226,6 +226,11 @@ public:
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle,
       const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
+  int get_tablet_with_timeout(
+      const common::ObTabletID &tablet_id,
+      ObTabletHandle &handle,
+      const int64_t retry_timeout_us,
+      const int64_t get_timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
   int remove_tablets(const common::ObIArray<common::ObTabletID> &tablet_id_array);
   int get_ls_min_end_scn_in_old_tablets(share::SCN &end_scn);
   int get_tx_data_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
@@ -271,11 +276,10 @@ public:
   // DAS interface
   int table_scan(
       ObTableScanIterator &iter,
-      ObTableScanParam &param,
-      common::ObNewRowIterator *&result);
+      ObTableScanParam &param);
   int table_rescan(
       ObTableScanParam &param,
-      common::ObNewRowIterator *&result);
+      common::ObNewRowIterator *result);
   int insert_rows(
       ObStoreCtx &ctx,
       const ObDMLBaseParam &dml_param,
@@ -348,7 +352,7 @@ public:
 
   // iterator
   int build_tablet_iter(ObLSTabletIterator &iter);
-  int build_tablet_iter(ObLSTabletIDIterator &iter);
+  int build_tablet_iter(ObHALSTabletIDIterator &iter);
 
   // migration section
   int trim_rebuild_tablet(
@@ -459,11 +463,6 @@ private:
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle,
       const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
-  int get_tablet_with_timeout(
-      const common::ObTabletID &tablet_id,
-      ObTabletHandle &handle,
-      const int64_t retry_timeout_us,
-      const int64_t get_timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
   int direct_get_tablet(
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle);

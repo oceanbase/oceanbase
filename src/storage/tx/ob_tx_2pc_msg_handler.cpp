@@ -367,7 +367,9 @@ int ObPartTransCtx::set_2pc_participants_(const ObLSArray &participants)
 {
   int ret = OB_SUCCESS;
 
-  exec_info_.participants_ = participants;
+  if (OB_FAIL(exec_info_.participants_.assign(participants))) {
+    TRANS_LOG(WARN, "set participants error", K(ret), K(participants), KPC(this));
+  }
 
   return ret;
 }

@@ -970,6 +970,10 @@ public:
   const common::ObIArray<CheckConstraintItem> &get_check_constraint_items() const {
     return check_constraint_items_; }
   int set_check_constraint_item(CheckConstraintItem &check_constraint_item);
+  int remove_check_constraint_item(const uint64_t table_id);
+  int get_check_constraint_items(const uint64_t table_id,
+                                 CheckConstraintItem &check_constraint_item);
+
   int get_qb_name(ObString &qb_name) const;
 
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_),

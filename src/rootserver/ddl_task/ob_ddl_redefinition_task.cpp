@@ -314,6 +314,10 @@ int ObDDLRedefinitionTask::hold_snapshot(const int64_t snapshot_version)
   ObRootService *root_service = GCTX.root_service_;
   ObSEArray<ObTabletID, 1> tablet_ids;
   SCN snapshot_scn;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *data_table_schema = nullptr;
+  const ObTableSchema *dest_table_schema = nullptr;
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
@@ -325,10 +329,31 @@ int ObDDLRedefinitionTask::hold_snapshot(const int64_t snapshot_version)
     LOG_WARN("invalid arguments", K(ret), K(snapshot_version));
   } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert", K(snapshot_version), K(ret));
+  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(object_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, dest_table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(target_object_id_));
+  } else if (OB_ISNULL(data_table_schema) || OB_ISNULL(dest_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(data_table_schema), KP(dest_table_schema));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
     LOG_WARN("failed to get data table snapshot", K(ret));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, target_object_id_, tablet_ids))) {
     LOG_WARN("failed to get dest table snapshot", K(ret));
+  } else if (data_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
+             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
+    LOG_WARN("failed to get data lob meta table snapshot", K(ret));
+  } else if (data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
+             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
+    LOG_WARN("failed to get data lob piece table snapshot", K(ret));
+  } else if (dest_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
+             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, dest_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
+    LOG_WARN("failed to get dest lob meta table snapshot", K(ret));
+  } else if (dest_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
+             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, dest_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
+    LOG_WARN("failed to get dest lob piece table snapshot", K(ret));
   } else {
     ObDDLService &ddl_service = root_service->get_ddl_service();
     if (OB_FAIL(ddl_service.get_snapshot_mgr().batch_acquire_snapshot(
@@ -345,16 +370,41 @@ int ObDDLRedefinitionTask::release_snapshot(const int64_t snapshot_version)
   int ret = OB_SUCCESS;
   ObRootService *root_service = GCTX.root_service_;
   ObSEArray<ObTabletID, 1> tablet_ids;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *data_table_schema = nullptr;
+  const ObTableSchema *dest_table_schema = nullptr;
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(object_id_));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, dest_table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(target_object_id_));
+  } else if (OB_ISNULL(data_table_schema) || OB_ISNULL(dest_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(data_table_schema), KP(dest_table_schema));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
     LOG_WARN("failed to get data table snapshot", K(ret));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, target_object_id_, tablet_ids))) {
     LOG_WARN("failed to get dest table snapshot", K(ret));
+  } else if (data_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
+             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
+    LOG_WARN("failed to get data lob meta table snapshot", K(ret));
+  } else if (data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
+             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
+    LOG_WARN("failed to get data lob piece table snapshot", K(ret));
+  } else if (dest_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
+             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, dest_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
+    LOG_WARN("failed to get dest lob meta table snapshot", K(ret));
+  } else if (dest_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
+             OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, dest_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
+    LOG_WARN("failed to get dest lob piece table snapshot", K(ret));
   } else if (OB_FAIL(batch_release_snapshot(snapshot_version, tablet_ids))) {
     LOG_WARN("failed to release snapshot", K(ret));
   }

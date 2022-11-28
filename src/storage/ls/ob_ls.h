@@ -69,48 +69,7 @@ class SCN;
 
 namespace storage
 {
-#define UPDATE_LS_META_CHECK()                                          \
-  if (IS_NOT_INIT) {                                                    \
-    ret = OB_NOT_INIT;                                                  \
-    STORAGE_LOG(WARN, "ls is not inited", K(ret), K(ls_meta_));         \
-  } else if (OB_UNLIKELY(is_stopped_)) {                                \
-    ret = OB_NOT_RUNNING;                                               \
-    STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));               \
-  } else if (!can_update_ls_meta(ls_meta_.ls_create_status_)) {         \
-    ret = OB_STATE_NOT_MATCH;                                           \
-    STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_)); \
-  }
-
-#define UPDATE_LS_META_CHECK_WITH_LOCK()                                \
-  int64_t read_lock = LSLOCKLS;                                         \
-  int64_t write_lock = 0;                                               \
-  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);              \
-  UPDATE_LS_META_CHECK();
-
-#define UPDATE_LSMETA_WITH_LOCK(delegate_obj, func_name)          \
-  template <typename ...Args>                                     \
-  int func_name(Args &&...args) {                                 \
-    int ret = OB_SUCCESS;                                         \
-    UPDATE_LS_META_CHECK_WITH_LOCK();                                       \
-    if (OB_FAIL(ret)) {                                           \
-    } else {                                                      \
-      ret = delegate_obj.func_name(std::forward<Args>(args)...);  \
-    }                                                             \
-    return ret;                                                   \
-  }
-
-#define UPDATE_LSMETA_WITHOUT_LOCK(delegate_obj, func_name)       \
-  template <typename ...Args>                                     \
-  int func_name##_without_lock(Args &&...args) {                  \
-    int ret = OB_SUCCESS;                                         \
-    UPDATE_LS_META_CHECK();                                       \
-    if (OB_FAIL(ret)) {                                           \
-    } else {                                                      \
-      ret = delegate_obj.func_name(std::forward<Args>(args)...);  \
-    }                                                             \
-    return ret;                                                   \
-  }
-
+const static int64_t LS_INNER_TABLET_FROZEN_TIMESTAMP = 1;
 
 struct ObLSVTInfo
 {
@@ -124,6 +83,7 @@ struct ObLSVTInfo
   share::SCN checkpoint_scn_;
   //TODO SCN
   int64_t checkpoint_lsn_;
+  int64_t rebuild_seq_;
 };
 
 // 诊断虚表统计信息
@@ -187,11 +147,12 @@ public:
   // I am ready to work now.
   int start();
   int stop();
+  void wait();
   bool safe_to_destroy();
   void destroy();
   int offline();
   int online();
-  bool is_offline() const { return false; } // mock function, TODO(@yanyuan)
+  bool is_offline() const { return is_offlined_; } // mock function, TODO(@yanyuan)
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
   ObLockTable *get_lock_table() { return &lock_table_; }
@@ -208,6 +169,8 @@ public:
   checkpoint::ObDataCheckpoint *get_data_checkpoint() { return &data_checkpoint_; }
   transaction::ObKeepAliveLSHandler *get_keep_alive_ls_handler() { return &keep_alive_ls_handler_; }
   ObLSRestoreHandler *get_ls_restore_handler() { return &ls_restore_handler_; }
+  ObLSDDLLogHandler *get_ddl_log_handler() { return &ls_ddl_log_handler_; }
+
   // ObObLogHandler interface:
   // get the log_service pointer
   logservice::ObLogHandler *get_log_handler() { return &log_handler_; }
@@ -233,7 +196,7 @@ public:
   // set create state of ls.
   // @param[in] new_status, the new create state which will be set.
   void set_create_state(const ObInnerLSStatus new_status);
-  ObInnerLSStatus get_create_state();
+  ObInnerLSStatus get_create_state() const;
   bool is_need_gc() const;
   bool is_need_load_inner_tablet() const;
   // for rebuild
@@ -307,43 +270,40 @@ public:
 
   TO_STRING_KV(K_(ls_meta), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler));
 private:
+  int stop_();
+  void wait_();
   int prepare_for_safe_destroy_();
   int flush_if_need_(const bool need_flush);
   int offline_();
-  int offline_log_();
-  int online_log_();
+  int offline_compaction_();
+  int online_compaction_();
   int offline_tx_();
   int online_tx_();
 public:
   // ObLSMeta interface:
-  int update_id_meta_with_writing_slog(const int64_t service_type,
-                                       const int64_t limited_id,
-                                       const share::SCN &latest_scn);
-  int update_id_meta_without_writing_slog(const int64_t service_type,
-                                          const int64_t limited_id,
-                                          const share::SCN &latest_scn);
+  int update_ls_meta(const bool update_restore_status,
+                     const ObLSMeta &src_ls_meta);
+
+  // int update_id_meta(const int64_t service_type,
+  //                    const int64_t limited_id,
+  //                    const int64_t latest_log_ts,
+  //                    const bool write_slog);
+  DELEGATE_WITH_RET(ls_meta_, update_id_meta, int);
   int set_ls_rebuild();
   // protect in ls lock
   // int set_gc_state(const logservice::LSGCState &gc_state);
-  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_gc_state);
+  DELEGATE_WITH_RET(ls_meta_, set_gc_state, int);
   // int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
   //                         const share::SCN &clog_checkpoint_scn,
   //                         const bool write_slog = true);
-  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_clog_checkpoint);
-  UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, set_clog_checkpoint);
+  DELEGATE_WITH_RET(ls_meta_, set_clog_checkpoint, int);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_scn, share::SCN);
   DELEGATE_WITH_RET(ls_meta_, get_clog_base_lsn, palf::LSN &);
   DELEGATE_WITH_RET(ls_meta_, get_saved_info, int);
   // int build_saved_info();
-  UPDATE_LSMETA_WITH_LOCK(ls_meta_, build_saved_info);
+  DELEGATE_WITH_RET(ls_meta_, build_saved_info, int);
   // int clear_saved_info_without_lock();
-  UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, clear_saved_info);
-  // int update_ls_meta(const bool update_restore_status,
-  //                    const ObLSMeta &src_ls_meta);
-  UPDATE_LSMETA_WITH_LOCK(ls_meta_, update_ls_meta);
-  // int update_ls_meta_without_lock(const bool update_restore_status,
-  //                                 const ObLSMeta &src_ls_meta);
-  UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, update_ls_meta);
+  DELEGATE_WITH_RET(ls_meta_, clear_saved_info, int);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_rebuild_seq, int64_t);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_tablet_change_checkpoint_scn, share::SCN);
 
@@ -369,7 +329,7 @@ public:
   // set offline ts
   // @param [in] offline ts.
   // int set_offline_scn(const int64_t offline_scn);
-  UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_offline_scn);
+  DELEGATE_WITH_RET(ls_meta_, set_offline_scn, int);
   // get offline ts
   // @param [in] offline ts.
   // int get_offline_scn(const share::SCN &offline_scn);
@@ -377,7 +337,8 @@ public:
   // update replayable point
   // @param [in] replayable point.
   // int update_ls_replayable_point(const int64_t replayable_point);
-  UPDATE_LSMETA_WITH_LOCK(ls_meta_, update_ls_replayable_point);
+  DELEGATE_WITH_RET(ls_meta_, update_ls_replayable_point, int);
+  // update replayable point
   // get replayable point
   // @param [in] replayable point
   // int get_ls_replayable_point(int64_t &replayable_point);
@@ -645,6 +606,7 @@ public:
 
   // ObDataCheckpoint interface:
   DELEGATE_WITH_RET(data_checkpoint_, get_freezecheckpoint_info, int);
+  DELEGATE_WITH_RET(keep_alive_ls_handler_, get_min_start_scn, void);
 
   // update tablet table store here do not using Macro because need lock ls and tablet
   // update table store for tablet
@@ -718,6 +680,7 @@ private:
   bool is_inited_;
   uint64_t tenant_id_;
   bool is_stopped_;
+  bool is_offlined_;
   ObLSMeta ls_meta_;
   observer::ObIMetaReport *rs_reporter_;
   ObLSLock lock_;

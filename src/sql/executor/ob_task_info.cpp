@@ -19,6 +19,10 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
+namespace oceanbase
+{
+namespace sql
+{
 ObTaskInfo::ObTaskInfo(common::ObIAllocator &allocator)
   : range_location_(allocator),
     task_split_type_(ObTaskSpliter::INVALID_SPLIT),
@@ -88,3 +92,5 @@ int ObTaskInfo::ObRangeLocation::assign(const ObTaskInfo::ObRangeLocation &range
   return ret;
 }
 
+}
+}

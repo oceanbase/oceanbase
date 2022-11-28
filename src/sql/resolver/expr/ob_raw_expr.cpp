@@ -4299,6 +4299,55 @@ int ObUDFRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &p
   return ret;
 }
 
+bool ObUDFRawExpr::inner_same_as(const ObRawExpr &expr,
+                                 ObExprEqualCheckContext *check_context) const
+
+{
+  bool bool_ret = is_deterministic_;
+  if (bool_ret) {
+    bool_ret = ObSysFunRawExpr::inner_same_as(expr, check_context);
+    if (bool_ret) {
+      const ObUDFRawExpr *other = static_cast<const ObUDFRawExpr *>(&expr);
+      bool_ret = udf_id_ == other->get_udf_id() &&
+                 pkg_id_ == other->get_pkg_id() &&
+                 type_id_ == other->get_type_id() &&
+                 pls_type_ == other->get_pls_type() &&
+                 database_name_.compare(other->get_database_name()) == 0 &&
+                 package_name_.compare(other->get_package_name()) == 0 &&
+                 is_deterministic_ == other->is_deterministic() &&
+                 is_parallel_enable_ == other->is_parallel_enable() &&
+                 is_udt_udf_ == other->get_is_udt_udf() &&
+                 is_pkg_body_udf_ == other->is_pkg_body_udf() &&
+                 is_return_sys_cursor_ == other->get_is_return_sys_cursor() &&
+                 is_aggregate_udf_ == other->get_is_aggregate_udf() &&
+                 is_aggr_udf_distinct_ == other->get_is_aggr_udf_distinct() &&
+                 loc_ == other->get_loc() &&
+                 is_udt_cons_ == other->get_is_udt_cons() &&
+                 subprogram_path_.count() == other->get_subprogram_path().count() &&
+                 params_type_.count() == other->get_params_type().count() &&
+                 nocopy_params_.count() == other->get_nocopy_params().count() &&
+                 params_name_.count() == other->get_params_name().count() &&
+                 params_desc_v2_.count() == other->get_params_desc().count();
+      for (int64_t i = 0; bool_ret && i < subprogram_path_.count(); ++i) {
+        bool_ret = subprogram_path_.at(i) == other->get_subprogram_path().at(i);
+      }
+      for (int64_t i = 0; bool_ret && i < params_type_.count(); ++i) {
+        bool_ret = params_type_.at(i) == other->get_params_type().at(i);
+      }
+      for (int64_t i = 0; bool_ret && i < nocopy_params_.count(); ++i) {
+        bool_ret = nocopy_params_.at(i) == other->get_nocopy_params().at(i);
+      }
+      for (int64_t i = 0; bool_ret && i < params_name_.count(); ++i) {
+        bool_ret = params_name_.at(i).compare(other->get_params_name().at(i)) == 0;
+      }
+      for (int64_t i = 0; bool_ret && i < params_desc_v2_.count(); ++i) {
+        bool_ret = params_desc_v2_.at(i) == other->get_params_desc().at(i);
+      }
+    }
+  }
+  return bool_ret;
+}
+
 int ObUDFRawExpr::get_schema_object_version(share::schema::ObSchemaObjVersion &obj_version)
 {
   int ret = OB_SUCCESS;

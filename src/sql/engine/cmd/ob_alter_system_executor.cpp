@@ -728,11 +728,7 @@ int ObAdminZoneExecutor::execute(ObExecContext &ctx, ObAdminZoneStmt &stmt)
         }
       } else {} // force stop, no need to wait leader switch
     } else if (ObAdminZoneArg::MODIFY == stmt.get_op()) {
-      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_1440) {
-        ret = OB_OP_NOT_ALLOW;
-        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "cannot alter zone during cluster updating to 143");
-        LOG_INFO("alter zone during cluster upgrading to version 1.4.3");
-      } else if (OB_FAIL(common_proxy->alter_zone(arg))) {
+      if (OB_FAIL(common_proxy->alter_zone(arg))) {
         LOG_WARN("common rpc proxy alter zone failed", K(arg), K(ret));
       }
     } else {

@@ -1662,6 +1662,7 @@ int ObBackupLSTaskOperator::get_ls_tasks(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  ls_attrs.reset();
   if (job_id <= 0 || tenant_id == OB_INVALID_TENANT_ID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(tenant_id), K(tenant_id));

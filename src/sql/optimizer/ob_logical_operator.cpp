@@ -2848,6 +2848,19 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
                     loc_cons_ctx->base_table_constraints_.count() - 1))) {
           LOG_WARN("failed to push back location constraint offset", K(ret));
         }
+      } else if (log_op_def::LOG_TEMP_TABLE_ACCESS == get_type()) {
+        ObLogTempTableAccess *access = static_cast<ObLogTempTableAccess*>(this);
+        ObLogicalOperator *insert_op = NULL;
+        if (OB_FAIL(access->get_temp_table_plan(insert_op))) {
+          LOG_WARN("failed to get temp table plan", K(ret));
+        } else if (OB_ISNULL(insert_op)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null operator", K(ret));
+        } else if (OB_FAIL(append(strict_pwj_constraint_, insert_op->strict_pwj_constraint_))) {
+          LOG_WARN("failed to append child pwj constraint", K(ret));
+        } else if (OB_FAIL(append(non_strict_pwj_constraint_, insert_op->non_strict_pwj_constraint_))) {
+          LOG_WARN("failed to append child pwj constraint", K(ret));
+        }
       }
     } else if (get_num_of_child() > 0) {
       /**

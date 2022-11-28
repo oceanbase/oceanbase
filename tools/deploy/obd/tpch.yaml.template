@@ -8,6 +8,7 @@ oceanbase-ce:
     rpc_port: ${rpc_port}
     home_path: ${home_path}
   global:
+    production_mode: false
     devname: lo
     cluster_id: 1
     memory_limit: '80G'

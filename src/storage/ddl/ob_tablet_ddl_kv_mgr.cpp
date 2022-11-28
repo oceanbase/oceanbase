@@ -29,7 +29,7 @@ using namespace oceanbase::storage;
 
 ObTabletDDLKvMgr::ObTabletDDLKvMgr()
   : is_inited_(false), is_commit_success_(false), ls_id_(), tablet_id_(), table_key_(), cluster_version_(0),
-    start_scn_(), max_freeze_scn_(),
+    start_scn_(SCN::min_scn()), max_freeze_scn_(SCN::min_scn()),
     table_id_(0), execution_id_(0), head_(0), tail_(0), lock_(), ref_cnt_(0)
 {
   MEMSET(ddl_kvs_, 0, MAX_DDL_KV_CNT_IN_STORAGE * sizeof(ddl_kvs_[0]));
@@ -58,7 +58,7 @@ void ObTabletDDLKvMgr::destroy()
   tablet_id_.reset();
   table_key_.reset();
   cluster_version_ = 0;
-  start_scn_.reset();
+  start_scn_.set_min();
   max_freeze_scn_.reset();
   table_id_ = 0;
   execution_id_ = 0;
@@ -88,30 +88,36 @@ int ObTabletDDLKvMgr::init(const share::ObLSID &ls_id, const common::ObTabletID 
 // ddl start from checkpoint
 //    keep ddl sstable table
 
-int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key, const SCN &start_scn, const int64_t cluster_version, const SCN &checkpoint_scn)
+int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key,
+                                const SCN &start_scn,
+                                const int64_t cluster_version,
+                                const int64_t execution_id,
+                                const SCN &checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   bool is_brand_new = false;
+  TCWLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn.is_valid() || cluster_version < 0
-        || (checkpoint_scn.is_valid() && checkpoint_scn < start_scn))) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn.is_valid_and_not_min() || execution_id < 0 || cluster_version < 0
+        || (checkpoint_scn.is_valid_and_not_min() && checkpoint_scn < start_scn))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(cluster_version), K(checkpoint_scn));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(execution_id), K(cluster_version), K(checkpoint_scn));
   } else if (table_key.get_tablet_id() != tablet_id_) {
     ret = OB_ERR_SYS;
     LOG_WARN("tablet id not same", K(ret), K(table_key), K(tablet_id_));
   } else if (start_scn_.is_valid()) {
-    if (start_scn > start_scn_) {
-      LOG_INFO("start log ts changed, need cleanup", K(ls_id_), K(tablet_id_), K(start_scn_), K(start_scn));
-      if (OB_FAIL(cleanup())) {
-        LOG_WARN("clean up start log failed", K(ret));
-      } else {
-        is_brand_new = true;
-      }
+    if (execution_id >= execution_id_ && start_scn >= start_scn_) {
+      LOG_INFO("execution id changed, need cleanup", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_scn_), K(start_scn));
+      cleanup_unlock();
+      is_brand_new = true;
     } else {
-      LOG_INFO("ddl start ignored", K(ls_id_), K(tablet_id_), K(start_scn_), K(start_scn));
+      if (!checkpoint_scn.is_valid_and_not_min()) {
+        // only return error code when not start from checkpoint.
+        ret = OB_TASK_EXPIRED;
+      }
+      LOG_INFO("ddl start ignored", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_scn_), K(start_scn));
     }
   } else {
     is_brand_new = true;
@@ -119,6 +125,7 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key, const SCN &
   if (OB_SUCC(ret) && is_brand_new) {
     table_key_ = table_key;
     cluster_version_ = cluster_version;
+    execution_id_ = execution_id;
     start_scn_ = start_scn;
     max_freeze_scn_ = SCN::max(start_scn, checkpoint_scn);
   }
@@ -128,14 +135,13 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key, const SCN &
       LOG_WARN("clean up ddl sstable failed", K(ret), K(ls_id_), K(tablet_id_));
     }
   }
-  FLOG_INFO("start ddl kv mgr finished", K(ret), K(is_brand_new), K(start_scn), K(checkpoint_scn), K(*this));
+  FLOG_INFO("start ddl kv mgr finished", K(ret), K(is_brand_new), K(start_scn), K(execution_id), K(checkpoint_scn), K(*this));
   return ret;
 }
 
 int ObTabletDDLKvMgr::ddl_prepare(const SCN &start_scn,
                                   const SCN &prepare_scn,
                                   const uint64_t table_id,
-                                  const int64_t execution_id,
                                   const int64_t ddl_task_id)
 {
   int ret = OB_SUCCESS;
@@ -153,7 +159,6 @@ int ObTabletDDLKvMgr::ddl_prepare(const SCN &start_scn,
     LOG_WARN("freeze ddl kv failed", K(ret), K(prepare_scn));
   } else {
     table_id_ = table_id;
-    execution_id_ = execution_id;
     ddl_task_id_ = ddl_task_id;
 
     ObDDLTableMergeDagParam param;
@@ -292,20 +297,147 @@ int ObTabletDDLKvMgr::cleanup()
     LOG_WARN("not init", K(ret));
   } else {
     TCWLockGuard guard(lock_);
-    for (int64_t pos = head_; pos < tail_; ++pos) {
-      const int64_t idx = get_idx(pos);
-      free_ddl_kv(idx);
+    cleanup_unlock();
+  }
+  return ret;
+}
+
+void ObTabletDDLKvMgr::cleanup_unlock()
+{
+  LOG_INFO("cleanup ddl kv mgr", K(*this));
+  for (int64_t pos = head_; pos < tail_; ++pos) {
+    const int64_t idx = get_idx(pos);
+    free_ddl_kv(idx);
+  }
+  head_ = 0;
+  tail_ = 0;
+  MEMSET(ddl_kvs_, 0, sizeof(ddl_kvs_));
+  table_key_.reset();
+  cluster_version_ = 0;
+  start_scn_.set_min();
+  max_freeze_scn_.set_min();
+  table_id_ = 0;
+  execution_id_ = 0;
+  is_commit_success_ = false;
+}
+
+bool ObTabletDDLKvMgr::is_execution_id_older(const int64_t execution_id)
+{
+  TCRLockGuard guard(lock_);
+  return execution_id < execution_id_;
+}
+
+int ObTabletDDLKvMgr::online()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
+                                                    tablet_handle,
+                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else {
+    const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
+    ObITable::TableKey table_key;
+    table_key.table_type_ = ObITable::TableType::MAJOR_SSTABLE;
+    table_key.tablet_id_ = tablet_meta.tablet_id_;
+    table_key.version_range_.base_version_ = 0;
+    table_key.version_range_.snapshot_version_ = tablet_meta.ddl_snapshot_version_;
+    const SCN &start_scn = tablet_meta.ddl_start_scn_;
+    if (OB_FAIL(ddl_start(table_key,
+                          start_scn,
+                          tablet_meta.ddl_cluster_version_,
+                          tablet_meta.ddl_execution_id_,
+                          tablet_meta.ddl_checkpoint_scn_))) {
+      if (OB_TASK_EXPIRED == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("start ddl kv manager failed", K(ret), K(tablet_meta));
+      }
     }
-    head_ = 0;
-    tail_ = 0;
-    MEMSET(ddl_kvs_, 0, sizeof(ddl_kvs_));
-    table_key_.reset();
-    cluster_version_ = 0;
-    start_scn_.reset();
-    max_freeze_scn_.reset();
-    table_id_ = 0;
-    execution_id_ = 0;
-    is_commit_success_ = false;
+  }
+  return ret;
+}
+
+int ObTabletDDLKvMgr::register_to_tablet(const SCN &ddl_start_scn, ObDDLKvMgrHandle &kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!ddl_start_scn.is_valid_and_not_min() || kv_mgr_handle.get_obj() != this)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_start_scn), KP(kv_mgr_handle.get_obj()), KP(this));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
+                                                    tablet_handle,
+                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else {
+    TCWLockGuard guard(lock_);
+    if (ddl_start_scn < start_scn_) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl task expired", K(ret), K(ls_id_), K(tablet_id_), K(start_scn_), K(ddl_start_scn));
+    } else if (ddl_start_scn > start_scn_) {
+      if (SCN::min_scn() == start_scn_) {
+        // maybe ls offline
+        ret = OB_EAGAIN;
+      } else {
+        ret = OB_ERR_SYS;
+      }
+      LOG_WARN("ddl kv mgr register before start", K(ret), K(ls_id_), K(tablet_id_), K(start_scn_), K(ddl_start_scn));
+    } else {
+      if (OB_FAIL(tablet_handle.get_obj()->set_ddl_kv_mgr(kv_mgr_handle))) {
+        LOG_WARN("set ddl kv mgr into tablet failed", K(ret), K(ls_id_), K(tablet_id_), K(start_scn_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletDDLKvMgr::unregister_from_tablet(const SCN &ddl_start_scn, ObDDLKvMgrHandle &kv_mgr_handle)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!ddl_start_scn.is_valid_and_not_min() || kv_mgr_handle.get_obj() != this)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_start_scn), KP(kv_mgr_handle.get_obj()), KP(this));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
+                                                    tablet_handle,
+                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else {
+    TCWLockGuard guard(lock_);
+    if (ddl_start_scn < start_scn_) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("ddl task expired", K(ret), K(ls_id_), K(tablet_id_), K(start_scn_), K(ddl_start_scn));
+    } else if (ddl_start_scn > start_scn_) {
+      if (SCN::min_scn() == start_scn_) {
+        // maybe ls offline
+        ret = OB_EAGAIN;
+      } else {
+        ret = OB_ERR_SYS;
+      }
+      LOG_WARN("ddl kv mgr register before start", K(ret), K(ls_id_), K(tablet_id_), K(start_scn_), K(ddl_start_scn));
+    } else {
+      if (OB_FAIL(tablet_handle.get_obj()->remove_ddl_kv_mgr(kv_mgr_handle))) {
+        LOG_WARN("set ddl kv mgr into tablet failed", K(ret), K(ls_id_), K(tablet_id_), K(start_scn_));
+      }
+    }
   }
   return ret;
 }
@@ -318,14 +450,15 @@ int ObTabletDDLKvMgr::update_tablet(const SCN &start_scn, const int64_t snapshot
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!start_scn.is_valid() || snapshot_version <= 0 || !ddl_checkpoint_scn.is_valid())) {
+  } else if (OB_UNLIKELY(!start_scn.is_valid_and_not_min() || snapshot_version <= 0 || !ddl_checkpoint_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(start_scn), K(snapshot_version), K(ddl_checkpoint_scn));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
-                                                    tablet_handle,
-                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
+                                               tablet_id_,
+                                               tablet_handle,
+                                               ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
   } else {
     ObTableHandleV2 table_handle; // empty
@@ -339,6 +472,8 @@ int ObTabletDDLKvMgr::update_tablet(const SCN &start_scn, const int64_t snapshot
     param.ddl_start_scn_ = start_scn;
     param.ddl_snapshot_version_ = snapshot_version;
     param.ddl_checkpoint_scn_ = ddl_checkpoint_scn;
+    param.ddl_execution_id_ = execution_id_;
+    param.ddl_cluster_version_ = cluster_version_;
     if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(ls_id_), K(tablet_id_), K(param));
     } else {
@@ -358,11 +493,11 @@ int ObTabletDDLKvMgr::get_ddl_param(ObTabletDDLParam &ddl_param)
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl not started", K(ret));
   } else {
-    ddl_param.snapshot_version_ = table_key_.get_snapshot_version();
     ddl_param.tenant_id_ = MTL_ID();
     ddl_param.ls_id_ = ls_id_;
     ddl_param.table_key_ = table_key_;
     ddl_param.start_scn_ = start_scn_;
+    ddl_param.snapshot_version_ = table_key_.get_snapshot_version();
     ddl_param.cluster_version_ = cluster_version_;
   }
 
@@ -439,7 +574,7 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(const SCN &scn, ObDDLKVHandle &kv_han
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
-  } else if (!scn.is_valid()) {
+  } else if (!scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(scn));
   } else {

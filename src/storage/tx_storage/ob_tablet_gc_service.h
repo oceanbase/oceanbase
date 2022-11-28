@@ -13,8 +13,8 @@
 #ifndef OCEABASE_STORAGE_OB_TABLET_GC_SERVICE_
 #define OCEABASE_STORAGE_OB_TABLET_GC_SERVICE_
 #include "storage/tx_storage/ob_ls_freeze_thread.h"
-#include "lib/lock/ob_spin_lock.h"
 #include "lib/task/ob_timer.h"
+#include "lib/lock/ob_rwlock.h"
 #include "common/ob_tablet_id.h"
 #include "share/scn.h"
 
@@ -32,6 +32,7 @@ public:
   ObTabletGCHandler()
     : ls_(NULL),
       tablet_persist_trigger_(0),
+      update_enabled_(true),
       is_inited_(false)
   {}
   ~ObTabletGCHandler() { reset(); }
@@ -57,6 +58,9 @@ public:
   int flush_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids,
                                  const share::SCN checkpoint_scn);
   int gc_tablets(const common::ObTabletIDArray &tablet_ids);
+  bool check_stop() { return ATOMIC_LOAD(&update_enabled_) == false; }
+  void offline();
+  void online();
   TO_STRING_KV(K_(tablet_persist_trigger), K_(is_inited));
 
 private:
@@ -65,10 +69,17 @@ private:
   int freeze_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids);
   int wait_unpersist_tablet_ids_flushed(const common::ObTabletIDArray &unpersist_tablet_ids,
                                         const share::SCN checkpoint_scn);
+  void wait_stop() { obsys::ObWLockGuard lock(wait_lock_); }
+  void set_stop() { ATOMIC_STORE(&update_enabled_, false); }
+  void set_start() { ATOMIC_STORE(&update_enabled_, true); }
+
+public:
+  obsys::ObRWLock wait_lock_;
 
 private:
   storage::ObLS *ls_;
   uint8_t tablet_persist_trigger_;
+  bool update_enabled_;
   bool is_inited_;
 };
 

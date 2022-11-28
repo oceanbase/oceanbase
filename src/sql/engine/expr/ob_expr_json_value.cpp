@@ -1685,5 +1685,7 @@ int ObExprJsonValue::get_cast_inttc_len(ObExprResType &type1,
   return ret;
 }
 
+#undef CAST_FAIL
+
 }
 }

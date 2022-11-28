@@ -115,6 +115,7 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
     schema_version_ = arg.schema_version_;
     task_id_ = arg.task_id_;
     execution_id_ = arg.execution_id_;
+    tablet_task_id_ = arg.tablet_task_id_;
     FLOG_INFO("succeed to init ObComplementDataParam", K(ret), K(is_inited_), K(tenant_id_), K(ls_id_),
       K(source_tablet_id_), K(dest_tablet_id_), K(schema_version_), K(task_id_), K(arg), K(concurrent_cnt_));
   }
@@ -219,6 +220,9 @@ int ObComplementDataParam::split_task_ranges(
                                                              ranges,
                                                              total_size))) {
       LOG_WARN("get multi ranges cost failed", K(ret));
+      if (OB_REPLICA_NOT_READABLE == ret) {
+        ret = OB_EAGAIN;
+      }
     } else if (OB_FALSE_IT(total_size = total_size / 1024 / 1024 /* Byte -> MB */)) {
     } else if (OB_FAIL(ObGranuleUtil::compute_total_task_count(params, 
                                                                total_size,
@@ -230,6 +234,9 @@ int ObComplementDataParam::split_task_ranges(
                                                           allocator_, 
                                                           multi_range_split_array))) {
       LOG_WARN("split multi ranges failed", K(ret));
+      if (OB_REPLICA_NOT_READABLE == ret) {
+        ret = OB_EAGAIN;
+      }
     } else if (multi_range_split_array.count() <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected range split arr", K(ret), K(total_size), K(hint_parallelism), 
@@ -328,7 +335,7 @@ int ObComplementDataContext::write_start_log(const ObComplementDataParam &param)
   } else if (OB_UNLIKELY(!hidden_table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table key", K(ret), K(hidden_table_key));
-  } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(hidden_table_key, ddl_kv_mgr_handle_))) {
+  } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(hidden_table_key, param.execution_id_, ddl_kv_mgr_handle_))) {
     LOG_WARN("fail write start log", K(ret), K(hidden_table_key), K(param));
   } else {
     LOG_INFO("complement task start ddl redo success", K(hidden_table_key));
@@ -1095,7 +1102,7 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
                                                               report_col_checksums,
                                                               report_col_ids,
                                                               1/*execution_id*/,
-                                                              param_->source_tablet_id_.id()/*task_id*/,
+                                                              param_->tablet_task_id_ << 48 | task_id_,
                                                               *GCTX.sql_proxy_))) {
       LOG_WARN("fail to report origin table checksum", K(ret));
     } else {/* do nothing. */}
@@ -1183,7 +1190,6 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
   ObTablet *tablet = nullptr;
   ObTabletHandle tablet_handle;
   ObITable::TableKey hidden_table_key;
@@ -1198,11 +1204,7 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
     LOG_WARN("error unexpected", K(ret), KP(param_), KP(context_));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(param_->ls_id_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls is unexpected null", K(ret));
-  } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(param_->dest_tablet_id_,
-                                                      tablet_handle))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, param_->dest_tablet_id_, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(param_->ls_id_), K(param_->dest_tablet_id_));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1217,11 +1219,11 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_prepare_log(hidden_table_key,
                                                                            param_->hidden_table_schema_->get_table_id(),
-                                                                           1/*execution_id*/,
+                                                                           param_->execution_id_,
                                                                            param_->task_id_,
                                                                            prepare_scn))) {
     if (OB_TASK_EXPIRED == ret) {
-      LOG_INFO("ddl task expired, but return success", K(ret), K(hidden_table_key), KPC(param_));
+      LOG_INFO("ddl task expired", K(ret), K(hidden_table_key), KPC(param_));
     } else {
       LOG_WARN("fail write ddl prepare log", K(ret), K(hidden_table_key));
     }
@@ -1236,28 +1238,17 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_scn,
                                                                 prepare_scn,
                                                                 param_->hidden_table_schema_->get_table_id(),
-                                                                1/*execution_id*/,
                                                                 param_->task_id_))) {
-      if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
-            K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("commit ddl log failed", K(ret), K(ddl_start_scn), K(prepare_scn), K(hidden_table_key));
-      }
+      LOG_WARN("commit ddl log failed", K(ret), K(ls_id), K(tablet_id), K(prepare_scn), K(hidden_table_key),
+          K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_scn, prepare_scn))) {
-      if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
-            K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("wait ddl commit failed", K(ret), K(ddl_start_scn), K(hidden_table_key));
-      }
+      LOG_WARN("wait ddl commit failed", K(ret), K(ls_id), K(tablet_id), K(hidden_table_key),
+          K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(ddl_start_scn, ddl_kv_mgr_handle))) {
+      LOG_WARN("ddl kv mgr unregister failed", K(ret), KPC(param_));
     } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_commit_log(hidden_table_key,
                                                                             prepare_scn))) {
       LOG_WARN("fail write ddl commit log", K(ret), K(hidden_table_key));
-    } else {
-      tablet_handle.get_obj()->remove_ddl_kv_mgr();
     }
   }
   return ret;

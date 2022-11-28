@@ -512,7 +512,9 @@ int ObCDCPartTransResolver::handle_record_(
       if (OB_FAIL(missing_info.push_back_missing_log_lsn_arr(prev_redo_lsns))) {
         LOG_ERROR("push_back_missing_log_lsn_arr failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(record_log), K(is_resolving_miss_log),
             K(missing_info), KPC(part_trans_task));
-      } else if (! is_first_record && OB_FAIL(missing_info.set_miss_record_log_lsn(prev_record_lsn))) {
+      } else if (is_first_record) {
+        part_trans_task->mark_read_first_record();
+      } else if (OB_FAIL(missing_info.set_miss_record_log_lsn(prev_record_lsn))) {
         LOG_ERROR("push prev_record_lsn into missing_info failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(record_log),
             K(is_first_record), K(missing_info), KPC(part_trans_task));
       } else {

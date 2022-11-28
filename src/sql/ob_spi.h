@@ -425,6 +425,7 @@ public:
 
   static int spi_build_record_type_by_result_set(common::ObIAllocator &allocator,
                                                  ObSQLSessionInfo &session,
+                                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                                  const sql::ObResultSet &result_set,
                                                  int64_t hidden_column_count,
                                                  pl::ObRecordType *&record_type,
@@ -577,6 +578,7 @@ private:
   static int spi_resolve_prepare(common::ObIAllocator &allocator,
                                  ObSQLSessionInfo &session,
                                  ObMySQLProxy &sql_proxy,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                  sql::ObRawExprFactory &expr_factory,
                                  const ObString &sql,
                                  bool is_cursor,
@@ -793,6 +795,11 @@ private:
                                      const int64_t *pl_integer_ranges,
                                      bool is_bulk,
                                      int64_t limit);
+
+  static int check_package_dest_and_deep_copy(pl::ObPLExecCtx &ctx,
+                                    const ObSqlExpression &expr,
+                                    ObIArray<ObObj> &src_array,
+                                    ObIArray<ObObj> &dst_array);
 };
 
 }

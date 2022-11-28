@@ -305,7 +305,8 @@ private:
   void try_reset_last_fetch_log_info_(const LSN &expected_end_lsn, const int64_t log_id);
   void try_update_committed_lsn_for_fetch_(const LSN &expected_end_lsn,
       const int64_t &expected_log_id,
-      const LSN &log_committed_end_lsn);
+      const LSN &log_committed_end_lsn,
+      bool &is_need_fetch);
   void try_fetch_log_streamingly_(const LSN &log_end_lsn);
   int do_fetch_log_(const FetchTriggerType &trigger_type,
                     const common::ObAddr &dest,
@@ -339,7 +340,7 @@ public:
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
   static const int64_t APPEND_CNT_ARRAY_SIZE = 32;   // append次数统计数组的size
   static const uint64_t APPEND_CNT_ARRAY_MASK = APPEND_CNT_ARRAY_SIZE - 1;
-  static const int64_t APPEND_CNT_LB_FOR_PERIOD_FREEZE = 200000;   // 切为PERIOD_FREEZE_MODE的append count下界
+  static const int64_t APPEND_CNT_LB_FOR_PERIOD_FREEZE = 130000;   // 切为PERIOD_FREEZE_MODE的append count下界
 private:
   struct LogTaskGuard
   {

@@ -33,6 +33,15 @@ namespace obrpc
 #define OB_LISTENER_MAX_THREAD_CNT         64
 #endif
 
+inline struct sockaddr_in* make_unix_sockaddr(struct sockaddr_in *sin, in_addr_t ip, int port) {
+  if (NULL != sin) {
+    sin->sin_port = (uint16_t)htons((uint16_t)port);
+    sin->sin_addr.s_addr = ip;
+    sin->sin_family = AF_INET;
+  }
+  return sin;
+}
+
 typedef struct io_threads_pipefd_pool_t{
     int count;
     int pipefd[OB_LISTENER_MAX_THREAD_CNT];

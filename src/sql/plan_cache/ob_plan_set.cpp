@@ -739,6 +739,8 @@ int ObPlanSet::set_equal_param_constraint(common::ObIArray<ObPCParamEqualInfo> &
   for (int64_t i = 0; OB_SUCC(ret) && i < equal_param_constraint.count(); ++i) {
     ObPCParamEqualInfo &equal_info = equal_param_constraint.at(i);
     if (equal_info.first_param_idx_ < 0 || equal_info.second_param_idx_ < 0 ||
+        equal_info.first_param_idx_ > params_info_.count() ||
+        equal_info.second_param_idx_ > params_info_.count() ||
         equal_info.first_param_idx_ == equal_info.second_param_idx_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get invalid equal param constraint", K(ret), K(equal_info));

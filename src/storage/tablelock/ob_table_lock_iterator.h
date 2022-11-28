@@ -102,7 +102,7 @@ private:
   blocksstable::ObDatumRow row_;
   ObTableLockBuffer buf_;
   int64_t idx_;
-  ObSEArray<ObTableLockOp, TABLE_LOCK_ARRAY_LENGTH> table_lock_store_info_;
+  ObSEArray<oceanbase::transaction::tablelock::ObTableLockOp, TABLE_LOCK_ARRAY_LENGTH> table_lock_store_info_;
   bool is_inited_;
 };
 

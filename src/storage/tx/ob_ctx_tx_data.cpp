@@ -266,7 +266,7 @@ int ObCtxTxData::set_state(int32_t state)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->state_ = state;
+    ATOMIC_STORE(&tx_data_->state_, state);
   }
 
   return ret;
@@ -280,7 +280,7 @@ int ObCtxTxData::set_commit_version(const SCN &commit_version)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->commit_version_ = commit_version;
+    tx_data_->commit_version_.atomic_store(commit_version);
   }
 
   return ret;
@@ -295,7 +295,7 @@ int ObCtxTxData::set_start_log_ts(const SCN &start_ts)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->start_scn_ = tmp_start_ts;
+    tx_data_->start_scn_.atomic_store(tmp_start_ts);
   }
 
   return ret;
@@ -309,7 +309,7 @@ int ObCtxTxData::set_end_log_ts(const SCN &end_scn)
   if (OB_FAIL(check_tx_data_writable_())) {
     TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
   } else {
-    tx_data_->end_scn_ = end_scn;
+    tx_data_->end_scn_.atomic_store(end_scn);
   }
 
   return ret;
@@ -318,28 +318,33 @@ int ObCtxTxData::set_end_log_ts(const SCN &end_scn)
 int32_t ObCtxTxData::get_state() const
 {
   RLockGuard guard(lock_);
-  return (NULL != tx_data_ ? tx_data_->state_: tx_commit_data_.state_);
+  return (NULL != tx_data_ ? ATOMIC_LOAD(&tx_data_->state_): ATOMIC_LOAD(&tx_commit_data_.state_));
 }
 
 const SCN ObCtxTxData::get_commit_version() const
 {
   RLockGuard guard(lock_);
-  SCN commit_version = (NULL != tx_data_ ? tx_data_->commit_version_ : tx_commit_data_.commit_version_);
-  return commit_version;
+  return (NULL != tx_data_ ? tx_data_->commit_version_.atomic_load() : tx_commit_data_.commit_version_.atomic_load());
 }
 
 const SCN ObCtxTxData::get_start_log_ts() const
 {
   RLockGuard guard(lock_);
-  SCN start_log_scn = (NULL != tx_data_ ? tx_data_->start_scn_ : tx_commit_data_.start_scn_);
-  return start_log_scn;
+  SCN ctx_scn = (NULL != tx_data_ ? tx_data_->start_scn_.atomic_load() : tx_commit_data_.start_scn_.atomic_load());
+  if (ctx_scn.is_max()) {
+   ctx_scn.reset();
+  }
+  return ctx_scn;
 }
 
 const SCN ObCtxTxData::get_end_log_ts() const
 {
   RLockGuard guard(lock_);
-  SCN end_log_scn = (NULL != tx_data_ ? tx_data_->end_scn_ : tx_commit_data_.end_scn_);
-  return end_log_scn;
+  SCN ctx_scn = (NULL != tx_data_ ? tx_data_->end_scn_.atomic_load() : tx_commit_data_.end_scn_.atomic_load());
+  if (ctx_scn.is_max()) {
+   ctx_scn.reset();
+  }
+  return ctx_scn;
 }
 
 ObTransID ObCtxTxData::get_tx_id() const

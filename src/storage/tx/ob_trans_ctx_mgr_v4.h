@@ -21,6 +21,7 @@
 #include "storage/tx/ob_tx_ls_log_writer.h"
 #include "storage/tx/ob_tx_retain_ctx_mgr.h"
 #include "storage/tablelock/ob_lock_table.h"
+#include "storage/tx/ob_keep_alive_ls_handler.h"
 
 namespace oceanbase
 {
@@ -287,7 +288,7 @@ public:
                                 ObTransID &block_tx_id);
 
   // check schduler status for tx gc
-  int check_scheduler_status();
+  int check_scheduler_status(share::SCN &min_start_scn, MinStartScnStatus &status);
 
   // Get this ObLSTxCtxMgr's ls_id_
   const share::ObLSID &get_ls_id() const { return ls_id_; }

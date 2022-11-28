@@ -220,18 +220,13 @@ int ObLogAllSvrCache::get_agent_svr(const common::ObAddrWithSeq &principal_svr, 
 {
   int ret = OB_SUCCESS;
   agent_svr.reset();
-  // agent_cache available if ob cluster versin equal/greater than 3_2_0
-  if (is_cluster_version_be_equal_or_greater_than_320()) {
-    AgentSvrItem item;
-    if (OB_FAIL(get_agent_item_(principal_svr, item))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_ERROR("get_agent_svr from cache fail", KR(ret), K(principal_svr), K(item));
-      }
-    } else {
-      agent_svr = item.agent_svr_;
+  AgentSvrItem item;
+  if (OB_FAIL(get_agent_item_(principal_svr, item))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_ERROR("get_agent_svr from cache fail", KR(ret), K(principal_svr), K(item));
     }
   } else {
-    ret = OB_ENTRY_NOT_EXIST;
+    agent_svr = item.agent_svr_;
   }
   return ret;
 }
@@ -600,10 +595,8 @@ bool ObLogAllSvrCache::need_update_agent_()
   bool bool_ret = false;
   const int64_t all_svr_agent_cache_update_interval = ATOMIC_LOAD(&g_all_svr_agent_cache_update_interval);
   const int64_t update_delta_time = get_timestamp() - agent_last_update_tstamp_;
-  // update policy: 0. cluster version should be at least 3_2_0; 1. nerver updated; 2. periodicity update
-  if (! is_cluster_version_be_equal_or_greater_than_320()) {
-    bool_ret = false;
-  } else if (OB_INVALID_TIMESTAMP == agent_last_update_tstamp_) {
+  // update policy: 1. nerver updated; 2. periodicity update
+  if (OB_INVALID_TIMESTAMP == agent_last_update_tstamp_) {
     bool_ret = true;
   } else if (update_delta_time >= all_svr_agent_cache_update_interval) {
     bool_ret = true;

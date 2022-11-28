@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <time.h>
 #include <signal.h>
+#include "lib/string/ob_string.h"
 
 namespace oceanbase
 {
@@ -110,6 +111,31 @@ struct ObSigHandlerCtx
 };
 
 extern ObSigHandlerCtx g_sig_handler_ctx_;
+
+class ObSqlInfoGuard
+{
+public:
+	ObSqlInfoGuard(const ObString &sql)
+      : sql_(sql)
+	{
+    last_ = get_cur_guard();
+    get_cur_guard() = this;
+  }
+	~ObSqlInfoGuard()
+  {
+    get_cur_guard() = last_;
+  }
+  static ObSqlInfoGuard *&get_cur_guard()
+  {
+    static thread_local ObSqlInfoGuard *cur_guard = NULL;
+    return cur_guard;
+  }
+public:
+  ObString sql_;
+private:
+
+  ObSqlInfoGuard *last_;
+};
 
 } // namespace common
 } // namespace oceanbase

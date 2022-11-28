@@ -21,7 +21,6 @@
 #include "ob_log_schema_getter.h"       // IObLogSchemaGetter
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
 #include "ob_log_config.h"              // TCONF
-#include "share/ob_cluster_version.h"   // GET_MIN_CLUSTER_VERSION
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)

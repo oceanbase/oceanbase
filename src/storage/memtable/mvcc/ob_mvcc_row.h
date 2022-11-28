@@ -105,13 +105,12 @@ public:
 
   // ===================== ObMvccTransNode Flag Interface =====================
   void set_committed();
-  bool is_committed() const { return flag_ & F_COMMITTED; }
-  bool is_locked() const { return flag_ & F_MUTEX; }
+  bool is_committed() const { return ATOMIC_LOAD(&flag_) & F_COMMITTED; }
   void set_elr();
-  bool is_elr() const { return flag_ & F_ELR; }
+  bool is_elr() const { return ATOMIC_LOAD(&flag_) & F_ELR; }
   void set_aborted();
   void clear_aborted();
-  bool is_aborted() const { return (flag_ & F_ABORTED); }
+  bool is_aborted() const { return ATOMIC_LOAD(&flag_) & F_ABORTED; }
   void set_delayed_cleanout(const bool delayed_cleanout);
   bool is_delayed_cleanout() const;
 
@@ -128,10 +127,10 @@ public:
   void set_tx_end_scn(const share::SCN tx_end_scn)
   {
     if (share::SCN::max_scn() != tx_end_scn) {
-      tx_end_scn_ = tx_end_scn;
+      tx_end_scn_.atomic_store(tx_end_scn);
     }
   }
-  share::SCN get_tx_end_scn() { return tx_end_scn_; }
+  share::SCN get_tx_end_scn() { return tx_end_scn_.atomic_load(); }
 
 private:
   static const uint8_t F_INIT;

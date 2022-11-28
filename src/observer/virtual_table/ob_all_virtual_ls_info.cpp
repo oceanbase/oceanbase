@@ -177,10 +177,14 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           // clog_checkpoint_lsn
           cur_row_.cells_[i].set_uint64(ls_info.checkpoint_lsn_ < 0 ? 0 : ls_info.checkpoint_lsn_);
           break;
-      case OB_APP_MIN_COLUMN_ID + 11:
-        // migrate_status
-        cur_row_.cells_[i].set_int(ls_info.migrate_status_);
-        break;
+        case OB_APP_MIN_COLUMN_ID + 11:
+          // migrate_status
+          cur_row_.cells_[i].set_int(ls_info.migrate_status_);
+          break;
+        case OB_APP_MIN_COLUMN_ID + 12:
+          // rebuild_seq
+          cur_row_.cells_[i].set_int(ls_info.rebuild_seq_);
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

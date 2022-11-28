@@ -103,6 +103,7 @@ private:
   share::ObDDLType type_;
   common::ObArray<common::ObTabletID> source_tablet_ids_;
   common::ObArray<common::ObTabletID> dest_tablet_ids_;
+  common::ObArray<int64_t> tablet_task_ids_;
   int64_t source_table_id_;
   int64_t dest_table_id_;
   int64_t schema_version_;

@@ -652,6 +652,33 @@ int ObTenantFreezer::get_tenant_mem_limit(
   return ret;
 }
 
+bool ObTenantFreezer::is_replay_pending_log_too_large(const int64_t pending_size)
+{
+  int ret = OB_SUCCESS;
+  bool bool_ret = true;
+  int64_t total_memstore_used = 0;
+  int64_t memstore_limit = 0;
+  int64_t unused = 0;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
+  } else if (OB_FAIL(get_tenant_memstore_cond(unused,
+                                              total_memstore_used,
+                                              unused,
+                                              memstore_limit,
+                                              unused,
+                                              false/* not force refresh */))) {
+    LOG_WARN("get tenant memstore condition failed", K(ret));
+  } else {
+    int64_t memstore_left = memstore_limit - total_memstore_used - REPLAY_RESERVE_MEMSTORE_BYTES;
+    memstore_left = (memstore_left > 0 ? memstore_left : 0);
+    memstore_left >>= 5; // Estimate the size of memstore based on 32 times expansion.
+                         // 16 times for replay and 16 times for replay
+    bool_ret = (pending_size >= memstore_left);
+  }
+  return bool_ret;
+}
+
 int ObTenantFreezer::get_tenant_memstore_cond(
     int64_t &active_memstore_used,
     int64_t &total_memstore_used,
@@ -662,7 +689,6 @@ int ObTenantFreezer::get_tenant_memstore_cond(
 {
   int ret = OB_SUCCESS;
   int64_t unused = 0;
-  const int64_t refresh_interval = 100 * 1000; // 100 ms
   int64_t current_time = OB_TSC_TIMESTAMP.current_time();
   RLOCAL_INIT(int64_t, last_refresh_timestamp, 0);
   RLOCAL(int64_t, last_active_memstore_used);
@@ -681,7 +707,7 @@ int ObTenantFreezer::get_tenant_memstore_cond(
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant manager not init", KR(ret));
   } else if (!force_refresh &&
-             current_time - last_refresh_timestamp < refresh_interval) {
+             current_time - last_refresh_timestamp < MEMSTORE_USED_CACHE_REFRESH_INTERVAL) {
     active_memstore_used = last_active_memstore_used;
     total_memstore_used = last_total_memstore_used;
     memstore_freeze_trigger = last_memstore_freeze_trigger;
@@ -840,7 +866,6 @@ int ObTenantFreezer::get_freeze_trigger_(ObTenantFreezeCtx &ctx)
 int ObTenantFreezer::check_tenant_out_of_memstore_limit(bool &is_out_of_mem)
 {
   int ret = OB_SUCCESS;
-  const int64_t check_memstore_limit_interval = 1 * 1000 * 1000;
   RLOCAL(int64_t, last_check_timestamp);
   RLOCAL(bool, last_result);
   int64_t current_time = OB_TSC_TIMESTAMP.current_time();
@@ -851,7 +876,7 @@ int ObTenantFreezer::check_tenant_out_of_memstore_limit(bool &is_out_of_mem)
   } else {
     const uint64_t tenant_id = tenant_info_.tenant_id_;
     if (!last_result &&
-        current_time - last_check_timestamp < check_memstore_limit_interval) {
+        current_time - last_check_timestamp < MEMSTORE_USED_CACHE_REFRESH_INTERVAL) {
       // Check once when the last memory burst or tenant_id does not match or the interval reaches the threshold
       is_out_of_mem = false;
     } else {
@@ -862,7 +887,7 @@ int ObTenantFreezer::check_tenant_out_of_memstore_limit(bool &is_out_of_mem)
       } else if (OB_FAIL(get_tenant_mem_usage_(ctx))) {
         LOG_WARN("[TenantFreezer] fail to get mem usage", KR(ret), K(tenant_info_.tenant_id_));
       } else {
-        is_out_of_mem = (ctx.total_memstore_hold_ > ctx.mem_memstore_limit_);
+        is_out_of_mem = (ctx.total_memstore_hold_ > ctx.mem_memstore_limit_ + REPLAY_RESERVE_MEMSTORE_BYTES);
       }
       last_check_timestamp = current_time;
     }

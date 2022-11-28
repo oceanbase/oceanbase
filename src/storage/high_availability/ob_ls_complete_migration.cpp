@@ -338,6 +338,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
         LOG_WARN("tenant dag scheduler has set stop, stop migration dag net", K(ret), K(ctx_));
         break;
       } else {
+        // TODO: muwei should not do this before ls create finished.
         if (OB_FAIL(ls->get_migration_status(current_migration_status))) {
           LOG_WARN("failed to get migration status", K(ret), K(ctx_));
         } else if (ctx_.is_failed()) {
@@ -353,7 +354,7 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
           }
         } else {
           if (ObMigrationOpType::REBUILD_LS_OP == ctx_.arg_.type_
-              && OB_FAIL(ls->clear_saved_info_without_lock())) {
+              && OB_FAIL(ls->clear_saved_info())) {
             LOG_WARN("failed to clear ls saved info", K(ret), KPC(ls));
           } else {
             new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
@@ -1213,6 +1214,7 @@ int ObStartCompleteMigrationTask::check_all_tablet_ready_()
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   const int64_t check_all_tablet_start_ts = ObTimeUtility::current_time();
+  const bool need_initial_state = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1221,7 +1223,7 @@ int ObStartCompleteMigrationTask::check_all_tablet_ready_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to change member list", K(ret), KP(ls));
   } else {
-    ObLSTabletIDIterator iter(ls->get_ls_id());
+    ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
     ObTabletID tablet_id;
     if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
       LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));

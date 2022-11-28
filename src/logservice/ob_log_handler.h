@@ -56,6 +56,7 @@ struct LogHandlerDiagnoseInfo {
                K(log_handler_proposal_id_));
 };
 
+class ObRoleChangeService;
 class ObILogHandler
 {
 public:
@@ -143,6 +144,9 @@ public:
   virtual int enable_vote() = 0;
   virtual int register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb) = 0;
   virtual int unregister_rebuild_cb() = 0;
+  virtual int offline() = 0;
+  virtual int online(const palf::LSN &lsn, const share::SCN &scn) = 0;
+  virtual bool is_offline() const = 0;
 };
 
 class ObLogHandler : public ObILogHandler, public ObLogHandlerBase
@@ -155,6 +159,7 @@ public:
            const common::ObAddr &self,
            ObLogApplyService *apply_service,
            ObLogReplayService *replay_service,
+           ObRoleChangeService *rc_service,
            palf::PalfHandle &palf_handle,
            palf::PalfEnv *palf_env,
            palf::PalfLocationCacheCb *lc_cb,
@@ -165,7 +170,7 @@ public:
   // @breif, wait cb append onto apply service all be called
   // is reentrant and should be called before destroy(),
   // protect cb will not be used when log handler destroyed
-  int safe_to_destroy();
+  int safe_to_destroy(bool &is_safe_destroy);
   // @brief append count bytes from the buffer starting at buf to the palf handle, return the LSN and timestamp
   // @param[in] const void *, the data buffer.
   // @param[in] const uint64_t, the length of data buffer.
@@ -520,6 +525,9 @@ public:
   int diagnose(LogHandlerDiagnoseInfo &diagnose_info) const;
   int diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const;
   TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_env_), K(is_in_stop_state_), K(is_inited_));
+  int offline() override final;
+  int online(const palf::LSN &lsn, const share::SCN &scn) override final;
+  bool is_offline() const override final;
 private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
   int get_leader_max_scn_(share::SCN &max_scn) const;
@@ -530,6 +538,7 @@ private:
   ObApplyStatus *apply_status_;
   ObLogApplyService *apply_service_;
   ObLogReplayService *replay_service_;
+  ObRoleChangeService *rc_service_;
   ObSpinLock deps_lock_;
   mutable palf::PalfLocationCacheCb *lc_cb_;
   mutable obrpc::ObLogServiceRpcProxy *rpc_proxy_;
@@ -539,6 +548,7 @@ private:
   mutable int64_t last_check_sync_ts_;
   mutable int64_t last_renew_loc_ts_;
   bool is_in_stop_state_;
+  bool is_offline_;
   bool is_inited_;
   mutable int64_t get_max_decided_scn_debug_time_;
 };

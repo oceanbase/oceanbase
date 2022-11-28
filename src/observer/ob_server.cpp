@@ -98,6 +98,7 @@
 #include "share/ob_server_blacklist.h"
 #include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
 #include "logservice/palf/election/interface/election.h"
+#include "storage/ddl/ob_ddl_redo_log_writer.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -364,6 +365,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     LOG_ERROR("init ASH failed", KR(ret));
   } else if (OB_FAIL(ObServerBlacklist::get_instance().init(self_addr_, net_frame_.get_req_transport()))) {
     LOG_ERROR("init server blacklist failed", KR(ret));
+  } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().init())) {
+    LOG_WARN("init DDL redo log writer failed", KR(ret));
   } else {
     GDS.set_rpc_proxy(&rs_rpc_proxy_);
   }
@@ -1361,9 +1364,7 @@ int ObServer::init_config()
   }
 
   get_unis_global_compat_version() = GET_MIN_CLUSTER_VERSION();
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2100) {
-    lib::g_runtime_enabled = true;
-  }
+  lib::g_runtime_enabled = true;
 
   return ret;
 }

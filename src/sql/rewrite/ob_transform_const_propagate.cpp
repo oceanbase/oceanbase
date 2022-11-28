@@ -596,6 +596,7 @@ int ObTransformConstPropagate::recursive_collect_const_info_from_table(ObDMLStmt
         RIGHT_OUTER_JOIN == joined_table->joined_type_) {
       // FULL_OUT_JOIN is not transformed because may eliminate all equal join conditions
       ConstInfoContext tmp_ctx;
+      tmp_ctx.hint_allowed_trans_ = const_ctx.hint_allowed_trans_;
       bool left_happened = false;
       bool right_happened = false;
       bool condition_happened = false;
@@ -1745,6 +1746,7 @@ int ObTransformConstPropagate::recursive_collect_equal_pair_from_condition(ObDML
     ObArray<ExprConstInfo> complex_infos;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ConstInfoContext tmp_ctx;
+      tmp_ctx.hint_allowed_trans_ = const_ctx.hint_allowed_trans_;
       bool child_happened = false;
       bool current_happened = false;
       if (OB_FAIL(SMART_CALL(recursive_collect_equal_pair_from_condition(stmt,

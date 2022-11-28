@@ -214,6 +214,7 @@ int ObSSTableInsertTabletContext::init(const ObSSTableInsertTabletParam &build_p
   const int64_t memory_limit = 1024L * 1024L * 1024L * 10L; // 10GB
   const ObTabletID &tablet_id = build_param.tablet_id_;
   const ObLSID &ls_id = build_param.ls_id_;
+  share::ObLocationService *location_service = GCTX.location_service_;
   ObLS *ls = nullptr;
   ObLSService *ls_service = nullptr;
   lib::ObMutexGuard guard(mutex_);
@@ -228,10 +229,7 @@ int ObSSTableInsertTabletContext::init(const ObSSTableInsertTabletParam &build_p
     LOG_ERROR("ls service should not be null", K(ret));
   } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle_, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls should not be null", K(ret));
-  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, tablet_id, tablet_handle_))) {
     LOG_WARN("fail to get tablet handle", K(ret), K(tablet_id));
   } else if (OB_FAIL(data_sstable_redo_writer_.init(ls_id, tablet_id))) {
     LOG_WARN("fail to init sstable redo writer", K(ret), K(ls_id), K(tablet_id));
@@ -263,7 +261,7 @@ int ObSSTableInsertTabletContext::update(const int64_t snapshot_version)
       LOG_WARN("invalid argument", K(ret), K(table_key));
     } else if (data_sstable_redo_writer_.get_start_scn().is_valid()) {
       // ddl start log is already written, do nothing
-    } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(table_key, ddl_kv_mgr_handle_))) {
+    } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(table_key, build_param_.execution_id_, ddl_kv_mgr_handle_))) {
       LOG_WARN("fail write start log", K(ret), K(table_key), K(build_param_));
     }
   }
@@ -684,8 +682,7 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
                                                                  build_param_.ddl_task_id_,
                                                                  prepare_scn))) {
     if (OB_TASK_EXPIRED == ret) {
-      LOG_INFO("ddl task expired, but return success", K(ret), K(table_key), K(build_param_));
-      ret = OB_SUCCESS;
+      LOG_INFO("ddl task expired", K(ret), K(table_key), K(build_param_));
     } else {
       LOG_WARN("fail write ddl prepare log", K(ret), K(table_key));
     }
@@ -697,19 +694,17 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
     const ObLSID &ls_id = ls->get_ls_id();
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     const SCN &ddl_start_scn = data_sstable_redo_writer_.get_start_scn();
-    if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
+    if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, tablet_id, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
     } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_scn,
                                                                 prepare_scn,
                                                                 table_schema->get_table_id(),
-                                                                build_param_.execution_id_,
                                                                 build_param_.ddl_task_id_))) {
       if (OB_TASK_EXPIRED == ret) {
-        LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
-            K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
-        ret = OB_SUCCESS;
+        LOG_INFO("ddl task expired", K(ret), K(ls_id), K(tablet_id),
+            K(ddl_start_scn), "new_ddl_start_log_ts", ddl_kv_mgr_handle.get_obj()->get_start_scn());
       } else {
         LOG_WARN("failed to do ddl kv prepare", K(ret), K(ddl_start_scn), K(prepare_scn), K(build_param_));
       }
@@ -717,15 +712,14 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
       if (OB_TASK_EXPIRED == ret) {
         LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
             K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
-        ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to wait ddl kv commit", K(ret), K(ddl_start_scn), K(build_param_));
       }
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(ddl_start_scn, ddl_kv_mgr_handle))) {
+      LOG_WARN("ddl kv mgr unregister failed", K(ret), K(build_param_));
     } else if (OB_FAIL(data_sstable_redo_writer_.write_commit_log(table_key,
                                                                   prepare_scn))) {
       LOG_WARN("fail write ddl commit log", K(ret), K(table_key));
-    } else {
-      tablet_handle.get_obj()->remove_ddl_kv_mgr();
     }
   }
   return ret;

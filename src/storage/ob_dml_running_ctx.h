@@ -23,7 +23,6 @@ namespace oceanbase
 namespace common
 {
 class ObIAllocator;
-class ColumnMap;
 }
 
 namespace share
