@@ -313,23 +313,16 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
       } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_,
                                                          to_expr))) {
         LOG_WARN("failed to build null expr", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(true,/* explicit_cast */
-                                                            0,    /* result_flag */
-                                                            ctx_->session_info_, cm))) {
+      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false,/* explicit_cast */
+                                                           0,    /* result_flag */
+                                                           ctx_->session_info_, cm))) {
         LOG_WARN("fail to get default cast mode", K(ret));
-      } else if (is_mysql_mode() &&
-                  OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_,
-                                                            to_expr,
-                                                            from_expr->get_result_type(),
-                                                            cast_expr, ctx_->session_info_,
-                                                            false, cm))) {
-          LOG_WARN("failed to cast expr", K(ret), K(*from_expr), K(*to_expr));
-        } else if (is_oracle_mode() &&
-                   OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_,
-                                                            to_expr,
-                                                            from_expr->get_result_type(),
-                                                            cast_expr, ctx_->session_info_))) {
-          LOG_WARN("failed to cast expr", K(ret), K(*from_expr), K(*to_expr));
+      } else if (OB_FAIL(ObRawExprUtils::create_cast_expr(*ctx_->expr_factory_,
+                                                          to_expr,
+                                                          from_expr->get_result_type(),
+                                                          cast_expr, ctx_->session_info_,
+                                                          false, cm | CM_TO_COLUMN_CS_LEVEL))) {
+        LOG_WARN("failed to cast expr", K(ret), K(*from_expr), K(*to_expr));
       } else if (OB_ISNULL(to_expr = cast_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null cast expr", K(ret));

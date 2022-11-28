@@ -500,7 +500,7 @@ int ObIndexBuilder::do_create_index(
   if (!ddl_service_.is_inited()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("ddl_service not init", "ddl_service inited", ddl_service_.is_inited(), K(ret));
-  } else if (!arg.is_valid() || !frozen_scn.is_valid()) {
+  } else if (!arg.is_valid() || !frozen_scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(arg), K(frozen_scn), K(ret));
   } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
@@ -589,7 +589,7 @@ int ObIndexBuilder::generate_schema(
   if (!ddl_service_.is_inited()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("ddl_service not init", "ddl_service inited", ddl_service_.is_inited(), K(ret));
-  } else if (!frozen_scn.is_valid() || !data_schema.is_valid()) {
+  } else if (!frozen_scn.is_valid_and_not_min() || !data_schema.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(frozen_scn), K(data_schema), K(ret));
   }
@@ -772,7 +772,7 @@ int ObIndexBuilder::set_basic_infos(const ObCreateIndexArg &arg,
   } else if (OB_ISNULL(database)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("database_schema is null", K(ret), "database_id", data_schema.get_database_id());
-  } else if (!frozen_scn.is_valid() || !data_schema.is_valid()) {
+  } else if (!frozen_scn.is_valid_and_not_min() || !data_schema.is_valid()) {
     // some items in arg may be invalid, don't check arg
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(frozen_scn), K(data_schema), K(ret));

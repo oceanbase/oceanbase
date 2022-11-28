@@ -453,6 +453,7 @@ private:
   int set_tx_data_in_tablet_pointer(const ObTabletTxMultiSourceDataUnit &tx_data);
   int get_max_sync_storage_schema_version(int64_t &max_schema_version) const;
   int check_max_sync_schema_version() const;
+
   template<class T>
   int dec_unsynced_cnt_for_if_need(
       T &multi_source_data_unit,
@@ -641,7 +642,7 @@ int ObTablet::set_multi_data_for_commit(
       TRANS_LOG(WARN, "failed to save tx data", K(ret), K(multi_source_data_unit), K(for_replay), K(ref_op));
     }
   } else if (OB_FAIL(inner_set_multi_data_for_commit(multi_source_data_unit, scn, for_replay, ref_op))) {
-    TRANS_LOG(WARN, "failed to back_fill_log_ts_for_ddl_data", K(ret), K(multi_source_data_unit));
+    TRANS_LOG(WARN, "failed to back_fill_scn_for_ddl_data", K(ret), K(multi_source_data_unit));
   }
   return ret;
 }
@@ -773,7 +774,15 @@ int ObTablet::save_multi_source_data_unit(
   } else if (is_callback) {
     memtable::ObMemtable *memtable = nullptr;
     if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(memtable, msd->type()))) {
-      TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
+      if (OB_ENTRY_NOT_EXIST == ret && for_replay) {
+        TRANS_LOG(INFO, "clog_checkpoint_scn of ls is bigger than the commit_info scn of this multi-trans in replay, failed to get multi source data unit",
+                  K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
+        if (OB_FAIL(save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op, false))) {
+          TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op));
+        }
+      } else {
+        TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
+      }
     } else if (OB_FAIL(memtable->save_multi_source_data_unit(msd, memtable_scn, for_replay, ref_op, is_callback))) {
       TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op));
     }

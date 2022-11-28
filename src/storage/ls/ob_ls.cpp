@@ -698,7 +698,8 @@ int ObLS::offline_()
     LOG_WARN("lock table offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_tablet_svr_.offline())) {
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
-  } else if (FALSE_IT(tablet_gc_handler_.offline())) {
+  } else if (OB_FAIL(tablet_gc_handler_.offline())) {
+    LOG_WARN("tablet gc handler offline failed", K(ret), K(ls_meta_));
   } else {
     // do nothing
   }
