@@ -68,73 +68,6 @@ int ObTabletMeta::init(
     const common::ObTabletID &data_tablet_id,
     const common::ObTabletID &lob_meta_tablet_id,
     const common::ObTabletID &lob_piece_tablet_id,
-    const int64_t create_scn,
-    const int64_t snapshot_version,
-    const lib::Worker::CompatMode compat_mode,
-    const ObTabletTableStoreFlag &table_store_flag,
-    const int64_t max_sync_storage_schema_version)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!ls_id.is_valid())
-      || OB_UNLIKELY(!tablet_id.is_valid())
-      || OB_UNLIKELY(!data_tablet_id.is_valid())
-      //|| OB_UNLIKELY(create_scn <= OB_INVALID_TIMESTAMP)
-      || OB_UNLIKELY(OB_INVALID_VERSION == snapshot_version)
-      || OB_UNLIKELY(lib::Worker::CompatMode::INVALID == compat_mode)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
-        K(create_scn), K(snapshot_version), K(compat_mode));
-  } else if (OB_FAIL(ha_status_.init_status())) {
-    LOG_WARN("failed to init ha status", K(ret));
-  } else {
-    version_ = TABLET_META_VERSION;
-    ls_id_ = ls_id;
-    tablet_id_ = tablet_id;
-    data_tablet_id_ = data_tablet_id;
-    create_scn_.convert_tmp(create_scn);
-    start_scn_.set_base();
-    clog_checkpoint_scn_.set_base();
-    ddl_checkpoint_scn_.set_base();
-    compat_mode_ = compat_mode;
-    snapshot_version_ = snapshot_version;
-    multi_version_start_ = snapshot_version;
-    table_store_flag_ = table_store_flag;
-    ddl_start_scn_.set_base();
-    ddl_snapshot_version_ = 0;
-    max_sync_storage_schema_version_ = max_sync_storage_schema_version;
-
-    report_status_.merge_snapshot_version_ = snapshot_version;
-    report_status_.cur_report_version_ = snapshot_version;
-    report_status_.data_checksum_ = 0;
-    report_status_.row_count_ = 0;
-
-    ddl_data_.lob_meta_tablet_id_ = lob_meta_tablet_id;
-    ddl_data_.lob_piece_tablet_id_ = lob_piece_tablet_id;
-
-    if (tablet_id_.is_ls_inner_tablet()) {
-      tx_data_.tablet_status_ = ObTabletStatus::NORMAL;
-    }
-
-    is_inited_ = true;
-  }
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    reset();
-  }
-  return ret;
-}
-
-int ObTabletMeta::init(
-    ObIAllocator &allocator,
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
-    const common::ObTabletID &data_tablet_id,
-    const common::ObTabletID &lob_meta_tablet_id,
-    const common::ObTabletID &lob_piece_tablet_id,
     const palf::SCN create_scn,
     const int64_t snapshot_version,
     const lib::Worker::CompatMode compat_mode,
@@ -187,64 +120,6 @@ int ObTabletMeta::init(
       tx_data_.tablet_status_ = ObTabletStatus::NORMAL;
     }
 
-    is_inited_ = true;
-  }
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    reset();
-  }
-  return ret;
-}
-
-int ObTabletMeta::init(
-    common::ObIAllocator &allocator,
-    const ObTabletMeta &old_tablet_meta,
-    const int64_t snapshot_version,
-    const int64_t multi_version_start,
-    const ObTabletTxMultiSourceDataUnit &tx_data,
-    const ObTabletBindingInfo &ddl_data,
-    const ObTabletAutoincSeq &autoinc_seq,
-    const int64_t max_sync_storage_schema_version,
-    const int64_t clog_checkpoint_ts,
-    const int64_t ddl_checkpoint_ts,
-    const int64_t ddl_start_scn,
-    const int64_t ddl_snapshot_version)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!old_tablet_meta.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(old_tablet_meta));
-  } else if (OB_FAIL(ddl_data_.assign(ddl_data))) {
-    LOG_WARN("failed to assign ddl data", K(ret));
-  } else if (OB_FAIL(autoinc_seq_.assign(autoinc_seq))) {
-    LOG_WARN("failed to assign autoinc seq", K(ret));
-  } else if (OB_FAIL(ddl_start_scn_.convert_for_tx(MAX(old_tablet_meta.ddl_start_scn_.get_val_for_tx(), ddl_start_scn)))) {
-    LOG_WARN("fail to convert scn", K(ret), K(ddl_start_scn));
-  } else if (OB_FAIL(clog_checkpoint_scn_.convert_for_tx(MAX(old_tablet_meta.clog_checkpoint_scn_.get_val_for_tx(), clog_checkpoint_ts)))) {
-    LOG_WARN("fail to convert scn", K(ret), K(clog_checkpoint_ts));
-  } else if (OB_FAIL(ddl_checkpoint_scn_.convert_for_tx(MAX(old_tablet_meta.ddl_checkpoint_scn_.get_val_for_tx(), ddl_checkpoint_ts)))) {
-    LOG_WARN("fail to convert scn", K(ret), K(ddl_checkpoint_ts));
-  } else {
-    version_ = TABLET_META_VERSION;
-    ls_id_ = old_tablet_meta.ls_id_;
-    tablet_id_ = old_tablet_meta.tablet_id_;
-    data_tablet_id_ = old_tablet_meta.data_tablet_id_;
-    ref_tablet_id_ = old_tablet_meta.ref_tablet_id_;
-    create_scn_ = old_tablet_meta.create_scn_;
-    start_scn_ = old_tablet_meta.start_scn_;
-    compat_mode_ = old_tablet_meta.compat_mode_;
-    ha_status_ = old_tablet_meta.ha_status_;
-    report_status_ = old_tablet_meta.report_status_;
-    snapshot_version_ = MAX(snapshot_version, old_tablet_meta.snapshot_version_);
-    multi_version_start_ = MIN(MAX(multi_version_start, old_tablet_meta.multi_version_start_), snapshot_version_);
-    tx_data_ = tx_data;
-    table_store_flag_ = old_tablet_meta.table_store_flag_;
-    max_sync_storage_schema_version_ = max_sync_storage_schema_version;
-    ddl_snapshot_version_ = MAX(old_tablet_meta.ddl_snapshot_version_, ddl_snapshot_version);
     is_inited_ = true;
   }
 
@@ -755,23 +630,6 @@ int ObTabletMeta::update(const ObMigrationTabletParam &param)
     ddl_start_scn_ = param.ddl_start_scn_;
     ddl_snapshot_version_ = param.ddl_snapshot_version_;
     max_sync_storage_schema_version_ = param.max_sync_storage_schema_version_;
-  }
-
-  return ret;
-}
-
-int ObTabletMeta::update_create_scn(const int64_t create_scn)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(create_scn <= OB_INVALID_TIMESTAMP)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(create_scn));
-  } else {
-    create_scn_.convert_tmp(create_scn);
   }
 
   return ret;

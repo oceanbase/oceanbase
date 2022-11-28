@@ -119,7 +119,7 @@ int ObTablet::init(
     const common::ObTabletID &lob_meta_tablet_id,
     const common::ObTabletID &lob_piece_tablet_id,
     const SCN &create_scn,
-    const SCN &snapshot_version,
+    const int64_t snapshot_version,
     const share::schema::ObTableSchema &table_schema,
     const lib::Worker::CompatMode compat_mode,
     const ObTabletTableStoreFlag &store_flag,
@@ -136,7 +136,7 @@ int ObTablet::init(
       || OB_UNLIKELY(!tablet_id.is_valid())
       || OB_UNLIKELY(!data_tablet_id.is_valid())
       //|| OB_UNLIKELY(create_scn <= OB_INVALID_TIMESTAMP)
-      || OB_UNLIKELY(!snapshot_version.is_valid())
+      || OB_UNLIKELY(snapshot_version <= OB_INVALID_TIMESTAMP)
       || OB_UNLIKELY(!table_schema.is_valid())
       || OB_UNLIKELY(lib::Worker::CompatMode::INVALID == compat_mode)
       || OB_ISNULL(freezer)) {
@@ -152,7 +152,7 @@ int ObTablet::init(
     LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id), KP(freezer));
   } else if (OB_FAIL(tablet_meta_.init(*allocator_, ls_id, tablet_id, data_tablet_id,
       lob_meta_tablet_id, lob_piece_tablet_id,
-      create_scn, snapshot_version.get_val_for_tx(), compat_mode, store_flag, table_schema.get_schema_version()))) {
+      create_scn, snapshot_version, compat_mode, store_flag, table_schema.get_schema_version()))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id),
         K(lob_meta_tablet_id), K(lob_piece_tablet_id),
         K(create_scn), K(snapshot_version), K(compat_mode), K(store_flag));
@@ -179,34 +179,6 @@ int ObTablet::init(
     reset();
   }
 
-  return ret;
-}
-
-int ObTablet::init(
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
-    const common::ObTabletID &data_tablet_id,
-    const common::ObTabletID &lob_meta_tablet_id,
-    const common::ObTabletID &lob_piece_tablet_id,
-    const int64_t create_scn,
-    const int64_t snapshot_version,
-    const share::schema::ObTableSchema &table_schema,
-    const lib::Worker::CompatMode compat_mode,
-    const ObTabletTableStoreFlag &store_flag,
-    ObTableHandleV2 &table_handle,
-    ObFreezer *freezer)
-{
-  int ret = OB_SUCCESS;
-  SCN scn;
-  SCN snapshot_scn;
-  if (OB_FAIL(scn.convert_tmp(create_scn))) {
-    LOG_WARN("failed to convert_tmp", K(ret), K(create_scn));
-  } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version))) {
-    LOG_WARN("failed to convert scn", K(ret), K(snapshot_version));
-  } else if (OB_FAIL(init(ls_id, tablet_id, data_tablet_id, lob_meta_tablet_id, lob_piece_tablet_id,
-      scn, snapshot_scn, table_schema, compat_mode, store_flag, table_handle, freezer))) {
-    LOG_WARN("failed to init tablet", K(ret), K(scn));
-  }
   return ret;
 }
 
@@ -1650,23 +1622,6 @@ int ObTablet::inner_create_memtable(
   return ret;
 }
 
-int ObTablet::release_memtables(const int64_t log_ts)
-{
-  int ret = OB_SUCCESS;
-  ObIMemtableMgr *memtable_mgr = nullptr;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
-    LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(memtable_mgr->release_memtables(log_ts))) {
-    LOG_WARN("failed to release memtables", K(ret), K(log_ts));
-  }
-
-  return ret;
-}
-
 int ObTablet::release_memtables(const palf::SCN scn)
 {
   int ret = OB_SUCCESS;
@@ -2116,7 +2071,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
   } else if (autoinc_seq.get_intervals().count() == 0 && OB_FAIL(autoinc_seq.set_autoinc_seq_value(1))) {
     // need to do this to ensure the intervals list size is always 1, so the memory size is same before and after clog.
     LOG_WARN("failed to set autoinc seq value", K(ret));
-  } else if (OB_FAIL(save_multi_source_data_unit(&autoinc_seq, share::ObScnRange::MAX_TS,
+  } else if (OB_FAIL(save_multi_source_data_unit(&autoinc_seq, SCN::max_scn(),
       false/*for_replay*/, memtable::MemtableRefOp::INC_REF))) {
     if (OB_BLOCK_FROZEN == ret) {
       ret = OB_EAGAIN;
@@ -2132,7 +2087,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
     LOG_WARN("fail to submit sync tablet seq log", K(ret), K(buffer_size));
     // rollback, dec ref
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(save_multi_source_data_unit(&autoinc_seq, share::ObScnRange::MAX_TS,
+    if (OB_TMP_FAIL(save_multi_source_data_unit(&autoinc_seq, SCN::max_scn(),
         false/*for_replay*/, memtable::MemtableRefOp::DEC_REF, true/*is_callback*/))) {
       LOG_ERROR("failed to dec ref for auto inc seq", K(tmp_ret));
       ob_usleep(1000 * 1000);
@@ -2769,10 +2724,9 @@ int ObTablet::get_tablet_status(ObTabletStatus::Status &tablet_status)
   return ret;
 }
 
-int ObTablet::get_rec_log_ts(int64_t &rec_log_ts)
-{
+int ObTablet::get_rec_log_scn(SCN &rec_scn) {
   int ret = OB_SUCCESS;
-  rec_log_ts = OB_MAX_SCN_TS_NS;
+  rec_scn = SCN::max_scn();
   ObTableHandleV2 handle;
   memtable::ObMemtable *mt;
   if (IS_NOT_INIT) {
@@ -2793,18 +2747,7 @@ int ObTablet::get_rec_log_ts(int64_t &rec_log_ts)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mt is NULL", KR(ret), K(handle));
   } else {
-    rec_log_ts = mt->get_rec_scn().get_val_for_tx();
-  }
-  return ret;
-}
-
-int ObTablet::get_rec_log_scn(SCN &rec_scn) {
-  int ret = OB_SUCCESS;
-  int64_t rec_log_ts = OB_MAX_SCN_TS_NS;
-  if (OB_FAIL(get_rec_log_ts(rec_log_ts))) {
-    LOG_WARN("fail to get rec log ts", K(rec_log_ts), K(ret));
-  } else if (OB_FAIL(rec_scn.convert_tmp(rec_log_ts))) {
-    LOG_WARN("fail to convert from rec_log_ts", K(ret), K(rec_log_ts));
+    rec_scn = mt->get_rec_scn();
   }
   return ret;
 }

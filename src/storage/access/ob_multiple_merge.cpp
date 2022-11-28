@@ -855,7 +855,7 @@ int ObMultipleMerge::alloc_row_store(ObTableAccessContext &context, const ObTabl
         block_row_store_ = new (buf) ObBlockRowStore(context);
       }
     }
-  } 
+  }
   if (OB_SUCC(ret) && nullptr != block_row_store_) {
     if (OB_FAIL(block_row_store_->init(param))) {
       LOG_WARN("fail to init block row store", K(ret), K(block_row_store_));

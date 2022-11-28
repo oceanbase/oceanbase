@@ -25,6 +25,7 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tx_storage/ob_ls_handle.h"//ObLSHandle
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -369,7 +370,7 @@ int ObStorageSchemaRecorder::dec_ref_on_memtable(const bool sync_finish)
         KP_(storage_schema), K_(tablet_handle));
   } else {
     storage_schema_->set_sync_finish(sync_finish);
-    if (OB_FAIL(tablet_handle_.get_obj()->save_multi_source_data_unit(storage_schema_, clog_scn_.get_val_for_tx(),
+    if (OB_FAIL(tablet_handle_.get_obj()->save_multi_source_data_unit(storage_schema_, clog_scn_,
         false/*for_replay*/, memtable::MemtableRefOp::DEC_REF, true/*is_callback*/))) {
       LOG_WARN("failed to save storage schema", K(ret), K_(tablet_id), K(storage_schema_));
     }
@@ -496,7 +497,7 @@ int ObStorageSchemaRecorder::submit_schema_log(const int64_t table_id)
   } else if (FALSE_IT(ATOMIC_STORE(&logcb_finish_flag_, false))) {
   } else if (FALSE_IT(storage_schema_->set_sync_finish(false))) {
   } else if (OB_FAIL(tablet_handle_.get_obj()->save_multi_source_data_unit(storage_schema_,
-      share::ObScnRange::MAX_TS, false/*for_replay*/, memtable::MemtableRefOp::INC_REF))) {
+      palf::SCN::max_scn(), false/*for_replay*/, memtable::MemtableRefOp::INC_REF))) {
     if (OB_BLOCK_FROZEN != ret) {
       LOG_WARN("failed to inc ref for storage schema", K(ret), K_(tablet_id), K(storage_schema_));
     }

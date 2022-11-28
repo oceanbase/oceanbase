@@ -116,7 +116,6 @@ public:
   int64_t dec_ref();
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
   int64_t get_wash_score() const { return ATOMIC_LOAD(&wash_score_); }
-  int get_rec_log_ts(int64_t &rec_log_ts);
   int get_rec_log_scn(palf::SCN &rec_scn);
 public:
   // first time create tablet
@@ -127,20 +126,6 @@ public:
       const common::ObTabletID &lob_meta_tablet_id,
       const common::ObTabletID &lob_piece_tablet_id,
       const palf::SCN &create_scn,
-      const palf::SCN &snapshot_version,
-      const share::schema::ObTableSchema &table_schema,
-      const lib::Worker::CompatMode compat_mode,
-      const ObTabletTableStoreFlag &store_flag,
-      ObTableHandleV2 &table_handle,
-      ObFreezer *freezer);
-
-  int init(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const common::ObTabletID &data_tablet_id,
-      const common::ObTabletID &lob_meta_tablet_id,
-      const common::ObTabletID &lob_piece_tablet_id,
-      const int64_t create_scn,
       const int64_t snapshot_version,
       const share::schema::ObTableSchema &table_schema,
       const lib::Worker::CompatMode compat_mode,
@@ -234,7 +219,6 @@ public:
   ObIMemtableMgr *get_memtable_mgr() const { return memtable_mgr_; } // TODO(bowen.gbw): get memtable mgr from tablet pointer handle
   // get the active memtable for write or replay.
   int get_active_memtable(ObTableHandleV2 &handle) const;
-  int release_memtables(const int64_t log_ts);
   int release_memtables(const palf::SCN scn);
   // force release all memtables
   // just for rebuild or migrate retry.
@@ -253,15 +237,6 @@ public:
   int back_fill_scn_for_commit(T &multi_source_data_unit);
   template<class T>
   int set_multi_data_for_commit(T &multi_source_data_unit, const palf::SCN &log_scn, const bool for_replay, const memtable::MemtableRefOp ref_op);
-
-  template<class T>
-  int save_multi_source_data_unit(
-      const T *const msd,
-      const int64_t memtable_log_ts,
-      const bool for_replay,
-      const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
-      const bool is_callback = false);
-
 
   template<class T>
   int save_multi_source_data_unit(
@@ -324,7 +299,6 @@ public:
   // other
   const ObTabletMeta &get_tablet_meta() const { return tablet_meta_; }
   const ObTabletTableStore &get_table_store() const { return table_store_; }
-  int64_t get_clog_checkpoint_ts() const { return tablet_meta_.clog_checkpoint_scn_.get_val_for_gts(); }
   palf::SCN get_clog_checkpoint_scn() const { return tablet_meta_.clog_checkpoint_scn_; }
   int64_t get_snapshot_version() const { return tablet_meta_.snapshot_version_; }
   int64_t get_multi_version_start() const { return tablet_meta_.multi_version_start_; }
@@ -768,24 +742,6 @@ int ObTablet::save_multi_source_data_unit(
     if (OB_ALLOCATE_MEMORY_FAILED == ret || OB_MINOR_FREEZE_NOT_ALLOW == ret) {
       ret = OB_EAGAIN;
     }
-  }
-  return ret;
-}
-
-template<class T>
-int ObTablet::save_multi_source_data_unit(
-    const T *const msd,
-    const int64_t log_ts,
-    const bool for_replay,
-    const memtable::MemtableRefOp ref_op,
-    const bool is_callback)
-{
-  int ret = OB_SUCCESS;
-  palf::SCN scn;
-  if (OB_FAIL(scn.convert_tmp(log_ts))) {
-    TRANS_LOG(WARN, "failed to convert_tmp", K(ret), K(log_ts));
-  } else if (OB_FAIL(save_multi_source_data_unit(msd, scn, for_replay, ref_op, is_callback))) {
-    TRANS_LOG(WARN, "failed to init tablet", K(ret), K(scn), K(for_replay));
   }
   return ret;
 }

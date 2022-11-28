@@ -1460,7 +1460,7 @@ int ObLSTabletService::inner_table_scan(
      ret = OB_SNAPSHOT_DISCARDED;
   } else if (OB_FAIL(ObTabletBindingHelper::check_snapshot_readable(
                        tablet_handle,
-                       store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator()))) {
+                       store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()))) {
     LOG_WARN("failed to check snapshot readable", K(ret));
    } else {
      if (param.need_switch_param_) {
@@ -1558,7 +1558,7 @@ int ObLSTabletService::do_create_tablet(
     table_store_flag.set_without_major_sstable();
     LOG_INFO("no need to create sstable", K(ls_id), K(tablet_id), K(table_schema));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::build_create_sstable_param(
-      table_schema, tablet_id, snapshot_version.get_val_for_lsn_allocator(), param))) {
+      table_schema, tablet_id, snapshot_version.get_val_for_tx(), param))) {
     LOG_WARN("failed to build create sstable param", K(ret), K(tablet_id),
         K(table_schema), K(snapshot_version), K(param));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, table_handle))) {
@@ -1567,7 +1567,7 @@ int ObLSTabletService::do_create_tablet(
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(handle.get_obj()->init(ls_id, tablet_id, data_tablet_id, lob_meta_tablet_id, lob_piece_tablet_id,
-      create_scn.get_val_for_lsn_allocator(), snapshot_version.get_val_for_lsn_allocator(), table_schema, compat_mode, table_store_flag, table_handle, freezer))) {
+      create_scn, snapshot_version.get_val_for_tx(), table_schema, compat_mode, table_store_flag, table_handle, freezer))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(data_tablet_id), K(index_tablet_array),
         K(create_scn), K(snapshot_version), K(table_schema), K(compat_mode), K(table_store_flag));
 
@@ -4611,7 +4611,7 @@ void ObLSTabletService::dump_diag_info_for_old_row_loss(
   common::ObVersionRange trans_version_rang;
   trans_version_rang.base_version_ = 0;
   trans_version_rang.multi_version_start_ = 0;
-  trans_version_rang.snapshot_version_ = store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator();
+  trans_version_rang.snapshot_version_ = store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
 
   for (int64_t i = 0; OB_SUCC(ret) && i < full_read_info.get_request_count(); i++) {
     if (OB_FAIL(out_col_pros.push_back(i))) {

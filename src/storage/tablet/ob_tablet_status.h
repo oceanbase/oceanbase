@@ -114,11 +114,6 @@ public:
       const palf::SCN &memtable_scn,
       const bool for_replay,
       const memtable::MemtableRefOp ref_op);
-  int wake_up(
-      ObTabletTxMultiSourceDataUnit &tx_data,
-      const int64_t memtable_log_ts,
-      const bool for_replay,
-      const memtable::MemtableRefOp ref_op);
 private:
   int do_wait(common::ObThreadCond &cond, const uint64_t time_ms);
   static bool is_final_status(const ObTabletStatus::Status &status);

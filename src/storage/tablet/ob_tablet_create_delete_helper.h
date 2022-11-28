@@ -134,11 +134,6 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version,
       ObTabletCreateSSTableParam &param);
-  static int build_create_sstable_param(
-      const share::schema::ObTableSchema &table_schema,
-      const common::ObTabletID &tablet_id,
-      const palf::SCN snapshot_version,
-      ObTabletCreateSSTableParam &param);
   static int create_sstable(
       const ObTabletCreateSSTableParam &param,
       ObTableHandleV2 &table_handle);
@@ -194,8 +189,8 @@ private:
   static int set_tablet_final_status(
       ObTabletHandle &tablet_handle,
       const ObTabletStatus::Status status,
-      const int64_t tx_log_ts,
-      const int64_t memtable_log_ts,
+      const palf::SCN &tx_scn,
+      const palf::SCN &memtable_scn,
       const bool for_replay,
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE);
   static bool check_tablet_status(
