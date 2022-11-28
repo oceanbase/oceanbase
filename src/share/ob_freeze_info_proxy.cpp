@@ -401,21 +401,21 @@ int ObFreezeInfoProxy::construct_frozen_status_(
 int ObFreezeInfoProxy::get_freeze_schema_info(
     ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
-    const int64_t major_version,
+    const palf::SCN &frozen_scn,
     TenantIdAndSchemaVersion &schema_version_info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObTimeoutCtx ctx;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-      || major_version <= 0)) {
+      || (!frozen_scn.is_valid()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(major_version));
+    LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(frozen_scn));
   } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
     LOG_WARN("fail to get timeout ctx", KR(ret), K(tenant_id), K(ctx));
   } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE frozen_scn = %ld",
-                                    OB_ALL_FREEZE_INFO_TNAME, major_version))) {
-    LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(major_version));
+                                    OB_ALL_FREEZE_INFO_TNAME, frozen_scn.get_val_for_inner_table_field()))) {
+    LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(frozen_scn));
   }
 
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
@@ -430,7 +430,7 @@ int ObFreezeInfoProxy::get_freeze_schema_info(
       if (OB_ITER_END == ret) {
         ret = OB_ENTRY_NOT_EXIST;
       }
-      LOG_WARN("fail to get result", KR(ret), K(tenant_id), K(major_version));
+      LOG_WARN("fail to get result", KR(ret), K(tenant_id), K(frozen_scn));
     } else {
       schema_version_info.tenant_id_ = tenant_id;
       EXTRACT_INT_FIELD_MYSQL(*result, "schema_version", schema_version_info.schema_version_, int64_t);

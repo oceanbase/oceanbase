@@ -167,7 +167,7 @@ public:
 
   int get_freeze_schema_info(common::ObISQLClient &sql_proxy,
                             const uint64_t tenant_id,
-                            const int64_t major_version,
+                            const palf::SCN &frozen_scn,
                             TenantIdAndSchemaVersion &schema_version_info);
 
 private:

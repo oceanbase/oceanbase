@@ -405,7 +405,6 @@ int ObFreezeInfoManager::generate_frozen_scn(
    }
   }
 
-  int64_t new_gts = 0;
   SCN tmp_frozen_scn;
   SCN local_max_frozen_scn;
 
@@ -418,17 +417,15 @@ int ObFreezeInfoManager::generate_frozen_scn(
   } else if (max_frozen_status.frozen_scn_ != local_max_frozen_scn) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("max frozen_scn not same in cache and table", KR(ret), K(max_frozen_status), K(local_max_frozen_scn));
-  } else if (OB_FAIL(get_gts(new_gts))) {
+  } else if (OB_FAIL(get_gts(tmp_frozen_scn))) {
     LOG_WARN("fail to get gts", KR(ret));
-  } else if (OB_FAIL(tmp_frozen_scn.convert_for_gts(new_gts))) {
-    LOG_WARN("fail to convert for gts", KR(ret), K(new_gts));
   } else if ((tmp_frozen_scn <= snapshot_gc_scn)
              || (tmp_frozen_scn <= local_max_frozen_scn)
              || (tmp_frozen_scn <= snapshot_info.snapshot_scn_)) {
     // current time from gts must be greater than old ts
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get invalid frozen_timestmap", KR(ret), K(snapshot_gc_scn),
-              K(new_gts), K(tmp_frozen_scn), K(local_max_frozen_scn), K(snapshot_info));
+              K(tmp_frozen_scn), K(local_max_frozen_scn), K(snapshot_info));
   } else {
     new_frozen_scn = tmp_frozen_scn;
   }
@@ -472,8 +469,9 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
 
   SCN cur_snapshot_gc_scn;
   SCN new_snapshot_gc_scn;
-  uint64_t new_snapshot_gc_ts = 0;
-  int64_t cur_gts = 0;
+  SCN cur_gts_scn;
+  const int64_t default_weak_ts = transaction::ObWeakReadUtil::default_max_stale_time_for_weak_consistency();
+  const uint64_t WEAK_TS_NS = (uint64_t)(default_weak_ts * 1000L);
   int64_t affected_rows = 0;
   ObMySQLTransaction trans;
   ObRecursiveMutexGuard guard(lock_);
@@ -485,13 +483,9 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
   } else if (OB_FAIL(ObGlobalStatProxy::select_snapshot_gc_scn_for_update(trans, tenant_id_,
       cur_snapshot_gc_scn))) {
     LOG_WARN("fail to select snapshot_gc_scn for update", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(get_gts(cur_gts))) {
+  } else if (OB_FAIL(get_gts(cur_gts_scn))) {
     LOG_WARN("fail to get_gts", KR(ret));
-  } else if (FALSE_IT(new_snapshot_gc_ts =
-        (cur_gts - transaction::ObWeakReadUtil::default_max_stale_time_for_weak_consistency()))) {
-    LOG_WARN("fail to calc new snapshot_gc_scn", KR(ret), K(cur_gts));
-  } else if (OB_FAIL(new_snapshot_gc_scn.convert_for_inner_table_field(new_snapshot_gc_ts))) {
-    LOG_WARN("fail to convert val to SCN", KR(ret), K(new_snapshot_gc_ts));
+  } else if (FALSE_IT(new_snapshot_gc_scn = SCN::minus(cur_gts_scn, WEAK_TS_NS))) {
   } else if ((new_snapshot_gc_scn <= freeze_info_.latest_snapshot_gc_scn_)
              || (cur_snapshot_gc_scn >= new_snapshot_gc_scn)) {
     ret = OB_ERR_UNEXPECTED;
@@ -524,19 +518,16 @@ int ObFreezeInfoManager::renew_snapshot_gc_scn()
   return ret;
 }
 
-int ObFreezeInfoManager::get_gts(int64_t &ts) const
+int ObFreezeInfoManager::get_gts(palf::SCN &gts_scn) const
 {
   int ret = OB_SUCCESS;
   bool is_external_consistent = true;
   const int64_t timeout_us = 10 * 1000 * 1000;
-  palf::SCN tmp_scn;
-  if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id_, timeout_us, tmp_scn, is_external_consistent))) {
+  if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id_, timeout_us, gts_scn, is_external_consistent))) {
     LOG_WARN("fail to get ts sync", K(ret), K_(tenant_id), K(timeout_us));
   } else if (!is_external_consistent) { // only suppport gts in 4.0
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("cannot freeze without gts", KR(ret), K_(tenant_id));
-  } else {
-    ts = tmp_scn.get_val_for_lsn_allocator();
   }
 
   return ret;
@@ -560,11 +551,10 @@ int ObFreezeInfoManager::try_gc_freeze_info()
   ObRecursiveMutexGuard guard(lock_);
   int ret = OB_SUCCESS;
 
-  const int64_t MAX_KEEP_INTERVAL_US =  30 * 24 * 60 * 60 * 1000L * 1000L; // 30 day
+  const uint64_t MAX_KEEP_INTERVAL_NS =  30 * 24 * 60 * 60 * 1000L * 1000L * 1000L; // 30 day
   const int64_t MIN_REMAINED_VERSION_COUNT = 32;
-  const int64_t now = ObTimeUtility::current_time();
-  const uint64_t min_frozen_ts = (now - MAX_KEEP_INTERVAL_US) * 1000L; // frozen_scn is nano_second
   SCN min_frozen_scn;
+  SCN cur_gts_scn;
   SCN cur_snapshot_gc_scn;
 
   ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
@@ -579,8 +569,9 @@ int ObFreezeInfoManager::try_gc_freeze_info()
     LOG_WARN("fail to select snapshot_gc_scn for update", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(freeze_info_proxy.get_all_freeze_info(trans, all_frozen_status))) {
     LOG_WARN("fail to get all freeze info", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(min_frozen_scn.convert_for_inner_table_field(min_frozen_ts))) {
-    LOG_WARN("fail to convert val to SCN", KR(ret), K(min_frozen_ts));
+  } else if (OB_FAIL(get_gts(cur_gts_scn))) {
+    LOG_WARN("fail to get gts", KR(ret));
+  } else if (FALSE_IT(min_frozen_scn = SCN::minus(cur_gts_scn, MAX_KEEP_INTERVAL_NS))) {
   } else {
     const int64_t frozen_status_cnt = all_frozen_status.count();
     if (frozen_status_cnt > MIN_REMAINED_VERSION_COUNT) {

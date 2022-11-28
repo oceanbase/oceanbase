@@ -86,7 +86,6 @@ public:
   static const char *get_merge_status_str(const MergeStatus status);
   static MergeStatus get_merge_status(const char* merge_status_str);
 
-  bool is_merged(const int64_t broadcast_version) const;
   bool is_in_merge() const;
   bool need_merge(const int64_t broadcast_version) const;
 

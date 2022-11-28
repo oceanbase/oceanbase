@@ -118,7 +118,7 @@ private:
 
   int set_local_snapshot_gc_scn(const palf::SCN &new_scn);
 
-  int get_gts(int64_t &ts) const;
+  int get_gts(palf::SCN &gts_scn) const;
   int get_schema_version(const palf::SCN &frozen_scn, int64_t &schema_version) const;
 
   int get_min_freeze_info(share::ObSimpleFrozenStatus &frozen_status);

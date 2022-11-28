@@ -669,7 +669,7 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
             LOG_WARN("try update global last_merged_scn failed", KR(ret), K(expected_epoch));
           } else {
             ROOTSERVICE_EVENT_ADD("daily_merge", "global_merged", K_(tenant_id),
-                                  "global_broadcast_scn", global_info.global_broadcast_scn_.get_scn_val());
+                                  "global_broadcast_scn", global_info.global_broadcast_scn_);
           }
         }
       }

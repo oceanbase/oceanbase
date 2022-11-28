@@ -1085,7 +1085,7 @@ int ObTenantFreezer::get_global_frozen_scn_(int64_t &frozen_scn)
   if (OB_FAIL(rootserver::ObMajorFreezeHelper::get_frozen_scn(tenant_id, tmp_frozen_scn))) {
     LOG_WARN("get_frozen_scn failed", KR(ret), K(tenant_id));
   } else {
-    frozen_scn = tmp_frozen_scn.get_val_for_inner_table_field();
+    frozen_scn = tmp_frozen_scn.get_val_for_tx();
   }
 
   return ret;
