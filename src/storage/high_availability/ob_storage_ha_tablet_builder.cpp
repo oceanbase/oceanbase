@@ -632,8 +632,8 @@ int ObStorageHATabletsBuilder::get_remote_logical_minor_scn_range_(
   int ret = OB_SUCCESS;
   scn_range.reset();
   ObArray<ObITable *> sstables;
-  scn_range.start_scn_.convert_for_gts(ObTabletMeta::INIT_CLOG_CHECKPOINT_TS);
-  scn_range.end_scn_.convert_for_gts(ObTabletMeta::INIT_CLOG_CHECKPOINT_TS);
+  scn_range.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+  scn_range.end_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;

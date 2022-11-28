@@ -26,7 +26,7 @@ using namespace blocksstable;
 using namespace palf;
 namespace storage
 {
-const int64_t ObTabletMeta::INIT_CLOG_CHECKPOINT_TS = 1;
+const palf::SCN ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN = palf::SCN::base_scn();
 
 ObTabletMeta::ObTabletMeta()
   : version_(TABLET_META_VERSION),

@@ -66,11 +66,12 @@ ObTableAccessContext::ObTableAccessContext()
     out_cnt_(0),
     trans_version_range_(),
     range_array_pos_(nullptr),
-    merge_log_ts_(INT_MAX),
+    merge_scn_(),
     lob_locator_helper_(nullptr),
     iter_pool_(nullptr),
     block_row_store_(nullptr)
 {
+  merge_scn_.set_max();
 }
 
 ObTableAccessContext::~ObTableAccessContext()

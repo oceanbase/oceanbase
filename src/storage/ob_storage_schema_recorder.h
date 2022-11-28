@@ -21,6 +21,7 @@
 #include "storage/ob_storage_schema.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -127,7 +128,7 @@ private:
   int64_t max_saved_table_version_;
   char *clog_buf_;
   int64_t clog_len_;
-  int64_t clog_ts_;
+  palf::SCN clog_scn_;
 
   share::schema::ObSchemaGetterGuard *schema_guard_;
   ObStorageSchema *storage_schema_;

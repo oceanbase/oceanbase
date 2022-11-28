@@ -1632,7 +1632,7 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_table_acc
   if (OB_FAIL(tbl_xs_ctx_.init(query_flag, store_ctx_, allocator_, allocator_, scan_version_range))) {
     STORAGE_LOG(WARN, "Failed to init table access context", KR(ret));
   } else {
-    tbl_xs_ctx_.merge_log_ts_ = merge_ctx_.merge_scn_;
+    tbl_xs_ctx_.merge_scn_ = merge_ctx_.merge_scn_;
   }
   return ret;
 }

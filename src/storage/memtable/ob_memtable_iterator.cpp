@@ -910,11 +910,7 @@ int ObMemtableMultiVersionScanIterator::init_next_value_iter()
     ret = (OB_SUCCESS == ret) ? OB_ERR_UNEXPECTED : ret;
   } else {
     key_first_row_ = true;
-    // TODO(handora.qc): fix it
-    palf::SCN merge_scn;
-    merge_scn.convert_for_lsn_allocator(context_->merge_log_ts_);
-
-    value_iter_->set_merge_scn(merge_scn);
+    value_iter_->set_merge_scn(context_->merge_scn_);
     row_checker_.reset();
   }
   return ret;

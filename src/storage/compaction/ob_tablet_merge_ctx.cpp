@@ -193,14 +193,7 @@ int ObTabletMergeInfo::build_create_sstable_param(const ObTabletMergeCtx &ctx,
       table_key.scn_range_ = ctx.scn_range_;
     }
     param.table_key_ = table_key;
-    // TODO(scn):
-    if (INT64_MAX == ctx.merge_scn_) {
-      param.filled_tx_scn_.set_max();
-    } else {
-      if (OB_FAIL(param.filled_tx_scn_.convert_for_lsn_allocator(ctx.merge_scn_))) {
-        LOG_WARN("failed to convert for gts", K(ret), K(ctx));
-      }
-    }
+    param.filled_tx_scn_ = ctx.merge_scn_;
 
     param.table_mode_ = ctx.schema_ctx_.merge_schema_->get_table_mode_struct();
     param.index_type_ = ctx.schema_ctx_.merge_schema_->get_index_type();
@@ -489,7 +482,7 @@ ObTabletMergeCtx::ObTabletMergeCtx(
     allocator_(allocator),
     sstable_version_range_(),
     scn_range_(),
-    merge_scn_(INT64_MAX),
+    merge_scn_(),
     create_snapshot_version_(0),
     tables_handle_(),
     merged_table_handle_(),
@@ -511,6 +504,7 @@ ObTabletMergeCtx::ObTabletMergeCtx(
     time_guard_(),
     rebuild_seq_(-1)
 {
+  merge_scn_.set_max();
 }
 
 ObTabletMergeCtx::~ObTabletMergeCtx()
