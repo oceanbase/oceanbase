@@ -2044,6 +2044,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     resolver_ctx.is_ddl_from_primary_ = context.is_ddl_from_primary_;
     resolver_ctx.is_cursor_ = context.is_cursor_;
     resolver_ctx.is_batch_stmt_ = context.multi_stmt_item_.is_batched_multi_stmt();
+    resolver_ctx.is_by_ordinal_ = parse_result.question_mark_ctx_.by_ordinal_;
     resolver_ctx.external_param_info_.by_name_
         = parse_result.question_mark_ctx_.by_name_ || NULL != context.secondary_namespace_; //static sql in PL must be by name
     resolver_ctx.outline_parse_result_ = outline_parse_result;

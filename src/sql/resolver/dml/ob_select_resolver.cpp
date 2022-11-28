@@ -2366,6 +2366,31 @@ int ObSelectResolver::resolve_all_function_table_columns(
   return ret;
 }
 
+int ObSelectResolver::is_need_check_col_dup(const ObRawExpr *expr, bool &need_check)
+{
+  int ret = OB_SUCCESS;
+  need_check = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("is null", K(ret));
+  } else if (!params_.is_prepare_protocol_ || !params_.is_by_ordinal_) {
+    need_check = true;
+  } else if (T_QUESTIONMARK == expr->get_expr_type()) {
+    need_check = false;
+  } else {
+    for (int64_t j = 0; OB_SUCC(ret) && need_check && j < expr->get_children_count(); ++j) {
+      const ObRawExpr *child = expr->get_param_expr(j);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid child", K(child));
+      } else if (OB_FAIL(SMART_CALL(is_need_check_col_dup(child, need_check)))) {
+        LOG_WARN("failed to check if need to check col duplicate", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSelectResolver::resolve_all_generated_table_columns(
   const TableItem &table_item, ObIArray<ColumnItem> *column_items)
 {
@@ -2381,6 +2406,7 @@ int ObSelectResolver::resolve_all_generated_table_columns(
     const SelectItem &select_item = table_ref->get_select_item(i);
     const bool is_joined_dup_column = select_item.expr_->is_column_ref_expr()?
         static_cast<ObColumnRefRawExpr *>(select_item.expr_)->is_joined_dup_column():false;
+    bool need_check_col_dup = true;
     bool is_skip = lib::is_oracle_mode() && !table_ref->is_view_stmt() && is_joined_dup_column;
     /* 这里进行一次重复列名检测是原因是oracle支持generated table含有重复列名的不引用重复列名的查询，比如：
     *  select 1 from (select c1,c1 from t1)；因此在oracle模式resolve generated table时会跳过检查重复列
@@ -2389,7 +2415,10 @@ int ObSelectResolver::resolve_all_generated_table_columns(
      */
     // if the select item is a duplicable column in generated table, skip the check.
     // else we should set the skip_join_dup parameter to true. 
-    if (!is_skip && OB_FAIL(column_namespace_checker_.check_column_exists(table_item,
+    if (OB_FAIL(is_need_check_col_dup(select_item.expr_, need_check_col_dup))) {
+      LOG_WARN("failed to check if need to check col duplicate", K(ret));
+    } else if (FALSE_IT(is_skip = is_skip ? is_skip : !need_check_col_dup)) {
+    } else if (!is_skip && OB_FAIL(column_namespace_checker_.check_column_exists(table_item,
                                                               select_item.alias_name_,
                                                               is_exists, // the return value of is_exists is unused.
                                                               !table_ref->is_view_stmt()))) { //if is a view stmt, do not pass the duplicated column.
