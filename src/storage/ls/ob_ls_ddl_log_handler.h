@@ -53,8 +53,9 @@ public:
   int resume_leader() override final;
 
   // for checkpoint
-  int flush(int64_t rec_log_ts) override final;
-  int64_t get_rec_log_ts() override final;
+  int flush(palf::SCN &rec_scn) override final;
+  int64_t get_rec_log_ts();
+  palf::SCN get_rec_scn() override final;
 private:
   int replay_ddl_redo_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);
   int replay_ddl_prepare_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const int64_t log_ts);

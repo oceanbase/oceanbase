@@ -21,6 +21,7 @@
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_service.h"
+#include "logservice/palf/scn.h"
 #include "observer/report/ob_i_meta_report.h"
 #include "share/ob_disk_usage_table_operator.h"
 #include "share/ob_rpc_struct.h"
@@ -197,15 +198,15 @@ int ObLSTabletService::resume_leader()
   return ret;
 }
 
-int ObLSTabletService::flush(int64_t rec_log_ts)
+int ObLSTabletService::flush(palf::SCN &recycle_scn)
 {
-  UNUSED(rec_log_ts);
+  UNUSED(recycle_scn);
   return OB_SUCCESS;
 }
 
-int64_t ObLSTabletService::get_rec_log_ts()
+palf::SCN ObLSTabletService::get_rec_scn()
 {
-  return INT64_MAX;
+  return palf::SCN::max_scn();
 }
 
 int ObLSTabletService::prepare_for_safe_destroy()

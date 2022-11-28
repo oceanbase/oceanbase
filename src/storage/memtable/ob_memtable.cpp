@@ -1578,7 +1578,7 @@ int ObMemtable::set_max_end_log_ts(const int64_t log_ts)
   return ret;
 }
 
-bool ObMemtable::rec_log_ts_is_stable()
+bool ObMemtable::rec_scn_is_stable()
 {
   int ret = OB_SUCCESS;
   bool rec_log_ts_is_stable = false;
@@ -1888,6 +1888,13 @@ int ObMemtable::flush(share::ObLSID ls_id)
   }
 
   return ret;
+}
+
+palf::SCN ObMemtable::get_rec_scn()
+{
+  palf::SCN tmp;
+  tmp.convert_for_lsn_allocator(get_rec_log_ts());
+  return tmp;
 }
 
 bool ObMemtable::is_active_memtable() const

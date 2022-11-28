@@ -49,7 +49,7 @@ ObLSMeta::ObLSMeta()
     ls_id_(),
     replica_type_(REPLICA_TYPE_MAX),
     ls_create_status_(ObInnerLSStatus::CREATING),
-    clog_checkpoint_ts_(0),
+    clog_checkpoint_scn_(),
     clog_base_lsn_(PALF_INITIAL_LSN_VAL),
     rebuild_seq_(0),
     migration_status_(ObMigrationStatus::OB_MIGRATION_STATUS_MAX),
@@ -69,7 +69,7 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     ls_id_(ls_meta.ls_id_),
     replica_type_(ls_meta.replica_type_),
     ls_create_status_(ls_meta.ls_create_status_),
-    clog_checkpoint_ts_(ls_meta.clog_checkpoint_ts_),
+    clog_checkpoint_scn_(ls_meta.clog_checkpoint_scn_),
     clog_base_lsn_(ls_meta.clog_base_lsn_),
     rebuild_seq_(ls_meta.rebuild_seq_),
     migration_status_(ls_meta.migration_status_),
@@ -94,7 +94,7 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
     rebuild_seq_ = other.rebuild_seq_;
     migration_status_ = other.migration_status_;
     clog_base_lsn_ = other.clog_base_lsn_;
-    clog_checkpoint_ts_ = other.clog_checkpoint_ts_;
+    clog_checkpoint_scn_ = other.clog_checkpoint_scn_;
     gc_state_ = other.gc_state_;
     offline_scn_ = other.offline_scn_;
     restore_status_ = other.restore_status_;
@@ -113,7 +113,7 @@ void ObLSMeta::reset()
   ls_id_.reset();
   replica_type_ = REPLICA_TYPE_MAX;
   clog_base_lsn_.reset();
-  clog_checkpoint_ts_ = 0;
+  clog_checkpoint_scn_.reset();
   rebuild_seq_ = 0;
   migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   gc_state_ = LSGCState::INVALID_LS_GC_STATE;
@@ -130,20 +130,26 @@ LSN &ObLSMeta::get_clog_base_lsn()
   return clog_base_lsn_;
 }
 
+SCN ObLSMeta::get_clog_checkpoint_scn() const
+{
+  ObSpinLockTimeGuard guard(lock_);
+	return clog_checkpoint_scn_;
+}
+
 int64_t ObLSMeta::get_clog_checkpoint_ts() const
 {
   ObSpinLockTimeGuard guard(lock_);
- 	return clog_checkpoint_ts_;
+	return clog_checkpoint_scn_.get_val_for_lsn_allocator();
 }
 
 int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
-                                  const int64_t clog_checkpoint_ts,
+                                  const SCN clog_checkpoint_scn,
                                   const bool write_slog)
 {
   ObSpinLockTimeGuard guard(lock_);
   ObLSMeta tmp(*this);
   tmp.clog_base_lsn_ = clog_checkpoint_lsn;
-  tmp.clog_checkpoint_ts_ = clog_checkpoint_ts;
+  tmp.clog_checkpoint_scn_ = clog_checkpoint_scn;
 
   int ret = OB_SUCCESS;
   if (write_slog) {
@@ -153,7 +159,7 @@ int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
   }
 
   clog_base_lsn_ = clog_checkpoint_lsn;
-  clog_checkpoint_ts_ = clog_checkpoint_ts;
+  clog_checkpoint_scn_ = clog_checkpoint_scn;
 
   return ret;
 }
@@ -401,7 +407,7 @@ int ObLSMeta::update_ls_meta(
       ObSpinLockTimeGuard guard(lock_);
       ObLSMeta tmp(*this);
       tmp.clog_base_lsn_ = src_ls_meta.clog_base_lsn_;
-      tmp.clog_checkpoint_ts_ = src_ls_meta.clog_checkpoint_ts_;
+      tmp.clog_checkpoint_scn_ = src_ls_meta.clog_checkpoint_scn_;
       tmp.replayable_point_ = src_ls_meta.replayable_point_;
       tmp.tablet_change_checkpoint_scn_ = src_ls_meta.tablet_change_checkpoint_scn_;
       if (update_restore_status) {
@@ -409,7 +415,7 @@ int ObLSMeta::update_ls_meta(
       }
       guard.click();
       tmp.all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
-      if (tmp.clog_checkpoint_ts_ < clog_checkpoint_ts_) {
+      if (tmp.clog_checkpoint_scn_ < clog_checkpoint_scn_) {
   // TODO: now do not allow clog checkpoint ts rollback, may support it in 4.1
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("do not allow clog checkpoint ts rollback", K(ret), K(src_ls_meta), KPC(this));
@@ -418,7 +424,7 @@ int ObLSMeta::update_ls_meta(
       } else {
         guard.click();
         clog_base_lsn_ = src_ls_meta.clog_base_lsn_;
-        clog_checkpoint_ts_ = src_ls_meta.clog_checkpoint_ts_;
+        clog_checkpoint_scn_ = src_ls_meta.clog_checkpoint_scn_;
         replayable_point_ = src_ls_meta.replayable_point_;
         tablet_change_checkpoint_scn_ = src_ls_meta.tablet_change_checkpoint_scn_;
 
@@ -535,7 +541,7 @@ int ObLSMeta::build_saved_info()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("saved info is not empty, can not build saved info", K(ret), K(*this));
   } else {
-    saved_info.clog_checkpoint_ts_ = clog_checkpoint_ts_;
+    saved_info.clog_checkpoint_ts_ = clog_checkpoint_scn_.convert_to_ts();
     saved_info.clog_base_lsn_ = clog_base_lsn_;
     saved_info.tablet_change_checkpoint_scn_ = tablet_change_checkpoint_scn_;
     ObLSMeta tmp(*this);
@@ -592,7 +598,7 @@ int ObLSMeta::init(
     ls_id_ = ls_id;
     replica_type_ = replica_type;
     ls_create_status_ = ObInnerLSStatus::CREATING;
-    clog_checkpoint_ts_ = create_scn;
+    clog_checkpoint_scn_.convert_for_lsn_allocator(create_scn);
     clog_base_lsn_.val_ = PALF_INITIAL_LSN_VAL;
     rebuild_seq_ = 0;
     migration_status_ = migration_status;
@@ -641,7 +647,7 @@ OB_SERIALIZE_MEMBER(ObLSMeta,
                     ls_id_,
                     replica_type_,
                     ls_create_status_,
-                    clog_checkpoint_ts_,
+                    clog_checkpoint_scn_,
                     clog_base_lsn_,
                     rebuild_seq_,
                     migration_status_,

@@ -20,6 +20,7 @@
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "logservice/ob_log_base_header.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -211,7 +212,7 @@ int ObLSDDLLogHandler::resume_leader()
   return ret;
 }
 
-int ObLSDDLLogHandler::flush(int64_t rec_log_ts)
+int ObLSDDLLogHandler::flush(palf::SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
   ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
@@ -242,7 +243,7 @@ int ObLSDDLLogHandler::flush(int64_t rec_log_ts)
           ObDDLTableMergeDagParam param;
           param.ls_id_ = ls_->get_ls_id();
           param.tablet_id_ = tablet_handle.get_obj()->get_tablet_meta().tablet_id_;
-          param.rec_log_ts_ = rec_log_ts;
+          param.rec_log_ts_ = rec_scn.convert_to_ts();
           if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
             if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
               LOG_WARN("failed to schedule ddl kv merge dag", K(ret));
@@ -253,6 +254,13 @@ int ObLSDDLLogHandler::flush(int64_t rec_log_ts)
     }
   }
   return OB_SUCCESS;
+}
+
+palf::SCN ObLSDDLLogHandler::get_rec_scn()
+{
+  palf::SCN tmp;
+  tmp.convert_for_lsn_allocator(get_rec_log_ts());
+  return tmp;
 }
 
 int64_t ObLSDDLLogHandler::get_rec_log_ts()

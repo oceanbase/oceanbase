@@ -122,8 +122,9 @@ private:
   virtual int resume_leader() override;
 
   // for checkpoint
-  virtual int flush(int64_t rec_log_ts) override;
-  virtual int64_t get_rec_log_ts() override;
+  virtual int flush(palf::SCN &recycle_scn) override;
+  virtual palf::SCN get_rec_scn() override;
+
 public:
   int prepare_for_safe_destroy();
   int safe_to_destroy(bool &is_safe);

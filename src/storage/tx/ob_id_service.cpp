@@ -252,12 +252,12 @@ int ObIDService::update_ls_id_meta(const bool write_slog)
   return ret;
 }
 
-int ObIDService::flush(int64_t rec_log_ts)
+int ObIDService::flush(palf::SCN &rec_scn)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(rwlock_);
   palf::SCN latest_rec_log_ts = rec_log_ts_.atomic_get();
-  if (latest_rec_log_ts.get_val_for_lsn_allocator() <= rec_log_ts) {
+  if (latest_rec_log_ts <= rec_scn) {
     latest_rec_log_ts = rec_log_ts_.atomic_get();
     if (OB_FAIL(update_ls_id_meta(true))) {
       TRANS_LOG(WARN, "update id meta of ls meta fail", K(ret), K(service_type_));
@@ -289,11 +289,11 @@ int ObIDService::check_leader(bool &leader)
   return ret;
 }
 
-int64_t ObIDService::get_rec_log_ts()
+palf::SCN ObIDService::get_rec_scn()
 {
   const palf::SCN rec_log_ts = rec_log_ts_.atomic_get();
-  TRANS_LOG(INFO, "get rec log ts", K(service_type_), K(rec_log_ts));
-  return rec_log_ts.get_val_for_lsn_allocator();
+  TRANS_LOG(INFO, "get rec log scn", K(service_type_), K(rec_log_ts));
+  return rec_log_ts;
 }
 
 int ObIDService::switch_to_follower_gracefully()

@@ -16,9 +16,15 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
+
+namespace palf
+{
+class SCN;
+}
 namespace storage
 {
 class ObLS;
@@ -27,11 +33,11 @@ namespace checkpoint
 
 struct ObCheckpointVTInfo
 {
-  int64_t rec_log_ts;
+  palf::SCN rec_scn;
   int service_type;
 
   TO_STRING_KV(
-    K(rec_log_ts),
+    K(rec_scn),
     K(service_type)
   );
 };
@@ -56,8 +62,8 @@ public:
   int update_clog_checkpoint();
 
   // the service will flush and advance checkpoint
-  // after flush, checkpoint_log_ts will be equal or greater than recycle_ts
-  int advance_checkpoint_by_flush(int64_t recycle_ts = 0);
+  // after flush, checkpoint_scn will be equal or greater than recycle_scn
+  int advance_checkpoint_by_flush(palf::SCN recycle_scn);
 
   // for __all_virtual_checkpoint
   int get_checkpoint_info(ObIArray<ObCheckpointVTInfo> &checkpoint_array);
@@ -67,13 +73,13 @@ public:
 
   bool is_wait_advance_checkpoint();
 
-  void set_wait_advance_checkpoint(int64_t checkpoint_log_ts);
+  void set_wait_advance_checkpoint(palf::SCN &checkpoint_scn);
 
   int64_t get_cannot_recycle_log_size();
 
 private:
   static const int64_t CLOG_GC_PERCENT = 60;
-  static const int64_t MAX_NEED_REPLAY_CLOG_INTERVAL = (int64_t)60 * 60 * 1000 * 1000 * 1000; //ns
+  static const int64_t MAX_NEED_REPLAY_CLOG_INTERVAL = (int64_t)60 * 60 * 1000 * 1000; //us
 
   ObLS *ls_;
   logservice::ObILogHandler *loghandler_;

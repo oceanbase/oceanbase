@@ -100,8 +100,8 @@ int ObFreezeCheckpoint::check_can_move_to_active(bool is_ls_freeze)
 {
   int ret = OB_SUCCESS;
   if (location_ != ACTIVE) {
-    // only when the unit rec_log_ts is stable that can be moved to ordered_active_list
-    if (rec_log_ts_is_stable()) {
+    // only when the unit rec_scn is stable that can be moved to ordered_active_list
+    if (rec_scn_is_stable()) {
       if (OB_FAIL(move_to_active_(is_ls_freeze))) {
         STORAGE_LOG(ERROR, "transfer to active failed", K(ret));
       }

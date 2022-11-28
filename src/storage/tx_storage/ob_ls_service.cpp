@@ -734,7 +734,7 @@ int ObLSService::restore_update_ls_(const ObLSMetaPackage &meta_package)
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls is null", K(meta_package));
-  } else if (OB_FAIL(ls->set_clog_checkpoint(ls_meta.get_clog_base_lsn(), ls_meta.get_clog_checkpoint_ts()))) {
+  } else if (OB_FAIL(ls->set_clog_checkpoint(ls_meta.get_clog_base_lsn(), ls_meta.get_clog_checkpoint_scn()))) {
     LOG_WARN("failed to set clog checkpoint", K(meta_package));
   } else if (OB_FAIL(ls->advance_base_info(meta_package.palf_meta_, is_rebuild))) {
     LOG_WARN("failed to advance base lsn", K(meta_package));

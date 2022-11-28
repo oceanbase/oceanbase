@@ -1208,13 +1208,14 @@ int ObLS::flush_if_need(const bool need_flush)
 int ObLS::flush_if_need_(const bool need_flush)
 {
   int ret = OB_SUCCESS;
-  int64_t clog_checkpoint_ts = get_clog_checkpoint_ts();
+  palf::SCN clog_checkpoint_scn = get_clog_checkpoint_scn();
+  palf::SCN invalid_scn;
   if ((!need_flush && !checkpoint_executor_.need_flush()) || checkpoint_executor_.is_wait_advance_checkpoint()) {
     STORAGE_LOG(INFO, "the ls no need flush to advance_checkpoint", K(get_ls_id()));
-  } else if (OB_FAIL(checkpoint_executor_.advance_checkpoint_by_flush())) {
+  } else if (OB_FAIL(checkpoint_executor_.advance_checkpoint_by_flush(invalid_scn))) {
     STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", KR(ret), K(get_ls_id()));
   } else {
-    checkpoint_executor_.set_wait_advance_checkpoint(clog_checkpoint_ts);
+    checkpoint_executor_.set_wait_advance_checkpoint(clog_checkpoint_scn);
   }
   return ret;
 }

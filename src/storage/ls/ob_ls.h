@@ -306,6 +306,7 @@ public:
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_clog_checkpoint);
   UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, set_clog_checkpoint);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_ts, int64_t);
+  CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_scn, palf::SCN);
   DELEGATE_WITH_RET(ls_meta_, get_clog_base_lsn, palf::LSN &);
   DELEGATE_WITH_RET(ls_meta_, get_saved_info, int);
   // int build_saved_info();

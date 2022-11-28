@@ -153,15 +153,15 @@ public:
   }
 
   // for checkpoint, do nothing
-  int64_t get_rec_log_ts() override final
+  palf::SCN get_rec_scn() override final
   {
-    return INT64_MAX;
+    return palf::SCN::max_scn();;
   }
 
-  int flush(int64_t rec_log_ts) override final
+  int flush(palf::SCN &scn) override final
   {
     int ret = OB_SUCCESS;
-    UNUSED(rec_log_ts);
+    UNUSED(scn);
     return ret;
   }
 

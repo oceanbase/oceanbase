@@ -83,12 +83,14 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
     ObLSMetaPackage ls_meta_package;
     int64_t i = 0;
     const int64_t start_ts = ObTimeUtility::current_time();
+    palf::SCN tmp;
+    tmp.convert_for_lsn_allocator(start_scn);
     do {
       const int64_t cur_ts = ObTimeUtility::current_time();
       if (cur_ts - start_ts > advance_checkpoint_timeout) {
         ret = OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT;
         LOG_WARN("backup advance checkpoint by flush timeout", K(ret), K(tenant_id), K(ls_id), K(start_scn));
-      } else if (OB_FAIL(checkpoint_executor->advance_checkpoint_by_flush(start_scn))) {
+      } else if (OB_FAIL(checkpoint_executor->advance_checkpoint_by_flush(tmp))) {
         if (OB_NO_NEED_UPDATE == ret) {
           // clog checkpoint ts has passed start log ts
           ret = OB_SUCCESS;

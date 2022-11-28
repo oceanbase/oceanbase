@@ -430,22 +430,12 @@ int ObGCHandler::replay(const void *buffer,
   return ret;
 }
 
-void ObGCHandler::get_rec_log_scn(SCN &scn)
+palf::SCN ObGCHandler::get_rec_scn()
 {
-  scn.set_max();
+  return palf::SCN::max_scn();
 }
 
-int64_t ObGCHandler::get_rec_log_ts()
-{
-  return INT64_MAX;
-}
-
-int ObGCHandler::flush(const SCN &scn)
-{
-  // do nothing
-  return OB_SUCCESS;
-}
-int ObGCHandler::flush(int64_t rec_log_ts)
+int ObGCHandler::flush(SCN &scn)
 {
   // do nothing
   return OB_SUCCESS;

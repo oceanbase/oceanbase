@@ -57,8 +57,8 @@ public:
   virtual void do_work() override;
   void destroy();
 public:
-  virtual int64_t get_rec_log_ts() override { return INT64_MAX;}
-  virtual int flush(int64_t rec_log_ts) override { return OB_SUCCESS; }
+  virtual palf::SCN get_rec_scn() override { return palf::SCN::max_scn();}
+  virtual int flush(palf::SCN &rec_scn) override { return OB_SUCCESS; }
   int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const palf::SCN &scn) override
   {
     UNUSED(buffer);

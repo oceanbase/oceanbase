@@ -735,17 +735,6 @@ int ObLockMemtable::get_frozen_schema_version(int64_t &schema_version) const
   return OB_NOT_SUPPORTED;
 }
 
-int64_t ObLockMemtable::get_rec_log_ts()
-{
-  // no need lock because rec_scn_ aesc except INT64_MAX
-  // TODO: cxf remove this
-  palf::SCN tmp;
-  int64_t tmp_rec_log_ts = INT64_MAX;
-  tmp = get_rec_scn();
-  tmp_rec_log_ts = tmp == palf::SCN::max_scn() ? INT64_MAX : tmp.get_val_for_lsn_allocator();
-  return tmp_rec_log_ts;
-}
-
 palf::SCN ObLockMemtable::get_rec_scn()
 {
   // no need lock because rec_scn_ aesc except INT64_MAX
@@ -805,17 +794,8 @@ bool ObLockMemtable::is_active_memtable() const
   return !ATOMIC_LOAD(&is_frozen_);
 }
 
-int ObLockMemtable::flush(int64_t recycle_log_ts, bool need_freeze)
-{
-  int ret = OB_SUCCESS;
-  palf::SCN tmp;
-  tmp.convert_for_lsn_allocator(recycle_log_ts);
-  ret = flush(tmp, need_freeze);
-  return ret;
-}
-
-int ObLockMemtable::flush(const palf::SCN &recycle_scn,
-                          const bool need_freeze)
+int ObLockMemtable::flush(palf::SCN recycle_scn,
+                          bool need_freeze)
 {
   int ret = OB_SUCCESS;
   UNUSED(need_freeze);
