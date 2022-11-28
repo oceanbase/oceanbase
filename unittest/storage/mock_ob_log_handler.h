@@ -394,9 +394,9 @@ public:
   {
     return OB_SUCCESS;
   }
-  int get_max_decided_log_scn(palf::SCN &log_scn)
+  int get_max_decided_scn(palf::SCN &scn)
   {
-    log_scn.set_max();
+    scn.set_max();
     return OB_SUCCESS;
   }
   int get_max_decided_log_ts_ns(int64_t &log_ts)

@@ -76,7 +76,7 @@ int ObLS::init(const share::ObLSID &ls_id,
                const ObReplicaType replica_type,
                const ObMigrationStatus &migration_status,
                const ObLSRestoreStatus &restore_status,
-               const int64_t create_scn,
+               const palf::SCN &create_scn,
                observer::ObIMetaReport *reporter)
 {
   int ret = OB_SUCCESS;
@@ -950,25 +950,25 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(ls_meta_.ls_id_, tablet_id);
   const palf::SCN tablet_change_checkpoint_scn = ls_meta_.get_tablet_change_checkpoint_scn();
-  palf::SCN log_scn;
+  palf::SCN scn;
   ObTabletHandle tablet_handle;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_FAIL(log_scn.convert_for_lsn_allocator(log_ts))) {
-    STORAGE_LOG(WARN, "fail to convert to scn", KR(ret), K(log_scn));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !log_scn.is_valid())) {
+  } else if (OB_FAIL(scn.convert_for_lsn_allocator(log_ts))) {
+    STORAGE_LOG(WARN, "fail to convert to scn", KR(ret), K(scn));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tablet_id), K(log_scn));
+    LOG_WARN("invalid args", K(ret), K(tablet_id), K(scn));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST != ret) {
       LOG_WARN("failed to get tablet", K(ret), K(key));
-    } else if (log_scn < tablet_change_checkpoint_scn) {
-      LOG_WARN("tablet already deleted", K(ret), K(key), K(log_scn), K(tablet_change_checkpoint_scn));
+    } else if (scn < tablet_change_checkpoint_scn) {
+      LOG_WARN("tablet already deleted", K(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
     } else {
       ret = OB_EAGAIN;
-      LOG_INFO("tablet does not exist, but need retry", K(ret), K(key), K(log_scn), K(tablet_change_checkpoint_scn));
+      LOG_INFO("tablet does not exist, but need retry", K(ret), K(key), K(scn), K(tablet_change_checkpoint_scn));
     }
   } else {
     ObTabletTxMultiSourceDataUnit tx_data;
@@ -976,17 +976,17 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
       LOG_WARN("failed to get tablet tx data", K(ret), K(tablet_handle));
     } else if (ObTabletStatus::CREATING == tx_data.tablet_status_) {
       ret = OB_EAGAIN;
-      LOG_INFO("tablet is CREATING, need retry", K(ret), K(key), K(tx_data), K(log_scn));
+      LOG_INFO("tablet is CREATING, need retry", K(ret), K(key), K(tx_data), K(scn));
     } else if (ObTabletStatus::NORMAL == tx_data.tablet_status_) {
       // do nothing
     } else if (ObTabletStatus::DELETING == tx_data.tablet_status_) {
-      LOG_INFO("tablet is DELETING, just continue", K(ret), K(key), K(tx_data), K(log_scn));
+      LOG_INFO("tablet is DELETING, just continue", K(ret), K(key), K(tx_data), K(scn));
     } else if (ObTabletStatus::DELETED == tx_data.tablet_status_) {
       ret = OB_TABLET_NOT_EXIST;
-      LOG_INFO("tablet is already deleted", K(ret), K(key), K(tx_data), K(log_scn));
+      LOG_INFO("tablet is already deleted", K(ret), K(key), K(tx_data), K(scn));
     } else {
       ret = OB_EAGAIN;
-      LOG_INFO("tablet may be in creating procedure", K(ret), K(key), K(tx_data), K(log_scn));
+      LOG_INFO("tablet may be in creating procedure", K(ret), K(key), K(tx_data), K(scn));
     }
   }
 
@@ -1288,7 +1288,7 @@ int ObLS::set_tablet_change_checkpoint_scn(const palf::SCN &scn)
 
 int ObLS::update_id_meta_with_writing_slog(const int64_t service_type,
                                            const int64_t limited_id,
-                                           const palf::SCN &latest_log_scn)
+                                           const palf::SCN &latest_scn)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKLS;
@@ -1304,8 +1304,8 @@ int ObLS::update_id_meta_with_writing_slog(const int64_t service_type,
   } else if (!can_update_ls_meta(ls_meta_.ls_create_status_)) {
     ret = OB_STATE_NOT_MATCH;
     STORAGE_LOG(WARN, "state not match, cannot update ls meta", K(ret), K(ls_meta_));
-  } else if (OB_FAIL(ls_meta_.update_id_meta(service_type, limited_id, latest_log_scn, true))) {
-    STORAGE_LOG(WARN, "update id meta with slog fail", K(ret), K_(ls_meta), K(service_type), K(limited_id), K(latest_log_scn));
+  } else if (OB_FAIL(ls_meta_.update_id_meta(service_type, limited_id, latest_scn, true))) {
+    STORAGE_LOG(WARN, "update id meta with slog fail", K(ret), K_(ls_meta), K(service_type), K(limited_id), K(latest_scn));
   } else {
     // do nothing
   }
@@ -1315,7 +1315,7 @@ int ObLS::update_id_meta_with_writing_slog(const int64_t service_type,
 
 int ObLS::update_id_meta_without_writing_slog(const int64_t service_type,
                                               const int64_t limited_id,
-                                              const palf::SCN &latest_log_scn)
+                                              const palf::SCN &latest_scn)
 {
   int ret = OB_SUCCESS;
 
@@ -1325,8 +1325,8 @@ int ObLS::update_id_meta_without_writing_slog(const int64_t service_type,
   } else if (OB_UNLIKELY(is_stopped_)) {
     ret = OB_NOT_RUNNING;
     STORAGE_LOG(WARN, "ls stopped", K(ret), K_(ls_meta));
-  } else if (OB_FAIL(ls_meta_.update_id_meta(service_type, limited_id, latest_log_scn, false))) {
-    STORAGE_LOG(WARN, "update id meta fail", K(ret), K_(ls_meta), K(service_type), K(limited_id), K(latest_log_scn));
+  } else if (OB_FAIL(ls_meta_.update_id_meta(service_type, limited_id, latest_scn, false))) {
+    STORAGE_LOG(WARN, "update id meta fail", K(ret), K_(ls_meta), K(service_type), K(limited_id), K(latest_scn));
   } else {
     // do nothing
   }

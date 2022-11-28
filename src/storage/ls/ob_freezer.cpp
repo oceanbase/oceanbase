@@ -31,8 +31,8 @@ namespace storage
 {
 ObFrozenMemtableInfo::ObFrozenMemtableInfo()
   : tablet_id_(),
-    start_log_scn_(share::ObScnRange::MIN_SCN),
-    end_log_scn_(share::ObScnRange::MIN_SCN),
+    start_scn_(share::ObScnRange::MIN_SCN),
+    end_scn_(share::ObScnRange::MIN_SCN),
     write_ref_cnt_(0),
     unsubmitted_cnt_(0),
     unsynced_cnt_(0),
@@ -40,15 +40,15 @@ ObFrozenMemtableInfo::ObFrozenMemtableInfo()
 {}
 
 ObFrozenMemtableInfo::ObFrozenMemtableInfo(const ObTabletID &tablet_id,
-                                           const palf::SCN &start_log_scn,
-                                           const palf::SCN &end_log_scn,
+                                           const palf::SCN &start_scn,
+                                           const palf::SCN &end_scn,
                                            const int64_t write_ref_cnt,
                                            const int64_t unsubmitted_cnt,
                                            const int64_t unsynced_cnt,
                                            const int64_t current_right_boundary)
  : tablet_id_(tablet_id),
-   start_log_scn_(start_log_scn),
-   end_log_scn_(end_log_scn),
+   start_scn_(start_scn),
+   end_scn_(end_scn),
    write_ref_cnt_(write_ref_cnt),
    unsubmitted_cnt_(unsubmitted_cnt),
    unsynced_cnt_(unsynced_cnt),
@@ -63,8 +63,8 @@ ObFrozenMemtableInfo::~ObFrozenMemtableInfo()
 void ObFrozenMemtableInfo::reset()
 {
   tablet_id_.reset();
-  start_log_scn_ = share::ObScnRange::MIN_SCN;
-  end_log_scn_ = share::ObScnRange::MIN_SCN;
+  start_scn_ = share::ObScnRange::MIN_SCN;
+  end_scn_ = share::ObScnRange::MIN_SCN;
   write_ref_cnt_ = 0;
   unsubmitted_cnt_ = 0;
   unsynced_cnt_ = 0;
@@ -72,16 +72,16 @@ void ObFrozenMemtableInfo::reset()
 }
 
 void ObFrozenMemtableInfo::set(const ObTabletID &tablet_id,
-                               const palf::SCN &start_log_scn,
-                               const palf::SCN &end_log_scn,
+                               const palf::SCN &start_scn,
+                               const palf::SCN &end_scn,
                                const int64_t write_ref_cnt,
                                const int64_t unsubmitted_cnt,
                                const int64_t unsynced_cnt,
                                const int64_t current_right_boundary)
 {
   tablet_id_ = tablet_id;
-  start_log_scn_ = start_log_scn;
-  end_log_scn_ = end_log_scn;
+  start_scn_ = start_scn;
+  end_scn_ = end_scn;
   write_ref_cnt_ = write_ref_cnt;
   unsubmitted_cnt_ = unsubmitted_cnt;
   unsynced_cnt_ = unsynced_cnt;
@@ -90,7 +90,7 @@ void ObFrozenMemtableInfo::set(const ObTabletID &tablet_id,
 
 bool ObFrozenMemtableInfo::is_valid()
 {
-  return tablet_id_.is_valid() && start_log_scn_ > share::ObScnRange::MIN_SCN && end_log_scn_ > share::ObScnRange::MIN_SCN;
+  return tablet_id_.is_valid() && start_scn_ > share::ObScnRange::MIN_SCN && end_scn_ > share::ObScnRange::MIN_SCN;
 }
 
 ObFreezerStat::ObFreezerStat()
@@ -131,8 +131,8 @@ bool ObFreezerStat::is_valid()
 }
 
 int ObFreezerStat::add_memtable_info(const ObTabletID &tablet_id,
-                                     const palf::SCN &start_log_scn,
-                                     const palf::SCN &end_log_scn,
+                                     const palf::SCN &start_scn,
+                                     const palf::SCN &end_scn,
                                      const int64_t write_ref_cnt,
                                      const int64_t unsubmitted_cnt,
                                      const int64_t unsynced_cnt,
@@ -143,8 +143,8 @@ int ObFreezerStat::add_memtable_info(const ObTabletID &tablet_id,
   ObSpinLockGuard guard(memtables_info_lock_);
   if (memtables_info_.count() < FROZEN_MEMTABLE_INFO_CNT) {
     ObFrozenMemtableInfo memtable_info(tablet_id,
-                                       start_log_scn,
-                                       end_log_scn,
+                                       start_scn,
+                                       end_scn,
                                        write_ref_cnt,
                                        unsubmitted_cnt,
                                        unsynced_cnt,
@@ -193,7 +193,7 @@ void ObFreezerStat::add_diagnose_info(const ObString &str)
 ObFreezer::ObFreezer()
   : freeze_flag_(0),
     freeze_snapshot_version_(),
-    max_decided_log_scn_(),
+    max_decided_scn_(),
     ls_wrs_handler_(nullptr),
     ls_tx_svr_(nullptr),
     ls_tablet_svr_(nullptr),
@@ -213,7 +213,7 @@ ObFreezer::ObFreezer(ObLSWRSHandler *ls_loop_worker,
                      const share::ObLSID &ls_id)
   : freeze_flag_(0),
     freeze_snapshot_version_(),
-    max_decided_log_scn_(),
+    max_decided_scn_(),
     ls_wrs_handler_(ls_loop_worker),
     ls_tx_svr_(ls_tx_svr),
     ls_tablet_svr_(ls_tablet_svr),
@@ -240,7 +240,7 @@ void ObFreezer::set(ObLSWRSHandler *ls_loop_worker,
 {
   freeze_flag_ = freeze_flag;
   freeze_snapshot_version_.reset();
-  max_decided_log_scn_.reset();
+  max_decided_scn_.reset();
   ls_wrs_handler_ = ls_loop_worker;
   ls_tx_svr_ = ls_tx_svr;
   ls_tablet_svr_ = ls_tablet_svr;
@@ -255,7 +255,7 @@ void ObFreezer::reset()
 {
   freeze_flag_ = 0;
   freeze_snapshot_version_.reset();
-  max_decided_log_scn_.reset();
+  max_decided_scn_.reset();
   ls_wrs_handler_ = nullptr;
   ls_tx_svr_ = nullptr;
   data_checkpoint_ = nullptr;
@@ -296,7 +296,7 @@ int ObFreezer::logstream_freeze()
 {
   int ret = OB_SUCCESS;
   palf::SCN freeze_snapshot_version;
-  palf::SCN max_decided_log_scn;
+  palf::SCN max_decided_scn;
   FLOG_INFO("[Freezer] logstream_freeze start", K(ret), K_(ls_id));
   stat_.reset();
   stat_.start_time_ = ObTimeUtility::current_time();
@@ -305,7 +305,7 @@ int ObFreezer::logstream_freeze()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[Freezer] not inited", K(ret), K_(ls_id));
-  } else if (OB_FAIL(decide_max_decided_log_scn(max_decided_log_scn))) {
+  } else if (OB_FAIL(decide_max_decided_scn(max_decided_scn))) {
     TRANS_LOG(WARN, "[Freezer] decide max decided log ts failure", K(ret), K_(ls_id));
   } else if (OB_FAIL(get_ls_weak_read_scn(freeze_snapshot_version))) {
     TRANS_LOG(WARN, "[Freezer] get ls weak read ts failure", K(ret), K_(ls_id));
@@ -315,7 +315,7 @@ int ObFreezer::logstream_freeze()
     LOG_WARN("[Freezer] weak read service not inited", K(ret), K_(ls_id), K(freeze_snapshot_version));
   } else if (OB_FAIL(set_freeze_flag())) {
     FLOG_INFO("[Freezer] freeze is running", K(ret), K_(ls_id));
-  } else if (FALSE_IT(max_decided_log_scn_ = max_decided_log_scn)) {
+  } else if (FALSE_IT(max_decided_scn_ = max_decided_scn)) {
   } else if (FALSE_IT(freeze_snapshot_version_ = freeze_snapshot_version)) {
   } else if (FALSE_IT(stat_.state_ = ObFreezeState::NOT_SUBMIT_LOG)) {
   } else if (OB_FAIL(inner_logstream_freeze())) {
@@ -721,8 +721,8 @@ void ObFreezer::unset_freeze_()
   // Step1: unset freeze_snapshot_version to invalid value
   freeze_snapshot_version_.reset();
 
-  // Step2: unset max_decided_log_scn to invalid value
-  max_decided_log_scn_.reset();
+  // Step2: unset max_decided_scn to invalid value
+  max_decided_scn_.reset();
 
   // Step3: unset freeze_flag to flag the end of freeze
   // set the first bit 0
@@ -740,8 +740,8 @@ void ObFreezer::undo_freeze_()
   // Step1: unset freeze_snapshot_version to invalid value
   freeze_snapshot_version_.reset();
 
-  // Step2: unset max_decided_log_scn to invalid value
-  max_decided_log_scn_.reset();
+  // Step2: unset max_decided_scn to invalid value
+  max_decided_scn_.reset();
 
   // Step3: unset freeze_flag and dec freeze_clock
   // used when freeze fails
@@ -781,25 +781,25 @@ int ObFreezer::get_max_consequent_callbacked_log_ts(int64_t &max_decided_log_ts)
   return ret;
 }
 
-int ObFreezer::decide_max_decided_log_scn(palf::SCN &max_decided_log_scn)
+int ObFreezer::decide_max_decided_scn(palf::SCN &max_decided_scn)
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[Freezer] not inited", K(ret), K_(ls_id));
-  } else if (OB_FAIL(loghandler_->get_max_decided_log_scn(max_decided_log_scn))) {
+  } else if (OB_FAIL(loghandler_->get_max_decided_scn(max_decided_scn))) {
     if (OB_STATE_NOT_MATCH == ret) {
-      max_decided_log_scn.reset();
+      max_decided_scn.reset();
       ret = OB_SUCCESS;
     } else {
-      TRANS_LOG(WARN, "[Freezer] fail to get max_decided_log_scn", K(ret), K_(ls_id),
-                K(max_decided_log_scn));
+      TRANS_LOG(WARN, "[Freezer] fail to get max_decided_scn", K(ret), K_(ls_id),
+                K(max_decided_scn));
     }
   }
 
   if (OB_SUCC(ret)) {
-    TRANS_LOG(TRACE, "[Freezer] decide max decided log ts", K(ret), K_(ls_id), K(max_decided_log_scn));
+    TRANS_LOG(TRACE, "[Freezer] decide max decided log ts", K(ret), K_(ls_id), K(max_decided_scn));
   }
   return ret;
 }
@@ -810,7 +810,7 @@ int ObFreezer::get_max_consequent_callbacked_scn(palf::SCN &max_consequent_callb
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[Freezer] not inited", K(ret), K_(ls_id));
-  } else if (OB_FAIL(loghandler_->get_max_decided_log_scn(max_consequent_callbacked_scn))) {
+  } else if (OB_FAIL(loghandler_->get_max_decided_scn(max_consequent_callbacked_scn))) {
     if (OB_STATE_NOT_MATCH == ret) {
       max_consequent_callbacked_scn.set_min();
       ret = OB_SUCCESS;

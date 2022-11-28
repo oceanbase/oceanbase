@@ -141,7 +141,7 @@ public:
   virtual int enable_replay(const palf::LSN &initial_lsn, const palf::SCN &initial_log_scn) = 0;
   virtual int enable_replay(const palf::LSN &initial_lsn, const int64_t &initial_log_ts) = 0;
   virtual int disable_replay() = 0;
-  virtual int get_max_decided_log_scn(palf::SCN &scn) = 0;
+  virtual int get_max_decided_scn(palf::SCN &scn) = 0;
   virtual int get_max_decided_log_ts_ns(int64_t &log_ts) = 0;
   virtual int pend_submit_replay_log() = 0;
   virtual int restore_submit_replay_log() = 0;
@@ -531,7 +531,7 @@ public:
   bool is_replay_enabled() const override final;
   // @brief, get max decided log ts considering both apply and replay.
   // @param[out] int64_t&, max decided log ts ns.
-  int get_max_decided_log_scn(palf::SCN &scn) override final;
+  int get_max_decided_scn(palf::SCN &scn) override final;
   int get_max_decided_log_ts_ns(int64_t &log_ts) override final;
   // @brief: store a persistent flag which means this paxos replica
   // can not reply ack when receiving logs.

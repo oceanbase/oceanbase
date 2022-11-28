@@ -1244,11 +1244,11 @@ int ObLogHandler::disable_replay()
 int ObLogHandler::get_max_decided_log_ts_ns(int64_t &log_ts)
 {
   int ret = OB_SUCCESS;
-  SCN log_scn;
-  if (OB_FAIL(get_max_decided_log_scn(log_scn))) {
+  SCN scn;
+  if (OB_FAIL(get_max_decided_scn(scn))) {
     CLOG_LOG(WARN, "failed to get_max_decided_log_ts_ns", K(ret));
   } else {
-    log_ts = log_scn.get_val_for_lsn_allocator();
+    log_ts = scn.get_val_for_lsn_allocator();
   }
   return ret;
 }
@@ -1301,11 +1301,11 @@ bool ObLogHandler::is_replay_enabled() const
   return bool_ret;
 }
 
-int ObLogHandler::get_max_decided_log_scn(SCN &log_scn)
+int ObLogHandler::get_max_decided_scn(SCN &scn)
 {
   int ret = OB_SUCCESS;
-  SCN min_unreplay_log_scn;
-  SCN min_unapply_log_scn;
+  SCN min_unreplay_scn;
+  SCN min_unapply_scn;
   share::ObLSID id;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
@@ -1314,36 +1314,36 @@ int ObLogHandler::get_max_decided_log_scn(SCN &log_scn)
     //和replay service统一返回4109
     ret = OB_STATE_NOT_MATCH;
   } else if (FALSE_IT(id = id_)) {
-  } else if (OB_FAIL(apply_service_->get_min_unapplied_log_scn(id, min_unapply_log_scn))) {
+  } else if (OB_FAIL(apply_service_->get_min_unapplied_log_scn(id, min_unapply_scn))) {
     CLOG_LOG(WARN, "failed to get_min_unapplied_log_scn", K(ret), K(id));
-  } else if (OB_FAIL(replay_service_->get_min_unreplayed_log_scn(id, min_unreplay_log_scn))) {
+  } else if (OB_FAIL(replay_service_->get_min_unreplayed_log_scn(id, min_unreplay_scn))) {
     if (OB_STATE_NOT_MATCH != ret) {
     CLOG_LOG(WARN, "failed to get_min_unreplayed_log_scn", K(ret), K(id));
     } else if (palf_reach_time_interval(1000 * 1000, get_max_decided_log_ts_ns_debug_time_)) {
       CLOG_LOG(WARN, "failed to get_min_unreplayed_log_ts_ns, replay status is not enabled", K(ret), K(id));
     }
-    if (OB_STATE_NOT_MATCH == ret && min_unapply_log_scn.is_valid()) {
+    if (OB_STATE_NOT_MATCH == ret && min_unapply_scn.is_valid()) {
       //回放尚未enable,但是apply service中拿到的最大连续回调位点合法
       ret = OB_SUCCESS;
-      if (min_unapply_log_scn > SCN::base_scn()) {
+      if (min_unapply_scn > SCN::base_scn()) {
         //TODO(scn):yaoying.yyy
-        log_scn.convert_for_gts(min_unapply_log_scn.get_val_for_lsn_allocator() - 1);
+        scn.convert_for_gts(min_unapply_scn.get_val_for_lsn_allocator() - 1);
         ret = OB_SUCCESS;
       } else {
-        log_scn.set_min();
+        scn.set_min();
       }
-      CLOG_LOG(INFO, "replay is not enabled, get_max_decided_log_scn from apply", K(ret), K(id),
-               K(min_unreplay_log_scn), K(min_unapply_log_scn), K(log_scn));
+      CLOG_LOG(INFO, "replay is not enabled, get_max_decided_scn from apply", K(ret), K(id),
+               K(min_unreplay_scn), K(min_unapply_scn), K(scn));
     }
   } else {
-    SCN tmp_scn = SCN::max(min_unreplay_log_scn, min_unapply_log_scn);
+    SCN tmp_scn = SCN::max(min_unreplay_scn, min_unapply_scn);
     if (tmp_scn > SCN::base_scn()) {
       //TODO(scn):yaoying.yyy
-      log_scn.convert_for_gts(tmp_scn.get_val_for_lsn_allocator() - 1);
+      scn.convert_for_gts(tmp_scn.get_val_for_lsn_allocator() - 1);
     } else {
-      log_scn.set_min();
+      scn.set_min();
     }
-    CLOG_LOG(TRACE, "get_max_decided_log_scn", K(ret), K(id), K(min_unreplay_log_scn), K(min_unapply_log_scn), K(log_scn));
+    CLOG_LOG(TRACE, "get_max_decided_scn", K(ret), K(id), K(min_unreplay_scn), K(min_unapply_scn), K(scn));
   }
   return ret;
 }

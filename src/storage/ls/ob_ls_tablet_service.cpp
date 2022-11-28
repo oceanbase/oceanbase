@@ -4740,7 +4740,7 @@ int ObLSTabletService::prepare_dml_running_ctx(
   return ret;
 }
 
-int ObLSTabletService::get_ls_min_end_log_ts_in_old_tablets(int64_t &end_log_ts)
+int ObLSTabletService::get_ls_min_end_scn_in_old_tablets(palf::SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_->get_ls_id();
@@ -4748,7 +4748,7 @@ int ObLSTabletService::get_ls_min_end_log_ts_in_old_tablets(int64_t &end_log_ts)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(t3m->get_min_end_log_ts_for_ls(ls_id, end_log_ts))) {
+  } else if (OB_FAIL(t3m->get_min_end_scn_for_ls(ls_id, end_scn))) {
     LOG_WARN("fail to get ls min end log ts in all of old tablets", K(ret), K(ls_id));
   }
   return ret;

@@ -32,9 +32,9 @@ public:
   void reset();
   bool is_empty() const;
 
-  TO_STRING_KV(K_(clog_checkpoint_ts), K_(clog_base_lsn), K_(replayable_point), K_(tablet_change_checkpoint_scn));
+  TO_STRING_KV(K_(clog_checkpoint_scn), K_(clog_base_lsn), K_(replayable_point), K_(tablet_change_checkpoint_scn));
 
-  int64_t clog_checkpoint_ts_;
+  palf::SCN clog_checkpoint_scn_;
   palf::LSN clog_base_lsn_;
   int64_t replayable_point_;
   palf::SCN tablet_change_checkpoint_scn_;

@@ -50,7 +50,7 @@ public:
   int64_t get_clog_checkpoint_ts() const;
   palf::LSN &get_clog_base_lsn();
   int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
-                          const palf::SCN clog_checkpoint_scn,
+                          const palf::SCN &clog_checkpoint_scn,
                           const bool write_slog = true);
   void reset();
   bool is_valid() const;
@@ -80,7 +80,7 @@ public:
   int set_tablet_change_checkpoint_scn(const palf::SCN &tablet_change_checkpoint_scn);
   int update_id_meta(const int64_t service_type,
                      const int64_t limited_id,
-                     const palf::SCN &latest_log_scn,
+                     const palf::SCN &latest_scn,
                      const bool write_slog);
   int update_id_service()
   {
@@ -96,7 +96,7 @@ public:
       const ObReplicaType &replica_type,
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &restore_status,
-      const int64_t create_scn);
+      const palf::SCN &create_scn);
   class ObSpinLockTimeGuard
   {
   public:
@@ -132,7 +132,7 @@ private:
   palf::SCN clog_checkpoint_scn_;
   // clog_base_lsn_, meaning:
   // 1. all clog entries which lsn are smaller than clog_base_lsn_ have been recycled
-  // 2. log_ts of log entry that clog_base_lsn_ points to is smaller than/equal to clog_checkpoint_ts_
+  // 2. log_scn of log entry that clog_base_lsn_ points to is smaller than/equal to clog_checkpoint_scn_
   // 3. clog starts to replay log entries from clog_base_lsn_ on crash recovery
   palf::LSN clog_base_lsn_;
   int64_t rebuild_seq_;

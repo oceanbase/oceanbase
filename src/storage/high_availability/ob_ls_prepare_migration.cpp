@@ -798,7 +798,7 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
   } else if (OB_FAIL(ls->get_saved_info(saved_info))) {
     LOG_WARN("failed to get saved info", K(ret), KPC(ls));
   } else if (!saved_info.is_empty()) {
-    ctx_->log_sync_scn_ = saved_info.clog_checkpoint_ts_;
+    ctx_->log_sync_scn_ = saved_info.clog_checkpoint_scn_.get_val_for_lsn_allocator();
   } else if (OB_FAIL(ls->get_end_ts_ns(ctx_->log_sync_scn_))) {
     LOG_WARN("failed to get end ts ns", K(ret), KPC(ctx_));
   }

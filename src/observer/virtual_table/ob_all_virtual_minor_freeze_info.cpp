@@ -242,12 +242,12 @@ int ObAllVirtualMinorFreezeInfo::generate_memtables_info()
       // tablet_id
       strcat(memtables_info_string_, "tablet_id:");
       strcat(memtables_info_string_, to_cstring(memtables_info_[i].tablet_id_.id()));
-      // start_log_scn
-      strcat(memtables_info_string_, ", start_log_scn:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].start_log_scn_));
-      // end_log_scn
-      strcat(memtables_info_string_, ", end_log_scn:");
-      strcat(memtables_info_string_, to_cstring(memtables_info_[i].end_log_scn_));
+      // start_scn
+      strcat(memtables_info_string_, ", start_scn:");
+      strcat(memtables_info_string_, to_cstring(memtables_info_[i].start_scn_));
+      // end_scn
+      strcat(memtables_info_string_, ", end_scn:");
+      strcat(memtables_info_string_, to_cstring(memtables_info_[i].end_scn_));
       // write_ref_cnt
       strcat(memtables_info_string_, ", write_ref_cnt:");
       strcat(memtables_info_string_, to_cstring(memtables_info_[i].write_ref_cnt_));

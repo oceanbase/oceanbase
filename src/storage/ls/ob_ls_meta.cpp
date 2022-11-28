@@ -49,7 +49,7 @@ ObLSMeta::ObLSMeta()
     ls_id_(),
     replica_type_(REPLICA_TYPE_MAX),
     ls_create_status_(ObInnerLSStatus::CREATING),
-    clog_checkpoint_scn_(),
+    clog_checkpoint_scn_(ObScnRange::MIN_SCN),
     clog_base_lsn_(PALF_INITIAL_LSN_VAL),
     rebuild_seq_(0),
     migration_status_(ObMigrationStatus::OB_MIGRATION_STATUS_MAX),
@@ -113,7 +113,7 @@ void ObLSMeta::reset()
   ls_id_.reset();
   replica_type_ = REPLICA_TYPE_MAX;
   clog_base_lsn_.reset();
-  clog_checkpoint_scn_.reset();
+  clog_checkpoint_scn_ = ObScnRange::MIN_SCN;
   rebuild_seq_ = 0;
   migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   gc_state_ = LSGCState::INVALID_LS_GC_STATE;
@@ -143,7 +143,7 @@ int64_t ObLSMeta::get_clog_checkpoint_ts() const
 }
 
 int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
-                                  const SCN clog_checkpoint_scn,
+                                  const SCN &clog_checkpoint_scn,
                                   const bool write_slog)
 {
   ObSpinLockTimeGuard guard(lock_);
@@ -541,7 +541,7 @@ int ObLSMeta::build_saved_info()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("saved info is not empty, can not build saved info", K(ret), K(*this));
   } else {
-    saved_info.clog_checkpoint_ts_ = clog_checkpoint_scn_.convert_to_ts();
+    saved_info.clog_checkpoint_scn_ = clog_checkpoint_scn_;
     saved_info.clog_base_lsn_ = clog_base_lsn_;
     saved_info.tablet_change_checkpoint_scn_ = tablet_change_checkpoint_scn_;
     ObLSMeta tmp(*this);
@@ -583,7 +583,7 @@ int ObLSMeta::init(
     const ObReplicaType &replica_type,
     const ObMigrationStatus &migration_status,
     const share::ObLSRestoreStatus &restore_status,
-    const int64_t create_scn)
+    const palf::SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()
@@ -598,7 +598,7 @@ int ObLSMeta::init(
     ls_id_ = ls_id;
     replica_type_ = replica_type;
     ls_create_status_ = ObInnerLSStatus::CREATING;
-    clog_checkpoint_scn_.convert_for_lsn_allocator(create_scn);
+    clog_checkpoint_scn_ = create_scn;
     clog_base_lsn_.val_ = PALF_INITIAL_LSN_VAL;
     rebuild_seq_ = 0;
     migration_status_ = migration_status;
@@ -615,20 +615,20 @@ void ObLSMeta::set_write_slog_func_(WriteSlog write_slog)
 
 int ObLSMeta::update_id_meta(const int64_t service_type,
                              const int64_t limited_id,
-                             const palf::SCN &latest_log_scn,
+                             const palf::SCN &latest_scn,
                              const bool write_slog)
 {
   int ret = OB_SUCCESS;
 
   ObSpinLockTimeGuard guard(lock_);
-  all_id_meta_.update_id_meta(service_type, limited_id, latest_log_scn);
+  all_id_meta_.update_id_meta(service_type, limited_id, latest_scn);
   guard.click();
   if (write_slog) {
     if (OB_FAIL(write_slog_(*this))) {
       LOG_WARN("id service flush write slog failed", K(ret));
     }
   }
-  LOG_INFO("update id meta", K(ret), K(service_type), K(limited_id), K(latest_log_scn),
+  LOG_INFO("update id meta", K(ret), K(service_type), K(limited_id), K(latest_scn),
                             K(*this));
 
   return ret;

@@ -688,7 +688,6 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   SCN min_end_scn = SCN::max_scn();
   SCN min_end_scn_from_old_tablets = SCN::max_scn();
   SCN min_end_scn_from_latest_tablets = SCN::max_scn();
-  int64_t min_end_ts_from_old_tablets = INT64_MAX;
 
   // set recycle_scn = SCN::min_scn() as default which means clear nothing
   recycle_scn.set_min();
@@ -704,12 +703,9 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
   } else if (OB_FAIL(get_ls_min_end_scn_in_latest_tablets_(min_end_scn_from_latest_tablets))) {
     // get_ls_min_end_log_ts_in_latest_tablets must before get_ls_min_end_log_ts_in_old_tablets
     STORAGE_LOG(WARN, "fail to get ls min end log ts in all of latest tablets", KR(ret));
-  } else if (OB_FAIL(ls_tablet_svr_->get_ls_min_end_log_ts_in_old_tablets(min_end_ts_from_old_tablets))) {
+  } else if (OB_FAIL(ls_tablet_svr_->get_ls_min_end_scn_in_old_tablets(min_end_scn_from_old_tablets))) {
     STORAGE_LOG(WARN, "fail to get ls min end log ts in all of old tablets", KR(ret));
   } else {
-    if (INT64_MAX != min_end_ts_from_old_tablets) {
-      min_end_scn_from_old_tablets.convert_for_lsn_allocator(min_end_ts_from_old_tablets);
-    }
     min_end_scn = std::min(min_end_scn_from_old_tablets, min_end_scn_from_latest_tablets);
     if (!min_end_scn.is_max()) {
       recycle_scn = min_end_scn;
@@ -874,14 +870,14 @@ bool ObTxDataTable::skip_this_sstable_end_scn_(SCN sstable_end_scn)
   int64_t cur_ts = common::ObTimeUtility::fast_current_time();
   int64_t tmp_update_ts = ATOMIC_LOAD(&last_update_min_start_scn_ts_);
   SCN min_start_scn_in_tx_data_memtable = SCN::max_scn();
-  SCN max_decided_log_scn = SCN::min_scn();
+  SCN max_decided_scn = SCN::min_scn();
 
   // make sure the max decided log ts is greater than sstable_end_log_ts
-  if (OB_FAIL(ls_->get_max_decided_log_scn(max_decided_log_scn))) {
+  if (OB_FAIL(ls_->get_max_decided_scn(max_decided_scn))) {
     STORAGE_LOG(WARN, "get max decided log ts failed", KR(ret), "ls_id", get_ls_id().id());
-  } else if (max_decided_log_scn < sstable_end_scn) {
+  } else if (max_decided_scn < sstable_end_scn) {
     need_skip = true;
-    STORAGE_LOG(INFO, "skip calc upper trans version once", K(max_decided_log_scn), K(sstable_end_scn));
+    STORAGE_LOG(INFO, "skip calc upper trans version once", K(max_decided_scn), K(sstable_end_scn));
   }
 
   // If the min_start_log_ts_in_ctx has not been updated for more than 30 seconds,

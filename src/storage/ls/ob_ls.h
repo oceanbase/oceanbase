@@ -157,7 +157,7 @@ public:
            const ObReplicaType replica_type,
            const ObMigrationStatus &migration_status,
            const share::ObLSRestoreStatus &restore_status,
-           const int64_t create_scn,
+           const palf::SCN &create_scn,
            observer::ObIMetaReport *reporter);
   // I am ready to work now.
   int start();
@@ -291,17 +291,17 @@ public:
   // ObLSMeta interface:
   int update_id_meta_with_writing_slog(const int64_t service_type,
                                        const int64_t limited_id,
-                                       const palf::SCN &latest_log_scn);
+                                       const palf::SCN &latest_scn);
   int update_id_meta_without_writing_slog(const int64_t service_type,
                                           const int64_t limited_id,
-                                          const palf::SCN &latest_log_scn);
+                                          const palf::SCN &latest_scn);
   // int set_ls_rebuild();
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_ls_rebuild);
   // protect in ls lock
   // int set_gc_state(const logservice::LSGCState &gc_state);
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_gc_state);
   // int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
-  //                         const int64_t clog_checkpoint_ts,
+  //                         const palf::SCN &clog_checkpoint_scn,
   //                         const bool write_slog = true);
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_clog_checkpoint);
   UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, set_clog_checkpoint);
@@ -364,8 +364,8 @@ public:
   // int get_ls_replayable_point(int64_t &replayable_point);
   DELEGATE_WITH_RET(ls_meta_, get_ls_replayable_point, int);
   // set tablet_change_checkpoint_scn, add write lock of LSLOCKLOGMETA.
-  // @param [in] log_scn
-  int set_tablet_change_checkpoint_scn(const palf::SCN &log_scn);
+  // @param [in] scn
+  int set_tablet_change_checkpoint_scn(const palf::SCN &scn);
   // get ls_meta_package and unsorted tablet_ids, add read lock of LSLOCKLOGMETA.
   // @param [out] meta_package
   // @param [out] tablet_ids
@@ -491,7 +491,7 @@ public:
   DELEGATE_WITH_RET(log_handler_, get_max_decided_log_ts_ns, int);
   // @brief, get max decided log scn considering both apply and replay.
   // @param[out] palf::SCN&, max decided log scn.
-  DELEGATE_WITH_RET(log_handler_, get_max_decided_log_scn, int);
+  DELEGATE_WITH_RET(log_handler_, get_max_decided_scn, int);
   // @breif, check request server is in self member list
   // @param[in] const common::ObAddr, request server.
   // @param[out] bool&, whether in self member list.
