@@ -1211,13 +1211,14 @@ int ObDDLRedoLogWriterCallback::write(const ObMacroBlockHandle &macro_handle,
     LOG_WARN("ObDDLRedoLogWriterCallback is not inited", K(ret));
   } else if (OB_FAIL(prepare_block_buffer_if_need())) {
     LOG_WARN("prepare block buffer failed", K(ret));
+  } else if (OB_FAIL(redo_info_.start_scn_.convert_for_lsn_allocator(ddl_writer_->get_start_log_ts()))) {
+    LOG_WARN("fail to convert scn", K(ret), K(ddl_writer_->get_start_log_ts()));
   } else {
     macro_block_id_ = macro_handle.get_macro_id();
     redo_info_.table_key_ = table_key_;
     redo_info_.data_buffer_.assign(buf, OB_SERVER_BLOCK_MGR.get_macro_block_size());
     redo_info_.block_type_ = block_type_;
     redo_info_.logic_id_ = logic_id;
-    redo_info_.start_log_ts_ = ddl_writer_->get_start_log_ts();
     if (OB_FAIL(ddl_writer_->write_redo_log(redo_info_, macro_block_id_))) {
       LOG_WARN("fail to write ddl redo log", K(ret));
     }

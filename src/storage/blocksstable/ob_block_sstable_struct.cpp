@@ -792,17 +792,17 @@ int ObRecordHeaderV3::deserialize(const char *buf, int64_t buf_len, int64_t &pos
 }
 
 ObDDLMacroBlockRedoInfo::ObDDLMacroBlockRedoInfo()
-  : table_key_(), data_buffer_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE), start_log_ts_(0)
+  : table_key_(), data_buffer_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE), start_scn_(palf::SCN::min_scn())
 {
 }
 
 bool ObDDLMacroBlockRedoInfo::is_valid() const
 {
-  return table_key_.is_valid() && data_buffer_.ptr() != nullptr
-         && block_type_ != ObDDLMacroBlockType::DDL_MB_INVALID_TYPE && logic_id_.is_valid() && start_log_ts_ > 0;
+  return table_key_.is_valid() && data_buffer_.ptr() != nullptr && block_type_ != ObDDLMacroBlockType::DDL_MB_INVALID_TYPE
+         && logic_id_.is_valid() && start_scn_.is_valid() && !start_scn_.is_min();
 }
 
-OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo, table_key_, data_buffer_, block_type_, logic_id_, start_log_ts_);
+OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo, table_key_, data_buffer_, block_type_, logic_id_, start_scn_);
 
 constexpr uint8_t ObColClusterInfoMask::BYTES_TYPE_TO_LEN[];
 

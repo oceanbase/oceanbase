@@ -255,7 +255,7 @@ void TestSSTableMeta::prepare_create_sstable_param()
   param_.column_cnt_ = table_schema_.get_column_count() + multi_version_col_cnt;
   param_.data_checksum_ = 0;
   param_.occupy_size_ = 0;
-  param_.ddl_log_ts_ = 0;
+  param_.ddl_scn_.set_min();
   param_.filled_tx_scn_.set_min();
   param_.original_size_ = 0;
   param_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
@@ -557,7 +557,7 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   src_sstable_param.column_cnt_ = 1;
   src_sstable_param.data_checksum_ = 0;
   src_sstable_param.occupy_size_ = 0;
-  src_sstable_param.ddl_log_ts_ = 0;
+  src_sstable_param.ddl_scn_.set_min();
   src_sstable_param.filled_tx_scn_.set_min();
   src_sstable_param.original_size_ = 0;
   src_sstable_param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;

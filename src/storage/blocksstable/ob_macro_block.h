@@ -21,6 +21,7 @@
 #include "ob_sstable_meta.h"
 #include "share/ob_encryption_util.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase {
 namespace storage {
@@ -62,7 +63,7 @@ struct ObDataStoreDesc
   ObSSTableIndexBuilder *sstable_index_builder_;
   ObCompressorType compressor_type_;
   int64_t snapshot_version_;
-  int64_t end_log_ts_;
+  palf::SCN end_scn_;
   int64_t progressive_merge_round_;
   int64_t encrypt_id_;
   bool need_prebuild_bloomfilter_;
@@ -93,7 +94,7 @@ struct ObDataStoreDesc
   OB_INLINE bool is_major_merge() const { return storage::is_major_merge(merge_type_); }
   int64_t get_logical_version() const
   {
-    return is_major_merge() ? snapshot_version_ : end_log_ts_;
+    return is_major_merge() ? snapshot_version_ : end_scn_.get_val_for_tx();
   }
   TO_STRING_KV(
       K_(ls_id),
@@ -109,7 +110,7 @@ struct ObDataStoreDesc
       KP_(merge_info),
       K_(merge_type),
       K_(snapshot_version),
-      K_(end_log_ts),
+      K_(end_scn),
       K_(need_prebuild_bloomfilter),
       K_(bloomfilter_rowkey_prefix),
       K_(encrypt_id),

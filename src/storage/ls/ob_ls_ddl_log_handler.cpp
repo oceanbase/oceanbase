@@ -259,7 +259,12 @@ int ObLSDDLLogHandler::flush(palf::SCN &rec_scn)
 palf::SCN ObLSDDLLogHandler::get_rec_scn()
 {
   palf::SCN tmp;
-  tmp.convert_for_lsn_allocator(get_rec_log_ts());
+  const int64_t rec_log_ts = get_rec_log_ts();
+  if (INT64_MAX == rec_log_ts) {
+    tmp.set_max();
+  } else {
+    tmp.convert_for_lsn_allocator(rec_log_ts);
+  }
   return tmp;
 }
 

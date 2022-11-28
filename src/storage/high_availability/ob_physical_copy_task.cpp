@@ -962,7 +962,7 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
     param.occupy_size_ = sstable_param_->basic_meta_.occupy_size_;
     param.original_size_ = sstable_param_->basic_meta_.original_size_;
     param.max_merged_trans_version_ = sstable_param_->basic_meta_.max_merged_trans_version_;
-    param.ddl_log_ts_ = sstable_param_->basic_meta_.ddl_log_ts_;
+    param.ddl_scn_ = sstable_param_->basic_meta_.ddl_scn_;
     param.filled_tx_scn_ = sstable_param_->basic_meta_.filled_tx_scn_;
     param.contain_uncommitted_row_ = sstable_param_->basic_meta_.contain_uncommitted_row_;
     param.compressor_type_ = sstable_param_->basic_meta_.compressor_type_;

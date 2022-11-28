@@ -50,7 +50,7 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     upper_trans_version_(0),
     max_merged_trans_version_(0),
     recycle_version_(0),
-    ddl_log_ts_(0),
+    ddl_scn_(palf::SCN::min_scn()),
     filled_tx_scn_(palf::SCN::min_scn()),
     data_index_tree_height_(0),
     table_mode_(),
@@ -90,7 +90,7 @@ bool ObSSTableBasicMeta::operator==(const ObSSTableBasicMeta &other) const
       && progressive_merge_step_ == other.progressive_merge_step_
       && upper_trans_version_ == other.upper_trans_version_
       && max_merged_trans_version_ == other.max_merged_trans_version_
-      && ddl_log_ts_ == other.ddl_log_ts_
+      && ddl_scn_ == other.ddl_scn_
       && filled_tx_scn_ == other.filled_tx_scn_
       && data_index_tree_height_ == other.data_index_tree_height_
       && table_mode_ == other.table_mode_
@@ -123,8 +123,8 @@ bool ObSSTableBasicMeta::is_valid() const
            && upper_trans_version_ >= 0
            && max_merged_trans_version_ >= 0
            && recycle_version_ >= 0
-           && ddl_log_ts_ >= 0
-           // && filled_tx_scn_.is_valid() // TODO(scn), TODO(yangyi.yyy) wait TODO(danling) modify merge_scn
+           && ddl_scn_.is_valid()
+           && filled_tx_scn_.is_valid()
            && data_index_tree_height_ >= 0
            && row_store_type_ < ObRowStoreType::MAX_ROW_STORE);
   return ret;
@@ -153,7 +153,7 @@ void ObSSTableBasicMeta::reset()
   upper_trans_version_ = 0;
   max_merged_trans_version_ = 0;
   recycle_version_ = 0;
-  ddl_log_ts_ = 0;
+  ddl_scn_.set_min();
   filled_tx_scn_.set_min();
   data_index_tree_height_ = 0;
   table_mode_.reset();
@@ -208,7 +208,7 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   upper_trans_version_,
                   max_merged_trans_version_,
                   recycle_version_,
-                  ddl_log_ts_,
+                  ddl_scn_,
                   filled_tx_scn_,
                   data_index_tree_height_,
                   table_mode_,
@@ -269,7 +269,7 @@ DEFINE_DESERIALIZE(ObSSTableBasicMeta)
                   upper_trans_version_,
                   max_merged_trans_version_,
                   recycle_version_,
-                  ddl_log_ts_,
+                  ddl_scn_,
                   filled_tx_scn_,
                   data_index_tree_height_,
                   table_mode_,
@@ -283,6 +283,8 @@ DEFINE_DESERIALIZE(ObSSTableBasicMeta)
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, deserialize may has bug", K(ret), K(pos), K(start_pos), KPC(this));
+      } else {
+        filled_tx_scn_.transform_max();
       }
     }
   }
@@ -315,7 +317,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               upper_trans_version_,
               max_merged_trans_version_,
               recycle_version_,
-              ddl_log_ts_,
+              ddl_scn_,
               filled_tx_scn_,
               data_index_tree_height_,
               table_mode_,
@@ -457,7 +459,7 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.max_merged_trans_version_ = param.max_merged_trans_version_;
     basic_meta_.upper_trans_version_ = contain_uncommitted_row() ?
         INT64_MAX : basic_meta_.max_merged_trans_version_;
-    basic_meta_.ddl_log_ts_ = param.ddl_log_ts_;
+    basic_meta_.ddl_scn_ = param.ddl_scn_;
     basic_meta_.filled_tx_scn_ = param.filled_tx_scn_;
     basic_meta_.data_index_tree_height_ = param.data_index_tree_height_;
     basic_meta_.row_store_type_ = param.root_row_store_type_;
