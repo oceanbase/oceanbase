@@ -4978,6 +4978,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                 if (OB_FAIL(rename_dropping_index_name(origin_table_schema.get_table_id(),
                                                         origin_table_schema.get_database_id(),
                                                         *drop_index_arg,
+                                                        schema_guard,
                                                         ddl_operator,
                                                         trans,
                                                         new_index_schema))) {
@@ -5796,9 +5797,7 @@ int ObDDLService::get_index_schema_by_name(
   const ObString &index_name = drop_index_arg.index_name_;
 
   //build index name and get index schema
-  if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
+  if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
                                                     data_table_id,
                                                     index_name,
                                                     index_table_name))) {
@@ -5830,12 +5829,12 @@ int ObDDLService::rename_dropping_index_name(
     const uint64_t data_table_id,
     const uint64_t database_id,
     const ObDropIndexArg &drop_index_arg,
+    ObSchemaGetterGuard &schema_guard,
     ObDDLOperator &ddl_operator,
     common::ObMySQLTransaction &trans,
     share::schema::ObTableSchema &new_index_schema)
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
   const ObTableSchema *index_table_schema = nullptr;
   int nwrite = 0;
   const int64_t buf_size = number::ObNumber::MAX_PRINTABLE_SIZE;
