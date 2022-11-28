@@ -212,12 +212,10 @@ int ObAccessService::table_scan(
   ObTableScanParam &param = static_cast<ObTableScanParam &>(vparam);
   ObStoreAccessType access_type = param.scan_flag_.is_read_latest() ?
     ObStoreAccessType::READ_LATEST : ObStoreAccessType::READ;
-  int64_t user_specified_snapshot = ObAccessTypeCheck::is_read_access_type(access_type) ?
-    param.fb_snapshot_ : transaction::ObTransVersion::INVALID_TRANS_VERSION;
   palf::SCN user_specified_snapshot_scn;
-  if (user_specified_snapshot > 0) {
+  if (ObAccessTypeCheck::is_read_access_type(access_type) && param.fb_snapshot_.is_valid()) {
     //todo lixinze:后续会判断是否有效
-    user_specified_snapshot_scn.convert_tmp(user_specified_snapshot);
+    user_specified_snapshot_scn = param.fb_snapshot_;
   }
   NG_TRACE(storage_table_scan_begin);
   if (IS_NOT_INIT) {
@@ -289,13 +287,10 @@ int ObAccessService::table_rescan(
     ObLSTabletService *tablet_service = nullptr;
     ObStoreAccessType access_type = param.scan_flag_.is_read_latest() ?
       ObStoreAccessType::READ_LATEST : ObStoreAccessType::READ;
-    int64_t user_specified_snapshot = ObAccessTypeCheck::is_read_access_type(access_type) ?
-      param.fb_snapshot_
-      : transaction::ObTransVersion::INVALID_TRANS_VERSION;
     palf::SCN user_specified_snapshot_scn;
-    if (user_specified_snapshot > 0) {
+    if (ObAccessTypeCheck::is_read_access_type(access_type) && param.fb_snapshot_.is_valid()) {
       //todo lixinze:后续会判断是否有效
-      user_specified_snapshot_scn.convert_tmp(user_specified_snapshot);
+      user_specified_snapshot_scn = param.fb_snapshot_;
     }
     NG_TRACE(storage_table_scan_begin);
     if (OB_FAIL(check_read_allowed_(ls_id,
@@ -1145,7 +1140,10 @@ int ObAccessService::audit_tablet_opt_dml_stat(
     const int64_t affected_rows)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(dml_param.table_param_)) {
+  static __thread int64_t last_access_ts = 0;
+  if (ObClockGenerator::getClock() - last_access_ts < 1000000) {
+    // do nothing
+  } else if (OB_ISNULL(dml_param.table_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(dml_param.table_param_));
   } else if (dml_stat_type == ObOptDmlStatType::TABLET_OPT_INSERT_STAT ||
@@ -1167,6 +1165,7 @@ int ObAccessService::audit_tablet_opt_dml_stat(
     } else {
       LOG_TRACE("succeed to update dml stat local cache", K(dml_stat));
     }
+    last_access_ts = ObClockGenerator::getClock();
   }
   return ret;
 }

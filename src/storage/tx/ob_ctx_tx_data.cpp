@@ -176,6 +176,9 @@ int ObCtxTxData::deep_copy_tx_data_out(ObTxData *&tmp_tx_data)
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(deep_copy_tx_data_(tx_table, tmp_tx_data))) {
       TRANS_LOG(WARN, "deep copy tx data failed", K(ret), KPC(tmp_tx_data), K(*this));
+    } else if (OB_ISNULL(tmp_tx_data)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "copied tmp tx data is null", K(ret), K(*this));
     }
   }
 
@@ -343,6 +346,38 @@ ObTransID ObCtxTxData::get_tx_id() const
 {
   RLockGuard guard(lock_);
   return (NULL != tx_data_ ? tx_data_->tx_id_ : tx_commit_data_.tx_id_);
+}
+
+int ObCtxTxData::prep_add_undo_action(ObUndoAction &undo_action,
+                                      ObTxData *&tmp_ctx_tx_data,
+                                      ObTxData *&tmp_tx_data_table_tx_data) {
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (OB_FAIL(check_tx_data_writable_())) {
+    TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
+  } else {
+    ObTxTable *tx_table = nullptr;
+    GET_TX_TABLE_(tx_table);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(tx_table->deep_copy_tx_data(tx_data_, tmp_ctx_tx_data))) {
+      TRANS_LOG(WARN, "copy tx data fail", K(ret), KPC(this));
+    } else if (OB_ISNULL(tmp_ctx_tx_data)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "unexpected copy null", KR(ret), KPC(this));
+    } else if (OB_FAIL(tmp_ctx_tx_data->add_undo_action(tx_table, undo_action))) {
+      TRANS_LOG(WARN, "add undo action failed", K(ret), K(undo_action), K(*this));
+    } else if (OB_FAIL(tx_table->deep_copy_tx_data(tmp_ctx_tx_data, tmp_tx_data_table_tx_data))) {
+      TRANS_LOG(WARN, "copy tx data fail", K(ret), KPC(this));
+    } else if (OB_ISNULL(tmp_tx_data_table_tx_data)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "unexpected copy null", KR(ret), KPC(this));
+    }
+    if (OB_FAIL(ret)) {
+      if (tmp_ctx_tx_data) { tx_table->free_tx_data(tmp_ctx_tx_data); }
+      if (tmp_tx_data_table_tx_data) { tx_table->free_tx_data(tmp_tx_data_table_tx_data); }
+    }
+  }
+  return ret;
 }
 
 int ObCtxTxData::add_undo_action(ObUndoAction &undo_action)

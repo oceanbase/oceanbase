@@ -451,7 +451,7 @@ int TestDmlCommon::build_table_scan_param_base_(
   scan_param.limit_param_.offset_ = 0;
   scan_param.need_scn_ = false;
   scan_param.pd_storage_flag_ = false;
-  scan_param.fb_snapshot_ = transaction::ObTransVersion::INVALID_TRANS_VERSION;
+  scan_param.fb_snapshot_.reset();
 
   ObNewRange range;
   range.table_id_ = table_id;

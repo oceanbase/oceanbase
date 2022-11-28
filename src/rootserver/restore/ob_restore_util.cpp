@@ -50,6 +50,7 @@ int ObRestoreUtil::fill_physical_restore_job(
     job.init_restore_key(OB_SYS_TENANT_ID, job_id); 
     job.set_status(PhysicalRestoreStatus::PHYSICAL_RESTORE_CREATE_TENANT);
     job.set_tenant_name(arg.tenant_name_);
+    job.set_initiator_tenant_id(OB_SYS_TENANT_ID);
     if (OB_FAIL(job.set_description(arg.description_))) {
       LOG_WARN("fail to set description", K(ret));
     }

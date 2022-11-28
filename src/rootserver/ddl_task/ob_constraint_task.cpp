@@ -46,31 +46,16 @@ ObCheckConstraintValidationTask::ObCheckConstraintValidationTask(
 int ObCheckConstraintValidationTask::process()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObRootService *root_service = GCTX.root_service_;
-  if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else {
-    ObTabletID unused_tablet_id;
-    ObDDLTaskKey task_key(target_object_id_, schema_version_);
-    ret = ObDDLUtil::retry_with_ddl_schema_hint([this]() -> int { return this->check_constraint_by_send_sql(); });
-    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, ret))) {
-      LOG_WARN("fail to finish check constraint task", K(ret), K(tmp_ret));
-    }
-  }
-  return ret;
-}
-
-int ObCheckConstraintValidationTask::check_constraint_by_send_sql() const
-{
-  int ret = OB_SUCCESS;
   ObTraceIdGuard trace_id_guard(trace_id_);
+  ObRootService *root_service = GCTX.root_service_;
   const ObConstraint *constraint = nullptr;
   bool is_oracle_mode = false;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
   const ObDatabaseSchema *database_schema = nullptr;
+  int tmp_ret = OB_SUCCESS;
+  ObTabletID unused_tablet_id;
+  ObDDLTaskKey task_key(target_object_id_, schema_version_);
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id_, table_schema))) {
@@ -78,6 +63,9 @@ int ObCheckConstraintValidationTask::check_constraint_by_send_sql() const
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema not exist", K(ret));
+  } else if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (!check_table_empty_ && OB_ISNULL(constraint = table_schema->get_constraint(constraint_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, can not get constraint", K(ret));
@@ -159,6 +147,9 @@ int ObCheckConstraintValidationTask::check_constraint_by_send_sql() const
       }
     }
   }
+  if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret))) {
+    LOG_WARN("fail to finish check constraint task", K(ret), K(tmp_ret));
+  }
   return ret;
 }
 
@@ -199,8 +190,10 @@ int ObForeignKeyConstraintValidationTask::process()
     ObTabletID unused_tablet_id;
     ObDDLTaskKey task_key(foregin_key_id_, schema_version_);
     int tmp_ret = OB_SUCCESS;
-    ret = ObDDLUtil::retry_with_ddl_schema_hint([this]() -> int { return this->check_fk_by_send_sql(); });
-    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, ret))) {
+    if (OB_FAIL(check_fk_by_send_sql())) {
+      LOG_WARN("failed to check fk", K(ret));
+    }
+    if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, 1L/*unused snapshot version*/, 1L/*unused execution id*/, ret))) {
       LOG_WARN("fail to finish check constraint task", K(ret));
     }
     LOG_INFO("execute check foreign key task finish", K(ret), K(task_key), K(data_table_id_), K(foregin_key_id_));

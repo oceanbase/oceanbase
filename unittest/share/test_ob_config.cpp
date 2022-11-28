@@ -134,7 +134,7 @@ public:
   DEF_INT_LIST(test_int_list_2, "1;2;3", "test list");
   DEF_STR_LIST(test_str_list, "str1;str2;str3", "test list");
   DEF_STR_LIST(test_str_list_2, "str1;str2;str3", "test list");
-  DEF_STR(url, "http://a.cc/?name=fufeng&pass=fufeng_pass", "test url");
+  DEF_STR(url, "test url", "test url");
 
   DEF_DBL(dbl1, "1.234", "some info");
   DEF_DBL(dbl2, "1.234", "[1.234,5.321]", "some info");
@@ -374,7 +374,7 @@ TEST_F(TestServerConfig, ALL)
   test_str_list = "123x";
   EXPECT_TRUE(test_int_list.valid());
 
-  EXPECT_STREQ("http://a.cc/?name=fufeng&pass=fufeng_pass", url.str());
+  EXPECT_STREQ("test url", url.str());
 
   EXPECT_EQ(1.234, dbl1);
   EXPECT_EQ(1.234, dbl2);

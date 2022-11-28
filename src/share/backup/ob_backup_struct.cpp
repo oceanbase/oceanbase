@@ -1534,7 +1534,7 @@ int ObBackupDest::parse_backup_dest_str_(const char *backup_dest)
   } else if (OB_FAIL(get_storage_type_from_path(bakup_dest_str, type))) {
     LOG_WARN("failed to get storage type", K(ret));
   } else {
-    // oss://backup_dir/?host=http://oss-cn-hangzhou-zmf.aliyuncs.com&access_id=111&access_key=222
+    // oss://backup_dir/?host=xxx.com&access_id=111&access_key=222
     // file:///root_backup_dir"
     while (backup_dest[pos] != '\0') {
       if ('?' == backup_dest[pos]) {

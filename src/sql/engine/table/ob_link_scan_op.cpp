@@ -517,6 +517,7 @@ int ObLinkScanOp::inner_get_next_row()
     const ObIArray<ObExpr *> &output = spec_.output_;
     for (int64_t i = 0; OB_SUCC(ret) && i < output.count(); i++) {
       ObObj value;
+      ObObj new_value;
       ObObj *res_obj = &value;
       ObExpr *expr = output.at(i);
       ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
@@ -528,7 +529,6 @@ int ObLinkScanOp::inner_get_next_row()
                                    ob_is_string_or_lob_type(expr->obj_meta_.get_type()) &&
                                    value.get_type() == expr->obj_meta_.get_type() && 
                                    value.get_collation_type() != expr->obj_meta_.get_collation_type())))) {
-        ObObj new_value;
         DEFINE_CAST_CTX(expr->datum_meta_.cs_type_);
         if (OB_FAIL(ObObjCaster::to_type(expr->obj_meta_.get_type(), cast_ctx, value, new_value))) {
           LOG_WARN("cast obj failed", K(ret), K(value), K(expr->obj_meta_));

@@ -38,7 +38,6 @@ namespace sql
 int FlashBackItem::set_flashback_query_info(ObEvalCtx &eval_ctx, ObDASScanRtDef &scan_rtdef) const
 {
   int ret = OB_SUCCESS;
-  int64_t time_val = transaction::ObTransVersion::INVALID_TRANS_VERSION;
   ObDatum *datum = NULL;
   const ObExpr *expr = flashback_query_expr_;
   scan_rtdef.need_scn_ = need_scn_;
@@ -57,31 +56,27 @@ int FlashBackItem::set_flashback_query_info(ObEvalCtx &eval_ctx, ObDASScanRtDef 
       if (ObTimestampTZType != expr->datum_meta_.type_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("type not match", K(ret));
+      } else if (OB_FAIL(scan_rtdef.fb_snapshot_.convert_from_ts(datum->get_otimestamp_tz().time_us_))) {
+        LOG_WARN("failed to convert from ts", K(ret));
       } else {
-        // tx snapshot version are in nanosecond
-        time_val = datum->get_otimestamp_tz().time_us_ * 1000;
-        LOG_TRACE("timestamp_val result", K(time_val), K(*datum));
+        LOG_TRACE("fb_snapshot_ result", K(scan_rtdef.fb_snapshot_), K(*datum));
       }
     } else if (TableItem::USING_SCN == flashback_query_type_) {
       if (ObUInt64Type != expr->datum_meta_.type_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("type not match", K(ret));
+      } else if (OB_FAIL(scan_rtdef.fb_snapshot_.convert_for_gts(datum->get_int()))) {
+        LOG_WARN("failed to convert for gts", K(ret));
       } else {
-        time_val = datum->get_int();
-        LOG_TRACE("timestamp_val result", K(time_val), K(*datum));
+        LOG_TRACE("fb_snapshot_ result", K(scan_rtdef.fb_snapshot_), K(*datum));
       }
-    }
-
-    if (OB_SUCC(ret)) {
-      scan_rtdef.fb_snapshot_ = time_val;
     }
   }
 
   //对于同时存在hint指定的frozen_version和flashback query指定了snapshot version的情况下, 选择保留
   //flashback query指定的snapshot version, 忽略hint指定的frozen_version
   if (OB_SUCC(ret)) {
-    if (scan_rtdef.fb_snapshot_
-                 != transaction::ObTransVersion::INVALID_TRANS_VERSION) {
+    if (scan_rtdef.fb_snapshot_.is_valid()) {
       scan_rtdef.frozen_version_ = transaction::ObTransVersion::INVALID_TRANS_VERSION;
     } else {
       /*do nothing*/
@@ -2311,12 +2306,12 @@ int ObTableScanOp::report_ddl_column_checksum()
     const uint64_t table_id = MY_CTDEF.scan_ctdef_.ref_table_id_;
     for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ddl_output_cids_.count(); ++i) {
       ObDDLChecksumItem item;
-      item.execution_id_ = MY_SPEC.plan_->get_ddl_schema_version();
+      item.execution_id_ = MY_SPEC.plan_->get_ddl_execution_id();
       item.tenant_id_ = MTL_ID();
       item.table_id_ = table_id;
-      item.tablet_id_ = tablet_id.id();
+      item.ddl_task_id_ = MY_SPEC.plan_->get_ddl_task_id();
       item.column_id_ = MY_SPEC.ddl_output_cids_.at(i);
-      item.task_id_ = ctx_.get_px_task_id() << 32 | curr_scan_task_id;
+      item.task_id_ = ctx_.get_px_sqc_id() << 48 | ctx_.get_px_task_id() << 32 | curr_scan_task_id;
       item.checksum_ = i < column_checksum_.count() ? column_checksum_[i] : 0;
     #ifdef ERRSIM
       if (OB_SUCC(ret)) {

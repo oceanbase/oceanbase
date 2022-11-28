@@ -323,7 +323,8 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     if (OB_SUCC(ret)) {
       access_ctx_->defensive_check_record_.query_flag_ = access_ctx_->query_flag_;
       if (NULL != access_ctx_->store_ctx_
-        && NULL != access_ctx_->store_ctx_->mvcc_acc_ctx_.get_mem_ctx()) {
+        && NULL != access_ctx_->store_ctx_->mvcc_acc_ctx_.get_mem_ctx()
+        && NULL != access_ctx_->store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_defensive_check_mgr()) {
         (void)access_ctx_->store_ctx_
                          ->mvcc_acc_ctx_
                          .get_mem_ctx()

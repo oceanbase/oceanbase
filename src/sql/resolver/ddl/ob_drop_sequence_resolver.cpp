@@ -59,7 +59,7 @@ int ObDropSequenceResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(NULL == (mystmt = create_stmt<ObDropSequenceStmt>()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("failed to drop select stmt");
+      LOG_WARN("failed to drop select stmt", K(ret));
     } else {
       stmt_ = mystmt;
     }
@@ -74,7 +74,7 @@ int ObDropSequenceResolver::resolve(const ParseNode &parse_tree)
                                    sequence_name,
                                    db_name))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid parse_tree", K(ret));
+      LOG_WARN("invalid parse_tree", K(ret));
     } else if (sequence_name.length() > OB_MAX_SEQUENCE_NAME_LENGTH) {
         ret = OB_ERR_TOO_LONG_IDENT;
         LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, sequence_name.length(), sequence_name.ptr());

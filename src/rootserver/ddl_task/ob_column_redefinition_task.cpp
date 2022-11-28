@@ -120,7 +120,7 @@ int ObColumnRedefinitionTask::wait_data_complement(const ObDDLTaskStatus next_ta
   DEBUG_SYNC(COLUMN_REDEFINITION_REPLICA_BUILD);
   if (is_build_replica_end) {
     ret = complete_sstable_job_ret_code_;
-    if (OB_SUCC(ret) && OB_FAIL(check_data_dest_tables_columns_checksum())) {
+    if (OB_SUCC(ret) && OB_FAIL(check_data_dest_tables_columns_checksum(1/*execution_id*/))) {
       LOG_WARN("fail to check the columns checkum between data table and hidden one", K(ret));
     }
     if (OB_FAIL(switch_status(next_task_status, ret))) {
@@ -139,6 +139,7 @@ int ObColumnRedefinitionTask::send_build_single_replica_request()
     ret = OB_NOT_INIT;
     LOG_WARN("ObColumnRedefinitionTask has not been inited", K(ret));
   } else {
+    redefinition_execution_id_ = ObTimeUtility::fast_current_time();
     ObDDLSingleReplicaExecutorParam param;
     param.tenant_id_ = tenant_id_;
     param.type_ = task_type_;
@@ -148,6 +149,7 @@ int ObColumnRedefinitionTask::send_build_single_replica_request()
     param.snapshot_version_ = snapshot_version_;
     param.task_id_ = task_id_;
     param.parallelism_ = alter_table_arg_.parallelism_;
+    param.execution_id_ = redefinition_execution_id_;
     if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, param.source_tablet_ids_))) {
       LOG_WARN("fail to get tablets", K(ret), K(tenant_id_), K(object_id_));
     } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, target_object_id_, param.dest_tablet_ids_))) {
@@ -183,7 +185,10 @@ int ObColumnRedefinitionTask::check_build_single_replica(bool &is_end)
 }
 
 // update sstable complement status for all leaders
-int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id, const int64_t snapshot_version, const int ret_code)
+int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
+                                                                 const int64_t snapshot_version,
+                                                                 const int64_t execution_id,
+                                                                 const int ret_code)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -194,6 +199,8 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
   } else if (snapshot_version != snapshot_version_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
+  } else if (execution_id != redefinition_execution_id_) {
+    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(redefinition_execution_id_));
   } else if (OB_FAIL(replica_builder_.set_partition_task_status(tablet_id, ret_code))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }

@@ -91,10 +91,9 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, palf::SCN &scn)
     COORDINATOR_LOG_(WARN, "open_palf failed");
   } else if (OB_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
     COORDINATOR_LOG_(WARN, "get_access_mode failed");
-  } else if (palf::AccessMode::APPEND != access_mode) {
-    // Set scn to 0 when current access mode is not APPEND.
-    scn.set_min();
-  } else {
+//  } else if (palf::AccessMode::APPEND != access_mode) {
+//    // Set log_ts to 0 when current access mode is not APPEND.
+//    log_ts = 0;
     common::ObRole role;
     int64_t unused_pid = -1;
     palf::SCN min_unreplay_scn;

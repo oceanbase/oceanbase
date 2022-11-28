@@ -227,6 +227,8 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
   int64_t idx = OB_INVALID_INDEX;
   TableItem *left_table = NULL;
   TableItem *right_table = NULL;
+  TableItem *right_view_table = NULL;
+  uint64_t right_table_id = OB_INVALID_ID;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
       OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -244,9 +246,13 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
   } else if (lib::is_oracle_mode() && OB_FAIL(clear_for_update(right_table))) {
     // avoid for update op in the right side of the anti/semi.
     LOG_WARN("failed to clear for update", K(ret));
+  } else if (right_table->is_joined_table() &&
+             OB_FAIL(ObTransformUtils::create_view_with_table(stmt, ctx_, right_table, right_view_table))) {
+    LOG_WARN("failed to create right view table", K(ret));
   } else {
+    right_table_id = right_view_table == NULL ? right_table->table_id_ : right_view_table->table_id_;
     semi_info->join_type_ = LEFT_ANTI_JOIN;
-    semi_info->right_table_id_ = right_table->table_id_;
+    semi_info->right_table_id_ = right_table_id;
     semi_info->semi_id_ = stmt->get_query_ctx()->available_tb_id_--;
     idx = stmt->get_from_item_idx(joined_table->table_id_);
     if (OB_UNLIKELY(idx < 0 || idx >= stmt->get_from_item_size())) {
@@ -293,7 +299,7 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, const JoinedT
           OB_ISNULL(from_expr = col_item->expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null column", K(ret));
-      } else if (right_table->table_id_ != col_item->table_id_) {
+      } else if (right_table_id != col_item->table_id_) {
         // do nothing
       } else if (OB_FAIL(ObRawExprUtils::build_null_expr(*ctx_->expr_factory_,
                                                          to_expr))) {

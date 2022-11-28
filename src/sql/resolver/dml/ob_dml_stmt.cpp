@@ -4140,15 +4140,11 @@ int ObDMLStmt::hint_table_may_used(ObCollationType cs_type,
 {
   int ret = OB_SUCCESS;
   may_appear = false;
-  for (int64_t i = 0; !may_appear && OB_SUCC(ret) && i < table_items_.count(); ++i) {
-    if (OB_ISNULL(table_items_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else {
-      may_appear = hint_table.is_match_table_item(cs_type, *table_items_.at(i));
-    }
-  }
-  if (OB_SUCC(ret) && !may_appear) {
+  if (OB_FAIL(check_hint_table_matched_table_item(cs_type, hint_table, may_appear))) {
+    LOG_WARN("failed to check hint table matched table item", K(ret));
+  } else if (may_appear) {
+    /* do nohting */
+  } else {
     ObSEArray<ObSelectStmt*, 4> child_stmts;
     if (is_set_stmt() && OB_FAIL(ObDMLStmt::get_child_stmts(child_stmts))) {
       // for set stmt, do not check union set child stmt.
@@ -4164,6 +4160,23 @@ int ObDMLStmt::hint_table_may_used(ObCollationType cs_type,
           LOG_WARN("failed to check hint table may used", K(ret));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::check_hint_table_matched_table_item(ObCollationType cs_type,
+                                                   const ObTableInHint &hint_table,
+                                                   bool &matched) const
+{
+  int ret = OB_SUCCESS;
+  matched = false;
+  for (int64_t i = 0; !matched && OB_SUCC(ret) && i < table_items_.count(); ++i) {
+    if (OB_ISNULL(table_items_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      matched = hint_table.is_match_table_item(cs_type, *table_items_.at(i));
     }
   }
   return ret;

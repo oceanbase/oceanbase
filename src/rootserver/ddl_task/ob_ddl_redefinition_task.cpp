@@ -39,6 +39,7 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     const int64_t dest_table_id,
     const int64_t schema_version,
     const int64_t snapshot_version,
+    const int64_t execution_id,
     const ObSQLMode &sql_mode,
     const common::ObCurTraceId::TraceId &trace_id,
     const int64_t parallelism,
@@ -46,7 +47,7 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     ObRootService *root_service)
   : is_inited_(false), tenant_id_(tenant_id), task_id_(task_id), data_table_id_(data_table_id),
     dest_table_id_(dest_table_id), schema_version_(schema_version), snapshot_version_(snapshot_version),
-    sql_mode_(sql_mode), trace_id_(trace_id), parallelism_(parallelism),
+    execution_id_(execution_id), sql_mode_(sql_mode), trace_id_(trace_id), parallelism_(parallelism),
     use_heap_table_ddl_plan_(use_heap_table_ddl_plan), root_service_(root_service)
 {
   set_retry_times(0); // do not retry
@@ -103,6 +104,8 @@ int ObDDLRedefinitionSSTableBuildTask::process()
                                                            dest_table_id_,
                                                            schema_version_,
                                                            snapshot_version_,
+                                                           execution_id_,
+                                                           task_id_,
                                                            parallelism_,
                                                            use_heap_table_ddl_plan_,
                                                            false/*use_schema_version_hint_for_src_table*/,
@@ -141,7 +144,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       }
     }
   }
-  if (OB_SUCCESS != (tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, snapshot_version_, ret))) {
+  if (OB_SUCCESS != (tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(unused_tablet_id, task_key, snapshot_version_, execution_id_, ret))) {
     LOG_WARN("fail to finish sstable complement", K(ret));
   }
   return ret;
@@ -165,6 +168,7 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
         dest_table_id_,
         schema_version_,
         snapshot_version_,
+        execution_id_,
         sql_mode_,
         trace_id_,
         parallelism_,
@@ -551,7 +555,7 @@ int ObDDLRedefinitionTask::get_validate_checksum_columns_id(const ObTableSchema 
   return ret;
 }
 
-int ObDDLRedefinitionTask::check_data_dest_tables_columns_checksum()
+int ObDDLRedefinitionTask::check_data_dest_tables_columns_checksum(const int64_t execution_id)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -583,16 +587,16 @@ int ObDDLRedefinitionTask::check_data_dest_tables_columns_checksum()
       LOG_WARN("fail to create datatable column checksum map", K(ret));
     } else if (OB_FAIL(dest_table_column_checksums.create(OB_MAX_COLUMN_NUMBER / 2, ObModIds::OB_CHECKSUM_CHECKER))) {
       LOG_WARN("fail to create desttable column checksum map", K(ret));
-    } else if (OB_UNLIKELY(OB_INVALID_ID == schema_version_ || OB_INVALID_ID == object_id_ || !data_table_column_checksums.created())) {
+    } else if (OB_UNLIKELY(0 > execution_id || OB_INVALID_ID == object_id_ || !data_table_column_checksums.created())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), "data_table_execution_id", schema_version_, K(object_id_), K(data_table_column_checksums.created()));
+      LOG_WARN("invalid argument", K(ret), K(execution_id), K(object_id_), K(data_table_column_checksums.created()));
     } else if (OB_UNLIKELY(OB_INVALID_ID == target_object_id_ || !dest_table_column_checksums.created())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), "dest_table_execution_id", schema_version_, "dest_table_id", target_object_id_, K(dest_table_column_checksums.created()));
-    } else if (OB_FAIL(ObDDLChecksumOperator::get_table_column_checksum(tenant_id_, schema_version_, object_id_, data_table_column_checksums, GCTX.root_service_->get_sql_proxy()))) {
-      LOG_WARN("fail to get table column checksum", K(ret), K(schema_version_), "table_id", object_id_, K(data_table_column_checksums.created()), KP(GCTX.root_service_));
-    } else if (OB_FAIL(ObDDLChecksumOperator::get_table_column_checksum(tenant_id_, schema_version_, target_object_id_, dest_table_column_checksums, GCTX.root_service_->get_sql_proxy()))) {
-      LOG_WARN("fail to get table column checksum", K(ret), "dest_table_execution_id", schema_version_, "table_id", target_object_id_, K(dest_table_column_checksums.created()), KP(GCTX.root_service_));
+      LOG_WARN("invalid argument", K(ret),  "dest_table_id", target_object_id_, K(dest_table_column_checksums.created()));
+    } else if (OB_FAIL(ObDDLChecksumOperator::get_table_column_checksum(tenant_id_, execution_id, object_id_, task_id_, data_table_column_checksums, GCTX.root_service_->get_sql_proxy()))) {
+      LOG_WARN("fail to get table column checksum", K(ret), K(execution_id), "table_id", object_id_, K_(task_id), K(data_table_column_checksums.created()), KP(GCTX.root_service_));
+    } else if (OB_FAIL(ObDDLChecksumOperator::get_table_column_checksum(tenant_id_, execution_id, target_object_id_, task_id_, dest_table_column_checksums, GCTX.root_service_->get_sql_proxy()))) {
+      LOG_WARN("fail to get table column checksum", K(ret), K(execution_id), "table_id", target_object_id_, K_(task_id), K(dest_table_column_checksums.created()), KP(GCTX.root_service_));
     } else {
       uint64_t dest_column_id = 0;
       for (hash::ObHashMap<int64_t, int64_t>::const_iterator iter = data_table_column_checksums.begin();

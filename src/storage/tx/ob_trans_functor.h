@@ -300,8 +300,6 @@ public:
     if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
       ret = common::OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_id), "ctx", OB_P(tx_ctx));
-    } else if (!tx_ctx->is_for_replay()) {
-      // do nothing
     } else {
       if (OB_FAIL(tx_ctx->replay_start_working_log(start_working_ts_))) {
         TRANS_LOG(WARN, "replay start working log error", KR(ret), K(tx_id));

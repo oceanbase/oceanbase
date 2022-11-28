@@ -1084,6 +1084,9 @@ int ObTransformViewMerge::adjust_updatable_view(ObDMLStmt *parent_stmt, TableIte
   } else if (OB_UNLIKELY(!table_item->is_generated_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected table type", K(table_item->type_), K(ret));
+  } else if (parent_stmt->is_update_stmt() &&
+             OB_FAIL(static_cast<ObUpdateStmt*>(parent_stmt)->remove_invalid_assignment())) {
+    LOG_WARN("failed to remove invalid assignment", K(ret));
   } else if (parent_stmt->is_delete_stmt() || parent_stmt->is_update_stmt()) {
     ObDelUpdStmt *del_upd_stmt = static_cast<ObDelUpdStmt *>(parent_stmt);
     ObSEArray<ObDmlTableInfo*, 2> table_infos;

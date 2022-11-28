@@ -70,6 +70,8 @@ struct ObOptParamHint
     DEF(HIDDEN_COLUMN_VISIBLE,)           \
     DEF(ROWSETS_ENABLED,)                 \
     DEF(ROWSETS_MAX_ROWS,)                \
+    DEF(DDL_EXECUTION_ID,)                \
+    DEF(DDL_TASK_ID,)                     \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -245,7 +247,7 @@ struct ObTableInHint
                                        bool ignore_qb_name = false);
 
   void reset() { qb_name_.reset(); db_name_.reset(); table_name_.reset(); }
-  void reset(const TableItem& table);
+  void set_table(const TableItem& table);
 
   DECLARE_TO_STRING;
 
@@ -706,7 +708,7 @@ private:
 class ObTableParallelHint : public ObOptHint
 {
 public:
-  ObTableParallelHint(ObItemType hint_type)
+  ObTableParallelHint(ObItemType hint_type = T_TABLE_PARALLEL)
     : ObOptHint(hint_type), parallel_(ObGlobalHint::UNSET_PARALLEL)
   {
     set_hint_class(HINT_TABLE_PARALLEL);
@@ -788,7 +790,8 @@ class ObPQSetHint : public ObOptHint
   public:
   ObPQSetHint(ObItemType hint_type = T_PQ_SET)
     : ObOptHint(hint_type),
-      dist_methods_()
+      dist_methods_(),
+      left_branch_()
   {
     set_hint_class(HINT_PQ_SET);
   }
@@ -804,11 +807,13 @@ class ObPQSetHint : public ObOptHint
   ObIArray<ObItemType> &get_dist_methods() { return dist_methods_; }
   int set_pq_set_hint(const DistAlgo dist_algo, const int64_t child_num, const int64_t random_none_idx);
   DistAlgo get_dist_algo(int64_t &random_none_idx) const { return get_dist_algo(dist_methods_, random_none_idx); }
-
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_methods));
+  const ObString &get_left_branch() const { return left_branch_; }
+  void set_left_branch(const ObString &left_branch) { return left_branch_.assign_ptr(left_branch.ptr(), left_branch.length()); }
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_methods), K_(left_branch));
 
 private:
   common::ObSEArray<ObItemType, 2, common::ModulePageAllocator, true> dist_methods_;
+  common::ObString left_branch_;  // qb_name for first branch of set, used for union distinct / intersect
 };
 
 class ObJoinOrderHint : public ObOptHint {

@@ -5063,7 +5063,7 @@ int ObTableLocation::try_split_integer_range(const common::ObIArray<common::ObNe
         if (!range->border_flag_.inclusive_end()) {
           end_val--;
         }
-        if (end_val - start_val + 1 > MAX_INTEGER_RANGE_SPLITE_COUNT) {
+        if (end_val - start_val >= MAX_INTEGER_RANGE_SPLITE_COUNT || end_val - start_val < 0) {
           all_part = true;
         } else if (OB_FAIL(int_ranges.push_back(std::pair<int64_t, int64_t>(start_val, end_val)))) {
           LOG_WARN("fail to push back integer range", K(ret));

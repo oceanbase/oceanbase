@@ -258,7 +258,8 @@ public:
                          const bool *exprs_not_null_flag,
                          const int64_t *pl_integer_rangs,
                          bool is_bulk = false,
-                         bool is_forall = false);
+                         bool is_forall = false,
+                         int32_t array_binding_count = 0);
 
   static int spi_execute_immediate(pl::ObPLExecCtx *ctx,
                                    const ObSqlExpression *sql,
@@ -526,9 +527,8 @@ public:
                         ParamStore &exec_params,
                         ObMySQLProxy::MySQLResult &mysql_result,
                         ObSPIOutParams &out_params,
-                        bool is_forall = false);
-
-  static int get_batch_query_num(ParamStore &exec_params, int64_t &query_num);
+                        bool is_forall = false,
+                        int32_t array_binding_count = 0);
 
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
 
@@ -597,7 +597,8 @@ private:
                                const bool *exprs_not_null_flag,
                                const int64_t *pl_integer_rangs,
                                int64_t is_bulk,
-                               bool is_forall = false);
+                               bool is_forall = false,
+                               int32_t array_binding_count = 0);
 
   static int dbms_cursor_execute(pl::ObPLExecCtx *ctx,
                                  uint64_t stmt_id,
@@ -638,7 +639,8 @@ private:
                         int64_t into_count,
                         ObMySQLProxy::MySQLResult &mysql_result,
                         ObSPIOutParams &out_params,
-                        bool is_forall = false);
+                        bool is_forall = false,
+                        int32_t array_binding_count = 0);
 
   static int inner_fetch(pl::ObPLExecCtx *ctx,
                          observer::ObQueryRetryCtrl &retry_ctrl,

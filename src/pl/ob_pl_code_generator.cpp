@@ -1185,7 +1185,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLForAllStmt &s)
   if (OB_SUCC(ret) && OB_NOT_NULL(generator_.get_current().get_v())) {
     const ObPLForLoopStmt& for_loop = static_cast<const ObPLForLoopStmt&>(s);
     if (OB_NOT_NULL(s.get_sql_stmt()) && !s.get_save_exception()) {
-      ObLLVMValue lower, upper, lower_obj, upper_obj, p_index_obj;
+      ObLLVMValue lower, upper, lower_obj, upper_obj, p_index_obj, count;
       ObLLVMValue ret_err, is_need_rollback;
       ObLLVMType ir_type;
       ObLLVMBasicBlock illegal_block, after_block, rollback_block, not_rollback_block;
@@ -1201,7 +1201,9 @@ int ObPLCodeGenerateVisitor::visit(const ObPLForAllStmt &s)
       OZ (generator_.get_helper().create_alloca(var->get_name(), ir_type, p_index_obj));
       OX (generator_.get_vars().at(s.get_ident() + generator_.USER_ARG_OFFSET) = p_index_obj);
       OZ (generator_.generate_bound_and_check(s, true, lower, upper, lower_obj, upper_obj, illegal_block));
-      OZ (generator_.generate_sql(*(s.get_sql_stmt()), ret_err));
+      OZ (generator_.get_helper().create_sub(upper, lower, count));
+      OZ (generator_.get_helper().create_inc(count, count));
+      OZ (generator_.generate_sql(*(s.get_sql_stmt()), ret_err, count));
       OZ (generator_.get_helper().create_icmp_eq(ret_err, OB_BATCHED_MULTI_STMT_ROLLBACK, is_need_rollback));
       OZ (generator_.get_helper().create_cond_br(is_need_rollback, rollback_block, not_rollback_block));
       OZ (generator_.set_current(not_rollback_block));
@@ -1558,8 +1560,9 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSqlStmt &s)
   } else if (OB_FAIL(generator_.generate_goto_label(s))) {
     LOG_WARN("failed to generate goto label", K(ret));
   } else {
-    ObLLVMValue ret_err;
-    OZ (generator_.generate_sql(s, ret_err));
+    ObLLVMValue ret_err, count;
+    OZ (generator_.get_helper().get_int32(0, count));
+    OZ (generator_.generate_sql(s, ret_err, count));
     OZ (generator_.generate_after_sql(s, ret_err));
   }
   return ret;
@@ -2633,9 +2636,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLFetchStmt &s)
                                         ret_err))) {
     LOG_WARN("failed to generate fetch", K(ret));
   } else if (lib::is_mysql_mode()) { //Mysql模式直接检查抛出异常
-    if (OB_FAIL(generator_.check_success(ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
-      LOG_WARN("failed to check success", K(ret));
-    }
+    OZ (generator_.check_success(
+      ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning(), true));
   } else { //Oracle模式如果是OB_READ_NOTHING错误，吞掉异常不抛出
     ObLLVMValue is_not_found;
     ObLLVMBasicBlock fetch_end;
@@ -3356,6 +3358,8 @@ int ObPLCodeGenerator::init_spi_service()
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(int32_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
       LOG_WARN("failed to get function type", K(ret));
@@ -4937,7 +4941,7 @@ int ObPLCodeGenerator::generate_bound_and_check(const ObPLForLoopStmt &s,
   return ret;
 }
 
-int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err)
+int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err, ObLLVMValue &array_bind_count)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_current().get_v())) {
@@ -5015,6 +5019,7 @@ int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err)
         ObLLVMValue is_forall;
         OZ (get_helper().get_int8(static_cast<int64_t>(s.is_forall_sql()), is_forall));
         OZ (args.push_back(is_forall));
+        OZ (args.push_back(array_bind_count));
         OZ (get_helper().create_call(ObString("spi_execute"), get_spi_service().spi_execute_, args, ret_err));
       }
     }
@@ -6612,7 +6617,7 @@ int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
   return ret;
 }
 int ObPLCodeGenerator::check_success(jit::ObLLVMValue &ret_err, int64_t stmt_id,
-                                     bool in_notfound, bool in_warning)
+                                     bool in_notfound, bool in_warning, bool signal)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(helper_.set_insert_point(get_current()))) {
@@ -6694,7 +6699,7 @@ int ObPLCodeGenerator::check_success(jit::ObLLVMValue &ret_err, int64_t stmt_id,
             LOG_WARN("failed to create_load", K(ret));
           } else if (OB_FAIL(helper_.create_load(ObString("load_str_len"), str_len_ptr, str_len))) {
             LOG_WARN("failed to create_load", K(ret));
-          } else if (OB_FAIL(generate_exception(type, ret_err, error_code, sql_state, str_len, stmt_id_value, success_branch, line_number_value, in_notfound, in_warning, false/*not signal*/))) {
+          } else if (OB_FAIL(generate_exception(type, ret_err, error_code, sql_state, str_len, stmt_id_value, success_branch, line_number_value, in_notfound, in_warning, signal))) {
             LOG_WARN("failed to generate exception", K(ret));
           } else if (OB_FAIL(set_current(success_branch))) {
             LOG_WARN("failed to set_current", K(ret));

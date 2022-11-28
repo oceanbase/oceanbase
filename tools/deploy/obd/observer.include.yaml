@@ -29,6 +29,5 @@ config:
   workers_per_cpu_quota: '10'
   schema_history_expire_time: '1d'
   net_thread_count: '4'
-  enable_merge_by_turn: 'FALSE'
   syslog_io_bandwidth_limit: '10G'
   enable_async_syslog: 'FALSE'

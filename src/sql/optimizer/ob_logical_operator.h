@@ -1779,6 +1779,7 @@ private:
                                      int64_t &filter_id);
   int allocate_normal_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                   int64_t &filter_id);
+  int mark_bloom_filter_id_to_receive_op(ObLogicalOperator *filter_use, int64_t filter_id);
   int push_down_bloom_filter_expr(ObLogicalOperator *op,
       ObLogicalOperator *join_filter_op, double join_filter_rate);
   /* manual set dop for each dfo */

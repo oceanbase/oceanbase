@@ -836,6 +836,14 @@ public:
                                const ObIArray<ObRawExpr*> &conditions,
                                ObIArray<ObOrderDirection> &directions);
 
+  int adjust_postfix_sort_expr_ordering(const ObIArray<OrderItem> &ordering,
+                                        const ObFdItemSet &fd_item_set,
+                                        const EqualSets &equal_sets,
+                                        const ObIArray<ObRawExpr*> &const_exprs,
+                                        const int64_t prefix_count,
+                                        ObIArray<ObRawExpr*> &sort_exprs,
+                                        ObIArray<ObOrderDirection> &sort_directions);
+
   int get_minimal_cost_candidates(const ObIArray<CandidatePlan> &candidates,
                                   ObIArray<CandidatePlan> &best_candidates);
 

@@ -135,6 +135,7 @@ public:
   }
   int64_t get_evo_perf() const;
   int64_t get_cpu_time() const { return stat_.evolution_stat_.cpu_time_; }
+  int64_t get_elapsed_time() const { return stat_.evolution_stat_.elapsed_time_; }
   int64_t get_executions() const { return stat_.evolution_stat_.executions_; }
   void set_evolution(bool v) { stat_.is_evolution_ = v; }
   bool get_evolution() const { return stat_.is_evolution_; }
@@ -330,6 +331,10 @@ public:
   inline int64_t get_ddl_schema_version() const { return ddl_schema_version_; }
   inline void set_ddl_table_id(const int64_t ddl_table_id) { ddl_table_id_ = ddl_table_id; }
   inline int64_t get_ddl_table_id() const { return ddl_table_id_; }
+  inline void set_ddl_execution_id(const int64_t ddl_execution_id) { ddl_execution_id_ = ddl_execution_id; }
+  inline int64_t get_ddl_execution_id() const { return ddl_execution_id_; }
+  inline void set_ddl_task_id(const int64_t ddl_task_id) { ddl_task_id_ = ddl_task_id; }
+  inline int64_t get_ddl_task_id() const { return ddl_task_id_; }
 public:
   int inc_concurrent_num();
   void dec_concurrent_num();
@@ -579,6 +584,8 @@ public:
   bool contain_pl_udf_or_trigger_;//mark if need sync pkg variables
   int64_t ddl_schema_version_;
   int64_t ddl_table_id_;
+  int64_t ddl_execution_id_;
+  int64_t ddl_task_id_;
   //parallel encoding of output_expr in advance to speed up packet response
   bool is_packed_;
   bool has_instead_of_trigger_; // mask if has instead of trigger on view

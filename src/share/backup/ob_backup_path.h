@@ -87,6 +87,11 @@ struct ObBackupPathUtil
 
   static int get_backup_set_dir_path(const share::ObBackupDest &backup_tenant_dest, 
       const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path);
+  // backup_set_1_full_
+  static int get_backup_set_inner_placeholder_prefix(
+      const share::ObBackupSetDesc &backup_set_desc,
+      char *placeholder_prefix,
+      int64_t length);
 
   // file:///obbackup/backup_set_1_full/backup_set_1_full_xxxx_xxxxx
   static int get_backup_set_inner_placeholder(const share::ObBackupDest &backup_set_dest,

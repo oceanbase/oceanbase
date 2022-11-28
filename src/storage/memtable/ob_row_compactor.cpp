@@ -457,6 +457,7 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const int64_t s
         STORAGE_LOG(WARN, "Unexpected null row header", K(ret));
       } else {
         rowkey_cnt = row_header->get_rowkey_count();
+        compact_datum_row.count_ = rowkey_cnt;
       }
     }
     if (OB_SUCC(ret) && find_committed_tnode) {
@@ -483,7 +484,7 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const int64_t s
       } else if (OB_FAIL(compact_datum_row.reserve(datum_row.get_column_count(), true))) {
           STORAGE_LOG(WARN, "Failed to reserve datum row", K(ret), K(datum_row));
       } else {
-        compact_datum_row.count_ = datum_row.get_column_count();
+        compact_datum_row.count_ = MAX(datum_row.get_column_count(), compact_datum_row.count_);
         if (ObDmlFlag::DF_NOT_EXIST == dml_flag) {
           dml_flag = mtd->dml_flag_;
           compact_datum_row.row_flag_.set_flag(dml_flag);

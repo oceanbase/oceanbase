@@ -238,6 +238,7 @@ public:
   // force release all memtables
   // just for rebuild or migrate retry.
   int release_memtables();
+  int destroy_memtable_mgr();
 
   // multi-source data operation
   int check_tx_data(bool &is_valid) const;
@@ -397,6 +398,11 @@ private:
   common::TCRWLock &get_rw_lock();
 
   int init_shared_params(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id,
+      const int64_t max_saved_schema_version,
+      ObFreezer *freezer);
+  int init_memtable_mgr(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const int64_t max_saved_schema_version,

@@ -125,6 +125,10 @@ int ObAllVirtualSessionWait::inner_get_next_row(ObNewRow *&row)
       ret = OB_ITER_END;
     }
     if (OB_SUCCESS == ret && session_status_.count() != 0) {
+      if (OB_ISNULL(event_desc) || OB_ISNULL(collect_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "event_desc or collect_ is NULL", K(ret), KP(event_desc), KP(collect_));
+      }
       uint64_t cell_idx = 0;
       int64_t curr_time = ObTimeUtility::current_time();
       for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {

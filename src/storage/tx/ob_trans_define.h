@@ -430,6 +430,8 @@ enum TransType : int32_t
   DIST_TRANS = 2
 };
 
+const char *trans_type_to_cstr(const TransType &trans_type);
+
 // class TransType
 // {
 // public:

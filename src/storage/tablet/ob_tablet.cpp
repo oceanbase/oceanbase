@@ -310,6 +310,10 @@ int ObTablet::init(
       || OB_ISNULL(log_handler_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(memtable_mgr), K_(log_handler));
+  } else if (is_update
+      && param.ha_status_.is_restore_status_full() // is_update && is_migrate: init memtable_mgr. restore reuse memtable_mgr
+      && OB_FAIL(init_memtable_mgr(ls_id, tablet_id, param.max_sync_storage_schema_version_, freezer))) {
+    LOG_WARN("failed to init memtable mgr", K(ret), K(ls_id), K(tablet_id), KP(freezer));
   } else if (!is_update && OB_FAIL(init_shared_params(ls_id, tablet_id, param.max_sync_storage_schema_version_, freezer))) {
     LOG_WARN("failed to init shared params", K(ret), K(ls_id), K(tablet_id), KP(freezer));
   } else if (OB_FAIL(tablet_meta_.init(*allocator_, param))) {
@@ -603,10 +607,10 @@ int ObTablet::load_deserialize(
       if (OB_FAIL(ls_service->get_ls(tablet_meta_.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD))) {
         LOG_WARN("failed to get ls", K(ret), "ls_id", tablet_meta_.ls_id_);
       } else if (t3m->is_used_obj_pool(&allocator)) {
-        if (OB_FAIL(t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, next_tablet_handle))) {
+        if (OB_FAIL(t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, next_tablet_handle, false/*only acquire*/))) {
           LOG_WARN("failed to acquire tablet", K(ret), K(key));
         }
-      } else if (OB_FAIL(t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, key, allocator, next_tablet_handle))) {
+      } else if (OB_FAIL(t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, key, allocator, next_tablet_handle, false/*only acquire*/))) {
         LOG_WARN("failed to acquire tablet", K(ret), K(key));
       }
       if (OB_FAIL(ret)) {
@@ -1701,6 +1705,22 @@ int ObTablet::release_memtables()
   return ret;
 }
 
+int ObTablet::destroy_memtable_mgr()
+{
+  int ret = OB_SUCCESS;
+  ObIMemtableMgr *memtable_mgr = nullptr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+    LOG_WARN("failed to get memtable mgr", K(ret));
+  } else {
+    memtable_mgr->destroy();
+  }
+  return ret;
+}
+
 int ObTablet::get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const
 {
   int ret = OB_SUCCESS;
@@ -1775,6 +1795,32 @@ int ObTablet::init_shared_params(
     }
   }
 
+  return ret;
+}
+
+int ObTablet::init_memtable_mgr(
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id,
+    const int64_t max_saved_schema_version, // for init storage_schema_recorder on MemtableMgr
+    ObFreezer *freezer)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!pointer_hdl_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl));
+  } else {
+    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+    ObIMemtableMgr *memtable_mgr = nullptr;
+    ObTabletDDLKvMgr *ddl_kv_mgr = nullptr;
+
+    if (OB_FAIL(get_ddl_kv_mgr(ddl_kv_mgr))) {
+      LOG_WARN("failed to get ddl kv mgr", K(ret));
+    } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
+      LOG_WARN("failed to get memtable mgr", K(ret));
+    } else if (OB_FAIL(memtable_mgr->init(tablet_id, ls_id, max_saved_schema_version, log_handler_, freezer, t3m, ddl_kv_mgr))) {
+      LOG_WARN("failed to init memtable mgr", K(ret), K(tablet_id), K(ls_id), KP(freezer));
+    }
+  }
   return ret;
 }
 

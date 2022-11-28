@@ -247,9 +247,13 @@ int ObOptimizer::get_stmt_max_table_parallel_hint(ObDMLStmt &stmt,
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 4> child_stmts;
   ObQueryCtx *query_ctx = NULL;
-  max_table_hint = std::max(max_table_hint, stmt.get_stmt_hint().get_max_table_parallel());
-  if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
+  int64_t cur_max_table_hint = ObGlobalHint::UNSET_PARALLEL;
+  if (OB_FAIL(stmt.get_stmt_hint().get_max_table_parallel(stmt, cur_max_table_hint))) {
+    LOG_WARN("failed to get max table parallel", K(ret));
+  } else if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
     LOG_WARN("failed to get child stmts", K(ret));
+  } else {
+    max_table_hint = std::max(max_table_hint, cur_max_table_hint);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
     if (OB_ISNULL(child_stmts.at(i))) {

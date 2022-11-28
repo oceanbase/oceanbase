@@ -55,7 +55,6 @@ private:
 
 
 // COS domain name structure: bucket_name-appid.endpoint
-// For example https://bucket-appid.cos.ap-guangzhou.myqcloud.com,
 // cos.ap-guangzhou.myqcloud.com is the endpoint.
 struct OB_PUBLIC_API ObCosAccount
 {

@@ -652,7 +652,9 @@ private:
                                            const ObTableSchema *table_schema);
   int resolve_multi_qb_name_list(const ParseNode *qb_name_node, common::ObIArray<QbNameList> &qb_name_list);
   int resolve_qb_name_list(const ParseNode *qb_name_node, ObIArray<ObString> &qb_name_list);
-  int get_valid_dist_methods(const ParseNode &dist_methods_node, ObIArray<ObItemType> &dist_methods);
+  int get_valid_dist_methods(const ParseNode *dist_methods_node,
+                             ObIArray<ObItemType> &dist_methods,
+                             bool &is_valid);
   int find_table_index_infos(const ObString &index_name,
                              const TableItem *table_item,
                              bool &find_it,
@@ -709,6 +711,7 @@ protected:
   bool with_clause_without_record_;
   bool is_prepare_stage_;
   bool in_pl_;
+  bool resolve_alias_for_subquery_;
   int32_t current_view_level_;
   uint64_t view_ref_id_;
   bool is_resolving_view_;

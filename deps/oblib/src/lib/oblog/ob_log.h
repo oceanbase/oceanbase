@@ -1113,6 +1113,8 @@ inline void ObLogger::do_log_message(const bool is_async,
                                      Function &log_data_func)
 {
   int ret = OB_SUCCESS;
+  bool old_val = set_disable_logging(true);
+  DEFER(set_disable_logging(old_val));
   bool allow = true;
 
   bool force_bt = false;

@@ -80,6 +80,7 @@ template<ObRpcPacketCode PC, typename AsyncRpcProxy>
 void ObAsyncCB<PC, AsyncRpcProxy>::on_timeout()
 {
   int ret = common::OB_SUCCESS;
+  RPC_LOG(WARN, "some error in rcode and enter on_timeout", K(AsyncCB::rcode_.rcode_));
   AsyncCB::rcode_.rcode_ = common::OB_TIMEOUT;
   if (OB_FAIL(proxy_.receive_response())) {
     RPC_LOG(WARN, "proxy_ receive_response failed", K(ret));

@@ -234,9 +234,8 @@ int ObObjectDevice::open_for_appender(const char *pathname, ObIODOpts *opts, voi
     OB_LOG(WARN, "Invalid append strategy!", KCSTRING(append_strategy), K(ret));
   }
   param.strategy_ = strategy;
-
+  param.version_param_.version_ = append_version;
   if (-1 != append_version) {
-    param.version_param_.version_ = append_version;
     param.version_param_.open_object_version_ = true;
     if (param.version_param_.version_ <= 0) {
       ret = OB_INVALID_ARGUMENT;

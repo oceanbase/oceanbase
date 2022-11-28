@@ -1928,10 +1928,11 @@ int ObRpcRemoteWriteDDLPrepareLogP::process()
       int64_t prepare_log_ts = 0;
       if (OB_FAIL(sstable_redo_writer.write_prepare_log(table_key,
                                                         arg_.table_id_,
-                                                        arg_.schema_version_,
+                                                        arg_.execution_id_,
+                                                        arg_.ddl_task_id_,
                                                         prepare_log_ts))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
-      } else if (OB_FAIL(ddl_kv_mgr->ddl_prepare(arg_.start_log_ts_, prepare_log_ts, arg_.table_id_, arg_.schema_version_))) {
+      } else if (OB_FAIL(ddl_kv_mgr->ddl_prepare(arg_.start_log_ts_, prepare_log_ts, arg_.table_id_, arg_.execution_id_, arg_.ddl_task_id_))) {
         LOG_WARN("failed to do ddl kv prepare", K(ret), K(arg_));
       } else {
         result_ = prepare_log_ts;

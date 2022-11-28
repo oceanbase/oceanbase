@@ -197,7 +197,7 @@ TEST(TestEncryptionUtil, encrypt_master_key)
 //  ObServerConfig &config = ObServerConfig::get_instance();
 //  ASSERT_EQ(OB_SUCCESS, config.init(sys_config));
 //  ws.init(config);
-//  config.obconfig_url.set_value("http://api.test.ocp.oceanbase.alibaba.net/services?Action=ObRootServiceInfo&User_ID=ocptest&UID=rongwei.drw&ObRegion=xr.admin");
+//  config.obconfig_url.set_value("");
 //  config.cluster_id.set_value("1");
 //  config.cluster.set_value("xr.admin");
 //  ObArray<ObRootAddr> rs_list;

@@ -271,15 +271,6 @@ private:
     int64_t palf_id_;
     int ret_code_;
   };
-  struct NotifyDiskEnough
-  {
-    NotifyDiskEnough(const bool diskspace_enough);
-    ~NotifyDiskEnough();
-    bool operator()(const LSKey &palf_id, PalfHandleImpl *palf_handle_impl);
-    TO_STRING_KV(K_(diskspace_enough), K_(ret_code));
-    bool diskspace_enough_;
-    int ret_code_;
-  };
 
 private:
   int scan_all_palf_handle_impl_director_();
@@ -293,7 +284,6 @@ private:
                       int64_t &palf_id,
                       int64_t &maximum_used_size);
   int recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, SCN &oldest_scn);
-  int notify_diskspace_enough_(const bool diskspace_enough);
   int wait_until_reference_count_to_zero_(const int64_t palf_id);
   // check the diskspace whether is enough to hold a new palf instance.
   bool check_can_create_palf_handle_impl_() const;

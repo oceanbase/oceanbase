@@ -1331,6 +1331,8 @@ public:
     return size_;
   }
 
+  int64_t get_bucket_count() const { return bucket_num_; }
+
 public:
   template<class _archive>
   int serialization(_archive &archive)

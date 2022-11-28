@@ -62,12 +62,14 @@ private:
 
   // @brief Get all the group by exprs, rollup exprs and their directions.
   int get_groupby_rollup_exprs(const ObLogicalOperator *op,
+                               common::ObIArray<ObRawExpr *> &reduce_exprs,
                                common::ObIArray<ObRawExpr *> &group_by_exprs,
                                common::ObIArray<ObRawExpr *> &rollup_exprs,
                                common::ObIArray<ObOrderDirection> &group_directions,
                                common::ObIArray<ObOrderDirection> &rollup_directions);
 
-  int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &group_by_exprs,
+  int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                     const ObIArray<ObRawExpr*> &group_by_exprs,
                                      const ObIArray<ObOrderDirection> &group_directions,
                                      const ObIArray<ObRawExpr*> &rollup_exprs,
                                      const ObIArray<ObOrderDirection> &rollup_directions,
@@ -80,7 +82,8 @@ private:
                           const bool ignore_hint,
                           bool &use_hash_valid,
                           bool &use_merge_valid);
-  int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &group_by_exprs,
+  int candi_allocate_normal_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                     const ObIArray<ObRawExpr*> &group_by_exprs,
                                      const ObIArray<ObOrderDirection> &group_directions,
                                      const ObIArray<ObRawExpr*> &rollup_exprs,
                                      const ObIArray<ObOrderDirection> &rollup_directions,
@@ -91,7 +94,8 @@ private:
                                      const bool ignore_hint,
                                      ObIArray<CandidatePlan> &groupby_plans);
 
-  int candi_allocate_three_stage_group_by(const ObIArray<ObRawExpr*> &group_by_exprs,
+  int candi_allocate_three_stage_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
+                                          const ObIArray<ObRawExpr*> &group_by_exprs,
                                           const ObIArray<ObOrderDirection> &group_directions,
                                           const ObIArray<ObRawExpr*> &rollup_exprs,
                                           const ObIArray<ObOrderDirection> &rollup_directions,
@@ -101,7 +105,8 @@ private:
                                           GroupingOpHelper &groupby_helper,
                                           ObIArray<CandidatePlan> &groupby_plans);
 
-  int create_hash_group_plan(const ObIArray<ObRawExpr*> &group_by_exprs,
+  int create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
+                             const ObIArray<ObRawExpr*> &group_by_exprs,
                              const ObIArray<ObRawExpr*> &rollup_exprs,
                              const ObIArray<ObAggFunRawExpr*> &aggr_items,
                              const ObIArray<ObRawExpr*> &having_exprs,
@@ -128,7 +133,7 @@ private:
                            int64_t topk_precision);
 
   int should_create_rollup_pushdown_plan(ObLogicalOperator *top,
-                                         const ObIArray<ObRawExpr *> &groupby_exprs,
+                                         const ObIArray<ObRawExpr *> &reduce_exprs,
                                          const ObIArray<ObRawExpr *> &rollup_exprs,
                                          GroupingOpHelper &groupby_helper,
                                          bool &is_needed);
@@ -140,7 +145,8 @@ private:
                                   GroupingOpHelper &groupby_helper,
                                   ObLogicalOperator *&top);
 
-  int create_merge_group_plan(const ObIArray<ObRawExpr*> &group_by_exprs,
+  int create_merge_group_plan(const ObIArray<ObRawExpr*> &reduce_exprs,
+                              const ObIArray<ObRawExpr*> &group_by_exprs,
                               const ObIArray<ObOrderDirection> &group_directions,
                               const ObIArray<ObRawExpr*> &rollup_exprs,
                               const ObIArray<ObOrderDirection> &rollup_directions,
@@ -168,14 +174,17 @@ private:
   // @brief Get all the distinct exprs
 
   int get_distinct_exprs(const ObLogicalOperator *top,
+                         common::ObIArray <ObRawExpr *> &reduce_exprs,
                          common::ObIArray <ObRawExpr *> &distinct_exprs);
 
   int create_hash_distinct_plan(ObLogicalOperator *&top,
                                 GroupingOpHelper &distinct_helper,
+                                ObIArray<ObRawExpr*> &reduce_exprs,
                                 ObIArray<ObRawExpr*> &distinct_exprs);
 
   int create_merge_distinct_plan(ObLogicalOperator *&top,
                                  GroupingOpHelper &distinct_helper,
+                                 ObIArray<ObRawExpr*> &reduce_exprs,
                                  ObIArray<ObRawExpr*> &distinct_exprs,
                                  ObIArray<ObOrderDirection> &directions,
                                  bool &is_plan_valid,
@@ -246,6 +255,11 @@ private:
   int candi_allocate_distinct_set(const ObIArray<ObSelectLogPlan*> &child_plans);
 
   int get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs);
+
+  int get_allowed_branch_order(const bool ignore_hint,
+                               const ObSelectStmt::SetOperator set_op,
+                               bool &no_swap,
+                               bool &swap);
 
   /**
    * @brief create_hash_set

@@ -174,7 +174,7 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
         }
         if (OB_FAIL(ret)) {
           // do nothing
-        } else if (OB_FAIL(datum_store.init(INT64_MAX,
+        } else if (OB_FAIL(datum_store.init(4 * 1024 * 1024, // 4MB
                                      MTL_ID(),
                                      common::ObCtxIds::DEFAULT_CTX_ID,
                                      "ObDASTaskResultMgr",

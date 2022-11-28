@@ -209,7 +209,7 @@ void ObDumpTaskGenerator::dump_memory_leak()
       ob_free(buf);
     }
   }
-  if (fd > 0) {
+  if (fd >= 0) {
     ::close(fd);
   }
 }

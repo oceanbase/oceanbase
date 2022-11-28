@@ -34,12 +34,11 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_redo_request()
     switch (state) {
       // TODO, new state may be required (coord state and part state)
       case ObTxState::INIT: {
-        if (!is_root()) {
-          collected_.reset();
-          set_upstream_state(ObTxState::REDO_COMPLETE);
-        }
         if (OB_FAIL(handle_2pc_prepare_redo_request_impl_())) {
           TRANS_LOG(WARN, "handle 2pc prepare request failed", K(ret), K(*this));
+        } else {
+          collected_.reset();
+          set_upstream_state(ObTxState::REDO_COMPLETE);
         }
         break;
       }
@@ -52,7 +51,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_redo_request()
           }
         }
         // rewrite ret code
-        if (OB_FAIL(retransmit_upstream_msg_())) {
+        if (OB_FAIL(retransmit_upstream_msg_(ObTxState::REDO_COMPLETE))) {
           TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
         }
         break;
@@ -62,7 +61,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_redo_request()
           TRANS_LOG(WARN, "retransmit downstream msg failed", KR(ret));
         }
         // rewrite ret code
-        if (OB_FAIL(retransmit_upstream_msg_())) {
+        if (OB_FAIL(retransmit_upstream_msg_(ObTxState::REDO_COMPLETE))) {
           TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
         }
         break;
@@ -75,7 +74,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_redo_request()
           TRANS_LOG(WARN, "retransmit downstream msg failed", KR(ret));
         }
         // rewrite ret code
-        if (OB_FAIL(retransmit_upstream_msg_())) {
+        if (OB_FAIL(retransmit_upstream_msg_(ObTxState::ABORT))) {
           TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
         }
         break;

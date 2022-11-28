@@ -5595,8 +5595,6 @@ int ObLogPlan::create_temp_table_transformation_plan(ObLogicalOperator *&top,
         LOG_WARN("failed to allocate exchange as top", K(ret));
       } else if (OB_FAIL(child_ops.push_back(temp))) {
         LOG_WARN("failed to push back child ops", K(ret));
-      } else {
-        info->is_local_ = !temp_table_insert.at(i)->is_sharding();
       }
     }
     if (OB_FAIL(ret)) {
@@ -6757,7 +6755,7 @@ int ObLogPlan::adjust_sort_expr_ordering(ObIArray<ObRawExpr*> &sort_exprs,
   const ObDMLStmt *stmt = NULL;
   const EqualSets &equal_sets = child_op.get_output_equal_sets();
   const ObIArray<ObRawExpr *> &const_exprs = child_op.get_output_const_exprs();
-  bool input_ordering_used = false;
+  int64_t prefix_count = -1;
   bool input_ordering_all_used = false;
   if (OB_ISNULL(stmt = child_op.get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
@@ -6767,12 +6765,12 @@ int ObLogPlan::adjust_sort_expr_ordering(ObIArray<ObRawExpr*> &sort_exprs,
                                                                child_op.get_op_ordering(),
                                                                equal_sets,
                                                                const_exprs,
-                                                               input_ordering_used,
+                                                               prefix_count,
                                                                input_ordering_all_used,
                                                                sort_directions))) {
     LOG_WARN("failed to adjust exprs by ordering", K(ret));
-  } else if (input_ordering_used) {
-    // do nothing
+  } else if (input_ordering_all_used) {
+    /* sort_exprs use input ordering, need not sort */
   } else {
     bool adjusted = false;
     if (stmt->is_select_stmt() && check_win_func) {
@@ -6785,6 +6783,9 @@ int ObLogPlan::adjust_sort_expr_ordering(ObIArray<ObRawExpr*> &sort_exprs,
         } else if (cur_expr->get_partition_exprs().count() == 0 &&
                    cur_expr->get_order_items().count() == 0) {
           // win_func over(), do nothing
+        } else if (prefix_count > 0) {
+          /* used part of input ordering, do not adjust now*/
+          adjusted = true;
         } else if (OB_FAIL(adjust_exprs_by_win_func(sort_exprs,
                                                     *cur_expr,
                                                     equal_sets,
@@ -6792,19 +6793,138 @@ int ObLogPlan::adjust_sort_expr_ordering(ObIArray<ObRawExpr*> &sort_exprs,
                                                     sort_directions))) {
             LOG_WARN("failed to adjust exprs by win func", K(ret));
         } else {
+          /* use no input ordering, adjusted by win func*/
           adjusted = true;
         }
       }
     }
     if (OB_SUCC(ret) && !adjusted && stmt->get_order_item_size() > 0) {
-      if (OB_FAIL(ObOptimizerUtil::adjust_exprs_by_ordering(sort_exprs,
-                                                            stmt->get_order_items(),
-                                                            equal_sets,
-                                                            const_exprs,
-                                                            input_ordering_used,
-                                                            input_ordering_all_used,
-                                                            sort_directions))) {
+      if (prefix_count > 0) {
+        /* used part of input ordering, try adjust sort_exprs after prefix_count by order item */
+        if (OB_FAIL(adjust_postfix_sort_expr_ordering(stmt->get_order_items(),
+                                                      child_op.get_fd_item_set(),
+                                                      equal_sets,
+                                                      const_exprs,
+                                                      prefix_count,
+                                                      sort_exprs,
+                                                      sort_directions))) {
+          LOG_WARN("failed to adjust exprs by ordering", K(ret));
+        }
+      } else if (OB_FAIL(ObOptimizerUtil::adjust_exprs_by_ordering(sort_exprs,
+                                                                   stmt->get_order_items(),
+                                                                   equal_sets,
+                                                                   const_exprs,
+                                                                   prefix_count,
+                                                                   input_ordering_all_used,
+                                                                   sort_directions))) {
         LOG_WARN("failed to adjust exprs by ordering", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::adjust_postfix_sort_expr_ordering(const ObIArray<OrderItem> &ordering,
+                                                  const ObFdItemSet &fd_item_set,
+                                                  const EqualSets &equal_sets,
+                                                  const ObIArray<ObRawExpr*> &const_exprs,
+                                                  const int64_t prefix_count,
+                                                  ObIArray<ObRawExpr*> &sort_exprs,
+                                                  ObIArray<ObOrderDirection> &sort_directions)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("begin adjust postfix sort expr ordering", K(prefix_count), K(fd_item_set), K(equal_sets),
+                                              K(sort_exprs), K(sort_directions), K(ordering));
+  if (OB_UNLIKELY(prefix_count < 0 || prefix_count >= sort_exprs.count())
+      || OB_UNLIKELY(sort_directions.count() != sort_exprs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(prefix_count), K(sort_exprs.count()),
+                                          K(sort_directions.count()));
+  } else if (ordering.count() < prefix_count) {
+    /* do nothing */
+  } else {
+    ObSEArray<ObRawExpr*, 5> new_sort_exprs;
+    ObSEArray<ObOrderDirection, 5> new_sort_directions;
+    bool check_next = false;
+    bool can_adjust = true;
+    int64_t idx = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && can_adjust && i < prefix_count; ++i) {
+      check_next = true;
+      while (OB_SUCC(ret) && check_next && idx < ordering.count()) {
+        // after ObOptimizerUtil::adjust_exprs_by_ordering, there is not const exprs in sort_exprs.
+        if (sort_directions.at(i) == ordering.at(idx).order_type_
+            && ObOptimizerUtil::is_expr_equivalent(sort_exprs.at(i), ordering.at(idx).expr_, equal_sets)) {
+          check_next = false;
+        } else if (OB_FAIL(ObOptimizerUtil::is_const_or_equivalent_expr(ordering, equal_sets,
+                                                                  const_exprs, idx, check_next))) {
+          LOG_WARN("failed to check is const or equivalent exprs", K(ret));
+        } else if (!check_next &&
+                   OB_FAIL(ObOptimizerUtil::is_expr_is_determined(new_sort_exprs, fd_item_set,
+                                                                  equal_sets, const_exprs,
+                                                                  ordering.at(idx).expr_,
+                                                                  check_next))) {
+          LOG_WARN("failed to check is expr is determined", K(ret));
+        } else if (check_next) {
+          ++idx;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (check_next) {
+        can_adjust = false;
+      } else if (OB_FAIL(new_sort_exprs.push_back(sort_exprs.at(i)))
+                 || OB_FAIL(new_sort_directions.push_back(sort_directions.at(i)))) {
+        LOG_WARN("failed to add prefix expr/direction", K(ret));
+      } else {
+        ++idx;
+      }
+    }
+    if (OB_SUCC(ret) && idx < ordering.count() && can_adjust) {
+      ObSqlBitSet<> added_sort_exprs;
+      for (int64_t i = idx; OB_SUCC(ret) && can_adjust && i < ordering.count(); ++i) {
+        can_adjust = false;
+        for (int64_t j = prefix_count; OB_SUCC(ret) && !can_adjust && j <  sort_exprs.count(); ++j) {
+          if (ObOptimizerUtil::is_expr_equivalent(sort_exprs.at(j), ordering.at(i).expr_, equal_sets)) {
+            can_adjust = true;
+            if (added_sort_exprs.has_member(j)) {
+              /* do nothing */
+            } else if (OB_FAIL(added_sort_exprs.add_member(j))) {
+              LOG_WARN("failed to add bit set", K(ret));
+            } else if (OB_FAIL(new_sort_exprs.push_back(sort_exprs.at(j)))
+                       || OB_FAIL(new_sort_directions.push_back(ordering.at(i).order_type_))) {
+              LOG_WARN("Failed to add prefix expr/direction", K(ret));
+            }
+          }
+        }
+        if (OB_FAIL(ret) || can_adjust) {
+        } else if (OB_FAIL(ObOptimizerUtil::is_const_or_equivalent_expr(ordering, equal_sets,
+                                                                        const_exprs, i, can_adjust))) {
+          LOG_WARN("failed to check is const or equivalent exprs", K(ret));
+        } else if (!can_adjust && OB_FAIL(ObOptimizerUtil::is_expr_is_determined(new_sort_exprs,
+                                                                                fd_item_set,
+                                                                                equal_sets,
+                                                                                const_exprs,
+                                                                                ordering.at(i).expr_,
+                                                                                can_adjust))) {
+          LOG_WARN("failed to check is expr is determined", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && can_adjust) {
+        for (int64_t i = prefix_count; OB_SUCC(ret) && i < sort_exprs.count(); ++i) {
+          if (added_sort_exprs.has_member(i)) {
+            /* do nothing */
+          } else if (OB_FAIL(new_sort_exprs.push_back(sort_exprs.at(i)))
+                     || OB_FAIL(new_sort_directions.push_back(sort_directions.at(i)))) {
+            LOG_WARN("failed to add prefix expr / direction", K(ret));
+          }
+        }
+        LOG_DEBUG("adjusted postfix sort expr ordering", K(new_sort_exprs), K(new_sort_directions));
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(sort_exprs.assign(new_sort_exprs))) {
+            LOG_WARN("assign adjusted exprs failed", K(ret));
+          } else if (OB_FAIL(sort_directions.assign(new_sort_directions))) {
+            LOG_WARN("failed to assign order types", K(ret));
+          }
+        }
       }
     }
   }
@@ -6866,13 +6986,13 @@ int ObLogPlan::adjust_exprs_by_win_func(ObIArray<ObRawExpr *> &exprs,
   if (OB_SUCC(ret) && all_part_used &&
       win_expr.get_order_items().count() > 0 &&
       rest_exprs.count() > 0) {
-    bool input_ordering_used = false;
+    int64_t prefix_count = -1;
     bool input_ordering_all_used = false;
     if (OB_FAIL(ObOptimizerUtil::adjust_exprs_by_ordering(rest_exprs,
                                                           win_expr.get_order_items(),
                                                           equal_sets,
                                                           const_exprs,
-                                                          input_ordering_used,
+                                                          prefix_count,
                                                           input_ordering_all_used,
                                                           rest_order_types))) {
       LOG_WARN("failed to adjust exprs by ordering", K(ret));

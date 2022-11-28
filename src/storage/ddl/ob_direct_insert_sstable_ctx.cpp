@@ -38,7 +38,7 @@ using namespace oceanbase::sql;
 /***************              ObSSTableInsertTabletParam              *****************/
 ObSSTableInsertTabletParam::ObSSTableInsertTabletParam()
   : context_id_(0), ls_id_(), tablet_id_(), table_id_(0), write_major_(false),
-    task_cnt_(0), schema_version_(0), snapshot_version_(0)
+    task_cnt_(0), schema_version_(0), snapshot_version_(0), execution_id_(0), ddl_task_id_(0)
 {
 
 }
@@ -55,7 +55,9 @@ bool ObSSTableInsertTabletParam::is_valid() const
               && tablet_id_.is_valid()
               && table_id_ > 0
               && task_cnt_ >= 0
-              && schema_version_ > 0;
+              && schema_version_ > 0
+              && execution_id_ > 0
+              && ddl_task_id_ > 0;
   return bret;
 }
 
@@ -676,7 +678,8 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(data_sstable_redo_writer_.write_prepare_log(table_key,
                                                                  table_schema->get_table_id(),
-                                                                 build_param_.schema_version_,
+                                                                 build_param_.execution_id_,
+                                                                 build_param_.ddl_task_id_,
                                                                  prepare_log_ts))) {
     LOG_WARN("fail write ddl prepare log", K(ret), K(table_key));
   } else {
@@ -694,7 +697,8 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
     } else if (OB_FAIL(ddl_kv_mgr->ddl_prepare(ddl_start_log_ts,
                                                prepare_log_ts,
                                                table_schema->get_table_id(),
-                                               build_param_.schema_version_))) {
+                                               build_param_.execution_id_,
+                                               build_param_.ddl_task_id_))) {
       LOG_WARN("failed to do ddl kv prepare", K(ret), K(ddl_start_log_ts), K(prepare_log_ts), K(build_param_));
     } else if (OB_FAIL(ddl_kv_mgr->wait_ddl_commit(ddl_start_log_ts, prepare_log_ts))) {
       if (OB_TASK_EXPIRED == ret) {
@@ -722,7 +726,7 @@ int ObSSTableInsertTabletContext::get_table_key(ObITable::TableKey &table_key)
 
 ObSSTableInsertTableParam::ObSSTableInsertTableParam()
   : exec_ctx_(nullptr), context_id_(0), dest_table_id_(OB_INVALID_ID), write_major_(false), schema_version_(0),
-    snapshot_version_(0), task_cnt_(0), ls_tablet_ids_()
+    snapshot_version_(0), task_cnt_(0), execution_id_(0), ddl_task_id_(0), ls_tablet_ids_()
 {
 }
 
@@ -738,6 +742,8 @@ int ObSSTableInsertTableParam::assign(const ObSSTableInsertTableParam &other)
     schema_version_ = other.schema_version_;
     snapshot_version_ = other.snapshot_version_;
     task_cnt_ = other.task_cnt_;
+    execution_id_ = other.execution_id_;
+    ddl_task_id_ = other.ddl_task_id_;
     exec_ctx_ = other.exec_ctx_;
   }
   return ret;
@@ -806,6 +812,8 @@ int ObSSTableInsertTableContext::create_all_tablet_contexts(
         param.table_id_ = param_.dest_table_id_;
         param.write_major_ = param_.write_major_;
         param.task_cnt_ = param_.task_cnt_;
+        param.execution_id_ = param_.execution_id_;
+        param.ddl_task_id_ = param_.ddl_task_id_;
         if (OB_FAIL(tablet_ctx->init(param))) {
           LOG_WARN("init tablet insert sstable context", K(ret));
         } else if (OB_FAIL(tablet_ctx_map_.set_refactored(tablet_id, tablet_ctx))) {

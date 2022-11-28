@@ -29,21 +29,6 @@ using namespace oceanbase::sql;
 
 int ObIndexSSTableBuildTask::process()
 {
-  int ret = ObDDLUtil::retry_with_ddl_schema_hint([this]() -> int { return this->send_build_replica_sql(); });
-  ObTabletID unused_tablet_id;
-  LOG_INFO("build index sstable finish", K(ret), K(*this));
-  ObDDLTaskKey task_key(dest_table_id_, schema_version_);
-  int tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(
-      unused_tablet_id, task_key, snapshot_version_, ret);
-  if (OB_SUCCESS != tmp_ret) {
-    LOG_WARN("report build finish failed", K(ret), K(tmp_ret));
-    ret = OB_SUCCESS == ret ? tmp_ret : ret;
-  }
-  return ret;
-}
-
-int ObIndexSSTableBuildTask::send_build_replica_sql() const
-{
   int ret = OB_SUCCESS;
   ObTraceIdGuard trace_id_guard(trace_id_);
   ObSqlString sql_string;
@@ -77,6 +62,8 @@ int ObIndexSSTableBuildTask::send_build_replica_sql() const
                                                            dest_table_id_,
                                                            table_schema->get_schema_version(),
                                                            snapshot_version_,
+                                                           execution_id_,
+                                                           task_id_,
                                                            parallelism_,
                                                            false/*use_heap_table_ddl*/,
                                                            !table_schema->is_user_hidden_table()/*use_schema_version_hint_for_src_table*/,
@@ -117,6 +104,15 @@ int ObIndexSSTableBuildTask::send_build_replica_sql() const
       LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
     }
   }
+
+  LOG_INFO("build index sstable finish", K(ret), K(*this));
+  ObDDLTaskKey task_key(dest_table_id_, schema_version_);
+  int tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(
+      unused_tablet_id, task_key, snapshot_version_, execution_id_, ret);
+  if (OB_SUCCESS != tmp_ret) {
+    LOG_WARN("report build finish failed", K(ret), K(tmp_ret));
+    ret = OB_SUCCESS == ret ? tmp_ret : ret;
+  }
   return ret;
 }
 
@@ -133,6 +129,7 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
         dest_table_id_,
         schema_version_,
         snapshot_version_,
+        execution_id_,
         trace_id_,
         parallelism_,
         create_index_arg_,
@@ -146,7 +143,8 @@ ObIndexBuildTask::ObIndexBuildTask()
   : ObDDLTask(ObDDLType::DDL_CREATE_INDEX), index_table_id_(target_object_id_),
     is_unique_index_(false), is_global_index_(false), root_service_(nullptr), snapshot_held_(false),
     is_sstable_complete_task_submitted_(false), sstable_complete_request_time_(0), sstable_complete_ts_(0),
-    check_unique_snapshot_(0), complete_sstable_job_ret_code_(INT64_MAX), create_index_arg_()
+    check_unique_snapshot_(0), complete_sstable_job_ret_code_(INT64_MAX),
+    redefinition_execution_id_(0), create_index_arg_()
 {
 
 }
@@ -578,6 +576,7 @@ int ObIndexBuildTask::send_build_single_replica_request()
         target_object_id_,
         schema_version_,
         snapshot_version_,
+        redefinition_execution_id_,
         trace_id_,
         parallelism_,
         &create_index_arg_,
@@ -639,6 +638,7 @@ int ObIndexBuildTask::wait_data_complement()
 
   // submit a job to complete sstable for the index table on snapshot_version
   if (OB_SUCC(ret) && !state_finished && !is_sstable_complete_task_submitted_) {
+    redefinition_execution_id_ = ObTimeUtility::current_time();
     if (OB_FAIL(send_build_single_replica_request())) {
       LOG_WARN("fail to send build single replica request", K(ret));
     }
@@ -657,15 +657,13 @@ int ObIndexBuildTask::wait_data_complement()
   if (OB_SUCC(ret) && state_finished) {
     uint64_t execution_id = OB_INVALID_ID;
     bool dummy_equal = false;
-    if (OB_FAIL(get_execution_id(execution_id))) {
-      LOG_WARN("fail to query execution id", K(ret), K(index_table_id_));
-    } else if (OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
-            tenant_id_, execution_id, object_id_, index_table_id_, dummy_equal, root_service_->get_sql_proxy()))) {
+    if (OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
+            tenant_id_, redefinition_execution_id_, object_id_, index_table_id_, task_id_, dummy_equal, root_service_->get_sql_proxy()))) {
       if (OB_ITER_END != ret) {
-        LOG_ERROR("fail to check column checksum", K(ret), K(index_table_id_), K(object_id_));
+        LOG_WARN("fail to check column checksum", K(ret), K(index_table_id_), K(object_id_), K(task_id_));
         state_finished = true;
       } else if (REACH_TIME_INTERVAL(1000L * 1000L)) {
-        LOG_INFO("index checksum has not been reported", K(ret), K(index_table_id_), K(object_id_));
+        LOG_INFO("index checksum has not been reported", K(ret), K(index_table_id_), K(object_id_), K(task_id_));
       }
     }
   }
@@ -673,19 +671,6 @@ int ObIndexBuildTask::wait_data_complement()
   if (state_finished || OB_FAIL(ret)) {
     (void)switch_status(ObDDLTaskStatus::VALIDATE_CHECKSUM, ret);
     LOG_INFO("wait data complement finished", K(ret), K(*this));
-  }
-  return ret;
-}
-
-int ObIndexBuildTask::get_execution_id(uint64_t &execution_id)
-{
-  int ret = OB_SUCCESS;
-  execution_id = OB_INVALID_ID;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    execution_id = schema_version_;
   }
   return ret;
 }
@@ -776,12 +761,8 @@ int ObIndexBuildTask::verify_checksum()
     static int64_t checksum_wait_timeout = max(GCONF.global_index_build_single_replica_timeout / 50, 3600L * 1000L * 1000L);
     bool is_column_checksum_ready = false;
     bool dummy_equal = false;
-    uint64_t execution_id = OB_INVALID_ID;
-    int64_t pos = 0;
-    if (OB_FAIL(get_execution_id(execution_id))) {
-      LOG_WARN("get execution id failed", K(ret), K(index_table_id_));
-    } else if (!wait_column_checksum_ctx_.is_inited() && OB_FAIL(wait_column_checksum_ctx_.init(
-            task_id_, tenant_id_, object_id_, index_table_id_, schema_version_, check_unique_snapshot_, execution_id, checksum_wait_timeout))) {
+    if (!wait_column_checksum_ctx_.is_inited() && OB_FAIL(wait_column_checksum_ctx_.init(
+            task_id_, tenant_id_, object_id_, index_table_id_, schema_version_, check_unique_snapshot_, redefinition_execution_id_, checksum_wait_timeout))) {
       LOG_WARN("init context of wait column checksum failed", K(ret), K(object_id_), K(index_table_id_));
     } else {
       if (OB_FAIL(wait_column_checksum_ctx_.try_wait(is_column_checksum_ready))) {
@@ -794,7 +775,7 @@ int ObIndexBuildTask::verify_checksum()
       // do nothing
     } else {
       if (OB_FAIL(ObDDLChecksumOperator::check_column_checksum(
-              tenant_id_, execution_id, object_id_, index_table_id_, dummy_equal, root_service_->get_sql_proxy()))) {
+              tenant_id_, redefinition_execution_id_, object_id_, index_table_id_, task_id_, dummy_equal, root_service_->get_sql_proxy()))) {
         if (OB_CHECKSUM_ERROR == ret && is_unique_index_) {
           ret = OB_ERR_DUPLICATED_UNIQUE_KEY;
         }
@@ -836,6 +817,7 @@ int ObIndexBuildTask::update_column_checksum_calc_status(
 int ObIndexBuildTask::update_complete_sstable_job_status(
     const common::ObTabletID &tablet_id,
     const int64_t snapshot_version,
+    const int64_t execution_id,
     const int ret_code)
 {
   int ret = OB_SUCCESS;
@@ -851,6 +833,8 @@ int ObIndexBuildTask::update_complete_sstable_job_status(
   } else if (snapshot_version != snapshot_version_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
+  } else if (execution_id != redefinition_execution_id_) {
+    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(redefinition_execution_id_));
   } else {
     complete_sstable_job_ret_code_ = ret_code;
     sstable_complete_ts_ = ObTimeUtility::current_time();

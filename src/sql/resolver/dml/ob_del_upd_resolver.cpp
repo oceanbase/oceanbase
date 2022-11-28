@@ -1628,6 +1628,7 @@ bool ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema, int64
           table_schema.get_foreign_key_infos().count() > 0 ||
           table_schema.get_trigger_list().count() > 0 ||
           table_schema.has_check_constraint() ||
+          table_schema.has_generated_and_partkey_column() ||
           binlog_row_image == ObBinlogRowImage::FULL);
 }
 

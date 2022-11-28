@@ -589,13 +589,9 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
   int ret = OB_SUCCESS;
   auto cl = plan_ctx->get_consistency_level();
   auto &snapshot = das_ctx.get_snapshot();
-  palf::SCN snapshot_version;
-  if (session->get_read_snapshot_version() > 0) {
-    if (OB_FAIL(snapshot_version.convert_for_lsn_allocator(session->get_read_snapshot_version()))) {
-      TRANS_LOG(WARN, "convert for lsn fail", K(session->get_read_snapshot_version()));
-    }
-    snapshot.init_special_read(snapshot_version);
-  } else if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
+  if ((cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN)
+             && !plan->is_contain_inner_table()) {
+    palf::SCN snapshot_version;
     if (OB_FAIL(txs->get_weak_read_snapshot_version(snapshot_version))) {
       TRANS_LOG(WARN, "get weak read snapshot fail", KPC(txs));
     } else {

@@ -84,6 +84,7 @@ ObDMLResolver::ObDMLResolver(ObResolverParams &params)
       with_clause_without_record_(false),
       is_prepare_stage_(params.is_prepare_stage_),
       in_pl_(params.secondary_namespace_ || params.is_dynamic_sql_ || params.is_dbms_sql_),
+      resolve_alias_for_subquery_(true),
       current_view_level_(0),
       view_ref_id_(OB_INVALID_ID),
       is_resolving_view_(false),
@@ -7645,7 +7646,6 @@ int ObDMLResolver::check_oracle_outer_join_condition(const ObRawExpr *expr)
   return ret;
 }
 
-// bugfix: https://workitem.aone.alibaba-inc.com/req/37137663
 // in some cases, oracle_outer_join is allowed in IN/OR
 int ObDMLResolver::check_oracle_outer_join_in_or_validity(const ObRawExpr *expr,
                                                           ObIArray<uint64_t> &right_tables)
@@ -9410,7 +9410,9 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
   switch (hint_node.type_) {
     case T_INDEX_HINT:
     case T_NO_INDEX_HINT:
-    case T_FULL_HINT: {
+    case T_FULL_HINT:
+    case T_USE_DAS_HINT:
+    case T_NO_USE_DAS_HINT: {
       if (OB_FAIL(resolve_index_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve index hint", K(ret));
       }
@@ -9555,11 +9557,11 @@ int ObDMLResolver::resolve_index_hint(const ParseNode &index_node,
     LOG_WARN("Failed to resolve qb name node", K(ret));
   } else if (OB_FAIL(resolve_table_relation_in_hint(*table_node, index_hint->get_table()))) {
     LOG_WARN("Resolve table relation fail", K(ret));
-  } else if (T_FULL_HINT == index_hint->get_hint_type()) {
+  } else if (T_FULL_HINT == index_hint->get_hint_type() ||
+             T_USE_DAS_HINT == index_hint->get_hint_type()) {
     index_hint->set_qb_name(qb_name);
     opt_hint = index_hint;
-  } else if (OB_UNLIKELY(!index_hint->is_access_path_hint()) ||
-             OB_UNLIKELY(3 != index_node.num_child_) ||
+  } else if (OB_UNLIKELY(3 != index_node.num_child_) ||
              OB_ISNULL(index_name_node = index_node.children_[2])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected index hint", K(ret), K(index_node.type_), K(index_node.num_child_),
@@ -9732,35 +9734,40 @@ int ObDMLResolver::resolve_pq_distribute_hint(const ParseNode &hint_node,
   int ret = OB_SUCCESS;
   opt_hint = NULL;
   if (OB_UNLIKELY(4 != hint_node.num_child_)
-      || OB_ISNULL(hint_node.children_[1])
-      || OB_ISNULL(hint_node.children_[2])
-      || OB_ISNULL(hint_node.children_[3])) {
+      || OB_ISNULL(hint_node.children_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected PQ Distribute hint node", K(ret), K(hint_node.num_child_));
   } else {
-    ObItemType outer = hint_node.children_[2]->type_;
-    ObItemType inner = hint_node.children_[3]->type_;
     DistAlgo dist_algo = DistAlgo::DIST_INVALID_METHOD;
-    if (T_DISTRIBUTE_HASH == outer && T_DISTRIBUTE_HASH == inner) {
-      dist_algo = DistAlgo::DIST_HASH_HASH;
-    } else if (T_DISTRIBUTE_BROADCAST == outer && T_DISTRIBUTE_NONE == inner) {
-      dist_algo = DistAlgo::DIST_BROADCAST_NONE;
-    } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_BROADCAST == inner) {
-      dist_algo = DistAlgo::DIST_NONE_BROADCAST;
-    } else if (T_DISTRIBUTE_PARTITION == outer && T_DISTRIBUTE_NONE == inner) {
-      dist_algo = DistAlgo::DIST_PARTITION_NONE;
-    } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_PARTITION == inner) {
-      dist_algo = DistAlgo::DIST_NONE_PARTITION;
-    } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_NONE == inner) {
-      dist_algo = DistAlgo::DIST_PARTITION_WISE;
-    } else if (T_DISTRIBUTE_LOCAL == outer && T_DISTRIBUTE_LOCAL == inner) {
-      dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
-    } else if (T_DISTRIBUTE_BC2HOST == outer && T_DISTRIBUTE_NONE == inner) {
-      dist_algo = DistAlgo::DIST_BC2HOST_NONE;
-    } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_ALL == inner) {
-      dist_algo = DistAlgo::DIST_NONE_ALL;
-    } else if (T_DISTRIBUTE_ALL == outer && T_DISTRIBUTE_NONE == inner) {
-      dist_algo = DistAlgo::DIST_ALL_NONE;
+    if (OB_ISNULL(hint_node.children_[2]) && OB_ISNULL(hint_node.children_[3])) {
+      dist_algo = DistAlgo::DIST_BASIC_METHOD;
+    } else if (OB_ISNULL(hint_node.children_[2]) || OB_ISNULL(hint_node.children_[3])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected PQ Distribute null child", K(ret), K(hint_node.children_[2]), K(hint_node.children_[2]));
+    } else {
+      ObItemType outer = hint_node.children_[2]->type_;
+      ObItemType inner = hint_node.children_[3]->type_;
+      if (T_DISTRIBUTE_HASH == outer && T_DISTRIBUTE_HASH == inner) {
+        dist_algo = DistAlgo::DIST_HASH_HASH;
+      } else if (T_DISTRIBUTE_BROADCAST == outer && T_DISTRIBUTE_NONE == inner) {
+        dist_algo = DistAlgo::DIST_BROADCAST_NONE;
+      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_BROADCAST == inner) {
+        dist_algo = DistAlgo::DIST_NONE_BROADCAST;
+      } else if (T_DISTRIBUTE_PARTITION == outer && T_DISTRIBUTE_NONE == inner) {
+        dist_algo = DistAlgo::DIST_PARTITION_NONE;
+      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_PARTITION == inner) {
+        dist_algo = DistAlgo::DIST_NONE_PARTITION;
+      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_NONE == inner) {
+        dist_algo = DistAlgo::DIST_PARTITION_WISE;
+      } else if (T_DISTRIBUTE_LOCAL == outer && T_DISTRIBUTE_LOCAL == inner) {
+        dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
+      } else if (T_DISTRIBUTE_BC2HOST == outer && T_DISTRIBUTE_NONE == inner) {
+        dist_algo = DistAlgo::DIST_BC2HOST_NONE;
+      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_ALL == inner) {
+        dist_algo = DistAlgo::DIST_NONE_ALL;
+      } else if (T_DISTRIBUTE_ALL == outer && T_DISTRIBUTE_NONE == inner) {
+        dist_algo = DistAlgo::DIST_ALL_NONE;
+      }
     }
 
     if (DistAlgo::DIST_INVALID_METHOD != dist_algo) {
@@ -9788,21 +9795,22 @@ int ObDMLResolver::resolve_pq_set_hint(const ParseNode &hint_node,
 {
   int ret = OB_SUCCESS;
   opt_hint = NULL;
-  const ParseNode *dist_methods_node = NULL;
   ObSEArray<ObItemType, 2> dist_methods;
   ObString qb_name;
+  ObString left_branch;
   ObPQSetHint *pq_dis_hint = NULL;
   int64_t random_none_idx = OB_INVALID_INDEX;
-  if (OB_UNLIKELY(2 != hint_node.num_child_)
-      || OB_ISNULL(dist_methods_node = hint_node.children_[1])
-      || OB_UNLIKELY(T_DISTRIBUTE_METHOD_LIST != dist_methods_node->type_)) {
+  bool is_valid = false;
+  if (OB_UNLIKELY(3 != hint_node.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected pq_set hint node", K(ret), K(hint_node.num_child_), K(dist_methods_node));
+    LOG_WARN("unexpected pq_set hint node", K(ret), K(hint_node.num_child_));
   } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
     LOG_WARN("failed to resolve query block name", K(ret));
-  } else if (OB_FAIL(get_valid_dist_methods(*dist_methods_node, dist_methods))) {
+  } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[1], left_branch))) {
+    LOG_WARN("failed to resolve query block name", K(ret));
+  } else if (OB_FAIL(get_valid_dist_methods(hint_node.children_[2], dist_methods, is_valid))) {
     LOG_WARN("failed to get valid dist methods", K(ret));
-  } else if (dist_methods.empty()) {
+  } else if (!is_valid) {
     /* do nothing */
   } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, pq_dis_hint))) {
     LOG_WARN("failed to create hint", K(ret));
@@ -9810,26 +9818,40 @@ int ObDMLResolver::resolve_pq_set_hint(const ParseNode &hint_node,
     LOG_WARN("failed to assign dist methods", K(ret));
   } else {
     pq_dis_hint->set_qb_name(qb_name);
+    pq_dis_hint->set_left_branch(left_branch);
     opt_hint = pq_dis_hint;
   }
   return ret;
 }
 
-int ObDMLResolver::get_valid_dist_methods(const ParseNode &dist_methods_node,
-                                          ObIArray<ObItemType> &dist_methods)
+int ObDMLResolver::get_valid_dist_methods(const ParseNode *dist_methods_node,
+                                          ObIArray<ObItemType> &dist_methods,
+                                          bool &is_valid)
 {
   int ret = OB_SUCCESS;
   dist_methods.reuse();
-  for (int64_t i = 0; OB_SUCC(ret) && i < dist_methods_node.num_child_; ++i) {
-    if (OB_ISNULL(dist_methods_node.children_[i])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(i));
-    } else if (OB_FAIL(dist_methods.push_back(dist_methods_node.children_[i]->type_))) {
-      LOG_WARN("failed to push back", K(ret));
+  is_valid = false;
+  if (OB_ISNULL(dist_methods_node)) {
+    is_valid = true;
+  } else if (OB_UNLIKELY(T_DISTRIBUTE_METHOD_LIST != dist_methods_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected pq_set hint node", K(ret), K(get_type_name(dist_methods_node->type_)));
+  } else if (OB_UNLIKELY(2 > dist_methods_node->num_child_)) {
+    /* do nothing */
+  } else {
+    is_valid = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < dist_methods_node->num_child_; ++i) {
+      if (OB_ISNULL(dist_methods_node->children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(i));
+      } else if (OB_FAIL(dist_methods.push_back(dist_methods_node->children_[i]->type_))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
     }
-  }
-  if (OB_SUCC(ret) && !ObPQSetHint::is_valid_dist_methods(dist_methods)) {
-    dist_methods.reuse();
+    if (OB_SUCC(ret) && !ObPQSetHint::is_valid_dist_methods(dist_methods)) {
+      dist_methods.reuse();
+      is_valid = false;
+    }
   }
   return ret;
 }

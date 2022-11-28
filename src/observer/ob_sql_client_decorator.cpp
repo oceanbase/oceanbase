@@ -98,7 +98,6 @@ int ObSQLClientRetryWeak::weak_read(ReadResult &res, const uint64_t tenant_id, c
   sqlclient::ObISQLConnection *conn = NULL;
   int64_t old_read_consistency = 0;
   ObString ob_read_consistency = ObString::make_string("ob_read_consistency");
-  ObString read_snapshot_version_name= ObString::make_string("ob_read_snapshot_version");
   ObString tx_isolation = ObString::make_string("tx_isolation");
   int64_t old_tx_isolation = 0;
   int64_t read_committed = 1; // ObTransIsolation::READ_COMMITTED
@@ -117,9 +116,6 @@ int ObSQLClientRetryWeak::weak_read(ReadResult &res, const uint64_t tenant_id, c
   // Mandatory set to READ-COMMITTED isolation level
   else if (OB_FAIL(conn->set_session_variable(tx_isolation, read_committed))) {
     LOG_WARN("failed to set session variable ob_read_consistency", K(ret));
-  } else if (snapshot_timestamp_ > 0 &&
-             OB_FAIL(conn->set_session_variable(read_snapshot_version_name, snapshot_timestamp_))) {
-    LOG_WARN("failed to set session variable ob_read_snapshot_version", K(ret), K_(snapshot_timestamp));
   } else {
 
     if (check_sys_variable_) {
@@ -146,13 +142,6 @@ int ObSQLClientRetryWeak::weak_read(ReadResult &res, const uint64_t tenant_id, c
     tmp_ret = conn->set_session_variable(tx_isolation, old_tx_isolation);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("failed to set session variable tx_isolation", K(ret), K(old_tx_isolation));
-    }
-    ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-
-    // reset ob_read_snapshot_version
-    tmp_ret = conn->set_session_variable(read_snapshot_version_name, OB_INVALID_VERSION);
-    if (OB_SUCCESS != tmp_ret) {
-      LOG_WARN("failed to set session variable ob_read_snapshot_version", K(ret));
     }
     ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
 

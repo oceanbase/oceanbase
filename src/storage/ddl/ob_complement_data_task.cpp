@@ -113,6 +113,7 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
     dest_tablet_id_ = arg.dest_tablet_id_;
     schema_version_ = arg.schema_version_;
     task_id_ = arg.task_id_;
+    execution_id_ = arg.execution_id_;
     FLOG_INFO("succeed to init ObComplementDataParam", K(ret), K(is_inited_), K(tenant_id_), K(ls_id_),
       K(source_tablet_id_), K(dest_tablet_id_), K(schema_version_), K(task_id_), K(arg), K(concurrent_cnt_));
   }
@@ -439,6 +440,7 @@ int ObComplementDataDag::report_replica_build_status()
     arg.snapshot_version_ = param_.snapshot_version_;
     arg.schema_version_ = param_.schema_version_;
     arg.task_id_ = param_.task_id_;
+    arg.execution_id_ = param_.execution_id_;
     FLOG_INFO("send replica build status response to RS", K(ret), K(context_.complement_data_ret_), K(arg));
     if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
       ret = OB_ERR_SYS;
@@ -1029,11 +1031,12 @@ int ObComplementWriteTask::append_row(ObLocalScan &local_scan)
       LOG_WARN("fail to get origin table columns checksum", K(ret));
     } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(param_->data_table_schema_->get_tenant_id(),
                                                               param_->data_table_schema_->get_table_id() /* data_table_id */,
-                                                              param_->source_tablet_id_.id(),
+                                                              param_->task_id_,
                                                               report_col_checksums,
                                                               report_col_ids,
-                                                              param_->schema_version_,
-                                                              task_id_, *GCTX.sql_proxy_))) {
+                                                              1/*execution_id*/,
+                                                              param_->source_tablet_id_.id()/*task_id*/,
+                                                              *GCTX.sql_proxy_))) {
       LOG_WARN("fail to report origin table checksum", K(ret));
     } else {/* do nothing. */}
   }
@@ -1137,7 +1140,8 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_prepare_log(hidden_table_key,
                                                                            param_->hidden_table_schema_->get_table_id(),
-                                                                           param_->schema_version_,
+                                                                           1/*execution_id*/,
+                                                                           param_->task_id_,
                                                                            prepare_log_ts))) {
     LOG_WARN("fail write ddl prepare log", K(ret), K(hidden_table_key));
   } else {
@@ -1151,8 +1155,9 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
     } else if (OB_FAIL(ddl_kv_mgr->ddl_prepare(ddl_start_log_ts,
                                                prepare_log_ts,
                                                param_->hidden_table_schema_->get_table_id(),
-                                               param_->schema_version_))) {
-      LOG_WARN("commit ddl log failed", K(ret), K(ddl_start_log_ts), K(prepare_log_ts), K(hidden_table_key));
+                                               1/*execution_id*/,
+                                               param_->task_id_))) {
+      LOG_WARN("prepare ddl log failed", K(ret), K(ddl_start_log_ts), K(prepare_log_ts), K(hidden_table_key));
     } else if (OB_FAIL(ddl_kv_mgr->wait_ddl_commit(ddl_start_log_ts, prepare_log_ts))) {
       if (OB_TASK_EXPIRED == ret) {
         ret = OB_SUCCESS;

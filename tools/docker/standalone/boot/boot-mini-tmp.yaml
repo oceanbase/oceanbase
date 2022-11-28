@@ -20,7 +20,6 @@ oceanbase-ce:
     sys_bkgd_migration_retry_num: 3
     minor_freeze_times: 100
     enable_separate_sys_clog: 0
-    enable_merge_by_turn: FALSE
     enable_auto_leader_switch: FALSE
     enable_one_phase_commit: FALSE
     weak_read_version_refresh_interval: 5s

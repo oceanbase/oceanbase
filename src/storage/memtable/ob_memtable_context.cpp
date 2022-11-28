@@ -64,6 +64,9 @@ ObMemtableCtx::ObMemtableCtx()
       is_master_(true),
       read_elr_data_(false),
       lock_mem_ctx_(ctx_cb_allocator_),
+#ifdef ENABLE_DEBUG_LOG
+      defensive_check_mgr_(NULL),
+#endif
       is_inited_(false)
 {
 }
@@ -91,6 +94,8 @@ int ObMemtableCtx::init(const uint64_t tenant_id)
     } else if (OB_FAIL(reset_log_generator_())) {
       TRANS_LOG(ERROR, "fail to reset log generator", K(ret));
 #ifdef ENABLE_DEBUG_LOG
+    } else if (!GCONF.enable_defensive_check()) {
+      // do nothing
     } else if (NULL == (defensive_check_mgr_ = op_alloc(ObDefensiveCheckMgr))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(ERROR, "memory alloc failed", K(ret), KP(defensive_check_mgr_));
@@ -100,6 +105,9 @@ int ObMemtableCtx::init(const uint64_t tenant_id)
       defensive_check_mgr_ = NULL;
 #endif
     } else {
+      // do nothing
+    }
+    if (OB_SUCC(ret)) {
       is_inited_ = true;
     }
   }

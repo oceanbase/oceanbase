@@ -61,7 +61,6 @@ PalfHandleImpl::PalfHandleImpl()
     last_record_append_lsn_(PALF_INITIAL_LSN_VAL),
     has_set_deleted_(false),
     palf_env_impl_(NULL),
-    diskspace_enough_(true),
     append_cost_stat_("[PALF STAT WRITE LOG]", 2 * 1000 * 1000),
     flush_cb_cost_stat_("[PALF STAT FLUSH CB]", 2 * 1000 * 1000),
     replica_meta_lock_(),
@@ -195,7 +194,6 @@ void PalfHandleImpl::destroy()
   if (IS_INIT) {
     PALF_EVENT("PalfHandleImpl destroy", palf_id_, KPC(this));
     is_inited_ = false;
-    diskspace_enough_ = true;
     lc_cb_ = NULL;
     self_.reset();
     palf_id_ = INVALID_PALF_ID;
@@ -370,7 +368,7 @@ int PalfHandleImpl::submit_log(
     PALF_LOG(WARN, "invalid argument", K(ret), K_(palf_id), KP(buf), K(buf_len), K(ref_scn));
   } else {
     RLockGuard guard(lock_);
-    if (false == diskspace_enough_) {
+    if (false == palf_env_impl_->check_disk_space_enough()) {
       ret = OB_LOG_OUTOF_DISK_SPACE;
       if (palf_reach_time_interval(1 * 1000 * 1000, log_disk_full_warn_time_)) {
         PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(opts), K(ref_scn));
@@ -2425,7 +2423,7 @@ int PalfHandleImpl::receive_log(const common::ObAddr &server,
   } else {
     // rdlock
     RLockGuard guard(lock_);
-    if (false == diskspace_enough_) {
+    if (false == palf_env_impl_->check_disk_space_enough()) {
       ret = OB_LOG_OUTOF_DISK_SPACE;
       if (palf_reach_time_interval(1 * 1000 * 1000, log_disk_full_warn_time_)) {
         PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(server), K(push_log_type), K(lsn));
@@ -2509,7 +2507,7 @@ int PalfHandleImpl::submit_group_log(const PalfAppendOptions &opts,
     while (true) {
       do {
         RLockGuard guard(lock_);
-        if (false == diskspace_enough_) {
+        if (false == palf_env_impl_->check_disk_space_enough()) {
           ret = OB_LOG_OUTOF_DISK_SPACE;
           if (palf_reach_time_interval(1 * 1000 * 1000, log_disk_full_warn_time_)) {
             PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(opts), K(lsn));
@@ -3452,12 +3450,6 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     PALF_LOG(INFO, "PalfHandleImpl stat", K(palf_stat));
   }
   return ret;
-}
-
-void PalfHandleImpl::set_diskspace_enough(const bool diskspace_enough)
-{
-  WLockGuard guard(lock_);
-  diskspace_enough_ = diskspace_enough;
 }
 
 } // end namespace palf

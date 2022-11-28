@@ -4528,12 +4528,15 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
     ObSimpleTableSchemaV2 *table_schema = NULL;
     // It is expected that OB_HASH_EXIST should not appear in the rebuild process
     int over_write = 0;
+    int tmp_ret = OB_SUCCESS;
+    ObSimpleTableSchemaV2 *exist_schema = NULL;
 
     for (ConstTableIterator iter = table_infos_.begin();
         iter != table_infos_.end() && OB_SUCC(ret);
         ++iter) {
       table_schema = *iter;
-      LOG_INFO("table_info is", "table_id", table_schema->get_table_id());
+      exist_schema = NULL;
+      LOG_TRACE("table_info is", "table_id", table_schema->get_table_id());
 
       if (OB_ISNULL(table_schema) || !table_schema->is_valid()) {
         ret = OB_ERR_UNEXPECTED;
@@ -4556,7 +4559,14 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
                                                            over_write);
           if (OB_SUCCESS != hash_ret) {
             ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-            LOG_ERROR("build hidden table name hashmap failed", K(ret), K(hash_ret),
+            tmp_ret = hidden_table_name_map_.get_refactored(table_name_wrapper, exist_schema);
+            LOG_ERROR("build hidden table name hashmap failed",
+                      KR(ret), KR(hash_ret), K(tmp_ret),
+                      "exist_table_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_id() : OB_INVALID_ID,
+                      "exist_database_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_database_id() : OB_INVALID_ID,
+                      "exist_session_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_session_id() : OB_INVALID_ID,
+                      "exist_name_case_mode", OB_NOT_NULL(exist_schema) ? exist_schema->get_name_case_mode() : OB_NAME_CASE_INVALID,
+                      "exist_table_name", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_name() : "",
                       "table_id", table_schema->get_table_id(),
                       "databse_id", table_schema->get_database_id(),
                       "session_id", table_schema->get_session_id(),
@@ -4568,9 +4578,9 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
           if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
             LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
           } else if (table_schema->is_index_table()) {
-            LOG_INFO("index is", "table_id", table_schema->get_table_id(),
-                     "database_id", table_schema->get_database_id(),
-                     "table_name", table_schema->get_table_name_str());
+            LOG_TRACE("index is", "table_id", table_schema->get_table_id(),
+                      "database_id", table_schema->get_database_id(),
+                      "table_name", table_schema->get_table_name_str());
             // oracle mode and index is not in recyclebin
             if (table_schema->is_in_recyclebin()) {
               ObIndexSchemaHashWrapper index_name_wrapper(table_schema->get_tenant_id(),
@@ -4580,7 +4590,12 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
               hash_ret = index_name_map_.set_refactored(index_name_wrapper, table_schema, over_write);
               if (OB_SUCCESS != hash_ret) {
                 ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-                LOG_ERROR("build index name hashmap failed", K(ret), K(hash_ret),
+                tmp_ret = index_name_map_.get_refactored(index_name_wrapper, exist_schema);
+                LOG_ERROR("build index name hashmap failed",
+                          KR(ret), KR(hash_ret), K(tmp_ret),
+                          "exist_table_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_id() : OB_INVALID_ID,
+                          "exist_database_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_database_id() : OB_INVALID_ID,
+                          "index_name",  OB_NOT_NULL(exist_schema) ? exist_schema->get_table_name() : "",
                           "table_id", table_schema->get_table_id(),
                           "databse_id", table_schema->get_database_id(),
                           "index_name", table_schema->get_table_name());
@@ -4596,7 +4611,12 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
                 hash_ret = index_name_map_.set_refactored(cutted_index_name_wrapper, table_schema, over_write);
                 if (OB_SUCCESS != hash_ret) {
                   ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-                  LOG_ERROR("build index name hashmap failed", K(ret), K(hash_ret),
+                  tmp_ret = index_name_map_.get_refactored(cutted_index_name_wrapper, exist_schema);
+                  LOG_ERROR("build index name hashmap failed",
+                            KR(ret), KR(hash_ret), K(tmp_ret),
+                            "exist_table_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_id() : OB_INVALID_ID,
+                            "exist_database_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_database_id() : OB_INVALID_ID,
+                            "index_name",  OB_NOT_NULL(exist_schema) ? exist_schema->get_origin_index_name_str() : "",
                             "table_id", table_schema->get_table_id(),
                             "databse_id", table_schema->get_database_id(),
                             "index_name", table_schema->get_origin_index_name_str());
@@ -4604,16 +4624,21 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
               }
             }
           } else if (table_schema->is_aux_vp_table()) {
-            LOG_INFO("aux_vp is", "table_id", table_schema->get_table_id(),
-                     "database_id", table_schema->get_database_id(),
-                     "table_name", table_schema->get_table_name_str());
+            LOG_TRACE("aux_vp is", "table_id", table_schema->get_table_id(),
+                      "database_id", table_schema->get_database_id(),
+                      "table_name", table_schema->get_table_name_str());
             ObAuxVPSchemaHashWrapper aux_vp_name_wrapper(table_schema->get_tenant_id(),
                                                          table_schema->get_database_id(),
                                                          table_schema->get_table_name_str());
             hash_ret = aux_vp_name_map_.set_refactored(aux_vp_name_wrapper, table_schema, over_write);
             if (OB_SUCCESS != hash_ret) {
               ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-              LOG_ERROR("build aux vp name hashmap failed", K(ret), K(hash_ret),
+              tmp_ret = aux_vp_name_map_.get_refactored(aux_vp_name_wrapper, exist_schema);
+              LOG_ERROR("build aux vp name hashmap failed",
+                        KR(ret), KR(hash_ret), K(tmp_ret),
+                        "exist_table_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_id() : OB_INVALID_ID,
+                        "exist_database_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_database_id() : OB_INVALID_ID,
+                        "index_name",  OB_NOT_NULL(exist_schema) ? exist_schema->get_table_name() : "",
                         "table_id", table_schema->get_table_id(),
                         "databse_id", table_schema->get_database_id(),
                         "aux_vp_name", table_schema->get_table_name());
@@ -4621,8 +4646,8 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
           } else if (table_schema->is_aux_lob_table()) {
             // do nothing
           } else {
-            LOG_INFO("table is", "table_id", table_schema->get_table_id(),
-                     "database_id", table_schema->get_database_id(),
+            LOG_TRACE("table is", "table_id", table_schema->get_table_id(),
+                      "database_id", table_schema->get_database_id(),
                      "table_name", table_schema->get_table_name_str());
             ObTableSchemaHashWrapper table_name_wrapper(table_schema->get_tenant_id(),
                                                         table_schema->get_database_id(),
@@ -4632,7 +4657,14 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
             hash_ret = table_name_map_.set_refactored(table_name_wrapper, table_schema, over_write);
             if (OB_SUCCESS != hash_ret) {
               ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
-              LOG_ERROR("build table name hashmap failed", K(ret), K(hash_ret),
+              tmp_ret = table_name_map_.get_refactored(table_name_wrapper, exist_schema);
+              LOG_ERROR("build table name hashmap failed",
+                        K(ret), K(hash_ret), K(tmp_ret),
+                        "exist_table_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_id() : OB_INVALID_ID,
+                        "exist_database_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_database_id() : OB_INVALID_ID,
+                        "exist_session_id", OB_NOT_NULL(exist_schema) ? exist_schema->get_session_id() : OB_INVALID_ID,
+                        "exist_name_case_mode", OB_NOT_NULL(exist_schema) ? exist_schema->get_name_case_mode() : OB_NAME_CASE_INVALID,
+                        "exist_table_name", OB_NOT_NULL(exist_schema) ? exist_schema->get_table_name() : "",
                         "table_id", table_schema->get_table_id(),
                         "databse_id", table_schema->get_database_id(),
                         "session_id", table_schema->get_session_id(),

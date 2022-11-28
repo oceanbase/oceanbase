@@ -462,8 +462,8 @@ int ObReqTransport::post_session(easy_session_t *s) const
 easy_addr_t ObReqTransport::to_ez_addr(const ObAddr &addr) const
 {
   easy_addr_t ez;
+  memset(&ez, 0, sizeof (ez));
   if (addr.is_valid()) {
-    memset(&ez, 0, sizeof (ez));
     ez.port   = (htons)(static_cast<uint16_t>(addr.get_port()));
     ez.cidx   = 0;
     if (addr.using_ipv4()) {

@@ -3,12 +3,6 @@ cmake_minimum_required(VERSION 3.20)
 include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
-#project(OceanBase
-#  VERSION 4.0.0.0
-#  DESCRIPTION "OceanBase distributed database system"
-#  HOMEPAGE_URL "http://oceanbase.alipay.com"
-#  LANGUAGES CXX C ASM)
-
 project("OceanBase_CE"
   VERSION 4.0.0.0
   DESCRIPTION "OceanBase distributed database system"

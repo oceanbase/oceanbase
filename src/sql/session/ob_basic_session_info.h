@@ -1191,10 +1191,6 @@ public:
 
   bool is_server_status_in_transaction() const;
 
-  int64_t get_read_snapshot_version() { return read_snapshot_version_; }
-  void set_read_snapshot_version(int64_t read_snapshot_version) { read_snapshot_version_ = read_snapshot_version; }
-  bool has_valid_read_snapshot_version() const { return read_snapshot_version_ > 0; }
-
   void set_has_exec_write_stmt(bool value) { trans_flags_.set_has_exec_write_stmt(value); }
   void set_has_set_trans_var(bool value) { trans_flags_.set_has_set_trans_var(value); }
   void set_has_any_dml_succ(bool value) { trans_flags_.set_has_any_dml_succ(value); }
@@ -1881,8 +1877,7 @@ private:
 protected:
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxExecResult tx_result_; // TODO: move to QueryCtx/ExecCtx
-  // 指定快照读版本
-  int64_t read_snapshot_version_;
+  palf::SCN unused_read_snapshot_version_;//serialize compatibility preserved
   transaction::ObXATransID xid_;
   bool associated_xa_; // session joined distr-xa-trans by xa-start
 public:

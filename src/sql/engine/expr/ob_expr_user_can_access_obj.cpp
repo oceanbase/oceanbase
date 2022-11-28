@@ -202,9 +202,9 @@ int ObExprUserCanAccessObj::build_real_obj_type_for_sym(
             if (package_id != OB_INVALID_ID) {
               obj_type = static_cast<uint64_t>(share::schema::ObObjectType::PACKAGE);
               obj_id = package_id;
+            } else {
+              ret = OB_TABLE_NOT_EXIST;
             }
-          } else {
-            ret = OB_TABLE_NOT_EXIST;
           }
         }
 
@@ -217,9 +217,9 @@ int ObExprUserCanAccessObj::build_real_obj_type_for_sym(
             if (udt_id != OB_INVALID_ID) {
               obj_type = static_cast<uint64_t>(share::schema::ObObjectType::TYPE);
               obj_id = udt_id;
+            } else {
+              ret = OB_TABLE_NOT_EXIST;
             }
-          } else {
-            ret = OB_TABLE_NOT_EXIST;
           }
         }
       }

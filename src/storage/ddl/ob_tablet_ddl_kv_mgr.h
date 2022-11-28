@@ -37,7 +37,7 @@ public:
   ~ObTabletDDLKvMgr();
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
   int ddl_start(const ObITable::TableKey &table_key, const int64_t start_log_ts, const int64_t cluster_version, const int64_t checkpoint_log_ts = 0);
-  int ddl_prepare(const int64_t start_log_ts, const int64_t prepare_log_ts, const uint64_t table_id = 0, const int64_t schema_version = 0); // schedule build a major sstable
+  int ddl_prepare(const int64_t start_log_ts, const int64_t commit_log_ts, const uint64_t table_id = 0, const int64_t execution_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
   int ddl_commit(const int64_t start_log_ts, const int64_t prepare_log_ts, const bool is_replay); // try wait build major sstable
   int wait_ddl_commit(const int64_t start_log_ts, const int64_t prepare_log_ts);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
@@ -59,8 +59,7 @@ public:
   OB_INLINE void reset() { destroy(); }
   TO_STRING_KV(K_(is_inited), K_(is_commit_success), K_(ls_id), K_(tablet_id), K_(table_key),
       K_(cluster_version), K_(start_log_ts), K_(max_freeze_log_ts),
-      K_(table_id), K_(schema_version),
-      K_(head), K_(tail), K_(ref_cnt));
+      K_(table_id), K_(execution_id), K_(ddl_task_id), K_(head), K_(tail), K_(ref_cnt));
 
 private:
   int64_t get_idx(const int64_t pos) const;
@@ -82,7 +81,8 @@ private:
   int64_t start_log_ts_;
   int64_t max_freeze_log_ts_;
   uint64_t table_id_; // used for ddl checksum
-  int64_t schema_version_; // used for ddl checksum
+  int64_t execution_id_; // used for ddl checksum
+  int64_t ddl_task_id_; // used for ddl checksum
   ObDDLKV *ddl_kvs_[MAX_DDL_KV_CNT_IN_STORAGE];
   int64_t head_;
   int64_t tail_;

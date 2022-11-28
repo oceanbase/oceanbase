@@ -42,6 +42,7 @@ int ObDDLSingleReplicaExecutor::build(const ObDDLSingleReplicaExecutorParam &par
     schema_version_ = param.schema_version_;
     snapshot_version_ = param.snapshot_version_;
     task_id_ = param.task_id_;
+    execution_id_ = param.execution_id_;
     parallelism_ = param.parallelism_;
 
     common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
@@ -113,6 +114,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
           arg.ddl_type_ = type_;
           arg.task_id_ = task_id_;
           arg.parallelism_ = parallelism_;
+          arg.execution_id_ = execution_id_;
           if (OB_FAIL(location_service->get(tenant_id_, arg.source_tablet_id_,
                   expire_renew_time, is_cache_hit, ls_id))) {
             LOG_WARN("get ls failed", K(ret), K(arg.source_tablet_id_));

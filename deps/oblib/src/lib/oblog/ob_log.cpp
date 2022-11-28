@@ -383,6 +383,7 @@ int ObLogger::set_probe(char *str)
           auto &probe = probes_[probe_cnt_++];
           probe.action_ = action;
           strncpy(probe.file_, file, sizeof probe.file_);
+          probe.file_[sizeof probe.file_ - 1] = '\0';
           probe.line_ = atoi(line);
           char location[256];
           snprintf(location, sizeof location, "%s:%s", file, line);

@@ -5541,7 +5541,7 @@ OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressRequest, agency_addr_seq_, principa
 OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressResponse, err_, progress_);
 
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, source_tablet_id_, dest_tablet_id_, 
-  source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, parallelism_);
+  source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, execution_id_, parallelism_);
 
 int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaRequestArg &other)
 {
@@ -5556,7 +5556,6 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
   snapshot_version_ = other.snapshot_version_;
   ddl_type_ = other.ddl_type_;
   task_id_ = other.task_id_;
-  parallelism_ = other.parallelism_;
   return ret;
 }
 
@@ -5569,7 +5568,7 @@ int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRe
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_, source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_, task_id_);
+OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_, source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_, task_id_, execution_id_);
 
 int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResponseArg &other)
 {
@@ -5583,6 +5582,7 @@ int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResp
   snapshot_version_ = other.snapshot_version_;
   schema_version_ = other.schema_version_;
   task_id_ = other.task_id_;
+  execution_id_ = other.execution_id_;
   return ret;
 }
 
@@ -6550,7 +6550,7 @@ OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLRedoLogArg, tenant_id_, ls_id_, redo_info
 
 ObRpcRemoteWriteDDLPrepareLogArg::ObRpcRemoteWriteDDLPrepareLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_log_ts_(0),
-    table_id_(0), schema_version_(0)
+    table_id_(0), execution_id_(0), ddl_task_id_(0)
 {}
 
 int ObRpcRemoteWriteDDLPrepareLogArg::init(const uint64_t tenant_id,
@@ -6558,27 +6558,29 @@ int ObRpcRemoteWriteDDLPrepareLogArg::init(const uint64_t tenant_id,
                                           const storage::ObITable::TableKey &table_key,
                                           const int64_t start_log_ts,
                                           const int64_t table_id,
-                                          const int64_t schema_version)
+                                          const int64_t execution_id,
+                                          const int64_t ddl_task_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || start_log_ts <= 0
-                  || table_id <= 0 || schema_version <= 0)) {
+                  || table_id <= 0 || execution_id <= 0 || ddl_task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(table_key), K(start_log_ts),
-                                       K(table_id), K(schema_version));
+                                       K(table_id), K(execution_id), K(ddl_task_id));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     table_key_ = table_key;
     start_log_ts_ = start_log_ts;
     table_id_ = table_id;
-    schema_version_ = schema_version;
+    execution_id_ = execution_id;
+    ddl_task_id_ = ddl_task_id;
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLPrepareLogArg, tenant_id_, ls_id_, table_key_, start_log_ts_,
-                    table_id_, schema_version_);
+                    table_id_, execution_id_, ddl_task_id_);
 
 ObRpcRemoteWriteDDLCommitLogArg::ObRpcRemoteWriteDDLCommitLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_log_ts_(0), prepare_log_ts_(0)

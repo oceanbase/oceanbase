@@ -29,7 +29,6 @@
     workers_per_cpu_quota: '10'
     schema_history_expire_time: '1d'
     net_thread_count: '4'
-    _enable_static_typing_engine: True
     enable_async_syslog: False
 {{%% EXTRA_PARAM %%}}
 

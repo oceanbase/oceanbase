@@ -119,7 +119,7 @@ int ObBucketLock::try_wrlock(const uint64_t bucket_idx)
   return ret;
 }
 
-int ObBucketLock::rdlock(const uint64_t bucket_idx)
+int ObBucketLock::rdlock(const uint64_t bucket_idx, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -128,13 +128,13 @@ int ObBucketLock::rdlock(const uint64_t bucket_idx)
   } else if(OB_UNLIKELY(bucket_idx >= bucket_cnt_)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument, ", K(bucket_idx), K_(bucket_cnt), K(ret));
-  } else if (OB_FAIL(latches_[bucket_to_latch_idx(bucket_idx)].rdlock(latch_id_))) {
-    COMMON_LOG(WARN, "Fail to read lock latch, ", K(bucket_idx), K_(latch_id), K(ret));
+  } else if (OB_FAIL(latches_[bucket_to_latch_idx(bucket_idx)].rdlock(latch_id_, abs_timeout_us))) {
+    COMMON_LOG(WARN, "Fail to read lock latch, ", K(bucket_idx), K_(latch_id), K(abs_timeout_us), K(ret));
   }
   return ret;
 }
 
-int ObBucketLock::wrlock(const uint64_t bucket_idx)
+int ObBucketLock::wrlock(const uint64_t bucket_idx, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -143,8 +143,8 @@ int ObBucketLock::wrlock(const uint64_t bucket_idx)
   } else if(OB_UNLIKELY(bucket_idx >= bucket_cnt_)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(ERROR, "Invalid argument, ", K(bucket_idx), K_(bucket_cnt), K(ret));
-  } else if (OB_FAIL(latches_[bucket_to_latch_idx(bucket_idx)].wrlock(latch_id_))) {
-    COMMON_LOG(WARN, "Fail to write lock latch, ", K(bucket_idx), K_(latch_id), K(ret));
+  } else if (OB_FAIL(latches_[bucket_to_latch_idx(bucket_idx)].wrlock(latch_id_, abs_timeout_us))) {
+    COMMON_LOG(WARN, "Fail to write lock latch, ", K(bucket_idx), K_(latch_id), K(abs_timeout_us), K(ret));
   }
   return ret;
 }

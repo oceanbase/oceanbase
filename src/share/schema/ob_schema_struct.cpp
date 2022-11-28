@@ -7442,7 +7442,10 @@ int ObPartitionUtils::set_low_bound_val_by_interval_range_by_innersql(
     }
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        ObObj low_bound;
+        static int64_t ROW_KEY_CNT = 1;
+        ObObj obj_array[ROW_KEY_CNT];
+        obj_array[0].reset();
+        ObObj &low_bound = obj_array[0];
         common::sqlclient::ObMySQLResult *result = NULL;
         if (OB_FAIL(sql_proxy->read(res, p.get_tenant_id(), sql_string.ptr()))) {
           LOG_WARN("execute sql failed", KR(ret), K(sql_string.ptr()), K(p), K(interval_range_val),
@@ -7457,7 +7460,7 @@ int ObPartitionUtils::set_low_bound_val_by_interval_range_by_innersql(
         } else {
           ObRowkey low_bound_val;
           low_bound_val.reset();
-          low_bound_val.assign(&low_bound, 1);
+          low_bound_val.assign(obj_array, ROW_KEY_CNT);
           if (OB_FAIL(p.set_low_bound_val(low_bound_val))) {
             LOG_WARN("fail to set low bound val", K(p), KR(ret));
           }

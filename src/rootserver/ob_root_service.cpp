@@ -9421,7 +9421,7 @@ int ObRootService::build_ddl_single_replica_response(const obrpc::ObDDLBuildSing
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(arg));
   } else if (OB_FAIL(ddl_scheduler_.on_sstable_complement_job_reply(
-      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.dest_schema_id_, arg.schema_version_), arg.snapshot_version_, arg.ret_code_))) {
+      arg.tablet_id_/*source tablet id*/, ObDDLTaskKey(arg.dest_schema_id_, arg.schema_version_), arg.snapshot_version_, arg.execution_id_, arg.ret_code_))) {
     LOG_WARN("handle column checksum calc response failed", K(ret), K(arg));
   }
   return ret;

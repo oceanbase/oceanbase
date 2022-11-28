@@ -103,7 +103,10 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
   return ret;
 }
 
-int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id, const int64_t snapshot_version, const int ret_code)
+int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::ObTabletID &tablet_id,
+                                                                const int64_t snapshot_version,
+                                                                const int64_t execution_id,
+                                                                const int ret_code)
 {
   int ret = OB_SUCCESS;
   TCWLockGuard guard(lock_);
@@ -116,6 +119,8 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
   } else if (OB_UNLIKELY(snapshot_version_ != snapshot_version)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, snapshot version is not equal", K(ret), K(snapshot_version_), K(snapshot_version));
+  } else if (execution_id != redefinition_execution_id_) {
+    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(redefinition_execution_id_));
   } else {
     complete_sstable_job_ret_code_ = ret_code;
     LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_));
@@ -150,6 +155,7 @@ int ObTableRedefinitionTask::send_build_replica_request()
         target_object_id_,
         schema_version_,
         snapshot_version_,
+        redefinition_execution_id_,
         sql_mode,
         trace_id_,
         parallelism_,
@@ -242,6 +248,7 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   }
 
   if (OB_SUCC(ret) && !is_build_replica_end && 0 == build_replica_request_time_) {
+    redefinition_execution_id_ = ObTimeUtility::current_time();
     if (OB_FAIL(send_build_replica_request())) {
       LOG_WARN("fail to send build replica request", K(ret));
     } else {
@@ -264,7 +271,7 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   if (is_build_replica_end) {
     ret = complete_sstable_job_ret_code_;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_data_dest_tables_columns_checksum())) {
+      if (OB_FAIL(check_data_dest_tables_columns_checksum(redefinition_execution_id_))) {
         LOG_WARN("fail to check the columns checksum of data table and destination table", K(ret));
       }
     }

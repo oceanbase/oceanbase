@@ -28,7 +28,7 @@ public:
   ObTxTableGuard() : tx_table_(nullptr), epoch_(-1) {}
   ~ObTxTableGuard() { reset(); }
 
-  ObTxTableGuard(const ObTxTableGuard &guard) { *this = guard; }
+  ObTxTableGuard(const ObTxTableGuard &guard) : ObTxTableGuard() { *this = guard; }
 
   ObTxTableGuard &operator=(const ObTxTableGuard &guard)
   {

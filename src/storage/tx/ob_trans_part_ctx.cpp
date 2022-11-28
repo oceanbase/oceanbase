@@ -1565,12 +1565,15 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
           // do nothing
         } else {
           if (OB_FAIL(on_success_ops_(cur_cb))) {
-            TRANS_LOG(ERROR, "invoke callback failed", K(ret), K(*this), K(*cur_cb));
+            TRANS_LOG(ERROR, "invoke on_success_ops failed", K(ret), K(*this), K(*cur_cb));
             if (OB_SUCCESS == save_ret) {
               save_ret = ret;
             }
             // rewrite ret
             ret = OB_SUCCESS;
+
+            usleep(1000*1000);
+            ob_abort();
           }
           // ignore ret and set cur_cb callbacked
           cur_cb->set_callbacked();
@@ -5585,40 +5588,53 @@ int ObPartTransCtx::rollback_to_savepoint_(const int64_t from_scn,
 
   /*
    * Follower:
-   *  1. insert UndoAction into tx_data_table
+   *  1. add UndoAction into tx_ctx's tx_data
+   *  2. insert UndoAction into tx_data_table
    * Leader:
-   *  1. submit 'RollbackToLog' if need
-   *  2. insert UndoAction into tx_data_table after log sync success
+   *  1. submit 'RollbackToLog'
+   *  2. add UndoAction into tx_ctx's tx_data
+   *  3. insert UndoAction into tx_data_table after log sync success
    */
-  if (is_follower_() || OB_UNLIKELY(exec_info_.max_submitted_seq_no_ > to_scn)) {
+  if (is_follower_()) { /* Follower */
     ObUndoAction undo_action(from_scn, to_scn);
-    // ObTxTable *tx_table = nullptr;
     ObTxData *tmp_tx_data = nullptr;
-    // GET_TX_TABLE(tx_table);
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ctx_tx_data_.add_undo_action(undo_action))) {
-        TRANS_LOG(WARN, "recrod undo info fail", K(ret), K(from_scn), K(to_scn), KPC(this));
-      } else if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data))) {
-        TRANS_LOG(WARN, "deep copy tx data failed", KR(ret), K(*this));
-      } else if (OB_ISNULL(tmp_tx_data)) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "unexpected null ptr", KR(ret), K(*this));
-      } else if (!is_follower_()) { /* Leader */
-        if (OB_FAIL(submit_rollback_to_log_(from_scn, to_scn, tmp_tx_data))) {
-          TRANS_LOG(WARN, "submit undo redolog fail", K(ret), K(from_scn), K(to_scn), KPC(this));
-          int tmp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = ctx_tx_data_.free_tmp_tx_data(tmp_tx_data))) {
-            TRANS_LOG(WARN, "free tx data failed", KR(tmp_ret), K(*this));
-          }
-        }
-      } else { /* Follower */
-        tmp_tx_data->end_scn_ = exec_info_.max_applying_log_ts_;
-        if (OB_FAIL(ctx_tx_data_.insert_tmp_tx_data(tmp_tx_data))) {
-          TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
-        } else {
-          tmp_tx_data = nullptr;
-        }
+    if (OB_FAIL(ctx_tx_data_.add_undo_action(undo_action))) {
+      TRANS_LOG(WARN, "recrod undo info fail", K(ret), K(from_scn), K(to_scn), KPC(this));
+    } else if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data))) {
+      TRANS_LOG(WARN, "deep copy tx data failed", KR(ret), K(*this));
+    } else {
+      tmp_tx_data->end_scn_ = exec_info_.max_applying_log_ts_;
+      if (OB_FAIL(ctx_tx_data_.insert_tmp_tx_data(tmp_tx_data))) {
+        TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
+      } else {
+        tmp_tx_data = nullptr;
       }
+    }
+  } else if (OB_UNLIKELY(exec_info_.max_submitted_seq_no_ > to_scn)) { /* Leader */
+    ObUndoAction undo_action(from_scn, to_scn);
+    //
+    // In order to ensure UndoAction can be added to tx_ctx and tx_data_table
+    // successfully post submit log, prepare two temporary tx_data before
+    // submitting log
+    //
+    ObTxData *tmp_ctx_tx_data = nullptr, *tmp_tx_data_table_tx_data = nullptr;
+    if (OB_FAIL(ctx_tx_data_.prep_add_undo_action(undo_action, tmp_ctx_tx_data, tmp_tx_data_table_tx_data))) {
+      TRANS_LOG(WARN, "prepare add undo action fail", K(ret), KPC(this));
+    } else if (OB_FAIL(submit_rollback_to_log_(from_scn, to_scn, tmp_tx_data_table_tx_data))) {
+      // submit log
+      TRANS_LOG(WARN, "submit undo redolog fail", K(ret), K(from_scn), K(to_scn), KPC(this));
+      // release tmp resource
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ctx_tx_data_.free_tmp_tx_data(tmp_ctx_tx_data))) {
+        TRANS_LOG(WARN, "free tmp tx data failed", KR(tmp_ret), KPC(this));
+      }
+      if (OB_TMP_FAIL(ctx_tx_data_.free_tmp_tx_data(tmp_tx_data_table_tx_data))) {
+        TRANS_LOG(WARN, "free tmp tx data failed", KR(tmp_ret), KPC(this));
+      }
+    } else if (OB_FAIL(ctx_tx_data_.replace_tx_data(tmp_ctx_tx_data))) {
+      // update tx_ctx's tx_data
+      TRANS_LOG(ERROR, "oops! replace tx data fail", KR(ret), KPC(this));
+      ob_abort();
     }
   }
 

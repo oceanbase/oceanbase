@@ -371,7 +371,7 @@ int ObMetaPointerMap<Key, T>::try_get_in_memory_meta_obj(
     STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
   } else if (OB_UNLIKELY(t_ptr->get_addr().is_none())) {
     ret = OB_ITEM_NOT_SETTED;
-    STORAGE_LOG(WARN, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
+    STORAGE_LOG(DEBUG, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
   } else {
     is_in_memory = t_ptr->is_in_memory();
     if (is_in_memory && OB_FAIL(t_ptr->get_in_memory_obj(guard))) {
@@ -395,7 +395,7 @@ int ObMetaPointerMap<Key, T>::get_meta_obj(
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
   } else if (OB_FAIL(try_get_in_memory_meta_obj(key, ptr_hdl, guard, is_in_memory))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
+    if (OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret) {
       STORAGE_LOG(DEBUG, "meta obj does not exist", K(ret), K(key));
     } else {
       STORAGE_LOG(WARN, "fail to try get in memory meta obj", K(ret), K(key));

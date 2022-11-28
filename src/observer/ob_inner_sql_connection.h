@@ -244,7 +244,8 @@ public:
           common::ObISQLClient::ReadResult &res,
           bool is_from_pl = false,
           bool is_dynamic = false,
-          bool is_forall = false);
+          bool is_forall = false,
+          int64_t array_binding_count = 0);
 
   virtual int execute(const uint64_t tenant_id, sqlclient::ObIExecutor &executor) override;
 
@@ -333,7 +334,8 @@ private:
               ObVirtualTableIteratorFactory *vt_iter_factory = NULL,
               bool is_from_pl = false,
               bool is_dynamic = false,
-              bool is_forall = false);
+              bool is_forall = false,
+              int64_t array_binding_count = 0);
   int do_execute(const ParamStore &params, ObInnerSQLResult &res);
   int switch_tenant(const uint64_t tenant_id);
 

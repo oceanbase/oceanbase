@@ -1984,8 +1984,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               open_cursors->set_allocator(&allocator);
               open_cursors->set_session_mgr(GCTX.session_mgr_);
-              open_cursors->set_plan_cache_manager(GCTX.sql_engine_->get_plan_cache_manager());
-              open_cursors->set_tenant_id(real_tenant_id);
               OZ (open_cursors->set_addr(addr_));
               OX (vt_iter = static_cast<ObVirtualOpenCursorTable*>(open_cursors));
             }

@@ -335,7 +335,7 @@ void ObDDLScheduler::run1()
         } else {
           ObCurTraceId::set(task->get_trace_id());
           task->process();
-          if (task->need_retry()) {
+          if (task->need_retry() && !has_set_stop()) {
             if (OB_FAIL(task_queue_.add_task_to_last(task))) {
               STORAGE_LOG(ERROR, "fail to add task to last, which should not happen", K(ret), K(*task));
             }
@@ -1302,15 +1302,16 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
     const common::ObTabletID &tablet_id,
     const ObDDLTaskKey &task_key,
     const int64_t snapshot_version,
+    const int64_t execution_id,
     const int ret_code)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!(task_key.is_valid() && snapshot_version > 0))) {
+  } else if (OB_UNLIKELY(!(task_key.is_valid() && snapshot_version > 0 && execution_id > 0))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(task_key), K(snapshot_version), K(ret_code));
+    LOG_WARN("invalid argument", K(ret), K(task_key), K(snapshot_version), K(execution_id), K(ret_code));
   } else {
     ObDDLTask *ddl_task = nullptr;
     if (OB_FAIL(task_queue_.get_task(task_key, ddl_task))) {
@@ -1324,12 +1325,12 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
       const int64_t task_type = ddl_task->get_task_type();
       switch (task_type) {
         case ObDDLType::DDL_CREATE_INDEX:
-          if (OB_FAIL(static_cast<ObIndexBuildTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, ret_code))) {
+          if (OB_FAIL(static_cast<ObIndexBuildTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code))) {
             LOG_WARN("update complete sstable job status failed", K(ret));
           }
           break;
         case ObDDLType::DDL_DROP_PRIMARY_KEY: 
-          if (OB_FAIL(static_cast<ObDropPrimaryKeyTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, ret_code))) {
+          if (OB_FAIL(static_cast<ObDropPrimaryKeyTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code))) {
             LOG_WARN("update complete sstable job status", K(ret));
           }
           break;
@@ -1339,7 +1340,7 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
         case ObDDLType::DDL_MODIFY_COLUMN:
         case ObDDLType::DDL_CONVERT_TO_CHARACTER:
         case ObDDLType::DDL_TABLE_REDEFINITION:
-          if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, ret_code))) {
+          if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code))) {
             LOG_WARN("update complete sstable job status", K(ret));
           }
           break;
@@ -1353,7 +1354,7 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
         case ObDDLType::DDL_DROP_COLUMN:
         case ObDDLType::DDL_ADD_COLUMN_OFFLINE:
         case ObDDLType::DDL_COLUMN_REDEFINITION:
-          if (OB_FAIL(static_cast<ObColumnRedefinitionTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, ret_code))) {
+          if (OB_FAIL(static_cast<ObColumnRedefinitionTask *>(ddl_task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code))) {
             LOG_WARN("update complete sstable job status", K(ret), K(tablet_id), K(snapshot_version), K(ret_code));
           }
           break;

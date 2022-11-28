@@ -178,18 +178,8 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_request()
   switch (state) {
     case ObTxState::INIT:
     case ObTxState::REDO_COMPLETE: {
-      const ObTxState old_state = get_upstream_state();
-      if (!is_root()) {
-        collected_.reset();
-        set_upstream_state(ObTxState::PREPARE);
-      }
       if (OB_FAIL(handle_2pc_prepare_request_impl_())) {
         TRANS_LOG(WARN, "handle 2pc prepare request failed", K(ret), K(*this));
-      }
-      // TODO: improve the code quality
-      if (OB_FAIL(ret)) {
-        collected_.reset();
-        set_upstream_state(old_state);
       }
       break;
     }
@@ -201,27 +191,32 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_request()
           TRANS_LOG(WARN, "retransmit downstream msg failed", KR(ret));
         }
       }
-      // rewrite ret code
-      if (OB_FAIL(retransmit_upstream_msg_())) {
+      if (OB_FAIL(retransmit_upstream_msg_(ObTxState::PREPARE))) {
         TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
       }
       break;
     }
-    // TODO, adjust abort
     case ObTxState::ABORT: {
       // Txn may go abort itself, so we need reply the response based on the state
       // to advance the two phase commit protocol as soon as possible
       if (OB_FAIL(retransmit_downstream_msg_())) {
         TRANS_LOG(WARN, "retransmit downstream msg failed", KR(ret));
       }
-      // rewrite ret code
-      if (OB_FAIL(retransmit_upstream_msg_())) {
+      if (OB_FAIL(retransmit_upstream_msg_(ObTxState::ABORT))) {
         TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
       }
       break;
     }
     case ObTxState::PRE_COMMIT:
-    case ObTxState::COMMIT:
+    case ObTxState::COMMIT: {
+      if (OB_FAIL(retransmit_downstream_msg_())) {
+        TRANS_LOG(WARN, "retransmit downstream msg failed", KR(ret));
+      }
+      if (OB_FAIL(retransmit_upstream_msg_(ObTxState::PREPARE))) {
+        TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
+      }
+      break;
+    }
     case ObTxState::CLEAR:
     {
       TRANS_LOG(WARN, "handle orphan request, ignore it", K(ret));
@@ -237,11 +232,10 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_request()
   return ret;
 }
 
-int ObTxCycleTwoPhaseCommitter::retransmit_upstream_msg_()
+int ObTxCycleTwoPhaseCommitter::retransmit_upstream_msg_(const ObTxState state)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  const ObTxState state = get_downstream_state();
   ObTwoPhaseCommitMsgType msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_UNKNOWN;
   bool need_respond = false;
 
@@ -315,6 +309,8 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_request_impl_()
     TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
   } else if (OB_FAIL(do_prepare(no_need_submit_log))) {
     TRANS_LOG(WARN, "do prepare failed", K(ret), K(*this));
+  } else if (FALSE_IT(set_upstream_state(ObTxState::PREPARE))) {
+  } else if (FALSE_IT(collected_.reset())) {
   } else if (!no_need_submit_log
              && OB_TMP_FAIL(submit_log(ObTwoPhaseCommitLogType::OB_LOG_TX_PREPARE))) {
     if (OB_BLOCK_FROZEN == tmp_ret) {
@@ -345,18 +341,8 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_commit_request()
     }
     case ObTxState::PREPARE:
     case ObTxState::PRE_COMMIT: {
-      const ObTxState old_state = get_upstream_state();
-      if (!is_root()) {
-        set_upstream_state(ObTxState::COMMIT);
-        collected_.reset();
-      }
       if (OB_FAIL(handle_2pc_commit_request_impl_())) {
         TRANS_LOG(WARN, "handle 2pc commit request failed", K(ret), K(*this));
-      }
-      // TODO: improve the code quality
-      if (OB_FAIL(ret)) {
-        collected_.reset();
-        set_upstream_state(old_state);
       }
       break;
     }
@@ -364,8 +350,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_commit_request()
       if (OB_FAIL(retransmit_downstream_msg_())) {
         TRANS_LOG(WARN, "retransmit downstream msg failed", KR(ret));
       }
-      // rewrite ret code
-      if (OB_FAIL(retransmit_upstream_msg_())) {
+      if (OB_FAIL(retransmit_upstream_msg_(ObTxState::COMMIT))) {
         TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
       }
       break;
@@ -396,6 +381,8 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_commit_request_impl_()
     TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
   } else if (OB_FAIL(do_commit())) {
     TRANS_LOG(WARN, "do commit failed", K(ret), K(*this));
+  } else if (FALSE_IT(set_upstream_state(ObTxState::COMMIT))) {
+  } else if (FALSE_IT(collected_.reset())) {
   } else if (OB_TMP_FAIL(submit_log(ObTwoPhaseCommitLogType::OB_LOG_TX_COMMIT))) {
     TRANS_LOG(WARN, "submit commit log failed", K(tmp_ret), K(*this));
   } else if (!is_root() && !is_leaf()) {
@@ -416,16 +403,8 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_abort_request()
     case ObTxState::INIT:
     case ObTxState::REDO_COMPLETE:
     case ObTxState::PREPARE: {
-      const ObTxState old_state = get_upstream_state();
-      set_upstream_state(ObTxState::ABORT);
-      collected_.reset();
       if (OB_FAIL(handle_2pc_abort_request_impl_())) {
         TRANS_LOG(WARN, "handle 2pc abort request failed", K(ret), K(*this));
-      }
-      // TODO: improve the code quality
-      if (OB_FAIL(ret)) {
-        collected_.reset();
-        set_upstream_state(old_state);
       }
       break;
     }
@@ -451,7 +430,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_abort_request()
         TRANS_LOG(WARN, "retransmit downstream msg failed", KR(ret));
         ret = OB_SUCCESS;
       }
-      if (OB_FAIL(retransmit_upstream_msg_())) {
+      if (OB_FAIL(retransmit_upstream_msg_(ObTxState::ABORT))) {
         TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
       }
       break;
@@ -479,6 +458,8 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_abort_request_impl_()
     TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
   } else if (OB_FAIL(do_abort())) {
     TRANS_LOG(WARN, "do commit failed", K(ret), K(*this));
+  } else if (FALSE_IT(set_upstream_state(ObTxState::ABORT))) {
+  } else if (FALSE_IT(collected_.reset())) {
   } else {
     if (OB_TMP_FAIL(submit_log(ObTwoPhaseCommitLogType::OB_LOG_TX_ABORT))) {
       TRANS_LOG(WARN, "submit abort log failed", K(tmp_ret), K(*this));
@@ -516,8 +497,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_pre_commit_request()
       if (OB_FAIL(retransmit_downstream_msg_())) {
         TRANS_LOG(WARN, "retransmit downstream msg failed", KR(ret));
       }
-      // rewrite ret code
-      if (OB_FAIL(retransmit_upstream_msg_())) {
+      if (OB_FAIL(retransmit_upstream_msg_(ObTxState::PRE_COMMIT))) {
         TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
       }
       break;
@@ -525,6 +505,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_pre_commit_request()
     case ObTxState::ABORT: {
       ret = OB_TRANS_PROTOCOL_ERROR;
       TRANS_LOG(ERROR, "handle 2pc pre commit request find protocol error", K(*this));
+      break;
     }
     case ObTxState::CLEAR: {
       TRANS_LOG(WARN, "handle orphan request failed, ignore it", K(ret), K(*this));
@@ -565,25 +546,13 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_clear_request()
     }
     case ObTxState::COMMIT:
     case ObTxState::ABORT: {
-      const ObTxState old_state = get_upstream_state();
-      if (!is_root()) {
-        set_upstream_state(ObTxState::CLEAR);
-        collected_.reset();
-      }
       if (OB_FAIL(handle_2pc_clear_request_impl_())) {
         TRANS_LOG(WARN, "handle 2pc clear request failed", K(ret), K(*this));
-      }
-      // TODO: improve the code quality
-      if (OB_FAIL(ret)) {
-        collected_.reset();
-        set_upstream_state(old_state);
       }
       break;
     }
     case ObTxState::CLEAR: {
-      // if (OB_FAIL(retransmit_msg_(state))) {
-      //   TRANS_LOG(WARN, "retransmit msg failed", K(ret), K(*this));
-      // }
+      TRANS_LOG(WARN, "handle orphan request failed, ignore it", K(ret), K(*this));
       break;
     }
     default: {
@@ -605,6 +574,8 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_clear_request_impl_()
     TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
   } else if (OB_FAIL(do_clear())) {
     TRANS_LOG(WARN, "do commit failed", K(ret), K(*this));
+  } else if (FALSE_IT(set_upstream_state(ObTxState::CLEAR))) {
+  } else if (FALSE_IT(collected_.reset())) {
   } else if (OB_TMP_FAIL(submit_log(ObTwoPhaseCommitLogType::OB_LOG_TX_CLEAR))) {
     TRANS_LOG(WARN, "submit clear log failed", K(tmp_ret), K(*this));
   } else if (!is_root() && !is_leaf()) {

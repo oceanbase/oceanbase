@@ -201,6 +201,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
       write_sstable_param.write_major_ = true;
       write_sstable_param.task_cnt_ = ctx_.get_sqc_handler()->get_sqc_ctx().get_task_count();
       write_sstable_param.schema_version_ = MY_SPEC.plan_->get_ddl_schema_version();
+      write_sstable_param.execution_id_ = MY_SPEC.plan_->get_ddl_execution_id();
       if (OB_FAIL(block_start_seq.set_parallel_degree(ddl_task_id_))) {
         LOG_WARN("set parallel index failed", K(ret), K(ddl_task_id_));
       }

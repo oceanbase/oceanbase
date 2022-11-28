@@ -854,46 +854,48 @@ int ObTabletCreateDeleteHelper::roll_back_remove_tablet(
   const ObTabletMapKey key(ls_id, tablet_id);
   ObTabletHandle tablet_handle;
 
+  // Try figure out if tablet needs to dec memtable ref or not
   if (OB_FAIL(get_tablet(key, tablet_handle))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
-      // tablet does not exist, do nothing
+    if (OB_TABLET_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret) {
+      // tablet does not exist or tablet creation failed on half way, do nothing
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_id));
     }
+  } else if (trans_flags.for_replay_) {
+    // for replay, no need to dec ref for memtable
   } else {
-    if (trans_flags.for_replay_) {
-      // for replay, no need to dec ref for memtable
-    } else {
-      ObTablet *tablet = tablet_handle.get_obj();
-      ObTabletMemtableMgr *memtable_mgr = static_cast<ObTabletMemtableMgr*>(tablet->get_memtable_mgr());
-      ObSEArray<ObTableHandleV2, MAX_MEMSTORE_CNT> memtable_handle_array;
-      if (OB_FAIL(memtable_mgr->get_all_memtables(memtable_handle_array))) {
-        LOG_WARN("failed to get all memtables", K(ret), K(ls_id), K(tablet_id));
-      } else if (0 == memtable_handle_array.count()) {
-        // tablet does not have memtable, do nothing
-      } else if (1 == memtable_handle_array.count()) {
-        ObMemtable *memtable = nullptr;
-        ObTabletTxMultiSourceDataUnit tx_data;
-        if (OB_FAIL(memtable_handle_array.at(0).get_data_memtable(memtable))) {
-          LOG_WARN("failed to get memtable", K(ret), K(ls_id), K(tablet_id));
-        } else if (!memtable->has_multi_source_data_unit(MultiSourceDataUnitType::TABLET_TX_DATA)) {
-          LOG_INFO("memtable does not have msd, do nothing", K(ret), K(ls_id), K(tablet_id));
-        } else if (OB_FAIL(tablet->get_tx_data(tx_data))) {
-          LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id));
-        } else if (OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, share::ObScnRange::MAX_TS,
-            trans_flags.for_replay_, MemtableRefOp::DEC_REF, true/*is_callback*/))) {
-          LOG_WARN("failed to save msd", K(ret), K(ls_id), K(tablet_id));
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet should not have more than one memtable", K(ret), K(ls_id), K(tablet_id),
-            "memtable_cnt", memtable_handle_array.count());
+    ObTablet *tablet = tablet_handle.get_obj();
+    ObTabletMemtableMgr *memtable_mgr = static_cast<ObTabletMemtableMgr*>(tablet->get_memtable_mgr());
+    ObSEArray<ObTableHandleV2, MAX_MEMSTORE_CNT> memtable_handle_array;
+    if (OB_FAIL(memtable_mgr->get_all_memtables(memtable_handle_array))) {
+      LOG_WARN("failed to get all memtables", K(ret), K(ls_id), K(tablet_id));
+    } else if (0 == memtable_handle_array.count()) {
+      // tablet does not have memtable, do nothing
+    } else if (1 == memtable_handle_array.count()) {
+      ObMemtable *memtable = nullptr;
+      ObTabletTxMultiSourceDataUnit tx_data;
+      if (OB_FAIL(memtable_handle_array.at(0).get_data_memtable(memtable))) {
+        LOG_WARN("failed to get memtable", K(ret), K(ls_id), K(tablet_id));
+      } else if (!memtable->has_multi_source_data_unit(MultiSourceDataUnitType::TABLET_TX_DATA)) {
+        LOG_INFO("memtable does not have msd, do nothing", K(ret), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(tablet->get_tx_data(tx_data))) {
+        LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, ObScnRange::MAX_TS,
+          trans_flags.for_replay_, MemtableRefOp::DEC_REF, true/*is_callback*/))) {
+        LOG_WARN("failed to save msd", K(ret), K(ls_id), K(tablet_id));
       }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet should not have more than one memtable", K(ret), K(ls_id), K(tablet_id),
+          "memtable_cnt", memtable_handle_array.count());
     }
+  }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(t3m->del_tablet(key))) {
+  // Whatever, delete tablet object from map and id set
+  // del_tablet and erase should swallow any not exist error
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(t3m->del_tablet(key))) {
       LOG_WARN("failed to delete tablet from t3m", K(ret), K(key));
     } else if (OB_FAIL(tablet_id_set_.erase(tablet_id))) {
       if (OB_HASH_NOT_EXIST == ret) {
@@ -903,18 +905,7 @@ int ObTabletCreateDeleteHelper::roll_back_remove_tablet(
         LOG_WARN("failed to erase tablet id from hash set", K(ret), K(tablet_id));
       }
     }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(t3m->erase_pinned_tablet(key))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        // tablet id does not exist in tablet handle map
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to erase tablet handle", K(ret), K(tablet_id));
-      }
-    }
   }
-
   return ret;
 }
 
@@ -1476,7 +1467,8 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
 
 int ObTabletCreateDeleteHelper::acquire_tablet(
     const ObTabletMapKey &key,
-    ObTabletHandle &handle)
+    ObTabletHandle &handle,
+    const bool only_acquire)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -1489,7 +1481,7 @@ int ObTabletCreateDeleteHelper::acquire_tablet(
     LOG_WARN("invalid arguments", K(ret), K(key));
   } else if (OB_FAIL(ls_service->get_ls(key.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD))) {
     LOG_WARN("failed to get ls", K(ret), "ls_id", key.ls_id_);
-  } else if (OB_FAIL(t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, tablet_handle))) {
+  } else if (OB_FAIL(t3m->acquire_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, tablet_handle, only_acquire))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (OB_ISNULL(tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2310,7 +2302,7 @@ int ObTabletCreateDeleteHelper::do_create_tablet(
     LOG_WARN("failed to convert_tmp", K(ret), K(scn));
   } else if (OB_FAIL(create_scn.convert_tmp(create_ts))) {
     LOG_WARN("failed to convert_tmp", K(ret), K(create_scn));
-  } else if (OB_FAIL(acquire_tablet(key, tablet_handle))) {
+  } else if (OB_FAIL(acquire_tablet(key, tablet_handle, false/*only acquire*/))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (OB_FAIL(check_need_create_empty_major_sstable(table_schema, need_create_empty_major_sstable))) {
     LOG_WARN("failed to check need create sstable", K(ret));

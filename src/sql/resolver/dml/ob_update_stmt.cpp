@@ -304,5 +304,31 @@ int ObUpdateStmt::remove_table_item_dml_info(const TableItem* table)
   return ret;
 }
 
+int ObUpdateStmt::remove_invalid_assignment()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); ++i) {
+    ObUpdateTableInfo* table_info = table_info_.at(i);
+    if (OB_ISNULL(table_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      for (int64_t j = table_info->assignments_.count() - 1; OB_SUCC(ret) && j >= 0; --j) {
+        ObAssignment& assign = table_info->assignments_.at(j);
+        if (OB_ISNULL(assign.column_expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (!assign.column_expr_->is_const_expr()) {
+          // do nothing
+        } else if (OB_FAIL(table_info->assignments_.remove(j))) {
+          LOG_WARN("failed to remove assignment", K(ret));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 } //namespace sql
 } //namespace oceanbase

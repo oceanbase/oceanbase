@@ -565,7 +565,7 @@ int ObService::calc_column_checksum_request(const obrpc::ObCalcColumnChecksumReq
         LOG_WARN("error unexpected, dag scheduler must not be nullptr", KR(ret));
       } else if (OB_FAIL(dag_scheduler->alloc_dag(dag))) {
         STORAGE_LOG(WARN, "fail to alloc dag", KR(ret));
-      } else if (OB_FAIL(dag->init(arg.tenant_id_, arg.ls_id_, arg.tablet_id_, arg.calc_table_id_ == arg.target_table_id_, arg.target_table_id_, arg.schema_version_, arg.execution_id_, arg.snapshot_version_))) {
+      } else if (OB_FAIL(dag->init(arg.tenant_id_, arg.ls_id_, arg.tablet_id_, arg.calc_table_id_ == arg.target_table_id_, arg.target_table_id_, arg.schema_version_, arg.task_id_, arg.execution_id_, arg.snapshot_version_))) {
         STORAGE_LOG(WARN, "fail to init ObUniqueCheckingDag", KR(ret));
       } else if (OB_FAIL(dag->alloc_global_index_task_callback(arg.tablet_id_, arg.target_table_id_, arg.source_table_id_, arg.schema_version_, arg.task_id_, callback))) {
         STORAGE_LOG(WARN, "fail to alloc global index task callback", KR(ret));

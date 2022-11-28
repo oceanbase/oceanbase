@@ -118,7 +118,6 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
   const static int MAX_IP_BUFFER_LEN = 32;
   char host[MAX_IP_BUFFER_LEN];
   host[0] = '\0';
-  // https://baike.baidu.com/item/mysql_real_connect/4007597
   // if db is NULL, the default database is used.
   if (OB_ISNULL(user) || OB_ISNULL(pass) /*|| OB_ISNULL(db)*/) {
     ret = OB_INVALID_ARGUMENT;

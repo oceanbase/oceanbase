@@ -4399,12 +4399,15 @@ int ObSQLUtils::get_one_group_params(int64_t pos, ParamStore &src, ParamStore &o
     ObObjParam &obj = src.at(i);
     pl::ObPLCollection *coll = NULL;
     ObObj *data = NULL;
-    CK (obj.is_ext());
-    CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
-    CK (coll->get_count() > pos);
-    CK (1 == coll->get_column_count());
-    CK (OB_NOT_NULL(data = reinterpret_cast<ObObj*>(coll->get_data())));
-    OX (obj_params.push_back(*(data + pos)));
+    if (OB_UNLIKELY(!obj.is_ext())) {
+      OZ (obj_params.push_back(obj));
+    } else {
+      CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
+      CK (coll->get_count() > pos);
+      CK (1 == coll->get_column_count());
+      CK (OB_NOT_NULL(data = reinterpret_cast<ObObj*>(coll->get_data())));
+      OX (obj_params.push_back(*(data + pos)));
+    }
   }
   return ret;
 }
@@ -4438,12 +4441,17 @@ int ObSQLUtils::init_elements_info(ParamStore &src, ParamStore &dst)
     ObObjParam &obj = src.at(i);
     pl::ObPLCollection *coll = NULL;
     ObObj *data = NULL;
-    CK (obj.is_ext());
-    CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
     CK (dst.at(i).is_ext_sql_array());
     CK (OB_NOT_NULL(array_params = reinterpret_cast<ObSqlArrayObj*>(dst.at(i).get_ext())));
-    if (OB_SUCC(ret)) {
-      array_params->element_ = coll->get_element_type();
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(!obj.is_ext())) {
+      array_params->element_.set_meta_type(obj.get_meta());
+      array_params->element_.set_accuracy(obj.get_accuracy());
+    } else {
+      CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
+      if (OB_SUCC(ret)) {
+        array_params->element_ = coll->get_element_type();
+      }
     }
   }
   return ret;

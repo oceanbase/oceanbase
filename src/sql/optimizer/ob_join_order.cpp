@@ -1139,6 +1139,8 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                              bool &create_basic_path) 
 {
   int ret = OB_SUCCESS;
+  create_das_path = false;
+  create_basic_path = false;
   IndexInfoEntry *index_info_entry;
   bool force_das_tsc = false;
   bool is_batch_update_table = false;
@@ -1164,6 +1166,8 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
   }
 
   if(OB_SUCC(ret)) {
+    bool hint_force_das = false;
+    bool hint_force_no_das = false;
     force_das_tsc = get_plan()->get_optimizer_context().in_nested_sql() ||
                     get_plan()->get_optimizer_context().has_pl_udf() ||
                     is_batch_update_table;
@@ -1171,9 +1175,17 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     //batch update table(multi queries or arraybinding)
     //contain nested sql(pl udf or in nested sql)
     //trigger or foreign key in the top sql not force to use DAS TSC
-    if (force_das_tsc ||
-        (index_info_entry->is_index_global() &&
-         get_plan()->get_optimizer_context().get_parallel() < 2)) {
+    if (force_das_tsc) {
+      create_das_path = true;
+      create_basic_path = false;
+    } else if (OB_FAIL(get_plan()->get_log_plan_hint().check_use_das(table_id, hint_force_das,
+                                                                     hint_force_no_das))) {
+      LOG_WARN("table_item is null", K(ret), K(table_id));
+    } else if (hint_force_das || hint_force_no_das) {
+      create_das_path = hint_force_das;
+      create_basic_path = hint_force_no_das;
+    } else if (index_info_entry->is_index_global() &&
+               get_plan()->get_optimizer_context().get_parallel() < 2) {
       create_das_path = true;
       create_basic_path = false;
     } else if ((helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) && 
@@ -1185,7 +1197,8 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
       create_das_path = false;
       create_basic_path = true;
     }
-    LOG_TRACE("will use das", K(force_das_tsc), K(helper.is_inner_path_), K(create_das_path), K(create_basic_path));
+    LOG_TRACE("will use das", K(force_das_tsc), K(hint_force_das), K(hint_force_no_das),
+                              K(helper.is_inner_path_), K(create_das_path), K(create_basic_path));
   }
   return ret;
 }

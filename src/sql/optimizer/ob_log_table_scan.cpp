@@ -1202,6 +1202,9 @@ int ObLogTableScan::print_used_hint(planText &plan_text)
     } else if (NULL != table_hint->parallel_hint_ && table_hint->parallel_hint_->get_parallel() > 1
                && OB_FAIL(table_hint->parallel_hint_->print_hint(plan_text))) {
       LOG_WARN("failed to print table parallel hint", K(ret));
+    } else if (NULL != table_hint->use_das_hint_ && (table_hint->use_das_hint_->is_enable_hint() ? use_das() : !use_das())
+               && OB_FAIL(table_hint->use_das_hint_->print_hint(plan_text))) {
+      LOG_WARN("failed to print table parallel hint", K(ret));
     } else if (table_hint->index_list_.empty()) {
       /*do nothing*/
     } else if (OB_UNLIKELY(table_hint->index_list_.count() != table_hint->index_hints_.count()
@@ -1247,31 +1250,24 @@ int ObLogTableScan::print_outline_data(planText &plan_text)
   int64_t &pos = plan_text.pos;
   TableItem *table_item = NULL;
   ObString qb_name;
-  ObItemType index_type = ref_table_id_ == index_table_id_ ? T_FULL_HINT: T_INDEX_HINT;
   const ObDMLStmt *stmt = NULL;
   const ObTableParallelHint *parallel_hint = NULL;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())
-      || OB_ISNULL(stmt->get_query_ctx())) {
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULl", K(ret), K(get_plan()), K(stmt));
-  } else if (OB_FAIL(stmt->get_query_ctx()->get_qb_name(stmt->get_stmt_id(), qb_name))) {
+  } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
     LOG_WARN("fail to get qb_name", K(ret), K(stmt->get_stmt_id()));
   } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get table item", K(ret), "table_id", table_id_);
-  } else if (T_FULL_HINT == index_type &&  // parallel hint
-             NULL != (parallel_hint = get_plan()->get_log_plan_hint().get_parallel_hint(table_id_)) &&
-             parallel_hint->get_parallel() > 1) {
-    if (OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\" ",
-                           ObQueryHint::get_outline_indent(plan_text.is_oneline_),
-                           ObHint::get_hint_name(T_TABLE_PARALLEL),
-                           qb_name.length(),
-                           qb_name.ptr()))) {
-      LOG_WARN("fail to print index hint", K(ret));
-    } else if (OB_FAIL(get_plan()->print_outline_table(plan_text, table_item))) {
-      LOG_WARN("fail to print index hint table", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF(" %ld)", parallel_hint->get_parallel()))) {
-      LOG_WARN("fail print parallel", K(ret), K_(parallel));
+  } else if (NULL != (parallel_hint = get_plan()->get_log_plan_hint().get_parallel_hint(table_id_)) &&
+             parallel_hint->get_parallel() > 1) { // parallel hint
+    ObTableParallelHint temp_hint;
+    temp_hint.set_parallel(parallel_hint->get_parallel());
+    temp_hint.set_qb_name(qb_name);
+    temp_hint.get_table().set_table(*table_item);
+    if (OB_FAIL(temp_hint.print_hint(plan_text))) {
+      LOG_WARN("failed to print table parallel hint", K(ret));
     }
   }
 
@@ -1287,19 +1283,24 @@ int ObLogTableScan::print_outline_data(planText &plan_text)
              && log_op_def::LOG_JOIN == get_parent()->get_type()
              && static_cast<ObLogJoin*>(get_parent())->is_late_mat()) {
     // late materialization right table, do not print index hint.
-  } else if (OB_FAIL(BUF_PRINTF("%s%s(@\"%.*s\" ",
-                                ObQueryHint::get_outline_indent(plan_text.is_oneline_),
-                                ObHint::get_hint_name(index_type),
-                                qb_name.length(),
-                                qb_name.ptr()))) {
-    LOG_WARN("fail to print index hint", K(ret));
-  } else if (OB_FAIL(get_plan()->print_outline_table(plan_text, table_item))) {
-    LOG_WARN("fail to print index hint table", K(ret));
-  } else if (T_INDEX_HINT == index_type &&
-             OB_FAIL(BUF_PRINTF(" \"%.*s\"", get_index_name().length(), get_index_name().ptr()))) {
-    LOG_WARN("fail to print index name", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF(")"))) {
-  } else { /*do nothing*/ }
+  } else {
+    ObIndexHint index_hint(ref_table_id_ == index_table_id_ ? T_FULL_HINT: T_INDEX_HINT);
+    index_hint.set_qb_name(qb_name);
+    index_hint.get_table().set_table(*table_item);
+    if (T_INDEX_HINT == index_hint.get_hint_type()) {
+      index_hint.get_index_name().assign(get_index_name().ptr(), get_index_name().length());
+    }
+    if (OB_FAIL(index_hint.print_hint(plan_text))) {
+      LOG_WARN("failed to print index hint", K(ret));
+    } else if (use_das()) {
+      ObIndexHint use_das_hint(T_USE_DAS_HINT);
+      use_das_hint.set_qb_name(qb_name);
+      use_das_hint.get_table().set_table(*table_item);
+      if (OB_FAIL(use_das_hint.print_hint(plan_text))) {
+        LOG_WARN("failed to print use das hint", K(ret));
+      }
+    }
+  }
 
   return ret;
 }
