@@ -2465,7 +2465,6 @@ bool ObLSRestoreResultMgr::can_retrieable_err_(const int err) const
     case OB_ERR_UNEXPECTED :
     case OB_ERR_SYS :
     case OB_INIT_TWICE :
-    case OB_SRC_DO_NOT_ALLOWED_MIGRATE :
     case OB_CANCELED :
     case OB_NOT_SUPPORTED :
     case OB_TENANT_HAS_BEEN_DROPPED :
