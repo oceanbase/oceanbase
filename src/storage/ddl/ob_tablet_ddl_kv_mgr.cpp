@@ -59,7 +59,7 @@ void ObTabletDDLKvMgr::destroy()
   table_key_.reset();
   cluster_version_ = 0;
   start_scn_.set_min();
-  max_freeze_scn_.reset();
+  max_freeze_scn_.set_min();
   table_id_ = 0;
   execution_id_ = 0;
   is_commit_success_ = false;
@@ -107,7 +107,7 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key,
   } else if (table_key.get_tablet_id() != tablet_id_) {
     ret = OB_ERR_SYS;
     LOG_WARN("tablet id not same", K(ret), K(table_key), K(tablet_id_));
-  } else if (start_scn_.is_valid()) {
+  } else if (start_scn_.is_valid_and_not_min()) {
     if (execution_id >= execution_id_ && start_scn >= start_scn_) {
       LOG_INFO("execution id changed, need cleanup", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_scn_), K(start_scn));
       cleanup_unlock();
@@ -129,7 +129,7 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key,
     start_scn_ = start_scn;
     max_freeze_scn_ = SCN::max(start_scn, checkpoint_scn);
   }
-  if (OB_SUCC(ret) && !checkpoint_scn.is_valid()) {
+  if (OB_SUCC(ret) && !checkpoint_scn.is_valid_and_not_min()) {
     // remove ddl sstable if exists and flush ddl start log ts and snapshot version into tablet meta
     if (OB_FAIL(update_tablet(start_scn_, table_key_.get_snapshot_version(), start_scn_))) {
       LOG_WARN("clean up ddl sstable failed", K(ret), K(ls_id_), K(tablet_id_));
@@ -246,7 +246,7 @@ int ObTabletDDLKvMgr::wait_ddl_commit(const SCN &start_scn, const SCN &prepare_s
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!start_scn.is_valid() || !prepare_scn.is_valid())) {
+  } else if (OB_UNLIKELY(!start_scn.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(start_scn), K(prepare_scn));
   } else if (!is_started()) {

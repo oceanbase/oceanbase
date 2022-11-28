@@ -38,7 +38,7 @@ public:
   ObTabletDDLKvMgr();
   ~ObTabletDDLKvMgr();
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
-  int ddl_start(const ObITable::TableKey &table_key, const share::SCN &start_log_ts, const int64_t cluster_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
+  int ddl_start(const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t cluster_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
   int ddl_prepare(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
   int ddl_commit(const share::SCN &start_scn, const share::SCN &prepare_scn, const bool is_replay); // try wait build major sstable
   int wait_ddl_commit(const share::SCN &start_scn, const share::SCN &prepare_scn);
@@ -46,12 +46,12 @@ public:
   int get_or_create_ddl_kv(const share::SCN &scn, ObDDLKVHandle &kv_handle); // used in active ddl kv guard
   int get_freezed_ddl_kv(const share::SCN &freeze_scn, ObDDLKVHandle &kv_handle); // locate ddl kv with exeact freeze log ts
   int get_ddl_kvs(const bool frozen_only, ObDDLKVsHandle &ddl_kvs_handle); // get all freeze ddl kvs
-  int freeze_ddl_kv(const share::SCN &freeze_scn = share::SCN::invalid_scn()); // freeze the active ddl kv, when memtable freeze or ddl commit
+  int freeze_ddl_kv(const share::SCN &freeze_scn = share::SCN::min_scn()); // freeze the active ddl kv, when memtable freeze or ddl commit
   int release_ddl_kvs(const share::SCN &rec_scn); // release persistent ddl kv, used in ddl merge task for free ddl kv
   int check_has_effective_ddl_kv(bool &has_ddl_kv); // used in ddl log handler for checkpoint
   int get_ddl_kv_min_scn(share::SCN &min_scn); // for calculate rec_scn of ls
   share::SCN get_start_scn() const { return start_scn_; }
-  bool is_started() const { return start_scn_.is_valid(); }
+  bool is_started() const { return start_scn_.is_valid_and_not_min(); }
   int set_commit_success();
   bool is_commit_success() const { return is_commit_success_; }
   common::ObTabletID get_tablet_id() const { return tablet_id_; }

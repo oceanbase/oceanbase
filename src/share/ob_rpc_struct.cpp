@@ -6666,7 +6666,7 @@ int ObRpcRemoteWriteDDLRedoLogArg::init(const uint64_t tenant_id,
 OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLRedoLogArg, tenant_id_, ls_id_, redo_info_);
 
 ObRpcRemoteWriteDDLPrepareLogArg::ObRpcRemoteWriteDDLPrepareLogArg()
-  : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(),
+  : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(SCN::min_scn()),
     table_id_(0), execution_id_(0), ddl_task_id_(0)
 {}
 
@@ -6679,7 +6679,7 @@ int ObRpcRemoteWriteDDLPrepareLogArg::init(const uint64_t tenant_id,
                                           const int64_t ddl_task_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || !start_scn.is_valid()
+  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || !start_scn.is_valid_and_not_min()
                   || table_id <= 0 || execution_id <= 0 || ddl_task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(table_key), K(start_scn),
@@ -6700,7 +6700,7 @@ OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLPrepareLogArg, tenant_id_, ls_id_, table_
                     table_id_, execution_id_, ddl_task_id_);
 
 ObRpcRemoteWriteDDLCommitLogArg::ObRpcRemoteWriteDDLCommitLogArg()
-  : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(), prepare_scn_()
+  : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), prepare_scn_(SCN::min_scn())
 {}
 
 int ObRpcRemoteWriteDDLCommitLogArg::init(const uint64_t tenant_id,
@@ -6710,8 +6710,8 @@ int ObRpcRemoteWriteDDLCommitLogArg::init(const uint64_t tenant_id,
                                           const SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || !start_scn.is_valid()
-                  || !prepare_scn.is_valid())) {
+  if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || !start_scn.is_valid_and_not_min()
+                  || !prepare_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(table_key), K(start_scn), K(prepare_scn));
   } else {

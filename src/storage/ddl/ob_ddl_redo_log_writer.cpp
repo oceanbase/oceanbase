@@ -621,7 +621,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
                                             SCN &start_scn)
 {
   int ret = OB_SUCCESS;
-  start_scn.reset();
+  start_scn.set_min();
   const enum ObReplayBarrierType replay_barrier_type = ObReplayBarrierType::STRICT_BARRIER;
   logservice::ObLogBaseHeader base_header(logservice::ObLogBaseType::DDL_LOG_BASE_TYPE,
                                           replay_barrier_type);
@@ -635,7 +635,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  SCN scn;
+  SCN scn = SCN::min_scn();
   bool is_external_consistent = false;
   ObBucketHashWLockGuard guard(bucket_lock_, log.get_table_key().get_tablet_id().hash());
   if (ddl_kv_mgr_handle.get_obj()->is_execution_id_older(log.get_execution_id())) {
@@ -652,7 +652,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
     LOG_WARN("fail to seriaize ddl start log", K(ret));
   } else if (OB_FAIL(log_handler->append(buffer,
                                          buffer_size,
-                                         SCN::base_scn(),
+                                         SCN::min_scn(),
                                          need_nonblock,
                                          cb,
                                          lsn,
@@ -722,8 +722,8 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  SCN base_scn = SCN::base_scn();
-  SCN scn;
+  SCN base_scn = SCN::min_scn();
+  SCN scn = SCN::min_scn();
   bool is_external_consistent = false;
   if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -784,7 +784,7 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
 }
 
 ObDDLRedoLogHandle::ObDDLRedoLogHandle()
-  : cb_(nullptr), scn_()
+  : cb_(nullptr), scn_(SCN::min_scn())
 {
 }
 
@@ -829,7 +829,7 @@ int ObDDLRedoLogHandle::wait(const int64_t timeout)
 }
 
 ObDDLCommitLogHandle::ObDDLCommitLogHandle()
-  : cb_(nullptr), commit_scn_()
+  : cb_(nullptr), commit_scn_(SCN::min_scn())
 {
 }
 
@@ -921,7 +921,7 @@ int ObDDLMacroBlockRedoWriter::remote_write_macro_redo(const ObAddr &leader_addr
 }
 
 ObDDLSSTableRedoWriter::ObDDLSSTableRedoWriter()
-  : is_inited_(false), remote_write_(false), start_scn_(),
+  : is_inited_(false), remote_write_(false), start_scn_(SCN::min_scn()),
     ls_id_(), tablet_id_(), ddl_redo_handle_(), leader_addr_(), leader_ls_id_(), buffer_(nullptr)
 {
 }
@@ -1059,7 +1059,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
                         "ddl_task_id", ddl_task_id);
   DEBUG_SYNC(BEFORE_DDL_WRITE_PREPARE_LOG);
 #endif
-  prepare_scn.reset();
+  prepare_scn.set_min();
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObDDLPrepareLog log;
@@ -1067,7 +1067,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn_.is_valid())) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn_.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_));
   } else if (OB_FAIL(log.init(table_key, get_start_scn()))) {
@@ -1121,7 +1121,7 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || SCN::min_scn() == start_scn_ || !prepare_scn.is_valid())) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || !start_scn_.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_), K(prepare_scn));
   } else if (OB_FAIL(log.init(table_key, get_start_scn(), prepare_scn))) {

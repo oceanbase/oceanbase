@@ -26,7 +26,7 @@ namespace storage
 ObTabletDDLInfo::ObTabletDDLInfo()
   : ddl_schema_version_(0),
     ddl_schema_refreshed_ts_(OB_INVALID_TIMESTAMP),
-    schema_version_change_scn_(),
+    schema_version_change_scn_(SCN::min_scn()),
     rwlock_()
 {
 }
@@ -43,7 +43,7 @@ void ObTabletDDLInfo::reset()
 {
   ddl_schema_version_ = 0;
   ddl_schema_refreshed_ts_ = OB_INVALID_TIMESTAMP;
-  schema_version_change_scn_.reset();
+  schema_version_change_scn_.set_min();
 }
 
 int ObTabletDDLInfo::get(int64_t &schema_version, int64_t &schema_refreshed_ts)
@@ -60,7 +60,7 @@ int ObTabletDDLInfo::update(const int64_t schema_version,
 {
   int ret = OB_SUCCESS;
   TCWLockGuard guard(rwlock_);
-  if (schema_version <= 0 || !scn.is_valid()) {
+  if (schema_version <= 0 || !scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(schema_version), K(scn));
   } else if (ddl_schema_version_ < schema_version) {

@@ -7470,7 +7470,7 @@ public:
            const int64_t ddl_task_id);
   bool is_valid() const
   {
-    return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && start_scn_.is_valid()
+    return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && start_scn_.is_valid_and_not_min()
            && table_id_ > 0 && execution_id_ > 0 && ddl_task_id_ > 0;
   }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(table_id),
@@ -7500,8 +7500,8 @@ public:
            const share::SCN &prepare_scn);
   bool is_valid() const
   {
-    return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && start_scn_.is_valid()
-           && prepare_scn_.is_valid();
+    return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && start_scn_.is_valid_and_not_min()
+           && prepare_scn_.is_valid_and_not_min();
   }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(prepare_scn));
 public:
