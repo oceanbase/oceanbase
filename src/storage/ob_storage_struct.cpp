@@ -211,7 +211,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const int64_t rebuild_seq)
   : table_handle_(),
     snapshot_version_(snapshot_version),
-    clog_checkpoint_ts_(0),
+    clog_checkpoint_scn_(),
     multi_version_start_(multi_version_start),
     keep_old_ddl_sstable_(true),
     need_report_(false),
@@ -223,6 +223,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     ddl_start_scn_(),
     ddl_snapshot_version_(0)
 {
+  clog_checkpoint_scn_.set_min();
 }
 
 ObUpdateTableStoreParam::ObUpdateTableStoreParam(
@@ -232,11 +233,11 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
     const bool need_report,
-    const int64_t clog_checkpoint_ts,
+    const palf::SCN clog_checkpoint_scn,
     const bool need_check_sstable)
   : table_handle_(table_handle),
     snapshot_version_(snapshot_version),
-    clog_checkpoint_ts_(clog_checkpoint_ts),
+    clog_checkpoint_scn_(),
     multi_version_start_(multi_version_start),
     keep_old_ddl_sstable_(true),
     need_report_(need_report),
@@ -248,6 +249,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     ddl_start_scn_(),
     ddl_snapshot_version_(0)
 {
+  clog_checkpoint_scn_ = clog_checkpoint_scn;
 }
 
 ObUpdateTableStoreParam::ObUpdateTableStoreParam(
@@ -260,7 +262,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const bool need_report)
   : table_handle_(table_handle),
     snapshot_version_(snapshot_version),
-    clog_checkpoint_ts_(0),
+    clog_checkpoint_scn_(),
     multi_version_start_(0),
     keep_old_ddl_sstable_(keep_old_ddl_sstable),
     need_report_(need_report),
@@ -272,13 +274,14 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     ddl_start_scn_(),
     ddl_snapshot_version_(0)
 {
+  clog_checkpoint_scn_.set_min();
 }
 
 bool ObUpdateTableStoreParam::is_valid() const
 {
   return multi_version_start_ >= ObVersionRange::MIN_VERSION
       && snapshot_version_ >= ObVersionRange::MIN_VERSION
-      && clog_checkpoint_ts_ >= 0
+      && clog_checkpoint_scn_.is_valid()
       && nullptr != storage_schema_
       && storage_schema_->is_valid()
       && rebuild_seq_ >= 0;
@@ -353,7 +356,7 @@ int ObBatchUpdateTableStoreParam::get_max_clog_checkpoint_ts(int64_t &clog_check
       } else if (!table->is_multi_version_minor_sstable()) {
         //do nothing
       } else {
-        clog_checkpoint_ts = std::max(clog_checkpoint_ts, table->get_end_log_ts());
+        clog_checkpoint_ts = std::max(clog_checkpoint_ts, table->get_end_scn().get_val_for_tx());
       }
     }
   }

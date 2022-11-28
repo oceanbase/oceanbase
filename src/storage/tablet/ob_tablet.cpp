@@ -221,7 +221,6 @@ int ObTablet::init(
   int64_t max_sync_schema_version = 0;
   int64_t input_max_sync_schema_version = 0;
   allocator_ = &(MTL(ObTenantMetaMemMgr*)->get_tenant_allocator());
-  palf::SCN tmp_clog_checkpoint_scn;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -239,12 +238,10 @@ int ObTablet::init(
   } else if (FALSE_IT(input_max_sync_schema_version = MIN(MAX(param.storage_schema_->schema_version_,
       old_tablet.storage_schema_.schema_version_), max_sync_schema_version))) {
     // use min schema version to avoid lose storage_schema in replay/reboot
-  } else if (OB_FAIL(tmp_clog_checkpoint_scn.convert_for_tx(param.clog_checkpoint_ts_))) {
-    LOG_WARN("convert for tx failed", K(ret));
   } else if (OB_FAIL(tablet_meta_.init(*allocator_, old_tablet.tablet_meta_,
       param.snapshot_version_, param.multi_version_start_,
       tx_data, ddl_data, autoinc_seq, input_max_sync_schema_version,
-      tmp_clog_checkpoint_scn, param.ddl_checkpoint_scn_, param.ddl_start_scn_, param.ddl_snapshot_version_))) {
+      param.clog_checkpoint_scn_, param.ddl_checkpoint_scn_, param.ddl_start_scn_, param.ddl_snapshot_version_))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(param),
         K(tx_data), K(ddl_data), K(autoinc_seq), K(input_max_sync_schema_version));
   } else if (OB_FAIL(table_store_.init(*allocator_, this, param, old_tablet.table_store_))) {
@@ -1131,7 +1128,7 @@ int ObTablet::update_upper_trans_version(ObLS &ls, bool &is_updated)
         if (OB_FAIL(ls.get_upper_trans_version_before_given_scn(
             sstable->get_end_scn(), tmp_scn))) {
           LOG_WARN("failed to get upper trans version before given log ts", K(ret), KPC(sstable));
-        } else if (FALSE_IT(max_trans_version = tmp_scn.is_max() ? INT64_MAX : tmp_scn.get_val_for_lsn_allocator())) {
+        } else if (FALSE_IT(max_trans_version = tmp_scn.get_val_for_tx())) {
         } else if (0 == max_trans_version) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("max trans version should not be 0", KPC(sstable));
@@ -1308,7 +1305,7 @@ int ObTablet::do_rowkey_exists(
     LOG_WARN("invalid argument", K(ret), K(store_ctx), K(rowkey), K(query_flag));
   } else if (OB_FAIL(allow_to_read_())) {
     LOG_WARN("not allowed to read", K(ret), K(tablet_meta_));
-  } else if (OB_FAIL(get_read_tables(store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator(),
+  } else if (OB_FAIL(get_read_tables(store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
                                      table_iter,
                                      query_flag.index_invalid_))) {
     LOG_WARN("get read iterator fail", K(ret));
@@ -1442,7 +1439,7 @@ int ObTablet::rowkeys_exists(
     LOG_WARN("tablet id doesn't match", K(ret), K(relative_table.get_tablet_id()), K(tablet_meta_.tablet_id_));
   } else if (OB_FAIL(allow_to_read_())) {
     LOG_WARN("not allowed to read", K(ret), K(tablet_meta_));
-  } else if (OB_FAIL(get_read_tables(store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator(),
+  } else if (OB_FAIL(get_read_tables(store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
                                      tables_iter,
                                      relative_table.allow_not_ready()))) {
     LOG_WARN("get read iterator fail", K(ret));
@@ -1672,7 +1669,7 @@ int ObTablet::release_memtables(const palf::SCN scn)
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
     LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (OB_FAIL(memtable_mgr->release_memtables(scn.get_val_for_gts()))) {
+  } else if (OB_FAIL(memtable_mgr->release_memtables(scn.get_val_for_tx()))) {
     LOG_WARN("failed to release memtables", K(ret), K(scn));
   }
 

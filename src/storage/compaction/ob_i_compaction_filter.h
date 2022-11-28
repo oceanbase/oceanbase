@@ -105,9 +105,9 @@ public:
 public:
   // TODO(scn): change scn of int64_t type to palf::SCN
   int64_t get_max_filtered_end_scn_v0() { return max_filtered_end_scn_; }
-  palf::SCN get_max_filtered_end_scn() { palf::SCN tmp_scn; tmp_scn.convert_for_lsn_allocator(max_filtered_end_scn_); return tmp_scn; }
+  palf::SCN get_max_filtered_end_scn() { palf::SCN tmp_scn; tmp_scn.convert_for_tx(max_filtered_end_scn_); return tmp_scn; }
   int64_t get_recycle_scn_v0() { return filter_val_; }
-  palf::SCN get_recycle_scn() { palf::SCN tmp_scn; tmp_scn.convert_for_lsn_allocator(filter_val_); return tmp_scn; }
+  palf::SCN get_recycle_scn() { palf::SCN tmp_scn; tmp_scn.convert_for_tx(filter_val_); return tmp_scn; }
 
 private:
   bool is_inited_;

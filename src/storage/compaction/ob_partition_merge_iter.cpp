@@ -112,7 +112,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
   } else {
     if (merge_param.version_range_.snapshot_version_ >= palf::OB_MAX_SCN_TS_NS) {
       tmp_scn.set_max();
-    } else if (OB_FAIL(tmp_scn.convert_for_lsn_allocator(merge_param.version_range_.snapshot_version_))) {
+    } else if (OB_FAIL(tmp_scn.convert_for_tx(merge_param.version_range_.snapshot_version_))) {
       LOG_WARN("Failed to convert", K(ret), K_(merge_param.version_range_.snapshot_version));
     }
   }

@@ -778,8 +778,8 @@ int ObTabletTableStore::build_minor_tables(
       // no minor tables to override new_table, skip to add new_table
       ret = OB_NO_NEED_MERGE;
       LOG_WARN("No minor tables in old store, cannot add a minor sstable", K(ret), K(param), KPC(new_table), K(old_store));
-    } else if (new_table->get_end_log_ts() < old_minor_tables.get_boundary_table(false/*first*/)->get_start_log_ts()
-            || new_table->get_start_log_ts() > old_minor_tables.get_boundary_table(true/*last*/)->get_end_log_ts()) {
+    } else if (new_table->get_end_scn() < old_minor_tables.get_boundary_table(false/*first*/)->get_start_scn()
+            || new_table->get_start_scn() > old_minor_tables.get_boundary_table(true/*last*/)->get_end_scn()) {
       ret = OB_NO_NEED_MERGE;
       LOG_WARN("No minor tables covered by new minor table in old store, cannot add the new minor table",
           K(ret), K(param), KPC(new_table), K(old_store));
@@ -1289,7 +1289,7 @@ int ObTabletTableStore::build_ha_ddl_tables_(
       break;
     } else if (!new_table->is_ddl_sstable()) {
       //do nothing
-    } else if (OB_NOT_NULL(last_ddl_table) && new_table->get_start_log_ts() != last_ddl_table->get_end_log_ts()) {
+    } else if (OB_NOT_NULL(last_ddl_table) && new_table->get_start_scn() != last_ddl_table->get_end_scn()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ddl table is not continue", K(ret), K(param), K(old_store));
     } else if (OB_FAIL(ddl_tables.push_back(new_table))) {
@@ -1304,7 +1304,7 @@ int ObTabletTableStore::build_ha_ddl_tables_(
     if (OB_ISNULL(new_table) || !new_table->is_ddl_sstable()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new table is null or table type is unexpected", K(ret), KPC(new_table));
-    } else if (OB_NOT_NULL(last_ddl_table) && new_table->get_start_log_ts() != last_ddl_table->get_end_log_ts()) {
+    } else if (OB_NOT_NULL(last_ddl_table) && new_table->get_start_scn() != last_ddl_table->get_end_scn()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ddl table is not continue", K(ret), K(param), K(old_store));
     } else if (OB_FAIL(ddl_tables.push_back(new_table))) {

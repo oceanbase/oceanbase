@@ -373,7 +373,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
             LOG_WARN("failed to add dignose info about freeze_info", K(tmp_ret), K(merged_version));
           }
         } else {
-          compaction_scn = freeze_info.freeze_scn.get_val_for_inner_table_field();
+          compaction_scn = freeze_info.freeze_scn.get_val_for_tx();
         }
       }
 

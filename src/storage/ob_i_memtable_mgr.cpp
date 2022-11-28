@@ -132,7 +132,7 @@ int ObIMemtableMgr::release_memtables(const int64_t log_ts)
             && memtable->is_empty()
             && !memtable->get_is_force_freeze()) {
           break;
-        } else if (memtable->get_end_log_ts() <= log_ts
+        } else if (memtable->get_end_scn().get_val_for_tx() <= log_ts
             && memtable->can_be_minor_merged()) {
           if (OB_FAIL(release_head_memtable_(memtable))) {
             STORAGE_LOG(WARN, "fail to release memtable", K(ret), KPC(memtable));

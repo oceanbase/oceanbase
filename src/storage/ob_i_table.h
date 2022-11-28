@@ -129,8 +129,6 @@ public:
     OB_INLINE bool is_remote_logical_minor_sstable() const { return ObITable::is_remote_logical_minor_sstable(table_type_); }
 
     OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
-    OB_INLINE int64_t get_start_log_ts() const { return get_start_scn().get_val_for_inner_table_field(); }
-    OB_INLINE int64_t get_end_log_ts() const { return get_end_scn().get_val_for_inner_table_field(); }
     OB_INLINE palf::SCN get_start_scn() const { return scn_range_.start_scn_; }
     OB_INLINE palf::SCN get_end_scn() const { return scn_range_.end_scn_; }
     OB_INLINE int64_t get_snapshot_version() const
@@ -205,8 +203,6 @@ public:
       const common::ObIArray<blocksstable::ObDatumRange> &ranges,
       ObStoreRowIterator *&row_iter) = 0;
 
-  virtual OB_INLINE int64_t get_start_log_ts() const;
-  virtual OB_INLINE int64_t get_end_log_ts() const;
   virtual OB_INLINE palf::SCN get_start_scn() const;
   virtual OB_INLINE palf::SCN get_end_scn() const;
   virtual OB_INLINE share::ObScnRange &get_scn_range() { return key_.scn_range_; }
@@ -467,15 +463,6 @@ OB_INLINE bool ObITable::TableKey::is_valid() const
   return valid;
 }
 
-OB_INLINE int64_t ObITable::get_start_log_ts() const
-{
-  return key_.get_start_log_ts();
-}
-
-OB_INLINE int64_t ObITable::get_end_log_ts() const
-{
-  return key_.get_end_log_ts();
-}
 
 OB_INLINE palf::SCN ObITable::get_start_scn() const
 {

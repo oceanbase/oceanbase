@@ -1082,7 +1082,7 @@ int ObMultipleMerge::prepare_read_tables(bool refresh)
       }
     } else if (OB_FAIL(tablet_handle.get_obj()->get_read_tables(
         get_table_param_.sample_info_.is_no_sample()
-          ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator()
+          ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
           : INT64_MAX,
         get_table_param_.tablet_iter_,
         false/*allow_not_ready*/))) {
@@ -1210,7 +1210,7 @@ int ObMultipleMerge::refresh_tablet_iter()
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
         tablet_id,
         get_table_param_.sample_info_.is_no_sample()
-          ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator()
+          ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
           : INT64_MAX,
         get_table_param_.tablet_iter_,
         false/*allow_not_ready*/))) {
