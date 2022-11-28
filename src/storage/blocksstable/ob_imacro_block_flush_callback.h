@@ -20,6 +20,7 @@ namespace blocksstable
 {
 class ObMacroBlockHandle;
 class ObMacroBlocksWriteCtx;
+struct ObLogicMacroBlockId;
 
 class ObIMacroBlockFlushCallback
 {

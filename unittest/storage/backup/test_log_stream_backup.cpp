@@ -32,6 +32,7 @@
 #include "storage/backup/ob_backup_extern_info_mgr.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "share/scheduler/ob_sys_task_stat.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -377,7 +378,7 @@ TEST_F(TestLogStreamBackup, test_backup_tmp_file)
   ObBackupMacroBlockIndex index;
   for (int64_t i = 1; OB_SUCC(ret) && i <= loop_count; ++i) {
     index.reset();
-    index.logic_id_ = ObLogicMacroBlockId(1, 1, i);
+    index.logic_id_ = blocksstable::ObLogicMacroBlockId(1, 1, i);
     index.backup_set_id_ = backup_set_desc_.backup_set_id_;
     index.ls_id_ = ObLSID(i);
     index.turn_id_ = turn_id_;
@@ -392,7 +393,7 @@ TEST_F(TestLogStreamBackup, test_backup_tmp_file)
     ObBackupMacroBlockIndex new_index;
     ret = buffer_node.get_backup_index(new_index);
     ASSERT_EQ(OB_SUCCESS, ret);
-    ObLogicMacroBlockId logic_id(1, 1, i);
+    blocksstable::ObLogicMacroBlockId logic_id(1, 1, i);
     ASSERT_EQ(logic_id, new_index.logic_id_);
   }
 }
@@ -427,7 +428,7 @@ TEST_F(TestLogStreamBackup, test_backup_utils)
   const int64_t macro_id_count = 10 * 1024;
   ObArray<ObBackupMacroBlockId> tmp_array;
   for (int64_t i = macro_id_count; OB_SUCC(ret) && i > 0; --i) {
-    ObLogicMacroBlockId logic_id(i, 1, tablet_id.id());
+    blocksstable::ObLogicMacroBlockId logic_id(i, 1, tablet_id.id());
     MacroBlockId macro_block_id;
     ObBackupMacroBlockId macro_id;
     macro_id.logic_id_ = logic_id;
@@ -488,7 +489,7 @@ TEST_F(TestLogStreamBackup, test_backup_ctx)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObBufferReader buffer_reader;
   for (int64_t i = 1; OB_SUCC(ret) && i <= 10; ++i) {
-    common::ObLogicMacroBlockId logic_id(1, 1, i);
+    blocksstable::blocksstable::ObLogicMacroBlockId logic_id(1, 1, i);
     ret = prepare_random_buffer_(allocator, i * 1024, buffer_reader);
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = backup_data_ctx.write_macro_block_data(buffer_reader, logic_id);
@@ -629,7 +630,7 @@ TEST_F(TestLogStreamBackup, test_backup_index_store)
   const int64_t loop_count = 10;
   ObBackupMacroBlockIndex macro_index;
   for (int64_t i = 1; OB_SUCC(ret) && i <= loop_count; ++i) {
-    ObLogicMacroBlockId logic_id(1, 1, i);
+    blocksstable::ObLogicMacroBlockId logic_id(1, 1, i);
     ret = macro_index_store.get_macro_block_index(logic_id, macro_index);
     ASSERT_EQ(OB_SUCCESS, ret);
     LOG_INFO("get backup macro block index", K(logic_id), K(macro_index));
@@ -809,14 +810,14 @@ TEST_F(TestLogStreamBackup, test_macro_range_index_iterator)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   for (int64_t i = 1; OB_SUCC(ret) && i <= 1023; ++i) {
-    ObLogicMacroBlockId logic_id(i, 1, 1);
+    blocksstable::ObLogicMacroBlockId logic_id(i, 1, 1);
     ObBackupMacroBlockIndex macro_index;
     ret = macro_index_store.get_macro_block_index(logic_id, macro_index);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
   for (int64_t i = 1; OB_SUCC(ret) && i <= 1023; ++i) {
-    ObLogicMacroBlockId logic_id(i, 1, 2);
+    blocksstable::ObLogicMacroBlockId logic_id(i, 1, 2);
     ObBackupMacroBlockIndex macro_index;
     ret = macro_index_store.get_macro_block_index(logic_id, macro_index);
     ASSERT_EQ(OB_SUCCESS, ret);

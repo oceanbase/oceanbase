@@ -23,6 +23,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -30,6 +31,7 @@ using namespace oceanbase::archive;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::logservice;
 using namespace oceanbase::share;
+using namespace oceanbase::blocksstable;
 
 int ObDDLCtrlSpeedHandleItem::assign(const ObDDLCtrlSpeedHandleItem &speed_handle_item)
 {
@@ -94,7 +96,7 @@ int ObDDLCtrlSpeedHandleItem::refresh()
                                                            force_wait /* force_wait, which is unused */,
                                                            ignore))) {
     LOG_WARN("fail to get archive speed for ls", K(ret), K(ls_id_));
-  } 
+  }
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(log_service->get_palf_disk_options(disk_opt))) {
@@ -112,7 +114,7 @@ int ObDDLCtrlSpeedHandleItem::refresh()
     disk_used_stop_write_threshold_ = (disk_opt.log_disk_utilization_threshold_ + disk_opt.log_disk_utilization_limit_threshold_) / 2;
     need_stop_write_ = 100.0 * total_used_space / total_disk_space >= disk_used_stop_write_threshold_ ? true : false;
   }
-  LOG_DEBUG("current ddl clog write speed", K(ret), K(need_stop_write_), K(ls_id_), K(archive_speed), K(write_speed_), 
+  LOG_DEBUG("current ddl clog write speed", K(ret), K(need_stop_write_), K(ls_id_), K(archive_speed), K(write_speed_),
     K(total_used_space), K(total_disk_space), K(disk_used_stop_write_threshold_));
   return ret;
 }
@@ -332,7 +334,7 @@ int ObDDLCtrlSpeedHandle::refresh()
       LOG_WARN("fail to erase_refactored", K(ret), K(speed_handle_key));
     }
   }
-  
+
   // 2. update speed and disk config.
   if (OB_SUCC(ret)) {
     UpdateSpeedHandleItemFn update_speed_handle_item_fn;

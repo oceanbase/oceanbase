@@ -22,6 +22,7 @@
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "test_backup.h"
 #include "share/backup/ob_backup_io_adapter.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -42,7 +43,7 @@ public:
 
 private:
   void inner_init_();
-  int prepare_macro_block_list_(const int64_t macro_count, common::ObIArray<common::ObLogicMacroBlockId> &list);
+  int prepare_macro_block_list_(const int64_t macro_count, common::ObIArray<blocksstable::ObLogicMacroBlockId> &list);
   int prepare_meta_list_(const int64_t meta_count, common::ObIArray<common::ObTabletID> &list);
   void clean_env_();
   void build_backup_file_header_(ObBackupFileHeader &file_header);
@@ -170,12 +171,12 @@ void TestBackupCtx::inner_init_()
 }
 
 int TestBackupCtx::prepare_macro_block_list_(
-    const int64_t macro_count, common::ObIArray<common::ObLogicMacroBlockId> &list)
+    const int64_t macro_count, common::ObIArray<blocksstable::ObLogicMacroBlockId> &list)
 {
   int ret = OB_SUCCESS;
   list.reset();
   for (int64_t i = 1; OB_SUCC(ret) && i <= macro_count; ++i) {
-    const common::ObLogicMacroBlockId logic_id(1, 1, i);
+    const blocksstable::ObLogicMacroBlockId logic_id(1, 1, i);
     ret = list.push_back(logic_id);
     EXPECT_EQ(OB_SUCCESS, ret);
   }
@@ -226,7 +227,7 @@ int TestBackupCtx::do_backup_ctx_(const int64_t macro_count, const int64_t meta_
   backup_data_ctx.write_backup_file_header(file_header);
   for (int64_t i = 0; OB_SUCC(ret) && i < macro_list.count(); ++i) {
     ObBackupMacroBlockIndex macro_index;
-    const common::ObLogicMacroBlockId &logic_id = macro_list.at(i);
+    const blocksstable::ObLogicMacroBlockId &logic_id = macro_list.at(i);
     ret = make_random_buffer(allocator, buffer_reader);
     EXPECT_EQ(OB_SUCCESS, ret);
     ret = backup_data_ctx.write_macro_block_data(buffer_reader, logic_id, macro_index);

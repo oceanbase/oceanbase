@@ -37,6 +37,7 @@
 #include "logservice/archiveservice/ob_archive_file_utils.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "storage/ob_storage_rpc.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 #include <algorithm>
 
 using namespace oceanbase::blocksstable;
@@ -315,7 +316,7 @@ int ObLSBackupMetaDagNet::init_by_param(const share::ObIDagInitParam *param)
     param_.ls_id_ = init_param.ls_id_;
     param_.turn_id_ = init_param.turn_id_;
     param_.retry_id_ = init_param.retry_id_;
-    param_.dest_id_ = init_param.dest_id_; 
+    param_.dest_id_ = init_param.dest_id_;
     report_ctx_ = init_param.report_ctx_;
     start_scn_ = init_param.start_scn_;
     is_inited_ = true;
@@ -383,7 +384,7 @@ int ObLSBackupDagInitParam::assign(const ObLSBackupDagInitParam &param)
     backup_stage_ = param.backup_stage_;
     dest_id_ = param.dest_id_;
   }
-  return ret; 
+  return ret;
 }
 
 /* ObLSBackupDagNet */
@@ -687,7 +688,7 @@ int ObLSBackupDataDagNet::get_batch_size_(int64_t &batch_size)
 
 int ObLSBackupDataDagNet::prepare_backup_tablet_provider_(const ObLSBackupParam &param,
     const share::ObBackupDataType &backup_data_type, ObLSBackupCtx &ls_backup_ctx,
-    ObBackupIndexKVCache &index_kv_cache, common::ObMySQLProxy &sql_proxy, 
+    ObBackupIndexKVCache &index_kv_cache, common::ObMySQLProxy &sql_proxy,
     ObIBackupTabletProvider *&provider)
 {
   int ret = OB_SUCCESS;
@@ -744,7 +745,7 @@ int ObBackupBuildTenantIndexDagNet::init_by_param(const share::ObIDagInitParam *
     param_.ls_id_ = ObLSID(0);  // 0 means build all ls backup index
     param_.turn_id_ = init_param.turn_id_;
     param_.retry_id_ = init_param.retry_id_;
-    param_.dest_id_ = init_param.dest_id_; 
+    param_.dest_id_ = init_param.dest_id_;
     backup_data_type_ = init_param.backup_data_type_;
     report_ctx_ = init_param.report_ctx_;
     is_inited_ = true;
@@ -898,7 +899,7 @@ int ObLSBackupComplementLogDagNet::init_by_param(const share::ObIDagInitParam *p
     param_.ls_id_ = init_param.ls_id_;
     param_.turn_id_ = init_param.turn_id_;
     param_.retry_id_ = init_param.retry_id_;
-    param_.dest_id_ = init_param.dest_id_; 
+    param_.dest_id_ = init_param.dest_id_;
     report_ctx_ = init_param.report_ctx_;
     compl_start_scn_ = init_param.compl_start_scn_;
     compl_end_scn_ = init_param.compl_end_scn_;
@@ -1868,7 +1869,7 @@ int ObLSBackupComplementLogDag::create_first_task()
   ObLSBackupComplementLogTask *task = NULL;
   if (OB_FAIL(alloc_task(task))) {
     LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(job_desc_, backup_dest_, tenant_id_, backup_set_desc_, ls_id_, compl_start_scn_, 
+  } else if (OB_FAIL(task->init(job_desc_, backup_dest_, tenant_id_, backup_set_desc_, ls_id_, compl_start_scn_,
       compl_end_scn_, turn_id_, retry_id_, report_ctx_))) {
     LOG_WARN("failed to init task", K(ret), K_(tenant_id), K_(backup_set_desc), K_(ls_id), K_(compl_start_scn), K_(compl_end_scn));
   } else if (OB_FAIL(add_task(*task))) {
@@ -2976,7 +2977,7 @@ int ObLSBackupDataTask::prepare_tablet_meta_reader_(const common::ObTabletID &ta
 }
 
 int ObLSBackupDataTask::get_next_macro_block_data_(
-    ObMultiMacroBlockBackupReader *reader, ObBufferReader &buffer_reader, common::ObLogicMacroBlockId &logic_id)
+    ObMultiMacroBlockBackupReader *reader, ObBufferReader &buffer_reader, blocksstable::ObLogicMacroBlockId &logic_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(reader)) {
@@ -3008,7 +3009,7 @@ int ObLSBackupDataTask::check_macro_block_data_(const ObBufferReader &buffer)
 }
 
 int ObLSBackupDataTask::write_macro_block_data_(
-    const ObBufferReader &data, const common::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index)
+    const ObBufferReader &data, const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index)
 {
   int ret = OB_SUCCESS;
   if (!data.is_valid() || !logic_id.is_valid()) {
@@ -3138,7 +3139,7 @@ int ObLSBackupDataTask::do_generate_next_backup_dag_()
       }
     }
   }
-  
+
   if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(next_dag)) {
     scheduler->free_dag(*next_dag);
   }
@@ -3206,7 +3207,7 @@ int ObLSBackupDataTask::finish_backup_items_()
   return ret;
 }
 
-int ObLSBackupDataTask::get_backup_item_(const common::ObLogicMacroBlockId &logic_id, ObBackupProviderItem &item)
+int ObLSBackupDataTask::get_backup_item_(const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupProviderItem &item)
 {
   int ret = OB_SUCCESS;
   bool found = false;
@@ -3340,8 +3341,8 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
   return ret;
 }
 
-int ObLSBackupDataTask::check_macro_block_need_reuse_when_recover_(const common::ObLogicMacroBlockId &logic_id,
-    const common::ObArray<common::ObLogicMacroBlockId> &logic_id_list, bool &need_reuse)
+int ObLSBackupDataTask::check_macro_block_need_reuse_when_recover_(const blocksstable::ObLogicMacroBlockId &logic_id,
+    const common::ObArray<blocksstable::ObLogicMacroBlockId> &logic_id_list, bool &need_reuse)
 {
   int ret = OB_SUCCESS;
   need_reuse = false;
@@ -4304,7 +4305,7 @@ int ObLSBackupComplementLogTask::process()
 #endif
   // TODO: redefine report backup complement task result in 4.1.
   if (OB_SUCCESS != (tmp_ret = ObBackupUtils::report_task_result(
-                         job_desc_.job_id_, job_desc_.task_id_, tenant_id_, ls_id_, turn_id_, retry_id_, 
+                         job_desc_.job_id_, job_desc_.task_id_, tenant_id_, ls_id_, turn_id_, retry_id_,
                          this->get_dag()->get_dag_id(), ret, report_ctx_))) {
     LOG_WARN("failed to report task result", K(tmp_ret), K_(job_desc), K_(tenant_id), K_(ls_id), K(ret));
   } else {

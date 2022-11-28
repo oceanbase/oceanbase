@@ -21,6 +21,7 @@
 #include "share/backup/ob_backup_path.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/blocksstable/ob_data_buffer.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase {
 namespace backup {
@@ -137,10 +138,10 @@ public:
       ObBackupIndexKVCache &index_kv_cache, common::ObMySQLProxy &sql_proxy);
   // for restore mode
   int init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
-      const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc, 
+      const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc,
       ObBackupIndexKVCache &index_kv_cache);
-  int get_macro_block_index(const common::ObLogicMacroBlockId &macro_id, ObBackupMacroBlockIndex &macro_index);
-  int get_macro_range_index(const common::ObLogicMacroBlockId &macro_id, ObBackupMacroRangeIndex &range_index);
+  int get_macro_block_index(const blocksstable::ObLogicMacroBlockId &macro_id, ObBackupMacroBlockIndex &macro_index);
+  int get_macro_range_index(const blocksstable::ObLogicMacroBlockId &macro_id, ObBackupMacroRangeIndex &range_index);
   void reset();
 
 public:
@@ -150,18 +151,18 @@ public:
 
 private:
   int inner_get_macro_block_range_index_(
-      const common::ObLogicMacroBlockId &logic_id, ObBackupMacroRangeIndex &range_index);
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroRangeIndex &range_index);
   int decode_range_index_from_block_(const int64_t end_pos, blocksstable::ObBufferReader &buffer_reader,
       common::ObArray<ObBackupMacroRangeIndex> &range_index);
   int decode_range_index_index_from_block_(const int64_t end_pos, blocksstable::ObBufferReader &buffer_reader,
       common::ObArray<ObBackupMacroRangeIndexIndex> &range_index_index);
-  int find_index_lower_bound_(const common::ObLogicMacroBlockId &logic_macro_block_id,
+  int find_index_lower_bound_(const blocksstable::ObLogicMacroBlockId &logic_macro_block_id,
       const common::ObArray<ObBackupMacroRangeIndex> &index_list, ObBackupMacroRangeIndex &index);
-  int find_index_index_lower_bound_(const common::ObLogicMacroBlockId &logic_macro_block_id,
+  int find_index_index_lower_bound_(const blocksstable::ObLogicMacroBlockId &logic_macro_block_id,
       const common::ObArray<ObBackupMacroRangeIndexIndex> &index_index_list, ObBackupMacroRangeIndexIndex &index_index);
   int get_macro_block_backup_path_(const ObBackupMacroRangeIndex &range_index, share::ObBackupPath &backup_path);
   int get_backup_set_desc_(const ObBackupMacroRangeIndex &range_index, share::ObBackupSetDesc &backup_set_desc);
-  int get_macro_block_index_(const common::ObLogicMacroBlockId &macro_id, const ObBackupMacroRangeIndex &range_index,
+  int get_macro_block_index_(const blocksstable::ObLogicMacroBlockId &macro_id, const ObBackupMacroRangeIndex &range_index,
       ObBackupMacroBlockIndex &macro_index);
   virtual int fill_backup_set_descs_(const uint64_t tenant_id, const int64_t backup_set_id, common::ObMySQLProxy &sql_proxy);
 
@@ -228,10 +229,10 @@ public:
   virtual ~ObBackupMacroBlockIndexStoreWrapper();
   // for restore
   int init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
-      const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc, 
+      const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc,
       ObBackupIndexKVCache &index_kv_cache);
   int get_macro_block_index(const share::ObBackupDataType &backup_data_type,
-      const common::ObLogicMacroBlockId &macro_id, ObBackupMacroBlockIndex &macro_index);
+      const blocksstable::ObLogicMacroBlockId &macro_id, ObBackupMacroBlockIndex &macro_index);
 
 private:
   int get_index_store_(const share::ObBackupDataType &type, ObBackupMacroBlockIndexStore *&index_store);

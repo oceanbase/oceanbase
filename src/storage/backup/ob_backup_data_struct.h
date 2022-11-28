@@ -23,6 +23,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "share/ob_rs_mgr.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase {
 namespace backup {
@@ -96,7 +97,7 @@ struct ObLSBackupParam {
   int64_t task_id_;
   share::ObBackupDest backup_dest_;
   uint64_t tenant_id_;
-  int64_t dest_id_; 
+  int64_t dest_id_;
   share::ObBackupSetDesc backup_set_desc_;
   share::ObLSID ls_id_;
   int64_t turn_id_;
@@ -186,7 +187,7 @@ struct ObBackupMacroBlockId {
   bool is_valid();
   void reset();
   TO_STRING_KV(K_(logic_id), K_(macro_block_id));
-  common::ObLogicMacroBlockId logic_id_;
+  blocksstable::ObLogicMacroBlockId logic_id_;
   blocksstable::MacroBlockId macro_block_id_;
 };
 
@@ -199,7 +200,7 @@ struct ObBackupPhysicalID final {
   void reset();
   bool is_valid() const;
   int get_backup_macro_block_index(
-      const common::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index) const;
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index) const;
   ObBackupPhysicalID &operator=(const ObBackupPhysicalID &other);
   bool operator==(const ObBackupPhysicalID &other) const;
   bool operator!=(const ObBackupPhysicalID &other) const;
@@ -264,7 +265,7 @@ public:
   bool operator==(const ObBackupMacroBlockIndex &other) const;
   TO_STRING_KV(
       K_(logic_id), K_(backup_set_id), K_(ls_id), K_(turn_id), K_(retry_id), K_(file_id), K_(offset), K_(length));
-  common::ObLogicMacroBlockId logic_id_;
+  blocksstable::ObLogicMacroBlockId logic_id_;
   int64_t backup_set_id_;
   share::ObLSID ls_id_;
   int64_t turn_id_;
@@ -304,8 +305,8 @@ public:
   bool operator==(const ObBackupMacroRangeIndex &other) const;
   TO_STRING_KV(K_(start_key), K_(end_key), K_(backup_set_id), K_(ls_id), K_(turn_id), K_(retry_id), K_(file_id),
       K_(offset), K_(length));
-  common::ObLogicMacroBlockId start_key_;
-  common::ObLogicMacroBlockId end_key_;
+  blocksstable::ObLogicMacroBlockId start_key_;
+  blocksstable::ObLogicMacroBlockId end_key_;
   int64_t backup_set_id_;
   share::ObLSID ls_id_;
   int64_t turn_id_;
@@ -349,14 +350,14 @@ struct ObBackupMacroRangeIndexCompareFunctor {
 };
 
 struct ObCompareBackupMacroRangeIndexLogicId {
-  bool operator()(const ObBackupMacroRangeIndex &item, const common::ObLogicMacroBlockId &logic_id) const
+  bool operator()(const ObBackupMacroRangeIndex &item, const blocksstable::ObLogicMacroBlockId &logic_id) const
   {
     return item.end_key_ < logic_id;
   }
 };
 
 struct ObCompareBackupMacroRangeIndexIndexLogicId {
-  bool operator()(const ObBackupMacroRangeIndexIndex &item, const common::ObLogicMacroBlockId &logic_id) const
+  bool operator()(const ObBackupMacroRangeIndexIndex &item, const blocksstable::ObLogicMacroBlockId &logic_id) const
   {
     return item.end_key_.end_key_ < logic_id;
   }
@@ -429,7 +430,7 @@ public:
   TO_STRING_KV(K_(tablet_id), K_(sstable_meta), K_(logic_id_list));
   common::ObTabletID tablet_id_;
   blocksstable::ObMigrationSSTableParam sstable_meta_;
-  common::ObSArray<common::ObLogicMacroBlockId> logic_id_list_;
+  common::ObSArray<blocksstable::ObLogicMacroBlockId> logic_id_list_;
 };
 
 struct ObBackupMacroBlockIDPair final {
@@ -443,7 +444,7 @@ public:
   void reset();
   bool is_valid() const;
   TO_STRING_KV(K_(logic_id), K_(physical_id));
-  common::ObLogicMacroBlockId logic_id_;
+  blocksstable::ObLogicMacroBlockId logic_id_;
   ObBackupPhysicalID physical_id_;
 };
 
@@ -453,14 +454,14 @@ struct ObBackupMacroBlockIDMapping final {
   ~ObBackupMacroBlockIDMapping();
   void reuse();
   int prepare_tablet_sstable(
-      const storage::ObITable::TableKey &table_key, const common::ObIArray<common::ObLogicMacroBlockId> &list);
+      const storage::ObITable::TableKey &table_key, const common::ObIArray<blocksstable::ObLogicMacroBlockId> &list);
   TO_STRING_KV(K_(table_key), K_(id_pair_list));
   storage::ObITable::TableKey table_key_;
   common::ObArray<ObBackupMacroBlockIDPair> id_pair_list_;
 
 private:
   friend class ObBackupTabletCtx;
-  typedef common::hash::ObHashMap<common::ObLogicMacroBlockId, int64_t /*idx_in_array*/> LogicIdArrayIdxMap;
+  typedef common::hash::ObHashMap<blocksstable::ObLogicMacroBlockId, int64_t /*idx_in_array*/> LogicIdArrayIdxMap;
   LogicIdArrayIdxMap map_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupMacroBlockIDMapping);
 };

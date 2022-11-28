@@ -27,6 +27,7 @@
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "test_backup.h"
 #include "test_backup_include.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 using namespace testing;
 using namespace oceanbase;
@@ -465,7 +466,7 @@ void TestBackupIndexMerger::iterate_macro_index_store_(
 {
   int ret = OB_SUCCESS;
   for (int64_t i = start_id; OB_SUCC(ret) && i <= end_id; i = i + 8) {
-    common::ObLogicMacroBlockId logic_id(1, 1, i);
+    blocksstable::ObLogicMacroBlockId logic_id(1, 1, i);
     ObBackupMacroRangeIndex range_index;
     ret = macro_index_store.get_macro_range_index(logic_id, range_index);
     LOG_INFO("get macro range index", K(logic_id), K(range_index));

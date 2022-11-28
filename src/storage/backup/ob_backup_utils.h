@@ -26,6 +26,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/ob_parallel_external_sort.h"
 #include "storage/backup/ob_backup_index_store.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase {
 namespace backup {
@@ -40,7 +41,7 @@ public:
       storage::ObTabletTableStore &table_store, common::ObIArray<storage::ObITable *> &sstable_array);
   static int check_tablet_with_major_sstable(const storage::ObTabletHandle &tablet_handle, bool &with_major);
   static int fetch_macro_block_logic_id_list(const storage::ObTabletHandle &tablet_handle,
-      const blocksstable::ObSSTable &sstable, common::ObIArray<common::ObLogicMacroBlockId> &logic_id_list);
+      const blocksstable::ObSSTable &sstable, common::ObIArray<blocksstable::ObLogicMacroBlockId> &logic_id_list);
   static int report_task_result(const int64_t job_id, const int64_t task_id, const uint64_t tenant_id,
       const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, const share::ObTaskId trace_id,
       const int64_t result, ObBackupReportCtx &report_ctx);
@@ -62,7 +63,7 @@ struct ObBackupTabletCtx final {
   void reuse();
   void print_ctx();
   int record_macro_block_physical_id(const storage::ObITable::TableKey &table_key,
-      const common::ObLogicMacroBlockId &logic_id, const ObBackupPhysicalID &physical_id);
+      const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupPhysicalID &physical_id);
   TO_STRING_KV(K_(total_tablet_meta_count), K_(finish_tablet_meta_count), K_(total_sstable_meta_count),
       K_(finish_sstable_meta_count), K_(reused_macro_block_count), K_(total_macro_block_count),
       K_(finish_macro_block_count), K_(is_all_loaded));
@@ -177,13 +178,13 @@ class ObBackupProviderItem {
 public:
   ObBackupProviderItem();
   virtual ~ObBackupProviderItem();
-  int set(const ObBackupProviderItemType &item_type, const common::ObLogicMacroBlockId &logic_id,
+  int set(const ObBackupProviderItemType &item_type, const blocksstable::ObLogicMacroBlockId &logic_id,
       const blocksstable::MacroBlockId &macro_block_id, const storage::ObITable::TableKey &table_key,
       const common::ObTabletID &tablet_id);
   bool operator==(const ObBackupProviderItem &other) const;
   bool operator!=(const ObBackupProviderItem &other) const;
   ObBackupProviderItemType get_item_type() const;
-  common::ObLogicMacroBlockId get_logic_id() const;
+  blocksstable::ObLogicMacroBlockId get_logic_id() const;
   blocksstable::MacroBlockId get_macro_block_id() const;
   const storage::ObITable::TableKey &get_table_key() const;
   common::ObTabletID get_tablet_id() const;
@@ -196,7 +197,7 @@ public:
 
 private:
   ObBackupProviderItemType item_type_;
-  common::ObLogicMacroBlockId logic_id_;
+  blocksstable::ObLogicMacroBlockId logic_id_;
   blocksstable::MacroBlockId macro_block_id_;
   storage::ObITable::TableKey table_key_;
   common::ObTabletID tablet_id_;  // logic_id_.tablet_id_ may not equal to tablet_id_
@@ -271,8 +272,8 @@ private:
   int add_sstable_item_(const common::ObTabletID &tablet_id);
   int add_tablet_item_(const common::ObTabletID &tablet_id);
   int remove_duplicates_(common::ObIArray<ObBackupProviderItem> &array);
-  int check_macro_block_need_skip_(const common::ObLogicMacroBlockId &logic_id, bool &need_skip);
-  int inner_check_macro_block_need_skip_(const common::ObLogicMacroBlockId &logic_id,
+  int check_macro_block_need_skip_(const blocksstable::ObLogicMacroBlockId &logic_id, bool &need_skip);
+  int inner_check_macro_block_need_skip_(const blocksstable::ObLogicMacroBlockId &logic_id,
       const common::ObArray<ObBackupMacroBlockIDPair> &reused_pair_list, bool &need_skip);
   int check_tablet_continuity_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       const storage::ObTabletHandle &tablet_handle);

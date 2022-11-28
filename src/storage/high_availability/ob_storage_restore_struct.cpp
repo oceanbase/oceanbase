@@ -14,6 +14,7 @@
 #include "ob_storage_restore_struct.h"
 #include "storage/restore/ob_ls_restore_args.h"
 #include "share/backup/ob_backup_data_store.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 namespace oceanbase
 {
 namespace storage
@@ -85,7 +86,7 @@ int ObRestoreBaseInfo::copy_from(const ObTenantRestoreCtx &restore_arg)
   return ret;
 }
 
-int ObRestoreBaseInfo::get_restore_backup_set_dest(const int64_t backup_set_id, 
+int ObRestoreBaseInfo::get_restore_backup_set_dest(const int64_t backup_set_id,
     share::ObRestoreBackupSetBriefInfo &backup_set_dest) const
 {
   int ret = OB_SUCCESS;
@@ -508,7 +509,7 @@ int ObRestoreMacroBlockIdMgr::inner_init_(
 
 int ObRestoreMacroBlockIdMgr::get_macro_block_id(
     const int64_t block_id_index,
-    ObLogicMacroBlockId &logic_block_id,
+    blocksstable::ObLogicMacroBlockId &logic_block_id,
     backup::ObBackupPhysicalID &physic_block_id)
 {
   int ret = OB_SUCCESS;
@@ -529,7 +530,7 @@ int ObRestoreMacroBlockIdMgr::get_macro_block_id(
 }
 
 int ObRestoreMacroBlockIdMgr::get_block_id_index(
-    const ObLogicMacroBlockId &logic_block_id,
+    const blocksstable::ObLogicMacroBlockId &logic_block_id,
     int64_t &block_id_index)
 {
   int ret = OB_SUCCESS;

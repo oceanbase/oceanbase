@@ -419,38 +419,6 @@ protected:
   };
 };
 
-struct ObLogicMacroBlockId
-{
-private:
-  static const int64_t LOGIC_BLOCK_ID_VERSION = 1;
-
-public:
-  ObLogicMacroBlockId()
-    : data_seq_(0), logic_version_(0), tablet_id_(0 /* ObTabletID::INVALID_TABLET_ID */)
-  {}
-  ObLogicMacroBlockId(const int64_t data_seq, const uint64_t logic_version, const int64_t tablet_id)
-    : data_seq_(data_seq), logic_version_(logic_version), tablet_id_(tablet_id)
-  {}
-
-  int64_t hash() const;
-  bool operator ==(const ObLogicMacroBlockId &other) const;
-  bool operator !=(const ObLogicMacroBlockId &other) const;
-  bool operator <(const ObLogicMacroBlockId &other) const;
-  bool operator >(const ObLogicMacroBlockId &other) const;
-  void reset();
-  OB_INLINE bool is_valid() const
-  {
-    return data_seq_ >= 0 && logic_version_ > 0 && tablet_id_ > 0;
-  }
-  TO_STRING_KV(K_(data_seq), K_(logic_version), K_(tablet_id));
-
-public:
-  int64_t data_seq_;
-  uint64_t logic_version_;
-  int64_t tablet_id_;
-  OB_UNIS_VERSION(LOGIC_BLOCK_ID_VERSION);
-};
-
 struct ObLobId
 {
   ObLobId()
@@ -491,7 +459,7 @@ struct ObLobDataOutRowCtx
   uint32_t seq_no_cnt_;
   uint32_t del_seq_no_cnt_; // for sql update
   uint64_t modified_len_;
-  uint32_t first_meta_offset_; 
+  uint32_t first_meta_offset_;
 };
 
 struct ObLobData

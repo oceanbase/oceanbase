@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #include "test_backup.h"
 #include "storage/backup/ob_backup_data_struct.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 #define private public
 #define protected public
 
@@ -80,7 +81,7 @@ static bool meta_is_equal(const ObBackupMacroBlockIDMappingsMeta &lhs, const ObB
 TEST(TestBackupDataStruct, BackupPhysicalID)
 {
   int ret = OB_SUCCESS;
-  ObLogicMacroBlockId logic_id;
+  blocksstable::ObLogicMacroBlockId logic_id;
   logic_id.data_seq_ = 0;
   logic_id.logic_version_ = 1657251061256045963;
   logic_id.tablet_id_ = 549755814602;

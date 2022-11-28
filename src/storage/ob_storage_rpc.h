@@ -28,6 +28,7 @@
 #include "storage/ls/ob_ls_meta_package.h"
 #include "tablet/ob_tablet_meta.h"
 #include "share/restore/ob_ls_restore_status.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {
@@ -55,7 +56,7 @@ public:
   void reset();
   bool is_valid() const;
   TO_STRING_KV(K_(logic_macro_block_id));
-  ObLogicMacroBlockId logic_macro_block_id_;
+  blocksstable::ObLogicMacroBlockId logic_macro_block_id_;
 };
 
 struct ObCopyMacroBlockListArg
@@ -599,7 +600,7 @@ public:
       obrpc::ObFetchLSMemberListInfo &ls_info) = 0;
   virtual int post_ls_disaster_recovery_res(const common::ObAddr &server,
                            const obrpc::ObDRTaskReplyResult &res) = 0;
-  
+
   // Notify follower restore some tablets from leader.
   virtual int notify_restore_tablets(
       const uint64_t tenant_id,
@@ -616,7 +617,7 @@ public:
       const share::ObLSID &ls_id,
       const share::ObLSRestoreStatus &restore_status,
       obrpc::ObInquireRestoreResp &restore_resp) = 0;
-  
+
   virtual int update_ls_meta(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &dest_info,
@@ -649,7 +650,7 @@ public:
       obrpc::ObFetchLSMemberListInfo &ls_info);
   virtual int post_ls_disaster_recovery_res(const common::ObAddr &server,
                            const obrpc::ObDRTaskReplyResult &res);
-  
+
   // Notify follower restore some tablets from leader.
   virtual int notify_restore_tablets(
       const uint64_t tenant_id,
@@ -666,7 +667,7 @@ public:
       const share::ObLSID &ls_id,
       const share::ObLSRestoreStatus &restore_status,
       obrpc::ObInquireRestoreResp &restore_resp);
-  
+
   virtual int update_ls_meta(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &dest_info,

@@ -32,6 +32,7 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "logservice/palf/scn.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 #include <algorithm>
 
@@ -129,7 +130,7 @@ int ObBackupUtils::check_tablet_with_major_sstable(const storage::ObTabletHandle
 }
 
 int ObBackupUtils::fetch_macro_block_logic_id_list(const storage::ObTabletHandle &tablet_handle,
-    const blocksstable::ObSSTable &sstable, common::ObIArray<common::ObLogicMacroBlockId> &logic_id_list)
+    const blocksstable::ObSSTable &sstable, common::ObIArray<blocksstable::ObLogicMacroBlockId> &logic_id_list)
 {
   int ret = OB_SUCCESS;
   logic_id_list.reset();
@@ -468,7 +469,7 @@ void ObBackupTabletCtx::print_ctx()
 }
 
 int ObBackupTabletCtx::record_macro_block_physical_id(const storage::ObITable::TableKey &table_key,
-    const common::ObLogicMacroBlockId &logic_id, const ObBackupPhysicalID &physical_id)
+    const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupPhysicalID &physical_id)
 {
   int ret = OB_SUCCESS;
   bool found = false;
@@ -1119,7 +1120,7 @@ ObBackupProviderItem::ObBackupProviderItem()
 ObBackupProviderItem::~ObBackupProviderItem()
 {}
 
-int ObBackupProviderItem::set(const ObBackupProviderItemType &item_type, const common::ObLogicMacroBlockId &logic_id,
+int ObBackupProviderItem::set(const ObBackupProviderItemType &item_type, const blocksstable::ObLogicMacroBlockId &logic_id,
     const blocksstable::MacroBlockId &macro_block_id, const ObITable::TableKey &table_key,
     const common::ObTabletID &tablet_id)
 {
@@ -1148,7 +1149,7 @@ ObBackupProviderItemType ObBackupProviderItem::get_item_type() const
   return item_type_;
 }
 
-common::ObLogicMacroBlockId ObBackupProviderItem::get_logic_id() const
+blocksstable::ObLogicMacroBlockId ObBackupProviderItem::get_logic_id() const
 {
   return logic_id_;
 }
@@ -1886,7 +1887,7 @@ int ObBackupTabletProvider::remove_duplicates_(common::ObIArray<ObBackupProvider
   return ret;
 }
 
-int ObBackupTabletProvider::check_macro_block_need_skip_(const common::ObLogicMacroBlockId &logic_id, bool &need_skip)
+int ObBackupTabletProvider::check_macro_block_need_skip_(const blocksstable::ObLogicMacroBlockId &logic_id, bool &need_skip)
 {
   int ret = OB_SUCCESS;
   need_skip = false;
@@ -1908,7 +1909,7 @@ int ObBackupTabletProvider::check_macro_block_need_skip_(const common::ObLogicMa
   return ret;
 }
 
-int ObBackupTabletProvider::inner_check_macro_block_need_skip_(const common::ObLogicMacroBlockId &logic_id,
+int ObBackupTabletProvider::inner_check_macro_block_need_skip_(const blocksstable::ObLogicMacroBlockId &logic_id,
     const common::ObArray<ObBackupMacroBlockIDPair> &reused_pair_list, bool &need_skip)
 {
   int ret = OB_SUCCESS;

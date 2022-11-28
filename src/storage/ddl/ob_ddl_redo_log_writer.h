@@ -19,6 +19,7 @@
 #include "storage/blocksstable/ob_imacro_block_flush_callback.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {
@@ -38,7 +39,7 @@ class ObDDLKV;
 class ObDDLKVPendingGuard;
 class ObLSHandle;
 
-// control the write speed of ddl clog for 4.0 . More detailly, 
+// control the write speed of ddl clog for 4.0 . More detailly,
 // a. set write speed to the log archive speed if archive is on;
 // b. set write speed to the out bandwidth throttle rate if archive is off.
 // c. control ddl clog space used at tenant level rather than observer/logstream level.
@@ -245,7 +246,7 @@ public:
   int init(const blocksstable::ObDDLMacroBlockType block_type, const ObITable::TableKey &table_key, ObDDLSSTableRedoWriter *ddl_writer);
   int write(
       const ObMacroBlockHandle &macro_handle,
-      const ObLogicMacroBlockId &logic_id,
+      const blocksstable::ObLogicMacroBlockId &logic_id,
       char *buf,
       const int64_t data_seq);
   int wait();

@@ -21,6 +21,7 @@
 #include "storage/backup/ob_backup_index_cache.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "logservice/palf/scn.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {
@@ -43,7 +44,7 @@ static void make_random_meta_type(backup::ObBackupMetaType &meta_type)
   meta_type = BACKUP_SSTABLE_META;
 }
 
-static void make_random_logic_id(common::ObLogicMacroBlockId &logic_id)
+static void make_random_logic_id(blocksstable::ObLogicMacroBlockId &logic_id)
 {
   logic_id.tablet_id_ = random(1, 10000000);
   logic_id.data_seq_ = random(1, 10000000);
@@ -129,7 +130,7 @@ static void make_random_cache_key(ObBackupIndexCacheKey &cache_key)
   cache_key.block_desc_ = block_desc;
 }
 
-static int make_random_buffer(common::ObIAllocator &allocator, 
+static int make_random_buffer(common::ObIAllocator &allocator,
     blocksstable::ObBufferReader &buffer)
 {
   int ret = OB_SUCCESS;

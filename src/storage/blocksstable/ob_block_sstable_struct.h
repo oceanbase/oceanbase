@@ -29,6 +29,7 @@
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/ob_i_store.h"
 #include "storage/ob_i_table.h"
+#include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase
 {
@@ -721,15 +722,15 @@ public:
         && (!is_sparse_row_ || (is_valid_col_idx_type(get_column_idx_type()) && sparse_column_cnt_ >= 0))
         && column_cnt_ > 0;
   }
-  OB_INLINE int64_t get_special_value_array_size(const int64_t serialize_column_cnt) const 
+  OB_INLINE int64_t get_special_value_array_size(const int64_t serialize_column_cnt) const
   {
     return (sizeof(uint8_t) * serialize_column_cnt + 1) >> 1;
   }
-  OB_INLINE int64_t get_total_array_size(const int64_t serialize_column_cnt) const 
+  OB_INLINE int64_t get_total_array_size(const int64_t serialize_column_cnt) const
   {
     // offset_array + special_val_array + column_idx_array[SPARSE]
     return  (get_offset_type_len() + (is_sparse_row_ ? get_column_idx_type_len() : 0)) * serialize_column_cnt
-                + (get_special_value_array_size(serialize_column_cnt)); 
+                + (get_special_value_array_size(serialize_column_cnt));
   }
   OB_INLINE int set_offset_type(const BYTES_LEN column_offset_type)
   {
@@ -1147,7 +1148,7 @@ public:
   storage::ObITable::TableKey table_key_;
   ObString data_buffer_;
   ObDDLMacroBlockType block_type_;
-  common::ObLogicMacroBlockId logic_id_;
+  ObLogicMacroBlockId logic_id_;
   int64_t start_log_ts_;
 };
 
