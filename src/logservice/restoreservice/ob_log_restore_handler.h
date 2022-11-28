@@ -73,13 +73,13 @@ public:
   // interface only for restore_and_standby branch, TODO should delete after no cut log by shuning.tsn
   int get_upper_limit_scn(palf::SCN &scn) const;
   // get the log ts of the max restored log
-  int get_max_restore_log_scn(palf::SCN &scn) const;
+  int get_max_restore_scn(palf::SCN &scn) const;
   // @brief add log fetch source of phyiscal backups
-  int add_source(share::DirArray &array, const palf::SCN &end_log_scn);
+  int add_source(share::DirArray &array, const palf::SCN &end_scn);
   // for stale TODO delete after log archive source ready
-  int add_source(logservice::DirArray &array, const palf::SCN &end_log_scn);
-  int add_source(share::ObBackupDest &dest, const palf::SCN &end_log_scn);
-  int add_source(const ObAddr &addr, const palf::SCN &end_log_scn);
+  int add_source(logservice::DirArray &array, const palf::SCN &end_scn);
+  int add_source(share::ObBackupDest &dest, const palf::SCN &end_scn);
+  int add_source(const ObAddr &addr, const palf::SCN &end_scn);
   // @brief As restore handler maybe destroyed, log source should be copied out
   void deep_copy_source(ObRemoteSourceGuard &guard);
   // @brief raw write logs to the pointed offset of palf
@@ -99,7 +99,7 @@ public:
   // @param[in] is_to_end, log fetch is to end, only for physical restore
   // @param[out] is_stale, fetch log task is stale due to cur_proposal_id is changed
   int update_fetch_log_progress(const int64_t id, const int64_t proposal_id, const LSN &max_fetch_lsn,
-      const palf::SCN &max_submit_log_scn, const bool is_finish, const bool is_to_end, bool &is_stale);
+      const palf::SCN &max_submit_scn, const bool is_finish, const bool is_to_end, bool &is_stale);
   int update_location_info(ObRemoteLogParent *source);
   // @brief check if restore finish
   // return true only if in restore state and all replicas have restore and replay finish
@@ -108,7 +108,7 @@ public:
   // param[in], const share::ObLSID, the identification of LS
   // param[in], int64_t, the commit ts of LS
   // @param[out], int64_t, the restore upper ts if restore to the end
-  int get_restore_sync_scn(const share::ObLSID &id, palf::SCN &log_scn);
+  int get_restore_sync_scn(const share::ObLSID &id, palf::SCN &scn);
   void mark_error(share::ObTaskId &trace_id, const int ret_code);
   int get_restore_error(share::ObTaskId &trace_id, int &ret_code, bool &error_exist);
   TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context));

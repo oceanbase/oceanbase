@@ -716,6 +716,8 @@ int ObTableLocation::assign(const ObTableLocation &other)
     is_valid_temporal_part_range_ = other.is_valid_temporal_part_range_;
     is_valid_temporal_subpart_range_ = other.is_valid_temporal_subpart_range_;
     is_link_ = other.is_link_;
+    is_part_range_get_ = other.is_part_range_get_;
+    is_subpart_range_get_ = other.is_subpart_range_get_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
     }
@@ -833,6 +835,8 @@ void ObTableLocation::reset()
   is_valid_temporal_part_range_ = false;
   is_valid_temporal_subpart_range_ = false;
   is_link_ = false;
+  is_part_range_get_ = false;
+  is_subpart_range_get_ = false;
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObDMLStmt &stmt,
@@ -1781,7 +1785,8 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             bool &is_col_part_expr,
                                             ObPartLocCalcNode *&calc_node,
                                             ObPartLocCalcNode *&gen_col_node,
-                                            bool &get_all)
+                                            bool &get_all,
+                                            bool &is_range_get)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ColumnItem, 5> part_columns;
@@ -1808,6 +1813,7 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             filter_exprs,
                                             calc_node,
                                             get_all,
+                                            is_range_get,
                                             dtc_params,
                                             exec_ctx))) {
     LOG_WARN("Failed to get location calc node", K(ret));
@@ -2094,7 +2100,8 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                      is_col_part_expr_,
                                      calc_node_,
                                      gen_col_node_,
-                                     part_get_all_))) {
+                                     part_get_all_,
+                                     is_part_range_get_))) {
     LOG_WARN("failed to set location calc node for first-level partition", K(ret));
   } else if (PARTITION_LEVEL_TWO == part_level_
              && OB_FAIL(set_location_calc_node(stmt,
@@ -2107,7 +2114,8 @@ int ObTableLocation::record_not_insert_dml_partition_info(
                                                is_col_subpart_expr_,
                                                subcalc_node_,
                                                sub_gen_col_node_,
-                                               subpart_get_all_))) {
+                                               subpart_get_all_,
+                                               is_subpart_range_get_))) {
     LOG_WARN("failed to set location calc node for second-level partition", K(ret));
   }
 
@@ -2188,12 +2196,14 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                             const ObIArray<ObRawExpr*> &filter_exprs,
                                             ObPartLocCalcNode *&res_node,
                                             bool &get_all,
+                                            bool &is_range_get,
                                             const ObDataTypeCastParams &dtc_params,
                                             ObExecContext *exec_ctx)
 {
   int ret = OB_SUCCESS;
   uint64_t column_id = OB_INVALID_ID;
   get_all = false;
+  is_range_get = false;
   bool only_range_node = false;
 
   if (partition_expr->is_column_ref_expr() || is_virtual_table(loc_meta_.ref_table_id_)) {
@@ -2222,6 +2232,9 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       get_all = true;
     } else {
       res_node = calc_node;
+      if (OB_NOT_NULL(calc_node)) {
+        is_range_get = static_cast<ObPLQueryRangeNode*>(calc_node)->pre_query_range_.is_precise_get();
+      }
     }
   } else {
     ObSEArray<ObRawExpr *, 5> normal_filters;
@@ -4483,6 +4496,11 @@ OB_DEF_SERIALIZE(ObTableLocation)
       OB_UNIS_ENCODE(part_hint_ids_.at(i));
     }
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                is_part_range_get_,
+                is_subpart_range_get_);
+  }
   return ret;
 }
 
@@ -4552,6 +4570,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   for (int64_t i = 0; i < part_hint_ids_.count(); i++) {
     OB_UNIS_ADD_LEN(part_hint_ids_.at(i));
   }
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              is_part_range_get_,
+              is_subpart_range_get_);
   return len;
 }
 
@@ -4696,6 +4717,11 @@ OB_DEF_DESERIALIZE(ObTableLocation)
       OZ(part_hint_ids_.init(part_hint_ids_count));
       OZ(part_hint_ids_.push_back(part_hint_id));
     }
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_part_range_get_,
+                is_subpart_range_get_);
   }
   return ret;
 }

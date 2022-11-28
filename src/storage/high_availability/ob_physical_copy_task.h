@@ -205,7 +205,8 @@ public:
   int init(
       const common::ObTabletID &tablet_id,
       ObLS *ls,
-      observer::ObIMetaReport *reporter);
+      observer::ObIMetaReport *reporter,
+      const ObMigrationTabletParam *src_tablet_meta);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletCopyFinishTask"), KP(this));
   int add_sstable(ObTableHandleV2 &table_handle);
@@ -224,6 +225,7 @@ private:
   observer::ObIMetaReport *reporter_;
   ObStorageHADag *ha_dag_;
   ObTablesHandleArray tables_handle_;
+  const ObMigrationTabletParam *src_tablet_meta_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletCopyFinishTask);
 };
 

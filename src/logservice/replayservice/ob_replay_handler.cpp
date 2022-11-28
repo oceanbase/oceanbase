@@ -71,23 +71,6 @@ int ObReplayHandler::replay(const ObLogBaseType &type,
                             const void *buffer,
                             const int64_t nbytes,
                             const palf::LSN &lsn,
-                            const int64_t ts_ns)
-{
-  //TODO(yaoying.yyy)
-  SCN scn;
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(scn.convert_for_gts(ts_ns))) {
-    CLOG_LOG(WARN, "failed to convert_for_gts", K(ret), K(ts_ns));
-  } else {
-    ret = replay(type, buffer, nbytes, lsn, scn);
-  }
-  return ret;
-}
-
-int ObReplayHandler::replay(const ObLogBaseType &type,
-                            const void *buffer,
-                            const int64_t nbytes,
-                            const palf::LSN &lsn,
                             const SCN &scn)
 {
   int ret = OB_SUCCESS;

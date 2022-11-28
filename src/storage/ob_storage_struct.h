@@ -33,6 +33,7 @@ class ObLSTxCtxMgr;
 namespace storage
 {
 class ObStorageSchema;
+class ObMigrationTabletParam;
 
 typedef common::ObSEArray<common::ObStoreRowkey, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> GetRowkeyArray;
 typedef common::ObSEArray<common::ObStoreRange, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> ScanRangeArray;
@@ -341,16 +342,16 @@ struct ObBatchUpdateTableStoreParam final
   int get_max_clog_checkpoint_ts(int64_t &clog_checkpoint_ts) const;
 
   TO_STRING_KV(K_(tables_handle), K_(snapshot_version), K_(multi_version_start), K_(need_report),
-      KPC_(storage_schema), K_(rebuild_seq), K_(update_logical_minor_sstable), K_(start_scn));
+      K_(rebuild_seq), K_(update_logical_minor_sstable), K_(start_scn), KP_(tablet_meta));
 
   ObTablesHandleArray tables_handle_;
   int64_t snapshot_version_;
   int64_t multi_version_start_;
-  const ObStorageSchema *storage_schema_;
   bool need_report_;
   int64_t rebuild_seq_;
   bool update_logical_minor_sstable_;
   palf::SCN start_scn_;
+  const ObMigrationTabletParam *tablet_meta_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);
 };

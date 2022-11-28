@@ -231,32 +231,17 @@ int ObMultiVersionSchemaService::update_schema_cache(
   LOG_TRACE("update schema cache", K(lbt()));
   for (int64_t i = 0; OB_SUCC(ret) && i < schema_array.count(); ++i) {
     ObTableSchema *table = schema_array.at(i);
-    int64_t table_id = OB_INVALID_ID;
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema is null", K(ret));
-    } else if (FALSE_IT(table_id = table->get_table_id())) {
-    } else if (ObSysTableChecker::is_sys_table_has_index(table_id)
-               && table->get_index_tid_count() <= 0) {
-      // Prevent resetting index_tid_array in the second stage of refreshing the schema
-      const int64_t index_id = ObSysTableChecker::get_sys_table_index_tid(table_id);
-      if (OB_INVALID_ID == index_id) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid sys table's index_id", KR(ret), K(table_id));
-      } else if (OB_FAIL(table->add_simple_index_info(ObAuxTableMetaInfo(
-                         index_id,
-                         USER_INDEX,
-                         INDEX_TYPE_NORMAL_LOCAL)))) {
-        LOG_WARN("fail to add simple_index_info", K(ret), K(table_id), K(index_id));
-      }
-    }
-    if (OB_FAIL(ret)) {
+      LOG_WARN("schema is null", KR(ret));
+    } else if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(*table))) {
+      LOG_WARN("fail to fill sys indexes", KR(ret), "table_id", table->get_table_id());
     } else if (OB_FAIL(schema_cache_.put_schema(TABLE_SCHEMA,
                                                 table->get_tenant_id(),
                                                 table->get_table_id(),
                                                 table->get_schema_version(),
                                                 *table))) {
-      LOG_WARN("put schema failed", K(ret));
+      LOG_WARN("put schema failed", KR(ret), "table_id", table->get_table_id());
     } else {
       LOG_INFO("put schema succeed", K(*table));
     }
@@ -271,28 +256,14 @@ int ObMultiVersionSchemaService::update_schema_cache(
   LOG_TRACE("update schema cache", K(lbt()));
   for (int64_t i = 0; OB_SUCC(ret) && i < schema_array.count(); ++i) {
     ObTableSchema &table = schema_array.at(i);
-    const int64_t table_id = table.get_table_id();
-    if (ObSysTableChecker::is_sys_table_has_index(table_id)
-        && table.get_index_tid_count() <= 0) {
-      // Prevent resetting index_tid_array in the second stage of refreshing the schema
-      const int64_t index_id = ObSysTableChecker::get_sys_table_index_tid(table_id);
-      if (OB_INVALID_ID == index_id) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid sys table's index_id", KR(ret), K(table_id));
-      } else if (OB_FAIL(table.add_simple_index_info(ObAuxTableMetaInfo(
-                         index_id,
-                         USER_INDEX,
-                         INDEX_TYPE_NORMAL_LOCAL)))) {
-        LOG_WARN("fail to add simple_index_info", K(ret), K(index_id));
-      }
-    }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(table))) {
+      LOG_WARN("fail to fill sys indexes", KR(ret), "table_id", table.get_table_id());
     } else if (OB_FAIL(schema_cache_.put_schema(TABLE_SCHEMA,
                                                 table.get_tenant_id(),
                                                 table.get_table_id(),
                                                 table.get_schema_version(),
                                                 table))) {
-      LOG_WARN("put schema failed", K(ret), "table_id", table.get_table_id());
+      LOG_WARN("put schema failed", KR(ret), "table_id", table.get_table_id());
     } else {
       LOG_INFO("put schema succeed", K(table));
     }
@@ -576,13 +547,8 @@ int ObMultiVersionSchemaService::get_schema(const ObSchemaMgr *mgr,
                      || table_schema->is_aux_lob_table()) {
             // do-nothing
           } else if (ObSysTableChecker::is_sys_table_has_index(schema_id)) {
-            const int64_t index_id = ObSysTableChecker::get_sys_table_index_tid(schema_id);
-            if (OB_INVALID_ID == index_id) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("sys table's index_id is invalid", KR(ret), K(schema_id));
-            } else if (OB_FAIL(table_schema->add_simple_index_info(
-                       ObAuxTableMetaInfo(index_id, USER_INDEX, INDEX_TYPE_NORMAL_LOCAL)))) {
-              LOG_WARN("fail to add simple_index_info", K(ret), K(tenant_id), K(schema_id), K(index_id));
+            if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(*table_schema))) {
+              LOG_WARN("fail to fill sys indexes", KR(ret), K(tenant_id), "table_id", schema_id);
             }
           } else if (is_lazy) {
             ObSEArray<ObAuxTableMetaInfo, 8> aux_table_metas;

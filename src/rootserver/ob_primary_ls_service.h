@@ -175,7 +175,7 @@ public:
   /*
   * description: create ls with palf base info for recovery
     @param[in] info: status info in __all_ls_status_info
-    @param[in] create_ts_ns : create scn of ls 
+    @param[in] create_scn : create scn of ls
     @param[in] create_ls_with_palf: restore create init ls
     @param[in] palf_base_info : palf base info
   */

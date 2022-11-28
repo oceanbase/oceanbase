@@ -104,11 +104,11 @@ int PalfHandle::append(const PalfAppendOptions &opts,
                        const int64_t nbytes,
                        const SCN &ref_scn,
                        LSN &lsn,
-                       SCN &log_scn)
+                       SCN &scn)
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ret = palf_handle_impl_->submit_log(opts, static_cast<const char*>(buffer), nbytes, ref_scn, lsn, log_scn);
+  ret = palf_handle_impl_->submit_log(opts, static_cast<const char*>(buffer), nbytes, ref_scn, lsn, scn);
   return ret;
 }
 
@@ -282,96 +282,96 @@ int PalfHandle::get_paxos_member_list(common::ObMemberList &member_list, int64_t
 int PalfHandle::change_replica_num(const common::ObMemberList &member_list,
                                    const int64_t curr_replica_num,
                                    const int64_t new_replica_num,
-                                   const int64_t timeout_ns)
+                                   const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->change_replica_num(member_list, curr_replica_num, new_replica_num, timeout_ns);
+  return palf_handle_impl_->change_replica_num(member_list, curr_replica_num, new_replica_num, timeout_us);
 }
 
 int PalfHandle::add_member(const common::ObMember &member,
                            const int64_t new_replica_num,
-                           const int64_t timeout_ns)
+                           const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->add_member(member, new_replica_num, timeout_ns);
+  return palf_handle_impl_->add_member(member, new_replica_num, timeout_us);
 }
 
 int PalfHandle::remove_member(const common::ObMember &member,
                               const int64_t new_replica_num,
-                              const int64_t timeout_ns)
+                              const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->remove_member(member, new_replica_num, timeout_ns);
+  return palf_handle_impl_->remove_member(member, new_replica_num, timeout_us);
 }
 
 int PalfHandle::replace_member(const common::ObMember &added_member,
                                const common::ObMember &removed_member,
-                               const int64_t timeout_ns)
+                               const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->replace_member(added_member, removed_member, timeout_ns);
+  return palf_handle_impl_->replace_member(added_member, removed_member, timeout_us);
 }
 
-int PalfHandle::add_learner(const common::ObMember &added_learner, const int64_t timeout_ns)
+int PalfHandle::add_learner(const common::ObMember &added_learner, const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->add_learner(added_learner, timeout_ns);
+  return palf_handle_impl_->add_learner(added_learner, timeout_us);
 }
 
-int PalfHandle::remove_learner(const common::ObMember &removed_learner, const int64_t timeout_ns)
+int PalfHandle::remove_learner(const common::ObMember &removed_learner, const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->remove_learner(removed_learner, timeout_ns);
+  return palf_handle_impl_->remove_learner(removed_learner, timeout_us);
 }
 
-int PalfHandle::switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_ns)
+int PalfHandle::switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->switch_learner_to_acceptor(learner, timeout_ns);
+  return palf_handle_impl_->switch_learner_to_acceptor(learner, timeout_us);
 }
 
-int PalfHandle::switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_ns)
+int PalfHandle::switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->switch_acceptor_to_learner(member, timeout_ns);
+  return palf_handle_impl_->switch_acceptor_to_learner(member, timeout_us);
 }
 
 int PalfHandle::add_arb_member(const common::ObMember &member,
                                const int64_t new_replica_num,
-                               const int64_t timeout_ns)
+                               const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->add_arb_member(member, new_replica_num, timeout_ns);
+  return palf_handle_impl_->add_arb_member(member, new_replica_num, timeout_us);
 }
 
 int PalfHandle::remove_arb_member(const common::ObMember &member,
                                   const int64_t new_replica_num,
-                                  const int64_t timeout_ns)
+                                  const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->remove_arb_member(member, new_replica_num, timeout_ns);
+  return palf_handle_impl_->remove_arb_member(member, new_replica_num, timeout_us);
 }
 
 int PalfHandle::replace_arb_member(const common::ObMember &added_member,
                                    const common::ObMember &removed_member,
-                                   const int64_t timeout_ns)
+                                   const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->replace_arb_member(added_member, removed_member, timeout_ns);
+  return palf_handle_impl_->replace_arb_member(added_member, removed_member, timeout_us);
 }
 
 int PalfHandle::degrade_acceptor_to_learner(const common::ObMemberList &member_list,
-                                            const int64_t timeout_ns)
+                                            const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->degrade_acceptor_to_learner(member_list, timeout_ns);
+  return palf_handle_impl_->degrade_acceptor_to_learner(member_list, timeout_us);
 }
 
 int PalfHandle::upgrade_learner_to_acceptor(const common::ObMemberList &learner_list,
-                                            const int64_t timeout_ns)
+                                            const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->upgrade_learner_to_acceptor(learner_list, timeout_ns);
+  return palf_handle_impl_->upgrade_learner_to_acceptor(learner_list, timeout_us);
 }
 
 int PalfHandle::change_leader_to(const common::ObAddr &dst_addr)

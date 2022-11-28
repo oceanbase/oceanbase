@@ -410,6 +410,7 @@ int ObLSMeta::update_ls_meta(
       tmp.clog_checkpoint_scn_ = src_ls_meta.clog_checkpoint_scn_;
       tmp.replayable_point_ = src_ls_meta.replayable_point_;
       tmp.tablet_change_checkpoint_scn_ = src_ls_meta.tablet_change_checkpoint_scn_;
+      tmp.rebuild_seq_++;
       if (update_restore_status) {
         tmp.restore_status_ = ls_restore_status;
       }

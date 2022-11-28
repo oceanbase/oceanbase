@@ -46,7 +46,7 @@ int FetchLogTask::set(const int64_t id,
     PALF_LOG(WARN, "invalid argument", K(id), K(server), K(proposal_id), K(prev_lsn),
              K(start_lsn), K(log_size), K(log_count), K(accepted_mode_pid));
   } else {
-    timestamp_ns_ = ObTimeUtility::current_time_ns();
+    timestamp_us_ = ObTimeUtility::current_time();
     id_ = id;
     server_ = server;
     fetch_type_ = fetch_type;
@@ -62,7 +62,7 @@ int FetchLogTask::set(const int64_t id,
 
 void FetchLogTask::reset()
 {
-  timestamp_ns_ = common::OB_INVALID_TIMESTAMP;
+  timestamp_us_ = common::OB_INVALID_TIMESTAMP;
   id_ = -1;
   server_.reset();
   fetch_type_ = FETCH_LOG_FOLLOWER;
@@ -193,7 +193,7 @@ void FetchLogEngine::handle(void *task)
   } else if (OB_ISNULL(task)) {
     PALF_LOG(WARN, "invalid argument", KP(task));
   } else {
-    int64_t handle_start_time_ns = ObTimeUtility::current_time_ns();
+    int64_t handle_start_time_us = ObTimeUtility::current_time();
     FetchLogTask *fetch_log_task = static_cast<FetchLogTask *>(task);
     int64_t palf_id = -1;
     if (OB_ISNULL(fetch_log_task)) {
@@ -226,12 +226,12 @@ void FetchLogEngine::handle(void *task)
         // do nothing
       }
     }
-    int64_t handle_finish_time_ns = ObTimeUtility::current_time_ns();
-    int64_t handle_cost_time_ns = handle_finish_time_ns - handle_start_time_ns;
-    if (REACH_TIME_INTERVAL(100 * 1000)) {
-      PALF_LOG(INFO, "handle fetch log task", K(ret), K(palf_id), K(handle_cost_time_ns), KPC(fetch_log_task));
-    } else if (handle_cost_time_ns > 200 * 1000 * 1000) {
-      PALF_LOG(INFO, "handle fetch log task cost too much time", K(ret), K(palf_id), K(handle_cost_time_ns),
+    int64_t handle_finish_time_us = ObTimeUtility::current_time();
+    int64_t handle_cost_time_us = handle_finish_time_us - handle_start_time_us;
+    if (REACH_TIME_INTERVAL(100 * 1000L)) {
+      PALF_LOG(INFO, "handle fetch log task", K(ret), K(palf_id), K(handle_cost_time_us), KPC(fetch_log_task));
+    } else if (handle_cost_time_us > 200 * 1000L) {
+      PALF_LOG(INFO, "handle fetch log task cost too much time", K(ret), K(palf_id), K(handle_cost_time_us),
                KPC(fetch_log_task));
     }
     free_fetch_log_task(fetch_log_task);
@@ -271,8 +271,8 @@ bool FetchLogEngine::is_task_queue_timeout_(FetchLogTask *task) const
   } else if (OB_ISNULL(task)) {
     PALF_LOG(WARN, "invalid argument", KP(task));
   } else {
-    bool_ret = (ObTimeUtility::current_time_ns() - task->get_timestamp_ns())
-               > PALF_FETCH_LOG_INTERVAL_NS;
+    bool_ret = (ObTimeUtility::current_time() - task->get_timestamp_us())
+               > PALF_FETCH_LOG_INTERVAL_US;
   }
 
   return bool_ret;

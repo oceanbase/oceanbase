@@ -374,7 +374,7 @@ int ObArchiveFetcher::check_need_delay_(ObArchiveLogFetchTask &task, bool &need_
   bool data_enough = false;
   bool data_full = false;
   LSN offset;
-  SCN fetch_log_scn;
+  SCN fetch_scn;
   need_delay = false;
 
   if (OB_FAIL(log_service_->open_palf(id, palf_handle_guard))) {
@@ -391,10 +391,10 @@ int ObArchiveFetcher::check_need_delay_(ObArchiveLogFetchTask &task, bool &need_
     need_delay = true;
   } else {
     GET_LS_TASK_CTX(ls_mgr_, id) {
-      if (OB_FAIL(ls_archive_task->get_fetcher_progress(station, offset, fetch_log_scn))) {
+      if (OB_FAIL(ls_archive_task->get_fetcher_progress(station, offset, fetch_scn))) {
         ARCHIVE_LOG(WARN, "get fetch progress failed", K(ret), K(id), K(station));
       } else {
-        need_delay = ! check_scn_enough_(fetch_log_scn, end_scn);
+        need_delay = ! check_scn_enough_(fetch_scn, end_scn);
       }
     }
   } return ret; }
@@ -410,9 +410,9 @@ void ObArchiveFetcher::check_capacity_enough_(const LSN &commit_lsn,
   data_enough = data_full || commit_lsn >= cur_lsn + unit_size_;
 }
 
-bool ObArchiveFetcher::check_scn_enough_(const SCN &fetch_log_scn, const SCN &end_scn) const
+bool ObArchiveFetcher::check_scn_enough_(const SCN &fetch_scn, const SCN &end_scn) const
 {
-  return end_scn.convert_to_ts() - fetch_log_scn.convert_to_ts() >= 5 * 1000 * 1000L;   //TODO 使用归档delay配置项
+  return end_scn.convert_to_ts() - fetch_scn.convert_to_ts() >= 5 * 1000 * 1000L;   //TODO 使用归档delay配置项
 }
 
 int ObArchiveFetcher::init_helper_(ObArchiveLogFetchTask &task, TmpMemoryHelper &helper)
@@ -510,9 +510,9 @@ int ObArchiveFetcher::generate_send_buffer_(PalfGroupBufferIterator &iter, TmpMe
       ret = OB_ERR_UNEXPECTED;
        ARCHIVE_LOG(ERROR, "iterate buf not valid", K(ret), K(helper), K(entry));
     } else {
-      // 由于归档按照palf block起始LSN开始归档, 因此存在部分日志其log_scn是小于归档round_start_scn的,
+      // 由于归档按照palf block起始LSN开始归档, 因此存在部分日志其scn是小于归档round_start_scn的,
       // 对于这部分日志, 归档到第一个piece
-      const SCN scn = entry.get_log_scn() > genesis_scn_ ? entry.get_log_scn() : genesis_scn_;
+      const SCN scn = entry.get_scn() > genesis_scn_ ? entry.get_scn() : genesis_scn_;
       ObArchivePiece piece(scn, piece_interval_, genesis_scn_, base_piece_id_);
       if (OB_FAIL(fill_helper_piece_if_empty_(piece, helper))) {
         ARCHIVE_LOG(WARN, "fill helper piece failed", K(ret), K(piece), K(helper));
@@ -647,7 +647,7 @@ int ObArchiveFetcher::update_log_fetch_task_(ObArchiveLogFetchTask &fetch_task,
   const LSN &start_offset = helper.get_start_offset();
   const LSN &cur_offset = helper.get_cur_offset();
   const LSN &end_offset = fetch_task.get_end_offset();
-  const SCN &log_scn = helper.get_unitized_log_scn();
+  const SCN &scn = helper.get_unitized_scn();
 
   if (NULL == send_task) {
     ARCHIVE_LOG(INFO, "send_task is NULL", K(send_task), K(helper), K(fetch_task));
@@ -656,7 +656,7 @@ int ObArchiveFetcher::update_log_fetch_task_(ObArchiveLogFetchTask &fetch_task,
     ARCHIVE_LOG(ERROR, "invalid pieces", K(ret), K(task_piece), K(cur_piece),
         K(fetch_task), K(helper));
   } else if (OB_FAIL(fetch_task.back_fill(cur_piece, start_offset, cur_offset,
-                                          log_scn, send_task))) {
+                                          scn, send_task))) {
     ARCHIVE_LOG(WARN, "log fetch task backup fill failed", K(ret), K(helper),
         K(fetch_task), KPC(send_task));
   } else {
@@ -708,7 +708,7 @@ int ObArchiveFetcher::build_send_task_(const ObLSID &id,
   const ObArchivePiece &piece = helper.get_piece();
   const LSN &start_offset = helper.get_start_offset();
   const LSN &end_offset = helper.get_cur_offset();
-  const SCN &max_log_scn = helper.get_unitized_log_scn();
+  const SCN &max_scn = helper.get_unitized_scn();
   char *buf = NULL;
   int64_t buf_size = 0;
   if (helper.is_empty()) {
@@ -725,7 +725,7 @@ int ObArchiveFetcher::build_send_task_(const ObLSID &id,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     ARCHIVE_LOG(WARN, "alloc send task failed", K(ret), K(id), K(station));
   } else if (OB_FAIL(task->init(tenant_id_, id, station, piece, start_offset, end_offset,
-                                max_log_scn, buf, buf_size))) {
+                                max_scn, buf, buf_size))) {
     ARCHIVE_LOG(WARN, "send task init failed", K(ret), K(id), K(station), K(helper));
   } else {
     helper.clear_handled_buf();
@@ -862,9 +862,9 @@ int ObArchiveFetcher::update_fetcher_progress_(ObLSArchiveTask &ls_archive_task,
 {
   int ret = OB_SUCCESS;
   const LSN &lsn = task.get_cur_offset();
-  const SCN &log_scn = task.get_max_log_scn();
+  const SCN &scn = task.get_max_scn();
   const ObArchivePiece &piece = task.get_piece();
-  LogFileTuple tuple(lsn, log_scn, piece);
+  LogFileTuple tuple(lsn, scn, piece);
   if (OB_FAIL(ls_archive_task.update_fetcher_progress(task.get_station(), tuple))) {
     ARCHIVE_LOG(WARN, "update fetcher progress failed", K(ret), K(task), K(ls_archive_task));
   }
@@ -922,7 +922,7 @@ ObArchiveFetcher::TmpMemoryHelper::TmpMemoryHelper(ObArchiveAllocator *allocator
   origin_buf_(NULL),
   origin_buf_pos_(0),
   cur_offset_(),
-  cur_log_scn_(),
+  cur_scn_(),
   ec_buf_(NULL),
   ec_buf_size_(0),
   ec_buf_pos_(0),
@@ -932,7 +932,7 @@ ObArchiveFetcher::TmpMemoryHelper::TmpMemoryHelper(ObArchiveAllocator *allocator
   allocator_(allocator)
 {
 
-  unitized_log_scn_ = SCN::min_scn();
+  unitized_scn_ = SCN::min_scn();
 }
 
 ObArchiveFetcher::TmpMemoryHelper::~TmpMemoryHelper()
@@ -942,9 +942,9 @@ ObArchiveFetcher::TmpMemoryHelper::~TmpMemoryHelper()
   end_offset_.reset();
   total_origin_buf_size_ = 0;
   cur_offset_.reset();
-  cur_log_scn_.reset();
+  cur_scn_.reset();
   unitized_offset_.reset();
-  unitized_log_scn_.reset();
+  unitized_scn_.reset();
   cur_piece_.reset();
   next_piece_.reset();
 
@@ -1052,14 +1052,14 @@ int ObArchiveFetcher::TmpMemoryHelper::append_log_entry(LogGroupEntry &entry)
   char *buf = origin_buf_ + origin_buf_pos_;
   int64_t residual_size = origin_buf_size_ - origin_buf_pos_;
   int64_t entry_size = entry.get_serialize_size();
-  const SCN &log_scn = entry.get_log_scn();
+  const SCN &scn = entry.get_scn();
 
   if (OB_UNLIKELY(! entry.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "log group entry is not valid", K(ret), K(entry));
-  } else if (OB_UNLIKELY(log_scn <= cur_log_scn_)) {
+  } else if (OB_UNLIKELY(scn <= cur_scn_)) {
     ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(ERROR, "log scn rollback", K(ret), K(log_scn), KPC(this), K(entry));
+    ARCHIVE_LOG(ERROR, "log scn rollback", K(ret), K(scn), KPC(this), K(entry));
   } else if (OB_UNLIKELY(entry_size > residual_size)) {
     ret = reserve_(entry_size + origin_buf_pos_);
   }
@@ -1070,7 +1070,7 @@ int ObArchiveFetcher::TmpMemoryHelper::append_log_entry(LogGroupEntry &entry)
     } else {
       origin_buf_pos_ += entry_size;
       cur_offset_ = cur_offset_ + entry_size;
-      cur_log_scn_ = log_scn;
+      cur_scn_ = scn;
     }
   }
   return ret;
@@ -1100,7 +1100,7 @@ void ObArchiveFetcher::TmpMemoryHelper::inc_total_origin_buf_size(const int64_t 
 void ObArchiveFetcher::TmpMemoryHelper::freeze_log_entry()
 {
   unitized_offset_ = cur_offset_;
-  unitized_log_scn_ = cur_log_scn_;
+  unitized_scn_ = cur_scn_;
 }
 
 void ObArchiveFetcher::TmpMemoryHelper::reset_original_buffer()

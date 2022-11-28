@@ -246,7 +246,7 @@ ObApplyStatus::ObApplyStatus()
       proposal_id_(-1),
       ap_sv_(NULL),
       palf_committed_end_lsn_(0),
-      last_check_log_scn_(),
+      last_check_scn_(),
       max_applied_cb_scn_(),
       submit_task_(),
       palf_env_(NULL),
@@ -295,7 +295,7 @@ int ObApplyStatus::init(const share::ObLSID &id,
       proposal_id_ = -1;
       ap_sv_ = ap_sv;
       palf_env_ = palf_env;
-      last_check_log_scn_.reset();
+      last_check_scn_.reset();
       max_applied_cb_scn_.reset();
       get_info_debug_time_ = OB_INVALID_TIMESTAMP;
       try_wrlock_debug_time_ = OB_INVALID_TIMESTAMP;
@@ -326,7 +326,7 @@ void ObApplyStatus::destroy()
   role_ = FOLLOWER;
   fs_cb_.destroy();
   palf_committed_end_lsn_.reset();
-  last_check_log_scn_.reset();
+  last_check_scn_.reset();
   max_applied_cb_scn_.reset();
   get_info_debug_time_ = OB_INVALID_TIMESTAMP;
   try_wrlock_debug_time_ = OB_INVALID_TIMESTAMP;
@@ -382,7 +382,7 @@ int ObApplyStatus::push_append_cb(AppendCb *cb)
     LSN palf_committed_end_lsn;
     const LSN cb_lsn = cb->__get_lsn();
     const SCN cb_scn = cb->__get_scn();
-    const uint64_t cb_sign = cb_scn.get_val_for_inner_table_field();
+    const uint64_t cb_sign = cb_scn.get_val_for_lsn_allocator();
     int64_t thread_index = cb_sign & (APPLY_TASK_QUEUE_SIZE - 1);
     ObLink *link = AppendCb::__get_member_address(cb);
     cb_queues_[thread_index].inc_total_submit_cb_cnt();
@@ -444,9 +444,9 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "cb_queue is NULL", KPC(this), KR(ret));
   } else {
-    int64_t start_ts_ns = ObTimeUtility::current_time_ns();
+    int64_t start_time = ObTimeUtility::current_time();
     LSN lsn;
-    SCN log_scn;
+    SCN scn;
     int64_t append_start_time = OB_INVALID_TIMESTAMP;
     int64_t append_finish_time = OB_INVALID_TIMESTAMP;
     int64_t cb_first_handle_time = OB_INVALID_TIMESTAMP;
@@ -467,15 +467,15 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
         if (OB_FAIL(cb_queue->pop())) {
           CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
         } else {
-          log_scn = cb->__get_scn();
+          scn = cb->__get_scn();
           get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time);
-          CLOG_LOG(TRACE, "cb on_success", K(lsn), K(log_scn), KP(link->next_), KPC(cb_queue), KPC(this));
+          CLOG_LOG(TRACE, "cb on_success", K(lsn), K(scn), KP(link->next_), KPC(cb_queue), KPC(this));
           if (OB_FAIL(cb->on_success())) {
             // 不处理此类失败情况
             CLOG_LOG(ERROR, "cb on_success failed", KP(cb), K(ret), KPC(this));
             ret = OB_SUCCESS;
           }
-          statistics_cb_cost_(lsn, log_scn, append_start_time, append_finish_time,
+          statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
                               cb_first_handle_time, cb_start_time);
           cb_queue->inc_total_apply_cb_cnt();
         }
@@ -484,14 +484,14 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
         if (OB_FAIL(cb_queue->pop())) {
           CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
         } else {
-          log_scn = cb->__get_scn();
+          scn = cb->__get_scn();
           get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time);
-          CLOG_LOG(INFO, "cb on_failure", K(lsn), K(log_scn), KP(link->next_), KPC(cb_queue), KPC(this));
+          CLOG_LOG(INFO, "cb on_failure", K(lsn), K(scn), KP(link->next_), KPC(cb_queue), KPC(this));
           if (OB_FAIL(cb->on_failure())) {
             CLOG_LOG(ERROR, "cb on_failure failed", KP(cb), K(ret), KPC(this));
             ret = OB_SUCCESS;
           }
-          statistics_cb_cost_(lsn, log_scn, append_start_time, append_finish_time,
+          statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
                               cb_first_handle_time, cb_start_time);
           cb_queue->inc_total_apply_cb_cnt();
         }
@@ -502,8 +502,8 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
         ret = OB_EAGAIN;
       }
       if (OB_SUCC(ret) && !is_queue_empty) {
-        int64_t used_time_ns = ObTimeUtility::current_time_ns() - start_ts_ns;
-        if (used_time_ns > MAX_HANDLE_TIME_NS_PER_ROUND_NS) {
+        int64_t used_time = ObTimeUtility::current_time() - start_time;
+        if (used_time > MAX_HANDLE_TIME_US_PER_ROUND_US) {
           is_timeslice_run_out = true;
         }
       }
@@ -579,8 +579,8 @@ int ObApplyStatus::switch_to_follower_()
     CLOG_LOG(INFO, "apply status has already been follower", KPC(this), K(ret));
   } else {
     lib::ObMutexGuard guard(mutex_);
-    // truancate场景旧主的max_log_ts可能回退
-    last_check_log_scn_.reset();
+    // truancate场景旧主的max_scn可能回退
+    last_check_scn_.reset();
     role_ = FOLLOWER;
     if (OB_FAIL(submit_task_to_apply_service_(submit_task_))) {
       CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret));
@@ -651,13 +651,13 @@ void ObApplyStatus::close_palf_handle()
   }
 }
 
-int ObApplyStatus::get_min_unapplied_log_scn(SCN &log_scn)
+int ObApplyStatus::get_min_unapplied_scn(SCN &scn)
 {
   int ret = OB_SUCCESS;
   //保证此接口不会被并发调用, 两把锁的顺序不能更改
   RLockGuard rguard(lock_);
   lib::ObMutexGuard guard(mutex_);
-  const SCN last_check_log_scn = last_check_log_scn_;
+  const SCN last_check_scn = last_check_scn_;
   if (OB_UNLIKELY(IS_NOT_INIT)) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "apply status has not been inited", K(ret));
@@ -675,21 +675,21 @@ int ObApplyStatus::get_min_unapplied_log_scn(SCN &log_scn)
       // 始终返回上轮作为leader时缓存的值
       // 所有cb回调完成后, 尝试推进一次最大连续回调位点
     } else if (OB_FAIL(palf_handle_.get_end_scn(palf_end_scn))) {
-      CLOG_LOG(WARN, "get_end_ts_ns failed", K(ret), KPC(this));
+      CLOG_LOG(WARN, "get_end_scn failed", K(ret), KPC(this));
     } else if (OB_FAIL(palf_handle_.get_end_lsn(palf_end_lsn))) {
       CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(this));
     } else if (palf_end_lsn == apply_end_lsn) {
       max_applied_cb_scn_ = palf_end_scn;
       CLOG_LOG(INFO, "update max_applied_cb_scn_", K(ret), KPC(this));
     }
-  } else if ((!last_check_log_scn.is_valid()) || last_check_log_scn == max_applied_cb_scn_) {
-    if (OB_FAIL(update_last_check_log_scn_())) {
-      CLOG_LOG(ERROR, "update_last_check_log_scn_ failed", K(ret), KPC(this));
+  } else if ((!last_check_scn.is_valid()) || last_check_scn == max_applied_cb_scn_) {
+    if (OB_FAIL(update_last_check_scn_())) {
+      CLOG_LOG(ERROR, "update_last_check_scn_ failed", K(ret), KPC(this));
     } else {
       //do nothing
     }
-  } else if (!max_applied_cb_scn_.is_valid() || last_check_log_scn > max_applied_cb_scn_) {
-    // 检查last_check_log_scn_是否都已经回调完成
+  } else if (!max_applied_cb_scn_.is_valid() || last_check_scn > max_applied_cb_scn_) {
+    // 检查last_check_scn_是否都已经回调完成
     bool is_done = true;
     for (int64_t i = 0; OB_SUCC(ret) && is_done && i < APPLY_TASK_QUEUE_SIZE; ++i) {
       if (OB_FAIL(cb_queues_[i].is_snapshot_apply_done(is_done))) {
@@ -697,27 +697,24 @@ int ObApplyStatus::get_min_unapplied_log_scn(SCN &log_scn)
       }
     }
     if (OB_SUCC(ret) && is_done) {
-      max_applied_cb_scn_ = last_check_log_scn;
+      max_applied_cb_scn_ = last_check_scn;
       CLOG_LOG(TRACE, "is_snapshot_apply_done", K(ret), KPC(this));
-      if (OB_FAIL(update_last_check_log_scn_())) {
-        CLOG_LOG(ERROR, "update_last_check_log_scn_ failed", K(ret), KPC(this));
+      if (OB_FAIL(update_last_check_scn_())) {
+        CLOG_LOG(ERROR, "update_last_check_scn_ failed", K(ret), KPC(this));
       } else {
         //do nothing
       }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "max_applied_cb_scn_ larger than last_check_log_scn_, unexpected", K(ret), KPC(this));
+    CLOG_LOG(ERROR, "max_applied_cb_scn_ larger than last_check_scn_, unexpected", K(ret), KPC(this));
   }
-  if (OB_SUCC(ret)) {
-    //TODO(scn):yaoying.yyy
-    if (OB_FAIL(log_scn.convert_for_gts(max_applied_cb_scn_.get_val_for_lsn_allocator() + 1))) {
-      CLOG_LOG(WARN, "failed to convert_for_gts", K(ret), K(max_applied_cb_scn_), KPC(this));
-    }
+  if (OB_SUCC(ret) && max_applied_cb_scn_.is_valid()) {
+    scn = palf::SCN::plus(max_applied_cb_scn_, 1);
   }
-  CLOG_LOG(TRACE, "get_min_unapplied_log_scn finish", K(ret), KPC(this), K(log_scn));
+  CLOG_LOG(TRACE, "get_min_unapplied_scn finish", K(ret), KPC(this), K(scn));
   if (palf_reach_time_interval(5 * 1000 * 1000, get_info_debug_time_)) {
-    CLOG_LOG(INFO, "get_min_unapplied_log_info", K(log_scn), KPC(this));
+    CLOG_LOG(INFO, "get_min_unapplied_log_info", K(scn), KPC(this));
   }
   return ret;
 }
@@ -773,7 +770,7 @@ int ObApplyStatus::submit_task_to_apply_service_(ObApplyServiceTask &task)
   return ret;
 }
 
-int ObApplyStatus::update_last_check_log_scn_()
+int ObApplyStatus::update_last_check_scn_()
 {
   int ret = OB_SUCCESS;
   ObRole palf_role = FOLLOWER;
@@ -793,8 +790,8 @@ int ObApplyStatus::update_last_check_log_scn_()
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "invalid palf_proposal_id", K(ret), K(ls_id_), K(palf_proposal_id), KPC(this));
     } else {
-      // palf已经切主, max_ts_ns可能包含其他新主的日志, do nothing
-      CLOG_LOG(TRACE, "skip update_last_check_log_ts_ns", K(ret), K(ls_id_), K(palf_max_scn), K(palf_proposal_id), KPC(this));
+      // palf已经切主, max_scn可能包含其他新主的日志, do nothing
+      CLOG_LOG(TRACE, "skip update_last_check_scn", K(ret), K(ls_id_), K(palf_max_scn), K(palf_proposal_id), KPC(this));
     }
   } else if (OB_FAIL(ap_sv_->wait_append_sync(ls_id_))) {
     CLOG_LOG(WARN, "wait_append_sync failed", K(ret), K(ls_id_), KPC(this));
@@ -802,7 +799,7 @@ int ObApplyStatus::update_last_check_log_scn_()
     for (int64_t i = 0; i < APPLY_TASK_QUEUE_SIZE; ++i) {
       cb_queues_[i].set_snapshot_check_submit_cb_cnt();
     }
-    last_check_log_scn_ = palf_max_scn;
+    last_check_scn_ = palf_max_scn;
   }
   return ret;
 }
@@ -812,7 +809,7 @@ int ObApplyStatus::handle_drop_cb_queue_(ObApplyServiceQueueTask &cb_queue)
   int ret = OB_SUCCESS;
   bool is_queue_empty = false;
   LSN lsn;
-  SCN log_scn;
+  SCN scn;
   int64_t append_start_time = OB_INVALID_TIMESTAMP;
   int64_t append_finish_time = OB_INVALID_TIMESTAMP;
   int64_t cb_first_handle_time = OB_INVALID_TIMESTAMP;
@@ -831,14 +828,14 @@ int ObApplyStatus::handle_drop_cb_queue_(ObApplyServiceQueueTask &cb_queue)
       CLOG_LOG(ERROR, "cb_queue pop failed", K(cb_queue), K(ret), KPC(this));
     } else {
       lsn = cb->__get_lsn();
-      log_scn = cb->__get_scn();
+      scn = cb->__get_scn();
       get_cb_trace_(cb, append_start_time, append_finish_time, cb_first_handle_time, cb_start_time);
-      CLOG_LOG(INFO, "cb on_failure", K(lsn), K(log_scn), KP(link->next_), K(cb_queue), KPC(this));
+      CLOG_LOG(INFO, "cb on_failure", K(lsn), K(scn), KP(link->next_), K(cb_queue), KPC(this));
       if (OB_FAIL(cb->on_failure())) {
         CLOG_LOG(ERROR, "cb on_failure failed", KP(cb), K(ret), KPC(this));
         ret = OB_SUCCESS;
       }
-      statistics_cb_cost_(lsn, log_scn, append_start_time, append_finish_time,
+      statistics_cb_cost_(lsn, scn, append_start_time, append_finish_time,
                           cb_first_handle_time, cb_start_time);
       cb_queue.inc_total_apply_cb_cnt();
     }
@@ -1193,7 +1190,7 @@ int ObLogApplyService::switch_to_follower(const share::ObLSID &id)
   return ret;
 }
 
-int ObLogApplyService::get_min_unapplied_log_scn(const share::ObLSID &id, SCN &log_scn)
+int ObLogApplyService::get_min_unapplied_scn(const share::ObLSID &id, SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObApplyStatus *apply_status = NULL;
@@ -1206,10 +1203,10 @@ int ObLogApplyService::get_min_unapplied_log_scn(const share::ObLSID &id, SCN &l
   } else if (NULL == (apply_status = guard.get_apply_status())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "apply status is not exist", K(ret), K(id));
-  } else if (OB_FAIL(apply_status->get_min_unapplied_log_scn(log_scn))) {
-    CLOG_LOG(WARN, "apply status get_min_unapplied_log_scn failed", K(ret), K(id));
+  } else if (OB_FAIL(apply_status->get_min_unapplied_scn(scn))) {
+    CLOG_LOG(WARN, "apply status get_min_unapplied_scn failed", K(ret), K(id));
   } else {
-    CLOG_LOG(TRACE, "apply service get_min_unapplied_log_scn success", K(id));
+    CLOG_LOG(TRACE, "apply service get_min_unapplied_scn success", K(id));
   }
   return ret;
 }

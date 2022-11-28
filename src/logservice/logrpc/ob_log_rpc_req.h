@@ -74,14 +74,14 @@ public:
                      const common::ObMember &removed_member,
                      const int64_t paxos_replica_num,
                      const LogConfigChangeCmdType cmd_type,
-                     const int64_t timeout_ns);
+                     const int64_t timeout_us);
   LogConfigChangeCmd(const common::ObAddr &src,
                      const int64_t palf_id,
                      const common::ObMemberList &member_list,
                      const int64_t curr_replica_num,
                      const int64_t new_replica_num,
                      const LogConfigChangeCmdType cmd_type,
-                     const int64_t timeout_ns);
+                     const int64_t timeout_us);
   ~LogConfigChangeCmd();
   bool is_valid() const;
   void reset();
@@ -89,7 +89,7 @@ public:
   bool is_add_member_list() const;
   TO_STRING_KV("cmd_type", log_config_change_cmd2str(cmd_type_), K_(src), K_(palf_id), \
   K_(added_member), K_(removed_member), K_(curr_member_list), K_(curr_replica_num),      \
-  K_(new_replica_num), K_(timeout_ns));
+  K_(new_replica_num), K_(timeout_us));
   common::ObAddr src_;
   int64_t palf_id_;
   common::ObMember added_member_;
@@ -98,7 +98,7 @@ public:
   int64_t curr_replica_num_;
   int64_t new_replica_num_;
   LogConfigChangeCmdType cmd_type_;
-  int64_t timeout_ns_;
+  int64_t timeout_us_;
 };
 
 struct LogConfigChangeCmdResp {

@@ -2446,13 +2446,13 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
                                                                  time_val))) {
               ret = OB_ERR_WRONG_VALUE;
               LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "TIMESTAMP", to_cstring(time_str));
-            } else if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_inner_table_field(time_val))) {
+            } else if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_sql(time_val))) {
               LOG_WARN("fail to set scn", K(ret));
             } else {
               stmt->get_rpc_arg().with_restore_scn_ = true;
             }
           } else if (1/*scn*/ == time_node->children_[0]->value_) {
-            if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_inner_table_field(time_node->children_[1]->value_))) {
+            if (OB_FAIL(stmt->get_rpc_arg().restore_scn_.convert_for_sql(time_node->children_[1]->value_))) {
               LOG_WARN("fail to set scn", K(ret));
             } else {
               stmt->get_rpc_arg().with_restore_scn_ = true;

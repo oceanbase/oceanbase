@@ -902,7 +902,7 @@ int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCPa
     literal_stmt_type_ = phy_plan.get_literal_stmt_type();
     is_returning_ = phy_plan.is_returning();
     plan_ctx->set_is_affect_found_row(phy_plan.is_affect_found_row());
-    if (plan_ctx->is_ps_protocol() && ps_param_count != phy_plan.get_param_fields().count()) {
+    if (is_ps_protocol() && ps_param_count != phy_plan.get_param_fields().count()) {
       if (OB_FAIL(reserve_param_columns(ps_param_count))) {
         LOG_WARN("reserve param columns failed", K(ret), K(ps_param_count));
       }
@@ -912,6 +912,8 @@ int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCPa
         param_field.cname_ = ObString::make_string("?");
         OZ (add_param_column(param_field), K(param_field), K(i), K(ps_param_count));
       }
+      LOG_DEBUG("reset param count ", K(ps_param_count), K(plan_ctx->get_orig_question_mark_cnt()),
+        K(phy_plan.get_returning_param_fields().count()), K(phy_plan.get_param_fields().count()));
     } else {
       p_param_columns_ = &phy_plan.get_param_fields();
     }

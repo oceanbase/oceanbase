@@ -476,7 +476,10 @@ int ObFastInitSqcCB::deal_with_rpc_timeout_err_safely()
 
 {
   int ret = OB_SUCCESS;
-  ObDealWithRpcTimeoutCall call(addr_, retry_info_, timeout_ts_, trace_id_);
+  // only if it's sure init_sqc msg is not sent to sqc successfully, we can retry the query.
+  bool init_sqc_not_send_out = (get_error() == EASY_TIMEOUT_NOT_SENT_OUT
+      || get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
+  ObDealWithRpcTimeoutCall call(addr_, retry_info_, timeout_ts_, trace_id_, init_sqc_not_send_out);
   call.ret_ = OB_TIMEOUT;
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   if (OB_NOT_NULL(manager)) {
@@ -529,7 +532,12 @@ void ObDealWithRpcTimeoutCall::deal_with_rpc_timeout_err()
           LOG_WARN("fail to add invalid server distinctly", K_(trace_id), K(a_ret), K_(addr));
         }
       }
-      ret_ = OB_RPC_CONNECT_ERROR;
+      if (can_retry_) {
+        // return OB_RPC_CONNECT_ERROR to retry.
+        ret_ = OB_RPC_CONNECT_ERROR;
+      } else {
+        ret_ = OB_PACKET_STATUS_UNKNOWN;
+      }
     } else {
       LOG_DEBUG("rpc return OB_TIMEOUT, and it is actually timeout, "
                 "do not change error code", K(ret_),

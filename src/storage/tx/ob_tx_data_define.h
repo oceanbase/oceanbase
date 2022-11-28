@@ -178,7 +178,6 @@ public:
   { 
     head_ = nullptr;
     undo_node_cnt_ = 0;
-    lock_.unlock();
   }
 
 private:
@@ -189,7 +188,7 @@ private:
 public:
   ObUndoStatusNode *head_;
   int32_t undo_node_cnt_;
-  common::ObByteLock lock_;
+  common::SpinRWLock lock_;
 };
 
 // TODO: Redefine it
@@ -244,7 +243,6 @@ class ObTxData : public ObTxCommitData, public TxDataHashValue
   friend TxDataHashMapAllocHandle;
 private:
   const static int64_t UNIS_VERSION = 1;
-
 public:
   ObTxData() { reset(); }
   ObTxData(const ObTxData &rhs);
@@ -258,8 +256,9 @@ public:
    * 
    * @param[in] tx_table, the tx table contains this tx data
    * @param[in & out] undo_action, the undo action which is waiting to be added. If this undo action contains exsiting undo actions, the existing undo actions will be deleted and this undo action will be modified to contain all the deleted undo actions.
+   * @param[in] undo_node, the undo status node can be used to extend undo status list if required, otherwise it will be released
    */
-  int add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &undo_action);
+  int add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &undo_action, ObUndoStatusNode *undo_node = nullptr);
   /**
    * @brief Check if this tx data is valid
    */

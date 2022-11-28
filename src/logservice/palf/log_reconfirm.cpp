@@ -50,8 +50,8 @@ LogReconfirm::LogReconfirm()
       mode_mgr_(NULL),
       log_engine_(NULL),
       lock_(ObLatchIds::CLOG_RECONFIRM_LOCK),
-      last_submit_prepare_req_ts_ns_(OB_INVALID_TIMESTAMP),
-      last_fetch_log_ts_ns_(OB_INVALID_TIMESTAMP),
+      last_submit_prepare_req_time_us_(OB_INVALID_TIMESTAMP),
+      last_fetch_log_time_us_(OB_INVALID_TIMESTAMP),
       last_record_sw_start_id_(OB_INVALID_LOG_ID),
       wait_slide_print_time_us_(OB_INVALID_TIMESTAMP),
       is_inited_(false)
@@ -102,8 +102,8 @@ void LogReconfirm::reset_state()
     majority_max_accept_pid_ = INVALID_PROPOSAL_ID;
     majority_max_lsn_.reset();
     saved_end_lsn_.reset();
-    last_submit_prepare_req_ts_ns_ = OB_INVALID_TIMESTAMP;
-    last_fetch_log_ts_ns_ = OB_INVALID_TIMESTAMP;
+    last_submit_prepare_req_time_us_ = OB_INVALID_TIMESTAMP;
+    last_fetch_log_time_us_ = OB_INVALID_TIMESTAMP;
     last_record_sw_start_id_ = OB_INVALID_LOG_ID;
   }
 }
@@ -127,8 +127,8 @@ void LogReconfirm::destroy()
     mm_ = NULL;
     mode_mgr_ = NULL;
     log_engine_ = NULL;
-    last_submit_prepare_req_ts_ns_ = OB_INVALID_TIMESTAMP;
-    last_fetch_log_ts_ns_ = OB_INVALID_TIMESTAMP;
+    last_submit_prepare_req_time_us_ = OB_INVALID_TIMESTAMP;
+    last_fetch_log_time_us_ = OB_INVALID_TIMESTAMP;
     last_record_sw_start_id_ = OB_INVALID_LOG_ID;
   }
 }
@@ -170,7 +170,7 @@ int LogReconfirm::submit_prepare_log_()
   LSN unused_prev_lsn;
 	LSN max_flushed_end_lsn;
 	int64_t max_flushed_log_pid = INVALID_PROPOSAL_ID;
-  const int64_t now_ns = ObTimeUtility::current_time_ns();
+  const int64_t now_us = ObTimeUtility::current_time();
   if (OB_FAIL(sw_->get_max_flushed_log_info(unused_prev_lsn, max_flushed_end_lsn, max_flushed_log_pid))) {
     PALF_LOG(WARN, "get_max_flushed_log_info failed", K(ret), K_(palf_id));
   } else if (OB_EAGAIN != (ret = mode_mgr_->reconfirm_mode_meta())) {
@@ -214,11 +214,11 @@ int LogReconfirm::submit_prepare_log_()
         && OB_FAIL(log_engine_->submit_prepare_meta_req(curr_paxos_follower_list_, new_proposal_id_))) {
 			PALF_LOG(WARN, "submit_prepare_meta_req failed", K(ret), K_(palf_id), K_(self), K_(new_proposal_id));
 		} else {
-      const int64_t old_prepare_ts_ns = last_submit_prepare_req_ts_ns_;
-      last_submit_prepare_req_ts_ns_ = now_ns;
+      const int64_t old_prepare_time_us = last_submit_prepare_req_time_us_;
+      last_submit_prepare_req_time_us_ = now_us;
 			PALF_LOG(INFO, "submit_prepare_meta_req success", K(ret), K_(palf_id), K(curr_paxos_follower_list_), K(prepare_log_ack_list_),
 					K(old_proposal_id), K(new_proposal_id_), K(self_), K(majority_max_lsn_), K(majority_max_log_server_),
-					K(majority_max_accept_pid_), K(now_ns), K(old_prepare_ts_ns), K(last_submit_prepare_req_ts_ns_), K(max_flushed_log_pid),
+					K(majority_max_accept_pid_), K(now_us), K(old_prepare_time_us), K(last_submit_prepare_req_time_us_), K(max_flushed_log_pid),
           K(local_accept_proposal_id));
 		}
   }
@@ -305,25 +305,25 @@ bool LogReconfirm::is_fetch_log_finished_() const
 int LogReconfirm::try_fetch_log_()
 {
   int ret = OB_SUCCESS;
-  const int64_t now_ns = ObTimeUtility::current_time_ns();
+  const int64_t now_us = ObTimeUtility::current_time();
   bool is_fetched = false;
   const int64_t sw_start_id = sw_->get_start_id();
-	if (OB_INVALID_TIMESTAMP == last_fetch_log_ts_ns_
+	if (OB_INVALID_TIMESTAMP == last_fetch_log_time_us_
       || OB_INVALID_LOG_ID == last_record_sw_start_id_
       || (sw_start_id == last_record_sw_start_id_
-          && now_ns - last_fetch_log_ts_ns_ >= PALF_FETCH_LOG_INTERVAL_NS)) {
+          && now_us - last_fetch_log_time_us_ >= PALF_FETCH_LOG_INTERVAL_US)) {
     if (OB_FAIL(sw_->try_fetch_log_for_reconfirm(majority_max_log_server_, majority_max_lsn_, is_fetched))) {
       PALF_LOG(WARN, "try_fetch_log_for_reconfirm failed", K(ret), K_(palf_id));
     } else if (is_fetched) {
       // send fetch req success
       last_record_sw_start_id_ = sw_start_id;
-      last_fetch_log_ts_ns_ = now_ns;
+      last_fetch_log_time_us_ = now_us;
       PALF_LOG(INFO, "try_fetch_log_ success", K(ret), K_(palf_id), K_(majority_max_lsn),
           K_(majority_max_log_server), K_(self), K_(last_record_sw_start_id));
     }
   } else if (sw_start_id != last_record_sw_start_id_) {
     last_record_sw_start_id_ = sw_start_id;
-    last_fetch_log_ts_ns_ = now_ns;
+    last_fetch_log_time_us_ = now_us;
   } else {
     PALF_LOG(INFO, "no need fetch log in current round", K(ret), K_(palf_id), K_(majority_max_log_server),
       K_(majority_max_lsn), K(sw_start_id), K_(last_record_sw_start_id));
@@ -339,7 +339,7 @@ int LogReconfirm::reconfirm()
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogReconfirm is not init", K(ret), K_(self), K_(palf_id));
   } else {
-    const int64_t now_ns = ObTimeUtility::current_time_ns();
+    const int64_t now_us = ObTimeUtility::current_time();
     switch (state_) {
       case INITED: {
         if (OB_FAIL(init_reconfirm_())) {
@@ -363,12 +363,12 @@ int LogReconfirm::reconfirm()
         break;
       }
       case FETCH_MAX_LOG_LSN: {
-				const int64_t cost_ts = ObTimeUtility::current_time_ns() - last_submit_prepare_req_ts_ns_;
+				const int64_t cost_ts = ObTimeUtility::current_time() - last_submit_prepare_req_time_us_;
         // NB: prepare_log_ack_list_ include self defaultly.
         if (prepare_log_ack_list_.get_count() + 1 < majority_cnt_) {
-          // not reach majority in RECONFIRM_PREPARE_RETRY_INTERVAL_NS, retry PREPARE phase
+          // not reach majority in RECONFIRM_PREPARE_RETRY_INTERVAL_US, retry PREPARE phase
           // because we do not record vote_for, so leader need advance proposal_id for each retry.
-          if (RECONFIRM_PREPARE_RETRY_INTERVAL_NS <= cost_ts) {
+          if (RECONFIRM_PREPARE_RETRY_INTERVAL_US <= cost_ts) {
             ret = submit_prepare_log_();
             PALF_LOG(WARN, "prepare_log_ack_list_ is not majority in expected interval, submit_prepare_log_ again",
 								K(ret), K(cost_ts), K(prepare_log_ack_list_), K(majority_cnt_), K_(palf_id));

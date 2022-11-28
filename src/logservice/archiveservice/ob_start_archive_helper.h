@@ -48,7 +48,7 @@ public:
   explicit StartArchiveHelper(const ObLSID &id,
       const uint64_t tenant_id,
       const ArchiveWorkStation &station,
-      const palf::SCN &min_log_scn,
+      const palf::SCN &min_scn,
       const int64_t piece_interval,
       const palf::SCN &genesis_scn,
       const int64_t base_piece_id,
@@ -66,14 +66,14 @@ public:
   const LSN &get_offset() const { return start_offset_; }
   int64_t get_file_id() const { return archive_file_id_; }
   int64_t get_file_offset() const { return archive_file_offset_; }
-  const palf::SCN &get_round_start_scn() const { return min_log_scn_; }
+  const palf::SCN &get_round_start_scn() const { return min_scn_; }
   const palf::SCN &get_max_archived_scn() const { return max_archived_scn_; }
   const share::ObArchivePiece &get_piece() const { return piece_; }
   bool is_log_gap_exist() const { return log_gap_exist_; }
   TO_STRING_KV(K_(id),
                K_(station),
                K_(log_gap_exist),
-               K_(min_log_scn),
+               K_(min_scn),
                K_(piece_interval),
                K_(genesis_scn),
                K_(base_piece_id),
@@ -97,7 +97,7 @@ private:
   uint64_t tenant_id_;
   ArchiveWorkStation station_;
   bool log_gap_exist_;
-  palf::SCN min_log_scn_;
+  palf::SCN min_scn_;
   int64_t piece_interval_;
   palf::SCN genesis_scn_;
   int64_t base_piece_id_;

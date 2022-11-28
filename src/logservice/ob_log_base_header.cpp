@@ -53,7 +53,7 @@ ObLogBaseHeader::ObLogBaseHeader(const ObLogBaseType log_type,
                                  const enum ObReplayBarrierType replay_barrier_type)
   : ObLogBaseHeader(log_type,
                     replay_barrier_type,
-                    common::ObTimeUtility::current_time_ns())
+                    common::ObTimeUtility::current_time())
 {
 }
 

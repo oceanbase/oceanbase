@@ -23,7 +23,7 @@ using namespace palf;
 namespace logservice
 {
 ObFetchLogTask::ObFetchLogTask(const share::ObLSID &id,
-    const SCN &pre_log_scn,
+    const SCN &pre_scn,
     const palf::LSN &lsn,
     const int64_t size,
     const int64_t proposal_id) :
@@ -32,18 +32,18 @@ ObFetchLogTask::ObFetchLogTask(const share::ObLSID &id,
   start_lsn_(lsn),
   cur_lsn_(lsn),
   end_lsn_(lsn + size),
-  max_fetch_log_scn_(),
-  max_submit_log_scn_(),
+  max_fetch_scn_(),
+  max_submit_scn_(),
   status_(Status::NORMAL)
 {
-  pre_log_scn_ = pre_log_scn;
+  pre_scn_ = pre_scn;
 }
 
 bool ObFetchLogTask::is_valid() const
 {
   return id_.is_valid()
     && proposal_id_ > 0
-    && pre_log_scn_.is_valid()
+    && pre_scn_.is_valid()
     && start_lsn_.is_valid()
     && cur_lsn_.is_valid()
     && end_lsn_.is_valid()
@@ -57,8 +57,8 @@ int ObFetchLogTask::update_cur_lsn_scn(const palf::LSN &lsn, const SCN &max_subm
     ret = OB_INVALID_ARGUMENT;
   } else {
     cur_lsn_ = lsn;
-    max_submit_log_scn_ = max_submit_scn > max_submit_log_scn_ ? max_submit_scn : max_submit_log_scn_;
-    max_fetch_log_scn_ = max_fetch_scn > max_fetch_log_scn_ ? max_fetch_scn: max_fetch_log_scn_;
+    max_submit_scn_ = max_submit_scn > max_submit_scn_ ? max_submit_scn : max_submit_scn_;
+    max_fetch_scn_ = max_fetch_scn > max_fetch_scn_ ? max_fetch_scn: max_fetch_scn_;
     if (cur_lsn_ >= end_lsn_) {
       status_ = Status::FINISH;
     }

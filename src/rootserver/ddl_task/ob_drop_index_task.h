@@ -55,6 +55,12 @@ private:
   int deep_copy_index_arg(common::ObIAllocator &allocator,
                           const obrpc::ObDropIndexArg &src_index_arg,
                           obrpc::ObDropIndexArg &dst_index_arg);
+  virtual bool is_error_need_retry(const int ret_code) override
+  {
+    UNUSED(ret_code);
+    // we should always retry on drop index task
+    return task_status_ < share::ObDDLTaskStatus::DROP_SCHEMA;
+  }
 private:
   static const int64_t OB_DROP_INDEX_TASK_VERSION = 1;
   ObDDLWaitTransEndCtx wait_trans_ctx_;

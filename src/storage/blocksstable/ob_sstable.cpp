@@ -662,7 +662,7 @@ int ObSSTable::check_row_locked(ObStoreCtx &ctx,
   int ret = OB_SUCCESS;
   void *buf = NULL;
   ObSSTableRowLockChecker *row_checker = NULL;
-  const int64_t read_snapshot = ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator();
+  const int64_t read_snapshot = ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
   ObArenaAllocator allocator(ObModIds::OB_STORE_ROW_LOCK_CHECKER);
   lock_state.trans_version_ = palf::SCN::min_scn();
   lock_state.is_locked_ = false;

@@ -223,7 +223,7 @@ int LogNetService::submit_change_mode_meta_resp(
 int LogNetService::submit_get_memberchange_status_req(
     const ObAddr &server,
     const LogConfigVersion &config_version,
-    const int64_t timeout_ns,
+    const int64_t timeout_us,
     LogGetMCStResp &resp)
 {
   int ret = OB_SUCCESS;
@@ -231,7 +231,7 @@ int LogNetService::submit_get_memberchange_status_req(
     ret = OB_NOT_INIT;
   } else {
     LogGetMCStReq req(config_version);
-    ret = post_sync_request_to_server_(server, timeout_ns / 1000, req, resp);
+    ret = post_sync_request_to_server_(server, timeout_us, req, resp);
   }
   return ret;
 }

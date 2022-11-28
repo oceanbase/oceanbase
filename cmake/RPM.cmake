@@ -328,6 +328,7 @@ install(PROGRAMS
 ## oceanbase-utils
 install(PROGRAMS
   ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
+  ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
   DESTINATION /usr/bin
   COMPONENT utils
 )
@@ -340,4 +341,4 @@ add_custom_target(rpm
   COMMAND +make package
   DEPENDS
   observer obcdc_tailf obtable obtable_static
-  ob_admin ob_sql_proxy_parser_static)
+  ob_admin ob_error ob_sql_proxy_parser_static)

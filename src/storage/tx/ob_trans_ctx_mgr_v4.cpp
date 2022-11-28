@@ -538,7 +538,6 @@ int ObLSTxCtxMgr::iterator_tx_id(ObTxIDIterator& iter)
 int ObLSTxCtxMgr::get_tx_ctx_directly_from_hash_map(const ObTransID &tx_id, ObPartTransCtx *&ctx)
 {
   int ret = OB_SUCCESS;
-  RLockGuard guard(rwlock_);
   ObTransCtx *tmp_ctx = NULL;
 
   if (IS_NOT_INIT) {
@@ -1007,8 +1006,6 @@ int ObLSTxCtxMgr::check_scheduler_status()
 {
   int ret = OB_SUCCESS;
   ObTimeGuard tg("ObLSTxCtxMgr::check_scheduler_status", 100000);
-  RDLockGuard guard(rwlock_);
-  tg.click();
 
   IteratePartCtxAskSchedulerStatusFunctor functor;
   if (OB_FAIL(ls_tx_ctx_map_.for_each(functor))) {
@@ -1025,7 +1022,6 @@ int ObLSTxCtxMgr::check_modify_schema_elapsed(const ObTabletID &tablet_id,
   int ret = OB_SUCCESS;
 
   ObTimeGuard timeguard("ObLSTxCtxMgr::check_modify_schema_elapsed");
-  WLockGuard guard(rwlock_);
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
@@ -1057,7 +1053,6 @@ int ObLSTxCtxMgr::check_modify_time_elapsed(const ObTabletID &tablet_id,
   int ret = OB_SUCCESS;
 
   ObTimeGuard timeguard("ObLSTxCtxMgr::check_modify_time_elapsed");
-  WLockGuard guard(rwlock_);
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
@@ -1084,8 +1079,6 @@ int ObLSTxCtxMgr::iterate_tx_obj_lock_op(ObLockOpIterator &iter)
 {
   int ret = OB_SUCCESS;
 
-  RLockGuard guard(rwlock_);
-
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
     ret = OB_NOT_INIT;
@@ -1102,8 +1095,6 @@ int ObLSTxCtxMgr::iterate_tx_obj_lock_op(ObLockOpIterator &iter)
 int ObLSTxCtxMgr::iterate_tx_lock_stat(ObTxLockStatIterator &tx_lock_stat_iter)
 {
   int ret = OB_SUCCESS;
-
-  RLockGuard guard(rwlock_);
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
@@ -1122,8 +1113,6 @@ int ObLSTxCtxMgr::iterate_tx_ctx_stat(ObTxStatIterator &tx_stat_iter)
 {
   int ret = OB_SUCCESS;
 
-  RLockGuard guard(rwlock_);
-
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
     ret = OB_NOT_INIT;
@@ -1139,13 +1128,11 @@ int ObLSTxCtxMgr::iterate_tx_ctx_stat(ObTxStatIterator &tx_stat_iter)
 
 int ObLSTxCtxMgr::revert_tx_ctx(ObPartTransCtx *ctx)
 {
-  RLockGuard guard(rwlock_);
   return revert_tx_ctx_without_lock(ctx);
 }
 
 int ObLSTxCtxMgr::revert_tx_ctx(ObTransCtx *ctx)
 {
-  RLockGuard guard(rwlock_);
   return revert_tx_ctx_without_lock(ctx);
 }
 
@@ -1154,10 +1141,7 @@ int ObLSTxCtxMgr::revert_tx_ctx_without_lock(ObTransCtx *ctx)
   int ret = OB_SUCCESS;
   TRANS_LOG(DEBUG, "revert_tx_ctx_without_lock", KPC(ctx));
 
-  if (IS_NOT_INIT) {
-    TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
-    ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(ctx)) {
+  if (OB_ISNULL(ctx)) {
     TRANS_LOG(WARN, "invalid argument", KP(ctx));
     ret = OB_INVALID_ARGUMENT;
   } else {

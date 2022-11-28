@@ -580,7 +580,7 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
     EXPECT_EQ(config_version, expect_config_version);
     // invoke resend ms log
     EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log());
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
     // ack defensive code
     EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 2, expect_config_version));
     EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 1, LogConfigVersion()));
@@ -604,7 +604,7 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
     EXPECT_EQ(expect_config_version, cm.resend_config_version_);
     EXPECT_EQ(1, cm.resend_log_list_.get_member_number());
     // resend config log
-    cm.last_submit_config_log_ts_ns_ = 0;
+    cm.last_submit_config_log_time_us_ = 0;
     EXPECT_EQ(OB_SUCCESS, cm.try_resend_config_log_(1));
     // receive ack from last member
     EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, 1, expect_config_version));
@@ -639,7 +639,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_sw_->mock_max_flushed_log_pid_ = 0;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(proposal_id, INVALID_PROPOSAL_ID, LSN(0), 1, cm.log_ms_meta_));
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
   }
   {
     // submit config log when no mode has been flushed
@@ -664,11 +664,11 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     EXPECT_EQ(OB_EAGAIN, cm.submit_config_log_(proposal_id, 1, prev_lsn, 2, cm.log_ms_meta_));
     EXPECT_EQ(OB_EAGAIN, cm.submit_config_log_(proposal_id, 0, prev_lsn, 2, cm.log_ms_meta_));
     EXPECT_EQ(cm.state_, 1);
-    EXPECT_EQ(cm.last_submit_config_log_ts_ns_, OB_INVALID_TIMESTAMP);
+    EXPECT_EQ(cm.last_submit_config_log_time_us_, OB_INVALID_TIMESTAMP);
     mock_sw_->mock_max_flushed_log_pid_ = 1;
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 2;
     EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(proposal_id, 1, prev_lsn, 2, cm.log_ms_meta_));
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
   }
   {
     // submit config log when no logs
@@ -691,7 +691,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 0;
     EXPECT_EQ(OB_EAGAIN, cm.change_config_(args));
     EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
     EXPECT_EQ(cm.state_, 1);
   }
   {
@@ -716,11 +716,11 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 3;
     EXPECT_EQ(OB_EAGAIN, cm.change_config_(args));
     EXPECT_EQ(OB_EAGAIN, cm.submit_config_log_(proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
-    EXPECT_EQ(cm.last_submit_config_log_ts_ns_, OB_INVALID_TIMESTAMP);
+    EXPECT_EQ(cm.last_submit_config_log_time_us_, OB_INVALID_TIMESTAMP);
     EXPECT_EQ(cm.state_, 1);
     mock_sw_->mock_max_flushed_lsn_.val_ = 20000;
     EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
     EXPECT_EQ(cm.state_, 1);
   }
   {
@@ -746,7 +746,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     mock_mode_mgr_->mock_accepted_mode_meta_.proposal_id_ = 3;
     EXPECT_EQ(OB_EAGAIN, cm.change_config_(args));
     EXPECT_EQ(OB_SUCCESS, cm.submit_config_log_(proposal_id, prev_pid, prev_lsn, prev_pid, cm.log_ms_meta_));
-    EXPECT_GT(cm.last_submit_config_log_ts_ns_, 0);
+    EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
     EXPECT_EQ(cm.state_, 1);
   }
   PALF_LOG(INFO, "test_submit_config_log end case");
@@ -770,12 +770,12 @@ TEST_F(TestLogConfigMgr, test_after_flush_config_log)
   EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
   init_test_log_config_env(addr1, config_info, cm);
   cm.parent_ = addr2;
-  cm.register_ts_ns_ = 555;
+  cm.register_time_us_ = 555;
   EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(LogLearner(addr3, 1)));
   EXPECT_EQ(OB_SUCCESS, cm.after_flush_config_log(cm.log_ms_meta_.curr_.config_version_));
-  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.register_ts_ns_);
-  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.parent_keepalive_ts_ns_);
-  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.last_submit_register_req_ts_ns_);
+  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.register_time_us_);
+  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.parent_keepalive_time_us_);
+  EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.last_submit_register_req_time_us_);
   EXPECT_FALSE(cm.parent_.is_valid());
   EXPECT_EQ(0, cm.children_.get_member_number());
   PALF_LOG(INFO, "test_after_flush_config_log end case");
@@ -810,7 +810,7 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     LogLearner child(addr4, 1);
     EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(child));
     cm.all_learnerlist_.add_learner(ObMember(addr4, 1));
-    child.register_ts_ns_ = 1;
+    child.register_time_us_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child, true));
     EXPECT_EQ(RegisterReturn::REGISTER_DONE, mock_log_engine_->reg_ret_);
   }
@@ -826,7 +826,7 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(exist_child));
     cm.all_learnerlist_.add_learner(ObMember(child1.get_server(), 1));
     cm.all_learnerlist_.add_learner(ObMember(exist_child.get_server(), 1));
-    child1.register_ts_ns_ = 1;
+    child1.register_time_us_ = 1;
     child1.region_ = region1;
     cm.paxos_member_region_map_.update(addr2, region1);
     // child1 register
@@ -839,13 +839,13 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     mock_log_engine_->reset_register_parent_resp_ret();
     // child2 register, child2' region is in a new region
     LogLearner child2(addr6, region2, 1);
-    child2.register_ts_ns_ = 1;
+    child2.register_time_us_ = 1;
     cm.all_learnerlist_.add_learner(ObMember(child2.get_server(), 1));
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child2, true));
     EXPECT_EQ(RegisterReturn::REGISTER_DONE, mock_log_engine_->reg_ret_);
     EXPECT_TRUE(cm.children_.contains(child2));
     EXPECT_EQ(cm.self_, mock_log_engine_->parent_itself_.server_);
-    EXPECT_EQ(child2.register_ts_ns_, mock_log_engine_->parent_itself_.register_ts_ns_);
+    EXPECT_EQ(child2.register_time_us_, mock_log_engine_->parent_itself_.register_time_us_);
   }
   {
     // register to follower
@@ -855,13 +855,13 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     init_test_log_config_env(addr1, config_info, cm);
     // diff region
     LogLearner child1(addr4, region1, 1);
-    child1.register_ts_ns_ = 1;
+    child1.register_time_us_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child1, false));
     EXPECT_EQ(REGISTER_DIFF_REGION, mock_log_engine_->reg_ret_);
     mock_log_engine_->reset_register_parent_resp_ret();
     // register success
     LogLearner child2(addr4, 1);
-    child2.register_ts_ns_ = 1;
+    child2.register_time_us_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child2, false));
     EXPECT_EQ(REGISTER_DONE, mock_log_engine_->reg_ret_);
     EXPECT_TRUE(cm.children_.contains(addr4));
@@ -872,7 +872,7 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_req)
     cm.children_.add_learner(LogLearner(addr7, 1));
     cm.children_.add_learner(LogLearner(addr8, 1));
     LogLearner child9(addr9, 1);
-    child9.register_ts_ns_ = 1;
+    child9.register_time_us_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_req(child9, false));
     EXPECT_EQ(REGISTER_CONTINUE, mock_log_engine_->reg_ret_);
     PALF_LOG(INFO, "trace", K(cm.children_), K(mock_log_engine_->candidate_list_));
@@ -898,12 +898,12 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_resp)
     init_test_log_config_env(addr1, config_info, cm, FOLLOWER);
     EXPECT_EQ(OB_STATE_NOT_MATCH, cm.handle_register_parent_resp(LogLearner(addr4, 1), LogCandidateList(), REGISTER_DONE));
     // register done
-    cm.register_ts_ns_ = 1;
-    cm.last_submit_register_req_ts_ns_ = 1;
+    cm.register_time_us_ = 1;
+    cm.last_submit_register_req_time_us_ = 1;
     LogLearner parent(addr4, 1);
-    parent.register_ts_ns_ = 1;
+    parent.register_time_us_ = 1;
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_resp(parent, LogCandidateList(), REGISTER_DONE));
-    EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.last_submit_register_req_ts_ns_);
+    EXPECT_EQ(OB_INVALID_TIMESTAMP, cm.last_submit_register_req_time_us_);
   }
   {
     // register continue
@@ -911,18 +911,18 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_resp)
     LogConfigInfo config_info;
     EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
     init_test_log_config_env(addr1, config_info, cm, FOLLOWER);
-    cm.register_ts_ns_ = 1;
-    cm.last_submit_register_req_ts_ns_ = 1;
+    cm.register_time_us_ = 1;
+    cm.last_submit_register_req_time_us_ = 1;
     LogLearner parent(addr4, 1);
-    parent.register_ts_ns_ = 1;
+    parent.register_time_us_ = 1;
     // cnadidate list is empty
     EXPECT_EQ(OB_ERR_UNEXPECTED, cm.handle_register_parent_resp(parent, LogCandidateList(), REGISTER_CONTINUE));
     LogCandidateList candidate_list;
     candidate_list.add_learner(common::ObMember(addr2, 1));
     // register continue
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_resp(parent, candidate_list, REGISTER_CONTINUE));
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
-    EXPECT_EQ(1, cm.register_ts_ns_);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
+    EXPECT_EQ(1, cm.register_time_us_);
   }
   {
     // register not master
@@ -931,19 +931,19 @@ TEST_F(TestLogConfigMgr, test_handle_register_parent_resp)
     EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
     init_test_log_config_env(addr4, config_info, cm, FOLLOWER);
     mock_state_mgr_->leader_ = addr1;
-    cm.register_ts_ns_ = 1;
-    cm.last_submit_register_req_ts_ns_ = 1;
+    cm.register_time_us_ = 1;
+    cm.last_submit_register_req_time_us_ = 1;
     LogLearner parent(addr4, 1);
-    parent.register_ts_ns_ = 1;
+    parent.register_time_us_ = 1;
     LogCandidateList candidate_list;
     candidate_list.add_learner(common::ObMember(addr2, 1));
     // register continue
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_resp(parent, candidate_list, REGISTER_NOT_MASTER));
-    EXPECT_EQ(cm.last_submit_register_req_ts_ns_, 1);
-    EXPECT_EQ(cm.register_ts_ns_, 1);
+    EXPECT_EQ(cm.last_submit_register_req_time_us_, 1);
+    EXPECT_EQ(cm.register_time_us_, 1);
     EXPECT_EQ(OB_SUCCESS, cm.handle_register_parent_resp(parent, candidate_list, REGISTER_DIFF_REGION));
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
-    EXPECT_GT(cm.register_ts_ns_, 1);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
+    EXPECT_GT(cm.register_time_us_, 1);
   }
   PALF_LOG(INFO, "test_handle_register_parent_resp end case");
 }
@@ -963,15 +963,15 @@ TEST_F(TestLogConfigMgr, test_region_changed)
   EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
   init_test_log_config_env(addr5, config_info, cm, FOLLOWER);
   cm.parent_ = addr4;
-  cm.register_ts_ns_ = 1;
-  cm.parent_keepalive_ts_ns_ = 5;
+  cm.register_time_us_ = 1;
+  cm.parent_keepalive_time_us_ = 5;
   mock_state_mgr_->leader_ = addr1;
   EXPECT_EQ(OB_SUCCESS, cm.set_region(region1));
   EXPECT_EQ(region1, cm.region_);
   EXPECT_FALSE(cm.parent_.is_valid());
-  EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
-  EXPECT_GT(cm.register_ts_ns_, 1);
-  EXPECT_EQ(cm.parent_keepalive_ts_ns_, OB_INVALID_TIMESTAMP);
+  EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
+  EXPECT_GT(cm.register_time_us_, 1);
+  EXPECT_EQ(cm.parent_keepalive_time_us_, OB_INVALID_TIMESTAMP);
   PALF_LOG(INFO, "test_region_changed end case");
 }
 
@@ -1042,11 +1042,11 @@ TEST_F(TestLogConfigMgr, test_check_parent_health)
     LogConfigInfo config_info;
     EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
     init_test_log_config_env(addr2, config_info, cm, FOLLOWER);
-    cm.last_submit_register_req_ts_ns_ = 1;
+    cm.last_submit_register_req_time_us_ = 1;
     mock_state_mgr_->leader_ = addr1;
     EXPECT_EQ(OB_SUCCESS, cm.check_parent_health());
-    EXPECT_GT(cm.register_ts_ns_, 1);
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
+    EXPECT_GT(cm.register_time_us_, 1);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
   }
   {
     // first registration
@@ -1056,8 +1056,8 @@ TEST_F(TestLogConfigMgr, test_check_parent_health)
     init_test_log_config_env(addr2, config_info, cm, FOLLOWER);
     mock_state_mgr_->leader_ = addr1;
     EXPECT_EQ(OB_SUCCESS, cm.check_parent_health());
-    EXPECT_GT(cm.register_ts_ns_, 1);
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
+    EXPECT_GT(cm.register_time_us_, 1);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
   }
   {
     // parent timeout
@@ -1068,8 +1068,8 @@ TEST_F(TestLogConfigMgr, test_check_parent_health)
     mock_state_mgr_->leader_ = addr1;
     cm.parent_ = addr4;
     EXPECT_EQ(OB_SUCCESS, cm.check_parent_health());
-    EXPECT_GT(cm.register_ts_ns_, 1);
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 1);
+    EXPECT_GT(cm.register_time_us_, 1);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 1);
     EXPECT_FALSE(cm.parent_.is_valid());
   }
   PALF_LOG(INFO, "test_check_parent_health end case");
@@ -1092,10 +1092,10 @@ TEST_F(TestLogConfigMgr, test_handle_retire_msg)
     init_test_log_config_env(addr4, config_info, cm, FOLLOWER);
     mock_state_mgr_->leader_ = addr1;
     cm.parent_ = addr2;
-    cm.register_ts_ns_ = 100;
+    cm.register_time_us_ = 100;
     LogLearner parent(addr2, 100);
     EXPECT_EQ(OB_SUCCESS, cm.handle_retire_child(parent));
-    EXPECT_GT(cm.last_submit_register_req_ts_ns_, 0);
+    EXPECT_GT(cm.last_submit_register_req_time_us_, 0);
     EXPECT_FALSE(cm.parent_.is_valid());
   }
   {
@@ -1107,12 +1107,12 @@ TEST_F(TestLogConfigMgr, test_handle_retire_msg)
     EXPECT_EQ(0, cm.children_.get_member_number());
   }
   {
-    // different register_ts_ns
+    // different register_time_us
     LogConfigMgr cm;
     init_test_log_config_env(addr2, config_info, cm, FOLLOWER);
     LogLearner child = LogLearner(addr4, 100);
     cm.children_.add_learner(child);
-    child.register_ts_ns_ = 200;
+    child.register_time_us_ = 200;
     EXPECT_EQ(OB_SUCCESS, cm.handle_learner_keepalive_resp(child));
     EXPECT_EQ(child.keepalive_ts_, OB_INVALID_TIMESTAMP);
   }

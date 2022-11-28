@@ -419,8 +419,8 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
           // LogModeMeta takes effect when reaches majority
           applied_mode_meta_ = accepted_mode_meta_;
           if (applied_mode_meta_.ref_scn_.is_valid() &&
-              OB_FAIL(sw_->inc_update_log_scn_base(applied_mode_meta_.ref_scn_))) {
-            PALF_LOG(ERROR, "inc_update_log_scn_base failed", KR(ret), K_(palf_id), K_(self),
+              OB_FAIL(sw_->inc_update_scn_base(applied_mode_meta_.ref_scn_))) {
+            PALF_LOG(ERROR, "inc_update_scn_base failed", KR(ret), K_(palf_id), K_(self),
                 K_(applied_mode_meta));
           } else {
             change_done = true;

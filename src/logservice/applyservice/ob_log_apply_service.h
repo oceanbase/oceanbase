@@ -159,19 +159,19 @@ public:
   int unregister_file_size_cb();
   void close_palf_handle();
   //最大连续回调位点
-  int get_min_unapplied_log_scn(palf::SCN &log_scn);
+  int get_min_unapplied_scn(palf::SCN &scn);
   int stat(LSApplyStat &stat) const;
   int handle_drop_cb();
   TO_STRING_KV(K(ls_id_),
                K(role_),
                K(proposal_id_),
                K(palf_committed_end_lsn_),
-               K(last_check_log_scn_),
+               K(last_check_scn_),
                K(max_applied_cb_scn_));
 private:
   int submit_task_to_apply_service_(ObApplyServiceTask &task);
-  int check_and_update_max_applied_log_scn_(const palf::SCN scn);
-  int update_last_check_log_scn_();
+  int check_and_update_max_applied_scn_(const palf::SCN scn);
+  int update_last_check_scn_();
   int handle_drop_cb_queue_(ObApplyServiceQueueTask &cb_queue);
   int switch_to_follower_();
   //从cb中获取打点信息
@@ -191,7 +191,7 @@ private:
   typedef RWLock::RLockGuard RLockGuard;
   typedef RWLock::WLockGuard WLockGuard;
   typedef RWLock::WLockGuardWithRetryInterval WLockGuardWithRetryInterval;
-  const int64_t MAX_HANDLE_TIME_NS_PER_ROUND_NS = 100 * 1000 * 1000; //100ms
+  const int64_t MAX_HANDLE_TIME_US_PER_ROUND_US = 100 * 1000; //100ms
   const int64_t WRLOCK_RETRY_INTERVAL_US = 20 * 1000;  // 20ms
 private:
   bool is_inited_;
@@ -204,7 +204,7 @@ private:
   palf::LSN palf_committed_end_lsn_;
   //LSN standy_committed_end_lsn_;
   //palf::LSN min_committed_end_lsn_;
-  palf::SCN last_check_log_scn_; //当前待确认的最大连续回调位点
+  palf::SCN last_check_scn_; //当前待确认的最大连续回调位点
   palf::SCN max_applied_cb_scn_; //该位点前的cb保证都已经回调完成
   ObApplyServiceSubmitTask submit_task_;
   ObApplyServiceQueueTask cb_queues_[APPLY_TASK_QUEUE_SIZE];
@@ -244,7 +244,7 @@ public:
                     palf::LSN &end_lsn);
   int switch_to_leader(const share::ObLSID &id, const int64_t proposal_id);
   int switch_to_follower(const share::ObLSID &id);
-  int get_min_unapplied_log_scn(const share::ObLSID &id, palf::SCN &log_scn);
+  int get_min_unapplied_scn(const share::ObLSID &id, palf::SCN &scn);
   int push_task(ObApplyServiceTask *task);
   int wait_append_sync(const share::ObLSID &ls_id);
   int stat_for_each(const common::ObFunction<int (const ObApplyStatus &)> &func);

@@ -170,7 +170,7 @@ public:
   int submit_get_memberchange_status_req(
       const common::ObAddr &server,
       const LogConfigVersion &config_version,
-      const int64_t timeout_ns,
+      const int64_t timeout_us,
       LogGetMCStResp &resp);
 
   int submit_register_parent_req(

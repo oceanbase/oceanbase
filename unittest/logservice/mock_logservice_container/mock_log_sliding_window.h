@@ -307,7 +307,7 @@ public:
     int ret = OB_SUCCESS;
     return ret;
   }
-  int inc_update_log_scn_base(const palf::SCN &log_scn)
+  int inc_update_scn_base(const palf::SCN &scn)
   {
     int ret = OB_SUCCESS;
     return ret;

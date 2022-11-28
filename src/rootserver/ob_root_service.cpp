@@ -3157,28 +3157,6 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
       } else if (OB_FAIL(ddl_service_.build_aux_lob_table_schema_if_need(table_schema, table_schemas))) {
         LOG_WARN("fail to build_aux_lob_table_schema_if_need", K(ret), K(table_schema));
       }
-      RS_TRACE(generate_schema_vertial_partition);
-      // generate aux vertical partition table schemas
-      ObVertialPartitionBuilder vp_builder(ddl_service_);
-      for (int64_t i = 0; OB_SUCC(ret) && i < arg.vertical_partition_arg_list_.count(); ++i) {
-        ObTableSchema aux_vp_table_schema;
-        ObCreateVertialPartitionArg &vp_arg =
-            const_cast<ObCreateVertialPartitionArg&>(arg.vertical_partition_arg_list_.at(i));
-        if (0 == i) {
-          // first is primary partition, no need to create additional table and udpate columns's flag.
-          // the user table's data_table_id is itself, not 0.
-          table_schema.set_data_table_id(table_schema.get_table_id()); // indicates primary_vp_table
-          if (OB_FAIL(vp_builder.set_primary_vp_table_options(vp_arg, table_schema))) {
-            LOG_WARN("generate_schema for aux vp table failed",
-              K(vp_arg), K(table_schema), K(ret));
-          }
-        } else if (OB_FAIL(vp_builder.generate_aux_vp_table_schema(schema_service, vp_arg,
-                   frozen_scn.get_val_for_inner_table_field(), table_schema, aux_vp_table_schema))) {
-          LOG_WARN("generate_schema for aux vp table failed", K(vp_arg), K(frozen_scn), K(table_schema), K(ret));
-        } else if (OB_FAIL(table_schemas.push_back(aux_vp_table_schema))) {
-          LOG_WARN("push_back failed", K(ret));
-        }
-      }
       if (OB_SUCC(ret)) {
         for (int64_t i = 0; OB_SUCC(ret) && i < arg.foreign_key_arg_list_.count(); i++) {
           const ObCreateForeignKeyArg &foreign_key_arg = arg.foreign_key_arg_list_.at(i);

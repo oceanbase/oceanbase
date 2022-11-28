@@ -146,7 +146,7 @@ int ObLSArchiveTask::push_fetch_log(ObArchiveLogFetchTask &task)
 
 int ObLSArchiveTask::get_fetcher_progress(const ArchiveWorkStation &station,
     LSN &offset,
-    SCN &log_scn)
+    SCN &scn)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
@@ -161,7 +161,7 @@ int ObLSArchiveTask::get_fetcher_progress(const ArchiveWorkStation &station,
     LogFileTuple tuple;
     dest_.get_fetcher_progress(tuple);
     offset = tuple.get_lsn();
-    log_scn= tuple.get_log_scn();
+    scn= tuple.get_scn();
   }
   return ret;
 }
@@ -266,7 +266,7 @@ int ObLSArchiveTask::get_max_archive_info(const ArchiveKey &key,
   RLockGuard guard(rwlock_);
   LSN piece_min_lsn;
   LSN lsn;
-  SCN log_scn;
+  SCN scn;
   SCN lower_limit_scn;
   ObArchivePiece piece;
   int64_t file_id = 0;
@@ -276,7 +276,7 @@ int ObLSArchiveTask::get_max_archive_info(const ArchiveKey &key,
   if (OB_UNLIKELY(key != station_.get_round())) {
     ret = OB_LOG_ARCHIVE_LEADER_CHANGED;
     ARCHIVE_LOG(WARN, "diff incarnation or round", K(ret), K(id_), K(key), K(station_));
-  } else if (FALSE_IT(dest_.get_max_archive_progress(piece_min_lsn, lsn, log_scn,
+  } else if (FALSE_IT(dest_.get_max_archive_progress(piece_min_lsn, lsn, scn,
           piece, file_id, file_offset, error_exist))) {
   } else if (OB_UNLIKELY(! piece.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -300,7 +300,7 @@ int ObLSArchiveTask::get_max_archive_info(const ArchiveKey &key,
     info.incarnation_ = key.incarnation_;
     info.start_lsn_ = piece_min_lsn.val_;
     info.start_scn_ = piece_start_scn;
-    info.checkpoint_scn_ = log_scn > piece_start_scn ? log_scn : piece_start_scn;
+    info.checkpoint_scn_ = scn > piece_start_scn ? scn : piece_start_scn;
     info.lsn_ = lsn.val_;
     info.input_bytes_ = static_cast<int64_t>(info.lsn_ - info.start_lsn_);
     info.output_bytes_ = info.input_bytes_;
@@ -410,13 +410,13 @@ void ObLSArchiveTask::stat(LSArchiveStat &ls_stat) const
   ls_stat.max_issued_log_lsn_ = static_cast<int64_t>(dest_.max_seq_log_offset_.val_);
   ls_stat.max_prepared_piece_id_ = dest_.max_fetch_info_.get_piece().get_piece_id();
   ls_stat.max_prepared_lsn_ = static_cast<int64_t>(dest_.max_fetch_info_.get_lsn().val_);
-  ls_stat.max_prepared_scn_ = dest_.max_fetch_info_.get_log_scn();
+  ls_stat.max_prepared_scn_ = dest_.max_fetch_info_.get_scn();
   ls_stat.issued_task_count_ = ls_stat.max_issued_log_lsn_ / MAX_ARCHIVE_FILE_SIZE - ls_stat.max_prepared_lsn_ / MAX_ARCHIVE_FILE_SIZE;
   ls_stat.issued_task_size_ = ls_stat.max_issued_log_lsn_ - ls_stat.max_prepared_lsn_;
   ls_stat.wait_send_task_count_ = dest_.wait_send_task_count_;
   ls_stat.archive_piece_id_ = dest_.max_archived_info_.get_piece().get_piece_id();
   ls_stat.archive_lsn_ = static_cast<int64_t>(dest_.max_archived_info_.get_lsn().val_);
-  ls_stat.archive_scn_ = dest_.max_archived_info_.get_log_scn();
+  ls_stat.archive_scn_ = dest_.max_archived_info_.get_scn();
   ls_stat.archive_file_id_ = dest_.archive_file_id_;
   ls_stat.archive_file_offset_ = dest_.archive_file_offset_;
 }
@@ -576,7 +576,7 @@ int ObLSArchiveTask::ArchiveDest::update_fetcher_progress(const SCN &round_start
 {
   int ret = OB_SUCCESS;
   ObArchivePiece piece = max_fetch_info_.get_piece();
-  if (OB_UNLIKELY((tuple.get_log_scn() > round_start_scn && ! (max_fetch_info_ < tuple)))) {
+  if (OB_UNLIKELY((tuple.get_scn() > round_start_scn && ! (max_fetch_info_ < tuple)))) {
     ret = OB_ERR_UNEXPECTED;
     ARCHIVE_LOG(ERROR, "fetcher progress rollback", K(ret), K(max_fetch_info_), K(tuple));
   } else {
@@ -625,7 +625,7 @@ int ObLSArchiveTask::ArchiveDest::compensate_piece(const int64_t piece_id)
 }
 
 void ObLSArchiveTask::ArchiveDest::get_max_archive_progress(LSN &piece_min_lsn,
-    LSN &lsn, SCN &log_scn,
+    LSN &lsn, SCN &scn,
     ObArchivePiece &piece,
     int64_t &file_id,
     int64_t &file_offset,
@@ -633,7 +633,7 @@ void ObLSArchiveTask::ArchiveDest::get_max_archive_progress(LSN &piece_min_lsn,
 {
   piece_min_lsn = piece_min_lsn_;
   lsn = max_archived_info_.get_lsn();
-  log_scn = max_archived_info_.get_log_scn();
+  scn = max_archived_info_.get_scn();
   piece = max_archived_info_.get_piece();
   file_id = archive_file_id_;
   file_offset = archive_file_offset_;
@@ -712,7 +712,7 @@ int ObLSArchiveTask::ArchiveDest::update_archive_progress(const SCN &round_start
   int ret = OB_SUCCESS;
   if ((!tuple.is_valid()
        || !round_start_scn.is_valid()
-       || (tuple.get_log_scn() > round_start_scn && max_archived_info_.is_valid() && ! (max_archived_info_ < tuple)))
+       || (tuple.get_scn() > round_start_scn && max_archived_info_.is_valid() && ! (max_archived_info_ < tuple)))
       || file_id < archive_file_id_
       || (max_archived_info_.get_piece() == tuple.get_piece() && file_id == archive_file_id_ && file_offset <= archive_file_offset_)) {
     ret = OB_ERR_UNEXPECTED;

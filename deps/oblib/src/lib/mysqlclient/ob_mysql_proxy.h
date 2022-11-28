@@ -114,7 +114,8 @@ public:
   using ObISQLClient::write;
 
   bool is_inited() const { return NULL != pool_; }
-  sqlclient::ObISQLConnectionPool *get_pool() override { return pool_; }
+  virtual sqlclient::ObISQLConnectionPool *get_pool() override { return pool_; }
+  virtual sqlclient::ObISQLConnection *get_connection() override { return NULL; }
 
   // can only use assign() to copy to prevent passing ObCommonSqlProxy by value unintentionally.
   void assign(const ObCommonSqlProxy &proxy) { *this = proxy; }

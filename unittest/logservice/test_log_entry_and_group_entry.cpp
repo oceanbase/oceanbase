@@ -123,7 +123,7 @@ TEST(TestLogGroupEntryHeader, test_log_group_entry_header)
   EXPECT_EQ(data_len + log_entry_header_size, log_group_entry.get_data_len());
   EXPECT_TRUE(
       header1.check_integrity(buf + log_group_entry_header_size, data_len + log_entry_header_size));
-  EXPECT_EQ(max_scn, log_group_entry.get_log_scn());
+  EXPECT_EQ(max_scn, log_group_entry.get_scn());
   EXPECT_EQ(committed_lsn, log_group_entry.get_committed_end_lsn());
   pos = 0;
   EXPECT_EQ(OB_SUCCESS, log_group_entry.serialize(buf, BUFSIZE, pos));

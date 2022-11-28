@@ -40,7 +40,7 @@ public:
 
 public:
   ObFetchLogTask(const share::ObLSID &id,
-                 const palf::SCN &pre_log_scn,
+                 const palf::SCN &pre_scn,
                  const palf::LSN &lsn,
                  const int64_t size,
                  const int64_t proposal_id);
@@ -52,19 +52,19 @@ public:
   int update_cur_lsn_scn(const palf::LSN &lsn, const palf::SCN &max_submit_scn, const palf::SCN &max_fetch_scn);
   void set_to_end() { status_ = Status::TO_END; }
   void set_stale() { status_ = Status::STALE; }
-  TO_STRING_KV(K_(id), K_(proposal_id), K_(pre_log_scn), K_(start_lsn), K_(cur_lsn), K_(end_lsn),
-      K_(max_fetch_log_scn), K_(max_submit_log_scn), K_(status));
+  TO_STRING_KV(K_(id), K_(proposal_id), K_(pre_scn), K_(start_lsn), K_(cur_lsn), K_(end_lsn),
+      K_(max_fetch_scn), K_(max_submit_scn), K_(status));
 
 public:
   share::ObLSID id_;
   // to distinguish stale tasks which is generated in previous leader
   int64_t proposal_id_;
-  palf::SCN pre_log_scn_;    // heuristic log scn to locate piece, may be imprecise one
+  palf::SCN pre_scn_;    // heuristic log scn to locate piece, may be imprecise one
   palf::LSN start_lsn_;
   palf::LSN cur_lsn_;
   palf::LSN end_lsn_;
-  palf::SCN max_fetch_log_scn_;     // 拉取日志最大log scn
-  palf::SCN max_submit_log_scn_;    // 提交日志最大log cn
+  palf::SCN max_fetch_scn_;     // 拉取日志最大log scn
+  palf::SCN max_submit_scn_;    // 提交日志最大log cn
   Status status_;
 };
 

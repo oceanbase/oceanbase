@@ -2119,10 +2119,6 @@ private:
       const int64_t tenant_id,
       const share::schema::AlterTableSchema &alter_table_schema,
       const share::schema::ObTableSchema &orig_table_schema);
-  int add_sys_table_index(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      common::ObIArray<share::schema::ObTableSchema> &schemas);
   int add_sys_table_lob_aux(const int64_t tenant_id, const uint64_t table_id,
                             ObTableSchema &meta_schema, ObTableSchema &data_schema);
   int check_has_multi_autoinc(share::schema::ObTableSchema &table_schema);
@@ -2155,7 +2151,7 @@ private:
       share::schema::AlterTableSchema &inc_table_schema,
       share::schema::AlterTableSchema &del_table_schema);
   //get gts value, return OB_STATE_NOT_MATCH when is not external consistent
-  int get_tenant_external_consistent_ts(const int64_t tenant_id, int64_t &ts);
+  int get_tenant_external_consistent_ts(const int64_t tenant_id, palf::SCN &scn);
   int get_part_by_part_id(
       const share::schema::ObPartitionSchema &partition_schema,
       const int64_t part_id,

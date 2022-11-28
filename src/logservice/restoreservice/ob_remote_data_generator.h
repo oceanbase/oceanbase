@@ -73,7 +73,7 @@ public:
       const ObLSID &id,
       const LSN &start_lsn,
       const LSN &end_lsn,
-      const palf::SCN &end_log_scn);
+      const palf::SCN &end_scn);
   virtual ~RemoteDataGenerator();
 
 public:
@@ -81,7 +81,7 @@ public:
   int update_max_lsn(const palf::LSN &lsn);
   bool is_valid() const;
   bool is_fetch_to_end() const;
-  TO_STRING_KV(K_(tenant_id), K_(id), K_(start_lsn), K_(next_fetch_lsn), K_(end_log_scn),
+  TO_STRING_KV(K_(tenant_id), K_(id), K_(start_lsn), K_(next_fetch_lsn), K_(end_scn),
       K_(end_lsn), K_(to_end), K_(max_consumed_lsn));
 
 protected:
@@ -92,7 +92,7 @@ protected:
   ObLSID id_;
   LSN start_lsn_;
   LSN next_fetch_lsn_;
-  palf::SCN end_log_scn_;
+  palf::SCN end_scn_;
   LSN end_lsn_;
   bool to_end_;
   LSN max_consumed_lsn_;
@@ -108,7 +108,7 @@ public:
       const ObLSID &id,
       const LSN &start_lsn,
       const LSN &end_lsn,
-      const palf::SCN &end_log_scn,
+      const palf::SCN &end_scn,
       const ObAddr &server);
   virtual ~ServiceDataGenerator();
 
@@ -134,18 +134,18 @@ class LocationDataGenerator : public RemoteDataGenerator
   static const int64_t MAX_DATA_BUF_LEN = 128 * 1024 * 1024L;   // 128M
 public:
   LocationDataGenerator(const uint64_t tenant_id,
-      const palf::SCN &pre_log_scn,
+      const palf::SCN &pre_scn,
       const ObLSID &id,
       const LSN &start_lsn,
       const LSN &end_lsn,
-      const palf::SCN &end_log_scn,
+      const palf::SCN &end_scn,
       share::ObBackupDest *dest,
       ObLogArchivePieceContext *piece_context);
   ~LocationDataGenerator();
   int next_buffer(RemoteDataBuffer &buffer);
   int update_max_lsn(const palf::LSN &lsn);
   INHERIT_TO_STRING_KV("RemoteDataGenerator", RemoteDataGenerator,
-      K_(pre_log_scn), K_(base_lsn), K_(data_len), KPC_(dest), KPC_(piece_context),
+      K_(pre_scn), K_(base_lsn), K_(data_len), KPC_(dest), KPC_(piece_context),
       K_(dest_id), K_(round_id), K_(piece_id), K_(max_file_id), K_(max_file_offset));
 
 private:
@@ -157,7 +157,7 @@ private:
       palf::LSN &lsn,
       share::ObBackupPath &piece_path);
 private:
-  palf::SCN pre_log_scn_;
+  palf::SCN pre_scn_;
   palf::LSN base_lsn_;
   int64_t data_len_;
   char data_[MAX_DATA_BUF_LEN];
@@ -185,7 +185,7 @@ public:
       const LSN &start_lsn,
       const LSN &end_lsn,
       const DirArray &array,
-      const palf::SCN &end_log_scn,
+      const palf::SCN &end_scn,
       const int64_t piece_index,
       const int64_t min_file_id,
       const int64_t max_file_id);

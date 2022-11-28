@@ -36,7 +36,7 @@ bool LogBlockHeader::is_valid() const
   return MAGIC == magic_
          && LOG_INFO_BLOCK_VERSION == version_
          && true == min_lsn_.is_valid()
-         && true == min_log_scn_.is_valid()
+         && true == min_scn_.is_valid()
          && true == is_valid_block_id(curr_block_id_)
          && true == is_valid_palf_id(palf_id_);
 }
@@ -47,18 +47,18 @@ void LogBlockHeader::reset()
   version_ = LOG_INFO_BLOCK_VERSION;
   flag_ = 0;
   min_lsn_.reset();
-  min_log_scn_.reset();
-  max_log_scn_.reset();
+  min_scn_.reset();
+  max_scn_.reset();
   curr_block_id_ = LOG_INVALID_BLOCK_ID;
   palf_id_ = INVALID_PALF_ID;
   checksum_ = 0;
 }
 
 void LogBlockHeader::update_lsn_and_scn(const LSN &lsn,
-                                        const SCN &log_scn)
+                                        const SCN &scn)
 {
   min_lsn_ = lsn;
-  min_log_scn_ = log_scn;
+  min_scn_ = scn;
 }
 
 void LogBlockHeader::update_palf_id_and_curr_block_id(const int64_t palf_id,
@@ -68,10 +68,10 @@ void LogBlockHeader::update_palf_id_and_curr_block_id(const int64_t palf_id,
   curr_block_id_ = curr_block_id;
 }
 
-void LogBlockHeader::mark_block_can_be_reused(const SCN &max_log_scn)
+void LogBlockHeader::mark_block_can_be_reused(const SCN &max_scn)
 {
   flag_ |= REUSED_BLOCK_MASK;
-  max_log_scn_ = max_log_scn;
+  max_scn_ = max_scn;
 }
 
 block_id_t LogBlockHeader::get_curr_block_id() const
@@ -79,9 +79,9 @@ block_id_t LogBlockHeader::get_curr_block_id() const
   return curr_block_id_;
 }
 
-const SCN &LogBlockHeader::get_min_log_scn() const
+const SCN &LogBlockHeader::get_min_scn() const
 {
-  return min_log_scn_;
+  return min_scn_;
 }
 
 LSN LogBlockHeader::get_min_lsn() const
@@ -89,9 +89,9 @@ LSN LogBlockHeader::get_min_lsn() const
   return min_lsn_;
 }
 
-const SCN LogBlockHeader::get_log_scn_used_for_iterator() const
+const SCN LogBlockHeader::get_scn_used_for_iterator() const
 {
-  return true == is_reused_block_() ? max_log_scn_ : min_log_scn_;
+  return true == is_reused_block_() ? max_scn_ : min_scn_;
 }
 
 void LogBlockHeader::calc_checksum()
@@ -125,8 +125,8 @@ DEFINE_SERIALIZE(LogBlockHeader)
              || OB_FAIL(serialization::encode_i16(buf, buf_len, new_pos, version_))
              || OB_FAIL(serialization::encode_i32(buf, buf_len, new_pos, flag_))
              || OB_FAIL(min_lsn_.serialize(buf, buf_len, new_pos))
-             || OB_FAIL(min_log_scn_.fixed_serialize(buf, buf_len, new_pos))
-             || OB_FAIL(max_log_scn_.fixed_serialize(buf, buf_len, new_pos))
+             || OB_FAIL(min_scn_.fixed_serialize(buf, buf_len, new_pos))
+             || OB_FAIL(max_scn_.fixed_serialize(buf, buf_len, new_pos))
              || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, curr_block_id_))
              || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, palf_id_))
              || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, checksum_))) {
@@ -147,8 +147,8 @@ DEFINE_DESERIALIZE(LogBlockHeader)
              || OB_FAIL(serialization::decode_i16(buf, data_len, new_pos, &version_))
              || OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, &flag_))
              || OB_FAIL(min_lsn_.deserialize(buf, data_len, new_pos))
-             || OB_FAIL(min_log_scn_.fixed_deserialize(buf, data_len, new_pos))
-             || OB_FAIL(max_log_scn_.fixed_deserialize(buf, data_len, new_pos))
+             || OB_FAIL(min_scn_.fixed_deserialize(buf, data_len, new_pos))
+             || OB_FAIL(max_scn_.fixed_deserialize(buf, data_len, new_pos))
              || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, reinterpret_cast<int64_t*>(&curr_block_id_)))
              || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &palf_id_))
              || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &checksum_))) {
@@ -166,8 +166,8 @@ DEFINE_GET_SERIALIZE_SIZE(LogBlockHeader)
   size += serialization::encoded_length_i16(version_);
   size += serialization::encoded_length_i32(flag_);
   size += min_lsn_.get_serialize_size();
-  size += min_log_scn_.get_fixed_serialize_size();
-  size += max_log_scn_.get_fixed_serialize_size();
+  size += min_scn_.get_fixed_serialize_size();
+  size += max_scn_.get_fixed_serialize_size();
   size += serialization::encoded_length_i64(curr_block_id_);
   size += serialization::encoded_length_i64(palf_id_);
   size += serialization::encoded_length_i64(checksum_);

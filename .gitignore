@@ -1,15 +1,4 @@
-###### lines below this line must be placed at the top of the file
-unittest/**/test_*
-unittest/**/*_test
-unittest/**/**/test_*
-unittest/**/**/*_test
-unittest/**/unittest_*
-!unittest/**/test_*.*
-!unittest/**/**/test_*.*
-!unittest/**/unittest_*.*
-###### lines above this line must be placed at the top of the file
-!doc/*/Makefile
-!src/rpc/easy/**
+############# root #############
 *.a
 *.bak
 *.gcda
@@ -18,7 +7,6 @@ unittest/**/unittest_*
 *.la
 *.lo
 *.log
-!tools/timezone_V1.log
 *.log.wf
 *.o
 *.orig
@@ -87,7 +75,6 @@ coverage/
 cscope.*
 depcomp
 dist_branch
-doc/**/*.html
 install-sh
 launch_bootstrap
 libtool
@@ -101,6 +88,25 @@ obproxy_config.bin
 observer.log*
 paratest*
 rollback_sql_pre.txt
+svn_dist_version
+svn_version.c
+tags
+test-driver
+.dir-locals.el
+compile_commands.json
+*.ccls-cache/
+.cproject
+.cache
+.history/*
+## Intellij files
+.idea
+cmake-build-debug
+cmake-build-release
+*.iml
+## OSX dir files
+.DS_Store
+
+############# src #############
 src/.settings/
 src/client/*
 src/election/election
@@ -133,8 +139,6 @@ src/observer/observer
 src/sql/parser/*.output
 src/sql/parser/expr_parser.output
 src/sql/parser/sql_parser.output
-svn_dist_version
-svn_version.c
 src/sql/parser/sql_parser_mysql_mode_lex.c
 src/sql/parser/sql_parser_mysql_mode_lex.h
 src/sql/parser/sql_parser_mysql_mode_tab.c
@@ -160,8 +164,10 @@ src/pl/parser/pl_parser_oracle_mode_tab.c
 src/pl/parser/pl_parser_oracle_mode_tab.h
 src/pl/parser/_gen_parser.error
 src/pl/parser/_gen_pl_parser.output
-tags
-test-driver
+src/pl/parser/pl_parser_mysql_mode.output
+src/pl/parser/pl_parser_oracle_mode.output
+
+############# tools #############
 tools/ObRestore/mvn_repository
 tools/agentserver/agentserver
 tools/agentserver/incbackupserver
@@ -256,6 +262,27 @@ tools/storage_test/storagetest
 tools/trace/trace_tool
 tools/upgrade/upgrade_post_extract_files*
 tools/upgrade/upgrade_pre_extract_files*
+tools/obtest/sql/backup_restore/meta_db_init.sql
+## Debug bin and configuration
+tools/deploy/bin
+tools/deploy/config2.py
+tools/deploy/.obd
+tools/deploy/distributed-with-proxy.yaml
+tools/deploy/distributed.yaml
+tools/deploy/obd_profile.sh
+tools/deploy/single-with-proxy.yaml
+tools/deploy/single.yaml
+
+############# unittest #############
+unittest/**/test_*
+unittest/**/*_test
+unittest/**/**/test_*
+unittest/**/**/*_test
+unittest/**/unittest_*
+!unittest/**/test_*.*
+!unittest/**/**/test_*.*
+!unittest/**/unittest_*.*
+
 unittest/clog/deploy/log_tool
 unittest/clog/deploy/ob_server_main
 unittest/clog/deploy/post_msg_main
@@ -293,43 +320,16 @@ unittest/storage/sstable_perf_tool
 unittest/storage/storage_bench
 unittest/storage/tmp
 unittest/storage/transaction/performance
-src/pl/parser/pl_parser_mysql_mode.output
-src/pl/parser/pl_parser_oracle_mode.output
-deps/oblib/src/common/storage/ob_io_selector.h
-/tools/obtest/sql/backup_restore/meta_db_init.sql
-.dir-locals.el
-compile_commands.json
-test/tmp
-test/var
-*.ccls-cache/
-.cproject
-.cache
-deps/3rd
 
-##### Git Sub Module
-deps/logmessage
-
-###### Intellij files
-.idea
-cmake-build-debug
-cmake-build-release
-*.iml
-
-###### OSX dir files
-.DS_Store
-
-###### Debug bin and configuration
-tools/deploy/bin
-tools/deploy/config2.py
-tools/deploy/.obd
-tools/deploy/distributed-with-proxy.yaml
-tools/deploy/distributed.yaml
-tools/deploy/obd_profile.sh
-tools/deploy/single-with-proxy.yaml
-tools/deploy/single.yaml
-
-###### binary and test logs
+## binary and test logs
 tools/ob-configserver/bin/*
 tools/ob-configserver/tests/*.log
 tools/ob-configserver/tests/*.out
-.history/*
+
+############# deps #############
+deps/oblib/src/common/storage/ob_io_selector.h
+deps/3rd
+
+############# test #############
+test/tmp
+test/var

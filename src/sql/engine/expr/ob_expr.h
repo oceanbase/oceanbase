@@ -255,7 +255,7 @@ public:
   // Can not use allocator for expression result. (ObExpr::get_str_res_mem() is used for result).
   common::ObArenaAllocator &tmp_alloc_;
   ObDatumCaster *datum_caster_;
-  bool tmp_alloc_used_;
+  bool &tmp_alloc_used_;
 private:
   int64_t batch_idx_;
   int64_t batch_size_;

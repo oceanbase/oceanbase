@@ -799,27 +799,31 @@ int ObLockMemtable::flush(palf::SCN recycle_scn,
 {
   int ret = OB_SUCCESS;
   UNUSED(need_freeze);
-  WLockGuard guard(flush_lock_);
-  palf::SCN rec_scn = get_rec_scn();
-  if (rec_scn >= recycle_scn) {
-    LOG_INFO("lock memtable no need to flush", K(rec_scn), K(recycle_scn),
-             K(is_frozen_), K(ls_id_));
-  } else if (is_active_memtable()) {
-    if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(freeze_scn_))) {
-      LOG_WARN("get_max_consequent_callbacked_log_scn failed", K(ret), K(ls_id_));
-    } else if (flushed_scn_ >= freeze_scn_) {
-      LOG_INFO("skip freeze because of flushed", K_(ls_id), K_(flushed_scn), K_(freeze_scn));
-    } else {
-      ObScnRange scn_range;
-      scn_range.start_scn_.convert_for_gts(1);
-      scn_range.end_scn_ = freeze_scn_;
-      set_scn_range(scn_range);
-      set_snapshot_version(freeze_scn_);
-      ATOMIC_STORE(&is_frozen_, true);
+  {
+    WLockGuard guard(flush_lock_);
+    palf::SCN rec_scn = get_rec_scn();
+    if (rec_scn >= recycle_scn) {
+      LOG_INFO("lock memtable no need to flush", K(rec_scn), K(recycle_scn),
+               K(is_frozen_), K(ls_id_));
+    } else if (is_active_memtable()) {
+      if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(freeze_scn_))) {
+        LOG_WARN("get_max_consequent_callbacked_log_scn failed", K(ret), K(ls_id_));
+      } else if (flushed_scn_ >= freeze_scn_) {
+        LOG_INFO("skip freeze because of flushed", K_(ls_id), K_(flushed_scn), K_(freeze_scn));
+      } else {
+        ObScnRange scn_range;
+        scn_range.start_scn_.set_base();
+        scn_range.end_scn_ = freeze_scn_;
+        set_scn_range(scn_range);
+        set_snapshot_version(freeze_scn_);
+        ATOMIC_STORE(&is_frozen_, true);
+      }
     }
   }
 
   if (is_frozen_memtable()) {
+    // dependent to judging is_active_memtable() in dag
+    // otherwise maybe merge active memtable
     compaction::ObTabletMergeDagParam param;
     param.ls_id_ = ls_id_;
     param.tablet_id_ = LS_LOCK_TABLET;

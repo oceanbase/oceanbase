@@ -77,13 +77,13 @@ bool ObArchiveLease::operator==(const ObArchiveLease &other) const
 //
 LogFileTuple::LogFileTuple() :
   offset_(),
-  log_scn_(),
+  scn_(),
   piece_()
 {}
 
-LogFileTuple::LogFileTuple(const LSN &lsn, const SCN &log_scn, const ObArchivePiece &piece)
+LogFileTuple::LogFileTuple(const LSN &lsn, const SCN &scn, const ObArchivePiece &piece)
   : offset_(lsn),
-    log_scn_(log_scn),
+    scn_(scn),
     piece_(piece)
 {}
 
@@ -94,13 +94,13 @@ LogFileTuple::~LogFileTuple()
 
 bool LogFileTuple::is_valid() const
 {
-  return offset_.is_valid() && log_scn_.is_valid() && piece_.is_valid();
+  return offset_.is_valid() && scn_.is_valid() && piece_.is_valid();
 }
 
 void LogFileTuple::reset()
 {
   offset_.reset();
-  log_scn_.reset();
+  scn_.reset();
   piece_.reset();
 }
 
@@ -109,14 +109,14 @@ void LogFileTuple::reset()
 bool LogFileTuple::operator<(const LogFileTuple &other) const
 {
   ObArchivePiece piece = piece_;
-  return (offset_ < other.offset_&& log_scn_ < other.log_scn_)
-    || (offset_ <= other.offset_&& log_scn_ <= other.log_scn_ && !(other.piece_ > (++piece)));
+  return (offset_ < other.offset_&& scn_ < other.scn_)
+    || (offset_ <= other.offset_&& scn_ <= other.scn_ && !(other.piece_ > (++piece)));
 }
 
 LogFileTuple &LogFileTuple::operator=(const LogFileTuple &other)
 {
   offset_ = other.offset_;
-  log_scn_ = other.log_scn_;
+  scn_ = other.scn_;
   piece_ = other.piece_;
   return *this;
 }

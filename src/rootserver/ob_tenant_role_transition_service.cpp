@@ -305,8 +305,8 @@ int ObTenantRoleTransitionService::update_tenant_stat_info_()
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
   } else {
-    //TODO, get all ls sync_ts_ns, update __all_tenant_info,
-    //the new sync_ts_ns cannot larger than recovery_scn and sync_ts_ns of sys_ls
+    //TODO, get all ls sync_scn, update __all_tenant_info,
+    //the new sync_scn cannot larger than recovery_scn and sync_scn of sys_ls
   }
   LOG_INFO("[ROLE_TRANSITION] finish update tenant stat info", KR(ret), K(tenant_id_));
   return ret;

@@ -285,7 +285,7 @@ int ObInnerTableSchema::all_table_history_idx_data_table_id_schema(ObTableSchema
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
   table_schema.set_data_table_id(OB_ALL_TABLE_HISTORY_TID);
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 23);
   return ret;
 }
 
@@ -419,7 +419,7 @@ int ObInnerTableSchema::all_log_archive_piece_files_idx_status_schema(ObTableSch
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
   table_schema.set_data_table_id(OB_ALL_LOG_ARCHIVE_PIECE_FILES_TID);
 
-  table_schema.set_max_used_column_id(column_id + 5);
+  table_schema.set_max_used_column_id(column_id + 18);
   return ret;
 }
 
@@ -534,7 +534,7 @@ int ObInnerTableSchema::all_backup_set_files_idx_status_schema(ObTableSchema &ta
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
   table_schema.set_data_table_id(OB_ALL_BACKUP_SET_FILES_TID);
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 11);
   return ret;
 }
 
@@ -666,7 +666,7 @@ int ObInnerTableSchema::all_ddl_task_status_idx_task_key_schema(ObTableSchema &t
   table_schema.set_index_type(INDEX_TYPE_UNIQUE_LOCAL);
   table_schema.set_data_table_id(OB_ALL_DDL_TASK_STATUS_TID);
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 32768);
   return ret;
 }
 

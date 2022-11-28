@@ -117,7 +117,7 @@ TEST(TestLogMeta, test_log_meta_generate)
   PalfBaseInfo base_info;
   LogInfo log_info;
   log_info.log_id_ = 1;
-  log_info.log_scn_ = init_scn;
+  log_info.scn_ = init_scn;
   log_info.log_proposal_id_ = init_pid;
   log_info.accum_checksum_ = init_cksum;
   // invalid lsn

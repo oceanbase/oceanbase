@@ -31,6 +31,7 @@
 #include "ob_tenant_freeze_info_mgr.h"
 #include "ob_tenant_compaction_progress.h"
 #include "ob_server_compaction_event_history.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -511,12 +512,12 @@ bool ObTenantTabletScheduler::check_tx_table_ready(ObLS &ls, const int64_t check
 {
   int ret = OB_SUCCESS;
   bool tx_table_ready = false;
-  int64_t max_replay_log_ts = 0;
-  if (OB_FAIL(ls.get_max_decided_log_ts_ns(max_replay_log_ts))) {
+  palf::SCN max_decided_scn;
+  if (OB_FAIL(ls.get_max_decided_scn(max_decided_scn))) {
     LOG_WARN("failed to get max decided log_ts", K(ret), "ls_id", ls.get_ls_id());
-  } else if (check_log_ts <= max_replay_log_ts) {
+  } else if (check_log_ts <= max_decided_scn.get_val_for_lsn_allocator()) {
     tx_table_ready = true;
-    LOG_INFO("tx table ready", "sstable_end_log_ts", check_log_ts, K(max_replay_log_ts));
+    LOG_INFO("tx table ready", "sstable_end_log_ts", check_log_ts, K(max_decided_scn));
   }
 
   return tx_table_ready;

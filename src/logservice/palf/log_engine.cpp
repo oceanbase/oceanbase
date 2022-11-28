@@ -419,7 +419,7 @@ int LogEngine::submit_truncate_prefix_blocks_task(
 }
 
 // ====================== LogStorage start =====================
-int LogEngine::append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &log_scn)
+int LogEngine::append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -428,11 +428,11 @@ int LogEngine::append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SC
   } else if (false == lsn.is_valid() || false == write_buf.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K_(palf_id), K_(is_inited), K(lsn), K(write_buf));
-  } else if (OB_FAIL(log_storage_.writev(lsn, write_buf, log_scn))) {
+  } else if (OB_FAIL(log_storage_.writev(lsn, write_buf, scn))) {
     PALF_LOG(ERROR, "LogStorage append_log failed", K(ret), K_(palf_id), K_(is_inited));
   } else {
     PALF_LOG(
-        TRACE, "LogEngine append_log success", K(ret), K_(palf_id), K_(is_inited), K(lsn), K(write_buf), K(log_scn));
+        TRACE, "LogEngine append_log success", K(ret), K_(palf_id), K_(is_inited), K(lsn), K(write_buf), K(scn));
   }
   return ret;
 }
@@ -815,7 +815,7 @@ int LogEngine::submit_change_mode_meta_resp(const common::ObAddr &server,
 
 int LogEngine::submit_get_memberchange_status_req(const common::ObAddr &server,
                                                   const LogConfigVersion &config_version,
-                                                  const int64_t timeout_ns,
+                                                  const int64_t timeout_us,
                                                   LogGetMCStResp &resp)
 {
   int ret = OB_SUCCESS;
@@ -823,7 +823,7 @@ int LogEngine::submit_get_memberchange_status_req(const common::ObAddr &server,
     ret = OB_NOT_INIT;
   } else {
     ret = log_net_service_.submit_get_memberchange_status_req(
-        server, config_version, timeout_ns, resp);
+        server, config_version, timeout_us, resp);
   }
   return ret;
 }

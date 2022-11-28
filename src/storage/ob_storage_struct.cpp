@@ -292,11 +292,11 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
   : tables_handle_(),
     snapshot_version_(0),
     multi_version_start_(0),
-    storage_schema_(nullptr),
     need_report_(false),
     rebuild_seq_(OB_INVALID_VERSION),
     update_logical_minor_sstable_(false),
-    start_scn_(palf::SCN::min_scn())
+    start_scn_(palf::SCN::min_scn()),
+    tablet_meta_(nullptr)
 {
 }
 
@@ -304,20 +304,20 @@ void ObBatchUpdateTableStoreParam::reset()
 {
   tables_handle_.reset();
   multi_version_start_ = 0;
-  storage_schema_ = nullptr;
   need_report_ = false;
   rebuild_seq_ = OB_INVALID_VERSION;
   update_logical_minor_sstable_ = false;
   start_scn_.set_min();
+  tablet_meta_ = nullptr;
 }
 
 bool ObBatchUpdateTableStoreParam::is_valid() const
 {
   return snapshot_version_ >= 0
       && multi_version_start_ >= 0
-      && OB_NOT_NULL(storage_schema_)
       && rebuild_seq_ > OB_INVALID_VERSION
-      && (!update_logical_minor_sstable_ || (update_logical_minor_sstable_ && start_scn_ > palf::SCN::min_scn()));
+      && ((!update_logical_minor_sstable_ && OB_NOT_NULL(tablet_meta_))
+          || (update_logical_minor_sstable_ && start_scn_ > palf::SCN::min_scn()));
 }
 
 int ObBatchUpdateTableStoreParam::assign(
@@ -331,11 +331,11 @@ int ObBatchUpdateTableStoreParam::assign(
     LOG_WARN("failed to assign tables handle", K(ret), K(param));
   } else {
     multi_version_start_ = param.multi_version_start_;
-    storage_schema_ = param.storage_schema_;
     need_report_ = param.need_report_;
     rebuild_seq_ = param.rebuild_seq_;
     update_logical_minor_sstable_ = param.update_logical_minor_sstable_;
     start_scn_ = param.start_scn_;
+    tablet_meta_ = param.tablet_meta_;
   }
   return ret;
 }
@@ -362,7 +362,6 @@ int ObBatchUpdateTableStoreParam::get_max_clog_checkpoint_ts(int64_t &clog_check
   }
   return ret;
 }
-
 
 ObPartitionReadableInfo::ObPartitionReadableInfo()
   : min_log_service_ts_(0),

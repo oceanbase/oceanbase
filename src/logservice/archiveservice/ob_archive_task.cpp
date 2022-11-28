@@ -31,7 +31,7 @@ ObArchiveLogFetchTask::ObArchiveLogFetchTask() :
   end_offset_(),
   send_task_(NULL)
 {
-  max_log_scn_ = SCN::min_scn();
+  max_scn_ = SCN::min_scn();
 }
 
 ObArchiveLogFetchTask::~ObArchiveLogFetchTask()
@@ -47,7 +47,7 @@ ObArchiveLogFetchTask::~ObArchiveLogFetchTask()
   next_piece_.reset();
   start_offset_.reset();
   end_offset_.reset();
-  max_log_scn_.reset();
+  max_scn_.reset();
 }
 
 int ObArchiveLogFetchTask::init(const uint64_t tenant_id,
@@ -106,28 +106,28 @@ int ObArchiveLogFetchTask::clear_send_task()
 int ObArchiveLogFetchTask::back_fill(const ObArchivePiece &cur_piece,
     const LSN &start_offset,
     const LSN &end_offset,
-    const SCN &max_log_scn,
+    const SCN &max_scn,
     ObArchiveSendTask *send_task)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(! cur_piece.is_valid()
-        || !max_log_scn.is_valid()
+        || !max_scn.is_valid()
         || (start_offset != cur_offset_ && cur_piece_ == cur_piece)
         || end_offset > end_offset_
-        || max_log_scn < max_log_scn_)
+        || max_scn < max_scn_)
       || OB_ISNULL(send_task)
       || OB_UNLIKELY(! send_task->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(cur_piece), K(start_offset),
-        K(end_offset), K(max_log_scn), KPC(send_task), KPC(this));
+        K(end_offset), K(max_scn), KPC(send_task), KPC(this));
   } else {
     cur_piece_ = cur_piece;
     next_piece_.reset();
     cur_offset_ = end_offset;
-    max_log_scn_ = max_log_scn;
+    max_scn_ = max_scn;
     send_task_ = send_task;
     ARCHIVE_LOG(INFO, "print back fill task succ", K(cur_piece), K(start_offset),
-        K(end_offset), K(max_log_scn), KPC(this));
+        K(end_offset), K(max_scn), KPC(this));
   }
   return ret;
 }
@@ -158,7 +158,7 @@ ObArchiveSendTask::ObArchiveSendTask() :
   piece_(),
   start_offset_(),
   end_offset_(),
-  max_log_scn_(),
+  max_scn_(),
   data_(NULL),
   data_len_(0)
 {}
@@ -171,7 +171,7 @@ ObArchiveSendTask::~ObArchiveSendTask()
   piece_.reset();
   start_offset_.reset();
   end_offset_.reset();
-  max_log_scn_.reset();
+  max_scn_.reset();
   data_ = NULL;
   data_len_ = 0;
 }
@@ -182,7 +182,7 @@ int ObArchiveSendTask::init(const uint64_t tenant_id,
                             const ObArchivePiece &piece,
                             const LSN &start_offset,
                             const LSN &end_offset,
-                            const SCN &max_log_scn,
+                            const SCN &max_scn,
                             char *buf,
                             const int64_t buf_size)
 
@@ -194,12 +194,12 @@ int ObArchiveSendTask::init(const uint64_t tenant_id,
         || !piece.is_valid()
         || !start_offset.is_valid()
         || end_offset < start_offset
-        || !max_log_scn.is_valid()
+        || !max_scn.is_valid()
         || NULL == buf
         || 0 >= buf_size)) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(id), K(station), K(piece), K(start_offset),
-        K(end_offset), K(max_log_scn), K(buf), K(buf_size));
+        K(end_offset), K(max_scn), K(buf), K(buf_size));
   } else {
     tenant_id_ = tenant_id;
     id_ = id;
@@ -207,7 +207,7 @@ int ObArchiveSendTask::init(const uint64_t tenant_id,
     piece_ = piece;
     start_offset_ = start_offset;
     end_offset_ = end_offset;
-    max_log_scn_ = max_log_scn;
+    max_scn_ = max_scn;
     MEMCPY(data_, buf, buf_size);
     data_len_ = buf_size;
   }
@@ -222,7 +222,7 @@ bool ObArchiveSendTask::is_valid() const
     && piece_.is_valid()
     && start_offset_.is_valid()
     && end_offset_ > start_offset_
-    && max_log_scn_.is_valid()
+    && max_scn_.is_valid()
     && NULL != data_
     && data_len_ > 0;
 }

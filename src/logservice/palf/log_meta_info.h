@@ -190,8 +190,8 @@ public:
   // proposal_id of last access_mode_, only changed by change_access_mode
   int64_t mode_version_;
   AccessMode access_mode_;
-  // log_ts lower bound
-  // after switching over, log_ts of all submitted log should be bigger than ref_scn_
+  // scn lower bound
+  // after switching over, scn of all submitted log should be bigger than ref_scn_
   SCN ref_scn_;
 
   static constexpr int64_t LOG_MODE_META_VERSION = 1;

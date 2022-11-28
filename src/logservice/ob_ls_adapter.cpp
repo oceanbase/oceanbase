@@ -70,7 +70,7 @@ int ObLSAdapter::replay(ObLogReplayTask *replay_task)
                                 replay_task->log_buf_,
                                 replay_task->log_size_,
                                 replay_task->lsn_,
-                                replay_task->log_scn_))) {
+                                replay_task->scn_))) {
     CLOG_LOG(WARN, "log stream do replay failed", K(ret), KPC(replay_task));
   }
   return ret;

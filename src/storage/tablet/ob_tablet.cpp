@@ -201,7 +201,7 @@ int ObTablet::init(
   SCN snapshot_scn;
   if (OB_FAIL(scn.convert_tmp(create_scn))) {
     LOG_WARN("failed to convert_tmp", K(ret), K(create_scn));
-  } else if (OB_FAIL(snapshot_scn.convert_for_lsn_allocator(snapshot_version))) {
+  } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert scn", K(ret), K(snapshot_version));
   } else if (OB_FAIL(init(ls_id, tablet_id, data_tablet_id, lob_meta_tablet_id, lob_piece_tablet_id,
       scn, snapshot_scn, table_schema, compat_mode, store_flag, table_handle, freezer))) {
@@ -355,6 +355,8 @@ int ObTablet::init(
   int ret = OB_SUCCESS;
   allocator_ = &(MTL(ObTenantMetaMemMgr*)->get_tenant_allocator());
   int64_t max_sync_schema_version = 0;
+  const ObStorageSchema *storage_schema = nullptr;
+
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));
@@ -368,16 +370,16 @@ int ObTablet::init(
     LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(memtable_mgr), K_(log_handler));
   } else if (OB_FAIL(old_tablet.get_max_sync_storage_schema_version(max_sync_schema_version))) {
     LOG_WARN("failed to get max sync storage schema version", K(ret));
-  } else if (OB_FAIL(tablet_meta_.init(*allocator_, old_tablet.tablet_meta_,
-      param.snapshot_version_, param.multi_version_start_, tx_data, ddl_data, autoinc_seq,
-      // use min schema version to avoid lose storage_schema in replay/reboot
-      // use old tablet clog_checkpoint_ts to avoid lose storage schema in migration
-      // TODO(yaoying.yyy):SCN  remove last params
-      MIN(MAX(param.storage_schema_->schema_version_, old_tablet.storage_schema_.schema_version_), max_sync_schema_version), palf::SCN::min_scn()))) {
+  } else if (FALSE_IT(storage_schema = OB_ISNULL(param.tablet_meta_) ? &old_tablet.storage_schema_ : &param.tablet_meta_->storage_schema_)) {
+  } else if (OB_FAIL(tablet_meta_.init(*allocator_, old_tablet.tablet_meta_, tx_data, ddl_data, autoinc_seq, param.tablet_meta_
+      // this interface for migration to batch update table store
+      // use old tablet clog_checkpoint_ts to avoid lose tx data
+      // use max schema to makesure sstable and schema match
+     ))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(param), K(tx_data), K(ddl_data), K(autoinc_seq));
   } else if (OB_FAIL(table_store_.build_ha_new_table_store(*allocator_, this, param, old_tablet.table_store_))) {
     LOG_WARN("failed to init table store", K(ret), K(old_tablet));
-  } else if (OB_FAIL(choose_and_save_storage_schema(*allocator_, old_tablet.storage_schema_, *param.storage_schema_))) {
+  } else if (OB_FAIL(choose_and_save_storage_schema(*allocator_, old_tablet.storage_schema_, *storage_schema))) {
     LOG_WARN("failed to choose and save storage schema", K(ret), K(old_tablet), K(param));
   } else if (OB_FAIL(try_update_start_scn())) {
     LOG_WARN("failed to update start scn", K(ret), K(param), K(table_store_));
@@ -625,6 +627,12 @@ int ObTablet::load_deserialize(
 
   if (OB_SUCC(ret)) {
     pos = new_pos;
+    if (tablet_meta_.max_sync_storage_schema_version_ > storage_schema_.schema_version_) {
+      LOG_INFO("tablet meta status is not right, upgrade may happened. fix max_sync_schema_version on purpose",
+          K(tablet_meta_.max_sync_storage_schema_version_),
+          K(storage_schema_.schema_version_));
+      tablet_meta_.max_sync_storage_schema_version_ = storage_schema_.schema_version_;
+    }
     is_inited_ = true;
     LOG_INFO("succeeded to deserialize tablet", K(ret), K(*this));
   } else if (OB_UNLIKELY(!is_inited_)) {
@@ -2954,7 +2962,7 @@ int ObTablet::check_max_sync_schema_version() const
     } else if (OB_FAIL(data_memtable_mgr->get_multi_source_data_unit(&storage_schema, &tmp_allocator))) {
       LOG_ERROR("failed to storage schema from memtable, max_sync_schema_version is invalid", K(ret),
           K(max_sync_schema_version), KPC(data_memtable_mgr));
-    } else if (OB_UNLIKELY(storage_schema.schema_version_ != max_sync_schema_version)) {
+    } else if (OB_UNLIKELY(storage_schema.schema_version_ < max_sync_schema_version)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("unexpected max sync schema version", K(ret), K(max_sync_schema_version),
           "storage_schema_on_memtable", storage_schema,

@@ -2396,13 +2396,17 @@ int ObTabletRestoreTask::generate_tablet_copy_finish_task_(
   int ret = OB_SUCCESS;
   tablet_copy_finish_task = nullptr;
   observer::ObIMetaReport *reporter = GCTX.ob_service_;
+  const ObMigrationTabletParam *src_tablet_meta = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet restore task do not init", K(ret));
   } else if (OB_FAIL(dag_->alloc_task(tablet_copy_finish_task))) {
     LOG_WARN("failed to alloc tablet copy finish task", K(ret), KPC(tablet_restore_ctx_));
-  } else if (OB_FAIL(tablet_copy_finish_task->init(tablet_restore_ctx_->tablet_id_, ls_, reporter))) {
+  } else if (OB_FAIL(tablet_restore_ctx_->ha_table_info_mgr_->get_tablet_meta(
+      tablet_restore_ctx_->tablet_id_, src_tablet_meta))) {
+    LOG_WARN("failed to get src tablet meta", K(ret), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(tablet_copy_finish_task->init(tablet_restore_ctx_->tablet_id_, ls_, reporter, src_tablet_meta))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   }
   return ret;

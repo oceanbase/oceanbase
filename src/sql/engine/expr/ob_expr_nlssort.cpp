@@ -105,7 +105,7 @@ int ObExprNLSSort::convert_to_coll_code(ObEvalCtx &ctx,
     } else {
       to_str.assign_ptr(conv_buf, result_len);
     }
-    LOG_DEBUG("charset convert", K(from_str), K(from_type), K(to_str), K(result_len));
+    LOG_DEBUG("charset convert", KPHEX(from_str.ptr(), from_str.length()), K(from_type), K(to_type), KPHEX(to_str.ptr(), to_str.length()), K(result_len));
   } else { 
     to_str.assign_ptr(from_str.ptr(), from_str.length());
   }

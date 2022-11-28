@@ -177,7 +177,6 @@ public:
   int64_t pos_;
   LogFormatFlag flag_;
 //  int64_t tx_id_;
- // int64_t log_ts_;
   ObAdminLogDumperInterface *writer_ptr_;
   ObAdminLogDumpFilter filter_;
   ObLogStat *log_stat_;

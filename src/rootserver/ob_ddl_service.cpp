@@ -1798,7 +1798,8 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
       if (OB_SUCC(ret)
           && ObSysTableChecker::is_sys_table_has_index(first_table.get_table_id())) {
         ObArray<ObTableSchema> schemas;
-        if (OB_FAIL(add_sys_table_index(tenant_id, first_table.get_table_id(), schemas))) {
+        if (OB_FAIL(ObSysTableChecker::append_sys_table_index_schemas(
+                    tenant_id, first_table.get_table_id(), schemas))) {
           LOG_WARN("fail to add sys table index", K(ret), K(tenant_id),
                    "table_id", first_table.get_table_id());
         } else if (OB_FAIL(ddl_operator.create_table(schemas.at(0),
@@ -6035,20 +6036,26 @@ int ObDDLService::check_generated_column_modify_authority(
 {
   int ret = OB_SUCCESS;
   if (old_column_schema.is_generated_column() && alter_column_schema.is_generated_column()) {
-    ObString old_def;
-    ObString alter_def;
-    if (OB_FAIL(old_column_schema.get_cur_default_value().get_string(old_def))) {
-      LOG_WARN("get old generated column definition failed", K(ret), K(old_column_schema));
-    } else if (OB_FAIL(alter_column_schema.get_cur_default_value().get_string(alter_def))) {
-      LOG_WARN("get new generated column definition failed", K(ret), K(alter_column_schema));
-    } else if (!ObCharset::case_insensitive_equal(old_def, alter_def)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify generated column definition");
-      LOG_WARN("generated column schema definition changed", K(ret), K(old_column_schema), K(alter_column_schema));
+    if ((old_column_schema.is_virtual_generated_column() && alter_column_schema.is_virtual_generated_column())
+     || (old_column_schema.is_stored_generated_column() && alter_column_schema.is_stored_generated_column())) {
+      ObString old_def;
+      ObString alter_def;
+      if (OB_FAIL(old_column_schema.get_cur_default_value().get_string(old_def))) {
+        LOG_WARN("get old generated column definition failed", K(ret), K(old_column_schema));
+      } else if (OB_FAIL(alter_column_schema.get_cur_default_value().get_string(alter_def))) {
+        LOG_WARN("get new generated column definition failed", K(ret), K(alter_column_schema));
+      } else if (!ObCharset::case_insensitive_equal(old_def, alter_def)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify generated column definition");
+        LOG_WARN("generated column schema definition changed", K(ret), K(old_column_schema), K(alter_column_schema));
+      }
+    } else {
+      ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+      LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, "Changing the STORED status");
     }
   } else if (old_column_schema.is_generated_column() || alter_column_schema.is_generated_column()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Changing the STORED status for generated columns");
+    ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+    LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN, "Changing the STORED status");
   }
   return ret;
 }
@@ -19240,6 +19247,7 @@ int ObDDLService::create_tenant_sys_tablets(
                               sql_proxy_);
     common::ObArray<share::ObLSID> ls_id_array;
     ObArray<const share::schema::ObTableSchema*> table_schemas;
+    ObArray<uint64_t> index_tids;
     if (OB_FAIL(trans.start(sql_proxy_, tenant_id))) {
       LOG_WARN("fail to start trans", KR(ret), K(tenant_id));
     } else if (OB_FAIL(table_creator.init())) {
@@ -19255,17 +19263,25 @@ int ObDDLService::create_tenant_sys_tablets(
         if (OB_FAIL(table_schemas.push_back(&data_table))) {
           LOG_WARN("fail to push back data table ptr", KR(ret), K(data_table_id));
         } else if (ObSysTableChecker::is_sys_table_has_index(data_table_id)) {
-           // sys table's index should be next to its data table.
-          int64_t index_id = OB_INVALID_ID;
-          if (i + 1 >= tables.count()) {
+          if (OB_FAIL(ObSysTableChecker::get_sys_table_index_tids(data_table_id, index_tids))) {
+            LOG_WARN("fail to get sys index tids", KR(ret), K(data_table_id));
+          } else if (i + index_tids.count()  >= tables.count()
+                     || index_tids.count() <= 0) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("sys table's index should be next to its data table", KR(ret), K(i));
-          } else if (FALSE_IT(index_id = tables.at(i + 1).get_table_id())) {
-          } else if (index_id != ObSysTableChecker::get_sys_table_index_tid(data_table_id)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("sys table's index not matched", KR(ret), K(index_id), K(data_table_id));
-          } else if (OB_FAIL(table_schemas.push_back(&tables.at(i + 1)))) {
-            LOG_WARN("fail to push back index table ptr", KR(ret), K(index_id), K(data_table_id));
+            LOG_WARN("sys table's index should be next to its data table",
+                     KR(ret), K(i), "index_cnt",  index_tids.count());
+          } else {
+            for (int64_t j = 0; OB_SUCC(ret) && j < index_tids.count(); j++) {
+              const ObTableSchema &index_schema = tables.at(i + j + 1);
+              const int64_t index_id = index_schema.get_table_id();
+              if (index_id != index_tids.at(j)
+                  || data_table_id != index_schema.get_data_table_id()) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("sys index schema order is not match", KR(ret), K(data_table_id), K(j), K(index_schema));
+              } else if (OB_FAIL(table_schemas.push_back(&index_schema))) {
+                LOG_WARN("fail to push back index schema", KR(ret), K(index_id), K(data_table_id));
+              }
+            } // end for
           }
         }
 
@@ -19583,13 +19599,14 @@ int ObDDLService::create_tenant_end(const uint64_t tenant_id)
       MEMSET(ddl_str_buf, 0, DDL_STR_BUF_SIZE);
       ObString ddl_stmt_str;
       if (tenant_schema->is_restore()) {
-        int64_t gts_value = OB_INVALID_TIMESTAMP;
+        palf::SCN gts;
         int64_t pos = 0;
-        if (OB_FAIL(get_tenant_external_consistent_ts(tenant_id, gts_value))) {
+        if (OB_FAIL(get_tenant_external_consistent_ts(tenant_id, gts))) {
           SERVER_LOG(WARN, "failed to get_tenant_gts", KR(ret), K(tenant_id));
         } else if (OB_FAIL(databuff_printf(ddl_str_buf, DDL_STR_BUF_SIZE, pos,
-                                           "schema_version=%ld; tenant_gts=%ld", refreshed_schema_version, gts_value))) {
-          SERVER_LOG(WARN, "failed to construct ddl_stmt_str", KR(ret), K(tenant_id), K(refreshed_schema_version), K(gts_value));
+                                           "schema_version=%ld; tenant_gts=%lu",
+                                           refreshed_schema_version, gts.get_val_for_inner_table_field()))) {
+          SERVER_LOG(WARN, "failed to construct ddl_stmt_str", KR(ret), K(tenant_id), K(refreshed_schema_version), K(gts));
         } else {
           ddl_stmt_str.assign_ptr(ddl_str_buf, pos);
           ddl_stmt_str_ptr = &ddl_stmt_str;
@@ -29519,28 +29536,6 @@ int ObDDLService::force_set_locality(
   return ret;
 }
 
-int ObDDLService::add_sys_table_index(
-    const uint64_t tenant_id,
-    const uint64_t table_id,
-    common::ObIArray<share::schema::ObTableSchema> &schemas)
-{
-  int ret = OB_SUCCESS;
-  if (ObSysTableChecker::is_sys_table_has_index(table_id)) {
-    ObTableSchema index_schema;
-    const int64_t data_table_id = table_id;
-    if (OB_FAIL(ObSysTableChecker::get_sys_table_index_schema(
-        data_table_id, index_schema))) {
-      LOG_WARN("fail to get sys table's index schema", KR(ret), K(data_table_id));
-    } else if (OB_FAIL(ObSchemaUtils::construct_tenant_space_full_table(
-               tenant_id, index_schema))) {
-      LOG_WARN("fail to construct tenant space table", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(schemas.push_back(index_schema))) {
-      LOG_WARN("fail to push back index schema", KR(ret), K(index_schema));
-    }
-  }
-  return ret;
-}
-
 int ObDDLService::add_sys_table_lob_aux(
     const int64_t tenant_id,
     const uint64_t table_id,
@@ -29564,23 +29559,21 @@ int ObDDLService::add_sys_table_lob_aux(
   return ret;
 }
 
-int ObDDLService::get_tenant_external_consistent_ts(const int64_t tenant_id, int64_t &ts)
+int ObDDLService::get_tenant_external_consistent_ts(const int64_t tenant_id, palf::SCN &scn)
 {
   int ret = OB_SUCCESS;
   const int64_t timeout_us = THIS_WORKER.is_timeout_ts_valid() ?
       THIS_WORKER.get_timeout_remain() : GCONF.rpc_timeout;
   bool is_external_consistent = false;
-  palf::SCN tmp_scn;
-  if (OB_FAIL(transaction::ObTsMgr::get_instance().get_ts_sync(tenant_id, timeout_us, tmp_scn,
+  if (OB_FAIL(transaction::ObTsMgr::get_instance().get_ts_sync(tenant_id, timeout_us, scn,
                                                                is_external_consistent))) {
     LOG_WARN("fail to get_ts_sync", K(ret), K(tenant_id));
   } else if (!is_external_consistent) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("got ts of tenant is not external consistent", K(ret), K(tenant_id), K(ts),
+    LOG_WARN("got ts of tenant is not external consistent", K(ret), K(tenant_id), K(scn),
              K(is_external_consistent));
   } else {
-    ts = tmp_scn.get_val_for_lsn_allocator();
-    LOG_INFO("success to get_tenant_external_consistent_ts", K(tenant_id), K(ts),
+    LOG_INFO("success to get_tenant_external_consistent_ts", K(tenant_id), K(scn),
              K(is_external_consistent));
   }
   return ret;

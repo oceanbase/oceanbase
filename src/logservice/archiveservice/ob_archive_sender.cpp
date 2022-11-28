@@ -612,9 +612,9 @@ int ObArchiveSender::update_archive_progress_(const int64_t file_id,
   const int64_t end_offset = file_offset + task.get_buf_size();
   const ArchiveWorkStation &station = task.get_station();
   const LSN &lsn = task.get_end_lsn();
-  const SCN &log_scn = task.get_max_log_scn();
+  const SCN &scn = task.get_max_scn();
   const ObArchivePiece &piece = task.get_piece();
-  LogFileTuple tuple(lsn, log_scn, piece);
+  LogFileTuple tuple(lsn, scn, piece);
   return ls_archive_task.update_archive_progress(station, file_id, end_offset, tuple);
 }
 

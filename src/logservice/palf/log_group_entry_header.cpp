@@ -436,7 +436,7 @@ int LogGroupEntryHeader::truncate(const char *buf,
     }
     PALF_LOG(INFO, "This is a padding log", K(data_len), K(cut_scn), K(pre_accum_checksum), KPC(this));
   } else {
-    SCN tmp_max_log_scn;
+    SCN tmp_max_scn;
     int64_t pos = 0;
     int64_t cut_pos = 0;
     LogEntryHeader log_entry_header;
@@ -445,21 +445,21 @@ int LogGroupEntryHeader::truncate(const char *buf,
     while (OB_SUCC(ret) && pos < data_len) {
       if (OB_FAIL(log_entry_header.deserialize(buf, data_len, pos))) {
         PALF_LOG(ERROR, "log_entry_header deserialize failed", K(ret), KP(buf), K(data_len));
-      } else if (log_entry_header.get_log_scn() > cut_scn) {
+      } else if (log_entry_header.get_scn() > cut_scn) {
         break;
       } else {
         log_entry_data_checksum = log_entry_header.get_data_checksum();
         tmp_log_checksum = common::ob_crc64(tmp_log_checksum, &log_entry_data_checksum, sizeof(log_entry_data_checksum));
         pos += log_entry_header.get_data_len();
         cut_pos = pos;
-        if (!tmp_max_log_scn.is_valid() || log_entry_header.get_log_scn() > tmp_max_log_scn) {
-          tmp_max_log_scn = log_entry_header.get_log_scn();
+        if (!tmp_max_scn.is_valid() || log_entry_header.get_scn() > tmp_max_scn) {
+          tmp_max_scn = log_entry_header.get_scn();
         }
       }
     }
     if (OB_SUCC(ret)) {
       group_size_ = cut_pos;
-      max_scn_ = tmp_max_log_scn;
+      max_scn_ = tmp_max_scn;
       update_accumulated_checksum(common::ob_crc64(pre_accum_checksum, const_cast<int64_t *>(&tmp_log_checksum),
                                                    sizeof(tmp_log_checksum)));
       update_header_checksum();

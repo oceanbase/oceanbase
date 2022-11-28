@@ -130,7 +130,7 @@ public:
   // ==================== Submit aysnc task end ==================
 
   // ====================== LogStorage start =====================
-  int append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &log_scn);
+  int append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &scn);
   int append_log(const LSNArray &lsn, const LogWriteBufArray &write_buf, const SCNArray &scn_array);
   int read_log(const LSN &lsn,
                const int64_t in_read_size,
@@ -281,7 +281,7 @@ public:
 
   int submit_get_memberchange_status_req(const common::ObAddr &server,
                                          const LogConfigVersion &config_version,
-                                         const int64_t timeout_ns,
+                                         const int64_t timeout_us,
                                          LogGetMCStResp &resp);
 
   // @brief: this function used to submit fetch log request to sepcified server

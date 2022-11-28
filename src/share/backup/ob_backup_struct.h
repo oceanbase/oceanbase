@@ -34,16 +34,6 @@ namespace oceanbase
 namespace share
 {
 
-enum ObBackupCompatibleVersion // used for data backup TODO(chongrong): delete it?
-{
-  OB_BACKUP_COMPATIBLE_VERSION_V1 = 1, // since 2.2.60
-  OB_BACKUP_COMPATIBLE_VERSION_V2 = 2, // since 2.2.77
-  OB_BACKUP_COMPATIBLE_VERSION_V3 = 3, // since 3.1
-  OB_BACKUP_COMPATIBLE_VERSION_V4 = 4, // since 4.0
-  OB_BACKUP_COMPATIBLE_VERSION_MAX,
-};
-
-bool has_independ_inc_backup_set(const int64_t version);
 // for log archive and data backup, exclude backup lease service inner table
 enum ObBackupInnerTableVersion {
   OB_BACKUP_INNER_TABLE_V1 = 1, // since 2.2.60
@@ -302,7 +292,6 @@ const char *const OB_STR_SINGLE_BACKUP_SET_INFO = "single_backup_set_info";
 const char *const OB_STR_PIECE_INFO = "piece_info";
 const char *const OB_STR_CHECKPOINT = "checkpoint";
 const char *const OB_STR_PIECES = "pieces";
-const char *const OB_STR_RESTORE_TS_NS = "restore_ts_ns";
 const char *const OB_STR_RESTORE_SCN = "restore_scn";
 const char *const OB_STR_LS_COUNT = "ls_count";
 const char *const OB_STR_FINISH_LS_COUNT = "finish_ls_count";
@@ -310,7 +299,6 @@ const char *const OB_STR_MACRO_BLOCK_BYTES = "major_block_bytes";
 const char *const OB_STR_FINISH_MACRO_BLOCK_BYTES = "finish_major_block_bytes";
 const char *const OB_STR_MINOR_BLOCK_BYTES = "minor_block_bytes";
 const char *const OB_STR_FINISH_MINOR_BLOCK_BYTES = "finish_minor_block_bytes";
-const char *const OB_STR_REPLAY_TS_NS = "replay_ts_ns";
 
 const char *const OB_STR_START_REPLAY_LSN = "start_replay_lsn";
 const char *const OB_STR_LAST_REPLAY_LSN = "last_replay_lsn";

@@ -62,7 +62,7 @@ public:
   void destroy();
 
   int writev(const LSNArray &lsn_array, const LogWriteBufArray &write_buf_array, const SCNArray &scn_array);
-  int writev(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &log_scn);
+  int writev(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &scn);
 
   int append_meta(const char *buf, const int64_t buf_len);
 

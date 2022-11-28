@@ -202,7 +202,7 @@ public:
 private:
   BufList list_;
   int64_t level_;
-  int idx_;
+  uint64_t idx_;
 };
 
 template <typename T>

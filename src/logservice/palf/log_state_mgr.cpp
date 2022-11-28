@@ -45,8 +45,8 @@ LogStateMgr::LogStateMgr()
     leader_(),
     leader_epoch_(OB_INVALID_TIMESTAMP),
     last_check_start_id_(OB_INVALID_LOG_ID),
-    last_check_start_id_time_ns_(OB_INVALID_TIMESTAMP),
-    reconfirm_start_time_ns_(OB_INVALID_TIMESTAMP),
+    last_check_start_id_time_us_(OB_INVALID_TIMESTAMP),
+    reconfirm_start_time_us_(OB_INVALID_TIMESTAMP),
     check_sync_enabled_time_(OB_INVALID_TIMESTAMP),
     check_reconfirm_timeout_time_(OB_INVALID_TIMESTAMP),
     check_follower_pending_warn_time_(OB_INVALID_TIMESTAMP),
@@ -546,7 +546,7 @@ int LogStateMgr::to_reconfirm_(const int64_t new_leader_epoch)
   if (OB_FAIL(sw_->to_leader_reconfirm())) {
     PALF_LOG(ERROR, "sw to_leader_reconfirm failed", K(ret), K_(palf_id));
   } else {
-    reconfirm_start_time_ns_ = ObTimeUtility::current_time_ns();
+    reconfirm_start_time_us_ = ObTimeUtility::current_time();
     reset_status_();
     update_role_and_state_(LEADER, RECONFIRM);
     reconfirm_->reset_state();
@@ -592,7 +592,7 @@ int LogStateMgr::reconfirm_to_follower_pending_()
 int LogStateMgr::reconfirm_to_leader_active_()
 {
   int ret = OB_SUCCESS;
-  const int64_t reconfirm_stage_cost = ObTimeUtility::current_time_ns() - reconfirm_start_time_ns_;
+  const int64_t reconfirm_stage_cost = ObTimeUtility::current_time() - reconfirm_start_time_us_;
   PALF_EVENT("reconfirm_to_leader_active begin", palf_id_, K_(self), K(reconfirm_stage_cost));
   ObMemberList member_list;
   if (OB_FAIL(mm_->get_curr_member_list(member_list))) {
@@ -611,7 +611,7 @@ int LogStateMgr::reconfirm_to_leader_active_()
     } else if (OB_FAIL(mm_->submit_broadcast_leader_info(get_proposal_id()))) {
       PALF_LOG(ERROR, "submit_broadcast_leader_info failed", KR(ret));
     }
-    const int64_t reconfirm_to_active_cost = ObTimeUtility::current_time_ns() - reconfirm_start_time_ns_;
+    const int64_t reconfirm_to_active_cost = ObTimeUtility::current_time() - reconfirm_start_time_us_;
     PALF_EVENT("reconfirm_to_leader_active end", palf_id_, K(ret), K_(self), K(reconfirm_to_active_cost), K_(role), K_(state));
   }
 
@@ -645,7 +645,7 @@ void LogStateMgr::reset_status_()
 {
   leader_.reset();
   leader_epoch_ = OB_INVALID_TIMESTAMP;
-  last_check_start_id_time_ns_ = OB_INVALID_TIMESTAMP;
+  last_check_start_id_time_us_ = OB_INVALID_TIMESTAMP;
   mm_->reset_status();
   mode_mgr_->reset_status();
   PALF_LOG(INFO, "reset_status_", K_(palf_id), K_(self), K_(leader_epoch), K(leader_));
@@ -769,17 +769,17 @@ bool LogStateMgr::leader_reconfirm_need_switch_()
 bool LogStateMgr::is_reconfirm_timeout_()
 {
   bool bool_ret = false;
-  const int64_t now_ns = ObTimeUtility::current_time_ns();
+  const int64_t now_us = ObTimeUtility::current_time();
 
   const int64_t start_id = sw_->get_start_id();
-  if (OB_INVALID_TIMESTAMP == last_check_start_id_time_ns_
+  if (OB_INVALID_TIMESTAMP == last_check_start_id_time_us_
       || last_check_start_id_ != start_id) {
     last_check_start_id_ = start_id;
-    last_check_start_id_time_ns_ = now_ns;
+    last_check_start_id_time_us_ = now_us;
   } else {
     bool is_sw_timeout = false;
 
-    if (now_ns - last_check_start_id_time_ns_ > PALF_LEADER_RECONFIRM_SYNC_TIMEOUT_NS) {
+    if (now_us - last_check_start_id_time_us_ > PALF_LEADER_RECONFIRM_SYNC_TIMEOUT_US) {
       // start log of sw is timeout
       is_sw_timeout = true;
     }
@@ -841,19 +841,19 @@ bool LogStateMgr::check_leader_log_sync_state_()
   // This function is called only in <LEADER, ACTICE> state.
   bool state_changed = false;
   const int64_t start_id = sw_->get_start_id();
-  const int64_t now_ns = ObTimeUtility::current_time_ns();
-  if (OB_INVALID_TIMESTAMP == last_check_start_id_time_ns_
+  const int64_t now_us = ObTimeUtility::current_time();
+  if (OB_INVALID_TIMESTAMP == last_check_start_id_time_us_
       || last_check_start_id_ != start_id) {
     last_check_start_id_ = start_id;
-    last_check_start_id_time_ns_ = now_ns;
+    last_check_start_id_time_us_ = now_us;
   } else if (sw_->is_empty()) {
     // sw is empty
-    last_check_start_id_time_ns_ = now_ns;
+    last_check_start_id_time_us_ = now_us;
   } else {
     // sw is not empty, check log sync state
-    if (now_ns - last_check_start_id_time_ns_ > PALF_LEADER_ACTIVE_SYNC_TIMEOUT_NS) {
+    if (now_us - last_check_start_id_time_us_ > PALF_LEADER_ACTIVE_SYNC_TIMEOUT_US) {
       if (palf_reach_time_interval(10 * 1000 * 1000, log_sync_timeout_warn_time_)) {
-        PALF_LOG(ERROR, "log sync timeout on leader", K_(palf_id), K_(self), K(now_ns), K(last_check_start_id_time_ns_), K(start_id));
+        PALF_LOG(ERROR, "log sync timeout on leader", K_(palf_id), K_(self), K(now_us), K(last_check_start_id_time_us_), K(start_id));
         (void) sw_->report_log_task_trace(start_id);
       }
     }
@@ -1005,25 +1005,25 @@ bool LogStateMgr::need_freeze_group_buffer() const
 int LogStateMgr::check_and_try_fetch_log_()
 {
   int ret = OB_SUCCESS;
-  const int64_t now_ns = ObTimeUtility::current_time_ns();
+  const int64_t now_us = ObTimeUtility::current_time();
   const uint64_t start_id = sw_->get_start_id();
   if (false == ATOMIC_LOAD(&is_sync_enabled_)) {
     if (palf_reach_time_interval(5 * 1000 * 1000, check_sync_enabled_time_)) {
       PALF_LOG(INFO, "sync is disabled, cannot fetch log", K_(palf_id));
     }
   } else if (OB_INVALID_ID == last_check_start_id_
-      || OB_INVALID_TIMESTAMP == last_check_start_id_time_ns_
+      || OB_INVALID_TIMESTAMP == last_check_start_id_time_us_
       || (last_check_start_id_ == start_id
-          && now_ns - last_check_start_id_time_ns_ > PALF_FETCH_LOG_INTERVAL_NS)) {
+          && now_us - last_check_start_id_time_us_ > PALF_FETCH_LOG_INTERVAL_US)) {
     if (OB_FAIL(sw_->try_fetch_log(FetchTriggerType::LOG_LOOP_TH))) {
       PALF_LOG(WARN, "sw try_fetch_log failed", K(ret), K_(palf_id));
     } else {
       last_check_start_id_ = start_id;
-      last_check_start_id_time_ns_ = now_ns;
+      last_check_start_id_time_us_ = now_us;
     }
   } else if (last_check_start_id_ != start_id) {
     last_check_start_id_ = start_id;
-    last_check_start_id_time_ns_ = now_ns;
+    last_check_start_id_time_us_ = now_us;
   } else {}
   return ret;
 }

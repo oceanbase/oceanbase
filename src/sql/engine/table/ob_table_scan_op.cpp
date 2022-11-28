@@ -65,7 +65,7 @@ int FlashBackItem::set_flashback_query_info(ObEvalCtx &eval_ctx, ObDASScanRtDef 
       if (ObUInt64Type != expr->datum_meta_.type_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("type not match", K(ret));
-      } else if (OB_FAIL(scan_rtdef.fb_snapshot_.convert_for_gts(datum->get_int()))) {
+      } else if (OB_FAIL(scan_rtdef.fb_snapshot_.convert_for_sql(datum->get_int()))) {
         LOG_WARN("failed to convert for gts", K(ret));
       } else {
         LOG_TRACE("fb_snapshot_ result", K(scan_rtdef.fb_snapshot_), K(*datum));

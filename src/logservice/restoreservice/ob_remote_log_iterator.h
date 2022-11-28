@@ -53,7 +53,7 @@ public:
   // init remote log iterator
   // @param[in] tenant_id, the tenant id of the LS
   // @param[in] id, the id of the LS
-  // @param[in] pre_log_scn, the log scn of the previous one, which is used to locate piece, this is an optional value
+  // @param[in] pre_scn, the log scn of the previous one, which is used to locate piece, this is an optional value
   //            if this param can not be provided, set it with OB_INVALID_TIMESTAMP
   // @param[in] start_lsn, the LSN of the first log to iterate
   // @param[in] end_lsn, the LSN of the last log to iterate, which can be set a limited or INT64_MAX
@@ -67,7 +67,7 @@ public:
   //            iteraotr should be inited again to follow this change
   int init(const uint64_t tenant_id,
       const ObLSID &id,
-      const palf::SCN &pre_log_scn,
+      const palf::SCN &pre_scn,
       const LSN &start_lsn,
       const LSN &end_lsn);
     // = [](share::ObBackupDest &dest) -> int { return OB_NOT_SUPPORTED; });
@@ -84,12 +84,12 @@ public:
   TO_STRING_KV(K_(inited), K_(tenant_id), K_(id), K_(start_lsn), K_(cur_lsn), K_(end_lsn), K_(gen));
 
 private:
-  int build_data_generator_(const palf::SCN &pre_log_scn,
+  int build_data_generator_(const palf::SCN &pre_scn,
       ObRemoteLogParent *source,
       const std::function<int(share::ObBackupDest &dest)> &refresh_storage_info_func);
   int build_service_data_generator_(ObRemoteSerivceParent *source);
-  int build_dest_data_generator_(const palf::SCN &pre_log_scn, ObRemoteRawPathParent *source);
-  int build_location_data_generator_(const palf::SCN &pre_log_scn,
+  int build_dest_data_generator_(const palf::SCN &pre_scn, ObRemoteRawPathParent *source);
+  int build_location_data_generator_(const palf::SCN &pre_scn,
       ObRemoteLocationParent *source,
       const std::function<int(share::ObBackupDest &dest)> &refresh_storage_info_func);
   int next_entry_(LogGroupEntry &entry, LSN &lsn, char *&buf, int64_t &buf_size);
@@ -105,7 +105,7 @@ private:
   ObLSID id_;
   LSN start_lsn_;
   LSN cur_lsn_;            // 迭代最新一条日志所对应终点LSN
-  palf::SCN cur_log_scn_;     // 迭代最新一条日志log_scn
+  palf::SCN cur_scn_;     // 迭代最新一条日志scn
   LSN end_lsn_;
   ObRemoteSourceGuard source_guard_;
   RemoteDataBuffer data_buffer_;

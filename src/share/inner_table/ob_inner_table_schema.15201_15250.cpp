@@ -14377,7 +14377,7 @@ int ObInnerTableSchema::all_virtual_ls_log_archive_progress_ora_schema(ObTableSc
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("LS_ID", //column_name
+    ADD_COLUMN_SCHEMA("ROUND_ID", //column_name
       ++column_id, //column_id
       3, //rowkey_id
       0, //index_id
@@ -14392,7 +14392,7 @@ int ObInnerTableSchema::all_virtual_ls_log_archive_progress_ora_schema(ObTableSc
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("ROUND_ID", //column_name
+    ADD_COLUMN_SCHEMA("PIECE_ID", //column_name
       ++column_id, //column_id
       4, //rowkey_id
       0, //index_id
@@ -14407,7 +14407,7 @@ int ObInnerTableSchema::all_virtual_ls_log_archive_progress_ora_schema(ObTableSc
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("PIECE_ID", //column_name
+    ADD_COLUMN_SCHEMA("LS_ID", //column_name
       ++column_id, //column_id
       5, //rowkey_id
       0, //index_id

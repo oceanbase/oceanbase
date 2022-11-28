@@ -504,6 +504,7 @@ private:
   // we keep it on tablet because we cannot get them in ObTablet::deserialize
   // through ObTabletPointerHandle.
   // may be some day will fix this issue, then the pointers have no need to exist.
+
   ObIMemtableMgr *memtable_mgr_;
   logservice::ObLogHandler *log_handler_;
 
@@ -512,6 +513,11 @@ private:
   ObTableReadInfo full_read_info_;
   common::ObIAllocator *allocator_;
   ObMetaObjGuard<ObTablet> next_tablet_guard_;
+
+  //ATTENTION : Add a new variable need consider ObMigrationTabletParam
+  // and tablet meta init interface for migration.
+  // yuque : https://yuque.antfin.com/ob/ob-backup/zzwpuh
+
   bool is_inited_;
 };
 
@@ -746,7 +752,7 @@ int ObTablet::save_multi_source_data_unit(
              palf::SCN::max_scn() == memtable_scn) {
         if (ObTimeUtility::current_time() - start > 100 * 1000) {
           ret = OB_BLOCK_FROZEN;
-          TRANS_LOG(ERROR, "logging_block costs too much time", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op), K(for_replay));
+          TRANS_LOG(WARN, "logging_block costs too much time", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op), K(for_replay));
         }
         ob_usleep(100);
       }

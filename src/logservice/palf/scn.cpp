@@ -176,10 +176,10 @@ SCN SCN::minus(const SCN &ref, uint64_t delta)
   SCN result;
   if (OB_UNLIKELY(delta >= OB_MAX_SCN_TS_NS || !ref.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "invalid argument", K(delta), K(ref), K(ret));
+    PALF_LOG(ERROR, "invalid argument", K(delta), K(ref), K(lbt()));
   } else if (OB_UNLIKELY(ref.val_ < delta)) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR , "new_val is not valid", K(ref), K(delta), K(ret));
+    PALF_LOG(ERROR, "new_val is not valid", K(delta), K(ret), K(lbt()));
   } else {
     result.val_ = ref.val_ - delta;
   }
@@ -238,7 +238,13 @@ SCN SCN::scn_dec(const SCN &ref)
 
 int64_t SCN::convert_to_ts() const
 {
-  return ts_ns_ / 1000UL;
+  int64_t ts_us = 0;
+  if (is_valid()) {
+    ts_us = ts_ns_ / 1000UL;
+  } else {
+    PALF_LOG(ERROR, "invalid scn should not convert to ts ", K(val_), K(lbt()));
+  }
+  return ts_us;
 }
 
 int SCN::convert_from_ts(uint64_t ts_us)
@@ -283,7 +289,6 @@ int SCN::convert_for_lsn_allocator(uint64_t scn_val)
   if (OB_UNLIKELY(OB_MAX_SCN_TS_NS < scn_val)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(scn_val), K(ret), K(lbt()));
-    // TODO(yaoying.yyy):remove lbt() later
   } else {
     val_ = scn_val;
   }
@@ -291,6 +296,18 @@ int SCN::convert_for_lsn_allocator(uint64_t scn_val)
 }
 
 int SCN::convert_for_inner_table_field(uint64_t value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_MAX_SCN_TS_NS < value)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(value), K(ret));
+  } else {
+    val_ = value;
+  }
+  return ret;
+}
+
+int SCN::convert_for_sql(uint64_t value)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_MAX_SCN_TS_NS < value)) {
@@ -314,17 +331,17 @@ uint64_t SCN::get_val_for_inner_table_field() const
   return val_;
 }
 
+uint64_t SCN::get_val_for_sql() const
+{
+  return val_;
+}
+
 uint64_t SCN::get_val_for_gts() const
 {
   return val_;
 }
 
 uint64_t SCN::get_val_for_lsn_allocator() const
-{
-  return val_;
-}
-
-uint64_t SCN::get_val_for_row_cell() const
 {
   return val_;
 }
@@ -336,7 +353,7 @@ int SCN::convert_for_tx(int64_t val)
     val_ = OB_MAX_SCN_TS_NS;
   } else if (OB_UNLIKELY(OB_MAX_SCN_TS_NS < val || OB_MIN_SCN_TS_NS > val)) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "invalid argument ", K(val));
+    PALF_LOG(ERROR, "invalid argument", K(val), K(lbt()));
   } else {
     val_ = val;
   }

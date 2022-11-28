@@ -732,8 +732,10 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const char *tg_white_list = TCONF.tablegroup_white_list.str();
   const char *tg_black_list = TCONF.tablegroup_black_list.str();
   int64_t max_cached_trans_ctx_count = MAX_CACHED_TRANS_CTX_COUNT;
-  int64_t sql_conn_timeout_us = TCONF.mysql_connect_timeout_sec * _SEC_;
-  int64_t sql_query_timeout_us = TCONF.mysql_query_timeout_sec * _SEC_;
+  int64_t rs_sql_conn_timeout_us = TCONF.rs_sql_connect_timeout_sec * _SEC_;
+  int64_t rs_sql_query_timeout_us = TCONF.rs_sql_query_timeout_sec * _SEC_;
+  int64_t tenant_sql_conn_timeout_us = TCONF.tenant_sql_connect_timeout_sec * _SEC_;
+  int64_t tenant_sql_query_timeout_us = TCONF.tenant_sql_query_timeout_sec * _SEC_;
   const char *ob_trace_id_ptr = TCONF.ob_trace_id.str();
   const char *drc_message_factory_binlog_record_type_str = TCONF.drc_message_factory_binlog_record_type.str();
   // The starting schema version of the SYS tenant
@@ -794,10 +796,10 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   // init ObLogMysqlProxy
   if (OB_SUCC(ret)) {
     if (OB_FAIL(mysql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
-        sql_conn_timeout_us, sql_query_timeout_us, enable_ssl_client_authentication, rs_server_provider_))) {
+        rs_sql_conn_timeout_us, rs_sql_query_timeout_us, enable_ssl_client_authentication, rs_server_provider_))) {
       LOG_ERROR("mysql_proxy_ init fail", KR(ret), K(rs_server_provider_),
-          K(cluster_user), K(cluster_password), K(cluster_db_name), K(sql_conn_timeout_us),
-          K(sql_query_timeout_us), K(enable_ssl_client_authentication));
+          K(cluster_user), K(cluster_password), K(cluster_db_name), K(rs_sql_conn_timeout_us),
+          K(rs_sql_query_timeout_us), K(enable_ssl_client_authentication));
     }
   }
 
@@ -832,11 +834,11 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   // init ObLogTenantSQLProxy
   if (OB_SUCC(ret)) {
     if (OB_FAIL(tenant_sql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
-        sql_conn_timeout_us, sql_query_timeout_us, enable_ssl_client_authentication,
+        tenant_sql_conn_timeout_us, tenant_sql_query_timeout_us, enable_ssl_client_authentication,
         tenant_server_provider_, true/*is_tenant_server_provider*/))) {
       LOG_ERROR("tenant_sql_proxy_ init fail", KR(ret), K(tenant_server_provider_),
-          K(cluster_user), K(cluster_password), K(cluster_db_name), K(sql_conn_timeout_us),
-          K(sql_query_timeout_us), K(enable_ssl_client_authentication));
+          K(cluster_user), K(cluster_password), K(cluster_db_name), K(tenant_sql_conn_timeout_us),
+          K(tenant_sql_query_timeout_us), K(enable_ssl_client_authentication));
     }
   }
 

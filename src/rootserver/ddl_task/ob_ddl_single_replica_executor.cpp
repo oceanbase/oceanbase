@@ -148,7 +148,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
         } else if (OB_SUCCESS == ret_array.at(i)) {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_REQUESTED;
           LOG_INFO("rpc send successfully", K(source_tablet_ids_.at(idx)), K(dest_tablet_ids_.at(idx)));
-        } else if (OB_HASH_EXIST == ret_array.at(i) || OB_TIMEOUT == ret_array.at(i) || OB_EAGAIN == ret_array.at(i)) {
+        } else if (ObIDDLTask::in_ddl_retry_white_list(ret_array.at(i))) {
           build_infos.at(idx).stat_ = ObPartitionBuildStat::BUILD_RETRY;
           LOG_INFO("task need retry", K(ret_array.at(i)), K(source_tablet_ids_.at(idx)), K(dest_tablet_ids_.at(idx)));
         } else {
@@ -216,7 +216,7 @@ int ObDDLSingleReplicaExecutor::set_partition_task_status(const common::ObTablet
         if (OB_SUCCESS == ret_code) {
           build_infos.at(i).ret_code_ = OB_SUCCESS;
           build_infos.at(i).stat_ = ObPartitionBuildStat::BUILD_SUCCEED;
-        } else if (ObIDDLTask::error_need_retry(ret_code) || OB_REPLICA_NOT_READABLE == ret_code || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code) {
+        } else if (ObIDDLTask::in_ddl_retry_white_list(ret_code) || OB_REPLICA_NOT_READABLE == ret_code || OB_ERR_INSUFFICIENT_PX_WORKER == ret_code) {
           build_infos.at(i).ret_code_ = OB_SUCCESS;
           build_infos.at(i).stat_ = ObPartitionBuildStat::BUILD_RETRY;
         } else {

@@ -81,7 +81,7 @@ public:
              const int64_t nbytes,
              const SCN &ref_scn,
              LSN &lsn,
-             SCN &log_scn);
+             SCN &scn);
 
   int raw_write(const PalfAppendOptions &opts,
                 const LSN &lsn,
@@ -102,39 +102,39 @@ public:
 
   int seek(const LSN &lsn, PalfGroupBufferIterator &iter);
 
-  // @desc: seek a group buffer iterator by log_scn, the first log A in iterator must meet
+  // @desc: seek a group buffer iterator by scn, the first log A in iterator must meet
   // one of the following conditions:
-  // 1. scn of log A equals to log_scn
-  // 2. scn of log A is higher than log_scn and A is the first log which log_scn is higher
-  // than log_scn in all committed logs
+  // 1. scn of log A equals to scn
+  // 2. scn of log A is higher than scn and A is the first log which scn is higher
+  // than scn in all committed logs
   // Note that this function may be time-consuming
-  // @params [in] log_scn:
-  //  @params [out] iter: group buffer iterator in which all logs's log_scn are higher than/equal to
-  // log_scn
+  // @params [in] scn:
+  //  @params [out] iter: group buffer iterator in which all logs's scn are higher than/equal to
+  // scn
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT
-  // - OB_ENTRY_NOT_EXIST: there is no log's log_scn is higher than log_scn
-  // - OB_ERR_OUT_OF_LOWER_BOUND: log_scn is too old, log files may have been recycled
+  // - OB_ENTRY_NOT_EXIST: there is no log's scn is higher than scn
+  // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
   // - others: bug
-  int seek(const SCN &log_scn, PalfGroupBufferIterator &iter);
+  int seek(const SCN &scn, PalfGroupBufferIterator &iter);
 
   // @desc: query coarse lsn by scn, that means there is a LogGroupEntry in disk,
-  // its lsn and log_scn are result_lsn and result_scn, and result_scn <= log_scn.
+  // its lsn and scn are result_lsn and result_scn, and result_scn <= scn.
   // Note that this function may be time-consuming
   // Note that result_lsn always points to head of log file
-  // @params [in] log_scn:
-  // @params [out] result_lsn: the lower bound lsn which includes log_scn
+  // @params [in] scn:
+  // @params [out] result_lsn: the lower bound lsn which includes scn
   // @return
   // - OB_SUCCESS: locate_by_scn_coarsely success
   // - OB_INVALID_ARGUMENT
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
-  // - OB_ERR_OUT_OF_LOWER_BOUND: log_scn is too small, log files may have been recycled
+  // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too small, log files may have been recycled
   // - others: bug
-  virtual int locate_by_scn_coarsely(const SCN &log_scn, LSN &result_lsn);
+  virtual int locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn);
 
   // @desc: query coarse scn by lsn, that means there is a log in disk,
-  // its lsn and log_scn are result_lsn and result_scn, and result_lsn <= lsn.
+  // its lsn and scn are result_lsn and result_scn, and result_lsn <= lsn.
   // Note that this function may be time-consuming
   // @params [in] lsn: lsn
   // @params [out] result_scn: the lower bound scn which includes lsn
@@ -169,7 +169,7 @@ public:
   virtual int get_end_lsn(LSN &lsn) const;
   int get_end_scn(SCN &scn) const;
   int get_max_lsn(LSN &lsn) const;
-  int get_max_scn(SCN &log_scn) const;
+  int get_max_scn(SCN &scn) const;
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const;
 
   //================= 分布式相关接口 =========================
@@ -190,7 +190,7 @@ public:
   // @param[in] common::ObMemberList: current memberlist, for pre-check
   // @param[in] const int64_t curr_replica_num: current replica num, for pre-check
   // @param[in] const int64_t new_replica_num: new replica num
-  // @param[in] const int64_t timeout_ns: timeout, ns
+  // @param[in] const int64_t timeout_us: timeout, us
   // @return
   // - OB_SUCCESS: change_replica_num successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -200,12 +200,12 @@ public:
   int change_replica_num(const common::ObMemberList &member_list,
                          const int64_t curr_replica_num,
                          const int64_t new_replica_num,
-                         const int64_t timeout_ns);
+                         const int64_t timeout_us);
 
   // @brief, add a member to paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be added
   // @param[in] const int64_t new_replica_num: replica number of paxos group after adding 'member'
-  // @param[in] const int64_t timeout_ns: add member timeout, ns
+  // @param[in] const int64_t timeout_us: add member timeout, us
   // @return
   // - OB_SUCCESS: add member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -214,12 +214,12 @@ public:
   // - other: bug
   int add_member(const common::ObMember &member,
                  const int64_t new_replica_num,
-                 const int64_t timeout_ns);
+                 const int64_t timeout_us);
 
   // @brief, remove a member from paxos group, can be called only in leader
   // @param[in] common::ObMember &member: member which will be removed
   // @param[in] const int64_t new_replica_num: replica number of paxos group after removing 'member'
-  // @param[in] const int64_t timeout_ns: remove member timeout, ns
+  // @param[in] const int64_t timeout_us: remove member timeout, us
   // @return
   // - OB_SUCCESS: remove member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -228,12 +228,12 @@ public:
   // - other: bug
   int remove_member(const common::ObMember &member,
                     const int64_t new_replica_num,
-                    const int64_t timeout_ns);
+                    const int64_t timeout_us);
 
   // @brief, replace old_member with new_member, can be called only in leader
   // @param[in] const common::ObMember &added_member: member wil be added
   // @param[in] const common::ObMember &removed_member: member will be removed
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS: replace member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -242,56 +242,56 @@ public:
   // - other: bug
   int replace_member(const common::ObMember &added_member,
                      const common::ObMember &removed_member,
-                     const int64_t timeout_ns);
+                     const int64_t timeout_us);
 
   // @brief: add a learner(read only replica) in this clsuter
   // @param[in] const common::ObMember &added_learner: learner will be added
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: add_learner timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   int add_learner(const common::ObMember &added_learner,
-                  const int64_t timeout_ns);
+                  const int64_t timeout_us);
 
   // @brief: remove a learner(read only replica) in this clsuter
   // @param[in] const common::ObMember &removed_learner: learner will be removed
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: remove_learner timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   int remove_learner(const common::ObMember &removed_learner,
-                     const int64_t timeout_ns);
+                     const int64_t timeout_us);
 
   // @brief: switch a learner(read only replica) to acceptor(full replica) in this clsuter
   // @param[in] const common::ObMember &learner: learner will be switched to acceptor
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: switch_learner_to_acceptor timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   int switch_learner_to_acceptor(const common::ObMember &learner,
-                                 const int64_t timeout_ns);
+                                 const int64_t timeout_us);
 
   // @brief: switch an acceptor(full replica) to learner(read only replica) in this clsuter
   // @param[in] const common::ObMember &member: acceptor will be switched to learner
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: switch_acceptor_to_learner timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   int switch_acceptor_to_learner(const common::ObMember &member,
-                                 const int64_t timeout_ns);
+                                 const int64_t timeout_us);
 
   // @brief, add an arbitration member to paxos group
   // @param[in] common::ObMember &member: arbitration member which will be added
   // @param[in] const int64_t paxos_replica_num: replica number of paxos group after adding 'member'
-  // @param[in] const int64_t timeout_ns: add member timeout, us
+  // @param[in] const int64_t timeout_us: add member timeout, us
   // @return
   // - OB_SUCCESS: add arbitration member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -300,12 +300,12 @@ public:
   // - other: bug
   int add_arb_member(const common::ObMember &added_member,
                      const int64_t paxos_replica_num,
-                     const int64_t timeout_ns);
+                     const int64_t timeout_us);
 
   // @brief, remove an arbitration member from paxos group
   // @param[in] common::ObMember &member: arbitration member which will be removed
   // @param[in] const int64_t paxos_replica_num: replica number of paxos group after removing 'member'
-  // @param[in] const int64_t timeout_ns: remove member timeout, us
+  // @param[in] const int64_t timeout_us: remove member timeout, us
   // @return
   // - OB_SUCCESS: remove arbitration member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -314,11 +314,11 @@ public:
   // - other: bug
   int remove_arb_member(const common::ObMember &arb_member,
                         const int64_t paxos_replica_num,
-                        const int64_t timeout_ns);
+                        const int64_t timeout_us);
   // @brief, replace old arbitration member with new arbitration member, can be called in any member
   // @param[in] const common::ObMember &added_member: arbitration member wil be added
   // @param[in] const common::ObMember &removed_member: arbitration member will be removed
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS: replace arbitration member successfully
   // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
@@ -327,26 +327,26 @@ public:
   // - other: bug
   int replace_arb_member(const common::ObMember &added_arb_member,
                          const common::ObMember &removed_arb_member,
-                         const int64_t timeout_ns);
+                         const int64_t timeout_us);
   // @brief: degrade an acceptor(full replica) to learner(special read only replica) in this cluster
   // @param[in] const common::ObMemberList &member_list: acceptors will be degraded to learner
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: timeout
   // - OB_NOT_MASTER: not leader
-  int degrade_acceptor_to_learner(const common::ObMemberList &member_list, const int64_t timeout_ns);
+  int degrade_acceptor_to_learner(const common::ObMemberList &member_list, const int64_t timeout_us);
 
   // @brief: upgrade a learner(special read only replica) to acceptor(full replica) in this cluster
   // @param[in] const common::ObMemberList &learner_list: learners will be upgraded to acceptors
-  // @param[in] const int64_t timeout_ns
+  // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: timeout
   // - OB_NOT_MASTER: not leader
-  int upgrade_learner_to_acceptor(const common::ObMemberList &learner_list, const int64_t timeout_ns);
+  int upgrade_learner_to_acceptor(const common::ObMemberList &learner_list, const int64_t timeout_us);
   int revoke_leader(const int64_t proposal_id);
   int change_leader_to(const common::ObAddr &dst_addr);
   // @brief: change AccessMode of palf.
@@ -354,10 +354,10 @@ public:
   // @param[in] const int64_t &mode_version: mode_version corresponding to AccessMode,
   // can be gotted by get_access_mode
   // @param[in] const palf::AccessMode access_mode: access_mode will be changed to
-  // @param[in] const int64_t ref_ts_ns: log_ts of all submitted logs after changing access mode
-  // are bigger than ref_ts_ns
-  // NB: ref_ts_ns will take effect only when:
-  //     a. ref_ts_ns is bigger than/equal to max_ts(get_max_ts_ns())
+  // @param[in] const int64_t ref_scn: scn of all submitted logs after changing access mode
+  // are bigger than ref_scn
+  // NB: ref_scn will take effect only when:
+  //     a. ref_scn is bigger than/equal to max_ts(get_max_scn())
   //     b. AccessMode is set to APPEND
   // @retval
   //   OB_SUCCESS
@@ -369,7 +369,7 @@ public:
   int change_access_mode(const int64_t proposal_id,
                          const int64_t mode_version,
                          const AccessMode &access_mode,
-                         const SCN &ref_ts_ns);
+                         const SCN &ref_scn);
   // @brief: query the access_mode of palf and it's corresponding mode_version
   // @param[out] palf::AccessMode &access_mode: current access_mode
   // @param[out] int64_t &mode_version: mode_version corresponding to AccessMode

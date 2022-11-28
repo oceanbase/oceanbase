@@ -39,43 +39,43 @@ void LSNAllocator::reset()
   lsn_ts_meta_.v128_.hi = 0;
   lsn_ts_meta_.is_need_cut_ = 1;
   log_id_base_ = OB_INVALID_LOG_ID;
-  log_ts_base_ = 0;
+  scn_base_ = 0;
 }
 
 int LSNAllocator::init(const int64_t log_id,
-                       const SCN &log_scn,
+                       const SCN &scn,
                        const LSN &start_lsn)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-  } else if (OB_INVALID_LOG_ID == log_id || !log_scn.is_valid() || !start_lsn.is_valid()) {
+  } else if (OB_INVALID_LOG_ID == log_id || !scn.is_valid() || !start_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(log_id), K(log_scn), K(start_lsn));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(log_id), K(scn), K(start_lsn));
   } else {
     log_id_base_ = log_id;
-    log_ts_base_ = log_scn.get_val_for_lsn_allocator();
+    scn_base_ = scn.get_val_for_lsn_allocator();
     lsn_ts_meta_.v128_.lo = 0;
     lsn_ts_meta_.lsn_val_ = start_lsn.val_;
     lsn_ts_meta_.is_need_cut_ = 1;
     is_inited_ = true;
-    PALF_LOG(INFO, "LSNAllocator init success", K_(log_id_base), K_(log_ts_base), K(start_lsn),
+    PALF_LOG(INFO, "LSNAllocator init success", K_(log_id_base), K_(scn_base), K(start_lsn),
         "lsn_ts_meta_.is_need_cut_", lsn_ts_meta_.is_need_cut_,
         "lsn_ts_meta_.log_id_delta_", lsn_ts_meta_.log_id_delta_,
-        "lsn_ts_meta_.log_ts_delta_", lsn_ts_meta_.log_ts_delta_,
+        "lsn_ts_meta_.scn_delta_", lsn_ts_meta_.scn_delta_,
         "lsn_ts_meta_.lsn_val_", lsn_ts_meta_.lsn_val_);
   }
   return ret;
 }
 
-int LSNAllocator::truncate(const LSN &lsn, const int64_t log_id, const SCN &log_scn)
+int LSNAllocator::truncate(const LSN &lsn, const int64_t log_id, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || OB_INVALID_LOG_ID == log_id || !log_scn.is_valid()) {
+  } else if (!lsn.is_valid() || OB_INVALID_LOG_ID == log_id || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(log_id), K(log_scn));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(log_id), K(scn));
   } else {
     LSNTsMeta last;
     LSNTsMeta next;
@@ -83,13 +83,13 @@ int LSNAllocator::truncate(const LSN &lsn, const int64_t log_id, const SCN &log_
       WLockGuard guard(lock_);
       LOAD128(last, &lsn_ts_meta_);
       next.log_id_delta_ = 0;
-      next.log_ts_delta_ = 0;
+      next.scn_delta_ = 0;
       next.lsn_val_ = lsn.val_;
       next.is_need_cut_ = 1;
       if (CAS128(&lsn_ts_meta_, last, next)) {
         log_id_base_ = log_id;
-        log_ts_base_ = log_scn.get_val_for_lsn_allocator();
-        PALF_LOG(INFO, "truncate success", K(lsn), K(log_id), K(log_scn));
+        scn_base_ = scn.get_val_for_lsn_allocator();
+        PALF_LOG(INFO, "truncate success", K(lsn), K(log_id), K(scn));
         break;
       } else {
         PAUSE();
@@ -99,14 +99,14 @@ int LSNAllocator::truncate(const LSN &lsn, const int64_t log_id, const SCN &log_
   return ret;
 }
 
-int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id, const SCN &log_scn)
+int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!lsn.is_valid() || !log_scn.is_valid() || OB_INVALID_LOG_ID == log_id) {
+  } else if (!lsn.is_valid() || !scn.is_valid() || OB_INVALID_LOG_ID == log_id) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(log_scn), K(log_id));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn), K(scn), K(log_id));
   } else {
     LSNTsMeta last;
     LSNTsMeta next;
@@ -115,7 +115,7 @@ int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id,
       LOAD128(last, &lsn_ts_meta_);
       const int64_t cur_log_id = log_id_base_ + last.log_id_delta_;
       next.log_id_delta_ = 0;
-      next.log_ts_delta_ = 0;
+      next.scn_delta_ = 0;
       next.lsn_val_ = lsn.val_;
       next.is_need_cut_ = 1;
       if (log_id < cur_log_id) {
@@ -126,8 +126,8 @@ int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id,
         break;
       } else if (CAS128(&lsn_ts_meta_, last, next)) {
         log_id_base_ = log_id;
-        log_ts_base_ = log_scn.get_val_for_lsn_allocator();
-        PALF_LOG(TRACE, "inc_update_last_log_info success", K(lsn), K(log_scn), K(log_id));
+        scn_base_ = scn.get_val_for_lsn_allocator();
+        PALF_LOG(TRACE, "inc_update_last_log_info success", K(lsn), K(scn), K(log_id));
         break;
       } else {
         PAUSE();
@@ -137,30 +137,30 @@ int LSNAllocator::inc_update_last_log_info(const LSN &lsn, const int64_t log_id,
   return ret;
 }
 
-int LSNAllocator::inc_update_log_scn_base(const SCN &log_scn)
+int LSNAllocator::inc_update_scn_base(const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (!log_scn.is_valid()) {
+  } else if (!ref_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments", K(ret), K(log_scn));
+    PALF_LOG(WARN, "invalid arguments", K(ret), K(ref_scn));
   } else {
     LSNTsMeta last;
     LSNTsMeta next;
-    const uint64_t log_ts = log_scn.get_val_for_lsn_allocator();
+    const uint64_t scn = ref_scn.get_val_for_lsn_allocator();
     while (true) {
       WLockGuard guard(lock_);
       LOAD128(last, &lsn_ts_meta_);
       next = last;
-      next.log_ts_delta_ = 0;
+      next.scn_delta_ = 0;
       next.is_need_cut_ = 1;
-      if (log_ts_base_ + last.log_ts_delta_ > log_ts) {
+      if (scn_base_ + last.scn_delta_ > scn) {
         // no need update
         break;
       } else if (CAS128(&lsn_ts_meta_, last, next)) {
-        log_ts_base_ = log_ts;
-        PALF_LOG(INFO, "inc_update_log_scn_base success", K(log_ts), K(log_scn));
+        scn_base_ = scn;
+        PALF_LOG(INFO, "inc_update_scn_base success", K(scn), K(scn));
         break;
       } else {
         PAUSE();
@@ -183,20 +183,20 @@ int64_t LSNAllocator::get_max_log_id() const
   return max_log_id;
 }
 
-SCN LSNAllocator::get_max_log_scn() const
+SCN LSNAllocator::get_max_scn() const
 {
   SCN result;
-  uint64_t max_log_ts = 0;
+  uint64_t max_scn = 0;
   if (IS_NOT_INIT) {
   } else {
     RLockGuard guard(lock_);
     LSNTsMeta last;
     LOAD128(last, &lsn_ts_meta_);
-    max_log_ts = log_ts_base_ + last.log_ts_delta_;
+    max_scn = scn_base_ + last.scn_delta_;
     int ret = OB_SUCCESS;
-    if (OB_FAIL(result.convert_for_lsn_allocator(max_log_ts))) {
-      PALF_LOG(ERROR, "failed to convert_for_lsn_allocator", K(max_log_ts),
-               K(log_ts_base_), K(last.log_ts_delta_));
+    if (OB_FAIL(result.convert_for_lsn_allocator(max_scn))) {
+      PALF_LOG(ERROR, "failed to convert_for_lsn_allocator", K(max_scn),
+               K(scn_base_), K(last.scn_delta_));
     }
   }
   return result;
@@ -236,7 +236,7 @@ int LSNAllocator::try_freeze_by_time(LSN &last_lsn, int64_t &last_log_id)
         next.lsn_val_ = last.lsn_val_;
         next.is_need_cut_ = 1;
         next.log_id_delta_ = last.log_id_delta_;
-        next.log_ts_delta_ = last.log_ts_delta_;
+        next.scn_delta_ = last.scn_delta_;
         if (CAS128(&lsn_ts_meta_, last, next)) {
           last_lsn.val_ = next.lsn_val_;
           last_log_id = log_id_base_ + last.log_id_delta_;
@@ -271,7 +271,7 @@ int LSNAllocator::try_freeze(LSN &last_lsn, int64_t &last_log_id)
         next.lsn_val_ = last.lsn_val_;
         next.is_need_cut_ = 1;
         next.log_id_delta_ = last.log_id_delta_;
-        next.log_ts_delta_ = last.log_ts_delta_;
+        next.scn_delta_ = last.scn_delta_;
         if (CAS128(&lsn_ts_meta_, last, next)) {
           last_lsn.val_ = next.lsn_val_;
           last_log_id = log_id_base_ + last.log_id_delta_;
@@ -289,7 +289,7 @@ int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
                                 const int64_t size, // 已包含LogHeader size
                                 LSN &lsn,
                                 int64_t &log_id,
-                                SCN &log_scn,
+                                SCN &scn,
                                 bool &is_new_group_log,
                                 bool &need_gen_padding_entry,
                                 int64_t &padding_len)
@@ -312,24 +312,24 @@ int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
         WLockGuard guard(lock_);
         LOAD128(last, &lsn_ts_meta_);
         const int64_t last_log_id = log_id_base_ + last.log_id_delta_;
-        const uint64_t last_log_ts = log_ts_base_ + last.log_ts_delta_;
-        const uint64_t new_log_ts = std::max(base_scn.get_val_for_lsn_allocator(), last_log_ts);
+        const uint64_t last_scn = scn_base_ + last.scn_delta_;
+        const uint64_t new_scn = std::max(base_scn.get_val_for_lsn_allocator(), last_scn);
 
         log_id_base_ = last_log_id;
-        log_ts_base_ = new_log_ts;
+        scn_base_ = new_scn;
         next.is_need_cut_ = last.is_need_cut_;
 
-        next.log_ts_delta_ = 0;
+        next.scn_delta_ = 0;
         next.log_id_delta_ = 0;
         next.lsn_val_ = last.lsn_val_;
         if (CAS128(&lsn_ts_meta_, last, next)) {
-          // PALF_LOG(INFO, "update base value and lsn_ts_meta_ successfully", K_(log_id_base), K_(log_ts_base));
+          // PALF_LOG(INFO, "update base value and lsn_ts_meta_ successfully", K_(log_id_base), K_(scn_base));
         } else {
           ret = OB_ERR_UNEXPECTED;
           PALF_LOG(ERROR, "CAS128 failed, unexpected", K(ret));
         }
       }
-      // alloc lsn/log_id/log_ts with rdlock
+      // alloc lsn/log_id/scn with rdlock
       need_update_base = false;
       RLockGuard guard(lock_);
       while (OB_SUCC(ret)) {
@@ -338,11 +338,11 @@ int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
         padding_len = 0;
         LOAD128(last, &lsn_ts_meta_);
         const int64_t last_log_id = log_id_base_ + last.log_id_delta_;
-        const uint64_t last_log_ts = log_ts_base_ + last.log_ts_delta_;
-        const uint64_t tmp_next_log_ts = std::max(base_scn.get_val_for_lsn_allocator(), last_log_ts + 1);
+        const uint64_t last_scn = scn_base_ + last.scn_delta_;
+        const uint64_t tmp_next_scn = std::max(base_scn.get_val_for_lsn_allocator(), last_scn + 1);
 
-        if ((tmp_next_log_ts + 1) - log_ts_base_ >= LOG_TS_DELTA_UPPER_BOUND) {
-          // 对于可能生成的padding log, 也会占用一个log_ts
+        if ((tmp_next_scn + 1) - scn_base_ >= LOG_TS_DELTA_UPPER_BOUND) {
+          // 对于可能生成的padding log, 也会占用一个scn
           need_update_base = true;
         } else if ((last.log_id_delta_ + 2) >= LOG_ID_DELTA_UPPER_BOUND) {
           // 对于可能生成的padding log, 也会占用一个log_id
@@ -357,7 +357,7 @@ int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
 
         uint64_t tmp_next_block_id = lsn_2_block(last.lsn_val_, PALF_BLOCK_SIZE);
         uint64_t tmp_next_log_id_delta = last.log_id_delta_;
-        uint64_t tmp_next_log_ts_delta = tmp_next_log_ts - log_ts_base_;
+        uint64_t tmp_next_scn_delta = tmp_next_scn - scn_base_;
         // 下一条日志是否需要cut
         bool is_next_need_cut = false;
         const uint64_t last_block_offset = lsn_2_offset(last.lsn_val_, PALF_BLOCK_SIZE);
@@ -420,7 +420,7 @@ int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
           is_next_need_cut = true;
         } else {
           // 当前文件无法容纳该日志, 需要切文件
-          // 首先在本文件尾生成一个padding_entry,它的log_ts与后一条日志相同
+          // 首先在本文件尾生成一个padding_entry,它的scn与后一条日志相同
           // 然后将新日志写到下一个文件开头
           is_new_group_log = true;
           need_gen_padding_entry = true;
@@ -437,15 +437,15 @@ int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
         if (is_new_group_log) {
           tmp_next_log_id_delta++;
         }
-        const int64_t output_next_log_ts_delta = tmp_next_log_ts_delta;
+        const int64_t output_next_scn_delta = tmp_next_scn_delta;
         if (need_gen_padding_entry) {
           tmp_next_log_id_delta++;
-          tmp_next_log_ts_delta++;
+          tmp_next_scn_delta++;
         }
         next.lsn_val_ = (tmp_next_block_id  * PALF_BLOCK_SIZE) + tmp_next_block_offset;
         next.is_need_cut_ = is_next_need_cut ? 1 : 0;
         next.log_id_delta_ = tmp_next_log_id_delta;
-        next.log_ts_delta_ = tmp_next_log_ts_delta;
+        next.scn_delta_ = tmp_next_scn_delta;
 
         if (CAS128(&lsn_ts_meta_, last, next)) {
           lsn.val_ = last.lsn_val_;
@@ -455,13 +455,13 @@ int LSNAllocator::alloc_lsn_scn(const SCN &base_scn,
             log_id = last_log_id;
           }
 
-          uint64_t log_ts = log_ts_base_ + output_next_log_ts_delta;
-          if (OB_FAIL(log_scn.convert_for_lsn_allocator(log_ts))) {
-            PALF_LOG(ERROR, "failed to convert log_scn", K(ret), K(base_scn), K(log_ts));
+          uint64_t scn_val = scn_base_ + output_next_scn_delta;
+          if (OB_FAIL(scn.convert_for_lsn_allocator(scn_val))) {
+            PALF_LOG(ERROR, "failed to convert scn", K(ret), K(base_scn), K(scn));
           }
 
           PALF_LOG(TRACE, "alloc_lsn_ts succ", K(ret), K(base_scn), K(size), K(lsn), K(last.lsn_val_),
-               K(next.lsn_val_), "next.is_need_cut", next.is_need_cut_, K(log_id), K(log_ts));
+               K(next.lsn_val_), "next.is_need_cut", next.is_need_cut_, K(log_id), K(scn));
           break;
         } else {
           PAUSE();

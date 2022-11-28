@@ -169,6 +169,7 @@ int ObVirtualOpenCursorTable::FillScanner::fill_session_cursor_cell(ObSQLSession
   const int64_t col_count = output_column_ids_.count();
   ObCharsetType default_charset = ObCharset::get_default_charset();
   ObCollationType default_collation = ObCharset::get_default_collation(default_charset);
+  char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
   for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
     const uint64_t col_id = output_column_ids_.at(i);
     switch (col_id) {
@@ -220,7 +221,6 @@ int ObVirtualOpenCursorTable::FillScanner::fill_session_cursor_cell(ObSQLSession
         break;
       }
       case SQL_ID: {
-        char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
         if (obmysql::COM_QUERY == sess_info.get_mysql_cmd() ||
             obmysql::COM_STMT_EXECUTE == sess_info.get_mysql_cmd() ||
             obmysql::COM_STMT_PREPARE == sess_info.get_mysql_cmd() ||
@@ -303,6 +303,7 @@ int ObVirtualOpenCursorTable::FillScanner::fill_cur_plan_cell(ObSQLSessionInfo &
   const int64_t col_count = output_column_ids_.count();
   ObCharsetType default_charset = ObCharset::get_default_charset();
   ObCollationType default_collation = ObCharset::get_default_collation(default_charset);
+  char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
   for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
     const uint64_t col_id = output_column_ids_.at(i);
     switch (col_id) {
@@ -354,7 +355,6 @@ int ObVirtualOpenCursorTable::FillScanner::fill_cur_plan_cell(ObSQLSessionInfo &
         break;
       }
       case SQL_ID: {
-        char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
         if (obmysql::COM_QUERY == sess_info.get_mysql_cmd() ||
             obmysql::COM_STMT_EXECUTE == sess_info.get_mysql_cmd() ||
             obmysql::COM_STMT_PREPARE == sess_info.get_mysql_cmd() ||

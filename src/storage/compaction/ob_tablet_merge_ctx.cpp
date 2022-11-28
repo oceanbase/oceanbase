@@ -266,15 +266,26 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObTabletMergeCtx &c
       param.filled_tx_scn_ = tx_data_memtable->get_start_scn();
     }
   } else if (ctx.param_.is_minor_merge()) {
-    // when this merege is MINOR_MERGE or MINI_MINOR_MERGE, use max_filtered_end_scn in filter if filtered some tx data
     ObTransStatusFilter *compaction_filter_ = (ObTransStatusFilter*)ctx.compaction_filter_;
-    if (OB_ISNULL(compaction_filter_)) {
-      // This minor merge do not filter any tx data
-      param.filled_tx_scn_ = ctx.scn_range_.start_scn_;
-    } else if (compaction_filter_->get_max_filtered_end_scn() > palf::SCN::min_scn()) {
-      param.filled_tx_scn_ = compaction_filter_->get_max_filtered_end_scn();
+    ObSSTable *oldest_tx_data_sstable = static_cast<ObSSTable *>(ctx.tables_handle_.get_table(0));
+    if (OB_ISNULL(oldest_tx_data_sstable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tx data sstable is unexpected nullptr", KR(ret));
     } else {
-      param.filled_tx_scn_ = compaction_filter_->get_recycle_scn();
+      param.filled_tx_scn_ = oldest_tx_data_sstable->get_filled_tx_scn();
+
+      if (OB_NOT_NULL(compaction_filter_)) {
+        // if compaction_filter is valid, update filled_tx_log_ts if recycled some tx data
+        palf::SCN recycled_scn;
+        if (compaction_filter_->get_max_filtered_end_scn() > palf::SCN::min_scn()) {
+          recycled_scn = compaction_filter_->get_max_filtered_end_scn();
+        } else {
+          recycled_scn = compaction_filter_->get_recycle_scn();
+        }
+        if (recycled_scn > param.filled_tx_scn_) {
+          param.filled_tx_scn_ = recycled_scn;
+        }
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -282,7 +293,7 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObTabletMergeCtx &c
   }
 
   return ret;
-}
+  }
 
 int ObTabletMergeInfo::create_sstable(ObTabletMergeCtx &ctx)
 {
@@ -747,8 +758,13 @@ int ObTabletMergeCtx::update_tablet_or_release_memtable(const ObGetMergeTablesRe
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage schema is unexpected null", K(ret), KPC(this));
   } else if (schema_ctx_.storage_schema_->get_schema_version() > old_tablet->get_storage_schema().get_schema_version()) {
-    update_table_store_flag = true;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can't have larger storage schema", K(ret), K(schema_ctx_.storage_schema_), K(old_tablet->get_storage_schema()));
   } else if (get_merge_table_result.version_range_.snapshot_version_ > old_tablet->get_snapshot_version()) {
+    // need write slog to update snapshot_version on tablet_meta
+    update_table_store_flag = true;
+  } else if (get_merge_table_result.scn_range_.end_scn_ > old_tablet->get_clog_checkpoint_scn()) {
+    // need write slog to update clog_checkpoint_log_ts on tablet_meta
     update_table_store_flag = true;
   }
 

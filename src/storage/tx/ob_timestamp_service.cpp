@@ -18,6 +18,7 @@
 #include "ob_timestamp_access.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -169,15 +170,16 @@ int ObTimestampService::switch_to_leader()
   if (OB_FAIL(check_and_fill_ls())) {
     TRANS_LOG(WARN, "ls set fail", K(ret));
   } else {
-    int64_t version = 0;
-    if (OB_FAIL(ls_->get_log_handler()->get_max_ts_ns(version))) {
+    palf::SCN version;
+    if (OB_FAIL(ls_->get_log_handler()->get_max_scn(version))) {
       TRANS_LOG(WARN, "get max ts fail", K(ret));
     } else {
-      if (version >= ATOMIC_LOAD(&limited_id_)) {
-        inc_update(&last_id_, version);
+      int64_t version_val = version.is_valid() ? version.get_val_for_gts() : -1;
+      if (version_val >= ATOMIC_LOAD(&limited_id_)) {
+        inc_update(&last_id_, version_val);
         ATOMIC_STORE(&tmp_last_id_, 0);
-      } else if (ATOMIC_LOAD(&tmp_last_id_) != 0 && version > ATOMIC_LOAD(&tmp_last_id_)) {
-        inc_update(&tmp_last_id_, version);
+      } else if (ATOMIC_LOAD(&tmp_last_id_) != 0 && version_val > ATOMIC_LOAD(&tmp_last_id_)) {
+        inc_update(&tmp_last_id_, version_val);
       } else {
         // do nothing
       }

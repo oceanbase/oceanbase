@@ -47,7 +47,7 @@ ObLogHandler::ObLogHandler() : self_(),
                                last_renew_loc_ts_(OB_INVALID_TIMESTAMP),
                                is_in_stop_state_(true),
                                is_inited_(false),
-                               get_max_decided_log_ts_ns_debug_time_(OB_INVALID_TIMESTAMP)
+                               get_max_decided_scn_debug_time_(OB_INVALID_TIMESTAMP)
 {
 }
 
@@ -84,7 +84,7 @@ int ObLogHandler::init(const int64_t id,
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "apply status is not exist", K(ret), K(id));
   } else {
-    get_max_decided_log_ts_ns_debug_time_ = OB_INVALID_TIMESTAMP;
+    get_max_decided_scn_debug_time_ = OB_INVALID_TIMESTAMP;
     apply_service_ = apply_service;
     replay_service_ = replay_service;
     apply_status_->inc_ref();
@@ -172,30 +172,8 @@ void ObLogHandler::destroy()
     rpc_proxy_ = NULL;
     palf_env_ = NULL;
     id_ = -1;
-    get_max_decided_log_ts_ns_debug_time_ = OB_INVALID_TIMESTAMP;
+    get_max_decided_scn_debug_time_ = OB_INVALID_TIMESTAMP;
   }
-}
-
-int ObLogHandler::append(const void *buffer,
-                         const int64_t nbytes,
-                         const int64_t ref_ts_ns,
-                         const bool need_nonblock,
-                         AppendCb *cb,
-                         LSN &lsn,
-                         int64_t &ts_ns)
-{
-  int ret = OB_SUCCESS;
-
-  SCN ref_scn;
-  SCN scn;
-  if (OB_FAIL(ref_scn.convert_for_gts(ref_ts_ns))) {
-    PALF_LOG(WARN, "failed to convert_for_gts", K(ref_ts_ns), KPC(this));
-  } else if (OB_FAIL(append(buffer, nbytes, ref_scn, need_nonblock, cb, lsn, scn))) {
-    PALF_LOG(WARN, "failed to append", K(ret), KPC(this));
-  } else {
-    ts_ns = scn.get_val_for_lsn_allocator();
-  }
-  return ret;
 }
 
 int ObLogHandler::append(const void *buffer,
@@ -314,20 +292,6 @@ int ObLogHandler::get_access_mode(int64_t &mode_version, palf::AccessMode &acces
 
 int ObLogHandler::change_access_mode(const int64_t mode_version,
                                      const palf::AccessMode &access_mode,
-                                     const int64_t ref_ts_ns)
-{
-  int ret = OB_SUCCESS;
-  SCN ref_scn;
-  if (OB_FAIL(ref_scn.convert_for_gts(ref_ts_ns))) {
-    PALF_LOG(WARN, "failed to convert_for_gts", K(ret), K(ref_ts_ns));
-  } else if (OB_FAIL(change_access_mode(mode_version, access_mode, ref_scn))) {
-    PALF_LOG(WARN, "failed to change access mode", K(ret), K(mode_version), K(access_mode), K(ref_scn));
-  } else {/*do nothing*/}
-  return ret;
-}
-
-int ObLogHandler::change_access_mode(const int64_t mode_version,
-                                     const palf::AccessMode &access_mode,
                                      const palf::SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
@@ -363,13 +327,8 @@ int ObLogHandler::seek(const LSN &lsn, PalfGroupBufferIterator &iter)
 
 int ObLogHandler::seek(const SCN &scn, palf::PalfGroupBufferIterator &iter)
 {
-  return seek(scn.get_val_for_inner_table_field(), iter);
-}
-
-int ObLogHandler::seek(const int64_t ts_ns, palf::PalfGroupBufferIterator &iter)
-{
   RLockGuard guard(lock_);
-  return palf_handle_.seek(ts_ns, iter);
+  return palf_handle_.seek(scn, iter);
 }
 
 int ObLogHandler::set_initial_member_list(const common::ObMemberList &member_list,
@@ -405,29 +364,10 @@ int ObLogHandler::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
   return palf_handle_.locate_by_scn_coarsely(scn, result_lsn);
 }
 
-int ObLogHandler::locate_by_ts_ns_coarsely(const int64_t ts_ns, LSN &result_lsn)
-{
-  SCN scn;
-  (void)scn.convert_for_gts(ts_ns);
-  return locate_by_scn_coarsely(scn, result_lsn);
-}
-
 int ObLogHandler::locate_by_lsn_coarsely(const LSN &lsn, palf::SCN &result_scn)
 {
   RLockGuard guard(lock_);
   return palf_handle_.locate_by_lsn_coarsely(lsn, result_scn);
-}
-
-int ObLogHandler::locate_by_lsn_coarsely(const LSN &lsn, int64_t &result_ts_ns)
-{
-  int ret = OB_SUCCESS;
-  SCN result_scn;
-  if (OB_FAIL(locate_by_lsn_coarsely(lsn, result_scn)))  {
-    PALF_LOG(WARN, "failed to locate_by_lsn_coarsely", K(lsn), K(ret));
-  } else {
-    result_ts_ns = result_scn.get_val_for_lsn_allocator();
-  }
-  return ret;
 }
 
 int ObLogHandler::advance_base_lsn(const LSN &lsn)
@@ -454,34 +394,10 @@ int ObLogHandler::get_max_scn(palf::SCN &scn) const
   return palf_handle_.get_max_scn(scn);
 }
 
-int ObLogHandler::get_max_ts_ns(int64_t &ts_ns) const
-{
-  int ret = OB_SUCCESS;
-  SCN scn;
-  if (OB_FAIL(get_max_scn(scn))) {
-    PALF_LOG(WARN, "failed to get_end_ts_ns", K(ret));
-  } else {
-    ts_ns = scn.get_val_for_lsn_allocator();
-  }
-  return ret;
-}
-
 int ObLogHandler::get_end_scn(palf::SCN &scn) const
 {
   RLockGuard guard(lock_);
   return palf_handle_.get_end_scn(scn);
-}
-
-int ObLogHandler::get_end_ts_ns(int64_t &ts_ns) const
-{
-  int ret = OB_SUCCESS;
-  SCN scn;
-  if (OB_FAIL(get_end_scn(scn))) {
-    PALF_LOG(WARN, "failed to get_end_ts_ns", K(ret));
-  } else {
-    ts_ns = scn.get_val_for_lsn_allocator();
-  }
-  return ret;
 }
 
 int ObLogHandler::get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const
@@ -600,9 +516,9 @@ int ObLogHandler::is_in_sync(bool &is_log_sync,
     } else if (LEADER == role) {
       is_log_sync = true;
     } else if (OB_FAIL(palf_handle_.get_max_scn(local_max_scn)) || !local_max_scn.is_valid()) {
-      CLOG_LOG(WARN, "get_max_ts_ns failed", K(ret), K_(id), K(local_max_scn));
+      CLOG_LOG(WARN, "get_max_scn failed", K(ret), K_(id), K(local_max_scn));
     } else if (palf_reach_time_interval(SYNC_GET_LEADER_INFO_INTERVAL_US, last_check_sync_ts_)) {
-      // if reachs time interval, get max_ts_ns of leader with sync RPC
+      // if reachs time interval, get max_scn of leader with sync RPC
       if (OB_FAIL(get_leader_max_scn_(leader_max_scn))) {
         CLOG_LOG(WARN, "get_palf_max_scn failed", K(ret), K_(id));
       }
@@ -633,7 +549,7 @@ int ObLogHandler::get_leader_max_scn_(SCN &max_scn) const
     need_renew_leader = true;
   } else if (OB_FAIL(rpc_proxy_->to(leader).timeout(500 * 1000).trace_time(true). \
                      by(MTL_ID()).get_palf_stat(req, resp))) {
-    CLOG_LOG(WARN, "get_palf_max_ts_ns failed", K(ret), K_(id));
+    CLOG_LOG(WARN, "get_palf_max_scn failed", K(ret), K_(id));
     need_renew_leader = true;
   } else {
     max_scn = resp.max_scn_;
@@ -1065,16 +981,16 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req)
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(req));
   } else {
     constexpr int64_t MIN_CONN_TIMEOUT_US = 5 * 1000 * 1000;                // 5s
-    constexpr int64_t RENEW_LEADER_INTERVAL_NS = 500 * 1000 * 1000L;        // 500ms
-    const int64_t timeout_us = req.timeout_ns_ / 1000;
+    constexpr int64_t RENEW_LEADER_INTERVAL_US = 500 * 1000;        // 500ms
+    const int64_t timeout_us = req.timeout_us_;
     const int64_t conn_timeout_us = MIN(timeout_us, MIN_CONN_TIMEOUT_US);
-    const int64_t start_ts_ns = common::ObTimeUtility::current_time_ns();
-    int64_t last_renew_leader_ts_ns = OB_INVALID_TIMESTAMP;
+    const int64_t start_time_us = common::ObTimeUtility::current_time();
+    int64_t last_renew_leader_time_us = OB_INVALID_TIMESTAMP;
     FLOG_INFO("config_change start", K_(id), K(req));
     bool has_added_to_blacklist = false;
     bool has_removed_from_blacklist = false;
     while(OB_SUCCESS == ret || OB_NOT_MASTER == ret) {
-      if (common::ObTimeUtility::current_time_ns() - start_ts_ns >= req.timeout_ns_) {
+      if (common::ObTimeUtility::current_time() - start_time_us >= req.timeout_us_) {
         ret = OB_TIMEOUT;
         break;
       }
@@ -1110,7 +1026,7 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req)
         }
       } else if (OB_SUCC(resp.ret_)) {
         FLOG_INFO("config_change finish", KR(ret), KPC(this), K(req),
-            "cost time(ns)", common::ObTimeUtility::current_time_ns() - start_ts_ns);
+            "cost time(ns)", common::ObTimeUtility::current_time() - start_time_us);
         break;
       } else if (OB_EAGAIN == ret) {
         ret = OB_SUCCESS;
@@ -1138,8 +1054,8 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req)
         CLOG_LOG(WARN, "handle_config_change_cmd failed", KR(ret), KPC(this), K(req), K(leader));
       }
       if (need_renew_leader &&
-          common::ObTimeUtility::current_time_ns() - last_renew_leader_ts_ns > RENEW_LEADER_INTERVAL_NS) {
-        last_renew_leader_ts_ns = common::ObTimeUtility::current_time_ns();
+          common::ObTimeUtility::current_time() - last_renew_leader_time_us > RENEW_LEADER_INTERVAL_US) {
+        last_renew_leader_time_us = common::ObTimeUtility::current_time();
         ret = lc_cb_->nonblock_renew_leader(id_);
         CLOG_LOG(INFO, "renew location cache leader", KR(ret), K_(id));
       }
@@ -1196,17 +1112,8 @@ void ObLogHandler::wait_append_sync() {
   WaitQuiescent(ls_qs_);
 }
 
-int ObLogHandler::enable_replay(const palf::LSN &initial_lsn,
-                                const int64_t &log_ts)
-{
-  SCN log_scn;
-  //TODO(yaoying.yyy)
-  log_scn.convert_for_gts(log_ts);
-  return enable_replay(initial_lsn, log_scn);
-}
-
 int ObLogHandler::enable_replay(const palf::LSN &lsn,
-                                const palf::SCN &log_scn)
+                                const palf::SCN &scn)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -1214,13 +1121,13 @@ int ObLogHandler::enable_replay(const palf::LSN &lsn,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (FALSE_IT(id = id_)) {
-  } else if (!lsn.is_valid() || !log_scn.is_valid()) {
+  } else if (!lsn.is_valid() || !scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(id), K(lsn), K(log_scn));
-  } else if (OB_FAIL(replay_service_->enable(id, lsn, log_scn))) {
-    CLOG_LOG(WARN, "failed to enable replay", K(ret), K(id), K(lsn), K(log_scn));
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(id), K(lsn), K(scn));
+  } else if (OB_FAIL(replay_service_->enable(id, lsn, scn))) {
+    CLOG_LOG(WARN, "failed to enable replay", K(ret), K(id), K(lsn), K(scn));
   } else {
-    CLOG_LOG(INFO, "enable replay success", K(ret), K(id), K(lsn), K(log_scn));
+    CLOG_LOG(INFO, "enable replay success", K(ret), K(id), K(lsn), K(scn));
   }
   return ret;
 }
@@ -1237,18 +1144,6 @@ int ObLogHandler::disable_replay()
     CLOG_LOG(WARN, "failed to disable replay", K(ret), K(id));
   } else {
     CLOG_LOG(INFO, "disable replay success", K(ret), K(id));
-  }
-  return ret;
-}
-
-int ObLogHandler::get_max_decided_log_ts_ns(int64_t &log_ts)
-{
-  int ret = OB_SUCCESS;
-  SCN scn;
-  if (OB_FAIL(get_max_decided_scn(scn))) {
-    CLOG_LOG(WARN, "failed to get_max_decided_log_ts_ns", K(ret));
-  } else {
-    log_ts = scn.get_val_for_lsn_allocator();
   }
   return ret;
 }
@@ -1314,20 +1209,19 @@ int ObLogHandler::get_max_decided_scn(SCN &scn)
     //和replay service统一返回4109
     ret = OB_STATE_NOT_MATCH;
   } else if (FALSE_IT(id = id_)) {
-  } else if (OB_FAIL(apply_service_->get_min_unapplied_log_scn(id, min_unapply_scn))) {
-    CLOG_LOG(WARN, "failed to get_min_unapplied_log_scn", K(ret), K(id));
-  } else if (OB_FAIL(replay_service_->get_min_unreplayed_log_scn(id, min_unreplay_scn))) {
+  } else if (OB_FAIL(apply_service_->get_min_unapplied_scn(id, min_unapply_scn))) {
+    CLOG_LOG(WARN, "failed to get_min_unapplied_scn", K(ret), K(id));
+  } else if (OB_FAIL(replay_service_->get_min_unreplayed_scn(id, min_unreplay_scn))) {
     if (OB_STATE_NOT_MATCH != ret) {
-    CLOG_LOG(WARN, "failed to get_min_unreplayed_log_scn", K(ret), K(id));
-    } else if (palf_reach_time_interval(1000 * 1000, get_max_decided_log_ts_ns_debug_time_)) {
-      CLOG_LOG(WARN, "failed to get_min_unreplayed_log_ts_ns, replay status is not enabled", K(ret), K(id));
+    CLOG_LOG(WARN, "failed to get_min_unreplayed_scn", K(ret), K(id));
+    } else if (palf_reach_time_interval(1000 * 1000, get_max_decided_scn_debug_time_)) {
+      CLOG_LOG(WARN, "failed to get_min_unreplayed_scn, replay status is not enabled", K(ret), K(id));
     }
     if (OB_STATE_NOT_MATCH == ret && min_unapply_scn.is_valid()) {
       //回放尚未enable,但是apply service中拿到的最大连续回调位点合法
       ret = OB_SUCCESS;
       if (min_unapply_scn > SCN::base_scn()) {
-        //TODO(scn):yaoying.yyy
-        scn.convert_for_gts(min_unapply_scn.get_val_for_lsn_allocator() - 1);
+        scn = SCN::scn_dec(min_unapply_scn);
         ret = OB_SUCCESS;
       } else {
         scn.set_min();
@@ -1338,8 +1232,7 @@ int ObLogHandler::get_max_decided_scn(SCN &scn)
   } else {
     SCN tmp_scn = SCN::max(min_unreplay_scn, min_unapply_scn);
     if (tmp_scn > SCN::base_scn()) {
-      //TODO(scn):yaoying.yyy
-      scn.convert_for_gts(tmp_scn.get_val_for_lsn_allocator() - 1);
+        scn = SCN::scn_dec(tmp_scn);
     } else {
       scn.set_min();
     }

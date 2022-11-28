@@ -174,7 +174,7 @@ int ObSingleRowGetter::init_dml_access_ctx(
     query_flag.skip_read_lob_ = ObQueryFlag::OBSF_MASK_SKIP_READ_LOB;
   }
   //TODO (yanfeng) trans_version_range值后续由上层传入
-  trans_version_range.snapshot_version_ = store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_lsn_allocator();
+  trans_version_range.snapshot_version_ = store_ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
   trans_version_range.base_version_ = 0;
   trans_version_range.multi_version_start_ = 0;
   store_ctx_ = &store_ctx;

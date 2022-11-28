@@ -108,6 +108,7 @@ public:
 
   //日志处理
   int handle_submit_callback(const bool success, const int64_t limited_id, const palf::SCN log_ts);
+  void test_lock() { WLockGuard guard(rwlock_); }
 
   //获取回放数据
   int handle_replay_result(const int64_t last_id, const int64_t limited_id, const palf::SCN log_ts);

@@ -133,7 +133,7 @@ private:
       const LSN &end_offset, bool &data_enough, bool &data_full);
 
   // 1.1.2 检查日志流落后程度是否需要触发归档
-  bool check_scn_enough_(const palf::SCN &fetch_log_scn, const palf::SCN &end_scn) const;
+  bool check_scn_enough_(const palf::SCN &fetch_scn, const palf::SCN &end_scn) const;
 
   // 1.2 初始化TmpMemoryHelper
   int init_helper_(ObArchiveLogFetchTask &task, TmpMemoryHelper &helper);
@@ -231,7 +231,7 @@ private:
     const LSN &get_start_offset() const { return start_offset_; }
     const LSN &get_end_offset() const { return end_offset_; }
     const LSN &get_cur_offset() const { return cur_offset_; }
-    const palf::SCN &get_unitized_log_scn() const { return unitized_log_scn_; }
+    const palf::SCN &get_unitized_scn() const { return unitized_scn_; }
     int64_t get_capaicity() const { return end_offset_ - cur_offset_; }
     bool original_buffer_enough(const int64_t size);
     int get_original_buf(char *&buf, int64_t &buf_size);
@@ -256,12 +256,12 @@ private:
                  K_(origin_buf_size),
                  K_(origin_buf_pos),
                  K_(cur_offset),
-                 K_(cur_log_scn),
+                 K_(cur_scn),
                  //K_(ec_buf),
                  K_(ec_buf_size),
                  K_(ec_buf_pos),
                  K_(unitized_offset),
-                 K_(unitized_log_scn),
+                 K_(unitized_scn),
                  K_(cur_piece),
                  K_(next_piece));
   private:
@@ -275,20 +275,20 @@ private:
     LSN end_offset_;
     int64_t total_origin_buf_size_;
 
-    // 处理原始数据buff, 由于可能单次处理凑不够unit_size数据, 这部分下次会重读同时log_scn/offset进度需要回滚
+    // 处理原始数据buff, 由于可能单次处理凑不够unit_size数据, 这部分下次会重读同时scn/offset进度需要回滚
     char *origin_buf_;
     int64_t origin_buf_size_;     // 需要unit_size + 最大单条日志大小
     int64_t origin_buf_pos_;
-    // 当前处理原数日志最大offset/log_scn
+    // 当前处理原数日志最大offset/scn
     LSN cur_offset_;
-    palf::SCN cur_log_scn_;
+    palf::SCN cur_scn_;
     // 中间缺少加密用buffer
     char *ec_buf_;
     int64_t ec_buf_size_;        // 需要根据数据量计算
     int64_t ec_buf_pos_;
-    // 做了单元化处理的日志最大offset/log_scn
+    // 做了单元化处理的日志最大offset/scn
     LSN unitized_offset_;
-    palf::SCN unitized_log_scn_;
+    palf::SCN unitized_scn_;
     // 当前正在处理piece, 单个helper包含从start_offset到当前piece的全部数据
     ObArchivePiece cur_piece_;
     // 读取日志过程中, 遇到更大piece说明当前piece已经结束
