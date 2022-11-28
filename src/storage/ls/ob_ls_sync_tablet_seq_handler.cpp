@@ -64,7 +64,7 @@ int ObLSSyncTabletSeqHandler::replay(const void *buffer,
     LOG_WARN("log base header deserialize error", K(ret));
   } else if (OB_FAIL(log.deserialize(log_buf, nbytes, tmp_pos))) {
     LOG_WARN("ObSyncTabletSeqLog deserialize error", K(ret));
-  } else if (OB_FAIL(ls_->replay_get_tablet(log.get_tablet_id(), scn.get_val_for_inner_table_field(), tablet_handle))) {
+  } else if (OB_FAIL(ls_->replay_get_tablet(log.get_tablet_id(), scn, tablet_handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       LOG_INFO("tablet may be deleted, skip this log", K(ret), "tablet_id", log.get_tablet_id(), K(scn));
       ret = OB_SUCCESS;

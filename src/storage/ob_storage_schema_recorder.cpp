@@ -318,10 +318,13 @@ int ObStorageSchemaRecorder::replay_get_tablet_handle(const int64_t log_ts, ObTa
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
+  palf::SCN scn;
   if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
-  } else if (OB_FAIL(ls_handle.get_ls()->replay_get_tablet(tablet_id_, log_ts, tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), K_(ls_id), K_(tablet_id), K(log_ts));
+  } else if (OB_FAIL(scn.convert_for_lsn_allocator(log_ts))) {
+    LOG_WARN("convert failed", K(log_ts), K(ret));
+  } else if (OB_FAIL(ls_handle.get_ls()->replay_get_tablet(tablet_id_, scn, tablet_handle))) {
+    LOG_WARN("failed to get tablet", K(ret), K_(ls_id), K_(tablet_id), K(scn));
   }
   return ret;
 }

@@ -273,7 +273,7 @@ public:
 
   // get tablet while replaying clog
   int replay_get_tablet(const common::ObTabletID &tablet_id,
-                        const int64_t log_ts,
+                        const palf::SCN &scn,
                         ObTabletHandle &handle) const;
 
   int flush_if_need(const bool need_flush);

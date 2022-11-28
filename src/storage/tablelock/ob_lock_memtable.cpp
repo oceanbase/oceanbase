@@ -806,7 +806,7 @@ int ObLockMemtable::flush(palf::SCN recycle_scn,
              K(is_frozen_), K(ls_id_));
   } else if (is_active_memtable()) {
     if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(freeze_scn_))) {
-      LOG_WARN("get_max_consequent_callbacked_log_ts failed", K(ret), K(ls_id_));
+      LOG_WARN("get_max_consequent_callbacked_log_scn failed", K(ret), K(ls_id_));
     } else if (flushed_scn_ >= freeze_scn_) {
       LOG_INFO("skip freeze because of flushed", K_(ls_id), K_(flushed_scn), K_(freeze_scn));
     } else {
