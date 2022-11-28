@@ -34,6 +34,7 @@ namespace oceanbase
 {
 using namespace common::hash;
 using namespace storage;
+using namespace share;
 namespace blocksstable
 {
 
@@ -664,7 +665,7 @@ int ObSSTable::check_row_locked(ObStoreCtx &ctx,
   ObSSTableRowLockChecker *row_checker = NULL;
   const int64_t read_snapshot = ctx.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
   ObArenaAllocator allocator(ObModIds::OB_STORE_ROW_LOCK_CHECKER);
-  lock_state.trans_version_ = palf::SCN::min_scn();
+  lock_state.trans_version_ = SCN::min_scn();
   lock_state.is_locked_ = false;
 
   if (OB_UNLIKELY(!is_valid())) {

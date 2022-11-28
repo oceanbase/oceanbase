@@ -27,6 +27,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace compaction
 {
 
@@ -276,8 +277,8 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObTabletMergeCtx &c
 
       if (OB_NOT_NULL(compaction_filter_)) {
         // if compaction_filter is valid, update filled_tx_log_ts if recycled some tx data
-        palf::SCN recycled_scn;
-        if (compaction_filter_->get_max_filtered_end_scn() > palf::SCN::min_scn()) {
+        SCN recycled_scn;
+        if (compaction_filter_->get_max_filtered_end_scn() > SCN::min_scn()) {
           recycled_scn = compaction_filter_->get_max_filtered_end_scn();
         } else {
           recycled_scn = compaction_filter_->get_recycle_scn();
@@ -767,7 +768,7 @@ int ObTabletMergeCtx::update_tablet_or_release_memtable(const ObGetMergeTablesRe
     update_table_store_flag = true;
   }
 
-  const palf::SCN release_memtable_scn = get_merge_table_result.scn_range_.end_scn_;
+  const SCN release_memtable_scn = get_merge_table_result.scn_range_.end_scn_;
   if (OB_FAIL(ret)) {
   } else if (update_table_store_flag && OB_FAIL(update_tablet_directly(get_merge_table_result))) {
     LOG_WARN("failed to update tablet directly", K(ret), K(get_merge_table_result), K(update_table_store_flag));
@@ -784,7 +785,7 @@ int ObTabletMergeCtx::update_tablet_directly(const ObGetMergeTablesResult &get_m
   int ret = OB_SUCCESS;
   const int64_t rebuild_seq = ls_handle_.get_ls()->get_rebuild_seq();
   scn_range_ = get_merge_table_result.scn_range_;
-  palf::SCN clog_checkpoint_scn = get_merge_table_result.scn_range_.end_scn_;
+  SCN clog_checkpoint_scn = get_merge_table_result.scn_range_.end_scn_;
 
   ObTableHandleV2 empty_table_handle;
   ObUpdateTableStoreParam param(

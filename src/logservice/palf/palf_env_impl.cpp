@@ -31,6 +31,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace palf
 {
 PalfHandleImpl *PalfHandleImplFactory::alloc()
@@ -591,7 +592,7 @@ int PalfEnvImpl::try_freeze_log_for_all()
 PalfEnvImpl::LogGetRecycableFileCandidate::LogGetRecycableFileCandidate()
   : id_(-1),
     min_block_id_(LOG_INVALID_BLOCK_ID),
-    min_block_id_scn_(),
+    min_block_max_scn_(),
     min_using_block_id_(LOG_INVALID_BLOCK_ID),
     oldest_palf_id_(INVALID_PALF_ID),
     oldest_block_scn_(),
@@ -602,7 +603,7 @@ PalfEnvImpl::LogGetRecycableFileCandidate::~LogGetRecycableFileCandidate()
 {
   ret_code_ = OB_SUCCESS;
   min_using_block_id_ = LOG_INVALID_BLOCK_ID;
-  min_block_id_scn_.reset();
+  min_block_max_scn_.reset();
   min_block_id_ = LOG_INVALID_BLOCK_ID;
   oldest_palf_id_ = INVALID_PALF_ID;
   oldest_block_scn_.reset();
@@ -620,14 +621,18 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
     const LSN base_lsn = palf_handle_impl->get_base_lsn_used_for_block_gc();
     const block_id_t min_using_block_id = lsn_2_block(base_lsn, PALF_BLOCK_SIZE);
     block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
-    SCN min_block_id_scn;
+    SCN min_block_max_scn;
+    // OB_ENTRY_EXIST means there is not any block;
+    // OB_NO_SUCH_FILE_OR_DIRECTORY means there is concurrently with rebuild.
+    // OB_ERR_OUT_OF_UPPER_BOUND means there is one block
+    auto need_skip_by_ret = [](const int ret ){
+      return OB_ENTRY_EXIST == ret  || OB_NO_SUCH_FILE_OR_DIRECTORY == ret
+          || OB_ERR_OUT_OF_UPPER_BOUND == ret;
+    };
     if (false == base_lsn.is_valid()) {
       PALF_LOG(WARN, "base_lsn is invalid", K(base_lsn), KPC(palf_handle_impl));
-      // OB_ENTRY_EXIST means there is not any block;
-      // OB_NO_SUCH_FILE_OR_DIRECTORY means there is concurrently with rebuild.
-    } else if (OB_FAIL(palf_handle_impl->get_min_block_id_min_scn(min_block_id, min_block_id_scn))
-               && OB_ENTRY_NOT_EXIST != ret
-               && OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
+    } else if (OB_FAIL(palf_handle_impl->get_min_block_info_for_gc(min_block_id, min_block_max_scn))
+               && !need_skip_by_ret(ret)) {
       ret_code_ = ret;
       bool_ret = false;
       PALF_LOG(WARN, "LogGetRecycableFileCandidate get_min_block_id_min_scn failed", K(ret), K(palf_id));
@@ -636,26 +641,25 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
       // 2. current palf_handle_impl must have older blocks(at least two blocks).
       // Always keep there are at least two blocks in range [begin_lsn, base_lsn], because for restart, we will read
       // first uncommitted log before base_lsn.
-    } else if (OB_ENTRY_NOT_EXIST == ret
-               || OB_NO_SUCH_FILE_OR_DIRECTORY == ret
+    } else if (need_skip_by_ret(ret)
                || min_using_block_id < min_block_id
                || min_using_block_id - min_block_id < 2) {
       PALF_LOG(TRACE, "can not recycle blocks, need keep at least two blocks or has been concurrently"
           " with rebuild, skip it",
           K(ret), KPC(palf_handle_impl), K(min_block_id), K(min_using_block_id));
-    } else if (min_block_id_scn_.is_valid() && min_block_id_scn_ < min_block_id_scn) {
-      PALF_LOG(TRACE, "current palf_handle_impl is not older than previous, skip it", K(min_block_id_scn),
-          K(min_block_id_scn_), KPC(palf_handle_impl), K(min_block_id));
+    } else if (min_block_max_scn_.is_valid() && min_block_max_scn_ < min_block_max_scn) {
+      PALF_LOG(TRACE, "current palf_handle_impl is not older than previous, skip it", K(min_block_max_scn),
+          K(min_block_max_scn_), KPC(palf_handle_impl), K(min_block_id));
     } else {
       id_ = palf_id.id_;
       min_block_id_ = min_block_id;
-      min_block_id_scn_ = min_block_id_scn;
+      min_block_max_scn_ = min_block_max_scn;
       min_using_block_id_ = min_using_block_id;
       PALF_LOG(TRACE, "can be recycable palf_handle_impl", K(id_), K(min_block_id_), K(min_using_block_id_),
-          K(min_block_id_scn_), K(base_lsn));
+          K(min_block_max_scn_), K(base_lsn));
     }
-    if (min_block_id_scn.is_valid() && (!oldest_block_scn_.is_valid() || oldest_block_scn_ > min_block_id_scn)) {
-      oldest_block_scn_ = min_block_id_scn;
+    if (min_block_max_scn.is_valid() && (!oldest_block_scn_.is_valid() || oldest_block_scn_ > min_block_max_scn)) {
+      oldest_block_scn_ = min_block_max_scn;
       oldest_palf_id_ = palf_id.id_;
     }
   }

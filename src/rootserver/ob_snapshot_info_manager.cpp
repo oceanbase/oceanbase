@@ -163,7 +163,7 @@ int ObSnapshotInfoManager::get_snapshot(common::ObMySQLProxy &proxy,
 int ObSnapshotInfoManager::get_snapshot(common::ObMySQLProxy &proxy,
                                         const uint64_t tenant_id,
                                         share::ObSnapShotType snapshot_type,
-                                        const palf::SCN &snapshot_scn,
+                                        const SCN &snapshot_scn,
                                         share::ObSnapshotInfo &snapshot_info)
 {
   int ret = OB_SUCCESS;

@@ -22,7 +22,7 @@
 #include "common/ob_timeout_ctx.h"
 #include "share/ob_share_util.h"
 #include "share/ls/ob_ls_status_operator.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -235,7 +235,7 @@ int ObLSRecoveryStatOperator::update_ls_recovery_stat_in_trans(
 int ObLSRecoveryStatOperator::set_ls_offline(const uint64_t &tenant_id,
                                              const share::ObLSID &ls_id,
                                              const ObLSStatus &ls_status,
-                                             const palf::SCN &drop_scn,
+                                             const SCN &drop_scn,
                                              ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;

@@ -365,7 +365,7 @@ void ObTenantMetaMemMgr::gc_sstable(ObSSTable *sstable)
   }
 }
 
-int ObTenantMetaMemMgr::get_min_end_scn_for_ls(const share::ObLSID &ls_id, palf::SCN &end_scn)
+int ObTenantMetaMemMgr::get_min_end_scn_for_ls(const share::ObLSID &ls_id, SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   end_scn = ObScnRange::MAX_SCN;

@@ -2252,6 +2252,17 @@ bool ObSysVarSchema::is_equal_except_value(const ObSysVarSchema &other) const
   }
   return bret;
 }
+
+bool ObSysVarSchema::is_equal_for_add(const ObSysVarSchema &other) const
+{
+  bool bret = false;
+  if (is_equal_except_value(other)
+      && 0 == value_.compare(other.value_)
+      && zone_ == other.zone_) {
+    bret = true;
+  }
+  return bret;
+}
 /*-------------------------------------------------------------------------------------------------
  * ------------------------------ObDatabaseSchema-------------------------------------------
  ----------------------------------------------------------------------------------------------------*/

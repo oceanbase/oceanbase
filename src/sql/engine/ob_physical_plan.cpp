@@ -742,7 +742,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     has_instead_of_trigger_,
                     is_plain_insert_,
                     ddl_execution_id_,
-                    ddl_task_id_);
+                    ddl_task_id_,
+                    stat_.plan_id_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

@@ -13,7 +13,7 @@
 #ifndef OB_DEFENSIVE_CHECK_MGR_H_
 #define OB_DEFENSIVE_CHECK_MGR_H_
 #include "storage/blocksstable/ob_fuse_row_cache.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -42,7 +42,7 @@ struct ObDefensiveCheckRecordExtend
                K_(is_all_data_from_memtable),
                K_(query_flag));
 public:
-  palf::SCN fist_access_table_start_scn_;
+  share::SCN fist_access_table_start_scn_;
   int64_t total_table_handle_cnt_;
   int64_t start_access_table_idx_;
   int64_t end_access_table_idx_;

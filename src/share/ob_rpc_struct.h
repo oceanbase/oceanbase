@@ -62,10 +62,9 @@
 #include "logservice/palf/palf_options.h"//access mode
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "logservice/palf/log_define.h"//INVALID_PROPOSAL_ID
-#include "logservice/palf/scn.h"//SCN
+#include "share/scn.h"//SCN
 #include "share/location_cache/ob_vtable_location_service.h" // share::ObVtableLocationType
 #include "logservice/palf/log_meta_info.h"//LogConfigVersion
-#include "logservice/palf/scn.h"//SCN
 
 namespace oceanbase
 {
@@ -913,7 +912,7 @@ public:
   bool is_valid() const;
   TO_STRING_KV(K_(frozen_scn));
 public:
-  palf::SCN frozen_scn_;
+  share::SCN frozen_scn_;
 };
 
 struct ObGetMinSSTableSchemaVersionArg
@@ -2421,7 +2420,7 @@ public:
            const ObReplicaType replica_type,
            const common::ObReplicaProperty &replica_property,
            const share::ObAllTenantInfo &tenant_info,
-           const palf::SCN &create_scn,
+           const share::SCN &create_scn,
            const lib::Worker::CompatMode &mode,
            const bool create_with_palf,
            const palf::PalfBaseInfo &palf_base_info);
@@ -2442,7 +2441,7 @@ public:
   {
     return replica_property_;
   }
-  const palf::SCN &get_create_scn() const
+  const share::SCN &get_create_scn() const
   {
     return create_scn_;
   }
@@ -2471,7 +2470,7 @@ private:
   ObReplicaType replica_type_;
   common::ObReplicaProperty replica_property_;
   share::ObAllTenantInfo tenant_info_;
-  palf::SCN create_scn_;
+  share::SCN create_scn_;
   lib::Worker::CompatMode compat_mode_;
   CreateLSType create_ls_type_;
   palf::PalfBaseInfo palf_base_info_;
@@ -2607,7 +2606,7 @@ public:
   int init(uint64_t tenant_id, const share::ObLSID &ls_idd,
            const int64_t mode_version,
            const palf::AccessMode &access_mode,
-           const palf::SCN &ref_scn);
+           const share::SCN &ref_scn);
   int assign(const ObLSAccessModeInfo &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(mode_version),
                K_(access_mode), K_(ref_scn));
@@ -2627,7 +2626,7 @@ public:
   {
     return mode_version_;
   }
-  const palf::SCN &get_ref_scn() const
+  const share::SCN &get_ref_scn() const
   {
     return ref_scn_;
   }
@@ -2638,7 +2637,7 @@ private:
   share::ObLSID ls_id_;
   int64_t mode_version_;
   palf::AccessMode access_mode_;
-  palf::SCN ref_scn_;
+  share::SCN ref_scn_;
 };
 
 struct ObChangeLSAccessModeRes
@@ -2709,13 +2708,13 @@ public:
   void reset();
   int assign(const ObBatchCreateTabletArg &arg);
   int init_create_tablet(const share::ObLSID &id_,
-                         const palf::SCN &major_frozen_scn);
+                         const share::SCN &major_frozen_scn);
   int64_t get_tablet_count() const;
   DECLARE_TO_STRING;
 
 public:
   share::ObLSID id_;
-  palf::SCN major_frozen_scn_;
+  share::SCN major_frozen_scn_;
   common::ObSArray<share::schema::ObTableSchema> table_schemas_;
   common::ObSArray<ObCreateTabletInfo> tablets_;
 };
@@ -3409,8 +3408,8 @@ public:
   share::ObLSID ls_id_;
   common::ObAddr dst_server_;
   share::ObBackupPathString backup_path_;
-  palf::SCN start_scn_;
-  palf::SCN end_scn_;
+  share::SCN start_scn_;
+  share::SCN end_scn_;
 };
 
 struct ObBackupBuildIdxArg
@@ -3507,7 +3506,7 @@ public:
   share::ObLSID ls_id_;
   int64_t  turn_id_;
   int64_t  retry_id_;
-  palf::SCN  start_scn_;
+  share::SCN  start_scn_;
   common::ObAddr dst_server_;
   share::ObBackupPathString backup_path_;
 };
@@ -3528,7 +3527,7 @@ public:
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
-  palf::SCN backup_scn_;
+  share::SCN backup_scn_;
   ObSArray<ObTabletID> tablet_ids_;
 };
 
@@ -4353,7 +4352,7 @@ public:
   common::ObString tenant_name_;
   common::ObString uri_;
   common::ObString restore_option_;
-  palf::SCN restore_scn_;
+  share::SCN restore_scn_;
   common::ObString kms_info_;  //Encryption use
   common::ObString passwd_array_; // Password verification
   common::ObSArray<ObTableItem> table_items_;
@@ -4453,8 +4452,10 @@ struct ObUpgradeJobArg
 public:
   enum Action {
     INVALID_ACTION,
-    RUN_UPGRADE_JOB,
-    STOP_UPGRADE_JOB
+    UPGRADE_POST_ACTION,
+    STOP_UPGRADE_JOB,
+    UPGRADE_SYSTEM_VARIABLE,
+    UPGRADE_SYSTEM_TABLE,
   };
 public:
   ObUpgradeJobArg();
@@ -4464,6 +4465,26 @@ public:
 public:
   Action action_;
   int64_t version_;
+};
+
+struct ObUpgradeTableSchemaArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObUpgradeTableSchemaArg()
+    : ObDDLArg(),
+      tenant_id_(common::OB_INVALID_TENANT_ID),
+      table_id_(common::OB_INVALID_ID) {}
+  ~ObUpgradeTableSchemaArg() {}
+  int init(const uint64_t tenant_id, const uint64_t table_id);
+  bool is_valid() const;
+  int assign(const ObUpgradeTableSchemaArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  uint64_t get_table_id() const { return table_id_; }
+  TO_STRING_KV(K_(tenant_id), K_(table_id));
+private:
+  uint64_t tenant_id_;
+  uint64_t table_id_;
 };
 
 struct ObAdminMergeArg
@@ -6030,7 +6051,7 @@ public:
   }
   bool is_valid() const;
 public:
-  palf::SCN frozen_scn_;
+  share::SCN frozen_scn_;
   TO_STRING_KV(K_(frozen_scn));
 };
 
@@ -7421,7 +7442,7 @@ public:
   int init(const uint64_t tenant_id,
            const share::ObLSID &ls_id,
            const storage::ObITable::TableKey &table_key,
-           const palf::SCN &start_scn,
+           const share::SCN &start_scn,
            const int64_t table_id,
            const int64_t execution_id,
            const int64_t ddl_task_id);
@@ -7436,7 +7457,7 @@ public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   storage::ObITable::TableKey table_key_;
-  palf::SCN start_scn_;
+  share::SCN start_scn_;
   int64_t table_id_;
   int64_t execution_id_;
   int64_t ddl_task_id_;
@@ -7453,8 +7474,8 @@ public:
   int init(const uint64_t tenant_id,
            const share::ObLSID &ls_id,
            const storage::ObITable::TableKey &table_key,
-           const palf::SCN &start_scn,
-           const palf::SCN &prepare_scn);
+           const share::SCN &start_scn,
+           const share::SCN &prepare_scn);
   bool is_valid() const
   {
     return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && start_scn_.is_valid()
@@ -7465,8 +7486,8 @@ public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   storage::ObITable::TableKey table_key_;
-  palf::SCN start_scn_;
-  palf::SCN prepare_scn_;
+  share::SCN start_scn_;
+  share::SCN prepare_scn_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLCommitLogArg);
 };

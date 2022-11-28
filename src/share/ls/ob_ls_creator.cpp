@@ -25,7 +25,7 @@
 #include "share/ob_unit_table_operator.h" //ObUnitTableOperator
 #include "logservice/leader_coordinator/table_accessor.h"
 #include "logservice/palf/palf_base_info.h"//palf::PalfBaseInfo
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/ls/ob_ls_life_manager.h"
 
 using namespace oceanbase::common;

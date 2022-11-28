@@ -26,7 +26,7 @@
 
 namespace oceanbase
 {
-using namespace palf;
+using namespace share;
 namespace storage
 {
 namespace checkpoint
@@ -294,7 +294,7 @@ int ObTabletGCHandler::get_unpersist_tablet_ids(common::ObTabletIDArray &unpersi
       } else {
         const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
         const ObTabletID &tablet_id = tablet_meta.tablet_id_;
-        palf::SCN tmp_scn;
+        SCN tmp_scn;
         if (OB_FAIL(tablet_handle.get_obj()->get_tx_data(tx_data))) {
           LOG_WARN("failed to get tx data", K(ret), K(tablet_id));
         } else if (only_deleted) {

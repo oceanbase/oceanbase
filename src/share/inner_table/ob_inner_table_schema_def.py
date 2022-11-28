@@ -10382,7 +10382,8 @@ def_table_schema(
     ('MODULE', 'varchar:64', 'true'),
     ('ACTION', 'varchar:64', 'true'),
     ('CLIENT_ID', 'varchar:64', 'true'),
-    ('BACKTRACE', 'varchar:512', 'true')
+    ('BACKTRACE', 'varchar:512', 'true'),
+    ('PLAN_ID', 'int')
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -20790,6 +20791,7 @@ def_table_schema(
       CAST(IF (SESSION_TYPE = 0, 'FOREGROUND', 'BACKGROUND') AS CHAR(10)) AS SESSION_TYPE,
       CAST(IF (EVENT_NO = 0, 'ON CPU', 'WAITING') AS CHAR(7)) AS SESSION_STATE,
       CAST(SQL_ID AS CHAR(32)) AS SQL_ID,
+      CAST(PLAN_ID AS SIGNED) AS PLAN_ID,
       CAST(TRACE_ID AS CHAR(64)) AS TRACE_ID,
       CAST(NAME AS CHAR(64)) AS EVENT,
       CAST(EVENT_NO AS SIGNED) AS EVENT_NO,
@@ -44239,6 +44241,7 @@ def_table_schema(
       CAST(DECODE(SESSION_TYPE, 0, 'FOREGROUND', 'BACKGROUND') AS VARCHAR2(10)) AS SESSION_TYPE,
       CAST(DECODE(EVENT_NO, 0, 'ON CPU', 'WAITING') AS VARCHAR2(7)) AS SESSION_STATE,
       CAST(SQL_ID AS VARCHAR(32)) AS SQL_ID,
+      CAST(PLAN_ID AS NUMBER) AS PLAN_ID,
       CAST(TRACE_ID AS VARCHAR(64)) AS TRACE_ID,
       CAST(NAME AS VARCHAR2(64)) AS EVENT,
       CAST(EVENT_NO AS NUMBER) AS EVENT_NO,

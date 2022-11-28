@@ -20,7 +20,7 @@
 #include "lib/guard/ob_unique_guard.h"
 #include "lib/utility/ob_unify_serialize.h"
 #include "logservice/palf/election/interface/election_priority.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/ob_ls_id.h"
 #include "share/ob_cluster_version.h"
 #include <type_traits>
@@ -111,7 +111,7 @@ public:
 protected:
   // 刷新优先级的方法
   virtual int refresh_(const share::ObLSID &ls_id) override;
-  int get_scn_(const share::ObLSID &ls_id, palf::SCN &scn);
+  int get_scn_(const share::ObLSID &ls_id, share::SCN &scn);
 private:
   int compare_observer_stopped_(int &ret, const PriorityV1&) const;
   int compare_server_stopped_flag_(int &ret, const PriorityV1&) const;
@@ -130,7 +130,7 @@ private:
   common::ObSArray<FailureEvent> fatal_failures_;// negative infos
   bool is_primary_region_;
   common::ObSArray<FailureEvent> serious_failures_;// negative infos
-  palf::SCN scn_;
+  share::SCN scn_;
   bool is_in_blacklist_;
   common::ObStringHolder in_blacklist_reason_;
   bool is_manual_leader_;

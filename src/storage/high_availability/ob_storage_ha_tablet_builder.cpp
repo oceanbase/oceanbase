@@ -16,7 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tablet/ob_tablet_create_delete_helper.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -694,8 +694,8 @@ int ObStorageHATabletsBuilder::get_need_copy_ddl_sstable_range_(
     need_copy_scn_range.start_scn_.set_min();
     need_copy_scn_range.end_scn_.set_min();
   } else {
-    const palf::SCN ddl_start_scn = tablet->get_tablet_meta().ddl_start_scn_;
-    const palf::SCN ddl_checkpoint_scn = tablet->get_tablet_meta().ddl_checkpoint_scn_;
+    const SCN ddl_start_scn = tablet->get_tablet_meta().ddl_start_scn_;
+    const SCN ddl_checkpoint_scn = tablet->get_tablet_meta().ddl_checkpoint_scn_;
     if (ddl_start_scn == ddl_checkpoint_scn) {
       need_copy_scn_range.start_scn_ = ddl_start_scn;
       need_copy_scn_range.end_scn_ = ddl_checkpoint_scn;
@@ -703,7 +703,7 @@ int ObStorageHATabletsBuilder::get_need_copy_ddl_sstable_range_(
       bool ddl_checkpoint_pushed = !ddl_sstable_array.empty();
       if (ddl_checkpoint_pushed) {
         need_copy_scn_range.start_scn_ = ddl_start_scn;
-        palf::SCN max_start_scn = palf::SCN::max_scn();
+        SCN max_start_scn = SCN::max_scn();
         if (OB_FAIL(get_ddl_sstable_max_start_scn_(ddl_sstable_array, max_start_scn))) {
           LOG_WARN("failed to get ddl sstable min start log ts", K(ret));
         } else {
@@ -714,12 +714,12 @@ int ObStorageHATabletsBuilder::get_need_copy_ddl_sstable_range_(
         need_copy_scn_range.end_scn_ = ddl_checkpoint_scn;
       }
 #ifdef ERRSIM
-      LOG_INFO("ddl checkpoint pushed", K(ddl_checkpoint_pushed), K(ddl_sstable_array), K(ddl_start_log_ts), K(ddl_checkpoint_ts));
+      LOG_INFO("ddl checkpoint pushed", K(ddl_checkpoint_pushed), K(ddl_sstable_array), K(ddl_start_scn), K(ddl_checkpoint_scn));
       SERVER_EVENT_SYNC_ADD("storage_ha", "get_need_copy_ddl_sstable_range",
                             "tablet_id", tablet->get_tablet_meta().tablet_id_,
                             "dest_ddl_checkpoint_pushed", ddl_checkpoint_pushed,
-                            "start_log_ts", need_copy_log_ts_range.start_log_ts_,
-                            "end_log_ts", need_copy_log_ts_range.end_log_ts_);
+                            "start_scn", need_copy_scn_range.start_scn_,
+                            "end_scn", need_copy_scn_range.end_scn_);
 #endif
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -732,11 +732,11 @@ int ObStorageHATabletsBuilder::get_need_copy_ddl_sstable_range_(
 
 int ObStorageHATabletsBuilder::get_ddl_sstable_max_start_scn_(
     const ObSSTableArray &ddl_sstable_array,
-    palf::SCN &max_start_scn)
+    SCN &max_start_scn)
 {
   int ret = OB_SUCCESS;
   ObArray<ObITable *> sstables;
-  max_start_scn = palf::SCN::max_scn();
+  max_start_scn = SCN::max_scn();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -757,13 +757,13 @@ int ObStorageHATabletsBuilder::get_ddl_sstable_max_start_scn_(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable type is unexpected", K(ret), KP(table), K(param_));
       } else {
-        palf::SCN start_scn = table->get_key().scn_range_.start_scn_.is_valid() ? (table->get_key().scn_range_.start_scn_) : palf::SCN::max_scn();
+        SCN start_scn = table->get_key().scn_range_.start_scn_.is_valid() ? (table->get_key().scn_range_.start_scn_) : SCN::max_scn();
         max_start_scn = std::min(max_start_scn, start_scn);
       }
     }
 
     if (OB_FAIL(ret)) {
-    } else if (palf::SCN::max_scn() == max_start_scn) {
+    } else if (SCN::max_scn() == max_start_scn) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("max start scn must not be equal to palf::max_scn", K(ret), K(max_start_scn));
     }
@@ -898,8 +898,8 @@ int ObStorageHATabletsBuilder::create_tablet_remote_logical_sstable_(
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
-  palf::SCN start_scn;
-  palf::SCN end_scn;
+  SCN start_scn;
+  SCN end_scn;
   ObArray<ObITable *> minor_tables;
   ObTableHandleV2 table_handle;
 
@@ -940,8 +940,8 @@ int ObStorageHATabletsBuilder::create_tablet_remote_logical_sstable_(
 
 int ObStorageHATabletsBuilder::create_remote_logical_sstable_(
     const common::ObTabletID &tablet_id,
-    const palf::SCN start_scn,
-    const palf::SCN end_scn,
+    const SCN start_scn,
+    const SCN end_scn,
     ObTablet *tablet,
     ObTableHandleV2 &table_handle)
 {
@@ -966,8 +966,8 @@ int ObStorageHATabletsBuilder::create_remote_logical_sstable_(
 }
 
 int ObStorageHATabletsBuilder::build_remote_logical_sstable_param_(
-    const palf::SCN start_scn,
-    const palf::SCN end_scn,
+    const SCN start_scn,
+    const SCN end_scn,
     const ObStorageSchema &table_schema,
     const common::ObTabletID &tablet_id,
     ObTabletCreateSSTableParam &param)

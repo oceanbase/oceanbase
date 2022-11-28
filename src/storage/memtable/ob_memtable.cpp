@@ -45,6 +45,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 using namespace compaction;
 using namespace share::schema;
 
@@ -107,9 +108,9 @@ ObMemtable::ObMemtable()
       logging_blocked_start_time(0),
       unset_active_memtable_logging_blocked_(false),
       resolve_active_memtable_left_boundary_(true),
-      freeze_scn_(palf::SCN::max_scn()),
+      freeze_scn_(SCN::max_scn()),
       max_end_scn_(ObScnRange::MIN_SCN),
-      rec_scn_(palf::SCN::max_scn()),
+      rec_scn_(SCN::max_scn()),
       state_(ObMemtableState::INVALID),
       freeze_state_(ObMemtableFreezeState::INVALID),
       timestamp_(0),
@@ -250,7 +251,7 @@ void ObMemtable::destroy()
   unset_active_memtable_logging_blocked_ = false;
   resolve_active_memtable_left_boundary_ = true;
   max_end_scn_ = ObScnRange::MIN_SCN;
-  rec_scn_ = palf::SCN::max_scn();
+  rec_scn_ = SCN::max_scn();
   read_barrier_ = false;
   is_tablet_freeze_ = false;
   is_force_freeze_ = false;
@@ -1070,7 +1071,7 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
   blocksstable::ObDmlFlag dml_flag = blocksstable::ObDmlFlag::DF_NOT_EXIST;
   ObMemtableCtx *mt_ctx = ctx.mvcc_acc_ctx_.mem_ctx_;
   ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(mt_ctx->get_trans_ctx());
-  const palf::SCN scn = mt_ctx->get_redo_scn();
+  const SCN scn = mt_ctx->get_redo_scn();
   const int64_t log_id = mt_ctx->get_redo_log_id();
 
   if (OB_FAIL(mmi->get_mutator_row().copy(table_id, rowkey, table_version, row,
@@ -1134,7 +1135,7 @@ int ObMemtable::lock_row_on_frozen_stores_(ObStoreCtx &ctx,
   } else if (value->is_lower_lock_scaned()) {
   } else {
     bool row_locked = false;
-    palf::SCN max_trans_version = palf::SCN::min_scn();
+    SCN max_trans_version = SCN::min_scn();
     const ObIArray<ObITable *> *stores = nullptr;
     common::ObSEArray<ObITable *, 4> iter_tables;
     ctx.table_iter_->resume();
@@ -1273,7 +1274,7 @@ ObDatumRange &ObMemtable::m_get_real_range(ObDatumRange &real_range, const ObDat
 
 int ObMemtable::row_compact(ObMvccRow *row,
                             const bool for_replay,
-                            const palf::SCN snapshot_version)
+                            const SCN snapshot_version)
 {
   int ret = OB_SUCCESS;
   ObMemtableRowCompactor row_compactor;
@@ -1439,7 +1440,7 @@ int ObMemtable::get_frozen_schema_version(int64_t &schema_version) const
   return OB_NOT_SUPPORTED;
 }
 
-int ObMemtable::set_snapshot_version(const palf::SCN snapshot_version)
+int ObMemtable::set_snapshot_version(const SCN snapshot_version)
 {
   int ret = OB_SUCCESS;
 
@@ -1456,7 +1457,7 @@ int ObMemtable::set_snapshot_version(const palf::SCN snapshot_version)
   return ret;
 }
 
-int ObMemtable::set_rec_scn(palf::SCN rec_scn)
+int ObMemtable::set_rec_scn(SCN rec_scn)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = freezer_->get_ls_id();
@@ -1471,8 +1472,8 @@ int ObMemtable::set_rec_scn(palf::SCN rec_scn)
     ret = OB_SCN_OUT_OF_BOUND;
     TRANS_LOG(ERROR, "cannot set freeze log ts smaller to start log ts", K(ret), K(rec_scn), K(ls_id), KPC(this));
   } else {
-    palf::SCN old_rec_scn;
-    palf::SCN new_rec_scn = get_rec_scn();
+    SCN old_rec_scn;
+    SCN new_rec_scn = get_rec_scn();
     while ((old_rec_scn = new_rec_scn) > rec_scn) {
       if ((new_rec_scn = rec_scn_.atomic_vcas(old_rec_scn, rec_scn))
           == old_rec_scn) {
@@ -1484,7 +1485,7 @@ int ObMemtable::set_rec_scn(palf::SCN rec_scn)
   return ret;
 }
 
-int ObMemtable::set_start_scn(const palf::SCN start_scn)
+int ObMemtable::set_start_scn(const SCN start_scn)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = freezer_->get_ls_id();
@@ -1496,7 +1497,7 @@ int ObMemtable::set_start_scn(const palf::SCN start_scn)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", K(ret), K(start_scn));
   } else if (start_scn >= get_end_scn()
-             || (max_end_scn_ != palf::SCN::min_scn() && start_scn >= max_end_scn_)
+             || (max_end_scn_ != SCN::min_scn() && start_scn >= max_end_scn_)
              || start_scn >= rec_scn_) {
     ret = OB_SCN_OUT_OF_BOUND;
     TRANS_LOG(ERROR, "cannot set start ts now", K(ret), K(start_scn), K(ls_id), KPC(this));
@@ -1507,7 +1508,7 @@ int ObMemtable::set_start_scn(const palf::SCN start_scn)
   return ret;
 }
 
-int ObMemtable::set_end_scn(const palf::SCN freeze_scn)
+int ObMemtable::set_end_scn(const SCN freeze_scn)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = freezer_->get_ls_id();
@@ -1523,8 +1524,8 @@ int ObMemtable::set_end_scn(const palf::SCN freeze_scn)
     TRANS_LOG(ERROR, "cannot set freeze log ts smaller to start log ts",
               K(ret), K(freeze_scn), K(ls_id), KPC(this));
   } else {
-    palf::SCN old_end_scn;
-    palf::SCN new_end_scn = get_end_scn();
+    SCN old_end_scn;
+    SCN new_end_scn = get_end_scn();
     while ((old_end_scn = new_end_scn) < freeze_scn
            || new_end_scn == ObScnRange::MAX_SCN) {
       if ((new_end_scn =
@@ -1539,7 +1540,7 @@ int ObMemtable::set_end_scn(const palf::SCN freeze_scn)
   return ret;
 }
 
-int ObMemtable::set_max_end_scn(const palf::SCN scn)
+int ObMemtable::set_max_end_scn(const SCN scn)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = freezer_->get_ls_id();
@@ -1555,8 +1556,8 @@ int ObMemtable::set_max_end_scn(const palf::SCN scn)
     TRANS_LOG(WARN, "cannot set max end log ts smaller to start log ts",
               K(ret), K(scn), K(ls_id), KPC(this));
   } else {
-    palf::SCN old_max_end_scn;
-    palf::SCN new_max_end_scn = get_max_end_scn();
+    SCN old_max_end_scn;
+    SCN new_max_end_scn = get_max_end_scn();
     while ((old_max_end_scn = new_max_end_scn) < scn) {
       if ((new_max_end_scn =
            max_end_scn_.atomic_vcas(old_max_end_scn, scn))
@@ -1573,10 +1574,10 @@ bool ObMemtable::rec_scn_is_stable()
 {
   int ret = OB_SUCCESS;
   bool rec_scn_is_stable = false;
-  if (palf::SCN::max_scn() == rec_scn_) {
+  if (SCN::max_scn() == rec_scn_) {
     rec_scn_is_stable = (is_frozen_memtable() && write_ref_cnt_ == 0 && unsynced_cnt_ == 0);
   } else {
-    palf::SCN max_consequent_callbacked_scn;
+    SCN max_consequent_callbacked_scn;
     if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(max_consequent_callbacked_scn))) {
       STORAGE_LOG(WARN, "get_max_consequent_callbacked_scn failed", K(ret), K(freezer_->get_ls_id()));
     } else {
@@ -1599,7 +1600,7 @@ bool ObMemtable::rec_scn_is_stable()
   return rec_scn_is_stable;
 }
 
-int ObMemtable::get_current_right_boundary(palf::SCN &current_right_boundary)
+int ObMemtable::get_current_right_boundary(SCN &current_right_boundary)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(freezer_)) {
@@ -1629,7 +1630,7 @@ bool ObMemtable::ready_for_flush_()
   bool bool_ret = is_frozen_memtable() && 0 == get_write_ref() && 0 == get_unsynced_cnt();
 
   int ret = OB_SUCCESS;
-  palf::SCN current_right_boundary = ObScnRange::MIN_SCN;
+  SCN current_right_boundary = ObScnRange::MIN_SCN;
   share::ObLSID ls_id = freezer_->get_ls_id();
   if (bool_ret) {
     if (OB_FAIL(resolve_snapshot_version_())) {
@@ -1693,8 +1694,8 @@ void ObMemtable::print_ready_for_flush()
   bool frozen_memtable_flag = is_frozen_memtable();
   int64_t write_ref = get_write_ref();
   int64_t unsynced_cnt = get_unsynced_cnt();
-  palf::SCN end_scn = get_end_scn();
-  palf::SCN current_right_boundary;
+  SCN end_scn = get_end_scn();
+  SCN current_right_boundary;
   uint32_t logstream_freeze_clock = freezer_->get_freeze_clock();
   uint32_t memtable_freeze_clock = freeze_clock_;
   if (OB_FAIL(get_current_right_boundary(current_right_boundary))) {
@@ -1747,16 +1748,16 @@ void ObMemtable::print_ready_for_flush()
 int ObMemtable::resolve_snapshot_version_()
 {
   int ret = OB_SUCCESS;
-  palf::SCN freeze_snapshot_version;
+  SCN freeze_snapshot_version;
 
-  if (snapshot_version_ != palf::SCN::max_scn()) {
+  if (snapshot_version_ != SCN::max_scn()) {
     // Pass if snapshot is already set
   } else if (OB_ISNULL(freezer_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "freezer should not be null", K(ret));
   } else if (FALSE_IT(freeze_snapshot_version = freezer_->get_freeze_snapshot_version())) {
     TRANS_LOG(ERROR, "fail to get freeze_snapshot_version", K(ret));
-  } else if (palf::SCN::invalid_scn() == freeze_snapshot_version) {
+  } else if (SCN::invalid_scn() == freeze_snapshot_version) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "fail to get freeze_snapshot_version", K(ret), KPC(this));
   } else if (OB_FAIL(set_snapshot_version(freeze_snapshot_version))) {
@@ -1780,14 +1781,14 @@ int ObMemtable::resolve_max_end_scn_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  palf::SCN max_decided_scn;
+  SCN max_decided_scn;
 
   if (OB_ISNULL(freezer_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "freezer should not be null", K(ret));
   } else if (FALSE_IT(max_decided_scn = freezer_->get_max_decided_scn())) {
     TRANS_LOG(ERROR, "fail to get freeze_snapshot_version", K(ret));
-  } else if (palf::SCN::invalid_scn() == max_decided_scn) {
+  } else if (SCN::invalid_scn() == max_decided_scn) {
     // Pass if not necessary
   } else if (OB_TMP_FAIL(set_max_end_scn(max_decided_scn))) {
     // ignore the error code
@@ -1798,9 +1799,9 @@ int ObMemtable::resolve_max_end_scn_()
 
 int ObMemtable::resolve_right_boundary()
 {
-  palf::SCN max_end_scn = get_max_end_scn();
-  palf::SCN end_scn = max_end_scn;
-  palf::SCN start_scn = get_start_scn();
+  SCN max_end_scn = get_max_end_scn();
+  SCN end_scn = max_end_scn;
+  SCN start_scn = get_start_scn();
   int ret = OB_SUCCESS;
 
   if (ObScnRange::MIN_SCN == max_end_scn) {
@@ -1814,7 +1815,7 @@ int ObMemtable::resolve_right_boundary()
   return ret;
 }
 
-void ObMemtable::resolve_left_boundary(palf::SCN end_scn)
+void ObMemtable::resolve_left_boundary(SCN end_scn)
 {
   set_start_scn(end_scn);
 }
@@ -2380,7 +2381,7 @@ int ObMemtable::mvcc_write_(storage::ObStoreCtx &ctx,
   ObMvccRow *value = NULL;
   ObMvccWriteResult res;
   ObIMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
-  palf::SCN snapshot_version = ctx.mvcc_acc_ctx_.get_snapshot_version();
+  SCN snapshot_version = ctx.mvcc_acc_ctx_.get_snapshot_version();
 
   if (OB_FAIL(mvcc_engine_.create_kv(key,
                                      &stored_key,

@@ -458,7 +458,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
         OB_FAIL(tx.trace_info_.set_app_trace_info(*trace_info))) {
       TRANS_LOG(WARN, "set trace_info failed", K(ret), KPC(trace_info));
     }
-    palf::SCN commit_version;
+    SCN commit_version;
     if (OB_SUCC(ret) &&
         OB_FAIL(do_commit_tx_(tx, expire_ts, cb, commit_version))) {
       TRANS_LOG(WARN, "try to commit tx fail, tx will be aborted",
@@ -531,7 +531,7 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
       // only acquire snapshot once in these isolation level
     if (tx.isolation_ != isolation /*change isolation*/ ||
         !tx.snapshot_version_.is_valid()/*version invalid*/) {
-      palf::SCN version;
+      SCN version;
       int64_t uncertain_bound = 0;
       if (OB_FAIL(sync_acquire_global_snapshot_(tx, expire_ts, version, uncertain_bound))) {
         TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(tx));
@@ -650,7 +650,7 @@ int ObTransService::get_ls_read_snapshot(ObTxDesc &tx,
 }
 
 int ObTransService::get_read_snapshot_version(const int64_t expire_ts,
-                                              palf::SCN &snapshot_version)
+                                              SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   int64_t uncertain_bound = 0;
@@ -664,14 +664,14 @@ int ObTransService::get_read_snapshot_version(const int64_t expire_ts,
 }
 
 int ObTransService::get_ls_read_snapshot_version(const share::ObLSID &local_ls_id,
-                                                 palf::SCN &snapshot_version)
+                                                 SCN &snapshot_version)
 {
   int ret = OB_SUCCESS;
   ret = acquire_local_snapshot_(local_ls_id, snapshot_version);
   return ret;
 }
 
-int ObTransService::get_weak_read_snapshot_version(palf::SCN &snapshot)
+int ObTransService::get_weak_read_snapshot_version(SCN &snapshot)
 {
   int ret = OB_SUCCESS;
   bool monotinic_read = true;;
@@ -700,7 +700,7 @@ int ObTransService::get_weak_read_snapshot_version(palf::SCN &snapshot)
 int ObTransService::release_snapshot(ObTxDesc &tx)
 {
   int ret = OB_SUCCESS;
-  palf::SCN snapshot;
+  SCN snapshot;
   ObSpinLockGuard guard(tx.lock_);
   tx.inc_op_sn();
   if (tx.state_ != ObTxDesc::State::IDLE) {
@@ -1279,16 +1279,13 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
     slowpath = false;
     ObTxPart &p = parts[0];
     int64_t born_epoch = 0;
-    ObFunction<int(ObPartTransCtx*&)> create_tx_ctx_func = [this, &p, &tx](ObPartTransCtx *&ctx) -> int {
-      return this->create_tx_ctx_(p.id_, tx, ctx);
-    };
     if (OB_FAIL(ls_rollback_to_savepoint_(tx.tx_id_,
                                           p.id_,
                                           p.epoch_,
                                           tx.op_sn_,
                                           savepoint,
                                           born_epoch,
-                                          create_tx_ctx_func,
+                                          &tx,
                                           expire_ts))) {
       if (OB_NOT_MASTER == ret) {
         slowpath = true;
@@ -1342,7 +1339,7 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
                                               const int64_t op_sn,
                                               const int64_t savepoint,
                                               int64_t &ctx_born_epoch,
-                                              ObFunction<int(ObPartTransCtx*&)> &func,
+                                              const ObTxDesc *tx,
                                               int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
@@ -1351,8 +1348,8 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
   if (OB_FAIL(get_tx_ctx_(ls, tx_id, ctx))) {
     if (OB_NOT_MASTER == ret) {
     } else if (OB_TRANS_CTX_NOT_EXIST == ret && verify_epoch <= 0) {
-      if (OB_FAIL(func(ctx))) {
-        TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), K(tx_id));
+      if (OB_FAIL(create_tx_ctx_(ls, *tx, ctx))) {
+        TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(ls), KPC(tx));
       }
     } else {
       TRANS_LOG(WARN, "get transaction context error", K(ret), K(tx_id), K(ls));
@@ -1403,12 +1400,32 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
   msg.tx_id_ = tx.tx_id_;
   msg.savepoint_ = savepoint;
   msg.op_sn_ = tx.op_sn_;
-  msg.can_elr_ = tx.can_elr_;
-  msg.session_id_ = tx.sess_id_;
-  msg.tx_addr_ = tx.addr_;
-  msg.tx_expire_ts_ = tx.get_expire_ts();
   msg.epoch_ = -1;
   msg.request_id_ = tx.op_sn_;
+  // prepare msg.tx_ptr_ if required
+  // TODO(yunxing.cyx) : in 4.1 rework here, won't serialize txDesc
+  ObTxDesc *tmp_tx_desc = NULL;
+  ARRAY_FOREACH_NORET(parts, i) {
+    if (parts[i].epoch_ <= 0) {
+      int64_t len = tx.get_serialize_size() + sizeof(ObTxDesc);
+      char *buf = (char*)ob_malloc(len);
+      int64_t pos = sizeof(ObTxDesc);
+      if (OB_FAIL(tx.serialize(buf, len, pos))) {
+        TRANS_LOG(WARN, "serialize tx fail", KR(ret), K(tx));
+        ob_free(buf);
+      } else {
+        tmp_tx_desc = new(buf)ObTxDesc();
+        pos = sizeof(ObTxDesc);
+        if (OB_FAIL(tmp_tx_desc->deserialize(buf, len, pos))) {
+          TRANS_LOG(WARN, "deserialize tx fail", KR(ret));
+        } else {
+          tmp_tx_desc->parts_.reset();
+          msg.tx_ptr_ = tmp_tx_desc;
+        }
+      }
+      break;
+    }
+  }
   int64_t start_ts = ObTimeUtility::current_time();
   int retries = 0;
   if (OB_SUCC(ret)) {
@@ -1428,6 +1445,11 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
     tx.brpc_mask_set_.reset();
     // clear interrupt flag
     tx.flags_.INTERRUPTED_ = false;
+  }
+  if (OB_NOT_NULL(tmp_tx_desc)) {
+    msg.tx_ptr_ = NULL;
+    tmp_tx_desc->~ObTxDesc();
+    ob_free(tmp_tx_desc);
   }
   auto elapsed_us = ObTimeUtility::current_time() - start_ts;
   TRANS_LOG(INFO, "rollback savepoint slowpath", K(ret),

@@ -17,6 +17,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace storage
 {
 
@@ -24,7 +25,7 @@ ObLSSavedInfo::ObLSSavedInfo()
   : clog_checkpoint_scn_(share::ObScnRange::MIN_SCN),
     clog_base_lsn_(palf::PALF_INITIAL_LSN_VAL),
     replayable_point_(0),
-    tablet_change_checkpoint_scn_(palf::SCN::min_scn())
+    tablet_change_checkpoint_scn_(SCN::min_scn())
 {
 }
 
@@ -33,7 +34,7 @@ void ObLSSavedInfo::reset()
   clog_checkpoint_scn_ = share::ObScnRange::MIN_SCN;
   clog_base_lsn_ = palf::PALF_INITIAL_LSN_VAL;
   replayable_point_ = 0;
-  tablet_change_checkpoint_scn_ = palf::SCN::min_scn();
+  tablet_change_checkpoint_scn_ = SCN::min_scn();
 }
 
 bool ObLSSavedInfo::is_valid() const

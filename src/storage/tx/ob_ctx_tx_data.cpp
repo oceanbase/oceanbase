@@ -19,7 +19,7 @@ namespace oceanbase
 {
 
 using namespace storage;
-using namespace palf;
+using namespace share;
 
 namespace transaction
 {
@@ -272,7 +272,7 @@ int ObCtxTxData::set_state(int32_t state)
   return ret;
 }
 
-int ObCtxTxData::set_commit_version(const palf::SCN &commit_version)
+int ObCtxTxData::set_commit_version(const SCN &commit_version)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -286,10 +286,10 @@ int ObCtxTxData::set_commit_version(const palf::SCN &commit_version)
   return ret;
 }
 
-int ObCtxTxData::set_start_log_ts(const palf::SCN &start_ts)
+int ObCtxTxData::set_start_log_ts(const SCN &start_ts)
 {
   int ret = OB_SUCCESS;
-  const palf::SCN tmp_start_ts = (start_ts.is_valid() ? start_ts : palf::SCN::max_scn());
+  const SCN tmp_start_ts = (start_ts.is_valid() ? start_ts : SCN::max_scn());
   RLockGuard guard(lock_);
 
   if (OB_FAIL(check_tx_data_writable_())) {
@@ -301,7 +301,7 @@ int ObCtxTxData::set_start_log_ts(const palf::SCN &start_ts)
   return ret;
 }
 
-int ObCtxTxData::set_end_log_ts(const palf::SCN &end_scn)
+int ObCtxTxData::set_end_log_ts(const SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -321,24 +321,24 @@ int32_t ObCtxTxData::get_state() const
   return (NULL != tx_data_ ? tx_data_->state_: tx_commit_data_.state_);
 }
 
-const palf::SCN ObCtxTxData::get_commit_version() const
+const SCN ObCtxTxData::get_commit_version() const
 {
   RLockGuard guard(lock_);
   SCN commit_version = (NULL != tx_data_ ? tx_data_->commit_version_ : tx_commit_data_.commit_version_);
   return commit_version;
 }
 
-const palf::SCN ObCtxTxData::get_start_log_ts() const
+const SCN ObCtxTxData::get_start_log_ts() const
 {
   RLockGuard guard(lock_);
-  palf::SCN start_log_scn = (NULL != tx_data_ ? tx_data_->start_scn_ : tx_commit_data_.start_scn_);
+  SCN start_log_scn = (NULL != tx_data_ ? tx_data_->start_scn_ : tx_commit_data_.start_scn_);
   return start_log_scn;
 }
 
-const palf::SCN ObCtxTxData::get_end_log_ts() const
+const SCN ObCtxTxData::get_end_log_ts() const
 {
   RLockGuard guard(lock_);
-  palf::SCN end_log_scn = (NULL != tx_data_ ? tx_data_->end_scn_ : tx_commit_data_.end_scn_);
+  SCN end_log_scn = (NULL != tx_data_ ? tx_data_->end_scn_ : tx_commit_data_.end_scn_);
   return end_log_scn;
 }
 
@@ -431,10 +431,11 @@ int ObCtxTxData::add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatu
 int ObCtxTxData::Guard::get_tx_data(const ObTxData *&tx_data) const
 {
   int ret = OB_SUCCESS;
-  if (NULL == host_.tx_data_) {
+  auto tmp_tx_data = host_.tx_data_;
+  if (NULL == tmp_tx_data) {
     ret = OB_TRANS_CTX_NOT_EXIST;
   } else {
-    tx_data = host_.tx_data_;
+    tx_data = tmp_tx_data;
   }
   return ret;
 }

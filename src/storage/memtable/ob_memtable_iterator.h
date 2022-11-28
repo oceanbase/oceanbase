@@ -132,10 +132,10 @@ public:
   virtual void reuse() override { reset(); }
   ObIMemtable* get_memtable() { return memtable_; }
   int get_key_val(const ObMemtableKey*& key, ObMvccRow*& row) { return row_iter_.get_key_val(key, row); }
-  palf::SCN get_read_snapshot() const
+  share::SCN get_read_snapshot() const
   {
     return (NULL == context_ || NULL == context_->store_ctx_ || !context_->store_ctx_->is_valid())
-      ? palf::SCN::min_scn()
+      ? share::SCN::min_scn()
       : context_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version();
   }
   uint8_t get_iter_flag() { return iter_flag_; }

@@ -24,7 +24,7 @@
 namespace oceanbase
 {
 using namespace storage;
-using namespace palf;
+using namespace share;
 
 namespace blocksstable
 {

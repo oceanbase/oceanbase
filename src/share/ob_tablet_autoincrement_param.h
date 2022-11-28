@@ -76,7 +76,7 @@ struct ObTabletAutoincInterval final
 public:
   ObTabletAutoincInterval()
     : tablet_id_(), start_(0), end_(0) {}
-  bool is_valid() const { return tablet_id_.is_valid(); }
+  bool is_valid() const { return tablet_id_.is_valid() && end_ >= start_; }
   void reset()
   {
     tablet_id_.reset();

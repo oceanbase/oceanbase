@@ -240,7 +240,7 @@ int ObTablet::init(
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
     }
     is_inited_ = true;
-    LOG_INFO("succeeded to init tablet", K(ret), K(param), K(old_tablet), K(tx_data), K(autoinc_seq));
+    LOG_INFO("succeeded to init tablet", K(ret), K(param), K(old_tablet), K(tx_data), K(ddl_data), K(autoinc_seq), KPC(this));
   }
 
   if (OB_SUCC(ret) && param.need_report_ && param.table_handle_.get_table()->is_major_sstable()) {
@@ -258,7 +258,6 @@ int ObTablet::init(
     reset();
   }
 
-  LOG_INFO("Update tablet info", K(ret), K(param), K(old_tablet), KPC(this));
   return ret;
 }
 
@@ -1500,7 +1499,7 @@ int ObTablet::assign_pointer_handle(const ObTabletPointerHandle &ptr_hdl)
 }
 
 int ObTablet::replay_update_storage_schema(
-    const palf::SCN &scn,
+    const SCN &scn,
     const char *buf,
     const int64_t buf_size,
     int64_t &pos)
@@ -1622,7 +1621,7 @@ int ObTablet::inner_create_memtable(
   return ret;
 }
 
-int ObTablet::release_memtables(const palf::SCN scn)
+int ObTablet::release_memtables(const SCN scn)
 {
   int ret = OB_SUCCESS;
   ObIMemtableMgr *memtable_mgr = nullptr;
@@ -1802,7 +1801,7 @@ int ObTablet::try_update_start_scn()
 {
   int ret = OB_SUCCESS;
   ObSSTable *first_minor = static_cast<ObSSTable *>(table_store_.get_minor_sstables().get_boundary_table(false /*first*/));
-  const palf::SCN &start_scn = OB_NOT_NULL(first_minor) ? first_minor->get_start_scn() : tablet_meta_.clog_checkpoint_scn_;
+  const SCN &start_scn = OB_NOT_NULL(first_minor) ? first_minor->get_start_scn() : tablet_meta_.clog_checkpoint_scn_;
   if (OB_UNLIKELY(start_scn < tablet_meta_.start_scn_)) {
     // ignore ret on purpose
     LOG_WARN("tablet start scn can not fallback", K(start_scn), K(tablet_meta_));
@@ -1817,7 +1816,7 @@ int ObTablet::try_update_ddl_checkpoint_scn()
   int ret = OB_SUCCESS;
   ObSSTable *last_ddl_sstable = static_cast<ObSSTable *>(table_store_.get_ddl_sstables().get_boundary_table(true/*last*/));
   if (OB_NOT_NULL(last_ddl_sstable)) {
-    const palf::SCN &ddl_checkpoint_scn = last_ddl_sstable->get_end_scn();
+    const SCN &ddl_checkpoint_scn = last_ddl_sstable->get_end_scn();
     if (OB_UNLIKELY(ddl_checkpoint_scn < tablet_meta_.ddl_checkpoint_scn_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected clog checkpoint ts", K(ret), K(ddl_checkpoint_scn), K(tablet_meta_));
@@ -2162,64 +2161,6 @@ int ObTablet::update_tablet_autoinc_seq(
   return ret;
 }
 
-int ObTablet::get_active_ddl_kv(ObDDLKVHandle &ddl_kvs_handle)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(ddl_kvs_handle);
-  return ret;
-}
-
-int ObTablet::get_or_create_active_ddl_kv(ObDDLKVHandle &ddl_kvs_handle)
-{
-  int ret = OB_NOT_SUPPORTED;
-  UNUSED(ddl_kvs_handle);
-  return ret;
-}
-
-int ObTablet::check_has_effective_ddl_kv(bool &has_ddl_kv)
-{
-  int ret = OB_SUCCESS;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get ddl kv mgr", K(ret));
-    } else {
-      has_ddl_kv = false;
-      ret = OB_SUCCESS;
-    }
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_effective_ddl_kv(has_ddl_kv))) {
-    LOG_WARN("fail to check has effective ddl kv", K(ret));
-  }
-
-  return ret;
-}
-
-int ObTablet::get_ddl_kv_min_scn(palf::SCN &min_scn)
-{
-  int ret = OB_SUCCESS;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get ddl kv mgr", K(ret));
-    } else {
-      min_scn = palf::SCN::max_scn();
-      ret = OB_SUCCESS;
-    }
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kv_min_scn(min_scn))) {
-    LOG_WARN("fail to get ddl kv min log ts", K(ret));
-  }
-
-  return ret;
-}
-
 int ObTablet::start_ddl_if_need()
 {
   int ret = OB_SUCCESS;
@@ -2531,7 +2472,7 @@ int ObTablet::get_ddl_info(int64_t &schema_version, int64_t &schema_refreshed_ts
 // only for redo
 int ObTablet::set_tx_scn(
     const transaction::ObTransID &tx_id,
-    const palf::SCN &scn,
+    const SCN &scn,
     const bool for_replay)
 {
   int ret = OB_SUCCESS;
@@ -2560,7 +2501,7 @@ int ObTablet::set_tx_scn(
 // only for commit, abort
 int ObTablet::set_tablet_final_status(
     ObTabletTxMultiSourceDataUnit &tx_data,
-    const palf::SCN &memtable_scn,
+    const SCN &memtable_scn,
     const bool for_replay,
     const memtable::MemtableRefOp ref_op)
 {
@@ -2900,6 +2841,9 @@ int ObTablet::check_max_sync_schema_version() const
     if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
       LOG_WARN("failed to get memtable mgr", K(ret));
     } else if (FALSE_IT(data_memtable_mgr = static_cast<ObTabletMemtableMgr *>(memtable_mgr))) {
+    } else if (OB_UNLIKELY(!data_memtable_mgr->get_storage_schema_recorder().is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("schema recorder is invalid", K(ret), K_(tablet_meta), KPC(data_memtable_mgr));
     } else if (OB_FAIL(data_memtable_mgr->get_multi_source_data_unit(&storage_schema, &tmp_allocator))) {
       LOG_ERROR("failed to storage schema from memtable, max_sync_schema_version is invalid", K(ret),
           K(max_sync_schema_version), KPC(data_memtable_mgr));

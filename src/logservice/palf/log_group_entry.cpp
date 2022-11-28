@@ -17,9 +17,9 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
-using namespace common;
 LogGroupEntry::LogGroupEntry() : header_(), buf_(NULL)
 {
 }

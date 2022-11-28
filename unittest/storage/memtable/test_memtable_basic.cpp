@@ -28,7 +28,7 @@
 #include "storage/tx/ob_multi_data_source.h"
 #include "storage/tx/ob_trans_define_v4.h"
 #include "storage/memtable/mvcc/ob_mvcc_row.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -87,7 +87,7 @@ int ObTxTableGuard::init(ObTxTable *tx_table)
 
 namespace memtable
 {
-int ObMvccRow::check_double_insert_(const palf::SCN ,
+int ObMvccRow::check_double_insert_(const share::SCN ,
                                     ObMvccTransNode &,
                                     ObMvccTransNode *)
 {
@@ -116,8 +116,8 @@ public:
     ObITable::TableKey table_key;
     table_key.table_type_ = ObITable::DATA_MEMTABLE;
     table_key.tablet_id_ = ObTabletID(tablet_id_.id());
-    table_key.scn_range_.start_scn_ = palf::SCN::base_scn();
-    table_key.scn_range_.end_scn_ = palf::SCN::max_scn();
+    table_key.scn_range_.start_scn_ = share::SCN::base_scn();
+    table_key.scn_range_.end_scn_ = share::SCN::max_scn();
     int64_t schema_version  = 1;
     uint32_t freeze_clock = 0;
 
@@ -254,7 +254,7 @@ public:
         if (trans_node->is_aborted()) {
           trans_node = trans_node->prev_;
         } else if (trans_node->is_committed()) {
-          if (trans_node->trans_version_.get_val_for_lsn_allocator() <= snapshot) {
+          if (trans_node->trans_version_.get_val_for_logservice() <= snapshot) {
             break;
           } else {
             trans_node = trans_node->prev_;
@@ -264,7 +264,7 @@ public:
           //if (trans_node->seq_no__ <= snapshot) {
           break;
         } else {
-          if (snapshot < trans_node->trans_version_.get_val_for_lsn_allocator()) {
+          if (snapshot < trans_node->trans_version_.get_val_for_logservice()) {
             trans_node = trans_node->prev_;
           } else {
             ret = OB_ERR_SHARED_LOCK_CONFLICT;
@@ -295,8 +295,8 @@ void print(ObMvccRow *mvcc_row)
   ObMvccTransNode *node = mvcc_row->get_list_head();
   while (node != nullptr) {
     printf("%p tx_id:%ld trans_version:%ld log_ts:%ld prev:%p next:%p version:%ld\n",
-           node, node->tx_id_.get_id(), node->trans_version_.get_val_for_lsn_allocator(),
-           node->scn_.get_val_for_lsn_allocator(), node->prev_, node->next_, node->version_);
+           node, node->tx_id_.get_id(), node->trans_version_.get_val_for_logservice(),
+           node->scn_.get_val_for_logservice(), node->prev_, node->next_, node->version_);
     node = node->prev_;
   }
   printf("\n");
@@ -328,8 +328,8 @@ TEST_F(TestMemtable, mt_set)
   print(mvcc_row);
   EXPECT_EQ(2, rg.mem_ctx_.trans_mgr_.get_main_list_length());
 
-  palf::SCN val_1000;
-  val_1000.convert_for_lsn_allocator(1000);
+  share::SCN val_1000;
+  val_1000.convert_for_logservice(1000);
   EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_1000, val_1000, 0));
   print(mvcc_row);
 }
@@ -349,16 +349,16 @@ TEST_F(TestMemtable, conflict)
   EXPECT_EQ(OB_SUCCESS, rg2.init(2, this));
   EXPECT_EQ(OB_ERR_EXCLUSIVE_LOCK_CONFLICT, rg2.write(1, 3, mt));
 
-  palf::SCN val_1000;
-  val_1000.convert_for_lsn_allocator(1000);
+  share::SCN val_1000;
+  val_1000.convert_for_logservice(1000);
   EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_1000, val_1000, 0));
 
   EXPECT_EQ(OB_TRANSACTION_SET_VIOLATION, rg2.write(1, 3, mt, 900));
   EXPECT_EQ(OB_SUCCESS, rg2.write(1, 3, mt, 1000));
   EXPECT_EQ(OB_SUCCESS, rg2.write(1, 4, mt, 1001));
 
-  palf::SCN val_1002;
-  val_1002.convert_for_lsn_allocator(1002);
+  share::SCN val_1002;
+  val_1002.convert_for_logservice(1002);
   EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, val_1002, val_1002, 0));
 
   print(mvcc_row);
@@ -373,8 +373,8 @@ TEST_F(TestMemtable, except)
   EXPECT_EQ(OB_SUCCESS, rg.init(1, this));
 
   ObMvccRow *mvcc_row = nullptr;
-  palf::SCN val_900;
-  val_900.convert_for_lsn_allocator(900);
+  share::SCN val_900;
+  val_900.convert_for_logservice(900);
 
   EXPECT_EQ(OB_SUCCESS, rg.write(1, 2, mt, mvcc_row, 1000));
   EXPECT_EQ(OB_SUCCESS, rg.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
@@ -403,8 +403,8 @@ TEST_F(TestMemtable, multi_key)
   RunCtxGuard rg;
   EXPECT_EQ(OB_SUCCESS, rg.init(1, this));
 
-  palf::SCN val_900;
-  val_900.convert_for_lsn_allocator(900);
+  share::SCN val_900;
+  val_900.convert_for_logservice(900);
 
   ObMvccRow *mvcc_row = nullptr;
   ObMvccRow *mvcc_row2 = nullptr;

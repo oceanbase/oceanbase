@@ -14,10 +14,10 @@
 #define OCEABASE_LOGSERVICE_LOG_TASK_
 #include "lib/ob_define.h"                      // Serialization
 #include "lib/utility/ob_print_utils.h"         // Print*
+#include "share/scn.h"
 #include "fixed_sliding_window.h"
 #include "log_define.h"                         // block_id_t
 #include "lsn.h"
-#include "scn.h"
 
 namespace oceanbase
 {
@@ -31,8 +31,8 @@ struct LogTaskHeaderInfo
   LSN begin_lsn_;
   LSN end_lsn_;
   int64_t log_id_;
-  SCN min_scn_;
-  SCN max_scn_;
+  share::SCN min_scn_;
+  share::SCN max_scn_;
   int64_t data_len_;             // total len without log_group_entry_header
   int64_t proposal_id_;  // leader's proposal_id when generate this log
   LSN prev_lsn_;
@@ -95,7 +95,7 @@ public:
   void unlock() const {
     lock_.unlock();
   }
-  void inc_update_max_scn(const SCN &scn);
+  void inc_update_max_scn(const share::SCN &scn);
   void update_data_len(const int64_t data_len);
   void set_end_lsn(const LSN &end_lsn);
   int try_freeze(const LSN &end_lsn);
@@ -120,7 +120,7 @@ public:
   int64_t get_log_cnt() const { return ATOMIC_LOAD(&log_cnt_); }
   int set_initial_header_info(const LogTaskHeaderInfo &header_info);
   int update_header_info(const LSN &committed_end_lsn, const int64_t accum_checksum);
-  int set_group_header(const LSN &lsn, const SCN &scn, const LogGroupEntryHeader &group_entry_header);
+  int set_group_header(const LSN &lsn, const share::SCN &scn, const LogGroupEntryHeader &group_entry_header);
   // update group log data_checksum
   void set_group_log_checksum(const int64_t data_checksum);
   void set_prev_lsn(const LSN &prev_lsn);
@@ -132,8 +132,8 @@ public:
   bool is_raw_write() const { return header_.is_raw_write_; }
   int64_t get_data_len() const { return ATOMIC_LOAD(&(header_.data_len_)); }
   int64_t get_log_id() const { return header_.log_id_; }
-  const SCN get_min_scn() const {return header_.min_scn_; }
-  const SCN get_max_scn() const { return header_.max_scn_; }
+  const share::SCN get_min_scn() const {return header_.min_scn_; }
+  const share::SCN get_max_scn() const { return header_.max_scn_; }
   int64_t get_proposal_id() const { return header_.proposal_id_; }
   LSN get_begin_lsn() const { return header_.begin_lsn_; }
   LSN get_end_lsn() const { return header_.end_lsn_; }

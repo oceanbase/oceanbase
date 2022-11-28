@@ -15,7 +15,7 @@
 
 #include <stdint.h>
 #include "logservice/palf/lsn.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -32,7 +32,7 @@ public:
       const int64_t log_size,
       const int64_t pos,
       const palf::LSN &lsn,
-      const palf::SCN &scn);
+      const share::SCN &scn);
 public:
   TO_STRING_KV(KP(ls_), K(lsn_), K(scn_));
 
@@ -40,20 +40,20 @@ private:
   ObTabletServiceClogReplayExecutor(
       ObLS *ls,
       const palf::LSN &lsn,
-      const palf::SCN &scn);
+      const share::SCN &scn);
   ~ObTabletServiceClogReplayExecutor() = default;
   ObTabletServiceClogReplayExecutor(const ObTabletServiceClogReplayExecutor&) = delete;
   ObTabletServiceClogReplayExecutor &operator=(const ObTabletServiceClogReplayExecutor&) = delete;
 private:
   int replay_update_storage_schema(
-      const palf::SCN &scn,
+      const share::SCN &scn,
       const char *buf,
       const int64_t buf_size,
       const int64_t pos);
 private:
   ObLS *ls_;
   palf::LSN lsn_;
-  palf::SCN scn_;
+  share::SCN scn_;
 };
 
 }

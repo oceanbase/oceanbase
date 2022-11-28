@@ -20,7 +20,7 @@
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/backup/ob_backup_index_cache.h"
 #include "storage/backup/ob_backup_data_struct.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 
 namespace oceanbase

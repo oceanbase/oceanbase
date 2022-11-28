@@ -787,7 +787,7 @@ int ObArchivePersistHelper::get_frozen_pieces(
   return ret;
 }
 
-int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const palf::SCN &end_scn,
+int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const SCN &end_scn,
     const char *backup_dest_str, ObIArray<ObTenantArchivePieceAttr> &pieces) const
 {
   int ret = OB_SUCCESS;
@@ -1142,8 +1142,8 @@ int ObArchivePersistHelper::do_parse_ls_archive_piece_summary_result_(sqlclient:
       piece.piece_id_ = 0;
       piece.incarnation_ = 0;
       piece.state_.set_invalid();
-      piece.start_scn_ = palf::SCN::min_scn();
-      piece.checkpoint_scn_ = palf::SCN::min_scn();
+      piece.start_scn_ = SCN::min_scn();
+      piece.checkpoint_scn_ = SCN::min_scn();
       piece.min_lsn_ = 0;
       piece.max_lsn_ = 0;
       piece.input_bytes_ = 0;

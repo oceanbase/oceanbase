@@ -21,7 +21,7 @@
 
 namespace oceanbase
 {
-using namespace palf;
+using namespace share;
 using namespace logservice;
 namespace storage
 {
@@ -266,7 +266,7 @@ bool ObCheckpointExecutor::need_flush()
 {
   int ret = OB_SUCCESS;
   bool need_flush = false;
-  palf::SCN end_scn;
+  SCN end_scn;
   if (OB_FAIL(loghandler_->get_end_scn(end_scn))) {
     STORAGE_LOG(WARN, "get_end_scn failed", K(ret));
   } else if (end_scn.convert_to_ts() - ls_->get_clog_checkpoint_scn().convert_to_ts()
@@ -290,7 +290,7 @@ bool ObCheckpointExecutor::is_wait_advance_checkpoint()
   return ATOMIC_LOAD(&wait_advance_checkpoint_);
 }
 
-void ObCheckpointExecutor::set_wait_advance_checkpoint(palf::SCN &checkpoint_scn)
+void ObCheckpointExecutor::set_wait_advance_checkpoint(SCN &checkpoint_scn)
 {
   ObSpinLockGuard guard(lock_);
   if (checkpoint_scn == ls_->get_clog_checkpoint_scn()) {

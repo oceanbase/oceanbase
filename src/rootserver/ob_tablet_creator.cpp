@@ -22,6 +22,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace rootserver
 {
 
@@ -108,7 +109,7 @@ DEF_TO_STRING(ObTabletCreatorArg)
 /////////////////////////////////////////////////////////
 
 int ObBatchCreateTabletHelper::init(const share::ObLSID &ls_key, const int64_t tenant_id,
-    const palf::SCN &major_frozen_scn)
+    const SCN &major_frozen_scn)
 {
   int ret = OB_SUCCESS;
   const int64_t bucket_count = hash::cal_next_prime(100);

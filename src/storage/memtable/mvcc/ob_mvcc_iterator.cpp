@@ -23,6 +23,7 @@
 namespace oceanbase
 {
 using namespace storage;
+using namespace share;
 using namespace transaction;
 using namespace common;
 namespace memtable
@@ -90,6 +91,17 @@ int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
     }
   }
 
+  // add barrier snapshot version for defensive check
+  if (NULL != version_iter_) {
+    if (ctx_->is_weak_read()) {
+      version_iter_->set_safe_read_barrier(true);
+    }
+    if (!flag.is_prewarm()
+        && !version_iter_->is_elr()) {
+      version_iter_->set_snapshot_version_barrier(ctx_->snapshot_.version_);
+    }
+  }
+
   lock_for_read_end(lock_start_time, ret);
   return ret;
 }
@@ -137,7 +149,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const int64_t data_seq_no = iter->get_seq_no();
   const int64_t snapshot_seq_no = ctx_->snapshot_.scn_;
 
-  const palf::SCN snapshot_version = ctx_->get_snapshot_version();
+  const SCN snapshot_version = ctx_->get_snapshot_version();
   const int64_t read_epoch = ctx_->get_tx_table_guard().epoch();
   const bool read_latest = flag.is_read_latest();
   ObTxTable *tx_table = ctx_->get_tx_table_guard().get_tx_table();
@@ -154,7 +166,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     //         because inner tx read only care whether tx node rollbacked
     if (iter->is_committed() || iter->is_elr()) {
       // Case 2: Data is committed, so the state is decided
-      const palf::SCN data_version = iter->trans_version_;
+      const SCN data_version = iter->trans_version_;
       if (snapshot_version >= data_version) {
         // Case 2.1 Read the version if it is smaller than read version
         version_iter_ = iter;
@@ -198,7 +210,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     //         is_delay_cleanout() to check the state and we only cleanout it
     //         when data is delay cleanout
     bool can_read = false;
-    palf::SCN data_version = palf::SCN::max_scn();
+    SCN data_version = SCN::max_scn();
     bool is_determined_state = false;
     // Opt3: we only cleanout tx node who is delay cleanout
     ObCleanoutOp cleanout_op;

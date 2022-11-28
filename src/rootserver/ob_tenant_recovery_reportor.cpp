@@ -22,7 +22,7 @@
 #include "share/ls/ob_ls_recovery_stat_operator.h" //ObLSRecoveryStatOperator
 #include "share/schema/ob_multi_version_schema_service.h"//is_tenant_full_schema
 #include "logservice/ob_log_service.h"//get_palf_role
-#include "logservice/palf/scn.h"//SCN
+#include "share/scn.h"//SCN
 #include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
 
 namespace oceanbase
@@ -389,7 +389,7 @@ int ObTenantRecoveryReportor::update_replayable_point_from_meta_()
 }
 
 int ObTenantRecoveryReportor::get_sync_point_(const share::ObLSID &id,
-    palf::SCN &sync_scn, palf::SCN &read_scn)
+    SCN &sync_scn, SCN &read_scn)
 {
   int ret = OB_SUCCESS;
   palf::AccessMode access_mode;

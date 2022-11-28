@@ -130,7 +130,6 @@ ob_set_subtarget(ob_logservice palf
   palf/palf_handle_impl.cpp
   palf/palf_handle_impl_guard.cpp
   palf/log_block_pool_interface.cpp
-  palf/scn.cpp
   palf/palf_options.cpp
   palf/log_mode_mgr.cpp
 )

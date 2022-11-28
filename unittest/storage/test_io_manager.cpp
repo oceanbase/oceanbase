@@ -560,7 +560,8 @@ TEST_F(TestIOStruct, IOCallbackManager)
   ASSERT_FAIL(callback_mgr.enqueue_callback(req));
   char buf[32] = "test";
   req.io_buf_ = buf;
-  req.copied_callback_ = new (req.callback_buf_) TestIOCallback();
+  char callback_buf_[ObIOCallback::CALLBACK_BUF_SIZE] __attribute__ ((aligned (16)));
+  req.copied_callback_ = new (callback_buf_) TestIOCallback();
 //  ObIOManager::get_instance().io_config_ = ObIOConfig::default_config();
   ASSERT_SUCC(callback_mgr.enqueue_callback(req));
 

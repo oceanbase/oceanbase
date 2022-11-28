@@ -19,6 +19,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace rootserver
 {
 
@@ -356,7 +357,7 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
 
 int ObMajorFreezeHelper::get_frozen_status(
     const int64_t tenant_id,
-    const palf::SCN &frozen_scn,
+    const SCN &frozen_scn,
     share::ObSimpleFrozenStatus &frozen_status)
 {
   int ret = OB_SUCCESS;
@@ -374,13 +375,13 @@ int ObMajorFreezeHelper::get_frozen_status(
 
 int ObMajorFreezeHelper::get_frozen_scn(
     const int64_t tenant_id,
-    palf::SCN &frozen_scn)
+    SCN &frozen_scn)
 {
   int ret = OB_SUCCESS;
   share::ObSimpleFrozenStatus frozen_status;
 
   // use min_scn to get frozen_status, means get one with biggest frozen_scn
-  if (OB_FAIL(get_frozen_status(tenant_id, palf::SCN::min_scn(), frozen_status))) {
+  if (OB_FAIL(get_frozen_status(tenant_id, SCN::min_scn(), frozen_status))) {
     LOG_WARN("fail to get frozen info", KR(ret));
   } else {
     frozen_scn = frozen_status.frozen_scn_;

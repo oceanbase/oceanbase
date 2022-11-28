@@ -17,8 +17,8 @@
 #include "lib/utility/ob_print_utils.h" // Print*
 #include "common/ob_learner_list.h"     // common::GlobalLearnerList
 #include "common/ob_member_list.h"      // ObMemberList
+#include "share/scn.h"                        // SCN
 #include "lsn.h"                        // LSN
-#include "scn.h"                        // SCN
 #include "palf_base_info.h"             // LogInfo
 #include "palf_options.h"               // AccessMode
 #include "log_define.h"                 // ReplicaType
@@ -177,7 +177,7 @@ public:
       const int64_t proposal_id,
       const int64_t mode_version,
       const AccessMode &access_mode,
-      const SCN &ref_scn);
+      const share::SCN &ref_scn);
   bool is_valid() const;
   void reset();
   void operator=(const LogModeMeta &mode_meta);
@@ -192,7 +192,7 @@ public:
   AccessMode access_mode_;
   // scn lower bound
   // after switching over, scn of all submitted log should be bigger than ref_scn_
-  SCN ref_scn_;
+  share::SCN ref_scn_;
 
   static constexpr int64_t LOG_MODE_META_VERSION = 1;
 };

@@ -930,7 +930,7 @@ int ObRestorePersistHelper::inc_finished_restored_block_bytes(
 
 int ObRestorePersistHelper::update_log_restore_progress(
   common::ObISQLClient &proxy, const ObLSRestoreJobPersistKey &ls_key,
-  const palf::SCN &last_replay_scn) const
+  const SCN &last_replay_scn) const
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;

@@ -123,7 +123,7 @@ int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
   return ret;
 }
 
-int ObTxDataMemtableMgr::create_memtable(const palf::SCN clog_checkpoint_scn,
+int ObTxDataMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
                                          const int64_t schema_version,
                                          const bool for_replay)
 {
@@ -150,7 +150,7 @@ int ObTxDataMemtableMgr::create_memtable(const palf::SCN clog_checkpoint_scn,
   return ret;
 }
 
-int ObTxDataMemtableMgr::create_memtable_(const palf::SCN clog_checkpoint_scn, int64_t schema_version)
+int ObTxDataMemtableMgr::create_memtable_(const SCN clog_checkpoint_scn, int64_t schema_version)
 {
   UNUSED(schema_version);
   int ret = OB_SUCCESS;
@@ -364,10 +364,10 @@ int ObTxDataMemtableMgr::get_all_memtables_for_write(ObTxDataMemtableWriteGuard 
   return ret;
 }
 
-palf::SCN ObTxDataMemtableMgr::get_rec_scn()
+SCN ObTxDataMemtableMgr::get_rec_scn()
 {
   int ret = OB_SUCCESS;
-  palf::SCN rec_scn;
+  SCN rec_scn;
   rec_scn.set_max();
 
   ObTxDataMemtable *oldest_memtable = nullptr;
@@ -410,7 +410,7 @@ int ObTxDataMemtableMgr::flush_all_frozen_memtables_(ObTableHdlArray &memtable_h
   return ret;
 }
 
-int ObTxDataMemtableMgr::flush(palf::SCN recycle_scn, bool need_freeze)
+int ObTxDataMemtableMgr::flush(SCN recycle_scn, bool need_freeze)
 {
   int ret = OB_SUCCESS;
 
@@ -419,7 +419,7 @@ int ObTxDataMemtableMgr::flush(palf::SCN recycle_scn, bool need_freeze)
   // self freeze task
   if (need_freeze) {
     TxDataMemtableMgrFreezeGuard freeze_guard;
-    palf::SCN rec_scn = get_rec_scn();
+    SCN rec_scn = get_rec_scn();
     if (rec_scn >= recycle_scn) {
       STORAGE_LOG(INFO, "no need freeze", K(recycle_scn), K(rec_scn));
     } else if (OB_FAIL(freeze_guard.init(this))) {

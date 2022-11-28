@@ -1120,6 +1120,7 @@ public:
   int64_t get_current_execution_id() const { return current_execution_id_; }
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
+  uint64_t get_current_plan_id() const { return plan_id_; }
   void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
   void set_last_trace_id(common::ObCurTraceId::TraceId *trace_id)
   {
@@ -1860,7 +1861,7 @@ private:
 protected:
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxExecResult tx_result_; // TODO: move to QueryCtx/ExecCtx
-  palf::SCN unused_read_snapshot_version_;//serialize compatibility preserved
+  share::SCN unused_read_snapshot_version_;//serialize compatibility preserved
   transaction::ObXATransID xid_;
   bool associated_xa_; // session joined distr-xa-trans by xa-start
 public:
@@ -1926,6 +1927,7 @@ private:
   ObPhysicalPlan *cur_phy_plan_;
   // sql_id of cur_phy_plan_ sql
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  uint64_t plan_id_; // for ASH sampling, get current SQL's sql_id & plan_id
 
   char flt_trace_id_[common::OB_MAX_UUID_LENGTH + 1];
   char flt_span_id_[common::OB_MAX_UUID_LENGTH + 1];

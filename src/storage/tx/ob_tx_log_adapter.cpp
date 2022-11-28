@@ -16,7 +16,7 @@
 
 namespace oceanbase
 {
-using namespace palf;
+using namespace share;
 namespace transaction
 {
 
@@ -35,13 +35,13 @@ int ObLSTxLogAdapter::init(ObITxLogParam *param)
 
 int ObLSTxLogAdapter::submit_log(const char *buf,
                                  const int64_t size,
-                                 const palf::SCN base_ts,
+                                 const SCN base_ts,
                                  ObTxBaseLogCb *cb,
                                  const bool need_nonblock)
 {
   int ret = OB_SUCCESS;
   palf::LSN lsn;
-  palf::SCN ts;
+  SCN ts;
 
   if (OB_ISNULL(log_handler_) || !log_handler_->is_valid() || NULL == buf || 0 == size
       || base_ts.convert_to_ts() > ObTimeUtility::current_time() + 86400000000L) {

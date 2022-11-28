@@ -111,8 +111,8 @@ TEST(TestLogMeta, test_log_meta_generate)
   LogMeta meta1, meta2;
   LSN prev_lsn(10000), lsn(20000);
   int64_t init_pid(2);
-  SCN init_scn;
-  init_scn.convert_for_lsn_allocator(10);
+  share::SCN init_scn;
+  init_scn.convert_for_logservice(10);
   int64_t init_cksum(10);
   PalfBaseInfo base_info;
   LogInfo log_info;

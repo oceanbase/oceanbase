@@ -30,7 +30,7 @@
 #include "storage/ob_i_store.h"
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -1159,7 +1159,7 @@ public:
   ObString data_buffer_;
   ObDDLMacroBlockType block_type_;
   ObLogicMacroBlockId logic_id_;
-  palf::SCN start_scn_;
+  share::SCN start_scn_;
 };
 
 }//end namespace blocksstable

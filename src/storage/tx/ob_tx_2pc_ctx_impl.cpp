@@ -16,6 +16,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace transaction
 {
 
@@ -139,7 +140,7 @@ int ObPartTransCtx::do_pre_commit(bool &need_wait)
 int ObPartTransCtx::do_commit()
 {
   int ret = OB_SUCCESS;
-  palf::SCN gts, local_max_read_version;
+  SCN gts, local_max_read_version;
 
   if (is_local_tx_()) {
     if (OB_FAIL(get_gts_(gts))) {
@@ -157,7 +158,7 @@ int ObPartTransCtx::do_commit()
       mt_ctx_.before_prepare(gts);
       if (OB_FAIL(get_local_max_read_version_(local_max_read_version))) {
         TRANS_LOG(ERROR, "get local max read version failed", KR(ret), K(*this));
-      } else if (OB_FAIL(ctx_tx_data_.set_commit_version(palf::SCN::max(gts, local_max_read_version)))) {
+      } else if (OB_FAIL(ctx_tx_data_.set_commit_version(SCN::max(gts, local_max_read_version)))) {
         TRANS_LOG(ERROR, "set tx data commit version failed", K(ret));
       }
     }
@@ -231,7 +232,7 @@ int ObPartTransCtx::check_and_response_scheduler_(int result)
 }
 
 
-int ObPartTransCtx::update_local_max_commit_version_(const palf::SCN &commit_version)
+int ObPartTransCtx::update_local_max_commit_version_(const SCN &commit_version)
 {
   int ret = OB_SUCCESS;
   trans_service_->get_tx_version_mgr().update_max_commit_ts(commit_version, false);

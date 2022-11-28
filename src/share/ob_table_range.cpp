@@ -9,12 +9,11 @@
 
 namespace oceanbase
 {
-using palf::SCN;
 
 namespace share
 {
-const palf::SCN ObScnRange::MIN_SCN = palf::SCN::min_scn();
-const palf::SCN ObScnRange::MAX_SCN = palf::SCN::max_scn();
+const SCN ObScnRange::MIN_SCN = SCN::min_scn();
+const SCN ObScnRange::MAX_SCN = SCN::max_scn();
 
 ObScnRange::ObScnRange()
   : start_scn_(MIN_SCN),

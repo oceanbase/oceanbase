@@ -53,7 +53,7 @@ public:
   share::ObLSID ls_id_;
   int64_t data_checksum_;
   int64_t row_count_;
-  palf::SCN compaction_scn_;
+  SCN compaction_scn_;
   int replica_type_;
   ObTabletReplicaReportColumnMeta column_meta_;
 };
@@ -72,7 +72,7 @@ public:
       const ObTabletLSPair &start_pair,
       const int64_t batch_cnt,
       const uint64_t tenant_id,
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       common::ObIArray<ObTabletChecksumItem> &items);
   // multi get tablet checksum
   static int load_tablet_checksum_items(
@@ -101,7 +101,7 @@ public:
   static int delete_tablet_checksum_items(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
-      const palf::SCN &gc_compaction_scn);
+      const SCN &gc_compaction_scn);
   static int delete_tablet_checksum_items(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
@@ -109,14 +109,14 @@ public:
   static int load_all_compaction_scn(
       common::ObISQLClient &sql_client, 
       const uint64_t tenant_id,
-      common::ObIArray<palf::SCN> &compaction_scn_arr);
+      common::ObIArray<share::SCN> &compaction_scn_arr);
 
 private:
   static int construct_load_sql_str_(
       const uint64_t tenant_id,
       const ObTabletLSPair &start_pair,
       const int64_t batch_cnt,
-      const palf::SCN &compaction_scn,
+      const SCN &compaction_scn,
       common::ObSqlString &sql);
   static int construct_load_sql_str_(
       const uint64_t tenant_id,

@@ -18,7 +18,7 @@
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_rpc_struct.h"
 #include "storage/tx_storage/ob_ls_handle.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -497,7 +497,7 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
           if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(autoinc_param.dest_tablet_id_, tablet_handle))) {
             LOG_WARN("failed to get tablet", K(tmp_ret), K(autoinc_param));
           } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_tablet_autoinc_seq(autoinc_param.autoinc_seq_,
-                                                                                    palf::SCN::max_scn()))) {
+                                                                                    SCN::max_scn()))) {
             LOG_WARN("failed to update tablet autoinc seq", K(tmp_ret), K(autoinc_param));
           }
           autoinc_param.ret_code_ = tmp_ret;
@@ -512,7 +512,7 @@ int ObTabletAutoincSeqRpcHandler::replay_update_tablet_autoinc_seq(
     const ObLS *ls,
     const ObTabletID &tablet_id,
     const uint64_t autoinc_seq,
-    const palf::SCN &replay_scn)
+    const SCN &replay_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(ls == nullptr || !tablet_id.is_valid() || autoinc_seq == 0 || !replay_scn.is_valid_and_not_min())) {

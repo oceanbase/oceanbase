@@ -69,7 +69,7 @@ ObPartitionBarrierLogStateEnum ObPartitionBarrierLogState::to_persistent_state()
   return persistent_state;
 }
 
-void ObPartitionBarrierLogState::set_log_info(const ObPartitionBarrierLogStateEnum state, const int64_t log_id, const palf::SCN &scn, const int64_t schema_version)
+void ObPartitionBarrierLogState::set_log_info(const ObPartitionBarrierLogStateEnum state, const int64_t log_id, const SCN &scn, const int64_t schema_version)
 {
   state_ = state;
   log_id_ = log_id;
@@ -221,7 +221,10 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_sstable_(false),
     ddl_checkpoint_scn_(),
     ddl_start_scn_(),
-    ddl_snapshot_version_(0)
+    ddl_snapshot_version_(0),
+    tx_data_(),
+    binding_info_(),
+    auto_inc_seq_()
 {
   clog_checkpoint_scn_.set_min();
 }
@@ -233,7 +236,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const ObStorageSchema *storage_schema,
     const int64_t rebuild_seq,
     const bool need_report,
-    const palf::SCN clog_checkpoint_scn,
+    const SCN clog_checkpoint_scn,
     const bool need_check_sstable)
   : table_handle_(table_handle),
     snapshot_version_(snapshot_version),
@@ -247,7 +250,10 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_sstable_(need_check_sstable),
     ddl_checkpoint_scn_(),
     ddl_start_scn_(),
-    ddl_snapshot_version_(0)
+    ddl_snapshot_version_(0),
+    tx_data_(),
+    binding_info_(),
+    auto_inc_seq_()
 {
   clog_checkpoint_scn_ = clog_checkpoint_scn;
 }
@@ -272,7 +278,10 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_sstable_(false),
     ddl_checkpoint_scn_(),
     ddl_start_scn_(),
-    ddl_snapshot_version_(0)
+    ddl_snapshot_version_(0),
+    tx_data_(),
+    binding_info_(),
+    auto_inc_seq_()
 {
   clog_checkpoint_scn_.set_min();
 }
@@ -295,7 +304,7 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
     need_report_(false),
     rebuild_seq_(OB_INVALID_VERSION),
     update_logical_minor_sstable_(false),
-    start_scn_(palf::SCN::min_scn()),
+    start_scn_(SCN::min_scn()),
     tablet_meta_(nullptr)
 {
 }
@@ -317,7 +326,7 @@ bool ObBatchUpdateTableStoreParam::is_valid() const
       && multi_version_start_ >= 0
       && rebuild_seq_ > OB_INVALID_VERSION
       && ((!update_logical_minor_sstable_ && OB_NOT_NULL(tablet_meta_))
-          || (update_logical_minor_sstable_ && start_scn_ > palf::SCN::min_scn()));
+          || (update_logical_minor_sstable_ && start_scn_ > SCN::min_scn()));
 }
 
 int ObBatchUpdateTableStoreParam::assign(
@@ -340,7 +349,7 @@ int ObBatchUpdateTableStoreParam::assign(
   return ret;
 }
 
-int ObBatchUpdateTableStoreParam::get_max_clog_checkpoint_scn(palf::SCN &clog_checkpoint_scn) const
+int ObBatchUpdateTableStoreParam::get_max_clog_checkpoint_scn(SCN &clog_checkpoint_scn) const
 {
   int ret = OB_SUCCESS;
   clog_checkpoint_scn.set_min();

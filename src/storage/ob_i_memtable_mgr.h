@@ -61,7 +61,7 @@ public:
       logservice::ObLogHandler *log_handler,
       ObFreezer *freezer,
       ObTenantMetaMemMgr *t3m);
-  virtual int create_memtable(const palf::SCN clog_checkpoint_scn,
+  virtual int create_memtable(const share::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
                               const bool for_replay = false)
   {
@@ -81,7 +81,7 @@ public:
 
   virtual int get_boundary_memtable(ObTableHandleV2 &handle) { return OB_SUCCESS; }
 
-  virtual int get_memtable_for_replay(palf::SCN replay_scn, ObTableHandleV2 &handle)
+  virtual int get_memtable_for_replay(share::SCN replay_scn, ObTableHandleV2 &handle)
   {
     return OB_SUCCESS;
   }
@@ -94,7 +94,7 @@ public:
       memtable::ObMemtable *&memtable,
       const memtable::MultiSourceDataUnitType type) const;
 
-  int release_memtables(const palf::SCN &scn);
+  int release_memtables(const share::SCN &scn);
   // force release all memtables
   // WARNING: this will release all the ref of memtable, make sure you will not use it again.
   int release_memtables();
@@ -105,9 +105,9 @@ public:
     return has_memtable_();
   }
 
-  int get_newest_clog_checkpoint_scn(palf::SCN &clog_checkpoint_scn);
+  int get_newest_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn);
 
-  int get_newest_snapshot_version(palf::SCN &snapshot_version);
+  int get_newest_snapshot_version(share::SCN &snapshot_version);
 
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }

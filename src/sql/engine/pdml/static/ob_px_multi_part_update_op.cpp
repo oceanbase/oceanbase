@@ -141,11 +141,11 @@ int ObPxMultiPartUpdateOp::read_row(ObExecContext &ctx,
     row = &child_->get_spec().output_;
     if (NO_PARTITION_ID_FLAG == part_id_idx) {
       ObDASTableLoc *table_loc = upd_rtdef_.dupd_rtdef_.table_loc_;
-      if (OB_ISNULL(table_loc) || table_loc->tablet_locs_.size() != 1) {
+      if (OB_ISNULL(table_loc) || table_loc->get_tablet_locs().size() != 1) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("insert table location is invalid", K(ret), KPC(table_loc));
       } else {
-        tablet_id = table_loc->tablet_locs_.get_first()->tablet_id_;
+        tablet_id = table_loc->get_first_tablet_loc()->tablet_id_;
       }
     } else if (child_->get_spec().output_.count() > part_id_idx) {
       ObExpr *expr = child_->get_spec().output_.at(part_id_idx);

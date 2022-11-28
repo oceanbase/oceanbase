@@ -68,7 +68,7 @@ public:
   // OB_TRANSACTION_SET_VIOLATION if encountering lost update. The interesting
   // implementation about mvcc_write is located in ob_mvcc_row.cpp/.h
   int mvcc_write(ObIMemtableCtx &ctx,
-                 const palf::SCN snapshot_version,
+                 const share::SCN snapshot_version,
                  ObMvccRow &value,
                  const ObTxNodeArg &arg,
                  ObMvccWriteResult &res);
@@ -115,7 +115,7 @@ public:
   int estimate_scan_row_count(const ObMvccScanRange &range,
                               storage::ObPartitionEst &part_est) const;
 private:
-  int try_compact_row_when_mvcc_read_(const palf::SCN &snapshot_version,
+  int try_compact_row_when_mvcc_read_(const share::SCN &snapshot_version,
                                       ObMvccRow &row);
 
   int build_tx_node_(ObIMemtableCtx &ctx,

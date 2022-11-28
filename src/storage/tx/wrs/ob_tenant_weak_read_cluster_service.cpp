@@ -171,8 +171,8 @@ void ObTenantWeakReadClusterService::update_valid_server_count_()
 
 #define QUERY_CLUSTER_VERSION_SQL "select min_version, max_version from %s where tenant_id = %lu and level_id = %d and level_value = ''"
 
-int ObTenantWeakReadClusterService::query_cluster_version_range_(palf::SCN &cur_min_version,
-    palf::SCN &cur_max_version,
+int ObTenantWeakReadClusterService::query_cluster_version_range_(SCN &cur_min_version,
+    SCN &cur_max_version,
     bool &record_exist)
 {
   int ret = OB_SUCCESS;
@@ -234,10 +234,10 @@ int ObTenantWeakReadClusterService::query_cluster_version_range_(palf::SCN &cur_
     where tenant_id = %lu and level_id = %d and level_value = '' and min_version = %lu and max_version = %lu \
 "
 
-int ObTenantWeakReadClusterService::build_update_version_sql_(const palf::SCN last_min_version,
-    const palf::SCN last_max_version,
-    const palf::SCN new_min_version,
-    const palf::SCN new_max_version,
+int ObTenantWeakReadClusterService::build_update_version_sql_(const SCN last_min_version,
+    const SCN last_max_version,
+    const SCN new_min_version,
+    const SCN new_max_version,
     const bool record_exist,
     ObSqlString &sql)
 {
@@ -265,10 +265,10 @@ int ObTenantWeakReadClusterService::build_update_version_sql_(const palf::SCN la
   return ret;
 }
 
-int ObTenantWeakReadClusterService::persist_version_if_need_(const palf::SCN last_min_version,
-    const palf::SCN last_max_version,
-    const palf::SCN new_min_version,
-    const palf::SCN new_max_version,
+int ObTenantWeakReadClusterService::persist_version_if_need_(const SCN last_min_version,
+    const SCN last_max_version,
+    const SCN new_min_version,
+    const SCN new_max_version,
     const bool record_exist,
     int64_t &affected_rows)
 {
@@ -364,7 +364,7 @@ int ObTenantWeakReadClusterService::start_service()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("WRS leader epoch is invalid", KR(ret), K(leader_epoch));
   } else {
-    palf::SCN cur_min_version, cur_max_version;
+    SCN cur_min_version, cur_max_version;
     bool record_exist = false;
 
     begin_query_ts = ObTimeUtility::current_time();
@@ -377,12 +377,12 @@ int ObTenantWeakReadClusterService::start_service()
 
       // new weak read version delay should smaller than max_stale_time
       int64_t new_version = MAX(cur_max_version.get_val_for_gts(), ObTimeUtility::current_time_ns() - max_stale_time);
-      palf::SCN new_version_scn;
+      SCN new_version_scn;
       if (OB_FAIL(new_version_scn.convert_for_gts(new_version))) {
         LOG_ERROR("convert for gts fail", KR(ret));
       } else {
-        palf::SCN new_min_version = new_version_scn;
-        palf::SCN new_max_version = generate_max_version_(new_min_version);
+        SCN new_min_version = new_version_scn;
+        SCN new_max_version = generate_max_version_(new_min_version);
         int64_t affected_rows = 0;
 
         // do persist
@@ -463,18 +463,18 @@ void ObTenantWeakReadClusterService::get_serve_info(bool &in_service, int64_t &l
   leader_epoch = leader_epoch_;
 }
 
-int ObTenantWeakReadClusterService::get_version(palf::SCN &version) const
+int ObTenantWeakReadClusterService::get_version(SCN &version) const
 {
-  palf::SCN min_version, max_version;
+  SCN min_version, max_version;
   return get_version(version, min_version, max_version);
 }
 
-int ObTenantWeakReadClusterService::get_version(palf::SCN &version, palf::SCN &min_version,
-    palf::SCN &max_version) const
+int ObTenantWeakReadClusterService::get_version(SCN &version, SCN &min_version,
+    SCN &max_version) const
 {
   int ret = OB_SUCCESS;
   static const int64_t GET_CLUSTER_VERSION_RDLOCK_TIMEOUT = 100;
-  palf::SCN ret_version;
+  SCN ret_version;
   int64_t rdlock_wait_time = GET_CLUSTER_VERSION_RDLOCK_TIMEOUT;
 
   // Lock wait time is necessary to prevent 'deadlock'
@@ -610,7 +610,7 @@ bool ObTenantWeakReadClusterService::check_can_update_version_()
 int ObTenantWeakReadClusterService::update_version(int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
-  palf::SCN new_version;
+  SCN new_version;
   int64_t cur_leader_epoch = 0;
   int64_t skipped_server_count = 0;
   bool need_print = false;
@@ -645,8 +645,8 @@ int ObTenantWeakReadClusterService::update_version(int64_t &affected_rows)
     // if new version exceeds the weak read version range([min, max)), do PERSIST
     // NOTE：Note that min_version maybe equal to max_version
     if (new_version > min_version_ && new_version >= max_version_) {
-      palf::SCN new_min_version = new_version;
-      palf::SCN new_max_version = generate_max_version_(new_min_version);
+      SCN new_min_version = new_version;
+      SCN new_max_version = generate_max_version_(new_min_version);
       // weak read record should be inserted in start service, and following update version only include UPDATE SQL
       bool record_exist = true;
 
@@ -677,12 +677,12 @@ int ObTenantWeakReadClusterService::update_version(int64_t &affected_rows)
   return ret;
 }
 
-palf::SCN ObTenantWeakReadClusterService::compute_version_(int64_t &skipped_servers, bool need_print) const
+SCN ObTenantWeakReadClusterService::compute_version_(int64_t &skipped_servers, bool need_print) const
 {
   /// min weak read version delay should not smaller than max_stale_time
-  palf::SCN base_version = ObWeakReadUtil::generate_min_weak_read_version(MTL_ID());
+  SCN base_version = ObWeakReadUtil::generate_min_weak_read_version(MTL_ID());
   // weak read version should increase monotonically
-  base_version = palf::SCN::max(current_version_, base_version);
+  base_version = SCN::max(current_version_, base_version);
   return cluster_version_mgr_.get_version(base_version, skipped_servers, need_print);
 }
 
@@ -976,7 +976,7 @@ void ObTenantWeakReadClusterService::stop_service_impl_()
 }
 
 int ObTenantWeakReadClusterService::update_server_version(const common::ObAddr &addr,
-    const palf::SCN version,
+    const SCN version,
     const int64_t valid_part_count,
     const int64_t total_part_count,
     const int64_t generate_timestamp)

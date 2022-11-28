@@ -17,7 +17,7 @@
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/tablelock/ob_obj_lock.h"
 #include "lib/lock/ob_spin_rwlock.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -86,8 +86,8 @@ public:
   // @param[in] commit_scn, if it is called by commit, set the commit logts too.
   // @param[in] status, the lock op status will be set.
   int update_lock_status(const ObTableLockOp &op_info,
-                         const palf::SCN &commit_version,
-                         const palf::SCN &commit_scn,
+                         const share::SCN &commit_version,
+                         const share::SCN &commit_scn,
                          const ObTableLockOpStatus status);
 
   int get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr);
@@ -118,8 +118,8 @@ public:
   bool is_active_memtable() const override;
 
   // =========== INHERITED FROM ObCommonCheckPoint ==========
-  virtual palf::SCN get_rec_scn();
-  virtual int flush(palf::SCN recycle_scn, bool need_freeze = true);
+  virtual share::SCN get_rec_scn();
+  virtual int flush(share::SCN recycle_scn, bool need_freeze = true);
 
   virtual ObTabletID get_tablet_id() const;
 
@@ -132,7 +132,7 @@ public:
   // used by the replay process of multi data source.
   int replay_lock(memtable::ObMemtableCtx *mem_ctx,
                   const ObTableLockOp &lock_op,
-                  const palf::SCN &scn);
+                  const share::SCN &scn);
 
   // ================ NOT SUPPORTED INTERFACE ===============
 
@@ -179,7 +179,7 @@ public:
 
   virtual int get_frozen_schema_version(int64_t &schema_version) const override;
 
-  void set_flushed_scn(const palf::SCN &flushed_scn) { flushed_scn_ = flushed_scn; }
+  void set_flushed_scn(const share::SCN &flushed_scn) { flushed_scn_ = flushed_scn; }
 
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(snapshot_version), K_(ls_id));
 private:
@@ -199,11 +199,11 @@ private:
               const int64_t expired_time = 0);
   int check_lock_need_replay_(memtable::ObMemtableCtx *mem_ctx,
                               const ObTableLockOp &lock_op,
-                              const palf::SCN &scn,
+                              const share::SCN &scn,
                               bool &need_replay);
   int replay_lock_(memtable::ObMemtableCtx *mem_ctx,
                    const ObTableLockOp &lock_op,
-                   const palf::SCN &scn);
+                   const share::SCN &scn);
   int post_obj_lock_conflict_(memtable::ObMvccAccessCtx &acc_ctx,
                               const ObLockID &lock_id,
                               const ObTransID &conflict_tx_id,
@@ -219,11 +219,11 @@ private:
   share::ObLSID ls_id_;
   // the lock map store lock data
   ObOBJLockMap obj_lock_map_;
-  palf::SCN freeze_scn_;
+  share::SCN freeze_scn_;
   // data before the flushed_scn_ have been flushed
-  palf::SCN flushed_scn_;
-  palf::SCN rec_scn_;
-  palf::SCN max_committed_scn_;
+  share::SCN flushed_scn_;
+  share::SCN rec_scn_;
+  share::SCN max_committed_scn_;
   bool is_frozen_;
 
   storage::ObFreezer *freezer_;

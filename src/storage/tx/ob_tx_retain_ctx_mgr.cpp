@@ -20,11 +20,12 @@
 
 namespace oceanbase
 {
+using namespace share;
 
 namespace transaction
 {
 
-ObAdvanceLSCkptTask::ObAdvanceLSCkptTask(share::ObLSID ls_id, palf::SCN ckpt_ts)
+ObAdvanceLSCkptTask::ObAdvanceLSCkptTask(share::ObLSID ls_id, SCN ckpt_ts)
 {;
   task_type_ = ObTransRetryTaskType::ADVANCE_LS_CKPT_TASK;
   ls_id_  = ls_id;
@@ -116,7 +117,7 @@ int ObIRetainCtxCheckFunctor::del_retain_ctx()
 
 int ObMDSRetainCtxFunctor::init(ObPartTransCtx *ctx,
                                 RetainCause cause,
-                                const palf::SCN &final_log_ts,
+                                const SCN &final_log_ts,
                                 palf::LSN final_log_lsn)
 {
   int ret = OB_SUCCESS;

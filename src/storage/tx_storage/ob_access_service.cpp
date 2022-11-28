@@ -27,6 +27,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace storage
 {
 
@@ -212,7 +213,7 @@ int ObAccessService::table_scan(
   ObTableScanParam &param = static_cast<ObTableScanParam &>(vparam);
   ObStoreAccessType access_type = param.scan_flag_.is_read_latest() ?
     ObStoreAccessType::READ_LATEST : ObStoreAccessType::READ;
-  palf::SCN user_specified_snapshot_scn;
+  SCN user_specified_snapshot_scn;
   if (ObAccessTypeCheck::is_read_access_type(access_type) && param.fb_snapshot_.is_valid()) {
     //todo lixinze:后续会判断是否有效
     user_specified_snapshot_scn = param.fb_snapshot_;
@@ -291,7 +292,7 @@ int ObAccessService::table_rescan(
     ObLSTabletService *tablet_service = nullptr;
     ObStoreAccessType access_type = param.scan_flag_.is_read_latest() ?
       ObStoreAccessType::READ_LATEST : ObStoreAccessType::READ;
-    palf::SCN user_specified_snapshot_scn;
+    SCN user_specified_snapshot_scn;
     if (ObAccessTypeCheck::is_read_access_type(access_type) && param.fb_snapshot_.is_valid()) {
       //todo lixinze:后续会判断是否有效
       user_specified_snapshot_scn = param.fb_snapshot_;
@@ -384,7 +385,7 @@ int ObAccessService::check_read_allowed_(
     const ObStoreAccessType access_type,
     const ObTableScanParam &scan_param,
     ObStoreCtxGuard &ctx_guard,
-    palf::SCN user_specified_snapshot)
+    SCN user_specified_snapshot)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;

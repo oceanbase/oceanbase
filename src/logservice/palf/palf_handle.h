@@ -21,13 +21,16 @@
 #include "palf_iterator.h"
 namespace oceanbase
 {
+namespace share
+{
+class SCN;
+}
 namespace palf
 {
 class PalfAppendOptions;
 class PalfFSCb;
 class PalfRoleChangeCb;
 class PalfLocationCacheCb;
-class SCN;
 class PalfHandle
 {
 public:
@@ -79,9 +82,9 @@ public:
   int append(const PalfAppendOptions &opts,
              const void *buffer,
              const int64_t nbytes,
-             const SCN &ref_scn,
+             const share::SCN &ref_scn,
              LSN &lsn,
-             SCN &scn);
+             share::SCN &scn);
 
   int raw_write(const PalfAppendOptions &opts,
                 const LSN &lsn,
@@ -117,7 +120,7 @@ public:
   // - OB_ENTRY_NOT_EXIST: there is no log's scn is higher than scn
   // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
   // - others: bug
-  int seek(const SCN &scn, PalfGroupBufferIterator &iter);
+  int seek(const share::SCN &scn, PalfGroupBufferIterator &iter);
 
   // @desc: query coarse lsn by scn, that means there is a LogGroupEntry in disk,
   // its lsn and scn are result_lsn and result_scn, and result_scn <= scn.
@@ -131,7 +134,7 @@ public:
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
   // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too small, log files may have been recycled
   // - others: bug
-  virtual int locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn);
+  virtual int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn);
 
   // @desc: query coarse scn by lsn, that means there is a log in disk,
   // its lsn and scn are result_lsn and result_scn, and result_lsn <= lsn.
@@ -142,7 +145,7 @@ public:
   // - OB_INVALID_ARGUMENT
   // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
   // - others: bug
-  virtual int locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn);
+  virtual int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn);
 
   // 开启日志同步
   virtual int enable_sync();
@@ -156,7 +159,7 @@ public:
 
   // 返回文件中可读的最早日志的位置信息
   int get_begin_lsn(LSN &lsn) const;
-  int get_begin_scn(SCN &scn) const;
+  int get_begin_scn(share::SCN &scn) const;
 
   // PalfBaseInfo include the 'base_lsn' and the 'prev_log_info' of sliding window.
   // @param[in] const LSN&, base_lsn of ls.
@@ -167,9 +170,9 @@ public:
   // 返回最后一条已确认日志的下一位置
   // 在没有新的写入的场景下，返回的end_lsn不可读
   virtual int get_end_lsn(LSN &lsn) const;
-  int get_end_scn(SCN &scn) const;
+  int get_end_scn(share::SCN &scn) const;
   int get_max_lsn(LSN &lsn) const;
-  int get_max_scn(SCN &scn) const;
+  int get_max_scn(share::SCN &scn) const;
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const;
 
   //================= 分布式相关接口 =========================
@@ -369,7 +372,7 @@ public:
   int change_access_mode(const int64_t proposal_id,
                          const int64_t mode_version,
                          const AccessMode &access_mode,
-                         const SCN &ref_scn);
+                         const share::SCN &ref_scn);
   // @brief: query the access_mode of palf and it's corresponding mode_version
   // @param[out] palf::AccessMode &access_mode: current access_mode
   // @param[out] int64_t &mode_version: mode_version corresponding to AccessMode

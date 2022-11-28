@@ -60,11 +60,11 @@ public:
   {}
   virtual ~ObDictDecoder() {}
 
-  OB_INLINE int init(const common::ObObjMeta &obj_meta,
+  OB_INLINE int init(
            const ObMicroBlockHeader &micro_block_header,
            const ObColumnHeader &column_header,
            const char *meta);
-  int init(const common::ObObjMeta &obj_meta, const char *meta_header);
+  int init(const common::ObObjType &store_obj_type, const char *meta_header);
   virtual int decode(ObColumnDecoderCtx &ctx, common::ObObj &cell, const int64_t row_id,
       const ObBitStream &bs, const char *data, const int64_t len) const override;
 
@@ -201,7 +201,7 @@ private:
   const char *var_data_;
 };
 
-OB_INLINE int ObDictDecoder::init(const common::ObObjMeta &obj_meta,
+OB_INLINE int ObDictDecoder::init(
     const ObMicroBlockHeader &micro_block_header,
     const ObColumnHeader &column_header,
     const char *meta)
@@ -213,10 +213,10 @@ OB_INLINE int ObDictDecoder::init(const common::ObObjMeta &obj_meta,
     ret = common::OB_INIT_TWICE;
     STORAGE_LOG(WARN, "init twice", K(ret));
   } else {
-    const common::ObObjTypeClass type_class = ob_obj_type_class(obj_meta.get_type());
+    const common::ObObjTypeClass type_class = ob_obj_type_class(column_header.get_store_obj_type());
     store_class_ = get_store_class_map()[type_class];
     if (common::ObIntTC == type_class) {
-      int64_t type_store_size = get_type_size_map()[obj_meta.get_type()];
+      int64_t type_store_size = get_type_size_map()[column_header.get_store_obj_type()];
       integer_mask_ = ~INTEGER_MASK_TABLE[type_store_size];
     } else {
       integer_mask_ = 0;

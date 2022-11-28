@@ -34,7 +34,7 @@ public:
   ObStringDiffDecoder();
   virtual ~ObStringDiffDecoder();
 
-  OB_INLINE int init(const common::ObObjMeta &obj_metan,
+  OB_INLINE int init(
       const ObMicroBlockHeader &micro_block_header,
       const ObColumnHeader &column_header,
       const char *meta);
@@ -61,12 +61,12 @@ private:
   const ObStringDiffHeader *header_;
 };
 
-OB_INLINE int ObStringDiffDecoder::init(const common::ObObjMeta &obj_meta,
+OB_INLINE int ObStringDiffDecoder::init(
     const ObMicroBlockHeader &micro_block_header,
     const ObColumnHeader &column_header,
     const char *meta)
 {
-  UNUSEDx(obj_meta, micro_block_header, column_header);
+  UNUSEDx(micro_block_header, column_header);
   // performance critical, don't check params, already checked upper layer
   int ret = common::OB_SUCCESS;
   if (is_inited()) {

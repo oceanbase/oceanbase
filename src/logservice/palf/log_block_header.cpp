@@ -19,6 +19,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace palf
 {
 LogBlockHeader::LogBlockHeader()

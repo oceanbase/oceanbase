@@ -53,7 +53,7 @@ int ObSnapshotInfo::init(
     const uint64_t tenant_id,
     const uint64_t tablet_id,
     const ObSnapShotType &snapshot_type,
-    const palf::SCN &snapshot_scn,
+    const SCN &snapshot_scn,
     const int64_t schema_version,
     const char* comment)
 {
@@ -179,7 +179,7 @@ int ObSnapshotTableProxy::batch_add_snapshot(
     const share::ObSnapShotType snapshot_type,
     const uint64_t tenant_id,
     const int64_t schema_version,
-    const palf::SCN &snapshot_scn,
+    const SCN &snapshot_scn,
     const char *comment,
     const common::ObIArray<ObTabletID> &tablet_id_array)
 {
@@ -194,7 +194,7 @@ int ObSnapshotTableProxy::batch_add_snapshot(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(schema_version), K(snapshot_scn), K(tablet_id_array));
   } else {
-    palf::SCN snapshot_gc_scn = palf::SCN::min_scn();
+    SCN snapshot_gc_scn = SCN::min_scn();
     int64_t report_idx = 0;
     const int64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     ObSnapshotInfo info;
@@ -307,7 +307,7 @@ int ObSnapshotTableProxy::batch_remove_snapshots(
     share::ObSnapShotType snapshot_type,
     const uint64_t tenant_id,
     const int64_t schema_version,
-    const palf::SCN &snapshot_scn,
+    const SCN &snapshot_scn,
     const common::ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
@@ -363,8 +363,8 @@ int extract_snapshot(const ObMySQLResult &result, ObSnapshotInfo &snapshot, cons
 {
   int ret = OB_SUCCESS;
 
-  palf::SCN snapshot_scn;
-  uint64_t snapshot_scn_val = palf::OB_INVALID_SCN_VAL;
+  SCN snapshot_scn;
+  uint64_t snapshot_scn_val = share::OB_INVALID_SCN_VAL;
   ObSnapShotType snapshot_type = ObSnapShotType::MAX_SNAPSHOT_TYPE;
   uint64_t tablet_id = UINT64_MAX;
   int64_t schema_version = -1;
@@ -432,7 +432,7 @@ int ObSnapshotTableProxy::get_all_snapshots(
 }
 
 int ObSnapshotTableProxy::check_snapshot_valid(
-    const palf::SCN &snapshot_gc_scn,
+    const SCN &snapshot_gc_scn,
     const ObSnapshotInfo &info,
     bool &is_valid) const
 {
@@ -597,7 +597,7 @@ int ObSnapshotTableProxy::get_snapshot(
     ObISQLClient &proxy,
     const uint64_t tenant_id,
     const ObSnapShotType snapshot_type,
-    const palf::SCN &snapshot_scn,
+    const SCN &snapshot_scn,
     ObSnapshotInfo &snapshot_info)
 {
   int ret = OB_SUCCESS;

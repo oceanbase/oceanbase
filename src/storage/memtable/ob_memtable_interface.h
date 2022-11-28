@@ -59,15 +59,15 @@ public:
   virtual void inc_ref() = 0;
   virtual void dec_ref() = 0;
   virtual int trans_begin() = 0;
-  virtual int trans_end(const bool commit, const palf::SCN trans_version, const palf::SCN final_scn) = 0;
+  virtual int trans_end(const bool commit, const share::SCN trans_version, const share::SCN final_scn) = 0;
   virtual int trans_clear() = 0;
   virtual int elr_trans_preparing() = 0;
   virtual int trans_kill() = 0;
   virtual int trans_publish() = 0;
   virtual int trans_replay_begin() = 0;
   virtual int trans_replay_end(const bool commit,
-                               const palf::SCN trans_version,
-                               const palf::SCN final_scn,
+                               const share::SCN trans_version,
+                               const share::SCN final_scn,
                                const uint64_t log_cluster_version = 0,
                                const uint64_t checksum = 0) = 0;
   virtual void print_callbacks() = 0;
@@ -148,7 +148,7 @@ struct ObMergePriorityInfo
 class ObIMemtable: public storage::ObITable
 {
 public:
-  ObIMemtable() : snapshot_version_(palf::SCN::max_scn())
+  ObIMemtable() : snapshot_version_(share::SCN::max_scn())
   {}
   virtual ~ObIMemtable() {}
 
@@ -209,9 +209,9 @@ public:
   virtual void dec_pending_lob_count() {}
   virtual int on_memtable_flushed() { return common::OB_SUCCESS; }
   virtual bool can_be_minor_merged() { return false; }
-  void set_snapshot_version(const palf::SCN snapshot_version) { snapshot_version_  = snapshot_version; }
+  void set_snapshot_version(const share::SCN snapshot_version) { snapshot_version_  = snapshot_version; }
   virtual int64_t get_snapshot_version() const override { return snapshot_version_.get_val_for_tx(); }
-  virtual palf::SCN get_snapshot_version_scn() const { return snapshot_version_; }
+  virtual share::SCN get_snapshot_version_scn() const { return snapshot_version_; }
   virtual int64_t get_upper_trans_version() const override
   { return OB_NOT_SUPPORTED; }
   virtual int64_t get_max_merged_trans_version() const override
@@ -272,7 +272,7 @@ public:
     return false;
   }
 protected:
-  palf::SCN snapshot_version_;
+  share::SCN snapshot_version_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

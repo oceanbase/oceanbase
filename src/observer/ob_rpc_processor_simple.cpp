@@ -48,7 +48,7 @@
 #include "share/sequence/ob_sequence_cache.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/ob_log_handler.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
@@ -1277,7 +1277,7 @@ int ObRpcGetLSAccessModeP::process()
       palf::AccessMode mode;
       int64_t mode_version = palf::INVALID_PROPOSAL_ID;
       int64_t second_proposal_id = 0;
-      const palf::SCN ref_scn = palf::SCN::min_scn();
+      const SCN ref_scn = SCN::min_scn();
       if (OB_FAIL(log_handler->get_access_mode(mode_version, mode))) {
         LOG_WARN("failed to get access mode", KR(ret), K(ls_id));
       } else if (OB_FAIL(result_.init(tenant_id, ls_id, mode_version, mode, ref_scn))) {
@@ -1925,7 +1925,7 @@ int ObRpcRemoteWriteDDLPrepareLogP::process()
       LOG_WARN("init sstable redo writer", K(ret), K(table_key));
     } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
     } else {
-      palf::SCN prepare_scn;
+      SCN prepare_scn;
       if (OB_FAIL(sstable_redo_writer.write_prepare_log(table_key,
                                                         arg_.table_id_,
                                                         arg_.execution_id_,

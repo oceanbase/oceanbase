@@ -25,7 +25,7 @@
 #include "share/backup/ob_archive_store.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ls/ob_ls_i_life_manager.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/ob_debug_sync.h"
 
 using namespace oceanbase;
@@ -652,7 +652,7 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
   int64_t since_piece_id = 0;
   ObDestRoundSummary summary;
   ObDestRoundCheckpointer checkpointer;
-  palf::SCN max_checkpoint_scn = palf::SCN::min_scn();
+  SCN max_checkpoint_scn = SCN::min_scn();
   if (OB_FAIL(ObTenantArchiveMgr::decide_piece_id(round_info.start_scn_, round_info.base_piece_id_, round_info.piece_switch_interval_, round_info.checkpoint_scn_, since_piece_id))) {
     LOG_WARN("failed to calc since piece id", K(ret), K(round_info));
   } else if (OB_FAIL(archive_table_op_.get_dest_round_summary(*sql_proxy_, round_info.dest_id_, round_info.round_id_, since_piece_id, summary))) {
@@ -678,7 +678,7 @@ int ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
   return ret;
 }
 
-int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, palf::SCN &max_checkpoint_scn) const
+int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, SCN &max_checkpoint_scn) const
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
@@ -686,7 +686,7 @@ int ObArchiveHandler::get_max_checkpoint_scn_(const uint64_t tenant_id, palf::SC
   if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, sql_proxy_, for_update, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
   } else if (OB_FALSE_IT(max_checkpoint_scn = tenant_info.get_standby_scn())) {
-  } else if (palf::SCN::base_scn() >= max_checkpoint_scn) {
+  } else if (SCN::base_scn() >= max_checkpoint_scn) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("max_checkpoint_scn not valid", K(ret), K(tenant_info));
   }

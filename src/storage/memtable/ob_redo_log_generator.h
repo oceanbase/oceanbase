@@ -74,7 +74,7 @@ public:
                     const bool log_for_lock_node);
   int search_unsubmitted_dup_tablet_redo();
   int log_submitted(const ObCallbackScope &callbacks);
-  int sync_log_succ(const palf::SCN scn, const ObCallbackScope &callbacks);
+  int sync_log_succ(const share::SCN scn, const ObCallbackScope &callbacks);
   void sync_log_fail(const ObCallbackScope &callbacks);
   ObITransCallback *get_generate_cursor() { return (ObITransCallback *)*generate_cursor_; }
 

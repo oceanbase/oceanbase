@@ -12,10 +12,11 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tablet_barrier_log.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
+using namespace share;
 namespace storage
 {
 ObTabletBarrierLogState::ObTabletBarrierLogState()
@@ -51,7 +52,7 @@ void ObTabletBarrierLogState::reset()
 
 void ObTabletBarrierLogState::set_log_info(
     const ObTabletBarrierLogStateEnum state,
-    const palf::SCN &scn,
+    const SCN &scn,
     const int64_t schema_version)
 {
   state_ = state;

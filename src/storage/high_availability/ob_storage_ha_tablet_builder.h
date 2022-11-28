@@ -22,7 +22,7 @@
 namespace oceanbase
 {
 
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -104,7 +104,7 @@ private:
       share::ObScnRange &scn_range);
   int get_ddl_sstable_max_start_scn_(
       const ObSSTableArray &ddl_sstable_array,
-      palf::SCN &max_start_scn);
+      share::SCN &max_start_scn);
   int hold_local_reuse_sstable_(
       const common::ObTabletID &tablet_id,
       ObTablesHandleArray &tables_handle);
@@ -118,13 +118,13 @@ private:
       ObTablesHandleArray &tables_handle);
   int create_remote_logical_sstable_(
       const common::ObTabletID &tablet_id,
-      const palf::SCN start_scn,
-      const palf::SCN end_scn,
+      const share::SCN start_scn,
+      const share::SCN end_scn,
       ObTablet *tablet,
       ObTableHandleV2 &table_handle);
   int build_remote_logical_sstable_param_(
-      const palf::SCN start_scn,
-      const palf::SCN end_scn,
+      const share::SCN start_scn,
+      const share::SCN end_scn,
       const ObStorageSchema &table_schema,
       const common::ObTabletID &tablet_id,
       ObTabletCreateSSTableParam &param);

@@ -24,12 +24,9 @@
 
 namespace oceanbase
 {
-namespace palf
-{
-class SCN;
-}
 namespace share
 {
+class SCN;
 class ObLSTableOperator;
 struct ObLSAttr;
 struct ObHisRestoreJobPersistInfo;
@@ -57,9 +54,9 @@ public:
   virtual void do_work() override;
   void destroy();
 public:
-  virtual palf::SCN get_rec_scn() override { return palf::SCN::max_scn();}
-  virtual int flush(palf::SCN &rec_scn) override { return OB_SUCCESS; }
-  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const palf::SCN &scn) override
+  virtual share::SCN get_rec_scn() override { return share::SCN::max_scn();}
+  virtual int flush(share::SCN &rec_scn) override { return OB_SUCCESS; }
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn) override
   {
     UNUSED(buffer);
     UNUSED(nbytes);

@@ -18,11 +18,11 @@
 #include "lib/random/ob_random.h"               // ObRandom
 #include "lib/hash/ob_array_hash_map.h"         // ObArrayHashMap
 #include "lib/function/ob_function.h"           // ObFunction
+#include "share/scn.h"                                //SCN
 #include "log_define.h"                         // utils
 #include "log_meta_info.h"                      // LogMembershipMeta
 #include "log_req.h"                            // LogLearnerReqType
 #include "log_simple_member_list.h"             // LogSimpleMemberList
-#include "scn.h"                                //SCN
 #include "log_state_mgr.h"                      // LogStateMgr
 #include "palf_callback.h"                      // PalfLocationCacheCb
 
@@ -134,7 +134,7 @@ public:
       type_(INVALID_LOG_CONFIG_CHANGE_TYPE) { }
 
   LogConfigChangeArgs(const LogConfigVersion &config_version,
-                      const SCN &ref_scn,
+                      const share::SCN &ref_scn,
                       const LogConfigChangeType type)
     : server_(), curr_member_list_(), curr_replica_num_(0), new_replica_num_(0),
       config_version_(config_version), ref_scn_(ref_scn), type_(type) { }
@@ -191,7 +191,7 @@ public:
   int64_t curr_replica_num_;
   int64_t new_replica_num_;
   LogConfigVersion config_version_;
-  SCN ref_scn_;
+  share::SCN ref_scn_;
   LogConfigChangeType type_;
 };
 

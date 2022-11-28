@@ -19,7 +19,6 @@ namespace oceanbase
 namespace share
 {
 using namespace std;
-using namespace palf;
 
 ObArchivePiece::ObArchivePiece() :
   interval_us_(0),
@@ -84,7 +83,7 @@ int ObArchivePiece::get_piece_lower_limit(SCN &scn)
   int ret = OB_SUCCESS;
   int64_t ts = (piece_id_ - base_piece_id_) * interval_us_  + genesis_scn_.convert_to_ts();
   if (OB_FAIL(scn.convert_from_ts(ts))) {
-    LOG_WARN("failed to convert_for_lsn_allocator", KPC(this), K(ret), K(ts));
+    LOG_WARN("failed to convert_for_logservice", KPC(this), K(ret), K(ts));
   }
   return ret;
 }

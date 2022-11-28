@@ -320,8 +320,8 @@ int ObOBJLock::recover_lock(
 
 int ObOBJLock::update_lock_status_(
     const ObTableLockOp &lock_op,
-    const palf::SCN &commit_version,
-    const palf::SCN &commit_scn,
+    const SCN &commit_version,
+    const SCN &commit_scn,
     const ObTableLockOpStatus status,
     ObTableLockOpList *op_list)
 {
@@ -346,8 +346,8 @@ int ObOBJLock::update_lock_status_(
 }
 
 int ObOBJLock::update_lock_status(const ObTableLockOp &lock_op,
-                                  const palf::SCN commit_version,
-                                  const palf::SCN commit_scn,
+                                  const SCN commit_version,
+                                  const SCN commit_scn,
                                   const ObTableLockOpStatus status,
                                   ObMalloc &allocator)
 {
@@ -594,10 +594,10 @@ void ObOBJLock::remove_lock_op(
   LOG_DEBUG("ObOBJLock::remove_lock_op finish.");
 }
 
-palf::SCN ObOBJLock::get_min_ddl_lock_committed_scn(const palf::SCN &flushed_scn) const
+SCN ObOBJLock::get_min_ddl_lock_committed_scn(const SCN &flushed_scn) const
 {
   int ret = OB_SUCCESS;
-  palf::SCN min_rec_scn = SCN::max_scn();
+  SCN min_rec_scn = SCN::max_scn();
   RDLockGuard guard(rwlock_);
   for (int i = 0; i < TABLE_LOCK_MODE_COUNT; i++) {
     ObTableLockOpList *op_list = map_[i];
@@ -617,7 +617,7 @@ palf::SCN ObOBJLock::get_min_ddl_lock_committed_scn(const palf::SCN &flushed_scn
 
 int ObOBJLock::get_table_lock_store_info(
     ObIArray<ObTableLockOp> &store_arr,
-    const palf::SCN &freeze_scn)
+    const SCN &freeze_scn)
 {
   int ret = OB_SUCCESS;
   RDLockGuard guard(rwlock_);
@@ -1679,7 +1679,7 @@ void ObOBJLockMap::print()
   lock_map_.for_each(fn);
 }
 
-palf::SCN ObOBJLockMap::get_min_ddl_committed_scn(palf::SCN &flushed_scn)
+SCN ObOBJLockMap::get_min_ddl_committed_scn(SCN &flushed_scn)
 {
   int ret = OB_SUCCESS;
   SCN min_ddl_committed_scn = SCN::max_scn();
@@ -1958,8 +1958,8 @@ int ObOBJLockMap::recover_obj_lock(const ObTableLockOp &lock_op)
 }
 
 int ObOBJLockMap::update_lock_status(const ObTableLockOp &lock_op,
-                                     const palf::SCN commit_version,
-                                     const palf::SCN commit_scn,
+                                     const SCN commit_version,
+                                     const SCN commit_scn,
                                      const ObTableLockOpStatus status)
 {
   int ret = OB_SUCCESS;

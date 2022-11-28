@@ -32,7 +32,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "storage/high_availability/ob_tablet_ha_status.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -43,7 +43,7 @@ struct ObMigrationTabletParam;
 class ObTabletMeta final
 {
 public:
-  static const palf::SCN INIT_CLOG_CHECKPOINT_SCN;
+  static const share::SCN INIT_CLOG_CHECKPOINT_SCN;
 
 public:
   ObTabletMeta();
@@ -58,7 +58,7 @@ public:
       const common::ObTabletID &data_tablet_id,
       const common::ObTabletID &lob_meta_tablet_id,
       const common::ObTabletID &lob_piece_tablet_id,
-      const palf::SCN create_scn,
+      const share::SCN create_scn,
       const int64_t snapshot_version,
       const lib::Worker::CompatMode compat_mode,
       const ObTabletTableStoreFlag &table_store_flag,
@@ -72,9 +72,9 @@ public:
       const ObTabletBindingInfo &ddl_data,
       const share::ObTabletAutoincSeq &autoinc_seq,
       const int64_t max_sync_storage_schema_version,
-      const palf::SCN clog_checkpoint_scn = palf::SCN::min_scn(),
-      const palf::SCN ddl_checkpoint_scn = palf::SCN::min_scn(),
-      const palf::SCN ddl_start_scn = palf::SCN::min_scn(),
+      const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
+      const share::SCN ddl_checkpoint_scn = share::SCN::min_scn(),
+      const share::SCN ddl_start_scn = share::SCN::min_scn(),
       const int64_t ddl_snapshot_version = 0);
   int init(
       common::ObIAllocator &allocator,
@@ -100,7 +100,7 @@ public:
   int64_t get_serialize_size() const;
 
   int update(const ObMigrationTabletParam &param);
-  int update_create_scn(const palf::SCN create_scn);
+  int update_create_scn(const share::SCN create_scn);
 public:
   static int deserialize_id(
       const char *buf,
@@ -143,10 +143,10 @@ public:
   common::ObTabletID data_tablet_id_;
   common::ObTabletID ref_tablet_id_;
   bool has_next_tablet_;
-  palf::SCN create_scn_;
-  palf::SCN start_scn_;
-  palf::SCN clog_checkpoint_scn_; // may less than last_minor->end_log_ts
-  palf::SCN ddl_checkpoint_scn_;
+  share::SCN create_scn_;
+  share::SCN start_scn_;
+  share::SCN clog_checkpoint_scn_; // may less than last_minor->end_log_ts
+  share::SCN ddl_checkpoint_scn_;
   // snapshot_version of last minor
   int64_t snapshot_version_;
   int64_t multi_version_start_;
@@ -157,7 +157,7 @@ public:
   ObTabletTxMultiSourceDataUnit tx_data_;
   ObTabletBindingInfo ddl_data_;
   ObTabletTableStoreFlag table_store_flag_;
-  palf::SCN ddl_start_scn_;
+  share::SCN ddl_start_scn_;
   int64_t ddl_snapshot_version_;
   int64_t max_sync_storage_schema_version_;
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
@@ -224,10 +224,10 @@ public:
   common::ObTabletID tablet_id_;
   common::ObTabletID data_tablet_id_;
   common::ObTabletID ref_tablet_id_;
-  palf::SCN create_scn_;
-  palf::SCN start_scn_;              // for migration
-  palf::SCN clog_checkpoint_scn_;
-  palf::SCN ddl_checkpoint_scn_;
+  share::SCN create_scn_;
+  share::SCN start_scn_;              // for migration
+  share::SCN clog_checkpoint_scn_;
+  share::SCN ddl_checkpoint_scn_;
   int64_t snapshot_version_;
   int64_t multi_version_start_;
   lib::Worker::CompatMode compat_mode_;
@@ -239,7 +239,7 @@ public:
   ObStorageSchema storage_schema_;
   compaction::ObMediumCompactionInfoList medium_info_list_;
   ObTabletTableStoreFlag table_store_flag_;
-  palf::SCN ddl_start_scn_;
+  share::SCN ddl_start_scn_;
   int64_t ddl_snapshot_version_;
   // max_sync_version may less than storage_schema.schema_version_ when major update schema
   int64_t max_sync_storage_schema_version_;

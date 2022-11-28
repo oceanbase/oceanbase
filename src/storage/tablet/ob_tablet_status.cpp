@@ -21,11 +21,11 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/tx/ob_trans_define.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
-using namespace palf;
+using namespace share;
 namespace storage
 {
 ObTabletStatus::ObTabletStatus()

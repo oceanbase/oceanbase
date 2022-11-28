@@ -20,7 +20,7 @@
 #include "storage/tablet/ob_tablet_table_store.h"
 #include "storage/ob_i_table.h"
 #include "storage/ob_storage_struct.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {

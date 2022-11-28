@@ -26,7 +26,7 @@ namespace backup {
 
 int ObBackupHandler::schedule_backup_meta_dag(const ObBackupJobDesc &job_desc, const ObBackupDest &backup_dest,
     const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
-    const int64_t turn_id, const int64_t retry_id, const palf::SCN &start_scn)
+    const int64_t turn_id, const int64_t retry_id, const SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
@@ -184,7 +184,7 @@ int ObBackupHandler::schedule_build_tenant_level_index_dag(const ObBackupJobDesc
 
 int ObBackupHandler::schedule_backup_complement_log_dag(const ObBackupJobDesc &job_desc,
     const share::ObBackupDest &backup_dest, const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc,
-    const share::ObLSID &ls_id, const palf::SCN &start_scn, const palf::SCN &end_scn)
+    const share::ObLSID &ls_id, const SCN &start_scn, const SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);

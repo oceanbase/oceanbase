@@ -54,7 +54,7 @@ TEST_F(TestLSLogWriter, submit_start_working_log)
   
   ObTxLogBlock replay_block;
   int64_t replay_hint = 0;
-  palf::SCN log_ts;
+  share::SCN log_ts;
   std::string log_string;
   ObTxLogHeader log_header;
   ObTxStartWorkingLogTempRef tmp_ref;

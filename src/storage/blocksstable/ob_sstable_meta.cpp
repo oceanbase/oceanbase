@@ -21,6 +21,7 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
+using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 
 namespace oceanbase
@@ -51,7 +52,7 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     max_merged_trans_version_(0),
     recycle_version_(0),
     ddl_scn_(),
-    filled_tx_scn_(palf::SCN::min_scn()),
+    filled_tx_scn_(SCN::min_scn()),
     data_index_tree_height_(0),
     table_mode_(),
     status_(0),

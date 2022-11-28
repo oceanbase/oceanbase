@@ -44,7 +44,7 @@ class ObMySQLTransaction;
 class ObMySQLProxy;
 class ObISQLClient;
 }
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -295,6 +295,13 @@ public:
   int delete_single_column(common::ObMySQLTransaction &trans,
                            share::schema::ObTableSchema &new_table_schema,
                            const common::ObString &column_name);
+  int batch_update_system_table_columns(
+      common::ObMySQLTransaction &trans,
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::ObTableSchema &new_table_schema,
+      const common::ObIArray<uint64_t> &add_column_ids,
+      const common::ObIArray<uint64_t> &alter_column_ids,
+      const common::ObString *ddl_stmt_str = NULL);
   int create_sequence_in_create_table(share::schema::ObTableSchema &table_schema,
                                       common::ObMySQLTransaction &trans,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -312,7 +319,7 @@ public:
                                    common::ObMySQLTransaction &trans,
                                    share::schema::ObSchemaGetterGuard &schema_guard);
   virtual int alter_table_create_index(const share::schema::ObTableSchema &new_table_schema,
-                                       const palf::SCN &frozen_scn,
+                                       const share::SCN &frozen_scn,
                                        common::ObIArray<share::schema::ObColumnSchemaV2*> &gen_columns,
                                        share::schema::ObTableSchema &index_schema,
                                        common::ObMySQLTransaction &trans);

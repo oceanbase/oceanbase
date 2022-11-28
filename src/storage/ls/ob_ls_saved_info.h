@@ -15,7 +15,7 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "logservice/palf/lsn.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -34,10 +34,10 @@ public:
 
   TO_STRING_KV(K_(clog_checkpoint_scn), K_(clog_base_lsn), K_(replayable_point), K_(tablet_change_checkpoint_scn));
 
-  palf::SCN clog_checkpoint_scn_;
+  share::SCN clog_checkpoint_scn_;
   palf::LSN clog_base_lsn_;
   int64_t replayable_point_;
-  palf::SCN tablet_change_checkpoint_scn_;
+  share::SCN tablet_change_checkpoint_scn_;
 };
 
 

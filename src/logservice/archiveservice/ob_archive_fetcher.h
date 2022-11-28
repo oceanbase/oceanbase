@@ -20,7 +20,7 @@
 #include "share/ob_ls_id.h"                 // ObLSID
 #include "share/backup/ob_archive_piece.h"  // ObArchivePiece
 #include "logservice/palf/lsn.h"            // LSN
-#include "logservice/palf/scn.h"            // SCN
+#include "share/scn.h"            // SCN
 #include "logservice/palf/palf_iterator.h"  // PalfGroupBufferIterator
 #include "ob_archive_define.h"
 
@@ -31,10 +31,13 @@ namespace logservice
 class ObLogService;
 }
 
+namespace share
+{
+class SCN;
+}
 namespace palf
 {
 struct LSN;
-class SCN;
 class PalfHandleGuard;
 class LogGroupEntry;
 }
@@ -82,7 +85,7 @@ public:
 
   // 开启关闭归档接口
   int set_archive_info(const int64_t piece_interval_us,
-                       const palf::SCN &genesis_scn,
+                       const share::SCN &genesis_scn,
                        const int64_t base_piece_id,
                        const int64_t unit_size,
                        const bool need_compress,
@@ -133,7 +136,7 @@ private:
       const LSN &end_offset, bool &data_enough, bool &data_full);
 
   // 1.1.2 检查日志流落后程度是否需要触发归档
-  bool check_scn_enough_(const palf::SCN &fetch_scn, const palf::SCN &end_scn) const;
+  bool check_scn_enough_(const share::SCN &fetch_scn, const share::SCN &end_scn) const;
 
   // 1.2 初始化TmpMemoryHelper
   int init_helper_(ObArchiveLogFetchTask &task, TmpMemoryHelper &helper);
@@ -231,7 +234,7 @@ private:
     const LSN &get_start_offset() const { return start_offset_; }
     const LSN &get_end_offset() const { return end_offset_; }
     const LSN &get_cur_offset() const { return cur_offset_; }
-    const palf::SCN &get_unitized_scn() const { return unitized_scn_; }
+    const share::SCN &get_unitized_scn() const { return unitized_scn_; }
     int64_t get_capaicity() const { return end_offset_ - cur_offset_; }
     bool original_buffer_enough(const int64_t size);
     int get_original_buf(char *&buf, int64_t &buf_size);
@@ -281,14 +284,14 @@ private:
     int64_t origin_buf_pos_;
     // 当前处理原数日志最大offset/scn
     LSN cur_offset_;
-    palf::SCN cur_scn_;
+    share::SCN cur_scn_;
     // 中间缺少加密用buffer
     char *ec_buf_;
     int64_t ec_buf_size_;        // 需要根据数据量计算
     int64_t ec_buf_pos_;
     // 做了单元化处理的日志最大offset/scn
     LSN unitized_offset_;
-    palf::SCN unitized_scn_;
+    share::SCN unitized_scn_;
     // 当前正在处理piece, 单个helper包含从start_offset到当前piece的全部数据
     ObArchivePiece cur_piece_;
     // 读取日志过程中, 遇到更大piece说明当前piece已经结束
@@ -303,7 +306,7 @@ private:
   // 压缩加密处理单元
   int64_t            unit_size_;
   int64_t            piece_interval_;
-  palf::SCN            genesis_scn_;
+  share::SCN            genesis_scn_;
   int64_t            base_piece_id_;
   bool               need_compress_;
   // 压缩算法

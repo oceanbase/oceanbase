@@ -310,7 +310,7 @@ int ObComplementDataContext::write_start_log(const ObComplementDataParam &param)
   } else if (OB_UNLIKELY(!hidden_table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table key", K(ret), K(hidden_table_key));
-  } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(hidden_table_key))) {
+  } else if (OB_FAIL(data_sstable_redo_writer_.start_ddl_redo(hidden_table_key, ddl_kv_mgr_handle_))) {
     LOG_WARN("fail write start log", K(ret), K(hidden_table_key), K(param));
   } else {
     LOG_INFO("complement task start ddl redo success", K(hidden_table_key));
@@ -328,6 +328,7 @@ void ObComplementDataContext::destroy()
     allocator_.free(index_builder_);
     index_builder_ = nullptr;
   }
+  ddl_kv_mgr_handle_.reset();
   allocator_.reset();
 }
 
@@ -1144,7 +1145,7 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
   ObTablet *tablet = nullptr;
   ObTabletHandle tablet_handle;
   ObITable::TableKey hidden_table_key;
-  palf::SCN prepare_scn;
+  SCN prepare_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementMergetask has not been inited", K(ret));
@@ -1177,13 +1178,17 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
                                                                            1/*execution_id*/,
                                                                            param_->task_id_,
                                                                            prepare_scn))) {
-    LOG_WARN("fail write ddl prepare log", K(ret), K(hidden_table_key));
+    if (OB_TASK_EXPIRED == ret) {
+      LOG_INFO("ddl task expired, but return success", K(ret), K(hidden_table_key), KPC(param_));
+    } else {
+      LOG_WARN("fail write ddl prepare log", K(ret), K(hidden_table_key));
+    }
   } else {
     ObTabletHandle new_tablet_handle; // no use here
     ObDDLKvMgrHandle ddl_kv_mgr_handle;
     const ObLSID &ls_id = param_->ls_id_;
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    const palf::SCN &ddl_start_scn = static_cast<ObComplementDataDag *>(get_dag())->get_context().data_sstable_redo_writer_.get_start_scn();
+    const SCN &ddl_start_scn = static_cast<ObComplementDataDag *>(get_dag())->get_context().data_sstable_redo_writer_.get_start_scn();
     if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       LOG_WARN("get ddl kv manager failed", K(ret));
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_prepare(ddl_start_scn,
@@ -1191,9 +1196,17 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
                                                                 param_->hidden_table_schema_->get_table_id(),
                                                                 1/*execution_id*/,
                                                                 param_->task_id_))) {
-      LOG_WARN("commit ddl log failed", K(ret), K(ddl_start_scn), K(prepare_scn), K(hidden_table_key));
+      if (OB_TASK_EXPIRED == ret) {
+        LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
+            K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("commit ddl log failed", K(ret), K(ddl_start_scn), K(prepare_scn), K(hidden_table_key));
+      }
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->wait_ddl_commit(ddl_start_scn, prepare_scn))) {
       if (OB_TASK_EXPIRED == ret) {
+        LOG_INFO("ddl task expired, but return success", K(ret), K(ls_id), K(tablet_id),
+            K(ddl_start_scn), "new_ddl_start_scn", ddl_kv_mgr_handle.get_obj()->get_start_scn());
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("wait ddl commit failed", K(ret), K(ddl_start_scn), K(hidden_table_key));
@@ -1498,7 +1511,7 @@ int ObLocalScan::construct_range_ctx(ObQueryFlag &query_flag,
   trans_version_range.snapshot_version_ = snapshot_version_;
   trans_version_range.multi_version_start_ = snapshot_version_;
   trans_version_range.base_version_ = 0;
-  palf::SCN tmp_scn;
+  SCN tmp_scn;
   if (OB_FAIL(tmp_scn.convert_for_tx(snapshot_version_))) {
     LOG_WARN("convert fail", K(ret), K(ls_id), K_(snapshot_version));
   } else if (OB_FAIL(ctx_.init_for_read(ls_id,

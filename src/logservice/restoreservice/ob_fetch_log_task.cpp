@@ -20,6 +20,7 @@
 namespace oceanbase
 {
 using namespace palf;
+using namespace share;
 namespace logservice
 {
 ObFetchLogTask::ObFetchLogTask(const share::ObLSID &id,

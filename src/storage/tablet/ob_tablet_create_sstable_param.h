@@ -18,7 +18,7 @@
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/blocksstable/ob_imicro_block_reader.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -97,8 +97,8 @@ public:
   int64_t occupy_size_;
   int64_t original_size_;
   int64_t max_merged_trans_version_;
-  palf::SCN ddl_scn_;
-  palf::SCN filled_tx_scn_;
+  share::SCN ddl_scn_;
+  share::SCN filled_tx_scn_;
   bool contain_uncommitted_row_;
   common::ObCompressorType compressor_type_;
   int64_t encrypt_id_;

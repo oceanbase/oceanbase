@@ -20,6 +20,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
 #define CHECK_VALID if (NULL == palf_handle_impl_) { return OB_NOT_INIT; }

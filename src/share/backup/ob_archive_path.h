@@ -51,12 +51,12 @@ public:
 
   // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000
   static int get_piece_start_file_path(const ObBackupDest &dest, const int64_t dest_id, 
-      const int64_t round_id, const int64_t piece_id, const palf::SCN &start_scn,
+      const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
       ObBackupPath &path);
 
   // oss://archive/pieces/piece_d[dest_id]r[round_id]p[piece_id]_end_20220601T120000
   static int get_piece_end_file_path(const ObBackupDest &dest, const int64_t dest_id, 
-      const int64_t round_id, const int64_t piece_id, const palf::SCN &end_scn,
+      const int64_t round_id, const int64_t piece_id, const SCN &end_scn,
       ObBackupPath &path);
 
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]
@@ -77,8 +77,8 @@ public:
 
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000
   static int get_piece_inner_placeholder_file_path(const ObBackupDest &dest, const int64_t dest_id, 
-      const int64_t round_id, const int64_t piece_id, const palf::SCN &start_scn,
-      const palf::SCN &end_scn, ObBackupPath &path);
+      const int64_t round_id, const int64_t piece_id, const SCN &start_scn,
+      const SCN &end_scn, ObBackupPath &path);
 
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[ls_id]
   static int get_piece_ls_dir_path(const ObBackupDest &dest, const int64_t dest_id, 

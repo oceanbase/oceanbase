@@ -340,7 +340,7 @@ private:
   // exception.
   //
   //  NB: We should take both upstream and downstream into consideration.
-  int decide_downstream_msg_type_(ObTwoPhaseCommitMsgType &msg_type);
+  int decide_downstream_msg_type_(bool &need_submit, ObTwoPhaseCommitMsgType &msg_type);
   int retransmit_downstream_msg_();
   int retransmit_downstream_msg_(const uint8_t participant);
   int retransmit_upstream_msg_(const ObTxState state);

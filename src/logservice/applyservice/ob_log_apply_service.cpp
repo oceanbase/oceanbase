@@ -14,7 +14,7 @@
 #include "logservice/ob_log_handler.h"
 #include "logservice/ob_ls_adapter.h"
 #include "logservice/palf/palf_env.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_thread_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -391,7 +391,7 @@ int ObApplyStatus::push_append_cb(AppendCb *cb)
     LSN palf_committed_end_lsn;
     const LSN cb_lsn = cb->__get_lsn();
     const SCN cb_scn = cb->__get_scn();
-    const uint64_t cb_sign = cb_scn.get_val_for_lsn_allocator();
+    const uint64_t cb_sign = cb_scn.get_val_for_logservice();
     int64_t thread_index = cb_sign & (APPLY_TASK_QUEUE_SIZE - 1);
     ObLink *link = AppendCb::__get_member_address(cb);
     cb_queues_[thread_index].inc_total_submit_cb_cnt();
@@ -676,7 +676,7 @@ int ObApplyStatus::get_min_unapplied_scn(SCN &scn)
   } else if (FOLLOWER == role_) {
     palf::LSN palf_end_lsn;
     palf::LSN apply_end_lsn;
-    palf::SCN palf_end_scn;
+    SCN palf_end_scn;
     bool is_done = false;
     if (OB_FAIL(is_apply_done(is_done, apply_end_lsn))) {
       CLOG_LOG(WARN, "check is_apply_done failed", K(ret), KPC(this));
@@ -720,7 +720,7 @@ int ObApplyStatus::get_min_unapplied_scn(SCN &scn)
     CLOG_LOG(ERROR, "max_applied_cb_scn_ larger than last_check_scn_, unexpected", K(ret), KPC(this));
   }
   if (OB_SUCC(ret) && max_applied_cb_scn_.is_valid()) {
-    scn = palf::SCN::plus(max_applied_cb_scn_, 1);
+    scn = SCN::plus(max_applied_cb_scn_, 1);
   }
   CLOG_LOG(TRACE, "get_min_unapplied_scn finish", K(ret), KPC(this), K(scn));
   if (palf_reach_time_interval(5 * 1000 * 1000, get_info_debug_time_)) {

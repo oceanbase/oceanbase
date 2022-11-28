@@ -67,7 +67,7 @@ private:
   int notify_(const share::ObTenantArchiveRoundAttr &round_attr);
   int do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info);
   int check_archive_dest_validity_(const int64_t dest_no);
-  int get_max_checkpoint_scn_(const uint64_t tenant_id, palf::SCN &max_checkpoint_scn) const;
+  int get_max_checkpoint_scn_(const uint64_t tenant_id, share::SCN &max_checkpoint_scn) const;
 
 private:
   bool is_inited_;

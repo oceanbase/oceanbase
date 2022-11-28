@@ -54,11 +54,11 @@ int ObPxMultiPartSSTableInsertOp::get_tablet_id_from_row(const ObExprPtrIArray &
   tablet_id.reset();
   if (NO_PARTITION_ID_FLAG == part_id_idx) {
     ObDASTableLoc *table_loc = ins_rtdef_.das_rtdef_.table_loc_;
-    if (OB_ISNULL(table_loc) || table_loc->tablet_locs_.size() != 1) {
+    if (OB_ISNULL(table_loc) || table_loc->get_tablet_locs().size() != 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insert table location is invalid", K(ret), KPC(table_loc));
     } else {
-      tablet_id = table_loc->tablet_locs_.get_first()->tablet_id_;
+      tablet_id = table_loc->get_first_tablet_loc()->tablet_id_;
     }
   } else if (part_id_idx < 0) {
     ret = OB_ERR_UNEXPECTED;

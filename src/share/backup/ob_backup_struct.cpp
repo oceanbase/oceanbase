@@ -3517,8 +3517,8 @@ void ObBackupSetFileDesc::reset()
   passwd_.reset();
   file_status_ = ObBackupFileStatus::BACKUP_FILE_MAX;
   backup_path_.reset();
-  start_replay_scn_ = palf::SCN::min_scn();
-  min_restore_scn_ = palf::SCN::min_scn();
+  start_replay_scn_ = SCN::min_scn();
+  min_restore_scn_ = SCN::min_scn();
   tenant_compatible_ = 0;
   backup_compatible_ = Compatible::MAX_COMPATIBLE_VERSION;
   data_turn_id_ = 0;
@@ -4058,7 +4058,7 @@ int share::trim_right_backslash(ObBackupPathString &path)
 }
 
 // Convert a scn to time string.
-int share::backup_scn_to_strftime(const palf::SCN &scn, char *buf,
+int share::backup_scn_to_strftime(const SCN &scn, char *buf,
     const int64_t buf_len, int64_t &pos, const char concat)
 {
   int ret = OB_SUCCESS;
@@ -4085,7 +4085,7 @@ int share::backup_scn_to_strftime(const palf::SCN &scn, char *buf,
   return ret;
 }
 
-int share::backup_scn_to_time_tag(const palf::SCN &scn, char *buf, const int64_t buf_len, int64_t &pos)
+int share::backup_scn_to_time_tag(const SCN &scn, char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(share::backup_scn_to_strftime(scn, buf, buf_len, pos, 'T'/* concat */))) {

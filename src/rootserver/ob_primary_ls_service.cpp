@@ -2049,7 +2049,7 @@ void ObPrimaryLSService::do_work()
     int64_t idle_time_us = 100 * 1000L;
     int tmp_ret = OB_SUCCESS;
     while (!has_set_stop()) {
-      idle_time_us = 10 * 1000 * 1000L;
+      idle_time_us = is_meta_tenant(tenant_id_) ? 100 * 1000L : 10 * 1000 * 1000L;
       {
         ObCurTraceId::init(GCONF.self_addr_);
         share::schema::ObSchemaGetterGuard schema_guard;

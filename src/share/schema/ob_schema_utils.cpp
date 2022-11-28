@@ -339,23 +339,18 @@ int ObSchemaUtils::construct_tenant_space_simple_table(
     ObSimpleTableSchemaV2 &table)
 {
   int ret = OB_SUCCESS;
-  if (is_sys_tenant(tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
-  } else {
-    table.set_tenant_id(tenant_id);
-    // for distributed virtual table in tenant space
-    int64_t part_num = table.get_partition_num();
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_num; i++) {
-      ObPartition *part = table.get_part_array()[i];
-      if (OB_ISNULL(part)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("part is null", KR(ret), K(i));
-      } else {
-        part->set_tenant_id(tenant_id);
-      }
-    } // end for
-  }
+  table.set_tenant_id(tenant_id);
+  // for distributed virtual table in tenant space
+  int64_t part_num = table.get_partition_num();
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_num; i++) {
+    ObPartition *part = table.get_part_array()[i];
+    if (OB_ISNULL(part)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part is null", KR(ret), K(i));
+    } else {
+      part->set_tenant_id(tenant_id);
+    }
+  } // end for
   return ret;
 }
 

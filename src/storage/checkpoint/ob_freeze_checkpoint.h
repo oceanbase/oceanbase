@@ -17,7 +17,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -61,7 +61,7 @@ int freeze_checkpoint_location_to_string(const ObFreezeCheckpointLocation locati
 struct ObFreezeCheckpointVTInfo
 {
   ObTabletID tablet_id;
-  palf::SCN rec_scn;
+  share::SCN rec_scn;
   ObFreezeCheckpointLocation location;
   bool rec_scn_is_stable;
 
@@ -87,7 +87,7 @@ public:
   ObFreezeCheckpoint() : location_(OUT), data_checkpoint_(nullptr) {}
   virtual ~ObFreezeCheckpoint() {}
   virtual void remove_from_data_checkpoint(bool need_lock_data_checkpoint = true);
-  virtual palf::SCN get_rec_scn() = 0;
+  virtual share::SCN get_rec_scn() = 0;
   virtual int flush(share::ObLSID ls_id) = 0;
   // judge rec_scn of the checkpoint unit won't get smaller
   // by comparing with max_consequent_callbacked_scn

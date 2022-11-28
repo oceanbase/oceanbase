@@ -72,7 +72,7 @@ public:
   ObBatchCreateTabletHelper() :arg_(), table_schemas_map_(), result_(common::OB_NOT_MASTER), next_(NULL) {}
   int init(const share::ObLSID &ls_key,
            const int64_t tenant_id,
-           const palf::SCN &major_frozen_scn);
+           const share::SCN &major_frozen_scn);
   int try_add_table_schema(const share::schema::ObTableSchema *table_schema, int64_t &index);
   int add_arg_to_batch_arg(const ObTabletCreatorArg &arg);
   void reset()
@@ -97,7 +97,7 @@ class ObTabletCreator
 public:
   ObTabletCreator(
       const uint64_t tenant_id,
-      const palf::SCN &major_frozen_scn,
+      const share::SCN &major_frozen_scn,
       share::ObLSTableOperator &lst_operator,
       ObMySQLTransaction &trans)
                 : tenant_id_(tenant_id),
@@ -119,7 +119,7 @@ private:
   const int64_t MAP_BUCKET_NUM = 1024;
 private:
   const uint64_t tenant_id_;
-  const palf::SCN major_frozen_scn_;
+  const share::SCN major_frozen_scn_;
   share::ObLSTableOperator *lst_operator_;
   ObArenaAllocator allocator_;
   common::hash::ObHashMap<share::ObLSID, ObBatchCreateTabletHelper*> args_map_;

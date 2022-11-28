@@ -100,9 +100,9 @@ public:
     const bool is_padding_log = (palf::LOG_PADDING == log_type);
     int64_t log_entry_header_size = entry_header.get_serialize_size();
     int64_t ts = get_timestamp();
-    SCN scn;
+    share::SCN scn;
 
-    if (OB_FAIL(scn.convert_for_lsn_allocator(ts))) {
+    if (OB_FAIL(scn.convert_for_logservice(ts))) {
       LOG_ERROR("fail to convert ts", KR(ret), K(ts));
     } else if (OB_FAIL(entry_header.generate_header(buf, buf_len, scn))) {
       LOG_ERROR("generate_header failed", KR(ret), K(buf), K(buf_len), K(scn));
@@ -136,9 +136,9 @@ public:
     logservice::ObLogBaseHeader log_base_header(logservice::ObLogBaseType::GC_LS_LOG_BASE_TYPE, logservice::ObReplayBarrierType::NO_NEED_BARRIER, 1);
     const int64_t serizlize_size = log_base_header.get_serialize_size();
     char *buf = static_cast<char*>(allocator_.alloc(serizlize_size));
-    SCN scn;
+    share::SCN scn;
 
-    if (OB_FAIL(scn.convert_for_lsn_allocator(ts))) {
+    if (OB_FAIL(scn.convert_for_logservice(ts))) {
       LOG_ERROR("fail to convert ts", KR(ret), K(ts));
     } else if (OB_FAIL(log_base_header.serialize(buf, serizlize_size, pos))) {
       LOG_ERROR("serialize log_base_header failed", KR(ret), K(buf), K(serizlize_size), K(pos));
@@ -287,8 +287,8 @@ void ObTxLogGenerator::gen_prepare_log()
 void ObTxLogGenerator::gen_commit_log()
 {
   int64_t commit_ts = get_timestamp();
-  palf::SCN commit_version;
-  commit_version.convert_for_lsn_allocator(commit_ts);
+  share::SCN commit_version;
+  commit_version.convert_for_logservice(commit_ts);
   uint64_t checksum = 0;
   share::ObLSArray inc_ls_arr;
   ObTxBufferNodeArray mds_arr;

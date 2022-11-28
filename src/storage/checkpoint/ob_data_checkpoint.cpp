@@ -16,7 +16,7 @@
 
 namespace oceanbase
 {
-using namespace palf;
+using namespace share;
 namespace storage
 {
 namespace checkpoint
@@ -235,7 +235,7 @@ int ObDataCheckpoint::flush(SCN recycle_scn, bool need_freeze)
   return ret;
 }
 
-int ObDataCheckpoint::ls_freeze(palf::SCN rec_scn)
+int ObDataCheckpoint::ls_freeze(SCN rec_scn)
 {
   int ret = OB_SUCCESS;
   ObCheckPointService *checkpoint_srv = MTL(ObCheckPointService *);
@@ -290,7 +290,7 @@ void ObDataCheckpoint::print_list_(ObCheckpointDList &list)
   }
 }
 
-void ObDataCheckpoint::road_to_flush(palf::SCN rec_scn)
+void ObDataCheckpoint::road_to_flush(SCN rec_scn)
 {
   if (OB_UNLIKELY(!is_inited_)) {
     STORAGE_LOG(WARN, "ObDataCheckpoint not init", K(is_inited_));

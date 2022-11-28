@@ -17,8 +17,8 @@
 #include "lib/ob_define.h"                 // Serialization
 #include "lib/utility/ob_print_utils.h"    // Print*
 #include "lib/utility/ob_macro_utils.h"    // DISALLOW_COPY_AND_ASSIGN
+#include "share/scn.h"
 #include "log_define.h"
-#include "scn.h"
 
 namespace oceanbase
 {
@@ -39,7 +39,7 @@ public:
   int64_t get_header_size() const { return header_.get_serialize_size(); }
   int64_t get_payload_offset() const { return header_.get_serialize_size(); }
   int64_t get_data_len() const { return header_.get_data_len(); }
-  const SCN get_scn() const { return header_.get_scn(); }
+  const share::SCN get_scn() const { return header_.get_scn(); }
   const char *get_data_buf() const { return buf_; }
   const LogEntryHeader &get_header() const { return header_; }
 

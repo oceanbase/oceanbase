@@ -16,10 +16,11 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/utility.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
+using namespace share;
 namespace storage
 {
 ObTabletDDLInfo::ObTabletDDLInfo()
@@ -54,7 +55,7 @@ int ObTabletDDLInfo::get(int64_t &schema_version, int64_t &schema_refreshed_ts)
   return ret;
 }
 int ObTabletDDLInfo::update(const int64_t schema_version,
-                            const palf::SCN &scn,
+                            const SCN &scn,
                             int64_t &schema_refreshed_ts)
 {
   int ret = OB_SUCCESS;

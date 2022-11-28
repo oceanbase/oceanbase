@@ -17,6 +17,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace palf
 {
 
@@ -67,7 +68,7 @@ bool LogEntryHeader::get_header_parity_check_res_() const
   bool bool_ret = parity_check(reinterpret_cast<const uint16_t &>(magic_));
   bool_ret ^= parity_check(reinterpret_cast<const uint16_t &>(version_));
   bool_ret ^= parity_check(reinterpret_cast<const uint32_t &>(log_size_));
-  bool_ret ^= parity_check((scn_.get_val_for_lsn_allocator()));
+  bool_ret ^= parity_check((scn_.get_val_for_logservice()));
   bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(data_checksum_));
   int64_t tmp_flag = (flag_ & ~(0x1));
   bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(tmp_flag));

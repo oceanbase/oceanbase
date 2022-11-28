@@ -4218,7 +4218,7 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObPhysicalPlan *plan, bool
       } else {
         const ObTableSchema *table_schema = NULL;
         ObDASTableLoc *first_table_loc = DAS_CTX(pc_ctx.exec_ctx_).get_table_loc_list().get_first();
-        ObDASTabletLoc *first_tablet_loc = first_table_loc->tablet_locs_.get_first();
+        ObDASTabletLoc *first_tablet_loc = first_table_loc->get_first_tablet_loc();
         ObLSReplicaLocation ls_replica_loc;
         ObDASLocationRouter &loc_router = DAS_CTX(pc_ctx.exec_ctx_).get_location_router();
         if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_table_schema(

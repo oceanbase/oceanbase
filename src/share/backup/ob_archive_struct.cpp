@@ -877,9 +877,9 @@ void ObLSArchivePersistInfo::reset()
 {
   key_.reset();
   incarnation_ = OB_START_INCARNATION;
-  start_scn_ = palf::SCN::min_scn();
+  start_scn_ = SCN::min_scn();
   start_lsn_ = 0;
-  checkpoint_scn_.palf::SCN::min_scn();
+  checkpoint_scn_.SCN::min_scn();
   lsn_ = 0;
   archive_file_id_ = -1;
   archive_file_offset_ = -1;
@@ -947,8 +947,8 @@ ObArchiveLSPieceSummary::ObArchiveLSPieceSummary()
   incarnation_ = OB_START_INCARNATION;
   state_.set_invalid();
 
-  start_scn_ = palf::SCN::min_scn();
-  checkpoint_scn_ = palf::SCN::min_scn();
+  start_scn_ = SCN::min_scn();
+  checkpoint_scn_ = SCN::min_scn();
   min_lsn_ = 0;
   max_lsn_ = 0;
   input_bytes_ = 0;
@@ -1074,7 +1074,7 @@ void ObLSDestRoundSummary::reset()
   ls_id_.reset();
   is_deleted_ = false;
   state_.set_invalid();
-  start_scn_ = palf::SCN::min_scn();
+  start_scn_ = SCN::min_scn();
   checkpoint_scn_.reset();
   piece_list_.reset();
 }

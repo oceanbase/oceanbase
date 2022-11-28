@@ -125,7 +125,7 @@ void ObTenantMajorFreeze::resume()
   merge_scheduler_.resume();
 }
 
-int ObTenantMajorFreeze::get_frozen_scn(palf::SCN &frozen_scn)
+int ObTenantMajorFreeze::get_frozen_scn(SCN &frozen_scn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -137,7 +137,7 @@ int ObTenantMajorFreeze::get_frozen_scn(palf::SCN &frozen_scn)
   return ret;
 }
 
-int ObTenantMajorFreeze::get_global_broadcast_scn(palf::SCN &global_broadcast_scn) const
+int ObTenantMajorFreeze::get_global_broadcast_scn(SCN &global_broadcast_scn) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -274,8 +274,8 @@ int ObTenantMajorFreeze::check_tenant_status() const
 int ObTenantMajorFreeze::check_freeze_info()
 {
   int ret = OB_SUCCESS;
-  palf::SCN latest_frozen_scn;
-  palf::SCN global_last_merged_scn;
+  SCN latest_frozen_scn;
+  SCN global_last_merged_scn;
   ObZoneMergeInfo::MergeStatus global_merge_status = ObZoneMergeInfo::MergeStatus::MERGE_STATUS_MAX;
 
   if (IS_NOT_INIT) {

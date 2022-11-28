@@ -15,8 +15,8 @@
 #include "lib/oblog/ob_log_print_kv.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"               // TO_STRING_KV
+#include "share/scn.h"
 #include "lsn.h"
-#include "scn.h"
 #include "palf_base_info.h"
 #include "log_meta_info.h"
 
@@ -27,7 +27,7 @@ namespace palf
 struct FlushLogCbCtx
 {
   FlushLogCbCtx();
-  FlushLogCbCtx(const int64_t log_id, const SCN &scn, const LSN &lsn,
+  FlushLogCbCtx(const int64_t log_id, const share::SCN &scn, const LSN &lsn,
                 const int64_t &log_proposal_id, const int64_t total_len,
                 const int64_t &curr_log_proposal_id, const int64_t begine_ts);
   ~FlushLogCbCtx();
@@ -36,7 +36,7 @@ struct FlushLogCbCtx
   FlushLogCbCtx &operator=(const FlushLogCbCtx &flush_log_cb_ctx);
   TO_STRING_KV(K_(log_id), K_(scn), K_(lsn), K_(log_proposal_id), K_(total_len), K_(curr_proposal_id), K_(begin_ts));
   int64_t log_id_;
-  SCN scn_;
+  share::SCN scn_;
   LSN lsn_;
   int64_t log_proposal_id_;
   int64_t total_len_;

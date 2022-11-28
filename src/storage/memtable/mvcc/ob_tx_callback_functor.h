@@ -74,8 +74,8 @@ class ObRemoveCallbacksForFastCommitFunctor : public ObITxCallbackFunctor
 public:
   ObRemoveCallbacksForFastCommitFunctor(const int64_t need_remove_count)
     : need_remove_count_(need_remove_count),
-    last_scn_for_remove_(palf::SCN::min_scn()),
-    checksum_scn_(palf::SCN::min_scn()),
+    last_scn_for_remove_(share::SCN::min_scn()),
+    checksum_scn_(share::SCN::min_scn()),
     checksumer_(NULL) {}
 
   virtual bool is_iter_end(ObITransCallback *callback) const override
@@ -88,15 +88,15 @@ public:
     } else if (callback->need_fill_redo() || callback->need_submit_log()) {
       // case2: the callback has not been sync successfully
       is_iter_end = true;
-    } else if (palf::SCN::max_scn() == callback->get_scn()) {
+    } else if (share::SCN::max_scn() == callback->get_scn()) {
       // case3: the callback has not been sync successfully
       is_iter_end = true;
-    } else if (palf::SCN::min_scn() != last_scn_for_remove_
+    } else if (share::SCN::min_scn() != last_scn_for_remove_
                && callback->get_scn() != last_scn_for_remove_) {
       // case4: the callback has exceeded the last log whose log ts need to be
       //         removed
       is_iter_end = true;
-    } else if (palf::SCN::min_scn() == last_scn_for_remove_
+    } else if (share::SCN::min_scn() == last_scn_for_remove_
                && 0 >= need_remove_count_) {
       // case6: the callback has not reached the last log whose log ts need to
       //         be removed while having no logs need to be removed
@@ -108,14 +108,14 @@ public:
     return is_iter_end;
   }
 
-  void set_checksumer(const palf::SCN checksum_scn,
+  void set_checksumer(const share::SCN checksum_scn,
                       ObBatchChecksum *checksumer)
   {
     checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
   }
 
-  palf::SCN get_checksum_last_scn() const
+  share::SCN get_checksum_last_scn() const
   {
     return last_scn_for_remove_;
   }
@@ -141,13 +141,13 @@ public:
       // callbacks until all callbacks with the same log ts has been removed in
       // order to satisfy the checksum calculation
       ObITransCallback *next = callback->get_next();
-      if (palf::SCN::min_scn() == last_scn_for_remove_) {
+      if (share::SCN::min_scn() == last_scn_for_remove_) {
         if (0 == need_remove_count_) {
           last_scn_for_remove_ = callback->get_scn();
         } else if (NULL == next
                    || next->need_submit_log()
                    || next->need_fill_redo()
-                   || palf::SCN::max_scn() == next->get_scn()) {
+                   || share::SCN::max_scn() == next->get_scn()) {
           last_scn_for_remove_ = callback->get_scn();
         }
       }
@@ -162,8 +162,8 @@ public:
 
 private:
   int64_t need_remove_count_;
-  palf::SCN last_scn_for_remove_;
-  palf::SCN checksum_scn_;
+  share::SCN last_scn_for_remove_;
+  share::SCN checksum_scn_;
   ObBatchChecksum *checksumer_;
 };
 
@@ -190,9 +190,9 @@ public:
     cond_for_stop_(stop_func),
     need_checksum_(false),
     need_remove_data_(need_remove_data),
-    checksum_scn_(palf::SCN::min_scn()),
+    checksum_scn_(share::SCN::min_scn()),
     checksumer_(NULL),
-    checksum_last_scn_(palf::SCN::min_scn())
+    checksum_last_scn_(share::SCN::min_scn())
     {
       is_reverse_ = is_reverse;
     }
@@ -209,7 +209,7 @@ public:
     return is_valid;
   }
 
-  void set_checksumer(const palf::SCN checksum_scn,
+  void set_checksumer(const share::SCN checksum_scn,
                       ObBatchChecksum *checksumer)
   {
     need_checksum_ = true;
@@ -217,13 +217,13 @@ public:
     checksumer_ = checksumer;
   }
 
-  palf::SCN get_checksum_last_scn() const
+  share::SCN get_checksum_last_scn() const
   {
     if (need_checksum_) {
       return checksum_last_scn_;
     } else {
       TRANS_LOG(ERROR, "we donot go here if we donot checksum", KPC(this));
-      return palf::SCN::min_scn();
+      return share::SCN::min_scn();
     }
   }
 
@@ -237,7 +237,7 @@ public:
     } else if (callback->need_fill_redo() || callback->need_submit_log()) {
       // case2: the callback has not been sync successfully
       is_iter_end = true;
-    } else if (palf::SCN::max_scn() == callback->get_scn()) {
+    } else if (share::SCN::max_scn() == callback->get_scn()) {
       // case3: the callback has not been sync successfully
       is_iter_end = true;
     } else if (cond_for_stop_(callback)) {
@@ -288,9 +288,9 @@ private:
   ObFunction<bool(ObITransCallback*)> cond_for_stop_;
   bool need_checksum_;
   bool need_remove_data_;
-  palf::SCN checksum_scn_;
+  share::SCN checksum_scn_;
   ObBatchChecksum *checksumer_;
-  palf::SCN checksum_last_scn_;
+  share::SCN checksum_last_scn_;
 };
 
 class ObRemoveCallbacksWCondFunctor : public ObITxCallbackFunctor
@@ -300,24 +300,24 @@ public:
                                 const bool need_remove_data = true)
     : cond_for_remove_(func),
     need_remove_data_(need_remove_data),
-    checksum_scn_(palf::SCN::min_scn()),
+    checksum_scn_(share::SCN::min_scn()),
     checksumer_(NULL),
-    checksum_last_scn_(palf::SCN::min_scn()) {}
+    checksum_last_scn_(share::SCN::min_scn()) {}
 
-  void set_checksumer(const palf::SCN checksum_scn,
+  void set_checksumer(const share::SCN checksum_scn,
                       ObBatchChecksum *checksumer)
   {
     checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
   }
 
-  palf::SCN get_checksum_last_scn() const
+  share::SCN get_checksum_last_scn() const
   {
     if (NULL != checksumer_) {
       return checksum_last_scn_;
     } else {
       TRANS_LOG(ERROR, "we donot go here if we donot checksum", KPC(this));
-      return palf::SCN::min_scn();
+      return share::SCN::min_scn();
     }
   }
 
@@ -387,9 +387,9 @@ public:
 private:
   ObFunction<bool(ObITransCallback*)> cond_for_remove_;
   bool need_remove_data_;
-  palf::SCN checksum_scn_;
+  share::SCN checksum_scn_;
   ObBatchChecksum *checksumer_;
-  palf::SCN checksum_last_scn_;
+  share::SCN checksum_last_scn_;
 };
 
 class ObTxForAllFunctor : public ObITxCallbackFunctor
@@ -545,11 +545,11 @@ private:
 class ObCalcChecksumFunctor : public ObITxCallbackFunctor
 {
 public:
-  ObCalcChecksumFunctor(const palf::SCN target_scn = palf::SCN::max_scn())
+  ObCalcChecksumFunctor(const share::SCN target_scn = share::SCN::max_scn())
     : target_scn_(target_scn),
-    checksum_scn_(palf::SCN::min_scn()),
+    checksum_scn_(share::SCN::min_scn()),
     checksumer_(NULL),
-    checksum_last_scn_(palf::SCN::min_scn()) {}
+    checksum_last_scn_(share::SCN::min_scn()) {}
 
   virtual bool is_iter_end(ObITransCallback *callback) const override
   {
@@ -569,14 +569,14 @@ public:
   }
 
 
-  void set_checksumer(const palf::SCN checksum_scn,
+  void set_checksumer(const share::SCN checksum_scn,
                       ObBatchChecksum *checksumer)
   {
     checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
   }
 
-  palf::SCN get_checksum_last_scn() const
+  share::SCN get_checksum_last_scn() const
   {
     return checksum_last_scn_;
   }
@@ -605,10 +605,10 @@ public:
                        K_(checksum_scn),
                        K_(checksum_last_scn));
 private:
-  palf::SCN target_scn_;
-  palf::SCN checksum_scn_;
+  share::SCN target_scn_;
+  share::SCN checksum_scn_;
   ObBatchChecksum *checksumer_;
-  palf::SCN checksum_last_scn_;
+  share::SCN checksum_last_scn_;
 };
 
 } // memtable

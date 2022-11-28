@@ -189,7 +189,7 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get phy table location", K(ret));
     } else {
-      const DASTabletLocList &locations = table_loc->tablet_locs_;
+      const DASTabletLocList &locations = table_loc->get_tablet_locs();
       if (locations.size() <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the location array is empty", K(locations.size()), K(ret));
@@ -511,7 +511,8 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
   DASTabletLocArray locations;
   FOREACH_X(tmp_node, table_locs, OB_SUCC(ret)) {
     ObDASTableLoc *table_loc = *tmp_node;
-    FOREACH_X(tablet_node, table_loc->tablet_locs_, OB_SUCC(ret)) {
+    for (DASTabletLocListIter tablet_node = table_loc->tablet_locs_begin();
+         OB_SUCC(ret) && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
       OZ(locations.push_back(*tablet_node));
     }
   }
@@ -792,7 +793,7 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   common::ObArray<ObPxSqcMeta *> sqcs;
   int n_locations = 0;
-  const DASTabletLocList &locations = table_loc->tablet_locs_;
+  const DASTabletLocList &locations = table_loc->get_tablet_locs();
   DASTabletLocSEArray temp_locations;
   if (OB_ISNULL(table_loc) || OB_ISNULL(phy_op)) {
     ret = OB_ERR_UNEXPECTED;

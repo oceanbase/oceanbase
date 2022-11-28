@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_DDL_MERGE_TASK_
 #define OCEANBASE_STORAGE_DDL_MERGE_TASK_
 
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "share/scheduler/ob_dag_scheduler.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
@@ -46,18 +46,21 @@ public:
       table_id_(0),
       execution_id_(0),
       ddl_task_id_(0)
-  {}
+  {
+    start_scn_.set_min();
+  }
   bool is_valid() const
   {
-    return ls_id_.is_valid() && tablet_id_.is_valid();
+    return ls_id_.is_valid() && tablet_id_.is_valid() && start_scn_.is_valid_and_not_min();
   }
   virtual ~ObDDLTableMergeDagParam() = default;
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_scn), K_(is_commit), K_(table_id), K_(execution_id), K_(ddl_task_id));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(rec_scn), K_(is_commit), K_(start_scn), K_(table_id), K_(execution_id), K_(ddl_task_id));
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
-  palf::SCN rec_scn_;
+  share::SCN rec_scn_;
   bool is_commit_;
+  share::SCN start_scn_; // start log ts at schedule, for skipping expired task
   uint64_t table_id_; // used for report ddl checksum
   int64_t execution_id_; // used for report ddl checksum
   int64_t ddl_task_id_; // used for report ddl checksum
@@ -94,14 +97,14 @@ class ObDDLTableDumpTask : public share::ObITask
 public:
   ObDDLTableDumpTask();
   virtual ~ObDDLTableDumpTask();
-  int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id, const palf::SCN &freeze_scn);
+  int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id, const share::SCN &freeze_scn);
   virtual int process() override;
   TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id), K_(freeze_scn));
 private:
   bool is_inited_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
-  palf::SCN freeze_scn_;
+  share::SCN freeze_scn_;
   DISALLOW_COPY_AND_ASSIGN(ObDDLTableDumpTask);
 };
 
@@ -113,8 +116,8 @@ public:
   int init(const ObDDLTableMergeDagParam &ddl_dag_param);
   virtual int process() override;
   static int check_data_integrity(const ObTablesHandleArray &ddl_sstables,
-                                  const palf::SCN &start_scn,
-                                  const palf::SCN &prepare_scn,
+                                  const share::SCN &start_scn,
+                                  const share::SCN &prepare_scn,
                                   bool &is_data_complete);
   TO_STRING_KV(K_(is_inited), K_(merge_param));
 private:
@@ -134,7 +137,7 @@ public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   ObITable::TableKey table_key_;
-  palf::SCN start_scn_;
+  share::SCN start_scn_;
   int64_t snapshot_version_;
   int64_t cluster_version_;
 };

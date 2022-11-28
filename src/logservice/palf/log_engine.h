@@ -130,7 +130,7 @@ public:
   // ==================== Submit aysnc task end ==================
 
   // ====================== LogStorage start =====================
-  int append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &scn);
+  int append_log(const LSN &lsn, const LogWriteBuf &write_buf, const share::SCN &scn);
   int append_log(const LSNArray &lsn, const LogWriteBufArray &write_buf, const SCNArray &scn_array);
   int read_log(const LSN &lsn,
                const int64_t in_read_size,
@@ -143,7 +143,7 @@ public:
 
   const LSN get_begin_lsn() const;
   int get_block_id_range(block_id_t &min_block_id, block_id_t &max_block_id) const;
-  int get_block_min_scn(const block_id_t &block_id, SCN &scn) const;
+  int get_block_min_scn(const block_id_t &block_id, share::SCN &scn) const;
   //
   // ====================== LogStorage end =======================
 
@@ -362,14 +362,15 @@ public:
   LogMeta get_log_meta() const;
   const LSN &get_base_lsn_used_for_block_gc() const;
   // not thread safe
-  int get_min_block_id_and_min_scn(block_id_t &block_id, SCN &SCN);
+  int get_min_block_info_for_gc(block_id_t &block_id, share::SCN &max_scn);
+  int get_min_block_info(block_id_t &block_id, share::SCN &min_scn) const;
   //
   // ===================== NetService end ========================
   LogStorage *get_log_storage() { return &log_storage_; }
   LogStorage *get_log_meta_storage() { return &log_meta_storage_; }
   int get_total_used_disk_space(int64_t &total_used_size_byte) const;
   virtual int64_t get_palf_epoch() const { return palf_epoch_; }
-  TO_STRING_KV(K_(palf_id), K_(is_inited), K_(min_block_scn), K_(min_block_id), K_(base_lsn_for_block_gc),
+  TO_STRING_KV(K_(palf_id), K_(is_inited), K_(min_block_max_scn), K_(min_block_id), K_(base_lsn_for_block_gc),
       K_(log_meta), K_(log_meta_storage), K_(log_storage), K_(palf_epoch), KP(this));
 private:
   int submit_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx, const LogMeta &log_meta);
@@ -405,7 +406,8 @@ private:
 
   int serialize_log_meta_(const LogMeta &log_meta, char *buf, int64_t buf_len);
 
-  void reset_min_block_info_guarded_by_lock_(const block_id_t block_id, const SCN &min_scn);
+  void reset_min_block_info_guarded_by_lock_(const block_id_t min_block_id,
+                                             const share::SCN &min_block_max_scn);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(LogEngine);
@@ -413,7 +415,7 @@ private:
 private:
   // used for GC
   mutable ObSpinLock block_gc_lock_;
-  SCN min_block_scn_;
+  share::SCN min_block_max_scn_;
   mutable block_id_t min_block_id_;
   LSN base_lsn_for_block_gc_;
 

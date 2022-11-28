@@ -19,7 +19,7 @@
 #include "share/rc/ob_tenant_base.h"                // MTL_*
 #include "observer/ob_server_struct.h"              // GCTX
 #include "logservice/palf/lsn.h"                    // LSN
-#include "logservice/palf/scn.h"                    // LSN
+#include "share/scn.h"                    // LSN
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/ob_debug_sync.h"
 

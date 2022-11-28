@@ -346,23 +346,23 @@ public:
   virtual int write_auth(const bool exclusive);
   virtual int write_done();
   virtual int trans_begin();
-  virtual int replay_begin(const palf::SCN scn);
+  virtual int replay_begin(const share::SCN scn);
   virtual int replay_end(const bool is_replay_succ,
-                         const palf::SCN scn);
-  int rollback_redo_callbacks(const palf::SCN scn);
+                         const share::SCN scn);
+  int rollback_redo_callbacks(const share::SCN scn);
   virtual uint64_t calc_checksum_all();
   virtual void print_callbacks();
   virtual int trans_end(const bool commit,
-                        const palf::SCN trans_version,
-                        const palf::SCN final_scn);
+                        const share::SCN trans_version,
+                        const share::SCN final_scn);
   virtual int trans_clear();
   virtual int elr_trans_preparing();
   virtual int trans_kill();
   virtual int trans_publish();
   virtual int trans_replay_begin();
   virtual int trans_replay_end(const bool commit,
-                               const palf::SCN trans_version,
-                               const palf::SCN final_scn,
+                               const share::SCN trans_version,
+                               const share::SCN final_scn,
                                const uint64_t log_cluster_version = 0,
                                const uint64_t checksum = 0);
   //method called when leader takeover
@@ -389,17 +389,17 @@ public:
                             int64_t &buf_pos,
                             ObRedoLogSubmitHelper &helper,
                             const bool log_for_lock_node = true);
-  int calc_checksum_before_scn(const palf::SCN scn,
+  int calc_checksum_before_scn(const share::SCN scn,
                                uint64_t &checksum,
-                               palf::SCN &checksum_scn);
+                               share::SCN &checksum_scn);
   void update_checksum(const uint64_t checksum,
-                       const palf::SCN checksum_scn);
+                       const share::SCN checksum_scn);
   int log_submitted(const ObRedoLogSubmitHelper &helper);
   // the function apply the side effect of dirty txn and return whether
   // remaining pending callbacks.
   // NB: the fact whether there remains pending callbacks currently is only used
   // for continuing logging when minor freeze
-  int sync_log_succ(const palf::SCN scn, const ObCallbackScope &callbacks);
+  int sync_log_succ(const share::SCN scn, const ObCallbackScope &callbacks);
   void sync_log_fail(const ObCallbackScope &callbacks);
   bool is_slow_query() const;
   virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx);
@@ -434,14 +434,14 @@ public:
   int check_tx_mem_size_overflow(bool &is_overflow);
 public:
   void on_tsc_retry(const ObMemtableKey& key,
-                    const palf::SCN snapshot_version,
-                    const palf::SCN max_trans_version,
+                    const share::SCN snapshot_version,
+                    const share::SCN max_trans_version,
                     const transaction::ObTransID &conflict_tx_id);
   void on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id);
   virtual int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual storage::ObTxTableGuard *get_tx_table_guard() override { return &tx_table_guard_; }
   virtual transaction::ObTransID get_tx_id() const override;
-  virtual palf::SCN get_tx_end_scn() const override;
+  virtual share::SCN get_tx_end_scn() const override;
 
   // mainly used by revert ref
   void reset_trans_table_guard();
@@ -454,7 +454,7 @@ public:
   void replay_done();
   int64_t get_checksum() const { return trans_mgr_.get_checksum(); }
   int64_t get_tmp_checksum() const { return trans_mgr_.get_tmp_checksum(); }
-  palf::SCN get_checksum_scn() const { return trans_mgr_.get_checksum_scn(); }
+  share::SCN get_checksum_scn() const { return trans_mgr_.get_checksum_scn(); }
 public:
   // table lock.
   int enable_lock_table(storage::ObTableHandleV2 &handle);
@@ -468,18 +468,18 @@ public:
   int check_modify_time_elapsed(const common::ObTabletID &tablet_id,
                                 const int64_t timestamp);
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
-  int check_lock_need_replay(const palf::SCN &scn,
+  int check_lock_need_replay(const share::SCN &scn,
                              const transaction::tablelock::ObTableLockOp &lock_op,
                              bool &need_replay);
   int add_lock_record(const transaction::tablelock::ObTableLockOp &lock_op);
   int replay_add_lock_record(const transaction::tablelock::ObTableLockOp &lock_op,
-                             const palf::SCN &scn);
+                             const share::SCN &scn);
   void remove_lock_record(ObMemCtxLockOpLinkNode *lock_op);
-  void set_log_synced(ObMemCtxLockOpLinkNode *lock_op, const palf::SCN &scn);
+  void set_log_synced(ObMemCtxLockOpLinkNode *lock_op, const share::SCN &scn);
   // replay lock to lock map and trans part ctx.
   // used by the replay process of multi data source.
   int replay_lock(const transaction::tablelock::ObTableLockOp &lock_op,
-                  const palf::SCN &scn);
+                  const share::SCN &scn);
   int recover_from_table_lock_durable_info(const ObTableLockInfo &table_lock_info);
   int get_table_lock_store_info(ObTableLockInfo &table_lock_info);
   // for deadlock detect.
@@ -488,12 +488,12 @@ public:
 private:
   int do_trans_end(
       const bool commit,
-      const palf::SCN trans_version,
-      const palf::SCN final_scn,
+      const share::SCN trans_version,
+      const share::SCN final_scn,
       const int end_code);
   int clear_table_lock_(const bool is_commit,
-                        const palf::SCN &commit_version,
-                        const palf::SCN &commit_scn);
+                        const share::SCN &commit_version,
+                        const share::SCN &commit_scn);
   int rollback_table_lock_(int64_t seq_no);
   int register_multi_source_data_if_need_(
       const transaction::tablelock::ObTableLockOp &lock_op,

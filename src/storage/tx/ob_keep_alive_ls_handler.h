@@ -65,7 +65,7 @@ public:
   int64_t near_to_gts_cnt;
   int64_t other_error_cnt;
   int64_t submit_succ_cnt;
-  palf::SCN last_log_ts_;
+  share::SCN last_log_ts_;
   palf::LSN last_lsn_;
 
 private:
@@ -99,7 +99,7 @@ public:
   int on_success() {ATOMIC_STORE(&is_busy_, false); return OB_SUCCESS;}
   int on_failure() {ATOMIC_STORE(&is_busy_, false); return OB_SUCCESS;}
 
-  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const palf::SCN &scn)
+  int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn)
   {
     UNUSED(buffer);
     UNUSED(nbytes);
@@ -114,8 +114,8 @@ public:
   int switch_to_leader() { ATOMIC_STORE(&is_master_,true); return OB_SUCCESS;}
   int switch_to_follower_gracefully() { ATOMIC_STORE(&is_master_,false); return OB_SUCCESS;}
   int resume_leader() { ATOMIC_STORE(&is_master_,true);return OB_SUCCESS; }
-  palf::SCN get_rec_scn() { return palf::SCN::max_scn(); }
-  int flush(palf::SCN &rec_scn) { return OB_SUCCESS;}
+  share::SCN get_rec_scn() { return share::SCN::max_scn(); }
+  int flush(share::SCN &rec_scn) { return OB_SUCCESS;}
 
 private:
   bool check_gts_();
@@ -131,7 +131,7 @@ private :
   int64_t submit_buf_len_;
   int64_t submit_buf_pos_;
 
-  palf::SCN last_gts_;
+  share::SCN last_gts_;
 
   ObLSKeepAliveStatInfo stat_info_;
 };

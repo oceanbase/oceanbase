@@ -16,7 +16,7 @@
 #include "logservice/archiveservice/ob_archive_service.h"
 #include "logservice/ob_log_handler.h"
 #include "logservice/ob_log_service.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_index_block_builder.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
@@ -557,8 +557,8 @@ int ObDDLRedoLogWriter::write(
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  palf::SCN base_scn = palf::SCN::min_scn();
-  palf::SCN scn;
+  SCN base_scn = SCN::min_scn();
+  SCN scn;
   if (!log.is_valid() || nullptr == log_handler || !ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id || nullptr == buffer) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(log), K(ls_id), K(tenant_id), KP(buffer));
@@ -602,7 +602,7 @@ int ObDDLRedoLogWriter::write(
   return ret;
 }
 
-int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandler *log_handler, palf::SCN &start_scn)
+int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandler *log_handler, SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   start_scn.reset();
@@ -619,7 +619,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandl
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  palf::SCN scn;
+  SCN scn;
   bool is_external_consistent = false;
   if (OB_ISNULL(cb = op_alloc(ObDDLClogCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -632,7 +632,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandl
     LOG_WARN("fail to seriaize ddl start log", K(ret));
   } else if (OB_FAIL(log_handler->append(buffer,
                                          buffer_size,
-                                         palf::SCN::base_scn(),
+                                         SCN::base_scn(),
                                          need_nonblock,
                                          cb,
                                          lsn,
@@ -691,8 +691,8 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  palf::SCN base_scn = palf::SCN::base_scn();
-  palf::SCN scn;
+  SCN base_scn = SCN::base_scn();
+  SCN scn;
   bool is_external_consistent = false;
   if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -924,13 +924,13 @@ int ObDDLSSTableRedoWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_i
   return ret;
 }
 
-int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key)
+int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key, ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObDDLStartLog log;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
-  palf::SCN tmp_scn;
+  ddl_kv_mgr_handle.reset();
+  SCN tmp_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
@@ -1017,7 +1017,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
                                               const int64_t table_id,
                                               const int64_t execution_id,
                                               const int64_t ddl_task_id,
-                                              palf::SCN &prepare_scn)
+                                              SCN &prepare_scn)
 
 {
   int ret = OB_SUCCESS;
@@ -1069,9 +1069,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
       ret = OB_ERR_SYS;
       LOG_WARN("srv rpc proxy or location service is null", K(ret), KP(srv_rpc_proxy));
     } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).remote_write_ddl_prepare_log(arg, log_ns))) {
-      if (OB_TASK_EXPIRED == ret) {
-        ret = OB_SUCCESS;
-      } else {
+      if (OB_TASK_EXPIRED != ret) {
         LOG_WARN("fail to remote write ddl redo log", K(ret), K(arg));
       }
     } else if (OB_FAIL(prepare_scn.convert_for_tx(log_ns))) {
@@ -1082,7 +1080,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
 }
 
 int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key,
-                                             const palf::SCN &prepare_scn)
+                                             const SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -1091,7 +1089,7 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLSSTableRedoWriter has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || palf::SCN::min_scn() == start_scn_ || !prepare_scn.is_valid())) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || SCN::min_scn() == start_scn_ || !prepare_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_), K(prepare_scn));
   } else if (OB_FAIL(log.init(table_key, get_start_scn(), prepare_scn))) {

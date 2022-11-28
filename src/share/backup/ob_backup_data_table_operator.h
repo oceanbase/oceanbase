@@ -127,14 +127,14 @@ public:
   static int get_backup_task(common::ObISQLClient &proxy, const int64_t job_id, const uint64_t tenant_id, 
       ObBackupSetTaskAttr &set_task_attr);
   static int advance_task_status(common::ObISQLClient &proxy, const ObBackupSetTaskAttr &set_task_attr,
-      const ObBackupStatus &next_status, const int result, const palf::SCN &end_scn, const int64_t end_ts);
+      const ObBackupStatus &next_status, const int result, const SCN &end_scn, const int64_t end_ts);
   static int move_task_to_his(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t job_id);
   static int update_stats(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
       const ObBackupStats &stats);
   static int update_meta_turn_id(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
       const int64_t turn_id);
   static int update_user_ls_start_scn(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id, 
-      const palf::SCN &scn);
+      const SCN &scn);
 private:
   static int fill_dml_with_backup_task_(const ObBackupSetTaskAttr &backup_set_task, ObDMLSqlSplicer &dml);
 };

@@ -27,7 +27,7 @@
 #include "share/ob_encryption_util.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/ob_dml_sql_splicer.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -1302,9 +1302,9 @@ public:
   int64_t backup_set_id_;
   int64_t start_ts_;
   int64_t end_ts_;
-  palf::SCN start_scn_;
-  palf::SCN end_scn_;
-  palf::SCN user_ls_start_scn_;
+  SCN start_scn_;
+  SCN end_scn_;
+  SCN user_ls_start_scn_;
   int64_t data_turn_id_;
   int64_t meta_turn_id_;
   ObBackupStatus status_;
@@ -1432,8 +1432,8 @@ public:
   common::ObFixedLengthString<OB_MAX_PASSWORD_LENGTH> passwd_;
   ObBackupFileStatus::STATUS file_status_;
   common::ObFixedLengthString<OB_MAX_BACKUP_DEST_LENGTH> backup_path_;
-  palf::SCN start_replay_scn_;
-  palf::SCN min_restore_scn_;
+  SCN start_replay_scn_;
+  SCN min_restore_scn_;
   uint64_t tenant_compatible_;
   Compatible backup_compatible_;
   int64_t data_turn_id_;
@@ -1592,12 +1592,12 @@ struct ObLogArchiveDestAtrr final
 int trim_right_backslash(ObBackupPathString &path);
 
 // Convert a scn to time string, return like '2022-05-31 12:00:00' if concat is ' '.
-int backup_scn_to_strftime(const palf::SCN &scn, char *buf, const int64_t buf_len, int64_t &pos, const char concat);
+int backup_scn_to_strftime(const SCN &scn, char *buf, const int64_t buf_len, int64_t &pos, const char concat);
 
 // Convert a scn to time tag, return like '20220531T120000'
-int backup_scn_to_time_tag(const palf::SCN &scn, char *buf, const int64_t buf_len, int64_t &pos);
+int backup_scn_to_time_tag(const SCN &scn, char *buf, const int64_t buf_len, int64_t &pos);
 
-inline uint64_t trans_scn_to_second(const palf::SCN &scn) { return scn.convert_to_ts() / 1000 / 1000; }
+inline uint64_t trans_scn_to_second(const SCN &scn) { return scn.convert_to_ts() / 1000 / 1000; }
 }//share
 }//oceanbase
 

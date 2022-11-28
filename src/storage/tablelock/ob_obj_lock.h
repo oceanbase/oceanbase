@@ -19,7 +19,7 @@
 #include "lib/hash/ob_iteratable_hashset.h"
 #include "lib/hash/ob_link_hashmap.h"
 #include "lib/hash/ob_hashmap.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/ob_i_store.h"
 
@@ -107,8 +107,8 @@ public:
   // only update the status of the exact one with the same lock_op
   int update_lock_status(
       const ObTableLockOp &lock_op,
-      const palf::SCN commit_version,
-      const palf::SCN commit_scn,
+      const share::SCN commit_version,
+      const share::SCN commit_scn,
       const ObTableLockOpStatus status,
       ObMalloc &allocator);
   int check_allow_lock(
@@ -118,10 +118,10 @@ public:
       bool &conflict_with_dml_lock,
       const bool include_finish_tx = true,
       const bool only_check_dml_lock = false);
-  palf::SCN get_min_ddl_lock_committed_scn(const palf::SCN &flushed_scn) const;
+  share::SCN get_min_ddl_lock_committed_scn(const share::SCN &flushed_scn) const;
   int get_table_lock_store_info(
       ObIArray<ObTableLockOp> &store_arr,
-      const palf::SCN &freeze_scn);
+      const share::SCN &freeze_scn);
 
   void reset(ObMalloc &allocator);
   void reset_without_lock(ObMalloc &allocator);
@@ -151,8 +151,8 @@ private:
       const bool only_check_dml_lock = false);
   int update_lock_status_(
       const ObTableLockOp &lock_op,
-      const palf::SCN &commit_version,
-      const palf::SCN &commit_scn,
+      const share::SCN &commit_version,
+      const share::SCN &commit_scn,
       const ObTableLockOpStatus status,
       ObTableLockOpList *op_list);
   int recover_(
@@ -330,8 +330,8 @@ public:
       const ObTableLockOp &lock_op);
   int update_lock_status(
       const ObTableLockOp &lock_op,
-      const palf::SCN commit_version,
-      const palf::SCN commit_scn,
+      const share::SCN commit_version,
+      const share::SCN commit_scn,
       const ObTableLockOpStatus status);
   bool is_inited() const { return is_inited_; }
   int check_allow_lock(
@@ -341,8 +341,8 @@ public:
       const bool include_finish_tx = true,
       const bool only_check_dml_lock = false);
   void print();
-  palf::SCN get_min_ddl_committed_scn(palf::SCN &flushed_scn);
-  int get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr, palf::SCN freeze_scn);
+  share::SCN get_min_ddl_committed_scn(share::SCN &flushed_scn);
+  int get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr, share::SCN freeze_scn);
   // get all the lock id in the lock map
   // @param[out] iter, the iterator returned.
   // int get_lock_id_iter(ObLockIDIterator &iter);
@@ -407,28 +407,28 @@ private:
   class GetMinCommittedDDLLogtsFunctor
   {
   public:
-    explicit GetMinCommittedDDLLogtsFunctor(palf::SCN &flushed_scn)
-      : min_committed_scn_(palf::SCN::max_scn()),
+    explicit GetMinCommittedDDLLogtsFunctor(share::SCN &flushed_scn)
+      : min_committed_scn_(share::SCN::max_scn()),
         flushed_scn_(flushed_scn) {}
     bool operator()(const ObLockID &lock_id, ObOBJLock *obj_lock);
-    palf::SCN get_min_committed_scn() { return min_committed_scn_; }
+    share::SCN get_min_committed_scn() { return min_committed_scn_; }
 
   private:
-    palf::SCN min_committed_scn_;
-    palf::SCN flushed_scn_;
+    share::SCN min_committed_scn_;
+    share::SCN flushed_scn_;
   };
   class GetTableLockStoreInfoFunctor
   {
   public:
     explicit GetTableLockStoreInfoFunctor(ObIArray<ObTableLockOp> &store_arr,
-                                          palf::SCN freeze_scn)
+                                          share::SCN freeze_scn)
       : store_arr_(store_arr),
         freeze_scn_(freeze_scn) {}
     bool operator()(const ObLockID &lock_id, ObOBJLock *obj_lock);
 
   private:
     ObIArray<ObTableLockOp> &store_arr_;
-    palf::SCN freeze_scn_;
+    share::SCN freeze_scn_;
   };
 
 private:

@@ -26,7 +26,7 @@
 #include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
 #include "share/leak_checker/obj_leak_checker.h"
 #include "share/ob_table_range.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -55,11 +55,6 @@ class ObSSTable;
 namespace share
 {
 struct ObScnRange;
-}
-
-namespace palf
-{
-class SCN;
 }
 
 namespace storage
@@ -129,8 +124,8 @@ public:
     OB_INLINE bool is_remote_logical_minor_sstable() const { return ObITable::is_remote_logical_minor_sstable(table_type_); }
 
     OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
-    OB_INLINE palf::SCN get_start_scn() const { return scn_range_.start_scn_; }
-    OB_INLINE palf::SCN get_end_scn() const { return scn_range_.end_scn_; }
+    OB_INLINE share::SCN get_start_scn() const { return scn_range_.start_scn_; }
+    OB_INLINE share::SCN get_end_scn() const { return scn_range_.end_scn_; }
     OB_INLINE int64_t get_snapshot_version() const
     {
       OB_ASSERT(is_major_sstable());
@@ -203,8 +198,8 @@ public:
       const common::ObIArray<blocksstable::ObDatumRange> &ranges,
       ObStoreRowIterator *&row_iter) = 0;
 
-  virtual OB_INLINE palf::SCN get_start_scn() const;
-  virtual OB_INLINE palf::SCN get_end_scn() const;
+  virtual OB_INLINE share::SCN get_start_scn() const;
+  virtual OB_INLINE share::SCN get_end_scn() const;
   virtual OB_INLINE share::ObScnRange &get_scn_range() { return key_.scn_range_; }
   virtual OB_INLINE bool is_trans_state_deterministic() { return get_upper_trans_version() < INT64_MAX; }
   virtual int64_t get_snapshot_version() const { return key_.get_snapshot_version(); }
@@ -456,12 +451,12 @@ OB_INLINE bool ObITable::TableKey::is_valid() const
 }
 
 
-OB_INLINE palf::SCN ObITable::get_start_scn() const
+OB_INLINE share::SCN ObITable::get_start_scn() const
 {
   return key_.get_start_scn();
 }
 
-OB_INLINE palf::SCN ObITable::get_end_scn() const
+OB_INLINE share::SCN ObITable::get_end_scn() const
 {
   return key_.get_end_scn();
 }

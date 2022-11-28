@@ -159,7 +159,7 @@ public:
   Property_declare_ObString(comment)
 
   Property_declare_int(int64_t, restore_start_ts)
-  Property_declare_int(palf::SCN, restore_scn)
+  Property_declare_int(share::SCN, restore_scn)
   Property_declare_int(uint64_t, post_cluster_version)
   Property_declare_int(uint64_t, source_cluster_version)
   //from cmd

@@ -78,8 +78,8 @@ int ObTxCtxMemtableMgr::create_memtable(const SCN last_replay_scn,
 
   table_key.table_type_ = ObITable::TX_CTX_MEMTABLE;
   table_key.tablet_id_ = ObTabletID(ObTabletID::LS_TX_CTX_TABLET_ID);
-  table_key.scn_range_.start_scn_ = palf::SCN::base_scn();
-  table_key.scn_range_.end_scn_ = palf::SCN::plus(table_key.scn_range_.start_scn_, 1);
+  table_key.scn_range_.start_scn_ = SCN::base_scn();
+  table_key.scn_range_.end_scn_ = SCN::plus(table_key.scn_range_.start_scn_, 1);
 
   // TODO: Donot use pool to create the only memtable
   if (get_memtable_count_() > 0) {

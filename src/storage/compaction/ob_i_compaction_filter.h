@@ -15,7 +15,7 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "share/schema/ob_table_param.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 namespace oceanbase
 {
 namespace blocksstable
@@ -91,7 +91,7 @@ public:
     max_filtered_end_scn_.set_min();
   }
   ~ObTransStatusFilter() {}
-  int init(const palf::SCN &filter_val, const int64_t filter_col_idx);
+  int init(const share::SCN &filter_val, const int64_t filter_col_idx);
   OB_INLINE virtual void reset() override
   {
     ObICompactionFilter::reset();
@@ -107,14 +107,14 @@ public:
       K_(filter_col_idx), K_(max_filtered_end_scn));
 
 public:
-  palf::SCN get_max_filtered_end_scn() { return max_filtered_end_scn_; }
-  palf::SCN get_recycle_scn() { return filter_val_; }
+  share::SCN get_max_filtered_end_scn() { return max_filtered_end_scn_; }
+  share::SCN get_recycle_scn() { return filter_val_; }
 
 private:
   bool is_inited_;
-  palf::SCN filter_val_;
+  share::SCN filter_val_;
   int64_t filter_col_idx_;
-  palf::SCN max_filtered_end_scn_;
+  share::SCN max_filtered_end_scn_;
 };
 
 } // namespace compaction

@@ -21,6 +21,7 @@
 namespace oceanbase
 {
 using namespace palf;
+using namespace share;
 namespace archive
 {
 // =================================== ObArchiveLease ================================= //

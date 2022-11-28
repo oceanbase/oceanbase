@@ -31,7 +31,7 @@
 #include "storage/tx/ob_trans_result.h"
 #include "storage/tx/ob_xa_define.h"
 #include "ob_multi_data_source.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -1259,10 +1259,10 @@ class ObElrTransInfo final
 public:
   ObElrTransInfo() { reset(); }
   void reset();
-  int init(const ObTransID &trans_id, uint32_t ctx_id, const palf::SCN commit_version);
+  int init(const ObTransID &trans_id, uint32_t ctx_id, const share::SCN commit_version);
   const ObTransID &get_trans_id() const { return trans_id_; }
   uint32_t get_ctx_id() const { return ctx_id_; }
-  palf::SCN get_commit_version() const { return commit_version_; }
+  share::SCN get_commit_version() const { return commit_version_; }
   int set_result(const int result) { result_ = result; return common::OB_SUCCESS; }
   uint64_t hash() const { return trans_id_.hash(); }
   int get_result() const { return ATOMIC_LOAD(&result_); }
@@ -1270,7 +1270,7 @@ public:
   TO_STRING_KV(K_(trans_id), K_(commit_version), K_(result), K_(ctx_id));
 private:
   ObTransID trans_id_;
-  palf::SCN commit_version_;
+  share::SCN commit_version_;
   int result_;
   uint32_t ctx_id_;
 };
@@ -1742,15 +1742,15 @@ public:
   ObTxBufferNodeArray multi_data_source_;
   // check
   common::ObAddr scheduler_;
-  palf::SCN prepare_version_;
+  share::SCN prepare_version_;
   int64_t trans_type_;
   int64_t next_log_entry_no_;
-  palf::SCN max_applied_log_ts_;
-  palf::SCN max_applying_log_ts_;
+  share::SCN max_applied_log_ts_;
+  share::SCN max_applying_log_ts_;
   int64_t max_applying_part_log_no_; // start from 0 on follower and always be INT64_MAX on leader
   int64_t max_submitted_seq_no_; // maintains on Leader and transfer to Follower via ActiveInfoLog
   uint64_t checksum_;
-  palf::SCN checksum_scn_;
+  share::SCN checksum_scn_;
   palf::LSN max_durable_lsn_;
   bool data_complete_;
   bool is_dup_tx_;
@@ -1768,9 +1768,9 @@ static const int64_t USEC_PER_SEC = 1000 * 1000;
 struct ObMulSourceDataNotifyArg
 {
   ObTransID tx_id_;
-  palf::SCN scn_; // the log ts of current notify type
+  share::SCN scn_; // the log ts of current notify type
   // in case of abort transaction, trans_version_ is invalid
-  palf::SCN trans_version_;
+  share::SCN trans_version_;
   bool for_replay_;
   NotifyType notify_type_;
 

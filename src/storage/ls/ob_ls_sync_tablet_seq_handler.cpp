@@ -15,7 +15,7 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/ob_sync_tablet_seq_clog.h"
 #include "logservice/ob_log_base_header.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/ob_tablet_autoincrement_service.h"
 
@@ -107,16 +107,16 @@ int ObLSSyncTabletSeqHandler::resume_leader()
   return ret;
 }
 
-int ObLSSyncTabletSeqHandler::flush(palf::SCN &scn)
+int ObLSSyncTabletSeqHandler::flush(SCN &scn)
 {
   // TODO
   UNUSED(scn);
   return OB_SUCCESS;
 }
 
-palf::SCN ObLSSyncTabletSeqHandler::get_rec_scn()
+SCN ObLSSyncTabletSeqHandler::get_rec_scn()
 {
-  return palf::SCN::max_scn();
+  return SCN::max_scn();
 }
 
 }

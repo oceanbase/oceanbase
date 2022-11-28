@@ -104,7 +104,7 @@ public:
         ctx_(NULL),
         value_(NULL),
         version_iter_(NULL),
-        last_trans_version_(palf::SCN::max_scn()),
+        last_trans_version_(share::SCN::max_scn()),
         skip_compact_(false)
   {
   }
@@ -126,7 +126,7 @@ public:
     ctx_ = NULL;
     value_ = NULL;
     version_iter_ = NULL;
-    last_trans_version_ = palf::SCN::max_scn();
+    last_trans_version_ = share::SCN::max_scn();
   }
   const ObMvccRow *get_mvcc_row() const { return value_; }
   const ObMvccTransNode *get_trans_node() const { return version_iter_; }
@@ -146,7 +146,7 @@ private:
   ObMvccAccessCtx *ctx_;
   ObMvccRow *value_;
   ObMvccTransNode *version_iter_;
-  palf::SCN last_trans_version_;
+  share::SCN last_trans_version_;
   bool skip_compact_;
 };
 

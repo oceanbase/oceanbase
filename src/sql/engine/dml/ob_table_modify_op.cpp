@@ -775,7 +775,7 @@ int ObTableModifyOp::calc_single_table_loc()
                K(table_loc_id), K(ref_table_id), K(das_ctx.get_table_loc_list()));
     } else {
       get_input()->table_loc_ = table_loc;
-      get_input()->tablet_loc_ = table_loc->tablet_locs_.get_first();
+      get_input()->tablet_loc_ = table_loc->get_first_tablet_loc();
     }
   }
   return ret;

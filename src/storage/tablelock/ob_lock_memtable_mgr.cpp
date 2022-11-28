@@ -71,7 +71,7 @@ void ObLockMemtableMgr::reset()
   is_inited_ = false;
 }
 
-int ObLockMemtableMgr::create_memtable(const palf::SCN clog_checkpoint_scn,
+int ObLockMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
                                        const int64_t schema_version,
                                        const bool for_replay)
 {
@@ -91,8 +91,8 @@ int ObLockMemtableMgr::create_memtable(const palf::SCN clog_checkpoint_scn,
   table_key.table_type_ = ObITable::LOCK_MEMTABLE;
   table_key.tablet_id_ = LS_LOCK_TABLET;
 
-  table_key.scn_range_.start_scn_ = palf::SCN::base_scn();//fake
-  table_key.scn_range_.end_scn_ = palf::SCN::plus(table_key.scn_range_.start_scn_, 1);//fake
+  table_key.scn_range_.start_scn_ = SCN::base_scn();//fake
+  table_key.scn_range_.end_scn_ = SCN::plus(table_key.scn_range_.start_scn_, 1);//fake
 
   if (get_memtable_count_() > 0) {
     ret = OB_ERR_UNEXPECTED;

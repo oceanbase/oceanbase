@@ -43,7 +43,7 @@ struct ObTxNodeArg
   // seq_no_ is the sequence no of the executing sql
   int64_t seq_no_;
   // scn_ is thee log ts of the redo log
-  palf::SCN scn_;
+  share::SCN scn_;
 
   TO_STRING_KV(KP_(data),
                KP_(old_row),
@@ -64,7 +64,7 @@ struct ObTxNodeArg
     acc_checksum_(0),
     memstore_version_(memstore_version),
     seq_no_(seq_no),
-    scn_(palf::SCN::max_scn()) {}
+    scn_(share::SCN::max_scn()) {}
 
   // Constructor for follower
   ObTxNodeArg(const ObMemtableData *data,
@@ -73,7 +73,7 @@ struct ObTxNodeArg
               const int64_t seq_no,
               const uint32_t modify_count,
               const uint32_t acc_checksum,
-              const palf::SCN scn)
+              const share::SCN scn)
     : data_(data),
     old_row_(old_row),
     modify_count_(modify_count),
@@ -89,7 +89,7 @@ struct ObTxNodeArg
     acc_checksum_ = 0;
     memstore_version_ = 0;
     seq_no_ = 0;
-    scn_ = palf::SCN::min_scn();
+    scn_ = share::SCN::min_scn();
   }
 };
 

@@ -20,6 +20,7 @@ namespace oceanbase
 {
 
 using namespace common;
+using namespace share;
 
 namespace transaction
 {
@@ -84,7 +85,7 @@ int ObGTSTaskQueue::foreach_task(const MonotonicTs srr,
           }
         }
         if (OB_SUCC(ret)) {
-          palf::SCN scn;
+          SCN scn;
           scn.convert_for_gts(gts);
           if (GET_GTS == task_type_) {
             if (OB_FAIL(task->get_gts_callback(srr, scn, receive_gts_ts))) {

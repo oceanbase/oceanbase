@@ -136,7 +136,7 @@ int ObTabletChecksumOperator::load_tablet_checksum_items(
     const ObTabletLSPair &start_pair,
     const int64_t batch_cnt,
     const uint64_t tenant_id,
-    const palf::SCN &compaction_scn,
+    const SCN &compaction_scn,
     ObIArray<ObTabletChecksumItem> &items)
 {
   int ret = OB_SUCCESS;
@@ -283,7 +283,7 @@ int ObTabletChecksumOperator::construct_load_sql_str_(
     const uint64_t tenant_id,
     const ObTabletLSPair &start_pair,
     const int64_t batch_cnt,
-    const palf::SCN &compaction_scn,
+    const SCN &compaction_scn,
     ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
@@ -291,7 +291,7 @@ int ObTabletChecksumOperator::construct_load_sql_str_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(batch_cnt), K(compaction_scn));
   } else {
-    if (compaction_scn > palf::SCN::min_scn()) {
+    if (compaction_scn > SCN::min_scn()) {
       if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE tenant_id = '%lu' and compaction_scn = %lu "
           "and tablet_id >= '%lu' and ls_id > %ld ", OB_ALL_TABLET_CHECKSUM_TNAME, tenant_id,
           compaction_scn.get_val_for_inner_table_field(), start_pair.get_tablet_id().id(),
@@ -468,7 +468,7 @@ int ObTabletChecksumOperator::insert_or_update_tablet_checksum_items_(
 int ObTabletChecksumOperator::delete_tablet_checksum_items(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
-    const palf::SCN &gc_compaction_scn)
+    const SCN &gc_compaction_scn)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -532,7 +532,7 @@ int ObTabletChecksumOperator::delete_tablet_checksum_items(
 int ObTabletChecksumOperator::load_all_compaction_scn(
     ObISQLClient &sql_client, 
     const uint64_t tenant_id,
-    ObIArray<palf::SCN> &compaction_scn_arr)
+    ObIArray<SCN> &compaction_scn_arr)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
@@ -561,7 +561,7 @@ int ObTabletChecksumOperator::load_all_compaction_scn(
             EXTRACT_UINT_FIELD_MYSQL(*result, "dis_comp_scn", compaction_scn_val, uint64_t);
           }
 
-          palf::SCN tmp_compaction_scn;
+          SCN tmp_compaction_scn;
           if (FAILEDx(tmp_compaction_scn.convert_for_inner_table_field(compaction_scn_val))) {
             LOG_WARN("fail to convert val to SCN", KR(ret), K(compaction_scn_val));
           } else if (OB_UNLIKELY(!tmp_compaction_scn.is_valid())) {

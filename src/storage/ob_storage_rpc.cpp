@@ -115,7 +115,7 @@ ObCopyMacroBlockRangeArg::ObCopyMacroBlockRangeArg()
     ls_id_(),
     table_key_(),
     data_version_(0),
-    backfill_tx_scn_(palf::SCN::min_scn()),
+    backfill_tx_scn_(SCN::min_scn()),
     copy_macro_range_info_()
 {
 }
@@ -136,7 +136,7 @@ bool ObCopyMacroBlockRangeArg::is_valid() const
       && ls_id_.is_valid()
       && table_key_.is_valid()
       && data_version_ >= 0
-      && backfill_tx_scn_ >= palf::SCN::min_scn()
+      && backfill_tx_scn_ >= SCN::min_scn()
       && copy_macro_range_info_.is_valid();
 }
 

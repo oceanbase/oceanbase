@@ -17,7 +17,7 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "logservice/palf/lsn.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -31,11 +31,11 @@ public:
   bool is_valid() const;
   void reset();
   // NB: not thread safe
-  void update_lsn_and_scn(const LSN &lsn, const SCN &scn);
+  void update_lsn_and_scn(const LSN &lsn, const share::SCN &scn);
   void update_palf_id_and_curr_block_id(const int64_t palf_id, const block_id_t curr_block_id);
-  void mark_block_can_be_reused(const SCN &max_scn);
+  void mark_block_can_be_reused(const share::SCN &max_scn);
   block_id_t get_curr_block_id() const;
-  const SCN &get_min_scn() const;
+  const share::SCN &get_min_scn() const;
   LSN get_min_lsn() const;
 
   // This interface is just used for PalfIterator
@@ -45,7 +45,7 @@ public:
   // an empty block.
   //
   // if this block is a reused block, return 'max_scn_', otherwise return 'min_scn_'.
-  const SCN get_scn_used_for_iterator() const;
+  const share::SCN get_scn_used_for_iterator() const;
   void calc_checksum();
   bool check_integrity() const;
   NEED_SERIALIZE_AND_DESERIALIZE;
@@ -64,8 +64,8 @@ private:
   // The min lsn of curr block
   LSN min_lsn_;
   // The min timstamp of curr block
-  SCN min_scn_;
-  SCN max_scn_;
+  share::SCN min_scn_;
+  share::SCN max_scn_;
 
   // Assume that, multiple PALF instances share a directory, and each block names with
   // 'block_%d'(the number is monotonic, and it may be not same with 'curr_block_id_').

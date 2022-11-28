@@ -13,7 +13,7 @@
 #define private public
 #include "logservice/palf/log_meta_info.h"            // LogPrepareMeta...
 #include "logservice/palf/palf_options.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #undef private
 #include <gtest/gtest.h>
 
@@ -202,14 +202,14 @@ TEST(TestLogMetaInfos, test_log_mode_meta)
   LSN lsn; lsn.val_ = 1;
   ObAddr addr(ObAddr::IPV4, "127.0.0.1", 4096);
 
-  SCN invalid_scn;
+  share::SCN invalid_scn;
   // Test invalid argument
   EXPECT_FALSE(log_mode_meta1.is_valid());
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::INVALID_ACCESS_MODE, SCN::min_scn()));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::INVALID_ACCESS_MODE, share::SCN::min_scn()));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::APPEND, invalid_scn));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, INVALID_PROPOSAL_ID, AccessMode::APPEND, SCN::min_scn()));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(INVALID_PROPOSAL_ID, 1, AccessMode::APPEND, SCN::min_scn()));
-  EXPECT_EQ(OB_SUCCESS, log_mode_meta1.generate(1, 1, AccessMode::APPEND, SCN::min_scn()));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, INVALID_PROPOSAL_ID, AccessMode::APPEND, share::SCN::min_scn()));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(INVALID_PROPOSAL_ID, 1, AccessMode::APPEND, share::SCN::min_scn()));
+  EXPECT_EQ(OB_SUCCESS, log_mode_meta1.generate(1, 1, AccessMode::APPEND, share::SCN::min_scn()));
   EXPECT_TRUE(log_mode_meta1.is_valid());
 
   // Test serialize and deserialize

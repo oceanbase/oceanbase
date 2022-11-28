@@ -21,7 +21,7 @@
 #include "logservice/palf/log_engine.h"
 #undef private
 #include "logservice/palf/log_group_entry.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "logservice/palf/log_group_entry_header.h"
 #include "logservice/palf/log_io_worker.h"
 #include "logservice/palf/log_iterator_storage.h"
@@ -187,7 +187,7 @@ public:
   }
   int test_log_read_block_scn(const block_id_t block_id)
   {
-    palf::SCN min_scn;
+    share::SCN min_scn;
     return log_engine_.get_block_min_scn(block_id, min_scn);
   }
   int test_log_engine_append_log(const std::function<int64_t()> &write_size, const int64_t total_size)

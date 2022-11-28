@@ -68,7 +68,7 @@ static int get_ls_handle(const uint64_t tenant_id, const share::ObLSID &ls_id, s
 }
 
 static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::ObLSID &ls_id,
-  const palf::SCN &start_scn, storage::ObLS *ls)
+  const SCN &start_scn, storage::ObLS *ls)
 {
   int ret = OB_SUCCESS;
   const int64_t advance_checkpoint_timeout = GCONF._advance_checkpoint_timeout;
@@ -100,7 +100,7 @@ static int advance_checkpoint_by_flush(const uint64_t tenant_id, const share::Ob
       } else if (OB_FAIL(ls->get_ls_meta_package(ls_meta_package))) {
         LOG_WARN("failed to get ls meta package", K(ret), K(tenant_id), K(ls_id));
       } else {
-        const palf::SCN clog_checkpoint_scn = ls_meta_package.ls_meta_.get_clog_checkpoint_scn();
+        const SCN clog_checkpoint_scn = ls_meta_package.ls_meta_.get_clog_checkpoint_scn();
         if (clog_checkpoint_scn >= start_scn) {
           LOG_INFO("clog checkpoint scn has passed start scn",
               K(i),
@@ -1040,7 +1040,7 @@ ObLSBackupMetaDag::~ObLSBackupMetaDag()
 {}
 
 int ObLSBackupMetaDag::init(
-    const palf::SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx)
+    const SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -1828,7 +1828,7 @@ ObLSBackupComplementLogDag::~ObLSBackupComplementLogDag()
 
 int ObLSBackupComplementLogDag::init(const ObBackupJobDesc &job_desc, const ObBackupDest &backup_dest,
     const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
-    const int64_t turn_id, const int64_t retry_id, const palf::SCN &start_scn, const palf::SCN &end_scn,
+    const int64_t turn_id, const int64_t retry_id, const SCN &start_scn, const SCN &end_scn,
     const ObBackupReportCtx &report_ctx)
 {
   int ret = OB_SUCCESS;
@@ -3383,7 +3383,7 @@ ObLSBackupMetaTask::~ObLSBackupMetaTask()
 {}
 
 int ObLSBackupMetaTask::init(
-    const palf::SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx)
+    const SCN &start_scn, const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -3409,7 +3409,7 @@ int ObLSBackupMetaTask::process()
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   SERVER_EVENT_SYNC_ADD("backup_data", "before_backup_meta");
   DEBUG_SYNC(BEFORE_BACKUP_META);
-  const palf::SCN start_scn = start_scn_;
+  const SCN start_scn = start_scn_;
   const int64_t task_id = param_.job_desc_.task_id_;
   const uint64_t tenant_id = param_.tenant_id_;
   const share::ObLSID ls_id = param_.ls_id_;
@@ -3465,7 +3465,7 @@ int ObLSBackupMetaTask::process()
 }
 
 int ObLSBackupMetaTask::advance_checkpoint_by_flush_(
-    const uint64_t tenant_id, const share::ObLSID &ls_id, const palf::SCN &start_scn)
+    const uint64_t tenant_id, const share::ObLSID &ls_id, const SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   checkpoint::ObCheckpointExecutor *checkpoint_executor = NULL;
@@ -3527,7 +3527,7 @@ int ObLSBackupMetaTask::backup_ls_meta_package_(const ObBackupLSMetaInfo &ls_met
 }
 
 int ObLSBackupMetaTask::backup_ls_tablet_list_(
-    const palf::SCN &scn, const share::ObLSID &ls_id, const common::ObIArray<common::ObTabletID> &tablet_id_list)
+    const SCN &scn, const share::ObLSID &ls_id, const common::ObIArray<common::ObTabletID> &tablet_id_list)
 {
   int ret = OB_SUCCESS;
   share::ObBackupDataStore store;
@@ -3546,7 +3546,7 @@ int ObLSBackupMetaTask::backup_ls_tablet_list_(
   return ret;
 }
 
-int ObLSBackupMetaTask::build_backup_data_ls_tablet_desc_(const share::ObLSID &ls_id, const palf::SCN &scn,
+int ObLSBackupMetaTask::build_backup_data_ls_tablet_desc_(const share::ObLSID &ls_id, const SCN &scn,
     const common::ObIArray<common::ObTabletID> &tablet_id_list, share::ObBackupDataTabletToLSDesc &desc)
 {
   int ret = OB_SUCCESS;
@@ -3775,7 +3775,7 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
 {
   int ret = OB_SUCCESS;
   int64_t rebuild_seq = 0;
-  palf::SCN backup_clog_checkpoint_scn;
+  SCN backup_clog_checkpoint_scn;
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
@@ -3811,7 +3811,7 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
   return ret;
 }
 
-int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &rebuild_seq, palf::SCN &clog_checkpoint_scn)
+int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &rebuild_seq, SCN &clog_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   rebuild_seq = 0;
@@ -3835,8 +3835,8 @@ int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &rebuild_seq, palf::SCN
 int ObLSBackupPrepareTask::check_tx_data_can_explain_user_data_()
 {
   int ret = OB_SUCCESS;
-  palf::SCN backup_filled_tx_scn = palf::SCN::max_scn();
-  palf::SCN cur_min_filled_tx_scn = palf::SCN::max_scn();
+  SCN backup_filled_tx_scn = SCN::max_scn();
+  SCN cur_min_filled_tx_scn = SCN::max_scn();
   if (!backup_data_type_.is_minor_backup()) {
     // do nothing
   } else if (OB_FAIL(get_backup_tx_data_table_filled_tx_scn_(backup_filled_tx_scn))) {
@@ -3854,10 +3854,10 @@ int ObLSBackupPrepareTask::check_tx_data_can_explain_user_data_()
   return ret;
 }
 
-int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_scn_(palf::SCN &filled_tx_scn)
+int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_scn_(SCN &filled_tx_scn)
 {
   int ret = OB_SUCCESS;
-  filled_tx_scn = palf::SCN::max_scn();
+  filled_tx_scn = SCN::max_scn();
   const common::ObTabletID &tx_data_tablet_id = LS_TX_DATA_TABLET;
   const ObBackupMetaType meta_type = ObBackupMetaType::BACKUP_SSTABLE_META;
   ObBackupDataType sys_backup_data_type;
@@ -3878,7 +3878,7 @@ int ObLSBackupPrepareTask::get_backup_tx_data_table_filled_tx_scn_(palf::SCN &fi
       backup_path.get_obstr(), param_.backup_dest_.get_storage_info(), meta_index, meta_array))) {
     LOG_WARN("failed to read sstable metas", K(ret), K(backup_path), K(meta_index));
   } else if (meta_array.empty()) {
-    filled_tx_scn = palf::SCN::min_scn();
+    filled_tx_scn = SCN::min_scn();
     LOG_INFO("the log stream do not have tx data sstable", K(ret));
   } else {
     filled_tx_scn = meta_array.at(0).sstable_meta_.basic_meta_.filled_tx_scn_;
@@ -3941,10 +3941,10 @@ int ObLSBackupPrepareTask::prepare_meta_index_store_param_(
   return ret;
 }
 
-int ObLSBackupPrepareTask::get_cur_ls_min_filled_tx_scn_(palf::SCN &min_filled_tx_scn)
+int ObLSBackupPrepareTask::get_cur_ls_min_filled_tx_scn_(SCN &min_filled_tx_scn)
 {
   int ret = OB_SUCCESS;
-  min_filled_tx_scn = palf::SCN::max_scn();
+  min_filled_tx_scn = SCN::max_scn();
   ObLSTabletIterator iterator(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
   storage::ObLSHandle ls_handle;
   storage::ObLS *ls = NULL;
@@ -3962,7 +3962,7 @@ int ObLSBackupPrepareTask::get_cur_ls_min_filled_tx_scn_(palf::SCN &min_filled_t
     STORAGE_LOG(WARN, "build ls table iter failed.", KR(ret));
   } else {
     while (OB_SUCC(iterator.get_next_tablet(tablet_handle))) {
-      palf::SCN tmp_filled_tx_scn = palf::SCN::max_scn();
+      SCN tmp_filled_tx_scn = SCN::max_scn();
       bool has_minor_sstable = false;
       if (OB_FAIL(get_tablet_min_filled_tx_scn_(tablet_handle, tmp_filled_tx_scn, has_minor_sstable))) {
         STORAGE_LOG(WARN, "get min end_log_ts from a single tablet failed.", KR(ret));
@@ -3981,11 +3981,11 @@ int ObLSBackupPrepareTask::get_cur_ls_min_filled_tx_scn_(palf::SCN &min_filled_t
 }
 
 int ObLSBackupPrepareTask::get_tablet_min_filled_tx_scn_(
-    ObTabletHandle &tablet_handle, palf::SCN &min_filled_tx_scn, bool &has_minor_sstable)
+    ObTabletHandle &tablet_handle, SCN &min_filled_tx_scn, bool &has_minor_sstable)
 {
   int ret = OB_SUCCESS;
   has_minor_sstable = false;
-  min_filled_tx_scn = palf::SCN::max_scn();
+  min_filled_tx_scn = SCN::max_scn();
   ObTablet *tablet = nullptr;
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
@@ -4418,7 +4418,7 @@ ObLSBackupComplementLogTask::~ObLSBackupComplementLogTask()
 
 int ObLSBackupComplementLogTask::init(const ObBackupJobDesc &job_desc, const ObBackupDest &backup_dest,
     const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
-    const palf::SCN &start_scn, const palf::SCN &end_scn, const int64_t turn_id, const int64_t retry_id,
+    const SCN &start_scn, const SCN &end_scn, const int64_t turn_id, const int64_t retry_id,
     const ObBackupReportCtx &report_ctx)
 {
   int ret = OB_SUCCESS;
@@ -4514,8 +4514,8 @@ int ObLSBackupComplementLogTask::calc_backup_file_range_(common::ObIArray<Backup
   int ret = OB_SUCCESS;
   file_list.reset();
   const uint64_t tenant_id = tenant_id_;
-  const palf::SCN start_scn = compl_start_scn_;
-  const palf::SCN end_scn = compl_end_scn_;
+  const SCN start_scn = compl_start_scn_;
+  const SCN end_scn = compl_end_scn_;
   int64_t start_piece_id = 0;
   int64_t end_piece_id = 0;
   ObArray<ObTenantArchivePieceAttr> piece_list;
@@ -4558,7 +4558,7 @@ int ObLSBackupComplementLogTask::check_pieces_continue_(const common::ObIArray<O
   return ret;
 }
 
-int ObLSBackupComplementLogTask::get_piece_id_by_ts_(const uint64_t tenant_id, const palf::SCN &scn, int64_t &piece_id)
+int ObLSBackupComplementLogTask::get_piece_id_by_ts_(const uint64_t tenant_id, const SCN &scn, int64_t &piece_id)
 {
   int ret = OB_NOT_SUPPORTED;
   // TODO: get piece from multi dest
@@ -4575,7 +4575,7 @@ int ObLSBackupComplementLogTask::get_all_pieces_(const uint64_t tenant_id, const
 }
 
 int ObLSBackupComplementLogTask::get_all_piece_file_list_(const uint64_t tenant_id,
-    const common::ObIArray<ObTenantArchivePieceAttr> &piece_list, const palf::SCN &start_scn, const palf::SCN &end_scn,
+    const common::ObIArray<ObTenantArchivePieceAttr> &piece_list, const SCN &start_scn, const SCN &end_scn,
     common::ObIArray<BackupPieceFile> &piece_file_list)
 {
   int ret = OB_SUCCESS;
@@ -4647,7 +4647,7 @@ int ObLSBackupComplementLogTask::inner_get_piece_file_list_(
 }
 
 int ObLSBackupComplementLogTask::locate_archive_file_id_by_ts_(const uint64_t tenant_id, const int64_t round_id,
-    const int64_t piece_id, const palf::SCN &scn, const bool is_upper_bound, int64_t &file_id)
+    const int64_t piece_id, const SCN &scn, const bool is_upper_bound, int64_t &file_id)
 {
   int ret = OB_SUCCESS;
   // TODO(yangyi.yyy): duotian has provide this interface, wait merge code in 4.1

@@ -203,7 +203,7 @@ void ObTxLoopWorker::do_tx_gc_(ObLS *ls_ptr)
 void ObTxLoopWorker::update_max_commit_ts_(ObLS *ls_ptr)
 {
   int ret = OB_SUCCESS;
-  palf::SCN snapshot;
+  SCN snapshot;
   const int64_t expire_ts = ObClockGenerator::getClock() + 1000000; // 1s
 
   do {

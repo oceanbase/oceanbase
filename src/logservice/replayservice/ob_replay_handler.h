@@ -24,7 +24,7 @@ namespace storage
 {
 class ObLS;
 }
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -46,7 +46,7 @@ public:
              const void *buffer,
              const int64_t nbytes,
              const palf::LSN &lsn,
-             const palf::SCN &scn);
+             const share::SCN &scn);
 private:
   typedef common::RWLock::WLockGuard WLockGuard;
   typedef common::RWLock::RLockGuard RLockGuard;

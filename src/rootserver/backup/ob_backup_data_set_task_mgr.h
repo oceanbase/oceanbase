@@ -60,11 +60,11 @@ private:
   int construct_ls_task_map_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
       hash::ObHashMap<share::ObLSID, const share::ObBackupLSTaskAttr *> &ls_map);
   int get_extern_tablet_info_(const share::ObLSID &ls_id, const int64_t &retry_cnt, 
-      share::ObBackupDataTabletToLSInfo &tablet_to_ls_info, palf::SCN &backup_scn);
+      share::ObBackupDataTabletToLSInfo &tablet_to_ls_info, share::SCN &backup_scn);
   int check_tablets_match_(const share::ObLSID &ls_id, const ObIArray<ObTabletID> &cur_tablet_ids, 
-      const ObIArray<ObTabletID> &user_tablet_ids, const palf::SCN &backup_scn);
+      const ObIArray<ObTabletID> &user_tablet_ids, const share::SCN &backup_scn);
   int do_check_inc_tablets_(const share::ObLSID &ls_id, const ObIArray<ObTabletID> &inc_tablets, 
-      const palf::SCN &backup_scn);
+      const share::SCN &backup_scn);
   int get_dst_server_(const share::ObLSID &ls_id, ObAddr &dst);
   int merge_ls_meta_infos_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks);
 
@@ -93,7 +93,7 @@ private:
 
   int backup_completing_log_();
   int do_backup_completing_log_(ObArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
-  int calculate_start_replay_scn_(palf::SCN &start_replay_scn);
+  int calculate_start_replay_scn_(share::SCN &start_replay_scn);
 
   int do_cancel_();
   
@@ -110,7 +110,7 @@ private:
   
   int set_backup_set_files_failed_(ObMySQLTransaction &trans);
   int advance_status_(ObMySQLTransaction &trans, const share::ObBackupStatus &next_status, const int result = OB_SUCCESS,
-      const palf::SCN &scn = palf::SCN::min_scn(), const int64_t end_ts = 0);
+      const share::SCN &scn = share::SCN::min_scn(), const int64_t end_ts = 0);
   int get_next_status_(const share::ObBackupStatus &cur_status, share::ObBackupStatus &next_status);
 private:
   bool is_inited_;

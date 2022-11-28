@@ -17,7 +17,7 @@
 
 namespace oceanbase
 {
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -125,7 +125,7 @@ public:
   virtual int replay(const void *buffer,
                      const int64_t nbytes,
                      const palf::LSN &lsn,
-                     const palf::SCN &scn) = 0;
+                     const share::SCN &scn) = 0;
 };
 
 class ObIRoleChangeSubHandler
@@ -158,8 +158,8 @@ public:
 class ObICheckpointSubHandler
 {
 public:
-  virtual palf::SCN get_rec_scn() = 0;
-  virtual int flush(palf::SCN &scn) = 0;
+  virtual share::SCN get_rec_scn() = 0;
+  virtual int flush(share::SCN &scn) = 0;
 };
 
 #define REGISTER_TO_LOGSERVICE(type, subhandler)                                            \

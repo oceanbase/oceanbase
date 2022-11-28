@@ -135,7 +135,7 @@ public:
       const ObLS *ls,
       const ObTabletID &tablet_id,
       const uint64_t autoinc_seq,
-      const palf::SCN &replay_scn);
+      const SCN &replay_scn);
 private:
   ObTabletAutoincSeqRpcHandler();
   ~ObTabletAutoincSeqRpcHandler();

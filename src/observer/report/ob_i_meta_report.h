@@ -37,10 +37,6 @@ public:
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id) = 0;
-  virtual int submit_tablet_checksums_task(
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id) = 0;
 };
 
 } // end namespace observer

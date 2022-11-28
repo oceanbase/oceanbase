@@ -44,6 +44,7 @@ namespace oceanbase {
 namespace transaction {
 
 using namespace memtable;
+using namespace share;
 
 int ObTransService::create_ls(const share::ObLSID &ls_id,
                               ObLS &ls,
@@ -182,7 +183,7 @@ int ObTransService::acquire_tx(const char* buf,
 int ObTransService::do_commit_tx_(ObTxDesc &tx,
                                   const int64_t expire_ts,
                                   ObITxCallback &cb,
-                                  palf::SCN &commit_version)
+                                  SCN &commit_version)
 {
   int ret = OB_SUCCESS;
   ObTxPart *coord = NULL;
@@ -354,7 +355,7 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
  */
 int ObTransService::handle_tx_commit_result(const ObTransID &tx_id,
                                             const int result,
-                                            const palf::SCN commit_version)
+                                            const SCN commit_version)
 {
   int ret = OB_SUCCESS;
   ObTxDesc *tx = NULL;
@@ -398,7 +399,7 @@ int ObTransService::handle_tx_commit_result(const ObTransID &tx_id,
  */
 int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
                                              const int result,
-                                             const palf::SCN commit_version)
+                                             const SCN commit_version)
 {
   int ret = OB_SUCCESS;
   bool commit_fin = true;
@@ -936,7 +937,8 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
      tx_table_guard,
      snapshot.core_,
      store_ctx.timeout_,
-     lock_timeout
+     lock_timeout,
+     snapshot.is_weak_read()
     );
     update_max_read_ts_(tenant_id_, ls_id, snapshot.core_.version_);
   }
@@ -947,7 +949,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
 
 
 
-int ObTransService::get_read_store_ctx(const palf::SCN snapshot_version,
+int ObTransService::get_read_store_ctx(const SCN snapshot_version,
                                        const int64_t lock_timeout,
                                        ObStoreCtx &store_ctx)
 {
@@ -1108,6 +1110,7 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
 {
   int ret = OB_SUCCESS;
   bool existed = false;
+  int64_t epoch = 0;
   ObTxCreateArg arg(tx.can_elr_,  /* can_elr */
                     false,  /* for_replay */
                     tx.tenant_id_,
@@ -1201,17 +1204,17 @@ int ObTransService::revert_store_ctx(storage::ObStoreCtx &store_ctx)
  * used to validate specified snapshot version
  * precondition: version <= current gts value
  */
-int ObTransService::validate_snapshot_version_(const palf::SCN snapshot,
+int ObTransService::validate_snapshot_version_(const SCN snapshot,
                                                const int64_t expire_ts,
                                                ObLS &ls)
 {
   int ret = OB_SUCCESS;
-  const palf::SCN ls_weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
+  const SCN ls_weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
   if (snapshot <= tx_version_mgr_.get_max_commit_ts(false) ||
       snapshot <= tx_version_mgr_.get_max_read_ts() ||
       snapshot <= ls_weak_read_ts) {
   } else {
-    palf::SCN gts;
+    SCN gts;
     const MonotonicTs stc_ahead = MonotonicTs::current_time() - MonotonicTs(GCONF._ob_get_gts_ahead_interval);
     MonotonicTs tmp_receive_gts_ts(0);
     do {
@@ -1261,7 +1264,7 @@ int ObTransService::validate_snapshot_version_(const palf::SCN snapshot,
  *    if so, update replica_readable_snapshot = v and return OK, otherwise
  * 4. return OB_REPLICA_NOT_READABLE
  */
-int ObTransService::check_replica_readable_(const palf::SCN snapshot,
+int ObTransService::check_replica_readable_(const SCN snapshot,
                                             const bool elr,
                                             const ObTxReadSnapshot::SRC src,
                                             const share::ObLSID &ls_id,
@@ -1271,7 +1274,7 @@ int ObTransService::check_replica_readable_(const palf::SCN snapshot,
   int ret = OB_SUCCESS;
   bool leader = false;
   int64_t epoch = 0;
-  palf::SCN ls_weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
+  SCN ls_weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
   bool readable = snapshot <= ls_weak_read_ts;
   if (!readable) {
     if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader, epoch))) {
@@ -1296,7 +1299,7 @@ int ObTransService::check_replica_readable_(const palf::SCN snapshot,
 
 int ObTransService::wait_follower_readable_(ObLS &ls,
                                             const int64_t expire_ts,
-                                            const palf::SCN snapshot)
+                                            const SCN snapshot)
 {
   int ret = OB_REPLICA_NOT_READABLE;
   int64_t compare_timeout = 0;
@@ -1375,11 +1378,12 @@ int ObTransService::abort_participants_(const ObTxDesc &tx_desc)
 }
 
 int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
-                                            palf::SCN &snapshot)
+                                            SCN &snapshot)
 {
   int ret = OB_SUCCESS;
+  int64_t epoch = 0;
   bool leader = false;
-  palf::SCN snapshot0;
+  SCN snapshot0;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
   if (OB_FAIL(tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
     TRANS_LOG(WARN, "get ls_tx_ctx_mgr fail", K(ret), K(ls_id));
@@ -1404,7 +1408,7 @@ int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_id,
 
 int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
                                                   const int64_t expire_ts,
-                                                  palf::SCN &snapshot,
+                                                  SCN &snapshot,
                                                   int64_t &uncertain_bound)
 {
   int ret = OB_SUCCESS;
@@ -1435,7 +1439,7 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
 
 int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
                                               const int64_t gts_ahead,
-                                              palf::SCN &snapshot,
+                                              SCN &snapshot,
                                               int64_t &uncertain_bound,
                                               ObFunction<bool()> interrupt_checker)
 {
@@ -1485,14 +1489,19 @@ int ObTransService::batch_post_tx_msg_(ObTxRollbackSPMsg &msg,
 {
   int ret = OB_SUCCESS;
   int last_ret = OB_SUCCESS;
+  const ObTxDesc *tx_ptr = msg.tx_ptr_;
   ARRAY_FOREACH_NORET(list, idx) {
     auto &p = list.at(idx);
     msg.receiver_ = p.left_;
     msg.epoch_ = p.right_;
+    if (msg.epoch_ > 0) {
+      msg.tx_ptr_ = NULL;
+    }
     if (OB_FAIL(rpc_->post_msg(p.left_, msg))) {
       TRANS_LOG(WARN, "post msg falied", K(ret), K(msg), K(p));
       last_ret = ret;
     }
+    msg.tx_ptr_ = tx_ptr;
   }
   return last_ret;
 }
@@ -1563,7 +1572,7 @@ int ObTransService::handle_trans_commit_request(ObTxCommitMsg &msg,
                                                 ObTransRpcResult &result)
 {
   int ret = OB_SUCCESS;
-  palf::SCN commit_version;
+  SCN commit_version;
   if (OB_FAIL(local_ls_commit_tx_(msg.tx_id_,
                                   msg.receiver_,
                                   msg.parts_,
@@ -1592,7 +1601,7 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
                                         const int64_t &expire_ts,
                                         const common::ObString &app_trace_info,
                                         const int64_t &request_id,
-                                        palf::SCN &commit_version)
+                                        SCN &commit_version)
 {
   int ret = OB_SUCCESS;
   MonotonicTs commit_time = MonotonicTs::current_time();
@@ -1635,7 +1644,7 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
 int ObTransService::get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                                 const ObTransID &tx_id,
                                                 int &state,
-                                                palf::SCN &commit_version)
+                                                SCN &commit_version)
 {
   int ret = OB_SUCCESS;
   ObTxTableGuard tx_table_guard;
@@ -1677,45 +1686,22 @@ int ObTransService::handle_trans_abort_request(ObTxAbortMsg &abort_req, ObTransR
   return ret;
 }
 
-int ObTransService::create_tx_ctx_(ObTxRollbackSPMsg &msg, ObPartTransCtx *&ctx)
-{
-  int ret = OB_SUCCESS;
-  bool existed = false;
-  ObTxCreateArg arg(msg.can_elr_,  /* can_elr */
-                    false,  /* for_replay */
-                    msg.tenant_id_,
-                    msg.tx_id_,
-                    msg.receiver_,
-                    msg.cluster_id_,
-                    msg.cluster_version_,
-                    msg.session_id_, /*session_id*/
-                    msg.tx_addr_,
-                    msg.tx_expire_ts_,
-                    this);
-  ret = tx_ctx_mgr_.create_tx_ctx(arg, existed, ctx);
-  if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "create tx ctx fail", K(ret), K(msg), K(arg));
-    ctx = NULL;
-  }
-  TRANS_LOG(TRACE, "create tx ctx for savepoint rollback", K(ret), K(msg), K(arg));
-  return ret;
-}
-
 int ObTransService::handle_sp_rollback_request(ObTxRollbackSPMsg &msg,
                                                obrpc::ObTxRpcRollbackSPResult &result)
 {
   int ret = OB_SUCCESS;
   int64_t ctx_born_epoch = -1;
-  ObFunction<int(ObPartTransCtx*&)> create_tx_ctx_func = [this, &msg](ObPartTransCtx *&ctx) -> int {
-    return this->create_tx_ctx_(msg, ctx);
-  };
   ret = ls_rollback_to_savepoint_(msg.tx_id_,
                                   msg.receiver_,
                                   msg.epoch_,
                                   msg.op_sn_,
                                   msg.savepoint_,
                                   ctx_born_epoch,
-                                  create_tx_ctx_func);
+                                  msg.tx_ptr_);
+  if (OB_NOT_NULL(msg.tx_ptr_)) {
+    ob_free((void*)msg.tx_ptr_);
+    msg.tx_ptr_ = NULL;
+  }
   result.status_ = ret;
   result.addr_ = self_;
   result.born_epoch_ = ctx_born_epoch;
@@ -1897,7 +1883,7 @@ int ObTransService::handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                                               const int status,
                                               const ObAddr &receiver_addr,
                                               const int64_t request_id,
-                                              const palf::SCN &private_data)
+                                              const SCN &private_data)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_running_)) {
@@ -1966,7 +1952,7 @@ int ObTransService::handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
 
 int ObTransService::update_max_read_ts_(const uint64_t tenant_id,
                                         const share::ObLSID &lsid,
-                                        const palf::SCN ts)
+                                        const SCN ts)
 {
   int ret = OB_SUCCESS;
   tx_version_mgr_.update_max_read_ts(ts);
@@ -2047,7 +2033,7 @@ bool ObTransService::commit_need_retry_(const int ret)
   return OB_NOT_MASTER == ret || OB_BLOCK_FROZEN == ret || OB_TX_NOLOGCB == ret || OB_EAGAIN == ret;
 }
 
-int ObTransService::get_min_uncommit_tx_prepare_version(const share::ObLSID& ls_id, palf::SCN &min_prepare_version)
+int ObTransService::get_min_uncommit_tx_prepare_version(const share::ObLSID& ls_id, SCN &min_prepare_version)
 {
   int ret = OB_SUCCESS;
 
@@ -2455,7 +2441,7 @@ int ObTransService::sub_prepare_local_ls_(const ObTransID &tx_id,
     TRANS_LOG(WARN, "get coordinator context fail", K(ret), K(tx_id), K(coord));
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
       int tx_state;
-      palf::SCN commit_version;
+      SCN commit_version;
       if (OB_FAIL(get_tx_state_from_tx_table_(coord, tx_id, tx_state, commit_version))) {
         TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(coord), K(tx_id));
         if (OB_ENTRY_NOT_EXIST == ret) {
@@ -2641,7 +2627,7 @@ int ObTransService::sub_end_tx_local_ls_(const ObTransID &tx_id,
     TRANS_LOG(WARN, "fail to get coordinator tx context", K(ret), K(tx_id), K(coord));
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
       int tx_state;
-      palf::SCN commit_version;
+      SCN commit_version;
       if (OB_FAIL(get_tx_state_from_tx_table_(coord, tx_id, tx_state, commit_version))) {
         TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(coord), K(tx_id));
         if (OB_ENTRY_NOT_EXIST == ret) {

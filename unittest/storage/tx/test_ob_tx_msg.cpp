@@ -90,7 +90,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = epoch_;
     msg.request_id_ = op_sn_;
-    msg.commit_version_ = palf::SCN::max_scn();
+    msg.commit_version_ = share::SCN::max_scn();
     msg.ret_ = OB_SUCCESS;
   }
   void build_tx_abort_msg(ObTxAbortMsg &msg)
@@ -121,10 +121,8 @@ public:
     msg.request_id_ = op_sn_;
     msg.savepoint_ = 1;
     msg.op_sn_ = op_sn_;
-    msg.can_elr_ = true;
-    msg.session_id_ = 202;
-    msg.tx_addr_ = ObAddr(ObAddr::VER::IPV4, "127.1.1.2", 8919);
-    msg.tx_expire_ts_ = 120000;
+    msg.branch_id_ = 1;
+    msg.tx_ptr_ = tx;
   }
   void build_tx_keepalive_msg(ObTxKeepaliveMsg &msg)
   {
@@ -169,7 +167,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = -1;
     msg.request_id_ = op_sn_;
-    msg.prepare_version_ = palf::SCN::max_scn();
+    msg.prepare_version_ = share::SCN::max_scn();
     if (OB_FAIL(msg.prepare_info_array_.push_back(ObLSLogInfo()))) {
       TRANS_LOG(WARN, "push_back info fail", K(ret));
     }
@@ -187,7 +185,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = -1;
     msg.request_id_ = op_sn_;
-    msg.commit_version_ = palf::SCN::max_scn();
+    msg.commit_version_ = share::SCN::max_scn();
   }
   void build_tx_2pc_pre_commit_resp_msg(Ob2pcPreCommitRespMsg &msg)
   {
@@ -201,7 +199,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = -1;
     msg.request_id_ = op_sn_;
-    msg.commit_version_ = palf::SCN::max_scn();
+    msg.commit_version_ = share::SCN::max_scn();
   }
   int build_tx_2pc_commit_msg(Ob2pcCommitReqMsg &msg)
   {
@@ -216,7 +214,7 @@ public:
     msg.timestamp_ = op_sn_;
     msg.epoch_ = -1;
     msg.request_id_ = op_sn_;
-    msg.commit_version_ = palf::SCN::max_scn();
+    msg.commit_version_ = share::SCN::max_scn();
     if (OB_FAIL(msg.prepare_info_array_.push_back(ObLSLogInfo()))) {
       TRANS_LOG(WARN, "push_back info fail", K(ret));
     }
@@ -434,10 +432,11 @@ TEST_F(TestObTxMsg, trans_rollback_sp_msg)
   EXPECT_EQ(msg.cluster_id_, msg1.cluster_id_);
   EXPECT_EQ(msg.savepoint_, msg1.savepoint_);
   EXPECT_EQ(msg.op_sn_, msg1.op_sn_);
-  EXPECT_EQ(msg.can_elr_, msg1.can_elr_);
-  EXPECT_EQ(msg.session_id_, msg1.session_id_);
-  EXPECT_EQ(msg.tx_addr_, msg1.tx_addr_);
-  EXPECT_EQ(msg.tx_expire_ts_, msg1.tx_expire_ts_);
+  EXPECT_EQ(msg.branch_id_, msg1.branch_id_);
+  EXPECT_EQ(msg.tx_ptr_->parts_[0].id_, msg1.tx_ptr_->parts_[0].id_);
+  if (OB_NOT_NULL(msg.tx_ptr_)) {
+    msg.tx_ptr_ = NULL;
+  }
 }
 
 TEST_F(TestObTxMsg, trans_keepalive_msg)

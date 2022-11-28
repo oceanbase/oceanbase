@@ -17,7 +17,7 @@
 #include "share/ob_freeze_info_proxy.h"
 #include "common/storage/ob_freeze_define.h"
 #include "share/ob_rpc_struct.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -41,7 +41,7 @@ public:
   // and stored order by freeze_scn asc
   common::ObSEArray<share::ObSimpleFrozenStatus, 4> frozen_statuses_;
   // local cached latest snapshot gc scn
-  palf::SCN latest_snapshot_gc_scn_;
+  share::SCN latest_snapshot_gc_scn_;
 
   ObFreezeInfo()
     : frozen_statuses_(), latest_snapshot_gc_scn_()
@@ -58,12 +58,12 @@ public:
   }
 
   int assign(const ObFreezeInfo &other);
-  int get_latest_frozen_scn(palf::SCN &frozen_scn) const;
+  int get_latest_frozen_scn(share::SCN &frozen_scn) const;
   int get_min_freeze_info_greater_than(
-      const palf::SCN &frozen_scn,
+      const share::SCN &frozen_scn,
       share::ObSimpleFrozenStatus &frozen_status) const;
   int get_frozen_status(
-      const palf::SCN &frozen_scn,
+      const share::SCN &frozen_scn,
       share::ObSimpleFrozenStatus &frozen_status) const;
 
   TO_STRING_KV(K_(frozen_statuses), K_(latest_snapshot_gc_scn));
@@ -91,7 +91,7 @@ public:
 
   int set_freeze_info();
 
-  int get_freeze_info(const palf::SCN &frozen_scn,
+  int get_freeze_info(const share::SCN &frozen_scn,
                       share::ObSimpleFrozenStatus &frozen_status);
 
   int renew_snapshot_gc_scn();
@@ -102,9 +102,9 @@ public:
   int check_need_broadcast(bool &need_broadcast);
   int broadcast_freeze_info(const int64_t expected_epoch);
 
-  int get_global_last_merged_scn(palf::SCN &global_last_merged_scn) const;
-  int get_global_broadcast_scn(palf::SCN &global_broadcast_scn) const;
-  int get_local_latest_frozen_scn(palf::SCN &frozen_scn);
+  int get_global_last_merged_scn(share::SCN &global_last_merged_scn) const;
+  int get_global_broadcast_scn(share::SCN &global_broadcast_scn) const;
+  int get_local_latest_frozen_scn(share::SCN &frozen_scn);
 
   void reset_freeze_info();
 
@@ -113,13 +113,13 @@ private:
 
   int generate_frozen_scn(
       const ObFreezeInfo &freeze_info,
-      const palf::SCN &snapshot_gc_scn,
-      palf::SCN &new_frozen_scn);
+      const share::SCN &snapshot_gc_scn,
+      share::SCN &new_frozen_scn);
 
-  int set_local_snapshot_gc_scn(const palf::SCN &new_scn);
+  int set_local_snapshot_gc_scn(const share::SCN &new_scn);
 
-  int get_gts(palf::SCN &gts_scn) const;
-  int get_schema_version(const palf::SCN &frozen_scn, int64_t &schema_version) const;
+  int get_gts(share::SCN &gts_scn) const;
+  int get_schema_version(const share::SCN &frozen_scn, int64_t &schema_version) const;
 
   int get_min_freeze_info(share::ObSimpleFrozenStatus &frozen_status);
   int get_min_freeze_info_to_broadcast(share::ObSimpleFrozenStatus &frozen_status) const;
@@ -128,6 +128,7 @@ private:
 public:
   static const int64_t SNAPSHOT_GC_TS_WARN = 30LL * 60LL * 1000LL * 1000LL;
   static const int64_t SNAPSHOT_GC_TS_ERROR = 2LL * 60LL * 60LL * 1000LL * 1000LL;
+
 
 private:
   bool is_inited_;

@@ -20,7 +20,7 @@
 #include "common/ob_tablet_id.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/tablet/ob_tablet_status.h"
 
 namespace oceanbase
@@ -175,7 +175,7 @@ private:
       common::ObIArray<ObTabletCreateInfo> &tablet_create_info_array);
   static int get_all_existed_tablets(
       const obrpc::ObBatchCreateTabletArg &arg,
-      const palf::SCN &scn,
+      const share::SCN &scn,
       common::ObIArray<common::ObTabletID> &existed_tablet_id_array,
       NonLockedHashSet &existed_tablet_id_set);
   static int build_batch_create_tablet_arg(
@@ -189,8 +189,8 @@ private:
   static int set_tablet_final_status(
       ObTabletHandle &tablet_handle,
       const ObTabletStatus::Status status,
-      const palf::SCN &tx_scn,
-      const palf::SCN &memtable_scn,
+      const share::SCN &tx_scn,
+      const share::SCN &memtable_scn,
       const bool for_replay,
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE);
   static bool check_tablet_status(
@@ -231,7 +231,7 @@ private:
       const transaction::ObMulSourceDataNotifyArg &trans_flags);
   int ensure_skip_create_all_tablets_safe(
       const obrpc::ObBatchCreateTabletArg &arg,
-      const palf::SCN &scn);
+      const share::SCN &scn);
   int build_pure_data_tablet(
       const obrpc::ObBatchCreateTabletArg &arg,
       const obrpc::ObCreateTabletInfo &info,
@@ -297,7 +297,7 @@ private:
       const transaction::ObMulSourceDataNotifyArg &trans_flags);
   int replay_verify_tablets(
       const obrpc::ObBatchRemoveTabletArg &arg,
-      const palf::SCN &scn,
+      const share::SCN &scn,
       common::ObIArray<common::ObTabletID> &tablet_id_array);
 private:
   ObLS &ls_;

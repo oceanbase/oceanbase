@@ -75,7 +75,7 @@ int ObChunkDatumStore::StoredRow::to_expr_skip_const(const ObIArray<ObExpr*> &ex
   } else {
     for (uint32_t i = 0; i < cnt_; ++i) {
       const ObExpr *expr = exprs.at(i);
-      if (expr->is_dynamic_const_ || expr->is_static_const_) { // T_QUESTIONMARK is included in dynamic_const
+      if (expr->is_const_expr()) { // T_QUESTIONMARK is included in dynamic_const
         continue;
       } else {
         expr->locate_expr_datum(ctx) = cells()[i];

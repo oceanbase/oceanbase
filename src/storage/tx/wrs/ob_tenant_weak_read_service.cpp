@@ -167,13 +167,13 @@ void ObTenantWeakReadService::destroy()
   TG_DESTROY(tg_id_);
 }
 
-palf::SCN ObTenantWeakReadService::get_server_version() const
+SCN ObTenantWeakReadService::get_server_version() const
 {
   return svr_version_mgr_.get_version();
 }
 
 // if weak_read_refresh_interval is 0, wrs close, and return OB_NOT_SUPPORTED
-int ObTenantWeakReadService::get_cluster_version(palf::SCN &cur_version)
+int ObTenantWeakReadService::get_cluster_version(SCN &cur_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ObWeakReadUtil::check_weak_read_service_available())) {
@@ -191,7 +191,7 @@ int ObTenantWeakReadService::get_cluster_version(palf::SCN &cur_version)
       ret = OB_TRANS_WEAK_READ_VERSION_NOT_READY;
       LOG_WARN("get cluster version fail, need retry", K(old_ret), KR(ret), K(tenant_id_));
     } else {
-      palf::SCN last_local_cluster_version = local_cluster_version_.atomic_get();
+      SCN last_local_cluster_version = local_cluster_version_.atomic_get();
       local_cluster_version_.atomic_set(cur_version);
       LOG_TRACE("get cluster version", K(cur_version), K(last_local_cluster_version));
     }
@@ -199,7 +199,7 @@ int ObTenantWeakReadService::get_cluster_version(palf::SCN &cur_version)
   return ret;
 }
 
-int ObTenantWeakReadService::get_cluster_version_internal_(palf::SCN &version,
+int ObTenantWeakReadService::get_cluster_version_internal_(SCN &version,
     const bool only_request_local)
 {
   int ret = OB_SUCCESS;
@@ -228,7 +228,7 @@ int ObTenantWeakReadService::get_cluster_version_internal_(palf::SCN &version,
   return ret;
 }
 
-int ObTenantWeakReadService::get_cluster_version_by_rpc_(palf::SCN &version)
+int ObTenantWeakReadService::get_cluster_version_by_rpc_(SCN &version)
 {
   int ret = OB_SUCCESS;
   ObAddr cluster_service_master;
@@ -298,7 +298,7 @@ int ObTenantWeakReadService::get_cluster_service_master_(common::ObAddr &cluster
 int ObTenantWeakReadService::update_server_version_with_part_info(const int64_t epoch_tstamp,
     const bool need_skip,
     const bool is_user_part,
-    const palf::SCN version)
+    const SCN version)
 {
   return svr_version_mgr_.update_with_part_info(tenant_id_, epoch_tstamp, need_skip, is_user_part, version);
 }
@@ -306,7 +306,7 @@ int ObTenantWeakReadService::update_server_version_with_part_info(const int64_t 
 int ObTenantWeakReadService::generate_server_version(const int64_t epoch_tstamp,
     const bool need_print_status)
 {
-  palf::SCN base_version_when_no_valid_partition = ObWeakReadUtil::generate_min_weak_read_version(tenant_id_);
+  SCN base_version_when_no_valid_partition = ObWeakReadUtil::generate_min_weak_read_version(tenant_id_);
     return  svr_version_mgr_.generate_new_version(tenant_id_, epoch_tstamp,
         base_version_when_no_valid_partition, need_print_status);
 }
@@ -316,9 +316,9 @@ void ObTenantWeakReadService::get_weak_read_stat(ObTenantWeakReadStat &wrs_stat)
   bool in_service = 0;
   int64_t master_epoch = 0;
 
-  palf::SCN current_cluster_version;
-  palf::SCN min_cluster_version;
-  palf::SCN max_cluster_version;
+  SCN current_cluster_version;
+  SCN min_cluster_version;
+  SCN max_cluster_version;
   int64_t cur_tstamp = ObTimeUtility::current_time();
 
   cluster_service_.get_serve_info(in_service, master_epoch);
@@ -401,7 +401,7 @@ void ObTenantWeakReadService::set_force_self_check_(bool need_stop_service)
   thread_cond_.signal();
 }
 
-int ObTenantWeakReadService::process_get_cluster_version_rpc(palf::SCN &version)
+int ObTenantWeakReadService::process_get_cluster_version_rpc(SCN &version)
 {
   int ret = OB_SUCCESS;
   bool only_request_local = true;
@@ -442,7 +442,7 @@ void ObTenantWeakReadService::process_cluster_heartbeat_rpc_cb(
 }
 
 int ObTenantWeakReadService::process_cluster_heartbeat_rpc(const common::ObAddr &svr,
-    const palf::SCN version,
+    const SCN version,
     const int64_t valid_part_count,
     const int64_t total_part_count,
     const int64_t generate_timestamp)
@@ -494,9 +494,9 @@ void ObTenantWeakReadService::print_stat_()
   int get_cluster_version_err = 0;
   int64_t cur_tstamp = ObTimeUtility::current_time();
   ObTenantWeakReadServerVersionMgr::ServerVersion sv;
-  palf::SCN cluster_version;
-  palf::SCN min_cluster_version;
-  palf::SCN max_cluster_version;
+  SCN cluster_version;
+  SCN min_cluster_version;
+  SCN max_cluster_version;
   bool in_cluster_service = cluster_service_.is_in_service();
   int64_t weak_read_refresh_interval = GCONF.weak_read_version_refresh_interval;
 
@@ -650,7 +650,7 @@ int ObTenantWeakReadService::scan_all_ls_(storage::ObLSService *ls_svr)
 int ObTenantWeakReadService::handle_ls_(ObLS &ls)
 {
   int ret = OB_SUCCESS;
-  palf::SCN version;
+  SCN version;
   bool need_skip = false;
   bool is_user_ls = false;
   const ObLSID &ls_id = ls.get_ls_id();
@@ -726,7 +726,7 @@ void ObTenantWeakReadService::do_cluster_heartbeat_()
   DEFINE_TIME_GUARD("do_cluster_heartbeat", 100 * 1000L);
 
   // get local server version
-  palf::SCN local_server_version = svr_version_mgr_.get_version(total_part_count, valid_part_count);
+  SCN local_server_version = svr_version_mgr_.get_version(total_part_count, valid_part_count);
 
   time_guard.click("get_server_version");
 
@@ -784,7 +784,7 @@ void ObTenantWeakReadService::do_cluster_heartbeat_()
   ATOMIC_SET(&last_post_cluster_heartbeat_tstamp_, ObTimeUtility::current_time());
 }
 
-int ObTenantWeakReadService::post_cluster_heartbeat_rpc_(const palf::SCN version,
+int ObTenantWeakReadService::post_cluster_heartbeat_rpc_(const SCN version,
     const int64_t valid_part_count,
     const int64_t total_part_count,
     const int64_t generate_timestamp)

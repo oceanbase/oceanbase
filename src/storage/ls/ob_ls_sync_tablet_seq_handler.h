@@ -17,7 +17,7 @@
 
 namespace oceanbase
 {
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -40,7 +40,7 @@ public:
   int replay(const void *buffer,
              const int64_t nbytes,
              const palf::LSN &lsn,
-             const palf::SCN &scn) override final;
+             const share::SCN &scn) override final;
 
   // for role change
   void switch_to_follower_forcedly() override final;
@@ -49,8 +49,8 @@ public:
   int resume_leader() override final;
 
   // for checkpoint
-  int flush(palf::SCN &scn) override final;
-  palf::SCN get_rec_scn() override final;
+  int flush(share::SCN &scn) override final;
+  share::SCN get_rec_scn() override final;
 
 private:
   bool is_inited_;

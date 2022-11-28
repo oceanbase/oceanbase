@@ -21,7 +21,7 @@
 #include "storage/ob_storage_schema.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "share/schema/ob_multi_version_schema_service.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -60,9 +60,17 @@ public:
       logservice::ObLogHandler *log_handler);
   void reset();
   bool is_inited() const { return is_inited_; }
+  bool is_valid() const
+  {
+    return is_inited_
+        && ls_id_.is_valid()
+        && tablet_id_.is_valid()
+        && nullptr != log_handler_
+        && max_saved_table_version_ >= 0;
+  }
 
   // follower
-  int replay_schema_log(const palf::SCN &scn, const char *buf, const int64_t size, int64_t &pos);
+  int replay_schema_log(const share::SCN &scn, const char *buf, const int64_t size, int64_t &pos);
   // leader
   int try_update_storage_schema(
       const int64_t table_id,
@@ -73,6 +81,7 @@ public:
   ObStorageSchemaRecorder(const ObStorageSchemaRecorder&) = delete;
   ObStorageSchemaRecorder& operator=(const ObStorageSchemaRecorder&) = delete;
   int64_t get_max_sync_version() const { return ATOMIC_LOAD(&max_saved_table_version_); }
+  TO_STRING_KV(K_(is_inited), K_(ls_id), K_(tablet_id));
 
 private:
   class ObStorageSchemaLogCb : public logservice::AppendCb
@@ -81,7 +90,7 @@ private:
     virtual int on_success() override;
     virtual int on_failure() override;
 
-    int set_table_version(const int64_t table_version);
+    void set_table_version(const int64_t table_version);
 
     ObStorageSchemaLogCb(ObStorageSchemaRecorder &recorder)
       : recorder_(recorder),
@@ -110,7 +119,7 @@ private:
   void free_allocated_info();
   int try_update_with_lock(const int64_t table_id, const int64_t table_version, const int64_t expire_ts);
   int get_tablet_handle(ObTabletHandle &tablet_handle);
-  int replay_get_tablet_handle(const palf::SCN &scn, ObTabletHandle &tablet_handle);
+  int replay_get_tablet_handle(const share::SCN &scn, ObTabletHandle &tablet_handle);
   // clog callback
   void update_table_schema_fail();
   void update_table_schema_succ(const int64_t table_version, bool &finish_flag);
@@ -129,7 +138,7 @@ private:
   int64_t max_saved_table_version_;
   char *clog_buf_;
   int64_t clog_len_;
-  palf::SCN clog_scn_;
+  share::SCN clog_scn_;
 
   share::schema::ObSchemaGetterGuard *schema_guard_;
   ObStorageSchema *storage_schema_;

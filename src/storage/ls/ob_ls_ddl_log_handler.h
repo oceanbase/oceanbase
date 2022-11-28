@@ -44,7 +44,7 @@ public:
   int replay(const void *buffer,
              const int64_t buf_size,
              const palf::LSN &lsn,
-             const palf::SCN &log_ts) override final;
+             const share::SCN &log_ts) override final;
                       
   // for role change
   void switch_to_follower_forcedly() override final;
@@ -53,14 +53,14 @@ public:
   int resume_leader() override final;
 
   // for checkpoint
-  int flush(palf::SCN &rec_scn) override final;
-  palf::SCN get_rec_scn() override final;
+  int flush(share::SCN &rec_scn) override final;
+  share::SCN get_rec_scn() override final;
 private:
-  int replay_ddl_redo_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const palf::SCN &scn);
-  int replay_ddl_prepare_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const palf::SCN &scn);
-  int replay_ddl_commit_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const palf::SCN &scn);
-  int replay_ddl_tablet_schema_version_change_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const palf::SCN &scn);
-  int replay_ddl_start_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const palf::SCN &scn);
+  int replay_ddl_redo_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
+  int replay_ddl_prepare_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
+  int replay_ddl_commit_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
+  int replay_ddl_tablet_schema_version_change_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
+  int replay_ddl_start_log_(const char *log_buf, const int64_t buf_size, int64_t pos, const share::SCN &scn);
 private:
   bool is_inited_;
   bool is_online_;

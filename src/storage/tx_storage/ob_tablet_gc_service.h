@@ -16,7 +16,7 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/task/ob_timer.h"
 #include "common/ob_tablet_id.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -52,10 +52,10 @@ public:
   void set_tablet_gc_trigger();
   uint8_t get_tablet_persist_trigger_and_reset();
   int get_unpersist_tablet_ids(common::ObTabletIDArray &unpersist_create_tablet_ids,
-                               const palf::SCN checkpoint_scn,
+                               const share::SCN checkpoint_scn,
                                bool only_deleted = false);
   int flush_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids,
-                                 const palf::SCN checkpoint_scn);
+                                 const share::SCN checkpoint_scn);
   int gc_tablets(const common::ObTabletIDArray &tablet_ids);
   TO_STRING_KV(K_(tablet_persist_trigger), K_(is_inited));
 
@@ -64,7 +64,7 @@ private:
   static const int64_t FLUSH_CHECK_INTERVAL;
   int freeze_unpersist_tablet_ids(const common::ObTabletIDArray &unpersist_tablet_ids);
   int wait_unpersist_tablet_ids_flushed(const common::ObTabletIDArray &unpersist_tablet_ids,
-                                        const palf::SCN checkpoint_scn);
+                                        const share::SCN checkpoint_scn);
 
 private:
   storage::ObLS *ls_;

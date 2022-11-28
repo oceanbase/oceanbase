@@ -19,7 +19,7 @@
 #include "storage/ob_i_memtable_mgr.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_table_store.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 using namespace oceanbase;
 using namespace oceanbase::blocksstable;
@@ -503,7 +503,7 @@ int ObTabletTableStore::calculate_read_tables(
   } else if (OB_NOT_NULL(base_table)) { // find read minor tables
     ObITable *table = nullptr;
     int64_t inc_pos = -1;
-    palf::SCN last_scn = base_table->is_major_sstable() ? palf::SCN::max_scn() : base_table->get_end_scn();
+    SCN last_scn = base_table->is_major_sstable() ? SCN::max_scn() : base_table->get_end_scn();
     for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables_.count_; ++i) {
       table = minor_tables_[i];
       if ((base_table->is_major_sstable() && table->get_upper_trans_version() >= base_table->get_snapshot_version())
@@ -544,7 +544,7 @@ int ObTabletTableStore::calculate_read_memtables(const ObTablet &tablet, ObTable
 {
   int ret = OB_SUCCESS;
   int64_t start_snapshot_version = tablet.get_snapshot_version();
-  palf::SCN start_scn = tablet.get_clog_checkpoint_scn();
+  SCN start_scn = tablet.get_clog_checkpoint_scn();
   int64_t mem_pos = -1;
   ObITable *memtable = nullptr;
 
@@ -572,7 +572,7 @@ int ObTabletTableStore::pull_memtables()
     LOG_WARN("failed to get all memtables from memtable_mgr", K(ret));
   } else {
     int64_t start_snapshot_version = tablet_ptr_->get_snapshot_version();
-    palf::SCN clog_checkpoint_scn = tablet_ptr_->get_clog_checkpoint_scn();
+    SCN clog_checkpoint_scn = tablet_ptr_->get_clog_checkpoint_scn();
     int64_t start_pos = -1;
 
     for (int64_t i = 0; OB_SUCC(ret) && i < memtable_handles.count(); ++i) {
@@ -800,11 +800,11 @@ int ObTabletTableStore::build_minor_tables(
           ObSSTable *new_sstable = static_cast<ObSSTable *>(new_table);
           if (sstable->get_meta().get_basic_meta().max_merged_trans_version_
               < new_sstable->get_meta().get_basic_meta().max_merged_trans_version_) {
-            need_add = true;
+            need_add = false;
             LOG_INFO("new sstable max merge trans version not equal to old sstable, "
                 "need add new sstable when table key is same", KPC(sstable), KPC(new_sstable));
           } else {
-            need_add = false;
+            need_add = true; // just keep old sstable
           }
         } else if (ObTableStoreUtil::check_include_by_scn_range(*new_table, *table)) {
           LOG_DEBUG("table purged", K(*new_table), K(*table));
@@ -931,8 +931,8 @@ int ObTabletTableStore::build_ddl_sstables(
         // already pushed, do nothing
       } else {
         ObITable *last_ddl_sstable = ddl_sstables.at(ddl_sstables.count() - 1);
-        const palf::SCN old_ddl_start_scn = static_cast<ObSSTable *>(last_ddl_sstable)->get_meta().get_basic_meta().get_ddl_scn();
-        const palf::SCN new_ddl_start_scn = static_cast<ObSSTable *>(new_table)->get_meta().get_basic_meta().get_ddl_scn();
+        const SCN old_ddl_start_scn = static_cast<ObSSTable *>(last_ddl_sstable)->get_meta().get_basic_meta().get_ddl_scn();
+        const SCN new_ddl_start_scn = static_cast<ObSSTable *>(new_table)->get_meta().get_basic_meta().get_ddl_scn();
         if (new_ddl_start_scn > old_ddl_start_scn) {
           // ddl start log ts changed means task retry, clean up old ddl sstable
           ddl_sstables.reset();
@@ -1333,7 +1333,7 @@ int ObTabletTableStore::cut_ha_sstable_scn_range_(
     common::ObIArray<ObITable *> &minor_sstables)
 {
   int ret = OB_SUCCESS;
-  palf::SCN last_end_scn = palf::SCN::min_scn();
+  SCN last_end_scn = SCN::min_scn();
   for (int64_t i = 0; OB_SUCC(ret) && i < minor_sstables.count(); ++i) {
     ObITable *table = minor_sstables.at(i);
 
@@ -1397,9 +1397,9 @@ int ObTabletTableStore::combin_ha_minor_sstables_(
     common::ObIArray<ObITable *> &new_minor_sstables)
 {
   int ret = OB_SUCCESS;
-  palf::SCN logical_start_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
-  palf::SCN logical_end_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
-  palf::SCN max_copy_end_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+  SCN logical_start_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+  SCN logical_end_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+  SCN max_copy_end_scn = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
   int64_t old_store_minor_tables_index = 0;
 
   //get remote logical minor sstable log ts
@@ -1416,7 +1416,7 @@ int ObTabletTableStore::combin_ha_minor_sstables_(
   }
 
   //push new sstable into array
-  const palf::SCN checkpoint_scn = tablet_ptr_->get_clog_checkpoint_scn();
+  const SCN checkpoint_scn = tablet_ptr_->get_clog_checkpoint_scn();
   if (OB_SUCC(ret)) {
     if (need_add_minor_sstables.empty()) {
       //do nothing

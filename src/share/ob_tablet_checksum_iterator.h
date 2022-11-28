@@ -46,7 +46,7 @@ public:
 
   int next(ObTabletChecksumItem &item);
 
-  void set_compaction_scn(const palf::SCN &compaction_scn) { compaction_scn_ = compaction_scn; }
+  void set_compaction_scn(const SCN &compaction_scn) { compaction_scn_ = compaction_scn; }
 
 private:
   int fetch_next_batch();
@@ -56,7 +56,7 @@ private:
 
   bool is_inited_;
   uint64_t tenant_id_;
-  palf::SCN compaction_scn_;
+  SCN compaction_scn_;
   common::ObSEArray<ObTabletChecksumItem, BATCH_FETCH_COUNT> checksum_items_;
   int64_t cur_idx_;
   common::ObISQLClient *sql_proxy_;

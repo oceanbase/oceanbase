@@ -29,6 +29,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 using namespace storage;
 using namespace blocksstable;
 using namespace transaction;
@@ -1147,7 +1148,7 @@ int ObMemtableMultiVersionScanIterator::iterate_uncommitted_row_value_(ObDatumRo
   int64_t sql_seq = -1;
   int64_t first_sql_sequence = -1;
   int64_t trans_version = INT64_MAX;
-  palf::SCN trans_scn;
+  SCN trans_scn;
   bool same_sql_sequence_flag = true;
   if (OB_ISNULL(value_iter_)) {
     ret = OB_INVALID_ARGUMENT;

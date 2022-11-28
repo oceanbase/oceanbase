@@ -325,7 +325,7 @@ int ObTableLockOp::calc_tablet_loc(const ObLockCtDef &lock_ctdef,
   } else {
     //direct lock to storage
     tablet_loc = (MY_INPUT.get_tablet_loc() != nullptr ?
-        MY_INPUT.get_tablet_loc() : MY_INPUT.get_table_loc()->tablet_locs_.get_first());
+        MY_INPUT.get_tablet_loc() : MY_INPUT.get_table_loc()->get_first_tablet_loc());
   }
   return ret;
 }

@@ -20,7 +20,7 @@
 #include "common/ob_queue_thread.h"     // ObCond
 #include "ob_ls_task.h"                 // ObLSArchiveTask
 #include "ob_start_archive_helper.h"    // StartArchiveHelper
-#include "logservice/palf/scn.h"        // SCn
+#include "share/scn.h"        // SCn
 #include <cstdint>
 
 namespace oceanbase
@@ -79,14 +79,14 @@ public:
   void stop();
   void wait();
   void destroy();
-  int set_archive_info(const palf::SCN &round_start_scn,
-      const int64_t piece_interval, const palf::SCN &genesis_scn, const int64_t base_piece_id);
+  int set_archive_info(const share::SCN &round_start_scn,
+      const int64_t piece_interval, const share::SCN &genesis_scn, const int64_t base_piece_id);
   void clear_archive_info();
   void notify_start();
   void notify_stop();
   int revert_ls_task(ObLSArchiveTask *task);
   int get_ls_guard(const ObLSID &id, ObArchiveLSGuard &guard);
-  int authorize_ls_archive_task(const ObLSID &id, const int64_t epoch, const palf::SCN &start_scn);
+  int authorize_ls_archive_task(const ObLSID &id, const int64_t epoch, const share::SCN &start_scn);
   void reset_task();
   int64_t get_ls_task_count() const { return ls_map_.count(); }
   int mark_fata_error(const ObLSID &id, const ArchiveKey &key, const ObArchiveInterruptReason &reason);
@@ -107,9 +107,9 @@ private:
 private:
   bool                  inited_;
   uint64_t              tenant_id_;
-  palf::SCN             round_start_scn_;
+  share::SCN             round_start_scn_;
   int64_t               piece_interval_;
-  palf::SCN             genesis_scn_;
+  share::SCN             genesis_scn_;
   int64_t               base_piece_id_;
   LSArchiveMap          ls_map_;
 

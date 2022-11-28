@@ -16,7 +16,7 @@
 #include <cstdint>
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -66,7 +66,7 @@ int common_checkpoint_type_to_string(const ObCommonCheckpointType common_checkpo
 struct ObCommonCheckpointVTInfo
 {
   ObTabletID tablet_id;
-  palf::SCN rec_scn;
+  share::SCN rec_scn;
   int checkpoint_type;
   bool is_flushing;
 
@@ -91,8 +91,8 @@ inline bool is_valid_log_base_type(const ObCommonCheckpointType &type)
 class ObCommonCheckpoint
 {
 public:
-  virtual palf::SCN get_rec_scn() = 0;
-  virtual int flush(palf::SCN recycle_scn, bool need_freeze = true) = 0;
+  virtual share::SCN get_rec_scn() = 0;
+  virtual int flush(share::SCN recycle_scn, bool need_freeze = true) = 0;
 
   virtual ObTabletID get_tablet_id() const = 0;
   virtual bool is_flushing() const = 0;

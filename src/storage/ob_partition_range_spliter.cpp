@@ -1603,7 +1603,7 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_store_ctx
   int ret = OB_SUCCESS;
   auto ls_id = merge_ctx_.param_.ls_id_;
   auto &snapshot = merge_ctx_.sstable_version_range_.snapshot_version_;
-  palf::SCN scn;
+  SCN scn;
   if (OB_FAIL(scn.convert_for_tx(snapshot))) {
     STORAGE_LOG(WARN, "convert for tx fail", K(ret), K(ls_id), K(snapshot));
   } else if (OB_FAIL(store_ctx_.init_for_read(ls_id,

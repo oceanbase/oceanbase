@@ -31,7 +31,7 @@
 #include "share/ob_max_id_fetcher.h"//ObMaxIdFetcher
 #include "share/ob_global_stat_proxy.h"//get gc
 #include "logservice/palf/log_define.h"//SCN
-#include "logservice/palf/scn.h"//SCN
+#include "share/scn.h"//SCN
 
 using namespace oceanbase;
 using namespace oceanbase::common;

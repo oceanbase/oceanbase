@@ -52,7 +52,7 @@
 #include "observer/ob_server_struct.h"
 #include "rootserver/freeze/ob_freeze_info_manager.h"
 #include "rootserver/ob_table_creator.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -659,7 +659,7 @@ int ObBootstrap::create_all_core_table_partition()
     ObMySQLTransaction trans;
     ObMySQLProxy &sql_proxy = ddl_service_.get_sql_proxy();
     ObTableCreator table_creator(OB_SYS_TENANT_ID,
-                                 palf::SCN::base_scn(),
+                                 SCN::base_scn(),
                                  lst_operator_,
                                  trans);
     if (OB_FAIL(trans.start(&sql_proxy, OB_SYS_TENANT_ID))) {
@@ -708,7 +708,7 @@ int ObBootstrap::create_all_partitions()
     ObMySQLTransaction trans;
     ObMySQLProxy &sql_proxy = ddl_service_.get_sql_proxy();
     ObTableCreator table_creator(OB_SYS_TENANT_ID,
-                                 palf::SCN::base_scn(),
+                                 SCN::base_scn(),
                                  lst_operator_,
                                  trans);
     if (OB_FAIL(trans.start(&sql_proxy, OB_SYS_TENANT_ID))) {
@@ -1157,7 +1157,7 @@ int ObBootstrap::init_global_stat()
   } else {
     const int64_t baseline_schema_version = -1;
     const int64_t rootservice_epoch = 0;
-    const palf::SCN snapshot_gc_scn = palf::SCN::min_scn();
+    const SCN snapshot_gc_scn = SCN::min_scn();
     const int64_t snapshot_gc_timestamp = 0;
     ObGlobalStatProxy global_stat_proxy(trans, OB_SYS_TENANT_ID);
     ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
@@ -1366,7 +1366,7 @@ int ObBootstrap::insert_sys_ls_(const share::schema::ObTenantSchema &tenant_sche
     if (OB_FAIL(status_info.init(OB_SYS_TENANT_ID, SYS_LS, ls_group_id,
             share::OB_LS_NORMAL, unit_group_id, primary_zone))) {
       LOG_WARN("failed to init ls info", KR(ret), K(primary_zone));
-    } else if (OB_FAIL(life_agent.create_new_ls(status_info, palf::SCN::base_scn(), primary_zone_str.string()))) {
+    } else if (OB_FAIL(life_agent.create_new_ls(status_info, SCN::base_scn(), primary_zone_str.string()))) {
       LOG_WARN("failed to get init member list", KR(ret), K(status_info), K(primary_zone_str));
     }
   }

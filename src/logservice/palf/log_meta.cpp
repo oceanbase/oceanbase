@@ -19,6 +19,7 @@ namespace oceanbase
 namespace palf
 {
 using namespace common;
+using namespace share;
 LogMeta::LogMeta() : version_(-1),
                      log_prepare_meta_(),
                      log_config_meta_(),

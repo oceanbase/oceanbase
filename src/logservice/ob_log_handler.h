@@ -30,6 +30,10 @@ namespace common
 {
 class ObAddr;
 }
+namespace share
+{
+class SCN;
+}
 namespace transaction
 {
 class ObTsMgr;
@@ -38,7 +42,6 @@ namespace palf
 {
 class PalfEnv;
 class LSN;
-class SCN;
 }
 namespace logservice
 {
@@ -53,21 +56,21 @@ public:
   virtual bool is_valid() const = 0;
   virtual int append(const void *buffer,
                      const int64_t nbytes,
-                     const palf::SCN &ref_scn,
+                     const share::SCN &ref_scn,
                      const bool need_nonblock,
                      AppendCb *cb,
                      palf::LSN &lsn,
-                     palf::SCN &scn) = 0;
+                     share::SCN &scn) = 0;
 
   virtual int get_role(common::ObRole &role, int64_t &proposal_id) const = 0;
 
   virtual int change_access_mode(const int64_t mode_version,
                                  const palf::AccessMode &access_mode,
-                                 const palf::SCN &ref_scn) = 0;
+                                 const share::SCN &ref_scn) = 0;
   virtual int get_access_mode(int64_t &mode_version, palf::AccessMode &access_mode) const = 0;
   virtual int seek(const palf::LSN &lsn, palf::PalfBufferIterator &iter) = 0;
   virtual int seek(const palf::LSN &lsn, palf::PalfGroupBufferIterator &iter) = 0;
-  virtual int seek(const palf::SCN &scn, palf::PalfGroupBufferIterator &iter) = 0;
+  virtual int seek(const share::SCN &scn, palf::PalfGroupBufferIterator &iter) = 0;
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
                                       const int64_t paxos_replica_num) = 0;
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
@@ -77,14 +80,14 @@ public:
   virtual int set_election_priority(palf::election::ElectionPriority *priority) = 0;
   virtual int reset_election_priority() = 0;
 
-  virtual int locate_by_scn_coarsely(const palf::SCN &scn, palf::LSN &result_lsn) = 0;
-  virtual int locate_by_lsn_coarsely(const palf::LSN &lsn, palf::SCN &result_scn) = 0;
+  virtual int locate_by_scn_coarsely(const share::SCN &scn, palf::LSN &result_lsn) = 0;
+  virtual int locate_by_lsn_coarsely(const palf::LSN &lsn, share::SCN &result_scn) = 0;
   virtual int advance_base_lsn(const palf::LSN &lsn) = 0;
   virtual int get_end_lsn(palf::LSN &lsn) const = 0;
   virtual int get_max_lsn(palf::LSN &lsn) const = 0;
 
-  virtual int get_max_scn(palf::SCN &scn) const = 0;
-  virtual int get_end_scn(palf::SCN &scn) const = 0;
+  virtual int get_max_scn(share::SCN &scn) const = 0;
+  virtual int get_end_scn(share::SCN &scn) const = 0;
   virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
   virtual int change_replica_num(const common::ObMemberList &member_list,
@@ -123,9 +126,9 @@ public:
   virtual int advance_base_info(const palf::PalfBaseInfo &palf_base_info, const bool is_rebuild) = 0;
   virtual int is_valid_member(const common::ObAddr &addr, bool &is_valid) const = 0;
   virtual void wait_append_sync() = 0;
-  virtual int enable_replay(const palf::LSN &initial_lsn, const palf::SCN &initial_scn) = 0;
+  virtual int enable_replay(const palf::LSN &initial_lsn, const share::SCN &initial_scn) = 0;
   virtual int disable_replay() = 0;
-  virtual int get_max_decided_scn(palf::SCN &scn) = 0;
+  virtual int get_max_decided_scn(share::SCN &scn) = 0;
   virtual int pend_submit_replay_log() = 0;
   virtual int restore_submit_replay_log() = 0;
   virtual bool is_replay_enabled() const = 0;
@@ -171,11 +174,11 @@ public:
   // NB: only support for primary(AccessMode::APPEND)
   int append(const void *buffer,
              const int64_t nbytes,
-             const palf::SCN &ref_scn,
+             const share::SCN &ref_scn,
              const bool need_nonblock,
              AppendCb *cb,
              palf::LSN &lsn,
-             palf::SCN &scn) override final;
+             share::SCN &scn) override final;
 
   // @brief switch log_handle role, to LEADER or FOLLOWER
   // @param[in], role, LEADER or FOLLOWER
@@ -214,7 +217,7 @@ public:
   //      get 'mode_version' and pass it to 'change_access_mode'
   int change_access_mode(const int64_t mode_mode_version,
                          const palf::AccessMode &access_mode,
-                         const palf::SCN &ref_scn) override final;
+                         const share::SCN &ref_scn) override final;
 
   // @brief alloc PalfBufferIterator, this iterator will get something append by caller.
   // @param[in] const LSN &, the start lsn of iterator.
@@ -229,7 +232,7 @@ public:
   // @brief alloc PalfBufferIterator, this iterator will get something append by caller.
   // @param[in] const int64_t, the start ts of iterator.
   // @param[out] PalfBufferIterator &, scn of first log in this iterator must be higher than/equal to start_scn.
-  int seek(const palf::SCN &scn,
+  int seek(const share::SCN &scn,
            palf::PalfGroupBufferIterator &iter) override final;
   // @brief set the initial member list of paxos group
   // @param[in] ObMemberList, the initial member list
@@ -264,7 +267,7 @@ public:
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
   // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
   // - others: bug
-  int locate_by_scn_coarsely(const palf::SCN &scn, palf::LSN &result_lsn) override final;
+  int locate_by_scn_coarsely(const share::SCN &scn, palf::LSN &result_lsn) override final;
 
   // @desc: query coarse ts by lsn, that means there is a log in disk,
   // its lsn and scn are result_lsn and result_scn, and result_lsn <= lsn.
@@ -275,7 +278,7 @@ public:
   // - OB_INVALID_ARGUMENT
   // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
   // - others: bug
-  int locate_by_lsn_coarsely(const palf::LSN &lsn, palf::SCN &result_scn) override final;
+  int locate_by_lsn_coarsely(const palf::LSN &lsn, share::SCN &result_scn) override final;
   // @brief, set the recycable lsn, palf will ensure that the data before recycable lsn readable.
   // @param[in] const LSN&, recycable lsn.
   int advance_base_lsn(const palf::LSN &lsn) override final;
@@ -285,10 +288,10 @@ public:
   int get_max_lsn(palf::LSN &lsn) const override final;
   // @brief, get max log ts.
   // @param[out] int64_t&, max log ts.
-  int get_max_scn(palf::SCN &scn) const override final;
+  int get_max_scn(share::SCN &scn) const override final;
   // @brief, get timestamp of end lsn.
   // @param[out] int64_t, timestamp.
-  int get_end_scn(palf::SCN &scn) const override final;
+  int get_end_scn(share::SCN &scn) const override final;
   // @brief, get paxos member list of this paxos group
   // @param[out] common::ObMemberList&
   // @param[out] int64_t&
@@ -484,7 +487,7 @@ public:
   // @param[in] const palf::LSN &initial_lsn: replay new start lsn.
   // @param[in] const int64_t &initial_scn: replay new start ts.
   int enable_replay(const palf::LSN &initial_lsn,
-                    const palf::SCN &initial_scn) override final;
+                    const share::SCN &initial_scn) override final;
   // @brief, disable replay for current ls.
   int disable_replay() override final;
   // @brief, pending sumbit replay log
@@ -496,7 +499,7 @@ public:
   bool is_replay_enabled() const override final;
   // @brief, get max decided log ts considering both apply and replay.
   // @param[out] int64_t&, max decided log ts ns.
-  int get_max_decided_scn(palf::SCN &scn) override final;
+  int get_max_decided_scn(share::SCN &scn) override final;
   // @brief: store a persistent flag which means this paxos replica
   // can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.
@@ -510,7 +513,7 @@ public:
   TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_env_), K(is_in_stop_state_), K(is_inited_));
 private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);
-  int get_leader_max_scn_(palf::SCN &max_scn) const;
+  int get_leader_max_scn_(share::SCN &max_scn) const;
   DISALLOW_COPY_AND_ASSIGN(ObLogHandler);
 private:
   common::ObAddr self_;

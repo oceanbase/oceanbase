@@ -137,7 +137,7 @@ int ObTabletMemtableMgr::destroy_storage_schema_recorder()
 // There are two cases:
 // 1. create the first memtable for tablet
 // 2. create the new memtable after freezing the old memtable
-int ObTabletMemtableMgr::create_memtable(const palf::SCN clog_checkpoint_scn,
+int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
                                          const int64_t schema_version,
                                          const bool for_replay)
 {
@@ -195,8 +195,8 @@ int ObTabletMemtableMgr::create_memtable(const palf::SCN clog_checkpoint_scn,
       LOG_WARN("failed to init memtable", K(ret), K(ls_id), K(table_key), KP(freezer_), KP(this),
                K(schema_version), K(logstream_freeze_clock));
     } else {
-      palf::SCN new_clog_checkpoint_scn;
-      palf::SCN new_snapshot_version;
+      SCN new_clog_checkpoint_scn;
+      SCN new_snapshot_version;
       memtable::ObMemtable *last_frozen_memtable = get_last_frozen_memtable_();
       if (OB_NOT_NULL(last_frozen_memtable)) {
         // keep the check order: is_frozen, write_ref_cnt, then unsubmitted_cnt and unsynced_cnt
@@ -378,8 +378,8 @@ ObMemtable *ObTabletMemtableMgr::get_last_frozen_memtable_() const
 }
 
 int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(ObIMemtable *memtable,
-                                                                   palf::SCN start_scn,
-                                                                   palf::SCN snapshot_scn)
+                                                                   SCN start_scn,
+                                                                   SCN snapshot_scn)
 {
   ObTableHandleV2 handle;
   ObIMemtable *active_memtable = nullptr;
@@ -460,7 +460,7 @@ int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(ObIMemtable *&
   return ret;
 }
 
-int ObTabletMemtableMgr::get_memtable_for_replay(palf::SCN replay_scn,
+int ObTabletMemtableMgr::get_memtable_for_replay(SCN replay_scn,
                                                  ObTableHandleV2 &handle)
 {
   int ret = OB_SUCCESS;
@@ -489,7 +489,7 @@ int ObTabletMemtableMgr::get_memtable_for_replay(palf::SCN replay_scn,
       }
     }
     if (OB_SUCC(ret) && !handle.is_valid() && i < memtable_head_) {
-      palf::SCN clog_checkpoint_scn;
+      SCN clog_checkpoint_scn;
       if (OB_FAIL(get_newest_clog_checkpoint_scn(clog_checkpoint_scn))) {
       } else if (replay_scn <= clog_checkpoint_scn) {
         // no need to replay the log
@@ -796,6 +796,7 @@ int64_t ObTabletMemtableMgr::to_string(char *buf, const int64_t buf_len) const
         J_COMMA();
       }
     }
+    J_KV("schema_recorder", schema_recorder_);
     J_ARRAY_END();
     J_OBJ_END();
     J_OBJ_END();

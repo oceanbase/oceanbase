@@ -726,7 +726,7 @@ int ObRootInspection::check_all()
 
     // check sys schema
     tmp = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp = check_sys_table_schemas())) {
+    if (OB_SUCCESS != (tmp = check_sys_table_schemas_())) {
       LOG_WARN("check_sys_table_schemas failed", K(tmp));
       ret = (OB_SUCCESS == ret) ? tmp : ret;
     }
@@ -976,51 +976,6 @@ int ObRootInspection::check_and_insert_sys_params(uint64_t tenant_id,
       LOG_WARN("some sys var exist in hard code, but does not exist in inner table, "
           "they will be inserted into table", K(table_name), K(miss_names));
     }
-    ObSqlString sql;
-    ObSysParam sys_param;
-    obrpc::ObAddSysVarArg arg;
-    arg.exec_tenant_id_ = tenant_id;
-    const ObZone global_zone = "";
-    for (int64_t i = 0; OB_SUCC(ret) && i < miss_names.count(); ++i) {
-      sql.reset();
-      sys_param.reset();
-      arg.sysvar_.reset();
-      arg.if_not_exist_ = true;
-      arg.sysvar_.set_tenant_id(tenant_id);
-      int64_t var_store_idx = OB_INVALID_INDEX;
-      if (OB_ISNULL(rpc_proxy_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("common rpc proxy is null");
-      } else if (OB_FAIL(check_cancel())) {
-        LOG_WARN("check_cancel failed", K(ret));
-      } else if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx_by_name(
-          ObString(miss_names.at(i).ptr()), var_store_idx))) {
-        LOG_WARN("fail to calc sys var store idx by name", K(ret), K(miss_names.at(i).ptr()));
-      } else if (false == ObSysVarFactory::is_valid_sys_var_store_idx(var_store_idx)) {
-        ret = OB_SCHEMA_ERROR;
-        LOG_WARN("calc sys var store idx success but store_idx is invalid", K(ret), K(var_store_idx));
-      } else {
-        const ObString &name = ObSysVariables::get_name(var_store_idx);
-        const ObObjType &type = ObSysVariables::get_type(var_store_idx);
-        const ObString &value = ObSysVariables::get_value(var_store_idx);
-        const ObString &min = ObSysVariables::get_min(var_store_idx);
-        const ObString &max = ObSysVariables::get_max(var_store_idx);
-        const ObString &info = ObSysVariables::get_info(var_store_idx);
-        const int64_t flag = ObSysVariables::get_flags(var_store_idx);
-        if (OB_FAIL(sys_param.init(tenant_id, global_zone, name.ptr(), type,
-            value.ptr(), min.ptr(), max.ptr(), info.ptr(), flag))) {
-          LOG_WARN("sys_param init failed", K(tenant_id), K(name), K(type), K(value),
-              K(min), K(max), K(info), K(flag), K(ret));
-        } else if (!sys_param.is_valid()) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("sys param is invalid", K(sys_param), K(ret));
-        } else if (OB_FAIL(ObSchemaUtils::convert_sys_param_to_sysvar_schema(sys_param, arg.sysvar_))) {
-          LOG_WARN("convert sys param to sysvar schema failed", K(ret));
-        } else if (OB_FAIL(rpc_proxy_->add_system_variable(arg))) {
-          LOG_WARN("add system variable failed", K(ret));
-        }
-      }
-    }
   }
   return ret;
 }
@@ -1190,7 +1145,7 @@ int ObRootInspection::calc_diff_names(const uint64_t tenant_id,
   return ret;
 }
 
-int ObRootInspection::check_sys_table_schemas()
+int ObRootInspection::check_sys_table_schemas_()
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
@@ -1337,7 +1292,7 @@ int ObRootInspection::check_table_schema(const ObTableSchema &hard_code_table,
       || !inner_table.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table_schema", K(hard_code_table), K(inner_table), K(ret));
-  } else if (OB_FAIL(check_table_options(inner_table, hard_code_table))) {
+  } else if (OB_FAIL(check_table_options_(inner_table, hard_code_table))) {
     LOG_WARN("check_table_options failed", "table_id", hard_code_table.get_table_id(), K(ret));
   } else {
     if (hard_code_table.get_column_count() != inner_table.get_column_count()) {
@@ -1361,7 +1316,7 @@ int ObRootInspection::check_table_schema(const ObTableSchema &hard_code_table,
               hard_code_column->get_column_name(), K(ret));
         } else {
           const bool ignore_column_id = is_virtual_table(hard_code_table.get_table_id());
-          if (OB_FAIL(check_column_schema(hard_code_table.get_table_name(),
+          if (OB_FAIL(check_column_schema_(hard_code_table.get_table_name(),
               *column, *hard_code_column, ignore_column_id))) {
             LOG_WARN("column schema mismatch with hard code column schema",
                 "table_name",inner_table.get_table_name(), "column", *column,
@@ -1373,6 +1328,110 @@ int ObRootInspection::check_table_schema(const ObTableSchema &hard_code_table,
       }
       ret = back_ret;
     }
+  }
+  return ret;
+}
+
+int ObRootInspection::check_and_get_system_table_column_diff(
+    const share::schema::ObTableSchema &table_schema,
+    const share::schema::ObTableSchema &hard_code_schema,
+    common::ObIArray<uint64_t> &add_column_ids,
+    common::ObIArray<uint64_t> &alter_column_ids)
+{
+  int ret = OB_SUCCESS;
+  add_column_ids.reset();
+  alter_column_ids.reset();
+  if (!table_schema.is_valid() || !hard_code_schema.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table_schema", KR(ret), K(table_schema), K(hard_code_schema));
+  } else if (table_schema.get_tenant_id() != hard_code_schema.get_tenant_id()
+             || table_schema.get_table_id() != hard_code_schema.get_table_id()
+             || 0 != table_schema.get_table_name_str().compare(hard_code_schema.get_table_name_str())
+             || !is_system_table(table_schema.get_table_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table_schema", KR(ret),
+             "tenant_id", table_schema.get_tenant_id(),
+             "table_id", table_schema.get_table_id(),
+             "table_name", table_schema.get_table_name(),
+             "hard_code_tenant_id", hard_code_schema.get_tenant_id(),
+             "hard_code_table_id", hard_code_schema.get_table_id(),
+             "hard_code_table_name", hard_code_schema.get_table_name());
+  } else {
+    const uint64_t tenant_id = table_schema.get_tenant_id();
+    const uint64_t table_id = table_schema.get_table_id();
+    const ObColumnSchemaV2 *column = NULL;
+    const ObColumnSchemaV2 *hard_code_column = NULL;
+    ObColumnSchemaV2 tmp_column; // check_column_can_be_altered_online() may change dst_column, is ugly.
+    bool ignore_column_id = false;
+
+    // case 1. check if columns should be dropped.
+    // case 2. check if column can be altered online.
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); i++) {
+      column = table_schema.get_column_schema_by_idx(i);
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null", KR(ret), K(tenant_id), K(table_id), K(i));
+      } else if (OB_ISNULL(hard_code_column = hard_code_schema.get_column_schema(column->get_column_id()))) {
+        ret = OB_NOT_SUPPORTED; // case 1
+        LOG_WARN("can't drop system table's column", KR(ret),
+                 K(tenant_id), K(table_id),
+                 "table_name", table_schema.get_table_name(),
+                 "column_id", column->get_column_id(),
+                 "column_name", column->get_column_name());
+      } else {
+        // case 2
+        int tmp_ret = check_column_schema_(table_schema.get_table_name_str(),
+                                           *column,
+                                           *hard_code_column,
+                                           ignore_column_id);
+        if (OB_SUCCESS == tmp_ret) {
+          // not changed
+        } else if (OB_SCHEMA_ERROR != tmp_ret) {
+          ret = tmp_ret;
+          LOG_WARN("fail to check column schema", KR(ret),
+                   K(tenant_id), K(table_id), KPC(column), KPC(hard_code_column));
+        } else if (OB_FAIL(tmp_column.assign(*hard_code_column))) {
+          LOG_WARN("fail to assign hard code column schema", KR(ret),
+                   K(tenant_id), K(table_id),  "column_id", hard_code_column->get_column_id());
+        } else if (OB_FAIL(table_schema.check_column_can_be_altered_online(column, &tmp_column))) {
+          LOG_WARN("fail to check alter column online", KR(ret),
+                   K(tenant_id), K(table_id),
+                   "table_name", table_schema.get_table_name(),
+                   "column_id", column->get_column_id(),
+                   "column_name", column->get_column_name());
+        } else if (OB_FAIL(alter_column_ids.push_back(column->get_column_id()))) {
+          LOG_WARN("fail to push back column_id", KR(ret), K(tenant_id), K(table_id),
+                   "column_id", column->get_column_id());
+        }
+      }
+    } // end for
+
+    // case 3: check if columns should be added.
+    for (int64_t i = 0; OB_SUCC(ret) && i < hard_code_schema.get_column_count(); i++) {
+      hard_code_column = hard_code_schema.get_column_schema_by_idx(i);
+      if (OB_ISNULL(hard_code_column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null", KR(ret), K(tenant_id), K(table_id), K(i));
+      } else if (OB_NOT_NULL(column = table_schema.get_column_schema(hard_code_column->get_column_id()))) {
+        // column exist, just skip
+      } else {
+        const uint64_t hard_code_column_id = hard_code_column->get_column_id();
+        const ObColumnSchemaV2 *last_column = NULL;
+        if (table_schema.get_column_count() <= 0
+            || OB_ISNULL(last_column = table_schema.get_column_schema_by_idx(
+                         table_schema.get_column_count() - 1))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid column count or column", KR(ret), K(table_schema));
+        } else if (table_schema.get_max_used_column_id() >= hard_code_column_id
+                  || last_column->get_column_id() >= hard_code_column_id) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("column should be added at last", KR(ret), KPC(hard_code_column), K(table_schema));
+        } else if (OB_FAIL(add_column_ids.push_back(hard_code_column_id))) {
+          LOG_WARN("fail to push back column_id", KR(ret), K(tenant_id), K(table_id),
+                   "column_id", hard_code_column_id);
+        }
+      }
+    } // end for
   }
   return ret;
 }
@@ -1462,8 +1521,8 @@ int ObRootInspection::check_sys_view_(
   return ret;
 }
 
-int ObRootInspection::check_table_options(const ObTableSchema &table,
-                                          const ObTableSchema &hard_code_table)
+int ObRootInspection::check_table_options_(const ObTableSchema &table,
+                                           const ObTableSchema &hard_code_table)
 {
   int ret = OB_SUCCESS;
   if (!table.is_valid() || !hard_code_table.is_valid()) {
@@ -1615,23 +1674,23 @@ int ObRootInspection::check_table_options(const ObTableSchema &table,
   return ret;
 }
 
-int ObRootInspection::check_column_schema(const ObString &table_name,
-                                          const ObColumnSchemaV2 &column,
-                                          const ObColumnSchemaV2 &hard_code_column,
-                                          const bool ignore_column_id)
+int ObRootInspection::check_column_schema_(const ObString &table_name,
+                                           const ObColumnSchemaV2 &column,
+                                           const ObColumnSchemaV2 &hard_code_column,
+                                           const bool ignore_column_id)
 {
   int ret = OB_SUCCESS;
   if (table_name.empty() || !column.is_valid() || !hard_code_column.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table_name is empty or invalid column or invalid hard_code_column",
-        K(table_name), K(column), K(hard_code_column), K(ret));
+             KR(ret), K(table_name), K(column), K(hard_code_column));
   } else {
 #define CMP_COLUMN_ATTR(attr) \
   if (OB_SUCC(ret)) { \
     if (column.get_##attr() != hard_code_column.get_##attr()) { \
       ret = OB_SCHEMA_ERROR; \
-      LOG_WARN(#attr " mismatch", K(table_name), "column_name", column.get_column_name(), \
-          "in_memory", column.get_##attr(), "hard_code", hard_code_column.get_##attr(), K(ret)); \
+      LOG_WARN(#attr " mismatch", KR(ret), K(table_name), "column_name", column.get_column_name(), \
+               "in_memory", column.get_##attr(), "hard_code", hard_code_column.get_##attr()); \
     } \
   }
 
@@ -1639,10 +1698,18 @@ int ObRootInspection::check_column_schema(const ObString &table_name,
   if (OB_SUCC(ret)) { \
     if (column.is_##attr() != hard_code_column.is_##attr()) { \
       ret = OB_SCHEMA_ERROR; \
-      LOG_WARN(#attr " mismatch", K(table_name), "column_name", column.get_column_name(), \
-          "in_memory", column.is_##attr(), "hard_code", hard_code_column.is_##attr(), K(ret)); \
+      LOG_WARN(#attr " mismatch", KR(ret), K(table_name), "column_name", column.get_column_name(), \
+               "in_memory", column.is_##attr(), "hard_code", hard_code_column.is_##attr()); \
     } \
   }
+    if (OB_SUCC(ret)) {
+      if (column.get_column_name_str() != hard_code_column.get_column_name_str()) {
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("column_name mismatch", KR(ret), K(table_name),
+                 "in_memory", column.get_column_name(),
+                 "hard_code", hard_code_column.get_column_name());
+      }
+    }
 
     if (!ignore_column_id) {
       CMP_COLUMN_ATTR(column_id);

@@ -197,12 +197,12 @@ private:
 
 public:
   struct Node {
-    palf::SCN start_scn_;
-    palf::SCN commit_version_;
+    share::SCN start_scn_;
+    share::SCN commit_version_;
 
     Node() : start_scn_(), commit_version_() {}
 
-    Node(const palf::SCN start_scn, const palf::SCN commit_version)
+    Node(const share::SCN start_scn, const share::SCN commit_version)
       : start_scn_(start_scn), commit_version_(commit_version) {}
 
     bool operator==(const Node &rhs) const 
@@ -279,7 +279,7 @@ public:
   bool is_inited_;
 
   // The end_scn of the sstable will be used as the cache_version
-  palf::SCN cache_version_;
+  share::SCN cache_version_;
   
   mutable common::TCRWLock lock_;
 

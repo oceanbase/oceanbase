@@ -183,7 +183,7 @@ private:
 class SwitchToLeaderFunctor
 {
 public:
-  explicit SwitchToLeaderFunctor(palf::SCN &start_working_ts)
+  explicit SwitchToLeaderFunctor(share::SCN &start_working_ts)
   {
     start_working_ts_ = start_working_ts;
 
@@ -206,7 +206,7 @@ public:
   }
 
 private:
-  palf::SCN start_working_ts_;
+  share::SCN start_working_ts_;
 };
 
 class SwitchToFollowerGracefullyFunctor
@@ -260,7 +260,7 @@ private:
 class ResumeLeaderFunctor
 {
 public:
-  ResumeLeaderFunctor(palf::SCN &start_working_ts)
+  ResumeLeaderFunctor(share::SCN &start_working_ts)
   {
     start_working_ts_ = start_working_ts;
 
@@ -282,13 +282,13 @@ public:
   }
 
 private:
-  palf::SCN start_working_ts_;
+  share::SCN start_working_ts_;
 };
 
 class ReplayTxStartWorkingLogFunctor
 {
 public:
-  ReplayTxStartWorkingLogFunctor(palf::SCN &start_working_ts)
+  ReplayTxStartWorkingLogFunctor(share::SCN &start_working_ts)
   {
     start_working_ts_ = start_working_ts;
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
@@ -309,7 +309,7 @@ public:
   }
 
 private:
-  palf::SCN start_working_ts_;
+  share::SCN start_working_ts_;
 };
 
 class KillTxCtxFunctor
@@ -597,7 +597,7 @@ public:
   {
     min_prepare_version_.set_max();
   }
-  palf::SCN get_min_prepare_version() const { return min_prepare_version_; }
+  share::SCN get_min_prepare_version() const { return min_prepare_version_; }
   OPERATOR_V4(IterateMinPrepareVersionFunctor)
   {
     int tmp_ret = common::OB_SUCCESS;
@@ -607,7 +607,7 @@ public:
       TRANS_LOG(WARN, "invalid argument", K(tmp_ret), K(tx_id), "ctx", OB_P(tx_ctx));
     } else {
       bool is_prepared = false;
-      palf::SCN prepare_version;
+      share::SCN prepare_version;
       if (OB_TMP_FAIL(tx_ctx->get_prepare_version_if_prepared(is_prepared, prepare_version))) {
         TRANS_LOG(WARN, "get prepare version if prepared failed", K(tmp_ret), K(*tx_ctx));
       } else if (!is_prepared || prepare_version >= min_prepare_version_) {
@@ -619,7 +619,7 @@ public:
     return (OB_SUCCESS == tmp_ret);
   }
 private:
-  palf::SCN min_prepare_version_;
+  share::SCN min_prepare_version_;
 };
 
 class ObGetMinUndecidedLogTsFunctor
@@ -630,7 +630,7 @@ public:
     log_ts_.set_max();
   }
   ~ObGetMinUndecidedLogTsFunctor() {}
-  palf::SCN get_min_undecided_scn() const { return log_ts_; }
+  share::SCN get_min_undecided_scn() const { return log_ts_; }
   OPERATOR_V4(ObGetMinUndecidedLogTsFunctor)
   {
     int ret = OB_SUCCESS;
@@ -638,7 +638,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
     } else {
-      palf::SCN log_ts = tx_ctx->get_min_undecided_log_ts();
+      share::SCN log_ts = tx_ctx->get_min_undecided_log_ts();
       if (log_ts_ > log_ts) {
         log_ts_ = log_ts;
       }
@@ -646,7 +646,7 @@ public:
     return OB_SUCC(ret);
   }
 private:
-  palf::SCN log_ts_;
+  share::SCN log_ts_;
 };
 
 class IterateAllLSTxStatFunctor
@@ -792,16 +792,16 @@ public:
       ret = OB_INVALID_ARGUMENT;
     } else {
       ObTxCtxTableInfo ctx_info;
-      rec_log_ts_ = palf::SCN::min(rec_log_ts_, tx_ctx->get_rec_log_ts());
+      rec_log_ts_ = share::SCN::min(rec_log_ts_, tx_ctx->get_rec_log_ts());
     }
     if (OB_SUCCESS == ret) {
       bool_ret = true;
     }
     return bool_ret;
   }
-  palf::SCN get_rec_log_ts() { return rec_log_ts_; }
+  share::SCN get_rec_log_ts() { return rec_log_ts_; }
 private:
-  palf::SCN rec_log_ts_;
+  share::SCN rec_log_ts_;
 };
 
 class OnTxCtxTableFlushedFunctor
@@ -1082,7 +1082,7 @@ public:
     if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
       TRANS_LOG(WARN, "invalid argument", K(tx_id), KP(tx_ctx));
     } else {
-      palf::SCN start_scn = tx_ctx->get_start_log_ts();
+      share::SCN start_scn = tx_ctx->get_start_log_ts();
       if (start_scn < min_start_scn_) {
         min_start_scn_ = start_scn;
       }
@@ -1091,10 +1091,10 @@ public:
     return bool_ret;
   }
 
-  palf::SCN get_min_start_scn() { return min_start_scn_; }
+  share::SCN get_min_start_scn() { return min_start_scn_; }
 
 private:
-  palf::SCN min_start_scn_;
+  share::SCN min_start_scn_;
 };
 
 class IteratePartCtxAskSchedulerStatusFunctor

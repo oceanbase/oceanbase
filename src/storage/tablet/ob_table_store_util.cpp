@@ -23,10 +23,11 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_tablet_table_store.h"
 #include "observer/ob_server_struct.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 
 using namespace oceanbase;
+using namespace share;
 using namespace common;
 using namespace storage;
 using namespace blocksstable;
@@ -587,7 +588,7 @@ int ObMemtableArray::rebuild(common::ObIArray<ObTableHandleV2> &handle_array)
     LOG_ERROR("ObMemtableArray not inited", K(ret), KPC(this), K(handle_array));
   } else {
     ObITable *last_memtable = get_table(count() - 1);
-    palf::SCN end_scn = (NULL == last_memtable) ? palf::SCN::min_scn() : last_memtable->get_end_scn();
+    SCN end_scn = (NULL == last_memtable) ? SCN::min_scn() : last_memtable->get_end_scn();
 
     for (int64_t i = 0; OB_SUCC(ret) && i < handle_array.count(); ++i) {
       memtable::ObMemtable *memtable = nullptr;
@@ -655,7 +656,7 @@ int ObMemtableArray::find(
 }
 
 int ObMemtableArray::find(
-    const palf::SCN &start_scn,
+    const SCN &start_scn,
     const int64_t base_version,
     ObITable *&table,
     int64_t &mem_pos) const
@@ -670,7 +671,7 @@ int ObMemtableArray::find(
   } else if (OB_UNLIKELY(!start_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(start_scn), K(base_version));
-  } else if (palf::SCN::min_scn() == start_scn) {
+  } else if (SCN::min_scn() == start_scn) {
     mem_pos = 0;
     table = get_table(0);
   } else {

@@ -22,6 +22,7 @@
 namespace oceanbase
 {
 using namespace memtable;
+using namespace share;
 using namespace storage;
 namespace transaction
 {
@@ -39,11 +40,11 @@ memtable::ObIMemtable* ObOBJLockCallback::get_memtable() const
   return memtable_;
 }
 
-int ObOBJLockCallback::log_sync(const palf::SCN scn)
+int ObOBJLockCallback::log_sync(const SCN scn)
 {
   int ret = OB_SUCCESS;
   ObMemtableCtx *mem_ctx = static_cast<ObMemtableCtx*>(ctx_);
-  if (OB_UNLIKELY(palf::SCN::max_scn() == scn)) {
+  if (OB_UNLIKELY(SCN::max_scn() == scn)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("log ts should not be invalid", K(ret), K(scn), K(*this));
   } else if (OB_ISNULL(mem_ctx) || OB_ISNULL(lock_op_)) {

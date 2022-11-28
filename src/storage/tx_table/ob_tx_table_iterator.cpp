@@ -20,7 +20,7 @@
 #include "storage/tx_table/ob_tx_table.h"
 namespace oceanbase
 {
-using namespace palf;
+using namespace share;
 
 namespace storage
 {
@@ -562,7 +562,7 @@ int ObTxDataMemtableScanIterator::get_past_commit_scns_(
   return ret;
 }
 
-int ObTxDataMemtableScanIterator::merge_cur_and_past_commit_verisons_(const palf::SCN recycle_scn,
+int ObTxDataMemtableScanIterator::merge_cur_and_past_commit_verisons_(const SCN recycle_scn,
                                                                       ObCommitSCNsArray &cur_commit_scns,
                                                                       ObCommitSCNsArray &past_commit_scns,
                                                                       ObCommitSCNsArray &merged_commit_scns)
@@ -590,8 +590,8 @@ int ObTxDataMemtableScanIterator::merge_cur_and_past_commit_verisons_(const palf
   // here we merge the past commit versions and current commit versions. To keep merged array correct, the node in past
   // array whose start_scn is larger than the minimum start_scn in current array will be dropped. The reason is in this
   // issue: https://work.aone.alibaba-inc.com/issue/43389863
-  palf::SCN cur_min_start_scn = cur_arr.count() > 0 ? cur_arr.at(0).start_scn_ : palf::SCN::max_scn();
-  palf::SCN max_commit_version = palf::SCN::min_scn();
+  SCN cur_min_start_scn = cur_arr.count() > 0 ? cur_arr.at(0).start_scn_ : SCN::max_scn();
+  SCN max_commit_version = SCN::min_scn();
   if (OB_FAIL(
           merge_pre_process_node_(step_len, cur_min_start_scn, recycle_scn, past_arr, max_commit_version, merged_arr))) {
     STORAGE_LOG(WARN, "merge past commit versions failed.", KR(ret), K(past_arr), KPC(tx_data_memtable_));
@@ -618,10 +618,10 @@ int ObTxDataMemtableScanIterator::merge_cur_and_past_commit_verisons_(const palf
 }
 
 int ObTxDataMemtableScanIterator::merge_pre_process_node_(const int64_t step_len,
-                                                          const palf::SCN start_scn_limit,
-                                                          const palf::SCN recycle_scn,
+                                                          const SCN start_scn_limit,
+                                                          const SCN recycle_scn,
                                                           const ObIArray<ObCommitSCNsArray::Node> &data_arr,
-                                                          palf::SCN &max_commit_version,
+                                                          SCN &max_commit_version,
                                                           ObIArray<ObCommitSCNsArray::Node> &merged_arr)
 {
   int ret = OB_SUCCESS;

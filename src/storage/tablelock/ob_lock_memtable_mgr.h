@@ -61,7 +61,7 @@ public:
                    storage::ObTenantMetaMemMgr *t3m) override;
   virtual void destroy() override;
 
-  virtual int create_memtable(const palf::SCN clog_checkpoint_scn,
+  virtual int create_memtable(const share::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
                               const bool for_replay = false) override;
 

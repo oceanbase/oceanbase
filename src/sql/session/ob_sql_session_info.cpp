@@ -865,6 +865,9 @@ ObPlanCache *ObSQLSessionInfo::get_plan_cache()
         if (tenant_id > OB_SYS_TENANT_ID && tenant_id <= OB_MAX_RESERVED_TENANT_ID) {
           // all virtual tenants use sys tenant's plan cache
           tenant_id = OB_SYS_TENANT_ID;
+        } else if (OB_INVALID_TENANT_ID == tenant_id) {
+          // When it is used by threads regardless of tenants, it switches to the system tenant for execution.
+          tenant_id = OB_SYS_TENANT_ID;
         }
         plan_cache_ = plan_cache_manager_->get_or_create_plan_cache(tenant_id,
                                                                     pc_mem_conf);
@@ -1215,6 +1218,7 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
 // open_cursors is 0 to indicate a special state, no limit is set
 #define NEED_CHECK_SESS_OPEN_CURSORS_LIMIT(v) (0 == v ? false : true)
   int ret = OB_SUCCESS;
+  bool add_cursor_success = false;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(get_effective_tenant_id()));
   CK (tenant_config.is_valid());
   CK (OB_NOT_NULL(cursor));
@@ -1248,12 +1252,37 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
       LOG_WARN("fail insert ps id to hash map", K(id), K(*cursor), K(ret));
     } else {
       cursor->set_id(id);
+      add_cursor_success = true;
       if (lib::is_diagnose_info_enabled()) {
         EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
         EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
       }
       LOG_DEBUG("ps cursor: add cursor", K(ret), K(id), K(get_sessid()));
     }
+  }
+  if (!add_cursor_success && OB_NOT_NULL(cursor)) {
+    int64_t id = cursor->get_id();
+    int tmp_ret = close_cursor(cursor);
+    ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("close cursor fail when add cursor to sesssion.", K(ret), K(id), K(get_sessid()));
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::close_cursor(ObPLCursorInfo *&cursor)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(cursor)) {
+    int64_t id = cursor->get_id();
+    OZ (cursor->close(*this));
+    cursor->~ObPLCursorInfo();
+    get_cursor_allocator().free(cursor);
+    cursor = NULL;
+    LOG_DEBUG("close cursor", K(ret), K(id), K(get_sessid()));
+  } else {
+    LOG_DEBUG("close cursor is null", K(get_sessid()));
   }
   return ret;
 }

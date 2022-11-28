@@ -16,8 +16,8 @@
 #include "lib/ob_define.h"                      // Serialization
 #include "lib/ob_name_def.h"
 #include "lib/utility/ob_print_utils.h"         // Print*
+#include "share/scn.h"                                // SCN
 #include "lsn.h"                                // LSN
-#include "scn.h"                                // SCN
 
 namespace oceanbase
 {
@@ -45,7 +45,7 @@ public:
                const bool is_padding_log,
                const LogWriteBuf &log_write_buf,
                const int64_t data_len,
-               const SCN &max_scn,
+               const share::SCN &max_scn,
                const int64_t log_id,
                const LSN &committed_end_lsn,
                const int64_t &log_proposal_id,
@@ -55,7 +55,7 @@ public:
   LogGroupEntryHeader& operator=(const LogGroupEntryHeader &header);
   int32_t get_data_len() const { return group_size_; }
   int64_t get_accum_checksum() const { return accumulated_checksum_; }
-  const SCN &get_max_scn() const { return max_scn_; }
+  const share::SCN &get_max_scn() const { return max_scn_; }
   int64_t get_log_id() const { return log_id_; }
   const int64_t &get_log_proposal_id() const { return proposal_id_; }
   const LSN &get_committed_end_lsn() const { return committed_end_lsn_; }
@@ -86,7 +86,7 @@ public:
 
   int truncate(const char *buf,
                const int64_t data_len,
-               const SCN &cut_scn,
+               const share::SCN &cut_scn,
                const int64_t pre_accum_checksum);
 
   NEED_SERIALIZE_AND_DESERIALIZE;
@@ -133,7 +133,7 @@ private:
   // The max committed log offset before this log
   LSN committed_end_lsn_;
   // The max scn of this log
-  SCN max_scn_;
+  share::SCN max_scn_;
   // The accumulated checksum before this log, including this log,
   // not including log header
   int64_t accumulated_checksum_;

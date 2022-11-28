@@ -530,6 +530,7 @@ void ObSSTablePrinter::print_encoding_column_header(const ObColumnHeader *col_he
   print_line("is bit packing", col_header->is_bit_packing());
   print_line("is last var field", col_header->is_last_var_field());
   print_line("extend value index", col_header->extend_value_index_);
+  print_line("store object type", col_header->obj_type_);
   print_line("offset", col_header->offset_);
   print_line("length", col_header->length_);
   print_end_line();

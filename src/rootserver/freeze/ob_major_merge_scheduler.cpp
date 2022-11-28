@@ -418,7 +418,7 @@ int ObMajorMergeScheduler::generate_next_global_broadcast_scn(const int64_t expe
 {
   int ret = OB_SUCCESS;
 
-  palf::SCN new_global_broadcast_scn;
+  SCN new_global_broadcast_scn;
   // MERGE_STATUS: IDLE -> MERGING
   if (OB_FAIL(zone_merge_mgr_->generate_next_global_broadcast_scn(expected_epoch, new_global_broadcast_scn))) {
     LOG_WARN("fail to generate next broadcast scn", KR(ret), K(expected_epoch));
@@ -493,7 +493,7 @@ int ObMajorMergeScheduler::schedule_zones_to_merge(
 int ObMajorMergeScheduler::start_zones_merge(const ObZoneArray &to_merge, const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
-  palf::SCN global_broadcast_scn;
+  SCN global_broadcast_scn;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -527,7 +527,7 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
   ObAllZoneMergeProgress all_progress;
-  palf::SCN global_broadcast_scn;
+  SCN global_broadcast_scn;
   bool all_merged = true;
   ObSimpleFrozenStatus frozen_status;
 
@@ -568,11 +568,11 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
             LOG_INFO("zone merge not finish", "zone", progress->zone_, "unmerged_cnt", progress->unmerged_tablet_cnt_);
           }
 
-          palf::SCN cur_all_merged_scn;
-          const palf::SCN &ori_all_merged_scn = info.all_merged_scn();
-          palf::SCN last_merged_scn = (merged ? info.broadcast_scn() : info.last_merged_scn());
+          SCN cur_all_merged_scn;
+          const SCN &ori_all_merged_scn = info.all_merged_scn();
+          SCN last_merged_scn = (merged ? info.broadcast_scn() : info.last_merged_scn());
 
-          if (progress->smallest_snapshot_scn_ <= palf::SCN::min_scn()) {
+          if (progress->smallest_snapshot_scn_ <= SCN::min_scn()) {
             cur_all_merged_scn = info.broadcast_scn();
           } else {
             cur_all_merged_scn = progress->smallest_snapshot_scn_;
@@ -656,6 +656,8 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
       LOG_WARN("not inited", KR(ret));
     } else if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, infos))) {
       LOG_WARN("fail to get zone info", KR(ret));
+    } else if (global_info.is_merge_error()) {
+      LOG_WARN("should not update global merged scn, cuz is_merge_error is true", K(global_info));
     } else {
       if (global_info.last_merged_scn() != global_info.global_broadcast_scn()) {
         bool merged = true;

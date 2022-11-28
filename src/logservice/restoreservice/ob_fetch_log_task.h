@@ -16,7 +16,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "share/ob_ls_id.h"                   // ObLSID
 #include "logservice/palf/lsn.h"              // LSN
-#include "logservice/palf/scn.h"              // SCN
+#include "share/scn.h"              // SCN
 #include <cstdint>
 namespace oceanbase
 {
@@ -40,7 +40,7 @@ public:
 
 public:
   ObFetchLogTask(const share::ObLSID &id,
-                 const palf::SCN &pre_scn,
+                 const share::SCN &pre_scn,
                  const palf::LSN &lsn,
                  const int64_t size,
                  const int64_t proposal_id);
@@ -49,7 +49,7 @@ public:
   bool is_finish() const { return Status::FINISH == status_; }
   bool is_to_end() const { return Status::TO_END == status_; }
   void mark_to_end() { status_ = Status::TO_END; }
-  int update_cur_lsn_scn(const palf::LSN &lsn, const palf::SCN &max_submit_scn, const palf::SCN &max_fetch_scn);
+  int update_cur_lsn_scn(const palf::LSN &lsn, const share::SCN &max_submit_scn, const share::SCN &max_fetch_scn);
   void set_to_end() { status_ = Status::TO_END; }
   void set_stale() { status_ = Status::STALE; }
   TO_STRING_KV(K_(id), K_(proposal_id), K_(pre_scn), K_(start_lsn), K_(cur_lsn), K_(end_lsn),
@@ -59,12 +59,12 @@ public:
   share::ObLSID id_;
   // to distinguish stale tasks which is generated in previous leader
   int64_t proposal_id_;
-  palf::SCN pre_scn_;    // heuristic log scn to locate piece, may be imprecise one
+  share::SCN pre_scn_;    // heuristic log scn to locate piece, may be imprecise one
   palf::LSN start_lsn_;
   palf::LSN cur_lsn_;
   palf::LSN end_lsn_;
-  palf::SCN max_fetch_scn_;     // 拉取日志最大log scn
-  palf::SCN max_submit_scn_;    // 提交日志最大log cn
+  share::SCN max_fetch_scn_;     // 拉取日志最大log scn
+  share::SCN max_submit_scn_;    // 提交日志最大log cn
   Status status_;
 };
 

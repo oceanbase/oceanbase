@@ -19,6 +19,7 @@
 namespace oceanbase
 {
 using namespace common;
+using namespace share;
 namespace transaction
 {
 // 1. follower if readable depend on follower readable snapshot version and weak read cluster version
@@ -44,9 +45,9 @@ int64_t ObWeakReadUtil::replica_keepalive_interval()
 // 2. all partitions offline
 // 3. all partitions delay too much or in invalid status
 // 4. all partitions in migrating and readable snapshot version delay more than 500ms
-palf::SCN ObWeakReadUtil::generate_min_weak_read_version(const uint64_t tenant_id)
+SCN ObWeakReadUtil::generate_min_weak_read_version(const uint64_t tenant_id)
 {
-  palf::SCN base_version_when_no_valid_partition;
+  SCN base_version_when_no_valid_partition;
   int64_t max_stale_time = 0;
   bool tenant_config_exist = false;
   // generating min weak version version should statisfy following constraint

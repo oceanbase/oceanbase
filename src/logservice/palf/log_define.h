@@ -26,6 +26,11 @@ namespace common
 {
 class ObIAllocator;
 }
+
+namespace share
+{
+class SCN;
+}
 namespace palf
 {
 #define TMP_SUFFIX ".tmp"
@@ -37,7 +42,6 @@ typedef uint64_t block_id_t ;
 typedef uint64_t offset_t;
 constexpr int64_t INVALID_PALF_ID = -1;
 class LSN;
-class SCN;
 class LogWriteBuf;
 
 // ==================== palf env start =============================
@@ -60,7 +64,7 @@ constexpr offset_t LOG_DIO_ALIGN_SIZE = 4 * 1024;
 constexpr offset_t LOG_DIO_ALIGNED_BUF_SIZE = MAX_LOG_BUFFER_SIZE + LOG_DIO_ALIGN_SIZE;
 constexpr block_id_t LOG_MAX_BLOCK_ID = UINT64_MAX/PALF_BLOCK_SIZE - 1;
 constexpr block_id_t LOG_INVALID_BLOCK_ID = LOG_MAX_BLOCK_ID + 1;
-typedef common::ObFixedArray<SCN, ObIAllocator> SCNArray;
+typedef common::ObFixedArray<share::SCN, ObIAllocator> SCNArray;
 typedef common::ObFixedArray<LSN, ObIAllocator> LSNArray;
 typedef common::ObFixedArray<LogWriteBuf *, ObIAllocator> LogWriteBufArray;
 // ==================== block and log end ===========================

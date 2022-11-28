@@ -123,7 +123,7 @@ public:
 
   // TIPS:
   //  - only for tx data table to find min log ts.
-  int get_min_end_scn_for_ls(const share::ObLSID &ls_id, palf::SCN &end_scn);
+  int get_min_end_scn_for_ls(const share::ObLSID &ls_id, share::SCN &end_scn);
 
   // garbage collector for sstable and memtable.
   int push_table_into_gc_queue(ObITable *table, const ObITable::TableType table_type);

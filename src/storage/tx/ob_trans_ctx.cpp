@@ -197,7 +197,7 @@ ObITsMgr *ObTransCtx::get_ts_mgr_()
   return trans_service_->get_ts_mgr();
 }
 
-int ObTransCtx::defer_commit_callback_(const int retcode, const palf::SCN commit_version)
+int ObTransCtx::defer_commit_callback_(const int retcode, const SCN commit_version)
 {
   int ret = OB_SUCCESS;
   if (!commit_cb_.is_enabled()) {

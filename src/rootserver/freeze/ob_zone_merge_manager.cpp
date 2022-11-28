@@ -804,9 +804,12 @@ int ObZoneMergeManagerBase::update_global_merge_info_after_merge(const int64_t e
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(tenant_id));
+  } else if (global_merge_info_.is_in_verifying_status()) {
+    LOG_INFO("already in verifying status, no need to update global merge status again", K_(tenant_id),
+             "global merge status", global_merge_info_.merge_status_);
   } else if (global_merge_info_.is_merge_error()) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("should not continue checking checksum, cuz is_merge_error is true", KR(ret), K_(global_merge_info));
+    LOG_WARN("should not update global merge status, cuz is_merge_error is true", KR(ret), K_(global_merge_info));
   } else {
     if (OB_FAIL(trans.start(proxy_, meta_tenant_id))) {
       LOG_WARN("fail to start transaction", KR(ret), K_(tenant_id), K(meta_tenant_id));

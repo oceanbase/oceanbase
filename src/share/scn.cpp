@@ -13,9 +13,10 @@
 #include "scn.h"
 #include "share/ob_table_range.h"
 #include "lib/utility/ob_macro_utils.h"         // OB_UNLIKELY
+#include "lib/json/ob_yson.h"
 namespace oceanbase
 {
-namespace palf
+namespace share
 {
 
 void SCN::reset()
@@ -279,7 +280,7 @@ int SCN::convert_for_gts(int64_t ts_ns)
   return ret;
 }
 
-int SCN::convert_for_lsn_allocator(uint64_t scn_val)
+int SCN::convert_for_logservice(uint64_t scn_val)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_MAX_SCN_TS_NS < scn_val)) {
@@ -337,7 +338,7 @@ uint64_t SCN::get_val_for_gts() const
   return val_;
 }
 
-uint64_t SCN::get_val_for_lsn_allocator() const
+uint64_t SCN::get_val_for_logservice() const
 {
   return val_;
 }
@@ -525,5 +526,5 @@ int64_t SCN::get_serialize_size(void) const
   return size;
 }
 
-} // end namespace palf
+} // end namespace share
 } // end namespace oceanbase

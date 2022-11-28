@@ -18,11 +18,12 @@
 #include "ob_timestamp_access.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
 
+using namespace oceanbase::share;
 namespace transaction
 {
 
@@ -170,7 +171,7 @@ int ObTimestampService::switch_to_leader()
   if (OB_FAIL(check_and_fill_ls())) {
     TRANS_LOG(WARN, "ls set fail", K(ret));
   } else {
-    palf::SCN version;
+    SCN version;
     if (OB_FAIL(ls_->get_log_handler()->get_max_scn(version))) {
       TRANS_LOG(WARN, "get max ts fail", K(ret));
     } else {

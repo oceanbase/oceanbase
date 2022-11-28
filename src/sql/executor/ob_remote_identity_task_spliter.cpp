@@ -62,7 +62,7 @@ int ObRemoteIdentityTaskSpliter::get_next_task(ObTaskInfo *&task)
     // t1 union t1这种情况， t1(p0) union t2(p0)这种情况，等等，
     // 都是remote模式，但table_loc_list的count可能大于1
     // 优化器必须保证：remote模式下，所有表的location都是一致的，并且都是单分区。
-    ObDASTabletLoc *first_tablet_loc = first_table_loc->tablet_locs_.get_first();
+    ObDASTabletLoc *first_tablet_loc = first_table_loc->get_first_tablet_loc();
     if (OB_ISNULL(ptr = allocator_->alloc(sizeof(ObTaskInfo)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("fail to alloc ObTaskInfo", K(ret));

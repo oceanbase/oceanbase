@@ -23,11 +23,11 @@
 #include "election/interface/election_msg_handler.h"
 #include "election/message/election_message.h"
 #include "election/algorithm/election_impl.h"
+#include "share/scn.h"
 #include "palf_callback_wrapper.h"
 #include "log_engine.h"                      // LogEngine
 #include "log_meta.h"
 #include "lsn.h"
-#include "scn.h"
 #include "log_config_mgr.h"
 #include "log_mode_mgr.h"
 #include "log_reconfirm.h"
@@ -74,12 +74,12 @@ struct PalfStat {
   bool allow_vote_;
   LogReplicaType replica_type_;
   LSN begin_lsn_;
-  SCN begin_scn_;
+  share::SCN begin_scn_;
   LSN base_lsn_;
   LSN end_lsn_;
-  SCN end_scn_;
+  share::SCN end_scn_;
   LSN max_lsn_;
-  SCN max_scn_;
+  share::SCN max_scn_;
   TO_STRING_KV(K_(self), K_(palf_id), K_(role), K_(log_proposal_id), K_(config_version),
       K_(access_mode), K_(paxos_member_list), K_(paxos_replica_num), K_(allow_vote),
       K_(replica_type), K_(base_lsn), K_(end_lsn), K_(end_scn), K_(max_lsn));
@@ -182,9 +182,9 @@ public:
   virtual int submit_log(const PalfAppendOptions &opts,
                          const char *buf,
                          const int64_t buf_len,
-                         const SCN &ref_scn,
+                         const share::SCN &ref_scn,
                          LSN &lsn,
-                         SCN &scn) = 0;
+                         share::SCN &scn) = 0;
   // 提交group_log到palf
   // 使用场景：备库leader处理从主库收到的日志
   // @param [in] opts, 提交日志的一些可选项参数，具体参见PalfAppendOptions的定义
@@ -403,7 +403,7 @@ public:
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
   // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
   // - others: bug
-  virtual int locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn) = 0;
+  virtual int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn) = 0;
 
   // @desc: query coarse scn by lsn, that means there is a LogGroupEntry in disk,
   // its lsn and scn are result_lsn and result_scn, and result_lsn <= lsn.
@@ -419,12 +419,12 @@ public:
   // - OB_INVALID_ARGUMENT
   // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
   // - others: bug
-  virtual int locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn) = 0;
+  virtual int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn) = 0;
   virtual int get_begin_lsn(LSN &lsn) const = 0;
-  virtual int get_begin_scn(SCN &scn) = 0;
+  virtual int get_begin_scn(share::SCN &scn) = 0;
   virtual int get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info) = 0;
 
-  virtual int get_min_block_id_min_scn(block_id_t &block_id, SCN &scn) = 0;
+  virtual int get_min_block_info_for_gc(block_id_t &min_block_id, share::SCN &max_scn) = 0;
   //begin lsn                          base lsn                                end lsn
   //   │                                │                                         │
   //   │                                │                                         │
@@ -440,8 +440,8 @@ public:
   // return the block length which the previous data was committed
   virtual const LSN get_end_lsn() const = 0;
   virtual LSN get_max_lsn() const = 0;
-  virtual const SCN get_max_scn() const = 0;
-  virtual const SCN get_end_scn() const = 0;
+  virtual const share::SCN get_max_scn() const = 0;
+  virtual const share::SCN get_end_scn() const = 0;
   virtual int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const = 0;
   virtual int64_t get_total_used_disk_space() const = 0;
   virtual const LSN &get_base_lsn_used_for_block_gc() const = 0;
@@ -458,7 +458,7 @@ public:
   virtual int advance_reuse_lsn(const LSN &flush_log_end_lsn) = 0;
   virtual int inner_append_log(const LSN &lsn,
                                const LogWriteBuf &write_buf,
-                               const SCN &scn) = 0;
+                               const share::SCN &scn) = 0;
   virtual int inner_append_log(const LSNArray &lsn_array,
                                const LogWriteBufArray &write_buf_array,
                                const SCNArray &scn_array) = 0;
@@ -536,7 +536,7 @@ public:
   virtual int change_access_mode(const int64_t proposal_id,
                                  const int64_t mode_version,
                                  const AccessMode &access_mode,
-                                 const SCN &ref_scn) = 0;
+                                 const share::SCN &ref_scn) = 0;
   virtual int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const = 0;
   virtual int get_access_mode(AccessMode &access_mode) const = 0;
   virtual int handle_committed_info(const common::ObAddr &server,
@@ -558,7 +558,7 @@ public:
                                          PalfBufferIterator &iterator) = 0;
   virtual int alloc_palf_group_buffer_iterator(const LSN &offset,
                                                PalfGroupBufferIterator &iterator) = 0;
-  virtual int alloc_palf_group_buffer_iterator(const SCN &scn,
+  virtual int alloc_palf_group_buffer_iterator(const share::SCN &scn,
                                                PalfGroupBufferIterator &iterator) = 0;
   // ===================== Iterator end =======================
 
@@ -626,9 +626,9 @@ public:
   int submit_log(const PalfAppendOptions &opts,
                  const char *buf,
                  const int64_t buf_len,
-                 const SCN &ref_scn,
+                 const share::SCN &ref_scn,
                  LSN &lsn,
-                 SCN &scn) override final;
+                 share::SCN &scn) override final;
 
   int submit_group_log(const PalfAppendOptions &opts,
                        const LSN &lsn,
@@ -677,8 +677,8 @@ public:
   int disable_sync();
   bool is_sync_enabled() const;
   int advance_base_info(const PalfBaseInfo &palf_base_info, const bool is_rebuild) override final;
-  int locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn) override final;
-  int locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn) override final;
+  int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn) override final;
+  int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn) override final;
   void set_deleted();
   int disable_vote() override final;
   int enable_vote() override final;
@@ -692,13 +692,13 @@ public:
   int change_access_mode(const int64_t proposal_id,
                          const int64_t mode_version,
                          const AccessMode &access_mode,
-                         const SCN &ref_scn) override final;
+                         const share::SCN &ref_scn) override final;
   int get_access_mode(int64_t &mode_version, AccessMode &access_mode) const override final;
   int get_access_mode(AccessMode &access_mode) const override final;
   // =========================== Iterator start ============================
   int alloc_palf_buffer_iterator(const LSN &offset, PalfBufferIterator &iterator) override final;
   int alloc_palf_group_buffer_iterator(const LSN &offset, PalfGroupBufferIterator &iterator) override final;
-  int alloc_palf_group_buffer_iterator(const SCN &scn, PalfGroupBufferIterator &iterator) override final;
+  int alloc_palf_group_buffer_iterator(const share::SCN &scn, PalfGroupBufferIterator &iterator) override final;
   // =========================== Iterator end ============================
 
   // ==================== Callback start ======================
@@ -715,9 +715,9 @@ public:
   // ==================== Callback end ========================
 public:
   int get_begin_lsn(LSN &lsn) const;
-  int get_begin_scn(SCN &scn);
+  int get_begin_scn(share::SCN &scn);
   int get_base_info(const LSN &base_lsn, PalfBaseInfo &base_info);
-  int get_min_block_id_min_scn(block_id_t &block_id, SCN &scn) override final;
+  int get_min_block_info_for_gc(block_id_t &min_block_id, share::SCN &max_scn) override final;
   // return the block length which the previous data was committed
   const LSN get_end_lsn() const override final
   {
@@ -731,12 +731,12 @@ public:
     return sw_.get_max_lsn();
   }
 
-  const SCN get_max_scn() const override final
+  const share::SCN get_max_scn() const override final
   {
     return sw_.get_max_scn();
   }
 
-  const SCN get_end_scn() const override final
+  const share::SCN get_end_scn() const override final
   {
     // 基于实现复杂度考虑，直接用last_slide_scn作为end_scn
     // 否则需要在match_lsn_map中额外维护scn
@@ -757,7 +757,7 @@ public:
   int advance_reuse_lsn(const LSN &flush_log_end_lsn);
   int inner_append_log(const LSN &lsn,
                        const LogWriteBuf &write_buf,
-                       const SCN &scn) override final;
+                       const share::SCN &scn) override final;
   int inner_append_log(const LSNArray &lsn_array,
                        const LogWriteBufArray &write_buf_array,
                        const SCNArray &scn_array);
@@ -890,11 +890,11 @@ private:
                                    const int64_t accepted_mode_pid);
   int try_update_proposal_id_(const common::ObAddr &server,
                               const int64_t &proposal_id);
-  int get_binary_search_range_(const SCN &scn,
+  int get_binary_search_range_(const share::SCN &scn,
                                block_id_t &min_block_id,
                                block_id_t &max_block_id,
                                block_id_t &result_block_id);
-  void inc_update_last_locate_block_scn_(const block_id_t &block_id, const SCN &scn);
+  void inc_update_last_locate_block_scn_(const block_id_t &block_id, const share::SCN &scn);
   int can_change_config_(const LogConfigChangeArgs &args, int64_t &proposal_id);
   int check_args_and_generate_config_(const LogConfigChangeArgs &args,
                                       bool &is_already_finished,
@@ -993,7 +993,7 @@ private:
   PalfLocationCacheCb *lc_cb_;
   // ======optimization for locate_by_scn_coarsely=========
   mutable SpinLock last_locate_lock_;
-  SCN last_locate_scn_;
+  share::SCN last_locate_scn_;
   block_id_t last_locate_block_;
   // ======optimization for locate_by_scn_coarsely=========
   int64_t cannot_recv_log_warn_time_;

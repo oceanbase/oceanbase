@@ -271,7 +271,7 @@ TEST_F(TestElectionWithPriority, not_change_leader_because_follower_memership_ve
   ASSERT_EQ(stop_to_be_follower_count, 0);
   // 1的membership version再加1，同时让2的log_ts超过比较阈值
   election_group[1]->proposer_.memberlist_with_states_.p_impl_->member_list_.membership_version_.config_seq_ += 1;
-  v_pri[2].priority_tuple_.element<1>().scn_.convert_for_lsn_allocator(100 * 1000 * 1000 * 1000L);// 此时并不会触发切主
+  v_pri[2].priority_tuple_.element<1>().scn_.convert_for_logservice(100 * 1000 * 1000 * 1000L);// 此时并不会触发切主
   this_thread::sleep_for(chrono::seconds(1));// 等待切主
   ASSERT_EQ(election_group[1]->proposer_.role_, ObRole::LEADER);
   ASSERT_EQ(leader_takeover_times, 1);

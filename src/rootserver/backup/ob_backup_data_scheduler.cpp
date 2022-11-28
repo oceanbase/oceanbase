@@ -646,7 +646,7 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
   return ret;
 }
 
-int ObBackupDataScheduler::get_scn(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, palf::SCN &scn)
+int ObBackupDataScheduler::get_scn(common::ObISQLClient &sql_proxy, const uint64_t tenant_id, SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
@@ -660,7 +660,7 @@ int ObBackupDataScheduler::get_scn(common::ObISQLClient &sql_proxy, const uint64
     // for backup and restore, we keep the scn round up to microseconds that keep the conversion accuracy is consistent.
     // meanwhile, in order to solve that boundary is not included in the restore, scn + 1;
     // 1658475549197665190 --> 1658475549197666000
-    palf::SCN tmp_scn;
+    SCN tmp_scn;
     int64_t ts;
     ts = tenant_info.get_standby_scn().convert_to_ts();
     if (OB_FAIL(tmp_scn.convert_from_ts(ts))) {
@@ -1411,8 +1411,8 @@ int ObUserTenantBackupJobMgr::insert_backup_set_task_(common::ObISQLClient &sql_
     backup_set_task.start_ts_ = job_attr_->start_ts_;
     backup_set_task.meta_turn_id_ = 1;
     backup_set_task.data_turn_id_ = 1;
-    backup_set_task.end_scn_ = palf::SCN::min_scn();
-    backup_set_task.user_ls_start_scn_ = palf::SCN::min_scn();
+    backup_set_task.end_scn_ = SCN::min_scn();
+    backup_set_task.user_ls_start_scn_ = SCN::min_scn();
     if (OB_FAIL(lease_service_->check_lease())) {
       LOG_WARN("fail to check leader", K(ret));
     } else if (OB_FAIL(ObBackupTaskOperator::insert_backup_task(sql_proxy, backup_set_task))) {
@@ -1480,8 +1480,8 @@ int ObUserTenantBackupJobMgr::fill_backup_set_desc_(
     backup_set_desc.file_status_ = ObBackupFileStatus::BACKUP_FILE_COPYING;
     backup_set_desc.result_ = job_attr.result_;
     backup_set_desc.encryption_mode_ = job_attr.encryption_mode_;
-    backup_set_desc.start_replay_scn_ = palf::SCN::min_scn();
-    backup_set_desc.min_restore_scn_ = palf::SCN::min_scn();
+    backup_set_desc.start_replay_scn_ = SCN::min_scn();
+    backup_set_desc.min_restore_scn_ = SCN::min_scn();
     backup_set_desc.backup_compatible_ = ObBackupSetFileDesc::Compatible::COMPATIBLE_VERSION_1;
     backup_set_desc.tenant_compatible_ = ObClusterVersion::get_instance().get_cluster_version();
     backup_set_desc.plus_archivelog_ = job_attr.plus_archivelog_;

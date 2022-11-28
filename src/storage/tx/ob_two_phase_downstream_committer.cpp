@@ -260,7 +260,7 @@ int ObTxCycleTwoPhaseCommitter::retransmit_upstream_msg_(const ObTxState state)
       // if xa trans, prepare redo response is required
       msg_type = ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REDO_RESP;
     } else {
-      // do nothing
+      need_respond = false;
     }
   }
   case ObTxState::PREPARE: {
@@ -754,15 +754,19 @@ int ObTxCycleTwoPhaseCommitter::apply_abort_log()
   const ObTxState state = get_downstream_state();
   const ObTxState upstream_state = get_upstream_state();
 
+  if (ObTxState::ABORT != upstream_state) {
+    TRANS_LOG(WARN, "meet tx whose upstrean state is not abort", K(ret), KPC(this));
+  }
+
   if (ObTxState::INIT != state
       && ObTxState::REDO_COMPLETE != state
       && ObTxState::PREPARE != state) {
     // We will never apply abort under commit and clear state
     ret = OB_TRANS_INVALID_STATE;
     TRANS_LOG(ERROR, "apply abort with wrong state", K(state));
-  } else if (ObTxState::ABORT != upstream_state) {
-    ret  = OB_TRANS_INVALID_STATE;
-    TRANS_LOG(ERROR, "apply invalid log", K(ret), K(*this), K(upstream_state));
+  // } else if (ObTxState::ABORT != upstream_state) {
+  //   ret  = OB_TRANS_INVALID_STATE;
+  //   TRANS_LOG(ERROR, "apply invalid log", K(ret), K(*this), K(upstream_state));
   } else if (OB_FAIL(on_abort())) {
     TRANS_LOG(ERROR, "on abort failed", K(ret), K(*this), K(state));
   } else if (OB_FAIL(set_downstream_state(ObTxState::ABORT))) {

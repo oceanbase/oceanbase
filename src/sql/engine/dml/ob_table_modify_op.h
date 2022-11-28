@@ -93,7 +93,6 @@ public:
   void set_table_location_uncertain(bool v) { table_location_uncertain_ = v; }
   bool is_table_location_uncertain() const { return table_location_uncertain_; }
   inline bool use_dist_das() const { return use_dist_das_; }
-  inline bool has_instead_of_trigger() const { return has_instead_of_trigger_; }
 public:
   // Expr frame info for partial expr serialization. (serialize is not need for it self)
   ObExprFrameInfo *expr_frame_info_;
@@ -107,7 +106,7 @@ public:
       uint64_t is_pdml_index_maintain_          : 1; // 表示当前dml算子是否是pdml中用于维护索引操作的算子（index maintain）
       uint64_t table_location_uncertain_        : 1; // 目标访问分区位置不确定，需要全表访问
       uint64_t use_dist_das_                    : 1;
-      uint64_t has_instead_of_trigger_          : 1;
+      uint64_t has_instead_of_trigger_          : 1; // abandoned, don't use again
       uint64_t is_pdml_update_split_            : 1; // 标记delete, insert op是否由update拆分而来
       uint64_t reserved_                        : 56;
     };

@@ -22,6 +22,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace storage
 {
 ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
@@ -51,7 +52,7 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     original_size_(0),
     max_merged_trans_version_(0),
     ddl_scn_(),
-    filled_tx_scn_(palf::SCN::min_scn()),
+    filled_tx_scn_(SCN::min_scn()),
     contain_uncommitted_row_(false),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     encrypt_id_(0),

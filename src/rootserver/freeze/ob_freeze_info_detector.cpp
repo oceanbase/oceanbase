@@ -249,7 +249,7 @@ int ObFreezeInfoDetector::can_start_work(bool &can_work)
     if (is_gc_scn_inited_) {
       // ...
     } else {
-      palf::SCN snapshot_gc_scn;
+      SCN snapshot_gc_scn;
       ObGlobalStatProxy global_stat_proxy(*sql_proxy_, tenant_id_);
       if (OB_FAIL(global_stat_proxy.get_snapshot_gc_scn(snapshot_gc_scn))) {
         LOG_WARN("can not get snapshot gc ts", KR(ret), K_(tenant_id));

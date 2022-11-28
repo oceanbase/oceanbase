@@ -1325,7 +1325,7 @@ int ObBackupTaskOperator::advance_task_status(
     const ObBackupSetTaskAttr &set_task_attr,
     const ObBackupStatus &next_status, 
     const int result,
-    const palf::SCN &end_scn,
+    const SCN &end_scn,
     const int64_t end_ts)
 {
   int ret = OB_SUCCESS;
@@ -1471,7 +1471,7 @@ int ObBackupTaskOperator::update_meta_turn_id(common::ObISQLClient &proxy, const
 }
 
 int ObBackupTaskOperator::update_user_ls_start_scn(common::ObISQLClient &proxy, const int64_t task_id, 
-    const uint64_t tenant_id, const palf::SCN &scn)
+    const uint64_t tenant_id, const SCN &scn)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;

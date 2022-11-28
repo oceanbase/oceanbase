@@ -17,7 +17,7 @@
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/ob_define.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/ob_ls_id.h"
 #include "storage/ob_i_table.h"
 
@@ -37,19 +37,19 @@ public:
   ObTabletDDLKvMgr();
   ~ObTabletDDLKvMgr();
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
-  int ddl_start(const ObITable::TableKey &table_key, const palf::SCN &start_scn, const int64_t cluster_version, const palf::SCN &checkpoint_scn = palf::SCN::invalid_scn());
-  int ddl_prepare(const palf::SCN &start_scn, const palf::SCN &commit_scn, const uint64_t table_id = 0, const int64_t execution_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
-  int ddl_commit(const palf::SCN &start_scn, const palf::SCN &prepare_scn, const bool is_replay); // try wait build major sstable
-  int wait_ddl_commit(const palf::SCN &start_scn, const palf::SCN &prepare_scn);
+  int ddl_start(const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t cluster_version, const share::SCN &checkpoint_scn = share::SCN::invalid_scn());
+  int ddl_prepare(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id = 0, const int64_t execution_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
+  int ddl_commit(const share::SCN &start_scn, const share::SCN &prepare_scn, const bool is_replay); // try wait build major sstable
+  int wait_ddl_commit(const share::SCN &start_scn, const share::SCN &prepare_scn);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
-  int get_or_create_ddl_kv(const palf::SCN &scn, ObDDLKVHandle &kv_handle); // used in active ddl kv guard
-  int get_freezed_ddl_kv(const palf::SCN &freeze_scn, ObDDLKVHandle &kv_handle); // locate ddl kv with exeact freeze log ts
+  int get_or_create_ddl_kv(const share::SCN &scn, ObDDLKVHandle &kv_handle); // used in active ddl kv guard
+  int get_freezed_ddl_kv(const share::SCN &freeze_scn, ObDDLKVHandle &kv_handle); // locate ddl kv with exeact freeze log ts
   int get_ddl_kvs(const bool frozen_only, ObDDLKVsHandle &ddl_kvs_handle); // get all freeze ddl kvs
-  int freeze_ddl_kv(const palf::SCN &freeze_scn = palf::SCN::invalid_scn()); // freeze the active ddl kv, when memtable freeze or ddl commit
-  int release_ddl_kvs(const palf::SCN &rec_scn); // release persistent ddl kv, used in ddl merge task for free ddl kv
+  int freeze_ddl_kv(const share::SCN &freeze_scn = share::SCN::invalid_scn()); // freeze the active ddl kv, when memtable freeze or ddl commit
+  int release_ddl_kvs(const share::SCN &rec_scn); // release persistent ddl kv, used in ddl merge task for free ddl kv
   int check_has_effective_ddl_kv(bool &has_ddl_kv); // used in ddl log handler for checkpoint
-  int get_ddl_kv_min_scn(palf::SCN &min_scn); // for calculate rec_scn of ls
-  palf::SCN get_start_scn() const { return start_scn_; }
+  int get_ddl_kv_min_scn(share::SCN &min_scn); // for calculate rec_scn of ls
+  share::SCN get_start_scn() const { return start_scn_; }
   bool is_started() const { return start_scn_.is_valid(); }
   int set_commit_success();
   bool is_commit_success() const { return is_commit_success_; }
@@ -69,8 +69,8 @@ private:
   int alloc_ddl_kv(ObDDLKV *&kv);
   void free_ddl_kv(const int64_t idx);
   int get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle);
-  void try_get_ddl_kv_unlock(const palf::SCN &scn, ObDDLKV *&kv);
-  int update_tablet(const palf::SCN &start_scn, const int64_t snapshot_version, const palf::SCN &ddl_checkpoint_scn);
+  void try_get_ddl_kv_unlock(const share::SCN &scn, ObDDLKV *&kv);
+  int update_tablet(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
   void destroy();
 private:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 64;
@@ -80,8 +80,8 @@ private:
   common::ObTabletID tablet_id_;
   ObITable::TableKey table_key_;
   int64_t cluster_version_;
-  palf::SCN start_scn_;
-  palf::SCN max_freeze_scn_;
+  share::SCN start_scn_;
+  share::SCN max_freeze_scn_;
   uint64_t table_id_; // used for ddl checksum
   int64_t execution_id_; // used for ddl checksum
   int64_t ddl_task_id_; // used for ddl checksum

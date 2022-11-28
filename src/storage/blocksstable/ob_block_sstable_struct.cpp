@@ -18,7 +18,7 @@
 #include "lib/utility/ob_serialization_helper.h"
 #include "lib/utility/serialization.h"
 #include "lib/utility/utility.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "ob_block_manager.h"
 #include "ob_data_buffer.h"
 #include "share/config/ob_server_config.h"

@@ -401,7 +401,7 @@ int ObFreezeInfoProxy::construct_frozen_status_(
 int ObFreezeInfoProxy::get_freeze_schema_info(
     ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
-    const palf::SCN &frozen_scn,
+    const SCN &frozen_scn,
     TenantIdAndSchemaVersion &schema_version_info)
 {
   int ret = OB_SUCCESS;

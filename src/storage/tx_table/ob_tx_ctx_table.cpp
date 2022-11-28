@@ -343,7 +343,7 @@ int ObTxCtxTable::check_with_tx_data(const transaction::ObTransID tx_id, ObITxDa
   return ret;
 }
 
-int ObTxCtxTable::get_min_start_scn(palf::SCN &min_start_scn)
+int ObTxCtxTable::get_min_start_scn(SCN &min_start_scn)
 {
   int ret = get_ls_tx_ctx_mgr()->get_min_start_scn(min_start_scn);
   return ret;

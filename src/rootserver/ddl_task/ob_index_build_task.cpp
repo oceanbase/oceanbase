@@ -17,7 +17,7 @@
 #include "share/ob_ddl_checksum.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "rootserver/ob_root_service.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -524,7 +524,7 @@ int ObIndexBuildTask::wait_trans_end()
 int ObIndexBuildTask::hold_snapshot(const int64_t snapshot)
 {
   int ret = OB_SUCCESS;
-  palf::SCN snapshot_scn;
+  SCN snapshot_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));

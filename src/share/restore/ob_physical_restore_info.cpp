@@ -329,7 +329,7 @@ void ObPhysicalRestoreJob::reset()
   status_ = PhysicalRestoreStatus::PHYSICAL_RESTORE_MAX_STATUS;
   comment_.reset();
   restore_start_ts_ = 0;
-  restore_scn_ = palf::SCN::min_scn();
+  restore_scn_ = SCN::min_scn();
   post_cluster_version_ = 0;
   source_cluster_version_ = 0;
   restore_option_.reset();

@@ -22,7 +22,7 @@
 #include "lib/queue/ob_fixed_queue.h"
 #include "common/storage/ob_freeze_define.h"
 #include "share/ob_cluster_version.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "share/ob_tenant_id_schema_version.h"
 
 namespace oceanbase
@@ -52,7 +52,7 @@ struct ObSimpleFrozenStatus
       schema_version_(INVALID_SCHEMA_VERSION), 
       cluster_version_(0)
   {}
-  ObSimpleFrozenStatus(const palf::SCN &frozen_scn,
+  ObSimpleFrozenStatus(const SCN &frozen_scn,
                        const int64_t schema_version,
                        const int64_t cluster_version)
     : schema_version_(schema_version),
@@ -79,7 +79,7 @@ struct ObSimpleFrozenStatus
   {
     schema_version_ = ORIGIN_SCHEMA_VERSION;
     cluster_version_ = cluster_version;
-    frozen_scn_ = palf::SCN::base_scn();
+    frozen_scn_ = share::SCN::base_scn();
   }
 
   bool is_valid() const
@@ -106,7 +106,7 @@ struct ObSimpleFrozenStatus
   static const uint64_t INITIAL_FROZEN_SCN_VAL = 1;
   static const uint64_t INVALID_FROZEN_SCN_VAL = UINT64_MAX;
 
-  palf::SCN frozen_scn_;
+  SCN frozen_scn_;
   int64_t schema_version_;
   int64_t cluster_version_;
 
@@ -121,7 +121,7 @@ public:
 
 public:
   int get_freeze_info(common::ObISQLClient &sql_proxy,
-                      const palf::SCN &frozen_scn,
+                      const SCN &frozen_scn,
                       ObSimpleFrozenStatus &frozen_status);
 
   // not include initial_freeze_info
@@ -130,7 +130,7 @@ public:
 
   int get_freeze_info_larger_or_equal_than(
       common::ObISQLClient &sql_proxy,
-      const palf::SCN &frozen_scn,
+      const SCN &frozen_scn,
       common::ObIArray<ObSimpleFrozenStatus> &frozen_statuses);
 
   int set_freeze_info(common::ObISQLClient &sql_proxy,
@@ -140,24 +140,24 @@ public:
   // 1. get min frozen_scn, as @min_frozen_scn
   // 2. get all frozen status whose frozen_scn is larger than @frozen_scn
   int get_min_major_available_and_larger_info(common::ObISQLClient &sql_proxy,
-                                              const palf::SCN &frozen_scn,
-                                              palf::SCN &min_frozen_scn,
+                                              const SCN &frozen_scn,
+                                              SCN &min_frozen_scn,
                                               common::ObIArray<ObSimpleFrozenStatus> &frozen_statuses);
 
   // batch delete freeze info:
   // frozen_scn <= upper_frozen_scn && frozen_scn > 1
   int batch_delete(common::ObISQLClient &sql_proxy,
-                   const palf::SCN &upper_frozen_scn);
+                   const SCN &upper_frozen_scn);
 
   // for frozen_status whose frozen_scn is less than @frozen_scn, get the one with biggest frozen_scn
   int get_frozen_info_less_than(common::ObISQLClient &sql_proxy,
-                                const palf::SCN &frozen_scn,
+                                const SCN &frozen_scn,
                                 ObSimpleFrozenStatus &frozen_status);
 
   // get frozen_status whose frozen_scn <= @frozen_scn
   // If @get_all = true, means 'get all matched'; Else, only get one record with highest frozen_scn.
   int get_frozen_info_less_than(common::ObISQLClient &sql_proxy,
-                                const palf::SCN &frozen_scn,
+                                const SCN &frozen_scn,
                                 common::ObIArray<ObSimpleFrozenStatus> &frozen_status_arr,
                                 bool get_all = true);
 
@@ -167,13 +167,13 @@ public:
 
   int get_freeze_schema_info(common::ObISQLClient &sql_proxy,
                             const uint64_t tenant_id,
-                            const palf::SCN &frozen_scn,
+                            const SCN &frozen_scn,
                             TenantIdAndSchemaVersion &schema_version_info);
 
 private:
   int get_min_major_available_and_larger_info_inner_(common::ObISQLClient &sql_proxy,
-                                                     const palf::SCN &frozen_scn,
-                                                     palf::SCN &min_frozen_scn,
+                                                     const SCN &frozen_scn,
+                                                     SCN &min_frozen_scn,
                                                      common::ObIArray<ObSimpleFrozenStatus> &frozen_statuses);
   
   int construct_frozen_status_(common::sqlclient::ObMySQLResult &result,

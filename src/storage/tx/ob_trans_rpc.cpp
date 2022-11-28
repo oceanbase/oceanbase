@@ -44,7 +44,7 @@ int handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                               const int status,
                               const ObAddr &addr,
                               const int64_t request_id,
-                              const palf::SCN &private_data)
+                              const SCN &private_data)
 {
   return MTL(ObTransService *)->handle_trans_msg_callback(sender_ls_id,
                                                   receiver_ls_id,

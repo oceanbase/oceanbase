@@ -44,7 +44,7 @@
 #include <map>
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -69,7 +69,7 @@ ObIndexBuilder::~ObIndexBuilder()
 
 int ObIndexBuilder::create_index(
     const ObCreateIndexArg &arg,
-    const palf::SCN &frozen_scn,
+    const SCN &frozen_scn,
     obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -242,7 +242,7 @@ int ObIndexBuilder::do_create_global_index(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const obrpc::ObCreateIndexArg &arg,
     const share::schema::ObTableSchema &table_schema,
-    const palf::SCN &frozen_scn,
+    const SCN &frozen_scn,
     obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -388,7 +388,7 @@ int ObIndexBuilder::do_create_local_index(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const obrpc::ObCreateIndexArg &create_index_arg,
     const share::schema::ObTableSchema &table_schema,
-    const palf::SCN &frozen_scn,
+    const SCN &frozen_scn,
     obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -486,7 +486,7 @@ int ObIndexBuilder::do_create_local_index(
 // and table_name, which will used for getting data table schema in generate_schema
 int ObIndexBuilder::do_create_index(
     const ObCreateIndexArg &arg,
-    const palf::SCN &frozen_scn,
+    const SCN &frozen_scn,
     obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -578,7 +578,7 @@ int ObIndexBuilder::do_create_index(
  */
 int ObIndexBuilder::generate_schema(
     const ObCreateIndexArg &arg,
-    const palf::SCN &frozen_scn,
+    const SCN &frozen_scn,
     ObTableSchema &data_schema,
     const bool global_index_without_column_info,
     ObTableSchema &schema)
@@ -754,7 +754,7 @@ int ObIndexBuilder::generate_schema(
 }
 
 int ObIndexBuilder::set_basic_infos(const ObCreateIndexArg &arg,
-                                    const palf::SCN &frozen_scn,
+                                    const SCN &frozen_scn,
                                     const ObTableSchema &data_schema,
                                     ObTableSchema &schema)
 {

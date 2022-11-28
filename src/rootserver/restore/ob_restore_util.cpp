@@ -329,14 +329,14 @@ int ObRestoreUtil::fill_restore_scn_(const obrpc::ObPhysicalRestoreTenantArg &ar
   } else if (!arg.with_restore_scn_) {
     int64_t round_id = 0;
     int64_t piece_id = 0;
-    palf::SCN max_checkpoint_scn = palf::SCN::min_scn();
+    SCN max_checkpoint_scn = SCN::min_scn();
     // restore to max checkpoint scn of log
     ARRAY_FOREACH_X(tenant_path_array, i, cnt, OB_SUCC(ret)) {
       const ObString &tenant_path = tenant_path_array.at(i);
       ObArchiveStore store;
       ObBackupDest dest;
       ObBackupFormatDesc format_desc;
-      palf::SCN cur_max_checkpoint_scn = palf::SCN::min_scn();
+      SCN cur_max_checkpoint_scn = SCN::min_scn();
       if (OB_FAIL(dest.set(tenant_path))) {
         LOG_WARN("fail to set dest", K(ret), K(tenant_path));
       } else if (OB_FAIL(store.init(dest))) {
@@ -352,7 +352,7 @@ int ObRestoreUtil::fill_restore_scn_(const obrpc::ObPhysicalRestoreTenantArg &ar
       }
     }
     if (OB_SUCC(ret)) {
-      if (palf::SCN::min_scn() == max_checkpoint_scn) {
+      if (SCN::min_scn() == max_checkpoint_scn) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid max checkpoint scn, no archvie tenant path", K(ret), K(tenant_path_array));
       } else {
@@ -366,13 +366,13 @@ int ObRestoreUtil::fill_restore_scn_(const obrpc::ObPhysicalRestoreTenantArg &ar
 int ObRestoreUtil::get_restore_source(
     const ObIArray<ObString>& tenant_path_array,
     const common::ObString &passwd_array,
-    const palf::SCN &restore_scn,
+    const SCN &restore_scn,
     ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
     ObIArray<ObBackupPiecePath> &backup_piece_list,
     ObIArray<ObBackupPathString> &log_path_list)
 {
   int ret = OB_SUCCESS;
-  palf::SCN restore_start_scn = palf::SCN::min_scn();
+  SCN restore_start_scn = SCN::min_scn();
   if (OB_FAIL(get_restore_backup_set_array_(tenant_path_array, passwd_array, restore_scn,
       restore_start_scn, backup_set_list))) {
     LOG_WARN("fail to get restore backup set array", K(ret), K(tenant_path_array), K(restore_scn));
@@ -392,8 +392,8 @@ int ObRestoreUtil::get_restore_source(
 int ObRestoreUtil::get_restore_backup_set_array_(
     const ObIArray<ObString> &tenant_path_array,
     const common::ObString &passwd_array,
-    const palf::SCN &restore_scn,
-    palf::SCN &restore_start_scn,
+    const SCN &restore_scn,
+    SCN &restore_start_scn,
     ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list)
 {
   int ret = OB_SUCCESS;
@@ -472,8 +472,8 @@ int ObRestoreUtil::get_restore_log_path_list_(
 
 int ObRestoreUtil::get_restore_log_piece_array_(
     const ObIArray<ObString> &tenant_path_array,
-    const palf::SCN &restore_start_scn,
-    const palf::SCN &restore_end_scn,
+    const SCN &restore_start_scn,
+    const SCN &restore_end_scn,
     ObIArray<ObBackupPiecePath> &backup_piece_list,
     ObIArray<share::ObBackupPathString> &log_path_list)
 {

@@ -526,8 +526,8 @@ int ObBackupDataStore::write_backup_set_placeholder(
     const bool is_inner,
     const bool is_start, 
     const bool is_succeed,
-    const palf::SCN &replay_scn,
-    const palf::SCN &min_restore_scn)
+    const SCN &replay_scn,
+    const SCN &min_restore_scn)
 {
   int ret = OB_SUCCESS;
   ObExternBackupSetPlaceholderDesc placeholder;
@@ -672,8 +672,8 @@ int ObBackupDataStore::get_backup_set_placeholder_path_(
     const bool is_inner, 
     const bool is_start, 
     const bool is_succeed, 
-    const palf::SCN &replay_scn,
-    const palf::SCN &min_restore_scn,
+    const SCN &replay_scn,
+    const SCN &min_restore_scn,
     share::ObBackupPath &path)
 {
   int ret = OB_SUCCESS;
@@ -704,8 +704,8 @@ int ObBackupDataStore::get_backup_set_placeholder_path_(
 
 int ObBackupDataStore::get_backup_set_array(
     const common::ObString &passwd_array,
-    const palf::SCN &restore_scn,
-    palf::SCN &restore_start_scn,
+    const SCN &restore_scn,
+    SCN &restore_start_scn,
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list)
 {
   int ret = OB_SUCCESS;
@@ -734,9 +734,9 @@ int ObBackupDataStore::get_backup_set_array(
 }
 
 int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_array, 
-    const palf::SCN &restore_scn, const ObBackupSetFilter &op,
+    const SCN &restore_scn, const ObBackupSetFilter &op,
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 
-    int64_t &cur_max_backup_set_id, palf::SCN &restore_start_scn)
+    int64_t &cur_max_backup_set_id, SCN &restore_start_scn)
 {
   int ret = OB_SUCCESS;
   const int64_t OB_BACKUP_MAX_BACKUP_SET_ID = 5000;

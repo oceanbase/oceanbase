@@ -18,7 +18,7 @@
 #include "share/ob_tenant_switchover_status.h"//ObTenantSwitchoverStatus
 #include "lib/container/ob_array.h"//ObArray
 #include "lib/container/ob_iarray.h"//ObIArray
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 //#include "share/ls/ob_ls_status_operator.h"
 
 
@@ -51,13 +51,13 @@ public:
   */
  int init(const uint64_t tenant_id, const ObTenantRole type);
  int init(const uint64_t tenant_id, const ObTenantRole &tenant_role, const ObTenantSwitchoverStatus &switchover_status, 
-          int64_t switchover_epoch, const palf::SCN &sync_scn, const palf::SCN &replayable_scn,
-          const palf::SCN &standby_scn, const palf::SCN &recovery_until_scn);
+          int64_t switchover_epoch, const SCN &sync_scn, const SCN &replayable_scn,
+          const SCN &standby_scn, const SCN &recovery_until_scn);
  ObAllTenantInfo &operator=(const ObAllTenantInfo &other);
  int assign(const ObAllTenantInfo &other);
  void reset();
  bool is_valid() const;
- const palf::SCN get_ref_scn() const;
+ const SCN get_ref_scn() const;
 
  // ObTenantRole related function
  bool is_standby() const { return tenant_role_.is_standby(); }
@@ -91,11 +91,11 @@ public:\
 
   Property_declare_var(uint64_t, tenant_id)
   Property_declare_var(int64_t, switchover_epoch)
-  Property_declare_var(palf::SCN, sync_scn)
-  Property_declare_var(palf::SCN, replayable_scn)
-  Property_declare_var(palf::SCN, standby_scn)
+  Property_declare_var(share::SCN, sync_scn)
+  Property_declare_var(share::SCN, replayable_scn)
+  Property_declare_var(share::SCN, standby_scn)
   //TODO msy164651 no use now
-  Property_declare_var(palf::SCN, recovery_until_scn)
+  Property_declare_var(share::SCN, recovery_until_scn)
 #undef Property_declare_var
 private:
   ObTenantRole tenant_role_;
@@ -136,9 +136,9 @@ public:
   static int update_tenant_recovery_status(const uint64_t tenant_id,
                                            ObMySQLProxy *proxy,
                                            ObTenantSwitchoverStatus status,
-                                           const palf::SCN &sync_scn,
-                                           const palf::SCN &replay_scn,
-                                           const palf::SCN &reabable_scn);
+                                           const SCN &sync_scn,
+                                           const SCN &replay_scn,
+                                           const SCN &reabable_scn);
   /**
    * @description: update tenant switchover status of __all_tenant_info
    * @param[in] tenant_id : user tenant id

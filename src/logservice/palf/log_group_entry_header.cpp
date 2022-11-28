@@ -18,9 +18,9 @@
 #include "lib/utility/utility.h"          // !FALSE_IT
 #include "lib/oblog/ob_log_module.h"      // LOG*
 #include "share/rc/ob_tenant_base.h"      // mtl_malloc
+#include "share/scn.h"                       // SCN
 #include "log_define.h"                   // is_valid_log_id...
 #include "log_writer_utils.h"             // LogWriteBuf
-#include "scn.h"                       // SCN
 
 namespace oceanbase
 {
@@ -179,7 +179,7 @@ bool LogGroupEntryHeader::get_header_parity_check_res_() const
   bool_ret ^= parity_check(reinterpret_cast<const uint32_t &>(group_size_));
   bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(proposal_id_));
   bool_ret ^= parity_check(committed_end_lsn_.val_);
-  bool_ret ^= parity_check(max_scn_.get_val_for_lsn_allocator());
+  bool_ret ^= parity_check(max_scn_.get_val_for_logservice());
   bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(accumulated_checksum_));
   bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(log_id_));
   int64_t tmp_flag = (flag_ & ~(0x1));

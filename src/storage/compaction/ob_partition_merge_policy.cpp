@@ -23,7 +23,7 @@
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -136,7 +136,7 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
   // Keep max_snapshot_version currently because major merge must be done step by step
   int64_t max_snapshot_version = freeze_info.next.freeze_scn.get_val_for_tx();
   ObITable *last_table = tablet.get_table_store().get_minor_sstables().get_boundary_table(true/*last*/);
-  const palf::SCN last_minor_scn = nullptr == last_table ? tablet.get_clog_checkpoint_scn() : last_table->get_end_scn();
+  const SCN last_minor_scn = nullptr == last_table ? tablet.get_clog_checkpoint_scn() : last_table->get_end_scn();
 
   // Freezing in the restart phase may not satisfy end >= last_max_sstable,
   // so the memtable cannot be filtered by scn

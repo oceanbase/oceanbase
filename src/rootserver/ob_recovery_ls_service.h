@@ -36,6 +36,7 @@ namespace share
 class ObLSTableOperator;
 struct ObLSAttr;
 struct ObLSRecoveryStat;
+class SCN;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -46,10 +47,6 @@ namespace logservice
 {
 class ObLogHandler;
 class ObGCLSLog;
-}
-namespace palf
-{
-class SCN;
 }
 namespace transaction
 {
@@ -75,28 +72,28 @@ public:
   virtual void do_work() override;
 private:
  //get log iterator by start_scn
- int seek_log_iterator_(const palf::SCN &syn_scn,
+ int seek_log_iterator_(const share::SCN &syn_scn,
                         palf::PalfBufferIterator &iterator);
- int process_ls_log_(const palf::SCN &start_scn,palf::PalfBufferIterator &iterator);
+ int process_ls_log_(const share::SCN &start_scn,palf::PalfBufferIterator &iterator);
  int process_gc_log_(logservice::ObGCLSLog &gc_log,
-                     const palf::SCN &syn_scn);
+                     const share::SCN &syn_scn);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
-                        const palf::SCN &syn_scn);
+                        const share::SCN &syn_scn);
  int process_ls_operator_(const share::ObLSAttr &ls_attr,
-                          const palf::SCN &syn_scn);
+                          const share::SCN &syn_scn);
  int create_new_ls_(const share::ObLSAttr &ls_attr,
-                    const palf::SCN &syn_scn,
+                    const share::SCN &syn_scn,
                     common::ObMySQLTransaction &trans);
  int process_recovery_ls_manager();
- int construct_ls_recovery_stat(const palf::SCN &syn_scn,
+ int construct_ls_recovery_stat(const share::SCN &syn_scn,
                                 share::ObLSRecoveryStat &ls_stat);
  //wait other ls is larger than sycn ts
- int check_valid_to_operator_ls_(const palf::SCN &syn_scn);
+ int check_valid_to_operator_ls_(const share::SCN &syn_scn);
  int check_can_do_recovery_();
  //check restore finish and update sync scn to recovery_unitl_scn
  int update_sys_ls_restore_finish_();
  //readable scn need report
- int report_sys_ls_recovery_stat_(const palf::SCN &sync_scn);
+ int report_sys_ls_recovery_stat_(const share::SCN &sync_scn);
 private:
   bool inited_;
   uint64_t tenant_id_;

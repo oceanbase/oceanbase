@@ -17,7 +17,7 @@
 #include <sys/types.h>
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 namespace oceanbase
 {
 namespace clog
@@ -41,11 +41,11 @@ public:
   int generate_ls_weak_read_snapshot_version(oceanbase::storage::ObLS &ls,
                                               bool &need_skip,
                                               bool &is_user_ls,
-                                              palf::SCN &wrs_version,
+                                              share::SCN &wrs_version,
                                               const int64_t max_stale_time);
-  palf::SCN get_ls_weak_read_ts() const { return ls_weak_read_ts_; }
+  share::SCN get_ls_weak_read_ts() const { return ls_weak_read_ts_; }
 private:
-  int generate_weak_read_timestamp_(oceanbase::storage::ObLS &ls, const int64_t max_stale_time, palf::SCN &timestamp);
+  int generate_weak_read_timestamp_(oceanbase::storage::ObLS &ls, const int64_t max_stale_time, share::SCN &timestamp);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSWRSHandler);
@@ -55,7 +55,7 @@ protected:
   common::ObSpinLock lock_;
   bool is_inited_;
   bool is_enabled_;
-  palf::SCN ls_weak_read_ts_;
+  share::SCN ls_weak_read_ts_;
 };
 
 }

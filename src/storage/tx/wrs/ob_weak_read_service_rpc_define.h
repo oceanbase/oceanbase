@@ -44,11 +44,11 @@ struct ObWrsGetClusterVersionRequest
 struct ObWrsGetClusterVersionResponse
 {
   int     err_code_;                // error code
-  palf::SCN version_;                 // weak read version
+  share::SCN version_;                 // weak read version
   int64_t version_duration_us_;     // weak read version duration time, for future 'version on Lease' compat
 
   ObWrsGetClusterVersionResponse() : err_code_(0), version_(), version_duration_us_(0) {}
-  void set(const int err, const palf::SCN version, const int64_t version_duration_us = 0)
+  void set(const int err, const share::SCN version, const int64_t version_duration_us = 0)
   {
     err_code_ = err;
     version_ = version;
@@ -64,7 +64,7 @@ struct ObWrsGetClusterVersionResponse
 struct ObWrsClusterHeartbeatRequest
 {
   common::ObAddr  req_server_;          // Who I am
-  palf::SCN        version_;             // What my weak read version is
+  share::SCN        version_;             // What my weak read version is
   int64_t         valid_part_count_;    // How many valid partition I have
   int64_t         total_part_count_;    // How many partition I have
   int64_t         generate_timestamp_;  // server version generation timestamp
@@ -78,7 +78,7 @@ struct ObWrsClusterHeartbeatRequest
   {}
 
   void set(const common::ObAddr &svr,
-      const palf::SCN version,
+      const share::SCN version,
       const int64_t valid_part_count,
       const int64_t total_part_count,
       const int64_t generate_timestamp)

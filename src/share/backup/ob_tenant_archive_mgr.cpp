@@ -71,10 +71,10 @@ int ObTenantArchiveMgr::is_archive_running(
 
 // piece op
 int ObTenantArchiveMgr::decide_piece_id(
-    const palf::SCN &piece_start_scn,
+    const SCN &piece_start_scn,
     const int64_t start_piece_id, 
     const int64_t piece_switch_interval, 
-    const palf::SCN &scn,
+    const SCN &scn,
     int64_t &piece_id)
 {
   int ret = OB_SUCCESS;
@@ -95,17 +95,17 @@ int ObTenantArchiveMgr::decide_piece_id(
 }
 
 int ObTenantArchiveMgr::decide_piece_start_scn(
-    const palf::SCN &piece_start_scn,
+    const SCN &piece_start_scn,
     const int64_t start_piece_id, 
     const int64_t piece_switch_interval, 
     const int64_t piece_id, 
-    palf::SCN &start_scn)
+    SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   if (piece_id < start_piece_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid piece id", K(ret), K(piece_start_scn), K(start_piece_id), K(piece_switch_interval), K(piece_id));
-  } else if (palf::SCN::min_scn() >= piece_start_scn) {
+  } else if (SCN::min_scn() >= piece_start_scn) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid piece_start_scn", K(ret), K(piece_start_scn), K(start_piece_id), K(piece_switch_interval), K(piece_id));
   } else if (0 >= piece_switch_interval) {
@@ -119,11 +119,11 @@ int ObTenantArchiveMgr::decide_piece_start_scn(
 }
 
 int ObTenantArchiveMgr::decide_piece_end_scn(
-    const palf::SCN &piece_start_scn,
+    const SCN &piece_start_scn,
     const int64_t start_piece_id, 
     const int64_t piece_switch_interval, 
     const int64_t piece_id, 
-    palf::SCN &end_scn)
+    SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   // piece end scn is the start of next piece.
@@ -135,9 +135,9 @@ int ObTenantArchiveMgr::decide_piece_end_scn(
 }
 
 int ObTenantArchiveMgr::decide_first_piece_start_scn(
-  const palf::SCN &start_scn,
+  const SCN &start_scn,
   const int64_t piece_switch_interval,
-  palf::SCN &piece_start_scn)
+  SCN &piece_start_scn)
 {
   int ret = OB_SUCCESS;
 

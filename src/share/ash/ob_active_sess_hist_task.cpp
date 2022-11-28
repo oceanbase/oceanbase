@@ -90,6 +90,7 @@ bool ObActiveSessHistTask::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessio
     stat.tenant_id_ = sess_info->get_effective_tenant_id();
     stat.user_id_ = sess_info->get_user_id();
     stat.session_id_ = sess_info->get_sessid();
+    stat.plan_id_ = sess_info->get_current_plan_id();
     stat.trace_id_ = sess_info->get_current_trace_id();
     sess_info->get_cur_sql_id(stat.sql_id_, sizeof(stat.sql_id_));
     ObActiveSessHistList::get_instance().add(stat);

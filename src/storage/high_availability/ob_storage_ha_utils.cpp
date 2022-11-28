@@ -15,7 +15,7 @@
 #include "share/tablet/ob_tablet_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 using namespace oceanbase::share;
 
@@ -28,7 +28,7 @@ int ObStorageHAUtils::check_tablet_replica_validity(const uint64_t tenant_id, co
     const common::ObAddr &src_addr, const common::ObTabletID &tablet_id, common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
-  palf::SCN compaction_scn;
+  SCN compaction_scn;
   if (tablet_id.is_ls_inner_tablet()) {
     // do nothing
   } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !src_addr.is_valid() || !tablet_id.is_valid()) {
@@ -63,7 +63,7 @@ int ObStorageHAUtils::check_merge_error_(const uint64_t tenant_id, common::ObISQ
 }
 
 int ObStorageHAUtils::fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-    const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client, palf::SCN &compaction_scn)
+    const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client, SCN &compaction_scn)
 {
   int ret = OB_SUCCESS;
   ObTabletTableOperator op;
@@ -79,7 +79,7 @@ int ObStorageHAUtils::fetch_src_tablet_meta_info_(const uint64_t tenant_id, cons
 }
 
 int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-    const share::ObLSID &ls_id, const palf::SCN &compaction_scn, common::ObISQLClient &sql_client)
+    const share::ObLSID &ls_id, const SCN &compaction_scn, common::ObISQLClient &sql_client)
 {
   int ret = OB_SUCCESS;
   ObArray<ObTabletReplicaChecksumItem> items;

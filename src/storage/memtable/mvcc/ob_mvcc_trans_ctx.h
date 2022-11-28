@@ -202,8 +202,8 @@ public:
   void print_callbacks();
   void elr_trans_preparing();
   int trans_end(const bool commit);
-  int replay_fail(const palf::SCN scn);
-  int replay_succ(const palf::SCN scn);
+  int replay_fail(const share::SCN scn);
+  int replay_succ(const share::SCN scn);
   int rollback_to(const int64_t seq_no,
                   const int64_t from_seq_no);
   void set_for_replay(const bool for_replay);
@@ -220,11 +220,11 @@ public:
 private:
   void wakeup_waiting_txns_();
 public:
-  int calc_checksum_before_scn(const palf::SCN scn,
+  int calc_checksum_before_scn(const share::SCN scn,
                                uint64_t &checksum,
-                               palf::SCN &checksum_scn);
+                               share::SCN &checksum_scn);
   void update_checksum(const uint64_t checksum,
-                       const palf::SCN checksum_scn);
+                       const share::SCN checksum_scn);
   int clean_unlog_callbacks(int64_t &removed_cnt);
   // when not inc, return -1
   int64_t inc_pending_log_size(const int64_t size);
@@ -271,7 +271,7 @@ public:
   { ATOMIC_AAF(&callback_remove_for_rollback_to_count_, cnt); }
   int64_t get_checksum() const { return callback_list_.get_checksum(); }
   int64_t get_tmp_checksum() const { return callback_list_.get_tmp_checksum(); }
-  palf::SCN get_checksum_scn() const { return callback_list_.get_checksum_scn(); }
+  share::SCN get_checksum_scn() const { return callback_list_.get_checksum_scn(); }
   transaction::ObPartTransCtx *get_trans_ctx() const;
 private:
   bool is_all_redo_submitted(ObMvccRowCallback *generate_cursor)
@@ -388,7 +388,7 @@ public:
   int get_cluster_version(uint64_t &cluster_version) const override;
   transaction::ObTransCtx *get_trans_ctx() const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
-  bool log_synced() const override { return palf::SCN::max_scn() != scn_; }
+  bool log_synced() const override { return share::SCN::max_scn() != scn_; }
   virtual int before_append(const bool is_replay) override;
   virtual int after_append(const bool is_replay, const int ret_code) override;
   virtual int log_submitted() override;
@@ -400,7 +400,7 @@ public:
   virtual int clean();
   virtual int del();
   virtual int checkpoint_callback();
-  virtual int log_sync(const palf::SCN scn) override;
+  virtual int log_sync(const share::SCN scn) override;
   virtual int log_sync_fail() override;
   virtual int print_callback() override;
   virtual blocksstable::ObDmlFlag get_dml_flag() const override;
@@ -414,7 +414,7 @@ private:
   virtual int trans_commit() override;
   virtual int trans_abort() override;
   virtual int rollback_callback() override;
-  virtual int calc_checksum(const palf::SCN checksum_scn,
+  virtual int calc_checksum(const share::SCN checksum_scn,
                             ObBatchChecksum *checksumer) override;
   virtual int elr_trans_preparing() override;
 private:

@@ -24,7 +24,7 @@
 #include "common/ob_zone_status.h"
 #include "common/ob_zone_type.h"
 #include "share/ob_replica_info.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -34,7 +34,7 @@ struct ObMergeInfoItem : public common::ObDLinkBase<ObMergeInfoItem>
 {		
 public:
   typedef common::ObDList<ObMergeInfoItem> ItemList;		
-  ObMergeInfoItem(ItemList &list, const char *name, const palf::SCN &scn, const bool need_update);
+  ObMergeInfoItem(ItemList &list, const char *name, const SCN &scn, const bool need_update);
   ObMergeInfoItem(ItemList &list, const char *name, const int64_t value, const bool need_update);
   ObMergeInfoItem(const ObMergeInfoItem &item);	
   
@@ -43,10 +43,10 @@ public:
   void assign_value(const ObMergeInfoItem &item);
   bool is_valid() const;
   void set_val(const int64_t value, const bool need_update);
-  void set_scn(const palf::SCN &scn, const bool need_update);
+  void set_scn(const SCN &scn, const bool need_update);
   int set_scn(const uint64_t scn_val);
   int set_scn(const uint64_t scn_val, const bool need_update);
-  const palf::SCN &get_scn() const { return scn_; }
+  const SCN &get_scn() const { return scn_; }
   uint64_t get_scn_val() const { return scn_.get_val_for_inner_table_field(); }
   int64_t get_value() const { return value_; }
 
@@ -54,7 +54,7 @@ public:
 public:		
   const char *name_;
   bool is_scn_;
-  palf::SCN scn_;
+  SCN scn_;
   int64_t value_;
   bool need_update_; // used to mark the table field need to be updated or not
 };
@@ -89,10 +89,10 @@ public:
   bool is_in_merge() const;
   bool need_merge(const int64_t broadcast_version) const;
 
-  const palf::SCN &broadcast_scn() const { return broadcast_scn_.get_scn(); }
-  const palf::SCN &last_merged_scn() const { return last_merged_scn_.get_scn(); }
-  const palf::SCN &all_merged_scn() const { return all_merged_scn_.get_scn(); }
-  const palf::SCN &frozen_scn() const { return frozen_scn_.get_scn(); }
+  const SCN &broadcast_scn() const { return broadcast_scn_.get_scn(); }
+  const SCN &last_merged_scn() const { return last_merged_scn_.get_scn(); }
+  const SCN &all_merged_scn() const { return all_merged_scn_.get_scn(); }
+  const SCN &frozen_scn() const { return frozen_scn_.get_scn(); }
 
   TO_STRING_KV(K_(tenant_id), K_(zone), K_(is_merging), K_(broadcast_scn), K_(last_merged_scn),
     K_(last_merged_time), K_(all_merged_scn), K_(merge_start_time), K_(merge_status), K_(frozen_scn), 
@@ -123,14 +123,15 @@ public:
   bool is_in_merge() const;
   bool is_valid() const;
   bool is_merge_error() const;
+  bool is_in_verifying_status() const;
   ObGlobalMergeInfo &operator = (const ObGlobalMergeInfo &other) = delete;
   int assign(const ObGlobalMergeInfo &other);
   // differ from assign, only exclude 'need_update_' copy
   int assign_value(const ObGlobalMergeInfo &other);
 
-  const palf::SCN &frozen_scn() const { return frozen_scn_.get_scn(); }
-  const palf::SCN &global_broadcast_scn() const { return global_broadcast_scn_.get_scn(); }
-  const palf::SCN &last_merged_scn() const { return last_merged_scn_.get_scn(); }
+  const SCN &frozen_scn() const { return frozen_scn_.get_scn(); }
+  const SCN &global_broadcast_scn() const { return global_broadcast_scn_.get_scn(); }
+  const SCN &last_merged_scn() const { return last_merged_scn_.get_scn(); }
 
   TO_STRING_KV(K_(tenant_id), K_(cluster), K_(frozen_scn),
     K_(global_broadcast_scn), K_(last_merged_scn), K_(is_merge_error), 
@@ -165,7 +166,7 @@ public:
   int64_t merged_tablet_cnt_;
   int64_t merged_data_size_;
 
-  palf::SCN smallest_snapshot_scn_;
+  SCN smallest_snapshot_scn_;
 
   int64_t get_merged_tablet_percentage() const;
   int64_t get_merged_data_percentage() const;

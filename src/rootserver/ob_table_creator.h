@@ -20,7 +20,7 @@
 
 namespace oceanbase
 {
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -36,7 +36,7 @@ class ObTableCreator
 public:
   ObTableCreator(
       const uint64_t tenant_id,
-      const palf::SCN &frozen_scn,
+      const share::SCN &frozen_scn,
       share::ObLSTableOperator &lst_operator,
       ObMySQLTransaction &trans)
                 : tenant_id_(tenant_id),

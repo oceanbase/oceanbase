@@ -138,7 +138,7 @@ private:
   int deserialize_commit_scns_array_from_row_(const blocksstable::ObDatumRow *row, ObCommitSCNsArray &past_commit_scns);
 
 
-  int merge_cur_and_past_commit_verisons_(const palf::SCN recycle_scn,
+  int merge_cur_and_past_commit_verisons_(const share::SCN recycle_scn,
                                           ObCommitSCNsArray &cur_commit_scns,
                                           ObCommitSCNsArray &past_commit_scns,
                                           ObCommitSCNsArray &merged_commit_scns);
@@ -154,10 +154,10 @@ private:
    * @param[out] merged_arr the target array to be dumped
    */
   int merge_pre_process_node_(const int64_t step_len,
-                              const palf::SCN start_scn_limit,
-                              const palf::SCN recycle_scn,
+                              const share::SCN start_scn_limit,
+                              const share::SCN recycle_scn,
                               const ObIArray<ObCommitSCNsArray::Node> &data_arr,
-                              palf::SCN &max_commit_version,
+                              share::SCN &max_commit_version,
                               ObIArray<ObCommitSCNsArray::Node> &merged_arr);
 
   int set_row_with_merged_commit_scns_(ObCommitSCNsArray &merged_commit_scns,
@@ -168,8 +168,8 @@ private:
 
   int DEBUG_try_calc_upper_and_check_(ObCommitSCNsArray &merged_commit_versions);
 
-  int DEBUG_fake_calc_upper_trans_version(const palf::SCN sstable_end_scn,
-                                          palf::SCN &upper_trans_version,
+  int DEBUG_fake_calc_upper_trans_version(const share::SCN sstable_end_scn,
+                                          share::SCN &upper_trans_version,
                                           ObCommitSCNsArray &merged_commit_versions);
 
   void DEBUG_print_start_scn_list_();
@@ -179,8 +179,8 @@ private:
   bool is_inited_;
   const ObTableIterParam &iter_param_;
   bool dump_tx_data_done_;
-  palf::SCN cur_max_commit_version_;
-  palf::SCN pre_start_scn_;
+  share::SCN cur_max_commit_version_;
+  share::SCN pre_start_scn_;
   int64_t tx_data_row_cnt_;
   ObTxData *pre_tx_data_;
   ObArenaAllocator arena_allocator_;
@@ -190,7 +190,7 @@ private:
   ObTxDataMemtable *tx_data_memtable_;
   blocksstable::ObStorageDatum key_datum_;
   int64_t DEBUG_iter_commit_ts_cnt_;
-  palf::SCN DEBUG_last_start_scn_;
+  share::SCN DEBUG_last_start_scn_;
 };
 
 /**

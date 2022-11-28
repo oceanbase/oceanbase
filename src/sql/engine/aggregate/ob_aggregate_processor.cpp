@@ -552,7 +552,8 @@ ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx &eval_ctx,
       dir_id_(-1),
       tmp_store_row_(nullptr),
       io_event_observer_(nullptr),
-      removal_info_()
+      removal_info_(),
+      support_fast_single_row_agg_(false)
 {
 }
 
@@ -5793,5 +5794,218 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
   }
   return ret;
 }
+
+int ObAggregateProcessor::single_row_agg(GroupRow &group_row, ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (!support_fast_single_row_agg_) {
+    group_row.reuse();
+    if (OB_FAIL(prepare(group_row))) {
+      LOG_WARN("failed to prepare group row", K(ret));
+    } else if (OB_FAIL(collect_group_row(&group_row))) {
+      LOG_WARN("failed to collect group by row", K(ret));
+    }
+  } else if (OB_FAIL(fast_single_row_agg(eval_ctx))) {
+    LOG_WARN("failed to fill result", K(ret));
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::single_row_agg_batch(GroupRow **group_row, ObEvalCtx &eval_ctx, const int64_t batch_size, const ObBitVector *skip)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(group_row) && OB_NOT_NULL(skip));
+  ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+  batch_info_guard.set_batch_size(batch_size);
+  if (OB_FAIL(ret)) {
+  } else if (!support_fast_single_row_agg_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+      if (skip->at(i)) {
+        continue;
+      }
+      if (OB_ISNULL(group_row[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("group row is not init", K(ret), K(i));
+      } else {
+        group_row[i]->reuse();
+        batch_info_guard.set_batch_idx(i);
+        if (OB_FAIL(prepare(*group_row[i]))) {
+          LOG_WARN("failed to prepare group row", K(ret));
+        } else if (OB_FAIL(collect_group_row(group_row[i]))) {
+          LOG_WARN("failed to collect group by row", K(ret));
+        }
+      }
+    }
+  } else if (OB_FAIL(fast_single_row_agg_batch(eval_ctx, batch_size, skip))) {
+    LOG_WARN("failed to fill result", K(ret));
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::fast_single_row_agg(ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < aggr_infos_.count(); ++i) {
+    ObAggrInfo &aggr_info = aggr_infos_.at(i);
+    if (aggr_info.is_implicit_first_aggr()) {
+      continue;
+    }
+    const ObItemType aggr_fun = aggr_info.get_expr_type();
+    switch (aggr_fun) {
+      case T_FUN_COUNT: {
+        bool has_null = false;
+        ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx);
+        for (int64_t j = 0; !has_null && j < aggr_info.param_exprs_.count(); ++j) {
+          has_null = aggr_info.param_exprs_.at(j)->locate_expr_datum(eval_ctx).is_null();
+        }
+        if (lib::is_mysql_mode()) {
+          result.set_int(has_null ? 0 : 1);
+        } else {
+          result.set_number(has_null ? ObNumber::get_zero() : ObNumber::get_positive_one());
+        }
+        break;
+      }
+      case T_FUN_SUM: {
+        ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx);
+        const ObObjTypeClass tc = ob_obj_type_class(aggr_info.get_first_child_type());
+        if ((ObIntTC == tc || ObUIntTC == tc) && !aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).is_null()) {
+          ObNumStackAllocator<2> tmp_alloc;
+          ObNumber result_nmb;
+          if (ObIntTC == tc) {
+            if (OB_FAIL(result_nmb.from(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_int(), tmp_alloc))) {
+                LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
+              }
+          } else {
+            if (OB_FAIL(result_nmb.from(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx).get_uint(), tmp_alloc))) {
+              LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
+            }
+          }
+          OX (result.set_number(result_nmb));
+        } else {
+          result.set_datum(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx));
+        }
+        break;
+      }
+      case T_FUN_MAX:
+      case T_FUN_MIN: {
+        ObDatum &result = aggr_info.expr_->locate_expr_datum(eval_ctx);
+        result.set_datum(aggr_info.param_exprs_.at(0)->locate_expr_datum(eval_ctx));
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown aggr function type", K(ret), K(aggr_fun), K(*aggr_info.expr_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const int64_t batch_size, const ObBitVector *skip)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(skip));
+  for (int64_t i = 0; OB_SUCC(ret) && i < aggr_infos_.count(); ++i) {
+    ObAggrInfo &aggr_info = aggr_infos_.at(i);
+    if (aggr_info.is_implicit_first_aggr()) {
+      continue;
+    }
+    const ObItemType aggr_fun = aggr_info.get_expr_type();
+    switch (aggr_fun) {
+      case T_FUN_COUNT: {
+        bool has_null[batch_size];
+        MEMSET(has_null, false, sizeof(bool) * batch_size);
+        ObDatum *result = aggr_info.expr_->locate_datums_for_update(eval_ctx, batch_size);
+        for (int64_t j = 0; j < aggr_info.param_exprs_.count(); ++j) {
+          ObDatumVector param_vec = aggr_info.param_exprs_.at(j)->locate_expr_datumvector(eval_ctx);
+          for (int64_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
+            if (skip->at(batch_idx) || has_null[batch_idx]) {
+              continue;
+            }
+            has_null[batch_idx] = param_vec.at(batch_idx)->is_null();
+          }
+        }
+        if (lib::is_mysql_mode()) {
+          for (int64_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
+            if (skip->at(batch_idx)) {
+              continue;
+            }
+            result[batch_idx].set_int(has_null[batch_idx] ? 0 : 1);
+          }
+        } else {
+          for (int64_t batch_idx = 0; OB_SUCC(ret) && batch_idx < batch_size; ++batch_idx) {
+            if (skip->at(batch_idx)) {
+              continue;
+            }
+            result[batch_idx].set_number(has_null[batch_idx] ? ObNumber::get_zero() : ObNumber::get_positive_one());
+          }
+        }
+        break;
+      }
+      case T_FUN_SUM: {
+        const ObObjTypeClass tc = ob_obj_type_class(aggr_info.get_first_child_type());
+        ObDatum *result = aggr_info.expr_->locate_datums_for_update(eval_ctx, batch_size);
+        ObDatumVector param_vec = aggr_info.param_exprs_.at(0)->locate_expr_datumvector(eval_ctx);
+        if (ObIntTC == tc) {
+          for (int64_t batch_idx = 0; OB_SUCC(ret) && batch_idx < batch_size; ++batch_idx) {
+            if (skip->at(batch_idx)) {
+              continue;
+            }
+            ObNumStackAllocator<2> tmp_alloc;
+            ObNumber result_nmb;
+            if (param_vec.at(batch_idx)->is_null()) {
+              result[batch_idx].set_null();
+            } else if (OB_FAIL(result_nmb.from(param_vec.at(batch_idx)->get_int(), tmp_alloc))) {
+              LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
+            } else {
+              result[batch_idx].set_number(result_nmb);
+            }
+          }
+        } else if (ObUIntTC == tc) {
+          for (int64_t batch_idx = 0; OB_SUCC(ret) && batch_idx < batch_size; ++batch_idx) {
+            if (skip->at(batch_idx)) {
+              continue;
+            }
+            ObNumStackAllocator<2> tmp_alloc;
+            ObNumber result_nmb;
+            if (param_vec.at(batch_idx)->is_null()) {
+              result[batch_idx].set_null();
+            } else if (OB_FAIL(result_nmb.from(param_vec.at(batch_idx)->get_uint64(), tmp_alloc))) {
+              LOG_WARN("create number from int failed", K(ret), K(result_nmb), K(tc));
+            } else {
+              result[batch_idx].set_number(result_nmb);
+            }
+          }
+        } else {
+          for (int64_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
+            if (skip->at(batch_idx)) {
+              continue;
+            }
+            result[batch_idx].set_datum(*param_vec.at(batch_idx));
+          }
+        }
+        break;
+      }
+      case T_FUN_MAX:
+      case T_FUN_MIN: {
+        ObDatum *result = aggr_info.expr_->locate_batch_datums(eval_ctx);
+        ObDatumVector param_vec = aggr_info.param_exprs_.at(0)->locate_expr_datumvector(eval_ctx);
+        for (int64_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
+          if (skip->at(batch_idx)) {
+            continue;
+          }
+          result[batch_idx].set_datum(*param_vec.at(batch_idx));
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown aggr function type", K(ret), K(aggr_fun), K(*aggr_info.expr_));
+      }
+    }
+  }
+  return ret;
+}
+
 } //namespace sql
 } //namespace oceanbase

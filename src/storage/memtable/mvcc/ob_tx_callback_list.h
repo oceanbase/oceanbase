@@ -83,7 +83,7 @@ public:
 
   // tx_calc_checksum_before_scn will calculate checksum during execution. It will
   // remember the intermediate results for final result.
-  int tx_calc_checksum_before_scn(const palf::SCN scn);
+  int tx_calc_checksum_before_scn(const share::SCN scn);
 
   // tx_calc_checksum_all will calculate checksum when tx end. Finally it will set
   // checksum_scn to INT64_MAX and never allow more checksum calculation.
@@ -108,7 +108,7 @@ public:
 
   // replay_fail will rollback all redo in a single log according to
   // scn
-  int replay_fail(const palf::SCN scn);
+  int replay_fail(const share::SCN scn);
 
 private:
   int callback_(ObITxCallbackFunctor &func);
@@ -116,7 +116,7 @@ private:
                 ObITransCallback *start,
                 ObITransCallback *end);
   int64_t calc_need_remove_count_for_fast_commit_();
-  void ensure_checksum_(const palf::SCN scn);
+  void ensure_checksum_(const share::SCN scn);
 public:
   ObITransCallback *get_guard() { return &head_; }
   ObITransCallback *get_tail() { return head_.get_prev(); }
@@ -124,9 +124,9 @@ public:
   int64_t get_length() const { return length_; }
   int64_t get_checksum() const { return checksum_; }
   int64_t get_tmp_checksum() const { return tmp_checksum_; }
-  palf::SCN get_checksum_scn() const { return checksum_scn_; }
-  void get_checksum_and_scn(uint64_t &checksum, palf::SCN &checksum_scn);
-  void update_checksum(const uint64_t checksum, const palf::SCN checksum_scn);
+  share::SCN get_checksum_scn() const { return checksum_scn_; }
+  void get_checksum_and_scn(uint64_t &checksum, share::SCN &checksum_scn);
+  void update_checksum(const uint64_t checksum, const share::SCN checksum_scn);
   transaction::ObPartTransCtx *get_trans_ctx() const;
 
   DECLARE_TO_STRING;
@@ -153,7 +153,7 @@ private:
    * checksum_scn_ by 1 to avoid duplicate calculation.
    */
   common::ObBatchChecksum batch_checksum_;
-  palf::SCN checksum_scn_;
+  share::SCN checksum_scn_;
   uint64_t checksum_;
   uint64_t tmp_checksum_;
 

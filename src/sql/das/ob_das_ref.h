@@ -23,6 +23,32 @@ namespace sql
 {
 class ObDASScanOp;
 class ObDASInsertOp;
+struct DasRefKey
+{
+public:
+  DasRefKey()
+    : tablet_loc_(NULL),
+      op_type_(ObDASOpType::DAS_OP_INVALID)
+  {}
+  DasRefKey(const ObDASTabletLoc *tablet_loc, ObDASOpType op_type)
+    : tablet_loc_(tablet_loc),
+      op_type_(op_type)
+  {}
+  ~DasRefKey() {}
+  bool operator==(const DasRefKey &other) const;
+  uint64_t hash() const;
+  TO_STRING_KV(KP_(tablet_loc), K_(op_type));
+
+public:
+  const ObDASTabletLoc *tablet_loc_;
+  ObDASOpType op_type_;
+};
+
+static const int64_t DAS_REF_TASK_LOOKUP_THRESHOLD = 1000;
+static const int64_t DAS_REF_TASK_SIZE_THRESHOLD = 1000;
+static const int64_t DAS_REF_MAP_BUCKET_SIZE = 5000;
+typedef common::hash::ObHashMap<DasRefKey, ObIDASTaskOp *, common::hash::NoPthreadDefendMode> ObDASRefMap;
+
 class ObDASRef
 {
 public:
@@ -37,7 +63,7 @@ public:
   template <typename DASOp>
   bool has_das_op(const ObDASTabletLoc *tablet_loc, DASOp *&das_op);
   ObIDASTaskOp* find_das_task(const ObDASTabletLoc *tablet_loc, ObDASOpType op_type);
-  int add_batched_task(ObIDASTaskOp *das_task) { return batched_tasks_.store_obj(das_task); }
+  int add_batched_task(ObIDASTaskOp *das_task);
   //创建一个DAS Task，并由das_ref持有
   template <typename DASOp>
   int prepare_das_task(const ObDASTabletLoc *tablet_loc, DASOp *&task_op);
@@ -67,6 +93,7 @@ public:
   void set_lookup_iter(DASOpResultIter *lookup_iter) { wild_datum_info_.lookup_iter_ = lookup_iter; }
 private:
   DISABLE_COPY_ASSIGN(ObDASRef);
+  int create_task_map();
 private:
   typedef common::ObObjNode<ObIDASTaskOp*> DasOpNode;
   //declare das allocator
@@ -84,6 +111,9 @@ private:
   DasOpNode *frozen_op_node_; // 初始为链表的head节点，冻结一次之后为链表的最后一个节点
   const ObExprFrameInfo *expr_frame_info_;
   DASOpResultIter::WildDatumPtrInfo wild_datum_info_;
+  int64_t lookup_cnt_;
+  int64_t task_cnt_;
+  ObDASRefMap task_map_;
 public:
   //all flags
   union {

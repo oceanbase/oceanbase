@@ -156,7 +156,8 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
       ObObj& value = row->get_cell(i);
       if (result.is_ps_protocol() && !is_packed) {
         if (value.get_type() != fields->at(i).type_.get_type()) {
-          ObCastCtx cast_ctx(&result.get_mem_pool(), NULL, CM_WARN_ON_FAIL, CS_TYPE_INVALID);
+          ObCastCtx cast_ctx(&result.get_mem_pool(), NULL, CM_WARN_ON_FAIL,
+            fields->at(i).type_.get_collation_type());
           if (OB_FAIL(common::ObObjCaster::to_type(fields->at(i).type_.get_type(),
                                            cast_ctx,
                                            value,

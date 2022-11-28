@@ -18,7 +18,7 @@
 
 namespace oceanbase
 {
-namespace palf
+namespace share
 {
 class SCN;
 }
@@ -114,7 +114,7 @@ public:
   int rebuild(common::ObIArray<ObTableHandleV2> &handle_array);
   int prepare_allocate();
   int find(const ObITable::TableKey &table_key, ObTableHandleV2 &handle) const;
-  int find(const palf::SCN &start_scn, const int64_t base_version, ObITable *&table, int64_t &mem_pos) const;
+  int find(const share::SCN &start_scn, const int64_t base_version, ObITable *&table, int64_t &mem_pos) const;
   TO_STRING_KV(K_(is_inited), KPC_(array));
 private:
   int add_table(ObITable * const table);

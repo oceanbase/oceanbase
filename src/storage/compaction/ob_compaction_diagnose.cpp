@@ -32,6 +32,13 @@ using namespace share;
 namespace compaction
 {
 
+int64_t ObScheduleSuspectInfo::hash() const
+{
+  int64_t hash_value = ObMergeDagHash::inner_hash();
+  hash_value = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_value);
+  return hash_value;
+}
+
 bool ObScheduleSuspectInfo::is_valid() const
 {
   bool bret = true;
@@ -45,6 +52,7 @@ bool ObScheduleSuspectInfo::is_valid() const
 
 ObScheduleSuspectInfo & ObScheduleSuspectInfo::operator = (const ObScheduleSuspectInfo &other)
 {
+  tenant_id_ = other.tenant_id_;
   merge_type_ = other.merge_type_;
   ls_id_ = other.ls_id_;
   tablet_id_ = other.tablet_id_;
@@ -320,13 +328,14 @@ int ObCompactionDiagnoseMgr::get_suspect_info(
     ObScheduleSuspectInfo &ret_info)
 {
   int ret = OB_SUCCESS;
-  compaction::ObMergeDagHash dag_hash;
-  dag_hash.merge_type_ = merge_type;
-  dag_hash.ls_id_ = ls_id;
-  dag_hash.tablet_id_ = tablet_id;
-  if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().get_suspect_info(dag_hash.inner_hash(), ret_info))) {
+  ObScheduleSuspectInfo input_info;
+  input_info.tenant_id_ = MTL_ID();
+  input_info.merge_type_ = merge_type;
+  input_info.ls_id_ = ls_id;
+  input_info.tablet_id_ = tablet_id;
+  if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().get_suspect_info(input_info.hash(), ret_info))) {
     if (OB_HASH_NOT_EXIST != ret) {
-      LOG_WARN("failed to get suspect info", K(ret), K(dag_hash));
+      LOG_WARN("failed to get suspect info", K(ret), K(input_info));
     }
   } else if (ret_info.add_time_ + SUSPECT_INFO_WARNING_THRESHOLD < ObTimeUtility::fast_current_time()) {
     ret = OB_ENTRY_NOT_EXIST;
@@ -413,7 +422,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
             SET_DIAGNOSE_INFO(
                 info_array_[idx_++],
                 MINI_MERGE,
-                MTL_ID(),
+                ret_info.tenant_id_,
                 ls_id,
                 ObTabletID(INT64_MAX),
                 ObCompactionDiagnoseInfo::DIA_STATUS_FAILED,

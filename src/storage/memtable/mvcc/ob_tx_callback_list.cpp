@@ -19,6 +19,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace memtable
 {
 
@@ -26,7 +27,7 @@ ObTxCallbackList::ObTxCallbackList(ObTransCallbackMgr &callback_mgr)
   : head_(),
     length_(0),
     batch_checksum_(),
-    checksum_scn_(palf::SCN::min_scn()),
+    checksum_scn_(SCN::min_scn()),
     checksum_(0),
     tmp_checksum_(0),
     callback_mgr_(callback_mgr),
@@ -41,7 +42,7 @@ void ObTxCallbackList::reset()
   head_.set_next(&head_);
   checksum_ = 0;
   tmp_checksum_ = 0;
-  checksum_scn_ = palf::SCN::min_scn();
+  checksum_scn_ = SCN::min_scn();
   batch_checksum_.reset();
   length_ = 0;
 }
@@ -156,7 +157,7 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
   } else {
     callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
     ensure_checksum_(functor.get_checksum_last_scn());
-    has_remove = palf::SCN::min_scn() != functor.get_checksum_last_scn();
+    has_remove = SCN::min_scn() != functor.get_checksum_last_scn();
   }
 
   return ret;
@@ -282,7 +283,7 @@ int ObTxCallbackList::get_memtable_key_arr_w_timeout(transaction::ObMemtableKeyA
   return ret;
 }
 
-int ObTxCallbackList::tx_calc_checksum_before_scn(const palf::SCN scn)
+int ObTxCallbackList::tx_calc_checksum_before_scn(const SCN scn)
 {
   int ret = OB_SUCCESS;
   SpinLockGuard guard(latch_);
@@ -312,7 +313,7 @@ int ObTxCallbackList::tx_calc_checksum_all()
   if (OB_FAIL(callback_(functor))) {
     TRANS_LOG(ERROR, "calc checksum wont report error", K(ret), K(functor));
   } else {
-    ensure_checksum_(palf::SCN::max_scn());
+    ensure_checksum_(SCN::max_scn());
   }
 
   return ret;
@@ -384,7 +385,7 @@ int ObTxCallbackList::tx_print_callback()
   return ret;
 }
 
-int ObTxCallbackList::replay_fail(const palf::SCN scn)
+int ObTxCallbackList::replay_fail(const SCN scn)
 {
   int ret = OB_SUCCESS;
   ObRemoveSyncCallbacksWCondFunctor functor(
@@ -418,7 +419,7 @@ int ObTxCallbackList::replay_fail(const palf::SCN scn)
   return OB_SUCCESS;
 }
 
-void ObTxCallbackList::get_checksum_and_scn(uint64_t &checksum, palf::SCN &checksum_scn)
+void ObTxCallbackList::get_checksum_and_scn(uint64_t &checksum, SCN &checksum_scn)
 {
   SpinLockGuard guard(latch_);
   checksum = batch_checksum_.calc();
@@ -426,7 +427,7 @@ void ObTxCallbackList::get_checksum_and_scn(uint64_t &checksum, palf::SCN &check
   TRANS_LOG(INFO, "get checksum and checksum_scn", KPC(this), K(checksum), K(checksum_scn));
 }
 
-void ObTxCallbackList::update_checksum(const uint64_t checksum, const palf::SCN checksum_scn)
+void ObTxCallbackList::update_checksum(const uint64_t checksum, const SCN checksum_scn)
 {
   SpinLockGuard guard(latch_);
   batch_checksum_.set_base(checksum);
@@ -434,17 +435,17 @@ void ObTxCallbackList::update_checksum(const uint64_t checksum, const palf::SCN 
   TRANS_LOG(INFO, "update checksum and checksum_scn", KPC(this), K(checksum), K(checksum_scn));
 }
 
-void ObTxCallbackList::ensure_checksum_(const palf::SCN scn)
+void ObTxCallbackList::ensure_checksum_(const SCN scn)
 {
-  if (palf::SCN::min_scn() == scn) {
+  if (SCN::min_scn() == scn) {
     // Case1: no callback is invovled
   } else if (scn < checksum_scn_) {
     // Case2: no checksum is calculated
-  } else if (palf::SCN::max_scn() == scn) {
-    checksum_scn_ = palf::SCN::max_scn();
+  } else if (SCN::max_scn() == scn) {
+    checksum_scn_ = SCN::max_scn();
     ATOMIC_STORE(&checksum_, batch_checksum_.calc() ? : 1);
   } else {
-    checksum_scn_ = palf::SCN::plus(scn, 1);
+    checksum_scn_ = SCN::plus(scn, 1);
     ATOMIC_STORE(&tmp_checksum_, batch_checksum_.calc() ? : 1);
   }
 }

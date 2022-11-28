@@ -18,6 +18,7 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 
 using namespace oceanbase::logservice;
+using namespace oceanbase::share;
 
 namespace oceanbase
 {
@@ -26,7 +27,7 @@ namespace storage
 ObTabletServiceClogReplayExecutor::ObTabletServiceClogReplayExecutor(
     ObLS *ls,
     const palf::LSN &lsn,
-    const palf::SCN &scn)
+    const SCN &scn)
   : ls_(ls),
     lsn_(lsn),
     scn_(scn)
@@ -39,7 +40,7 @@ int ObTabletServiceClogReplayExecutor::execute(
     const int64_t buf_size,
     const int64_t pos,
     const palf::LSN &lsn,
-    const palf::SCN &scn)
+    const SCN &scn)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_pos = pos;
@@ -73,7 +74,7 @@ int ObTabletServiceClogReplayExecutor::execute(
 }
 
 int ObTabletServiceClogReplayExecutor::replay_update_storage_schema(
-    const palf::SCN &scn,
+    const SCN &scn,
     const char *buf,
     const int64_t buf_size,
     const int64_t pos)

@@ -18,7 +18,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/worker.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include <cstdint>
 namespace oceanbase
 {
@@ -60,7 +60,7 @@ struct ObLogArchiveSourceItem
   int64_t id_;
   ObLogArchiveSourceType type_;
   common::ObString value_;
-  palf::SCN until_scn_;
+  SCN until_scn_;
   lib::ObArenaAllocator allocator_;
   ObLogArchiveSourceItem() :
     tenant_id_(),
@@ -70,7 +70,7 @@ struct ObLogArchiveSourceItem
     allocator_() {}
   ObLogArchiveSourceItem(const uint64_t tenant_id,
       const int64_t id,
-      const palf::SCN &until_scn) :
+      const SCN &until_scn) :
     tenant_id_(tenant_id),
     id_(id),
     type_(ObLogArchiveSourceType::INVALID),
@@ -80,7 +80,7 @@ struct ObLogArchiveSourceItem
       const int64_t id,
       const ObLogArchiveSourceType &type,
       const ObString &value,
-      const palf::SCN &until_scn) :
+      const SCN &until_scn) :
     tenant_id_(tenant_id),
     id_(id),
     type_(type),

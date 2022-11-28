@@ -112,6 +112,7 @@ public:
   int merge_all();
   int schedule_merge(const int64_t broadcast_version);
   int update_upper_trans_version_and_gc_sstable();
+  int wait_ls_compaction_finish(const share::ObLSID &ls_id);
 
   // Schedule an async task to build bloomfilter for the given macro block.
   // The bloomfilter build task will be ignored if a same build task exists in the queue.
@@ -120,7 +121,7 @@ public:
       const blocksstable::MacroBlockId &macro_id,
       const int64_t prefix_len);
   int schedule_load_bloomfilter(const blocksstable::MacroBlockId &macro_id);
-  static bool check_tx_table_ready(ObLS &ls, const palf::SCN &check_scn);
+  static bool check_tx_table_ready(ObLS &ls, const share::SCN &check_scn);
   static int check_ls_state(ObLS &ls, bool &need_merge);
   static int schedule_tablet_minor_merge(const share::ObLSID ls_id, ObTablet &tablet);
   static int schedule_tablet_major_merge(

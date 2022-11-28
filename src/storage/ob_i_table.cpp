@@ -24,6 +24,7 @@ using namespace oceanbase;
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 using namespace oceanbase::memtable;
 using namespace oceanbase::transaction::tablelock;
 
@@ -677,13 +678,13 @@ int ObTablesHandleArray::check_continues(const share::ObScnRange *scn_range) con
     // there can only be one major or buf minor
     const ObITable *last_table = nullptr;
     const ObITable *table = nullptr;
-    palf::SCN base_end_scn = palf::SCN::min_scn();
+    SCN base_end_scn = SCN::min_scn();
     int64_t i = 0;
     if (OB_ISNULL(table = tables_.at(i))) {
       ret = OB_ERR_SYS;
       LOG_WARN("table is NULL", KPC(table));
     } else if (table->is_major_sstable() || table->is_buf_minor_sstable()) {
-      base_end_scn = table->is_buf_minor_sstable() ? table->get_end_scn() : palf::SCN::min_scn();
+      base_end_scn = table->is_buf_minor_sstable() ? table->get_end_scn() : SCN::min_scn();
       i++;
     }
     // 2:check minor sstable

@@ -24,7 +24,6 @@
 
 using namespace oceanbase;
 using namespace oceanbase::common;
-using namespace oceanbase::palf;
 namespace oceanbase
 {
 namespace share
@@ -79,8 +78,8 @@ int ObAllTenantInfo::init(const uint64_t tenant_id, const ObTenantRole tenant_ro
 
 int ObAllTenantInfo::init(
     const uint64_t tenant_id, const ObTenantRole &tenant_role, const ObTenantSwitchoverStatus &switchover_status,
-    int64_t switchover_epoch, const palf::SCN &sync_scn, const palf::SCN &replayable_scn,
-    const palf::SCN &standby_scn, const palf::SCN &recovery_until_scn)
+    int64_t switchover_epoch, const SCN &sync_scn, const SCN &replayable_scn,
+    const SCN &standby_scn, const SCN &recovery_until_scn)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -233,8 +232,8 @@ int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
 
 int ObAllTenantInfoProxy::update_tenant_recovery_status(
     const uint64_t tenant_id, ObMySQLProxy *proxy,
-    ObTenantSwitchoverStatus status, const palf::SCN &sync_scn,
-    const palf::SCN &replay_scn, const palf::SCN &readable_scn)
+    ObTenantSwitchoverStatus status, const SCN &sync_scn,
+    const SCN &replay_scn, const SCN &readable_scn)
 {
   int ret = OB_SUCCESS;
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);

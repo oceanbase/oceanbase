@@ -860,9 +860,11 @@ int ObTableSqlService::revise_check_cst_column_info(
   return ret;
 }
 
-int ObTableSqlService::insert_single_column(ObISQLClient &sql_client,
-                                            const ObTableSchema &new_table_schema,
-                                            const ObColumnSchemaV2 &new_column_schema)
+int ObTableSqlService::insert_single_column(
+    ObISQLClient &sql_client,
+    const ObTableSchema &new_table_schema,
+    const ObColumnSchemaV2 &new_column_schema,
+    const bool record_ddl_operation)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_ddl_allowed(new_table_schema))) {
@@ -881,7 +883,7 @@ int ObTableSqlService::insert_single_column(ObISQLClient &sql_client,
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && record_ddl_operation) {
     ObSchemaOperation opt;
     opt.tenant_id_ = new_table_schema.get_tenant_id();
     opt.database_id_ = new_table_schema.get_database_id();
@@ -3681,10 +3683,10 @@ int ObTableSqlService::gen_column_dml(
         orig_default_value.assign_ptr(orig_default_value_buf, static_cast<int32_t>(orig_default_value_len));
         cur_default_value.assign_ptr(cur_default_value_buf, static_cast<int32_t>(cur_default_value_len));
       }
-      LOG_DEBUG("begin gen_column_dml", K(ret), K(compat_mode), K(orig_default_value), K(cur_default_value),  K(orig_default_value_len), K(cur_default_value_len));
+      LOG_TRACE("begin gen_column_dml", K(ret), K(compat_mode), K(orig_default_value), K(cur_default_value),  K(orig_default_value_len), K(cur_default_value_len));
     }
   }
-  LOG_DEBUG("begin gen_column_dml", K(ret), K(orig_default_value), K(cur_default_value), K(column));
+  LOG_TRACE("begin gen_column_dml", K(ret), K(orig_default_value), K(cur_default_value), K(column));
   if (OB_SUCC(ret)) {
     ObString cur_default_value_v1;
     if (column.get_orig_default_value().is_null()) {

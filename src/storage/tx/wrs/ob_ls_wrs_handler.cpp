@@ -21,6 +21,7 @@ namespace oceanbase
 using namespace common;
 using namespace transaction;
 using namespace clog;
+using namespace share;
 
 namespace storage
 {
@@ -75,11 +76,11 @@ int ObLSWRSHandler::online()
 int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
                                                            bool &need_skip,
                                                            bool &is_user_ls,
-                                                           palf::SCN &wrs_version,
+                                                           SCN &wrs_version,
                                                            const int64_t max_stale_time)
 {
   int ret = OB_SUCCESS;
-  palf::SCN timestamp;
+  SCN timestamp;
   const ObLSID &ls_id = ls.get_ls_id();
   need_skip = false;
   ObMigrationStatus status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
@@ -101,7 +102,7 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
   } else if (OB_FAIL(ls.get_migration_status(status))
                   || ObMigrationStatus::OB_MIGRATION_STATUS_NONE == status ) {
     // check the weak read timestamp of the migrated ls
-    if (timestamp.get_val_for_lsn_allocator() > ObTimeUtility::current_time() - 500 * 1000) {
+    if (timestamp.get_val_for_logservice() > ObTimeUtility::current_time() - 500 * 1000) {
       STORAGE_LOG(TRACE, "ls received the latest log", K(timestamp));
       // clog chases within 500ms, then clear the mark
       need_skip = false;
@@ -110,7 +111,7 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
     }
   } else {
     int64_t snapshot_version_barrier = ObTimeUtility::current_time() - max_stale_time;
-    if (timestamp.get_val_for_lsn_allocator() <= snapshot_version_barrier) {
+    if (timestamp.get_val_for_logservice() <= snapshot_version_barrier) {
       // rule out these ls to avoid too old weak read timestamp
       need_skip = true;
     } else {
@@ -136,10 +137,10 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
   return ret;
 }
 
-int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_stale_time, palf::SCN &timestamp)
+int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_stale_time, SCN &timestamp)
 {
   int ret = OB_SUCCESS;
-  palf::SCN min_log_service_scn, min_tx_service_ts;
+  SCN min_log_service_scn, min_tx_service_ts;
   const ObLSID &ls_id = ls.get_ls_id();
 
   //the order of apply service、trx should not be changed
@@ -164,7 +165,7 @@ int ObLSWRSHandler::generate_weak_read_timestamp_(ObLS &ls, const int64_t max_st
       STORAGE_LOG(WARN, "get_min_uncommit_prepare_version error", K(ret), K(ls_id));
     }
   } else {
-    timestamp = palf::SCN::min(min_log_service_scn, min_tx_service_ts);
+    timestamp = SCN::min(min_log_service_scn, min_tx_service_ts);
     const int64_t current_us = ObClockGenerator::getClock();
     if (current_us - timestamp.convert_to_ts() > 3000 * 1000L /*3s*/
         || REACH_TIME_INTERVAL(10 * 1000 * 1000)) {

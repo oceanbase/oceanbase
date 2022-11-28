@@ -245,7 +245,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                                   const ObReplicaType replica_type,
                                   const ObMigrationStatus &migration_status,
                                   const ObLSRestoreStatus &restore_status,
-                                  const palf::SCN &create_scn,
+                                  const SCN &create_scn,
                                   ObLS *&ls)
 {
   int ret = OB_SUCCESS;
@@ -385,7 +385,7 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
   bool need_retry = true;
   bool ls_exist = false;
   bool waiting_destroy = false;
-  const palf::SCN create_scn = arg.get_create_scn();
+  const SCN create_scn = arg.get_create_scn();
   palf::PalfBaseInfo palf_base_info;
   const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
   lib::ObMutexGuard change_guard(change_lock_);
@@ -1202,7 +1202,7 @@ int ObLSService::create_tablet(const obrpc::ObBatchCreateTabletArg &batch_arg,
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("log stream is null, unexpected error", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls->batch_create_tablets(batch_arg, palf::SCN(), is_replay))) {
+  } else if (OB_FAIL(ls->batch_create_tablets(batch_arg, SCN(), is_replay))) {
     LOG_WARN("batch create tablet failed", K(ret), K(batch_arg));
   } else {
     // do nothing

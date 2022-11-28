@@ -23,7 +23,7 @@
 #include "logservice/logrpc/ob_log_rpc_req.h"
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/lsn.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "logservice/palf/palf_env.h"
 #include "logservice/palf/log_group_entry.h"
 #include "logservice/palf/palf_options.h"
@@ -31,6 +31,7 @@
 
 namespace oceanbase
 {
+using namespace share;
 namespace logservice
 {
 using namespace palf;
@@ -295,7 +296,7 @@ int ObLogHandler::get_access_mode(int64_t &mode_version, palf::AccessMode &acces
 
 int ObLogHandler::change_access_mode(const int64_t mode_version,
                                      const palf::AccessMode &access_mode,
-                                     const palf::SCN &ref_scn)
+                                     const SCN &ref_scn)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -367,7 +368,7 @@ int ObLogHandler::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
   return palf_handle_.locate_by_scn_coarsely(scn, result_lsn);
 }
 
-int ObLogHandler::locate_by_lsn_coarsely(const LSN &lsn, palf::SCN &result_scn)
+int ObLogHandler::locate_by_lsn_coarsely(const LSN &lsn, SCN &result_scn)
 {
   RLockGuard guard(lock_);
   return palf_handle_.locate_by_lsn_coarsely(lsn, result_scn);
@@ -391,13 +392,13 @@ int ObLogHandler::get_max_lsn(LSN &lsn) const
   return palf_handle_.get_max_lsn(lsn);
 }
 
-int ObLogHandler::get_max_scn(palf::SCN &scn) const
+int ObLogHandler::get_max_scn(SCN &scn) const
 {
   RLockGuard guard(lock_);
   return palf_handle_.get_max_scn(scn);
 }
 
-int ObLogHandler::get_end_scn(palf::SCN &scn) const
+int ObLogHandler::get_end_scn(SCN &scn) const
 {
   RLockGuard guard(lock_);
   return palf_handle_.get_end_scn(scn);
@@ -1116,7 +1117,7 @@ void ObLogHandler::wait_append_sync() {
 }
 
 int ObLogHandler::enable_replay(const palf::LSN &lsn,
-                                const palf::SCN &scn)
+                                const SCN &scn)
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);

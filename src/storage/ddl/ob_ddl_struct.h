@@ -15,7 +15,7 @@
 
 #include "lib/hash/ob_hashmap.h"
 #include "lib/lock/ob_mutex.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/ob_i_table.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
@@ -62,8 +62,8 @@ public:
   ObDDLMacroHandle block_handle_;
   blocksstable::ObLogicMacroBlockId logic_id_;
   blocksstable::ObDDLMacroBlockType block_type_;
-  palf::SCN ddl_start_scn_;
-  palf::SCN scn_;
+  share::SCN ddl_start_scn_;
+  share::SCN scn_;
   const char *buf_;
   int64_t size_;
 };
@@ -76,20 +76,20 @@ public:
   ~ObDDLKV();
   int init(const share::ObLSID &ls_id,
            const common::ObTabletID &tablet_id,
-           const palf::SCN &ddl_start_log_ts,
+           const share::SCN &ddl_start_log_ts,
            const int64_t snapshot_version,
-           const palf::SCN &last_freezed_scn,
+           const share::SCN &last_freezed_scn,
            const int64_t cluster_version);
   void destroy();
   int set_macro_block(const ObDDLMacroBlock &macro_block);
 
-  int freeze(const palf::SCN &freeze_scn);
+  int freeze(const share::SCN &freeze_scn);
   bool is_freezed() const { return ATOMIC_LOAD(&is_freezed_); }
   int close();
   bool is_closed() const { return is_closed_; }
-  palf::SCN get_min_scn() const { return min_scn_; }
-  palf::SCN get_freeze_scn() const { return freeze_scn_; }
-  palf::SCN get_ddl_start_scn() const { return ddl_start_scn_; }
+  share::SCN get_min_scn() const { return min_scn_; }
+  share::SCN get_freeze_scn() const { return freeze_scn_; }
+  share::SCN get_ddl_start_scn() const { return ddl_start_scn_; }
   int64_t get_macro_block_cnt() const { return ddl_blocks_.count(); }
   void inc_pending_cnt(); // used by ddl kv pending guard
   void dec_pending_cnt();
@@ -110,16 +110,16 @@ private:
   bool is_inited_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
-  palf::SCN ddl_start_scn_; // the log ts of ddl start log
+  share::SCN ddl_start_scn_; // the log ts of ddl start log
   int64_t snapshot_version_; // the snapshot version for major sstable which is completed by ddl
   common::TCRWLock lock_; // lock for ddl_blocks_ and freeze_log_ts_
   common::ObArenaAllocator allocator_;
   bool is_freezed_;
   bool is_closed_;
-  palf::SCN last_freezed_scn_; // the freezed log ts of last ddl kv. the log ts range of this ddl kv is (last_freezed_log_ts_, freeze_log_ts_]
-  palf::SCN min_scn_; // the min log ts of macro blocks
-  palf::SCN max_scn_; // the max log ts of macro blocks
-  palf::SCN freeze_scn_; // ddl kv refuse data larger than freeze log ts, freeze_log_ts >= max_log_ts
+  share::SCN last_freezed_scn_; // the freezed log ts of last ddl kv. the log ts range of this ddl kv is (last_freezed_log_ts_, freeze_log_ts_]
+  share::SCN min_scn_; // the min log ts of macro blocks
+  share::SCN max_scn_; // the max log ts of macro blocks
+  share::SCN freeze_scn_; // ddl kv refuse data larger than freeze log ts, freeze_log_ts >= max_log_ts
   int64_t pending_cnt_; // the amount of kvs that are replaying
   int64_t cluster_version_;
   int64_t ref_cnt_;
@@ -161,13 +161,13 @@ class ObDDLKVPendingGuard final
 public:
   static int set_macro_block(ObTablet *tablet, const ObDDLMacroBlock &macro_block);
 public:
-  ObDDLKVPendingGuard(ObTablet *tablet, const palf::SCN &scn);
+  ObDDLKVPendingGuard(ObTablet *tablet, const share::SCN &scn);
   ~ObDDLKVPendingGuard();
   int get_ret() const { return ret_; }
   int get_ddl_kv(ObDDLKV *&kv);
 private:
   ObTablet *tablet_;
-  palf::SCN scn_;
+  share::SCN scn_;
   ObDDLKVHandle kv_handle_;
   int ret_;
 };

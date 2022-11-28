@@ -33,7 +33,7 @@ public:
   }
   ~ObTxVersionMgr() {}
 public:
-  void update_max_commit_ts(const palf::SCN &ts, const bool elr)
+  void update_max_commit_ts(const share::SCN &ts, const bool elr)
   {
     if (!elr) {
       max_commit_ts_.inc_update(ts);
@@ -42,31 +42,31 @@ public:
     }
     TRANS_LOG(TRACE, "update max commit ts", K(ts), K(elr));
   }
-  void update_max_read_ts(const palf::SCN &ts)
+  void update_max_read_ts(const share::SCN &ts)
   {
     max_read_ts_.inc_update(ts);
     TRANS_LOG(TRACE, "update max read ts", K(ts));
   }
-  palf::SCN get_max_commit_ts(const bool elr) const
+  share::SCN get_max_commit_ts(const bool elr) const
   {
-    palf::SCN max_commit_ts = max_commit_ts_.atomic_get();
+    share::SCN max_commit_ts = max_commit_ts_.atomic_get();
     if (elr) {
-      const palf::SCN max_elr_commit_ts = max_elr_commit_ts_.atomic_get();
-      max_commit_ts = palf::SCN::max(max_commit_ts, max_elr_commit_ts);
+      const share::SCN max_elr_commit_ts = max_elr_commit_ts_.atomic_get();
+      max_commit_ts = share::SCN::max(max_commit_ts, max_elr_commit_ts);
     }
     TRANS_LOG(TRACE, "get max commit ts", K(max_commit_ts), K(elr));
     return max_commit_ts;
   }
-  palf::SCN get_max_read_ts() const
+  share::SCN get_max_read_ts() const
   {
-    const palf::SCN max_read_ts = palf::SCN::scn_inc(max_read_ts_);
+    const share::SCN max_read_ts = share::SCN::scn_inc(max_read_ts_);
     TRANS_LOG(TRACE, "get max read ts", K(max_read_ts));
     return max_read_ts;
   }
 private:
-  palf::SCN max_commit_ts_ CACHE_ALIGNED;
-  palf::SCN max_elr_commit_ts_ CACHE_ALIGNED;
-  palf::SCN max_read_ts_ CACHE_ALIGNED;
+  share::SCN max_commit_ts_ CACHE_ALIGNED;
+  share::SCN max_elr_commit_ts_ CACHE_ALIGNED;
+  share::SCN max_read_ts_ CACHE_ALIGNED;
 };
 
 }

@@ -67,7 +67,7 @@ int ObTxTableMergeDag::init_by_param(const ObIDagInitParam *param)
   } else if (merge_param->tablet_id_.is_ls_tx_data_tablet() && merge_param->is_minor_merge()) {
     // init compaction filter for minor merge in TxDataTable
     ObTxTableGuard guard;
-    palf::SCN recycle_scn = palf::SCN::min_scn();
+    SCN recycle_scn = SCN::min_scn();
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(ctx_->ls_handle_.get_ls()->get_tx_table_guard(guard))) {
       LOG_WARN("failed to get tx table", K(tmp_ret), KPC(merge_param));

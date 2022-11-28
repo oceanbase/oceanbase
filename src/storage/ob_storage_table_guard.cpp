@@ -27,12 +27,13 @@ namespace oceanbase
 {
 namespace storage
 {
+using namespace share;
 ObStorageTableGuard::ObStorageTableGuard(
     ObTablet *tablet,
     ObStoreCtx &store_ctx,
     const bool need_control_mem,
     const bool for_replay,
-    const palf::SCN replay_scn,
+    const SCN replay_scn,
     const bool for_multi_source_data)
   : tablet_(tablet),
     store_ctx_(store_ctx),
@@ -139,7 +140,7 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
   ObTableHandleV2 handle;
   const share::ObLSID &ls_id = tablet_->get_tablet_meta().ls_id_;
   const common::ObTabletID &tablet_id = tablet_->get_tablet_meta().tablet_id_;
-  palf::SCN clog_checkpoint_scn;
+  SCN clog_checkpoint_scn;
   bool bool_ret = true;
   const int64_t start = ObTimeUtility::current_time();
 

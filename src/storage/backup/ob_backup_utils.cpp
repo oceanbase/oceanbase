@@ -31,7 +31,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 
 #include <algorithm>
@@ -225,8 +225,8 @@ int ObBackupUtils::check_tablet_minor_sstable_validity_(const storage::ObTabletH
   ObTablet *tablet = NULL;
   ObITable *last_table_ptr = NULL;
   ObTabletID tablet_id;
-  palf::SCN start_scn = SCN::min_scn();
-  palf::SCN clog_checkpoint_scn = SCN::min_scn();
+  SCN start_scn = SCN::min_scn();
+  SCN clog_checkpoint_scn = SCN::min_scn();
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));

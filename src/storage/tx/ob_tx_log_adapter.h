@@ -48,7 +48,7 @@ class ObITxLogAdapter
 public:
   virtual int submit_log(const char *buf,
                          const int64_t size,
-                         const palf::SCN base_ts,
+                         const share::SCN base_ts,
                          ObTxBaseLogCb *cb,
                          const bool need_nonblock) = 0;
 
@@ -65,7 +65,7 @@ public:
   int init(ObITxLogParam *param);
   int submit_log(const char *buf,
                  const int64_t size,
-                 const palf::SCN base_ts,
+                 const share::SCN base_ts,
                  ObTxBaseLogCb *cb,
                  const bool need_nonblock);
   int get_role(bool &is_leader, int64_t &epoch);

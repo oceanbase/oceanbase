@@ -16,6 +16,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase {
+using namespace share;
 namespace storage {
 
 ObStorageHASrcProvider::ObStorageHASrcProvider()
@@ -47,7 +48,7 @@ int ObStorageHASrcProvider::init(const uint64_t tenant_id, const ObMigrationOpTy
   return ret;
 }
 
-int ObStorageHASrcProvider::choose_ob_src(const share::ObLSID &ls_id, const palf::SCN &local_clog_checkpoint_scn,
+int ObStorageHASrcProvider::choose_ob_src(const share::ObLSID &ls_id, const SCN &local_clog_checkpoint_scn,
     ObStorageHASrcInfo &src_info)
 {
   int ret = OB_SUCCESS;
@@ -181,13 +182,13 @@ int ObStorageHASrcProvider::fetch_ls_meta_info_(const uint64_t tenant_id, const 
 }
 
 int ObStorageHASrcProvider::inner_choose_ob_src_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const palf::SCN &local_clog_checkpoint_scn, const common::ObIArray<common::ObAddr> &addr_list,
+    const SCN &local_clog_checkpoint_scn, const common::ObIArray<common::ObAddr> &addr_list,
     common::ObAddr &choosen_src_addr)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t choose_member_idx = -1;
-  palf::SCN max_clog_checkpoint_scn;
+  SCN max_clog_checkpoint_scn;
   for (int64_t i = 0; OB_SUCC(ret) && i < addr_list.count(); ++i) {
     const common::ObAddr &addr = addr_list.at(i);
     obrpc::ObFetchLSMetaInfoResp ls_info;

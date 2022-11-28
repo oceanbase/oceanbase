@@ -19,7 +19,7 @@
 #include "share/ob_inner_kv_table_operator.h"
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_archive_compatible.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -152,9 +152,9 @@ struct ObTenantArchiveRoundAttr final : public ObIInnerTableRow
   int64_t dest_id_; // archive dest identification.
   int64_t round_id_;
   ObArchiveRoundState state_;
-  palf::SCN start_scn_;
-  palf::SCN checkpoint_scn_;
-  palf::SCN max_scn_;
+  SCN start_scn_;
+  SCN checkpoint_scn_;
+  SCN max_scn_;
   ObArchiveCompatible compatible_;
 
   int64_t base_piece_id_;
@@ -179,9 +179,9 @@ struct ObTenantArchiveRoundAttr final : public ObIInnerTableRow
     base_piece_id_ = 0;
     used_piece_id_ = 0;
     piece_switch_interval_ = 0;
-    start_scn_ = palf::SCN::min_scn();
-    checkpoint_scn_ = palf::SCN::min_scn();
-    max_scn_ = palf::SCN::min_scn();
+    start_scn_ = share::SCN::min_scn();
+    checkpoint_scn_ = share::SCN::min_scn();
+    max_scn_ = share::SCN::min_scn();
     frozen_input_bytes_ = 0;
     frozen_output_bytes_ = 0;
     active_input_bytes_ = 0;
@@ -316,9 +316,9 @@ struct ObTenantArchiveHisRoundAttr final : public ObIInnerTableRow
   Key key_;
   int64_t incarnation_;
   int64_t dest_id_;
-  palf::SCN start_scn_;
-  palf::SCN checkpoint_scn_;
-  palf::SCN max_scn_;
+  SCN start_scn_;
+  SCN checkpoint_scn_;
+  SCN max_scn_;
   ObArchiveCompatible compatible_;
 
   int64_t base_piece_id_;
@@ -340,9 +340,9 @@ struct ObTenantArchiveHisRoundAttr final : public ObIInnerTableRow
     base_piece_id_ = 0;
     used_piece_id_ = 0;
     piece_switch_interval_ = 0;
-    start_scn_ = palf::SCN::min_scn();
-    checkpoint_scn_ = palf::SCN::min_scn();
-    max_scn_ = palf::SCN::min_scn();
+    start_scn_ = share::SCN::min_scn();
+    checkpoint_scn_ = share::SCN::min_scn();
+    max_scn_ = share::SCN::min_scn();
     input_bytes_ = 0;
     output_bytes_ = 0;
     deleted_input_bytes_ = 0;
@@ -581,10 +581,10 @@ public:
   int64_t incarnation_;
   int64_t dest_no_;
   int64_t file_count_;
-  palf::SCN start_scn_;
-  palf::SCN checkpoint_scn_;
-  palf::SCN max_scn_;
-  palf::SCN end_scn_;
+  SCN start_scn_;
+  SCN checkpoint_scn_;
+  SCN max_scn_;
+  SCN end_scn_;
   ObArchiveCompatible compatible_;
 
   int64_t input_bytes_;
@@ -606,10 +606,10 @@ public:
     output_bytes_ = 0;
     cp_file_id_ = 0;
     cp_file_offset_ = 0;
-    start_scn_ = palf::SCN::min_scn();
-    checkpoint_scn_ = palf::SCN::min_scn();
-    max_scn_ = palf::SCN::min_scn();
-    end_scn_ = palf::SCN::min_scn();
+    start_scn_ = share::SCN::min_scn();
+    checkpoint_scn_ = share::SCN::min_scn();
+    max_scn_ = share::SCN::min_scn();
+    end_scn_ = share::SCN::min_scn();
   }
 
   // Return if primary key valid.
@@ -744,9 +744,9 @@ struct ObLSArchivePersistInfo final : public ObIInnerTableRow
 
   Key key_;
   int64_t incarnation_;
-  palf::SCN start_scn_;        // piece start ts
+  SCN start_scn_;        // piece start ts
   uint64_t start_lsn_;                // piece start lsn
-  palf::SCN checkpoint_scn_;
+  SCN checkpoint_scn_;
   uint64_t lsn_;
   int64_t archive_file_id_;
   int64_t archive_file_offset_;
@@ -814,8 +814,8 @@ struct ObArchiveLSPieceSummary
   int64_t incarnation_;
   ObArchiveRoundState state_;
 
-  palf::SCN start_scn_;
-  palf::SCN checkpoint_scn_;
+  SCN start_scn_;
+  SCN checkpoint_scn_;
   uint64_t min_lsn_;
   uint64_t max_lsn_;
   int64_t input_bytes_;
@@ -834,8 +834,8 @@ struct ObLSDestRoundSummary
   struct OnePiece
   {
     int64_t piece_id_;
-    palf::SCN start_scn_;
-    palf::SCN checkpoint_scn_;
+    SCN start_scn_;
+    SCN checkpoint_scn_;
     uint64_t min_lsn_;
     uint64_t max_lsn_;
     int64_t input_bytes_;
@@ -851,8 +851,8 @@ struct ObLSDestRoundSummary
   ObLSID ls_id_;
   bool is_deleted_; // mark deleted ls.
   ObArchiveRoundState state_;
-  palf::SCN start_scn_;
-  palf::SCN checkpoint_scn_;
+  SCN start_scn_;
+  SCN checkpoint_scn_;
   // Ordered by pieceid.
   common::ObArray<OnePiece> piece_list_;
 

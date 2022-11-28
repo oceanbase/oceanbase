@@ -28,7 +28,7 @@
 #include "storage/tablet/ob_tablet_table_store.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/tx/ob_trans_define.h"
-#include "logservice/palf/scn.h"
+#include "share/scn.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase
@@ -64,11 +64,6 @@ namespace blocksstable
 {
 class ObSSTable;
 }
-namespace palf
-{
-class SCN;
-}
-
 namespace transaction
 {
 class ObTransID;
@@ -116,7 +111,7 @@ public:
   int64_t dec_ref();
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
   int64_t get_wash_score() const { return ATOMIC_LOAD(&wash_score_); }
-  int get_rec_log_scn(palf::SCN &rec_scn);
+  int get_rec_log_scn(share::SCN &rec_scn);
 public:
   // first time create tablet
   int init(
@@ -125,7 +120,7 @@ public:
       const common::ObTabletID &data_tablet_id,
       const common::ObTabletID &lob_meta_tablet_id,
       const common::ObTabletID &lob_piece_tablet_id,
-      const palf::SCN &create_scn,
+      const share::SCN &create_scn,
       const int64_t snapshot_version,
       const share::schema::ObTableSchema &table_schema,
       const lib::Worker::CompatMode compat_mode,
@@ -219,7 +214,7 @@ public:
   ObIMemtableMgr *get_memtable_mgr() const { return memtable_mgr_; } // TODO(bowen.gbw): get memtable mgr from tablet pointer handle
   // get the active memtable for write or replay.
   int get_active_memtable(ObTableHandleV2 &handle) const;
-  int release_memtables(const palf::SCN scn);
+  int release_memtables(const share::SCN scn);
   // force release all memtables
   // just for rebuild or migrate retry.
   int release_memtables();
@@ -236,12 +231,12 @@ public:
   template<class T>
   int back_fill_scn_for_commit(T &multi_source_data_unit);
   template<class T>
-  int set_multi_data_for_commit(T &multi_source_data_unit, const palf::SCN &log_scn, const bool for_replay, const memtable::MemtableRefOp ref_op);
+  int set_multi_data_for_commit(T &multi_source_data_unit, const share::SCN &log_scn, const bool for_replay, const memtable::MemtableRefOp ref_op);
 
   template<class T>
   int save_multi_source_data_unit(
       const T *const msd,
-      const palf::SCN &memtable_scn,
+      const share::SCN &memtable_scn,
       const bool for_replay,
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
       const bool is_callback = false);
@@ -285,11 +280,6 @@ public:
   // check whether we have dumped a sstable or not.
   int check_has_sstable(bool &has_sstable) const;
 
-  // ddl kv
-  int get_active_ddl_kv(ObDDLKVHandle &ddl_kvs_handle);
-  int get_or_create_active_ddl_kv(ObDDLKVHandle &ddl_kvs_handle);
-  int check_has_effective_ddl_kv(bool &has_ddl_kv);
-  int get_ddl_kv_min_scn(palf::SCN &min_scn);
   int get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_create = false);
   void remove_ddl_kv_mgr();
   int start_ddl_if_need();
@@ -299,11 +289,11 @@ public:
   // other
   const ObTabletMeta &get_tablet_meta() const { return tablet_meta_; }
   const ObTabletTableStore &get_table_store() const { return table_store_; }
-  palf::SCN get_clog_checkpoint_scn() const { return tablet_meta_.clog_checkpoint_scn_; }
+  share::SCN get_clog_checkpoint_scn() const { return tablet_meta_.clog_checkpoint_scn_; }
   int64_t get_snapshot_version() const { return tablet_meta_.snapshot_version_; }
   int64_t get_multi_version_start() const { return tablet_meta_.multi_version_start_; }
-  int get_multi_version_start(palf::SCN &scn) const;
-  int get_snapshot_version(palf::SCN &scn) const;
+  int get_multi_version_start(share::SCN &scn) const;
+  int get_snapshot_version(share::SCN &scn) const;
 
   // deprecated later, DO NOT use it!
   ObTabletTableStore &get_table_store() { return table_store_; }
@@ -319,7 +309,7 @@ public:
   int assign_pointer_handle(const ObTabletPointerHandle &ptr_hdl);
 
   int replay_update_storage_schema(
-      const palf::SCN &scn,
+      const share::SCN &scn,
       const char *buf,
       const int64_t buf_size,
       int64_t &pos);
@@ -331,7 +321,7 @@ public:
   int get_latest_autoinc_seq(share::ObTabletAutoincSeq &autoinc_seq) const;
   int update_tablet_autoinc_seq(
       const uint64_t autoinc_seq,
-      const palf::SCN &replay_scn);
+      const share::SCN &replay_scn);
 
   int get_kept_multi_version_start(
       int64_t &multi_version_start,
@@ -350,7 +340,7 @@ public:
       const bool need_checksums = true);
   int set_tx_data(
       const ObTabletTxMultiSourceDataUnit &tx_data,
-      const palf::SCN &memtable_log_scn,
+      const share::SCN &memtable_log_scn,
       const bool for_replay,
       const bool update_cache,
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
@@ -410,20 +400,20 @@ private:
 
   // used for freeze_tablet
   int inner_create_memtable(
-      const palf::SCN clog_checkpoint_scn = palf::SCN::base_scn(),/*1 for first memtable, filled later*/
+      const share::SCN clog_checkpoint_scn = share::SCN::base_scn(),/*1 for first memtable, filled later*/
       const int64_t schema_version = 0/*0 for first memtable*/,
       const bool for_replay=false);
 
   int write_sync_tablet_seq_log(share::ObTabletAutoincSeq &autoinc_seq,
                                 const uint64_t new_autoinc_seq,
-                                palf::SCN &scn);
+                                share::SCN &scn);
   int update_ddl_info(
       const int64_t schema_version,
-      const palf::SCN &scn,
+      const share::SCN &scn,
       int64_t &schema_refreshed_ts);
   int write_tablet_schema_version_change_clog(
       const int64_t schema_version,
-      palf::SCN &scn);
+      share::SCN &scn);
   int get_ddl_info(
       int64_t &refreshed_schema_version,
       int64_t &refreshed_schema_ts) const;
@@ -443,11 +433,11 @@ private:
       const bool for_replay);
   int set_tx_scn(
       const transaction::ObTransID &tx_id,
-      const palf::SCN &scn,
+      const share::SCN &scn,
       const bool for_replay);
   int set_tablet_final_status(
       ObTabletTxMultiSourceDataUnit &tx_data,
-      const palf::SCN &memtable_scn,
+      const share::SCN &memtable_scn,
       const bool for_replay,
       const memtable::MemtableRefOp ref_op);
   int set_tx_data(
@@ -594,7 +584,7 @@ int ObTablet::prepare_data(T &multi_source_data_unit, const transaction::ObMulSo
 {
   int ret = OB_SUCCESS;
 
-  const palf::SCN scn = trans_flags.for_replay_ ? trans_flags.scn_ : palf::SCN::max_scn();
+  const share::SCN scn = trans_flags.for_replay_ ? trans_flags.scn_ : share::SCN::max_scn();
 
   TRANS_LOG(INFO, "prepare data when tx_end", K(multi_source_data_unit), K(tablet_meta_.tablet_id_));
 
@@ -617,14 +607,14 @@ int ObTablet::prepare_data(T &multi_source_data_unit, const transaction::ObMulSo
 template<class T>
 int ObTablet::set_multi_data_for_commit(
     T &multi_source_data_unit,
-    const palf::SCN &log_scn,
+    const share::SCN &log_scn,
     const bool for_replay,
     const memtable::MemtableRefOp ref_op)
 {
   int ret = OB_SUCCESS;
 
   bool is_callback = true;
-  TRANS_LOG(INFO, "set_multi_data_for_commit", K(multi_source_data_unit));
+  TRANS_LOG(INFO, "set_multi_data_for_commit", K(multi_source_data_unit), K(ref_op));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret), K_(is_inited));
@@ -647,7 +637,7 @@ int ObTablet::back_fill_scn_for_commit(T &multi_source_data_unit)
 {
   int ret = OB_SUCCESS;
 
-  const palf::SCN scn = palf::SCN::max_scn();
+  const share::SCN scn = share::SCN::max_scn();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not inited", K(ret), K_(is_inited));
@@ -668,7 +658,7 @@ int ObTablet::back_fill_scn_for_commit(T &multi_source_data_unit)
 template<class T>
 int ObTablet::save_multi_source_data_unit(
     const T *const msd,
-    const palf::SCN &memtable_scn,
+    const share::SCN &memtable_scn,
     const bool for_replay,
     const memtable::MemtableRefOp ref_op,
     const bool is_callback)
@@ -723,7 +713,7 @@ int ObTablet::save_multi_source_data_unit(
       const int64_t start = ObTimeUtility::current_time();
       while (OB_SUCC(ret) &&
              memtable->get_logging_blocked() &&
-             palf::SCN::max_scn() == memtable_scn) {
+             share::SCN::max_scn() == memtable_scn) {
         if (ObTimeUtility::current_time() - start > 100 * 1000) {
           ret = OB_BLOCK_FROZEN;
           TRANS_LOG(WARN, "logging_block costs too much time", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op), K(for_replay));

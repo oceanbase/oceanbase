@@ -240,12 +240,12 @@ public:
   ObTransPreCommitLog()
     : ObTransLog() {}
   ~ObTransPreCommitLog() {}
-  palf::SCN get_publish_version() const { return publish_version_; }
+  share::SCN get_publish_version() const { return publish_version_; }
   bool is_valid() const;
 public:
   TO_STRING_KV(K_(log_type));
 private:
-  palf::SCN publish_version_;
+  share::SCN publish_version_;
 };
 
 class ObTransAbortLog : public ObTransLog
@@ -381,7 +381,7 @@ private:
   bool can_elr_;
   common::ObAddr proposal_leader_;
   uint64_t cluster_version_;
-  palf::SCN snapshot_version_;
+  share::SCN snapshot_version_;
   int64_t cur_query_start_time_;
   int64_t stmt_expired_time_;
   ObXATransID xid_;

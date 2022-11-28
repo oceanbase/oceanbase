@@ -798,8 +798,8 @@ ObStartCompleteMigrationTask::ObStartCompleteMigrationTask()
     is_inited_(false),
     ls_handle_(),
     ctx_(nullptr),
-    log_sync_scn_(palf::SCN::min_scn()),
-    max_minor_end_scn_(palf::SCN::min_scn())
+    log_sync_scn_(SCN::min_scn()),
+    max_minor_end_scn_(SCN::min_scn())
 {
 }
 
@@ -881,8 +881,8 @@ int ObStartCompleteMigrationTask::wait_log_sync_()
   bool is_log_sync = false;
   bool is_need_rebuild = false;
   bool is_cancel = false;
-  palf::SCN last_end_scn;
-  palf::SCN current_end_scn;
+  SCN last_end_scn;
+  SCN current_end_scn;
   const int64_t OB_CHECK_LOG_SYNC_INTERVAL = 200 * 1000; // 200ms
   const int64_t CLOG_IN_SYNC_DELAY_TIMEOUT = 30 * 60 * 1000 * 1000; // 30 min
   bool need_wait = true;
@@ -979,8 +979,8 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
   logservice::ObLogService *log_service = nullptr;
   bool wait_log_replay_success = false;
   bool is_cancel = false;
-  palf::SCN current_replay_scn;
-  palf::SCN last_replay_scn;
+  SCN current_replay_scn;
+  SCN last_replay_scn;
   const int64_t OB_CHECK_LOG_REPLAY_INTERVAL = 200 * 1000; // 200ms
   const int64_t CLOG_IN_REPLAY_DELAY_TIMEOUT = 30 * 60 * 1000 * 1000L; // 30 min
   bool need_wait = false;
@@ -1010,7 +1010,7 @@ int ObStartCompleteMigrationTask::wait_log_replay_sync_()
         STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
       } else if (OB_FAIL(ls->get_max_decided_scn(current_replay_scn))) {
         LOG_WARN("failed to get current replay log ts", K(ret), KPC(ctx_));
-      } else if (current_replay_scn >= log_sync_scn_) {
+      } else if (current_replay_scn.convert_to_ts() + IS_REPLAY_DONE_THRESHOLD_US >= log_sync_scn_.convert_to_ts()) {
         wait_log_replay_success = true;
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_replay_start_ts;
         LOG_INFO("wait replay log ts ns success, stop wait", "arg", ctx_->arg_, K(cost_ts));
@@ -1352,7 +1352,7 @@ int ObStartCompleteMigrationTask::wait_ls_checkpoint_scn_push_()
     LOG_WARN("checkpoint executor should not be NULL", K(ret), KPC(ctx_), KP(checkpoint_executor));
   } else {
     const int64_t wait_checkpoint_push_start_ts = ObTimeUtility::current_time();
-    palf::SCN checkpoint_scn = palf::SCN::min_scn();
+    SCN checkpoint_scn = SCN::min_scn();
     while (OB_SUCC(ret)) {
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
