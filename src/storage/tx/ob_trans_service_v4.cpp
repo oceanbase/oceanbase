@@ -1613,7 +1613,7 @@ int ObTransService::local_ls_commit_tx_(const ObTransID &tx_id,
   if (OB_FAIL(get_tx_ctx_(coord, tx_id, ctx))) {
     TRANS_LOG(WARN, "get coordinator tx context fail", K(ret), K(tx_id), K(coord));
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
-      int tx_state;
+      int tx_state = ObTxData::RUNNING;
       if (OB_FAIL(get_tx_state_from_tx_table_(coord, tx_id, tx_state, commit_version))) {
         TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(coord), K(tx_id));
         if (OB_TRANS_CTX_NOT_EXIST == ret) {
@@ -2641,11 +2641,11 @@ int ObTransService::sub_end_tx_local_ls_(const ObTransID &tx_id,
   if (OB_FAIL(get_tx_ctx_(coord, tx_id, ctx))) {
     TRANS_LOG(WARN, "fail to get coordinator tx context", K(ret), K(tx_id), K(coord));
     if (OB_TRANS_CTX_NOT_EXIST == ret) {
-      int tx_state;
+      int tx_state = ObTxData::RUNNING;
       SCN commit_version;
       if (OB_FAIL(get_tx_state_from_tx_table_(coord, tx_id, tx_state, commit_version))) {
         TRANS_LOG(WARN, "get tx state from tx table fail", K(ret), K(coord), K(tx_id));
-        if (OB_ENTRY_NOT_EXIST == ret) {
+        if (OB_TRANS_CTX_NOT_EXIST == ret) {
           ret = OB_TRANS_KILLED; // presume abort
         }
       } else {
@@ -2796,6 +2796,24 @@ int ObTransService::handle_sub_end_tx_result_(ObTxDesc &tx,
       // TODO, use other state to denote timeout
       tx.state_ = ObTxDesc::State::ROLLED_BACK;
       TRANS_LOG(WARN, "stmt timeout of sub end trans", K(tx), K(result));
+      break;
+    }
+    case OB_TRANS_COMMITED: {
+      commit_fin = true;
+      // NOTE that success is returned if xa rollback
+      tx.commit_out_ = OB_SUCCESS;
+      tx.state_ = ObTxDesc::State::SUB_COMMITTED;
+      break;
+    }
+    case OB_TRANS_ROLLBACKED:
+    case OB_TRANS_KILLED: {
+      commit_fin = true;
+      tx.state_ = ObTxDesc::State::SUB_ROLLBACKED;
+      if (is_rollback) {
+        tx.commit_out_ = OB_SUCCESS;
+      } else {
+        tx.commit_out_ = result;
+      }
       break;
     }
     case OB_SUCCESS: {
