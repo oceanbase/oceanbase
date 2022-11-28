@@ -531,7 +531,7 @@ int ObIndexBuildTask::hold_snapshot(const int64_t snapshot)
   } else if (snapshot <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("snapshot version not valid", K(ret), K(snapshot));
-  } else if (OB_FAIL(snapshot_scn.convert_for_lsn_allocator(snapshot))) {
+  } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot))) {
     LOG_WARN("failed to convert", K(snapshot), K(ret));
   } else {
     ObDDLService &ddl_service = root_service_->get_ddl_service();

@@ -556,8 +556,8 @@ int ObDDLRedoLogWriter::write(
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  palf::SCN base_log_scn = palf::SCN::min_scn();
-  palf::SCN log_scn;
+  palf::SCN base_scn = palf::SCN::min_scn();
+  palf::SCN scn;
   if (!log.is_valid() || nullptr == log_handler || !ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id || nullptr == buffer) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(log), K(ls_id), K(tenant_id), KP(buffer));
@@ -574,17 +574,17 @@ int ObDDLRedoLogWriter::write(
     LOG_WARN("fail to seriaize ddl redo log", K(ret));
   } else if (OB_FAIL(log_handler->append(buffer,
                                          buffer_size,
-                                         base_log_scn,
+                                         base_scn,
                                          need_nonblock,
                                          cb,
                                          lsn,
-                                         log_scn))) {
+                                         scn))) {
     LOG_WARN("fail to submit ddl redo log", K(ret), K(buffer), K(buffer_size));
   } else {
     handle.cb_ = cb;
     cb = nullptr;
-    handle.log_scn_ = log_scn;
-    LOG_INFO("submit ddl redo log succeed", K(lsn), K(base_log_scn), K(log_scn));
+    handle.scn_ = scn;
+    LOG_INFO("submit ddl redo log succeed", K(lsn), K(base_scn), K(scn));
   }
   if (OB_SUCC(ret)) {
     int64_t real_sleep_us = 0;
@@ -618,7 +618,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandl
 
   palf::LSN lsn;
   const bool need_nonblock= false;
-  palf::SCN log_scn;
+  palf::SCN scn;
   bool is_external_consistent = false;
   if (OB_ISNULL(cb = op_alloc(ObDDLClogCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -635,7 +635,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandl
                                          need_nonblock,
                                          cb,
                                          lsn,
-                                         log_scn))) {
+                                         scn))) {
     LOG_WARN("fail to submit ddl start log", K(ret), K(buffer_size));
   } else {
     ObDDLClogCb *tmp_cb = cb;
@@ -659,7 +659,7 @@ int ObDDLRedoLogWriter::write_ddl_start_log(const ObDDLStartLog &log, ObLogHandl
       }
     }
     if (OB_SUCC(ret)) {
-      start_scn = log_scn;
+      start_scn = scn;
     }
     tmp_cb->try_release(); // release the memory no matter succ or not
   }
@@ -691,7 +691,7 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
   palf::LSN lsn;
   const bool need_nonblock= false;
   palf::SCN base_scn = palf::SCN::base_scn();
-  palf::SCN log_scn;
+  palf::SCN scn;
   bool is_external_consistent = false;
   if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -713,14 +713,14 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
                                          need_nonblock,
                                          cb,
                                          lsn,
-                                         log_scn))) {
+                                         scn))) {
     LOG_WARN("fail to submit ddl commit log", K(ret), K(buffer), K(buffer_size));
   } else {
     ObDDLClogCb *tmp_cb = cb;
     cb = nullptr;
     bool need_retry = true;
     while (need_retry) {
-      if (OB_FAIL(OB_TS_MGR.wait_gts_elapse(MTL_ID(), log_scn))) {
+      if (OB_FAIL(OB_TS_MGR.wait_gts_elapse(MTL_ID(), scn))) {
         if (OB_EAGAIN != ret) {
           LOG_WARN("fail to wait gts elapse", K(ret), K(log));
         } else {
@@ -732,8 +732,8 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
     }
     if (OB_SUCC(ret)) {
       handle.cb_ = tmp_cb;
-      handle.commit_scn_ = log_scn;
-      LOG_INFO("submit ddl commit log succeed", K(lsn), K(base_scn), K(log_scn));
+      handle.commit_scn_ = scn;
+      LOG_INFO("submit ddl commit log succeed", K(lsn), K(base_scn), K(scn));
     } else {
       tmp_cb->try_release(); // release the memory
     }
@@ -752,7 +752,7 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
 }
 
 ObDDLRedoLogHandle::ObDDLRedoLogHandle()
-  : cb_(nullptr), log_scn_()
+  : cb_(nullptr), scn_()
 {
 }
 

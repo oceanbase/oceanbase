@@ -222,12 +222,11 @@ int ObTabletMeta::init(
     LOG_WARN("failed to assign ddl data", K(ret));
   } else if (OB_FAIL(autoinc_seq_.assign(autoinc_seq))) {
     LOG_WARN("failed to assign autoinc seq", K(ret));
-  } else if (OB_FAIL(ddl_start_scn_.convert_for_gts(MAX(old_tablet_meta.ddl_start_scn_.get_val_for_gts(), ddl_start_scn)))) {
-    // TODO yiren, Do not forget to use palf::SCN::max rather than MAX.
+  } else if (OB_FAIL(ddl_start_scn_.convert_for_tx(MAX(old_tablet_meta.ddl_start_scn_.get_val_for_tx(), ddl_start_scn)))) {
     LOG_WARN("fail to convert scn", K(ret), K(ddl_start_scn));
-  } else if (OB_FAIL(clog_checkpoint_scn_.convert_for_gts(MAX(old_tablet_meta.clog_checkpoint_scn_.get_val_for_gts(), clog_checkpoint_ts)))) {
+  } else if (OB_FAIL(clog_checkpoint_scn_.convert_for_tx(MAX(old_tablet_meta.clog_checkpoint_scn_.get_val_for_tx(), clog_checkpoint_ts)))) {
     LOG_WARN("fail to convert scn", K(ret), K(clog_checkpoint_ts));
-  } else if (OB_FAIL(ddl_checkpoint_scn_.convert_for_gts(MAX(old_tablet_meta.ddl_checkpoint_scn_.get_val_for_gts(), ddl_checkpoint_ts)))) {
+  } else if (OB_FAIL(ddl_checkpoint_scn_.convert_for_tx(MAX(old_tablet_meta.ddl_checkpoint_scn_.get_val_for_tx(), ddl_checkpoint_ts)))) {
     LOG_WARN("fail to convert scn", K(ret), K(ddl_checkpoint_ts));
   } else {
     version_ = TABLET_META_VERSION;

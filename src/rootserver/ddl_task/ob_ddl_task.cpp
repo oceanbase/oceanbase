@@ -524,7 +524,7 @@ int ObDDLTask::batch_release_snapshot(
   if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(snapshot_scn.convert_for_lsn_allocator(snapshot_version))) {
+  } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version))) {
     LOG_WARN("failed to convert scn", K(snapshot_scn), K(ret));
   } else if (OB_FAIL(trans.start(&root_service->get_ddl_service().get_sql_proxy(), tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret));
@@ -1539,7 +1539,7 @@ int ObDDLTaskRecordOperator::fill_task_record(
     EXTRACT_VARCHAR_FIELD_MYSQL(*result_row, "ddl_stmt_str_unhex", ddl_stmt_str);
     if (OB_SUCC(ret)) {
       palf::SCN check_snapshot_version;
-      if (OB_FAIL(check_snapshot_version.convert_for_inner_table_field(task_record.snapshot_version_))) {
+      if (OB_FAIL(check_snapshot_version.convert_for_tx(task_record.snapshot_version_))) {
         LOG_WARN("convert for inner table field failed", K(ret), K(task_record.snapshot_version_));
       } else if (!check_snapshot_version.is_valid()) {
         ret = OB_ERR_UNEXPECTED;

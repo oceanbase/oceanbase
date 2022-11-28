@@ -638,7 +638,7 @@ int ObTabletBindingHelper::modify_tablet_binding_for_unbind(
         info.hidden_tablet_ids_.reset();
         if (arg.is_redefined()) {
           info.redefined_ = true;
-          info.snapshot_version_ = commit_version.get_val_for_lsn_allocator();
+          info.snapshot_version_ = commit_version.get_val_for_tx();
         }
         if (OB_FAIL(tablet->set_multi_data_for_commit(info, scn, for_replay, MemtableRefOp::NONE))) {
           LOG_WARN("failed to save tablet binding info", K(ret));
@@ -664,7 +664,7 @@ int ObTabletBindingHelper::modify_tablet_binding_for_unbind(
           LOG_WARN("failed to get ddl data", K(ret));
         } else {
           info.redefined_ = false;
-          info.snapshot_version_ = commit_version.get_val_for_lsn_allocator();
+          info.snapshot_version_ = commit_version.get_val_for_tx();
           info.schema_version_ = arg.schema_version_;
           if (OB_FAIL(tablet->set_multi_data_for_commit(info, scn, for_replay, MemtableRefOp::NONE))) {
             LOG_WARN("failed to save tablet binding info", K(ret));

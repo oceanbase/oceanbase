@@ -1047,6 +1047,9 @@ int ObService::check_modify_time_elapsed(
         }
       } else if (OB_FAIL(txs->get_max_commit_version(tmp_scn))) {
         LOG_WARN("fail to get max commit version", K(ret));
+      } else if (OB_UNLIKELY(!tmp_scn.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, scn is invalid", K(ret), K(tmp_scn));
       } else {
         result.snapshot_ = tmp_scn.get_val_for_tx();
         LOG_INFO("succeed to wait transaction end", K(arg));

@@ -133,7 +133,7 @@ int ObDDLMacroBlockClogCb::on_success()
     } else {
       macro_block.block_type_ = redo_info_.block_type_;
       macro_block.logic_id_ = redo_info_.logic_id_;
-      macro_block.log_scn_ = __get_scn();
+      macro_block.scn_ = __get_scn();
       macro_block.buf_ = redo_info_.data_buffer_.ptr();
       macro_block.size_ = redo_info_.data_buffer_.length();
       macro_block.ddl_start_scn_ = redo_info_.start_scn_;
