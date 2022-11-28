@@ -2483,7 +2483,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
     }
   }
   // execute dml in oracle mode, regardless of success or failure, always need to maintain object dependencies
-  if (OB_SUCC(ret) && OB_NOT_NULL(basic_stmt) && basic_stmt->is_dml_stmt()) {
+  if (OB_NOT_NULL(basic_stmt) && basic_stmt->is_dml_stmt()) {
     int tmp_ret = ret;
     ObDMLStmt *stmt = static_cast<ObDMLStmt*>(basic_stmt);
     if (stmt->get_ref_obj_table()->is_inited()) {
