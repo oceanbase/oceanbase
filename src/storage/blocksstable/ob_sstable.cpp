@@ -680,7 +680,7 @@ int ObSSTable::check_row_locked(ObStoreCtx &ctx,
     if (!meta_.is_empty()) {
       // skip reference upper_trans_version of empty_sstable, which may greater than real
       // committed transaction's version
-      lock_state.trans_version_.convert_for_lsn_allocator(get_upper_trans_version());
+      lock_state.trans_version_.convert_for_tx(get_upper_trans_version());
     }
   } else if (NULL == (buf = allocator.alloc(sizeof(ObSSTableRowLockChecker)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

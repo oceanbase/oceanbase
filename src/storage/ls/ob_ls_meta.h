@@ -47,7 +47,6 @@ public:
   ~ObLSMeta() {}
   ObLSMeta &operator=(const ObLSMeta &other);
   palf::SCN get_clog_checkpoint_scn() const;
-  int64_t get_clog_checkpoint_ts() const;
   palf::LSN &get_clog_base_lsn();
   int set_clog_checkpoint(const palf::LSN &clog_checkpoint_lsn,
                           const palf::SCN &clog_checkpoint_scn,

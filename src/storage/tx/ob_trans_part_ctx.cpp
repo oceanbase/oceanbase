@@ -374,7 +374,7 @@ int ObPartTransCtx::trans_clear_()
   int ret = OB_SUCCESS;
 
   if (is_ctx_table_merged_
-      && OB_FAIL(ls_tx_ctx_mgr_->update_aggre_log_ts_wo_lock(get_rec_log_ts_().get_val_for_lsn_allocator()))) {
+      && OB_FAIL(ls_tx_ctx_mgr_->update_aggre_log_ts_wo_lock(get_rec_log_ts_()))) {
     TRANS_LOG(ERROR, "update aggre log ts wo lock failed", KR(ret), "context", *this);
   } else {
     ret = mt_ctx_.trans_clear();
@@ -1352,30 +1352,6 @@ int ObPartTransCtx::on_tx_ctx_table_flushed()
   prev_rec_log_ts_.reset();
 
   return ret;
-}
-
-// for ob admin only
-void ObPartTransCtx::set_trans_table_status(const ObTrxToolArg &arg)
-{
-  ObTransTableStatusType status = ObTransTableStatusType(arg.status_);
-  int64_t trans_version = arg.trans_version_;
-  const int64_t end_log_ts = arg.end_log_ts_;
-  //TODO(handora.qc): fix it
-  palf::SCN trans_scn;
-  trans_scn.convert_for_lsn_allocator(trans_version);
-
-  if (ObTransTableStatusType::COMMIT == status) {
-    mt_ctx_.set_commit_version(trans_scn);
-  } else {
-    mt_ctx_.set_trans_version(trans_scn);
-  }
-
-  if (ObTransTableStatusType::COMMIT == status || ObTransTableStatusType::ABORT == status) {
-    end_log_ts_.convert_for_lsn_allocator(end_log_ts);
-    if (!end_log_ts_.is_valid()) {
-      TRANS_LOG(WARN, "convert for lsn fail", K(end_log_ts));
-    }
-  }
 }
 
 int64_t ObPartTransCtx::to_string(char* buf, const int64_t buf_len) const
@@ -4690,8 +4666,7 @@ int ObPartTransCtx::check_with_tx_data(ObITxDataCheckFunctor &fn)
     // NB: we must read the state then the version without lock. If you are interested in the
     // order, then you can read the comment in ob_tx_data_functor.cpp
     ObTxState state = exec_info_.state_;
-    const int64_t prepare_version = mt_ctx_.get_trans_version().get_val_for_lsn_allocator();
-    ObTxCCCtx tx_cc_ctx(state, prepare_version);
+    ObTxCCCtx tx_cc_ctx(state, mt_ctx_.get_trans_version());
 
     if (OB_FAIL(fn(*tx_data_ptr, &tx_cc_ctx))) {
       TRANS_LOG(WARN, "do data check function fail.", KR(ret), K(*this));

@@ -119,8 +119,7 @@ struct ObLSVTInfo
   int64_t tablet_count_;
   palf::SCN weak_read_scn_;
   bool need_rebuild_;
-  //TODO SCN
-  int64_t checkpoint_ts_;
+  palf::SCN checkpoint_scn_;
   //TODO SCN
   int64_t checkpoint_lsn_;
 };
@@ -304,7 +303,6 @@ public:
   //                         const bool write_slog = true);
   UPDATE_LSMETA_WITH_LOCK(ls_meta_, set_clog_checkpoint);
   UPDATE_LSMETA_WITHOUT_LOCK(ls_meta_, set_clog_checkpoint);
-  CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_ts, int64_t);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_clog_checkpoint_scn, palf::SCN);
   DELEGATE_WITH_RET(ls_meta_, get_clog_base_lsn, palf::LSN &);
   DELEGATE_WITH_RET(ls_meta_, get_saved_info, int);

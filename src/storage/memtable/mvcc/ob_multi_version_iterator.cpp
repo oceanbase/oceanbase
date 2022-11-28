@@ -89,10 +89,10 @@ int ObMultiVersionValueIterator::init_multi_version_iter()
     iter = iter->prev_;
   }
 
-  max_committed_trans_version_ = (NULL != version_iter_) ? version_iter_->trans_version_.get_val_for_lsn_allocator() : -1;
+  max_committed_trans_version_ = (NULL != version_iter_) ? version_iter_->trans_version_.get_val_for_tx() : -1;
   // NB: It will assign -1 to cur_trans_version_, while it will not
   // cause any wrong logic, but take care of it
-  cur_trans_version_.convert_for_lsn_allocator(max_committed_trans_version_);
+  cur_trans_version_.convert_for_tx(max_committed_trans_version_);
   multi_version_iter_ = iter;
   if (max_committed_trans_version_ <= version_range_.multi_version_start_) {
     //如果多版本的开始版本大于等于当前以提交的最大版本
@@ -285,7 +285,7 @@ int ObMultiVersionValueIterator::get_next_node(const void *&tnode)
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret), KP(this));
   } else if (OB_ISNULL(version_iter_)
-      || version_iter_->trans_version_.get_val_for_lsn_allocator() <= version_range_.base_version_) {
+      || version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) {
     version_iter_ = NULL;
     ret = OB_ITER_END;
   } else {
@@ -317,7 +317,7 @@ int ObMultiVersionValueIterator::get_next_node_for_compact(const void *&tnode)
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret), KP(this));
   } else if ((OB_NOT_NULL(version_iter_)
-              && version_iter_->trans_version_.get_val_for_lsn_allocator() <= version_range_.base_version_) ||
+              && version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) ||
       OB_ISNULL(version_iter_)) {
     version_iter_ = nullptr;
     ret = OB_ITER_END;
@@ -357,11 +357,11 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
     const palf::SCN cur_trans_version = multi_version_iter_->trans_version_;
     ObMvccTransNode *record_node = nullptr;
     while (OB_SUCC(ret) && OB_NOT_NULL(multi_version_iter_) && OB_ISNULL(record_node)) {
-      if (multi_version_iter_->trans_version_.get_val_for_lsn_allocator() <= version_range_.base_version_) {
+      if (multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) {
         multi_version_iter_ = NULL;
         break;
       } else if (NDT_COMPACT == multi_version_iter_->type_) { // meet compacted node
-        if (multi_version_iter_->trans_version_.get_val_for_lsn_allocator() > version_range_.multi_version_start_) {
+        if (multi_version_iter_->trans_version_.get_val_for_tx() > version_range_.multi_version_start_) {
           // ignore compact node
           is_compacted = true;
         } else { // multi_version_iter_->trans_version_ <= multi_version_start
@@ -371,7 +371,7 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
           break;
         }
       } else { // not compacted node
-        if (multi_version_iter_->trans_version_.get_val_for_lsn_allocator() <= version_range_.multi_version_start_) {
+        if (multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.multi_version_start_) {
           is_node_compacted_ = true;
         }
         record_node = multi_version_iter_;
@@ -443,7 +443,7 @@ void ObMultiVersionValueIterator::reset()
 bool ObMultiVersionValueIterator::is_multi_version_iter_end() const
 {
   return OB_ISNULL(multi_version_iter_)
-      || multi_version_iter_->trans_version_.get_val_for_lsn_allocator() <= version_range_.base_version_;
+      || multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_;
 }
 
 bool ObMultiVersionValueIterator::is_trans_node_iter_null() const
@@ -454,7 +454,7 @@ bool ObMultiVersionValueIterator::is_trans_node_iter_null() const
 bool ObMultiVersionValueIterator::is_compact_iter_end() const
 {
   return OB_ISNULL(version_iter_)
-      || version_iter_->trans_version_.get_val_for_lsn_allocator() <= version_range_.base_version_;
+      || version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_;
 }
 
 DEF_TO_STRING(ObMultiVersionValueIterator) {
@@ -498,12 +498,12 @@ int ObMultiVersionRowIterator::init(
   if (OB_FAIL(query_engine.scan(
       range.start_key_,  !range.border_flag_.inclusive_start(),
       range.end_key_,    !range.border_flag_.inclusive_end(),
-      ctx.snapshot_.version_.get_val_for_lsn_allocator(),
+      ctx.snapshot_.version_.get_val_for_tx(),
       query_engine_iter_))) {
     TRANS_LOG(WARN, "query engine scan fail", K(ret));
   } else {
     query_engine_ = &query_engine;
-    query_engine_iter_->set_version(ctx.snapshot_.version_.get_val_for_lsn_allocator());
+    query_engine_iter_->set_version(ctx.snapshot_.version_.get_val_for_tx());
     ctx_ = &ctx;
     version_range_ = version_range;
     is_inited_ = true;

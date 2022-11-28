@@ -231,14 +231,14 @@ int LockForReadFunctor::inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *
         // updated as prepared until log is applied and the application is
         // asynchronous. So we need use version instead of state as judgement and
         // mark it whenever we submit the commit/prepare log(using before_prepare)
-        if (INT64_MAX == tx_cc_ctx->prepare_version_) {
+        if (tx_cc_ctx->prepare_version_.is_max()) {
           // Case 2.2.1: data is not in 2pc state, so the prepare version and
           // commit version of the data must be bigger than the read txn's
           // snapshot version, so we cannot read it and trans version is
           // unnecessary for the running txn
           can_read_ = false;
           trans_version_ = SCN::min_scn();
-        } else if (tx_cc_ctx->prepare_version_ > snapshot_version.get_val_for_lsn_allocator()) {
+        } else if (tx_cc_ctx->prepare_version_ > snapshot_version) {
           // Case 2.2.2: data is at least in prepare state and the prepare
           // version is bigger than the read txn's snapshot version, then the
           // data's commit version must be bigger than the read txn's snapshot
@@ -360,7 +360,7 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxData &tx_data, ObTxCCCtx *tx
       // updated as prepared until log is applied and the application is
       // asynchronous. So we need use version instead of state as judgement and
       // mark it whenever we submit the commit/prepare log(using before_prepare)
-      && INT64_MAX == tx_cc_ctx->prepare_version_) {
+      && tx_cc_ctx->prepare_version_.is_max()) {
     // Case 1: data is during execution, so we donot need write back
     // This is the case for most of the lock for read scenerio, so we need to
     // mainly optimize it through not latching the row
@@ -379,7 +379,7 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxData &tx_data, ObTxCCCtx *tx
           (void)tnode_.trans_abort(tx_data.end_scn_);
         }
       } else if (ObTxData::RUNNING == tx_data.state_) {
-        if (INT64_MAX != tx_cc_ctx->prepare_version_) {
+        if (!tx_cc_ctx->prepare_version_.is_max()) {
           // Case 3: data is prepared, we also donot write back the prepare state
         }
       } else if (ObTxData::COMMIT == tx_data.state_) {
