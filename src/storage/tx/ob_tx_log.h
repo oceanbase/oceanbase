@@ -241,7 +241,7 @@ public:
                     palf::block_id_t block_id,
                     palf::LSN lsn,
                     int64_t tx_id,
-                    palf::SCN log_ts,
+                    palf::SCN scn,
                     bool &has_output);
   //------------
 

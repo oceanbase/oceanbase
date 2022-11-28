@@ -617,11 +617,6 @@ public:
     v = sys_vars_cache_.get_optimizer_use_sql_plan_baselines();
     return common::OB_SUCCESS;
   }
-  int get_adaptive_cursor_sharing(bool &acs) const
-  {
-    acs = sys_vars_cache_.get__optimizer_adaptive_cursor_sharing();
-    return common::OB_SUCCESS;
-  }
   int get_nlj_batching_enabled(bool &v) const;
   int get_enable_parallel_dml(bool &v) const;
   int get_enable_parallel_query(bool &v) const;
@@ -1163,8 +1158,6 @@ public:
   void set_curr_trans_last_stmt_end_time(int64_t t) { curr_trans_last_stmt_end_time_ = t; }
   int64_t get_curr_trans_last_stmt_end_time() const { return curr_trans_last_stmt_end_time_; }
 
-  int use_parallel_execution(bool &v) const;
-
   // nested session and sql execute for foreign key.
   bool is_nested_session() const { return nested_count_ > 0; }
   int64_t get_nested_count() const { return nested_count_; }
@@ -1448,8 +1441,6 @@ private:
         optimizer_use_sql_plan_baselines_(false),
         optimizer_capture_sql_plan_baselines_(false),
         is_result_accurate_(false),
-        _ob_use_parallel_execution_(false),
-        _optimizer_adaptive_cursor_sharing_(false),
         ob_enable_transmission_checksum_(false),
         character_set_results_(ObCharsetType::CHARSET_INVALID),
         character_set_connection_(ObCharsetType::CHARSET_INVALID),
@@ -1498,8 +1489,6 @@ private:
       optimizer_use_sql_plan_baselines_ = false;
       optimizer_capture_sql_plan_baselines_ = false;
       is_result_accurate_ = false;
-      _ob_use_parallel_execution_ = false;
-      _optimizer_adaptive_cursor_sharing_ = false;
       ob_enable_transmission_checksum_ = false;
       character_set_results_ = ObCharsetType::CHARSET_INVALID;
       character_set_connection_ = ObCharsetType::CHARSET_INVALID;
@@ -1615,7 +1604,7 @@ private:
                  K(ob_trx_idle_timeout_), K(ob_trx_lock_timeout_), K(nls_collation_), K(nls_nation_collation_),
                  K_(sql_throttle_current_priority), K_(ob_last_schema_version), K_(sql_select_limit),
                  K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),
-                 K_(is_result_accurate), K_(_ob_use_parallel_execution), K_(character_set_results),
+                 K_(is_result_accurate), K_(character_set_results),
                  K_(character_set_connection), K_(ob_pl_block_timeout), K_(ob_plsql_ccflags),
                  K_(iso_nls_currency));
   public:
@@ -1636,8 +1625,6 @@ private:
     bool optimizer_use_sql_plan_baselines_;
     bool optimizer_capture_sql_plan_baselines_;
     bool is_result_accurate_;
-    bool _ob_use_parallel_execution_;
-    bool _optimizer_adaptive_cursor_sharing_;
     bool ob_enable_transmission_checksum_;
     ObCharsetType character_set_results_;
     ObCharsetType character_set_connection_;
@@ -1748,8 +1735,6 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(bool, optimizer_use_sql_plan_baselines);
     DEF_SYS_VAR_CACHE_FUNCS(bool, optimizer_capture_sql_plan_baselines);
     DEF_SYS_VAR_CACHE_FUNCS(bool, is_result_accurate);
-    DEF_SYS_VAR_CACHE_FUNCS(bool, _ob_use_parallel_execution);
-    DEF_SYS_VAR_CACHE_FUNCS(bool, _optimizer_adaptive_cursor_sharing);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_transmission_checksum);
     DEF_SYS_VAR_CACHE_FUNCS(ObCharsetType, character_set_results);
     DEF_SYS_VAR_CACHE_FUNCS(ObCharsetType, character_set_connection);
@@ -1811,8 +1796,6 @@ private:
         bool inc_optimizer_use_sql_plan_baselines_:1;
         bool inc_optimizer_capture_sql_plan_baselines_:1;
         bool inc_is_result_accurate_:1;
-        bool inc__ob_use_parallel_execution_:1;
-        bool inc__optimizer_adaptive_cursor_sharing_:1;
         bool inc_ob_enable_transmission_checksum_:1;
         bool inc_character_set_results_:1;
         bool inc_character_set_connection_:1;

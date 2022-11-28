@@ -212,7 +212,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 406	__all_mock_fk_parent_table_history	0	201001	1
 407	__all_mock_fk_parent_table_column	0	201001	1
 408	__all_mock_fk_parent_table_column_history	0	201001	1
-409	__all_log_archive_source	0	201001	1
+409	__all_log_restore_source	0	201001	1
 412	__all_service_epoch	0	201001	1
 416	__all_column_checksum_error_info	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
@@ -545,7 +545,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12321	__all_virtual_mock_fk_parent_table_history	2	201001	1
 12322	__all_virtual_mock_fk_parent_table_column	2	201001	1
 12323	__all_virtual_mock_fk_parent_table_column_history	2	201001	1
-12324	__all_virtual_log_archive_source	2	201001	1
+12324	__all_virtual_log_restore_source	2	201001	1
 12325	__all_virtual_query_response_time	2	201001	1
 12330	__all_virtual_column_checksum_error_info	2	201001	1
 12331	__all_virtual_kvcache_handle_leak_info	2	201001	1

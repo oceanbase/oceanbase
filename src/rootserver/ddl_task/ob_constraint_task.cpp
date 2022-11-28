@@ -95,9 +95,9 @@ int ObCheckConstraintValidationTask::process()
       if (check_expr_str.empty()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("check_expr_str is empty", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_USER_SPECIFIED_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
         LOG_WARN("set trx timeout failed", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_USER_SPECIFIED_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(table_name, table_schema->get_schema_version(), is_oracle_mode, ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint str", K(ret));
@@ -339,9 +339,9 @@ int ObForeignKeyConstraintValidationTask::check_fk_constraint_data_valid(
       ObSqlString child_ddl_schema_hint_str;
       ObSqlString parent_ddl_schema_hint_str;
       // print str like "select c1, c2 from db.t2 where c1 is not null and c2 is not null minus select c3, c4 from db.t1"
-      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_USER_SPECIFIED_TIMEOUT))) {
+      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
         LOG_WARN("set trx timeout failed", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_USER_SPECIFIED_TIMEOUT))) {
+      } else if (OB_FAIL(timeout_ctx.set_timeout(OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT))) {
         LOG_WARN("set timeout failed", K(ret));
       } else if (OB_FAIL(ObDDLUtil::generate_ddl_schema_hint_str(child_table_schema.get_table_name_str(), child_table_schema.get_schema_version(), is_oracle_mode, child_ddl_schema_hint_str))) {
         LOG_WARN("failed to generate ddl schema hint", K(ret));
@@ -796,7 +796,7 @@ int ObConstraintTask::check_replica_end(bool &is_end)
   }
 
   if (OB_SUCC(ret) && !is_end) {
-    const int64_t timeout = GCONF.global_index_build_single_replica_timeout;
+    const int64_t timeout = OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT;
     if (check_replica_request_time_ + timeout < ObTimeUtility::current_time()) {
       check_replica_request_time_ = 0;
     }

@@ -256,7 +256,7 @@ const char *const OB_STR_MAX_FILE_ID = "max_file_id";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_ID = "id";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_TYPE = "type";
 const char *const OB_STR_LOG_ARCHIVE_SOURCE_VALUE = "value";
-const char *const OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_TS = "recovery_until_ts";
+const char *const OB_STR_LOG_ARCHIVE_SOURCE_UNTIL_SCN = "recovery_until_scn";
 
 const char *const OB_STR_TENANT = "tenant";
 const char *const OB_STR_DATA = "data";

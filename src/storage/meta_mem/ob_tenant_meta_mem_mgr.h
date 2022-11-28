@@ -190,6 +190,7 @@ public:
   int set_tablet_pointer_tx_data(const ObTabletMapKey &key, const ObTabletTxMultiSourceDataUnit &tx_data);
   int insert_pinned_tablet(const ObTabletMapKey &key);
   int erase_pinned_tablet(const ObTabletMapKey &key);
+  int get_tablet_ddl_kv_mgr(const ObTabletMapKey &key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
 
   // TIPS:
   //  - only for allocating variable meta object in storage meta.

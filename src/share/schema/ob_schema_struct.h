@@ -5658,6 +5658,10 @@ private:
   int ob_write_string(
       const common::ObString &src,
       common::ObString &dst);
+  static int append_table_(
+             const uint64_t tenant_id,
+             share::schema::ObTableSchema &index_schema,
+             common::ObIArray<share::schema::ObTableSchema> &tables);
 public:
   static ObSysTableChecker &instance();
   int init();

@@ -40,7 +40,7 @@ int64_t ObTxDataMemtableScanIterator::PERIODICAL_SELECT_INTERVAL_NS = 1000LL * 1
   common::ObVersionRange trans_version_range;                                                    \
   trans_version_range.base_version_ = 0;                                                         \
   trans_version_range.multi_version_start_ = 0;                                                  \
-  trans_version_range.snapshot_version_ = common::ObVersionRange::MAX_VERSION - 2;               \
+  trans_version_range.snapshot_version_ = MERGE_READ_SNAPSHOT_VERSION;               \
   if (OB_SUCC(ret)                                                                               \
       && OB_FAIL(                                                                                \
            access_context.init(query_flag, store_ctx, arena_allocator_, trans_version_range))) { \

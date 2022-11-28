@@ -36,7 +36,7 @@ int ObDDLChecksumOperator::fill_one_item(const ObDDLChecksumItem &item,
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(exec_tenant_id, item.table_id_)))
       // currently tablet id is not necessary, so instead we save task id in this column to distinguish different DDL
       // task_id is the primary key in __all_ddl_task_status, so it can uniquely identify a DDL.
-      || OB_FAIL(dml.add_pk_column("tablet_id", item.ddl_task_id_))
+      || OB_FAIL(dml.add_pk_column("ddl_task_id", item.ddl_task_id_))
       || OB_FAIL(dml.add_pk_column("column_id", item.column_id_))
       || OB_FAIL(dml.add_pk_column("task_id", item.task_id_))
       || OB_FAIL(dml.add_column("checksum", item.checksum_))) {
@@ -223,7 +223,7 @@ int ObDDLChecksumOperator::get_table_column_checksum(
         K(column_checksum_map.created()));
   } else if (OB_FAIL(sql.assign_fmt(
       "SELECT column_id, checksum FROM %s "
-      "WHERE execution_id = %ld AND tenant_id = %ld AND table_id = %ld AND tablet_id = %ld "
+      "WHERE execution_id = %ld AND tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld "
       "ORDER BY column_id", OB_ALL_DDL_CHECKSUM_TNAME,
       execution_id, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
       ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id), ddl_task_id))) {
@@ -302,7 +302,7 @@ int ObDDLChecksumOperator::delete_checksum(
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(execution_id), K(source_table_id), K(dest_table_id));
   } else if (OB_FAIL(sql.assign_fmt(
       "DELETE /*+ use_plan_cache(none) */ FROM %s "
-      "WHERE tenant_id = 0 AND execution_id = %ld AND tablet_id = %ld AND table_id IN (%ld, %ld)",
+      "WHERE tenant_id = 0 AND execution_id = %ld AND ddl_task_id = %ld AND table_id IN (%ld, %ld)",
       OB_ALL_DDL_CHECKSUM_TNAME, execution_id, ddl_task_id, source_table_id, dest_table_id))) {
     LOG_WARN("fail to assign fmt", K(ret));
   } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {

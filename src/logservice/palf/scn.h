@@ -57,7 +57,7 @@ public:
   /*******convert functions******/
   //[convert scn to timestamp(us)
   // @result[out]: timestamp in us
-  int64_t convert_to_ts() const;
+  int64_t convert_to_ts(bool ignore_invalid = false) const;
 
   // @param[in] :timestamp with us
   int convert_from_ts(uint64_t ts_us);

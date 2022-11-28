@@ -38,6 +38,7 @@ public:
   // 2. OB_LS_NEED_REVOKE, ObRoleChangeService need revoke this LS.
   // 3. OTHERS, switch_to_follower_gracefully failed, but no need to revoke leader.
   int switch_to_follower_gracefully();
+  int resume_to_leader();
 
 private:
   int resume_leader_when_switch_failure_(int64_t cursor);

@@ -415,9 +415,11 @@ private:
       bool &need_copy_sstable);
   int get_copy_sstable_count_(int64_t &sstable_count);
   int get_tablet_meta_(ObMigrationTabletParam &tablet_meta);
+  int fake_deleted_tablet_meta_(ObMigrationTabletParam &tablet_meta);
 
 private:
   bool is_inited_;
+  share::ObLSID ls_id_;
   obrpc::ObCopyTabletSSTableInfoArg tablet_sstable_info_;
   ObTabletHandle tablet_handle_;
   ObTableStoreIterator iter_;

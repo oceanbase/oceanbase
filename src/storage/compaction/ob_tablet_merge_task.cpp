@@ -138,7 +138,7 @@ int ObMergeParameter::init(compaction::ObTabletMergeCtx &merge_ctx, const int64_
       // minor compaction always need to read all the data from input table
       // rewrite version to whole version range
       version_range_.base_version_ = 0;
-      version_range_.snapshot_version_ = INT64_MAX - 2;
+      version_range_.snapshot_version_ = MERGE_READ_SNAPSHOT_VERSION;
     }
     scn_range_ = merge_ctx.scn_range_;
     is_full_merge_ = merge_ctx.is_full_merge_;

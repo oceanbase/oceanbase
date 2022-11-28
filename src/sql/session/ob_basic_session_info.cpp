@@ -2179,18 +2179,6 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_is_result_accurate(int_val != 0));
       break;
     }
-    case SYS_VAR__OB_USE_PARALLEL_EXECUTION: {
-      int64_t int_val = 0;
-      OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache_.set__ob_use_parallel_execution(int_val != 0));
-      break;
-    }
-    case SYS_VAR__OPTIMIZER_ADAPTIVE_CURSOR_SHARING: {
-      int64_t int_val = 0;
-      OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache_.set__optimizer_adaptive_cursor_sharing(int_val != 0));
-      break;
-    }
     case SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
@@ -2264,7 +2252,7 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_autocommit(int_val != 0));
       break;
     }
-    case SYS_VAR_OB_ENABLE_TRACE_LOG: {
+    case SYS_VAR_OB_ENABLE_SHOW_TRACE: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache_.set_ob_enable_trace_log(int_val != 0));
@@ -2616,18 +2604,6 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       OX (sys_vars_cache.set_base_is_result_accurate(int_val != 0));
       break;
     }
-    case SYS_VAR__OB_USE_PARALLEL_EXECUTION: {
-      int64_t int_val = 0;
-      OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache.set_base__ob_use_parallel_execution(int_val != 0));
-      break;
-    }
-    case SYS_VAR__OPTIMIZER_ADAPTIVE_CURSOR_SHARING: {
-      int64_t int_val = 0;
-      OZ (val.get_int(int_val), val);
-      OX (sys_vars_cache.set_base__optimizer_adaptive_cursor_sharing(int_val != 0));
-      break;
-    }
     case SYS_VAR_OB_ENABLE_TRANSMISSION_CHECKSUM: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
@@ -2701,7 +2677,7 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       OX (sys_vars_cache.set_base_autocommit(int_val != 0));
       break;
     }
-    case SYS_VAR_OB_ENABLE_TRACE_LOG: {
+    case SYS_VAR_OB_ENABLE_SHOW_TRACE: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_ob_enable_trace_log(int_val != 0));
@@ -3247,13 +3223,6 @@ int ObBasicSessionInfo::get_pl_block_timeout(int64_t &pl_block_timeout) const
 int ObBasicSessionInfo::get_ob_read_consistency(int64_t &ob_read_consistency) const
 {
   return get_int64_sys_var(SYS_VAR_OB_READ_CONSISTENCY, ob_read_consistency);
-}
-
-int ObBasicSessionInfo::use_parallel_execution(bool &v) const
-{
-  v = sys_vars_cache_.get__ob_use_parallel_execution();
-  LOG_DEBUG("use parallel exeuction", K(v));
-  return OB_SUCCESS;
 }
 
 int ObBasicSessionInfo::get_group_concat_max_len(uint64_t &group_concat_max_len) const
@@ -4366,7 +4335,7 @@ int ObBasicSessionInfo::is_sys_var_actully_changed(const ObSysVarClassType &sys_
       case SYS_VAR_OB_ENABLE_PLAN_CACHE:
       case SYS_VAR_OB_ENABLE_SQL_AUDIT:
       case SYS_VAR_AUTOCOMMIT:
-      case SYS_VAR_OB_ENABLE_TRACE_LOG:
+      case SYS_VAR_OB_ENABLE_SHOW_TRACE:
       case SYS_VAR_OB_ORG_CLUSTER_ID:
       case SYS_VAR_OB_QUERY_TIMEOUT:
       case SYS_VAR_OB_TRX_TIMEOUT:

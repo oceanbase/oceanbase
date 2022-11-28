@@ -1992,14 +1992,6 @@ OB_NOINLINE int ObSql::handle_large_query(int tmp_ret,
         LOG_INFO("compile time is too long, need delay", K(elapsed_time), K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(exec_ctx.get_physical_plan_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("phy plan ctx is NULL", K(ret));
-      } else {
-        exec_ctx.get_physical_plan_ctx()->set_large_query(is_large_query);
-      }
-    }
   }
 
   return ret;

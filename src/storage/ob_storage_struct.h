@@ -22,6 +22,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -38,15 +39,15 @@ class ObMigrationTabletParam;
 typedef common::ObSEArray<common::ObStoreRowkey, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> GetRowkeyArray;
 typedef common::ObSEArray<common::ObStoreRange, common::OB_DEFAULT_MULTI_GET_ROWKEY_NUM> ScanRangeArray;
 
-static const int64_t EXIST_READ_SNAPSHOT_VERSION = INT64_MAX - 1;
-static const int64_t MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 2;
-static const int64_t MV_LEFT_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 3;
-static const int64_t MV_RIGHT_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 4;
-static const int64_t MV_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 5;
-static const int64_t BUILD_INDEX_READ_SNAPSHOT_VERSION = INT64_MAX - 6;
-static const int64_t WARM_UP_READ_SNAPSHOT_VERSION = INT64_MAX - 7;
-static const int64_t GET_BATCH_ROWS_READ_SNAPSHOT_VERSION = INT64_MAX - 8;
-static const int64_t GET_SCAN_COST_READ_SNAPSHOT_VERSION = INT64_MAX - 9;
+static const int64_t EXIST_READ_SNAPSHOT_VERSION = palf::OB_MAX_SCN_TS_NS - 1;
+static const int64_t MERGE_READ_SNAPSHOT_VERSION = palf::OB_MAX_SCN_TS_NS - 2;
+// static const int64_t MV_LEFT_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 3;
+// static const int64_t MV_RIGHT_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 4;
+// static const int64_t MV_MERGE_READ_SNAPSHOT_VERSION = INT64_MAX - 5;
+// static const int64_t BUILD_INDEX_READ_SNAPSHOT_VERSION = INT64_MAX - 6;
+// static const int64_t WARM_UP_READ_SNAPSHOT_VERSION = INT64_MAX - 7;
+static const int64_t GET_BATCH_ROWS_READ_SNAPSHOT_VERSION = palf::OB_MAX_SCN_TS_NS - 8;
+// static const int64_t GET_SCAN_COST_READ_SNAPSHOT_VERSION = INT64_MAX - 9;
 
 
 enum ObMigrateStatus

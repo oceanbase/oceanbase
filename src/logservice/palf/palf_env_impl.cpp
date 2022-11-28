@@ -638,6 +638,7 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
       // first uncommitted log before base_lsn.
     } else if (OB_ENTRY_NOT_EXIST == ret
                || OB_NO_SUCH_FILE_OR_DIRECTORY == ret
+               || min_using_block_id < min_block_id
                || min_using_block_id - min_block_id < 2) {
       PALF_LOG(TRACE, "can not recycle blocks, need keep at least two blocks or has been concurrently"
           " with rebuild, skip it",

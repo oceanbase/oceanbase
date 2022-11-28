@@ -176,7 +176,7 @@ int ObColumnRedefinitionTask::check_build_single_replica(bool &is_end)
   } else if (OB_FAIL(replica_builder_.check_build_end(is_end, complete_sstable_job_ret_code_))) {
     LOG_WARN("fail to check build end", K(ret));
   } else if (!is_end) {
-    if (sstable_complete_request_time_ + GCONF.global_index_build_single_replica_timeout < ObTimeUtility::current_time()) {   // timeout, retry
+    if (sstable_complete_request_time_ + OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT < ObTimeUtility::current_time()) {   // timeout, retry
       is_sstable_complete_task_submitted_ = false;
       sstable_complete_request_time_ = 0;
     }

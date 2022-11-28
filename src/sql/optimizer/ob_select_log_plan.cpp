@@ -389,14 +389,6 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
     //group_concat and distinct aggregation hold all input rows temporary,
     //too much memory consumption for hash aggregate.
     use_hash_valid = false;
-  } else if (OB_FAIL(session->get_sys_variable(share::SYS_VAR_OB_ENABLE_HASH_GROUP_BY, val))) {
-    LOG_WARN("Get sys variable error", K(ret));
-  } else if (!val.get_bool()) {
-    if (!ignore_hint && groupby_helper.force_use_hash_) {
-      // has use_hash_aggregation hint
-    } else {
-      use_hash_valid = false;
-    }
   }
   return ret;
 }

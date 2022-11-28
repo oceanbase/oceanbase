@@ -7446,6 +7446,39 @@ int ObDDLResolver::check_foreign_key_reference(
                  K(ret), K(child_table_schema->is_user_table()));
       } else if (arg.is_parent_table_mock_) {
         // skip checking parent table
+        uint64_t database_id = OB_INVALID_ID;
+        const ObMockFKParentTableSchema *mock_fk_parent_table_schema = NULL;
+        if (OB_FAIL(schema_checker_->get_database_id(
+                    arg.tenant_id_, arg.database_name_, database_id))) {
+          LOG_WARN("failed to get_database_id", K(ret), K(arg.tenant_id_),
+                                                K(arg.database_name_), K(database_id));
+        } else if (OB_FAIL(schema_checker_->get_mock_fk_parent_table_with_name(
+                           arg.tenant_id_, database_id,
+                           arg.foreign_key_name_, mock_fk_parent_table_schema))) {
+          LOG_WARN("failed to get_mock_fk_parent_table_schema_with_name", K(ret),
+                    K(arg.tenant_id_), K(database_id),
+                    K(arg.foreign_key_name_));
+        } else if (OB_NOT_NULL(mock_fk_parent_table_schema)) {
+          if (is_alter_table
+              && OB_FAIL(alter_table_stmt->get_alter_table_arg().based_schema_object_infos_.push_back(
+                 ObBasedSchemaObjectInfo(
+                     mock_fk_parent_table_schema->get_mock_fk_parent_table_id(),
+                     MOCK_FK_PARENT_TABLE_SHCEMA,
+                     mock_fk_parent_table_schema->get_schema_version())))) {
+            LOG_WARN("failed to add based_schema_object_info to arg",
+                         K(ret), K(mock_fk_parent_table_schema->get_mock_fk_parent_table_id()),
+                         K(mock_fk_parent_table_schema->get_schema_version()));
+          } else if (!is_alter_table
+                     && OB_FAIL(create_table_stmt->get_create_table_arg().based_schema_object_infos_.push_back(
+                     ObBasedSchemaObjectInfo(
+                         mock_fk_parent_table_schema->get_mock_fk_parent_table_id(),
+                         MOCK_FK_PARENT_TABLE_SHCEMA,
+                         mock_fk_parent_table_schema->get_schema_version())))) {
+            LOG_WARN("failed to add based_schema_object_info to arg",
+                         K(ret), K(mock_fk_parent_table_schema->get_mock_fk_parent_table_id()),
+                         K(mock_fk_parent_table_schema->get_schema_version()));
+          }
+        }
       } else if (!parent_table_schema->is_user_table()) {
         ret = OB_ERR_CANNOT_ADD_FOREIGN;
         LOG_WARN("foreign key cannot be based on non-user table",

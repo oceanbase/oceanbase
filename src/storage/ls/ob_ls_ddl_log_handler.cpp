@@ -75,28 +75,19 @@ int ObLSDDLLogHandler::offline()
     LOG_WARN("failed to build ls tablet iter", K(ret), K(ls_));
   } else {
     while (OB_SUCC(ret)) {
-      ObTabletHandle tablet_handle;
-      if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
+      ObDDLKvMgrHandle ddl_kv_mgr_handle;
+      if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;
         } else {
-          LOG_WARN("failed to get tablet", K(ret), K(tablet_handle));
+          LOG_WARN("failed to get ddl kv mgr", K(ret), K(ddl_kv_mgr_handle));
         }
-      } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+      } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
-      } else {
-        ObDDLKvMgrHandle ddl_kv_mgr_handle;
-        if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-          if (OB_ENTRY_NOT_EXIST != ret) {
-            LOG_WARN("get ddl kv mgr failed", K(ret), "ls_meta", ls_->get_ls_meta(), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
-          } else {
-            ret = OB_SUCCESS;
-          }
-        } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->cleanup())) {
-          LOG_WARN("ddl kv mgr cleanup failed", K(ret), "ls_meta", ls_->get_ls_meta(), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
-        }
+        LOG_WARN("invalid tablet handle", K(ret), K(ddl_kv_mgr_handle));
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->cleanup())) {
+        LOG_WARN("ddl kv mgr cleanup failed", K(ret), "ls_meta", ls_->get_ls_meta(), "tablet_id", ddl_kv_mgr_handle.get_obj()->get_tablet_id());
       }
     }
   }
@@ -227,24 +218,24 @@ int ObLSDDLLogHandler::flush(palf::SCN &rec_scn)
     } else {
       bool has_ddl_kv = false;
       while (OB_SUCC(ret)) {
-        ObTabletHandle tablet_handle;
-        if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
+        ObDDLKvMgrHandle ddl_kv_mgr_handle;
+        if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
             break;
           } else {
-            LOG_WARN("failed to get tablet", K(ret), K(tablet_handle));
+            LOG_WARN("failed to get ddl kv mgr", K(ret), K(ddl_kv_mgr_handle));
           }
-        } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+        } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
-        } else if (OB_FAIL(tablet_handle.get_obj()->check_has_effective_ddl_kv(has_ddl_kv))) {
+          LOG_WARN("invalid ddl kv mgr handle", K(ret), K(ddl_kv_mgr_handle));
+        } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_effective_ddl_kv(has_ddl_kv))) {
           LOG_WARN("failed to check ddl kv", K(ret));
         } else if (has_ddl_kv) {
           DEBUG_SYNC(BEFORE_DDL_CHECKPOINT);
           ObDDLTableMergeDagParam param;
           param.ls_id_ = ls_->get_ls_id();
-          param.tablet_id_ = tablet_handle.get_obj()->get_tablet_meta().tablet_id_;
+          param.tablet_id_ = ddl_kv_mgr_handle.get_obj()->get_tablet_id();
           param.rec_scn_ = rec_scn;
           if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
             if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
@@ -268,22 +259,22 @@ palf::SCN ObLSDDLLogHandler::get_rec_scn()
     LOG_WARN("failed to build ls tablet iter", K(ret), K(ls_));
   } else {
     while (OB_SUCC(ret)) {
-      ObTabletHandle tablet_handle;
+      ObDDLKvMgrHandle ddl_kv_mgr_handle;
       palf::SCN min_scn = palf::SCN::max_scn();
-      if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
+      if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;
         } else {
-          LOG_WARN("failed to get tablet", K(ret), K(tablet_handle));
+          LOG_WARN("failed to get ddl kv mgr", K(ret), K(ddl_kv_mgr_handle));
         }
-      } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+      } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
-      } else if (OB_FAIL(tablet_handle.get_obj()->check_has_effective_ddl_kv(has_ddl_kv))) {
+        LOG_WARN("invalid ddl kv mgr handle", K(ret), K(ddl_kv_mgr_handle));
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->check_has_effective_ddl_kv(has_ddl_kv))) {
         LOG_WARN("failed to check ddl kv", K(ret));
       } else if (has_ddl_kv) {
-        if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_min_scn(min_scn))) {
+        if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kv_min_scn(min_scn))) {
           LOG_WARN("fail to get ddl kv min log ts", K(ret));
         } else {
           rec_scn = palf::SCN::min(rec_scn, min_scn);
