@@ -20,6 +20,13 @@ namespace oceanbase
 using namespace common;
 namespace logservice
 {
+void RCDiagnoseInfo::reset()
+{
+  id_ = -1;
+  state_ = TakeOverState::INVALID_TAKE_OVER_STATE;
+  log_type_ = ObLogBaseType::INVALID_LOG_BASE_TYPE;
+}
+
 ObRoleChangeHandler::ObRoleChangeHandler(): sub_role_change_handler_arr_()
 {
   reset();
@@ -80,7 +87,7 @@ void ObRoleChangeHandler::switch_to_follower_forcedly()
   }
 }
 
-int ObRoleChangeHandler::switch_to_leader()
+int ObRoleChangeHandler::switch_to_leader(RCDiagnoseInfo &diagnose_info)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
@@ -88,6 +95,7 @@ int ObRoleChangeHandler::switch_to_leader()
     ObIRoleChangeSubHandler *handler = sub_role_change_handler_arr_[i];
     char sub_role_change_handler_str[OB_LOG_BASE_TYPE_STR_MAX_LEN] = {'\0'};
     ObLogBaseType base_type = static_cast<ObLogBaseType>(i);
+    diagnose_info.log_type_ = base_type;
     bool has_defined_to_string = false;
     if (OB_SUCCESS == log_base_type_to_string(base_type, sub_role_change_handler_str,
           OB_LOG_BASE_TYPE_STR_MAX_LEN)) {

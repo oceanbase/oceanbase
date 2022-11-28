@@ -71,6 +71,12 @@ enum TruncateType
   TRUNCATE_LOG = 2,
 };
 
+enum FreezeMode
+{
+  PERIOD_FREEZE_MODE = 0,
+  FEEDBACK_FREEZE_MODE,
+};
+
 struct TruncateLogInfo
 {
   TruncateType truncate_type_;
@@ -182,10 +188,12 @@ public:
   virtual int to_leader_active();
   virtual int try_advance_committed_end_lsn(const LSN &end_lsn);
   virtual int64_t get_last_submit_log_id_() const;
+  virtual void get_last_submit_end_lsn_(LSN &end_lsn) const;
   virtual int get_last_submit_log_info(LSN &last_submit_lsn, int64_t &log_id, int64_t &log_proposal_id) const;
   virtual int get_last_slide_end_lsn(LSN &out_end_lsn) const;
   virtual const share::SCN get_last_slide_scn() const;
-  virtual int try_freeze_last_log();
+  virtual int check_and_switch_freeze_mode();
+  virtual int period_freeze_last_log();
   virtual int inc_update_scn_base(const share::SCN &scn);
   // location cache will be removed TODO by yunlong
   virtual int set_location_cache_cb(PalfLocationCacheCb *lc_cb);
@@ -251,7 +259,8 @@ private:
                                 const int64_t log_id,
                                 const int64_t &log_proposal_id);
   int try_freeze_prev_log_(const int64_t next_log_id, const LSN &lsn, bool &is_need_handle);
-  int try_freeze_last_log_(const int64_t expected_log_id, const LSN &expected_end_lsn, bool &is_need_handle);
+  int feedback_freeze_last_log_();
+  int try_freeze_last_log_task_(const int64_t expected_log_id, const LSN &expected_end_lsn, bool &is_need_handle);
   int generate_new_group_log_(const LSN &lsn,
                               const int64_t log_id,
                               const share::SCN &scn,
@@ -294,7 +303,9 @@ private:
                             LSN &last_committed_end_lsn,
                             int64_t &last_fetch_max_log_id) const;
   void try_reset_last_fetch_log_info_(const LSN &expected_end_lsn, const int64_t log_id);
-  void try_update_committed_lsn_for_fetch_(const LSN &expected_end_lsn, const int64_t &expected_log_id);
+  void try_update_committed_lsn_for_fetch_(const LSN &expected_end_lsn,
+      const int64_t &expected_log_id,
+      const LSN &log_committed_end_lsn);
   void try_fetch_log_streamingly_(const LSN &log_end_lsn);
   int do_fetch_log_(const FetchTriggerType &trigger_type,
                     const common::ObAddr &dest,
@@ -326,6 +337,9 @@ private:
 public:
   typedef common::ObLinearHashMap<common::ObAddr, LSN> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小
+  static const int64_t APPEND_CNT_ARRAY_SIZE = 32;   // append次数统计数组的size
+  static const uint64_t APPEND_CNT_ARRAY_MASK = APPEND_CNT_ARRAY_SIZE - 1;
+  static const int64_t APPEND_CNT_LB_FOR_PERIOD_FREEZE = 200000;   // 切为PERIOD_FREEZE_MODE的append count下界
 private:
   struct LogTaskGuard
   {
@@ -446,6 +460,8 @@ private:
   int64_t accum_log_cnt_;
   int64_t accum_group_log_size_;
   int64_t last_record_group_log_id_;
+  int64_t append_cnt_array_[APPEND_CNT_ARRAY_SIZE];
+  FreezeMode freeze_mode_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(LogSlidingWindow);

@@ -92,6 +92,7 @@ class ObTabletTxMultiSourceDataUnit;
 struct ObMigrationTabletParam;
 class ObTableScanRange;
 
+
 class ObLSTabletService : public logservice::ObIReplaySubHandler,
                           public logservice::ObIRoleChangeSubHandler,
                           public logservice::ObICheckpointSubHandler
@@ -106,7 +107,46 @@ public:
   void destroy();
   int offline();
   int online();
+public:
+  class AllowToReadMgr final
+  {
+  public:
+    struct AllowToReadInfo final
+    {
+      AllowToReadInfo() { info_.seq_ = 0; info_.allow_to_read_ = 0; info_.reserved_ = 0; }
+      ~AllowToReadInfo() = default;
+      bool allow_to_read() const { return info_.allow_to_read_ == 1; }
+      bool operator==(const AllowToReadInfo &other) const {
+        return info_.seq_ == other.info_.seq_
+            && info_.allow_to_read_ == other.info_.allow_to_read_
+            && info_.reserved_ == other.info_.reserved_;
+      }
 
+      TO_STRING_KV(K_(info));
+      static const int32_t RESERVED = 63;
+      union InfoUnion
+      {
+        struct types::uint128_t v128_;
+        struct
+        {
+          uint64_t seq_ : 64;
+          uint8_t allow_to_read_ : 1;
+          uint64_t reserved_ : RESERVED;
+        };
+        TO_STRING_KV(K_(seq), K_(allow_to_read), K_(reserved));
+      };
+      InfoUnion info_;
+    } __attribute__((__aligned__(16)));
+  public:
+    AllowToReadMgr(): read_info_() {}
+    ~AllowToReadMgr() = default;
+    void disable_to_read();
+    void enable_to_read();
+    void load_allow_to_read_info(AllowToReadInfo &read_info);
+    void check_read_info_same(const AllowToReadInfo &read_info, bool &is_same);
+  private:
+    AllowToReadInfo read_info_;
+  };
 private:
   // for replay
   virtual int replay(
@@ -328,6 +368,9 @@ public:
   int build_ha_tablet_new_table_store(
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
+  void enable_to_read();
+  void disable_to_read();
+
 protected:
   virtual int prepare_dml_running_ctx(
       const common::ObIArray<uint64_t> *column_ids,
@@ -720,6 +763,8 @@ private:
       ObRelativeTable &data_table,
       ObStoreCtx &store_ctx,
       const ObStoreRow &tbl_row);
+  int set_allow_to_read_(ObLS *ls);
+
 private:
   friend class ObLSTabletIterator;
 
@@ -730,7 +775,7 @@ private:
   ObTabletIDSet tablet_id_set_;
   common::ObBucketLock bucket_lock_; // for tablet update, not for dml
   observer::ObIMetaReport *rs_reporter_;
-
+  AllowToReadMgr allow_to_read_mgr_;
   bool is_inited_;
 };
 

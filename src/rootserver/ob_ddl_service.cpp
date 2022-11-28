@@ -1655,6 +1655,33 @@ int ObDDLService::print_view_expanded_definition(
   return ret;
 }
 
+int ObDDLService::get_obj_privs_ora(const uint64_t tenant_id,
+                                    const uint64_t obj_id,
+                                    const uint64_t obj_type,
+                                    ObSchemaGetterGuard &schema_guard,
+                                    ObIArray<ObObjPriv> &obj_privs) {
+  int ret = OB_SUCCESS;
+  ObArray<const ObObjPriv*> obj_privs_pointer;
+  if (OB_FAIL(schema_guard.get_obj_priv_with_obj_id(tenant_id,
+                                                    obj_id,
+                                                    obj_type,
+                                                    obj_privs_pointer,
+                                                    true))) {
+    LOG_WARN("fail to get_obj_priv_with_obj_id", KR(ret), K(tenant_id), K(obj_id), K(obj_type));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < obj_privs_pointer.count(); ++i) {
+      if (OB_ISNULL(obj_privs_pointer.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("obj_privs_pointer contains NULL", KR(ret), K(i));
+      } else if(OB_FAIL(obj_privs.push_back(*(obj_privs_pointer.at(i))))) {
+        LOG_WARN("obj_privs fail to push back", KR(ret), K(i));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObDDLService::create_tables_in_trans(const bool if_not_exist,
                                          const ObString &ddl_stmt_str,
                                          const ObErrorInfo &error_info,
@@ -1686,6 +1713,9 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
     ObSchemaGetterGuard schema_guard;
     uint64_t tenant_id = table_schemas.at(0).get_tenant_id();
     share::schema::ObTableSchema &first_table = table_schemas.at(0);
+    ObArray<ObObjPriv> orig_obj_privs_ora;
+    const ObTableSchema *old_view_schema = NULL;
+    bool is_oracle_mode = false;
     int64_t refreshed_schema_version = 0;
     if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
@@ -1694,6 +1724,8 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to start trans", KR(ret), K(tenant_id),
                K(tenant_id), K(refreshed_schema_version));
+    } else if (OB_FAIL(first_table.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", KR(ret), K(first_table));
     } else {
     }
     if (OB_SUCC(ret)) {
@@ -1714,7 +1746,6 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
         if (OB_FAIL(ret)) {
         } else if (table_schema.is_view_table() && if_not_exist) {
           const ObString &view_name = table_schema.get_table_name();
-          const ObTableSchema *old_view_schema = NULL;
           if (OB_FAIL(schema_guard.get_table_schema(table_schema.get_tenant_id(),
                                                     table_schema.get_database_id(),
                                                     view_name,
@@ -1723,12 +1754,26 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
             LOG_WARN("failed to get table schema", K(view_name), K(ret));
           } else if (OB_ISNULL(old_view_schema)) {
             ret = OB_SUCCESS;
-          } else if (OB_FAIL(drop_trigger_in_drop_table(trans, ddl_operator, schema_guard,
-                                                        *old_view_schema, false))) {
-            // 兼容oracle,create or replace view时drop trigger，且不进回收站
-            LOG_WARN("failed to drop trigger", K(old_view_schema->get_table_id()), K(ret));
-          } else if (OB_FAIL(ddl_operator.drop_table(*old_view_schema, trans))) {
-            LOG_WARN("failed to drop old view schema", K(ret));
+          } else {
+            if (!is_oracle_mode) {
+              // no need to store obj privs
+            } else if (OB_FAIL(get_obj_privs_ora(table_schema.get_tenant_id(),
+                                                 old_view_schema->get_table_id(),
+                                                 static_cast<uint64_t>(ObObjectType::TABLE),
+                                                 schema_guard,
+                                                 orig_obj_privs_ora))) {
+              LOG_WARN("fial to get obj privs ora", KR(ret), K(table_schema.get_tenant_id()),
+                       K(old_view_schema->get_table_id()));
+            }
+
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(drop_trigger_in_drop_table(trans, ddl_operator, schema_guard,
+                                                          *old_view_schema, false))) {
+              // 兼容oracle,create or replace view时drop trigger，且不进回收站
+              LOG_WARN("failed to drop trigger", KR(ret), K(old_view_schema->get_table_id()));
+            } else if (OB_FAIL(ddl_operator.drop_table(*old_view_schema, trans))) {
+              LOG_WARN("failed to drop old view schema", KR(ret));
+            }
           }
         }
       }
@@ -1763,15 +1808,32 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
             }
           }
         }
+
+        if (OB_SUCC(ret) && (0 == i) && table_schema.is_view_table() &&
+            OB_NOT_NULL(old_view_schema) && is_oracle_mode) {
+          const uint64_t db_id = table_schema.get_database_id();
+          const ObSimpleDatabaseSchema *db_schema = NULL;
+          if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_id, db_schema))) {
+            LOG_WARN("failed to get database schema", KR(ret), K(db_id));
+          } else if (OB_ISNULL(db_schema)) {
+            ret = OB_ERR_BAD_DATABASE;
+            LOG_WARN("db schema is NULL", KR(ret), K(tenant_id), K(db_id));
+          } else if (OB_FAIL(restore_obj_privs_for_table(table_schema.get_table_id(),
+                                                         db_schema->get_database_name_str(),
+                                                         table_schema.get_table_name_str(),
+                                                         ddl_operator,
+                                                         trans,
+                                                         orig_obj_privs_ora))) {
+            LOG_WARN("restore_obj_privs_for_table failed", KR(ret), K(table_schema.get_table_id()),
+                     K(db_schema->get_database_name_str()), K(table_schema.get_table_name_str()));
+          }
+        }
       }
 
       // add error info for create force view
       if (OB_SUCC(ret) && 1 == table_schemas.count() && first_table.is_user_view()) {
-        bool is_oracle_mode = false;
         if (OB_LIKELY(ERROR_STATUS_HAS_ERROR != error_info.get_error_status())) {
           /* do nothing */
-        } else if (OB_FAIL(first_table.check_if_oracle_compat_mode(is_oracle_mode))) {
-          LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
         } else if (OB_UNLIKELY(!is_oracle_mode)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected compat mode add create view error info", K(ret), K(is_oracle_mode));
@@ -4844,9 +4906,9 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
               ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
               LOG_WARN("index table schema should not be null", K(*drop_index_arg), K(ret));
               LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, drop_index_arg->index_name_.length(), drop_index_arg->index_name_.ptr());
-            } else if (index_table_schema->is_unavailable_index()) {
+            } else if (!drop_index_arg->is_inner_ && index_table_schema->is_unavailable_index()) {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("not support to drop a building index", K(ret), KPC(index_table_schema));
+              LOG_WARN("not support to drop a building index", K(ret), K(drop_index_arg->is_inner_), KPC(index_table_schema));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building index is");
             } else if (drop_index_arg->is_add_to_scheduler_) {
               ObDDLRes ddl_res;
@@ -5801,7 +5863,7 @@ int ObDDLService::fill_column_collation(
         column_schema, table_schema.get_charset_type(), table_schema.get_collation_type()))) {
       RS_LOG(WARN, "failed to fill column charset info", K(ret));
     } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(column_schema,
-                       table_schema.get_table_id()))) {
+                       table_schema.get_table_id(), true))) {
       RS_LOG(WARN, "failed to check text or blob column length", K(ret));
     }
   } else if (ObEnumSetTC == col_tc) {
@@ -12339,7 +12401,6 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
     ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
     const uint64_t tenant_id = orig_table_schema.get_tenant_id();
     ObSArray<ObSAuditSchema> audit_schemas;
-    ObArray<const ObObjPriv *> orig_obj_privs_pointer_ora;
     ObArray<ObObjPriv> orig_obj_privs_ora;
     const bool to_recyclebin = false;
     if (table_schemas.count() < 1) {
@@ -12371,24 +12432,12 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
       }
     }
     // Save Oracle obj privs on table for later restore
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(schema_guard.get_obj_priv_with_obj_id(tenant_id,
-                                   orig_table_schema.get_table_id(),
-                                   static_cast<uint64_t>(ObObjectType::TABLE),
-                                   orig_obj_privs_pointer_ora,
-                                   true /* reset flag */))) {
-        LOG_WARN("get_obj_priv_with_obj_id failed", K(ret),
-            K(tenant_id), K(orig_table_schema.get_table_id()));
-      } else {
-        for (int i = 0; OB_SUCC(ret) && i < orig_obj_privs_pointer_ora.count(); ++i) {
-          if (OB_ISNULL(orig_obj_privs_pointer_ora.at(i))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("orig_obj_privs_pointer_ora contains NULL", K(ret), K(i));
-          } else {
-            OZ (orig_obj_privs_ora.push_back(*(orig_obj_privs_pointer_ora.at(i))));
-          }
-        }
-      }
+    if (OB_SUCC(ret) && OB_FAIL(get_obj_privs_ora(tenant_id,
+                                                  orig_table_schema.get_table_id(),
+                                                  static_cast<uint64_t>(ObObjectType::TABLE),
+                                                  schema_guard,
+                                                  orig_obj_privs_ora))) {
+      LOG_WARN("fail to get obj privs ora", KR(ret), K(tenant_id), K(orig_table_schema.get_table_id()));
     }
     if (OB_SUCC(ret) && OB_FAIL(drop_aux_table_in_truncate(
         orig_table_schema, schema_guard, trans, ddl_operator,
@@ -12492,14 +12541,21 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
           for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count(); i++) {
             ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
             foreign_key_info.foreign_key_id_ = OB_INVALID_ID;
-            if (OB_FAIL(schema_service->fetch_new_constraint_id(tmp_schema.get_tenant_id(), foreign_key_info.foreign_key_id_))) {
+            if (OB_FAIL(schema_service->fetch_new_constraint_id(
+                        tmp_schema.get_tenant_id(), foreign_key_info.foreign_key_id_))) {
               LOG_WARN("failed to fetch new foreign key id", K(ret), K(tmp_schema.get_tenant_id()));
-            } else if (foreign_key_info.child_table_id_ == foreign_key_info.parent_table_id_) {
-              // When it depends on itself, the parent table ID also needs to be updated
-              foreign_key_info.parent_table_id_ = tmp_schema.get_table_id();
-            }
-            if (OB_SUCC(ret)) {
+            } else if (orig_table_schema.get_table_id() == foreign_key_info.child_table_id_) {
+              if (foreign_key_info.child_table_id_ == foreign_key_info.parent_table_id_) {
+                // When it depends on itself, the parent table ID also needs to be updated
+                foreign_key_info.parent_table_id_ = tmp_schema.get_table_id();
+              }
               foreign_key_info.child_table_id_ = tmp_schema.get_table_id();
+            } else if (orig_table_schema.get_table_id() == foreign_key_info.parent_table_id_) {
+              foreign_key_info.parent_table_id_ = tmp_schema.get_table_id();
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("orig table id is not equal to orig parent_table_id_ or orig child_table_id_ of foreign_key_info ",
+                       K(ret), K(orig_table_schema.get_table_id()), K(foreign_key_info));
             }
           }
         }
@@ -12593,17 +12649,16 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
         }
         if (OB_SUCC(ret) && (0 == i)) {
           // truncate table needs to rebuild the audit rules for the newly created table
-          if (OB_FAIL(restore_obj_priv_after_truncation(
-                        ddl_operator,
-                        trans,
-                        orig_obj_privs_ora,
-                        tmp_schema.get_table_id(),
-                        database_name,
-                        tmp_schema.get_table_name_str()))) {
-            LOG_WARN("restore_obj_priv_after_truncation failed", K(ret),
-                K(tmp_schema.get_table_id()),
-                K(database_name),
-                K(tmp_schema.get_table_name_str()));
+          if (OB_FAIL(restore_obj_privs_for_table(tmp_schema.get_table_id(),
+                                                  database_name,
+                                                  tmp_schema.get_table_name_str(),
+                                                  ddl_operator,
+                                                  trans,
+                                                  orig_obj_privs_ora))) {
+            LOG_WARN("restore_obj_privs_for_table failed", KR(ret),
+                     K(tmp_schema.get_table_id()),
+                     K(database_name),
+                     K(tmp_schema.get_table_name_str()));
           }
         }
       }
@@ -12706,14 +12761,12 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
   return ret;
 }
 
-int ObDDLService::restore_obj_priv_after_truncation(
-    ObDDLOperator &ddl_operator,
-    ObMySQLTransaction &trans,
-    ObIArray<ObObjPriv> &orig_obj_privs_ora,
-    uint64_t new_table_id,
-    const ObString &database_name,
-    const ObString &table_name)
-{
+int ObDDLService::restore_obj_privs_for_table(const uint64_t new_table_id,
+                                              const ObString &database_name,
+                                              const ObString &table_name,
+                                              ObDDLOperator &ddl_operator,
+                                              ObMySQLTransaction &trans,
+                                              ObIArray<ObObjPriv> &orig_obj_privs_ora) {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < orig_obj_privs_ora.count(); ++i) {
     ObObjPriv &obj_priv = orig_obj_privs_ora.at(i);
@@ -13104,39 +13157,24 @@ int ObDDLService::rebuild_hidden_table_priv(const ObTableSchema &orig_table_sche
                                             ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  ObArray<const ObObjPriv *> orig_obj_privs_pointer_ora;
   ObArray<ObObjPriv> orig_obj_privs_ora;
-  if (OB_FAIL(schema_guard.get_obj_priv_with_obj_id(
-                           orig_table_schema.get_tenant_id(),
-                           orig_table_schema.get_table_id(),
-                           static_cast<uint64_t>(ObObjectType::TABLE),
-                           orig_obj_privs_pointer_ora,
-                           true /* reset flag */))) {
-    LOG_WARN("get_obj_priv_with_obj_id failed", K(ret),
-    K(orig_table_schema.get_table_id()));
-  } else {
-    for (int i = 0; OB_SUCC(ret) && i < orig_obj_privs_pointer_ora.count(); ++i) {
-      if (OB_ISNULL(orig_obj_privs_pointer_ora.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("orig_obj_privs_pointer_ora contains NULL", K(ret), K(i));
-      } else {
-        OZ (orig_obj_privs_ora.push_back(*(orig_obj_privs_pointer_ora.at(i))));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(get_obj_privs_ora(orig_table_schema.get_tenant_id(),
+                                orig_table_schema.get_table_id(),
+                                static_cast<uint64_t>(ObObjectType::TABLE),
+                                schema_guard,
+                                orig_obj_privs_ora))) {
+    LOG_WARN("fail to get obj privs ora", KR(ret), K(orig_table_schema.get_tenant_id()),
+             K(orig_table_schema.get_table_id()));
+  } else if (OB_FAIL(restore_obj_privs_for_table(hidden_table_schema.get_table_id(),
+                                                 hidden_table_schema.get_link_database_name(),
+                                                 hidden_table_schema.get_table_name_str(),
+                                                 ddl_operator,
+                                                 trans,
+                                                 orig_obj_privs_ora))) {
     // need to rebuild permissions for the newly created table
-    if (OB_FAIL(restore_obj_priv_after_truncation(
-                ddl_operator,
-                trans,
-                orig_obj_privs_ora,
-                hidden_table_schema.get_table_id(),
-                hidden_table_schema.get_link_database_name(),
-                hidden_table_schema.get_table_name_str()))) {
-      LOG_WARN("restore_obj_priv_after_truncation failed", K(ret),
-               K(hidden_table_schema.get_table_id()),
-               K(hidden_table_schema.get_table_name_str()));
-    }
+    LOG_WARN("restore_obj_privs_for_table failed", KR(ret),
+             K(hidden_table_schema.get_table_id()),
+             K(hidden_table_schema.get_table_name_str()));
   }
   return ret;
 }
@@ -13834,6 +13872,15 @@ int ObDDLService::reconstruct_index_schema(const ObTableSchema &orig_table_schem
               new_index_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
               bool is_exist = false;
               if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(schema_guard.check_table_exist(new_index_schema.get_tenant_id(),
+                                                                new_index_schema.get_database_id(),
+                                                                new_index_schema.get_table_name_str(),
+                                                                true/*is_index*/,
+                                                                ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE/*check_type*/,
+                                                                is_exist))) {
+                LOG_WARN("failed to check table exist", K(ret));
+              } else if (is_exist) {
+                LOG_INFO("index already rebuilt, skip", K(new_index_schema.get_table_id()), K(new_index_schema.get_table_name_str()));
               } else if (OB_FAIL(new_table_schemas.push_back(new_index_schema))) {
                 LOG_WARN("failed to add table schema!", K(ret));
               } else if (OB_FAIL(index_ids.push_back(new_idx_tid))) {
@@ -15305,6 +15352,7 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
           new_col_schema.set_nullable(false);
           new_col_schema.drop_not_null_cst();
           new_hidden_table_schema.set_in_offline_ddl_white_list(true);
+          ObSchemaOperationType operation_type = OB_DDL_ALTER_TABLE;
           if (OB_FAIL(new_hidden_table_schema.alter_column(new_col_schema, ObTableSchema::CHECK_MODE_ONLINE))) {
             LOG_WARN("failed to alter column", K(ret));
           } else if (OB_FAIL(ddl_operator.update_single_column(trans,
@@ -15317,6 +15365,8 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
                                                                                     new_hidden_table_schema,
                                                                                     trans))) {
             LOG_WARN("failed to drop constraint", K(ret));
+          } else if (OB_FAIL(ddl_operator.update_table_attribute(new_hidden_table_schema, trans, operation_type))) {
+            LOG_WARN("failed to update data table schema attribute", K(ret));
           }
         }
       }
@@ -15538,7 +15588,7 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support trunate table has materialized view", K(ret));
         }
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && arg.foreign_key_checks_) {
           // When truncate table, check whether the table being truncate is the parent table
           // of the foreign key constraint
           // if it is parent table, not allow truncate
@@ -18176,10 +18226,22 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
               */
             } else {
               bool to_recyclebin = drop_table_arg.to_recyclebin_;
+              bool has_conflict_ddl = false;
               if (table_schema->get_table_type() == MATERIALIZED_VIEW || table_schema->is_tmp_table()) {
                 to_recyclebin = false;
               }
-              if (OB_FAIL(drop_table_in_trans(schema_guard,
+              if (drop_table_arg.table_type_ == USER_TABLE && OB_FAIL(ObDDLTaskRecordOperator::check_has_conflict_ddl(
+                      sql_proxy_,
+                      drop_table_arg.tenant_id_,
+                      table_schema->get_table_id(),
+                      drop_table_arg.task_id_,
+                      ObDDLType::DDL_DROP_TABLE,
+                      has_conflict_ddl))) {
+                LOG_WARN("failed to check has conflict ddl", K(ret));
+              } else if (has_conflict_ddl) {
+                ret = OB_SCHEMA_EAGAIN;
+                LOG_WARN("failed to drop table that has conflict ddl", K(ret), K(table_schema->get_table_id()));
+              } else if (OB_FAIL(drop_table_in_trans(schema_guard,
                           tmp_table_schema,
                           false,
                           USER_INDEX == drop_table_arg.table_type_,

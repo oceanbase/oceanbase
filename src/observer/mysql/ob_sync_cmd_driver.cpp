@@ -71,10 +71,14 @@ int ObSyncCmdDriver::send_eof_packet(bool has_more_result)
 
   // for proxy
   // in multi-stmt, send extra ok packet in the last stmt(has no more result)
-  if (!is_prexecute_ && !has_more_result) {
-    sender_.update_last_pkt_pos();
+  if (!is_prexecute_ && !has_more_result
+        && OB_FAIL(sender_.update_last_pkt_pos())) {
+    LOG_WARN("failed to update last packet pos", K(ret));
   }
-  if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
     LOG_WARN("response packet fail", K(ret), K(has_more_result));
   }
   return ret;

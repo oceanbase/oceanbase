@@ -58,7 +58,7 @@ private:
       memtable::ObIMemtable *memtable,
       bool &bool_ret);
   int check_freeze_to_inc_write_ref(ObITable *table, bool &bool_ret);
-  bool need_to_refresh_table(ObTableStoreIterator &iter, int &ret);
+  bool need_to_refresh_table(ObTableStoreIterator &iter);
   bool check_if_need_log();
 private:
   static const int64_t LOG_INTERVAL_US = 10 * 1000 * 1000;

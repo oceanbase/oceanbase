@@ -1901,7 +1901,7 @@ int ObFastParserMysql::process_string(const char quote)
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
       } else if (is_ansi_quotes && quote == '"') {
-        cur_token_type_ = IGNORE_TOKEN;
+        cur_token_type_ = NORMAL_TOKEN;
       } else {
         char *buf = nullptr;
         cur_token_type_ = PARAM_TOKEN;

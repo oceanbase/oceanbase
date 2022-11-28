@@ -110,7 +110,7 @@ private:
 
 private:
   typedef common::ObLinkHashMap<ObTabletAutoincKey, ObTabletAutoincMgr> TabletAutoincMgrMap;
-  const static int INIT_NODE_MUTEX_NUM = 1024;
+  const static int INIT_NODE_MUTEX_NUM = 10243L;
   bool is_inited_;
   common::ObSmallAllocator node_allocator_;
   TabletAutoincMgrMap tablet_autoinc_mgr_map_;

@@ -574,10 +574,11 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
         // for proxy
         // in multi-stmt, send extra ok packet in the last stmt(has no more result)
         if (OB_SUCC(ret)) {
-          if (!has_ok_packet()) {
-            update_last_pkt_pos();
-          }
-          if (OB_FAIL(response_packet(eofp, &session))) {
+          if (OB_FAIL(packet_sender_.alloc_ezbuf())) {
+            LOG_WARN("failed to alloc easy buf", K(ret));
+          } else if (!has_ok_packet() && OB_FAIL(update_last_pkt_pos())) {
+            LOG_WARN("failed to update last packet pos", K(ret));
+          } else if (OB_FAIL(response_packet(eofp, &session))) {
             LOG_WARN("response packet fail", K(ret));
           } else if (last_row && !cursor.is_scrollable() 
                               && !cursor.is_streaming()
@@ -718,6 +719,7 @@ int ObMPStmtFetch::process()
     ObSQLSessionInfo &session = *sess;
     int64_t tenant_version = 0;
     int64_t sys_version = 0;
+    THIS_WORKER.set_session(sess);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.get_raw_audit_record().request_memory_used_ = 0;
@@ -746,28 +748,28 @@ int ObMPStmtFetch::process()
                 OB_SYS_TENANT_ID, sys_version))) {
       LOG_WARN("fail get tenant broadcast version", K(ret));
     } else {
+      ObPLCursorInfo *cursor = NULL;
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       session.partition_hit().reset();
       ret = process_fetch_stmt(session);
+      // set cursor fetched info. if cursor has be fetched, we need to disconnect
+      cursor = session.get_cursor(cursor_id_);
+      if (OB_NOT_NULL(cursor) && cursor->get_fetched()) {
+        cursor_fetched = true;
+      }
+      if (need_close_cursor()) {
+        // close at here because after do_process, need read some cursor info for log in process_fetch_stmt
+        int tmp_ret = session.close_cursor(cursor_id_);
+        ret = ret == OB_SUCCESS ? tmp_ret : ret;
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("no scrollable cursor close cursor failed at last row.", K(tmp_ret));
+        }
+      }
     }
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
   }
 
-  // set cursor fetched info. if cursor has be fetched, we need to disconnect
-  if (OB_NOT_NULL(sess)) {
-    ObPLCursorInfo *cursor = sess->get_cursor(cursor_id_);
-    if (OB_NOT_NULL(cursor) && cursor->get_fetched()) {
-      cursor_fetched = true;
-    }
-    if (need_close_cursor()) {
-      int tmp_ret = sess->close_cursor(cursor_id_);
-			if (OB_SUCCESS != tmp_ret) {
-				ret = OB_SUCCESS == ret ? tmp_ret : ret;
-        LOG_WARN("no scrollable cursor close cursor failed at last row.", K(ret), K(tmp_ret));
-      }
-    }
-  }
   if (!OB_SUCC(ret) && is_conn_valid()) {
     send_error_packet(ret, NULL);
     if (cursor_fetched) {
@@ -779,6 +781,7 @@ int ObMPStmtFetch::process()
   if (!THIS_WORKER.need_retry()) {
     flush_ret = flush_buffer(true);
   }
+  THIS_WORKER.set_session(NULL);
   if (sess != NULL) {
     revert_session(sess); //current ignore revert session ret
   }

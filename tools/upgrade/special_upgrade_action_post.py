@@ -6,60 +6,9 @@ import time
 from actions import Cursor
 from actions import DMLCursor
 from actions import QueryCursor
-from actions import check_current_cluster_is_primary
 import mysql.connector
 from mysql.connector import errorcode
 import actions
-
-def do_special_upgrade_in_standy_cluster(standby_cluster_infos, user, passwd):
-  try:
-    for standby_cluster_info in standby_cluster_infos:
-      logging.info("do_special_upgrade_in_standy_cluster: cluster_id = {0}, ip = {1}, port = {2}"
-                   .format(standby_cluster_info['cluster_id'],
-                           standby_cluster_info['ip'],
-                           standby_cluster_info['port']))
-      logging.info("create connection : cluster_id = {0}, ip = {1}, port = {2}"
-                   .format(standby_cluster_info['cluster_id'],
-                           standby_cluster_info['ip'],
-                           standby_cluster_info['port']))
-      conn = mysql.connector.connect(user     =  standby_cluster_info['user'],
-                                     password =  standby_cluster_info['pwd'],
-                                     host     =  standby_cluster_info['ip'],
-                                     port     =  standby_cluster_info['port'],
-                                     database =  'oceanbase',
-                                     raise_on_warnings = True)
-
-      cur = conn.cursor(buffered=True)
-      conn.autocommit = True
-      query_cur = QueryCursor(cur)
-      is_primary = check_current_cluster_is_primary(query_cur)
-      if is_primary:
-        logging.exception("""primary cluster changed : cluster_id = {0}, ip = {1}, port = {2}"""
-                          .format(standby_cluster_info['cluster_id'],
-                                  standby_cluster_info['ip'],
-                                  standby_cluster_info['port']))
-        raise e
-
-      ## process
-      do_special_upgrade_for_standby_cluster(conn, cur, user, passwd)
-
-      cur.close()
-      conn.close()
-  except Exception, e:
-    logging.exception("""do_special_upgrade_for_standby_cluster failed""")
-    raise e
-
-# 备库需要执行的升级动作，且备库仅系统租户可写
-def do_special_upgrade_for_standby_cluster(conn, cur, user, passwd):
-#升级语句对应的action要写在下面的actions begin和actions end这两行之间，
-#因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
-#这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
-  tenant_id_list = [1]
-  upgrade_system_package(conn, cur)
-####========******####======== actions begin ========####******========####
-  run_upgrade_job(conn, cur, "4.0.0.0")
-  return
-####========******####========= actions end =========####******========####
 
 def do_special_upgrade(conn, cur, tenant_id_list, user, pwd):
   # special upgrade action
@@ -68,7 +17,6 @@ def do_special_upgrade(conn, cur, tenant_id_list, user, pwd):
 #这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
   upgrade_system_package(conn, cur)
 ####========******####======== actions begin ========####******========####
-  run_upgrade_job(conn, cur, "4.0.0.0")
   return
 ####========******####========= actions end =========####******========####
 

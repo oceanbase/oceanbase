@@ -153,6 +153,14 @@ public:
      const uint64_t table_id,
      bool &has_long_running_ddl);
 
+  static int check_has_conflict_ddl(
+      common::ObMySQLProxy *proxy,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const int64_t task_id,
+      const share::ObDDLType ddl_type,
+      bool &has_conflict_ddl);
+
   static int insert_record(
       common::ObISQLClient &proxy,
       const ObDDLTaskRecord &record);

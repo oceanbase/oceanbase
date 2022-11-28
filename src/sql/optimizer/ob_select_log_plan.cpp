@@ -2218,10 +2218,6 @@ int ObSelectLogPlan::create_recursive_union_all_plan(ObLogicalOperator *left_chi
   } else if (is_basic) {
     if (DistAlgo::DIST_BASIC_METHOD & set_dist_methods) {
       dist_set_method = DistAlgo::DIST_BASIC_METHOD;
-      if (right_child->is_local() &&
-          OB_FAIL(adjust_recursive_cte_plan(right_child->get_child_list()))) {
-        LOG_WARN("failed to adjust recursive cte plan", K(ret));
-      }
     }
   } else if (DistAlgo::DIST_PULL_TO_LOCAL & set_dist_methods) {
     // pull to local
@@ -2229,9 +2225,6 @@ int ObSelectLogPlan::create_recursive_union_all_plan(ObLogicalOperator *left_chi
     if (left_child->is_sharding()) {
       left_exch_info.dist_method_ = ObPQDistributeMethod::LOCAL;
     }
-    if (OB_FAIL(adjust_recursive_cte_plan(right_child->get_child_list()))) {
-      LOG_WARN("failed to adjust recurisve cte plan", K(ret));
-    } else { /*do nothing*/ }
   }
   if (OB_SUCC(ret) && DistAlgo::DIST_INVALID_METHOD != dist_set_method) {
     if (OB_FAIL(ObOptimizerUtil::check_need_sort(order_items,
@@ -2253,43 +2246,6 @@ int ObSelectLogPlan::create_recursive_union_all_plan(ObLogicalOperator *left_chi
     } else if (OB_FAIL(allocate_recursive_union_all_as_top(left_child, right_child, dist_set_method, top))) {
       LOG_WARN("failed to allocate recursive union all as top", K(ret));
     } else { /*do nothing*/ }
-  }
-  return ret;
-}
-
-int ObSelectLogPlan::adjust_recursive_cte_plan(ObIArray<ObLogicalOperator*> &child_ops)
-{
-  int ret = OB_SUCCESS;
-  ObLogPlan *log_plan = NULL;
-  ObExchangeInfo exch_info;
-  int64_t fake_cte_pos = -1;
-  for (int64_t i = 0; OB_SUCC(ret) && fake_cte_pos == -1 && i < child_ops.count(); i++) {
-    if (OB_ISNULL(child_ops.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (child_ops.at(i)->get_contains_fake_cte()) {
-      fake_cte_pos = i;
-    } else { /*do nothing*/ }
-  }
-  if (OB_SUCC(ret) && fake_cte_pos != -1) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < child_ops.count(); i++) {
-      if (OB_ISNULL(child_ops.at(i)) || OB_ISNULL(log_plan = child_ops.at(i)->get_plan())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (i == fake_cte_pos) {
-        if (OB_FAIL(SMART_CALL(adjust_recursive_cte_plan(child_ops.at(i)->get_child_list())))) {
-          LOG_WARN("failed to adjust recursive cte plan", K(ret));
-        } else { /*do nothing*/ }
-      } else if (child_ops.at(i)->is_sharding() &&
-                 OB_FAIL(log_plan->allocate_exchange_as_top(child_ops.at(i),
-                                                            exch_info))) {
-        LOG_WARN("failed to allocate exchange", K(ret));
-      } else if (log_op_def::LOG_MATERIAL != child_ops.at(i)->get_type() &&
-                 log_op_def::LOG_TABLE_SCAN != child_ops.at(i)->get_type() &&
-                 OB_FAIL(log_plan->allocate_material_as_top(child_ops.at(i)))) {
-        LOG_WARN("failed to allocate materialize as top", K(ret));
-      } else { /*do nothing*/ }
-    }
   }
   return ret;
 }
@@ -4851,9 +4807,11 @@ int ObSelectLogPlan::get_late_materialization_operator(ObLogicalOperator *top,
     LOG_WARN("get unexpected null", K(ret));
   } else if (log_op_def::LOG_TABLE_SCAN != child_scan->get_type()) {
     /*do nothing*/
+  } else if (OB_FALSE_IT(table_scan = static_cast<ObLogTableScan *>(child_scan))) {
+  } else if (NULL != table_scan->get_limit_expr() || NULL != table_scan->get_offset_expr()) {
+    table_scan = NULL;
   } else {
     sort_op = static_cast<ObLogSort *>(child_sort);
-    table_scan = static_cast<ObLogTableScan *>(child_scan);
   }
   return ret;
 }

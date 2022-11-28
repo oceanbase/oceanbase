@@ -850,18 +850,20 @@ ObTwoPhaseCommitMsgType ObPartTransCtx::switch_msg_type_(const int16_t msg_type)
 int ObPartTransCtx::post_tx_commit_resp_(const int status)
 {
   int ret = OB_SUCCESS;
+  bool has_skip = false, use_rpc = true;
   const auto commit_version = ctx_tx_data_.get_commit_version();
   // scheduler on this server, direct call
   if (exec_info_.scheduler_ == addr_) {
-    if (need_callback_scheduler_()) {
-      if (OB_FAIL(defer_commit_callback_(status, commit_version))) {
+    use_rpc = false;
+    if (!has_callback_scheduler_()) {
+      if (OB_FAIL(defer_callback_scheduler_(status, commit_version))) {
         TRANS_LOG(WARN, "report tx commit result fail", K(ret), K(status), KPC(this));
       } else {
 #ifndef NDEBUG
         TRANS_LOG(INFO, "report tx commit result to local scheduler succeed", K(status), KP(this));
 #endif
       }
-    }
+    } else { has_skip = true; }
   } else {
     ObTxCommitRespMsg msg;
     build_tx_common_msg_(SCHEDULER_LS, msg);
@@ -876,7 +878,10 @@ int ObPartTransCtx::post_tx_commit_resp_(const int status)
 #endif
     }
   }
-  REC_TRANS_TRACE_EXT(tlog_, response_scheduler, OB_ID(ret), ret,
+  REC_TRANS_TRACE_EXT(tlog_, response_scheduler,
+                      OB_ID(ret), ret,
+                      OB_ID(tag1), has_skip,
+                      OB_ID(tag2), use_rpc,
                       OB_ID(status), status,
                       OB_ID(commit_version), commit_version);
   return ret;

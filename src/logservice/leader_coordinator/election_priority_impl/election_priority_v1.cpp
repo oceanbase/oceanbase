@@ -82,26 +82,30 @@ int PriorityV1::compare(const AbstractPriority &rhs, int &result, ObStringHolder
 
 int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
 {
+  LC_TIME_GUARD(100_ms);
   #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(ls_id), K(*this)
   int ret = OB_SUCCESS;
   palf::PalfHandleGuard palf_handle_guard;
-  palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
+//  palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
   if (OB_ISNULL(MTL(ObLogService*))) {
     COORDINATOR_LOG_(ERROR, "ObLogService is nullptr");
-  } else if (OB_FAIL(MTL(ObLogService*)->open_palf(ls_id, palf_handle_guard))) {
+  } else if (CLICK_FAIL(MTL(ObLogService*)->open_palf(ls_id, palf_handle_guard))) {
     COORDINATOR_LOG_(WARN, "open_palf failed");
-  } else if (OB_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
-    COORDINATOR_LOG_(WARN, "get_access_mode failed");
+//  } else if (CLICK_FAIL(palf_handle_guard.get_palf_handle()->get_access_mode(access_mode))) {
+//    COORDINATOR_LOG_(WARN, "get_access_mode failed");
+//  } else if (palf::AccessMode::APPEND != access_mode) {
+//    // Set log_ts to 0 when current access mode is not APPEND.
+//    log_ts = 0;
   } else {
     common::ObRole role;
     int64_t unused_pid = -1;
     SCN min_unreplay_scn;
-    if (OB_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
+    if (CLICK_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
       COORDINATOR_LOG_(WARN, "get_role failed");
-    } else if (OB_FAIL(palf_handle_guard.get_max_scn(scn))) {
+    } else if (CLICK_FAIL(palf_handle_guard.get_max_scn(scn))) {
       COORDINATOR_LOG_(WARN, "get_max_scn failed");
     } else if (FOLLOWER == role) {
-      if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_scn(ls_id, min_unreplay_scn))) {
+      if (CLICK_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_min_unreplayed_scn(ls_id, min_unreplay_scn))) {
         COORDINATOR_LOG_(WARN, "failed to get_min_unreplayed_scn");
         ret = OB_SUCCESS;
       } else if (!min_unreplay_scn.is_valid_and_not_min()) {
@@ -111,6 +115,12 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
         scn = SCN::minus(min_unreplay_scn, 1) ;
       } else {}
     } else {}
+    // log_ts may fallback because palf's role may be different with apply_service.
+    // So we need check it here to keep inc update semantic.
+    if (scn < scn_) {
+      COORDINATOR_LOG_(TRACE, "new log_ts is smaller than current, no need update", K(role), K(min_unreplay_scn), K(scn));
+      scn = scn_;
+    }
     COORDINATOR_LOG_(TRACE, "get_scn_ finished", K(role), K(min_unreplay_scn), K(scn));
     if (OB_SUCC(ret) && !scn.is_valid()) {
       scn.set_min();
@@ -122,7 +132,7 @@ int PriorityV1::get_scn_(const share::ObLSID &ls_id, SCN &scn)
 
 int PriorityV1::refresh_(const share::ObLSID &ls_id)
 {
-  LC_TIME_GUARD(1_s);
+  LC_TIME_GUARD(100_ms);
   #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(*this)
   int ret = OB_SUCCESS;
   ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);

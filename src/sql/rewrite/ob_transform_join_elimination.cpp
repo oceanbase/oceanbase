@@ -1234,7 +1234,7 @@ int ObTransformJoinElimination::left_join_can_be_eliminated(ObDMLStmt *stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("condition is null", K(ret));
         // todo 
-      } else if (condition->is_const_expr()) {
+      } else if (condition->is_static_scalar_const_expr()) {
         ObObj value;
         bool got_result = false;
         if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
@@ -1342,8 +1342,6 @@ int ObTransformJoinElimination::eliminate_outer_join(ObIArray<ObParentDMLStmt> &
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ctx_), K(ret));
-  } else if (OB_FAIL(ObTransformUtils::right_join_to_left(stmt))) {
-    LOG_WARN("failed to change right outer join to left.", K(ret));
   } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
     LOG_WARN("failed to get relations exprs all.", K(ret));
   } else if (OB_FAIL(check_vaild_non_sens_dul_vals(parent_stmts, stmt, is_non_sens_dul_vals,
@@ -3485,11 +3483,13 @@ int ObTransformJoinElimination::eliminate_join_in_joined_table(ObDMLStmt *stmt,
                                                                 left_happened,
                                                                 trans_tables)))) {
       LOG_WARN("failed to eliminate join in joined table`s left table.", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::adjust_single_table_ids(joined_table))) {
-      LOG_WARN("failed to construct single table ids.", K(ret));
     } else if (OB_FAIL(append(child_candi_tables, left_child_candi_tables))
                || OB_FAIL(append(child_candi_tables, right_child_candi_tables))) {
       LOG_WARN("failed to append child candi tables", K(ret));
+    } else if (!left_happened && !right_happened) {
+      /* do nothing */
+    } else if (OB_FAIL(ObTransformUtils::adjust_single_table_ids(joined_table))) {
+      LOG_WARN("failed to construct single table ids.", K(ret));
     } else if (joined_table->is_left_join() &&
                (OB_FAIL(append(trans_conditions, left_trans_conditions))
                 || OB_FAIL(append(joined_table->join_conditions_, right_trans_conditions)))) {
@@ -3498,7 +3498,7 @@ int ObTransformJoinElimination::eliminate_join_in_joined_table(ObDMLStmt *stmt,
                (OB_FAIL(append(joined_table->join_conditions_, left_trans_conditions))
                 || OB_FAIL(append(trans_conditions, right_trans_conditions)))) {
       LOG_WARN("failed to append trans conditions to right join", K(ret));
-    } else if (left_happened || right_happened) {
+    } else {
       trans_happened = true;
     }
   } else if (!joined_table->is_inner_join()) {
@@ -3538,12 +3538,13 @@ int ObTransformJoinElimination::eliminate_join_in_joined_table(ObDMLStmt *stmt,
     } else if (OB_FAIL(eliminate_candi_tables(stmt, inner_join_conds, other_tables,
                                               child_candi_tables, false, is_happened, trans_tables))) {
       LOG_WARN("failed to eliminate candi tables", K(ret));
+    } else if (false == (trans_happened |= is_happened)) {
+      /* do nothing */
     } else if (OB_FAIL(append(outer_join_tables, other_tables))) {
       LOG_WARN("failed to append tables", K(ret));
     } else if (OB_FAIL(rebuild_joined_tables(stmt, table_item, inner_join_tables,
                                              outer_join_tables, inner_join_conds))) {
       LOG_WARN("failed to rebuild joined tables", K(ret));
-    } else if (OB_FALSE_IT(trans_happened |= is_happened)) {
     } else if (!table_item->is_joined_table() ||
                !static_cast<JoinedTable*>(table_item)->is_inner_join()) {
       ret = trans_conditions.assign(inner_join_conds);

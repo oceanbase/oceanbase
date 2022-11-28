@@ -685,6 +685,8 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
     const bool is_sync_ddl_user)
 {
   int ret = OB_SUCCESS;
+  // do not support cancel drop_index_task.
+  bool is_support_cancel = true;
   const ObSArray<obrpc::ObIndexArg *> index_arg_list = alter_table_arg.index_arg_list_;
   ObSArray<obrpc::ObIndexArg *> add_index_arg_list;
   ObSArray<obrpc::ObIndexArg *> drop_index_args;
@@ -714,6 +716,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
       } else {
         ObDropIndexArg *drop_index_arg = static_cast<ObDropIndexArg *>(index_arg);
         drop_index_arg->is_add_to_scheduler_ = true;
+        is_support_cancel = false;
       }
     } else { // for rename/drop index action
       if (OB_FAIL(alter_table_arg.index_arg_list_.push_back(index_arg))) {
@@ -744,7 +747,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
     ObIArray<obrpc::ObDDLRes> &ddl_ress = res.ddl_res_array_;
     for (int64_t i = 0; OB_SUCC(ret) && i < ddl_ress.count(); ++i) {
       ObDDLRes &ddl_res = ddl_ress.at(i);
-      if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ddl_res.tenant_id_, ddl_res.task_id_, *my_session, common_rpc_proxy))) {
+      if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ddl_res.tenant_id_, ddl_res.task_id_, *my_session, common_rpc_proxy, is_support_cancel))) {
         LOG_WARN("wait drop index finish", K(ret));
       }
     }
@@ -1818,6 +1821,9 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
                && FALSE_IT(const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).session_id_ = my_session->get_sessid_for_table())) {
       //impossible
     } else if (!stmt.is_truncate_oracle_temp_table()) {
+      int64_t foreign_key_checks = 0;
+      my_session->get_foreign_key_checks(foreign_key_checks);
+      const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).foreign_key_checks_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks);
       const_cast<obrpc::ObTruncateTableArg&>(truncate_table_arg).compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode()
         ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
       int64_t affected_rows = 0;

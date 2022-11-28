@@ -516,7 +516,11 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
         ret = OB_RPC_CONNECT_ERROR;
         LOG_WARN("peer no in communication, maybe crashed", K(ret), K(sqc), K(cluster_id),
                 K(session->get_process_query_time()));
+      } else {
+        LOG_WARN("ignore the black server list with virtual table", K(addr), K(ret));
       }
+    }
+    if (OB_FAIL(ret)) {
     } else {
       SMART_VAR(ObPxRpcInitSqcArgs, args) {
         int64_t timeout_us = phy_plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time();
@@ -1235,7 +1239,11 @@ int ObParallelDfoScheduler::fast_dispatch_sqc(ObExecContext &exec_ctx,
         ret = OB_RPC_CONNECT_ERROR;
         LOG_WARN("peer no in communication, maybe crashed", K(ret), K(sqc), K(cluster_id),
                 K(session->get_process_query_time()));
+      } else {
+        LOG_WARN("ignore the black server list with virtual table", K(ret));
       }
+    }
+    if (OB_FAIL(ret)) {
     } else {
       SMART_VAR(ObPxRpcInitSqcArgs, args) {
         ObPxRpcInitSqcResponse resp;

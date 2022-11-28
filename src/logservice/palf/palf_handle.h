@@ -426,6 +426,8 @@ public:
   int reset_election_priority();
   int stat(PalfStat &palf_stat) const;
 
+	// @param [out] diagnose info, current diagnose info of palf
+  int diagnose(PalfDiagnoseInfo &diagnose_info) const;
   TO_STRING_KV(KP(palf_handle_impl_), KP(rc_cb_), KP(fs_cb_));
 private:
   palf::PalfHandleImpl *palf_handle_impl_;

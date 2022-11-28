@@ -247,16 +247,16 @@ int ObMemtableCtx::write_auth(const bool exclusive)
   do {
     if (ATOMIC_LOAD(&is_read_only_)) {
       ret = OB_ERR_READ_ONLY_TRANSACTION;
-      TRANS_LOG(ERROR, "WriteAuth fail: readonly trans not support update operation",
-                "trans_id", NULL == ctx_ ? "" : S(ctx_->get_trans_id()), K(ret));
+      TRANS_LOG(ERROR, "WriteAuth: readonly trans not support update operation",
+                "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K(ret));
     } else if (OB_SUCCESS != ATOMIC_LOAD(&end_code_)) {
       ret = get_trans_status_retcode();
       TRANS_LOG(WARN, "WriteAuth: trans is already end", K(ret),
-                "trans_id", NULL == ctx_ ? "" : S(ctx_->get_trans_id()), K_(end_code));
+                "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K_(end_code));
     } else if (!ATOMIC_LOAD(&is_master_)) {
       ret = OB_NOT_MASTER;
       TRANS_LOG(WARN, "WriteAuth: trans is already not master",
-                "trans_id", NULL == ctx_ ? "" : S(ctx_->get_trans_id()), K(ret));
+                "trans_id", ctx_->get_trans_id(), "ls_id", ctx_->get_ls_id(), K(ret));
     } else if (lock_succ) {
       // all check passed after lock succ
       break;
@@ -581,7 +581,10 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
     }
   }
 
-  if (OB_FAIL(trans_end(commit, trans_version, final_scn))) {
+  if (OB_FAIL(do_trans_end(commit,
+                           trans_version,
+                           final_scn,
+                           commit ? OB_TRANS_COMMITED : OB_TRANS_ROLLBACKED))) {
     TRANS_LOG(ERROR, "trans_end fail", K(ret), K(*this));
   } else {
     ret = cs_ret;

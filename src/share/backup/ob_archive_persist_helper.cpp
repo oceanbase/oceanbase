@@ -215,7 +215,6 @@ int ObArchivePersistHelper::get_piece_switch_interval(
   } else if (OB_FAIL(dest_attr.set_piece_switch_interval(value.ptr()))) {
     LOG_WARN("fail to set piece switch interval", K(ret), K(value));
   } else {
-  // TODO: need to adjust
     piece_switch_interval = dest_attr.piece_switch_interval_;
   }
   return ret;

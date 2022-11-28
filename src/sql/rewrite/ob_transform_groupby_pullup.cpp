@@ -1092,7 +1092,7 @@ int ObTransformGroupByPullup::need_transform(const common::ObIArray<ObParentDMLS
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
   } else if (!query_hint->has_outline_data()) {
-    need_trans = true;
+    need_trans = !query_hint->global_hint_.disable_cost_based_transform();
   } else if (NULL == (trans_hint = query_hint->get_outline_trans_hint(ctx_->trans_list_loc_))
              || !trans_hint->is_view_merge_hint()
              || !static_cast<const ObViewMergeHint*>(trans_hint)->enable_group_by_pull_up(ctx_->src_qb_name_)) {

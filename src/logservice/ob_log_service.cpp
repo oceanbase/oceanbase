@@ -325,8 +325,14 @@ int ObLogService::remove_ls(const ObLSID &id,
     CLOG_LOG(WARN, "failed to remove from replay_service", K(ret), K(id));
     // NB: remove palf_handle lastly.
   } else {
-    log_handler.destroy();
-    restore_handler.destroy();
+    // NB: can not execute destroy, otherwise, each interface in log_handler or restore_handler
+    // may return OB_NOT_INIT.
+    // TODO by runlin: create_ls don't init ObLogHandler and ObLogRestoreHandler.
+    //
+    // In normal case(for gc), stop has been executed, this stop has no effect.
+    // In abnormal case(create ls failed, need remove ls directlly), there is no possibility for dead lock.
+    log_handler.stop();
+    restore_handler.stop();
     if (OB_FAIL(palf_env_->remove(id.id()))) {
       CLOG_LOG(WARN, "failed to remove from palf_env_", K(ret), K(id));
     } else {
@@ -610,6 +616,50 @@ int ObLogService::create_ls_(const share::ObLSID &id,
     if (true == palf_handle.is_valid() && false == log_handler.is_valid()) {
       palf_env_->close(palf_handle);
     }
+  }
+  return ret;
+}
+
+int ObLogService::diagnose_role_change(RCDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "log_service is not inited", K(ret));
+  } else if (OB_FAIL(role_change_service_.diagnose(diagnose_info))) {
+    CLOG_LOG(WARN, "role_change_service diagnose failed", K(ret));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+int ObLogService::diagnose_replay(const share::ObLSID &id,
+                                  ReplayDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "log_service is not inited", K(ret));
+  } else if (OB_FAIL(replay_service_.diagnose(id, diagnose_info))) {
+    CLOG_LOG(WARN, "replay_service diagnose failed", K(ret), K(id));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
+int ObLogService::diagnose_apply(const share::ObLSID &id,
+                                 ApplyDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "log_service is not inited", K(ret));
+  } else if (OB_FAIL(apply_service_.diagnose(id, diagnose_info))) {
+    CLOG_LOG(WARN, "apply_service diagnose failed", K(ret), K(id));
+  } else {
+    // do nothing
   }
   return ret;
 }

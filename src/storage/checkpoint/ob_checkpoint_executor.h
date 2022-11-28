@@ -37,6 +37,17 @@ struct ObCheckpointVTInfo
   );
 };
 
+struct CheckpointDiagnoseInfo
+{
+  share::SCN checkpoint_;
+  share::SCN min_rec_scn_;
+  logservice::ObLogBaseType log_type_;
+
+  TO_STRING_KV(K(checkpoint_),
+               K(min_rec_scn_),
+               K(log_type_));
+};
+
 class ObCheckpointExecutor
 {
 public:
@@ -58,23 +69,19 @@ public:
 
   // the service will flush and advance checkpoint
   // after flush, checkpoint_scn will be equal or greater than recycle_scn
-  int advance_checkpoint_by_flush(share::SCN recycle_scn);
+  int advance_checkpoint_by_flush(share::SCN recycle_scn = share::SCN::min_scn());
 
   // for __all_virtual_checkpoint
   int get_checkpoint_info(ObIArray<ObCheckpointVTInfo> &checkpoint_array);
 
-  // avoid need replay too mang logs
-  bool need_flush();
-
-  bool is_wait_advance_checkpoint();
-
-  void set_wait_advance_checkpoint(share::SCN &checkpoint_scn);
-
   int64_t get_cannot_recycle_log_size();
+
+  void get_min_rec_scn(int &log_type, share::SCN &min_rec_scn) const;
+
+  int diagnose(CheckpointDiagnoseInfo &diagnose_info) const;
 
 private:
   static const int64_t CLOG_GC_PERCENT = 60;
-  static const int64_t MAX_NEED_REPLAY_CLOG_INTERVAL = (int64_t)60 * 60 * 1000 * 1000; //us
 
   ObLS *ls_;
   logservice::ObILogHandler *loghandler_;
@@ -82,11 +89,8 @@ private:
   // be used to avoid checkpoint concurrently,
   // no need to protect handlers_[] because ls won't be destroyed(hold lshandle)
   // when the public interfaces are invoked
-  common::ObSpinLock lock_;
+  mutable common::ObSpinLock lock_;
 
-  // avoid frequent freeze when clog_used_over_threshold
-  bool wait_advance_checkpoint_;
-  int64_t last_set_wait_advance_checkpoint_time_;
   bool update_checkpoint_enabled_;
 };
 

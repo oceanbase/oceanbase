@@ -112,7 +112,7 @@ struct QSyncCriticalGuard
 class ObDynamicQSync
 {
 public:
-  enum { MAX_REF_CNT = 64 };
+  enum { MAX_REF_CNT = 48 };
   struct Ref
   {
     Ref(): ref_(0) {}

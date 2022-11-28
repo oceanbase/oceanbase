@@ -229,6 +229,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_log_stat.cpp
   virtual_table/ob_all_virtual_apply_stat.cpp
   virtual_table/ob_all_virtual_replay_stat.cpp
+  virtual_table/ob_all_virtual_ha_diagnose.cpp
   virtual_table/ob_global_variables.cpp
   virtual_table/ob_gv_sql.cpp
   virtual_table/ob_gv_sql_audit.cpp

@@ -260,9 +260,26 @@ int ObTabletMeta::init(
     const int64_t max_sync_storage_schema_version = OB_ISNULL(tablet_meta) ?
         old_tablet_meta.max_sync_storage_schema_version_ : MIN(old_tablet_meta.max_sync_storage_schema_version_,
             tablet_meta->max_sync_storage_schema_version_);
+    const SCN clog_checkpoint_scn = OB_ISNULL(tablet_meta) ?
+        old_tablet_meta.clog_checkpoint_scn_ : MAX(old_tablet_meta.clog_checkpoint_scn_, tablet_meta->clog_checkpoint_scn_);
+
     ObTabletTableStoreFlag table_store_flag = old_tablet_meta.table_store_flag_;
     if (!table_store_flag.with_major_sstable()) {
       table_store_flag = OB_ISNULL(tablet_meta) ? table_store_flag : tablet_meta->table_store_flag_;
+    }
+
+    if (OB_NOT_NULL(tablet_meta) && tablet_meta->clog_checkpoint_scn_ > old_tablet_meta.clog_checkpoint_scn_) {
+      if (OB_FAIL(autoinc_seq_.assign(tablet_meta->autoinc_seq_))) {
+        LOG_WARN("failed to assign autoinc seq", K(ret));
+      } else {
+        tx_data_ = tablet_meta->tx_data_;
+      }
+    } else {
+      if (OB_FAIL(autoinc_seq_.assign(autoinc_seq))) {
+        LOG_WARN("failed to assign autoinc seq", K(ret));
+      } else {
+        tx_data_ = tx_data;
+      }
     }
 
     version_ = TABLET_META_VERSION;
@@ -276,12 +293,8 @@ int ObTabletMeta::init(
     snapshot_version_ = snapshot_version;
     multi_version_start_ = multi_version_start;
     compat_mode_ = old_tablet_meta.compat_mode_;
-    if (FAILEDx(autoinc_seq_.assign(autoinc_seq))) {
-      LOG_WARN("failed to assign autoinc seq", K(ret));
-    }
     ha_status_ = old_tablet_meta.ha_status_;
-    report_status_ = old_tablet_meta.report_status_;
-    tx_data_ = tx_data;
+    report_status_ = old_tablet_meta.report_status_; //old tablet meta report status already reset
     if (FAILEDx(ddl_data_.assign(ddl_data))) {
       LOG_WARN("failed to assign ddl data", K(ret));
     }

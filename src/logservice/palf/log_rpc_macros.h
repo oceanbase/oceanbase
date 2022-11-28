@@ -13,14 +13,9 @@
 #ifndef OCEANBASE_LOGSERVICE_LOG_RPC_MACROS_
 #define OCEANBASE_LOGSERVICE_LOG_RPC_MACROS_
 
-#define DEFINE_RPC_PROCESSOR(CLASS, PROXY, REQTYPE, PCODE)                                                        \
-  class CLASS : public obrpc::ObRpcProcessor<PROXY::ObRpc<PCODE>>                                                 \
-  {                                                                                                               \
-  public:                                                                                                         \
-    CLASS() : palf_env_impl_(NULL), filter_(NULL) {}                                                              \
-    virtual ~CLASS() {}                                                                                           \
-    int process()                                                                                                 \
-    {                                                                                                             \
+#include "share/ob_occam_time_guard.h"
+
+#define __RPC_PROCESS_CODE__(REQTYPE) \
       int ret = OB_SUCCESS;                                                                                       \
       LogRpcPacketImpl<REQTYPE> &rpc_packet = arg_;                                                               \
       const REQTYPE &req = rpc_packet.req_;                                                                       \
@@ -36,6 +31,24 @@
         PALF_LOG(TRACE, "Processor handle_request success", K(ret), K(palf_id), K(req), KP(filter_));             \
       }                                                                                                           \
       return ret;                                                                                                 \
+
+#define __DEFINE_RPC_PROCESSOR__(CLASS, PROXY, REQTYPE, PCODE, ELECTION_MSG)                                      \
+  class CLASS : public obrpc::ObRpcProcessor<PROXY::ObRpc<PCODE>>                                                 \
+  {                                                                                                               \
+  public:                                                                                                         \
+    CLASS() : palf_env_impl_(NULL), filter_(NULL) {}                                                              \
+    virtual ~CLASS() {}                                                                                           \
+    int process() { return process_impl_(); }                                                                     \
+    template <bool FLAG = ELECTION_MSG, typename std::enable_if<FLAG, bool>::type = true>                         \
+    int process_impl_()                                                                                           \
+    {                                                                                                             \
+      TIMEGUARD_INIT(ELECT, 50_ms, 10_s);                                                                         \
+      __RPC_PROCESS_CODE__(REQTYPE)                                                                               \
+    }                                                                                                             \
+    template <bool FLAG = ELECTION_MSG, typename std::enable_if<!FLAG, bool>::type = true>                        \
+    int process_impl_()                                                                                           \
+    {                                                                                                             \
+      __RPC_PROCESS_CODE__(REQTYPE)                                                                               \
     }                                                                                                             \
     void set_palf_env_impl(void *palf_env_impl, void *filter)                                                     \
     {                                                                                                             \
@@ -47,6 +60,9 @@
     PalfEnvImpl *palf_env_impl_;                                                                                  \
     ObFunction<bool(const ObAddr &src)> *filter_;                                                                 \
   }
+
+#define DEFINE_RPC_PROCESSOR(CLASS, PROXY, REQTYPE, PCODE) __DEFINE_RPC_PROCESSOR__(CLASS, PROXY, REQTYPE, PCODE, false)
+#define DEFINE_ELECTION_RPC_PROCESSOR(CLASS, PROXY, REQTYPE, PCODE) __DEFINE_RPC_PROCESSOR__(CLASS, PROXY, REQTYPE, PCODE, true)
 
 #define DECLARE_RPC_PROXY_POST_FUNCTION(PRIO, REQTYPE, PCODE)               \
   RPC_AP(PRIO post_packet, PCODE, (palf::LogRpcPacketImpl<palf::REQTYPE>)); \
@@ -72,6 +88,7 @@
   int LogRpcProxyV2::post_packet(const common::ObAddr &dst, const palf::LogRpcPacketImpl<palf::REQTYPE> &pkt, \
                                  const int64_t tenant_id)                                                     \
   {                                                                                                           \
+    TIMEGUARD_INIT(ELECT, 50_ms, 10_s);                                                                       \
     int ret = common::OB_SUCCESS;                                                                             \
     static obrpc::LogRpcCB<obrpc::PCODE> cb;                                                                  \
     ret = this->to(dst)                                                                                       \
@@ -79,7 +96,7 @@
               .trace_time(true)                                                                               \
               .max_process_handler_time(100 * 1000)                                                           \
               .by(tenant_id)                                                                                  \
-              .group_id(share::OBCG_ELECTION)                                                                    \
+              .group_id(share::OBCG_ELECTION)                                                                 \
               .post_packet(pkt, &cb);                                                                         \
     return ret;                                                                                               \
   }
@@ -113,6 +130,7 @@
     virtual ~CLASS() {}                                                                                           \
     int process()                                                                                                 \
     {                                                                                                             \
+      TIMEGUARD_INIT(PALF, 100_ms, 10_s);                                                                         \
       int ret = OB_SUCCESS;                                                                                       \
       LogRpcPacketImpl<REQTYPE> &rpc_packet = arg_;                                                               \
       const REQTYPE &req = rpc_packet.req_;                                                                       \
@@ -120,11 +138,12 @@
       int64_t palf_id = rpc_packet.palf_id_;                                                                      \
       RESPTYPE &resp = result_.req_;                                                                              \
       result_.palf_id_ = palf_id;                                                                                 \
-      if (OB_ISNULL(palf_env_impl_) && OB_FAIL(__get_palf_env_impl(rpc_pkt_->get_tenant_id(), palf_env_impl_))) { \
+      if (OB_ISNULL(palf_env_impl_) && CLICK_FAIL(__get_palf_env_impl(rpc_pkt_->get_tenant_id(), palf_env_impl_))) { \
         PALF_LOG(WARN, "__get_palf_env_impl failed", K(ret), KPC(rpc_pkt_));                                      \
-      } else if (NULL != filter_ && true == (*filter_)(server)) {                                                 \
+      } else if (CLICK() && NULL != filter_ && true == (*filter_)(server)) {                                      \
         PALF_LOG(INFO, "need filter this packet", K(rpc_packet));                                                 \
       } else {                                                                                                    \
+        CLICK();                                                                                                  \
         LogRequestHandler handler(palf_env_impl_);                                                                \
         ret = handler.handle_sync_request(palf_id, server, req, resp);                                            \
       }                                                                                                           \

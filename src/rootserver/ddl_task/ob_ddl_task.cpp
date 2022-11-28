@@ -20,6 +20,7 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/ob_debug_sync.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "share/location_cache/ob_location_struct.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_struct.h"
@@ -487,8 +488,7 @@ int ObDDLTask::wait_trans_end(
   // try wait transaction end
   if (OB_SUCC(ret) && new_status != next_task_status && tmp_snapshot_version <= 0) {
     bool is_trans_end = false;
-    const bool need_wait_trans_end = true;
-    if (OB_FAIL(wait_trans_ctx.try_wait(is_trans_end, tmp_snapshot_version, need_wait_trans_end))) {
+    if (OB_FAIL(wait_trans_ctx.try_wait(is_trans_end, tmp_snapshot_version, true /*need_wait_trans_end */))) {
       if (OB_EAGAIN != ret) {
         LOG_WARN("fail to try wait transaction", K(ret));
       } else {
@@ -806,7 +806,7 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
           if (OB_SUCCESS == ret_codes.at(i) && tmp_snapshots.at(i) > 0) {
             snapshot_array_.at(tablet_pos_indexes.at(i)) = tmp_snapshots.at(i);
             ++succ_count;
-          } else if (OB_EAGAIN == ret_codes.at(i)) {
+          } else if (ObIDDLTask::in_ddl_retry_white_list(ret_codes.at(i))) {
             // need retry
           } else if (OB_SUCCESS != ret_codes.at(i)) {
             ret = ret_codes.at(i);
@@ -832,7 +832,6 @@ int ObDDLWaitTransEndCtx::try_wait(bool &is_trans_end, int64_t &snapshot_version
     }
   }
   is_trans_end = is_trans_end_;
-  ret = OB_LS_LOCATION_LEADER_NOT_EXIST == ret ? OB_SUCCESS : ret;
   return ret;
 }
 
@@ -1071,9 +1070,6 @@ int ObDDLWaitColumnChecksumCtx::try_wait(bool &is_column_checksum_ready)
     }
   }
   is_column_checksum_ready = is_calc_done_;
-  if (OB_LS_LOCATION_LEADER_NOT_EXIST == ret) {
-    ret = OB_SUCCESS;
-  }
   return ret;
 }
 
@@ -1402,6 +1398,67 @@ int ObDDLTaskRecordOperator::check_has_long_running_ddl(
         }
       } else {
         has_long_running_ddl = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLTaskRecordOperator::check_has_conflict_ddl(
+    common::ObMySQLProxy *proxy,
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const int64_t task_id,
+    const ObDDLType ddl_type,
+    bool &has_conflict_ddl)
+{
+  int ret = OB_SUCCESS;
+  has_conflict_ddl = false;
+  if (OB_UNLIKELY(nullptr == proxy || !proxy->is_inited()
+    || OB_INVALID_ID == tenant_id
+    || OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), KP(proxy), K(tenant_id), K(table_id));
+  } else {
+    ObSqlString sql_string;
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(sql_string.assign_fmt("SELECT tenant_id, task_id, object_id, target_object_id, ddl_type,"
+          "schema_version, parent_task_id, trace_id, status, snapshot_version, task_version,"
+          "UNHEX(ddl_stmt_str) as ddl_stmt_str_unhex, ret_code, UNHEX(message) as message_unhex FROM %s "
+          "WHERE tenant_id = %lu AND object_id = %lu", OB_ALL_VIRTUAL_DDL_TASK_STATUS_TNAME,
+          tenant_id, table_id))) {
+        LOG_WARN("assign sql string failed", K(ret));
+      } else if (OB_FAIL(proxy->read(res, sql_string.ptr()))) {
+        LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else {
+        ObDDLTaskRecord task_record;
+        ObArenaAllocator allocator("DdlTaskRec");
+        while (OB_SUCC(ret) && !has_conflict_ddl && OB_SUCC(result->next())) {
+          allocator.reuse();
+          if (OB_FAIL(fill_task_record(result, allocator, task_record))) {
+            LOG_WARN("failed to fill task record", K(ret));
+          } else if (task_record.task_id_ != task_id) {
+            switch (ddl_type) {
+            case ObDDLType::DDL_DROP_TABLE: {
+              if (task_record.ddl_type_ == ObDDLType::DDL_DROP_INDEX && task_record.target_object_id_ != task_record.object_id_) {
+                LOG_WARN("conflict with ddl", K(task_record));
+                has_conflict_ddl = true;
+              }
+              break;
+            }
+            default: {
+              // do nothing
+            }
+            }
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
       }
     }
   }

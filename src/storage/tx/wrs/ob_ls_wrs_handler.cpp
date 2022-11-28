@@ -44,7 +44,7 @@ int ObLSWRSHandler::init()
 void ObLSWRSHandler::reset()
 {
   is_inited_ = false;
-  ls_weak_read_ts_.reset();
+  ls_weak_read_ts_.set_min();
   is_enabled_ = false;
 }
 
@@ -53,7 +53,7 @@ int ObLSWRSHandler::offline()
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
   is_enabled_ = false;
-  ls_weak_read_ts_.reset();
+  ls_weak_read_ts_.set_min();
   STORAGE_LOG(INFO, "weak read handler disabled", K(this));
   return ret;
 }

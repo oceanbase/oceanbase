@@ -7446,17 +7446,18 @@ int ObDDLResolver::check_foreign_key_reference(
                  K(ret), K(child_table_schema->is_user_table()));
       } else if (arg.is_parent_table_mock_) {
         // skip checking parent table
-        uint64_t database_id = OB_INVALID_ID;
+        uint64_t database_id = session_info_->get_database_id();
         const ObMockFKParentTableSchema *mock_fk_parent_table_schema = NULL;
-        if (OB_FAIL(schema_checker_->get_database_id(
-                    arg.tenant_id_, arg.database_name_, database_id))) {
-          LOG_WARN("failed to get_database_id", K(ret), K(arg.tenant_id_),
+        if (!arg.database_name_.empty()
+            && OB_FAIL(schema_checker_->get_database_id(
+               session_info_->get_effective_tenant_id(), arg.database_name_, database_id))) {
+          LOG_WARN("failed to get_database_id", K(ret), K(session_info_->get_effective_tenant_id()),
                                                 K(arg.database_name_), K(database_id));
         } else if (OB_FAIL(schema_checker_->get_mock_fk_parent_table_with_name(
-                           arg.tenant_id_, database_id,
+                           session_info_->get_effective_tenant_id(), database_id,
                            arg.foreign_key_name_, mock_fk_parent_table_schema))) {
           LOG_WARN("failed to get_mock_fk_parent_table_schema_with_name", K(ret),
-                    K(arg.tenant_id_), K(database_id),
+                    K(session_info_->get_effective_tenant_id()), K(database_id),
                     K(arg.foreign_key_name_));
         } else if (OB_NOT_NULL(mock_fk_parent_table_schema)) {
           if (is_alter_table

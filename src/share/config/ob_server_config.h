@@ -18,6 +18,10 @@
 
 namespace oceanbase
 {
+namespace unittest
+{
+  class ObSimpleClusterTestBase;
+}
 namespace common
 {
 class ObISQLClient;
@@ -46,10 +50,12 @@ const char* const EXTERNAL_KMS_INFO = "external_kms_info";
 const char* const SSL_EXTERNAL_KMS_INFO = "ssl_external_kms_info";
 const char* const CLUSTER_ID = "cluster_id";
 const char* const CLUSTER_NAME = "cluster";
+class ObServerMemoryConfig;
 
 class ObServerConfig : public ObCommonConfig
 {
 public:
+  friend class ObServerMemoryConfig;
   int init(const ObSystemConfig &config);
   static ObServerConfig &get_instance();
 
@@ -62,13 +68,6 @@ public:
   int strict_check_special() const;
   // print all config to log file
   void print() const;
-
-  // server memory limit
-  int64_t get_server_memory_limit();
-  // server memory available for normal tenants
-  int64_t get_server_memory_avail();
-  // server momory reserved for internal usage.
-  int64_t get_reserved_server_memory();
 
   double get_sys_tenant_default_min_cpu() { return server_cpu_quota_min; }
   double get_sys_tenant_default_max_cpu() { return server_cpu_quota_max; }
@@ -134,9 +133,29 @@ protected:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObServerConfig);
 };
+
+class ObServerMemoryConfig
+{
+public:
+  friend class unittest::ObSimpleClusterTestBase;
+  ObServerMemoryConfig();
+  static ObServerMemoryConfig &get_instance();
+  int reload_config(const ObServerConfig& server_config);
+  int64_t get_server_memory_limit() { return memory_limit_; }
+  int64_t get_reserved_server_memory() { return system_memory_; }
+  int64_t get_server_memory_avail() { return memory_limit_ - system_memory_; }
+private:
+// set_server_memory_limit just for mittest
+  void set_server_memory_limit(int64_t memory_limit);
+private:
+  int64_t memory_limit_;
+  int64_t system_memory_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObServerMemoryConfig);
+};
 }
 }
 
 #define GCONF (::oceanbase::common::ObServerConfig::get_instance())
-
+#define GMEMCONF (::oceanbase::common::ObServerMemoryConfig::get_instance())
 #endif // OCEANBASE_SHARE_CONFIG_OB_SERVER_CONFIG_H_

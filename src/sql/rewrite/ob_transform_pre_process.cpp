@@ -55,6 +55,8 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::right_join_to_left(stmt))) {
+    LOG_WARN("failed to transform right join as left", K(ret));
   } else {
     if (OB_SUCC(ret)) {
       if (OB_FAIL(add_all_rowkey_columns_to_stmt(stmt, is_happened))) {
@@ -172,11 +174,7 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
         LOG_TRACE("succeed to transform for grouping sets and multi rollup",K(is_happened), K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObTransformUtils::right_join_to_left(stmt))) {
-        LOG_WARN("failed to transform right join as left", K(ret));
-      }
-    }
+
     if (OB_SUCC(ret)) {
       LOG_DEBUG("transform pre process succ", K(*stmt));
       if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {

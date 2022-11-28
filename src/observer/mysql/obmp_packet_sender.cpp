@@ -691,6 +691,18 @@ ObSMConnection* ObMPPacketSender::get_conn() const
   return conn;
 }
 
+int ObMPPacketSender::update_last_pkt_pos()
+{
+  int ret = OB_SUCCESS;
+  if (NULL == ez_buf_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ez buf is null and cannot update last pkt pos for compress protocol", K(ret));
+  } else {
+    comp_context_.update_last_pkt_pos(ez_buf_->last);
+  }
+  return ret;
+}
+
 void ObMPPacketSender::force_disconnect()
 {
   LOG_WARN("force disconnect", K(lbt()));

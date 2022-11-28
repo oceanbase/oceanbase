@@ -116,6 +116,8 @@ public:
 
   bool is_flushing() const;
 
+  bool has_prepared_flush_checkpoint();
+
 private:
   // traversal prepare_list to flush memtable
   // case1: some memtable flush failed when ls freeze

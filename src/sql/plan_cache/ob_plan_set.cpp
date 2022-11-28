@@ -491,7 +491,7 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
       }
     }
 
-    if (OB_SUCC(ret) && is_same) {
+    if (is_sql_planset() && OB_SUCC(ret) && is_same) {
       CK( OB_NOT_NULL(pc_ctx.exec_ctx_.get_physical_plan_ctx()) );
       if (OB_SUCC(ret)) {
         const ParamStore &params = pc_ctx.exec_ctx_.get_physical_plan_ctx()->get_param_store();

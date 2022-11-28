@@ -681,13 +681,6 @@ public:
   int set_part_expr(uint64_t table_id, uint64_t index_tid, ObRawExpr *part_expr, ObRawExpr *subpart_expr);
   inline ObStmtHint &get_stmt_hint() { return stmt_hint_; }
   inline const ObStmtHint &get_stmt_hint() const { return stmt_hint_; }
-  int hint_table_may_used(ObCollationType cs_type,
-                                     const ObIArray<ObTableInHint*> &all_tables,
-                                     bool &may_used) const;
-  bool is_generate_name(ObString &name) const;
-  int hint_table_may_used(ObCollationType cs_type,
-                                     const ObTableInHint &hint_table,
-                                     bool &may_appear) const;
   int check_hint_table_matched_table_item(ObCollationType cs_type,
                                           const ObTableInHint &hint_table,
                                           bool &matched) const;

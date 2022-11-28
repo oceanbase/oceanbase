@@ -371,10 +371,17 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
     // loop until 'this round major merge finished' or 'epoch changed'
     while (!stop_ && !is_paused()) {
       update_last_run_timestamp();
-
-      // get zones to schedule merge
       ObZoneArray to_merge_zone;
-      if (OB_FAIL(get_next_merge_zones(to_merge_zone))) {
+      // Place is_last_merge_complete() to the head of this while loop.
+      // So as to break this loop at once, when the last merge is complete.
+      // Otherwise, may run one extra loop that should not run, and thus incur error.
+      // https://work.aone.alibaba-inc.com/issue/45954449
+      if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
+        LOG_WARN("fail to get zone global merge info", KR(ret));
+      } else if (global_info.is_last_merge_complete()) {
+        // this round major merge is complete
+        break;
+      } else if (OB_FAIL(get_next_merge_zones(to_merge_zone))) {  // get zones to schedule merge
         LOG_WARN("fail to get next merge zones", KR(ret));
       } else if (to_merge_zone.empty()) {
         // no new zone to merge
@@ -382,16 +389,11 @@ int ObMajorMergeScheduler::do_one_round_major_merge(const int64_t expected_epoch
       } else if (OB_FAIL(schedule_zones_to_merge(to_merge_zone, expected_epoch))) {
         LOG_WARN("fail to get next merge zones", KR(ret), K(to_merge_zone), K(expected_epoch));
       }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(zone_merge_mgr_->get_snapshot(global_info, info_array))) {
-          LOG_WARN("fail to get zone global merge info", KR(ret));
-        } else if (global_info.is_last_merge_complete()) {
-          // this round major merge is complete
-          break;
-        } else if (OB_FAIL(update_merge_status(expected_epoch))) {
-          LOG_WARN("fail to update merge status", KR(ret), K(expected_epoch));
-        }
+      // Need to update_merge_status, even though to_merge_zone is empty.
+      // E.g., in the 1st loop, already schedule all zones to merge, but not finish major merge.
+      // In the 2nd loop, though to_merge_zone is empty, need continue to update_merge_status.
+      if (FAILEDx(update_merge_status(expected_epoch))) {
+        LOG_WARN("fail to update merge status", KR(ret), K(expected_epoch));
       }
 
       if (OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret) {
@@ -561,6 +563,24 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
           if (OB_ENTRY_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
           }
+        } else if (info.broadcast_scn() > global_broadcast_scn) {
+          // broadcast_scn of zones here may be not equal to the global_broadcast_scn above,
+          // since merge_info can be reload at any time.
+          // 1) Larger:  e.g., broadcast_scn (that has increased) of zones is reload in one
+          // new epoch, while global_broadcast_scn is the one generated in one old epoch.
+          // https://work.aone.alibaba-inc.com/issue/46027393
+          // 2) Smaller: broadcast_scn of new added zones may be smaller than global_broadcast_scn.
+          // 3) Equal:   the common case.
+
+          // The check_merge_progress above is based on global_broadcast_scn. Hence,
+          // if broadcast_scn of one zone here is larger than global_broadcast_scn, then
+          // the check_merge_progress above is not enough. Need to recheck merge progress
+          // based on one global_broadcast_scn that is equal to or larger than broadcast_scn
+          // of all these zones. Note that, the info log below will be followed by one warn log
+          // with error code OB_FREEZE_SERVICE_EPOCH_MISMATCH.
+          all_merged = false;  // treat merged as false, thus all_merged is false too
+          LOG_INFO("broadcast_scn of this zone is larger than global_broadcast_scn, need to "
+            "recheck merge progress again", K_(tenant_id), K(zone), K(global_broadcast_scn));
         } else {
           merged = (0 == progress->unmerged_tablet_cnt_);
           if (!merged) {
@@ -568,47 +588,50 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
             LOG_INFO("zone merge not finish", "zone", progress->zone_, "unmerged_cnt", progress->unmerged_tablet_cnt_);
           }
 
-          SCN cur_all_merged_scn;
-          const SCN &ori_all_merged_scn = info.all_merged_scn();
-          SCN last_merged_scn = (merged ? info.broadcast_scn() : info.last_merged_scn());
+          SCN cur_all_merged_scn = SCN::min_scn();
+          const SCN &ori_all_merged_scn = info.all_merged_scn ();
+          SCN cur_merged_scn = (merged ? info.broadcast_scn() : info.last_merged_scn());
 
           if (progress->smallest_snapshot_scn_ <= SCN::min_scn()) {
             cur_all_merged_scn = info.broadcast_scn();
           } else {
             cur_all_merged_scn = progress->smallest_snapshot_scn_;
           }
+          LOG_INFO("check updating merge status", KR(ret), K_(tenant_id), K(zone), K(merged), K(cur_all_merged_scn),
+            K(cur_merged_scn), "smallest_snapshot_scn", progress->smallest_snapshot_scn_, K(info));
 
-          if ((last_merged_scn < cur_all_merged_scn) || (ori_all_merged_scn > cur_all_merged_scn)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpect version", KR(ret), K(last_merged_scn), K(cur_all_merged_scn), K(ori_all_merged_scn));
-          } else {
-            // TODO 'zone merge finish' & 'zone all tablet merge finish' should be handled in same procedure.
-            if (info.last_merged_scn_.get_scn() != last_merged_scn) {
-              LOG_INFO("this zone merge finished", K(zone), K_(tenant_id), K(cur_all_merged_scn),
-                K(ori_all_merged_scn), K(last_merged_scn));
-              // update last_merged_scn in all_merge_info table
-              if (OB_FAIL(zone_merge_mgr_->finish_zone_merge(zone, expected_epoch, last_merged_scn,
-                  ori_all_merged_scn))) {
-                LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch));
+          if (OB_SUCC(ret) && merged) {
+            // cur_all_merged_scn >= cur_merged_scn
+            // 1. Equal: snapshot_version of all tablets change to frozen_scn after major compaction
+            // 2. Greater: In backup-restore situation, tablets may have higher snapshot_version, which
+            // is larger than current frozen_scn. https://work.aone.alibaba-inc.com/issue/45933591
+            //
+            // cur_all_merged_scn >= ori_all_merged_scn
+            // 1. Greater: all_merged_scn will increase like last_merged_scn after major compaction
+            // 2. Equal: In backup-restore situation, tablets may have higher snapshot_version(eg. version=10).
+            // If major_freeze with version=4, all_merged_scn will be updated to 10; if major_freeze with version=5,
+            // all_merged_scn will still be 10.
+            if ((cur_all_merged_scn < cur_merged_scn) || (cur_all_merged_scn < ori_all_merged_scn)
+                || (cur_merged_scn < info.last_merged_scn())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("unexpected merged scn", KR(ret), K(merged), K(cur_merged_scn), K(cur_all_merged_scn),
+                K(ori_all_merged_scn), K(info));
+            } else if (cur_merged_scn > info.last_merged_scn()) {
+              LOG_INFO("this zone merge finished", K(zone), K_(tenant_id), K(cur_all_merged_scn), K(ori_all_merged_scn),
+                K(cur_merged_scn), "last_merged_scn", info.last_merged_scn());
+              // update last_merged_scn & all_merged_scn in all_zone_merge_info
+              if (OB_FAIL(zone_merge_mgr_->finish_zone_merge(zone, expected_epoch, cur_merged_scn, cur_all_merged_scn))) {
+                LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch), K(cur_merged_scn),
+                  K(cur_all_merged_scn), K(info));
               } else {
                 ROOTSERVICE_EVENT_ADD("daily_merge", "zone_merge_finish", K_(tenant_id),
-                                      "last_merged_scn", info.last_merged_scn_, K(zone));
+                                      "last_merged_scn", cur_merged_scn,
+                                      "all_merged_scn", cur_all_merged_scn,
+                                      K(zone));
               }
             }
+          }
 
-            if (OB_SUCC(ret) && (ori_all_merged_scn != cur_all_merged_scn)) {
-              LOG_INFO("this zone all tablet merge finished", K(zone), K_(tenant_id), K(cur_all_merged_scn),
-                K(ori_all_merged_scn), K(last_merged_scn));
-              // update all_merged_scn in all_merge_info table
-              if (OB_FAIL(zone_merge_mgr_->finish_zone_merge(zone, expected_epoch, last_merged_scn,
-                  cur_all_merged_scn))) {
-                LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch));
-              } else {
-                ROOTSERVICE_EVENT_ADD("daily_merge", "zone_all_tablet_merged", K_(tenant_id),
-                                      "all_merged_scn", cur_all_merged_scn, K(zone));
-              }
-            }
-          } // end do check
         }
       }
     }

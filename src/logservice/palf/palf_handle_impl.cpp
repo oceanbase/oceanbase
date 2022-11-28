@@ -2025,15 +2025,26 @@ int PalfHandleImpl::reset_location_cache_cb()
   return ret;
 }
 
-
-int PalfHandleImpl::try_freeze_last_log()
+int PalfHandleImpl::check_and_switch_freeze_mode()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
     RLockGuard guard(lock_);
-    sw_.try_freeze_last_log();
+    sw_.check_and_switch_freeze_mode();
+  }
+  return ret;
+}
+
+int PalfHandleImpl::period_freeze_last_log()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    RLockGuard guard(lock_);
+    sw_.period_freeze_last_log();
   }
   return ret;
 }
@@ -3494,6 +3505,15 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     palf_stat.max_scn_ = get_max_scn();
     PALF_LOG(INFO, "PalfHandleImpl stat", K(palf_stat));
   }
+  return ret;
+}
+
+int PalfHandleImpl::diagnose(PalfDiagnoseInfo &diagnose_info) const
+{
+  int ret = OB_SUCCESS;
+  state_mgr_.get_role_and_state(diagnose_info.palf_role_, diagnose_info.palf_state_);
+  diagnose_info.palf_proposal_id_ = state_mgr_.get_proposal_id();
+  state_mgr_.get_election_role(diagnose_info.election_role_, diagnose_info.election_epoch_);
   return ret;
 }
 

@@ -54,12 +54,11 @@ const char *log_archive_encryption_algorithm_values[] =
 // ObConfigItem
 ObConfigItem::ObConfigItem()
     : ck_(NULL), version_(0), dumped_version_(0), inited_(false), initial_value_set_(false),
-      value_updated_(false), value_valid_(false), lock_()
+      value_updated_(false), value_valid_(false), name_str_(nullptr), info_str_(nullptr),
+      range_str_(nullptr), lock_()
 {
   MEMSET(value_str_, 0, sizeof(value_str_));
   MEMSET(value_reboot_str_, 0, sizeof(value_reboot_str_));
-  MEMSET(name_str_, 0, sizeof(name_str_));
-  MEMSET(info_str_, 0, sizeof(info_str_));
 }
 
 ObConfigItem::~ObConfigItem()
@@ -291,6 +290,7 @@ void ObConfigIntegralItem::init(Scope::ScopeInfo scope_info,
                                 const ObParameterAttr attr)
 {
   ObConfigItem::init(scope_info, name, def, info, attr);
+  set_range(range);
   if (OB_ISNULL(range)) {
     OB_LOG(ERROR, "Range is NULL");
   } else if (!parse_range(range)) {
@@ -377,7 +377,7 @@ ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer *container,
   if (OB_LIKELY(NULL != container)) {
     container->set_refactored(ObConfigStringKey(name), this, 1);
   }
-  init(scope_info, name, def, range,  info, attr);
+  init(scope_info, name, def, range, info, attr);
 }
 
 ObConfigDoubleItem::ObConfigDoubleItem(ObConfigContainer *container,
@@ -402,6 +402,7 @@ void ObConfigDoubleItem::init(Scope::ScopeInfo scope_info,
                               const ObParameterAttr attr)
 {
   ObConfigItem::init(scope_info, name, def, info, attr);
+  set_range(range);
   if (OB_ISNULL(range)) {
     OB_LOG(ERROR, "Range is NULL");
   } else if (!parse_range(range)) {

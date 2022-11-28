@@ -489,6 +489,21 @@ int ObTabletGroupRestoreDagNet::report_result_()
   return ret;
 }
 
+int ObTabletGroupRestoreDagNet::deal_with_cancel()
+{
+  int ret = OB_SUCCESS;
+  const int32_t result = OB_CANCELED;
+  const bool need_retry = false;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet group restore dag net do not init", K(ret));
+  } else if (OB_FAIL(ctx_->set_result(result, need_retry))) {
+    LOG_WARN("failed to set result", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 /******************ObTabletGroupRestoreDag*********************/
 ObTabletGroupRestoreDag::ObTabletGroupRestoreDag(const ObStorageHADagType sub_type)
   : ObStorageHADag(ObDagType::DAG_TYPE_RESTORE, sub_type)
@@ -790,6 +805,7 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
       ctx_->arg_.action_, action_restore_status))) {
     LOG_WARN("failed to trans restore action to restore status", K(ret), KPC(ctx_));
   } else {
+    ctx_->tablet_id_array_.reset();
     bool can_change = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->arg_.tablet_id_array_.count(); ++i) {
       const ObTabletID &tablet_id = ctx_->arg_.tablet_id_array_.at(i);
@@ -1868,7 +1884,11 @@ int ObTabletRestoreDag::inner_reset_status_for_retry()
     result_mgr_.reuse();
     if (!tablet_restore_ctx_.is_leader_) {
       if (OB_FAIL(tablet_restore_ctx_.ha_table_info_mgr_->remove_tablet_table_info(tablet_restore_ctx_.tablet_id_))) {
-        LOG_WARN("failed to remove tablet info", K(ret), K(tablet_restore_ctx_));
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to remove tablet info", K(ret), K(tablet_restore_ctx_));
+        }
       }
     }
 

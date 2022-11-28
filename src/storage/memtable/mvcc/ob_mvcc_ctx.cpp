@@ -18,6 +18,7 @@
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable_util.h"
 #include "storage/tablelock/ob_table_lock_callback.h"
+#include "storage/ls/ob_freezer.h"
 namespace oceanbase
 {
 using namespace common;
@@ -268,10 +269,14 @@ namespace memtable {
 ObMvccWriteGuard::~ObMvccWriteGuard()
 {
   if (NULL != ctx_) {
+    int ret = OB_SUCCESS;
     auto tx_ctx = ctx_->get_trans_ctx();
     ctx_->write_done();
-    if (is_freeze_) {
-      (void)tx_ctx->submit_redo_log(is_freeze_);
+    if (OB_NOT_NULL(memtable_) && memtable_->is_frozen_memtable()) {
+      if (OB_FAIL(tx_ctx->submit_redo_log(true/*is_freeze*/))) {
+        TRANS_LOG(WARN, "failed to submit freeze log", K(ret), KPC(tx_ctx));
+        memtable_->get_freezer()->set_need_resubmit_log(true);
+      }
     }
   }
 }

@@ -205,6 +205,7 @@ ObFreezer::ObFreezer()
     empty_memtable_cnt_(0),
     high_priority_freeze_cnt_(0),
     low_priority_freeze_cnt_(0),
+    need_resubmit_log_(false),
     is_inited_(false)
 {}
 
@@ -227,6 +228,7 @@ ObFreezer::ObFreezer(ObLSWRSHandler *ls_loop_worker,
     empty_memtable_cnt_(0),
     high_priority_freeze_cnt_(0),
     low_priority_freeze_cnt_(0),
+    need_resubmit_log_(false),
     is_inited_(false)
 {}
 
@@ -254,6 +256,7 @@ void ObFreezer::set(ObLSWRSHandler *ls_loop_worker,
   ls_id_ = ls_id;
   stat_.reset();
   empty_memtable_cnt_ = 0;
+  need_resubmit_log_ = false;
 }
 
 void ObFreezer::reset()
@@ -271,6 +274,7 @@ void ObFreezer::reset()
   empty_memtable_cnt_ = 0;
   high_priority_freeze_cnt_ = 0;
   low_priority_freeze_cnt_ = 0;
+  need_resubmit_log_ = false;
   is_inited_ = false;
 }
 
@@ -325,6 +329,7 @@ int ObFreezer::logstream_freeze()
     FLOG_INFO("[Freezer] freeze is running", K(ret), K_(ls_id));
   } else if (FALSE_IT(max_decided_scn_ = max_decided_scn)) {
   } else if (FALSE_IT(freeze_snapshot_version_ = freeze_snapshot_version)) {
+  } else if (FALSE_IT(set_need_resubmit_log(false))) {
   } else if (FALSE_IT(stat_.state_ = ObFreezeState::NOT_SUBMIT_LOG)) {
   } else if (OB_FAIL(inner_logstream_freeze())) {
     undo_freeze_();
@@ -361,8 +366,12 @@ int ObFreezer::inner_logstream_freeze()
     // this means that all memtables can be dumped
     while (!data_checkpoint_->ls_freeze_finished()) {
       const int64_t cost_time = ObTimeUtility::current_time() - start;
-      if (cost_time > 10 * 1000 * 1000) {
-        if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      if (cost_time > 5 * 1000 * 1000) {
+        if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+          if (need_resubmit_log()) {
+            submit_log_for_freeze();
+            TRANS_LOG(INFO, "[Freezer] resubmit log for ls_freeze", K_(ls_id), K(cost_time));
+          }
           TRANS_LOG(WARN, "[Freezer] finish ls_freeze costs too much time",
                     K_(ls_id), K(cost_time));
           stat_.add_diagnose_info("finish ls_freeze costs too much time");
@@ -411,6 +420,7 @@ int ObFreezer::tablet_freeze(const ObTabletID &tablet_id)
       ret = OB_NOT_INIT;
       LOG_WARN("[Freezer] weak read service not inited", K(ret), K_(ls_id));
     } else if (FALSE_IT(freeze_snapshot_version_ = freeze_snapshot_version)) {
+    } else if (FALSE_IT(set_need_resubmit_log(false))) {
     } else if (OB_FAIL(ls_tablet_svr_->get_tablet(tablet_id,
                                                   handle,
                                                   ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
@@ -480,6 +490,7 @@ int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
       ret = OB_NOT_INIT;
       LOG_WARN("[Freezer] weak read service not inited", K(ret), K_(ls_id));
     } else if (FALSE_IT(freeze_snapshot_version_ = freeze_snapshot_version)) {
+    } else if (FALSE_IT(set_need_resubmit_log(false))) {
     } else if (OB_FAIL(ls_tablet_svr_->get_tablet(tablet_id,
         handle, ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
       TRANS_LOG(WARN, "[Freezer] fail to get tablet for freeze", K(ret), K_(ls_id), K(tablet_id));
@@ -589,8 +600,12 @@ void ObFreezer::wait_memtable_ready_for_flush(memtable::ObMemtable *memtable)
 
   while (!memtable->ready_for_flush()) {
     const int64_t cost_time = ObTimeUtility::current_time() - start;
-    if (cost_time > 10 * 1000 * 1000) {
-      if (TC_REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+    if (cost_time > 5 * 1000 * 1000) {
+      if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+        if (need_resubmit_log()) {
+          submit_log_for_freeze();
+          TRANS_LOG(INFO, "[Freezer] resubmit log for tablet_freeze", K_(ls_id), K(cost_time));
+        }
         TRANS_LOG(WARN, "[Freezer] ready_for_flush costs too much time",
                   K_(ls_id), K(cost_time), KPC(memtable));
         stat_.add_diagnose_info("ready_for_flush costs too much time");
@@ -738,7 +753,10 @@ void ObFreezer::unset_freeze_()
   // Step2: unset max_decided_scn to invalid value
   max_decided_scn_.reset();
 
-  // Step3: unset freeze_flag to flag the end of freeze
+  // Step3: unset need_resubmit_log_
+  set_need_resubmit_log(false);
+
+  // Step4: unset freeze_flag to flag the end of freeze
   // set the first bit 0
   do {
     old_v = ATOMIC_LOAD(&freeze_flag_);
@@ -757,7 +775,10 @@ void ObFreezer::undo_freeze_()
   // Step2: unset max_decided_scn to invalid value
   max_decided_scn_.reset();
 
-  // Step3: unset freeze_flag and dec freeze_clock
+  // Step3: unset need_resubmit_log_
+  set_need_resubmit_log(false);
+
+  // Step4: unset freeze_flag and dec freeze_clock
   // used when freeze fails
   do {
     old_v = ATOMIC_LOAD(&freeze_flag_);

@@ -187,7 +187,7 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
   return ret;
 }
 
-ObPLCtx::~ObPLCtx()
+void ObPLCtx::reset_obj()
 {
   int tmp_ret = OB_SUCCESS;
   for (int64_t i = 0; i < objects_.count(); ++i) {
@@ -196,6 +196,11 @@ ObPLCtx::~ObPLCtx()
     }
   }
   objects_.reset();
+}
+
+ObPLCtx::~ObPLCtx()
+{
+  reset_obj();
 }
 
 void ObPL::destory()
@@ -281,6 +286,7 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
         ctx.exec_ctx_->get_sql_ctx()->schema_guard_ = &schema_guard;
         try {
           if (OB_FAIL(pl.execute(*ctx.exec_ctx_,
+                                 ctx.exec_ctx_->get_allocator(),
                                  package_id,
                                  proc_id,
                                  path_array,
@@ -1148,6 +1154,7 @@ int ObPLContext::set_subprogram_var_from_local(
 
 // for common execute routine.
 int ObPL::execute(ObExecContext &ctx,
+                  ObIAllocator &allocator,
                   ObPLPackageGuard &package_guard,
                   ObPLFunction &routine,
                   ParamStore *params,
@@ -1166,7 +1173,7 @@ int ObPL::execute(ObExecContext &ctx,
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
 
-  ObPLExecState pl(ctx.get_allocator(),
+  ObPLExecState pl(allocator,
                    ctx,
                    package_guard,
                    routine,
@@ -1279,6 +1286,7 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
       try {
         // execute it.
         OZ (execute(ctx,
+                    ctx.get_allocator(),
                     *(ctx.get_package_guard()),
                     *routine,
                     NULL, // params
@@ -1362,6 +1370,7 @@ int ObPL::execute(ObExecContext &ctx,
       try {
         // execute it...
         OZ (execute(ctx,
+                    ctx.get_allocator(),
                     *(ctx.get_package_guard()),
                     *routine,
                     &params,
@@ -1391,6 +1400,7 @@ int ObPL::execute(ObExecContext &ctx,
 
 // for normal routine
 int ObPL::execute(ObExecContext &ctx,
+                  ObIAllocator &allocator,
                   uint64_t package_id,
                   uint64_t routine_id,
                   const ObIArray<int64_t> &subprogram_path,
@@ -1509,6 +1519,7 @@ int ObPL::execute(ObExecContext &ctx,
     try {
       // execute it ...
       OZ (execute(ctx,
+                  allocator,
                   *(ctx.get_package_guard()),
                   *routine,
                   &params,

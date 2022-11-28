@@ -5113,6 +5113,7 @@ def_table_schema(
 
 # 429 : __all_arbitration_service
 # 430 : __all_arbitration_service_replica_task
+# 431 : __all_meta_dictionary_location;
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -10490,7 +10491,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_backup_delete_policy']))
 
 def_table_schema(
-  owner = 'shuangcan.yjw',
+  owner = 'lihongqin.lhq',
   table_name     = '__all_virtual_tablet_ddl_kv_info',
   table_id       = '12315',
   table_type = 'VIRTUAL_TABLE',
@@ -10769,6 +10770,53 @@ def_table_schema(
 )
 
 # 12339: __all_virtual_show_trace
+def_table_schema(
+  owner = 'keqing.llt',
+  table_name = '__all_virtual_ha_diagnose',
+  table_id = '12340',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = False,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('election_role', 'varchar:32'),
+    ('election_epoch', 'int'),
+    ('palf_role', 'varchar:32'),
+    ('palf_state', 'varchar:32'),
+    ('palf_proposal_id', 'int'),
+    ('log_handler_role', 'varchar:32'),
+    ('log_handler_proposal_id', 'int'),
+    ('log_handler_takeover_state', 'varchar:32'),
+    ('log_handler_takeover_log_type', 'varchar:32'),
+    ('max_applied_scn', 'uint'),
+    ('max_replayed_lsn', 'uint'),
+    ('max_replayed_scn', 'uint'),
+    ('replay_diagnose_info', 'varchar:1024'),
+    ('gc_state', 'varchar:32'),
+    ('gc_start_ts', 'int'),
+    ('archive_scn', 'uint'),
+    ('checkpoint_scn', 'uint'),
+    ('min_rec_scn', 'uint'),
+    ('min_rec_scn_log_type', 'varchar:32')
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+# 12341: __all_virtual_meta_dictionary_location
+
+# 12342: __all_virtual_transfer_task
+# 12343: __all_virtual_transfer_task_history
+# 12344: __all_virtual_balance_job
+# 12345: __all_virtual_balance_job_history
+# 12346: __all_virtual_balance_task
+# 12347: __all_virtual_balance_task_history
 
 #
 # 余留位置
@@ -39680,7 +39728,7 @@ def_table_schema(
     CAST(T.START_DATE AS TIMESTAMP(6) WITH TIME ZONE) AS START_DATE,
     CAST(T.REPEAT_INTERVAL AS VARCHAR2(4000)) AS REPEAT_INTERVAL,
     CAST(T.END_DATE AS TIMESTAMP(6) WITH TIME ZONE) AS END_DATE,
-    CAST((TIMESTAMP'1970-01-01 08:00:00' + T.MAX_RUN_DURATION / (1000 * 60 * 60 * 24 * 1000) - TIMESTAMP'1970-01-01 08:00:00') AS INTERVAL DAY(3) TO SECOND(0)) AS DURATION,
+    CAST((TIMESTAMP'1970-01-01 08:00:00' + T.MAX_RUN_DURATION / (60 * 60 * 24) - TIMESTAMP'1970-01-01 08:00:00') AS INTERVAL DAY(3) TO SECOND(0)) AS DURATION,
     CAST(NULL AS VARCHAR2(4)) AS WINDOW_PRIORITY,
     CAST(T.NEXT_DATE AS TIMESTAMP(6) WITH TIME ZONE) AS NEXT_RUN_DATE,
     CAST(T.LAST_DATE AS TIMESTAMP(6) WITH TIME ZONE) AS LAST_START_DATE,
@@ -43410,10 +43458,10 @@ def_table_schema(
     CAST(NULL AS NUMBER) AS MAX_FAILURES,
     CAST(T.RETRY_COUNT AS NUMBER) AS RETRY_COUNT,
     CAST(T.LAST_DATE AS TIMESTAMP(6) WITH TIME ZONE) AS LAST_START_DATE,
-    CAST((TIMESTAMP'1970-01-01 08:00:00' + T.MAX_RUN_DURATION / (1000 * 60 * 60 * 24 * 1000) - TIMESTAMP'1970-01-01 08:00:00') AS INTERVAL DAY(9) TO SECOND(6)) AS LAST_RUN_DURATION,
+    CAST((TIMESTAMP'1970-01-01 08:00:00' + T.MAX_RUN_DURATION / (60 * 60 * 24) - TIMESTAMP'1970-01-01 08:00:00') AS INTERVAL DAY(9) TO SECOND(6)) AS LAST_RUN_DURATION,
     CAST(T.NEXT_DATE AS TIMESTAMP(6) WITH TIME ZONE) AS NEXT_RUN_DATE,
     CAST(NULL AS INTERVAL DAY(3) TO SECOND(0)) AS SCHEDULE_LIMIT,
-    CAST((TIMESTAMP'1970-01-01 08:00:00' + T.MAX_RUN_DURATION / (1000 * 60 * 60 * 24 * 1000) - TIMESTAMP'1970-01-01 08:00:00') AS INTERVAL DAY(3) TO SECOND(0)) AS MAX_RUN_DURATION,
+    CAST((TIMESTAMP'1970-01-01 08:00:00' + T.MAX_RUN_DURATION / (60 * 60 * 24) - TIMESTAMP'1970-01-01 08:00:00') AS INTERVAL DAY(3) TO SECOND(0)) AS MAX_RUN_DURATION,
     CAST(NULL AS VARCHAR2(11)) AS LOGGING_LEVEL,
     CAST(NULL AS VARCHAR2(5)) AS STORE_OUTPUT,
     CAST(NULL AS VARCHAR2(5)) AS STOP_ON_WINDOW_CLOSE,

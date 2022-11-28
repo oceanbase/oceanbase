@@ -1850,9 +1850,9 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
         || DDL_ADD_COLUMN_OFFLINE == arg.ddl_type_
         || DDL_COLUMN_REDEFINITION == arg.ddl_type_) {
       MTL_SWITCH(arg.tenant_id_) {
+        int saved_ret = OB_SUCCESS;
         ObTenantDagScheduler *dag_scheduler = nullptr;
         ObComplementDataDag *dag = nullptr;
-        ObComplementPrepareTask *prepare_task = nullptr;
         if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("dag scheduler is null", K(ret));
@@ -1863,29 +1863,21 @@ int ObService::build_ddl_single_replica_request(const ObDDLBuildSingleReplicaReq
           LOG_WARN("unexpected error, dag is null", K(ret), KP(dag));
         } else if (OB_FAIL(dag->init(arg))) {
           LOG_WARN("fail to init complement data dag", K(ret), K(arg));
-        } else if (OB_FAIL(dag->alloc_task(prepare_task))) {
-          LOG_WARN("fail to alloc complement prepare task", K(ret));
-        } else if (OB_ISNULL(prepare_task)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error, prepare task is null", K(ret), KP(prepare_task));
-        } else if (OB_FAIL(prepare_task->init(dag->get_param(), dag->get_context()))) {
-          LOG_WARN("fail to init complement prepare task", K(ret));
-        } else if (OB_FAIL(dag->add_task(*prepare_task))) {
-          LOG_WARN("fail to add complement prepare task to dag", K(ret));
+        } else if (OB_FAIL(dag->create_first_task())) {
+          LOG_WARN("create first task failed", K(ret));
         } else if (OB_FAIL(dag_scheduler->add_dag(dag))) {
-          if (OB_EAGAIN == ret) {
-            ret = OB_SUCCESS;
-            LOG_INFO("drop column dag already exists, no need to schedule once again");
-          } else if (OB_SIZE_OVERFLOW == ret) {
-            ret = OB_EAGAIN;
-          } else {
-            LOG_WARN("fail to add dag to queue", K(ret));
-          }
+          saved_ret = ret;
+          LOG_WARN("add dag failed", K(ret), K(arg));
         }
         if (OB_FAIL(ret) && OB_NOT_NULL(dag)) {
           (void) dag->handle_init_failed_ret_code(ret);
           dag_scheduler->free_dag(*dag);
           dag = nullptr;
+        }
+        if (OB_FAIL(ret)) {
+          // RS does not retry send RPC to tablet leader when the dag exists.
+          ret = OB_EAGAIN == saved_ret ? OB_SUCCESS : ret;
+          ret = OB_SIZE_OVERFLOW == saved_ret ? OB_EAGAIN : ret;
         }
       }
       LOG_INFO("obs get rpc to build drop column dag", K(ret));

@@ -567,7 +567,7 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
             if (REACH_TIME_INTERVAL(1000000)) {
               STORAGE_LOG(WARN, "disk address change", K(ret), K(disk_addr), KPC(t_ptr));
             }
-          } else if (t->deserialize_post_work()) {
+          } else if (OB_FAIL(t->deserialize_post_work())) {
             STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
           } else if (OB_FAIL(t->assign_pointer_handle(ptr_hdl))) {
             STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), KP(t));

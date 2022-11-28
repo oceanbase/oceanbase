@@ -224,7 +224,9 @@ int ObDataCheckpoint::flush(SCN recycle_scn, bool need_freeze)
   int ret = OB_SUCCESS;
   if (need_freeze) {
     if (get_rec_scn() <= recycle_scn) {
-      if (OB_FAIL(ls_->logstream_freeze())) {
+      if (!is_flushing() &&
+          !has_prepared_flush_checkpoint() &&
+          OB_FAIL(ls_->logstream_freeze())) {
         STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
       }
     }
@@ -484,6 +486,11 @@ int ObDataCheckpoint::unlink_from_prepare(ObFreezeCheckpoint *ob_freeze_checkpoi
     }
   }
   return ret;
+}
+
+bool ObDataCheckpoint::has_prepared_flush_checkpoint()
+{
+  return !prepare_list_.is_empty();
 }
 
 int ObDataCheckpoint::get_freezecheckpoint_info(

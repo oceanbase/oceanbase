@@ -1515,6 +1515,9 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
         LOG_WARN("failed to push back qual", K(ret));
       } else if (OB_FAIL(detector->join_info_.table_set_.add_members(expr->get_relation_ids()))) {
         LOG_WARN("failed to add members", K(ret));
+      } else if (expr->has_flag(CNT_SUB_QUERY) &&
+                 OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
+        LOG_WARN("failed to add members", K(ret));
       } else if (OB_FAIL(inner_join_detectors.push_back(detector))) {
         LOG_WARN("failed to push back detector", K(ret));
       } else {
@@ -1537,6 +1540,9 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
     } else if (expr->has_flag(IS_JOIN_COND) &&
                OB_FAIL(detector->join_info_.equal_join_conditions_.push_back(expr))) {
         LOG_WARN("failed to push back qual", K(ret));
+    } else if (expr->has_flag(CNT_SUB_QUERY) &&
+               OB_FAIL(detector->join_info_.table_set_.add_members(all_table_ids))) {
+      LOG_WARN("failed to add members", K(ret));
     }
   }
   //3. 生成inner join的冲突规则
@@ -8140,7 +8146,6 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
         !is_virtual_table(table_scan->get_ref_table_id()) &&
         !(0 != table_scan->get_dblink_id() && NULL != offset_expr) &&
         !get_stmt()->is_calc_found_rows() && !table_scan->is_sample_scan() &&
-        !get_log_plan_hint().use_late_material() &&
         (NULL == table_scan->get_limit_expr() ||
          ObOptimizerUtil::is_point_based_sub_expr(limit_expr, table_scan->get_limit_expr()))) {
       if (!top->is_distributed()) {
@@ -9889,6 +9894,20 @@ int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
   int ret = OB_SUCCESS;
   bool should_add = true;
   DominateRelation plan_rel = DominateRelation::OBJ_UNCOMPARABLE;
+  if (OB_ISNULL(new_plan.plan_tree_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (new_plan.plan_tree_->get_type() == LOG_SET &&
+             static_cast<ObLogSet*>(new_plan.plan_tree_)->is_recursive_union()) {
+    ObLogicalOperator* right_child = new_plan.plan_tree_->get_child(ObLogicalOperator::second_child);
+    if (OB_ISNULL(right_child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (right_child->get_contains_match_all_fake_cte() &&
+               !new_plan.plan_tree_->is_remote()) {
+      should_add = false;
+    }
+  }
   for (int64_t i = current_plans.count() - 1;
        OB_SUCC(ret) && should_add && i >= 0; --i) {
     if (OB_FAIL(compute_plan_relationship(current_plans.at(i),
@@ -10845,6 +10864,18 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
       } else if (OB_FAIL(append_array_no_dup(query_ctx->all_expr_constraints_,
                                              op->expr_constraints_))) {
         LOG_WARN("failed to append expr constraints", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && op->get_type() == LOG_SET &&
+        static_cast<ObLogSet*>(op)->is_recursive_union()) {
+      ObLogicalOperator* right_child = NULL;
+      if (OB_UNLIKELY(2 != op->get_num_of_child()) ||
+          OB_ISNULL(right_child = op->get_child(ObLogicalOperator::second_child))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(op->get_name()));
+      } else if (OB_FAIL(allocate_material_for_recursive_cte_plan(right_child->get_child_list()))) {
+        LOG_WARN("faile to allocate material for recursive cte plan", K(ret));
       }
     }
 
@@ -12434,6 +12465,39 @@ int ObLogPlan::compute_subplan_filter_repartition_distribution_info(ObLogicalOpe
     } else {
       exch_info.unmatch_row_dist_method_ = ObPQDistributeMethod::DROP;
       LOG_TRACE("succeed to compute repartition distribution info", K(exch_info));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperator*> &child_ops)
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *log_plan = NULL;
+  int64_t fake_cte_pos = -1;
+  for (int64_t i = 0; OB_SUCC(ret) && fake_cte_pos == -1 && i < child_ops.count(); i++) {
+    if (OB_ISNULL(child_ops.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (child_ops.at(i)->get_contains_fake_cte()) {
+      fake_cte_pos = i;
+    } else { /*do nothing*/ }
+  }
+  if (OB_SUCC(ret) && fake_cte_pos != -1) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_ops.count(); i++) {
+      if (OB_ISNULL(child_ops.at(i)) || OB_ISNULL(log_plan = child_ops.at(i)->get_plan())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (i == fake_cte_pos) {
+        if (OB_FAIL(SMART_CALL(allocate_material_for_recursive_cte_plan(child_ops.at(i)->get_child_list())))) {
+          LOG_WARN("failed to adjust recursive cte plan", K(ret));
+        } else { /*do nothing*/ }
+      } else if (log_op_def::LOG_MATERIAL != child_ops.at(i)->get_type() &&
+                 log_op_def::LOG_TABLE_SCAN != child_ops.at(i)->get_type() &&
+                 log_op_def::LOG_EXPR_VALUES != child_ops.at(i)->get_type() &&
+                 OB_FAIL(log_plan->allocate_material_as_top(child_ops.at(i)))) {
+        LOG_WARN("failed to allocate materialize as top", K(ret));
+      } else { /*do nothing*/ }
     }
   }
   return ret;

@@ -96,6 +96,10 @@ bool ObTabletCreateSSTableParam::is_valid() const
              K(original_size_), K(ddl_scn_), K(filled_tx_scn_));
   } else if (ObITable::is_ddl_sstable(table_key_.table_type_)) {
     // ddl sstable can have invalid meta addr, so skip following ifs
+    if (!ddl_scn_.is_valid_and_not_min()) {
+      ret = false;
+      LOG_WARN("ddl log ts is invalid", K(ddl_scn_), K(table_key_));
+    }
   } else if (!is_block_meta_valid(root_block_addr_, root_block_data_)) {
     ret = false;
     LOG_WARN("invalid root meta", K(root_block_addr_), K(root_block_data_));

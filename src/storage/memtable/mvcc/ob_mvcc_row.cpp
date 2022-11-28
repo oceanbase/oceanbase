@@ -795,7 +795,7 @@ int ObMvccRow::trans_commit(const SCN commit_version, ObMvccTransNode &node)
     // Check safety condition for ELR
     if (NULL != node.prev_ && node.prev_->is_safe_read_barrier()) {
       if (commit_version <= node.prev_->snapshot_version_barrier_) {
-        if (node.is_elr() && node.prev_->type_ == NDT_COMPACT) {
+        if ((node.is_elr() || node.is_delayed_cleanout())  && node.prev_->type_ == NDT_COMPACT) {
           // do nothing
         } else {
           // ignore ret

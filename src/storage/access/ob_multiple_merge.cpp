@@ -914,7 +914,6 @@ int ObMultipleMerge::fuse_default(ObDatumRow &row)
             LOG_WARN("convert obj to datum failed", K(ret));
           } else {
             eval_info.evaluated_ = true;
-            LOG_INFO("stt, fuse default", K(def_cell), K(&datum), K(datum));
           }
         }
       }

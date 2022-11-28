@@ -761,6 +761,10 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
     const int64_t input_param_num = ps_session_info->get_param_count();
     stmt_type_ = ps_session_info->get_stmt_type();
     int8_t new_param_bound_flag = 0;
+    if (is_pl_stmt(stmt_type_)) {
+      // pl not support save exception
+      is_save_exception_ = 0;
+    }
     // for returning into,
     // all_param_num  = input_param_num + returning_param_num
     params_num_ = (all_param_num > input_param_num) ? all_param_num : input_param_num;
@@ -1679,6 +1683,7 @@ int ObMPStmtExecute::process()
     ObSQLSessionInfo &session = *sess;
     int64_t tenant_version = 0;
     int64_t sys_version = 0;
+    THIS_WORKER.set_session(sess);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
     session.get_raw_audit_record().request_memory_used_ = 0;
@@ -1807,6 +1812,7 @@ int ObMPStmtExecute::process()
     need_retry_ = true;
   }
 
+  THIS_WORKER.set_session(NULL);
   if (sess != NULL) {
     revert_session(sess); //current ignore revert session ret
   }
@@ -2755,9 +2761,12 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObDbms
 
     // for obproxy, 最后一次要把 eof和OK包放一起
     if (OB_SUCC(ret)) {
-      OX (update_last_pkt_pos());
-      if (OB_FAIL(response_packet(eofp, &session))) {
+      if (OB_FAIL(update_last_pkt_pos())) {
+        LOG_WARN("failed to update last packet pos", K(ret));
+      } else if (OB_FAIL(response_packet(eofp, &session))) {
         LOG_WARN("response packet fail", K(ret));
+      } else {
+        // do nothing
       }
     }
     // for obproxy

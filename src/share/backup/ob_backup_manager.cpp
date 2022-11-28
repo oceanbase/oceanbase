@@ -787,7 +787,9 @@ int ObBackupInfoChecker::get_item_count_(const uint64_t tenant_id, int64_t &item
 int ObBackupInfoChecker::get_status_line_count_(const uint64_t tenant_id, int64_t &status_count)
 {
   int ret = OB_SUCCESS;
-  // TODO: wangxiaohui.wxh, to remove
+
+  // TODO: to remove.
+
 #if 0
   ObSqlString sql;
   SMART_VAR(ObMySQLProxy::ReadResult, res) {
@@ -929,7 +931,7 @@ int ObBackupInfoChecker::insert_log_archive_status_(
     common::ObMySQLTransaction &trans, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  // TODO: wangxiaohui.wxh, to remove
+  // TODO: to remove.
 #if 0
   ObSqlString sql;
   int64_t affected_rows = -1;

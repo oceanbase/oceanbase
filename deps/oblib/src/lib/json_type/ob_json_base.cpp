@@ -63,6 +63,8 @@ int ObIJsonBase::add_if_missing(ObJsonBaseSortedVector &dup, ObJsonBaseVector &r
     if (OB_FAIL(res.push_back(this))) {
       LOG_WARN("fail to push_back value into result", K(ret), K(res.size()));
     }
+  } else if (ret == OB_CONFLICT_VALUE) {
+    ret = OB_SUCCESS; // confilict means found duplicated nodes, it is not an error.
   }
 
   return ret;
@@ -237,7 +239,9 @@ int ObIJsonBase::find_child(const JsonPathIterator &cur_node, const JsonPathIter
   // If the path expression is already at the end, the current DOM is the res,
   // and it is added to the res
   if (cur_node == last_node) {
-    add_if_missing(dup, res);
+    if (OB_FAIL(add_if_missing(dup, res))) {
+      LOG_WARN("fail to add node.", K(ret));
+    }
   } else {
     ObJsonPathBasicNode *path_node = static_cast<ObJsonPathBasicNode *>(*cur_node);
     SMART_VAR (JsonPathIterator, next_node) {

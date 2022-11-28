@@ -1375,7 +1375,7 @@ int ObDDLScheduler::on_ddl_task_finish(
     LOG_WARN("invalid arguments", K(ret), K(parent_task_id), K(child_task_key));
   } else {
     ObDDLTask *ddl_task = nullptr;
-    ObTableRedefinitionTask *redefinition_task = nullptr;
+    ObDDLRedefinitionTask *redefinition_task = nullptr;
     if (OB_FAIL(task_queue_.get_task(parent_task_id, ddl_task))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         bool is_cancel = false;
@@ -1395,7 +1395,7 @@ int ObDDLScheduler::on_ddl_task_finish(
     } else if (OB_ISNULL(ddl_task)) {
       ret = OB_ERR_SYS;
       LOG_WARN("ddl task must not be nullptr", K(ret));
-    } else if (FALSE_IT(redefinition_task = static_cast<ObTableRedefinitionTask *>(ddl_task))) {
+    } else if (FALSE_IT(redefinition_task = static_cast<ObDDLRedefinitionTask *>(ddl_task))) {
     } else if (OB_FAIL(redefinition_task->on_child_task_finish(child_task_key, ret_code))) {
       LOG_WARN("on child task finish failed", K(ret), K(child_task_key));
     }

@@ -135,7 +135,7 @@ static int record_piece_checkpoint(const ObTenantArchivePieceAttr &piece_info, c
     && ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE == piece_info.file_status_)) {
   } else {
     // persist piece checkpoint
-    // TODO: wangxiaohui.wxh, change overwrite to append.
+    // TODO: change overwrite to append
     ObPieceCheckpointDesc checkpoint_desc;
     checkpoint_desc.tenant_id_ = piece_info.key_.tenant_id_;
     checkpoint_desc.dest_id_ = piece_info.key_.dest_id_;
@@ -672,7 +672,7 @@ int ObArchiveHandler::do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info
 int ObArchiveHandler::notify_(const ObTenantArchiveRoundAttr &round)
 {
   int ret = OB_SUCCESS;
-  // TODO: wangxiaohui.wxh notify each log stream.
+  // TODO: notify each log stream.
   UNUSED(round);
   // Get all log streams, and try the best to notify each log stream event of archive start.
   return ret;

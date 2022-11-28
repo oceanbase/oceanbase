@@ -976,7 +976,7 @@ int ObMvccRowCallback::trans_commit()
           (void)ATOMIC_FAA(&value_.update_since_compact_, 1);
           if (value_.need_compact(for_read, ctx_.is_for_replay())) {
             if (ctx_.is_for_replay()) {
-              if (SCN::min_scn() != ctx_.get_replay_compact_version() && SCN::max_scn() != ctx_.get_replay_compact_version()) {
+              if (ctx_.get_replay_compact_version().is_valid_and_not_min() && SCN::max_scn() != ctx_.get_replay_compact_version()) {
                 memtable_->row_compact(&value_, ctx_.is_for_replay(), ctx_.get_replay_compact_version());
               }
             } else {

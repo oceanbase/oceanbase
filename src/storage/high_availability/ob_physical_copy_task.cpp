@@ -135,8 +135,7 @@ ObPhysicalCopyTask::ObPhysicalCopyTask()
     copy_ctx_(nullptr),
     finish_task_(nullptr),
     copy_table_key_(),
-    copy_macro_range_info_(),
-    index_block_rebuilder_()
+    copy_macro_range_info_()
 {
 }
 
@@ -157,8 +156,6 @@ int ObPhysicalCopyTask::init(
     LOG_WARN("physical copy task get invalid argument", K(ret), KPC(copy_ctx), KPC(finish_task));
   } else if (OB_FAIL(build_macro_block_copy_info_(finish_task))) {
     LOG_WARN("failed to build macro block copy info", K(ret), KPC(copy_ctx));
-  } else if (OB_FAIL(index_block_rebuilder_.init(*copy_ctx->sstable_index_builder_))) {
-    LOG_WARN("failed to init index rebuilder", K(ret), KPC(copy_ctx));
   } else {
     copy_ctx_ = copy_ctx;
     finish_task_ = finish_task;
@@ -211,8 +208,6 @@ int ObPhysicalCopyTask::process()
         ret = OB_ERR_SYS;
         LOG_ERROR("list count not match", K(ret), KPC(copy_macro_range_info_),
             K(copied_ctx.get_macro_block_count()), K(copied_ctx));
-      } else if (OB_FAIL(index_block_rebuilder_.close())) {
-        LOG_WARN("failed to close index block builder", K(ret), K(copied_ctx));
       }
     }
     LOG_INFO("physical copy task finish", K(ret), KPC(copy_macro_range_info_), KPC(copy_ctx_));
@@ -244,7 +239,7 @@ int ObPhysicalCopyTask::fetch_macro_block_with_retry_(
       if (retry_times > 0) {
         LOG_INFO("retry get major block", K(retry_times));
       }
-      if (OB_FAIL(fetch_macro_block_(copied_ctx))) {
+      if (OB_FAIL(fetch_macro_block_(retry_times, copied_ctx))) {
         STORAGE_LOG(WARN, "failed to fetch major block", K(ret), K(retry_times));
       }
 
@@ -264,20 +259,25 @@ int ObPhysicalCopyTask::fetch_macro_block_with_retry_(
 }
 
 int ObPhysicalCopyTask::fetch_macro_block_(
+    const int64_t retry_times,
     ObMacroBlocksWriteCtx &copied_ctx)
 {
   int ret = OB_SUCCESS;
   ObStorageHAMacroBlockWriter *writer = NULL;
   ObICopyMacroBlockReader *reader = NULL;
+  ObIndexBlockRebuilder index_block_rebuilder;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy physical task do not init", K(ret));
   } else {
     LOG_INFO("init reader", K(copy_table_key_));
 
-    if (OB_FAIL(get_macro_block_reader_(reader))) {
+    if (OB_FAIL(index_block_rebuilder.init(*copy_ctx_->sstable_index_builder_))) {
+      LOG_WARN("failed to init index block rebuilder", K(ret), K(copy_table_key_));
+    } else if (OB_FAIL(get_macro_block_reader_(reader))) {
       LOG_WARN("fail to get macro block reader", K(ret));
-    } else if (OB_FAIL(get_macro_block_writer_(reader, writer))) {
+    } else if (OB_FAIL(get_macro_block_writer_(reader, &index_block_rebuilder, writer))) {
       LOG_WARN("failed to get macro block writer", K(ret), K(copy_table_key_));
     } else if (OB_FAIL(writer->process(copied_ctx))) {
       LOG_WARN("failed to process writer", K(ret), K(copy_table_key_));
@@ -285,6 +285,23 @@ int ObPhysicalCopyTask::fetch_macro_block_(
       ret = OB_ERR_SYS;
       LOG_ERROR("list count not match", K(ret), K(copy_table_key_), KPC(copy_macro_range_info_),
           K(copied_ctx.get_macro_block_count()), K(copied_ctx));
+    }
+
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = E(EventTable::EN_MIGRATE_FETCH_MACRO_BLOCK) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        if (retry_times == 0) {
+        } else {
+          ret = OB_SUCCESS;
+        }
+        STORAGE_LOG(ERROR, "fake EN_MIGRATE_FETCH_MACRO_BLOCK", K(ret));
+      }
+    }
+#endif
+
+    if (FAILEDx(index_block_rebuilder.close())) {
+      LOG_WARN("failed to close index block builder", K(ret), K(copied_ctx));
     }
 
     if (NULL != reader) {
@@ -406,6 +423,7 @@ int ObPhysicalCopyTask::get_macro_block_restore_reader_(
 
 int ObPhysicalCopyTask::get_macro_block_writer_(
     ObICopyMacroBlockReader *reader,
+    ObIndexBlockRebuilder *index_block_rebuilder,
     ObStorageHAMacroBlockWriter *&writer)
 {
   int ret = OB_SUCCESS;
@@ -413,16 +431,16 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy task do not init", K(ret));
-  } else if (OB_ISNULL(reader)) {
+  } else if (OB_ISNULL(reader) || OB_ISNULL(index_block_rebuilder)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("macro block writer get invalid argument", K(ret), KP(reader));
+    LOG_WARN("macro block writer get invalid argument", K(ret), KP(reader), KP(index_block_rebuilder));
   } else {
     void *buf = mtl_malloc(sizeof(ObStorageHAMacroBlockWriter), "MacroObWriter");
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), KP(buf));
     } else if (FALSE_IT(writer = new(buf) ObStorageHAMacroBlockWriter())) {
-    } else if (OB_FAIL(writer->init(copy_ctx_->tenant_id_, reader, &index_block_rebuilder_))) {
+    } else if (OB_FAIL(writer->init(copy_ctx_->tenant_id_, reader, index_block_rebuilder))) {
       STORAGE_LOG(WARN, "failed to init ob reader", K(ret), KPC(copy_ctx_));
     }
 
@@ -921,7 +939,7 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
     param.data_block_ids_ = res.data_block_ids_;
     param.other_block_ids_ = res.other_block_ids_;
     param.rowkey_column_cnt_ = sstable_param_->basic_meta_.rowkey_column_count_;
-    param.ddl_scn_.set_min();
+    param.ddl_scn_ = sstable_param_->basic_meta_.ddl_scn_;
     MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     if (param.table_key_.is_major_sstable() || param.table_key_.is_ddl_sstable()) {
       if (OB_FAIL(res.fill_column_checksum(sstable_param_->column_default_checksums_,
@@ -1192,6 +1210,7 @@ int ObTabletCopyFinishTask::create_new_table_store_()
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   const bool is_rollback = false;
+  bool need_merge = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1201,10 +1220,12 @@ int ObTabletCopyFinishTask::create_new_table_store_()
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id_));
+  } else if (OB_FAIL(check_need_merge_tablet_meta_(tablet, need_merge))) {
+    LOG_WARN("failedto check remote logical sstable exist", K(ret), KPC(tablet));
   } else {
     update_table_store_param.multi_version_start_ = 0;
     update_table_store_param.need_report_ = true;
-    update_table_store_param.tablet_meta_ = src_tablet_meta_;
+    update_table_store_param.tablet_meta_ = need_merge ? src_tablet_meta_ : nullptr;
     update_table_store_param.rebuild_seq_ = ls_->get_rebuild_seq();
 
     if (OB_FAIL(update_table_store_param.tables_handle_.assign(tables_handle_))) {
@@ -1230,6 +1251,7 @@ int ObTabletCopyFinishTask::update_tablet_data_status_()
   ObTabletHandle tablet_handle;
   ObTablet *tablet = nullptr;
   const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
+  bool is_logical_sstable_exist = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1244,24 +1266,19 @@ int ObTabletCopyFinishTask::update_tablet_data_status_()
     LOG_WARN("tablet here should only has one", K(ret), KPC(tablet));
   } else if (tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
     //do nothing
+  } else if (OB_FAIL(check_remote_logical_sstable_exist_(tablet, is_logical_sstable_exist))) {
+    LOG_WARN("failedto check remote logical sstable exist", K(ret), KPC(tablet));
+  } else if (is_logical_sstable_exist && tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet still has remote logical sstable, unexpected !!!", K(ret), KPC(tablet));
   } else {
-    const ObSSTableArray &minor_sstables = tablet->get_table_store().get_minor_sstables();
     const ObSSTableArray &major_sstables = tablet->get_table_store().get_major_sstables();
-    for (int64_t i = 0; OB_SUCC(ret) && i < minor_sstables.count(); ++i) {
-      const ObITable *table = minor_sstables[i];
-      if (table->is_remote_logical_minor_sstable()
-          && tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet still has remote logical sstable, unexpected !!!", K(ret), KPC(table), KPC(tablet));
-      }
-    }
-
     if (OB_SUCC(ret)
         && tablet->get_tablet_meta().table_store_flag_.with_major_sstable()
         && tablet->get_tablet_meta().ha_status_.is_restore_status_full()
         && major_sstables.empty()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet should has major sstable, unexpected", K(ret), K(tablet), K(major_sstables));
+      LOG_WARN("tablet should has major sstable, unexpected", K(ret), KPC(tablet), K(major_sstables));
     }
 
 #ifdef ERRSIM
@@ -1288,10 +1305,63 @@ int ObTabletCopyFinishTask::update_tablet_data_status_()
         LOG_WARN("failed to submit tablet update task", K(tmp_ret), KPC(ls_), K(tablet_id_));
       }
     }
-
   }
   return ret;
 }
+
+int ObTabletCopyFinishTask::check_need_merge_tablet_meta_(
+    ObTablet *tablet,
+    bool &need_merge)
+{
+  int ret = OB_SUCCESS;
+  need_merge = false;
+  bool is_exist = false;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet copy finish task do not init", K(ret));
+  } else if (OB_ISNULL(tablet)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check need merge tablet meta get invalid argument", K(ret), KP(tablet));
+  } else if (tablet->get_tablet_meta().clog_checkpoint_scn_ >= src_tablet_meta_->clog_checkpoint_scn_) {
+    need_merge = false;
+  } else if (OB_FAIL(check_remote_logical_sstable_exist_(tablet, is_exist))) {
+    LOG_WARN("failed to check remote logical sstable exist", K(ret), KPC(tablet));
+  } else if (!is_exist) {
+    need_merge = false;
+  } else {
+    need_merge = true;
+  }
+  return ret;
+}
+
+int ObTabletCopyFinishTask::check_remote_logical_sstable_exist_(
+    ObTablet *tablet,
+    bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet copy finish task do not init", K(ret));
+  } else if (OB_ISNULL(tablet)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check remote logical sstable exist get invalid argument", K(ret), KP(tablet));
+  } else {
+    const ObSSTableArray &minor_sstables = tablet->get_table_store().get_minor_sstables();
+    for (int64_t i = 0; OB_SUCC(ret) && i < minor_sstables.count(); ++i) {
+      const ObITable *table = minor_sstables.array_[i];
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("minor sstable should not be NULL", K(ret), KP(table));
+      } else if (table->is_remote_logical_minor_sstable()) {
+        is_exist = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 
 }
 }

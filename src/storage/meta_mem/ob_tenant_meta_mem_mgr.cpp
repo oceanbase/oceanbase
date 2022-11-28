@@ -130,15 +130,20 @@ int ObTenantMetaMemMgr::init()
 {
   int ret = OB_SUCCESS;
   lib::ObMemAttr mem_attr(tenant_id_, "MetaAllocator", ObCtxIds::META_OBJ_CTX_ID);
+  const int64_t mem_limit = get_tenant_memory_limit(tenant_id_);
+  const int64_t min_bkt_cnt = DEFAULT_BUCKET_NUM;
+  const int64_t max_bkt_cnt = 10000000L;
+  const int64_t tablet_bucket_num = std::min(std::max((mem_limit / (1024 * 1024 * 1024)) * 50000, min_bkt_cnt), max_bkt_cnt);
+  const int64_t bucket_num = common::hash::cal_next_prime(tablet_bucket_num);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantMetaMemMgr has been initialized", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT, ObLatchIds::BLOCK_MANAGER_LOCK))) {
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::BLOCK_MANAGER_LOCK))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(),
       OB_MALLOC_NORMAL_BLOCK_SIZE, mem_attr))) {
     LOG_WARN("fail to init tenant fifo allocator", K(ret));
-  } else if (OB_FAIL(tablet_map_.init(DEFAULT_BUCKET_NUM, "TabletMap", TOTAL_LIMIT, HOLD_LIMIT,
+  } else if (OB_FAIL(tablet_map_.init(bucket_num, "TabletMap", TOTAL_LIMIT, HOLD_LIMIT,
         common::OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("fail to initialize tablet map", K(ret));
   } else if (OB_FAIL(last_min_minor_sstable_set_.create(DEFAULT_MINOR_SSTABLE_SET_COUNT))) {

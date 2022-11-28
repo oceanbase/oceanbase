@@ -128,7 +128,7 @@ int ObPartTransCtx::do_pre_commit(bool &need_wait)
     }
   }
 
-  if (OB_FAIL(update_local_max_commit_version_(ctx_tx_data_.get_commit_version()))) {
+  if (!need_wait && OB_FAIL(update_local_max_commit_version_(ctx_tx_data_.get_commit_version()))) {
     TRANS_LOG(ERROR, "update publish version failed", KR(ret), KPC(this));
   }
   if (OB_SUCC(ret) && OB_FAIL(restart_2pc_trans_timer_())) {
@@ -246,8 +246,7 @@ int ObPartTransCtx::on_commit()
   if (is_local_tx_()) {
     // TODO: fill it for sp commit
   } else {
-    if (OB_FAIL(on_dist_end_(true /*commit*/
-                        ))) {
+    if (OB_FAIL(on_dist_end_(true /*commit*/))) {
       TRANS_LOG(WARN, "transaciton end error", KR(ret), "context", *this);
     }
   }

@@ -24,7 +24,7 @@ namespace palf
 namespace election
 {
 
-int64_t MAX_TST = 750_ms;
+int64_t MAX_TST = 1_s;
 int64_t INIT_TS = -1;
 ObOccamTimer GLOBAL_REPORT_TIMER;
 
@@ -242,9 +242,9 @@ int ElectionImpl::handle_message(const ElectionAcceptRequestMsg &msg)
     acceptor_.on_accept_request(msg, &us_to_expired);
   }
   if (OB_LIKELY(us_to_expired > 0)) {
-    if (us_to_expired - 2 * MAX_TST < 0) {
+    if (us_to_expired - CALCULATE_TRIGGER_ELECT_WATER_MARK() < 0) {
       LOG_NONE(WARN, "reschedule devote task in invalid us", K(us_to_expired - 2 * MAX_TST));
-    } else if (CLICK_FAIL(proposer_.reschedule_or_register_prepare_task_after_(us_to_expired - 2 * MAX_TST))) {
+    } else if (CLICK_FAIL(proposer_.reschedule_or_register_prepare_task_after_(us_to_expired - CALCULATE_TRIGGER_ELECT_WATER_MARK()))) {
       LOG_NONE(ERROR, "register devote task failed");
     } else {
       LOG_NONE(DEBUG, "reschedule devote task after", K(us_to_expired - 2 * MAX_TST));

@@ -612,6 +612,7 @@ public:
   int add(ObObj &obj) {
     return objects_.push_back(obj);
   }
+  void reset_obj();
   common::ObIArray<ObObj>& get_objects() { return objects_; }
 private:
   // 用于收集在PL执行过程中使用到的Allocator,
@@ -1012,6 +1013,7 @@ public:
 
   // for normal routine or package routine
   int execute(sql::ObExecContext &ctx,
+              ObIAllocator &allocator,
               uint64_t package_id,
               uint64_t routine_id,
               const ObIArray<int64_t> &subprogram_path,
@@ -1056,6 +1058,7 @@ private:
 
   // for inner common execute
   int execute(sql::ObExecContext &ctx,
+              ObIAllocator &allocator,
               ObPLPackageGuard &package_guard,
               ObPLFunction &routine,
               ParamStore *params,

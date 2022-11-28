@@ -46,7 +46,8 @@ ObLSRestoreHandler::ObLSRestoreHandler()
     ls_(nullptr),
     ls_restore_arg_(),
     state_handler_(nullptr),
-    allocator_()
+    allocator_(),
+    rebuild_seq_(0)
 {
 }
 
@@ -70,6 +71,7 @@ int ObLSRestoreHandler::init(ObLS *ls)
   } else {
     allocator_.set_label(OB_LS_RESTORE_HANDLER);
     ls_ = ls;
+    rebuild_seq_ = ls->get_rebuild_seq();
     is_inited_ = true;
   }
   return ret;
@@ -511,6 +513,25 @@ int ObLSRestoreHandler::safe_to_destroy(bool &is_safe)
   return ret;
 }
 
+int ObLSRestoreHandler::update_rebuild_seq()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls restore handler do not init", K(ret));
+  } else {
+    lib::ObMutexGuard guard(mtx_);
+    rebuild_seq_ = ls_->get_rebuild_seq();
+  }
+  return ret;
+}
+
+int64_t ObLSRestoreHandler::get_rebuild_seq()
+{
+  lib::ObMutexGuard guard(mtx_);
+  return rebuild_seq_;
+}
+
 //================================ObILSRestoreState=======================================
 
 ObILSRestoreState::ObILSRestoreState(const share::ObLSRestoreStatus::Status &status)
@@ -599,16 +620,44 @@ int ObILSRestoreState::handle_pull_tablet(
   return ret;
 }
 
+int ObILSRestoreState::update_restore_status_(
+    storage::ObLS &ls, const share::ObLSRestoreStatus &next_status)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  storage::ObLSRestoreHandler *ls_restore_handler = ls.get_ls_restore_handler();
+  int64_t rebuild_seq = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(ls_restore_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls restore handler can't be nullptr", K(ret));
+  } else if (FALSE_IT(rebuild_seq = ls_restore_handler->get_rebuild_seq())) {
+  } else if (OB_FAIL(ls.set_restore_status(next_status, rebuild_seq))) {
+    LOG_WARN("fail to advance ls meta status", K(ret), K(next_status), K(ls), K(rebuild_seq));
+    if (OB_STATE_NOT_MATCH == ret) {
+      if (OB_SUCCESS != (tmp_ret = ls_restore_handler->update_rebuild_seq())) {
+        LOG_ERROR("failed to update rebuild seq", K(ret), K(tmp_ret), K(rebuild_seq));
+      }
+      //overwrite ret
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
 int ObILSRestoreState::deal_failed_restore(const ObLSRestoreResultMgr &result_mgr)
 {
   int ret = OB_SUCCESS;
   ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::RESTORE_FAILED);
   ObLSRestoreResultMgr::Comment comment;
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ls_->set_restore_status(next_status))) {
-    LOG_WARN("fail to set restore status to failed", K(ret), K(next_status), KPC(ls_));
+  } else if (OB_FAIL(update_restore_status_(*ls_, next_status))) {
+    LOG_WARN("failed to update restore status", K(ret), KPC(ls_), K(next_status));
   } else if (OB_FAIL(result_mgr.get_comment_str(comment))) {
     LOG_WARN("fail to get comment str", K(ret));
   } else if (OB_FAIL(report_ls_restore_progress_(*ls_, next_status, result_mgr.get_trace_id(),
@@ -631,8 +680,8 @@ int ObILSRestoreState::advance_status_(
   } else if (OB_ISNULL(ls_restore_handler)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls restore handler can't be nullptr", K(ret));
-  } else if (OB_FAIL(ls.set_restore_status(next_status))) {
-    LOG_WARN("fail to advance ls meta status", K(ret), K(next_status), K(ls));
+  } else if (OB_FAIL(update_restore_status_(ls, next_status))) {
+    LOG_WARN("failed to update restore status", K(ret), K(ls), K(next_status));
   } else {
     ls_restore_handler->wakeup();
     LOG_INFO("success advance status", K(ls), K(next_status));
@@ -1570,6 +1619,7 @@ int ObLSRestoreSysTabletState::leader_restore_sys_tablet_()
   int ret = OB_SUCCESS;
   ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_RESTORE_SYS_TABLETS);
   ObArray<common::ObTabletID> no_use_tablet_ids;
+  storage::ObLSRestoreHandler *ls_restore_handler = nullptr;
   LOG_INFO("ready to restore leader sys tablet", K(ls_restore_status_), KPC(ls_));
   if (tablet_mgr_.has_no_task()) {
     if (OB_FAIL(do_restore_sys_tablet())) {
@@ -1582,6 +1632,8 @@ int ObLSRestoreSysTabletState::leader_restore_sys_tablet_()
     // next term to retry
   } else if (OB_FAIL(ls_->load_ls_inner_tablet())) {
     LOG_WARN("fail to load ls inner tablet", K(ret));
+  } else if (OB_FAIL(ls_->get_ls_restore_handler()->update_rebuild_seq())) {
+    LOG_WARN("failed to update rebuild seq", K(ret), KPC(ls_));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
   } else {
@@ -1611,6 +1663,8 @@ int ObLSRestoreSysTabletState::follower_restore_sys_tablet_()
     // next term to retry
   } else if (OB_FAIL(ls_->load_ls_inner_tablet())) {
     LOG_WARN("fail to load ls inner tablet", K(ret));
+  } else if (OB_FAIL(ls_->get_ls_restore_handler()->update_rebuild_seq())) {
+    LOG_WARN("failed to update rebuild seq", K(ret), KPC(ls_));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
   } else {
@@ -2337,7 +2391,6 @@ int ObLSRestoreWaitState::follower_wait_leader_()
   } else {
     LOG_INFO("follower success advance status", K(next_status), KPC(ls_));
   }
-
   return ret;
 }
 

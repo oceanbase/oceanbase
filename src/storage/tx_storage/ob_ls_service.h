@@ -92,6 +92,8 @@ public:
   int get_ls(const share::ObLSID &ls_id,
              ObLSHandle &handle,
              ObLSGetMod mod);
+  // @param [in] func, iterate all ls diagnose info
+  int iterate_diagnose(const ObFunction<int(const storage::ObLS &ls)> &func);
 
   // remove the ls that is creating and write abort slog.
   int gc_ls_after_replay_slog();

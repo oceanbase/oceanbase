@@ -25,24 +25,26 @@ namespace observer
 class ObAllVirtualLSInfo : public common::ObVirtualTableScannerIterator,
                            public omt::ObMultiTenantOperator
 {
- public:
+public:
   ObAllVirtualLSInfo();
   virtual ~ObAllVirtualLSInfo();
- public:
+public:
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
   inline void set_addr(common::ObAddr &addr)
   {
     addr_ = addr;
   }
- private:
+private:
   // 过滤得到需要处理的租户
   virtual bool is_need_process(uint64_t tenant_id) override;
   // 处理当前迭代的租户
   virtual int process_curr_tenant(common::ObNewRow *&row) override;
   // 释放上一个租户的资源
   virtual void release_last_tenant() override;
- private:
+private:
+  int next_ls_info_(ObLSVTInfo &ls_info);
+private:
   common::ObAddr addr_;
   char ip_buf_[common::OB_IP_STR_BUFF];
   char state_name_[common::MAX_LS_STATE_LENGTH];
@@ -50,7 +52,7 @@ class ObAllVirtualLSInfo : public common::ObVirtualTableScannerIterator,
   /* 跨租户访问的资源必须由ObMultiTenantOperator来处理释放*/
   int64_t ls_id_;
   ObSharedGuard<storage::ObLSIterator> ls_iter_guard_;
- private:
+private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualLSInfo);
 };
 

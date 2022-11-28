@@ -121,7 +121,12 @@ int ObCommonConfig::add_extra_config(const char *config_str,
           LOG_ERROR("Invalid config value", K(name), K(value), K(ret));
         } else if (!(*pp_item)->check()) {
           ret = OB_INVALID_CONFIG;
-          LOG_ERROR("Invalid config, value out of range", K(name), K(value), K(ret));
+          const char* range = (*pp_item)->range();
+          if (OB_ISNULL(range) || strlen(range) == 0) {
+            LOG_ERROR("Invalid config, value out of range", K(name), K(value), K(ret));
+          } else {
+            _LOG_ERROR("Invalid config, value out of %s (for reference only). name=%s, value=%s, ret=%d", range, name, value, ret);
+          }
         } else {
           (*pp_item)->set_version(version);
           LOG_INFO("Load config succ", K(name), K(value));

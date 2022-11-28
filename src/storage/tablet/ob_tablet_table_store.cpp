@@ -313,30 +313,17 @@ int ObTabletTableStore::prepare_memtables()
   return memtables_.prepare_allocate();
 }
 
-// fix issue 41619224
 int ObTabletTableStore::update_memtables()
 {
   int ret = OB_SUCCESS;
-  ObTableHandleArray inc_memtables;
-
-  if (OB_ISNULL(tablet_ptr_) || OB_ISNULL(tablet_ptr_->get_memtable_mgr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected tablet_ptr or memtable_mgr", K(ret), KP(tablet_ptr_));
-  } else if (!tablet_ptr_->get_memtable_mgr()->has_memtable()) {
-    LOG_INFO("no memtable in memtable mgr", K(ret));
-  } else if (OB_FAIL(tablet_ptr_->get_memtable_mgr()->get_all_memtables(inc_memtables))) {
-    LOG_WARN("failed to get all memtables from memtable_mgr", K(ret));
-  } else if (OB_FAIL(memtables_.rebuild(inc_memtables))) {
-    LOG_ERROR("failed to rebuild table store memtables", K(ret), K(inc_memtables), KPC(this));
+  if (OB_FAIL(pull_memtables())) {
+    LOG_WARN("failed to update memtables from memtable_mgr", K(ret));
   } else {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = init_read_cache())) {
-      if (OB_SNAPSHOT_DISCARDED != tmp_ret) {
-        LOG_WARN("failed to rebuild read cache", K(tmp_ret));
-      }
+      LOG_WARN("failed to rebuild read cache", K(tmp_ret));
     }
   }
-
   return ret;
 }
 
@@ -1037,9 +1024,6 @@ int ObTabletTableStore::need_remove_old_table(
     LOG_WARN("get invalid arguments", K(ret), K(multi_version_start));
   } else if (minor_tables_.empty() || INT64_MAX == minor_tables_[0]->get_upper_trans_version()) {
     // do nothing
-  } else if (minor_tables_[0]->get_end_scn() > tablet_ptr_->get_tablet_meta().clog_checkpoint_scn_) {
-    need_remove = false;
-    //TODO(muwei.ym) remove it later
   } else if (minor_tables_[0]->get_upper_trans_version() <= major_tables_[0]->get_snapshot_version()) {
     // at least one minor sstable is coverd by major sstable
     // don't need to care about kept_multi_version_start here
@@ -1247,18 +1231,27 @@ int ObTabletTableStore::replace_ha_minor_sstables_(
     LOG_WARN("failed to add need add minor tables", K(ret), K(param));
   } else if (OB_FAIL(old_store.minor_tables_.get_all_tables(old_minor_tables))) {
     LOG_WARN("failed to get old minor tables", K(ret), K(old_store));
-  } else if (OB_FAIL(check_minor_tables_continue_(need_add_minor_tables.count(), need_add_minor_tables.get_data()))) {
-    LOG_WARN("failed to check minor tables continue", K(ret), K(need_add_minor_tables), K(param));
   } else if (OB_FAIL(check_old_store_minor_sstables_(old_minor_tables))) {
     LOG_WARN("failed to check old store minor sstables", K(ret), K(old_minor_tables));
   } else if (OB_FAIL(combin_ha_minor_sstables_(old_minor_tables, need_add_minor_tables, new_minor_tables))) {
     LOG_WARN("failed to combin ha minor sstables", K(ret), K(old_store), K(param));
   } else if (new_minor_tables.empty()) { // no minor tables
-    LOG_INFO("minor tables is empty, skip it", K(ret), K(new_minor_tables));
+    if (tablet_ptr_->get_tablet_meta().start_scn_ != tablet_ptr_->get_tablet_meta().clog_checkpoint_scn_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(new_minor_tables), K(param), K(old_store));
+    } else {
+      LOG_INFO("minor tables is empty, skip it", K(ret), K(new_minor_tables));
+    }
   } else if (OB_FAIL(ObTableStoreUtil::sort_minor_tables(new_minor_tables))) {
     LOG_WARN("failed to sort minor tables", K(ret));
   } else if (OB_FAIL(cut_ha_sstable_scn_range_(new_minor_tables))) {
     LOG_WARN("failed to cut ha sstable log ts range", K(ret), K(old_store), K(param));
+  } else if (OB_FAIL(check_minor_tables_continue_(new_minor_tables.count(), new_minor_tables.get_data()))) {
+    LOG_WARN("minor tables is not continue", K(ret), K(param), K(new_minor_tables), K(old_store));
+  } else if (new_minor_tables.at(0)->get_start_scn() != tablet_ptr_->get_tablet_meta().start_scn_
+      || new_minor_tables.at(new_minor_tables.count() - 1)->get_end_scn() != tablet_ptr_->get_tablet_meta().clog_checkpoint_scn_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet meta is not match with minor sstables", K(ret), K(new_minor_tables), K(param), K(old_store));
   } else if (OB_FAIL(minor_tables_.init_and_copy(allocator, new_minor_tables, inc_pos))) {
     LOG_WARN("failed to init minor_tables", K(ret));
   } else {

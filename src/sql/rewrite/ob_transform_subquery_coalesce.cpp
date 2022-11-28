@@ -1852,8 +1852,6 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
   ObStmtCompareContext context;
   //select items in subquery
   ObSEArray<ObRawExpr*, 16> subquery_select_list;
-  //select items in subquery trans to select items in coalesce query
-  ObSEArray<ObRawExpr*, 16> new_select_list;
   //select items in coalesce query
   ObSEArray<ObRawExpr*, 16> coalesce_select_list;
   //column items in subquery
@@ -1948,13 +1946,7 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null select expr", K(ret));
       } else if (!coalesce_select->same_as(*subquery_select, &context)) {
-        //do nothing
-      } else if (OB_FAIL(new_select_list.push_back(coalesce_select))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
-                                                              coalesce_select,
-                                                              coalesce_query))) {
-        LOG_WARN("failed to create column for subquery", K(ret));
+        // do nothing
       } else if (OB_FAIL(index_map.push_back(coalesce_query->get_select_item_size() - 1))) {
         LOG_WARN("failed to push back index", K(ret));
       } else {
@@ -1966,8 +1958,6 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
       ObSEArray<ObWinFunRawExpr*, 8> win_func_exprs;
       if (ObTransformUtils::replace_expr(subquery_column_list, new_column_list, subquery_select)) {
         LOG_WARN("failed to replace expr", K(ret));
-      } else if (OB_FAIL(new_select_list.push_back(subquery_select))) {
-        LOG_WARN("failed to push back expr", K(ret));
       } else if (OB_FAIL(ObTransformUtils::extract_aggr_expr(subquery->get_current_level(),
                                                              subquery_select,
                                                              aggr_items))) {
@@ -2070,8 +2060,10 @@ int ObTransformSubqueryCoalesce::adjust_assign_exprs(ObUpdateStmt *upd_stmt,
   } else {
     coalesce_query_expr->set_ref_stmt(coalesce_query);
     coalesce_query_expr->set_expr_level(upd_stmt->get_current_level());
+    if (OB_FAIL(coalesce_query_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize coalesce query expr", K(ret));
+    }
   }
-
   for (int64_t i = 0; OB_SUCC(ret) && i < upd_stmt->get_update_table_info().count(); ++i) {
     ObUpdateTableInfo* table_info = upd_stmt->get_update_table_info().at(i);
     if (OB_ISNULL(table_info)) {
@@ -2083,6 +2075,8 @@ int ObTransformSubqueryCoalesce::adjust_assign_exprs(ObUpdateStmt *upd_stmt,
         if (OB_ISNULL(assign.expr_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null expr", K(ret));
+        } else if (OB_FAIL(assign.expr_->extract_info())) {
+          LOG_WARN("failed to extract expr info", K(ret));
         } else if (assign.expr_->has_flag(CNT_ALIAS)) {
           if (OB_FAIL(adjust_alias_assign_exprs(assign.expr_, 
                                               helper, 

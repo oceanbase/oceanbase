@@ -33,6 +33,7 @@ public:
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
+  virtual int check_hint_status(const ObDMLStmt &stmt, bool &need_trans) override;
 
   int do_transform(ObDMLStmt *stmt,
                    bool ignore_all_select_exprs,
@@ -86,7 +87,10 @@ private:
   };
 
   struct ConstInfoContext {
-    ConstInfoContext() : active_const_infos_(), expired_const_infos_(), extra_excluded_exprs_()
+    ConstInfoContext() : active_const_infos_(),
+                         expired_const_infos_(),
+                         extra_excluded_exprs_(),
+                         hint_allowed_trans_(true)
     {
     }
     ~ConstInfoContext() {}
@@ -100,10 +104,12 @@ private:
     common::ObSEArray<ExprConstInfo, 4> active_const_infos_;
     common::ObSEArray<ExprConstInfo, 4> expired_const_infos_;
     common::ObSEArray<ObRawExpr *, 4> extra_excluded_exprs_;
+    bool hint_allowed_trans_;
 
     TO_STRING_KV(K_(active_const_infos),
                  K_(expired_const_infos),
-                 K_(extra_excluded_exprs));
+                 K_(extra_excluded_exprs),
+                 K_(hint_allowed_trans));
   };
 
   struct PullupConstInfo {
