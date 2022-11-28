@@ -154,7 +154,7 @@ public:
   ~ObDDLPrepareLog() = default;
   int init(const ObITable::TableKey &table_key,
            const share::SCN &start_scn);
-  bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid(); }
+  bool is_valid() const { return table_key_.is_valid() && start_scn_.is_valid_and_not_min(); }
   ObITable::TableKey get_table_key() const { return table_key_; }
   share::SCN get_start_scn() const { return start_scn_; }
   TO_STRING_KV(K_(table_key), K_(start_scn));

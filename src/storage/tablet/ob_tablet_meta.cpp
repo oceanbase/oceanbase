@@ -43,7 +43,7 @@ ObTabletMeta::ObTabletMeta()
     create_scn_(ObTabletMeta::INVALID_CREATE_SCN),
     start_scn_(),
     clog_checkpoint_scn_(),
-    ddl_checkpoint_scn_(),
+    ddl_checkpoint_scn_(SCN::min_scn()),
     snapshot_version_(OB_INVALID_TIMESTAMP),
     multi_version_start_(OB_INVALID_TIMESTAMP),
     compat_mode_(lib::Worker::CompatMode::INVALID),
@@ -53,7 +53,7 @@ ObTabletMeta::ObTabletMeta()
     tx_data_(),
     ddl_data_(),
     table_store_flag_(),
-    ddl_start_scn_(),
+    ddl_start_scn_(SCN::min_scn()),
     ddl_snapshot_version_(OB_INVALID_TIMESTAMP),
     max_sync_storage_schema_version_(0),
     ddl_execution_id_(0),
@@ -342,7 +342,7 @@ void ObTabletMeta::reset()
   create_scn_ = ObTabletMeta::INVALID_CREATE_SCN;
   start_scn_.reset();
   clog_checkpoint_scn_.reset();
-  ddl_checkpoint_scn_ .reset();
+  ddl_checkpoint_scn_.set_min();
   snapshot_version_ = OB_INVALID_TIMESTAMP;
   multi_version_start_ = OB_INVALID_TIMESTAMP;
   compat_mode_ = lib::Worker::CompatMode::INVALID;
@@ -352,7 +352,7 @@ void ObTabletMeta::reset()
   tx_data_.reset();
   ddl_data_.reset();
   table_store_flag_.reset();
-  ddl_start_scn_.reset();
+  ddl_start_scn_.set_min();
   ddl_snapshot_version_ = OB_INVALID_TIMESTAMP;
   max_sync_storage_schema_version_ = 0;
   ddl_execution_id_ = 0;
@@ -729,7 +729,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     create_scn_(ObTabletMeta::INVALID_CREATE_SCN),
     start_scn_(),
     clog_checkpoint_scn_(),
-    ddl_checkpoint_scn_(),
+    ddl_checkpoint_scn_(SCN::min_scn()),
     snapshot_version_(OB_INVALID_TIMESTAMP),
     multi_version_start_(OB_INVALID_TIMESTAMP),
     compat_mode_(lib::Worker::CompatMode::INVALID),
@@ -741,7 +741,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     storage_schema_(),
     medium_info_list_(compaction::ObMediumCompactionInfoList::MEDIUM_LIST_IN_STORAGE),
     table_store_flag_(),
-    ddl_start_scn_(),
+    ddl_start_scn_(SCN::min_scn()),
     ddl_snapshot_version_(OB_INVALID_TIMESTAMP),
     max_sync_storage_schema_version_(0),
     ddl_execution_id_(0),
@@ -942,7 +942,7 @@ void ObMigrationTabletParam::reset()
   create_scn_ = ObTabletMeta::INVALID_CREATE_SCN;
   start_scn_.reset();
   clog_checkpoint_scn_.reset();
-  ddl_checkpoint_scn_.reset();
+  ddl_checkpoint_scn_.set_min();
   snapshot_version_ = OB_INVALID_TIMESTAMP;
   multi_version_start_ = OB_INVALID_TIMESTAMP;
   compat_mode_ = lib::Worker::CompatMode::INVALID;
@@ -954,7 +954,7 @@ void ObMigrationTabletParam::reset()
   storage_schema_.reset();
   medium_info_list_.reset();
   table_store_flag_.reset();
-  ddl_start_scn_.reset();
+  ddl_start_scn_.set_min();
   ddl_snapshot_version_ = OB_INVALID_TIMESTAMP;
   max_sync_storage_schema_version_ = 0;
   ddl_execution_id_ = 0;

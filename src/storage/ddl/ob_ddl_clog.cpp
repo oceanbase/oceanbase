@@ -236,7 +236,7 @@ int ObDDLRedoLog::init(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info)
 OB_SERIALIZE_MEMBER(ObDDLRedoLog, redo_info_);
 
 ObDDLPrepareLog::ObDDLPrepareLog()
-  : table_key_(), start_scn_()
+  : table_key_(), start_scn_(SCN::min_scn())
 {
 }
 
@@ -244,7 +244,7 @@ int ObDDLPrepareLog::init(const ObITable::TableKey &table_key,
                          const SCN &start_scn)
 {
   int ret = OB_SUCCESS;
-  if (!table_key.is_valid() || !start_scn.is_valid()) {
+  if (!table_key.is_valid() || !start_scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn));
   } else {
@@ -257,7 +257,7 @@ int ObDDLPrepareLog::init(const ObITable::TableKey &table_key,
 OB_SERIALIZE_MEMBER(ObDDLPrepareLog, table_key_, start_scn_);
 
 ObDDLCommitLog::ObDDLCommitLog()
-  : table_key_(), start_scn_(), prepare_scn_()
+  : table_key_(), start_scn_(SCN::min_scn()), prepare_scn_(SCN::min_scn())
 {
 }
 
@@ -266,7 +266,7 @@ int ObDDLCommitLog::init(const ObITable::TableKey &table_key,
                          const SCN &prepare_scn)
 {
   int ret = OB_SUCCESS;
-  if (!table_key.is_valid() || !start_scn.is_valid() || !prepare_scn.is_valid()) {
+  if (!table_key.is_valid() || !start_scn.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(table_key), K(start_scn), K(prepare_scn));
   } else {

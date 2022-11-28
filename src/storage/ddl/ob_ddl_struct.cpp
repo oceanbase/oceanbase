@@ -87,7 +87,7 @@ int ObDDLMacroHandle::reset_macro_block_ref()
 }
 
 ObDDLMacroBlock::ObDDLMacroBlock()
-  : block_handle_(), logic_id_(), block_type_(DDL_MB_INVALID_TYPE), ddl_start_scn_(), scn_(), buf_(nullptr), size_(0)
+  : block_handle_(), logic_id_(), block_type_(DDL_MB_INVALID_TYPE), ddl_start_scn_(SCN::min_scn()), scn_(SCN::min_scn()), buf_(nullptr), size_(0)
 {
 }
 
@@ -123,21 +123,19 @@ bool ObDDLMacroBlock::is_valid() const
   return block_handle_.get_block_id().is_valid()
     && logic_id_.is_valid()
     && DDL_MB_INVALID_TYPE != block_type_
-    && ddl_start_scn_.is_valid()
-    && scn_.is_valid()
+    && ddl_start_scn_.is_valid_and_not_min()
+    && scn_.is_valid_and_not_min()
     && nullptr != buf_
     && size_ > 0;
 }
 
 
 ObDDLKV::ObDDLKV()
-  : is_inited_(false), ls_id_(), tablet_id_(), ddl_start_scn_(), snapshot_version_(0),
-    lock_(), allocator_("DDL_KV"), is_freezed_(false), is_closed_(false), last_freezed_scn_(),
-    max_scn_(), pending_cnt_(0), cluster_version_(0), ref_cnt_(0),
-    sstable_index_builder_(nullptr), index_block_rebuilder_(nullptr), is_rebuilder_closed_(false)
+  : is_inited_(false), ls_id_(), tablet_id_(), ddl_start_scn_(SCN::min_scn()), snapshot_version_(0),
+    lock_(), allocator_("DDL_KV"), is_freezed_(false), is_closed_(false), last_freezed_scn_(SCN::min_scn()),
+    min_scn_(SCN::max_scn()), max_scn_(SCN::min_scn()), freeze_scn_(SCN::max_scn()), pending_cnt_(0), cluster_version_(0),
+    ref_cnt_(0), sstable_index_builder_(nullptr), index_block_rebuilder_(nullptr), is_rebuilder_closed_(false)
 {
-  min_scn_ = SCN::max_scn();
-  freeze_scn_ = SCN::max_scn();
 }
 
 ObDDLKV::~ObDDLKV()
@@ -159,9 +157,9 @@ int ObDDLKV::init(const share::ObLSID &ls_id,
     LOG_WARN("ObDDLKV has been inited twice", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid()
         || !tablet_id.is_valid()
-        || !ddl_start_scn.is_valid()
+        || !ddl_start_scn.is_valid_and_not_min()
         || snapshot_version <= 0
-        || !last_freezed_scn.is_valid()
+        || !last_freezed_scn.is_valid_and_not_min()
         || cluster_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(ddl_start_scn), K(snapshot_version), K(last_freezed_scn), K(cluster_version));
@@ -258,11 +256,11 @@ int ObDDLKV::set_macro_block(const ObDDLMacroBlock &macro_block)
     if (macro_block.ddl_start_scn_ != ddl_start_scn_) {
       if (macro_block.ddl_start_scn_ > ddl_start_scn_) {
         ret = OB_EAGAIN;
-        LOG_INFO("ddl start log ts too large, retry", K(ret),
+        LOG_INFO("ddl start scn too large, retry", K(ret),
             K(ls_id_), K(tablet_id_), K(ddl_start_scn_), K(macro_block));
       } else {
         // filter out and do nothing
-        LOG_INFO("ddl start log ts too small, maybe from old build task, ignore", K(ret),
+        LOG_INFO("ddl start scn too small, maybe from old build task, ignore", K(ret),
             K(ls_id_), K(tablet_id_), K(ddl_start_scn_), K(macro_block));
       }
     } else if (macro_block.scn_ > freeze_scn_) {
@@ -293,9 +291,9 @@ int ObDDLKV::freeze(const SCN &freeze_scn)
     if (is_freezed_) {
       // do nothing
     } else {
-      if (freeze_scn.is_valid()) {
+      if (freeze_scn.is_valid_and_not_min()) {
         freeze_scn_ = freeze_scn;
-      } else if (max_scn_.is_valid()) {
+      } else if (max_scn_.is_valid_and_not_min()) {
         freeze_scn_ = max_scn_;
       } else {
         ret = OB_EAGAIN;
@@ -511,12 +509,12 @@ int ObDDLKVsHandle::get_ddl_kv(const int64_t idx, ObDDLKV *&kv)
 }
 
 ObDDLKVPendingGuard::ObDDLKVPendingGuard(ObTablet *tablet, const SCN &scn)
-  : tablet_(tablet), kv_handle_(), ret_(OB_SUCCESS)
+  : tablet_(tablet), scn_(scn), kv_handle_(), ret_(OB_SUCCESS)
 {
   int ret = OB_SUCCESS;
   ObDDLKV *curr_kv = nullptr;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
-  if (OB_UNLIKELY(nullptr == tablet || !scn.is_valid())) {
+  if (OB_UNLIKELY(nullptr == tablet || !scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(tablet), K(scn));
   } else if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
@@ -529,7 +527,6 @@ ObDDLKVPendingGuard::ObDDLKVPendingGuard(ObTablet *tablet, const SCN &scn)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, active ddl kv must not be nullptr", K(ret));
   } else {
-    scn_ = scn;
     curr_kv->inc_pending_cnt();
   }
   if (OB_FAIL(ret)) {

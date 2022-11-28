@@ -76,7 +76,7 @@ public:
   ~ObDDLKV();
   int init(const share::ObLSID &ls_id,
            const common::ObTabletID &tablet_id,
-           const share::SCN &ddl_start_log_ts,
+           const share::SCN &ddl_start_scn,
            const int64_t snapshot_version,
            const share::SCN &last_freezed_scn,
            const int64_t cluster_version);

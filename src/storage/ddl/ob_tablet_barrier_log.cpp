@@ -20,7 +20,7 @@ using namespace share;
 namespace storage
 {
 ObTabletBarrierLogState::ObTabletBarrierLogState()
-  : state_(TABLET_BARRIER_LOG_INIT), scn_(), schema_version_(0)
+  : state_(TABLET_BARRIER_LOG_INIT), scn_(SCN::min_scn()), schema_version_(0)
 {
 }
 
@@ -46,7 +46,7 @@ ObTabletBarrierLogStateEnum ObTabletBarrierLogState::to_persistent_state() const
 void ObTabletBarrierLogState::reset()
 {
   state_ = TABLET_BARRIER_LOG_INIT;
-  scn_.reset();
+  scn_.set_min();
   schema_version_ = 0;
 }
 

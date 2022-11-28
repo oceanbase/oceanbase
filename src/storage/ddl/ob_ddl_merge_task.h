@@ -42,14 +42,13 @@ public:
   ObDDLTableMergeDagParam()
     : ls_id_(),
       tablet_id_(),
-      rec_scn_(),
+      rec_scn_(share::SCN::min_scn()),
       is_commit_(false),
+      start_scn_(share::SCN::min_scn()),
       table_id_(0),
       execution_id_(0),
       ddl_task_id_(0)
-  {
-    start_scn_.set_min();
-  }
+  { }
   bool is_valid() const
   {
     return ls_id_.is_valid() && tablet_id_.is_valid() && start_scn_.is_valid_and_not_min();

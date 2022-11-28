@@ -205,7 +205,7 @@ bool ObDDLTableMergeDag::ignore_warning()
 /******************             ObDDLTableDumpTask             *****************/
 ObDDLTableDumpTask::ObDDLTableDumpTask()
   : ObITask(ObITaskType::TASK_TYPE_DDL_KV_DUMP),
-    is_inited_(false), ls_id_(), tablet_id_(), freeze_scn_()
+    is_inited_(false), ls_id_(), tablet_id_(), freeze_scn_(SCN::min_scn())
 {
 
 }
@@ -222,7 +222,7 @@ int ObDDLTableDumpTask::init(const share::ObLSID &ls_id,
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(tablet_id_));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !freeze_scn.is_valid())) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !freeze_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(freeze_scn));
   } else {
@@ -386,7 +386,7 @@ int ObDDLTableMergeTask::process()
       sstable = static_cast<ObSSTable *>(table_handle.get_table());
     }
 
-    if (OB_SUCC(ret) && merge_param_.rec_scn_.is_valid()) {
+    if (OB_SUCC(ret) && merge_param_.rec_scn_.is_valid_and_not_min()) {
       // when the ddl dag is self scheduled when ddl kv is full, the rec_scn is invalid
       // but no worry, the formmer ddl dump task will also release ddl kvs
       if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->release_ddl_kvs(merge_param_.rec_scn_))) {
@@ -429,7 +429,7 @@ int ObDDLTableMergeTask::check_data_integrity(const ObTablesHandleArray &ddl_sst
 {
   int ret = OB_SUCCESS;
   is_data_complete = false;
-  if (OB_UNLIKELY(ddl_sstables.empty() || !start_scn.is_valid() || !prepare_scn.is_valid())) {
+  if (OB_UNLIKELY(ddl_sstables.empty() || !start_scn.is_valid_and_not_min() || !prepare_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_sstables.get_count()), K(start_scn), K(prepare_scn));
   } else {
@@ -458,7 +458,7 @@ int ObDDLTableMergeTask::check_data_integrity(const ObTablesHandleArray &ddl_sst
 }
 
 ObTabletDDLParam::ObTabletDDLParam()
-  : tenant_id_(0), ls_id_(), table_key_(), start_scn_(), snapshot_version_(0), cluster_version_(0)
+  : tenant_id_(0), ls_id_(), table_key_(), start_scn_(SCN::min_scn()), snapshot_version_(0), cluster_version_(0)
 {
 
 }
@@ -473,7 +473,7 @@ bool ObTabletDDLParam::is_valid() const
   return tenant_id_ > 0  && tenant_id_ != OB_INVALID_ID
     && ls_id_.is_valid()
     && table_key_.is_valid()
-    && start_scn_.is_valid()
+    && start_scn_.is_valid_and_not_min()
     && snapshot_version_ > 0
     && cluster_version_ >= 0;
 }

@@ -163,7 +163,7 @@ public:
   ~ObDDLRedoLogHandle();
   int wait(const int64_t timeout = DDL_REDO_LOG_TIMEOUT);
   void reset();
-  bool is_valid() const { return nullptr != cb_  && scn_.is_valid(); }
+  bool is_valid() const { return nullptr != cb_  && scn_.is_valid_and_not_min(); }
 public:
   ObDDLMacroBlockClogCb *cb_;
   share::SCN scn_;
