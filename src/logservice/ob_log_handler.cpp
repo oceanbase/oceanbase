@@ -1403,17 +1403,10 @@ int ObLogHandler::diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const
 int ObLogHandler::online(const LSN &lsn, const SCN &scn)
 {
   int ret = OB_SUCCESS;
-  SCN max_decided_scn;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (true == is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-  } else if (OB_FAIL(get_max_decided_scn(max_decided_scn))) {
-    CLOG_LOG(WARN, "get_max_decided_log_scn failed", K(ret), KPC(this));
-  } else if (scn < max_decided_scn) {
-    ret = OB_NOT_SUPPORTED;
-    CLOG_LOG(WARN, "base scn is less than max decided scn, not supported",
-        K(ret), KPC(this), K(scn), K(max_decided_scn));
   } else if (OB_FAIL(enable_replay(lsn, scn))) {
     CLOG_LOG(WARN, "enable_replay failed", K(ret), KPC(this), K(lsn), K(scn));
   } else if (OB_FAIL(enable_sync())) {
