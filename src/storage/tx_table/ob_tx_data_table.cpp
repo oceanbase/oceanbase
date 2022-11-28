@@ -193,7 +193,9 @@ void ObTxDataTable::reset()
 
 int ObTxDataTable::prepare_for_safe_destroy()
 {
-  return clean_memtables_cache_();
+  int ret = clean_memtables_cache_();
+  LOG_INFO("tx data table prepare for safe destroy", KR(ret), K(get_ls_id()));
+  return ret;
 }
 
 int ObTxDataTable::offline()
@@ -644,37 +646,32 @@ int ObTxDataTable::get_tx_data_in_memtables_cache_(const ObTransID tx_id,
 int ObTxDataTable::check_tx_data_in_sstable_(const ObTransID tx_id, ObITxDataCheckFunctor &fn)
 {
   int ret = OB_SUCCESS;
-  ObTxData *tx_data = nullptr;
+  ObTxData tx_data;
+  tx_data.reset();
 
   if (OB_FAIL(get_tx_data_in_sstable_(tx_id, tx_data))) {
     STORAGE_LOG(WARN, "get tx data from sstable failed.", KR(ret), K(tx_id));
-  } else if (OB_ISNULL(tx_data)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "unexpected nullptr of tx data", KR(ret), K(tx_id));
-  } else if (OB_FAIL(fn(*tx_data))) {
+  } else if (OB_FAIL(fn(tx_data))) {
     STORAGE_LOG(WARN, "check tx data in sstable failed.", KR(ret), KP(this), K(tablet_id_));
   }
 
-  // free tx data after using it
-  if (OB_NOT_NULL(tx_data)) {
-    free_tx_data(tx_data);
+  // free undo status list if exist
+  if (OB_NOT_NULL(tx_data.undo_status_list_.head_)) {
+    free_undo_status_list_(tx_data.undo_status_list_.head_);
   }
   return ret;
 }
 
-int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData *&tx_data)
+int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData &tx_data)
 {
   int ret = OB_SUCCESS;
-  tx_data = nullptr;
   ObTableIterParam iter_param = read_schema_.iter_param_;
   ObTabletHandle &tablet_handle = iter_param.tablet_handle_;
 
   if (tablet_handle.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "tablet handle should be empty", KR(ret), K(tablet_handle));
-  } else if (OB_FAIL(alloc_tx_data(tx_data))) {
-    STORAGE_LOG(WARN, "allocate tx data from tx data table failed.");
-  } else if (FALSE_IT(tx_data->tx_id_ = tx_id)) {
+  } else if (FALSE_IT(tx_data.tx_id_ = tx_id)) {
   } else if (OB_FAIL(ls_tablet_svr_->get_tablet(tablet_id_, tablet_handle))) {
     STORAGE_LOG(WARN, "get tablet from ls tablet service fail.", KR(ret), KP(this), K(tablet_id_));
   } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
@@ -684,7 +681,7 @@ int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, O
     ObTxDataSingleRowGetter getter(iter_param, slice_allocator_);
     if (OB_FAIL(getter.init(tx_id))) {
       STORAGE_LOG(WARN, "init ObTxDataSingleRowGetter fail.", KR(ret), KP(this), K(tablet_id_));
-    } else if (OB_FAIL(getter.get_next_row(*tx_data))) {
+    } else if (OB_FAIL(getter.get_next_row(tx_data))) {
       if (OB_ITER_END == ret) {
         ret = OB_TRANS_CTX_NOT_EXIST;
       }
@@ -694,11 +691,6 @@ int ObTxDataTable::get_tx_data_in_sstable_(const transaction::ObTransID tx_id, O
     }
   }
 
-  // If get tx data in sstable failed, free the tx data and reset it.
-  if (OB_FAIL(ret) && (nullptr != tx_data)) {
-    free_tx_data(tx_data);
-    tx_data = nullptr;
-  }
   return ret;
 }
 
@@ -1217,7 +1209,8 @@ int ObTxDataTable::calc_upper_trans_scn_(const SCN sstable_end_scn, SCN &upper_t
 int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *&tx_data)
 {
   int ret = OB_SUCCESS;
-  ObTxData *tx_data_from_sstable = nullptr;
+  ObTxData tx_data_from_sstable;
+  tx_data_from_sstable.reset();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1232,17 +1225,9 @@ int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *&tx_data)
     } else {
       STORAGE_LOG(WARN, "get tx data from sstable failed.", KR(ret));
     }
-  } else if (OB_ISNULL(tx_data_from_sstable)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected nullptr of tx data", KR(ret), KPC(tx_data));
   } else {
     // assign and reset to avoid deep copy
-    tx_data->undo_status_list_ = tx_data_from_sstable->undo_status_list_;
-    tx_data_from_sstable->undo_status_list_.reset();
-  }
-
-  if (OB_NOT_NULL(tx_data_from_sstable)) {
-    free_tx_data(tx_data_from_sstable);
+    tx_data->undo_status_list_ = tx_data_from_sstable.undo_status_list_;
   }
   return ret;
 }
@@ -1325,24 +1310,16 @@ int ObTxDataTable::dump_tx_data_in_memtable_2_text_(const ObTransID tx_id, FILE 
 int ObTxDataTable::dump_tx_data_in_sstable_2_text_(const ObTransID tx_id, FILE *fd)
 {
   int ret = OB_SUCCESS;
-  ObTxData *tx_data = nullptr;
+  ObTxData tx_data;
+  tx_data.reset();
 
   if (OB_FAIL(get_tx_data_in_sstable_(tx_id, tx_data))) {
     STORAGE_LOG(WARN, "get tx data from sstable failed.", KR(ret), K(tx_id));
-  } else if (OB_ISNULL(tx_data)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "unexpected nullptr of tx data", KR(ret), K(tx_id));
   } else {
     fprintf(fd, "********** Tx Data SSTable ***********\n\n");
-    tx_data->dump_2_text(fd);
+    tx_data.dump_2_text(fd);
     fprintf(fd, "\n********** Tx Data SSTable ***********\n");
   }
-
-  // free tx data after using it
-  if (OB_NOT_NULL(tx_data)) {
-    free_tx_data(tx_data);
-  }
-
   return ret;
 }
 
