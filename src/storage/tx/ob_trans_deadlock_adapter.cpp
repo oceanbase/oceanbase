@@ -461,7 +461,7 @@ int ObTransDeadlockDetectorAdapter::get_trans_start_time_and_scheduler_from_sess
     DETECT_LOG(ERROR, "get session failed", PRINT_WRAPPER);
   } else if (OB_ISNULL(guard->get_tx_desc())) {
     ret = OB_BAD_NULL_ERROR;
-    DETECT_LOG(ERROR, "desc on session is NULL", PRINT_WRAPPER);
+    DETECT_LOG(WARN, "desc on session is NULL", PRINT_WRAPPER);
   } else if (guard->get_tx_desc()->get_addr() != GCTX.self_addr()) {
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(ERROR, "this not happened on scheduler", PRINT_WRAPPER, K(guard->get_tx_desc()->get_addr()));

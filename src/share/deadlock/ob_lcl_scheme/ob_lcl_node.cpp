@@ -872,7 +872,7 @@ bool ObLCLNode::if_phase_match_(const int64_t ts,
   return ret;
 }
 
-ObLCLNode::PushStateTask::PushStateTask(ObLCLNode &node) :lcl_node_(node) {}
+ObLCLNode::PushStateTask::PushStateTask(ObLCLNode &node) : expected_executed_ts(0), lcl_node_(node) {}
 
 void ObLCLNode::PushStateTask::runTimerTask()
 {
