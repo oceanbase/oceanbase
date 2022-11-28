@@ -2385,7 +2385,7 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
     param.column_cnt_ = table_schema.get_column_count() + multi_version_col_cnt;
     param.data_checksum_ = 0;
     param.occupy_size_ = 0;
-    param.ddl_log_ts_ = 0;
+    param.ddl_scn_.set_min();
     param.filled_tx_scn_.set_min();
     param.original_size_ = 0;
     param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
@@ -2443,7 +2443,7 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
     param.column_cnt_ = table_schema.get_column_count() + multi_version_col_cnt;
     param.data_checksum_ = 0;
     param.occupy_size_ = 0;
-    param.ddl_log_ts_ = 0;
+    param.ddl_scn_.set_min();
     param.filled_tx_scn_.set_min();
     param.original_size_ = 0;
     param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;

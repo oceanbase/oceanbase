@@ -353,7 +353,7 @@ int ObDDLTableMergeTask::process()
         LOG_WARN("release ddl kv failed", K(ret));
       }
     }
- 
+
     if (OB_SUCC(ret) && merge_param_.is_commit_) {
       if (skip_major_process) {
       } else if (OB_ISNULL(sstable)) {
@@ -578,7 +578,6 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
         param.index_type_ = storage_schema.get_index_type();
         param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
         param.schema_version_ = storage_schema.get_schema_version();
-        param.ddl_log_ts_ = ddl_param.start_log_ts_;
         param.create_snapshot_version_ = ddl_param.snapshot_version_;
         ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
             param.root_block_addr_, param.root_block_data_);
@@ -604,7 +603,9 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
         param.other_block_ids_ = res.other_block_ids_;
         MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 
-        if (OB_FAIL(res.fill_column_checksum(&storage_schema, param.column_checksums_))) {
+        if (OB_FAIL(param.ddl_scn_.convert_for_lsn_allocator(ddl_param.start_log_ts_))) {
+          LOG_WARN("fail to convert scn", K(ret), K(ddl_param.start_log_ts_));
+        } else if (OB_FAIL(res.fill_column_checksum(&storage_schema, param.column_checksums_))) {
           LOG_WARN("fail to fill column checksum for empty major", K(ret), K(param));
         } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, table_handle))) {
           LOG_WARN("create sstable failed", K(ret), K(param));

@@ -931,8 +931,8 @@ int ObTabletTableStore::build_ddl_sstables(
         // already pushed, do nothing
       } else {
         ObITable *last_ddl_sstable = ddl_sstables.at(ddl_sstables.count() - 1);
-        const int64_t old_ddl_start_scn = static_cast<ObSSTable *>(last_ddl_sstable)->get_meta().get_basic_meta().get_ddl_log_ts();
-        const int64_t new_ddl_start_scn = static_cast<ObSSTable *>(new_table)->get_meta().get_basic_meta().get_ddl_log_ts();
+        const palf::SCN old_ddl_start_scn = static_cast<ObSSTable *>(last_ddl_sstable)->get_meta().get_basic_meta().get_ddl_scn();
+        const palf::SCN new_ddl_start_scn = static_cast<ObSSTable *>(new_table)->get_meta().get_basic_meta().get_ddl_scn();
         if (new_ddl_start_scn > old_ddl_start_scn) {
           // ddl start log ts changed means task retry, clean up old ddl sstable
           ddl_sstables.reset();

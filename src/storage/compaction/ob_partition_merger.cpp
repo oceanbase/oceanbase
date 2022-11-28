@@ -140,7 +140,7 @@ int ObPartitionMerger::open_macro_writer(ObMergeParameter &merge_param)
   } else if (OB_FAIL(macro_start_seq.set_parallel_degree(task_idx_))) {
     STORAGE_LOG(WARN, "Failed to set parallel degree to macro start seq", K(ret), K_(task_idx));
   } else {
-    data_store_desc_.end_log_ts_ = merge_ctx_->scn_range_.end_scn_.get_val_for_inner_table_field();
+    data_store_desc_.end_scn_ = merge_ctx_->scn_range_.end_scn_;
     if (OB_FAIL(macro_writer_.open(data_store_desc_, macro_start_seq))) {
       STORAGE_LOG(WARN, "Failed to open macro block writer", K(ret));
     }

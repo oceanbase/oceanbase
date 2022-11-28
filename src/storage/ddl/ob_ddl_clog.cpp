@@ -91,7 +91,7 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
       redo_info_.block_type_ = redo_info.block_type_;
       redo_info_.logic_id_ = redo_info.logic_id_;
       redo_info_.table_key_ = redo_info.table_key_;
-      redo_info_.start_log_ts_ = redo_info.start_log_ts_;
+      redo_info_.start_scn_ = redo_info.start_scn_;
       ls_id_ = ls_id;
       macro_block_id_ = macro_block_id;
     }
@@ -136,7 +136,7 @@ int ObDDLMacroBlockClogCb::on_success()
       macro_block.log_ts_ = __get_scn().get_val_for_inner_table_field();
       macro_block.buf_ = redo_info_.data_buffer_.ptr();
       macro_block.size_ = redo_info_.data_buffer_.length();
-      macro_block.ddl_start_log_ts_ = redo_info_.start_log_ts_;
+      macro_block.ddl_start_log_ts_ = redo_info_.start_scn_.get_val_for_lsn_allocator();
       if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle.get_obj(), macro_block))) {
         LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle), K(macro_block));
       }

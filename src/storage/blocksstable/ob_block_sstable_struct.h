@@ -30,6 +30,7 @@
 #include "storage/ob_i_store.h"
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -1143,13 +1144,13 @@ public:
   ObDDLMacroBlockRedoInfo();
   ~ObDDLMacroBlockRedoInfo() = default;
   bool is_valid() const;
-  TO_STRING_KV(K_(table_key),  K_(data_buffer), K_(block_type), K_(logic_id), K_(start_log_ts));
+  TO_STRING_KV(K_(table_key),  K_(data_buffer), K_(block_type), K_(logic_id), K_(start_scn));
 public:
   storage::ObITable::TableKey table_key_;
   ObString data_buffer_;
   ObDDLMacroBlockType block_type_;
   ObLogicMacroBlockId logic_id_;
-  int64_t start_log_ts_;
+  palf::SCN start_scn_;
 };
 
 }//end namespace blocksstable

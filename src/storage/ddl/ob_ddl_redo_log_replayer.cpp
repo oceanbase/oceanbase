@@ -105,7 +105,7 @@ int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const int64_t log
   } else if (OB_UNLIKELY(!log.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(log));
-  } else if (OB_FAIL(check_need_replay_ddl_log(table_key, redo_info.start_log_ts_, log_ts, need_replay, tablet_handle))) {
+  } else if (OB_FAIL(check_need_replay_ddl_log(table_key, redo_info.start_scn_.get_val_for_lsn_allocator(), log_ts, need_replay, tablet_handle))) {
     if (OB_EAGAIN != ret) {
       LOG_WARN("fail to check need replay ddl log", K(ret), K(table_key), K(log_ts));
     }
@@ -141,7 +141,7 @@ int ObDDLRedoLogReplayer::replay_redo(const ObDDLRedoLog &log, const int64_t log
       macro_block.log_ts_ = log_ts;
       macro_block.buf_ = redo_info.data_buffer_.ptr();
       macro_block.size_ = redo_info.data_buffer_.length();
-      macro_block.ddl_start_log_ts_ = redo_info.start_log_ts_;
+      macro_block.ddl_start_log_ts_ = redo_info.start_scn_.get_val_for_lsn_allocator();
       if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle.get_obj(), macro_block))) {
         LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle), K(macro_block));
       }

@@ -201,10 +201,11 @@ int ObDataStoreDesc::init(
     schema_rowkey_col_cnt_ = merge_schema.get_rowkey_column_num();
     schema_version_ = merge_schema.get_schema_version();
     snapshot_version_ = snapshot_version;
-    end_log_ts_ = snapshot_version; // will update in ObPartitionMerger::open_macro_writer
     sstable_index_builder_ = nullptr;
 
-    if (OB_FAIL(merge_schema.get_store_column_count(row_column_count_, true))) {
+    if (OB_FAIL(end_scn_.convert_for_tx(snapshot_version))) { // will update in ObPartitionMerger::open_macro_writer
+      STORAGE_LOG(WARN, "fail to convert scn", K(ret), K(snapshot_version));
+    } else if (OB_FAIL(merge_schema.get_store_column_count(row_column_count_, true))) {
       STORAGE_LOG(WARN, "failed to get store column count", K(ret), K_(tablet_id));
     } else {
       rowkey_column_count_ =
@@ -304,7 +305,7 @@ void ObDataStoreDesc::reset()
   merge_type_ = INVALID_MERGE_TYPE;
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   snapshot_version_ = 0;
-  end_log_ts_ = 0;
+  end_scn_.set_min();
   encrypt_id_ = 0;
   need_prebuild_bloomfilter_ = false;
   bloomfilter_rowkey_prefix_ = 0;
@@ -338,7 +339,7 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc &desc)
   merge_type_ = desc.merge_type_;
   compressor_type_ = desc.compressor_type_;
   snapshot_version_ = desc.snapshot_version_;
-  end_log_ts_ = desc.end_log_ts_;
+  end_scn_ = desc.end_scn_;
   encrypt_id_ = desc.encrypt_id_;
   need_prebuild_bloomfilter_ = desc.need_prebuild_bloomfilter_;
   bloomfilter_rowkey_prefix_ = desc.bloomfilter_rowkey_prefix_;

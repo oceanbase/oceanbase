@@ -1856,8 +1856,8 @@ int ObLSTabletService::build_create_sstable_param_for_migration(
     param.occupy_size_                   = mig_param.basic_meta_.occupy_size_;
     param.original_size_                 = mig_param.basic_meta_.original_size_;
     param.max_merged_trans_version_      = mig_param.basic_meta_.max_merged_trans_version_;
-    param.ddl_log_ts_                    = mig_param.basic_meta_.ddl_log_ts_;
-    param.filled_tx_scn_              = mig_param.basic_meta_.filled_tx_scn_;
+    param.ddl_scn_                       = mig_param.basic_meta_.ddl_scn_;
+    param.filled_tx_scn_                 = mig_param.basic_meta_.filled_tx_scn_;
     param.contain_uncommitted_row_       = mig_param.basic_meta_.contain_uncommitted_row_;
     param.compressor_type_               = mig_param.basic_meta_.compressor_type_;
     param.encrypt_id_                    = mig_param.basic_meta_.encrypt_id_;

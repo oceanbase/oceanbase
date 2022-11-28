@@ -17,6 +17,7 @@
 #include "storage/ob_storage_schema.h"
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_sstable_meta_info.h"
+#include "logservice/palf/scn.h"
 
 namespace oceanbase
 {
@@ -56,7 +57,7 @@ public:
   }
   OB_INLINE int64_t get_upper_trans_version() const { return ATOMIC_LOAD(&upper_trans_version_); }
   OB_INLINE int64_t get_max_merged_trans_version() const { return max_merged_trans_version_; }
-  OB_INLINE int64_t get_ddl_log_ts() const { return ddl_log_ts_; }
+  OB_INLINE palf::SCN get_ddl_scn() const { return ddl_scn_; }
   OB_INLINE int64_t get_create_snapshot_version() const { return create_snapshot_version_; }
   OB_INLINE palf::SCN get_filled_tx_scn() const { return filled_tx_scn_; }
   OB_INLINE int16_t get_data_index_tree_height() const { return data_index_tree_height_; }
@@ -74,7 +75,7 @@ public:
       K(create_snapshot_version_), K(progressive_merge_round_),
       K(progressive_merge_step_), K(data_index_tree_height_), K(table_mode_),
       K(upper_trans_version_), K(max_merged_trans_version_), K_(recycle_version),
-      K(ddl_log_ts_), K(filled_tx_scn_),
+      K(ddl_scn_), K(filled_tx_scn_),
       K(contain_uncommitted_row_), K(status_), K_(row_store_type), K_(compressor_type),
       K_(encrypt_id), K_(master_key_id), KPHEX_(encrypt_key, sizeof(encrypt_key_)));
 
@@ -102,7 +103,7 @@ public:
   int64_t max_merged_trans_version_;
   // recycle_version only avaliable for minor sstable, recored recycled multi version start
   int64_t recycle_version_;
-  int64_t ddl_log_ts_; // only used in DDL SSTable, all MB in DDL SSTable should have the same log_ts(start_log_ts)
+  palf::SCN ddl_scn_; // only used in DDL SSTable, all MB in DDL SSTable should have the same scn(start_scn)
   palf::SCN filled_tx_scn_; // only for rebuild
   int16_t data_index_tree_height_;
   share::schema::ObTableMode table_mode_;

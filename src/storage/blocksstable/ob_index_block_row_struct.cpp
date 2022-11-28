@@ -308,7 +308,7 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
     if (header_->is_data_index() && !header_->is_major_node()) {
       ObIndexBlockRowMinorMetaInfo *minor_meta
           = reinterpret_cast<ObIndexBlockRowMinorMetaInfo *>(data_buf_ + write_pos_);
-      minor_meta->snapshot_version_ = desc.data_store_desc_->end_log_ts_;
+      minor_meta->snapshot_version_ = desc.data_store_desc_->end_scn_.get_val_for_tx();
       header_->contain_uncommitted_row_ = desc.contain_uncommitted_row_;
       minor_meta->max_merged_trans_version_ = desc.max_merged_trans_version_;
       minor_meta->row_count_delta_ = desc.row_count_delta_;

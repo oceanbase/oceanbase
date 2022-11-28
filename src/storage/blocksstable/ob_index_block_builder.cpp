@@ -1206,6 +1206,8 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid null data store desc", K(ret));
   } else if (FALSE_IT(data_desc = const_cast<ObDataStoreDesc *>(row_desc.data_store_desc_))) {
+  } else if (OB_FAIL(data_desc->end_scn_.convert_for_tx(macro_meta.val_.snapshot_version_))) {
+    STORAGE_LOG(WARN, "fail to convert scn", K(ret), K(macro_meta.val_.snapshot_version_));
   } else {
     data_desc->row_store_type_ = macro_meta.val_.row_store_type_;
     data_desc->compressor_type_ = macro_meta.val_.compressor_type_;
@@ -1213,9 +1215,7 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
     data_desc->encrypt_id_ = macro_meta.val_.encrypt_id_;
     MEMCPY(data_desc->encrypt_key_, macro_meta.val_.encrypt_key_, sizeof(data_desc->encrypt_key_));
     data_desc->schema_version_ = macro_meta.val_.schema_version_;
-    // if major merge, set snapshot_version_; otherwise, end_log_ts_
     data_desc->snapshot_version_ = macro_meta.val_.snapshot_version_;
-    data_desc->end_log_ts_ = macro_meta.val_.snapshot_version_;
 
     row_desc.is_secondary_meta_ = false;
     row_desc.is_macro_node_ = true;

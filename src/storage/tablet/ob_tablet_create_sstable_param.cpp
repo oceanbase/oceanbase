@@ -50,7 +50,7 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     occupy_size_(0),
     original_size_(0),
     max_merged_trans_version_(0),
-    ddl_log_ts_(0),
+    ddl_scn_(palf::SCN::min_scn()),
     filled_tx_scn_(palf::SCN::min_scn()),
     contain_uncommitted_row_(false),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
@@ -84,7 +84,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && rowkey_column_cnt_ >= 0
                && column_cnt_ >= 0
                && occupy_size_ >= 0
-               && ddl_log_ts_ > OB_INVALID_TIMESTAMP
+               && ddl_scn_.is_valid()
                && filled_tx_scn_.is_valid()
                && original_size_ >= 0)) {
     ret = false;
@@ -92,7 +92,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
              K(root_row_store_type_), K(data_index_tree_height_), K(index_blocks_cnt_),
              K(data_blocks_cnt_), K(micro_block_cnt_), K(use_old_macro_block_count_),
              K(row_count_), K(rowkey_column_cnt_), K(column_cnt_), K(occupy_size_),
-             K(original_size_), K(ddl_log_ts_), K(filled_tx_scn_));
+             K(original_size_), K(ddl_scn_), K(filled_tx_scn_));
   } else if (ObITable::is_ddl_sstable(table_key_.table_type_)) {
     // ddl sstable can have invalid meta addr, so skip following ifs
   } else if (!is_block_meta_valid(root_block_addr_, root_block_data_)) {
