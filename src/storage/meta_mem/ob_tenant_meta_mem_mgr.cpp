@@ -365,10 +365,10 @@ void ObTenantMetaMemMgr::gc_sstable(ObSSTable *sstable)
   }
 }
 
-int ObTenantMetaMemMgr::get_min_end_log_ts_for_ls(const share::ObLSID &ls_id, int64_t &end_log_ts)
+int ObTenantMetaMemMgr::get_min_end_scn_for_ls(const share::ObLSID &ls_id, palf::SCN &end_scn)
 {
   int ret = OB_SUCCESS;
-  end_log_ts = INT64_MAX;
+  end_scn = ObScnRange::MAX_SCN;
   if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(ls_id));
@@ -382,8 +382,8 @@ int ObTenantMetaMemMgr::get_min_end_log_ts_for_ls(const share::ObLSID &ls_id, in
       } else if (OB_UNLIKELY(!info.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, info is invalid", K(ret), K(info));
-      } else if (info.sstable_handle_.get_table()->get_end_log_ts() < end_log_ts) {
-        end_log_ts = info.sstable_handle_.get_table()->get_end_log_ts();
+      } else if (info.sstable_handle_.get_table()->get_end_scn() < end_scn) {
+        end_scn = info.sstable_handle_.get_table()->get_end_scn();
       }
       ++iter;
     }

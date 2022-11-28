@@ -146,7 +146,7 @@ void ObTabletGCService::ObTabletGCTask::runTimerTask()
             STORAGE_LOG(WARN, "freezer should not null", K(ls->get_ls_id()), KR(ret));
           }
           // 1. get minor merge point
-          else if (OB_FAIL(freezer->decide_max_decided_log_scn(checkpoint_scn))) {
+          else if (OB_FAIL(freezer->decide_max_decided_scn(checkpoint_scn))) {
             need_retry = true;
             STORAGE_LOG(WARN, "get_max_consequent_callbacked_log_ts failed", KR(ret), K(freezer->get_ls_id()));
           } else if (!checkpoint_scn.is_valid()

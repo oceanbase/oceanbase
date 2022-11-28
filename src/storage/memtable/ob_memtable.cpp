@@ -1794,7 +1794,7 @@ int ObMemtable::resolve_max_end_log_ts_()
   if (OB_ISNULL(freezer_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "freezer should not be null", K(ret));
-  } else if (FALSE_IT(max_decided_log_ts = freezer_->get_max_decided_log_scn().get_val_for_lsn_allocator())) {
+  } else if (FALSE_IT(max_decided_log_ts = freezer_->get_max_decided_scn().get_val_for_lsn_allocator())) {
     TRANS_LOG(ERROR, "fail to get freeze_snapshot_version", K(ret));
   } else if (OB_INVALID_TIMESTAMP == max_decided_log_ts) {
     // Pass if not necessary

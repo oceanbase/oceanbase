@@ -245,7 +245,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                                   const ObReplicaType replica_type,
                                   const ObMigrationStatus &migration_status,
                                   const ObLSRestoreStatus &restore_status,
-                                  const int64_t create_scn,
+                                  const palf::SCN &create_scn,
                                   ObLS *&ls)
 {
   int ret = OB_SUCCESS;
@@ -421,7 +421,7 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
                                       (is_ls_to_restore_(arg) ?
                                        ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_START) :
                                        ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE)),
-                                      create_scn.get_val_for_lsn_allocator(),
+                                      create_scn,
                                       ls))) {
     LOG_WARN("inner create log stream failed.", K(ret), K(arg), K(migration_status));
   } else {
@@ -779,7 +779,7 @@ int ObLSService::replay_create_ls_(const ObLSMeta &ls_meta)
                                       ls_meta.replica_type_,
                                       migration_status,
                                       restore_status,
-                                      ls_meta.get_clog_checkpoint_ts(),
+                                      ls_meta.get_clog_checkpoint_scn(),
                                       ls))) {
     LOG_WARN("fail to inner create ls", K(ret), K(ls_meta.ls_id_));
   } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_INNER_CREATED)) {
@@ -998,7 +998,7 @@ int ObLSService::create_ls_for_ha(
                                       arg.dst_.get_replica_type(),
                                       migration_status,
                                       restore_status,
-                                      0, /* create scn */
+                                      ObScnRange::MIN_SCN, /* create scn */
                                       ls))) {
     LOG_WARN("create ls failed", K(ret), K(arg), K(task_id));
   } else {

@@ -187,7 +187,7 @@ public:
       ObTabletHandle &handle,
       const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
   int remove_tablets(const common::ObIArray<common::ObTabletID> &tablet_id_array);
-  int get_ls_min_end_log_ts_in_old_tablets(int64_t &end_log_ts);
+  int get_ls_min_end_scn_in_old_tablets(palf::SCN &end_scn);
   int get_tx_data_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
   int get_tx_ctx_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
   int get_lock_memtable_mgr(ObMemtableMgrHandle &mgr_handle);
