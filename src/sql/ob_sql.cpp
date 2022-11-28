@@ -1891,7 +1891,7 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
         ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
         LOG_WARN("batched multi_stmt needs rollback");
       }
-      // 如果是begin/commit语句，不再从plan cahce中获取plan
+      // 如果是begin/commit语句，不再从plan cache中获取plan
     } else if (!is_begin_commit_stmt
         && OB_FAIL(pc_get_plan_and_fill_result(*pc_ctx, result, get_plan_err,
                                                ectx.get_need_disconnect_for_update()))) {

@@ -97,25 +97,25 @@ void ObLibCacheRegister::register_lc_obj()
 memset(NS_TYPE_LABELS, 0, sizeof(NS_TYPE_LABELS));
 memset(CO_ALLOC, 0, sizeof(CO_ALLOC));
 memset(NAME_TYPES, 0, sizeof(NAME_TYPES));
-#define LIB_CAHCE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_OBJ(ns, ns_name, co_class, label);
+#define LIB_CACHE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_OBJ(ns, ns_name, co_class, label);
 #include "sql/plan_cache/ob_lib_cache_register.h"
-#undef LIB_CAHCE_OBJ_DEF
+#undef LIB_CACHE_OBJ_DEF
 }
 
 void ObLibCacheRegister::register_lc_key()
 {
 memset(CK_ALLOC, 0, sizeof(CK_ALLOC));
-#define LIB_CAHCE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_KEY(ns, ck_class);
+#define LIB_CACHE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_KEY(ns, ck_class);
 #include "sql/plan_cache/ob_lib_cache_register.h"
-#undef LIB_CAHCE_OBJ_DEF
+#undef LIB_CACHE_OBJ_DEF
 }
 
 void ObLibCacheRegister::register_lc_node()
 {
 memset(CN_ALLOC, 0, sizeof(CN_ALLOC));
-#define LIB_CAHCE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_NODE(ns, cn_class);
+#define LIB_CACHE_OBJ_DEF(ns, ns_name, ck_class, cn_class, co_class, label) REG_LIB_CACHE_NODE(ns, cn_class);
 #include "sql/plan_cache/ob_lib_cache_register.h"
-#undef LIB_CAHCE_OBJ_DEF
+#undef LIB_CACHE_OBJ_DEF
 }
 
 } // namespace common
