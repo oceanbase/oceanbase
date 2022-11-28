@@ -372,16 +372,17 @@ int ObMySQLConnection::switch_tenant(const uint64_t tenant_id)
 }
 
 int ObMySQLConnection::execute_write(const uint64_t tenant_id, const ObString &sql,
-                                     int64_t &affected_rows, bool is_user_sql)
+    int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
-  UNUSEDx(tenant_id, sql, affected_rows, is_user_sql);
+  UNUSEDx(tenant_id, sql, affected_rows, is_user_sql, sql_exec_addr);
   return OB_NOT_SUPPORTED;
 }
 
 int ObMySQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
-    int64_t &affected_rows, bool is_user_sql)
+    int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
   UNUSED(is_user_sql);
+  UNUSED(sql_exec_addr);
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(closed_)) {
     ret = OB_NOT_INIT;
@@ -398,17 +399,18 @@ int ObMySQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
 }
 
 int ObMySQLConnection::execute_read(const int64_t cluster_id, const uint64_t tenant_id,
-    const ObString &sql, ObISQLClient::ReadResult &res, bool is_user_sql, bool is_from_pl)
+    const ObString &sql, ObISQLClient::ReadResult &res, bool is_user_sql, bool is_from_pl, const common::ObAddr *sql_exec_addr)
 {
-  UNUSEDx(cluster_id, tenant_id, sql, res, is_user_sql, is_from_pl);
+  UNUSEDx(cluster_id, tenant_id, sql, res, is_user_sql, is_from_pl, sql_exec_addr);
   return OB_NOT_SUPPORTED;
 }
 
 int ObMySQLConnection::execute_read(const uint64_t tenant_id, const char *sql,
-    ObISQLClient::ReadResult &res, bool is_user_sql, bool is_from_pl)
+    ObISQLClient::ReadResult &res, bool is_user_sql, bool is_from_pl, const common::ObAddr *sql_exec_addr)
 {
   UNUSED(is_user_sql);
   UNUSED(is_from_pl);
+  UNUSED(sql_exec_addr);
   int ret = OB_SUCCESS;
   ObMySQLReadContext *read_ctx = NULL;
   if (OB_UNLIKELY(closed_)) {

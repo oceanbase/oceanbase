@@ -127,6 +127,10 @@ public:
       const uint64_t autoinc_val,
       const int ret_code);
 
+  int on_update_execution_id(
+      const int64_t task_id,
+      int64_t &ret_execution_id);
+
 private:
   class DDLIdling : public ObThreadIdling
   {

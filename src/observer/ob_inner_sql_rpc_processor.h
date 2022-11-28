@@ -18,6 +18,7 @@
 #include "observer/ob_inner_sql_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
+#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase
 {
@@ -39,6 +40,15 @@ public:
 public:
   virtual int process();
 private:
+  int create_tmp_session(
+      uint64_t tenant_id,
+      sql::ObSQLSessionInfo *&tmp_session,
+      sql::ObFreeSessionCtx &free_session_ctx,
+      const bool is_oracle_mode);
+  void cleanup_tmp_session(
+      sql::ObSQLSessionInfo *tmp_session,
+      sql::ObFreeSessionCtx &free_session_ctx);
+
   int process_start_transaction(
       sqlclient::ObISQLConnection *conn,
       const ObSqlString &start_trans_sql,

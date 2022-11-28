@@ -66,6 +66,22 @@ int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const c
   return ret;
 }
 
+int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const char *sql, const common::ObAddr *exec_sql_addr)
+{
+  int ret = OB_SUCCESS;
+  ObISQLConnection *conn = NULL;
+  if (OB_ISNULL(exec_sql_addr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("read with typically exec addr failed", K(ret), K(exec_sql_addr));
+  } else if (OB_FAIL(acquire(tenant_id, conn))) {
+    LOG_WARN("acquire connection failed", K(ret), K(conn));
+  } else if (OB_FAIL(read(conn, result, tenant_id, sql, exec_sql_addr))) {
+    LOG_WARN("read failed", K(ret));
+  }
+  close(conn, ret);
+  return ret;
+}
+
 int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const char *sql, const ObSessionParam *session_param)
 {
   int ret = OB_SUCCESS;
@@ -74,6 +90,7 @@ int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const c
     LOG_WARN("acquire connection failed", K(ret), K(conn));
   } else if (nullptr != session_param) {
     conn->set_ddl_info(&session_param->ddl_info_);
+    conn->set_use_external_session(session_param->use_external_session_);
     if (nullptr != session_param->sql_mode_) {
       if (OB_FAIL(conn->set_session_variable("sql_mode", *session_param->sql_mode_))) {
         LOG_WARN("set inner connection sql mode failed", K(ret));
@@ -92,7 +109,7 @@ int ObCommonSqlProxy::read(ReadResult &result, const uint64_t tenant_id, const c
 }
 
 int ObCommonSqlProxy::read(ObISQLConnection *conn, ReadResult &result,
-                           const uint64_t tenant_id, const char *sql)
+                           const uint64_t tenant_id, const char *sql, const common::ObAddr *exec_sql_addr)
 {
   int ret = OB_SUCCESS;
   const int64_t start = ::oceanbase::common::ObTimeUtility::current_time();
@@ -104,7 +121,7 @@ int ObCommonSqlProxy::read(ObISQLConnection *conn, ReadResult &result,
     ret = OB_INACTIVE_SQL_CLIENT;
     LOG_WARN("in active sql client", K(ret), KCSTRING(sql));
   } else {
-    if (OB_FAIL(conn->execute_read(tenant_id, sql, result))) {
+    if (OB_FAIL(conn->execute_read(tenant_id, sql, result, exec_sql_addr))) {
       LOG_WARN("query failed", K(ret), K(conn), K(start), KCSTRING(sql));
     }
   }
@@ -139,7 +156,9 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const char *sql, int64_t &
 }
 
 int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
-                        int64_t &affected_rows, int64_t compatibility_mode, const ObSessionParam *param /* = nullptr*/)
+                        int64_t &affected_rows, int64_t compatibility_mode,
+                        const ObSessionParam *param /* = nullptr*/,
+                        const common::ObAddr *sql_exec_addr)
 {
   int ret = OB_SUCCESS;
   bool is_user_sql = false;
@@ -177,6 +196,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
   }
   if (OB_SUCC(ret) && nullptr != param) {
     conn->set_is_load_data_exec(param->is_load_data_exec_);
+    conn->set_use_external_session(param->use_external_session_);
     if (param->is_load_data_exec_) {
       is_user_sql = true;
     }
@@ -202,8 +222,8 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(conn->execute_write(tenant_id, sql, affected_rows, is_user_sql))) {
-      LOG_WARN("execute sql failed", K(ret), K(conn), K(start), K(sql));
+    if (OB_FAIL(conn->execute_write(tenant_id, sql, affected_rows, is_user_sql, sql_exec_addr))) {
+      LOG_WARN("execute sql failed", K(ret), K(tenant_id), K(conn), K(start), K(sql));
     } else if (old_compatibility_mode != compatibility_mode
                && OB_FAIL(conn->set_session_variable("ob_compatibility_mode", old_compatibility_mode))) {
       LOG_WARN("fail to recover inner connection sql mode", K(ret));

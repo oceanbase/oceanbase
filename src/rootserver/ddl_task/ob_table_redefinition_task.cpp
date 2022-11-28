@@ -56,6 +56,10 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
   } else if (OB_FAIL(set_ddl_stmt_str(alter_table_arg_.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
   } else {
+    if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id, alter_table_arg_.inner_sql_exec_addr_))) {
+      ret = OB_SUCCESS; // ignore ret
+    }
+    set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
     task_type_ = ddl_type;
     object_id_ = data_table_id;
     target_object_id_ = dest_table_id;
@@ -90,6 +94,7 @@ int ObTableRedefinitionTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_FAIL(set_ddl_stmt_str(task_record.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
   } else {
+    set_sql_exec_addr(alter_table_arg_.inner_sql_exec_addr_); // set to switch_status, if task cancel, we should kill session with inner_sql_exec_addr_
     task_id_ = task_record.task_id_;
     task_type_ = task_record.ddl_type_;
     object_id_ = data_table_id;
@@ -129,7 +134,8 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
     LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(execution_id_));
   } else {
     complete_sstable_job_ret_code_ = ret_code;
-    LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_));
+    execution_id_ = execution_id; // update ObTableRedefinitionTask::execution_id_ from ObDDLRedefinitionSSTableBuildTask::execution_id_
+    LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_), K(execution_id_));
   }
   return ret;
 }
@@ -161,12 +167,13 @@ int ObTableRedefinitionTask::send_build_replica_request()
         target_object_id_,
         schema_version_,
         snapshot_version_,
-        execution_id_,
+        execution_id_,  // will init in ObDDLRedefinitionSSTableBuildTask::process
         sql_mode,
         trace_id_,
         parallelism_,
         use_heap_table_ddl_plan,
-        GCTX.root_service_);
+        GCTX.root_service_,
+        alter_table_arg_.inner_sql_exec_addr_);
     if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, orig_table_schema))) {
@@ -254,9 +261,7 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
   }
 
   if (OB_SUCC(ret) && !is_build_replica_end && 0 == build_replica_request_time_) {
-    if (OB_FAIL(push_execution_id())) {
-      LOG_WARN("failed to push execution id", K(ret));
-    } else if (OB_FAIL(send_build_replica_request())) {
+    if (OB_FAIL(send_build_replica_request())) {
       LOG_WARN("fail to send build replica request", K(ret));
     } else {
       build_replica_request_time_ = ObTimeUtility::current_time();

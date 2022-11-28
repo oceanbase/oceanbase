@@ -1629,7 +1629,8 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
       skip_sys_table_check_,
       need_rebuild_trigger_,
       foreign_key_checks_,
-      is_add_to_scheduler_);
+      is_add_to_scheduler_,
+      inner_sql_exec_addr_);
 
   return ret;
 }
@@ -1717,7 +1718,8 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
       skip_sys_table_check_,
       need_rebuild_trigger_,
       foreign_key_checks_,
-      is_add_to_scheduler_);
+      is_add_to_scheduler_,
+      inner_sql_exec_addr_);
   return ret;
 }
 
@@ -1758,7 +1760,8 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
         skip_sys_table_check_,
         need_rebuild_trigger_,
         foreign_key_checks_,
-        is_add_to_scheduler_);
+        is_add_to_scheduler_,
+        inner_sql_exec_addr_);
   }
 
   if (OB_FAIL(ret)) {
@@ -2120,7 +2123,8 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(nls_date_format),
        K_(nls_timestamp_format),
        K_(nls_timestamp_tz_format),
-       K_(sql_mode));
+       K_(sql_mode),
+       K_(inner_sql_exec_addr));
   J_OBJ_END();
   return pos;
 }
@@ -2142,7 +2146,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     nls_date_format_,
                     nls_timestamp_format_,
                     nls_timestamp_tz_format_,
-                    sql_mode_);
+                    sql_mode_,
+                    inner_sql_exec_addr_);
 
 bool ObAlterIndexArg::is_valid() const
 {
@@ -3120,6 +3125,20 @@ bool ObCheckModifyTimeElapsedArg::is_valid() const
   return bret;
 }
 
+int ObDDLCheckTabletMergeStatusArg::assign(const ObDDLCheckTabletMergeStatusArg &other) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tablet_ids_.assign(other.tablet_ids_))) {
+    LOG_WARN("assign tablet_ids_ failed", K(ret), K(other.tablet_ids_));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+    snapshot_version_ = other.snapshot_version_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObDDLCheckTabletMergeStatusArg, tenant_id_, ls_id_, tablet_ids_, snapshot_version_);
+
 void ObCheckModifyTimeElapsedArg::reuse()
 {
   tenant_id_ = OB_INVALID_ID;
@@ -3143,6 +3162,8 @@ OB_SERIALIZE_MEMBER(ObCheckSchemaVersionElapsedResult, results_);
 
 
 OB_SERIALIZE_MEMBER(CandidateStatus, candidate_status_);
+
+OB_SERIALIZE_MEMBER(ObDDLCheckTabletMergeStatusResult, merge_status_);
 
 //----Structs for managing privileges----
 OB_SERIALIZE_MEMBER(ObAccountArg,

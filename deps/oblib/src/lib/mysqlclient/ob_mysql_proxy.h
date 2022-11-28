@@ -67,7 +67,7 @@ struct ObSessionParam final
 {
 public:
   ObSessionParam()
-    : sql_mode_(nullptr), tz_info_wrap_(nullptr), ddl_info_(), is_load_data_exec_(false), nls_formats_{}
+    : sql_mode_(nullptr), tz_info_wrap_(nullptr), ddl_info_(), is_load_data_exec_(false), use_external_session_(false), nls_formats_{}
   {}
   ~ObSessionParam() = default;
 public:
@@ -75,6 +75,7 @@ public:
   ObTimeZoneInfoWrap *tz_info_wrap_;
   ObSessionDDLInfo ddl_info_;
   bool is_load_data_exec_;
+  bool use_external_session_; // need init remote inner sql conn with sess getting from sess mgr
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
 };
 
@@ -100,6 +101,7 @@ public:
   // execute query and return data result
   virtual int read(ReadResult &res, const uint64_t tenant_id, const char *sql) override;
   int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const ObSessionParam *session_param);
+  int read(ReadResult &res, const uint64_t tenant_id, const char *sql, const common::ObAddr *sql_exec_addr);
   //only for across cluster
   //cluster_id can not GCONF.cluster_id
   virtual int read(ReadResult &res,
@@ -110,7 +112,8 @@ public:
   // execute update sql
   virtual int write(const uint64_t tenant_id, const char *sql, int64_t &affected_rows) override;
   int write(const uint64_t tenant_id, const ObString sql, int64_t &affected_rows, int64_t compatibility_mode,
-        const ObSessionParam *session_param = nullptr);
+        const ObSessionParam *session_param = nullptr,
+        const common::ObAddr *sql_exec_addr = nullptr);
   using ObISQLClient::write;
 
   bool is_inited() const { return NULL != pool_; }
@@ -129,7 +132,7 @@ protected:
   int acquire(sqlclient::ObISQLConnection *&conn) { return this->acquire(OB_INVALID_TENANT_ID, conn); }
   int acquire(const uint64_t tenant_id, sqlclient::ObISQLConnection *&conn);
   int read(sqlclient::ObISQLConnection *conn, ReadResult &result,
-           const uint64_t tenant_id, const char *sql);
+           const uint64_t tenant_id, const char *sql, const common::ObAddr *sql_exec_addr = nullptr);
 
   sqlclient::ObISQLConnectionPool *pool_;
 

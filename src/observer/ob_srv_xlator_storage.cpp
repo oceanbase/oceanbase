@@ -107,4 +107,5 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcLSRemoveNonPaxosReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSModifyPaxosReplicaNumberP, gctx_);
     RPC_PROCESSOR(ObRpcLSCheckDRTaskExistP, gctx_);
+    RPC_PROCESSOR(ObRpcDDLCheckTabletMergeStatusP, gctx_);
 }

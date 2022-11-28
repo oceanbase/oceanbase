@@ -614,6 +614,18 @@ int ObRpcCheckCtxCreateTimestampElapsedP::process()
   return ret;
 }
 
+int ObRpcDDLCheckTabletMergeStatusP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", K(ret), KP(gctx_.ob_service_));
+  } else {
+    ret = gctx_.ob_service_->check_ddl_tablet_merge_status(arg_, result_);
+  }
+  return ret;
+}
+
 int ObRpcSwitchLeaderP::process()
 {
   int ret = OB_SUCCESS;

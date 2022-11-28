@@ -80,14 +80,18 @@ public:
   // sql execute interface
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
-      bool is_from_pl = false) = 0;
+      bool is_from_pl = false,
+      const common::ObAddr *sql_exec_addr = nullptr) = 0;
   virtual int execute_read(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
       ObISQLClient::ReadResult &res, bool is_user_sql = false,
-      bool is_from_pl = false) = 0;
+      bool is_from_pl = false,
+      const common::ObAddr *sql_exec_addr = nullptr) = 0;
   virtual int execute_write(const uint64_t tenant_id, const char *sql,
-      int64_t &affected_rows, bool is_user_sql = false) = 0;
+      int64_t &affected_rows, bool is_user_sql = false,
+      const common::ObAddr *sql_exec_addr = nullptr) = 0;
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
-      int64_t &affected_rows, bool is_user_sql = false) = 0;
+      int64_t &affected_rows, bool is_user_sql = false,
+      const common::ObAddr *sql_exec_addr = nullptr) = 0;
 
   // transaction interface
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) = 0;
@@ -116,6 +120,7 @@ public:
   virtual void set_nls_formats(const ObString *nls_formats) { UNUSED(nls_formats); }
   virtual void set_is_load_data_exec(bool v) { UNUSED(v); }
   virtual void set_force_remote_exec(bool v) { UNUSED(v); }
+  virtual void set_use_external_session(bool v) { UNUSED(v); }
   virtual int64_t get_cluster_id() const { return common::OB_INVALID_ID; }
   void set_init_remote_env(bool flag) { is_init_remote_env_ = flag;}
   bool get_init_remote_env() const { return is_init_remote_env_; }

@@ -132,16 +132,20 @@ public:
   inline void reset() { destroy(); }
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
                            common::ObISQLClient::ReadResult &res,
-                           bool is_user_sql = false, bool is_from_pl = false) override;
+                           bool is_user_sql = false, bool is_from_pl = false,
+                           const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_read(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
                            common::ObISQLClient::ReadResult &res,
-                           bool is_user_sql = false, bool is_from_pl = false) override;
+                           bool is_user_sql = false, bool is_from_pl = false,
+                           const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_write(const uint64_t tenant_id, const char *sql,
                             int64_t &affected_rows,
-                            bool is_user_sql = false) override;
+                            bool is_user_sql = false,
+                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
                             int64_t &affected_rows,
-                            bool is_user_sql = false) override;
+                            bool is_user_sql = false,
+                            const common::ObAddr *sql_exec_addr = nullptr) override;
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int register_multi_data_source(const uint64_t &tenant_id,
                                          const share::ObLSID ls_id,
@@ -174,6 +178,7 @@ public:
   virtual void set_nls_formats(const ObString *nls_formats);
   virtual void set_is_load_data_exec(bool v);
   virtual void set_force_remote_exec(bool v) { force_remote_execute_ = v; }
+  virtual void set_use_external_session(bool v) { use_external_session_ = v; }
   bool is_nested_conn();
 
   void ref();
@@ -282,6 +287,11 @@ public:
                           const sql::stmt::StmtType type,
                           bool is_from_pl = false);
 
+  static int init_session_info(sql::ObSQLSessionInfo *session,
+                               const bool is_extern_session,
+                               const bool is_oracle_mode,
+                               const bool is_ddl);
+
   int64_t get_init_timestamp() const { return init_timestamp_; }
 
 public:
@@ -354,9 +364,9 @@ private:
 
   int execute_read_inner(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
       common::ObISQLClient::ReadResult &res,
-      bool is_user_sql = false, bool is_from_pl = false);
+      bool is_user_sql = false, bool is_from_pl = false, const common::ObAddr *sql_exec_addr = nullptr);
   int execute_write_inner(const uint64_t tenant_id, const ObString &sql, int64_t &affected_rows,
-      bool is_user_sql = false);
+      bool is_user_sql = false, const common::ObAddr *sql_exec_addr = nullptr);
   int start_transaction_inner(const uint64_t &tenant_id, bool with_snap_shot = false);
   template <typename T>
   int retry_while_no_tenant_resource(const int64_t cluster_id, const uint64_t &tenant_id, T function);
@@ -393,7 +403,7 @@ private:
   bool is_in_trans_;
   bool is_resource_conn_;
   bool is_idle_; // for resource_conn_
-  common::ObAddr resource_svr_;
+  common::ObAddr resource_svr_; // server of destination in local rpc call
   uint64_t resource_conn_id_; // resource conn_id of dst srv
   int64_t last_query_timestamp_;
   /*
@@ -412,6 +422,10 @@ private:
   */
   bool force_remote_execute_;
   bool force_no_reuse_;
+
+  // ask the inner sql connection to use external session instead of internal one
+  // this enables show session / kill session using sql query command
+  bool use_external_session_;
 
   DISABLE_COPY_ASSIGN(ObInnerSQLConnection);
 };

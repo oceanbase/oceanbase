@@ -1612,7 +1612,8 @@ public:
       skip_sys_table_check_(false),
       need_rebuild_trigger_(false),
       foreign_key_checks_(true),
-      is_add_to_scheduler_(false)
+      is_add_to_scheduler_(false),
+      inner_sql_exec_addr_()
   {
   }
   virtual ~ObAlterTableArg()
@@ -1676,7 +1677,8 @@ public:
                K_(foreign_key_checks),
                K_(is_add_to_scheduler),
                K_(table_id),
-               K_(hidden_table_id));
+               K_(hidden_table_id),
+               K_(inner_sql_exec_addr));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -1707,6 +1709,7 @@ public:
   bool need_rebuild_trigger_;
   bool foreign_key_checks_;
   bool is_add_to_scheduler_;
+  common::ObAddr inner_sql_exec_addr_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
@@ -1949,7 +1952,8 @@ public:
         nls_date_format_(),
         nls_timestamp_format_(),
         nls_timestamp_tz_format_(),
-        sql_mode_(0)
+        sql_mode_(0),
+        inner_sql_exec_addr_()
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -1976,6 +1980,7 @@ public:
     nls_timestamp_format_.reset();
     nls_timestamp_tz_format_.reset();
     sql_mode_ = 0;
+    inner_sql_exec_addr_.reset();
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2006,6 +2011,7 @@ public:
       nls_timestamp_format_ = other.nls_timestamp_format_;
       nls_timestamp_tz_format_ = other.nls_timestamp_tz_format_;
       sql_mode_ = other.sql_mode_;
+      inner_sql_exec_addr_ = other.inner_sql_exec_addr_;
     }
     return ret;
   }
@@ -2036,6 +2042,7 @@ public:
   common::ObString nls_timestamp_format_;
   common::ObString nls_timestamp_tz_format_;
   ObSQLMode sql_mode_;
+  common::ObAddr inner_sql_exec_addr_;
 };
 
 typedef ObCreateIndexArg ObAlterPrimaryArg;
@@ -3640,6 +3647,33 @@ public:
   ObSEArray<ObLSTabletPair, 10> tablets_;
 };
 
+struct ObDDLCheckTabletMergeStatusArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDDLCheckTabletMergeStatusArg()
+    : tenant_id_(), ls_id_(), tablet_ids_(), snapshot_version_()
+  {}
+  ~ObDDLCheckTabletMergeStatusArg() = default;
+  bool is_valid() const {
+    return OB_INVALID_TENANT_ID != tenant_id_ &&
+      common::OB_INVALID_TIMESTAMP != snapshot_version_ &&
+      ls_id_.is_valid() &&
+      tablet_ids_.count() > 0;
+  }
+  int assign(const ObDDLCheckTabletMergeStatusArg &other);
+  void reset() {
+    ls_id_.reset();
+    tablet_ids_.reset();
+  }
+public:
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_ids), K_(snapshot_version));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObSArray<common::ObTabletID> tablet_ids_;
+  int64_t snapshot_version_;
+};
+
 struct ObCheckModifyTimeElapsedArg final
 {
   OB_UNIS_VERSION(1);
@@ -3662,6 +3696,18 @@ public:
   int ret_code_;
   int64_t snapshot_;
   transaction::ObTransID pending_tx_id_;
+};
+
+struct ObDDLCheckTabletMergeStatusResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDDLCheckTabletMergeStatusResult()
+    : merge_status_() {}
+  void reset() { merge_status_.reset(); }
+public:
+  TO_STRING_KV(K_(merge_status));
+  common::ObSArray<bool> merge_status_;
 };
 
 struct ObCheckSchemaVersionElapsedResult
