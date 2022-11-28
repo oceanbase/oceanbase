@@ -136,6 +136,10 @@ int ObMacroBlockReader::decompress_data_buf(
           uncomp_size += header_size;
         }
       }
+
+      if (OB_FAIL(ret) && OB_NOT_NULL(ext_uncomp_buf)) {
+        ext_allocator->free(ext_uncomp_buf);
+      }
     } else if (OB_FAIL(alloc_buf(uncomp_size, uncomp_buf_, uncomp_buf_size_))) {
       LOG_WARN("Fail to allocate buf", K(ret));
     } else if (OB_FAIL(compressor_->decompress(data_buf, data_buf_size,
@@ -329,6 +333,10 @@ int ObMacroBlockReader::decrypt_and_decompress_data(
         } else {
           MEMCPY(ext_uncomp_buf + pos, data_buf, data_buf_size);
           uncomp_buf = ext_uncomp_buf;
+        }
+
+        if (OB_FAIL(ret) && OB_NOT_NULL(ext_uncomp_buf)) {
+          ext_allocator->free(ext_uncomp_buf);
         }
       } else if (OB_FAIL(alloc_buf(uncomp_size, uncomp_buf_, uncomp_buf_size_))) {
         LOG_WARN("Fail to allocate buf for deepcopy", K(uncomp_size), K(ret));
