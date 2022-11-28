@@ -1021,6 +1021,8 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
       LOG_WARN("fail to init buffer", K(ret));
     } else if (OB_FAIL(parse_result.prepare_allocate(handle->generator.get_field_exprs().count()))) {
       LOG_WARN("fail to allocate", K(ret));
+    } else {
+      handle->exec_ctx.set_use_temp_expr_ctx_cache(true);
     }
 
     while (OB_SUCC(ret) && ptr < end) {
@@ -1059,7 +1061,8 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
         } else {
           for (int i = 0; i < handle->parser.get_fields_per_line().count(); ++i) {
             ObCSVGeneralParser::FieldValue &str_v = handle->parser.get_fields_per_line().at(i);
-            handle->row_in_file.get_cell(i).set_varchar_value(str_v.ptr_, str_v.len_);
+            handle->row_in_file.get_cell(i) =
+              static_cast<ObConstRawExpr *>(handle->generator.get_field_exprs().at(i))->get_value();
           }
           if (OB_FAIL(handle->calc_tablet_id_expr->eval(handle->exec_ctx, handle->row_in_file, result))) {
             LOG_WARN("fail to calc tablet id", K(ret));
@@ -1207,13 +1210,7 @@ int ObLoadDataSPImpl::exec_insert(ObInsertTask &task, ObInsertResult& result)
         if (c != 0) {
           OZ (sql_str.append(",", 1));
         }
-        if (ObLoadDataUtils::is_null_field(single_row_values[c])) {
-          OZ (sql_str.append(ObString(ObLoadDataUtils::NULL_STRING)));
-        } else if (ObLoadDataUtils::is_zero_field(single_row_values[c])) {
-          OZ (sql_str.append("0"));
-        } else {
-          OZ (sql_str.append(single_row_values[c]));
-        }
+        OZ (sql_str.append(single_row_values[c]));
       }
       OZ (sql_str.append(")", 1));
 
@@ -1233,7 +1230,7 @@ int ObLoadDataSPImpl::exec_insert(ObInsertTask &task, ObInsertResult& result)
   param.is_load_data_exec_ = true;
 
   if (OB_SUCC(ret) && OB_FAIL(GCTX.sql_proxy_->write(task.tenant_id_,
-                                                     sql_str.ptr(),
+                                                     sql_str.string(),
                                                      affected_rows,
                                                      get_compatibility_mode(),
                                                      &param))) {
@@ -2061,12 +2058,12 @@ int ObPartDataFragMgr::next_insert_task(int64_t batch_row_count, ObInsertTask &t
 
   while (OB_SUCC(ret) && row_count < batch_row_count) {
     new_top_begin_point.reset();
-    //每次处理一个头部的frag
+    //handle one frag from head
     while (OB_EAGAIN == queue_.top(link)) { pause(); }
     if (OB_ISNULL(frag = static_cast<ObDataFrag *>(link))) {
       ret = OB_ERR_UNEXPECTED;
     } else if ((row_count += frag->row_cnt) > batch_row_count) {
-      //情况1 frag还有剩余数据，不需要pop
+      //case1 frag has data remained，do not pop
       new_top_begin_point.frag_row_pos_ = frag->row_cnt - (row_count - batch_row_count);
       if (OB_FAIL(rowoffset2pos(frag,
                                 new_top_begin_point.frag_row_pos_,
@@ -2080,7 +2077,7 @@ int ObPartDataFragMgr::next_insert_task(int64_t batch_row_count, ObInsertTask &t
         LOG_WARN("fail to push back frag", K(ret));
       }
     } else {
-      //情况2 frag榨干，需要pop
+      //case2 frag is empty，need pop
       if (OB_FAIL(queue_.pop(link))) {
         ret = OB_ERR_UNEXPECTED;
       } else if (OB_FAIL(frag_free_list_.push_back(frag))) {

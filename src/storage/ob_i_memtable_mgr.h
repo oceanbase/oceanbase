@@ -129,7 +129,7 @@ public:
     UNUSED(log_handler);
     return OB_NOT_SUPPORTED;
   }
-  virtual int destroy_storage_schema_recorder()
+  virtual int reset_storage_schema_recorder()
   { // do nothing
     return OB_NOT_SUPPORTED;
   }

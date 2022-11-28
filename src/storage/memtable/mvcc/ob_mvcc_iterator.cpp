@@ -95,6 +95,7 @@ int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
   if (NULL != version_iter_) {
     if (ctx_->is_weak_read()) {
       version_iter_->set_safe_read_barrier(true);
+      version_iter_->set_snapshot_version_barrier(ctx_->snapshot_.version_);
     }
     if (!flag.is_prewarm()
         && !version_iter_->is_elr()) {
@@ -144,29 +145,40 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   //        reader_tx_id.
   const ObTransID &snapshot_tx_id = ctx_->snapshot_.tx_id_;
   const ObTransID &reader_tx_id = ctx_->tx_id_;
-  const ObTransID &data_tx_id = iter->get_tx_id();
-
-  const int64_t data_seq_no = iter->get_seq_no();
   const int64_t snapshot_seq_no = ctx_->snapshot_.scn_;
 
   const SCN snapshot_version = ctx_->get_snapshot_version();
   const int64_t read_epoch = ctx_->get_tx_table_guard().epoch();
-  const bool read_latest = flag.is_read_latest();
   ObTxTable *tx_table = ctx_->get_tx_table_guard().get_tx_table();
+  const bool read_latest = flag.is_read_latest();
+
+  const ObTransID &data_tx_id = iter->get_tx_id();
+  const int64_t data_seq_no = iter->get_seq_no();
+
+  // NB: We need pay much attention to the order of the reads to the different
+  // variables. Although we update the version before the state for the tnodes
+  // and read the state before the version. It may appear that the compiled code
+  // execution may rearrange its order and fail to obey its origin logic(You can
+  // read the Dependency Definiation of the ARM architecture book to understand
+  // it). So the synchronization primitive below is much important.
+  const bool is_committed = iter->is_committed();
+  const bool is_aborted = iter->is_aborted();
+  const bool is_elr = iter->is_elr();
+  const bool is_delayed_cleanout = iter->is_delayed_cleanout();
 
   // Opt1: data is decided
-  if ((iter->is_committed() || iter->is_aborted() || iter->is_elr())
+  if ((is_committed || is_aborted || is_elr)
       // Opt2: data is not decided while we donot need cleanout
-      || (!iter->is_delayed_cleanout()
+      || (!is_delayed_cleanout
           && (// Opt2.1: snapshot reads the data written by snapshot
             data_tx_id == snapshot_tx_id ||
             // Opt2.2: read reader's latest is matched
             (read_latest && data_tx_id == reader_tx_id)))) {
     // Case 1: Cleanout can be skipped
     //         because inner tx read only care whether tx node rollbacked
-    if (iter->is_committed() || iter->is_elr()) {
+    if (is_committed || is_elr) {
       // Case 2: Data is committed, so the state is decided
-      const SCN data_version = iter->trans_version_;
+      const SCN data_version = iter->trans_version_.atomic_load();
       if (snapshot_version >= data_version) {
         // Case 2.1 Read the version if it is smaller than read version
         version_iter_ = iter;
@@ -174,7 +186,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
         // Case 2.2: Otherwise, skip to the next version
         iter = iter->prev_;
       }
-    } else if (iter->is_aborted()) {
+    } else if (is_aborted) {
       // Case 3: Data is aborted, so the state is decided. So we skip aborted data
       //         version
       iter = iter->prev_;

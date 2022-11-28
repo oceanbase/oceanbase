@@ -61,12 +61,14 @@ struct ObTabletRestoreAction
     RESTORE_TABLET_META = 1,
     RESTORE_MINOR = 2,
     RESTORE_MAJOR = 3,
+    RESTORE_NONE = 4,
     MAX,
   };
   static const char *get_action_str(const ACTION &action);
   static bool is_valid(const ACTION &action);
   static bool is_restore_minor(const ACTION &action);
   static bool is_restore_major(const ACTION &action);
+  static bool is_restore_none(const ACTION &action);
   static bool is_restore_all(const ACTION &action);
   static bool is_restore_tablet_meta(const ACTION &action);
   static int trans_restore_action_to_restore_status(

@@ -207,6 +207,9 @@ public:
   inline ObSQLSessionInfo *get_my_session() const;
   //get the parent execute context in nested sql
   ObExecContext *get_parent_ctx() { return parent_ctx_; }
+  //get the root execute context in nested sql
+  int get_root_ctx(ObExecContext* &root_ctx);
+  bool is_root_ctx();
   int64_t get_nested_level() const { return nested_level_; }
   /**
    * @brief set sql proxy
@@ -368,6 +371,8 @@ public:
                                        const ObIArray<uint64_t> &interm_result_ids);
   // for granule iterator
   int get_gi_task_map(GIPrepareTaskMap *&gi_prepare_task_map);
+
+  void set_use_temp_expr_ctx_cache(bool v) { use_temp_expr_ctx_cache_ = v; }
 
   // for udf
   int get_udf_ctx_mgr(ObUdfCtxMgr *&udf_ctx_mgr);
@@ -599,6 +604,7 @@ protected:
   uint64_t admission_version_;
   hash::ObHashMap<ObAddr, int64_t> admission_addr_map_;
   // used for temp expr ctx manager
+  bool use_temp_expr_ctx_cache_;
   hash::ObHashMap<int64_t, int64_t> temp_expr_ctx_map_;
   // for pl/trigger
   ObDmlEventType dml_event_;

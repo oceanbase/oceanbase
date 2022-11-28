@@ -1611,7 +1611,11 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+  } else if (OB_ISNULL(ls_backup_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls backup ctx should not be null", K(ret));
   } else {
+    const int64_t rebuild_seq = ls_backup_ctx_->rebuild_seq_;
     MTL_SWITCH(tenant_id) {
       ObLS *ls = NULL;
       ObLSHandle ls_handle;
@@ -1625,8 +1629,12 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("LS is null", K(ret));
+      } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, rebuild_seq))) {
+        LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
       } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle, timeout_us))) {
         LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, rebuild_seq))) {
+        LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
       }
     }
   }

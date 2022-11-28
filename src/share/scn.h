@@ -47,6 +47,7 @@ public:
   static SCN scn_inc(const SCN &ref);
   static SCN scn_dec(const SCN &ref);
 
+  SCN atomic_load() const;
   void atomic_store(const SCN &ref);
   void atomic_set(const SCN &ref);
   SCN atomic_get() const;

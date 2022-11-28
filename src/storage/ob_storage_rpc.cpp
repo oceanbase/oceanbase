@@ -49,6 +49,29 @@ static bool is_copy_ls_inner_tablet(const common::ObIArray<common::ObTabletID> &
   return is_inner;
 }
 
+static int compare_ls_rebuild_seq(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t remote_rebuild_seq)
+{
+  int ret = OB_SUCCESS;
+  int64_t local_rebuild_seq = 0;
+  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ObMigrationUtils::get_ls_rebuild_seq(tenant_id, ls_id, local_rebuild_seq))) {
+    LOG_WARN("failed to get ls rebuild seq", K(ret), K(tenant_id), K(ls_id));
+  } else {
+    if (local_rebuild_seq != remote_rebuild_seq) {
+      ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
+      LOG_WARN("rebuild seq has changed", K(ret), K(local_rebuild_seq), K(remote_rebuild_seq));
+      SERVER_EVENT_ADD("storage_ha", "compare_ls_rebuild_seq",
+                       "tenant_id", tenant_id,
+                       "ls_id", ls_id.id(),
+                       "local_rebuild_seq", local_rebuild_seq,
+                       "remote_rebuild_seq", remote_rebuild_seq);
+    }
+  }
+  return ret;
+}
+
 ObCopyMacroBlockArg::ObCopyMacroBlockArg()
   : logic_macro_block_id_()
 {
@@ -116,7 +139,9 @@ ObCopyMacroBlockRangeArg::ObCopyMacroBlockRangeArg()
     table_key_(),
     data_version_(0),
     backfill_tx_scn_(SCN::min_scn()),
-    copy_macro_range_info_()
+    copy_macro_range_info_(),
+    need_check_seq_(false),
+    ls_rebuild_seq_(-1)
 {
 }
 
@@ -128,6 +153,8 @@ void ObCopyMacroBlockRangeArg::reset()
   data_version_ = 0;
   backfill_tx_scn_.set_min();
   copy_macro_range_info_.reset();
+  need_check_seq_ = false;
+  ls_rebuild_seq_ = -1;
 }
 
 bool ObCopyMacroBlockRangeArg::is_valid() const
@@ -137,7 +164,8 @@ bool ObCopyMacroBlockRangeArg::is_valid() const
       && table_key_.is_valid()
       && data_version_ >= 0
       && backfill_tx_scn_ >= SCN::min_scn()
-      && copy_macro_range_info_.is_valid();
+      && copy_macro_range_info_.is_valid()
+      && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);
 }
 
 int ObCopyMacroBlockRangeArg::assign(const ObCopyMacroBlockRangeArg &arg)
@@ -154,12 +182,14 @@ int ObCopyMacroBlockRangeArg::assign(const ObCopyMacroBlockRangeArg &arg)
     table_key_ = arg.table_key_;
     data_version_ = arg.data_version_;
     backfill_tx_scn_ = arg.backfill_tx_scn_;
+    need_check_seq_ = arg.need_check_seq_;
+    ls_rebuild_seq_ = arg.ls_rebuild_seq_;
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, data_version_,
-    backfill_tx_scn_, copy_macro_range_info_);
+    backfill_tx_scn_, copy_macro_range_info_, need_check_seq_, ls_rebuild_seq_);
 
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),
@@ -184,8 +214,8 @@ ObCopyTabletInfoArg::ObCopyTabletInfoArg()
   : tenant_id_(OB_INVALID_ID),
     ls_id_(),
     tablet_id_list_(),
-    need_check_scn_(false),
-    ls_rebuild_scn_(-1),
+    need_check_seq_(false),
+    ls_rebuild_seq_(-1),
     is_only_copy_major_(false)
 {
 }
@@ -195,8 +225,8 @@ void ObCopyTabletInfoArg::reset()
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
   tablet_id_list_.reset();
-  need_check_scn_ = false;
-  ls_rebuild_scn_ = -1;
+  need_check_seq_ = false;
+  ls_rebuild_seq_ = -1;
   is_only_copy_major_ = false;
 }
 
@@ -205,11 +235,11 @@ bool ObCopyTabletInfoArg::is_valid() const
   return tenant_id_ != OB_INVALID_ID
       && ls_id_.is_valid()
       && tablet_id_list_.count() > 0
-      && ((need_check_scn_ && ls_rebuild_scn_ >= 0) || !need_check_scn_);
+      && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);
 }
 
 OB_SERIALIZE_MEMBER(ObCopyTabletInfoArg,
-    tenant_id_, ls_id_, tablet_id_list_, need_check_scn_, ls_rebuild_scn_, is_only_copy_major_);
+    tenant_id_, ls_id_, tablet_id_list_, need_check_seq_, ls_rebuild_seq_, is_only_copy_major_);
 
 ObCopyTabletInfo::ObCopyTabletInfo()
   : tablet_id_(),
@@ -468,7 +498,9 @@ ObCopySSTableMacroRangeInfoArg::ObCopySSTableMacroRangeInfoArg()
     ls_id_(),
     tablet_id_(),
     copy_table_key_array_(),
-    macro_range_max_marco_count_(0)
+    macro_range_max_marco_count_(0),
+    need_check_seq_(false),
+    ls_rebuild_seq_(0)
 {
 }
 
@@ -483,6 +515,8 @@ void ObCopySSTableMacroRangeInfoArg::reset()
   tablet_id_.reset();
   copy_table_key_array_.reset();
   macro_range_max_marco_count_ = 0;
+  need_check_seq_ = false;
+  ls_rebuild_seq_ = -1;
 }
 
 bool ObCopySSTableMacroRangeInfoArg::is_valid() const
@@ -507,12 +541,15 @@ int ObCopySSTableMacroRangeInfoArg::assign(const ObCopySSTableMacroRangeInfoArg 
     ls_id_ = arg.ls_id_;
     tablet_id_ = arg.tablet_id_;
     macro_range_max_marco_count_ = arg.macro_range_max_marco_count_;
+    need_check_seq_ = arg.need_check_seq_;
+    ls_rebuild_seq_ = arg.ls_rebuild_seq_;
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObCopySSTableMacroRangeInfoArg, tenant_id_, ls_id_,
-    tablet_id_, copy_table_key_array_, macro_range_max_marco_count_);
+    tablet_id_, copy_table_key_array_, macro_range_max_marco_count_,
+    need_check_seq_, ls_rebuild_seq_);
 
 ObCopySSTableMacroRangeInfoHeader::ObCopySSTableMacroRangeInfoHeader()
   : copy_table_key_(),
@@ -923,6 +960,13 @@ int ObHAFetchMacroBlockP::process()
             }
           }
         }
+        if (OB_SUCC(ret)) {
+          if (arg_.need_check_seq_) {
+            if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
+              LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
+            }
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -1003,6 +1047,13 @@ int ObFetchTabletInfoP::process()
           STORAGE_LOG(WARN, "fill to fill tablet info", K(ret), K(tablet_info));
         }
       }
+      if (OB_SUCC(ret)) {
+        if (arg_.need_check_seq_) {
+          if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
+            LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
+          }
+        }
+      }
     }
   }
   return ret;
@@ -1048,12 +1099,17 @@ int ObFetchSSTableInfoP::process()
       LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
     } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), K(arg_));
-      //TODO(yanfeng) check_rebuild_lsn
     } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
       ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
       STORAGE_LOG(WARN, "src migrate status do not allow migrate out", K(ret), K(migration_status));
     } else if (OB_FAIL(build_tablet_sstable_info_(ls))) {
       LOG_WARN("failed to build tablet sstable info", K(ret), K(arg_));
+    } else {
+      if (arg_.need_check_seq_) {
+        if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
+          LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
+        }
+      }
     }
   }
   return ret;
@@ -1320,12 +1376,17 @@ int ObFetchSSTableMacroInfoP::process()
     LOG_WARN("log stream should not be NULL", KR(ret), K(arg_), KP(ls));
   } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
     LOG_WARN("failed to get migration status", K(ret), K(arg_));
-    //TODO(yanfeng) check_rebuild_lsn
   } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
     ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
     STORAGE_LOG(WARN, "src migrate status do not allow migrate out", K(ret), K(migration_status));
   } else if (OB_FAIL(fetch_sstable_macro_info_header_())) {
     LOG_WARN("failed to fetch sstable macro info header", K(ret), K(arg_));
+  } else {
+    if (arg_.need_check_seq_) {
+      if (OB_FAIL(compare_ls_rebuild_seq(arg_.tenant_id_, arg_.ls_id_, arg_.ls_rebuild_seq_))) {
+        LOG_WARN("failed to compare ls rebuild seq", K(ret), K_(arg));
+      }
+    }
   }
   return ret;
 }

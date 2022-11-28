@@ -125,10 +125,13 @@ int ObTabletMemtableMgr::init_storage_schema_recorder(
   return ret;
 }
 
-int ObTabletMemtableMgr::destroy_storage_schema_recorder()
+int ObTabletMemtableMgr::reset_storage_schema_recorder()
 {
   int ret = OB_SUCCESS;
-  if (schema_recorder_.is_inited()) {
+  if (OB_UNLIKELY(!schema_recorder_.is_inited())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema recorder is not init", K(ret));
+  } else {
     schema_recorder_.reset();
   }
   return ret;

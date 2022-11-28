@@ -75,15 +75,8 @@ ObResultSet::~ObResultSet()
   if (OB_NOT_NULL(pc)) {
     cache_obj_guard_.force_early_release(pc);
   }
-
-  if (need_update_cnt_ > 0) {
-    observer::ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(observer::ObReqTimeInfo,
-                                               observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    for (int i=0; i < need_update_cnt_; i++) {
-      req_timeinfo->update_end_time();
-    }
-  }
+  // Always called at the end of the ObResultSet destructor
+  update_end_time();
 }
 
 int ObResultSet::open_cmd()

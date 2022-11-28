@@ -44,7 +44,7 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
     is_iterating_ = false;
     min_tx_scn_.set_max();
     max_tx_scn_.set_min();
-    min_start_scn_.set_min();
+    min_start_scn_.set_max();
     inserted_cnt_ = 0;
     deleted_cnt_ = 0;
     write_ref_ = 0;

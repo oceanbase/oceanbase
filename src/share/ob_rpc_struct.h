@@ -2858,7 +2858,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObGetMinSSTableSchemaVersionRes);
 };
 
-struct ObCalcColumnChecksumRequestArg
+struct ObCalcColumnChecksumRequestArg final
 {
   OB_UNIS_VERSION(1);
 public:
@@ -2866,36 +2866,41 @@ public:
   ~ObCalcColumnChecksumRequestArg() = default;
   bool is_valid() const;
   void reset();
-  int assign(const ObCalcColumnChecksumRequestArg &other) {
-    int ret = common::OB_SUCCESS;
-    tenant_id_ = other.tenant_id_;
-    ls_id_ = other.ls_id_;
-    tablet_id_ = other.tablet_id_;
-    target_table_id_ = other.target_table_id_;
-    schema_version_ = other.schema_version_;
-    execution_id_ = other.execution_id_;
-    snapshot_version_ = other.snapshot_version_;
-    source_table_id_ = other.source_table_id_;
-    calc_table_id_ = other.calc_table_id_;
-    task_id_ = other.task_id_;
-    return ret;
-  }
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id),
-      K_(target_table_id), K_(schema_version), K_(execution_id),
-      K_(snapshot_version), K_(source_table_id), K_(calc_table_id));
+  int assign(const ObCalcColumnChecksumRequestArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(target_table_id), K_(schema_version), K_(execution_id),
+      K_(snapshot_version), K_(source_table_id), K_(task_id), K_(calc_items));
+  struct SingleItem final
+  {
+    OB_UNIS_VERSION(1);
+  public:
+    SingleItem() { reset(); }
+    ~SingleItem() = default;
+    bool is_valid() const;
+    void reset();
+    int assign(const SingleItem &other);
+    TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(calc_table_id));
+    share::ObLSID ls_id_;
+    common::ObTabletID tablet_id_;
+    int64_t calc_table_id_;
+  };
 public:
   uint64_t tenant_id_;
-  share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
   uint64_t target_table_id_;
   int64_t schema_version_;
   uint64_t execution_id_;
   int64_t snapshot_version_;
   int64_t source_table_id_;
-  int64_t calc_table_id_;
   int64_t task_id_;
+  common::ObSEArray<SingleItem, 10> calc_items_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCalcColumnChecksumRequestArg);
+};
+
+struct ObCalcColumnChecksumRequestRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  common::ObSEArray<int, 10> ret_codes_;
 };
 
 struct ObCalcColumnChecksumResponseArg
@@ -3605,66 +3610,72 @@ public:
   bool force_refresh_;
 };
 
-struct ObCheckSchemaVersionElapsedArg
+struct ObLSTabletPair final
+{
+  OB_UNIS_VERSION(1);
+public:
+  bool is_valid() const { return ls_id_.is_valid() && tablet_id_.is_valid(); }
+  uint64_t hash() const { return ls_id_.hash() + tablet_id_.hash(); }
+  bool operator == (const ObLSTabletPair &other) const { return ls_id_ == other.ls_id_ && tablet_id_ == other.tablet_id_; }
+  bool operator < (const ObLSTabletPair &other) const { return ls_id_ != other.ls_id_ ? ls_id_ < other.ls_id_ : tablet_id_ < other.tablet_id_; }
+  TO_STRING_KV(K_(ls_id), K_(tablet_id));
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+};
+
+struct ObCheckSchemaVersionElapsedArg final
 {
   OB_UNIS_VERSION(1);
 public:
   ObCheckSchemaVersionElapsedArg()
-    : tenant_id_(), ls_id_(), data_tablet_id_(0), schema_version_(0), need_wait_trans_end_(true)
+    : tenant_id_(), schema_version_(0), need_wait_trans_end_(true)
   {}
-  bool is_valid() const {
-    return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && data_tablet_id_.is_valid() && schema_version_ > 0;
-  }
+  bool is_valid() const;
   void reuse();
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(data_tablet_id), K_(schema_version), K_(need_wait_trans_end));
+  TO_STRING_KV(K_(tenant_id), K_(schema_version), K_(need_wait_trans_end), K_(tablets));
+
   uint64_t tenant_id_;
-  share::ObLSID ls_id_;
-  common::ObTabletID data_tablet_id_;
   int64_t schema_version_;
   bool need_wait_trans_end_;
+  ObSEArray<ObLSTabletPair, 10> tablets_;
 };
 
-struct ObCheckModifyTimeElapsedArg
+struct ObCheckModifyTimeElapsedArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCheckModifyTimeElapsedArg() : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), sstable_exist_ts_(0) {}
-  bool is_valid() const {
-    return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid() && sstable_exist_ts_ > 0;
-  }
-  void reuse() {tenant_id_ = OB_INVALID_ID; ls_id_.reset(); tablet_id_.reset(); sstable_exist_ts_ = 0;}
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(sstable_exist_ts));
+  ObCheckModifyTimeElapsedArg() : tenant_id_(OB_INVALID_ID), sstable_exist_ts_(0) {}
+  bool is_valid() const;
+  void reuse();
+  TO_STRING_KV(K_(tenant_id), K_(sstable_exist_ts), K_(tablets));
   uint64_t tenant_id_;
-  share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
   int64_t sstable_exist_ts_;
+  ObSEArray<ObLSTabletPair, 10> tablets_;
+};
+
+struct ObCheckTransElapsedResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckTransElapsedResult() : ret_code_(common::OB_SUCCESS), snapshot_(common::OB_INVALID_TIMESTAMP) {}
+  TO_STRING_KV(K_(ret_code), K_(snapshot), K_(pending_tx_id));
+  int ret_code_;
+  int64_t snapshot_;
+  transaction::ObTransID pending_tx_id_;
 };
 
 struct ObCheckSchemaVersionElapsedResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCheckSchemaVersionElapsedResult()
-    : snapshot_(common::OB_INVALID_TIMESTAMP), pending_tx_id_() {}
-  bool is_valid() const { return snapshot_ != common::OB_INVALID_TIMESTAMP; }
-  void reuse() { snapshot_ = common::OB_INVALID_TIMESTAMP; pending_tx_id_.reset(); }
-  TO_STRING_KV(K_(snapshot), K_(pending_tx_id));
-  int64_t snapshot_;
-  transaction::ObTransID pending_tx_id_;
+  ObCheckSchemaVersionElapsedResult() {}
+  bool is_valid() const;
+  void reuse() { results_.reuse(); }
+  TO_STRING_KV(K_(results));
+  ObSEArray<ObCheckTransElapsedResult, 10> results_;
 };
 
-struct ObCheckModifyTimeElapsedResult
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObCheckModifyTimeElapsedResult()
-    : snapshot_(common::OB_INVALID_TIMESTAMP), pending_tx_id_() {}
-  bool is_valid() const { return snapshot_ != common::OB_INVALID_TIMESTAMP; }
-  void reuse() { snapshot_ = common::OB_INVALID_TIMESTAMP; pending_tx_id_.reset(); }
-  TO_STRING_KV(K_(snapshot), K_(pending_tx_id));
-  int64_t snapshot_;
-  transaction::ObTransID pending_tx_id_;
-};
+typedef ObCheckSchemaVersionElapsedResult ObCheckModifyTimeElapsedResult;
 
 class CandidateStatus
 {
@@ -7118,16 +7129,19 @@ struct ObDDLBuildSingleReplicaRequestArg final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObDDLBuildSingleReplicaRequestArg() : tenant_id_(OB_INVALID_ID), ls_id_(), source_tablet_id_(), dest_tablet_id_(), source_table_id_(OB_INVALID_ID),
-                                        dest_schema_id_(OB_INVALID_ID), schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0), execution_id_(0) {}
+  ObDDLBuildSingleReplicaRequestArg() : tenant_id_(OB_INVALID_ID), ls_id_(), source_tablet_id_(), dest_tablet_id_(),
+                                        source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID),
+                                        schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0),
+                                        parallelism_(0), execution_id_(0), tablet_task_id_(0) {}
   bool is_valid() const {
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
            && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_ && schema_version_ > 0 && snapshot_version_ > 0
-           && task_id_ > 0 && parallelism_ > 0;
+           && task_id_ > 0 && parallelism_ > 0 && tablet_task_id_ > 0;
   }
   int assign(const ObDDLBuildSingleReplicaRequestArg &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(source_tablet_id), K_(dest_tablet_id),
-    K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id));
+    K_(source_table_id), K_(dest_schema_id), K_(schema_version), K_(snapshot_version),
+    K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -7141,6 +7155,7 @@ public:
   int64_t task_id_;
   int64_t parallelism_;
   int64_t execution_id_;
+  int64_t tablet_task_id_;
 };
 
 struct ObDDLBuildSingleReplicaRequestResult final

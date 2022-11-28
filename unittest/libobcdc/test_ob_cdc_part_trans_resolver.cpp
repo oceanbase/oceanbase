@@ -806,6 +806,93 @@ TEST(ObCDCPartTransResolver, DISABLED_test_sp_tx_dist4)
   DESTROY_OBLOG_INSTANCE();
 }
 
+TEST(ObCDCPartTransResolver, test_sp_tx_record)
+{
+  PREPARE_LS_FETCH_CTX();
+  LogEntry log_entry;
+  palf::LSN lsn;
+  LogEntry log_entry_rc0;
+  palf::LSN lsn_rc0;
+  LogEntry log_entry1;
+  palf::LSN lsn1;
+  LogEntry log_entry_rc1;
+  palf::LSN lsn_rc1;
+  LogEntry log_entry2;
+  palf::LSN lsn2;
+  LogEntry log_entry_rc2;
+  palf::LSN lsn_rc2;
+  // generate and log_entry below
+  log_generator.gen_redo_log();
+  log_generator.gen_log_entry(log_entry, lsn);
+  log_generator.gen_record_log();
+  log_generator.gen_log_entry(log_entry_rc0, lsn_rc0);
+  log_generator.gen_redo_log();
+  log_generator.gen_log_entry(log_entry1, lsn1);
+  log_generator.gen_record_log();
+  log_generator.gen_log_entry(log_entry_rc1, lsn_rc1);
+  log_generator.gen_redo_log();
+  log_generator.gen_log_entry(log_entry2, lsn2);
+  log_generator.gen_record_log();
+  log_generator.gen_log_entry(log_entry_rc2, lsn_rc2);
+  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry, lsn, missing_info, tsi, stop_flag));
+  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry_rc0, lsn_rc0, missing_info, tsi, stop_flag));
+  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry1, lsn1, missing_info, tsi, stop_flag));
+  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry_rc1, lsn_rc1, missing_info, tsi, stop_flag));
+  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry2, lsn2, missing_info, tsi, stop_flag));
+  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry_rc2, lsn_rc2, missing_info, tsi, stop_flag));
+
+  DESTROY_OBLOG_INSTANCE();
+}
+
+TEST(ObCDCPartTransResolver, test_sp_tx_record_miss)
+{
+  PREPARE_LS_FETCH_CTX();
+  LogEntry log_entry;
+  palf::LSN lsn;
+  LogEntry log_entry_rc0;
+  palf::LSN lsn_rc0;
+  LogEntry log_entry1;
+  palf::LSN lsn1;
+  LogEntry log_entry_rc1;
+  palf::LSN lsn_rc1;
+  LogEntry log_entry2;
+  palf::LSN lsn2;
+  LogEntry log_entry_rc2;
+  palf::LSN lsn_rc2;
+  // generate and log_entry below
+  log_generator.gen_redo_log();
+  log_generator.gen_log_entry(log_entry, lsn);
+  log_generator.gen_record_log();
+  log_generator.gen_log_entry(log_entry_rc0, lsn_rc0);
+  log_generator.gen_redo_log();
+  log_generator.gen_log_entry(log_entry1, lsn1);
+  log_generator.gen_record_log();
+  log_generator.gen_log_entry(log_entry_rc1, lsn_rc1);
+  log_generator.gen_redo_log();
+  log_generator.gen_log_entry(log_entry2, lsn2);
+  log_generator.gen_record_log();
+  log_generator.gen_log_entry(log_entry_rc2, lsn_rc2);
+  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry1, lsn1, missing_info, tsi, stop_flag));
+  EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_log(log_entry_rc1, lsn_rc1, missing_info, tsi, stop_flag));
+  EXPECT_TRUE(missing_info.miss_record_log_lsn_.is_valid());
+  EXPECT_EQ(1, missing_info.get_total_misslog_cnt());
+  LOG_INFO("", K(lsn), K(lsn_rc0), K(lsn1), K(lsn_rc1), K(lsn2), K(lsn_rc2), K(missing_info));
+//  EXPECT_EQ(lsn, missing_info.miss_redo_or_state_lsn_arr_.at(0));
+  IObCDCPartTransResolver::MissingLogInfo missing_info1;
+  missing_info1.set_resolving_miss_log();
+  EXPECT_EQ(OB_ITEM_NOT_SETTED, ls_fetch_ctx->read_log(log_entry_rc0, lsn_rc0, missing_info1, tsi, stop_flag));
+  EXPECT_EQ(lsn, missing_info1.get_miss_redo_or_state_log_arr().at(0));
+  IObCDCPartTransResolver::MissingLogInfo missing_info2;
+  missing_info2.set_resolving_miss_log();
+  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry, lsn, missing_info2, tsi, stop_flag));
+  IObCDCPartTransResolver::MissingLogInfo missing_info3;
+  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry2, lsn2, missing_info3, tsi, stop_flag));
+  EXPECT_EQ(OB_SUCCESS, ls_fetch_ctx->read_log(log_entry_rc2, lsn_rc2, missing_info3, tsi, stop_flag));
+  LOG_INFO("missing_infos", K(missing_info), K(missing_info1), K(missing_info2), K(missing_info3));
+
+  DESTROY_OBLOG_INSTANCE();
+}
+
 TEST(ObCDCPartTransResolver, test_sp_tx_seq_example)
 {
   PREPARE_LS_FETCH_CTX();
@@ -828,7 +915,7 @@ int main(int argc, char **argv)
   bool not_output_obcdc_log = true;
   logger.set_file_name("test_ob_cdc_part_trans_resolver.log", not_output_obcdc_log, false);
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
-  logger.set_mod_log_levels("ALL.*:DEBUG, TLOG.*:DEBUG");
+  logger.set_mod_log_levels("ALL.*:DEBUG;TLOG.*:DEBUG");
   logger.set_enable_async_log(false);
   testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();

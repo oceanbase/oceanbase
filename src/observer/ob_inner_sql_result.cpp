@@ -17,6 +17,7 @@
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/rc/context.h"
+#include "lib/signal/ob_signal_struct.h"
 #include "share/rc/ob_tenant_base.h"
 #include "observer/ob_req_time_service.h"
 #include "omt/ob_tenant.h"
@@ -58,7 +59,6 @@ ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session)
       iter_end_(false),
       is_read_(true),
       has_tenant_resource_(true),
-      need_update_cnt_(0),
       tenant_(nullptr)
 
 {
@@ -111,16 +111,6 @@ ObInnerSQLResult::~ObInnerSQLResult()
   if (remote_result_set_ != nullptr) {
     remote_result_set_->~ObRemoteResultSet();
   }
-
-  if (need_update_cnt_ > 0) {
-    oceanbase::observer::ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(observer::ObReqTimeInfo,
-                                               observer::ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
-    OB_ASSERT(NULL != req_timeinfo);
-    for (int i=0; i < need_update_cnt_; i++) {
-      req_timeinfo->update_end_time();
-    }
-  }
-
   if (tenant_ != nullptr) {
     tenant_->unlock(handle_);
     tenant_ = nullptr;
@@ -147,6 +137,7 @@ int ObInnerSQLResult::open()
     LOG_WARN("switch tenant failed", K(ret), K(session_.get_effective_tenant_id()));
   } else {
     lib::CompatModeGuard g(compat_mode_);
+    common::ObSqlInfoGuard si_guard(session_.get_current_query_string());
     bool is_select = has_tenant_resource() ?
            ObStmt::is_select_stmt(result_set_->get_stmt_type())
            : ObStmt::is_select_stmt(remote_result_set_->get_stmt_type());
@@ -207,11 +198,11 @@ int ObInnerSQLResult::force_close()
   column_indexed_ = false;
   return ret;
 }
-
 int ObInnerSQLResult::inner_close()
 {
   int ret = OB_SUCCESS;
   lib::CompatModeGuard g(compat_mode_);
+  common::ObSqlInfoGuard si_guard(session_.get_current_query_string());
   LOG_DEBUG("compat_mode_", K(ret), K(compat_mode_), K(lbt()));
 
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
@@ -250,6 +241,7 @@ int ObInnerSQLResult::next()
   } else {
     row_ = NULL;
     lib::CompatModeGuard g(compat_mode_);
+    common::ObSqlInfoGuard si_guard(session_.get_current_query_string());
     WITH_CONTEXT(mem_context_) {
       if (has_tenant_resource() && OB_FAIL(result_set_->get_next_row(row_))) {
         if (OB_ITER_END != ret) {
@@ -262,6 +254,7 @@ int ObInnerSQLResult::next()
                    K(ret), K(remote_result_set_->get_field_columns()->count()));
         }
       }
+
     }
   }
   return ret;

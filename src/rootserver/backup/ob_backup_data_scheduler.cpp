@@ -109,6 +109,7 @@ int ObBackupDataScheduler::get_need_reload_task(
         LOG_INFO("[DATA_BACKUP]no job need to reload");
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < jobs.count(); ++i) {
+          ls_tasks.reset();
           const ObBackupJobAttr &job = jobs.at(i);
           ObBackupSetTaskAttr set_task_attr;
           bool is_valid = true;
@@ -1226,21 +1227,25 @@ int ObUserTenantBackupJobMgr::report_failed_to_initiator_()
 int ObUserTenantBackupJobMgr::check_can_backup_()
 {
   int ret = OB_SUCCESS;
-  ObTenantArchiveRoundAttr round_attr;
-  if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr_->tenant_id_, job_attr_->incarnation_id_, round_attr))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_LOG_ARCHIVE_NOT_RUNNING;
+  if (share::ObBackupStatus::CANCELING == job_attr_->status_.status_) {
+    // backup job is canceling, no need to check log archive status
+  } else {
+    ObTenantArchiveRoundAttr round_attr;
+    if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr_->tenant_id_, job_attr_->incarnation_id_, round_attr))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_LOG_ARCHIVE_NOT_RUNNING;
+        LOG_WARN("[DATA_BACKUP]not supported backup when log archive is not doing", K(ret), K(round_attr));
+      } else {
+        LOG_WARN("failed to get cur log archive round", K(ret), K(round_attr));
+      }
+    } else if (ObArchiveRoundState::Status::DOING != round_attr.state_.status_) {
+      if (ObArchiveRoundState::Status::INTERRUPTED == round_attr.state_.status_) {
+        ret = OB_LOG_ARCHIVE_INTERRUPTED;
+      } else {
+        ret = OB_LOG_ARCHIVE_NOT_RUNNING;
+      }
       LOG_WARN("[DATA_BACKUP]not supported backup when log archive is not doing", K(ret), K(round_attr));
-    } else {
-      LOG_WARN("failed to get cur log archive round", K(ret), K(round_attr));
     }
-  } else if (ObArchiveRoundState::Status::DOING != round_attr.state_.status_) {
-    if (ObArchiveRoundState::Status::INTERRUPTED == round_attr.state_.status_) {
-      ret = OB_LOG_ARCHIVE_INTERRUPTED;
-    } else {
-      ret = OB_LOG_ARCHIVE_NOT_RUNNING;
-    }
-    LOG_WARN("[DATA_BACKUP]not supported backup when log archive is not doing", K(ret), K(round_attr));
   }
   return ret;
 }
@@ -1483,7 +1488,7 @@ int ObUserTenantBackupJobMgr::fill_backup_set_desc_(
     backup_set_desc.start_replay_scn_ = SCN::min_scn();
     backup_set_desc.min_restore_scn_ = SCN::min_scn();
     backup_set_desc.backup_compatible_ = ObBackupSetFileDesc::Compatible::COMPATIBLE_VERSION_1;
-    backup_set_desc.tenant_compatible_ = ObClusterVersion::get_instance().get_cluster_version();
+    backup_set_desc.tenant_compatible_ = GET_MIN_CLUSTER_VERSION();
     backup_set_desc.plus_archivelog_ = job_attr.plus_archivelog_;
   }
   return ret;

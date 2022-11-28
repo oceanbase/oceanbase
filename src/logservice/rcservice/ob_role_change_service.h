@@ -112,8 +112,15 @@ private:
                                                         const int64_t proposal_id,
                                                         const share::ObLSID &ls_id,
                                                         palf::LSN &end_lsn);
-  bool check_need_execute_role_change_(const int64_t curr_proposal_id, const common::ObRole &curr_role,
-                                       const int64_t new_proposal_id, const common::ObRole &new_role) const;
+  bool need_execute_role_change(const int64_t curr_proposal_id,
+                                const common::ObRole curr_role,
+                                const int64_t new_proposal_id,
+                                const common::ObRole new_role,
+                                const bool is_pending_state,
+                                const bool is_offline) const;
+
+  bool is_append_mode(const palf::AccessMode &access_mode) const;
+  bool is_raw_write_or_flashback_mode(const palf::AccessMode &access_mode) const;
 private:
   enum class RoleChangeOptType {
     INVALID_RC_OPT_TYPE = 0,

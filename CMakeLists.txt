@@ -4,7 +4,7 @@ include(cmake/Utils.cmake)
 include(cmake/Env.cmake)
 
 project("OceanBase_CE"
-  VERSION 4.0.0.0
+  VERSION 4.1.0.0
   DESCRIPTION "OceanBase distributed database system"
   HOMEPAGE_URL "https://open.oceanbase.com/"
   LANGUAGES CXX C ASM)
@@ -117,6 +117,24 @@ cmake_dependent_option(
   OB_INCLUDE_TEST "Include test" ON
   "NOT OB_BUILD_RPM" OFF)
 option(OB_BUILD_TEST "" OFF)
+
+# OB_BUILD_RPM => build sql proxy parser
+cmake_dependent_option(
+  OB_BUILD_LIBOB_SQL_PROXY_PARSER "Build lib_sql_proxy_parser" OFF
+  "NOT OB_BUILD_RPM" ON
+)
+
+# OB_BUILD_RPM => build OB_BUILD_LIBOBTABLE
+cmake_dependent_option(
+  OB_BUILD_LIBOBTABLE "Build liboblog" OFF
+  "NOT OB_BUILD_RPM" ON
+)
+
+# OB_BUILD_RPM => build OB_BUILD_OBADMIN
+cmake_dependent_option(
+  OB_BUILD_OBADMIN "Build ob_admin" OFF
+  "NOT OB_BUILD_RPM" ON
+)
 
 include(CTest)
 if (OB_BUILD_UNITTEST)

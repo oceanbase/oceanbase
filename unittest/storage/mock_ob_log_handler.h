@@ -412,6 +412,9 @@ public:
     return OB_SUCCESS;
   }
   int unregister_rebuild_cb() { return OB_SUCCESS; }
+  bool is_offline() const {return false;};
+  int offline() {return OB_SUCCESS;};
+  int online(const LSN &lsn, const share::SCN &scn) { UNUSED(lsn); UNUSED(scn); return OB_SUCCESS;};
 };
 
 }  // namespace storage

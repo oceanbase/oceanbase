@@ -14,10 +14,10 @@
 #include "tx_node.h"
 #include "share/scn.h"
 #define FAST_FAIL() \
-do {                                                            \
+  do {                                                          \
   if (OB_FAIL(ret)) {                                           \
+    TRANS_LOG(ERROR, "[tx node crash] fast-fail for easy debug", K(ret)); \
     ob_abort();                                                 \
-    TRANS_LOG(ERROR, "fast-fail for easy debug", K(ret));       \
   }                                                             \
 } while(0);
 
@@ -209,10 +209,10 @@ void ObTxNode::dump_msg_queue_()
 
 ObTxNode::~ObTxNode() __attribute__((optnone)) {
   int ret = OB_SUCCESS;
-  fake_tx_table_.is_inited_ = false;
+  TRANS_LOG(INFO, "destroy TxNode", KPC(this));
+  ObTenantEnv::set_tenant(&tenant_);
   OZ(txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_));
   fake_tx_table_.tx_ctx_table_.ls_tx_ctx_mgr_ = nullptr;
-  ObTenantEnv::set_tenant(&tenant_);
   OX(txs_.stop());
   OZ(txs_.wait_());
   if (role_ == Leader && fake_tx_log_adapter_) {
@@ -220,13 +220,16 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
     fake_tx_log_adapter_->stop();
     fake_tx_log_adapter_->wait();
     fake_tx_log_adapter_->destroy();
-    delete fake_tx_log_adapter_;
   }
   msg_consumer_.stop();
   msg_consumer_.wait();
   dump_msg_queue_();
+  //fake_tx_table_.is_inited_ = false;
   if (memtable_) {
     delete memtable_;
+  }
+  if (role_ == Leader && fake_tx_log_adapter_) {
+    delete fake_tx_log_adapter_;
   }
   FAST_FAIL();
 }

@@ -30,6 +30,7 @@ class ObLS;
 namespace transaction
 {
 
+class ObAllIDMeta;
 
 class ObPresistIDLog
 {
@@ -98,6 +99,7 @@ public:
 
   static void get_all_id_service_type(int64_t *service_type);
   static int get_id_service(const int64_t id_service_type, ObIDService *&id_service);
+  static int update_id_service(const ObAllIDMeta &id_meta);
 
   //获取数值或数值组
   int get_number(const int64_t range, const int64_t base_id, int64_t &start_id, int64_t &end_id);
@@ -181,10 +183,12 @@ public:
   ObAllIDMeta() : count_(ObIDService::MAX_SERVICE_TYPE) {}
   ~ObAllIDMeta() {}
   void update_all_id_meta(const ObAllIDMeta &all_id_meta);
-  int update_id_service();
-  void update_id_meta(const int64_t service_type,
-                      const int64_t limited_id,
-                      const share::SCN latest_log_ts);
+  int update_id_meta(const int64_t service_type,
+                     const int64_t limited_id,
+                     const share::SCN &latest_log_ts);
+  int get_id_meta(const int64_t service_type,
+                  int64_t &limited_id,
+                  share::SCN &latest_log_ts) const;
   int64_t to_string(char* buf, const int64_t buf_len) const
   {
     int64_t pos = 0;
@@ -197,6 +201,7 @@ public:
   }
    OB_UNIS_VERSION(1);
 private:
+  mutable common::ObSpinLock lock_;
   int64_t count_;
   ObIDMeta id_meta_[ObIDService::MAX_SERVICE_TYPE];
 };

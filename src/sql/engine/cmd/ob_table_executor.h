@@ -88,14 +88,6 @@ private:
       ObString first_stmt,
       const bool need_modify_notnull_validate);
 
-  int alter_table_rpc_v1(
-      obrpc::ObAlterTableArg &alter_table_arg,
-      obrpc::ObAlterTableRes &res,
-      common::ObIAllocator &allocator,
-      obrpc::ObCommonRpcProxy *common_rpc_proxy,
-      ObSQLSessionInfo *my_session,
-      const bool is_sync_ddl_user);
-
   int alter_table_rpc_v2(
       obrpc::ObAlterTableArg &alter_table_arg,
       obrpc::ObAlterTableRes &res,

@@ -568,6 +568,15 @@ DEF_NAME(id, "id")
     DEF_NAME(update_start_check_row, "update_start_check_row")
     DEF_NAME(update_end_check_row, "update_end_check_row")
 
+    DEF_NAME_PAIR(get_das_id, "get_das_id")
+    DEF_NAME_PAIR(do_local_das_task, "do_local_das_task")
+    DEF_NAME_PAIR(do_remote_das_task, "do_remote_das_task")
+    DEF_NAME_PAIR(rescan_das_task, "rescan_das_task")
+    DEF_NAME_PAIR(das_rpc_process, "das_rpc_process")
+    DEF_NAME_PAIR(close_das_task, "close_das_task")
+    DEF_NAME_PAIR(fetch_das_extra_result, "fetch_das_extra_result")
+    DEF_NAME_PAIR(fetch_das_result_process, "fetch_das_result_process")
+
     DEF_NAME(before_calculate_row, "before_calculate_row")
     DEF_NAME(end_calculate_row, "end_calculate_row")
     DEF_NAME(row, "row")
@@ -740,6 +749,7 @@ DEF_NAME(id, "id")
     // pc: plan cache
     // E: executor
     DEF_NAME_PAIR(S_table_scan, "storage: table scan")
+    DEF_NAME_PAIR(S_table_rescan, "storage: table rescan")
     DEF_NAME_PAIR(S_revert_iter, "storage: revert iterator")
     DEF_NAME_PAIR(S_delete_rows, "storage: delete rows")
     DEF_NAME_PAIR(S_delete_row, "storage: delete row")

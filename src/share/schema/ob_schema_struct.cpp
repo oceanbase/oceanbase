@@ -22,6 +22,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/number/ob_number_v2.h"
 #include "common/ob_zone_type.h"
+#include "share/ob_ddl_common.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/ob_primary_zone_util.h"
 #include "sql/ob_sql_utils.h"
@@ -5200,6 +5201,7 @@ void ObBasePartition::reset()
   is_empty_partition_name_ = false;
   tablespace_id_ = OB_INVALID_ID;
   partition_type_ = PARTITION_TYPE_NORMAL;
+  name_.reset();
   ObSchema::reset();
 }
 
@@ -5397,6 +5399,72 @@ int ObBasePartition::set_high_bound_val_with_hex_str(
   } else if (OB_FAIL(high_bound_val_.deserialize(*allocator, serialize_buf, seri_length, pos))) {
     LOG_WARN("Failed to deserialize high bound val", K(ret));
   } else { }//do nothing
+  return ret;
+}
+
+int ObBasePartition::convert_character_for_range_columns_part(
+    const ObCollationType &to_collation)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator *allocator = get_allocator();
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null allocator", K(ret));
+  } else if (low_bound_val_.get_obj_cnt() > 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("defensive code, unexpected error", K(ret), K(low_bound_val_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < high_bound_val_.get_obj_cnt(); i++) {
+      ObObj &obj = high_bound_val_.get_obj_ptr()[i];
+      const ObObjMeta &obj_meta = obj.get_meta();
+      if (obj_meta.is_lob()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err, lob column can not be part key", K(ret), K(obj_meta));
+      } else if (ObDDLUtil::check_can_convert_character(obj_meta)) {
+        ObString dst_string;
+        if (OB_FAIL(ObCharset::charset_convert(*allocator, obj.get_string(), obj.get_collation_type(),
+                                               to_collation, dst_string))) {
+          LOG_WARN("charset convert failed", K(ret), K(obj), K(to_collation));
+        } else {
+          obj.set_string(obj.get_type(), dst_string);
+          obj.set_collation_type(to_collation);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBasePartition::convert_character_for_list_columns_part(
+    const ObCollationType &to_collation)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator *allocator = get_allocator();
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null allocator", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < list_row_values_.count(); i++) {
+      common::ObNewRow &row = list_row_values_.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < row.get_count(); j++) {
+        ObObj &obj = row.get_cell(j);
+        const ObObjMeta &obj_meta = obj.get_meta();
+        if (obj_meta.is_lob()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected err, lob column can not be part key", K(ret), K(obj_meta));
+        } else if (ObDDLUtil::check_can_convert_character(obj_meta)) {
+          ObString dst_string;
+          if (OB_FAIL(ObCharset::charset_convert(*allocator, obj.get_string(), obj.get_collation_type(),
+                                               to_collation, dst_string))) {
+          LOG_WARN("charset convert failed", K(ret), K(obj), K(to_collation));
+          } else {
+            obj.set_string(obj.get_type(), dst_string);
+            obj.set_collation_type(to_collation);
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -11553,7 +11621,6 @@ int ObProfileSchema::set_default_values()
 int ObProfileSchema::set_default_values_v2()
 {
   int ret = OB_SUCCESS;
-  //GET_MIN_CLUSTER_VERSION() >=  CLUSTER_VERSION_2250
   for (int i = 0; OB_SUCC(ret) && i < MAX_PARAMS; ++i) {
     if (PASSWORD_VERIFY_FUNCTION == i) {
       password_verify_function_ = "DEFAULT";

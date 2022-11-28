@@ -218,7 +218,7 @@ int ElectionPriorityImpl::compare_with(const ElectionPriority &rhs, int &result,
   } else if (CLICK_FAIL(functor1.get_closest_priority()->compare(*functor2.get_closest_priority(), result, reason))) {
     COORDINATOR_LOG(ERROR, "compare priority failed", KR(ret), K(MTL_ID()), K(*this), K(rhs), K(compare_version));
   } else {
-    COORDINATOR_LOG(INFO, "compare priority success", KR(ret), K(MTL_ID()), K(*this), K(rhs), K(compare_version), K(result), K(reason));
+    COORDINATOR_LOG(TRACE, "compare priority success", KR(ret), K(MTL_ID()), K(*this), K(rhs), K(compare_version), K(result), K(reason));
   }
   return ret;
 }

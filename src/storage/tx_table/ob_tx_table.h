@@ -301,7 +301,6 @@ private:
                               const int64_t read_epoch,
                               const bool need_log_error,
                               int &ret);
-
 private:
   static const int64_t LS_TX_CTX_SCHEMA_VERSION = 0;
   static const int64_t LS_TX_CTX_SCHEMA_ROWKEY_CNT = 1;

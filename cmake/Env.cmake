@@ -22,6 +22,7 @@ ob_define(ENABLE_COMPILE_DLL_MODE OFF)
 ob_define(OB_CMAKE_RULES_CHECK ON)
 ob_define(OB_STATIC_LINK_LGPL_DEPS ON)
 ob_define(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/hotfuncs.txt")
+ob_define(OB_BUILD_CCLS OFF)
 
 # 'ENABLE_PERF_MODE' use for offline system insight performance test
 # PERF_MODE macro controls many special code path in system
@@ -82,6 +83,14 @@ if (OB_USE_CLANG)
   set(CMAKE_EXE_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack ${REORDER_LINK_OPT}")
 else() # not clang, use gcc
   message("gcc9 not support currently, please set OB_USE_CLANG ON and we will finish it as soon as possible")
+endif()
+
+if (OB_BUILD_CCLS)
+  # ccls场景采用更大的unity的联合编译单元，ccls是非完整编译，掉用clang AST接口，单元的size和耗时成指数衰减
+  set(OB_MAX_UNITY_BATCH_SIZE 200)
+  # -DCCLS_LASY_ENABLE 给全局设置上，将采用ccls懒加载模式，主要针对单测case，当添加上-DCCLS_LASY_OFF，首次将会进行检索
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCCLS_LASY_ENABLE")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCCLS_LASY_ENABLE")
 endif()
 
 if (OB_CC AND OB_CXX)

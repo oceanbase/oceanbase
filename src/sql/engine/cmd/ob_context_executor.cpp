@@ -53,6 +53,6 @@ int name##Executor::execute(ObExecContext &ctx, name##Stmt &stmt) \
 DEF_SIMPLE_EXECUTOR_IMPL(ObCreateContext, do_context_ddl);
 DEF_SIMPLE_EXECUTOR_IMPL(ObDropContext, do_context_ddl);
 
-#undef DEF_EXECUTOR_IMPL
+#undef DEF_SIMPLE_EXECUTOR_IMPL
 }  // namespace sql
 }  // namespace oceanbase

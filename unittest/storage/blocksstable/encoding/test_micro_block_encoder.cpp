@@ -136,35 +136,32 @@ public:
 TEST_F(TestEncoderOverFlow, test_append_row_with_timestamp_and_max_estimate_limit)
 {
   common::ObClusterVersion::get_instance().update_cluster_version(cal_version(2, 2, 0, 75));
-  ASSERT_TRUE(IS_CLUSTER_VERSION_AFTER_2274);
-  if (IS_CLUSTER_VERSION_AFTER_2274) {
-    ObMicroBlockEncoder encoder;
-    ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  ObMicroBlockEncoder encoder;
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
 
-    encoder.estimate_size_limit_ = ctx_.macro_block_size_;
+  encoder.estimate_size_limit_ = ctx_.macro_block_size_;
 
-    ObDatumRow row;
-    ASSERT_EQ(OB_SUCCESS, row.init(allocator_, column_cnt_));
-    int ret = OB_SUCCESS;
-    int row_cnt = 0;
-    // calculated max size 4444 for this schema
-    while(row_cnt < 4443) {
-      ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
-      ret = encoder.append_row(row);
-      row_cnt++;
-    }
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, column_cnt_));
+  int ret = OB_SUCCESS;
+  int row_cnt = 0;
+  // calculated max size 4444 for this schema
+  while(row_cnt < 4443) {
     ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
-    row.storage_datums_[2].len_ = 105000;
-    encoder.append_row(row);
-
-    LOG_INFO("Data buffer size", K(encoder.data_buffer_),
-        K(row_cnt), K(encoder.estimate_size_limit_), K(encoder.estimate_size_),
-        K(encoder.length_));
-
-    char *buf = NULL;
-    int64_t size = 0;
-    ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, size));
+    ret = encoder.append_row(row);
+    row_cnt++;
   }
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(row));
+  row.storage_datums_[2].len_ = 105000;
+  encoder.append_row(row);
+
+  LOG_INFO("Data buffer size", K(encoder.data_buffer_),
+      K(row_cnt), K(encoder.estimate_size_limit_), K(encoder.estimate_size_),
+      K(encoder.length_));
+
+  char *buf = NULL;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, size));
 }
 
 static ObObjType test_dict_large_varchar[2] = {ObIntType, ObVarcharType};

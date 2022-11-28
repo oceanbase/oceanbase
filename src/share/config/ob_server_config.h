@@ -50,6 +50,8 @@ const char* const EXTERNAL_KMS_INFO = "external_kms_info";
 const char* const SSL_EXTERNAL_KMS_INFO = "ssl_external_kms_info";
 const char* const CLUSTER_ID = "cluster_id";
 const char* const CLUSTER_NAME = "cluster";
+const char* const FREEZE_TRIGGER_PERCENTAGE = "freeze_trigger_percentage";
+const char* const WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE = "writing_throttling_trigger_percentage";
 class ObServerMemoryConfig;
 
 class ObServerConfig : public ObCommonConfig
@@ -104,6 +106,7 @@ public:
   bool in_major_version_upgrade_mode() const { return in_upgrade_mode() && is_major_version_upgrade(); }
   bool enable_new_major() const {  return true; }
   bool in_upgrade_mode() const;
+  bool is_valid() const { return  system_config_!= NULL; };
   int64_t get_current_version() { return system_config_->get_version(); }
 
   // 兼容性需求，兼容老的SPFILE格式

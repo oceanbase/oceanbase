@@ -870,8 +870,8 @@ int ObTabletCreateDeleteHelper::roll_back_remove_tablet(
         LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id), K(cnt));
       } else if (OB_FAIL(ObTabletBindingHelper::check_need_dec_cnt_for_abort(tx_data, need_dec))) {
         LOG_WARN("failed to save tx data", K(ret), K(tx_data), K(trans_flags));
-      } else if (need_dec && OB_FAIL(tablet->save_multi_source_data_unit(&tx_data, ObScnRange::MAX_SCN,
-          trans_flags.for_replay_, MemtableRefOp::DEC_REF, true/*is_callback*/))) {
+      } else if (need_dec && OB_FAIL(tablet->set_multi_data_for_commit(tx_data, ObScnRange::MAX_SCN,
+          trans_flags.for_replay_, MemtableRefOp::DEC_REF))) {
         LOG_WARN("failed to save msd", K(ret), K(ls_id), K(tablet_id), K(cnt));
       } else {
         LOG_INFO("succeeded to dec ref for memtable in roll back operation", K(ret), K(ls_id), K(tablet_id), K(cnt));
@@ -1214,6 +1214,7 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
   ObTabletTxMultiSourceDataUnit tx_data;
   MemtableRefOp ref_op = MemtableRefOp::NONE;
   bool is_valid = true;
+  SCN tx_scn;
 
   if (OB_FAIL(get_tablet(key, tablet_handle))) {
     // leader handle 4013 error(caused by memory not enough in load and dump procedure)
@@ -1277,12 +1278,20 @@ int ObTabletCreateDeleteHelper::do_abort_remove_tablet(
       LOG_INFO("tablet is no valid but do nothing", K(ret), K(key), K(trans_flags));
     }
   } else {
+    if (trans_flags.for_replay_) {
+      tx_scn = trans_flags.scn_;
+    } else if (trans_flags.is_redo_synced()) {
+      tx_scn = trans_flags.scn_;
+    } else {
+      tx_scn = tx_data.tx_scn_;
+    }
+
     const SCN memtable_scn = (SCN::invalid_scn() == trans_flags.scn_) ? SCN::max_scn() : trans_flags.scn_;
 
     if (OB_FAIL(set_tablet_final_status(tablet_handle, ObTabletStatus::NORMAL,
-        tx_data.tx_scn_, memtable_scn, trans_flags.for_replay_, ref_op))) {
+        tx_scn, memtable_scn, trans_flags.for_replay_, ref_op))) {
       LOG_WARN("failed to set tablet status to NORMAL", K(ret), K(tablet_handle),
-          K(tx_data.tx_scn_), K(memtable_scn), K(trans_flags), K(ref_op));
+          K(tx_scn), K(memtable_scn), K(trans_flags), K(ref_op));
     } else if (OB_FAIL(t3m->erase_pinned_tablet(key))) {
       LOG_ERROR("failed to erase tablet handle", K(ret), K(key));
       ob_usleep(1000 * 1000);
@@ -1341,7 +1350,10 @@ int ObTabletCreateDeleteHelper::tx_end_remove_tablets(
   return ret;
 }
 
-int ObTabletCreateDeleteHelper::get_tablet(const ObTabletMapKey &key, ObTabletHandle &handle)
+int ObTabletCreateDeleteHelper::get_tablet(
+    const ObTabletMapKey &key,
+    ObTabletHandle &handle,
+    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   static const int64_t SLEEP_TIME_US = 10;
@@ -1359,9 +1371,9 @@ int ObTabletCreateDeleteHelper::get_tablet(const ObTabletMapKey &key, ObTabletHa
       LOG_DEBUG("tablet does not exist", K(ret), K(key));
     } else if (OB_ITEM_NOT_SETTED == ret) {
       current_time = ObTimeUtility::current_time();
-      if (current_time - begin_time > ObTabletCommon::MAX_GET_TABLET_DURATION_US) {
-        LOG_WARN("continuously meet item not set error", K(ret), K(begin_time), K(current_time));
-        break;
+      if (current_time - begin_time > timeout_us) {
+        ret = OB_TABLET_NOT_EXIST;
+        LOG_WARN("continuously meet item not set error", K(ret), K(begin_time), K(current_time), K(timeout_us));
       } else {
         ret = OB_SUCCESS;
         ob_usleep(SLEEP_TIME_US);
@@ -1389,11 +1401,11 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
   ObTimeGuard time_guard(__func__, 5 * 1000 * 1000); // 5s
 
   // TODO(bowen.gbw): optimize this logic, refactor ObTabletStatusChecker
-  if (OB_FAIL(get_tablet(key, tablet_handle))) {
+  if (OB_FAIL(get_tablet(key, tablet_handle, timeout_us))) {
     if (OB_TABLET_NOT_EXIST == ret) {
-      LOG_DEBUG("tablet does not exist", K(ret), K(key));
+      LOG_DEBUG("tablet does not exist", K(ret), K(key), K(timeout_us));
     } else {
-      LOG_WARN("failed to get tablet", K(ret), K(key));
+      LOG_WARN("failed to get tablet", K(ret), K(key), K(timeout_us));
     }
   } else if (FALSE_IT(time_guard.click("DirectGet"))) {
   } else if (tablet_handle.get_obj()->is_ls_inner_tablet()) {

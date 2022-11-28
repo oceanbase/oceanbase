@@ -322,8 +322,8 @@ int ObIndexChecksumValidator::do_check(const ObSimpleFrozenStatus &frozen_status
         if (FAILEDx(ObTabletReplicaChecksumOperator::check_column_checksum(tenant_id_, *data_table_schema,
             *index_table_schema, frozen_status.frozen_scn_, *sql_proxy_))) {
           if (OB_CHECKSUM_ERROR == ret) {
-            LOG_ERROR("ERROR! ERROR! ERROR! checksum error in index checksum", KR(ret), K(*data_table_schema), K(*index_table_schema),
-              K_(tenant_id), K(frozen_status));
+            LOG_ERROR("ERROR! ERROR! ERROR! checksum error in index checksum", KR(ret), K_(tenant_id),
+              K(frozen_status), K(*data_table_schema), K(*index_table_schema));
             check_ret = OB_CHECKSUM_ERROR;
             ret = OB_SUCCESS; // continue checking next checksum
           } else if (OB_EAGAIN != ret) {

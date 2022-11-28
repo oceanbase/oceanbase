@@ -204,6 +204,7 @@ public:
   inline int64_t get_unmaps()  { return unmaps_; }
   inline int64_t get_large_maps()  { return large_maps_; }
   inline int64_t get_large_unmaps()  { return large_unmaps_; }
+  inline int64_t get_shadow_hold() const { return ATOMIC_LOAD(&shadow_hold_); }
 
 private:
   typedef ABitSet ChunkBitMap;
@@ -228,6 +229,7 @@ protected:
   int64_t unmaps_;
   int64_t large_maps_;
   int64_t large_unmaps_;
+  int64_t shadow_hold_;
 }; // end of class AChunkMgr
 
 OB_INLINE AChunk *AChunkMgr::ptr2chunk(const void *ptr)

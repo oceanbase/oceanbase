@@ -215,6 +215,13 @@ WAIT_EVENT_DEF(ID_SOURCE_LOCK_WAIT, 16014, "ID allocator updates assignable inte
 WAIT_EVENT_DEF(TRANS_AUDIT_RECORD_LOCK_WAIT, 16015, "trans records audit information lock wait", "", "", "", CONCURRENCY, "TRANS_AUDIT_RECORD_LOCK_WAIT", true)
 WAIT_EVENT_DEF(TABLET_LOCK_WAIT, 16016, "tablet lock wait", "", "", "", CONCURRENCY, "TABLET_LOCK_WAIT", true)
 WAIT_EVENT_DEF(TABLET_MULTI_SOURCE_DATA_WAIT, 16017, "tablet multi source data wait", "", "", "", CONCURRENCY, "TABLET_MULTI_SOURCE_DATA_WAIT", true)
+WAIT_EVENT_DEF(WRS_SERVER_VERSION_WAIT, 16018, "weak read server version wait ", "", "", "", CONCURRENCY, "WRS_SERVER_VERSION_WAIT", true)
+WAIT_EVENT_DEF(TX_LS_LOG_WRITER_WAIT, 16019, "transaction ls log writer wait", "", "", "", CONCURRENCY, "TX_LS_LOG_WRITER_WAIT", true)
+WAIT_EVENT_DEF(TX_DESC_WAIT, 16020, "transaction descriptor wait", "", "", "", CONCURRENCY, "TX_DESC_WAIT", true)
+WAIT_EVENT_DEF(TX_DESC_COMMIT_WAIT, 16021, "transaction descriptor commit wait", "", "", "", CONCURRENCY, "TX_DESC_COMMIT_WAIT", true)
+WAIT_EVENT_DEF(WRS_CLUSTER_SERVICE_WAIT, 16022, "weak read service cluster service wait", "", "", "", CONCURRENCY, "WRS_CLUSTER_SERVICE_WAIT", true)
+WAIT_EVENT_DEF(TX_STAT_ITEM_WAIT, 16023, "transaction stat item wait", "", "", "", CONCURRENCY, "TX_STAT_ITEM_WAIT", true)
+WAIT_EVENT_DEF(WRS_CLUSTER_VERSION_MGR_WAIT, 16024, "weak read service cluster version manager wait", "", "", "", CONCURRENCY, "WRS_CLUSTER_VERSION_MGR_WAIT", true)
 
 //replication group
 WAIT_EVENT_DEF(RG_TRANSFER_LOCK_WAIT, 17000, "transfer lock wait", "src_rg", "dst_rg", "transfer_pkey", CONCURRENCY, "transfer lock wait", false)

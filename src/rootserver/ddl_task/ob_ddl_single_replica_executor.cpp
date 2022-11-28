@@ -53,6 +53,8 @@ int ObDDLSingleReplicaExecutor::build(const ObDDLSingleReplicaExecutorParam &par
         build_info_tmp.stat_ = ObPartitionBuildStat::BUILD_INIT;
         if (OB_FAIL(build_infos.push_back(build_info_tmp))) {
           LOG_WARN("fail to push back build info", K(ret));
+        } else if (OB_FAIL(tablet_task_ids_.push_back(i + 1))) {
+          LOG_WARN("fail to push tablet task id", K(ret));
         }
       }
     } else {      // timeout, need reset task status
@@ -115,6 +117,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
           arg.task_id_ = task_id_;
           arg.parallelism_ = parallelism_;
           arg.execution_id_ = execution_id_;
+          arg.tablet_task_id_ = tablet_task_ids_.at(i);
           if (OB_FAIL(location_service->get(tenant_id_, arg.source_tablet_id_,
                   expire_renew_time, is_cache_hit, ls_id))) {
             LOG_WARN("get ls failed", K(ret), K(arg.source_tablet_id_));

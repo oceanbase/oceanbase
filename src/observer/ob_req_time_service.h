@@ -133,13 +133,12 @@ private:
 
 struct ObReqTimeGuard
 {
-  ObReqTimeGuard(bool need_end = true)
+  ObReqTimeGuard()
   {
     ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(ObReqTimeInfo,
                                                ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
     OB_ASSERT(NULL != req_timeinfo);
     req_timeinfo->update_start_time();
-    need_end_ = need_end;
   }
 
   ~ObReqTimeGuard()
@@ -147,11 +146,8 @@ struct ObReqTimeGuard
     ObReqTimeInfo *req_timeinfo = GET_TSI_MULT(ObReqTimeInfo,
                                                ObReqTimeInfo::REQ_TIMEINFO_IDENTIFIER);
     OB_ASSERT(NULL != req_timeinfo);
-    if (need_end_) {
-      req_timeinfo->update_end_time();
-    }
+    req_timeinfo->update_end_time();
   }
-  bool need_end_;
 };
 } // end namespace observer
 } // end namespace oceanbase

@@ -855,6 +855,7 @@ void ObTxTable::check_state_and_epoch_(const transaction::ObTransID tx_id,
                                        const bool need_log_error,
                                        int &ret)
 {
+  UNUSED(need_log_error);
   TxTableState state = ATOMIC_LOAD(&state_);
   int64_t epoch = ATOMIC_LOAD(&epoch_);
 
@@ -891,11 +892,7 @@ void ObTxTable::check_state_and_epoch_(const transaction::ObTransID tx_id,
                K(epoch));
     }
   } else if (OB_FAIL(ret)) {
-    if (need_log_error && OB_TRANS_CTX_NOT_EXIST == ret) {
-      LOG_ERROR("check with tx data failed.", KR(ret), K(tx_id), K(read_epoch), "ls_id", ls_->get_ls_id(), KPC(this));
-    } else {
-      LOG_WARN("check with tx data failed.", KR(ret), K(tx_id), K(read_epoch), "ls_id", ls_->get_ls_id(), KPC(this));
-    }
+    LOG_WARN("check with tx data failed.", KR(ret), K(tx_id), K(read_epoch), "ls_id", ls_->get_ls_id(), KPC(this));
   }
 }
 

@@ -532,7 +532,7 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   is_valid = false;
   TableItem *right_table = NULL;
-  bool is_del_upd_valid = true;
+  bool is_table_valid = true;
   if (OB_ISNULL(stmt) ||
       OB_ISNULL(ctx_) || OB_ISNULL(ctx_->schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -558,14 +558,22 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
       } else if (right_table->is_joined_table()) {
         JoinedTable *right_joined_table = static_cast<JoinedTable *>(right_table);
         if (is_contain(right_joined_table->single_table_ids_, table_info->table_id_)) {
-          is_del_upd_valid = false;
+          is_table_valid = false;
         }
       } else if (table_info->table_id_ == right_table->table_id_) {
-        is_del_upd_valid = false;
+        is_table_valid = false;
       }
     }
   }
-  for (int64_t i = 0; OB_SUCC(ret) && is_del_upd_valid &&
+  if (OB_SUCC(ret) && is_table_valid) {
+    bool contained = false;
+    if (OB_FAIL(ObTransformUtils::check_table_contain_in_semi(stmt, right_table, contained))) {
+      LOG_WARN("failed to check table contained in semi", K(ret));
+    } else if (contained) {
+      is_table_valid = false;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_table_valid &&
                       i < cond_exprs.count(); ++i) {
     bool tmp_cond_valid = false;
     ObArray<ObRawExpr *> tmp_constraints;

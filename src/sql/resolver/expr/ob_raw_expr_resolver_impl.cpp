@@ -3804,7 +3804,7 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
       int64_t pos = (T_FUN_GROUPING == node->type_) ? 0 : 1;
       if ((T_FUN_VAR_POP == node->type_ || T_FUN_VAR_SAMP == node->type_ ||
            T_FUN_STDDEV_POP == node->type_ || T_FUN_STDDEV_SAMP == node->type_
-           || T_FUN_MEDIAN == node->type_) &&
+           || T_FUN_MEDIAN == node->type_ || T_FUN_JSON_ARRAYAGG == node->type_) &&
           node->children_[0] != NULL && node->children_[0]->type_ == T_DISTINCT) {
         ret = OB_DISTINCT_NOT_ALLOWED;
         LOG_WARN("distinct not allowed in aggr", K(ret));
@@ -6486,6 +6486,7 @@ int ObRawExprResolverImpl::process_odbc_time_literals(const ObItemType dst_time_
       tmp_node.num_child_ = 0;
       tmp_node.str_len_ = time_str.length();
       tmp_node.str_value_ = time_str.ptr();
+      tmp_node.is_date_unit_ = false;
       if (OB_FAIL(process_datatype_or_questionmark(tmp_node, expr))) {
         if (ret == OB_ERR_WRONG_VALUE) {//invalid time str, go back default way like Mysql.
           ret = OB_SUCCESS;

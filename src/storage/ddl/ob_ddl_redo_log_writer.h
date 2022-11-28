@@ -186,6 +186,7 @@ class ObDDLRedoLogWriter final
 {
 public:
   static ObDDLRedoLogWriter &get_instance();
+  int init();
   int write(const ObDDLRedoLog &log,
             const uint64_t tenant_id,
             const share::ObLSID &ls_id,
@@ -193,7 +194,10 @@ public:
             const blocksstable::MacroBlockId &macro_block_id,
             char *buffer,
             ObDDLRedoLogHandle &handle);
-  int write_ddl_start_log(const ObDDLStartLog &log, logservice::ObLogHandler *log_handler, share::SCN &start_scn);
+  int write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                          const ObDDLStartLog &log,
+                          logservice::ObLogHandler *log_handler,
+                          share::SCN &start_scn);
   template <typename T>
   int write_ddl_finish_log(const T &log,
                           const ObDDLClogType clog_type,
@@ -210,6 +214,9 @@ private:
   public:
   };
   // TODO: traffic control
+private:
+  bool is_inited_;
+  common::ObBucketLock bucket_lock_;
 };
 
 
@@ -237,7 +244,9 @@ public:
   ObDDLSSTableRedoWriter();
   ~ObDDLSSTableRedoWriter();
   int init(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
-  int start_ddl_redo(const ObITable::TableKey &table_key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int start_ddl_redo(const ObITable::TableKey &table_key,
+                     const int64_t execution_id,
+                     ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int write_redo_log(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                      const blocksstable::MacroBlockId &macro_block_id);
   int wait_redo_log_finish(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
@@ -252,7 +261,6 @@ public:
   OB_INLINE void set_start_scn(const share::SCN &start_scn) { start_scn_.atomic_set(start_scn); }
   OB_INLINE share::SCN get_start_scn() const { return start_scn_.atomic_get(); }
 private:
-  bool need_remote_write(int ret_code);
   int switch_to_remote_write();
 private:
   bool is_inited_;

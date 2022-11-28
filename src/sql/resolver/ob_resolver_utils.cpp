@@ -3482,7 +3482,7 @@ int ObResolverUtils::check_expr_valid_for_partition(ObRawExpr &expr,
       if (OB_FAIL(part_expr->formalize(&session_info))) {
         LOG_WARN("part expr formalize failed", K(ret));
       } else if (OB_FAIL(part_expr->preorder_accept(part_expr_checker))) {
-        LOG_WARN("check_part_expr failed", K(ret));
+        LOG_WARN("check_part_expr failed", K(ret), KPC(part_expr));
       }
     }
   }

@@ -36,6 +36,8 @@ ObMigrationCtx::ObMigrationCtx()
   : ObIHADagNetCtx(),
     tenant_id_(OB_INVALID_ID),
     arg_(),
+    local_clog_checkpoint_scn_(SCN::min_scn()),
+    local_rebuild_seq_(-1),
     start_ts_(0),
     finish_ts_(0),
     task_id_(),
@@ -65,7 +67,7 @@ void ObMigrationCtx::reset()
   tenant_id_ = OB_INVALID_ID;
   arg_.reset();
   local_clog_checkpoint_scn_.set_min();
-  local_rebuild_seq_ = 0;
+  local_rebuild_seq_ = -1;
   start_ts_ = 0;
   finish_ts_ = 0;
   task_id_.reset();
@@ -109,7 +111,7 @@ int ObMigrationCtx::fill_comment(char *buf, const int64_t buf_len) const
 void ObMigrationCtx::reuse()
 {
   local_clog_checkpoint_scn_.set_min();
-  local_rebuild_seq_ = 0;
+  local_rebuild_seq_ = -1;
   minor_src_.reset();
   major_src_.reset();
   src_ls_meta_package_.reset();
@@ -946,7 +948,7 @@ int ObStartMigrationTask::process()
     LOG_WARN("failed to update_ls_", K(ret), K(*ctx_));
   } else if (OB_FAIL(try_remove_unneeded_tablets_())) {
     LOG_WARN("failed to try remove unneeded tablets", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(deal_local_restore_ls_(need_generate_dag))) {
+  }  else if (OB_FAIL(deal_local_restore_ls_(need_generate_dag))) {
     LOG_WARN("failed to deal local restore ls", K(ret), KPC(ctx_));
   } else if (!need_generate_dag) {
     //do nothing
@@ -1121,6 +1123,16 @@ int ObStartMigrationTask::choose_src_()
           }
         }
       }
+#if ERRSIM
+      const ObString &errsim_server = GCONF.errsim_migration_src_server_addr.str();
+      if (!errsim_server.empty() && !ctx_->arg_.ls_id_.is_sys_ls() && ctx_->arg_.type_ != ObMigrationOpType::REBUILD_LS_OP) {
+        SERVER_EVENT_ADD("storage_ha", "after_choose_src",
+                         "tenant_id", ctx_->tenant_id_,
+                         "ls_id", ctx_->arg_.ls_id_.id(),
+                         "local_rebuild_seq", ctx_->local_rebuild_seq_);
+        DEBUG_SYNC(ALTER_LS_CHOOSE_SRC);
+      }
+#endif
 
       FLOG_INFO("succeed choose src",  K(src_info),
           K(ls_info), K(ctx_->sys_tablet_id_array_), K(ctx_->data_tablet_id_array_));
@@ -1189,21 +1201,23 @@ int ObStartMigrationTask::update_ls_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KPC(ctx_));
   } else {
-    ObLSMetaPackage local_ls_meta_package;
     ObLSLockGuard lock_ls(ls);
     const bool is_rebuild = (ctx_->arg_.type_ == ObMigrationOpType::REBUILD_LS_OP);
-    if (OB_FAIL(ls->update_ls_meta_without_lock(update_restore_status,
-                                                ctx_->src_ls_meta_package_.ls_meta_))) {
+    if (OB_FAIL(ls->update_ls_meta(update_restore_status,
+                                   ctx_->src_ls_meta_package_.ls_meta_))) {
       LOG_WARN("failed to update ls meta", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ls->get_end_lsn(end_lsn))) {
       LOG_WARN("failed to get end lsn", K(ret), KPC(ctx_));
     } else if (end_lsn >= ctx_->src_ls_meta_package_.palf_meta_.curr_lsn_) {
       LOG_INFO("end lsn is bigger than src curr lsn, skip advance base info", "end_lsn",
-          end_lsn, "src palf meta", ctx_->src_ls_meta_package_.palf_meta_);
+          end_lsn, "src palf meta", ctx_->src_ls_meta_package_.palf_meta_,
+          "ls_id", ctx_->arg_.ls_id_);
     } else if (OB_FAIL(ls->advance_base_info(ctx_->src_ls_meta_package_.palf_meta_, is_rebuild))) {
       LOG_WARN("failed to advance base lsn for migration", K(ret), KPC(ctx_));
     } else {
       ctx_->local_clog_checkpoint_scn_ = ctx_->src_ls_meta_package_.ls_meta_.get_clog_checkpoint_scn();
+      LOG_INFO("update rebuild seq", "old_ls_rebuld_seq", ctx_->local_rebuild_seq_,
+          "new_ls_rebuild_seq", ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq(), K(lbt()));
       ctx_->local_rebuild_seq_ = ctx_->src_ls_meta_package_.ls_meta_.get_rebuild_seq();
     }
   }
@@ -1379,6 +1393,15 @@ int ObStartMigrationTask::deal_local_restore_ls_(bool &need_generate_dag)
   } else if (ls_restore_status.is_restore_start() || ls_restore_status.is_restore_sys_tablets()) {
     if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
       LOG_WARN("failed to enable log sync", K(ret), KPC(ctx_), KPC(ls));
+    } else if (OB_FAIL(ls->get_tablet_svr()->online())) {
+      LOG_WARN("failed to online tablet svr", K(ret), KPC(ctx_), KPC(ls));
+    } else if (OB_FAIL(ls->get_tx_svr()->online())) {
+      LOG_WARN("failed to online tx svr", K(ret), KPC(ctx_), KPC(ls));
+    } else if (OB_FAIL(ls->get_ddl_log_handler()->online())) {
+      LOG_WARN("failed to online ddl log handler", K(ret), KPC(ctx_), KPC(ls));
+    } else if (OB_FAIL(ls->get_ls_wrs_handler()->online())) {
+      LOG_WARN("failed to online ls wrs handler", K(ret), KPC(ctx_), KPC(ls));
+    } else if (OB_FALSE_IT(ls->get_checkpoint_executor()->online())) {
     } else {
       need_generate_dag = false;
       LOG_INFO("ls restore status is in restore start or in restore sys tablets, no need generate dag",
@@ -1397,6 +1420,7 @@ int ObStartMigrationTask::try_remove_unneeded_tablets_()
   int64_t bucket_num = 0;
   ObArray<ObTabletID> tablet_id_array;
   const int64_t MAX_BUCKET_NUM = 1024;
+  const bool need_initial_state = true;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1426,7 +1450,7 @@ int ObStartMigrationTask::try_remove_unneeded_tablets_()
     }
 
     if (OB_SUCC(ret)) {
-      ObLSTabletIDIterator iter(ls->get_ls_id());
+      ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
       ObTabletID tablet_id;
       if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
         LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));
@@ -2408,6 +2432,8 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
   } else if (FALSE_IT(init_param.src_info_ = src_info)) {
   } else if (FALSE_IT(init_param.tablet_copy_finish_task_ = tablet_copy_finish_task)) {
   } else if (FALSE_IT(init_param.ls_ = ls)) {
+  } else if (FALSE_IT(init_param.need_check_seq_ = true)) {
+  } else if (FALSE_IT(init_param.ls_rebuild_seq_ = ctx_->local_rebuild_seq_)) {
   } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, copy_table_key, init_param.sstable_param_))) {
     LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
   } else if (OB_FAIL(copy_sstable_info_mgr_.get_copy_sstable_maro_range_info(copy_table_key, init_param.sstable_macro_range_info_))) {
@@ -2480,6 +2506,7 @@ int ObTabletMigrationTask::build_copy_sstable_info_mgr_()
     param.tablet_id_ = copy_tablet_ctx_->tablet_id_;
     param.is_leader_restore_ = false;
     param.local_rebuild_seq_ = ctx_->local_rebuild_seq_;
+    param.meta_index_store_ = nullptr;
     param.second_meta_index_store_ = nullptr;
     param.need_check_seq_ = true;
     param.restore_base_info_ = nullptr;
@@ -2549,6 +2576,7 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
   ObLS *ls = nullptr;
   ObTabletMigrationDag *tablet_migration_dag = nullptr;
   observer::ObIMetaReport *reporter = GCTX.ob_service_;
+  const ObTabletRestoreAction::ACTION restore_action = ObTabletRestoreAction::RESTORE_NONE;
   const ObMigrationTabletParam *src_tablet_meta = nullptr;
 
   if (!is_inited_) {
@@ -2561,7 +2589,7 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_tablet_meta(copy_tablet_ctx_->tablet_id_, src_tablet_meta))) {
     LOG_WARN("failed to get src tablet meta", K(ret), KPC(copy_tablet_ctx_));
-  } else if (OB_FAIL(tablet_copy_finish_task->init(copy_tablet_ctx_->tablet_id_, ls, reporter, src_tablet_meta))) {
+  } else if (OB_FAIL(tablet_copy_finish_task->init(copy_tablet_ctx_->tablet_id_, ls, reporter, restore_action, src_tablet_meta))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   }
   return ret;
@@ -4028,10 +4056,12 @@ int ObLSMigrationUtils::init_ha_tablets_builder(
     param.bandwidth_throttle_ = GCTX.bandwidth_throttle_;
     param.is_leader_restore_ = false;
     param.local_rebuild_seq_ = local_rebuild_seq;
+    param.need_check_seq_ = true;
     param.ls_ = ls;
     param.meta_index_store_ = nullptr;
     param.need_check_seq_ = true;
     param.restore_base_info_ = nullptr;
+    param.restore_action_ = ObTabletRestoreAction::RESTORE_NONE;
     param.src_info_ = src_info;
     param.storage_rpc_ = ls_service->get_storage_rpc();
     param.svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();

@@ -30,7 +30,7 @@
 #include "common/ob_accuracy.h"
 #include "rpc/obmysql/ob_mysql_global.h"
 #include "objit/common/ob_item_type.h"
-#include "objit/common/ob_expr_res_type.h"
+#include "sql/engine/expr/ob_expr_res_type.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/expr/ob_expr_cmp_func.h"
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"

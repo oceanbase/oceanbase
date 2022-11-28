@@ -615,8 +615,6 @@ public:
     if (field.is_null_
         || (0 == field.len_ && lib::is_oracle_mode())) {
       obj.set_null();
-    } else if (0 == field.len_ && !is_string_type_column && lib::is_mysql_mode()) {
-      obj.set_int(0);
     } else {
       obj.set_varchar(field.ptr_, field.len_);
       obj.set_collation_type(cs_type);

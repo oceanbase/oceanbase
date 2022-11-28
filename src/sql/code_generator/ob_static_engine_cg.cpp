@@ -2036,6 +2036,23 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
       }
     }  // for index_dml_infos end
   } //for table_columns end
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < delete_table_list.count(); ++i) {
+    ObTableDeleteSpec::DelCtDefArray &ctdefs = spec.del_ctdefs_.at(i);
+    ObDelCtDef &del_ctdef = *ctdefs.at(0);
+    const uint64_t del_table_id = del_ctdef.das_base_ctdef_.index_tid_;
+    bool is_dup = false;
+    for (int j = 0; !is_dup && OB_SUCC(ret) && j < delete_table_list.count(); ++j) {
+      const uint64_t root_table_id = spec.del_ctdefs_.at(j).at(0)->das_base_ctdef_.index_tid_;
+      DASTableIdList parent_tables(phy_plan_->get_allocator());
+      if(OB_FAIL(check_fk_nested_dup_del(del_table_id, root_table_id, parent_tables, is_dup))) {
+        LOG_WARN("failed to perform nested duplicate table check", K(ret), K(del_table_id), K(root_table_id));
+      }
+    }
+    if (OB_SUCC(ret) && is_dup) {
+      del_ctdef.distinct_algo_ = T_HASH_DISTINCT;
+    }
+  }
   return ret;
 }
 
@@ -2091,6 +2108,15 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op, ObTableReplaceSpec &spec, c
           LOG_WARN("generate conflict_checker failed", K(ret));
         } else if (OB_FAIL(mark_expr_self_produced(index_dml_info->column_exprs_))) {
           LOG_WARN("mark self expr failed", K(ret));
+        } else {
+          bool is_dup = false;
+          const uint64_t replace_table_id = replace_ctdef->del_ctdef_->das_base_ctdef_.index_tid_;
+          DASTableIdList parent_tables(phy_plan_->get_allocator());
+          if(OB_FAIL(check_fk_nested_dup_del(replace_table_id, replace_table_id, parent_tables, is_dup))) {
+            LOG_WARN("failed to perform nested duplicate table check", K(ret), K(replace_table_id));
+          } else if (is_dup) {
+            replace_ctdef->del_ctdef_->distinct_algo_ = T_HASH_DISTINCT;
+          }
         }
       }
       spec.replace_ctdefs_.at(i) = replace_ctdef;
@@ -2382,17 +2408,11 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
         LOG_WARN("failed to push back hash func", K(ret));
       }
     } else {
-      bool is_new_hash_version = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_0_0_0);
       for (int64_t i = 0; i < spec.join_keys_.count() && OB_SUCC(ret); ++i) {
         ObExpr *join_expr = spec.join_keys_.at(i);
         ObHashFunc hash_func;
-        if (is_new_hash_version) {
-          hash_func.hash_func_ = join_expr->basic_funcs_->murmur_hash_;
-          hash_func.batch_hash_func_ = join_expr->basic_funcs_->murmur_hash_batch_;
-        } else {
-          hash_func.hash_func_ = join_expr->basic_funcs_->default_hash_;
-          hash_func.batch_hash_func_ = join_expr->basic_funcs_->default_hash_batch_;
-        }
+        hash_func.hash_func_ = join_expr->basic_funcs_->murmur_hash_;
+        hash_func.batch_hash_func_ = join_expr->basic_funcs_->murmur_hash_batch_;
         if (OB_ISNULL(hash_func.hash_func_) || OB_ISNULL(hash_func.batch_hash_func_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("hash func is null, check datatype is valid", K(ret));
@@ -2586,14 +2606,13 @@ int ObStaticEngineCG::generate_basic_receive_spec(ObLogExchange &op, ObPxReceive
           LOG_WARN("batch op type is unexpected", K(ret), K(op.get_px_batch_op_type()));
         }
       }
-      if (OB_SUCC(ret) && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2276) {
-        if (OB_FAIL(coord->get_table_locations().prepare_allocate(op.get_pruning_table_locations().count(),
-            phy_plan_->get_allocator()))) {
-          LOG_WARN("fail to init pruning table locations", K(ret));
-        } else {
-          for (int i = 0; i < op.get_pruning_table_locations().count() && OB_SUCC(ret); ++i) {
-            OZ(coord->get_table_locations().at(i).assign(op.get_pruning_table_locations().at(i)));
-          }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(coord->get_table_locations().prepare_allocate(op.get_pruning_table_locations().count(),
+          phy_plan_->get_allocator()))) {
+        LOG_WARN("fail to init pruning table locations", K(ret));
+      } else {
+        for (int i = 0; i < op.get_pruning_table_locations().count() && OB_SUCC(ret); ++i) {
+          OZ(coord->get_table_locations().at(i).assign(op.get_pruning_table_locations().at(i)));
         }
       }
       LOG_TRACE("map worker to px coordinator", K(spec.get_type()),
@@ -6261,11 +6280,9 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
         case NESTED_LOOP_JOIN: {
           type = CONNECT_BY_JOIN != op.get_join_type()
              ? PHY_NESTED_LOOP_JOIN
-             : (GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_2250
-                ? PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX
-                : (op.get_nl_params().count() > 0
+             : (op.get_nl_params().count() > 0
                   ? PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX
-                  : PHY_NESTED_LOOP_CONNECT_BY));
+                  : PHY_NESTED_LOOP_CONNECT_BY);
           break;
         }
         case MERGE_JOIN: {
@@ -6698,6 +6715,59 @@ int ObStaticEngineCG::check_only_one_unique_key(const ObLogPlan& log_plan,
   }
   if (OB_SUCC(ret)) {
     only_one_unique_key = (1 == unique_index_cnt);
+  }
+  return ret;
+}
+
+bool ObStaticEngineCG::has_cycle_reference(DASTableIdList &parent_tables, const uint64_t table_id)
+{
+  bool ret = false;
+  if (!parent_tables.empty()) {
+    DASTableIdList::iterator iter = parent_tables.begin();
+    for (; !ret && iter != parent_tables.end(); iter++) {
+      if (*iter == table_id) {
+        ret = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::check_fk_nested_dup_del(const uint64_t table_id,
+                              const uint64_t root_table_id,
+                              DASTableIdList &parent_tables,
+                              bool &is_dup)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = NULL;
+  const uint64_t tenant_id = MTL_ID();
+  if (OB_FAIL(parent_tables.push_back(root_table_id))) {
+    LOG_WARN("failed to push root_table_id to parent tables list", K(ret), K(root_table_id), K(parent_tables.size()));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, root_table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(root_table_id));
+  } else if (!OB_ISNULL(table_schema)) {
+    const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos = table_schema->get_foreign_key_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count() && !is_dup; ++i) {
+      const ObForeignKeyInfo &fk_info = foreign_key_infos.at(i);
+      const uint64_t child_table_id = fk_info.child_table_id_;
+      const uint64_t parent_table_id = fk_info.parent_table_id_;
+      ObReferenceAction del_act = fk_info.delete_action_;
+      if (child_table_id != common::OB_INVALID_ID && del_act == ACTION_CASCADE) {
+        if (child_table_id == table_id) {
+          is_dup = true;
+        } else if (has_cycle_reference(parent_tables, child_table_id)) {
+          LOG_DEBUG("This schema has a circular foreign key dependencies");
+        } else if (OB_FAIL(SMART_CALL(check_fk_nested_dup_del(table_id, child_table_id, parent_tables, is_dup)))) {
+          LOG_WARN("failed deep search nested duplicate delete table", K(ret), K(table_id), K(root_table_id), K(child_table_id));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(parent_tables.pop_back())) {
+    LOG_WARN("failed to pop latest table id", K(ret));
   }
   return ret;
 }

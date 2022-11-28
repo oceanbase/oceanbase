@@ -107,7 +107,12 @@ int ObTenantMemoryPrinter::print_tenant_usage()
     _STORAGE_LOG(INFO,
         "[CHUNK_MGR] free=%ld pushes=%ld pops=%ld limit=%'15ld hold=%'15ld total_hold=%'15ld used=%'15ld" \
         " freelist_hold=%'15ld maps=%'15ld unmaps=%'15ld large_maps=%'15ld large_unmaps=%'15ld" \
-        " memalign=%d virtual_memory_used=%'15ld\n",
+        " memalign=%d"
+#ifndef ENABLE_SANITY
+        " virtual_memory_used=%'15ld\n",
+#else
+        " virtual_memory_used=%'15ld actual_virtual_memory_used=%'15ld\n",
+#endif
         CHUNK_MGR.get_free_chunk_count(),
         CHUNK_MGR.get_free_chunk_pushes(),
         CHUNK_MGR.get_free_chunk_pops(),
@@ -121,7 +126,12 @@ int ObTenantMemoryPrinter::print_tenant_usage()
         CHUNK_MGR.get_large_maps(),
         CHUNK_MGR.get_large_unmaps(),
         0,
-        memory_used);
+#ifndef ENABLE_SANITY
+        memory_used
+#else
+        memory_used - CHUNK_MGR.get_shadow_hold(), memory_used
+#endif
+        );
     print_mutex_.unlock();
   }
 

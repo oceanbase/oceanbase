@@ -305,3 +305,8 @@ int ObExprTruncate::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
 }
 } // namespace sql
 } // namespace oceanbase
+
+#undef GET_SCALE_FOR_CALC
+#undef GET_SCALE_FOR_CALC_ORACLE
+#undef GET_SCALE_FOR_DEDUCE
+#undef GET_SCALE_FOR_DEDUCE_ORACLE

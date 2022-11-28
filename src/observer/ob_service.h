@@ -126,7 +126,7 @@ public:
       obrpc::ObGetMinSSTableSchemaVersionRes &result);
   // ObRpcSwitchSchemaP @RS DDL
   int switch_schema(const obrpc::ObSwitchSchemaArg &arg, obrpc::ObSwitchSchemaResult &result);
-  int calc_column_checksum_request(const obrpc::ObCalcColumnChecksumRequestArg &arg);
+  int calc_column_checksum_request(const obrpc::ObCalcColumnChecksumRequestArg &arg, obrpc::ObCalcColumnChecksumRequestRes &res);
   int build_ddl_single_replica_request(const obrpc::ObDDLBuildSingleReplicaRequestArg &arg);
   int write_ddl_sstable_commit_log(const obrpc::ObDDLWriteSSTableCommitLogArg &arg);
   int stop_partition_write(const obrpc::Int64 &switchover_timestamp, obrpc::Int64 &result);

@@ -282,6 +282,7 @@ public:
     : ref_action_(share::schema::ACTION_INVALID),
       database_name_(),
       table_name_(),
+      table_id_(0),
       columns_(),
       is_self_ref_(false)
   {}
@@ -290,6 +291,7 @@ public:
     : ref_action_(share::schema::ACTION_INVALID),
       database_name_(),
       table_name_(),
+      table_id_(0),
       columns_(alloc),
       is_self_ref_(false)
   {}
@@ -298,6 +300,7 @@ public:
     ref_action_ = share::schema::ACTION_INVALID;
     database_name_.reset();
     table_name_.reset();
+    table_id_ = 0;
     columns_.reset();
   }
   TO_STRING_KV(K_(ref_action), K_(database_name), K_(table_name), K_(columns), K_(is_self_ref));
@@ -305,6 +308,7 @@ public:
   share::schema::ObReferenceAction ref_action_;
   common::ObString database_name_;
   common::ObString table_name_;
+  uint64_t table_id_;
   common::ObFixedArray<ObForeignKeyColumn, common::ObIAllocator> columns_;
   bool is_self_ref_;
 };
@@ -746,7 +750,7 @@ public:
   virtual ~ObDelRtDef()
   {
     if (se_rowkey_dist_ctx_ != nullptr) {
-      se_rowkey_dist_ctx_->destroy();
+      // se_rowkey_dist_ctx_->destroy();
       se_rowkey_dist_ctx_ = nullptr;
     }
   }
@@ -757,7 +761,6 @@ public:
   DASDelRtDefArray related_rtdefs_;
   SeRowkeyDistCtx *se_rowkey_dist_ctx_;
 };
-
 struct ObMergeCtDef
 {
   OB_UNIS_VERSION(1);

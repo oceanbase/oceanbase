@@ -83,7 +83,7 @@ public:
   int check_task_exist(const share::ObTaskId &task_id, bool &is_exist);
   void destroy();
   void stop();
-  int safe_to_destroy(bool &is_safe_to_destroy);
+  void wait(bool &wait_finished);
 
 private:
   void reuse_();

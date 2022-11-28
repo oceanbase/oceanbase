@@ -441,8 +441,7 @@ int ObBinlogRecordPrinter::parse_major_version_(const binlogBuf *filter_rv, int3
   int ret = OB_SUCCESS;
   major_version = -1; // default -1, invalid value
   // Get major version, major version is only output if version 1.x is configured and the corresponding configuration item is configured
-  bool need_major_version = common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_2000
-          && TCONF.test_mode_on && TCONF.test_output_major_version;
+  bool need_major_version = false;
   if (need_major_version) {
     const binlogBuf *major_version_buf = filter_rv + 3;
     major_version = (int32_t) atoi(major_version_buf->buf);

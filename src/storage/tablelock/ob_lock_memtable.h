@@ -208,7 +208,6 @@ private:
                               const ObLockID &lock_id,
                               const ObTransID &conflict_tx_id,
                               ObFunction<int(bool &need_wait)> &recheck_f);
-  void wakeup_waiters_(const ObTableLockOp &lock_op);
 private:
   typedef common::SpinRWLock RWLock;
   typedef common::SpinRLockGuard RLockGuard;
@@ -223,6 +222,7 @@ private:
   // data before the flushed_scn_ have been flushed
   share::SCN flushed_scn_;
   share::SCN rec_scn_;
+  share::SCN pre_rec_scn_;
   share::SCN max_committed_scn_;
   bool is_frozen_;
 

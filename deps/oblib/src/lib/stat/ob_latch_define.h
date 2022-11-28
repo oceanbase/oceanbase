@@ -142,6 +142,13 @@ LATCH_DEF(APPLY_STATUS_LOCK, 127, "apply_status latch", LATCH_FIFO, 2000, 0, APP
 LATCH_DEF(ID_SOURCE_LOCK, 128, "ID allocator updates assignable interval lock", LATCH_FIFO, 2000, 0, ID_SOURCE_LOCK_WAIT, "ID allocator updates assignable interval lock")
 LATCH_DEF(TRANS_AUDIT_RECORD_LOCK, 129, "trans records audit information lock", LATCH_FIFO, 2000, 0, TRANS_AUDIT_RECORD_LOCK_WAIT, "trans records audit information lock")
 LATCH_DEF(TABLET_MULTI_SOURCE_DATA_LOCK, 130, "tablet multi source data lock", LATCH_FIFO, 2000, 0, TABLET_MULTI_SOURCE_DATA_WAIT, "tablet multi source data lock")
+LATCH_DEF(WRS_SERVER_VERSION_LOCK, 131, "weak read server version lock", LATCH_FIFO, 2000, 0, WRS_SERVER_VERSION_WAIT, "weak read server version lock")
+LATCH_DEF(TX_LS_LOG_WRITER_LOCK, 132, "transaction ls log writer lock", LATCH_FIFO, 2000, 0, TX_LS_LOG_WRITER_WAIT, "transaction ls log writer lock")
+LATCH_DEF(TX_DESC_LOCK, 133, "transaction descriptor lock", LATCH_FIFO, 2000, 0, TX_DESC_WAIT, "transaction descriptor lock")
+LATCH_DEF(TX_DESC_COMMIT_LOCK, 134, "transaction descriptor commit lock", LATCH_FIFO, 2000, 0, TX_DESC_COMMIT_WAIT, "transaction descriptor commit lock")
+LATCH_DEF(WRS_CLUSTER_SERVICE_LOCK, 135, "weak read service cluster service lock", LATCH_FIFO, 2000, 0, WRS_CLUSTER_SERVICE_WAIT, "weak read service cluster service lock")
+LATCH_DEF(TX_STAT_ITEM_LOCK, 136, "transaction stat item lock", LATCH_FIFO, 2000, 0, TX_STAT_ITEM_WAIT, "transaction stat item lock")
+LATCH_DEF(WRS_CLUSTER_VERSION_MGR_LOCK, 137, "weak read service cluster version manager lock", LATCH_FIFO, 2000, 0, WRS_CLUSTER_VERSION_MGR_WAIT, "weak read service cluster version manager lock")
 
 LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif

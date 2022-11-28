@@ -386,7 +386,7 @@ int ObLogService::add_ls(const ObLSID &id,
                                             replica_type))) {
     CLOG_LOG(WARN, "failed to add_ls for replay_service", K(ret), K(id));
   } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-          palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {
+          &role_change_service_, palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {
     CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), K(id), KP(palf_env_), K(palf_handle));
   } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));
@@ -601,7 +601,7 @@ int ObLogService::create_ls_(const share::ObLSID &id,
   } else if (OB_FAIL(replay_service_.add_ls(id, replica_type))) {
     CLOG_LOG(WARN, "failed to add_ls", K(ret), K(id));
   } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
-          palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {
+          &role_change_service_, palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {
     CLOG_LOG(WARN, "ObLogHandler init failed", K(ret), KP(palf_env_), K(palf_handle));
   } else if (OB_FAIL(restore_handler.init(id.id(), palf_env_))) {
     CLOG_LOG(WARN, "ObLogRestoreHandler init failed", K(ret), K(id), KP(palf_env_));

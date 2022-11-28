@@ -114,7 +114,7 @@ extern ParseNode *new_non_terminal_node(void *malloc_pool, ObItemType node_tag, 
 extern int parse_sql_stmt(ParseResult *parse_result);
 
 
-extern NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char *word);
+extern const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char *word);
 
 #define reset_current_location(__f_col, __l_col)                                  \
   do {                                                                            \

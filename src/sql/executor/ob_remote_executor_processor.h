@@ -14,12 +14,13 @@
 #define OBDEV_SRC_SQL_EXECUTOR_OB_REMOTE_EXECUTOR_PROCESSOR_H_
 #include "sql/executor/ob_executor_rpc_processor.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
+
+namespace oceanbase
+{
 namespace observer
 {
 struct ObGlobalContext;
 }
-namespace oceanbase
-{
 namespace sql
 {
 template <typename T>

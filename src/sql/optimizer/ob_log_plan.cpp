@@ -1280,7 +1280,7 @@ int ObLogPlan::pre_process_quals(SemiInfo* semi_info)
     } else if (expr->has_flag(CNT_ROWNUM) || expr->has_flag(CNT_RAND_FUNC)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr in semi condition", K(ret), K(*expr));
-    } else if (!expr->has_flag(CNT_ONETIME)) {
+    } else if (!expr->has_flag(CNT_ONETIME) || expr->has_flag(CNT_SUB_QUERY)) {
       // do nothing
     } else if (OB_FAIL(add_subquery_filter(expr))) {
       LOG_WARN("failed to add subquery filter", K(ret));
@@ -1314,7 +1314,7 @@ int ObLogPlan::pre_process_quals(TableItem *table_item)
       if (OB_ISNULL(expr = joined_table->join_conditions_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL", K(ret), K(expr));
-      } else if (!expr->has_flag(CNT_ONETIME)) {
+      } else if (!expr->has_flag(CNT_ONETIME) || expr->has_flag(CNT_SUB_QUERY)) {
         // do nothing
       } else if (OB_FAIL(add_subquery_filter(expr))) {
         LOG_WARN("failed to add subquery filter", K(ret));

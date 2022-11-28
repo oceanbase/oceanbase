@@ -245,9 +245,15 @@ int ObIDService::update_ls_id_meta(const bool write_slog)
   if (OB_FAIL(check_and_fill_ls())) {
     TRANS_LOG(WARN, "ls set fail", K(ret));
   } else if (write_slog) {
-    ret = ls_->update_id_meta_with_writing_slog(service_type_, ATOMIC_LOAD(&limited_id_), latest_log_ts_.atomic_get());
+    ret = ls_->update_id_meta(service_type_,
+                              ATOMIC_LOAD(&limited_id_),
+                              latest_log_ts_.atomic_load(),
+                              true /* write slog */);
   } else {
-    ret = ls_->update_id_meta_without_writing_slog(service_type_, ATOMIC_LOAD(&limited_id_), latest_log_ts_.atomic_get());
+    ret = ls_->update_id_meta(service_type_,
+                              ATOMIC_LOAD(&limited_id_),
+                              latest_log_ts_.atomic_load(),
+                              false /* not write slog */);
   }
 
   if (OB_FAIL(ret)) {
@@ -426,7 +432,30 @@ int ObIDService::get_id_service(const int64_t id_service_type, ObIDService *&id_
     break;
   default:
     ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(ERROR, "get wrong id_service_type", K(ret), K(MTL_ID()), K(id_service_type));
+    TRANS_LOG(ERROR, "get wrong id_service_type", K(ret), K(MTL_ID()), K(id_service_type));
+  }
+
+  return ret;
+}
+
+int ObIDService::update_id_service(const ObAllIDMeta &id_meta)
+{
+  int ret = OB_SUCCESS;
+
+  for(int i = 0; i < ObIDService::MAX_SERVICE_TYPE && OB_SUCC(ret); i++) {
+    ObIDService *id_service = NULL;
+    int64_t limited_id = 0;
+    SCN latest_log_ts = SCN::min_scn();
+    if (OB_FAIL(id_meta.get_id_meta(i, limited_id, latest_log_ts))) {
+      TRANS_LOG(WARN, "get id meta fail", K(ret), K(id_meta));
+    } else if (OB_FAIL(get_id_service(i, id_service))) {
+      TRANS_LOG(WARN, "get id service fail", K(ret), K(i));
+    } else if (OB_ISNULL(id_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "id service is null", K(ret));
+    } else {
+      (void) id_service->update_limited_id(limited_id, latest_log_ts);
+    }
   }
 
   return ret;
@@ -642,38 +671,45 @@ OB_DEF_DESERIALIZE(ObAllIDMeta)
 
 void ObAllIDMeta::update_all_id_meta(const ObAllIDMeta &all_id_meta)
 {
+  ObSpinLockGuard lock_guard(lock_);
   for(int i=0; i<ObIDService::MAX_SERVICE_TYPE; i++) {
     (void)inc_update(&id_meta_[i].limited_id_, all_id_meta.id_meta_[i].limited_id_);
     id_meta_[i].latest_log_ts_.inc_update(all_id_meta.id_meta_[i].latest_log_ts_);
   }
 }
 
-int ObAllIDMeta::update_id_service()
+int ObAllIDMeta::update_id_meta(const int64_t service_type,
+                                const int64_t limited_id,
+                                const SCN &latest_log_ts)
 {
   int ret = OB_SUCCESS;
-
-  for(int i=0; i<ObIDService::MAX_SERVICE_TYPE; i++) {
-    ObIDService *id_service = NULL;
-    if (OB_FAIL(ObIDService::get_id_service(i, id_service))) {
-        SERVER_LOG(WARN, "get id service fail", K(ret), K(*this));
-    } else if (OB_ISNULL(id_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "id service is null", K(ret), K(*this));
-    } else {
-      id_service->update_limited_id(id_meta_[i].limited_id_,
-                                    id_meta_[i].latest_log_ts_);
-    }
+  ObSpinLockGuard lock_guard(lock_);
+  if (service_type <= ObIDService::INVALID_ID_SERVICE_TYPE ||
+      service_type >= ObIDService::MAX_SERVICE_TYPE) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(service_type));
+  } else {
+    (void)inc_update(&id_meta_[service_type].limited_id_, limited_id);
+    id_meta_[service_type].latest_log_ts_.inc_update(latest_log_ts);
   }
-
   return ret;
 }
 
-void ObAllIDMeta::update_id_meta(const int64_t service_type,
-                                 const int64_t limited_id,
-                                 const SCN latest_log_ts)
+int ObAllIDMeta::get_id_meta(const int64_t service_type,
+                             int64_t &limited_id,
+                             SCN &latest_log_ts) const
 {
-  (void)inc_update(&id_meta_[service_type].limited_id_, limited_id);
-  id_meta_[service_type].latest_log_ts_.inc_update(latest_log_ts);
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard lock_guard(lock_);
+  if (service_type <= ObIDService::INVALID_ID_SERVICE_TYPE ||
+      service_type >= ObIDService::MAX_SERVICE_TYPE) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(service_type));
+  } else {
+    limited_id = id_meta_[service_type].limited_id_;
+    latest_log_ts = id_meta_[service_type].latest_log_ts_;
+  }
+  return ret;
 }
 
 }

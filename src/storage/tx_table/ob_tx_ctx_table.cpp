@@ -343,12 +343,6 @@ int ObTxCtxTable::check_with_tx_data(const transaction::ObTransID tx_id, ObITxDa
   return ret;
 }
 
-int ObTxCtxTable::get_min_start_scn(SCN &min_start_scn)
-{
-  int ret = get_ls_tx_ctx_mgr()->get_min_start_scn(min_start_scn);
-  return ret;
-}
-
 int ObTxCtxTable::dump_single_tx_data_2_text(const int64_t tx_id_int, FILE *fd)
 {
   int ret = OB_SUCCESS;

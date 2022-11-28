@@ -55,14 +55,14 @@ int gen_create_ls_arg(const int64_t tenant_id,
   ObReplicaType replica_type = REPLICA_TYPE_FULL;
   ObReplicaProperty property;
   share::ObAllTenantInfo tenant_info;
-  const int64_t create_ts_ns = 0;
+  const share::SCN create_scn = share::SCN::base_scn();
   arg.reset();
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
   palf::PalfBaseInfo palf_base_info;
   if (OB_FAIL(tenant_info.init(tenant_id, share::PRIMARY_TENANT_ROLE))) {
     STORAGE_LOG(WARN, "failed to init tenant info", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(arg.init(tenant_id, ls_id, replica_type, property, tenant_info, share::SCN::min_scn(), compat_mode, false, palf_base_info))) {
-   STORAGE_LOG(WARN, "failed to init arg", KR(ret), K(tenant_id), K(ls_id), K(tenant_info), K(create_ts_ns), K(compat_mode), K(palf_base_info));
+  } else if (OB_FAIL(arg.init(tenant_id, ls_id, replica_type, property, tenant_info, create_scn, compat_mode, false, palf_base_info))) {
+   STORAGE_LOG(WARN, "failed to init arg", KR(ret), K(tenant_id), K(ls_id), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info));
   }
   return ret;
 }

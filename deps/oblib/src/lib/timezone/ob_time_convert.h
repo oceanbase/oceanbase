@@ -140,6 +140,8 @@ extern const int64_t USECS_PER_MIN;
 #define DATETIME_MAX_LENGTH 26
 #define TIME_MIN_LENGTH 10
 #define DATE_MIN_LENGTH 10
+#define DAYNAME_MAX_LENGTH 9 //Wednesday is longest
+#define MONTHNAME_MAX_LENGTH 9 //September is longest
 //max timestamp最大值为253402272000 12位
 #define TIMESTAMP_VALUE_LENGTH 12
 #define SEC_TO_USEC(secs)   ((secs) * USECS_PER_SEC)

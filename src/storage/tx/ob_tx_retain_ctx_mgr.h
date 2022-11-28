@@ -126,7 +126,7 @@ public:
 
 private:
   int remove_ctx_func_(RetainCtxList::iterator remove_iter);
-  int for_each_remove_(RetainFuncHandler remove_handler, storage::ObLS *ls);
+  int for_each_remove_(RetainFuncHandler remove_handler, storage::ObLS *ls, const int64_t max_run_us);
   int try_gc_(ObIRetainCtxCheckFunctor *func_ptr, bool &need_remove, storage::ObLS *ls);
   int force_gc_(ObIRetainCtxCheckFunctor *func_ptr, bool &need_remove, storage::ObLS *ls);
 

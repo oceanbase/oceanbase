@@ -221,6 +221,10 @@ struct ObMigrationUtils
   static int check_tablets_has_inner_table(
       const common::ObIArray<ObTabletID> &tablet_ids,
       bool &has_inner_table);
+  static int get_ls_rebuild_seq(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      int64_t &rebuild_seq);
 };
 
 struct ObCopyTableKeyInfo final

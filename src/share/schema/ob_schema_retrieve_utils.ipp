@@ -1216,14 +1216,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         SHARE_SCHEMA_LOG(WARN, "fail to set encryption str", K(ret), K(encryption));
       }
     }
-    /*
-     * __all_table_v2_history is added in ver 2.2.60. To avoid compatibility problems,
-     * __all_table/__all_table_history/__all_table_v2/__all_table_v2_history should add columns in upgrade post stage from ver 2.2.60.
-     * Here, we should ignore error because column is not exist when cluster is still in upgradation.
-     */
-    /* ver 2.2.60 */
-    bool ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                               || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2270;
+    bool ignore_column_error = false;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, sub_part_template_flags, table_schema, int64_t, true /* skip null error*/,
       ignore_column_error, true);
@@ -1232,13 +1225,9 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       table_schema.set_def_sub_part_num(0);
     }
 
-    // table dop: table dop supported from 2270
     int64_t default_table_dop = OB_DEFAULT_TABLE_DOP;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, dop, table_schema, int64_t, true, ignore_column_error, default_table_dop);
 
-    // character_set_client and collation_connection of view schema, supported from 2271
-    ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                          || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2271;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
                 result, character_set_client,
                 table_schema.get_view_schema(),
@@ -1251,26 +1240,17 @@ int ObSchemaRetrieveUtils::fill_table_schema(
                 ObCollationType, true /* skip null error*/,
                 ignore_column_error,
                 CS_TYPE_INVALID);
-    /* ver 3.1 */
-    ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                          || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3100;
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, auto_part, partition_option, true, ignore_column_error, false);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, auto_part_size, partition_option, int64_t, true, ignore_column_error, -1);
 
-    ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                            || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID_AND_DEFAULT_VALUE(result, association_table_id,
     table_schema, tenant_id, true, ignore_column_error, common::OB_INVALID_ID);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID_AND_DEFAULT_VALUE(result, define_user_id,
     table_schema, tenant_id, true, ignore_column_error, common::OB_INVALID_ID);
 
-    ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                          || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_322;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, max_dependency_version,
     table_schema, int64_t, true, ignore_column_error, common::OB_INVALID_VERSION);
 
-    ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                            || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0;
     if (OB_SUCC(ret) && table_schema.is_interval_part()) {
       ObString btransition_point;
       ObString binterval_range;
@@ -1289,7 +1269,6 @@ int ObSchemaRetrieveUtils::fill_table_schema(
       }
     }
 
-    ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, tablet_id, table_schema, uint64_t,
         true, ignore_column_error, ObTabletID::INVALID_TABLET_ID);
   }
@@ -2185,7 +2164,7 @@ int ObSchemaRetrieveUtils::fill_trigger_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, package_exec_env, trigger_info);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, sql_mode, trigger_info, uint64_t);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, trigger_priv_user, trigger_info,
-      true, ObSchemaService::g_ignore_column_retrieve_error_ || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0, default_value);
+      true, false, default_value);
   }
   return ret;
 }
@@ -2336,8 +2315,7 @@ int ObSchemaRetrieveUtils::fill_sequence_schema(
     EXTRACT_NUMBER_FIELD_TO_CLASS_MYSQL(result, cache_size, sequence_schema);
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL(result, cycle_flag, sequence_schema);
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL(result, order_flag, sequence_schema);
-    bool ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-        || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3200;
+    bool ignore_column_error = false;
     EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, is_system_generated, sequence_schema, true, ignore_column_error, false);
   }
   return ret;
@@ -3764,14 +3742,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(const uint64_t tenant_id,
           SHARE_SCHEMA_LOG(WARN, "fail to set encryption str", K(ret), K(encryption));
         }
       }
-     /*
-      * __all_table_v2_history is added in ver 2.2.60. To avoid compatibility problems,
-      * __all_table/__all_table_history/__all_table_v2/__all_table_v2_history should add columns in upgrade post stage from ver 2.2.60.
-      * Here, we should ignore error because column is not exist when cluster is still in upgradation.
-      */
-      /* ver 2.2.60 */
-      ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                                 || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2270;
+      ignore_column_error = false;
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
         result, sub_part_template_flags, table_schema, int64_t, true /* skip null error*/,
         ignore_column_error, true);
@@ -3779,24 +3750,14 @@ int ObSchemaRetrieveUtils::fill_table_schema(const uint64_t tenant_id,
         table_schema.get_sub_part_option().set_part_num(0);
         table_schema.set_def_sub_part_num(0);
       }
-      /* ver 3.1 */
-      ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                            || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_3100;
       EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, auto_part, partition_option, true, ignore_column_error, false);
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, auto_part_size, partition_option, int64_t, true, ignore_column_error, -1);
-      ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                            || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0;
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID_AND_DEFAULT_VALUE(result, association_table_id,
       table_schema, tenant_id, true, ignore_column_error, common::OB_INVALID_ID);
 
-      ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                            || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_322;
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, max_dependency_version,
       table_schema, int64_t, true, ignore_column_error, common::OB_INVALID_VERSION);
     }
-
-    ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                            || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0;
 
     if (OB_SUCC(ret) && table_schema.is_interval_part()) {
       ObString btransition_point;
@@ -3815,7 +3776,6 @@ int ObSchemaRetrieveUtils::fill_table_schema(const uint64_t tenant_id,
         SHARE_SCHEMA_LOG(WARN, "Failed to set interval range to partition", K(ret));
       }
     }
-    ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, tablet_id, table_schema, uint64_t, true, ignore_column_error, 0);
   }
   return ret;
@@ -4758,9 +4718,7 @@ int ObSchemaRetrieveUtils::fill_tablespace_schema(
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
   if (!is_deleted) {
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, tablespace_name, tablespace_schema);
-    // Because encryption_name/encrypt_key/master_key_id is added in upgrade post stage in ver 2.2.30.
-    bool ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                               || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2230;
+    bool ignore_column_error = false;
     ObString empty_str("");
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, encryption_name, tablespace_schema, true, ignore_column_error, empty_str);
@@ -4828,10 +4786,7 @@ int ObSchemaRetrieveUtils::fill_profile_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, password_lock_time, profile_schema, int64_t);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, password_verify_function, profile_schema, true, ObSchemaService::g_ignore_column_retrieve_error_, default_password_verify_function);
-    // __all_tenant_profile is a new table in 2230, adding column actions should be in post stage.
-    // Ignore column error according to cluster version
-    bool ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_
-                               || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2276;
+    bool ignore_column_error = false;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, password_life_time, profile_schema,
         int64_t, false, ignore_column_error, INT64_MAX);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, password_grace_time, profile_schema,

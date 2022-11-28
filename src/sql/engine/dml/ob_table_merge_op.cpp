@@ -169,6 +169,8 @@ int ObTableMergeOp::open_table_for_each()
   int ret = OB_SUCCESS;
   if (OB_FAIL(merge_rtdefs_.allocate_array(ctx_.get_allocator(), MY_SPEC.merge_ctdefs_.count()))) {
     LOG_WARN("allocate merge rtdef failed", K(ret), K(MY_SPEC.merge_ctdefs_.count()));
+  } else if (OB_FAIL(ObDMLService::create_rowkey_check_hashset(get_spec().rows_, &ctx_, merge_rtdefs_.at(0).rowkey_dist_ctx_))) {
+    LOG_WARN("Failed to create hash set", K(ret));
   }
   trigger_clear_exprs_.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.merge_ctdefs_.count(); ++i) {
@@ -355,40 +357,7 @@ int ObTableMergeOp::inner_close()
   return (OB_SUCCESS == ret) ? close_ret : ret;
 }
 
-int ObTableMergeOp::inner_get_next_row()
-{
-  int ret = OB_SUCCESS;
-  if (iter_end_) {
-    LOG_WARN("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
-    ret = OB_ITER_END;
-  } else {
-    while (OB_SUCC(ret)) {
-      if (OB_FAIL(try_check_status())) {
-        LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(get_next_row_from_child())) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("fail to get next row", K(ret));
-        } else {
-          iter_end_ = true;
-        }
-      } else if (OB_FAIL(merge_row_to_das())) {
-        LOG_WARN("merge row to das failed", K(ret));
-      }
-    }
-
-    if (OB_ITER_END == ret) {
-      if (OB_FAIL(merge_rows_post_proc())) {
-        LOG_WARN("do insert rows post process failed", K(ret));
-      } else {
-        ret = OB_ITER_END;
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObTableMergeOp::merge_row_to_das()
+int ObTableMergeOp::write_row_to_das_buffer()
 {
   int ret = OB_SUCCESS;
   bool is_match = false;
@@ -408,26 +377,18 @@ int ObTableMergeOp::merge_row_to_das()
   return ret;
 }
 
-int ObTableMergeOp::merge_rows_post_proc()
+int ObTableMergeOp::write_rows_post_proc(int last_errno)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   //iterator end, if das ref has task, need flush all task data to partition storage
-  if (OB_ISNULL(plan_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("plan_ctx is null", K(ret));
-  } else if (OB_FAIL(dml_rtctx_.das_ref_.pick_del_task_to_first())) {
-    LOG_WARN("pick delete das task to first failed", K(ret));
-  } else if (OB_FAIL(submit_all_dml_task())) {
-    LOG_WARN("submit all dml task failed", K(ret));
-  } else if (OB_FAIL(dml_rtctx_.das_ref_.close_all_task())) {
-    LOG_WARN("close all das task failed", K(ret));
-  } else {
-    dml_rtctx_.reuse();
-  }
-
-  if (OB_SUCC(ret)) {
-    plan_ctx->add_affected_rows(affected_rows_);
+  if (OB_SUCC(last_errno) && iter_end_) {
+    if (OB_ISNULL(plan_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("plan_ctx is null", K(ret));
+    } else {
+      plan_ctx->add_affected_rows(affected_rows_);
+    }
   }
   return ret;
 }
@@ -443,6 +404,7 @@ int ObTableMergeOp::check_is_distinct(bool &conflict)
                                                           MY_SPEC.rows_,
                                                           DistinctType::T_HASH_DISTINCT,
                                                           get_eval_ctx(),
+                                                          get_exec_ctx(),
                                                           merge_rtdefs_.at(0).rowkey_dist_ctx_,
                                                           // merge_rtdefs_ length must > 0
                                                           is_distinct))) {
@@ -619,20 +581,6 @@ int ObTableMergeOp::do_insert()
     if (OB_SUCC(ret)) {
       affected_rows_++;
     }
-  }
-  return ret;
-}
-
-OB_INLINE int ObTableMergeOp::get_next_row_from_child()
-{
-  int ret = OB_SUCCESS;
-  clear_evaluated_flag();
-  if (OB_FAIL(child_->get_next_row())) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to get next row", K(ret));
-    }
-  } else {
-    LOG_TRACE("child output row", "row", ROWEXPR2STR(eval_ctx_, child_->get_spec().output_));
   }
   return ret;
 }

@@ -39,6 +39,7 @@
 #include "share/schema/ob_schema_mgr.h"
 #include "share/ob_lease_struct.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "share/config/ob_config_helper.h"
 #include "share/config/ob_config_manager.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_part_mgr_util.h"
@@ -3656,8 +3657,6 @@ int ObRootService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLA
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_322) {
-    // do nothing
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
@@ -3769,13 +3768,10 @@ int ObRootService::precheck_interval_part(const obrpc::ObAlterTableArg &arg)
   int64_t tenant_id = alter_table_schema.get_tenant_id();
 
   if (!alter_table_schema.is_interval_part()
-             || obrpc::ObAlterTableArg::ADD_PARTITION != op_type) {
+      || obrpc::ObAlterTableArg::ADD_PARTITION != op_type) {
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, schema service must not be NULL", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_0_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval partition");
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard", K(ret));
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
@@ -7936,7 +7932,7 @@ int ObRootService::run_upgrade_job(const obrpc::ObUpgradeJobArg &arg)
              || ObUpgradeJobArg::UPGRADE_SYSTEM_VARIABLE == arg.action_
              || ObUpgradeJobArg::UPGRADE_SYSTEM_TABLE == arg.action_) {
     if (ObUpgradeJobArg::UPGRADE_POST_ACTION == arg.action_
-        && !ObUpgradeChecker::check_cluster_version_exist(version)) {
+        && !ObUpgradeChecker::check_data_version_exist(version)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "run upgrade job with such version is");
@@ -8647,10 +8643,28 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
     LOG_WARN("invalid argument", K(ret), K(arg));
   }
   FOREACH_X(item, arg.items_, OB_SUCCESS == ret) {
-    bool valid;
+    bool valid = true;
     if (item->name_.is_empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("empty config name", "item", *item, K(ret));
+    } else if (0 == STRCMP(item->name_.ptr(), FREEZE_TRIGGER_PERCENTAGE)) {
+      // check write throttle percentage
+      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
+        valid = valid && ObConfigFreezeTriggerIntChecker::check(item->tenant_ids_.at(i), *item);
+        if (!valid) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
+        }
+      }
+    } else if (0 == STRCMP(item->name_.ptr(), WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE)) {
+      // check freeze trigger
+      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
+        valid = valid && ObConfigWriteThrottleTriggerIntChecker::check(item->tenant_ids_.at(i), *item);
+        if (!valid) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
+        }
+      }
     }
   }
   return ret;

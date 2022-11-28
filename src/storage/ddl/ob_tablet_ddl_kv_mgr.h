@@ -20,6 +20,7 @@
 #include "share/scn.h"
 #include "share/ob_ls_id.h"
 #include "storage/ob_i_table.h"
+#include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase
 {
@@ -37,8 +38,8 @@ public:
   ObTabletDDLKvMgr();
   ~ObTabletDDLKvMgr();
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
-  int ddl_start(const ObITable::TableKey &table_key, const share::SCN &start_scn, const int64_t cluster_version, const share::SCN &checkpoint_scn = share::SCN::invalid_scn());
-  int ddl_prepare(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id = 0, const int64_t execution_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
+  int ddl_start(const ObITable::TableKey &table_key, const share::SCN &start_log_ts, const int64_t cluster_version, const int64_t execution_id, const share::SCN &checkpoint_scn);
+  int ddl_prepare(const share::SCN &start_scn, const share::SCN &commit_scn, const uint64_t table_id = 0, const int64_t ddl_task_id = 0); // schedule build a major sstable
   int ddl_commit(const share::SCN &start_scn, const share::SCN &prepare_scn, const bool is_replay); // try wait build major sstable
   int wait_ddl_commit(const share::SCN &start_scn, const share::SCN &prepare_scn);
   int get_ddl_param(ObTabletDDLParam &ddl_param);
@@ -55,6 +56,10 @@ public:
   bool is_commit_success() const { return is_commit_success_; }
   common::ObTabletID get_tablet_id() const { return tablet_id_; }
   int cleanup();
+  int online();
+  bool is_execution_id_older(const int64_t execution_id);
+  int register_to_tablet(const share::SCN &ddl_start_scn, ObDDLKvMgrHandle &kv_mgr_handle);
+  int unregister_from_tablet(const share::SCN &ddl_start_scn, ObDDLKvMgrHandle &kv_mgr_handle);
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
@@ -71,6 +76,7 @@ private:
   int get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle);
   void try_get_ddl_kv_unlock(const share::SCN &scn, ObDDLKV *&kv);
   int update_tablet(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
+  void cleanup_unlock();
   void destroy();
 private:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 64;

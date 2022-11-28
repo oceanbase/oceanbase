@@ -482,6 +482,7 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
                                                bool &can_be) {
   int ret = OB_SUCCESS;
   can_be = false;
+  bool has_assignment = false;
   bool has_rownum_expr = false;
   bool has_ref_assign_user_var = false;
   bool force_merge = false;
@@ -508,10 +509,13 @@ int ObTransformViewMerge::check_basic_validity(ObDMLStmt *parent_stmt,
              || !child_stmt->has_order_by())
              || child_stmt->has_limit()
              || child_stmt->get_aggr_item_size() != 0
-             || child_stmt->is_contains_assignment()
              || child_stmt->has_window_function()
              || child_stmt->has_sequence()
              || child_stmt->has_ora_rowscn()) {
+    can_be = false;
+  } else if (OB_FAIL(ObTransformUtils::check_has_assignment(*child_stmt, has_assignment))) {
+    LOG_WARN("check has assignment failed", K(ret));
+  } else if (has_assignment) {
     can_be = false;
   } else if (OB_FAIL(child_stmt->has_rownum(has_rownum_expr))) {
     LOG_WARN("failed to check has rownum expr", K(ret));

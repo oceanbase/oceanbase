@@ -90,6 +90,7 @@ int ObPxMultiPartDeleteOp::check_rowkey_distinct(const ObExprPtrIArray &row,
                                                       MY_SPEC.rows_,
                                                       MY_SPEC.del_ctdef_.distinct_algo_,
                                                       eval_ctx_,
+                                                      ctx_,
                                                       del_rtdef_.se_rowkey_dist_ctx_,
                                                       is_distinct);
   } else {

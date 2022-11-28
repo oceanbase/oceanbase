@@ -54,14 +54,16 @@ private:
   const int64_t timeout_us_;
 };
 
-class ObLSTabletIDIterator final
+class ObHALSTabletIDIterator final
 {
   friend class ObLSTabletService;
 public:
-  explicit ObLSTabletIDIterator(const share::ObLSID &ls_id);
-  ~ObLSTabletIDIterator();
-  ObLSTabletIDIterator(const ObLSTabletIDIterator&) = delete;
-  ObLSTabletIDIterator &operator=(const ObLSTabletIDIterator&) = delete;
+  explicit ObHALSTabletIDIterator(
+      const share::ObLSID &ls_id,
+      const bool need_initial_state);
+  ~ObHALSTabletIDIterator();
+  ObHALSTabletIDIterator(const ObHALSTabletIDIterator&) = delete;
+  ObHALSTabletIDIterator &operator=(const ObHALSTabletIDIterator&) = delete;
 public:
   int get_next_tablet_id(common::ObTabletID &tablet_id);
 
@@ -73,6 +75,7 @@ private:
   share::ObLSID ls_id_;
   common::ObSEArray<common::ObTabletID, ObTabletCommon::DEFAULT_ITERATOR_TABLET_ID_CNT> tablet_ids_;
   int64_t idx_;
+  const bool need_initial_state_;
 };
 } // namespace storage
 } // namespace oceanbase

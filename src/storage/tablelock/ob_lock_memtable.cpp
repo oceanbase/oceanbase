@@ -46,14 +46,14 @@ ObLockMemtable::ObLockMemtable()
   : ObIMemtable(),
     is_inited_(false),
     ls_id_(),
-    freeze_scn_(),
-    flushed_scn_(),
-    rec_scn_(),
+    freeze_scn_(SCN::min_scn()),
+    flushed_scn_(SCN::min_scn()),
+    rec_scn_(SCN::max_scn()),
+    pre_rec_scn_(),
     max_committed_scn_(),
     is_frozen_(false),
     freezer_(nullptr)
 {
-  rec_scn_.set_max();
 }
 
 ObLockMemtable::~ObLockMemtable()
@@ -171,8 +171,7 @@ int ObLockMemtable::lock_(
   if (ret == OB_OBJ_LOCK_EXIST) {
     ret = OB_SUCCESS;
   }
-  if (ENABLE_USE_LOCK_WAIT_MGR &&
-      OB_TRY_LOCK_ROW_CONFLICT == ret &&
+  if (OB_TRY_LOCK_ROW_CONFLICT == ret &&
       lock_op.is_dml_lock_op() &&   // only in trans dml lock will wait at lock wait mgr.
       conflict_tx_set.count() != 0) {
     // TODO: yanyuan.cxf only wait at the first conflict trans now, but we need
@@ -351,19 +350,6 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
   return ret;
 }
 
-void ObLockMemtable::wakeup_waiters_(const ObTableLockOp &lock_op)
-{
-  // dml in trans lock does not need do this.
-  if (OB_LIKELY(!lock_op.need_wakeup_waiter())) {
-    // do nothing
-  } else if (OB_ISNULL(MTL(ObLockWaitMgr*))) {
-    LOG_WARN("MTL(ObLockWaitMgr*) is null");
-  } else {
-    MTL(ObLockWaitMgr*)->wakeup(lock_op.lock_id_);
-    LOG_DEBUG("ObLockMemtable::wakeup_waiters_ ", K(lock_op));
-  }
-}
-
 int ObLockMemtable::check_lock_conflict(
     const ObMemtableCtx *mem_ctx,
     const ObTableLockOp &lock_op,
@@ -489,9 +475,6 @@ void ObLockMemtable::remove_lock_record(const ObTableLockOp &lock_op)
     LOG_WARN("invalid argument", K(ret), K(lock_op));
   } else {
     obj_lock_map_.remove_lock_record(lock_op);
-    if (ENABLE_USE_LOCK_WAIT_MGR) {
-      wakeup_waiters_(lock_op);
-    }
   }
   LOG_DEBUG("ObLockMemtable::remove_lock_record", K(lock_op));
 }
@@ -523,6 +506,7 @@ int ObLockMemtable::update_lock_status(
     RLockGuard guard(flush_lock_);
     rec_scn_.dec_update(commit_scn);
     max_committed_scn_.inc_update(commit_scn);
+    LOG_INFO("out_trans update_lock_status", K(ret), K(op_info), K(commit_scn), K(status), K(rec_scn_), K(ls_id_));
   }
   LOG_DEBUG("ObLockMemtable::update_lock_status", K(ret), K(op_info), K(commit_scn), K(status));
   return ret;
@@ -738,9 +722,14 @@ int ObLockMemtable::get_frozen_schema_version(int64_t &schema_version) const
 SCN ObLockMemtable::get_rec_scn()
 {
   // no need lock because rec_scn_ aesc except INT64_MAX
-  LOG_INFO("rec_scn of ObLockMemtable is ", K(rec_scn_), K(flushed_scn_),
+  LOG_INFO("rec_scn of ObLockMemtable is ",
+           K(rec_scn_), K(flushed_scn_), K(pre_rec_scn_),
            K(freeze_scn_), K(max_committed_scn_), K(is_frozen_), K(ls_id_));
-  return rec_scn_;
+  if (!pre_rec_scn_.is_valid()) {
+    return rec_scn_;
+  } else {
+    return pre_rec_scn_;
+  }
 }
 
 ObTabletID ObLockMemtable::get_tablet_id() const
@@ -757,15 +746,8 @@ int ObLockMemtable::on_memtable_flushed()
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(flush_lock_);
-  if (max_committed_scn_ > freeze_scn_) {
-    // have no_flushed commit_scn
-    rec_scn_ = freeze_scn_;
-  } else {
-    // all commit_scn flushed
-    rec_scn_.set_max();
-    max_committed_scn_.reset();
-  }
-  if (freeze_scn_ >= flushed_scn_) {
+  pre_rec_scn_.reset();
+  if (freeze_scn_ > flushed_scn_) {
     flushed_scn_ = freeze_scn_;
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -798,19 +780,21 @@ int ObLockMemtable::flush(SCN recycle_scn,
                           bool need_freeze)
 {
   int ret = OB_SUCCESS;
-  UNUSED(need_freeze);
-  {
+  if (need_freeze) {
     WLockGuard guard(flush_lock_);
     SCN rec_scn = get_rec_scn();
     if (rec_scn >= recycle_scn) {
       LOG_INFO("lock memtable no need to flush", K(rec_scn), K(recycle_scn),
                K(is_frozen_), K(ls_id_));
     } else if (is_active_memtable()) {
-      if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(freeze_scn_))) {
-        LOG_WARN("get_max_consequent_callbacked_log_scn failed", K(ret), K(ls_id_));
-      } else if (flushed_scn_ >= freeze_scn_) {
+      freeze_scn_ = max_committed_scn_;
+      if (flushed_scn_ >= freeze_scn_) {
         LOG_INFO("skip freeze because of flushed", K_(ls_id), K_(flushed_scn), K_(freeze_scn));
       } else {
+        pre_rec_scn_ = rec_scn_;
+        rec_scn_.set_max();
+        max_committed_scn_.reset();
+
         ObScnRange scn_range;
         scn_range.start_scn_.set_base();
         scn_range.end_scn_ = freeze_scn_;
@@ -822,16 +806,25 @@ int ObLockMemtable::flush(SCN recycle_scn,
   }
 
   if (is_frozen_memtable()) {
-    // dependent to judging is_active_memtable() in dag
-    // otherwise maybe merge active memtable
-    compaction::ObTabletMergeDagParam param;
-    param.ls_id_ = ls_id_;
-    param.tablet_id_ = LS_LOCK_TABLET;
-    param.merge_type_ = MINI_MERGE;
-    param.merge_version_ = ObVersion::MIN_VERSION;
-    if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
-      if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-        LOG_WARN("failed to schedule lock_memtable merge dag", K(ret), K(this));
+    SCN max_consequent_callbacked_scn = SCN::min_scn();
+    if (OB_FAIL(freezer_->get_max_consequent_callbacked_scn(max_consequent_callbacked_scn))) {
+      LOG_WARN("get_max_consequent_callbacked_scn failed", K(ret), K(ls_id_));
+    } else if (max_consequent_callbacked_scn < freeze_scn_) {
+      LOG_INFO("lock memtable not ready for flush",
+               K(max_consequent_callbacked_scn),
+               K(freeze_scn_));
+    } else {
+      // dependent to judging is_active_memtable() in dag
+      // otherwise maybe merge active memtable
+      compaction::ObTabletMergeDagParam param;
+      param.ls_id_ = ls_id_;
+      param.tablet_id_ = LS_LOCK_TABLET;
+      param.merge_type_ = MINI_MERGE;
+      param.merge_version_ = ObVersion::MIN_VERSION;
+      if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
+        if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
+          LOG_WARN("failed to schedule lock_memtable merge dag", K(ret), K(this));
+        }
       }
     }
   }

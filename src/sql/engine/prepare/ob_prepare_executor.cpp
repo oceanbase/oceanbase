@@ -55,7 +55,7 @@ int ObPrepareExecutor::execute(ObExecContext &ctx, ObPrepareStmt &stmt)
     if (OB_FAIL(ObSQLUtils::calc_const_expr(ctx, stmt.get_prepare_sql(), result, ctx.get_allocator(), params_array))) {
       LOG_WARN("failed to calc const expr", K(stmt.get_prepare_sql()), K(ret));
     } else if (!result.is_string_type()) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_PARSER_SYNTAX;
       LOG_WARN("prepare sql is not a string", K(result), K(ret));
     } else {
       ObString stmt_name;

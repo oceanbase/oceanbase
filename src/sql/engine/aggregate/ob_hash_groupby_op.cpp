@@ -245,9 +245,7 @@ int ObHashGroupByOp::inner_open()
     }
     if (OB_SUCC(ret)) {
       if (is_vectorized()) {
-        // child operator may disable vectorization and returns only 1 row
-        int64_t max_size = (child_->get_spec().max_batch_size_ == 0)
-                            ? 1 : child_->get_spec().max_batch_size_;
+        int64_t max_size = MY_SPEC.max_batch_size_;
         int64_t mem_size = max_size * (sizeof(ObChunkDatumStore::StoredRow *)
                                         + sizeof(uint64_t)
                                         + sizeof(uint64_t)
@@ -332,8 +330,7 @@ int ObHashGroupByOp::inner_open()
           }
         }
         if (OB_SUCC(ret) && is_vectorized()) {
-          // child operator may disable vectorization and returns only 1 row
-          int64_t max_size = (child_->get_spec().max_batch_size_ == 0) ? 1 : child_->get_spec().max_batch_size_;
+          int64_t max_size = MY_SPEC.max_batch_size_;
           int64_t distinct_selector_pos = 0;
           int64_t distinct_hash_value_pos = distinct_selector_pos + max_size * sizeof(uint16_t);
           int64_t distinct_skip_pos = distinct_hash_value_pos + max_size * sizeof(uint64_t);

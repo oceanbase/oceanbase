@@ -2369,6 +2369,9 @@ int ObDmlCgService::generate_fk_arg(ObForeignKeyArg &fk_arg,
   } else if (OB_FAIL(fk_arg.columns_.reserve(name_column_ids.count()))) {
     LOG_WARN("failed to reserve foreign key columns", K(name_column_ids.count()), K(ret));
   }
+  if ( OB_SUCC(ret) && need_handle) {
+    fk_arg.table_id_ = name_table_id;
+  }
   for (int64_t i = 0; OB_SUCC(ret) && need_handle && i < name_column_ids.count(); i++) {
     ObForeignKeyColumn fk_column;
     if (OB_ISNULL(column_schema = (table_schema->get_column_schema(name_column_ids.at(i))))) {

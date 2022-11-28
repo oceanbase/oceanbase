@@ -1625,7 +1625,12 @@ int ObTenantMetaMemMgr::insert_pinned_tablet(const ObTabletMapKey &key)
   } else if (OB_UNLIKELY(!key.is_valid())) {
     LOG_WARN("invalid args", K(ret), K(key));
   } else if (OB_FAIL(pinned_tablet_set_.set_refactored(key, 0/*flag, not overwrite*/))) {
-    LOG_WARN("failed to insert into hash set", K(ret), K(key));
+    if (OB_HASH_EXIST == ret) {
+      LOG_DEBUG("tablet already exists", K(ret), K(key));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to insert into hash set", K(ret), K(key));
+    }
   }
 
   return ret;

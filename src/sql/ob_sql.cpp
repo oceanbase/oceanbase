@@ -2266,6 +2266,8 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   stmt_need_privs.need_privs_.set_allocator(&allocator);
   stmt_ora_need_privs.need_privs_.set_allocator(&allocator);
   uint64_t aggregate_setting = 0;
+  // TODO: @linlin.xll remove ori_bl_key after eval_udf use identical sql ctx.
+  ObPlanBaseKeyGuard(sql_ctx.spm_ctx_.bl_key_);
   _LOG_DEBUG("start to generate physical plan for query.(query = %.*s)",
               parse_result.input_sql_len_, parse_result.input_sql_);
   if (OB_FAIL(sanity_check(sql_ctx))) { //check sql_ctx.session_info_ and sql_ctx.schema_guard_
@@ -2481,8 +2483,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
     }
   }
   // execute dml in oracle mode, regardless of success or failure, always need to maintain object dependencies
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_322
-      && OB_NOT_NULL(basic_stmt) && basic_stmt->is_dml_stmt()) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(basic_stmt) && basic_stmt->is_dml_stmt()) {
     int tmp_ret = ret;
     ObDMLStmt *stmt = static_cast<ObDMLStmt*>(basic_stmt);
     if (stmt->get_ref_obj_table()->is_inited()) {
@@ -3562,7 +3563,6 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       // bug: https://work.aone.alibaba-inc.com/issue/33487009
       if (OB_SUCC(ret) && phy_plan->is_remote_plan()
           && !phy_plan->contains_temp_table()
-          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_2250
           && !enable_send_plan) {
         //处理远程plan转发SQL的情况
         ParamStore &param_store = pctx->get_param_store_for_update();
@@ -3741,8 +3741,6 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
     LOG_TRACE("batched multi_stmt needs rollback", K(ret));
   }
   generate_sql_id(pc_ctx, add_plan_to_pc, parse_result, signature_sql, ret);
-  // TODO: @linlin.xll remove ori_bl_key after eval_udf use identical sql ctx.
-  ObBaselineKey ori_bl_key = context.spm_ctx_.bl_key_;
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(get_outline_data(context, pc_ctx, signature_sql,
@@ -3760,7 +3758,6 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
     } else {
       LOG_WARN("Failed to generate plan", K(ret), K(result.get_exec_context().need_disconnect()));
     }
-  } else if (OB_FALSE_IT(pc_ctx.sql_ctx_.spm_ctx_.bl_key_ = ori_bl_key)) {
   } else if (OB_FAIL(need_add_plan(pc_ctx,
                                    result,
                                    use_plan_cache,

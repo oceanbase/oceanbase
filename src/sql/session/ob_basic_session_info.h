@@ -480,7 +480,7 @@ public:
   void set_rpc_tenant_id(uint64_t tenant_id) { rpc_tenant_id_ = tenant_id; }
   uint64_t get_rpc_tenant_id() const
   {
-    return rpc_tenant_id_?: GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_2210 ? effective_tenant_id_ : tenant_id_;
+    return rpc_tenant_id_ != 0 ? rpc_tenant_id_ : effective_tenant_id_;
   }
   uint64_t get_login_tenant_id() const { return tenant_id_; }
   void set_login_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }

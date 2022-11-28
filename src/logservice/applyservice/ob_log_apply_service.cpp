@@ -558,14 +558,14 @@ int ObApplyStatus::switch_to_leader(const int64_t new_proposal_id)
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(INFO, "apply status has been stopped");
-  } else if (new_proposal_id < proposal_id_) {
+  } else if (new_proposal_id < ATOMIC_LOAD(&proposal_id_)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid proposal id", K(ret), K(new_proposal_id), KPC(this));
   } else if (LEADER == role_) {
     ret = OB_STATE_NOT_MATCH;
     CLOG_LOG(WARN, "apply status has already been leader", KPC(this));
   } else {
-    proposal_id_ = new_proposal_id;
+    ATOMIC_STORE(&proposal_id_, new_proposal_id);
     role_ = LEADER;
     CLOG_LOG(INFO, "apply status switch_to_leader success", KPC(this));
   }
@@ -574,8 +574,12 @@ int ObApplyStatus::switch_to_leader(const int64_t new_proposal_id)
 
 int ObApplyStatus::switch_to_follower()
 {
+  int ret = OB_SUCCESS;
   WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
-  return switch_to_follower_();
+  if (OB_FAIL(switch_to_follower_())) {
+    CLOG_LOG(WARN, "ObApplyStatus switch_to_follower_ failed", K(ret));
+  }
+  return ret;
 }
 
 //需要锁保护
@@ -612,10 +616,11 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
   } else {
     {
       RLockGuard guard(lock_);
+      int64_t curr_proposal_id = ATOMIC_LOAD(&proposal_id_);
       if (is_in_stop_state_) {
         //skip
         CLOG_LOG(WARN, "apply status has been stopped", K(ret), KPC(this));
-      } else if (proposal_id == proposal_id_ && LEADER == role_) {
+      } else if (proposal_id == curr_proposal_id && LEADER == role_) {
         if (palf_committed_end_lsn_ >= end_lsn) {
           CLOG_LOG(ERROR, "invalid new end_lsn", KPC(this), K(proposal_id), K(end_lsn));
         } else {
@@ -624,8 +629,8 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
             CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret), K(proposal_id), K(end_lsn));
           }
         }
-      } else if ((proposal_id == proposal_id_ && FOLLOWER == role_)
-                 || proposal_id < proposal_id_) {
+      } else if ((proposal_id == curr_proposal_id && FOLLOWER == role_)
+                 || proposal_id < curr_proposal_id) {
         // apply切为follower之后, 同proposal_id的日志不应该还能滑出
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(ERROR, "invalid new end_lsn", KPC(this), K(proposal_id), K(end_lsn));
@@ -772,6 +777,12 @@ int ObApplyStatus::diagnose(ApplyDiagnoseInfo &diagnose_info)
   return ret;
 }
 
+void ObApplyStatus::reset_proposal_id()
+{
+  ATOMIC_STORE(&proposal_id_, -1);
+  CLOG_LOG(INFO, "reset_proposal_id success");
+}
+
 int ObApplyStatus::submit_task_to_apply_service_(ObApplyServiceTask &task)
 {
   int ret = OB_SUCCESS;
@@ -796,6 +807,7 @@ int ObApplyStatus::update_last_check_scn_()
 {
   int ret = OB_SUCCESS;
   ObRole palf_role = FOLLOWER;
+  int64_t curr_proposal_id = ATOMIC_LOAD(&proposal_id_);
   int64_t palf_proposal_id = -1;
   bool is_pending_state = true;
   SCN palf_max_scn;
@@ -807,7 +819,7 @@ int ObApplyStatus::update_last_check_scn_()
     //防御性检查, palf的max_scn不应该回退到已达成一致的max_applied_cb_scn_之前
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "invalid palf_max_scn", K(ret), K(ls_id_), K(palf_max_scn), KPC(this));
-  } else if ((palf_proposal_id != proposal_id_) || (FOLLOWER == palf_role)) {
+  } else if ((palf_proposal_id != curr_proposal_id) || (FOLLOWER == palf_role)) {
     if (palf_proposal_id < proposal_id_) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "invalid palf_proposal_id", K(ret), K(ls_id_), K(palf_proposal_id), KPC(this));

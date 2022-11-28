@@ -187,7 +187,7 @@ ObDtlBasicChannel::ObDtlBasicChannel(
   ObRandom rand;
   hash_val_ = rand.get();
   // dtl创建时候的server版本决定发送老的ser方式还是新的chunk row store方式
-  use_crs_writer_ = !(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2200);
+  use_crs_writer_ = true;
   msg_response_.set_id(id_);
 }
 
@@ -221,7 +221,7 @@ ObDtlBasicChannel::ObDtlBasicChannel(
           msg_count_(0)
 {
   // dtl创建时候的server版本决定发送老的ser方式还是新的chunk row store方式
-  use_crs_writer_ = !(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_2200);
+  use_crs_writer_ = true;
   msg_response_.set_id(id_);
 }
 

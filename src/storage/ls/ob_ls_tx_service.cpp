@@ -178,14 +178,15 @@ int ObLSTxService::revert_store_ctx(storage::ObStoreCtx &store_ctx) const
   return ret;
 }
 
-int ObLSTxService::check_scheduler_status(share::ObLSID ls_id)
+int ObLSTxService::check_scheduler_status(SCN &min_start_scn,
+                                          transaction::MinStartScnStatus &status)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(trans_service_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));
   } else {
-    ret = trans_service_->check_scheduler_status(ls_id);
+    ret = mgr_->check_scheduler_status(min_start_scn, status);
   }
   return ret;
 }
@@ -420,6 +421,7 @@ SCN ObLSTxService::get_rec_scn()
   SCN min_rec_scn = SCN::max_scn();
   int min_rec_scn_common_checkpoint_type_index = 0;
   char common_checkpoint_type[common::MAX_CHECKPOINT_TYPE_BUF_LENGTH];
+  ObSpinLockGuard guard(lock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     if (OB_NOT_NULL(common_checkpoints_[i])) {
       SCN rec_scn = common_checkpoints_[i]->get_rec_scn();
@@ -444,6 +446,7 @@ int ObLSTxService::flush(SCN &recycle_scn)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     // only flush the common_checkpoint that whose clog need recycle
     if (OB_NOT_NULL(common_checkpoints_[i]) && recycle_scn >= common_checkpoints_[i]->get_rec_scn()) {
@@ -455,11 +458,29 @@ int ObLSTxService::flush(SCN &recycle_scn)
   return ret;
 }
 
+int ObLSTxService::flush_ls_inner_tablet(const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_id.is_ls_inner_tablet()) {
+    TRANS_LOG(INFO, "not a ls inner tablet", KR(ret), K(tablet_id));
+  } else {
+    for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
+      if (OB_NOT_NULL(common_checkpoints_[i]) && common_checkpoints_[i]->get_tablet_id() == tablet_id &&
+          OB_FAIL(common_checkpoints_[i]->flush(SCN::max_scn(), true))) {
+        TRANS_LOG(WARN, "obCommonCheckpoint flush failed", KR(ret), KP(common_checkpoints_[i]));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSTxService::get_common_checkpoint_info(
     ObIArray<ObCommonCheckpointVTInfo> &common_checkpoint_array)
 {
   int ret = OB_SUCCESS;
   common_checkpoint_array.reset();
+  ObSpinLockGuard guard(lock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     ObCommonCheckpoint *common_checkpoint = common_checkpoints_[i];
     if (OB_ISNULL(common_checkpoint)) {
@@ -538,6 +559,7 @@ int ObLSTxService::traversal_flush()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
   for (int i = 1; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     if (OB_NOT_NULL(common_checkpoints_[i]) &&
         OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(SCN::max_scn(), false))) {
@@ -548,6 +570,7 @@ int ObLSTxService::traversal_flush()
 }
 
 void ObLSTxService::reset_() {
+  ObSpinLockGuard guard(lock_);
   for (int i = 0; i < ObCommonCheckpointType::MAX_BASE_TYPE; i++) {
     common_checkpoints_[i] = NULL;
   }

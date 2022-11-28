@@ -313,6 +313,7 @@ int ObTenantConfig::got_version(int64_t version, const bool remove_repeat)
       if ((ATOMIC_FAA(&update_task_.running_task_count_, 1) < 2)) {
         if (OB_FAIL(config_mgr_->schedule(update_task_, 0))) {
           LOG_WARN("schedule task failed", K_(tenant_id), K(ret));
+          ret = OB_SUCCESS; // if task reach 32 limit, it has chance to retry later
           ATOMIC_DEC(&update_task_.running_task_count_);
         } else {
           LOG_INFO("Schedule update tenant config task successfully!", K_(tenant_id));

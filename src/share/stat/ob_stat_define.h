@@ -44,7 +44,8 @@ enum StatOptionFlags
   OPT_STATTYPE         = 1 << 10,
   OPT_FORCE            = 1 << 11,
   OPT_APPROXIMATE_NDV  = 1 << 12,
-  OPT_STAT_OPTION_ALL  = (1 << 13) -1
+  OPT_ESTIMATE_BLOCK   = 1 << 13,
+  OPT_STAT_OPTION_ALL  = (1 << 14) -1
 };
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
@@ -289,7 +290,8 @@ struct ObTableStatParam {
     duration_time_(-1),
     global_tablet_id_(0),
     global_data_part_id_(INVALID_GLOBAL_PART_ID),
-    data_table_id_(INVALID_GLOBAL_PART_ID)
+    data_table_id_(INVALID_GLOBAL_PART_ID),
+    need_estimate_block_(true)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -360,6 +362,7 @@ struct ObTableStatParam {
   uint64_t global_tablet_id_;
   int64_t global_data_part_id_; // used to check wether table is locked, while gathering index stats.
   int64_t data_table_id_; // the data table id for index schema
+  bool need_estimate_block_;//need estimate macro/micro block count
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -402,7 +405,8 @@ struct ObTableStatParam {
                K(duration_time_),
                K(global_tablet_id_),
                K(global_data_part_id_),
-               K(data_table_id_));
+               K(data_table_id_),
+               K(need_estimate_block_));
 };
 
 struct ObOptStat

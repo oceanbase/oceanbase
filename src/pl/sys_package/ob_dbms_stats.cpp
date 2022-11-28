@@ -3738,7 +3738,7 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   UNUSED(ctx);
-  int64_t stat_options = StatOptionFlags::OPT_APPROXIMATE_NDV;
+  int64_t stat_options = StatOptionFlags::OPT_APPROXIMATE_NDV | StatOptionFlags::OPT_ESTIMATE_BLOCK;
   number::ObNumber num_est_percent;
   number::ObNumber num_degree;
   double percent = 0.0;
@@ -3929,6 +3929,14 @@ int ObDbmsStats::get_default_stat_options(ObExecContext &ctx,
   }
   if (OB_SUCC(ret) && stat_options & StatOptionFlags::OPT_APPROXIMATE_NDV) {
     ObApproximateNdvPrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(ctx.get_allocator(), ctx.get_my_session(), ObString(), tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else if (OB_FAIL(stat_prefs.push_back(tmp_pref))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && stat_options & StatOptionFlags::OPT_ESTIMATE_BLOCK) {
+    ObEstimateBlockPrefs *tmp_pref = NULL;
     if (OB_FAIL(new_stat_prefs(ctx.get_allocator(), ctx.get_my_session(), ObString(), tmp_pref))) {
       LOG_WARN("failed to new stat prefs", K(ret));
     } else if (OB_FAIL(stat_prefs.push_back(tmp_pref))) {
@@ -4890,8 +4898,7 @@ int ObDbmsStats::check_statistic_table_writeable(sql::ObExecContext &ctx)
                                                            in_restore))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (OB_UNLIKELY(in_restore) ||
-             GCTX.is_standby_cluster() ||
-             GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_321) {
+             GCTX.is_standby_cluster()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "use dbms_stats during restore or standby cluster");
   }
@@ -5589,6 +5596,7 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
  *     CONCURRENT, DEBUG, ENABLE_HYBRID_HISTOGRAMS, INCREMENTAL_INTERNAL_CONTROL, JOB_OVERHEAD,
  *     JOB_OVERHEAD_PERC, PREFERENCE_OVERRIDES_PARAMETER, SCAN_RATE, STAT_CATEGORY, SYS_FLAGS,
  *     TRACE, WAIT_TIME_TO_UPDATE_STATS
+ *  add new prefs for OceanBase: ESTIMATE_BLOCK
    https://docs.oracle.com/database/121/ARPLS/d_stats.htm#ARPLS68674
 */
 int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
@@ -5677,13 +5685,20 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
     } else {
       stat_pref = tmp_pref;
     }
+  } else if (is_global_prefs && 0 == opt_name.case_compare("ESTIMATE_BLOCK")) {
+    ObEstimateBlockPrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(ctx.get_allocator(), ctx.get_my_session(), opt_value, tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else {
+      stat_pref = tmp_pref;
+    }
   } else {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Invalid input values for pname", K(ret), K(opt_name));
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid input values for pname, Only Support CASCADE |"\
                                        "DEGREE | ESTIMATE_PERCENT | GRANULARITY | INCREMENTAL |"\
                                        "INCREMENTAL_LEVEL | METHOD_OPT | NO_INVALIDATE | OPTIONS"\
-                                      "STALE_PERCENT | APPROXIMATE_NDV(global prefs unique) prefs");
+                                      "STALE_PERCENT | ESTIMATE_BLOCK | APPROXIMATE_NDV(global prefs unique) prefs");
   }
   return ret;
 }

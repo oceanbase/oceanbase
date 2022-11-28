@@ -331,7 +331,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
       if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(
                     allocator_, dtc_params, body))) {
         LOG_WARN("fail to do charset convert", K(ret), K(body));
-      } else if (OB_FAIL(parser.parse_routine_body(body, parse_tree))) {
+      } else if (OB_FAIL(parser.parse_routine_body(body, parse_tree, session_info_.is_for_trigger_package()))) {
         LOG_WARN("parse routine body failed", K(ret), K(body));
       }
     }

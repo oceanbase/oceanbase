@@ -22,7 +22,8 @@ namespace transaction
 class ObTransStatItem
 {
 public:
-  explicit ObTransStatItem(const char *const item_name) : item_name_(item_name) { reset(); }
+  explicit ObTransStatItem(const char *const item_name)
+      : item_name_(item_name), lock_(common::ObLatchIds::TX_STAT_ITEM_LOCK) { reset(); }
   ~ObTransStatItem() { destroy(); }
   void reset();
   void destroy() { reset(); }

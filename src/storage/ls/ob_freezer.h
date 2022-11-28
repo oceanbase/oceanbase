@@ -205,12 +205,16 @@ public:
            const share::ObLSID &ls_id,
            uint32_t freeze_flag = 0);
   void reset();
+  void offline() { enable_ = false; }
+  void online() { enable_ = true; }
 
 public:
   /* freeze */
   int logstream_freeze();
   int tablet_freeze(const ObTabletID &tablet_id);
   int force_tablet_freeze(const ObTabletID &tablet_id);
+  int tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *&imemtable);
+  int handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *imemtable);
 
   /* freeze_flag */
   bool is_freeze(uint32_t is_freeze=UINT32_MAX) const;
@@ -318,6 +322,7 @@ private:
   int64_t low_priority_freeze_cnt_; // freeze tablet cnt
 
   bool need_resubmit_log_;
+  bool enable_;                     // whether we can do freeze now
 
   bool is_inited_;
 };

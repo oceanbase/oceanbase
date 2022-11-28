@@ -232,6 +232,8 @@ int ObAccessService::table_scan(
   } else if (OB_ISNULL(iter = common::sop_borrow(ObTableScanIterator))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("alloc table scan iterator fail", K(ret));
+  } else if (FALSE_IT(result = iter)) {
+    // upper layer responsible for releasing iter object
   } else if (OB_FAIL(check_read_allowed_(ls_id,
                                          data_tablet_id,
                                          access_type,
@@ -246,14 +248,10 @@ int ObAccessService::table_scan(
   } else if (OB_ISNULL(tablet_service = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet service should not be null.", K(ret), K(ls_id));
-  } else if (OB_FAIL(tablet_service->table_scan(*iter, param, result))) {
+  } else if (OB_FAIL(tablet_service->table_scan(*iter, param))) {
     LOG_WARN("Fail to scan table, ", K(ret), K(ls_id), K(param));
   } else {
     NG_TRACE(storage_table_scan_end);
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(iter)) {
-    iter->reset();
-    common::sop_return(ObTableScanIterator, iter);
   }
   return ret;
 }
@@ -274,18 +272,11 @@ int ObAccessService::table_rescan(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only table scan iter can be rescan", K(ret), K(result->get_type()));
   } else if (!param.need_switch_param_) {
-    if (ObNewRowIterator::ObTableScanIterator == result->get_type() &&
-        OB_FAIL(static_cast<ObTableScanIterator*>(result)->rescan(param))) {
+    if (OB_FAIL(static_cast<ObTableScanIterator*>(result)->rescan(param))) {
       LOG_WARN("rescan ObTableScanIterator failed", K(ret), K(result), K(vparam));
     }
   } else {
-    ObTableScanIterator *iter = nullptr;
-    if (ObNewRowIterator::ObTableScanIterator == result->get_type()) {
-      iter = static_cast<ObTableScanIterator*>(result);
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected table iter type", K(ret), K(result->get_type()));
-    }
+    ObTableScanIterator *iter =  static_cast<ObTableScanIterator*>(result);
     const share::ObLSID &ls_id = vparam.ls_id_;
     const common::ObTabletID &data_tablet_id = vparam.tablet_id_;
     ObLS *ls = nullptr;
@@ -1045,6 +1036,7 @@ int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *
 int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(S_revert_iter_begin);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("access service is not initiated", K(ret));
@@ -1056,7 +1048,7 @@ int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
     iter->~ObNewRowIterator();
   }
   iter = nullptr;
-  NG_TRACE(revert_scan_iter);
+  NG_TRACE(S_revert_iter_end);
   return ret;
 }
 
