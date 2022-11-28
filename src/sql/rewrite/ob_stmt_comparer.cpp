@@ -699,7 +699,7 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
 {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> matched_items;
-  ObStmtCompareContext context;
+  ObStmtCompareContext context(first, second, map_info, &first->get_query_ctx()->calculable_items_);
   match_count = 0;
   if (OB_ISNULL(first) || OB_ISNULL(second) || OB_ISNULL(first->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -707,7 +707,6 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
   } else if (OB_FAIL(condition_map.prepare_allocate(first_exprs.count()))) {
     LOG_WARN("failed to preallocate array", K(ret));
   } else {
-    context.init(first, second, map_info, &first->get_query_ctx()->calculable_items_);
     for (int64_t i = 0; OB_SUCC(ret) && i < first_exprs.count(); ++i) {
       bool is_match = false;
       condition_map.at(i) = OB_INVALID_ID;
@@ -894,7 +893,7 @@ int ObStmtComparer::compute_tables_map(const ObDMLStmt *first,
 {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> matched_items;
-  ObStmtCompareContext context;
+  ObStmtCompareContext context(first, second, map_info, &first->get_query_ctx()->calculable_items_);
   match_count = 0;
   if (OB_ISNULL(first) || OB_ISNULL(second) || OB_ISNULL(first->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -902,7 +901,6 @@ int ObStmtComparer::compute_tables_map(const ObDMLStmt *first,
   } else if (OB_FAIL(table_map.prepare_allocate(first_table_ids.count()))) {
     LOG_WARN("failed to preallocate array", K(ret));
   } else {
-    context.init(first, second, map_info, &first->get_query_ctx()->calculable_items_);
     for (int64_t i = 0; OB_SUCC(ret) && i < first_table_ids.count(); ++i) {
       bool is_match = false;
       table_map.at(i) = OB_INVALID_ID;

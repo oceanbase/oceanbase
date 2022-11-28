@@ -168,7 +168,8 @@ private:
                               ObStmtMapInfo &map_info,
                               ObIArray<ObRawExpr*> &select_exprs, 
                               ObIArray<int64_t> &index_map, 
-                              ObSelectStmt *coalesce_query);
+                              ObSelectStmt *coalesce_query,
+                              const bool is_first_subquery);
 
   int get_map_table_id(ObSelectStmt *subquery,
                       ObSelectStmt *coalesce_subquery,
