@@ -26630,6 +26630,46 @@ int ObDDLService::create_package(ObSchemaGetterGuard &schema_guard,
   return ret;
 }
 
+int ObDDLService::alter_package(ObSchemaGetterGuard &schema_guard,
+                                const ObPackageInfo &package_info,
+                                ObIArray<ObRoutineInfo> &public_routine_infos,
+                                share::schema::ObErrorInfo &error_info,
+                                const ObString *ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = package_info.get_tenant_id();
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else {
+    const uint64_t tenant_id = package_info.get_tenant_id();
+    ObDDLSQLTransaction trans(schema_service_);
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    int64_t refreshed_schema_version = 0;
+    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+      LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    } else if (OB_FAIL(ddl_operator.alter_package(package_info, trans, public_routine_infos,
+                                                  error_info, ddl_stmt_str))) {
+      LOG_WARN("alter package failed", K(package_info), K(ret));
+    }
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(publish_schema(tenant_id))) {
+        LOG_WARN("publish schema failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::drop_package(const ObPackageInfo &package_info,
                                ObErrorInfo &error_info,
                                const ObString *ddl_stmt_str)

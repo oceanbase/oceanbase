@@ -808,6 +808,11 @@ public:
                              share::schema::ObErrorInfo &error_info,
                              common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
                              const common::ObString *ddl_stmt_str);
+  virtual int alter_package(share::schema::ObSchemaGetterGuard &schema_guard,
+                            const ObPackageInfo &package_info,
+                            ObIArray<ObRoutineInfo> &public_routine_infos,
+                            share::schema::ObErrorInfo &error_info,
+                            const common::ObString *ddl_stmt_str);
   virtual int drop_package(const share::schema::ObPackageInfo &package_info,
                            share::schema::ObErrorInfo &error_info,
                            const common::ObString *ddl_stmt_str);

@@ -6365,9 +6365,64 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
 
 int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
 {
-  UNUSED(arg);
-  // need not LOG_UESR_ERROR, actually 'alter trigger' is not supported in oracle parser now.
-  return OB_NOT_SUPPORTED;
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else {
+    uint64_t tenant_id = arg.tenant_id_;
+    const ObString &db_name = arg.db_name_;
+    const ObString &package_name = arg.package_name_;
+    ObPackageType package_type = arg.package_type_;
+    int64_t compatible_mode =  arg.compatible_mode_;
+    ObSchemaGetterGuard schema_guard;
+    const ObDatabaseSchema *db_schema = NULL;
+    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+      LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, db_name, db_schema))) {
+      LOG_WARN("get database schema failed", K(ret));
+    } else if (NULL == db_schema) {
+      ret = OB_ERR_BAD_DATABASE;
+      LOG_WARN("database id is invalid", K(tenant_id), K(db_name), K(ret));
+    } else if (db_schema->is_in_recyclebin()) {
+      ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+      LOG_WARN("Can't not create package of db in recyclebin", K(ret), K(arg), K(*db_schema));
+    }
+    if (OB_SUCC(ret)) {
+      bool exist = false;
+      ObSArray<ObRoutineInfo> &public_routine_infos = const_cast<ObSArray<ObRoutineInfo> &>(arg.public_routine_infos_);
+      if (OB_FAIL(schema_guard.check_package_exist(tenant_id, db_schema->get_database_id(),
+                                                   package_name, package_type, compatible_mode, exist))) {
+        LOG_WARN("failed to check package info exist", K(package_name), K(ret));
+      } else if (exist) {
+        const ObPackageInfo *package_info = NULL;
+        if (OB_FAIL(schema_guard.get_package_info(tenant_id, db_schema->get_database_id(), package_name, package_type,
+                                                  compatible_mode, package_info))) {
+          LOG_WARN("get package info failed", K(ret));
+        } else if (OB_ISNULL(package_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("package info is null", K(db_schema->get_database_id()), K(package_name), K(package_type), K(ret));
+        } else if (OB_FAIL(ddl_service_.alter_package(schema_guard,
+                                                      *package_info,
+                                                      public_routine_infos,
+                                                      const_cast<ObErrorInfo &>(arg.error_info_),
+                                                      &arg.ddl_stmt_str_))) {
+          LOG_WARN("drop package failed", K(ret), K(package_name));
+        }
+      } else {
+        ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
+        const char *type = (package_type == PACKAGE_TYPE ? "PACKAGE" : "PACKAGE BODY");
+        LOG_USER_ERROR(OB_ERR_PACKAGE_DOSE_NOT_EXIST, type,
+                       db_schema->get_database_name_str().length(), db_schema->get_database_name(),
+                       package_name.length(), package_name.ptr());
+      }
+    }
+  }
+
+  return ret;
 }
 
 int ObRootService::drop_package(const obrpc::ObDropPackageArg &arg)

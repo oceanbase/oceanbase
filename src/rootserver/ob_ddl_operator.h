@@ -760,6 +760,11 @@ public:
                      share::schema::ObErrorInfo &error_info,
                      common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
                      const common::ObString *ddl_stmt_str/*=NULL*/);
+  int alter_package(const share::schema::ObPackageInfo &package_info,
+                    common::ObMySQLTransaction &trans,
+                    ObIArray<ObRoutineInfo> &public_routine_infos,
+                    share::schema::ObErrorInfo &error_info,
+                    const common::ObString *ddl_stmt_str);
   int drop_package(const share::schema::ObPackageInfo &package_info,
                    common::ObMySQLTransaction &trans,
                    share::schema::ObSchemaGetterGuard &schema_guard,
