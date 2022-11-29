@@ -459,8 +459,8 @@ public:
   int64_t get_task_count() const;
   void set_result(const int32_t ret);
   int get_result() const;
-  int add_backup_macro_block_info(const ObBackupMacroBlockInfo& block_info);
-  int wait_for_turn(const int64_t task_idx);
+  int add_backup_macro_block_info(const ObBackupMacroBlockInfo &block_info);
+  int wait_for_turn(const int64_t task_idx, bool &need_wait);
   int finish_task(const int64_t task_idx);
   int fetch_prev_macro_index(const ObPhyRestoreMacroIndexStoreV2& macro_index_store,
       const ObBackupMacroBlockArg& macro_arg, ObBackupTableMacroIndex& macro_index);
@@ -539,6 +539,7 @@ private:
   int reuse_block_index(const ObIArray<ObBackupMacroBlockArg>& list, ObIArray<ObBackupTableMacroIndex>& macro_indexs,
       int64_t& reuse_count);
   int calc_migrate_data_statics(const int64_t copy_count, const int64_t reuse_count);
+  int wait_for_turn_();
 
 private:
   static const int64_t OB_FETCH_MAJOR_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000L;  // 1s

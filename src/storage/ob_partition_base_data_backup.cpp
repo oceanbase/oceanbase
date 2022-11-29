@@ -2767,29 +2767,32 @@ int ObBackupPhysicalPGCtx::add_backup_macro_block_info(const ObBackupMacroBlockI
   return ret;
 }
 
-int ObBackupPhysicalPGCtx::wait_for_turn(const int64_t task_idx)
+int ObBackupPhysicalPGCtx::wait_for_turn(const int64_t task_idx, bool &need_wait)
 {
   int ret = OB_SUCCESS;
+  need_wait = true;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "phiscal backup ctx do not init", K(ret));
+    STORAGE_LOG(WARN, "Physical backup ctx do not init", K(ret));
   } else if (!is_opened_) {
     ret = OB_NOT_OPEN;
     LOG_WARN("not opened yet", K(ret));
-  }
-
-  while (OB_SUCC(ret) && task_idx != ATOMIC_LOAD(&task_turn_)) {
+  } else if (task_idx != ATOMIC_LOAD(&task_turn_)) {
     if (OB_FAIL(get_result())) {
       STORAGE_LOG(WARN, "backup pg task already failed", K(ret), K(task_idx));
-      break;
-    }
-    ObThreadCondGuard guard(cond_);
-    if (OB_FAIL(cond_.wait_us(DEFAULT_WAIT_TIME))) {
-      if (OB_TIMEOUT == ret) {
-        ret = OB_SUCCESS;
-        STORAGE_LOG(WARN, "waiting for turn to build macro index is too slow", K(ret), K(task_idx), K(task_turn_));
+      need_wait = false;
+    } else {
+      ObThreadCondGuard guard(cond_);
+      if (OB_FAIL(cond_.wait_us(DEFAULT_WAIT_TIME))) {
+        if (OB_TIMEOUT == ret) {
+          ret = OB_SUCCESS;
+          STORAGE_LOG(WARN, "waiting for turn to build macro index is too slow", K(ret), K(task_idx), K(task_turn_));
+        }
       }
     }
+  } else {
+    need_wait = false;
   }
   return ret;
 }
@@ -3714,7 +3717,7 @@ int ObBackupCopyPhysicalTask::backup_block_index(const int64_t reuse_count, cons
   } else if (OB_UNLIKELY(macro_indexs.count() != sub_task_->block_count_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "macro index count mismatch", K(ret), K(macro_indexs.count()), K(sub_task_->block_count_));
-  } else if (OB_FAIL(backup_pg_ctx_->wait_for_turn(task_idx_))) {
+  } else if (OB_FAIL(wait_for_turn_())) {
     STORAGE_LOG(WARN, "wait to write data index fail", K(ret), K(task_idx_));
   } else if (OB_FAIL(reuse_block_index(list, macro_indexs, real_reuse_count))) {
     STORAGE_LOG(WARN, "wait to write data index fail", K(ret), K(task_idx_));
@@ -3730,6 +3733,34 @@ int ObBackupCopyPhysicalTask::backup_block_index(const int64_t reuse_count, cons
     STORAGE_LOG(WARN, "finish backup sub task fail", K(ret), K(task_idx_));
   } else {
   }
+  return ret;
+}
+
+int ObBackupCopyPhysicalTask::wait_for_turn_()
+{
+  int ret = OB_SUCCESS;
+  bool need_wait = true;
+  const int64_t wait_start_time_us = ObTimeUtility::current_time();
+  int64_t wait_count = 0;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  }
+
+  while (OB_SUCC(ret) && need_wait) {
+    if (OB_FAIL(backup_pg_ctx_->wait_for_turn(task_idx_, need_wait))) {
+      LOG_WARN("failed to wait for turn", K(ret), K_(task_idx));
+    } else if (!need_wait) {
+      break;
+    }
+    ++wait_count;
+    // no need sleep here, wait_for_turn will sleep inside
+  }
+
+  const int64_t wait_cost_time_us = ObTimeUtility::current_time() - wait_start_time_us;
+  LOG_INFO("wait_for_turn", K_(task_idx), K(wait_count), K(wait_cost_time_us));
+
   return ret;
 }
 
