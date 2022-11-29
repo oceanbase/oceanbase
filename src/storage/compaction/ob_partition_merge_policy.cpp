@@ -157,11 +157,10 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       FLOG_INFO("memtable cannot mini merge now", K(ret), K(i), KPC(memtable), K(max_snapshot_version), K(memtable_handles), K(param));
       break;
     } else if (memtable->get_end_scn() <= clog_checkpoint_scn) {
-      if (!tablet_id.is_special_merge_tablet()) {
-        if (static_cast<ObMemtable *>(memtable)->get_is_force_freeze()
-            && memtable->get_snapshot_version() > tablet.get_tablet_meta().snapshot_version_) {
-          contain_force_freeze_memtable = true;
-        }
+      if (!tablet_id.is_special_merge_tablet() &&
+          static_cast<ObMemtable *>(memtable)->get_is_force_freeze() &&
+          memtable->get_snapshot_version() > tablet.get_tablet_meta().snapshot_version_) {
+        contain_force_freeze_memtable = true;
       } else {
         LOG_DEBUG("memtable wait to release", K(param), KPC(memtable));
         continue;
