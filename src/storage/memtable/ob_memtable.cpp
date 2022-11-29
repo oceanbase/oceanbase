@@ -211,6 +211,12 @@ void ObMemtable::destroy()
 {
   ObTimeGuard time_guard("ObMemtable::destroy()", 100 * 1000);
   int ret = OB_SUCCESS;
+  if (mt_stat_.release_time_ != 0) {
+    const int64_t cost_time = ObTimeUtility::current_time() - mt_stat_.release_time_;
+    if (cost_time > 100 * 1000) {
+      TRANS_LOG(INFO, "memtable is destroyed too late", K(cost_time), KP(this));
+    }
+  }
   if (is_inited_) {
     STORAGE_LOG(INFO, "memtable destroyed", K(*this));
     time_guard.click();

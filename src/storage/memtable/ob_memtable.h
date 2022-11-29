@@ -456,7 +456,8 @@ public:
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
                        K_(contain_hotspot_row), K_(max_end_log_ts), K_(rec_log_ts), K_(snapshot_version), K_(migration_clog_checkpoint_ts),
                        K_(is_tablet_freeze), K_(is_force_freeze), K_(contain_hotspot_row),
-                       K_(read_barrier), K_(is_flushed), K_(freeze_state));
+                       K_(read_barrier), K_(is_flushed), K_(freeze_state),
+                       K_(mt_stat_.frozen_time), K_(mt_stat_.ready_for_flush_time), K_(mt_stat_.create_flush_dag_time), K_(mt_stat_.release_time));
 private:
   static const int64_t OB_EMPTY_MEMSTORE_MAX_SIZE = 10L << 20; // 10MB
   int mvcc_write_(storage::ObStoreCtx &ctx,
