@@ -422,10 +422,25 @@ int ObParser::prepare_parse(const ObString &query, void *ns, ParseResult &parse_
         // other errors handle outer side.
       }
     } else {
-      memmove(parse_result.no_param_sql_ + parse_result.no_param_sql_len_,
-          parse_result.input_sql_ + parse_result.pl_parse_info_.last_pl_symbol_pos_,
-          parse_result.input_sql_len_ - parse_result.pl_parse_info_.last_pl_symbol_pos_);
-      parse_result.no_param_sql_len_ += parse_result.input_sql_len_ - parse_result.pl_parse_info_.last_pl_symbol_pos_;
+      int req_size = parse_result.no_param_sql_len_ + parse_result.input_sql_len_ - parse_result.pl_parse_info_.last_pl_symbol_pos_;
+      if (parse_result.no_param_sql_buf_len_ < req_size) {
+        int64_t new_buf_length = req_size + 1;
+        char *new_buf = (char *)parse_malloc(new_buf_length, parse_result.malloc_pool_);
+        if (OB_UNLIKELY(NULL == new_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("no memory for parser");
+        } else {
+          MEMCPY(new_buf, parse_result.no_param_sql_, parse_result.no_param_sql_len_);
+          parse_result.no_param_sql_ = new_buf;
+          parse_result.no_param_sql_buf_len_ = new_buf_length;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        memmove(parse_result.no_param_sql_ + parse_result.no_param_sql_len_,
+              parse_result.input_sql_ + parse_result.pl_parse_info_.last_pl_symbol_pos_,
+              parse_result.input_sql_len_ - parse_result.pl_parse_info_.last_pl_symbol_pos_);
+        parse_result.no_param_sql_len_ += parse_result.input_sql_len_ - parse_result.pl_parse_info_.last_pl_symbol_pos_;
+      }
     }
   }
   return ret;
