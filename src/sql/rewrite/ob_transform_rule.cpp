@@ -165,7 +165,8 @@ int ObTransformRule::transform_stmt_recursively(common::ObIArray<ObParentDMLStmt
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
-  if (OB_ISNULL(stmt)) {
+  int64_t size = 0;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(ret));
   } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
@@ -173,7 +174,10 @@ int ObTransformRule::transform_stmt_recursively(common::ObIArray<ObParentDMLStmt
   } else if (is_stack_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(current_level), K(is_stack_overflow), K(ret));
-  } else if (is_large_stmt(*stmt) &&
+  } else if (stmt->is_select_stmt() &&
+        OB_FAIL(static_cast<const ObSelectStmt *>(stmt)->get_set_stmt_size(size))) {
+    LOG_WARN("failed to get set stm size", K(ret));
+  } else if (size > common::OB_MAX_SET_STMT_SIZE &&
             !(transformer_type_ == PRE_PROCESS ||
             transformer_type_ == POST_PROCESS)) {
     // skip transformation for large stmt
@@ -270,6 +274,8 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
     LOG_WARN("context is null", K(ret), K(ctx_), K(stmt), K(trans_stmt), K(top_stmt));
   } else if (force_accept) {
     trans_happened = true;
+  } else if (ctx_->is_set_stmt_oversize_) {
+    LOG_TRACE("not accept transform because large set stmt", K(ctx_->is_set_stmt_oversize_));
   } else if (OB_FAIL(evaluate_cost(parent_stmts, trans_stmt, true,
                                    trans_stmt_cost, is_expected, check_ctx))) {
     LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
@@ -281,11 +287,10 @@ int ObTransformRule::accept_transform(common::ObIArray<ObParentDMLStmt> &parent_
   } else {
     trans_happened = trans_stmt_cost < stmt_cost_;
   }
-
   if (OB_FAIL(ret)) {
   } else if (!trans_happened) {
     LOG_TRACE("reject transform because the cost is increased or the query plan is unexpected",
-                                      K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
+                     K_(ctx_->is_set_stmt_oversize), K_(stmt_cost), K(trans_stmt_cost), K(is_expected));
   } else if (OB_FAIL(adjust_transformed_stmt(parent_stmts, trans_stmt, tmp1, tmp2))) {
     LOG_WARN("failed to adjust transformed stmt", K(ret));
   } else if (force_accept) {
@@ -737,20 +742,6 @@ bool ObTransformRule::is_view_stmt(const ObIArray<ObParentDMLStmt> &parents, con
   return bret;
 }
 
-bool ObTransformRule::is_large_stmt(const ObDMLStmt &stmt)
-{
-  bool bret = false;
-  int ret = OB_SUCCESS;
-  int64_t size = 0;
-  if (stmt.is_select_stmt()) {
-    if (OB_FAIL(static_cast<const ObSelectStmt&>(stmt).get_set_stmt_size(size))) {
-      LOG_WARN("failed to get set stm size", K(ret));
-    } else if (size > common::OB_MAX_SET_STMT_SIZE) {
-      bret = true;
-    }
-  }
-  return bret;
-}
 
 int ObTryTransHelper::fill_helper(const ObQueryCtx *query_ctx)
 {

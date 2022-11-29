@@ -294,9 +294,9 @@ int ObOptimizer::get_stmt_max_table_dop(ObDMLStmt &stmt,
                  table_item->is_fake_cte_table() ||
                  table_item->is_joined_table()) {
       } else if (table_item->is_temp_table()) {
-	if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
-	  LOG_WARN("push back failed", K(ret));
-	}
+        if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
+          LOG_WARN("push back failed", K(ret));
+        }
       } else if (table_item->is_generated_table()) {
       } else {
         uint64_t tids[OB_MAX_INDEX_PER_TABLE + 1];
