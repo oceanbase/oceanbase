@@ -63,12 +63,6 @@ char* ObEasySqlRequestOperator::alloc_sql_response_buffer(ObRequest* req, int64_
   return static_cast<char*>(buf);
 }
 
-void ObEasySqlRequestOperator::free_sql_response_buffer(ObRequest* req, void *buf)
-{
-  (void)req;
-  (void)buf;
-}
-
 char *ObEasySqlRequestOperator::sql_reusable_alloc(ObRequest* req, int64_t size)
 {
   void *buf = NULL;
