@@ -80,7 +80,7 @@ ThreadSpecificBuffer::Buffer *ThreadSpecificBuffer::get_buffer() const
       ptr = ob_malloc(size_ + sizeof(Buffer), ObModIds::OB_THREAD_BUFFER);
       if (NULL == ptr) {
         // malloc failed;
-        _OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "malloc thread specific memeory failed.");
+        _OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "malloc thread specific memory failed.");
       } else {
         int ret = pthread_setspecific(key_, ptr);
         if (0 != ret) {

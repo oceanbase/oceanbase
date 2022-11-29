@@ -196,7 +196,7 @@ int ObQueryRange::init_query_range_ctx(ObIAllocator &allocator,
         LOG_WARN("expr result type is null", K(ret));
       } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObKeyPartPos)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memeory for ObKeyPartPos", K(ret));
+        LOG_WARN("failed to allocate memory for ObKeyPartPos", K(ret));
       } else {
         ObExprResType tmp_expr_type = *expr_res_type;
         if (tmp_expr_type.is_lob_locator()) {
