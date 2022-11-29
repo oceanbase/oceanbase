@@ -65,9 +65,9 @@ DEF_STR(devname, OB_CLUSTER_PARAMETER, "bond0", "name of network adapter",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(zone, OB_CLUSTER_PARAMETER, "", "specifies the zone name",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(internal_sql_execute_timeout, OB_CLUSTER_PARAMETER, "30s", "[1000us, 10m]",
+DEF_TIME(internal_sql_execute_timeout, OB_CLUSTER_PARAMETER, "30s", "[1000us, 1h]",
     "the number of microseconds an internal DML request is permitted to "
-    "execute before it is terminated. Range: [1000us, 10m]",
+    "execute before it is terminated. Range: [1000us, 1h]",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
     "the number of rpc/mysql I/O threads for Libeasy. Range: [0, 64] in integer, 0 stands for max(6, CPU_NUM/8)",
