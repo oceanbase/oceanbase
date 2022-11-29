@@ -1372,6 +1372,7 @@ constexpr int OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT = -9086;
 constexpr int OB_EER_WINDOW_NO_CHILD_PARTITIONING = -9087;
 constexpr int OB_EER_WINDOW_NO_INHERIT_FRAME = -9088;
 constexpr int OB_EER_WINDOW_NO_REDEFINE_ORDER_BY = -9089;
+constexpr int OB_ESI_SESSION_NOT_EXIST = -9090;
 constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
@@ -3203,6 +3204,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_EER_WINDOW_NO_CHILD_PARTITIONING__USER_ERROR_MSG "A window which depends on another cannot define partitioning"
 #define OB_EER_WINDOW_NO_INHERIT_FRAME__USER_ERROR_MSG "Window '%.*s' has a frame definition, so cannot be referenced by another window"
 #define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__USER_ERROR_MSG "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
+#define OB_ESI_SESSION_NOT_EXIST__USER_ERROR_MSG "obesi process session not exist"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
@@ -5035,6 +5037,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_EER_WINDOW_NO_CHILD_PARTITIONING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9087, A window which depends on another cannot define partitioning"
 #define OB_EER_WINDOW_NO_INHERIT_FRAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9088, Window '%.*s' has a frame definition, so cannot be referenced by another window"
 #define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9089, Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
+#define OB_ESI_SESSION_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9090, obesi process session not exist"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"

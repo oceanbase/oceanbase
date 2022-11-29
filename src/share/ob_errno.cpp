@@ -19257,6 +19257,18 @@ static const _error _error_OB_EER_WINDOW_NO_REDEFINE_ORDER_BY = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9089, Named window cann't be modified by another ordering property",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9089, Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
 };
+static const _error _error_OB_ESI_SESSION_NOT_EXIST = {
+      .error_name            = "OB_ESI_SESSION_NOT_EXIST",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "obesi process session not exist",
+      .str_user_error        = "obesi process session not exist",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9090, obesi process session not exist",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9090, obesi process session not exist"
+};
 static const _error _error_OB_NO_SUCH_FILE_OR_DIRECTORY = {
       .error_name            = "OB_NO_SUCH_FILE_OR_DIRECTORY",
       .error_cause           = "Internal Error",
@@ -23579,6 +23591,7 @@ struct ObStrErrorInit
     _errors[-OB_EER_WINDOW_NO_CHILD_PARTITIONING] = &_error_OB_EER_WINDOW_NO_CHILD_PARTITIONING;
     _errors[-OB_EER_WINDOW_NO_INHERIT_FRAME] = &_error_OB_EER_WINDOW_NO_INHERIT_FRAME;
     _errors[-OB_EER_WINDOW_NO_REDEFINE_ORDER_BY] = &_error_OB_EER_WINDOW_NO_REDEFINE_ORDER_BY;
+    _errors[-OB_ESI_SESSION_NOT_EXIST] = &_error_OB_ESI_SESSION_NOT_EXIST;
     _errors[-OB_NO_SUCH_FILE_OR_DIRECTORY] = &_error_OB_NO_SUCH_FILE_OR_DIRECTORY;
     _errors[-OB_FILE_OR_DIRECTORY_EXIST] = &_error_OB_FILE_OR_DIRECTORY_EXIST;
     _errors[-OB_FILE_OR_DIRECTORY_PERMISSION_DENIED] = &_error_OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;

@@ -1684,7 +1684,7 @@ DEFINE_ERROR(OB_PACKET_CHECKSUM_ERROR, -8003, -1, "08004", "Packet checksum erro
 DEFINE_ERROR_DEP(OB_PACKET_CLUSTER_ID_NOT_MATCH, -8004, -1, "08004", "Packet cluster_id not match");
 
 ////////////////////////////////////////////////////////////////
-// backup and restore error codes
+// backup and restore error codes 9000 - 9099
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR_DEP(OB_URI_ERROR, -9001, -1, "HY000", "URI error");
 DEFINE_ERROR_DEP(OB_FINAL_MD5_ERROR, -9002, -1, "HY000", "OSS file MD5 error");
@@ -1777,6 +1777,9 @@ DEFINE_ERROR(OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT, -9086, -1, "HY000", "backup a
 DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_CHILD_PARTITIONING, -9087, ER_WINDOW_NO_CHILD_PARTITIONING, "HY000", "Named window cann't be modified by another partitioning property", "A window which depends on another cannot define partitioning");
 DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_INHERIT_FRAME, -9088, ER_WINDOW_NO_INHERIT_FRAME, "HY000", "Named window cann't be modified by another framing property", "Window '%.*s' has a frame definition, so cannot be referenced by another window");
 DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_REDEFINE_ORDER_BY, -9089, ER_WINDOW_NO_REDEFINE_ORDER_BY, "HY000", "Named window cann't be modified by another ordering property", "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause");
+
+DEFINE_ERROR(OB_ESI_SESSION_NOT_EXIST, -9090, -1, "HY000", "obesi process session not exist");
+// end of backup and restore error codes 9001 ~ 9099
 
 ////////////////////////////////////////////////////////////////
 //error code for STORAGE3.0 -9100 ~
