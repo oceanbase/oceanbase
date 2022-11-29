@@ -8143,6 +8143,40 @@ int ObDDLOperator::create_package(const ObPackageInfo *old_package_info,
   return ret;
 }
 
+int ObDDLOperator::alter_package(const ObPackageInfo &package_info,
+                                 ObMySQLTransaction &trans,
+                                 ObIArray<ObRoutineInfo> &public_routine_infos,
+                                 ObErrorInfo &error_info,
+                                 const ObString *ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(ddl_stmt_str);
+  ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
+  const uint64_t tenant_id = package_info.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  uint64_t package_id = package_info.get_package_id();
+  ObPackageInfo new_package_info;
+  OV (OB_NOT_NULL(schema_service_impl), OB_ERR_SYS);
+  OV (OB_INVALID_ID != tenant_id && OB_INVALID_ID != package_id, OB_INVALID_ARGUMENT);
+  if (OB_SUCC(ret)) {
+    if (public_routine_infos.count() > 0) {
+      // update routine route sql
+      ARRAY_FOREACH(public_routine_infos, routine_idx) {
+        ObRoutineInfo &routine_info = public_routine_infos.at(routine_idx);
+        OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version));
+        OX (routine_info.set_schema_version(new_schema_version));
+        OZ (schema_service_impl->get_routine_sql_service().update_routine(routine_info, &trans));
+      }
+      OZ (new_package_info.assign(package_info));
+      OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version));
+      OX (new_package_info.set_schema_version(new_schema_version));
+      OZ (schema_service_impl->get_routine_sql_service().alter_package(new_package_info, &trans, ddl_stmt_str));
+    }
+  }
+  OZ (error_info.handle_error_info(trans, &package_info));
+  return ret;
+}
+
 int ObDDLOperator::drop_package(const ObPackageInfo &package_info,
                                 ObMySQLTransaction &trans,
                                 ObSchemaGetterGuard &schema_guard,

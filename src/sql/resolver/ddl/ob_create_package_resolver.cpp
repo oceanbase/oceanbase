@@ -559,7 +559,8 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
         if (OB_SUCC(ret)) {
           obrpc::ObCreatePackageArg &create_package_arg = stmt->get_create_package_arg();
           ObIArray<ObRoutineInfo> &routine_list = create_package_arg.public_routine_infos_;
-          const ObPLRoutineTable &routine_table = package_body_ast.get_routine_table();
+          const ObPLRoutineTable &spec_routine_table = package_spec_ast.get_routine_table();
+          const ObPLRoutineTable &body_routine_table = package_body_ast.get_routine_table();
           ObRoutineInfo routine_info;
           const ObPLRoutineInfo *pl_routine_info = NULL;
           ObArray<const ObRoutineInfo *> routine_infos;
@@ -569,30 +570,8 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
           OZ (schema_checker_->get_schema_guard()->get_routine_infos_in_package(
             session_info_->get_effective_tenant_id(), package_spec_info->get_package_id(),
             routine_infos));
-          for (int64_t i = ObPLRoutineTable::NORMAL_ROUTINE_START_IDX;
-               OB_SUCC(ret) && i < package_spec_ast.get_routine_table().get_count(); i++) {
-            const ObRoutineInfo* tmp_routine_info = NULL;
-            bool found = false;
-            OX (routine_info.reset());
-            OZ (routine_table.get_routine_info(i, pl_routine_info));
-            for (int64_t j = 0; OB_SUCC(ret) && j < routine_infos.count(); ++j) {
-              tmp_routine_info = routine_infos.at(j);
-              if (tmp_routine_info->get_subprogram_id() == i) {
-                ObString route_sql = pl_routine_info->get_route_sql();
-                ObString routine_body = pl_routine_info->get_routine_body();
-                CK (false == found);
-                OX (found = true);
-                OX (routine_info = *tmp_routine_info);
-                OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(
-                      *allocator_, session_info_->get_dtc_params(), route_sql));
-                OX (routine_info.set_route_sql(route_sql));
-                OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(
-                      *allocator_, session_info_->get_dtc_params(), routine_body));
-                OX (routine_info.set_routine_body(routine_body));
-              }
-            }
-            OZ (routine_list.push_back(routine_info));
-          }
+          OZ (update_routine_route_sql(*allocator_, *session_info_, routine_list,
+                                       spec_routine_table, body_routine_table, routine_infos));
         }
         if (OB_FAIL(ret) && ret != OB_ERR_UNEXPECTED && ret != OB_ERR_TOO_LONG_IDENT) {
           LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR, "PACKAGE BODY",
@@ -674,5 +653,41 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
   }
   return ret;
 }
+
+int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocator,
+                                                          const ObSQLSessionInfo &session_info,
+                                                          ObIArray<ObRoutineInfo> &public_routine_list,
+                                                          const ObPLRoutineTable &spec_routine_table,
+                                                          const ObPLRoutineTable &body_routine_table,
+                                                          ObArray<const ObRoutineInfo *> &routine_infos)
+{
+  int ret = OB_SUCCESS;
+  const ObPLRoutineInfo *pl_routine_info = NULL;
+  ObRoutineInfo routine_info;
+  for (int64_t i = ObPLRoutineTable::NORMAL_ROUTINE_START_IDX;
+       OB_SUCC(ret) && i < spec_routine_table.get_count(); i++) {
+    const ObRoutineInfo* tmp_routine_info = NULL;
+    bool found = false;
+    OX (routine_info.reset());
+    OZ (body_routine_table.get_routine_info(i, pl_routine_info));
+    for (int64_t j = 0; OB_SUCC(ret) && j < routine_infos.count(); ++j) {
+      tmp_routine_info = routine_infos.at(j);
+      if (tmp_routine_info->get_subprogram_id() == i) {
+        ObString route_sql = pl_routine_info->get_route_sql();
+        ObString routine_body = pl_routine_info->get_routine_body();
+        CK (false == found);
+        OX (found = true);
+        OX (routine_info = *tmp_routine_info);
+        OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator, session_info.get_dtc_params(), route_sql));
+        OX (routine_info.set_route_sql(route_sql));
+        OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator, session_info.get_dtc_params(), routine_body));
+        OX (routine_info.set_routine_body(routine_body));
+      }
+    }
+    OZ (public_routine_list.push_back(routine_info));
+  }
+  return ret;
+}
+
 } //namespace sql
 } //namespace oceanbase
