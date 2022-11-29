@@ -181,6 +181,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
                                                       table_schema->get_table_id(),
                                                       table_schema->get_database_id(),
                                                       arg,
+                                                      schema_guard,
                                                       ddl_operator,
                                                       trans,
                                                       new_index_schema))) {

@@ -938,6 +938,7 @@ public:
       const uint64_t data_table_id,
       const uint64_t database_id,
       const obrpc::ObDropIndexArg &drop_index_arg,
+      ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,
       share::schema::ObTableSchema &new_index_schema);
