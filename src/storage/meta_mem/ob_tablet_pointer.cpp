@@ -267,7 +267,7 @@ int ObTabletPointer::remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle
     LOG_WARN("invalid argument", K(ret), K(ddl_kv_mgr_handle));
   } else if (ddl_kv_mgr_handle_.get_obj() != ddl_kv_mgr_handle.get_obj()) {
     ret = OB_ITEM_NOT_MATCH;
-    LOG_WARN("ddl kv mgr changed", K(ret));
+    LOG_WARN("ddl kv mgr changed", K(ret), KP(ddl_kv_mgr_handle_.get_obj()), KPC(ddl_kv_mgr_handle.get_obj()));
   } else {
     ddl_kv_mgr_handle_.reset();
   }
