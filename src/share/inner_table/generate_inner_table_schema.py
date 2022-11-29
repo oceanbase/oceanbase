@@ -828,15 +828,13 @@ def add_normal_columns(columns, *args):
       add_column(column, rowkey_id, index_id, 0)
 
 def add_storing_column(keywords, column_name):
-  idx = len(keywords['index_columns']) + len(keywords['rowkey_columns'])
-  for col in keywords['normal_columns']:
-    if col[0] == column_name:
-      add_column(col, 0, 0, 0, idx,is_hidden='false' ,is_storing_column='true')
-    else:
-      idx+=1
-def add_storing_columns(columns, **keywords):
+  (idx, column_def) = find_column_def(keywords, column_name, False)
+  add_column(column_def, 0, 0, 0, idx, is_hidden='false' ,is_storing_column='true')
+  return idx
+def add_storing_columns(columns, max_used_column_idx, **keywords):
   for column_name in columns:
-    add_storing_column(keywords, column_name)
+    max_used_column_idx = max(max_used_column_idx, add_storing_column(keywords, column_name))
+  return max_used_column_idx
 
 def add_field(kw, value):
   global cpp_f
@@ -1803,7 +1801,7 @@ def def_table_schema(**keywords):
       max_used_column_idx = add_index_columns(value, **keywords)
     elif field == 'storing_columns':
       # only virtual table index generation will enter here
-      add_storing_columns(value,**keywords)
+      max_used_column_idx = add_storing_columns(value, max_used_column_idx, **keywords)
     elif field in ('index_name', 'name_postfix',
                    'is_cluster_private', 'is_real_virtual_table',
                    'owner', 'vtable_route_policy'):
