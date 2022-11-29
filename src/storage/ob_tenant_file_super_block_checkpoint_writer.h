@@ -63,6 +63,9 @@ public:
   void reset();
 
 private:
+  int check_tenant_unit_deleted(const uint64_t tenant_id, bool &is_deleted);
+
+private:
   ObPGMetaItemWriter writer_;
 };
 

@@ -15,6 +15,7 @@
 #include "ob_tenant_file_super_block_checkpoint_writer.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "storage/ob_tenant_file_mgr.h"
+#include "observer/omt/ob_tenant_node_balancer.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::blocksstable;
@@ -104,18 +105,8 @@ int ObTenantFileSuperBlockCheckpointWriter::write_checkpoint(blocksstable::ObSto
       ObTenantFileCheckpointEntry file_checkpoint_entry;
       if (OB_FAIL(file_checkpoint_map.get_refactored(file_info.tenant_key_, file_checkpoint_entry))) {
         if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-          int tmp_ret = OB_SUCCESS;
-          // in case any deleted tenant file info is leaked, try check schema for sure
-          share::schema::ObSchemaGetterGuard schema_guard;
-          if (OB_SUCCESS !=
-              (tmp_ret = share::schema::ObMultiVersionSchemaService::get_instance().get_schema_guard(schema_guard))) {
-            LOG_WARN("fail to get schema guard", K(tmp_ret), K(file_info));
-          } else if (OB_SUCCESS != (tmp_ret = schema_guard.check_formal_guard())) {
-            LOG_WARN("fail to check formal schema guard", K(tmp_ret), K(file_info));
-          } else if (OB_SUCCESS != (tmp_ret = schema_guard.check_if_tenant_has_been_dropped(
-                                        file_info.tenant_key_.tenant_id_, tenant_has_been_dropped))) {
-            LOG_WARN("fail to check if tenant has been dropped", K(tmp_ret), K(file_info));
+          if (OB_FAIL(check_tenant_unit_deleted(file_info.tenant_key_.tenant_id_, tenant_has_been_dropped))) {
+            LOG_WARN("fail to check tenant unit dropped", K(ret), K(file_info.tenant_key_));
           }
         } else {
           LOG_WARN("fail to get from file checkpoint map", K(ret));
@@ -163,6 +154,24 @@ int ObTenantFileSuperBlockCheckpointWriter::write_checkpoint(blocksstable::ObSto
     }
   }
   tenant_file_infos.reset();
+  return ret;
+}
+
+int ObTenantFileSuperBlockCheckpointWriter::check_tenant_unit_deleted(const uint64_t tenant_id, bool &is_deleted)
+{
+  // in case any deleted tenant file info is leaked, check schema for sure
+  int ret = OB_SUCCESS;
+  is_deleted = !omt::ObTenantNodeBalancer::get_instance().is_tenant_exist(tenant_id);
+  share::schema::ObSchemaGetterGuard schema_guard;
+  if (is_deleted) {
+    // unit has beed removed
+  } else if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance().get_schema_guard(schema_guard))) {
+    LOG_ERROR("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.check_formal_guard())) {
+    LOG_WARN("fail to check formal schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.check_if_tenant_has_been_dropped(tenant_id, is_deleted))) {
+    LOG_ERROR("fail to check if tenant has been dropped", K(ret), K(tenant_id));
+  }
   return ret;
 }
 
