@@ -178,7 +178,7 @@ public:
   void reset();
   share::SCN get_commit_scn() const { return commit_scn_; }
 public:
-  ObDDLClogCb *cb_;
+  ObDDLCommitClogCb *cb_;
   share::SCN commit_scn_;
 };
 
@@ -200,9 +200,10 @@ public:
                           share::SCN &start_scn);
   template <typename T>
   int write_ddl_finish_log(const T &log,
-                          const ObDDLClogType clog_type,
-                          logservice::ObLogHandler *log_handler,
-                          ObDDLCommitLogHandle &handle);
+                           const ObDDLClogType clog_type,
+                           const share::ObLSID &ls_id,
+                           logservice::ObLogHandler *log_handler,
+                           ObDDLCommitLogHandle &handle);
 private:
   ObDDLRedoLogWriter();
   ~ObDDLRedoLogWriter();

@@ -705,7 +705,11 @@ int ObDDLRedoLogWriter::write_ddl_start_log(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
 }
 
 template <typename T>
-int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType clog_type, ObLogHandler *log_handler, ObDDLCommitLogHandle &handle)
+int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log,
+                                             const ObDDLClogType clog_type,
+                                             const share::ObLSID &ls_id,
+                                             ObLogHandler *log_handler,
+                                             ObDDLCommitLogHandle &handle)
 {
   int ret = OB_SUCCESS;
   const enum ObReplayBarrierType replay_barrier_type = ObReplayBarrierType::PRE_BARRIER;
@@ -718,7 +722,7 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
                               + ddl_header.get_serialize_size()
                               + log.get_serialize_size();
   int64_t pos = 0;
-  ObDDLClogCb *cb = nullptr;
+  ObDDLCommitClogCb *cb = nullptr;
 
   palf::LSN lsn;
   const bool need_nonblock= false;
@@ -728,9 +732,12 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
   if (OB_ISNULL(buffer = static_cast<char *>(ob_malloc(buffer_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_ISNULL(cb = op_alloc(ObDDLClogCb))) {
+  } else if (OB_ISNULL(cb = op_alloc(ObDDLCommitClogCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
+  } else if (ObDDLClogType::DDL_COMMIT_LOG == clog_type &&
+      OB_FAIL(cb->init(ls_id, log.get_table_key().tablet_id_, log.get_start_scn()))) {
+        LOG_WARN("init ddl commit log callback failed", K(ret), K(ls_id), K(log));
   } else if (OB_FAIL(base_header.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("failed to serialize log base header", K(ret));
   } else if (OB_FAIL(ddl_header.serialize(buffer, buffer_size, pos))) {
@@ -748,7 +755,7 @@ int ObDDLRedoLogWriter::write_ddl_finish_log(const T &log, const ObDDLClogType c
                                          scn))) {
     LOG_WARN("fail to submit ddl commit log", K(ret), K(buffer), K(buffer_size));
   } else {
-    ObDDLClogCb *tmp_cb = cb;
+    ObDDLCommitClogCb *tmp_cb = cb;
     cb = nullptr;
     bool need_retry = true;
     while (need_retry) {
@@ -848,6 +855,10 @@ int ObDDLCommitLogHandle::wait(const int64_t timeout)
     while (OB_SUCC(ret) && !finish) {
       if (cb_->is_success()) {
         finish = true;
+        ret = cb_->get_ret_code();
+        if (OB_FAIL(ret)) {
+          LOG_WARN("ddl commit log callback execute failed", K(ret), KPC(cb_));
+        }
       } else if (cb_->is_failed()) {
         ret = OB_NOT_MASTER;
       }
@@ -1078,7 +1089,7 @@ int ObDDLSSTableRedoWriter::write_prepare_log(const ObITable::TableKey &table_ke
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
   } else if (!remote_write_) {
-    if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_finish_log(log, ObDDLClogType::DDL_PREPARE_LOG, ls->get_log_handler(), handle))) {
+    if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_finish_log(log, ObDDLClogType::DDL_PREPARE_LOG, ls_id_, ls->get_log_handler(), handle))) {
       if (ObDDLUtil::need_remote_write(ret)) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(table_key));
@@ -1132,7 +1143,7 @@ int ObDDLSSTableRedoWriter::write_commit_log(const ObITable::TableKey &table_key
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(table_key));
   } else if (!remote_write_) {
-    if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_finish_log(log, ObDDLClogType::DDL_COMMIT_LOG, ls->get_log_handler(), handle))) {
+    if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_finish_log(log, ObDDLClogType::DDL_COMMIT_LOG, ls_id_, ls->get_log_handler(), handle))) {
       if (ObDDLUtil::need_remote_write(ret)) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(table_key));

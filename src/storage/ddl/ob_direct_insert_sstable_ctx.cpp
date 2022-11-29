@@ -718,8 +718,6 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
     } else if (OB_FAIL(data_sstable_redo_writer_.write_commit_log(table_key,
                                                                   prepare_scn))) {
       LOG_WARN("fail write ddl commit log", K(ret), K(table_key));
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(ddl_start_scn, ddl_kv_mgr_handle))) {
-      LOG_WARN("ddl kv mgr unregister failed", K(ret), K(build_param_));
     }
   }
   return ret;
