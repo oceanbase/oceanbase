@@ -590,30 +590,6 @@ int ObDDLTask::batch_release_snapshot(
   return ret;
 }
 
-int ObDDLTask::check_is_latest_execution_id(const int64_t execution_id, bool &is_latest)
-{
-  int ret = OB_SUCCESS;
-  is_latest = true;
-  ObMySQLTransaction trans;
-  ObRootService *root_service = nullptr;
-  int64_t table_task_status = 0;
-  int64_t table_execution_id = 0;
-  if (OB_ISNULL(root_service = GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
-    LOG_WARN("start transaction failed", K(ret));
-  } else {
-    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id_, task_id_, table_task_status, table_execution_id))) {
-      LOG_WARN("select for update failed", K(ret), K(task_id_));
-    } else if (table_execution_id > execution_id) {
-      is_latest = false;
-    }
-    trans.end(false);// abort
-  }
-  return ret;
-}
-
 int ObDDLTask::push_execution_id()
 {
   int ret = OB_SUCCESS;

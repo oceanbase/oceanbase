@@ -193,7 +193,6 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
                                                                  const int ret_code)
 {
   int ret = OB_SUCCESS;
-  bool is_latest_execution_id = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObColumnRedefinitionTask has not been inited", K(ret));
@@ -202,10 +201,8 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
   } else if (snapshot_version != snapshot_version_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
-  } else if (OB_FAIL(check_is_latest_execution_id(execution_id, is_latest_execution_id))) {
-    LOG_WARN("failed to check latest execution id", K(ret), K(execution_id));
-  } else if (!is_latest_execution_id) {
-    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(execution_id_));
+  } else if (execution_id < execution_id_) {
+    LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
   } else if (OB_FAIL(replica_builder_.set_partition_task_status(tablet_id, ret_code))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }

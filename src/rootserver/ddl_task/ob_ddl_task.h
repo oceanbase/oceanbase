@@ -338,7 +338,6 @@ public:
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
       K_(sys_task_id), K_(err_code_occurence_cnt), K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_));
 protected:
-  int check_is_latest_execution_id(const int64_t execution_id, bool &is_latest);
   virtual bool is_error_need_retry(const int ret_code)
   {
     return !share::ObIDDLTask::in_ddl_retry_black_list(ret_code) && (share::ObIDDLTask::in_ddl_retry_white_list(ret_code)
