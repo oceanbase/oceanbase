@@ -85,10 +85,9 @@ void ObConnectByOpPump::reset()
     if (NULL != str.ptr()) {
       allocator_.free(const_cast<char *>(str.ptr()));
     }
+    str.reset();
   }
-  sys_path_buffer_.reset();
   cur_level_ = 1;
-  sys_path_buffer_.reset();
   // TODO:shanting 计划生成时记录右表是否有含参数的条件下推，如果没有可以不做datum_store_的rebuild
   if (true) {
     datum_store_.reset();
