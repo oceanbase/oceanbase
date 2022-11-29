@@ -303,7 +303,7 @@ int ObTabletMeta::init(
     ref_tablet_id_ = old_tablet_meta.ref_tablet_id_;
     create_scn_ = old_tablet_meta.create_scn_;
     start_scn_ = old_tablet_meta.start_scn_;
-    clog_checkpoint_scn_ = old_tablet_meta.clog_checkpoint_scn_;
+    clog_checkpoint_scn_ = clog_checkpoint_scn;
     snapshot_version_ = snapshot_version;
     multi_version_start_ = multi_version_start;
     compat_mode_ = old_tablet_meta.compat_mode_;
