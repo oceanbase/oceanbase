@@ -974,7 +974,6 @@ int ObMPPacketSender::resize_ezbuf(const int64_t size)
       if (comp_context_.last_pkt_pos_ == ez_buf_->pos) {
         comp_context_.last_pkt_pos_ = tmp->pos;
       }
-      SQL_REQ_OP.free_sql_response_buffer(req_, ez_buf_);
       ez_buf_ = tmp;
     }
   }
@@ -1009,7 +1008,6 @@ void ObMPPacketSender::finish_sql_request()
   if (conn_valid_ && !req_has_wokenup_) {
     SQL_REQ_OP.finish_sql_request(req_);
     req_has_wokenup_ = true;
-    SQL_REQ_OP.free_sql_response_buffer(req_, ez_buf_);
     ez_buf_ = NULL;
   }
 }
