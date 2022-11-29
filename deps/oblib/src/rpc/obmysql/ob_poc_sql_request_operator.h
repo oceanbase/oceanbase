@@ -28,8 +28,7 @@ public:
   virtual SSL *get_sql_ssl_st(rpc::ObRequest* req) override;
   virtual char* alloc_sql_response_buffer(rpc::ObRequest* req, int64_t size) override;
   virtual char *sql_reusable_alloc(rpc::ObRequest* req, const int64_t size) override;
-  virtual void free_sql_response_buffer(rpc::ObRequest* req, void *buf) override;
-   virtual common::ObAddr get_peer(const rpc::ObRequest* req) override;
+  virtual common::ObAddr get_peer(const rpc::ObRequest* req) override;
   virtual void disconnect_sql_conn(rpc::ObRequest* req) override;
   virtual void finish_sql_request(rpc::ObRequest* req) override;
   virtual int write_response(rpc::ObRequest* req, const char* buf, int64_t sz) override;
