@@ -745,6 +745,12 @@ void ObTenant::set_unit_status(const ObUnitInfoGetter::ObUnitStatus status)
   tenant_meta_.unit_.unit_status_ = status;
 }
 
+ObUnitInfoGetter::ObUnitStatus  ObTenant::get_unit_status()
+{
+  TCRLockGuard guard(meta_lock_);
+  return tenant_meta_.unit_.unit_status_;
+}
+
 void ObTenant::mark_tenant_is_removed()
 {
   TCWLockGuard guard(meta_lock_);
