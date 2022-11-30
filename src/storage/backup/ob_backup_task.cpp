@@ -3777,7 +3777,9 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
-  } else if (OB_FAIL(fetch_backup_ls_meta_(rebuild_seq, backup_clog_checkpoint_ts))) {
+  } else if (OB_FAIL(fetch_cur_ls_rebuild_seq_(rebuild_seq))) {
+    LOG_WARN("failed to fetch cur ls rebuild seq", K(ret), K_(param));
+  } else if (OB_FAIL(fetch_backup_ls_meta_(backup_clog_checkpoint_ts))) {
     LOG_WARN("failed to fetch backup ls meta checkpoint ts", K(ret), K_(param));
   } else if (FALSE_IT(ls_backup_ctx_->rebuild_seq_ = rebuild_seq)) {
     // assign rebuild seq
@@ -3811,10 +3813,33 @@ int ObLSBackupPrepareTask::may_need_advance_checkpoint_()
   return ret;
 }
 
-int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &rebuild_seq, int64_t &clog_checkpoint_ts)
+int ObLSBackupPrepareTask::fetch_cur_ls_rebuild_seq_(int64_t &rebuild_seq)
 {
   int ret = OB_SUCCESS;
-  rebuild_seq = 0;
+  rebuild_seq = -1;
+  storage::ObLSHandle ls_handle;
+  storage::ObLS *ls = NULL;
+  const uint64_t tenant_id = param_.tenant_id_;
+  const share::ObLSID &ls_id = param_.ls_id_;
+  MTL_SWITCH(tenant_id) {
+    ObLSMetaPackage cur_ls_meta;
+    if (OB_FAIL(get_ls_handle(tenant_id, ls_id, ls_handle))) {
+      LOG_WARN("failed to get ls handle", K(ret), K(tenant_id), K(ls_id));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream not exist", K(ret), K(ls_id));
+    } else if (OB_FAIL(ls->get_ls_meta_package(cur_ls_meta))) {
+      LOG_WARN("failed to get ls meta package", K(ret), K(tenant_id), K(ls_id));
+    } else {
+      rebuild_seq = cur_ls_meta.ls_meta_.get_rebuild_seq();
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &clog_checkpoint_ts)
+{
+  int ret = OB_SUCCESS;
   clog_checkpoint_ts = 0;
   ObLSMetaPackage ls_meta_package;
   share::ObBackupDataStore store;
@@ -3826,7 +3851,6 @@ int ObLSBackupPrepareTask::fetch_backup_ls_meta_(int64_t &rebuild_seq, int64_t &
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls meta package", K(ret), K(ls_meta_package));
   } else {
-    rebuild_seq = ls_meta_package.ls_meta_.get_rebuild_seq();
     clog_checkpoint_ts = ls_meta_package.ls_meta_.get_clog_checkpoint_ts();
   }
   return ret;

@@ -446,7 +446,8 @@ public:
 
 private:
   int may_need_advance_checkpoint_();
-  int fetch_backup_ls_meta_(int64_t &rebuild_seq, int64_t &clog_checkpoint_ts);
+  int fetch_cur_ls_rebuild_seq_(int64_t &rebuild_seq);
+  int fetch_backup_ls_meta_(int64_t &clog_checkpoint_ts);
   int check_tx_data_can_explain_user_data_();
   int get_backup_tx_data_table_filled_tx_log_ts_(int64_t &filled_tx_log_ts);
   int prepare_meta_index_store_(ObBackupMetaIndexStore &meta_index_store);
