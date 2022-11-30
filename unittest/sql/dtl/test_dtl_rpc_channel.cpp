@@ -119,7 +119,7 @@ TEST(TestDtlRpcChannel, Basic)
 
 //   // Create a DtlChannelInfo object, ci1 and ci2 are the channel information at both ends of the same channel.
 //   ObDtlChannelInfo ci1, ci2;
-//   const uint64_t tenant_id = 500;
+//   const uint64_t tenant_id = OB_SERVER_TENANT_ID;
 //   int ret = ObDtlChannelGroup::make_channel(tenant_id, self_addr, self_addr, ci1, ci2);
 //   ASSERT_EQ(OB_SUCCESS, ret);
 

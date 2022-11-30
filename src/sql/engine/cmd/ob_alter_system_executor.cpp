@@ -1621,7 +1621,7 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
         LOG_WARN("fail to get pc mem conf", KR(ret), KPC(session_info));
       } else if (OB_FAIL(GCTX.schema_service_->get_tenant_received_broadcast_version(
                  effective_tenant_id, received_schema_version))) {
-        LOG_WARN("fail to get tenant received brocast version", KR(ret), K(effective_tenant_id));
+        LOG_WARN("fail to get tenant received broadcast version", KR(ret), K(effective_tenant_id));
       } else if (OB_FAIL(session_info->switch_tenant(effective_tenant_id))) {
         LOG_WARN("fail to switch tenant", KR(ret), K(effective_tenant_id), K(pre_effective_tenant_id));
       } else if (OB_FAIL(session_info->set_default_database(database_name))) {

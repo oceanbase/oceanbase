@@ -1648,7 +1648,7 @@ int ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
       }
     }
     cast_mode |= CM_FORMAT_NUMBER_WITH_LIMIT;
-    LOG_DEBUG("in get_defalut_cast_mode", K(ret), K(is_explicit_cast),
+    LOG_DEBUG("in get_default_cast_mode", K(ret), K(is_explicit_cast),
         K(result_flag), K(session->get_stmt_type()), K(cast_mode));
   }
   return ret;
@@ -2912,7 +2912,7 @@ int ObSQLUtils::update_session_last_schema_version(ObMultiVersionSchemaService &
   uint64_t tenant_id = session_info.get_effective_tenant_id();
   if (OB_FAIL(schema_service.get_tenant_received_broadcast_version(tenant_id,
                                                                    received_schema_version))) {
-    LOG_WARN("fail to get tenant received brocast version", K(ret), K(tenant_id));
+    LOG_WARN("fail to get tenant received broadcast version", K(ret), K(tenant_id));
   } else if (OB_FAIL(session_info.update_sys_variable(SYS_VAR_OB_LAST_SCHEMA_VERSION,
                                                       received_schema_version))) {
     LOG_WARN("fail to set session variable for last_schema_version", K(ret));
