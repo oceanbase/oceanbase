@@ -766,6 +766,9 @@ constexpr int OB_DDL_SCHEMA_VERSION_NOT_MATCH = -5403;
 constexpr int OB_ERR_COLUMN_GROUP_DUPLICATE = -5404;
 constexpr int OB_SQL_RETRY_SPM = -5434;
 constexpr int OB_OUTLINE_NOT_REPRODUCIBLE = -5435;
+constexpr int OB_EER_WINDOW_NO_CHILD_PARTITIONING = -5438;
+constexpr int OB_EER_WINDOW_NO_INHERIT_FRAME = -5439;
+constexpr int OB_EER_WINDOW_NO_REDEFINE_ORDER_BY = -5440;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -1369,9 +1372,6 @@ constexpr int OB_BACKUP_FORMAT_FILE_NOT_EXIST = -9080;
 constexpr int OB_BACKUP_FORMAT_FILE_NOT_MATCH = -9081;
 constexpr int OB_BACKUP_MAJOR_NOT_COVER_MINOR = -9085;
 constexpr int OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT = -9086;
-constexpr int OB_EER_WINDOW_NO_CHILD_PARTITIONING = -9087;
-constexpr int OB_EER_WINDOW_NO_INHERIT_FRAME = -9088;
-constexpr int OB_EER_WINDOW_NO_REDEFINE_ORDER_BY = -9089;
 constexpr int OB_ESI_SESSION_NOT_EXIST = -9090;
 constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
@@ -2521,6 +2521,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OUTLINE_NOT_REPRODUCIBLE__USER_ERROR_MSG "outline not reproducible"
 #define OB_INVALID_ARGUMENT_FOR_TIMESTAMP_TO_SCN__USER_ERROR_MSG " TIMESTAMP_TO_SCN expected timestamp argument"
 #define OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP__USER_ERROR_MSG "SCN_TO_TIMESTAMP expected a interger number as nsec argument"
+#define OB_EER_WINDOW_NO_CHILD_PARTITIONING__USER_ERROR_MSG "A window which depends on another cannot define partitioning"
+#define OB_EER_WINDOW_NO_INHERIT_FRAME__USER_ERROR_MSG "Window '%.*s' has a frame definition, so cannot be referenced by another window"
+#define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__USER_ERROR_MSG "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -3201,9 +3204,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_PWRITE_CONTENT_NOT_MATCH__USER_ERROR_MSG "the contents of pwrite are inconsistent"
 #define OB_BACKUP_MAJOR_NOT_COVER_MINOR__USER_ERROR_MSG "backup major sstable range not cover minor sstable"
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__USER_ERROR_MSG "backup advance checkpoint by flush timeout"
-#define OB_EER_WINDOW_NO_CHILD_PARTITIONING__USER_ERROR_MSG "A window which depends on another cannot define partitioning"
-#define OB_EER_WINDOW_NO_INHERIT_FRAME__USER_ERROR_MSG "Window '%.*s' has a frame definition, so cannot be referenced by another window"
-#define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__USER_ERROR_MSG "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
 #define OB_ESI_SESSION_NOT_EXIST__USER_ERROR_MSG "obesi process session not exist"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
@@ -4354,6 +4354,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OUTLINE_NOT_REPRODUCIBLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5435, outline not reproducible"
 #define OB_INVALID_ARGUMENT_FOR_TIMESTAMP_TO_SCN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5436,  TIMESTAMP_TO_SCN expected timestamp argument"
 #define OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5437, SCN_TO_TIMESTAMP expected a interger number as nsec argument"
+#define OB_EER_WINDOW_NO_CHILD_PARTITIONING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5438, A window which depends on another cannot define partitioning"
+#define OB_EER_WINDOW_NO_INHERIT_FRAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5439, Window '%.*s' has a frame definition, so cannot be referenced by another window"
+#define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5440, Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"
@@ -5034,9 +5037,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_PWRITE_CONTENT_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9084, the contents of pwrite are inconsistent"
 #define OB_BACKUP_MAJOR_NOT_COVER_MINOR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9085, backup major sstable range not cover minor sstable"
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9086, backup advance checkpoint by flush timeout"
-#define OB_EER_WINDOW_NO_CHILD_PARTITIONING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9087, A window which depends on another cannot define partitioning"
-#define OB_EER_WINDOW_NO_INHERIT_FRAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9088, Window '%.*s' has a frame definition, so cannot be referenced by another window"
-#define OB_EER_WINDOW_NO_REDEFINE_ORDER_BY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9089, Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
 #define OB_ESI_SESSION_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9090, obesi process session not exist"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
