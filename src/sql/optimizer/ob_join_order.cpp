@@ -5792,8 +5792,7 @@ int ObJoinOrder::pruning_unstable_access_path(BaseTableOptInfo *table_opt_info,
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(access_paths.count()), K(get_plan()), K(session_info));
-  } else if (access_paths.count() <= 1 ||
-             OB_DEFAULT_STAT_EST == table_meta_info_.cost_est_type_) {
+  } else if (access_paths.count() <= 1) {
     /* do not pruning access path */
   } else if (OB_FAIL(try_pruning_base_table_access_path(access_paths, unstable_index_id))) {
     LOG_WARN("failed to pruning base table access path", K(ret));
