@@ -145,7 +145,7 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
   // can only take out all frozen memtable
   ObIMemtable *memtable = nullptr;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
-  bool contain_force_freeze_memtable = false;
+  bool need_update_snapshot_version = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < memtable_handles.count(); ++i) {
     if (OB_ISNULL(memtable = static_cast<ObIMemtable *>(memtable_handles.at(i).get_table()))) {
       ret = OB_ERR_SYS;
@@ -158,9 +158,8 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
       break;
     } else if (memtable->get_end_scn() <= clog_checkpoint_scn) {
       if (!tablet_id.is_special_merge_tablet() &&
-          static_cast<ObMemtable *>(memtable)->get_is_force_freeze() &&
           memtable->get_snapshot_version() > tablet.get_tablet_meta().snapshot_version_) {
-        contain_force_freeze_memtable = true;
+        need_update_snapshot_version = true;
       } else {
         LOG_DEBUG("memtable wait to release", K(param), KPC(memtable));
         continue;
@@ -199,7 +198,7 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
     if (result.handle_.empty()) {
       ret = OB_NO_NEED_MERGE;
     } else if (result.scn_range_.end_scn_ <= clog_checkpoint_scn) {
-      if (contain_force_freeze_memtable) {
+      if (need_update_snapshot_version) {
         result.update_tablet_directly_ = true;
         LOG_INFO("meet empty force freeze memtable, could update tablet directly", K(ret), K(result));
       } else {
