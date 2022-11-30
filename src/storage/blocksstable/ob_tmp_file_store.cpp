@@ -514,7 +514,7 @@ int ObTmpMacroBlock::get_block_cache_handle(ObTmpBlockValueHandle &handle)
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
       STORAGE_LOG(WARN, "fail to get tmp block from cache", K(ret), K(key));
     } else if (REACH_COUNT_INTERVAL(100)) { // print one log per 100 times.
-      STORAGE_LOG(INFO, "block cache miss", K(ret), K(key));
+      STORAGE_LOG(DEBUG, "block cache miss", K(ret), K(key));
     }
   }
   return ret;
