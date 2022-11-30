@@ -4359,7 +4359,7 @@ int ObSQLUtils::create_multi_stmt_param_store(common::ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(param_store.reserve(param_num))) {
-    LOG_WARN("failed to reserver param num", K(param_num), K(ret));
+    LOG_WARN("failed to reserve param num", K(param_num), K(ret));
   } else {
     void *ptr = NULL;
     void *data_ptr = NULL;
