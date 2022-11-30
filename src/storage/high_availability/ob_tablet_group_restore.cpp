@@ -1903,12 +1903,20 @@ int ObTabletRestoreDag::create_first_task()
 int ObTabletRestoreDag::inner_reset_status_for_retry()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int32_t result = OB_SUCCESS;
   ObLS *ls = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet restore dag do not init", K(ret));
+  } else if (ha_dag_net_ctx_->is_failed()) {
+    if (OB_SUCCESS != (tmp_ret = ha_dag_net_ctx_->get_result(ret))) {
+      LOG_WARN("failed to get result", K(tmp_ret), KPC(ha_dag_net_ctx_));
+      ret = tmp_ret;
+    } else {
+      LOG_INFO("set inner reset status for retry failed", K(ret), KPC(ha_dag_net_ctx_));
+    }
   } else if (OB_FAIL(result_mgr_.get_result(result))) {
     LOG_WARN("failed to get result", K(ret));
   } else {
