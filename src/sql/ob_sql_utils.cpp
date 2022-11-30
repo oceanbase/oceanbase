@@ -159,7 +159,7 @@ void ObSQLUtils::check_if_need_disconnect_after_end_trans(const int end_trans_er
 {
   // 1.对于commit操作（不管是隐式还是显式），失败的时候遇到事务模块目前没有明确指明的错误码，都采取断连接操作。
   // 2.对于显式rollback操作，如果失败，由于客户端就算收到错误码也不知道怎么处理，因此统一都断连接。
-  // 3.对于隐式rollback操作，如果失败，这种情况是autocommit=1的情况，由于autocomit=1的分布式查询经常遇到rollback失败，
+  // 3.对于隐式rollback操作，如果失败，这种情况是autocommit=1的情况，由于autocommit=1的分布式查询经常遇到rollback失败，
   // 所以这种情况不断连接，如果这种情况下有特殊情况需要断连接，需要在外层调用implicit_end_trans之后自行加上断连接的逻辑。
   is_need_disconnect = false;
   if (is_rollback) {
