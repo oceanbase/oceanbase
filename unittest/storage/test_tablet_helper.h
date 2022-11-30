@@ -45,6 +45,9 @@ int TestTabletHelper::create_tablet(ObLSTabletService &ls_tablet_svr, obrpc::ObB
   } else if (OB_FAIL(ls_tablet_svr.on_redo_create_tablets(arg, trans_flags))) {
     STORAGE_LOG(WARN, "failed to redo create tablets", K(ret), K(arg));
   } else if (FALSE_IT(trans_flags.scn_ = share::SCN::plus(trans_flags.scn_, 1))) {
+  } else if (OB_FAIL(ls_tablet_svr.on_tx_end_create_tablets(arg, trans_flags))) {
+    STORAGE_LOG(WARN, "failed to tx end create tablets", K(ret), K(arg));
+  } else if (FALSE_IT(trans_flags.scn_ = share::SCN::plus(trans_flags.scn_, 1))) {
   } else if (OB_FAIL(ls_tablet_svr.on_commit_create_tablets(arg, trans_flags))) {
     STORAGE_LOG(WARN, "failed to commit create tablets", K(ret), K(arg));
   }
