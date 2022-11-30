@@ -806,10 +806,10 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
       } else {
         scheduler->resume_major_merge();
         const int64_t scheduler_frozen_version = scheduler->get_frozen_version();
-        if (zone_merge_info.broadcast_scn_.get_scn_val() > scheduler_frozen_version) {
+        if (zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx() > scheduler_frozen_version) {
           FLOG_INFO("try to schedule merge", K(tenant_id), "zone", zone_merge_info.zone_, "broadcast_scn",
             zone_merge_info.broadcast_scn_, K(scheduler_frozen_version));
-          if (OB_FAIL(scheduler->schedule_merge(zone_merge_info.broadcast_scn_.get_scn_val()))) {
+          if (OB_FAIL(scheduler->schedule_merge(zone_merge_info.broadcast_scn_.get_scn().get_val_for_tx()))) {
             LOG_WARN("fail to schedule merge", K(ret), K(zone_merge_info));
           }
         }

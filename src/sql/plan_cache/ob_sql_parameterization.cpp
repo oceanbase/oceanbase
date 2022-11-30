@@ -653,7 +653,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
       ctx.is_project_list_scope_ = true;
     }
     for (int32_t i = 0;
-         OB_SUCC(ret) && i < root->num_child_ && root->type_ != T_QUESTIONMARK && root->type_ != T_VARCHAR && root->type_ != T_CHAR;
+         OB_SUCC(ret) && i < root->num_child_ && root->type_ != T_QUESTIONMARK
+         && root->type_ != T_VARCHAR && root->type_ != T_CHAR && root->type_ != T_NCHAR;
          ++i) {
       //如果not_param本来就是true则不需要再判断；因为某结点判断为true，则该结点子树均为true；
       if (OB_ISNULL(root->children_)) {

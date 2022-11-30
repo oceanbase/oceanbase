@@ -1858,7 +1858,7 @@ int ObXACtx::clear_branch_for_xa_terminate_(const ObXATransID &xid,
       is_exiting_ = true;
     }
     // tx_desc.set_xa_ctx(NULL);
-    xa_ctx_mgr_->revert_xa_ctx(this);
+    // xa_ctx_mgr_->revert_xa_ctx(this);
     if (delete_branch &&
         OB_SUCCESS != (tmp_ret = xa_service_->delete_xa_all_tightly_branch(tenant_id_, xid))) {
       TRANS_LOG(WARN, "delete xa tight branch failed", K(ret), K(xid));
@@ -2141,6 +2141,9 @@ int ObXACtx::try_heartbeat()
         // exit only
         // no need to delete xa records
         // if xa records exist, we can rely on garbage collection
+        if (OB_FAIL(MTL(ObTransService*)->stop_tx(*tx_desc_))) {
+          TRANS_LOG(WARN, "fail to stop transaction", K(ret), K(*this));
+        }
         (void)set_exiting_();
       } else if (now > branch_info.last_hb_ts_ + XA_HB_THRESHOLD) {
         branch_info.unrespond_msg_cnt_++;

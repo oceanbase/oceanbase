@@ -4453,7 +4453,27 @@ bool ObAlterPackageArg::is_valid() const
       && INVALID_PACKAGE_TYPE != package_type_;
 }
 
-OB_SERIALIZE_MEMBER((ObAlterPackageArg, ObDDLArg), tenant_id_, db_name_, package_name_, package_type_);
+int ObAlterPackageArg::assign(const ObAlterPackageArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(public_routine_infos_.assign(other.public_routine_infos_))) {
+    LOG_WARN("fail to assign array", K(ret));
+  } else if (OB_FAIL(error_info_.assign(other.error_info_))) {
+    LOG_WARN("failed to copy error info", K(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    db_name_ = other.db_name_;
+    package_name_ = other.package_name_;
+    package_type_ = other.package_type_;
+    compatible_mode_ = other.compatible_mode_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObAlterPackageArg, ObDDLArg), tenant_id_, db_name_, package_name_, package_type_,
+                    compatible_mode_, public_routine_infos_, error_info_);
 
 bool ObDropPackageArg::is_valid() const
 {

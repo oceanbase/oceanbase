@@ -1563,6 +1563,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
   OZ (ObPLContext::valid_execute_context(ctx));
   if (OB_SUCC(ret)) {
     ObPlanCache *plan_cache = ctx.get_my_session()->get_plan_cache();
+    ObPlanBaseKeyGuard guard(ctx.get_sql_ctx()->spm_ctx_.bl_key_);
     ObPlanCacheCtx pc_ctx(sql,
                           true, // PS_MODE
                           ctx.get_allocator(),
@@ -1691,6 +1692,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
   } else { // standalone routine
     static const ObString PLSQL = ObString("PL/SQL");
     ObPlanCache *plan_cache = ctx.get_my_session()->get_plan_cache();
+    ObPlanBaseKeyGuard guard(ctx.get_sql_ctx()->spm_ctx_.bl_key_);
     ObPlanCacheCtx pc_ctx(PLSQL,
                           false, // ps mode
                           ctx.get_allocator(),
@@ -2200,6 +2202,8 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("incorrect argument type, expected complex, but get basic type", K(ret));
         }
+      } else if (NULL == reinterpret_cast<const ObPLComposite *>(params->at(i).get_ext())) {
+        // do nothing
       } else {
         const pl::ObPLComposite *src_composite = NULL;
         uint64_t udt_id = params->at(i).get_udt_id();

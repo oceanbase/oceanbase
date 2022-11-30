@@ -4978,6 +4978,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                 if (OB_FAIL(rename_dropping_index_name(origin_table_schema.get_table_id(),
                                                         origin_table_schema.get_database_id(),
                                                         *drop_index_arg,
+                                                        schema_guard,
                                                         ddl_operator,
                                                         trans,
                                                         new_index_schema))) {
@@ -5796,9 +5797,7 @@ int ObDDLService::get_index_schema_by_name(
   const ObString &index_name = drop_index_arg.index_name_;
 
   //build index name and get index schema
-  if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("failed to get schema guard", K(ret));
-  } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
+  if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
                                                     data_table_id,
                                                     index_name,
                                                     index_table_name))) {
@@ -5830,12 +5829,12 @@ int ObDDLService::rename_dropping_index_name(
     const uint64_t data_table_id,
     const uint64_t database_id,
     const ObDropIndexArg &drop_index_arg,
+    ObSchemaGetterGuard &schema_guard,
     ObDDLOperator &ddl_operator,
     common::ObMySQLTransaction &trans,
     share::schema::ObTableSchema &new_index_schema)
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
   const ObTableSchema *index_table_schema = nullptr;
   int nwrite = 0;
   const int64_t buf_size = number::ObNumber::MAX_PRINTABLE_SIZE;
@@ -10001,7 +10000,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("array count is unexpected" , K(orig_table_schemas), K(new_table_schemas),
                      K(inc_table_schemas), K(del_table_schemas), KR(ret));
-          } else if (alter_table_arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_succ(trans, tenant_id, alter_table_arg.task_id_))) {
+          } else if (alter_table_arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(trans, tenant_id, alter_table_arg.task_id_))) {
             LOG_WARN("update ddl task status failed", K(ret));
           }
         }
@@ -10252,11 +10251,17 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                 LOG_WARN("fail to push ddl task", K(ret), K(task_record));
               } else {
                 res.task_id_ = task_record.task_id_;
+                ObDDLRes ddl_res;
+                ddl_res.tenant_id_ = tenant_id;
+                ddl_res.schema_id_ = create_index_arg->index_schema_.get_schema_version();
+                ddl_res.task_id_ = task_record.task_id_;
                 obrpc::ObAlterTableResArg arg(TABLE_SCHEMA,		
                                               create_index_arg->index_schema_.get_table_id(),		
                                               create_index_arg->index_schema_.get_schema_version());		
                 if (OB_FAIL(res.res_arg_array_.push_back(arg))) {		
                   LOG_WARN("push back to res_arg_array failed", K(ret), K(arg));		
+                } else if (OB_FAIL(res.ddl_res_array_.push_back(ddl_res))) {
+                  LOG_WARN("failed to push back ddl res array", K(ret));
                 }
               }
             }
@@ -12789,7 +12794,7 @@ int ObDDLService::truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_succ(trans, tenant_id, arg.task_id_))) {
+    } else if (arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(trans, tenant_id, arg.task_id_))) {
       LOG_WARN("update ddl task status failed", K(ret));
     }
     if (trans.is_started()) {
@@ -18353,7 +18358,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
     // drop table and update ddl task status should be done in single trans.
     if (OB_FAIL(ret)) {
     } else if (drop_table_arg.task_id_ > 0
-      && OB_FAIL(ObDDLRetryTask::update_task_status_succ(trans, tenant_id, drop_table_arg.task_id_))) {
+      && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(trans, tenant_id, drop_table_arg.task_id_))) {
       LOG_WARN("update task status of drop table failed", K(ret));
     }
     //no matter success or not, we should publish schema
@@ -22538,7 +22543,7 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_succ(
+      } else if (arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(
           OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans, tenant_id, arg.task_id_))) {
         LOG_WARN("update ddl task status to success failed", K(ret));
       }
@@ -26607,6 +26612,46 @@ int ObDDLService::create_package(ObSchemaGetterGuard &schema_guard,
                                                    dep_infos,
                                                    ddl_stmt_str))) {
       LOG_WARN("create package failed", K(ret), K(new_package_info));
+    }
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCC(ret), K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(publish_schema(tenant_id))) {
+        LOG_WARN("publish schema failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::alter_package(ObSchemaGetterGuard &schema_guard,
+                                const ObPackageInfo &package_info,
+                                ObIArray<ObRoutineInfo> &public_routine_infos,
+                                share::schema::ObErrorInfo &error_info,
+                                const ObString *ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = package_info.get_tenant_id();
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else {
+    const uint64_t tenant_id = package_info.get_tenant_id();
+    ObDDLSQLTransaction trans(schema_service_);
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    int64_t refreshed_schema_version = 0;
+    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+      LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+      LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
+    } else if (OB_FAIL(ddl_operator.alter_package(package_info, trans, public_routine_infos,
+                                                  error_info, ddl_stmt_str))) {
+      LOG_WARN("alter package failed", K(package_info), K(ret));
     }
     if (trans.is_started()) {
       int temp_ret = OB_SUCCESS;

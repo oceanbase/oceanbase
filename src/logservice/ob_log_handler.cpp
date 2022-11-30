@@ -1238,7 +1238,6 @@ int ObLogHandler::get_max_decided_scn(SCN &scn)
       ret = OB_SUCCESS;
       if (min_unapply_scn > SCN::base_scn()) {
         scn = SCN::scn_dec(min_unapply_scn);
-        ret = OB_SUCCESS;
       } else {
         scn.set_min();
       }

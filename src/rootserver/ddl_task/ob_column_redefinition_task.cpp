@@ -193,7 +193,6 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
                                                                  const int ret_code)
 {
   int ret = OB_SUCCESS;
-  bool is_latest_execution_id = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObColumnRedefinitionTask has not been inited", K(ret));
@@ -202,10 +201,8 @@ int ObColumnRedefinitionTask::update_complete_sstable_job_status(const common::O
   } else if (snapshot_version != snapshot_version_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snapshot version not match", K(ret), K(snapshot_version), K(snapshot_version_));
-  } else if (OB_FAIL(check_is_latest_execution_id(execution_id, is_latest_execution_id))) {
-    LOG_WARN("failed to check latest execution id", K(ret), K(execution_id));
-  } else if (!is_latest_execution_id) {
-    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(execution_id_));
+  } else if (execution_id < execution_id_) {
+    LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
   } else if (OB_FAIL(replica_builder_.set_partition_task_status(tablet_id, ret_code))) {
     LOG_WARN("fail to set partition task status", K(ret));
   }
@@ -261,6 +258,10 @@ int ObColumnRedefinitionTask::copy_table_indexes()
       }
       DEBUG_SYNC(COLUMN_REDEFINITION_COPY_TABLE_INDEXES);
       if (OB_SUCC(ret) && index_ids.count() > 0) {
+        ObSchemaGetterGuard new_schema_guard;
+        if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, new_schema_guard))) {
+          LOG_WARN("failed to refresh schema guard", K(ret));
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count(); ++i) {
           const uint64_t index_id = index_ids.at(i);	
           const ObTableSchema *index_schema = nullptr;
@@ -271,9 +272,7 @@ int ObColumnRedefinitionTask::copy_table_indexes()
             create_index_arg.nls_date_format_ = alter_table_arg_.nls_formats_[0];
             create_index_arg.nls_timestamp_format_ = alter_table_arg_.nls_formats_[1];
             create_index_arg.nls_timestamp_tz_format_ = alter_table_arg_.nls_formats_[2];
-            if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
-              LOG_WARN("get schema guard failed", K(ret));
-            } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_ids.at(i), index_schema))) {
+            if (OB_FAIL(new_schema_guard.get_table_schema(tenant_id_, index_ids.at(i), index_schema))) {
               LOG_WARN("get table schema failed", K(ret));
             } else if (OB_ISNULL(index_schema)) {
               ret = OB_ERR_SYS;

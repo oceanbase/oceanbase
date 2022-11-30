@@ -199,7 +199,8 @@ bool ObDDLTableMergeDag::ignore_warning()
 {
   return OB_LS_NOT_EXIST == dag_ret_
     || OB_TABLET_NOT_EXIST == dag_ret_
-    || OB_TASK_EXPIRED == dag_ret_;
+    || OB_TASK_EXPIRED == dag_ret_
+    || OB_EAGAIN == dag_ret_;
 }
 
 /******************             ObDDLTableDumpTask             *****************/
@@ -269,7 +270,9 @@ int ObDDLTableDumpTask::process()
     } else if (OB_FAIL(ddl_kv_handle.get_ddl_kv(ddl_kv))) {
       LOG_WARN("get ddl kv failed", K(ret));
     } else if (OB_FAIL(ddl_kv->close())) {
-      LOG_WARN("close ddl kv failed", K(ret));
+      if (OB_EAGAIN != ret) {
+        LOG_WARN("close ddl kv failed", K(ret));
+      }
     } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->release_ddl_kvs(freeze_scn_))) {
       LOG_WARN("release ddl kv failed", K(ret), K(freeze_scn_));
     }

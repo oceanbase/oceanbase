@@ -2125,13 +2125,16 @@ int ObRelationalExprOperator::deduce_cmp_type(const ObExprOperator &expr,
       // to be compatiable with mysql:
       // if c1 is date or datetime, convert 'c1 = c2+1'to cast (c1 as double) = cast (c2+1 as double)
       const ObRawExpr* cmp_expr = type_ctx.get_raw_expr();
-      const ObRawExpr* date_expr = cmp_expr->get_param_expr(0);
-      const ObRawExpr* other_expr = cmp_expr->get_param_expr(1);
+      const ObRawExpr* date_expr = NULL;
+      const ObRawExpr* other_expr = NULL;
       ObObjType other_expr_type = ObMaxType;
       bool is_date_op_other = false;
-      if (OB_ISNULL(cmp_expr) || OB_ISNULL(date_expr) || OB_ISNULL(other_expr) ) {
+      if (OB_ISNULL(cmp_expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), K(cmp_expr), K(date_expr), K(other_expr));
+        LOG_WARN("unexpected null", K(ret), K(cmp_expr));
+      } else if (OB_ISNULL(date_expr = cmp_expr->get_param_expr(0)) || OB_ISNULL(other_expr = cmp_expr->get_param_expr(1))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(date_expr), K(other_expr));
       } else {
         if (T_REF_QUERY == other_expr->get_expr_type()) {
           const ObQueryRefRawExpr *ref_expr = static_cast<const ObQueryRefRawExpr*>(other_expr);

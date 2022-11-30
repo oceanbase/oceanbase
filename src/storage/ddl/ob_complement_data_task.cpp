@@ -1246,8 +1246,6 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
     } else if (OB_FAIL(context_->data_sstable_redo_writer_.write_commit_log(hidden_table_key,
                                                                             prepare_scn))) {
       LOG_WARN("fail write ddl commit log", K(ret), K(hidden_table_key));
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(ddl_start_scn, ddl_kv_mgr_handle))) {
-      LOG_WARN("ddl kv mgr unregister failed", K(ret), KPC(param_));
     }
   }
   return ret;

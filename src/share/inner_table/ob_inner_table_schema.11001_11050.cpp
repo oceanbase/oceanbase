@@ -2020,7 +2020,7 @@ int ObInnerTableSchema::all_virtual_plan_cache_stat_all_virtual_plan_cache_stat_
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 3);
+  table_schema.set_max_used_column_id(column_id + 49);
   return ret;
 }
 
@@ -4530,7 +4530,7 @@ int ObInnerTableSchema::all_virtual_session_event_all_virtual_session_event_i1_s
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 15);
   return ret;
 }
 
@@ -5243,7 +5243,7 @@ int ObInnerTableSchema::all_virtual_session_wait_all_virtual_session_wait_i1_sch
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 3);
+  table_schema.set_max_used_column_id(column_id + 19);
   return ret;
 }
 
@@ -5890,7 +5890,7 @@ int ObInnerTableSchema::all_virtual_session_wait_history_all_virtual_session_wai
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 17);
   return ret;
 }
 
@@ -6441,7 +6441,7 @@ int ObInnerTableSchema::all_virtual_system_event_all_virtual_system_event_i1_sch
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 14);
   return ret;
 }
 
@@ -7131,7 +7131,7 @@ int ObInnerTableSchema::all_virtual_sesstat_all_virtual_sesstat_i1_schema(ObTabl
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 7);
   return ret;
 }
 
@@ -7554,7 +7554,7 @@ int ObInnerTableSchema::all_virtual_sysstat_all_virtual_sysstat_i1_schema(ObTabl
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 10);
   return ret;
 }
 
@@ -10344,7 +10344,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("trace_id", //column_name
-      column_id + 6, //column_id
+      column_id + 5, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10361,7 +10361,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("client_ip", //column_name
-      column_id + 7, //column_id
+      column_id + 6, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10378,7 +10378,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("client_port", //column_name
-      column_id + 8, //column_id
+      column_id + 7, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10395,7 +10395,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("tenant_name", //column_name
-      column_id + 9, //column_id
+      column_id + 8, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10412,7 +10412,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("effective_tenant_id", //column_name
-      column_id + 10, //column_id
+      column_id + 9, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10429,7 +10429,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("user_id", //column_name
-      column_id + 11, //column_id
+      column_id + 10, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10446,7 +10446,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("user_name", //column_name
-      column_id + 12, //column_id
+      column_id + 11, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10463,7 +10463,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("db_id", //column_name
-      column_id + 13, //column_id
+      column_id + 12, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10480,7 +10480,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("db_name", //column_name
-      column_id + 14, //column_id
+      column_id + 13, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10497,7 +10497,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("sql_id", //column_name
-      column_id + 15, //column_id
+      column_id + 14, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10514,7 +10514,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("query_sql", //column_name
-      column_id + 16, //column_id
+      column_id + 15, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10531,7 +10531,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("plan_id", //column_name
-      column_id + 17, //column_id
+      column_id + 16, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10548,7 +10548,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("affected_rows", //column_name
-      column_id + 18, //column_id
+      column_id + 17, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10565,7 +10565,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("return_rows", //column_name
-      column_id + 19, //column_id
+      column_id + 18, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10582,7 +10582,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("partition_cnt", //column_name
-      column_id + 20, //column_id
+      column_id + 19, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10599,7 +10599,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("ret_code", //column_name
-      column_id + 21, //column_id
+      column_id + 20, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10616,7 +10616,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("qc_id", //column_name
-      column_id + 22, //column_id
+      column_id + 21, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10633,7 +10633,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("dfo_id", //column_name
-      column_id + 23, //column_id
+      column_id + 22, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10650,7 +10650,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("sqc_id", //column_name
-      column_id + 24, //column_id
+      column_id + 23, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10667,7 +10667,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("worker_id", //column_name
-      column_id + 25, //column_id
+      column_id + 24, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10684,7 +10684,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("event", //column_name
-      column_id + 26, //column_id
+      column_id + 25, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10701,7 +10701,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("p1text", //column_name
-      column_id + 27, //column_id
+      column_id + 26, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10718,7 +10718,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("p1", //column_name
-      column_id + 28, //column_id
+      column_id + 27, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10735,7 +10735,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("p2text", //column_name
-      column_id + 29, //column_id
+      column_id + 28, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10752,7 +10752,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("p2", //column_name
-      column_id + 30, //column_id
+      column_id + 29, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10769,7 +10769,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("p3text", //column_name
-      column_id + 31, //column_id
+      column_id + 30, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10786,7 +10786,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("p3", //column_name
-      column_id + 32, //column_id
+      column_id + 31, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10803,7 +10803,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("level", //column_name
-      column_id + 33, //column_id
+      column_id + 32, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10820,7 +10820,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("wait_class_id", //column_name
-      column_id + 34, //column_id
+      column_id + 33, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10837,7 +10837,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("wait_class#", //column_name
-      column_id + 35, //column_id
+      column_id + 34, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10854,7 +10854,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("wait_class", //column_name
-      column_id + 36, //column_id
+      column_id + 35, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10871,7 +10871,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("state", //column_name
-      column_id + 37, //column_id
+      column_id + 36, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10888,7 +10888,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("wait_time_micro", //column_name
-      column_id + 38, //column_id
+      column_id + 37, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10905,7 +10905,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("total_wait_time_micro", //column_name
-      column_id + 39, //column_id
+      column_id + 38, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10922,7 +10922,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("total_waits", //column_name
-      column_id + 40, //column_id
+      column_id + 39, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10939,7 +10939,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("rpc_count", //column_name
-      column_id + 41, //column_id
+      column_id + 40, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10956,7 +10956,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("plan_type", //column_name
-      column_id + 42, //column_id
+      column_id + 41, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10973,7 +10973,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("is_inner_sql", //column_name
-      column_id + 43, //column_id
+      column_id + 42, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -10990,7 +10990,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("is_executor_rpc", //column_name
-      column_id + 44, //column_id
+      column_id + 43, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11007,7 +11007,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("is_hit_plan", //column_name
-      column_id + 45, //column_id
+      column_id + 44, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11024,7 +11024,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("request_time", //column_name
-      column_id + 46, //column_id
+      column_id + 45, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11041,7 +11041,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("elapsed_time", //column_name
-      column_id + 47, //column_id
+      column_id + 46, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11058,7 +11058,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("net_time", //column_name
-      column_id + 48, //column_id
+      column_id + 47, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11075,7 +11075,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("net_wait_time", //column_name
-      column_id + 49, //column_id
+      column_id + 48, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11092,7 +11092,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("queue_time", //column_name
-      column_id + 50, //column_id
+      column_id + 49, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11109,7 +11109,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("decode_time", //column_name
-      column_id + 51, //column_id
+      column_id + 50, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11126,7 +11126,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("get_plan_time", //column_name
-      column_id + 52, //column_id
+      column_id + 51, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11143,7 +11143,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("execute_time", //column_name
-      column_id + 53, //column_id
+      column_id + 52, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11160,7 +11160,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("application_wait_time", //column_name
-      column_id + 54, //column_id
+      column_id + 53, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11177,7 +11177,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("concurrency_wait_time", //column_name
-      column_id + 55, //column_id
+      column_id + 54, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11194,7 +11194,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("user_io_wait_time", //column_name
-      column_id + 56, //column_id
+      column_id + 55, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11211,7 +11211,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("schedule_time", //column_name
-      column_id + 57, //column_id
+      column_id + 56, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11228,7 +11228,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("row_cache_hit", //column_name
-      column_id + 58, //column_id
+      column_id + 57, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11245,7 +11245,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("bloom_filter_cache_hit", //column_name
-      column_id + 59, //column_id
+      column_id + 58, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11262,7 +11262,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("block_cache_hit", //column_name
-      column_id + 60, //column_id
+      column_id + 59, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11279,7 +11279,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("disk_reads", //column_name
-      column_id + 61, //column_id
+      column_id + 60, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11296,7 +11296,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("execution_id", //column_name
-      column_id + 62, //column_id
+      column_id + 61, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11313,7 +11313,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("session_id", //column_name
-      column_id + 63, //column_id
+      column_id + 62, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11330,7 +11330,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("retry_cnt", //column_name
-      column_id + 64, //column_id
+      column_id + 63, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11347,7 +11347,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("table_scan", //column_name
-      column_id + 65, //column_id
+      column_id + 64, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11364,7 +11364,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("consistency_level", //column_name
-      column_id + 66, //column_id
+      column_id + 65, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11381,7 +11381,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("memstore_read_row_count", //column_name
-      column_id + 67, //column_id
+      column_id + 66, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11398,7 +11398,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("ssstore_read_row_count", //column_name
-      column_id + 68, //column_id
+      column_id + 67, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11415,7 +11415,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("data_block_read_cnt", //column_name
-      column_id + 69, //column_id
+      column_id + 68, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11432,7 +11432,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("data_block_cache_hit", //column_name
-      column_id + 70, //column_id
+      column_id + 69, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11449,7 +11449,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("index_block_read_cnt", //column_name
-      column_id + 71, //column_id
+      column_id + 70, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11466,7 +11466,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("index_block_cache_hit", //column_name
-      column_id + 72, //column_id
+      column_id + 71, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11483,7 +11483,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("blockscan_block_cnt", //column_name
-      column_id + 73, //column_id
+      column_id + 72, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11500,7 +11500,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("blockscan_row_cnt", //column_name
-      column_id + 74, //column_id
+      column_id + 73, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11517,7 +11517,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("pushdown_storage_filter_row_cnt", //column_name
-      column_id + 75, //column_id
+      column_id + 74, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11534,7 +11534,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("request_memory_used", //column_name
-      column_id + 76, //column_id
+      column_id + 75, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11551,7 +11551,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("expected_worker_count", //column_name
-      column_id + 77, //column_id
+      column_id + 76, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11568,7 +11568,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("used_worker_count", //column_name
-      column_id + 78, //column_id
+      column_id + 77, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11585,7 +11585,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("sched_info", //column_name
-      column_id + 79, //column_id
+      column_id + 78, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11602,7 +11602,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("fuse_row_cache_hit", //column_name
-      column_id + 80, //column_id
+      column_id + 79, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11619,7 +11619,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("user_client_ip", //column_name
-      column_id + 81, //column_id
+      column_id + 80, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11636,7 +11636,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("ps_client_stmt_id", //column_name
-      column_id + 82, //column_id
+      column_id + 81, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11653,7 +11653,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("ps_inner_stmt_id", //column_name
-      column_id + 83, //column_id
+      column_id + 82, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11670,7 +11670,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("transaction_id", //column_name
-      column_id + 84, //column_id
+      column_id + 83, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11687,7 +11687,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("snapshot_version", //column_name
-      column_id + 85, //column_id
+      column_id + 84, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11704,7 +11704,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("snapshot_source", //column_name
-      column_id + 86, //column_id
+      column_id + 85, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11721,7 +11721,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("request_type", //column_name
-      column_id + 87, //column_id
+      column_id + 86, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11738,7 +11738,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("is_batched_multi_stmt", //column_name
-      column_id + 88, //column_id
+      column_id + 87, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11755,7 +11755,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("ob_trace_info", //column_name
-      column_id + 89, //column_id
+      column_id + 88, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11772,7 +11772,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("plan_hash", //column_name
-      column_id + 90, //column_id
+      column_id + 89, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11789,7 +11789,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("user_group", //column_name
-      column_id + 91, //column_id
+      column_id + 90, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11806,7 +11806,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("lock_for_read_time", //column_name
-      column_id + 92, //column_id
+      column_id + 91, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11823,7 +11823,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("params_value", //column_name
-      column_id + 93, //column_id
+      column_id + 92, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -11838,7 +11838,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 92);
   return ret;
 }
 

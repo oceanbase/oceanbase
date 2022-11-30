@@ -162,8 +162,8 @@ int ObMergeExceptOp::inner_get_next_batch(const int64_t max_row_cnt)
       //we will compare inside a batch
       last_row_.store_row_ = nullptr;
       brs_.skip_->unset(curr_left_idx);
+      last_left_idx = curr_left_idx;
       if (right_iter_end_) {
-        last_left_idx = curr_left_idx;
         ++curr_left_idx;
       }
       while (OB_SUCC(ret) && !right_iter_end_) {
@@ -227,6 +227,9 @@ int ObMergeExceptOp::inner_get_next_batch(const int64_t max_row_cnt)
       brs_.end_ = true;
     } else if (last_left_idx == left_brs->size_) {
       // empty batch
+    } else if (OB_UNLIKELY(left_brs->skip_->at(last_left_idx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get wrong last row", K(last_left_idx), K(curr_left_idx), K(ret));
     } else {
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
       batch_info_guard.set_batch_idx(last_left_idx);

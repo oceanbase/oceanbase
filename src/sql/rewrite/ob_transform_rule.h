@@ -53,6 +53,7 @@ struct ObTransformerCtx
     expr_constraints_(),
     plan_const_param_constraints_(),
     equal_param_constraints_(),
+    is_set_stmt_oversize_(false),
     happened_cost_based_trans_(0),
     equal_sets_(),
     ignore_semi_infos_(),
@@ -108,6 +109,7 @@ struct ObTransformerCtx
   ObSEArray<ObExprConstraint, 4, common::ModulePageAllocator, true> expr_constraints_;
   ObSEArray<ObPCConstParamInfo, 4, common::ModulePageAllocator, true> plan_const_param_constraints_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
+  bool is_set_stmt_oversize_;
   // record cost based transformers
   uint64_t happened_cost_based_trans_;
   EqualSets equal_sets_;
@@ -415,8 +417,6 @@ private:
   bool is_view_stmt(const ObIArray<ObParentDMLStmt> &parents,
                     const ObDMLStmt &stmt);
 
-  bool is_large_stmt(const ObDMLStmt &stmt);
-
   bool skip_move_trans_loc() const
   {
     return TEMP_TABLE_OPTIMIZATION == transformer_type_ // move trans loc in transform rule
@@ -430,7 +430,6 @@ private:
            || PROJECTION_PRUNING == transformer_type_
            || PREDICATE_MOVE_AROUND == transformer_type_;
   }
-
 
   DISALLOW_COPY_AND_ASSIGN(ObTransformRule);
 

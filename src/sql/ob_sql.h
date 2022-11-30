@@ -61,9 +61,9 @@ class ObResultSet;
 class ObPlanBaseKeyGuard
 {
 public:
-  explicit ObPlanBaseKeyGuard(ObBaselineKey &bl_key)
-    : bl_key_(bl_key),
-      ori_bl_key_(bl_key) {}
+  [[nodiscard]] explicit ObPlanBaseKeyGuard(ObBaselineKey &bl_key)
+  : bl_key_(bl_key),
+    ori_bl_key_(bl_key) {}
   ~ObPlanBaseKeyGuard()
   {
     bl_key_ = ori_bl_key_;
@@ -223,7 +223,9 @@ public:
     rs_mgr_(NULL),
     execution_id_(0),
     px_sequence_id_(0)
-  {}
+  {
+    px_sequence_id_ = ObTimeUtility::current_time();
+  }
 
   virtual ~ObSql() { destroy(); }
   static int construct_ps_param(const ParamStore &params,

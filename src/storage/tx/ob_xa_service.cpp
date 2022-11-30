@@ -2123,6 +2123,7 @@ int ObXAService::handle_terminate_for_xa_branch(const ObXATransID &xid, ObTxDesc
       if (OB_SUCCESS != (tmp_ret = xa_ctx->clear_branch_for_xa_terminate(xid, tx_desc, true))) {
         TRANS_LOG(WARN, "clear branch for xa terminate failed", K(ret), K(xid), K(tx_id));
       }
+      xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
       TRANS_LOG(INFO, "handle terminate for tightly coupled xa branch", K(ret), K(xid), K(tx_id));
     }
   }

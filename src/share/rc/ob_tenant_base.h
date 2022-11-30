@@ -112,7 +112,7 @@ namespace observer
   class ObTenantMetaChecker;
 }
 
-// for ObTenamtSwitchGuard 临时使用>>>>>>>>
+// for ObTenantSwitchGuard 临时使用>>>>>>>>
 namespace observer
 {
   class ObAllVirtualTabletInfo;

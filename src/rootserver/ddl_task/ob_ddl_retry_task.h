@@ -41,7 +41,7 @@ public:
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
   virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
-  static int update_task_status_succ(
+  static int update_task_status_wait_child_task_finish(
         common::ObMySQLTransaction &trans,
         const uint64_t tenant_id,
         const int64_t task_id);
@@ -49,7 +49,7 @@ private:
   int check_health();
   int prepare(const share::ObDDLTaskStatus next_task_status);
   int drop_schema(const share::ObDDLTaskStatus next_task_status);
-  int wait_alter_table(const obrpc::ObAlterTableArg &alter_table_arg, const obrpc::ObAlterTableRes &res);
+  int wait_alter_table(const share::ObDDLTaskStatus next_task_status);
   int succ();
   int fail();
   int cleanup();
@@ -67,6 +67,7 @@ private:
   int64_t affected_rows_;
   common::ObString forward_user_message_;
   common::ObArenaAllocator allocator_;
+  obrpc::ObAlterTableRes alter_table_res_; // in memory
 };
 
 }  // end namespace rootserver

@@ -49,7 +49,6 @@ public:
   virtual SSL *get_sql_ssl_st(ObRequest* req) = 0;
   virtual char* alloc_sql_response_buffer(ObRequest* req, int64_t size) = 0;
   virtual char *sql_reusable_alloc(ObRequest* req, const int64_t size) = 0;
-  virtual void free_sql_response_buffer(ObRequest* req, void *buf) = 0;
   virtual common::ObAddr get_peer(const ObRequest* req) = 0;
   virtual void disconnect_sql_conn(ObRequest* req) = 0;
   virtual void finish_sql_request(ObRequest* req) = 0;
@@ -72,9 +71,6 @@ public:
   }
   char* alloc_sql_response_buffer(ObRequest* req, int64_t size) {
     return get_operator(req).alloc_sql_response_buffer(req, size);
-  }
-  void free_sql_response_buffer(ObRequest* req, void *buf) {
-    return get_operator(req).free_sql_response_buffer(req, buf);
   }
   char *sql_reusable_alloc(ObRequest* req, const int64_t size) {
     return get_operator(req).sql_reusable_alloc(req, size);

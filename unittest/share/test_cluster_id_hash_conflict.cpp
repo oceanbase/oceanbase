@@ -40,7 +40,7 @@ TEST(test_cluster_id_hash_conflict, test_cluster_id_hash)
   common::ObAddr addr;
   addr.parse_from_cstring("127.0.0.1:8080");
 
-  int64_t tenant_id = 500;
+  int64_t tenant_id = OB_SERVER_TENANT_ID;
 
   // The binary of 112 and 120 are only one bit different
   int64_t cluster_id_11 = 112;

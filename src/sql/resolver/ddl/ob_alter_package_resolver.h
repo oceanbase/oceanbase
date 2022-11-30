@@ -32,10 +32,14 @@ public:
   virtual int resolve(const ParseNode &parse_tree);
 
 private:
-  int resolve_alter_clause(
-    const ParseNode &alter_clause, const ObString &db_name, const ObString &package_name);
-  int resolve_alter_compile_clause(
-    const ParseNode &alter_clause, const ObString &db_name, const ObString &package_name);
+  int resolve_alter_clause(const ParseNode &alter_clause,
+                           const ObString &db_name,
+                           const ObString &package_name,
+                           obrpc::ObAlterPackageArg &pkg_arg);
+  int resolve_alter_compile_clause(const ParseNode &alter_clause,
+                                   const ObString &db_name,
+                                   const ObString &package_name,
+                                   obrpc::ObAlterPackageArg &pkg_arg);
   int analyze_package(pl::ObPLCompiler &compiler,
                       const ObString &source,
                       const pl::ObPLBlockNS *parent_ns,
@@ -46,9 +50,12 @@ private:
                       const ObString &package_name,
                       const ObPackageInfo *package_info,
                       share::schema::ObErrorInfo &error_info,
-                      const bool need_delete_error_info);
-  int compile_package(
-    const ObString& db_name, const ObString &package_name, bool compile_spec, bool compile_body);
+                      bool &has_error);
+  int compile_package(const ObString& db_name,
+                      const ObString &package_name,
+                      bool compile_spec,
+                      bool compile_body,
+                      obrpc::ObAlterPackageArg &pkg_arg);
   int collec_error_info(const ObPackageInfo *package_info,
                         share::schema::ObErrorInfo &error_info);
 
