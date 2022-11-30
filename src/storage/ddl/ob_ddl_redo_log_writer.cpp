@@ -1048,9 +1048,8 @@ int ObDDLSSTableRedoWriter::wait_redo_log_finish(const ObDDLMacroBlockRedoInfo &
     LOG_WARN("fail to wait io finish", K(ret));
   } else if (OB_FAIL(ddl_redo_handle_.cb_->get_ret_code())) {
     LOG_WARN("ddl redo callback executed failed", K(ret));
-  } else {
-    ddl_redo_handle_.reset();
   }
+  ddl_redo_handle_.reset();
   return ret;
 }
 
