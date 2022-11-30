@@ -562,7 +562,8 @@ bool ObMigrationUtils::is_need_retry_error(const int err)
     case OB_LOG_NOT_SYNC :
     case OB_INVALID_DATA :
     case OB_CHECKSUM_ERROR :
-    case OB_DDL_SSTABLE_RANGE_CROSS:
+    case OB_DDL_SSTABLE_RANGE_CROSS :
+    case OB_TENANT_NOT_EXIST :
       bret = false;
       break;
     default:
