@@ -48,7 +48,7 @@ int ObIMemtableMgr::get_first_memtable(ObTableHandleV2 &handle) const
   SpinRLockGuard lock_guard(lock_);
   if (memtable_head_ == memtable_tail_) {
     ret = OB_ENTRY_NOT_EXIST;
-    STORAGE_LOG(WARN, "There is no memtable in ObLockMemtableMgr.");
+    STORAGE_LOG(DEBUG, "There is no memtable in ObIMemtableMgr.");
   } else if (OB_FAIL(get_ith_memtable(memtable_head_, handle))) {
     STORAGE_LOG(WARN, "fail to get ith memtable", K(ret), K(memtable_head_));
   } else if (OB_UNLIKELY(!handle.is_valid())) {
