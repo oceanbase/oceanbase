@@ -310,6 +310,7 @@ int ObNLConnectByOp::inner_close()
   if (nullptr != mem_context_) {
     mem_context_->reuse();
   }
+  connect_by_pump_.sys_path_buffer_.reset();
   return ret;
 }
 
