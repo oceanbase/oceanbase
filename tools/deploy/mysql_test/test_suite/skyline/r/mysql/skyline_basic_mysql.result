@@ -247,13 +247,13 @@ Outputs & filters:
 
 explain select distinct(c),b, d from t1 where b > 200 limit 100;
 Query Plan
-=======================================
-|ID|OPERATOR      |NAME|EST. ROWS|COST|
----------------------------------------
-|0 |LIMIT         |    |1        |3   |
-|1 | HASH DISTINCT|    |1        |3   |
-|2 |  TABLE SCAN  |t1  |1        |2   |
-=======================================
+================================================
+|ID|OPERATOR      |NAME         |EST. ROWS|COST|
+------------------------------------------------
+|0 |LIMIT         |             |1        |5   |
+|1 | HASH DISTINCT|             |1        |5   |
+|2 |  TABLE SCAN  |t1(idx_c_a_b)|1        |5   |
+================================================
 
 Outputs & filters: 
 -------------------------------------
@@ -261,7 +261,7 @@ Outputs & filters:
   1 - output([t1.c], [t1.b], [t1.d]), filter(nil), rowset=256, 
       distinct([t1.c], [t1.b], [t1.d])
   2 - output([t1.b], [t1.c], [t1.d]), filter([t1.b > 200]), rowset=256, 
-      access([t1.b], [t1.c], [t1.d]), partitions(p0)
+      access([t1.pk1], [t1.b], [t1.c], [t1.d]), partitions(p0)
 
 explain select b from t1 order by b;
 Query Plan
@@ -2966,16 +2966,16 @@ Outputs & filters:
 
 explain select * from t7 where a >= 0 and a <= 5 and b = 1;
 Query Plan
-===================================
-|ID|OPERATOR  |NAME|EST. ROWS|COST|
------------------------------------
-|0 |TABLE SCAN|t7  |1        |2   |
-===================================
+=====================================
+|ID|OPERATOR  |NAME  |EST. ROWS|COST|
+-------------------------------------
+|0 |TABLE SCAN|t7(k1)|1        |5   |
+=====================================
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t7.a], [t7.b], [t7.c], [t7.d], [t7.e], [t7.f]), filter([t7.a >= 0], [t7.a <= 5], [t7.b = 1]), rowset=256, 
-      access([t7.a], [t7.b], [t7.c], [t7.d], [t7.e], [t7.f]), partitions(p0)
+  0 - output([t7.a], [t7.b], [t7.c], [t7.d], [t7.e], [t7.f]), filter([t7.b = 1]), rowset=256,
+      access([t7.__pk_increment], [t7.a], [t7.b], [t7.c], [t7.d], [t7.e], [t7.f]), partitions(p0)
 
 explain select * from t8 where e = 1 order by b;
 Query Plan

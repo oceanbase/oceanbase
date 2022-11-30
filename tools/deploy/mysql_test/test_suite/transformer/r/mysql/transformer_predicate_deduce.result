@@ -3521,9 +3521,9 @@ Query Plan
 ==================================================
 |ID|OPERATOR                |NAME |EST. ROWS|COST|
 --------------------------------------------------
-|0 |SCALAR GROUP BY         |     |1        |4   |
-|1 | NESTED-LOOP JOIN       |     |1        |4   |
-|2 |  TABLE SCAN            |A    |1        |2   |
+|0 |SCALAR GROUP BY         |     |1        |6   |
+|1 | NESTED-LOOP JOIN       |     |1        |6   |
+|2 |  TABLE SCAN            |A(c1)|1        |5   |
 |3 |  DISTRIBUTED TABLE SCAN|B(c2)|1        |16  |
 ==================================================
 
@@ -3533,10 +3533,11 @@ Outputs & filters:
       group(nil), agg_func([T_FUN_COUNT(*)])
   1 - output(nil), filter(nil), rowset=256, 
       conds(nil), nl_params_([A.c1]), batch_join=true
-  2 - output([A.c1]), filter([A.c1 >= 5630905], [A.c1 < 5631105], [A.c2 < 5631105], [A.c1 = A.c2]), rowset=256, 
-      access([A.c1], [A.c2]), partitions(p0), 
-      is_index_back=false, filter_before_indexback[false,false,false,false], 
-      range_key([A.__pk_increment]), range(MIN ; MAX)always true
+  2 - output([A.c1]), filter([A.c2 < 5631105], [A.c1 = A.c2]), rowset=256,
+      access([A.__pk_increment], [A.c1], [A.c2]), partitions(p0),
+      is_index_back=true, filter_before_indexback[false,false],
+      range_key([A.c1], [A.__pk_increment]), range(5630905,MIN ; 5631105,MIN),
+      range_cond([A.c1 >= 5630905], [A.c1 < 5631105])
   3 - output(nil), filter(nil), rowset=256, 
       access([GROUP_ID]), partitions(p0), 
       is_index_back=false, 
