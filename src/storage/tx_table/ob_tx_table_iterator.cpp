@@ -606,7 +606,7 @@ int ObTxDataMemtableScanIterator::merge_cur_and_past_commit_verisons_(const SCN 
   }
 
   STORAGE_LOG(INFO,
-              "genenrate commit versions array finish.",
+              "generate commit versions array finish.",
               K(recycle_scn),
               K(step_len),
               "past_array_count", past_commit_scns.array_.count(),
