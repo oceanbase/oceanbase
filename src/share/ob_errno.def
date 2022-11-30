@@ -1029,8 +1029,9 @@ DEFINE_ERROR(OB_SQL_RETRY_SPM, -5434, -1, "HY000", "retry sql due to spm");
 DEFINE_ERROR(OB_OUTLINE_NOT_REPRODUCIBLE, -5435, -1, "HY000", "outline not reproducible");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_TIMESTAMP_TO_SCN, -5436, -1, "42000", "Invalid argument for timestamp_to_scn()", " TIMESTAMP_TO_SCN expected timestamp argument");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP, -5437, -1, "42000", "Invalid argument for scn_to_timestamp()", "SCN_TO_TIMESTAMP expected a interger number as nsec argument");
-
-
+DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_CHILD_PARTITIONING, -5438, ER_WINDOW_NO_CHILD_PARTITIONING, "HY000", "Named window cann't be modified by another partitioning property", "A window which depends on another cannot define partitioning");
+DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_INHERIT_FRAME, -5439, ER_WINDOW_NO_INHERIT_FRAME, "HY000", "Named window cann't be modified by another framing property", "Window '%.*s' has a frame definition, so cannot be referenced by another window");
+DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_REDEFINE_ORDER_BY, -5440, ER_WINDOW_NO_REDEFINE_ORDER_BY, "HY000", "Named window cann't be modified by another ordering property", "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause");
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");
 DEFINE_PLS_ERROR_EXT(OB_ERR_SP_UNDECLARED_VAR, -5543, ER_SP_UNDECLARED_VAR, "42000", "Undeclared variable", "Undeclared variable: %.*s", 201, "identifier must be declared", "identifier '%.*s' must be declared");
@@ -1774,9 +1775,6 @@ DEFINE_ERROR_DEP(OB_BACKUP_PWRITE_CONTENT_NOT_MATCH, -9084, -1, "HY000", "the co
 DEFINE_ERROR(OB_BACKUP_MAJOR_NOT_COVER_MINOR, -9085, -1, "HY000", "backup major sstable range not cover minor sstable");
 DEFINE_ERROR(OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT, -9086, -1, "HY000", "backup advance checkpoint by flush timeout");
 
-DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_CHILD_PARTITIONING, -9087, ER_WINDOW_NO_CHILD_PARTITIONING, "HY000", "Named window cann't be modified by another partitioning property", "A window which depends on another cannot define partitioning");
-DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_INHERIT_FRAME, -9088, ER_WINDOW_NO_INHERIT_FRAME, "HY000", "Named window cann't be modified by another framing property", "Window '%.*s' has a frame definition, so cannot be referenced by another window");
-DEFINE_ERROR_EXT(OB_EER_WINDOW_NO_REDEFINE_ORDER_BY, -9089, ER_WINDOW_NO_REDEFINE_ORDER_BY, "HY000", "Named window cann't be modified by another ordering property", "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause");
 
 DEFINE_ERROR(OB_ESI_SESSION_NOT_EXIST, -9090, -1, "HY000", "obesi process session not exist");
 // end of backup and restore error codes 9001 ~ 9099
