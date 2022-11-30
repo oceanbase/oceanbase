@@ -415,9 +415,10 @@ int ObTenantWeakReadClusterService::start_service()
   }
 
   end_ts = ObTimeUtility::current_time();
+  const bool ignore_invalid = true;
   ISTAT("start service done", KR(ret), K(tenant_id),
       K_(in_service), K_(leader_epoch),
-      K_(current_version), "delta", end_ts - current_version_.convert_to_ts(),
+      K_(current_version), "delta", end_ts - current_version_.convert_to_ts(ignore_invalid),
       K_(min_version), K_(max_version),
       K(max_stale_time),
       K_(all_valid_server_count),

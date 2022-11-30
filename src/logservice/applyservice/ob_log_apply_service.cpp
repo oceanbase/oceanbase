@@ -772,7 +772,7 @@ int ObApplyStatus::diagnose(ApplyDiagnoseInfo &diagnose_info)
   if (OB_FAIL(get_min_unapplied_scn(min_unapplied_scn))) {
     CLOG_LOG(WARN, "get_min_unapplied_scn failed", KPC(this), K(ret));
   } else {
-    diagnose_info.max_applied_scn_ = SCN::minus(min_unapplied_scn, 1);
+    diagnose_info.max_applied_scn_ = min_unapplied_scn.is_valid_and_not_min() ? SCN::minus(min_unapplied_scn, 1) : SCN::min_scn();
   }
   return ret;
 }
