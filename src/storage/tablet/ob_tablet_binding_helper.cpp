@@ -223,6 +223,7 @@ int ObTabletBindingHelper::set_scn_for_create(const ObBatchCreateTabletArg &arg,
       if (OB_FAIL(helper.set_scn(info.data_tablet_id_))) {
         LOG_WARN("failed to set log ts for orig tablet", K(ret));
       }
+
       for (int64_t j = 0; OB_SUCC(ret) && j < info.tablet_ids_.count(); ++j) {
         int64_t aux_idx = -1;
         if (ObTabletCreateDeleteHelper::find_related_aux_info(arg, info.tablet_ids_.at(j), aux_idx)
@@ -253,6 +254,7 @@ int ObTabletBindingHelper::unlock_tablet_binding_for_create(const ObBatchCreateT
       if (OB_FAIL(helper.unlock_tablet_binding(info.data_tablet_id_))) {
         LOG_WARN("failed to lock tablet binding", K(ret));
       }
+
       for (int64_t j = 0; OB_SUCC(ret) && j < info.tablet_ids_.count(); ++j) {
         int64_t aux_idx = -1;
         if (ObTabletCreateDeleteHelper::find_related_aux_info(arg, info.tablet_ids_.at(j), aux_idx)
@@ -269,7 +271,7 @@ int ObTabletBindingHelper::unlock_tablet_binding_for_create(const ObBatchCreateT
   return ret;
 }
 
-// bind aux and hidden tablets to non-creating data tablet
+// bind aux and hidden tablets to creating and non-creating data tablet
 int ObTabletBindingHelper::modify_tablet_binding_for_create(
     const ObBatchCreateTabletArg &arg,
     ObLS &ls,
@@ -277,25 +279,14 @@ int ObTabletBindingHelper::modify_tablet_binding_for_create(
 {
   int ret = OB_SUCCESS;
   ObArray<ObTabletID> empty_array;
-  ObSArray<int64_t> skip_idx;
   ObTabletBindingHelper helper(ls, trans_flags);
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablets_.count(); i++) {
     const ObCreateTabletInfo &info = arg.tablets_[i];
     bool need_modify = false;
     bool tablet_ids_as_aux_tablets = false;
-    if (is_contain(skip_idx, i)) {
-      // do nothing
-    } else if (ObTabletCreateDeleteHelper::is_pure_hidden_tablets(info)) {
+    if (ObTabletCreateDeleteHelper::is_pure_hidden_tablets(info)) {
       need_modify = true;
-      // tablet_ids_as_aux_tablets = false;
-      for (int64_t j = 0; OB_SUCC(ret) && j < info.tablet_ids_.count(); ++j) {
-        int64_t aux_idx = -1;
-        if (ObTabletCreateDeleteHelper::find_related_aux_info(arg, info.tablet_ids_.at(j), aux_idx)
-            && OB_FAIL(skip_idx.push_back(aux_idx))) {
-          LOG_WARN("failed to push related aux idx", K(ret), K(aux_idx));
-        }
-      }
-    } else if (ObTabletCreateDeleteHelper::is_pure_aux_tablets(info)) {
+    } else if (ObTabletCreateDeleteHelper::is_pure_aux_tablets(info) || ObTabletCreateDeleteHelper::is_mixed_tablets(info)) {
       if (has_lob_tablets(arg, info)) {
         need_modify = true;
         tablet_ids_as_aux_tablets = true;
@@ -469,9 +460,9 @@ int ObTabletBindingHelper::check_skip_tx_end(const ObTabletID &tablet_id, const 
   ObTabletTxMultiSourceDataUnit tx_data;
   ObTabletBindingHelper helper(ls, trans_flags);
 
-  if (SCN::invalid_scn() == trans_flags.scn_) {
+  if (!trans_flags.scn_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tablet_id), K(ls));
+    LOG_WARN("invalid args", K(ret), K(tablet_id), K(trans_flags));
   } else if (OB_FAIL(helper.get_tablet(tablet_id, tablet_handle))) {
     if (OB_NO_NEED_UPDATE == ret) {
       skip = true;
@@ -564,22 +555,12 @@ int ObTabletBindingHelper::fix_binding_info_for_create_tablets(const ObBatchCrea
 {
   int ret = OB_SUCCESS;
   // fix data_tablet binding_info for pure_aux_table
-  ObSArray<int64_t> skip_idx;
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablets_.count(); i++) {
     const ObCreateTabletInfo &info = arg.tablets_[i];
     bool need_modify = false;
-    if (is_contain(skip_idx, i)) {
-      // do nothing
-    } else if (ObTabletCreateDeleteHelper::is_pure_hidden_tablets(info)) {
+    if (ObTabletCreateDeleteHelper::is_pure_hidden_tablets(info)) {
       need_modify = true;
-      for (int64_t j = 0; OB_SUCC(ret) && j < info.tablet_ids_.count(); ++j) {
-        int64_t aux_idx = -1;
-        if (ObTabletCreateDeleteHelper::find_related_aux_info(arg, info.tablet_ids_.at(j), aux_idx)
-            && OB_FAIL(skip_idx.push_back(aux_idx))) {
-          LOG_WARN("failed to push related aux idx", K(ret), K(aux_idx));
-        }
-      }
-    } else if (ObTabletCreateDeleteHelper::is_pure_aux_tablets(info)) {
+    } else if (ObTabletCreateDeleteHelper::is_pure_aux_tablets(info) || ObTabletCreateDeleteHelper::is_mixed_tablets(info)) {
       if (has_lob_tablets(arg, info)) {
         need_modify = true;
       }
