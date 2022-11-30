@@ -313,6 +313,8 @@ int ObOptEstUtils::if_expr_value_equal(ObOptimizerContext &opt_ctx,
     ObExprResType result_type;
     ObExprResType first_type = first_expr.get_result_type();
     ObExprResType second_type = second_expr.get_result_type();
+    ObOpRawExpr equal_expr(const_cast<ObRawExpr *>(&first_expr), const_cast<ObRawExpr *>(&second_expr), T_OP_EQ);
+    type_ctx.set_raw_expr(&equal_expr);
     if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt->get_stmt_type(), *exec_ctx, allocator, expr_ctx))) {
       LOG_WARN("Failed to wrap expr ctx", K(ret));
     } else if (OB_FAIL(equal_op.calc_result_type2(result_type, first_type, second_type, type_ctx))) {
