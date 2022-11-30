@@ -785,7 +785,7 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
           int64_t group_log_data_checksum = -1;
           bool is_accum_checksum_acquired = false;
           if (is_need_submit) {
-            // genenrate group_entry_header
+            // generate group_entry_header
             log_task->lock();
             // Check the prev_proposal_id before submit this log.
             // Because there is maybe a gap when this replica receives this log.
