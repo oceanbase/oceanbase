@@ -2141,6 +2141,9 @@ int ObXACtx::try_heartbeat()
         // exit only
         // no need to delete xa records
         // if xa records exist, we can rely on garbage collection
+        if (OB_FAIL(MTL(ObTransService*)->stop_tx(*tx_desc_))) {
+          TRANS_LOG(WARN, "fail to stop transaction", K(ret), K(*this));
+        }
         (void)set_exiting_();
       } else if (now > branch_info.last_hb_ts_ + XA_HB_THRESHOLD) {
         branch_info.unrespond_msg_cnt_++;
