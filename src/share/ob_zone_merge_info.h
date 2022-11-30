@@ -47,6 +47,7 @@ public:
   int set_scn(const uint64_t scn_val);
   int set_scn(const uint64_t scn_val, const bool need_update);
   const SCN &get_scn() const { return scn_; }
+  //this interface is just used for operations of reading or writing inner tables
   uint64_t get_scn_val() const { return scn_.get_val_for_inner_table_field(); }
   int64_t get_value() const { return value_; }
 

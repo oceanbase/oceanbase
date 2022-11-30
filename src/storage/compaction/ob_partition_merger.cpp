@@ -1942,13 +1942,13 @@ int ObPartitionMergeDumper::generate_dump_table_name(const char *dir_name,
     STORAGE_LOG(WARN, "table is null", K(ret));
   } else {
     int64_t pret = snprintf(
-                       file_name, OB_MAX_FILE_NAME_LENGTH, "%s/%s.%s.%ld.%s.%d.%s.%lu.%s.%lu",
+                       file_name, OB_MAX_FILE_NAME_LENGTH, "%s/%s.%s.%ld.%s.%d.%s.%ld.%s.%ld",
                        dir_name,
                        table->is_memtable() ? "dump_memtable" : "dump_sstable",
                        "tablet_id", table->get_key().tablet_id_.id(),
                        "table_type", table->get_key().table_type_,
-                       "start_scn", table->get_start_scn().get_val_for_inner_table_field(),
-                       "end_scn", table->get_end_scn().get_val_for_inner_table_field());
+                       "start_scn", table->get_start_scn().get_val_for_tx(),
+                       "end_scn", table->get_end_scn().get_val_for_tx());
     if (pret < 0 || pret >= OB_MAX_FILE_NAME_LENGTH) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "name too long", K(ret), K(pret), K(file_name));
