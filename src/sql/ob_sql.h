@@ -61,9 +61,9 @@ class ObResultSet;
 class ObPlanBaseKeyGuard
 {
 public:
-  explicit ObPlanBaseKeyGuard(ObBaselineKey &bl_key)
-    : bl_key_(bl_key),
-      ori_bl_key_(bl_key) {}
+  [[nodiscard]] explicit ObPlanBaseKeyGuard(ObBaselineKey &bl_key)
+  : bl_key_(bl_key),
+    ori_bl_key_(bl_key) {}
   ~ObPlanBaseKeyGuard()
   {
     bl_key_ = ori_bl_key_;

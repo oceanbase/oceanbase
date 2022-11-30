@@ -1564,6 +1564,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
   OZ (ObPLContext::valid_execute_context(ctx));
   if (OB_SUCC(ret)) {
     ObPlanCache *plan_cache = ctx.get_my_session()->get_plan_cache();
+    ObPlanBaseKeyGuard guard(ctx.get_sql_ctx()->spm_ctx_.bl_key_);
     ObPlanCacheCtx pc_ctx(sql,
                           true, // PS_MODE
                           ctx.get_allocator(),
@@ -1692,6 +1693,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
   } else { // standalone routine
     static const ObString PLSQL = ObString("PL/SQL");
     ObPlanCache *plan_cache = ctx.get_my_session()->get_plan_cache();
+    ObPlanBaseKeyGuard guard(ctx.get_sql_ctx()->spm_ctx_.bl_key_);
     ObPlanCacheCtx pc_ctx(PLSQL,
                           false, // ps mode
                           ctx.get_allocator(),
