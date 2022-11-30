@@ -3413,7 +3413,7 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
   } else if (OB_USE_PLAN_CACHE_NONE == phy_plan->get_phy_plan_hint().plan_cache_policy_) {
     LOG_DEBUG("Hint not use plan cache");
   } else if (OB_FAIL(result.to_plan(pc_ctx.is_ps_mode_, phy_plan))) {
-    LOG_WARN("Failed copy field to pplan", K(ret));
+    LOG_WARN("Failed copy field to plan", K(ret));
   } else if (OB_FAIL(ob_write_string(phy_plan->get_allocator(),
                                      pc_ctx.is_ps_mode_ ? pc_ctx.raw_sql_ :
                                      pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_,
