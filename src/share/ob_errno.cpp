@@ -11061,6 +11061,42 @@ static const _error _error_OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -5437, Invalid argument for scn_to_timestamp()",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5437, SCN_TO_TIMESTAMP expected a interger number as nsec argument"
 };
+static const _error _error_OB_EER_WINDOW_NO_CHILD_PARTITIONING = {
+      .error_name            = "OB_EER_WINDOW_NO_CHILD_PARTITIONING",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = ER_WINDOW_NO_CHILD_PARTITIONING,
+      .sqlstate              = "HY000",
+      .str_error             = "Named window cann't be modified by another partitioning property",
+      .str_user_error        = "A window which depends on another cannot define partitioning",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5438, Named window cann't be modified by another partitioning property",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5438, A window which depends on another cannot define partitioning"
+};
+static const _error _error_OB_EER_WINDOW_NO_INHERIT_FRAME = {
+      .error_name            = "OB_EER_WINDOW_NO_INHERIT_FRAME",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = ER_WINDOW_NO_INHERIT_FRAME,
+      .sqlstate              = "HY000",
+      .str_error             = "Named window cann't be modified by another framing property",
+      .str_user_error        = "Window '%.*s' has a frame definition, so cannot be referenced by another window",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5439, Named window cann't be modified by another framing property",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5439, Window '%.*s' has a frame definition, so cannot be referenced by another window"
+};
+static const _error _error_OB_EER_WINDOW_NO_REDEFINE_ORDER_BY = {
+      .error_name            = "OB_EER_WINDOW_NO_REDEFINE_ORDER_BY",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = ER_WINDOW_NO_REDEFINE_ORDER_BY,
+      .sqlstate              = "HY000",
+      .str_error             = "Named window cann't be modified by another ordering property",
+      .str_user_error        = "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -5440, Named window cann't be modified by another ordering property",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5440, Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
+};
 static const _error _error_OB_ERR_SP_ALREADY_EXISTS = {
       .error_name            = "OB_ERR_SP_ALREADY_EXISTS",
       .error_cause           = "Internal Error",
@@ -19221,42 +19257,6 @@ static const _error _error_OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9086, backup advance checkpoint by flush timeout",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9086, backup advance checkpoint by flush timeout"
 };
-static const _error _error_OB_EER_WINDOW_NO_CHILD_PARTITIONING = {
-      .error_name            = "OB_EER_WINDOW_NO_CHILD_PARTITIONING",
-      .error_cause           = "Internal Error",
-      .error_solution        = "Contact OceanBase Support",
-      .mysql_errno           = ER_WINDOW_NO_CHILD_PARTITIONING,
-      .sqlstate              = "HY000",
-      .str_error             = "Named window cann't be modified by another partitioning property",
-      .str_user_error        = "A window which depends on another cannot define partitioning",
-      .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9087, Named window cann't be modified by another partitioning property",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9087, A window which depends on another cannot define partitioning"
-};
-static const _error _error_OB_EER_WINDOW_NO_INHERIT_FRAME = {
-      .error_name            = "OB_EER_WINDOW_NO_INHERIT_FRAME",
-      .error_cause           = "Internal Error",
-      .error_solution        = "Contact OceanBase Support",
-      .mysql_errno           = ER_WINDOW_NO_INHERIT_FRAME,
-      .sqlstate              = "HY000",
-      .str_error             = "Named window cann't be modified by another framing property",
-      .str_user_error        = "Window '%.*s' has a frame definition, so cannot be referenced by another window",
-      .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9088, Named window cann't be modified by another framing property",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9088, Window '%.*s' has a frame definition, so cannot be referenced by another window"
-};
-static const _error _error_OB_EER_WINDOW_NO_REDEFINE_ORDER_BY = {
-      .error_name            = "OB_EER_WINDOW_NO_REDEFINE_ORDER_BY",
-      .error_cause           = "Internal Error",
-      .error_solution        = "Contact OceanBase Support",
-      .mysql_errno           = ER_WINDOW_NO_REDEFINE_ORDER_BY,
-      .sqlstate              = "HY000",
-      .str_error             = "Named window cann't be modified by another ordering property",
-      .str_user_error        = "Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause",
-      .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9089, Named window cann't be modified by another ordering property",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9089, Window '%.*s' cannot inherit '%.*s' since both contain an ORDER BY clause"
-};
 static const _error _error_OB_NO_SUCH_FILE_OR_DIRECTORY = {
       .error_name            = "OB_NO_SUCH_FILE_OR_DIRECTORY",
       .error_cause           = "Internal Error",
@@ -22896,6 +22896,9 @@ struct ObStrErrorInit
     _errors[-OB_OUTLINE_NOT_REPRODUCIBLE] = &_error_OB_OUTLINE_NOT_REPRODUCIBLE;
     _errors[-OB_INVALID_ARGUMENT_FOR_TIMESTAMP_TO_SCN] = &_error_OB_INVALID_ARGUMENT_FOR_TIMESTAMP_TO_SCN;
     _errors[-OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP] = &_error_OB_INVALID_ARGUMENT_FOR_SCN_TO_TIMESTAMP;
+    _errors[-OB_EER_WINDOW_NO_CHILD_PARTITIONING] = &_error_OB_EER_WINDOW_NO_CHILD_PARTITIONING;
+    _errors[-OB_EER_WINDOW_NO_INHERIT_FRAME] = &_error_OB_EER_WINDOW_NO_INHERIT_FRAME;
+    _errors[-OB_EER_WINDOW_NO_REDEFINE_ORDER_BY] = &_error_OB_EER_WINDOW_NO_REDEFINE_ORDER_BY;
     _errors[-OB_ERR_SP_ALREADY_EXISTS] = &_error_OB_ERR_SP_ALREADY_EXISTS;
     _errors[-OB_ERR_SP_DOES_NOT_EXIST] = &_error_OB_ERR_SP_DOES_NOT_EXIST;
     _errors[-OB_ERR_SP_UNDECLARED_VAR] = &_error_OB_ERR_SP_UNDECLARED_VAR;
@@ -23576,9 +23579,6 @@ struct ObStrErrorInit
     _errors[-OB_BACKUP_PWRITE_CONTENT_NOT_MATCH] = &_error_OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;
     _errors[-OB_BACKUP_MAJOR_NOT_COVER_MINOR] = &_error_OB_BACKUP_MAJOR_NOT_COVER_MINOR;
     _errors[-OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT] = &_error_OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT;
-    _errors[-OB_EER_WINDOW_NO_CHILD_PARTITIONING] = &_error_OB_EER_WINDOW_NO_CHILD_PARTITIONING;
-    _errors[-OB_EER_WINDOW_NO_INHERIT_FRAME] = &_error_OB_EER_WINDOW_NO_INHERIT_FRAME;
-    _errors[-OB_EER_WINDOW_NO_REDEFINE_ORDER_BY] = &_error_OB_EER_WINDOW_NO_REDEFINE_ORDER_BY;
     _errors[-OB_NO_SUCH_FILE_OR_DIRECTORY] = &_error_OB_NO_SUCH_FILE_OR_DIRECTORY;
     _errors[-OB_FILE_OR_DIRECTORY_EXIST] = &_error_OB_FILE_OR_DIRECTORY_EXIST;
     _errors[-OB_FILE_OR_DIRECTORY_PERMISSION_DENIED] = &_error_OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;
