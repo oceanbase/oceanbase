@@ -272,7 +272,7 @@ int ObBackupMetaFileStore::may_need_parse_common_header(MemoryFile*& mem_file)
   } else if (!mem_file->need_parse_common_header_) {
     // do not need parse common header
   } else if (reader.remain() < sizeof(ObBackupCommonHeader)) {
-    FLOG_INFO("backup data has incomplete data, skip it", KPC(mem_file));
+    FLOG_INFO("backup data has incomplete common header, skip it", K(reader), KPC(mem_file));
     need_swith_next_file_ = true;
   } else if (OB_FAIL(parse_common_header(reader, common_header))) {
     LOG_WARN("failed to parse common header", KR(ret));
@@ -282,8 +282,8 @@ int ObBackupMetaFileStore::may_need_parse_common_header(MemoryFile*& mem_file)
     mem_file->meet_file_end_mark_ = true;
     LOG_INFO("file reach end mark", K(mem_file->reader_));
   } else if (common_header.data_length_ > reader.remain()) {
-    ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("buffer reader not enough", KR(ret));
+    FLOG_INFO("backup data has incomplete data body, skip it", K(common_header), K(reader), KPC(mem_file));
+    need_swith_next_file_ = true;
   } else if (OB_FAIL(common_header.check_data_checksum(reader.current(), common_header.data_length_))) {
     LOG_WARN("failed to check data checksum", KR(ret), K(common_header));
   } else {

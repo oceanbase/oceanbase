@@ -2808,6 +2808,7 @@ int ObBackupPhysicalPGCtx::finish_task(const int64_t task_idx)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "backup data, build index order unexpected", K(ret), K(task_idx), K(task_turn_));
   } else {
+    LOG_INFO("finish task turn", K(task_idx));
     ObThreadCondGuard guard(cond_);
     ATOMIC_INC(&task_turn_);
     if (OB_FAIL(cond_.broadcast())) {
@@ -3755,6 +3756,7 @@ int ObBackupCopyPhysicalTask::wait_for_turn_()
       break;
     }
     ++wait_count;
+    dag_yield();
     // no need sleep here, wait_for_turn will sleep inside
   }
 
