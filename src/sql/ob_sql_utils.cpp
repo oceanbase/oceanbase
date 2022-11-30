@@ -483,7 +483,7 @@ int ObSQLUtils::calc_raw_expr_without_row(
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_overflow) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recusive", K(ret));
+    LOG_WARN("too deep recursive", K(ret));
   }
   if (OB_FAIL(ret)) {
     // do nothing
