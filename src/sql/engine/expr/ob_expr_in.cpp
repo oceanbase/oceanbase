@@ -1107,7 +1107,7 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
               left = &input_left[i];
               is_equal = ((left->len_ == len0 && 0 == MEMCMP(ptr0, left->ptr_, len0))
                            || (!is_calc_with_end_space && left->len_ > len0 && is_all_space(left->ptr_ + len0, left->len_ - len0)));
-              is_equal = is_equal || ((left->len_ == len1 && 0 == MEMCMP(ptr0, left->ptr_, len1))
+              is_equal = is_equal || ((left->len_ == len1 && 0 == MEMCMP(ptr1, left->ptr_, len1))
                                       || (!is_calc_with_end_space && left->len_ > len1 && is_all_space(left->ptr_ + len1, left->len_ - len1)));
               results[i].set_int(is_equal);
             }
