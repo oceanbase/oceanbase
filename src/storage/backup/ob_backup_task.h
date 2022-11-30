@@ -451,6 +451,8 @@ public:
 
 private:
   int may_need_advance_checkpoint_();
+  int fetch_cur_ls_rebuild_seq_(int64_t &rebuild_seq);
+  int fetch_backup_ls_meta_(share::SCN &clog_checkpoint_scn);
   int check_tx_data_can_explain_user_data_();
   int get_backup_tx_data_table_filled_tx_scn_(share::SCN &filled_tx_scn);
   int prepare_meta_index_store_(ObBackupMetaIndexStore &meta_index_store);
@@ -459,7 +461,6 @@ private:
   int get_cur_ls_min_filled_tx_scn_(share::SCN &min_filled_tx_scn);
   int get_tablet_min_filled_tx_scn_(ObTabletHandle &tablet_handle,
       share::SCN &min_filled_tx_scn, bool &has_minor_sstable);
-  int fetch_backup_ls_meta_(int64_t &rebuild_seq, share::SCN &clog_checkpoint_scn);
 
 private:
   bool is_inited_;
