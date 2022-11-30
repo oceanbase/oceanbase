@@ -505,7 +505,7 @@ int ObObjFreeList::destroy_cur_thread_cache()
   ObThreadCache *cur_thread_cache = NULL;
   void *item = NULL;
 
-  // unregister thread cahce
+  // unregister thread cache
   if (!OB_ISNULL(cur_thread_cache = get_thread_cache(thread_cache_idx_))) {
     if (OB_FAIL(mutex_acquire(&lock_))) {
       OB_LOG(WARN, "failed to lock of freelist", KCSTRING(name_));

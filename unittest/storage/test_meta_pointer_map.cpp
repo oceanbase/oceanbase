@@ -54,7 +54,7 @@ public:
   void FakeLs(ObLS &ls);
 
 private:
-  static constexpr uint64_t TEST_TENANT_ID = 500;
+  static constexpr uint64_t TEST_TENANT_ID = OB_SERVER_TENANT_ID;
   ObMetaPointerMap<ObTabletMapKey, ObTablet> tablet_map_;
   ObTenantBase tenant_base_;
 };
