@@ -2509,7 +2509,7 @@ int ObSQLUtils::revise_hash_part_object(common::ObObj &obj,
  * choose best replica for storage row estimation with following priority:
  *  1. local replica
  *  2. random replica in local idc
- *  3. random replica in local regin
+ *  3. random replica in local region
  *  4. other
  */
 int ObSQLUtils::choose_best_replica_for_estimation(
@@ -2562,7 +2562,7 @@ int ObSQLUtils::choose_best_replica_for_estimation(
 }
 
 /*
- * 选择副本优先级： 本机-->本idc(随机)-->本regin(随机) --> 其他regin(随机)
+ * 选择副本优先级： 本机-->本idc(随机)-->本region(随机) --> 其他region(随机)
  * */
 int ObSQLUtils::choose_best_partition_replica_addr(const ObAddr &local_addr,
                                                    const ObCandiTabletLoc &phy_part_loc_info,
