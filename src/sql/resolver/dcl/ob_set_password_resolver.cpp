@@ -72,11 +72,17 @@ int ObSetPasswordResolver::resolve(const ParseNode& parse_tree)
       set_pwd_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
       ObString user_name;
       ObString host_name;
-      const ObString& session_user_name = session_info_->get_user_name();
-      const ObString& session_host_name = session_info_->get_host_name();
+      const ObString &session_user_name = session_info_->get_user_name();
+      const ObString &session_host_name = session_info_->get_host_name();
+      bool is_valid = false;
       if (NULL != node->children_[0]) {
-        ParseNode* user_hostname_node = node->children_[0];
-        if (OB_ISNULL(user_hostname_node->children_[0])) {
+        ParseNode *user_hostname_node = node->children_[0];
+        if (OB_FAIL(check_role_as_user(user_hostname_node, is_valid))) {
+          LOG_WARN("failed to check role as user", K(ret));
+        } else if (!is_valid) {
+          ret = OB_USER_NOT_EXIST;
+          LOG_ORACLE_USER_ERROR(OB_USER_NOT_EXIST, int(user_hostname_node->str_len_), user_hostname_node->str_value_);
+        } else if (OB_ISNULL(user_hostname_node->children_[0])) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("username should not be NULL", K(ret));
         } else {
@@ -298,6 +304,25 @@ int ObSetPasswordResolver::resolve_oracle_password_strength(
     if (OB_FAIL(check_oracle_password_strength(
             session_info_->get_effective_tenant_id(), profile_id, password, user_name))) {
       LOG_WARN("fail to check oracle password strength", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSetPasswordResolver::check_role_as_user(ParseNode *user_hostname_node, bool &is_valid)
+{
+  is_valid = false;
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(user_hostname_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to check_role_as_user, user_hostname_node is NULL", K(ret));
+  } else if (!lib::is_oracle_mode() || T_VARCHAR != user_hostname_node->type_) {
+    is_valid = true;
+  } else {
+    ObString node_str(user_hostname_node->str_len_, user_hostname_node->str_value_);
+    if (0 != node_str.case_compare(OB_ORA_RESOURCE_ROLE_NAME) && 0 != node_str.case_compare(OB_ORA_PUBLIC_ROLE_NAME) &&
+        0 != node_str.case_compare(OB_ORA_CONNECT_ROLE_NAME)) {
+      is_valid = true;
     }
   }
   return ret;
