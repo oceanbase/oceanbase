@@ -1732,22 +1732,22 @@ int ObRemoteResultSet::setup_next_scanner()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("resp_handler is NULL", K(ret));
   } else {
-    ObInnerSQLTransmitResult *tansmit_result= NULL;
+    ObInnerSQLTransmitResult *transmit_result= NULL;
 
     if (!first_response_received_) { /* has not gotten the first scanner responsed */
-      if (OB_ISNULL(tansmit_result = remote_resp_handler_->get_result())) {
+      if (OB_ISNULL(transmit_result = remote_resp_handler_->get_result())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tansmit_result is NULL", K(ret));
-      } else if (OB_FAIL(tansmit_result->get_err_code())) {
+        LOG_WARN("transmit_result is NULL", K(ret));
+      } else if (OB_FAIL(transmit_result->get_err_code())) {
         LOG_WARN("while fetching first scanner, the remote rcode is not OB_SUCCESS", K(ret));
       } else {
-        scanner_ = &tansmit_result->get_scanner();
+        scanner_ = &transmit_result->get_scanner();
         scanner_iter_ = scanner_->begin();
         first_response_received_ = true; /* has gotten the first scanner responsed already */
         found_rows_ += scanner_->get_found_rows();
-        stmt_type_ = tansmit_result->get_stmt_type();
+        stmt_type_ = transmit_result->get_stmt_type();
         const common::ObSArray<common::ObField> &src_field_columns =
-              tansmit_result->get_field_columns();
+              transmit_result->get_field_columns();
         if (0 >= src_field_columns.count()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("the count of field_columns is unexpected",
@@ -1767,13 +1767,13 @@ int ObRemoteResultSet::setup_next_scanner()
       if (handle.has_more()) {
         if (OB_FAIL(remote_resp_handler_->reset_and_init_scanner())) {
           LOG_WARN("fail reset and init result", K(ret));
-        } else if (OB_ISNULL(tansmit_result = remote_resp_handler_->get_result())) {
+        } else if (OB_ISNULL(transmit_result = remote_resp_handler_->get_result())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc result, but result scanner is NULL", K(ret));
-        } else if (OB_FAIL(handle.get_more(*tansmit_result))) {
+        } else if (OB_FAIL(handle.get_more(*transmit_result))) {
           LOG_WARN("fail wait response", K(ret));
         } else {
-          scanner_ = &tansmit_result->get_scanner();
+          scanner_ = &transmit_result->get_scanner();
           scanner_iter_ = scanner_->begin();
           found_rows_ += scanner_->get_found_rows();
         }
