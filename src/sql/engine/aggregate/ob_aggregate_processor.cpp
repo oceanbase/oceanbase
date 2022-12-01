@@ -3180,7 +3180,6 @@ int ObAggregateProcessor::collect_aggr_result(
         if (ret == OB_ITER_END && 0 == not_null_start_loc) {
           ret = OB_SUCCESS;
           result.set_null();
-          LOG_DEBUG("result is null", K(*storted_row), K(row_cnt));
         } else if (OB_FAIL(ret)) {
           LOG_WARN("failed to get dest loc row", K(ret), K(dest_loc), K(row_cnt));
         } else if (OB_FAIL(prev_row.save_store_row(*storted_row))) {
