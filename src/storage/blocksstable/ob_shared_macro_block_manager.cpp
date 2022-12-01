@@ -29,6 +29,7 @@
 #include "storage/ls/ob_ls.h"
 #include "share/ob_ls_id.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 
 namespace oceanbase
 {
@@ -273,10 +274,10 @@ int ObSharedMacroBlockMgr::try_switch_macro_block()
   if (block_id.is_valid() && OB_FAIL(add_block(block_id, used_size))) {
     LOG_WARN("fail to add cur block to map", K(ret), K(block_id));
   } else if (FALSE_IT(macro_handle_.reset())) {
-  } else if (FALSE_IT(offset_ = 0)) {
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.alloc_block(macro_handle_))) {
     LOG_WARN("fail to alloc block for new macro block", K(ret));
   } else {
+    offset_ = 0;
     ObMacroBlockWriteInfo write_info;
     ObBlockInfo block_info;
     write_info.buffer_ = common_header_buf_;
@@ -288,6 +289,7 @@ int ObSharedMacroBlockMgr::try_switch_macro_block()
       LOG_WARN("fail to write common header to the shared macro block", K(ret), K(block_info));
     }
   }
+
   return ret;
 }
 
@@ -739,7 +741,7 @@ int ObSharedMacroBlockMgr::read_sstable_block(
 void ObSharedMacroBlockMgr::ObBlockDefragmentationTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(shared_mgr_.defragment())) {
+  if (ObServerCheckpointSlogHandler::get_instance().is_started() && OB_FAIL(shared_mgr_.defragment())) {
     LOG_WARN("fail to defragment small sstables", K(ret));
   }
 }
