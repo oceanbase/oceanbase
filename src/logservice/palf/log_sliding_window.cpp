@@ -2263,6 +2263,26 @@ int LogSlidingWindow::gen_committed_end_lsn_(LSN &new_committed_end_lsn)
   return ret;
 }
 
+int LogSlidingWindow::gen_committed_end_lsn_with_memberlist_(
+    const ObMemberList &member_list,
+    const int64_t replica_num)
+{
+  int ret = OB_SUCCESS;
+  LSN result_lsn;
+  if (!member_list.is_valid() || replica_num <= 0 ||
+      replica_num < member_list.get_member_number()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(member_list), K(replica_num));
+  } else if (OB_FAIL(get_majority_lsn_(member_list, replica_num, result_lsn))) {
+    PALF_LOG(WARN, "get_majority_lsn failed", K(ret), K_(palf_id), K_(self));
+  } else {
+    (void) try_advance_committed_lsn_(result_lsn);
+    PALF_LOG(INFO, "gen_committed_end_lsn_with_memberlist_ finished", K(ret), K_(palf_id),
+        K_(self), K(result_lsn), K(member_list), K(replica_num));
+  }
+  return ret;
+}
+
 int LogSlidingWindow::get_majority_lsn(const ObMemberList &member_list,
                                        const int64_t replica_num,
                                        LSN &result_lsn) const
@@ -3317,7 +3337,11 @@ int LogSlidingWindow::reset_match_lsn_map_()
 }
 
 // need caller hold wlock in PalfHandleImpl
-int LogSlidingWindow::config_change_update_match_lsn_map(const ObMemberList &added_memberlist, const ObMemberList &removed_memberlist)
+int LogSlidingWindow::config_change_update_match_lsn_map(
+    const ObMemberList &added_memberlist,
+    const ObMemberList &removed_memberlist,
+    const ObMemberList &new_log_sync_memberlist,
+    const int64_t new_replica_num)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -3348,6 +3372,17 @@ int LogSlidingWindow::config_change_update_match_lsn_map(const ObMemberList &add
       } else {
         tmp_ret = OB_SUCCESS;
       }
+    }
+  }
+  // Try to advance committed_end_lsn after updating match_lsn_map_.
+  if (OB_SUCC(ret)) {
+    if (state_mgr_->is_leader_active()) {
+      // Only leader with ACTIVE state can generate new committed_end_lsn.
+      // This step is necessary because after removing member, current log_sync_memeber_list
+      // may become self (single member). And if all local logs have been flushed, but
+      // committed_end_lsn is smaller than flushed lsn, self won't have chance to advance it.
+      // So we need try to advance committed_end_lsn here.
+      (void) gen_committed_end_lsn_with_memberlist_(new_log_sync_memberlist, new_replica_num);
     }
   }
   PALF_LOG(INFO, "config_change_update_match_lsn_map_ finished", K(ret), K_(palf_id), K_(self), K(added_memberlist), K(removed_memberlist));

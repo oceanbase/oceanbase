@@ -170,7 +170,9 @@ public:
                                     const int64_t &prev_log_proposal_id,
                                     const LSN &committed_end_lsn);
   virtual int config_change_update_match_lsn_map(const ObMemberList &added_memberlist,
-                                                 const ObMemberList &removed_memberlist);
+                                                 const ObMemberList &removed_memberlist,
+                                                 const ObMemberList &new_log_sync_memberlist,
+                                                 const int64_t new_replica_num);
   // ================= log sync part end
   virtual int append_disk_log(const LSN &lsn, const LogGroupEntry &group_entry);
   virtual int report_log_task_trace(const int64_t log_id);
@@ -284,6 +286,9 @@ private:
                                    LogGroupEntryHeader &header,
                                    int64_t &group_log_checksum);
   int gen_committed_end_lsn_(LSN &new_committed_end_lsn);
+  int gen_committed_end_lsn_with_memberlist_(
+    const ObMemberList &member_list,
+    const int64_t replica_num);
   int get_majority_lsn_(const ObMemberList &member_list,
                         const int64_t replica_num,
                         LSN &result_lsn) const;

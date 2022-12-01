@@ -319,7 +319,7 @@ private:
                                 const LogConfigChangeArgs &args,
                                 LogConfigInfo &new_config_info) const;
   int update_complete_config_info_(const LogConfigInfo &config_info);
-  int update_match_lsn_map_(const LogConfigChangeArgs &args);
+  int update_match_lsn_map_(const LogConfigChangeArgs &args, const LogConfigInfo &new_config_info);
   int update_election_meta_(const LogConfigInfo &info);
   int update_election_meta_(const ObMemberList &member_list,
                             const LogConfigVersion &config_version,

@@ -1047,7 +1047,7 @@ int LogConfigMgr::apply_config_meta_(const int64_t curr_proposal_id,
     } else {
       PALF_LOG(WARN, "update_election_meta_ failed", KR(ret), K_(palf_id), K_(self), K(new_config_info), K_(log_ms_meta));
     }
-  } else if (OB_FAIL(update_match_lsn_map_(args))) {
+  } else if (OB_FAIL(update_match_lsn_map_(args, new_config_info))) {
     PALF_LOG(WARN, "update_match_lsn_map failed", K(ret), K_(palf_id), K_(self), K(args));
   } else if (OB_FAIL(update_complete_config_info_(new_config_info))) {
   } else {
@@ -1060,7 +1060,8 @@ int LogConfigMgr::apply_config_meta_(const int64_t curr_proposal_id,
   return ret;
 }
 
-int LogConfigMgr::update_match_lsn_map_(const LogConfigChangeArgs &args)
+int LogConfigMgr::update_match_lsn_map_(const LogConfigChangeArgs &args,
+    const LogConfigInfo &new_config_info)
 {
   int ret = OB_SUCCESS;
   ObMemberList added_memberlist;
@@ -1070,7 +1071,9 @@ int LogConfigMgr::update_match_lsn_map_(const LogConfigChangeArgs &args)
   } else if (is_remove_log_sync_member_list(args.type_) && OB_FAIL(removed_memberlist.add_member(args.server_))) {
     PALF_LOG(WARN, "add_member failed", K(ret), K_(palf_id), K_(self), K(added_memberlist), K(args));
   }
-  if (OB_SUCC(ret) && OB_FAIL(sw_->config_change_update_match_lsn_map(added_memberlist, removed_memberlist))) {
+  if (OB_SUCC(ret) && OB_FAIL(sw_->config_change_update_match_lsn_map(added_memberlist, \
+          removed_memberlist, new_config_info.log_sync_memberlist_, \
+          new_config_info.log_sync_replica_num_))) {
     PALF_LOG(WARN, "config_change_update_match_lsn_map failed", K(ret), K_(palf_id), K_(self), K(added_memberlist), K(removed_memberlist));
   }
   return ret;
