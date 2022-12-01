@@ -26,6 +26,7 @@ namespace oceanbase
 {
 namespace blocksstable
 {
+
 /**
  * ---------------------------------------ObMacroBlockHandle----------------------------------------
  */
@@ -285,5 +286,6 @@ int ObMacroBlocksHandle::reserve(const int64_t block_cnt)
   }
   return ret;
 }
+
 } // namespace blocksstable
 } // namespace oceanbase

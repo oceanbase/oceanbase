@@ -19,6 +19,8 @@
 #include "storage/blocksstable/ob_index_block_row_struct.h"
 #include "storage/blocksstable/ob_micro_block_cache.h"
 #include "storage/blocksstable/ob_block_manager.h"
+#include "storage/blocksstable/ob_macro_block_handle.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {
@@ -368,15 +370,19 @@ int ObIMicroBlockCache::load_block(
 int ObIMicroBlockCache::prefetch(
     const uint64_t tenant_id,
     const MacroBlockId &macro_id,
-    const ObIndexBlockRowHeader& idx_row_header,
+    const ObMicroIndexInfo& idx_row,
     const common::ObQueryFlag &flag,
     ObMacroBlockHandle &macro_handle,
     ObIMicroBlockIOCallback &callback)
 {
   int ret = OB_SUCCESS;
+  const ObIndexBlockRowHeader *idx_row_header = idx_row.row_header_;
   BaseBlockCache *cache = nullptr;
   ObIAllocator *allocator = nullptr;
-  if (OB_FAIL(get_cache(cache))) {
+  if (OB_ISNULL(idx_row_header)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(get_cache(cache))) {
     LOG_WARN("Fail to get base cache", K(ret));
   } else if (OB_FAIL(get_allocator(allocator))) {
     LOG_WARN("Fail to get allocator", K(ret));
@@ -387,13 +393,13 @@ int ObIMicroBlockCache::prefetch(
     callback.put_size_stat_ = this;
     callback.tenant_id_ = tenant_id;
     callback.block_id_ = macro_id;
-    callback.offset_ = idx_row_header.get_block_offset();
-    callback.size_ = idx_row_header.get_block_size();
-    callback.row_store_type_ = idx_row_header.get_row_store_type();
-    callback.block_des_meta_.compressor_type_ = idx_row_header.get_compressor_type();
-    callback.block_des_meta_.encrypt_id_ = idx_row_header.get_encrypt_id();
-    callback.block_des_meta_.master_key_id_ = idx_row_header.get_master_key_id();
-    callback.block_des_meta_.encrypt_key_ = idx_row_header.get_encrypt_key();
+    callback.offset_ = idx_row.get_block_offset();
+    callback.size_ = idx_row.get_block_size();
+    callback.row_store_type_ = idx_row.get_row_store_type();
+    callback.block_des_meta_.compressor_type_ = idx_row_header->get_compressor_type();
+    callback.block_des_meta_.encrypt_id_ = idx_row_header->get_encrypt_id();
+    callback.block_des_meta_.master_key_id_ = idx_row_header->get_master_key_id();
+    callback.block_des_meta_.encrypt_key_ = idx_row_header->get_encrypt_key();
     callback.use_block_cache_ = flag.is_use_block_cache();
     // fill read info
     ObMacroBlockReadInfo read_info;
@@ -404,15 +410,15 @@ int ObIMicroBlockCache::prefetch(
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     read_info.io_callback_ = &callback;
     common::align_offset_size(
-        idx_row_header.get_block_offset(),
-        idx_row_header.get_block_size(),
+        idx_row.get_block_offset(),
+        idx_row.get_block_size(),
         read_info.offset_,
         read_info.size_);
     if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle))) {
       STORAGE_LOG(WARN, "Fail to async read block, ", K(ret));
     } else {
       EVENT_INC(ObStatEventIds::IO_READ_PREFETCH_MICRO_COUNT);
-      EVENT_ADD(ObStatEventIds::IO_READ_PREFETCH_MICRO_BYTES, idx_row_header.get_block_size());
+      EVENT_ADD(ObStatEventIds::IO_READ_PREFETCH_MICRO_BYTES, idx_row.get_block_size());
     }
   }
   return ret;
@@ -763,11 +769,9 @@ int ObDataMicroBlockCache::prefetch(
 {
   int ret = OB_SUCCESS;
   const ObIndexBlockRowHeader *idx_header = idx_row.row_header_;
-  if (OB_ISNULL(idx_header)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid null index block row header", K(ret), K(idx_row));
-  } else if (OB_UNLIKELY(
-          !idx_header->is_valid()
+  if (OB_UNLIKELY(
+          nullptr == idx_header
+          || !idx_header->is_valid()
           || 0 >= idx_header->get_block_size()
           || !idx_header->is_data_block())) {
     ret = OB_INVALID_ARGUMENT;
@@ -779,7 +783,7 @@ int ObDataMicroBlockCache::prefetch(
     callback.need_write_extra_buf_ = idx_header->is_data_index()
         && ObStoreFormat::is_row_store_type_with_encoding(idx_header->get_row_store_type());
     if (OB_FAIL(ObIMicroBlockCache::prefetch(
-        tenant_id, macro_id, *idx_header, flag, macro_handle, callback))) {
+        tenant_id, macro_id, idx_row, flag, macro_handle, callback))) {
       LOG_WARN("Fail to prefetch data micro block", K(ret));
     }
   }
@@ -1254,7 +1258,7 @@ int ObIndexMicroBlockCache::prefetch(
     callback.index_read_info_ = &index_read_info;
     callback.tablet_handle_ = tablet_handle;
     if (OB_FAIL(ObIMicroBlockCache::prefetch(
-        tenant_id, macro_id, *idx_header, flag, macro_handle, callback))) {
+        tenant_id, macro_id, idx_row, flag, macro_handle, callback))) {
       LOG_WARN("Fail to prefetch data micro block", K(ret));
     }
   }

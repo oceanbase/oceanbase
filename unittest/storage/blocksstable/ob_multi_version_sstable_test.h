@@ -532,6 +532,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
                                         param.root_block_addr_, param.root_block_data_);
   ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
                                         param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
+  param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
   param.root_row_store_type_ = res.root_desc_.row_type_;
   param.data_index_tree_height_ = res.root_desc_.height_;
   param.index_blocks_cnt_ = res.index_blocks_cnt_;
@@ -544,6 +545,8 @@ void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;
   param.master_key_id_ = 0;
+  param.nested_size_ = res.nested_size_;
+  param.nested_offset_ = res.nested_offset_;
   param.ddl_scn_.set_min();
   if (merge_type_ == MAJOR_MERGE) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));

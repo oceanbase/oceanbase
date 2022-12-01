@@ -235,7 +235,7 @@ protected:
   virtual int prefetch(
       const uint64_t tenant_id,
       const MacroBlockId &macro_id,
-      const ObIndexBlockRowHeader& idx_row_header,
+      const ObMicroIndexInfo& idx_row,
       const common::ObQueryFlag &flag,
       ObMacroBlockHandle &macro_handle,
       ObIMicroBlockIOCallback &callback);

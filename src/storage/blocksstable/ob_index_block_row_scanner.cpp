@@ -212,8 +212,8 @@ ObIndexBlockRowScanner::ObIndexBlockRowScanner()
     current_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     start_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     end_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
-    step_(1), range_idx_(0), is_transformed_(false), is_get_(false), is_reverse_scan_(false),
-    is_left_border_(false), is_right_border_(false), is_inited_(false)
+    step_(1), range_idx_(0), nested_offset_(0), is_transformed_(false), is_get_(false),
+    is_reverse_scan_(false), is_left_border_(false), is_right_border_(false), is_inited_(false)
 {}
 
 ObIndexBlockRowScanner::~ObIndexBlockRowScanner() {}
@@ -249,6 +249,7 @@ void ObIndexBlockRowScanner::reset()
   end_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   step_ = 1;
   range_idx_ = 0;
+  nested_offset_ = 0;
   is_transformed_ = false;
   is_get_ = false;
   is_reverse_scan_ = false;
@@ -262,7 +263,8 @@ int ObIndexBlockRowScanner::init(
     const ObIArray<share::schema::ObColumnSchemaV2> &agg_column_schema,
     const ObTableReadInfo *index_read_info,
     ObIAllocator &allocator,
-    const common::ObQueryFlag &query_flag)
+    const common::ObQueryFlag &query_flag,
+    const int64_t nested_offset)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -280,6 +282,7 @@ int ObIndexBlockRowScanner::init(
     is_reverse_scan_ = query_flag.is_reverse_scan();
     step_ = is_reverse_scan_ ? -1 : 1;
     index_read_info_ = index_read_info;
+    nested_offset_ = nested_offset;
     is_inited_ = true;
   }
   return ret;
@@ -383,6 +386,7 @@ int ObIndexBlockRowScanner::get_next(ObMicroIndexInfo &idx_block_row)
     idx_block_row.range_idx_ = range_idx_;
     idx_block_row.query_range_ = query_range_;
     idx_block_row.parent_macro_id_ = macro_id_;
+    idx_block_row.nested_offset_ = nested_offset_;
   }
   LOG_DEBUG("Get next index block row", K(ret), K_(current), K_(start), K_(end), K(idx_block_row));
   return ret;

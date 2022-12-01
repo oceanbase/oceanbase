@@ -41,6 +41,8 @@ int ObSSTableMacroBlockChecker::check(
   } else if (OB_FAIL(common_header.deserialize(macro_block_buf, macro_block_buf_size, pos))) {
     STORAGE_LOG(ERROR, "fail to deserialize common header", K(ret), KP(macro_block_buf),
         K(macro_block_buf_size), K(pos), K(common_header));
+  } else if (common_header.is_shared_macro_block()) {
+    // skip the check
   } else if (OB_FAIL(common_header.check_integrity())) {
     ret = OB_INVALID_DATA;
     STORAGE_LOG(ERROR, "Invalid common header", K(ret), K(common_header));

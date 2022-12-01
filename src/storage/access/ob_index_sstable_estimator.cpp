@@ -17,6 +17,7 @@
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 #include "storage/tablet/ob_tablet.h"
 #include "share/schema/ob_column_schema.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {
@@ -86,7 +87,8 @@ int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
               agg_column_schema,
               &context_.tablet_handle_.get_obj()->get_index_read_info(),
               allocator_,
-              context_.query_flag_))) {
+              context_.query_flag_,
+              context_.sstable_.get_macro_offset()))) {
     STORAGE_LOG(WARN, "Failed to init index block row scanner", K(ret), K(agg_projector), K(agg_column_schema));
   } else if (OB_FAIL(context_.sstable_.get_index_tree_root(context_.tablet_handle_.get_obj()->get_index_read_info(), root_index_block_))) {
     STORAGE_LOG(WARN, "Failed to get index tree root", K(ret));

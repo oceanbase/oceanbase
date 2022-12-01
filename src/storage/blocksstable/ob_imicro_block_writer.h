@@ -49,6 +49,7 @@ struct ObMicroBlockDesc
   ObMicroBlockDesc() { reset(); }
   bool is_valid() const;
   void reset();
+  int64_t get_block_size() const { return buf_size_ + header_->header_size_; }
 
   TO_STRING_KV(
       K_(last_rowkey),

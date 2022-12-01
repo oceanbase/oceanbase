@@ -659,18 +659,18 @@ int ObBloomFilterCache::get_sstable_bloom_filter(const uint64_t tenant_id,
 int ObBloomFilterCache::inc_empty_read(
     const uint64_t tenant_id,
     const uint64_t table_id,
-    const MacroBlockId &macro_block_id,
+    const MacroBlockId &macro_id,
     const int64_t empty_read_prefix)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || empty_read_prefix <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument, ",
-        K(ret), K(tenant_id), K(macro_block_id), K(empty_read_prefix));
+        K(ret), K(tenant_id), K(macro_id), K(empty_read_prefix));
   } else if (0 == bf_cache_miss_count_threshold_) {
     // bf cache is disabled, do nothing
   } else {
-    const ObBloomFilterCacheKey bfc_key(tenant_id, macro_block_id, empty_read_prefix);
+    const ObBloomFilterCacheKey bfc_key(tenant_id, macro_id, empty_read_prefix);
     uint64_t key_hash = bfc_key.hash();
     uint64_t cur_cnt = 1;
     ObEmptyReadCell *cell = nullptr;
@@ -687,7 +687,7 @@ int ObBloomFilterCache::inc_empty_read(
     } else if (cur_cnt > bf_cache_miss_count_threshold_ && (!cell->is_building())) {
       if (cell->check_timeout()) {
       } else if (OB_FAIL(MTL(storage::ObTenantTabletScheduler *)->schedule_build_bloomfilter(
-          table_id, macro_block_id, empty_read_prefix))) {
+          table_id, macro_id, empty_read_prefix))) {
         STORAGE_LOG(WARN, "Fail to schedule build bloom filter, ", K(ret), K(bfc_key),
                     K(cur_cnt), K_(bf_cache_miss_count_threshold));
       } else {
@@ -695,7 +695,7 @@ int ObBloomFilterCache::inc_empty_read(
         cell->build_time_ = ObTimeUtility::current_time();
       }
     }
-    STORAGE_LOG(DEBUG, "inc_empty_read", K(tenant_id), K(table_id), K(macro_block_id),
+    STORAGE_LOG(DEBUG, "inc_empty_read", K(tenant_id), K(table_id), K(macro_id),
         K(cur_cnt), K(bf_cache_miss_count_threshold_));
   }
   return ret;

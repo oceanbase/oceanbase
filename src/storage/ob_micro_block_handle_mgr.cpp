@@ -105,7 +105,7 @@ int ObMicroBlockDataHandle::get_index_block_data(
         nullptr,
         loaded_index_block_data_,
         allocator_))) {
-      LOG_WARN("Fail to load index micro block", K(ret), K_(macro_block_id), K(read_info));
+      LOG_WARN("Fail to load index micro block", K(ret), K_(macro_block_id), K(read_info), K(micro_block_id));
       try_release_loaded_index_block();
     } else {
       index_block = loaded_index_block_data_;
@@ -206,21 +206,24 @@ int ObMicroBlockHandleMgr::init(
 
 int ObMicroBlockHandleMgr::get_micro_block_handle(
     const uint64_t tenant_id,
-    const MacroBlockId macro_id,
-    const ObIndexBlockRowHeader &idx_header,
+    const ObMicroIndexInfo &index_block_info,
     const bool is_data_block,
     ObMicroBlockDataHandle &micro_block_handle)
 {
   int ret = OB_SUCCESS;
   const bool deep_copy_key = true;
   bool found = false;
-  int64_t offset = idx_header.get_block_offset();
-  int64_t size = idx_header.get_block_size();
+  const MacroBlockId &macro_id = index_block_info.get_macro_id();
+  const int64_t offset = index_block_info.get_block_offset();
+  const int64_t size = index_block_info.get_block_size();
+  const ObIndexBlockRowHeader *idx_header = index_block_info.row_header_;
   micro_block_handle.reset();
   micro_block_handle.allocator_ = &allocator_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Block handle manager is not inited", K(ret));
+  } else if (OB_ISNULL(idx_header)) {
+    LOG_WARN("invalid argument", K(ret));
   } else {
     if (is_multi_) {
       if (is_ordered_) {
@@ -245,7 +248,7 @@ int ObMicroBlockHandleMgr::get_micro_block_handle(
     }
 
     if (OB_FAIL(ret) || found) {
-    } else if (OB_FAIL(idx_header.fill_micro_des_meta(deep_copy_key, micro_block_handle.des_meta_))) {
+    } else if (OB_FAIL(idx_header->fill_micro_des_meta(deep_copy_key, micro_block_handle.des_meta_))) {
       LOG_WARN("Fail to fill micro block deserialize meta", K(ret));
     } else {
       micro_block_handle.tenant_id_ = tenant_id;

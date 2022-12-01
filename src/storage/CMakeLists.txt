@@ -37,6 +37,7 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_row_queue.cpp
   blocksstable/ob_row_reader.cpp
   blocksstable/ob_row_writer.cpp
+  blocksstable/ob_shared_macro_block_manager.cpp
   blocksstable/ob_sstable.cpp
   blocksstable/ob_sstable_macro_block_header.cpp
   blocksstable/ob_sstable_meta.cpp

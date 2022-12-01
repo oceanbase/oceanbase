@@ -126,7 +126,9 @@ public:
   void reset();
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool contain_uncommitted_row() const { return basic_meta_.contain_uncommitted_row_; }
-  OB_INLINE bool is_empty() const { return 0 == basic_meta_.data_macro_block_count_; }
+  OB_INLINE bool is_empty() const {
+    return 0 == basic_meta_.data_macro_block_count_;
+  }
   OB_INLINE ObSSTableBasicMeta &get_basic_meta() { return basic_meta_; }
   OB_INLINE const ObSSTableBasicMeta &get_basic_meta() const { return basic_meta_; }
   OB_INLINE const common::ObIArray<int64_t> &get_col_checksum() const { return column_checksums_; }
@@ -176,14 +178,13 @@ private:
   static const int64_t SSTABLE_META_VERSION = 1;
   typedef common::ObFixedArray<int64_t, common::ObIAllocator> ColChecksumArray;
 private:
+  bool is_inited_;
+  common::ObIAllocator *allocator_;
+  common::TCRWLock lock_;
   ObSSTableBasicMeta basic_meta_;
   ColChecksumArray column_checksums_;
   ObRootBlockInfo data_root_info_;
   ObSSTableMacroInfo macro_info_;
-  // The following fields don't to persist
-  common::ObIAllocator *allocator_;
-  common::TCRWLock lock_;
-  bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMeta);
 };
 
@@ -212,6 +213,9 @@ private:
 class ObSSTableMetaChecker
 {
 public:
+  static int check_sstable_meta_strict_equality(
+      const ObSSTableMeta &old_sstable_meta,
+      const ObSSTableMeta &new_sstable_meta);
   static int check_sstable_meta(
       const ObSSTableMeta &old_sstable_meta,
       const ObSSTableMeta &new_sstable_meta);

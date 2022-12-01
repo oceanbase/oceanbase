@@ -147,6 +147,13 @@ public:
       const ObTabletTxMultiSourceDataUnit &tx_data,
       const ObTabletBindingInfo &ddl_data,
       const share::ObTabletAutoincSeq &autoinc_seq);
+  // batch replace sstables without data modification
+  int init(
+      const ObIArray<ObTableHandleV2> &table_handles,
+      const ObTablet &old_tablet,
+      const ObTabletTxMultiSourceDataUnit &tx_data,
+      const ObTabletBindingInfo &ddl_data,
+      const share::ObTabletAutoincSeq &autoinc_seq);
 
   bool is_valid() const;
 

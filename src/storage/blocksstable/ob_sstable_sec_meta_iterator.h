@@ -46,6 +46,7 @@ private:
       const ObMacroBlockMetaType meta_type,
       const ObSSTableMeta &sstable_meta);
   void set_iter_end();
+  int adjust_index(const int64_t begin_idx, const int64_t end_idx, const int64_t row_cnt);
   int init_micro_reader(const ObRowStoreType row_store_type, ObIAllocator &allocator);
   int init_by_type(const ObMacroBlockMetaType meta_type);
   OB_INLINE bool is_handle_buffer_empty() const { return curr_handle_idx_ == prefetch_handle_idx_; }
@@ -66,6 +67,7 @@ private:
       bool &is_beyond_range);
   int prefetch_micro_block(int64_t prefetch_depth);
   int open_next_micro_block();
+  int open_data_root_block();
 
   // TODO: opt with prefetch
   int get_micro_block(

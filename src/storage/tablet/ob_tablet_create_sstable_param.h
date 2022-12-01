@@ -64,9 +64,12 @@ public:
       K_(max_merged_trans_version),
       K_(ddl_scn),
       K_(contain_uncommitted_row),
+      K_(is_meta_root),
       K_(compressor_type),
       K_(encrypt_id),
       K_(master_key_id),
+      K_(nested_offset),
+      K_(nested_size),
       KPHEX_(encrypt_key, sizeof(encrypt_key_)));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
@@ -100,9 +103,12 @@ public:
   share::SCN ddl_scn_;
   share::SCN filled_tx_scn_;
   bool contain_uncommitted_row_;
+  bool is_meta_root_;
   common::ObCompressorType compressor_type_;
   int64_t encrypt_id_;
   int64_t master_key_id_;
+  int64_t nested_offset_;
+  int64_t nested_size_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> data_block_ids_;
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> other_block_ids_;

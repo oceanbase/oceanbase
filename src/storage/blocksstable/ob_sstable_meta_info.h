@@ -66,6 +66,7 @@ private:
       const int64_t data_len,
       int64_t &pos);
   int64_t get_serialize_size_() const;
+
 protected:
   storage::ObMetaDiskAddr addr_;
   ObMicroBlockData block_data_;
@@ -116,9 +117,21 @@ public:
   {
     return linked_block_ids_;
   }
+  OB_INLINE bool is_meta_root() const
+  {
+    return is_meta_root_;
+  }
   OB_INLINE int64_t get_total_block_cnt() const
   {
     return data_block_ids_.count() + other_block_ids_.count() + linked_block_ids_.count();
+  }
+  OB_INLINE int64_t get_nested_offset() const
+  {
+    return nested_offset_;
+  }
+  OB_INLINE int64_t get_nested_size() const
+  {
+    return nested_size_;
   }
   DECLARE_TO_STRING;
 private:
@@ -153,6 +166,9 @@ private:
   MacroIdFixedList other_block_ids_;
   MacroIdFixedList linked_block_ids_;
   MacroBlockId entry_id_;
+  bool is_meta_root_;
+  int64_t nested_offset_;
+  int64_t nested_size_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMacroInfo);
 };
 

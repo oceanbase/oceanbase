@@ -114,6 +114,11 @@ public:
       ObTablet *tablet,
       const ObBatchUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
+  int batch_replace_sstables(
+      common::ObIAllocator &allocator,
+      ObTablet *tablet,
+      const ObIArray<ObTableHandleV2> &table_handles,
+      const ObTabletTableStore &old_store);
 
 private:
   int build_new_table_store(
@@ -202,6 +207,14 @@ private:
       common::ObIAllocator &allocator,
       const ObBatchUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
+  int inner_replace_sstables(
+      common::ObIAllocator &allocator,
+      const ObIArray<ObTableHandleV2> &table_handles,
+      const ObTabletTableStore &old_store);
+  int get_replaced_tables(
+      const ObIArray<ObTableHandleV2> &table_handles,
+      const ObITableArray &old_tables,
+      ObSEArray<ObITable *, 8> &replaced_tables) const;
 
 public:
   static const int64_t TABLE_STORE_VERSION = 0x0100;

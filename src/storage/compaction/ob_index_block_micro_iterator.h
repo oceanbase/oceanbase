@@ -76,7 +76,8 @@ public:
       const blocksstable::MacroBlockId &macro_id,
       const common::ObIArray<blocksstable::ObMicroIndexInfo> &micro_block_infos,
       const common::ObIArray<blocksstable::ObDatumRowkey> &endkeys,
-      const ObRowStoreType row_store_type);
+      const ObRowStoreType row_store_type,
+      const blocksstable::ObSSTable *sstable);
   void reset();
   int next(const blocksstable::ObMicroBlock *&micro_block);
 

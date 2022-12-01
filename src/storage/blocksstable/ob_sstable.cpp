@@ -29,6 +29,7 @@
 #include "storage/tablet/ob_tablet_create_sstable_param.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
 {
@@ -94,6 +95,7 @@ void ObSSTable::reset()
   // dec ref first, then reset sstable meta
   if (hold_macro_ref_) {
     dec_macro_ref();
+    dec_used_size();
   }
   meta_.reset();
   valid_for_reading_ = false;
@@ -922,6 +924,9 @@ void ObSSTable::dec_macro_ref()
       LOG_ERROR("fail to dec other block ref cnt", K(ret), K(macro_id), K(idx));
     }
   }
+  if (OB_FAIL(dec_used_size())) {// ignore ret
+    LOG_ERROR("fail to dec used size of shared block", K(ret));
+  }
   hold_macro_ref_ = false;
 }
 
@@ -945,6 +950,9 @@ int ObSSTable::add_macro_ref()
     } else {
       ++j;
     }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(add_used_size())) {
+    LOG_ERROR("fail to add used size", K(ret));
   }
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
@@ -998,6 +1006,9 @@ int ObSSTable::add_disk_ref()
     } else {
       ++k;
     }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(add_used_size())) {
+    LOG_ERROR("fail to add used size", K(ret));
   }
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
@@ -1056,6 +1067,9 @@ int ObSSTable::dec_disk_ref()
       ++k;
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(dec_used_size())) {
+    LOG_ERROR("fail to dec used size of shared block", K(ret));
+  }
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
     int64_t idx = i - 1;
@@ -1078,6 +1092,44 @@ int ObSSTable::dec_disk_ref()
       if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = OB_SERVER_BLOCK_MGR.inc_disk_ref(macro_id)))) {
         LOG_ERROR("fail to inc other block disk ref cnt", K(ret), K(tmp_ret), K(macro_id));
       }
+    }
+  }
+  return ret;
+}
+
+int ObSSTable::add_used_size()
+{
+  int ret = OB_SUCCESS;
+  if (is_small_sstable()) {
+    const ObSSTableMacroInfo &macro_info = meta_.get_macro_info();
+    const ObIArray<MacroBlockId> &data_block_ids = macro_info.get_data_block_ids();
+    ObSharedMacroBlockMgr *shared_block_mgr = MTL(ObSharedMacroBlockMgr*);
+    if (data_block_ids.count() == 0) { // skip
+    } else if (data_block_ids.count() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected data block ids", K(ret), K(macro_info));
+    } else if (OB_FAIL(shared_block_mgr->add_block(
+        data_block_ids.at(0), meta_.get_macro_info().get_nested_size()))) {
+      LOG_WARN("fail to add used size of shared block", K(ret), K_(meta));
+    }
+  }
+  return ret;
+}
+
+int ObSSTable::dec_used_size()
+{
+  int ret = OB_SUCCESS;
+  if (is_small_sstable()) {
+    const ObSSTableMacroInfo &macro_info = meta_.get_macro_info();
+    const ObIArray<MacroBlockId> &data_block_ids = macro_info.get_data_block_ids();
+    ObSharedMacroBlockMgr *shared_block_mgr = MTL(ObSharedMacroBlockMgr*);
+    if (data_block_ids.count() == 0) { // skip
+    } else if (data_block_ids.count() != 1) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected data block ids", K(ret), K(macro_info));
+    } else if (OB_FAIL(shared_block_mgr->free_block(
+        data_block_ids.at(0), meta_.get_macro_info().get_nested_size()))) {
+      LOG_WARN("fail to dec used size of shared block", K(ret), K_(meta));
     }
   }
   return ret;

@@ -953,13 +953,13 @@ int ObLS::update_tablet_table_store(
     ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKLOGMETA;
-  int64_t write_lock = 0;
+  const int64_t read_lock = LSLOCKLOGMETA;
+  const int64_t write_lock = 0;
   ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
-  } else if (!tablet_id.is_valid() || !param.is_valid()) {
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("update tablet table store get invalid argument", K(ret), K(tablet_id), K(param));
   } else {
@@ -970,6 +970,33 @@ int ObLS::update_tablet_table_store(
           K(ret), K(tablet_id), K(rebuild_seq), K(param));
     } else if (OB_FAIL(ls_tablet_svr_.update_tablet_table_store(tablet_id, param, handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(tablet_id), K(param));
+    }
+  }
+  return ret;
+}
+
+int ObLS::update_tablet_table_store(
+    const int64_t rebuild_seq,
+    const ObTabletHandle &old_tablet_handle,
+    const ObIArray<ObTableHandleV2> &table_handles)
+{
+  int ret = OB_SUCCESS;
+  const int64_t read_lock = LSLOCKLOGMETA;
+  const int64_t write_lock = 0;
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls hasn't been inited", K(ret));
+  } else if (OB_UNLIKELY(!old_tablet_handle.is_valid() || 0 == table_handles.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(old_tablet_handle), K(table_handles));
+  } else {
+    const int64_t seq = ls_meta_.get_rebuild_seq();
+    if (rebuild_seq != seq) {
+      ret = OB_EAGAIN;
+      LOG_WARN("rebuild seq has changed, retry", K(ret), K(seq), K(rebuild_seq));
+    } else if (OB_FAIL(ls_tablet_svr_.update_tablet_table_store(old_tablet_handle, table_handles))) {
+      LOG_WARN("fail to replace small sstables in the tablet", K(ret), K(old_tablet_handle), K(table_handles));
     }
   }
   return ret;

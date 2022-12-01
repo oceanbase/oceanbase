@@ -232,7 +232,7 @@ public:
   int inc_empty_read(
       const uint64_t tenant_id,
       const uint64_t table_id,
-      const MacroBlockId &macro_block_id,
+      const MacroBlockId &macro_id,
       const int64_t empty_read_prefix);
   int get_sstable_bloom_filter(
       const uint64_t tenant_id,

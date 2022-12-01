@@ -74,7 +74,12 @@ void ObITableArray::reset_table(const int64_t pos)
     LOG_ERROR("[MEMORY LEAK] TenantMetaMemMgr is unexpected not equal!!!", K(meta_mem_mgr_), KP(allocator_), KPC(array_[pos]));
   } else if (0 == array_[pos]->dec_ref()) {
     if (meta_mem_mgr_->is_used_obj_pool(allocator_)) {
-      if (array_[pos]->is_sstable()) {
+      if (OB_UNLIKELY(OB_INVALID_TENANT_ID == MTL_ID()
+          && array_[pos]->is_sstable()
+          && reinterpret_cast<ObSSTable*>(array_[pos])->is_small_sstable())) {
+        FLOG_INFO("this thread doesn't have MTL ctx, push sstable into gc queue", KP(array_[pos]), K(array_[pos]->get_key()));
+        meta_mem_mgr_->push_table_into_gc_queue(array_[pos], array_[pos]->get_key().table_type_);
+      } else if (array_[pos]->is_sstable()) {
         meta_mem_mgr_->gc_sstable(reinterpret_cast<ObSSTable*>(array_[pos]));
       } else {
         meta_mem_mgr_->push_table_into_gc_queue(array_[pos], array_[pos]->get_key().table_type_);

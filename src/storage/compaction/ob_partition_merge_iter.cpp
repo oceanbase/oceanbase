@@ -715,7 +715,8 @@ int ObPartitionMicroMergeIter::open_curr_range(const bool for_rewrite)
                 curr_block_desc_.macro_block_id_,
                 macro_block_iter_->get_micro_index_infos(),
                 macro_block_iter_->get_micro_endkeys(),
-                static_cast<ObRowStoreType>(curr_block_desc_.row_store_type_)))) {
+                static_cast<ObRowStoreType>(curr_block_desc_.row_store_type_),
+                reinterpret_cast<ObSSTable *>(table_)))) {
       LOG_WARN("Failed to init micro_block_iter", K(ret), KPC(column_ids_), K_(curr_block_desc));
     } else {
       micro_block_opened_ = false;

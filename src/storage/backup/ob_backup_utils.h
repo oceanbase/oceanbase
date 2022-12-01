@@ -178,9 +178,8 @@ class ObBackupProviderItem {
 public:
   ObBackupProviderItem();
   virtual ~ObBackupProviderItem();
-  int set(const ObBackupProviderItemType &item_type, const blocksstable::ObLogicMacroBlockId &logic_id,
-      const blocksstable::MacroBlockId &macro_block_id, const storage::ObITable::TableKey &table_key,
-      const common::ObTabletID &tablet_id);
+  int set(const ObBackupProviderItemType &item_type, const ObBackupMacroBlockId &backup_macro_id,
+      const storage::ObITable::TableKey &table_key, const common::ObTabletID &tablet_id);
   bool operator==(const ObBackupProviderItem &other) const;
   bool operator!=(const ObBackupProviderItem &other) const;
   ObBackupProviderItemType get_item_type() const;
@@ -188,11 +187,13 @@ public:
   blocksstable::MacroBlockId get_macro_block_id() const;
   const storage::ObITable::TableKey &get_table_key() const;
   common::ObTabletID get_tablet_id() const;
+  int64_t get_nested_offset() const;
+  int64_t get_nested_size() const;
   int64_t get_deep_copy_size() const;
   int deep_copy(const ObBackupProviderItem &src, char *buf, int64_t len, int64_t &pos);
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(item_type), K_(logic_id), K_(table_key), K_(tablet_id));
+  TO_STRING_KV(K_(item_type), K_(logic_id), K_(table_key), K_(tablet_id), K_(nested_offset), K_(nested_size));
   NEED_SERIALIZE_AND_DESERIALIZE;
 
 private:
@@ -201,6 +202,8 @@ private:
   blocksstable::MacroBlockId macro_block_id_;
   storage::ObITable::TableKey table_key_;
   common::ObTabletID tablet_id_;  // logic_id_.tablet_id_ may not equal to tablet_id_
+  int64_t nested_offset_;
+  int64_t nested_size_;
 };
 
 class ObBackupProviderItemCompare {

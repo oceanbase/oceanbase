@@ -174,7 +174,7 @@ int ObDDLKV::init(const share::ObLSID &ls_id,
     ddl_param.start_scn_ = ddl_start_scn;
     ddl_param.snapshot_version_ = snapshot_version;
     ddl_param.cluster_version_ = cluster_version;
-    if (OB_FAIL(ObTabletDDLUtil::prepare_index_builder(ddl_param, allocator_, sstable_index_builder_, index_block_rebuilder_))) {
+    if (OB_FAIL(ObTabletDDLUtil::prepare_index_builder(ddl_param, allocator_, ObSSTableIndexBuilder::DISABLE, sstable_index_builder_, index_block_rebuilder_))) {
       LOG_WARN("prepare index builder failed", K(ret));
     } else {
       ls_id_ = ls_id;

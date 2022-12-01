@@ -542,6 +542,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(const share::ObLSID &ls_id,
 
 int ObTabletDDLUtil::prepare_index_builder(const ObTabletDDLParam &ddl_param,
                                            ObIAllocator &allocator,
+                                           const ObSSTableIndexBuilder::ObSpaceOptimizationMode mode,
                                            ObSSTableIndexBuilder *&sstable_index_builder,
                                            ObIndexBlockRebuilder *&index_block_rebuilder)
 {
@@ -560,7 +561,10 @@ int ObTabletDDLUtil::prepare_index_builder(const ObTabletDDLParam &ddl_param,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret));
   } else if (FALSE_IT(sstable_index_builder = new (buf) ObSSTableIndexBuilder)) {
-  } else if (OB_FAIL(sstable_index_builder->init(data_desc))) {
+  } else if (OB_FAIL(sstable_index_builder->init(
+      data_desc,
+      nullptr, // this param is flush macro call back, nullptr is default val
+      mode))) {
     LOG_WARN("init sstable index builder failed", K(ret));
   } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObIndexBlockRebuilder)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -627,6 +631,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
             param.root_block_addr_, param.root_block_data_);
         ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
             param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
+        param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
         param.root_row_store_type_ = res.root_desc_.row_type_;
         param.data_index_tree_height_ = res.root_desc_.height_;
         param.index_blocks_cnt_ = res.index_blocks_cnt_;
@@ -643,6 +648,8 @@ int ObTabletDDLUtil::create_ddl_sstable(ObSSTableIndexBuilder *sstable_index_bui
         param.compressor_type_ = res.compressor_type_;
         param.encrypt_id_ = res.encrypt_id_;
         param.master_key_id_ = res.master_key_id_;
+        param.nested_size_ = res.nested_size_;
+        param.nested_offset_ = res.nested_offset_;
         param.data_block_ids_ = res.data_block_ids_;
         param.other_block_ids_ = res.other_block_ids_;
         MEMCPY(param.encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
@@ -683,10 +690,13 @@ int ObTabletDDLUtil::compact_ddl_sstable(const ObIArray<ObITable *> &ddl_sstable
   ObArenaAllocator arena;
   ObSSTableIndexBuilder *sstable_index_builder = nullptr;
   ObIndexBlockRebuilder *index_block_rebuilder = nullptr;
+  const ObSSTableIndexBuilder::ObSpaceOptimizationMode mode = ddl_param.table_key_.is_ddl_sstable()
+      ? ObSSTableIndexBuilder::DISABLE : ObSSTableIndexBuilder::AUTO;
+
   if (OB_UNLIKELY(!ddl_param.is_valid() || ddl_sstables.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_param), K(ddl_sstables.count()));
-  } else if (OB_FAIL(prepare_index_builder(ddl_param, arena, sstable_index_builder, index_block_rebuilder))) {
+  } else if (OB_FAIL(prepare_index_builder(ddl_param, arena, mode, sstable_index_builder, index_block_rebuilder))) {
     LOG_WARN("prepare sstable index builder failed", K(ret));
   } else {
     // campact

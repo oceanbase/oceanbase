@@ -343,13 +343,13 @@ int ObSSTableBasicMeta::set_upper_trans_version(const int64_t upper_trans_versio
 
 //================================== ObSSTableMeta ==================================
 ObSSTableMeta::ObSSTableMeta()
-  : basic_meta_(),
-    column_checksums_(),
-    data_root_info_(),
-    macro_info_(),
+  : is_inited_(false),
     allocator_(nullptr),
     lock_(),
-    is_inited_(false)
+    basic_meta_(),
+    column_checksums_(),
+    data_root_info_(),
+    macro_info_()
 {
 }
 
@@ -466,6 +466,7 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.encrypt_id_ = param.encrypt_id_;
     basic_meta_.master_key_id_ = param.master_key_id_;
     MEMCPY(basic_meta_.encrypt_key_, param.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+    basic_meta_.length_ = basic_meta_.get_serialize_size();
     if (OB_FAIL(prepare_column_checksum(param.column_checksums_))) {
       LOG_WARN("fail to prepare column checksum", K(ret), K(param));
     }
@@ -824,6 +825,23 @@ int64_t ObMigrationSSTableParam::get_serialize_size_() const
   return len;
 }
 
+int ObSSTableMetaChecker::check_sstable_meta_strict_equality(
+    const ObSSTableMeta &old_sstable_meta,
+    const ObSSTableMeta &new_sstable_meta)
+{
+  int ret = OB_SUCCESS;
+
+  if (!old_sstable_meta.is_valid() || !new_sstable_meta.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("old sstable meta or new sstable meta is invalid", K(ret));
+  } else if (OB_UNLIKELY(old_sstable_meta.get_basic_meta() != new_sstable_meta.get_basic_meta()
+      || !is_array_equal(old_sstable_meta.get_col_checksum(), new_sstable_meta.get_col_checksum()))) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("new sstable meta is not equal to old sstable meta", K(ret));
+  }
+
+  return ret;
+}
 
 int ObSSTableMetaChecker::check_sstable_meta(
     const ObSSTableMeta &old_sstable_meta,
@@ -836,6 +854,7 @@ int ObSSTableMetaChecker::check_sstable_meta(
     LOG_WARN("old sstable meta or new sstable meta is invalid", K(ret), K(old_sstable_meta), K(new_sstable_meta));
   } else if (OB_FAIL(check_sstable_basic_meta_(old_sstable_meta.get_basic_meta(), new_sstable_meta.get_basic_meta()))) {
     LOG_WARN("failed to check sstable basic meta", K(ret), K(old_sstable_meta), K(new_sstable_meta));
+    // TODO replace check_sstable_column_checksum_ with is_array_equal
   } else if (OB_FAIL(check_sstable_column_checksum_(old_sstable_meta.get_col_checksum(), new_sstable_meta.get_col_checksum()))) {
     LOG_WARN("failed to check sstable column checksum", K(ret), K(old_sstable_meta), K(new_sstable_meta));
   }

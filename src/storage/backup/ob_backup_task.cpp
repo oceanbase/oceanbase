@@ -2909,6 +2909,8 @@ int ObLSBackupDataTask::get_macro_block_id_list_(common::ObIArray<ObBackupMacroB
     ObBackupMacroBlockId macro_id;
     macro_id.logic_id_ = item.get_logic_id();
     macro_id.macro_block_id_ = item.get_macro_block_id();
+    macro_id.nested_offset_ = item.get_nested_offset();
+    macro_id.nested_size_ = item.get_nested_size();
     if (PROVIDER_ITEM_MACRO_ID == item.get_item_type()) {
       if (OB_FAIL(list.push_back(macro_id))) {
         LOG_WARN("failed to push back", K(ret), K(macro_id));

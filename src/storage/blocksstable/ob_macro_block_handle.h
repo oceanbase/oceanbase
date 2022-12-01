@@ -71,6 +71,7 @@ private:
   common::ObArray<MacroBlockId> macro_id_list_;
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlocksHandle);
 };
+
 } // namespace blocksstable
 } // namespace oceanbase
 

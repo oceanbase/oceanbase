@@ -42,6 +42,9 @@ namespace sql {
   class ObDataAccessService;
   class ObDASIDService;
 }
+namespace blocksstable {
+  class ObSharedMacroBlockMgr;
+}
 namespace storage {
   struct ObTenantStorageInfo;
   class ObLSService;
@@ -151,7 +154,7 @@ namespace detector
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
       common::ObTenantIOManager*,                    \
-      storage::ObStorageLogger*,                   \
+      storage::ObStorageLogger*,                     \
       storage::ObTenantMetaMemMgr*,                  \
       transaction::ObTransService*,                  \
       logservice::coordinator::ObLeaderCoordinator*, \
@@ -193,6 +196,7 @@ namespace detector
       sql::ObDataAccessService*,                     \
       sql::ObDASIDService*,                          \
       share::schema::ObTenantSchemaService*,         \
+      blocksstable::ObSharedMacroBlockMgr*,          \
       storage::ObTenantFreezer*,                     \
       storage::checkpoint::ObCheckPointService *,    \
       storage::checkpoint::ObTabletGCService *,      \
