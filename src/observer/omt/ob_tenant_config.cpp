@@ -37,7 +37,7 @@ ObTenantConfig::ObTenantConfig(uint64_t tenant_id)
     : tenant_id_(tenant_id), current_version_(1),
       mutex_(),
       update_task_(), system_config_(), config_mgr_(nullptr),
-      lock_(), is_deleting_(false)
+      lock_(ObLatchIds::CONFIG_LOCK), is_deleting_(false)
 {
 }
 
@@ -55,7 +55,7 @@ int ObTenantConfig::init(ObTenantConfigMgr *config_mgr)
 
 void ObTenantConfig::print() const
 {
-  ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
+  DRWLock::RDLockGuard guard(lock_);
   OB_LOG(INFO, "===================== * begin tenant config report * =====================", K(tenant_id_));
   ObConfigContainer::const_iterator it = container_.begin();
   for (; it != container_.end(); ++it) {
@@ -71,7 +71,7 @@ void ObTenantConfig::print() const
 int ObTenantConfig::check_all() const
 {
   int ret = OB_SUCCESS;
-  ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
+  DRWLock::RDLockGuard guard(lock_);
   ObConfigContainer::const_iterator it = container_.begin();
   for (; OB_SUCC(ret) && it != container_.end(); ++it) {
     if (OB_ISNULL(it->second)) {
@@ -90,31 +90,32 @@ int ObTenantConfig::check_all() const
 
 int ObTenantConfig::rdlock()
 {
-  return lock_.rdlock(ObLatchIds::CONFIG_LOCK) == OB_SUCCESS
-      ? OB_SUCCESS : OB_EAGAIN;
+  return lock_.rdlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
 }
 
 int ObTenantConfig::wrlock()
 {
-  return lock_.wrlock(ObLatchIds::CONFIG_LOCK) == OB_SUCCESS
-      ? OB_SUCCESS : OB_EAGAIN;
+  return lock_.wrlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
 }
 
 int ObTenantConfig::try_rdlock()
 {
-  return lock_.try_rdlock(ObLatchIds::CONFIG_LOCK) == OB_SUCCESS
-      ? OB_SUCCESS : OB_EAGAIN;
+  return lock_.try_rdlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
 }
 
 int ObTenantConfig::try_wrlock()
 {
-  return lock_.try_wrlock(ObLatchIds::CONFIG_LOCK) == OB_SUCCESS
-      ? OB_SUCCESS : OB_EAGAIN;
+  return lock_.try_wrlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
 }
 
 int ObTenantConfig::unlock()
 {
-  return lock_.unlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
+  return lock_.rdunlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
+}
+
+int ObTenantConfig::wrunlock()
+{
+  return lock_.wrunlock() == OB_SUCCESS ? OB_SUCCESS : OB_EAGAIN;
 }
 
 int ObTenantConfig::read_config()
@@ -124,7 +125,7 @@ int ObTenantConfig::read_config()
   ObAddr server;
   char local_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
-  ObLatchWGuard wr_guard(lock_, ObLatchIds::CONFIG_LOCK);
+  DRWLock::WRLockGuard guard(lock_);
   server = GCTX.self_addr();
   if (OB_UNLIKELY(true != server.ip_to_string(local_ip, sizeof(local_ip)))) {
     ret = OB_CONVERT_ERROR;
@@ -364,7 +365,7 @@ int ObTenantConfig::add_extra_config(char *config_str,
   char *saveptr = NULL;
   char *token = NULL;
   DRWLock::RDLockGuard lguard(ObConfigManager::get_serialize_lock());
-  ObLatchWGuard wr_guard(lock_, ObLatchIds::CONFIG_LOCK);
+  DRWLock::WRLockGuard guard(lock_);
   token = STRTOK_R(config_str, ",\n", &saveptr);
   while (OB_SUCC(ret) && OB_LIKELY(NULL != token)) {
     char *saveptr_one = NULL;
@@ -422,7 +423,7 @@ OB_DEF_SERIALIZE(ObTenantConfig)
   int ret = OB_SUCCESS;
   int64_t expect_data_len = get_serialize_size_();
   int64_t saved_pos = pos;
-  ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
+  DRWLock::RDLockGuard guard(lock_);
   if (OB_FAIL(databuff_printf(buf, buf_len, pos, "[%lu]\n", tenant_id_))) {
   } else {
     ret = ObCommonConfig::serialize(buf, buf_len, pos);
@@ -440,7 +441,7 @@ OB_DEF_SERIALIZE(ObTenantConfig)
 OB_DEF_DESERIALIZE(ObTenantConfig)
 {
   int ret = OB_SUCCESS;
-  ObLatchWGuard wr_guard(lock_, ObLatchIds::CONFIG_LOCK);
+  DRWLock::WRLockGuard guard(lock_);
   if ('[' != *(buf + pos)) {
     ret = OB_INVALID_DATA;
     LOG_ERROR("invalid tenant config", K(ret));
@@ -483,7 +484,7 @@ OB_DEF_SERIALIZE_SIZE(ObTenantConfig)
   int64_t len = 0, tmp_pos = 0;
   int ret = OB_SUCCESS;
   char tenant_str[100] = {'\0'};
-  ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
+  DRWLock::RDLockGuard guard(lock_);
   if (OB_FAIL(databuff_printf(tenant_str, 100, tmp_pos, "[%lu]\n", tenant_id_))) {
     LOG_WARN("write data buff failed", K(ret));
   } else {

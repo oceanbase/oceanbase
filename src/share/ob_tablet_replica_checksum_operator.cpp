@@ -189,12 +189,17 @@ int ObTabletReplicaReportColumnMeta::check_checksum(
 {
   int ret = OB_SUCCESS;
   is_equal = true;
-  if ((pos < 0) || (pos > column_checksums_.count()) || (pos > other.column_checksums_.count())) {
+  const int64_t col_ckm_cnt = column_checksums_.count();
+  const int64_t other_col_ckm_cnt = other.column_checksums_.count();
+  if ((pos < 0) || (pos > col_ckm_cnt) || (pos > other_col_ckm_cnt)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", KR(ret), K(pos), K(column_checksums_), K(other.column_checksums_));
+    LOG_WARN("get invalid args", KR(ret), K(pos), K(col_ckm_cnt), K(other_col_ckm_cnt),
+      K(column_checksums_), K(other.column_checksums_));
   } else if (column_checksums_.at(pos) != other.column_checksums_.at(pos)) {
     is_equal = false;
-    LOG_WARN("column checksum is not equal!", K(pos), K(column_checksums_), K(other.column_checksums_));
+    LOG_WARN("column checksum is not equal!", K(pos), "col_ckm", column_checksums_.at(pos),
+      "other_col_ckm", other.column_checksums_.at(pos), K(col_ckm_cnt), K(other_col_ckm_cnt),
+      K(column_checksums_), K(other.column_checksums_));
   }
   return ret;
 }
@@ -207,11 +212,13 @@ int ObTabletReplicaReportColumnMeta::check_all_checksums(
   is_equal = true;
   if (column_checksums_.count() != other.column_checksums_.count()) {
     is_equal = false;
-    LOG_WARN("column cnt is not equal!", K(*this), K(other));
+    LOG_WARN("column cnt is not equal!", "cur_cnt", column_checksums_.count(), "other_cnt",
+      other.column_checksums_.count(), K(*this), K(other));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && is_equal && i < column_checksums_.count(); ++i) {
+    const int64_t column_ckm_cnt = column_checksums_.count();
+    for (int64_t i = 0; OB_SUCC(ret) && is_equal && (i < column_ckm_cnt); ++i) {
       if (OB_FAIL(check_checksum(other, i, is_equal))) {
-        LOG_WARN("fail to check checksum", KR(ret), K(i));
+        LOG_WARN("fail to check checksum", KR(ret), K(i), K(column_ckm_cnt));
       }
     }
   }
@@ -333,16 +340,29 @@ int ObTabletReplicaChecksumItem::assign_key(const ObTabletReplicaChecksumItem &o
   return ret;
 }
 
+int ObTabletReplicaChecksumItem::assign(const ObTabletReplicaChecksumItem &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    reset();
+    if (OB_FAIL(column_meta_.assign(other.column_meta_))) {
+      LOG_WARN("fail to assign column meta", KR(ret), K(other));
+    } else {
+      tenant_id_ = other.tenant_id_;
+      tablet_id_ = other.tablet_id_;
+      ls_id_ = other.ls_id_;
+      server_ = other.server_;
+      row_count_ = other.row_count_;
+      snapshot_version_ = other.snapshot_version_;
+      data_checksum_ = other.data_checksum_;
+    }
+  }
+  return ret;
+}
+
 ObTabletReplicaChecksumItem &ObTabletReplicaChecksumItem::operator=(const ObTabletReplicaChecksumItem &other)
 {
-  tenant_id_ = other.tenant_id_;
-  tablet_id_ = other.tablet_id_;
-  ls_id_ = other.ls_id_;
-  server_ = other.server_;
-  row_count_ = other.row_count_;
-  snapshot_version_ = other.snapshot_version_;
-  data_checksum_ = other.data_checksum_;
-  column_meta_.assign(other.column_meta_);
+  assign(other);
   return *this;
 }
 

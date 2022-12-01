@@ -17,6 +17,7 @@
 #include "share/config/ob_system_config.h"
 #include "share/config/ob_common_config.h"
 #include "share/config/ob_config_helper.h"
+#include "lib/lock/ob_drw_lock.h"
 
 namespace oceanbase {
 
@@ -79,6 +80,7 @@ public:
   int try_rdlock();
   int try_wrlock();
   int unlock();
+  int wrunlock();
 
   int read_config();
   uint64_t get_tenant_id() const { return tenant_id_; }
@@ -100,7 +102,7 @@ private:
   common::ObSystemConfig system_config_;
   ObTenantConfigMgr *config_mgr_;
   // protect this object from being deleted in OTC_MGR.del_tenant_config
-  common::ObLatch lock_;
+  mutable common::DRWLock lock_;
   bool is_deleting_;
 
 public:

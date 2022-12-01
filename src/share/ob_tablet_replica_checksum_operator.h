@@ -82,6 +82,7 @@ public:
   bool is_same_tablet(const ObTabletReplicaChecksumItem &other) const;
   int verify_checksum(const ObTabletReplicaChecksumItem &other) const;
   int assign_key(const ObTabletReplicaChecksumItem &other);
+  int assign(const ObTabletReplicaChecksumItem &other);
   ObTabletReplicaChecksumItem &operator =(const ObTabletReplicaChecksumItem &other);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(server), K_(row_count),
