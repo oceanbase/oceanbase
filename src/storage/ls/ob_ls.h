@@ -118,6 +118,8 @@ class ObLS : public common::ObLink
 {
 public:
   friend ObLSLockGuard;
+  friend class ObFreezer;
+  friend class checkpoint::ObDataCheckpoint;
 public:
   static constexpr int64_t TOTAL_INNER_TABLET_NUM = 3;
   static const uint64_t INNER_TABLET_ID_LIST[TOTAL_INNER_TABLET_NUM];

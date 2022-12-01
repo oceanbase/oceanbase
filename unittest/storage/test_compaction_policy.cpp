@@ -302,7 +302,7 @@ int TestCompactionPolicy::mock_memtable(
     LOG_WARN("failed to init memtable", K(ret));
   } else if (OB_FAIL(mt_mgr->add_memtable_(table_handle))) {
     LOG_WARN("failed to add memtable to mgr", K(ret));
-  } else if (OB_FAIL(memtable->add_to_data_checkpoint(mt_mgr->freezer_->get_data_checkpoint()))) {
+  } else if (OB_FAIL(memtable->add_to_data_checkpoint(mt_mgr->freezer_->get_ls_data_checkpoint()))) {
     LOG_WARN("add to data_checkpoint failed", K(ret), KPC(memtable));
     mt_mgr->clean_tail_memtable_();
   } else if (OB_MAX_SCN_TS_NS != end_border) { // frozen memtable

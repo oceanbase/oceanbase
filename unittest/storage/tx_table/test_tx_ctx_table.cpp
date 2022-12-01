@@ -65,12 +65,7 @@ public:
       tablet_id_(LS_TX_DATA_TABLET),
       ls_id_(1),
       tenant_id_(1001),
-      freezer_((ObLSWRSHandler *)(0x1),
-               (ObLSTxService *)(0x1),
-               (ObLSTabletService *)(0x1),
-               (checkpoint::ObDataCheckpoint *)(0x1),
-               (logservice::ObILogHandler *)(0x1),
-               ls_id_),
+      freezer_(&ls_),
       t3m_(common::OB_SERVER_TENANT_ID),
       mt_mgr_(nullptr),
       ctx_mt_mgr_(nullptr),
@@ -95,7 +90,7 @@ protected:
   virtual void SetUp() override
   {
     ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01));
-    freezer_.init(&ls_loop_worker_, &ls_tx_service_, &ls_tablet_service_, &ls_data_checkpoint_, &log_handler_, ls_id_);
+    freezer_.init(&ls_);
     EXPECT_EQ(OB_SUCCESS, t3m_.init());
     EXPECT_EQ(OB_SUCCESS,
               ls_tx_ctx_mgr_.init(tenant_id_, /*tenant_id*/
