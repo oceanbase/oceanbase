@@ -73,12 +73,10 @@ int ObTabletReplicaChecksumIterator::next(ObTabletReplicaChecksumItem &item)
     ret = OB_ITER_END;
   } else {
     while (OB_SUCC(ret)) {
-      ObTabletReplicaChecksumItem tmp_item;
       if (cur_idx_ < checksum_items_.count()) {
-        if (OB_FAIL(checksum_items_.at(cur_idx_, tmp_item))) {
-          LOG_WARN("fail to get checksum item", KR(ret), K_(cur_idx));
-        } else {
-          item = tmp_item;
+        if (OB_FAIL(item.assign(checksum_items_.at(cur_idx_)))) {
+          LOG_WARN("fail to assign tablet replica checksum item", KR(ret), K_(cur_idx), "target_item",
+            checksum_items_.at(cur_idx_), "total cnt", checksum_items_.count());
         }
         ++cur_idx_;
         break;
