@@ -432,7 +432,6 @@ private:
   bool is_valid();
   bool is_valid_type() const;
   int init(const int64_t total = TOTAL_LIMIT, const int64_t hold = HOLD_LIMIT, const int64_t page_size = PAGE_SIZE);
-  void restart_task(ObITask& task);
   void reset();
   int check_cycle();
   int get_next_ready_task(ObITask*& task);
@@ -834,6 +833,7 @@ private:
   bool try_switch(ObDagWorker& worker);
   int try_switch(ObDagWorker& worker, const int64_t src_prio, const int64_t dest_prio, bool& need_pause);
   void pause_worker(ObDagWorker& worker, const int64_t priority);
+  void inner_finish_dag(ObIDag& dag);
   void dump_dag_status();
   int check_need_load_shedding(const int64_t priority, const bool for_schedule, bool& need_shedding);
 

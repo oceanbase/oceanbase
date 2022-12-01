@@ -1376,6 +1376,61 @@ TEST_F(TestDagScheduler, test_emergency_task)
   EXPECT_EQ(3, op.value());
 }
 
+class TestGenerateTaskFailTask : public ObITask {
+public:
+  TestGenerateTaskFailTask() : ObITask(ObITask::TASK_TYPE_UT), seq_(0), task_cnt_(0)
+  {}
+  void init(int64_t seq, int64_t task_cnt)
+  {
+    seq_ = seq;
+    task_cnt_ = task_cnt;
+  }
+  int process()
+  {
+    sleep(5);
+    return OB_SUCCESS;
+  }
+  virtual int generate_next_task(ObITask *&next_task)
+  {
+    int ret = OB_SUCCESS;
+    ObIDag *dag = get_dag();
+    TestGenerateTaskFailTask *ntask = NULL;
+    if (NULL == dag) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "dag is null", K(ret));
+    } else if (OB_FAIL(dag->alloc_task(ntask))) {
+      COMMON_LOG(WARN, "failed to alloc task", K(ret));
+    } else if (NULL == ntask) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "task is null", K(ret));
+    } else if (seq_ == task_cnt_) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      ntask->init(seq_ + 1, task_cnt_);
+      next_task = ntask;
+    }
+    return ret;
+  }
+  int64_t seq_;
+  int64_t task_cnt_;
+};
+TEST_F(TestDagScheduler, test_generate_task_failed)
+{
+  ObDagScheduler &scheduler = ObDagScheduler::get_instance();
+  scheduler.destroy();
+  scheduler.init(ObAddr(1, 1), time_slice, 64);
+  EXPECT_EQ(OB_SUCCESS, scheduler.set_minor_merge_concurrency(30));
+  TestHPDag *dag1 = NULL;
+  TestGenerateTaskFailTask *test_task = NULL;
+  EXPECT_EQ(OB_SUCCESS, scheduler.alloc_dag(dag1));
+  EXPECT_EQ(OB_SUCCESS, dag1->init(1));
+  EXPECT_EQ(OB_SUCCESS, alloc_task(*dag1, test_task));
+  test_task->init(0, 10);
+  EXPECT_EQ(OB_SUCCESS, dag1->add_task(*test_task));
+  EXPECT_EQ(OB_SUCCESS, scheduler.add_dag(dag1));
+  wait_scheduler(scheduler);
+}
+
 }  // namespace unittest
 }  // namespace oceanbase
 

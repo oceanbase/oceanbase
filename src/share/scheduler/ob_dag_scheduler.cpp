@@ -118,10 +118,6 @@ int ObITask::generate_next_task()
     } else if (OB_FAIL(dag_->add_task(*next_task))) {
       COMMON_LOG(WARN, "failed to add next task", K(ret), K(*next_task));
     }
-    if (OB_FAIL(ret)) {
-      dag_->set_dag_status(ObIDag::DAG_STATUS_NODE_FAILED);
-      dag_->set_dag_ret(ret);
-    }
   }
   return ret;
 }
@@ -492,14 +488,7 @@ int ObIDag::set_dag_id(const ObDagId& dag_id)
   return ret;
 }
 
-void ObIDag::restart_task(ObITask& task)
-{
-  ObMutexGuard guard(lock_);
-  dec_running_task_cnt();
-  task.set_status(ObITask::TASK_STATUS_WAITING);
-}
-
-int64_t ObIDag::to_string(char* buf, const int64_t buf_len) const
+int64_t ObIDag::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
@@ -1308,22 +1297,8 @@ int ObDagScheduler::finish_task(ObITask& task, ObDagWorker& worker)
       dag->dec_running_task_cnt();
       if (dag->has_finished()) {
         dag->set_dag_status(ObIDag::DAG_STATUS_FINISH);
-        if (OB_SUCCESS != (tmp_ret = dag_map_.erase_refactored(dag))) {
-          COMMON_LOG(ERROR, "failed to erase dag from dag_map", K(tmp_ret), KP(dag), K(*dag));
-        }
-        if (!ready_dag_list_.remove(dag, prio)) {
-          COMMON_LOG(WARN, "failed to remove dag from dag list", K(*dag));
-        }
-        --dag_cnt_;
-        --dag_cnts_[dag->get_type()];
         free_flag = true;
-        COMMON_LOG(INFO,
-            "dag finished",
-            K(*dag),
-            "runtime",
-            ObTimeUtility::current_time() - dag->start_time_,
-            K_(dag_cnt),
-            K(dag_cnts_[dag->get_type()]));
+        (void)inner_finish_dag(*dag);
         storage::ObDagWarningHistoryManager::get_instance().add_dag_warning_info(dag);  // ignore failure
       }
     }
@@ -1347,6 +1322,31 @@ int ObDagScheduler::finish_task(ObITask& task, ObDagWorker& worker)
     }
   }
   return ret;
+}
+
+// should protect by scheduler_sync_
+void ObDagScheduler::inner_finish_dag(ObIDag &dag)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const int64_t prio = dag.get_priority();
+  if (OB_FAIL(dag_map_.erase_refactored(&dag))) {
+    COMMON_LOG(ERROR, "failed to erase dag from dag_map", K(ret), K(dag));
+  }
+  if (!ready_dag_list_.remove(&dag, prio)) {
+    COMMON_LOG(WARN, "failed to remove dag from dag list", K(dag));
+  }
+  --dag_cnt_;
+  --dag_cnts_[dag.get_type()];
+  COMMON_LOG(INFO,
+      "dag finished",
+      K(dag),
+      "dag_ret",
+      dag.dag_ret_,
+      "runtime",
+      ObTimeUtility::current_time() - dag.start_time_,
+      K_(dag_cnt),
+      K(dag_cnts_[dag.get_type()]));
 }
 
 int ObDagScheduler::try_switch(ObDagWorker& worker, const int64_t src_prio, const int64_t dest_prio, bool& need_pause)
@@ -1558,7 +1558,16 @@ int ObDagScheduler::pop_task(const int64_t priority, ObITask*& task)
     ObIDag* cur = head->get_next();
     ObITask* ready_task = NULL;
     while (!found && head != cur && OB_SUCC(ret)) {
-      if (cur->get_dag_status() == ObIDag::DAG_STATUS_READY) {
+      if (ObIDag::DAG_STATUS_NODE_FAILED == cur->get_dag_status() && cur->has_finished()) {
+        ObIDag *fail_dag = cur;
+        cur = cur->get_next();
+        (void)inner_finish_dag(*fail_dag);
+        if (OB_SUCCESS != (tmp_ret = ObSysTaskStatMgr::get_instance().del_task(fail_dag->get_dag_id()))) {
+          STORAGE_LOG(WARN, "failed to del sys task", K(tmp_ret), K(fail_dag->get_dag_id()));
+        }
+        free_dag(*fail_dag);
+        continue;
+      } else if (ObIDag::DAG_STATUS_READY == cur->get_dag_status()) {
         if (OB_SUCCESS != (tmp_ret = sys_task_start(cur))) {
           COMMON_LOG(WARN, "failed to start sys task", K(tmp_ret));
         }
@@ -1599,13 +1608,19 @@ int ObDagScheduler::schedule_one(const int64_t priority)
   } else {
     ObCurTraceId::set(task->get_dag()->get_dag_id());
     if (OB_FAIL(task->generate_next_task())) {
-      COMMON_LOG(WARN, "failed to generate_next_task", K(ret));
+      COMMON_LOG(WARN, "failed to generate_next_task", K(ret), KPC(task->get_dag()));
     } else if (OB_FAIL(dispatch_task(*task, worker))) {
-      task->get_dag()->restart_task(*task);
       COMMON_LOG(WARN, "failed to dispatch task", K(ret));
     }
   }
-  if (OB_SUCC(ret) && NULL != worker) {
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(task)) {
+      task->get_dag()->set_dag_status(ObIDag::DAG_STATUS_NODE_FAILED);
+      task->get_dag()->set_dag_ret(ret);
+      // cur task can't execute now, pop_task() will inc_running_task_cnt when success
+      task->get_dag()->dec_running_task_cnt();
+    }
+  } else if (NULL != worker) {
     ++running_task_cnts_[priority];
     ++total_running_task_cnt_;
     ++running_task_cnts_per_ult_[UP_LIMIT_MAP[priority]];
