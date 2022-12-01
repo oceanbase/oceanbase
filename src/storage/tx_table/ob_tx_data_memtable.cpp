@@ -567,8 +567,8 @@ ObTxDataSortListNode *ObTxDataMemtable::quick_sort_(int64_t (*get_key)(const ObT
 
   ObTxDataSortListNode small_head;
   ObTxDataSortListNode large_head;
-  ObTxDataSortListNode *small_ptr = &small_head;;
-  ObTxDataSortListNode *large_ptr = &large_head;;
+  ObTxDataSortListNode *small_ptr = &small_head;
+  ObTxDataSortListNode *large_ptr = &large_head;
   ObTxDataSortListNode *node_ptr = head->next_;
   int64_t mid_key = get_key(*ObTxData::get_tx_data_by_sort_list_node(head));
 

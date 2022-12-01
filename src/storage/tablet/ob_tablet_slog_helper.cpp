@@ -48,7 +48,7 @@ int ObTabletSlogHelper::write_create_tablet_slog(
     if (OB_FAIL(MTL(ObStorageLogger*)->write_log(log_param))) {
       LOG_WARN("fail to write slog for creating tablet", K(ret), K(log_param));
     } else {
-      disk_addr = log_param.disk_addr_;;
+      disk_addr = log_param.disk_addr_;
     }
   }
 

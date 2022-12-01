@@ -347,7 +347,7 @@ int ObTransTask::set_retry_interval_us(const int64_t start_interval_us, const in
 
 bool ObTransTask::ready_to_handle()
 {
-  bool boot_ret = false;;
+  bool boot_ret = false;
   int64_t current_ts = ObTimeUtility::current_time();
 
   if (current_ts >= next_handle_ts_) {

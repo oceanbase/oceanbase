@@ -150,7 +150,7 @@ public:
 
   static uint64_t default_fallback_tenant_id()
   {
-    const auto tenant = CURRENT_ENTITY(TENANT_SPACE)->get_tenant();;
+    const auto tenant = CURRENT_ENTITY(TENANT_SPACE)->get_tenant();
     uint64_t id = 0;
     if (NULL == tenant || 0 == tenant->id() || common::OB_INVALID_ID == tenant->id()) {
       // for background thread, fallback to sys tenant

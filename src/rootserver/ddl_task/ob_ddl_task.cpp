@@ -497,7 +497,7 @@ int ObDDLTask::wait_trans_end(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  int64_t tmp_snapshot_version = 0;;
+  int64_t tmp_snapshot_version = 0;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *data_table_schema = nullptr;
   ObDDLTaskStatus new_status = PREPARE;

@@ -406,7 +406,7 @@ public:
 
   int erase(const value_type &value)
   {
-    int ret = OB_SUCCESS;;
+    int ret = OB_SUCCESS;
     iterator it = begin();
     for (; it != end(); ++it) {
       if (it.node_->data == value) {

@@ -170,7 +170,7 @@ TEST_F(TestRawExpr, basic_test)
   ASSERT_FALSE(bin_expr1->same_as(*bin_expr2));
   (*bin_expr1).assign(*bin_expr2);
   ASSERT_TRUE(bin_expr1->same_as(*bin_expr2));
-  ObRawExpr *copy_expr = NULL;;
+  ObRawExpr *copy_expr = NULL;
   ASSERT_EQ(OB_SUCCESS, ObRawExprUtils::copy_expr(expr_factory_, bin_expr1, copy_expr, true, true, true));
   ASSERT_TRUE(bin_expr1->same_as(*copy_expr));
 

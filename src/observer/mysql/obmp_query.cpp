@@ -247,7 +247,7 @@ int ObMPQuery::process()
           }
         }
 
-        bool enable_batch_opt = session.is_enable_batched_multi_statement();;
+        bool enable_batch_opt = session.is_enable_batched_multi_statement();
         if (OB_FAIL(ret)) {
           //do nothing
         } else if (OB_FAIL(parser.split_multiple_stmt(sql_, queries, parse_stat))) {

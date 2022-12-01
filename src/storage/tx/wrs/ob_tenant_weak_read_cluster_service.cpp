@@ -691,7 +691,7 @@ SCN ObTenantWeakReadClusterService::compute_version_(int64_t &skipped_servers, b
 bool ObTenantWeakReadClusterService::is_service_master() const
 {
   int ret = OB_SUCCESS;
-  bool is_master = false;;
+  bool is_master = false;
   int64_t cur_leader_epoch = 0;
   if (OB_FAIL(check_leader_info_(cur_leader_epoch))) {
       is_master = false;

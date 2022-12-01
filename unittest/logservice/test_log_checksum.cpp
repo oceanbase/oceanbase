@@ -42,7 +42,7 @@ TEST(TestLogChecksum, test_log_checksum)
     int64_t checksum02 = 0;
     int64_t data_len = ObRandom::rand(10, buffer_size);
     EXPECT_TRUE(data_len >= 10);
-    int64_t data_len_part_1 = ObRandom::rand(1, data_len - 1);;
+    int64_t data_len_part_1 = ObRandom::rand(1, data_len - 1);
     EXPECT_TRUE(data_len_part_1 > 0);
     int64_t data_len_part_2 = data_len - data_len_part_1;
     EXPECT_TRUE(data_len_part_1 > 0);

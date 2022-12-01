@@ -133,7 +133,7 @@ int __attribute__ ((weak)) get_tenant_ctx_with_tenant_lock(const uint64_t tenant
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), K(tenant_id));
   } else {
-    tenant_ctx = &tenant->ctx();;
+    tenant_ctx = &tenant->ctx();
   }
 
   return ret;

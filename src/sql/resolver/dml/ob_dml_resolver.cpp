@@ -7608,7 +7608,7 @@ int ObDMLResolver::add_cte_table_to_children(ObChildStmtResolver& child_resolver
  */
 int ObDMLResolver::check_oracle_outer_join_condition(const ObRawExpr *expr)
 {
-  int ret = OB_SUCCESS;;
+  int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(expr));
   if (OB_SUCC(ret) && (expr->has_flag(CNT_OUTER_JOIN_SYMBOL))) {
     if (OB_UNLIKELY(expr->has_flag(CNT_IN) || expr->has_flag(CNT_OR))) {
@@ -7657,7 +7657,7 @@ int ObDMLResolver::check_oracle_outer_join_condition(const ObRawExpr *expr)
 int ObDMLResolver::check_oracle_outer_join_in_or_validity(const ObRawExpr *expr,
                                                           ObIArray<uint64_t> &right_tables)
 {
-  int ret = OB_SUCCESS;;
+  int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(expr));
   if(OB_SUCC(ret)){
     switch (expr->get_expr_type()) {
@@ -7792,7 +7792,7 @@ int ObDMLResolver::check_single_oracle_outer_join_expr_validity(const ObRawExpr 
                                                                 ObIArray<uint64_t> &right_tables)
 {
   UNUSED(left_tables);
-  int ret = OB_SUCCESS;;
+  int ret = OB_SUCCESS;
   CK(OB_NOT_NULL(right_expr));
   if (OB_SUCC(ret)) {
     ObArray<uint64_t> re_left_tables;  // left tables of right expr;

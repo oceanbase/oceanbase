@@ -177,7 +177,7 @@ int ObExprSubstringIndex::eval_substring_index_batch(const ObExpr &expr,
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
       if (skip.at(i) || eval_flags.at(i)) {
-        continue;;
+        continue;
       }
       ObString res_str;
       int32_t count_val = 0;

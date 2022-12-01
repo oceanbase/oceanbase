@@ -34,7 +34,7 @@ int ObTsResponseHandler::init(observer::ObSrvTask *task, ObTsMgr *ts_mgr)
   int ret = OB_SUCCESS;
 
   if (NULL == task || NULL == ts_mgr) {
-    ret = OB_INVALID_ARGUMENT;;
+    ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), KP(task), KP(ts_mgr));
   } else {
     //Indicates that the task is a task generated internally by the Observer

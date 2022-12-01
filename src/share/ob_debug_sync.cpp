@@ -895,7 +895,7 @@ int ObDebugSync::execute(const ObDebugSyncPoint sync_point)
 
   if (OB_UNLIKELY(sync_point <= INVALID_DEBUG_SYNC_POINT)
       || OB_UNLIKELY(sync_point >= MAX_DEBUG_SYNC_POINT)) {
-    ret = OB_INVALID_ARGUMENT;;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(sync_point));
   } else if (!GCONF.is_debug_sync_enabled()
       || ((OB_ISNULL(local_actions) || local_actions->is_empty())

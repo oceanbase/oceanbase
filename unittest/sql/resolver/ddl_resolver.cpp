@@ -152,7 +152,7 @@ TEST_F(TestResolver, basic_test)
       do_load_sql(iter->sql.c_str(),stmt, is_print, TREE_FORMAT, iter->expect_error);
     }
     gettimeofday(&end, NULL);
-    use_time = (long int)(end.tv_sec - start.tv_sec) * 1000000 + (long int)(end.tv_usec - start.tv_usec);;
+    use_time = (long int)(end.tv_sec - start.tv_sec) * 1000000 + (long int)(end.tv_usec - start.tv_usec);
     std::cout<< name << " use time :" << use_time << std::endl;
   }
 }

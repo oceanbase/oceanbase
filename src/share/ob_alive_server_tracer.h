@@ -90,7 +90,7 @@ public:
   virtual void runTimerTask();
 private:
   ObAliveServerTracer &tracer_;
-  bool is_inited_;;
+  bool is_inited_;
 
   DISALLOW_COPY_AND_ASSIGN(ObAliveServerRefreshTask);
 };

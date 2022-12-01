@@ -347,7 +347,7 @@ int ObFreezeInfoManager::check_inner_stat()
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;;
+    ret = OB_NOT_INIT;
     LOG_WARN("inner stat error", KR(ret));
   } else if ((nullptr == sql_proxy_) || (nullptr == merge_info_mgr_)) {
     ret = OB_INNER_STAT_ERROR;

@@ -100,7 +100,7 @@ protected:
     UNUSED(exprs);
     UNUSED(eval_ctx);
     UNUSED(slice_idx);
-    return common::OB_NOT_IMPLEMENT;;
+    return common::OB_NOT_IMPLEMENT;
   }
 
   int setup_slice_indexes(ObEvalCtx &ctx);

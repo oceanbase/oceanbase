@@ -62,7 +62,7 @@ public:
   int64_t thread_id_;
   ObStoredDatumRow *first_row_;
   ObStoredDatumRow *last_row_;
-  common::ObArenaAllocator &alloc_;;
+  common::ObArenaAllocator &alloc_;
 };
 
 typedef ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_RANGE_DIST_WF_PIECE_MSG> ObRDWFPieceMsgBase;

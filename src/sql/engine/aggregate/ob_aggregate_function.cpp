@@ -520,15 +520,15 @@ int ObAggregateFunction::clone_cell(const ObObj &src_cell, ObObj &target_cell)
       int64_t curr_size = 0;
       if (OB_ISNULL((char *)data_ptr - sizeof(int64_t))
           || OB_ISNULL((char *)data_ptr - sizeof(int64_t) - sizeof(int64_t))) {
-        ret = OB_ERR_UNEXPECTED;;
+        ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("clone_cell use stored_row_buf, need has meta",
                   KP(data_ptr), K(ret));
       } else if (OB_UNLIKELY(*((int64_t *)(data_ptr) - 1) != STORED_ROW_MAGIC_NUM)) {
-        ret = OB_ERR_UNEXPECTED;;
+        ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("stored_row_buf memory is mismatch, maybe some one make bad things",
                   "curr_magic", *((int64_t *)(data_ptr)), K(ret));
       } else if (OB_UNLIKELY((curr_size = *((int64_t *)(data_ptr) - 2)) < data_length)) {
-        ret = OB_ERR_UNEXPECTED;;
+        ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("target obj size is overflow", K(curr_size),
                   "target_size", data_length, K(ret));
       } else {

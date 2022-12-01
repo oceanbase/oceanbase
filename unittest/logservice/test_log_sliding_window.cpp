@@ -578,7 +578,7 @@ TEST_F(TestLogSlidingWindow, test_after_flush_log)
   group_log_lsn.val_ = lsn.val_ - LogGroupEntryHeader::HEADER_SER_SIZE;
   flush_log_ctx.lsn_ = group_log_lsn;
   flush_log_ctx.log_proposal_id_ = curr_proposal_id;
-  flush_log_ctx.total_len_ = LogGroupEntryHeader::HEADER_SER_SIZE + LogEntryHeader::HEADER_SER_SIZE + buf_len;;
+  flush_log_ctx.total_len_ = LogGroupEntryHeader::HEADER_SER_SIZE + LogEntryHeader::HEADER_SER_SIZE + buf_len;
   flush_log_ctx.curr_proposal_id_ = curr_proposal_id + 1;
   flush_log_ctx.begin_ts_ = ObTimeUtility::current_time();
   EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND, log_sw_.after_flush_log(flush_log_ctx));
@@ -761,7 +761,7 @@ TEST_F(TestLogSlidingWindow, test_ack_log)
   group_log_lsn.val_ = lsn.val_ - LogGroupEntryHeader::HEADER_SER_SIZE;
   flush_log_ctx.lsn_ = group_log_lsn;
   flush_log_ctx.log_proposal_id_ = curr_proposal_id;
-  flush_log_ctx.total_len_ = LogGroupEntryHeader::HEADER_SER_SIZE + LogEntryHeader::HEADER_SER_SIZE + buf_len;;
+  flush_log_ctx.total_len_ = LogGroupEntryHeader::HEADER_SER_SIZE + LogEntryHeader::HEADER_SER_SIZE + buf_len;
   flush_log_ctx.curr_proposal_id_ = curr_proposal_id;
   flush_log_ctx.begin_ts_ = ObTimeUtility::current_time();
   EXPECT_EQ(OB_SUCCESS, log_sw_.after_flush_log(flush_log_ctx));

@@ -467,7 +467,7 @@ public:
       TestKey key;
       TestValue value;
       for (int64_t i = 0; OB_SUCC(ret) && i < kv_cnt; ++i) {
-        key.tenant_id_ = tenant_id;;
+        key.tenant_id_ = tenant_id;
         key.v_ = i;
         if (OB_FAIL(cache_.put(key, value))) {
           COMMON_LOG(WARN, "put failed", K(ret));
