@@ -1344,8 +1344,6 @@ int ObLogHandler::offline()
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (true == is_in_stop_state_) {
-    ret = OB_NOT_RUNNING;
   } else if (OB_FAIL(disable_replay())) {
     CLOG_LOG(WARN, "disable_replay failed", K(ret), KPC(this));
   } else if (OB_FAIL(disable_sync())) {
