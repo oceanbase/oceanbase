@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX EXTLOG
+#include "share/scn.h"
 #include "ob_cdc_start_lsn_locator.h"
 #include "ob_cdc_util.h"
 #include "logservice/ob_log_service.h"          // ObLogService
@@ -157,6 +158,7 @@ int ObCdcStartLsnLocator::do_locate_ls_(const ObLocateLSNByTsReq::LocateParam &l
   int ret = OB_SUCCESS;
   palf::PalfHandleGuard palf_handle_guard;
   palf::PalfGroupBufferIterator group_iter;
+  share::SCN start_scn;
   LogGroupEntry log_group_entry;
   ObLocateLSNByTsResp::LocateResult locate_res;
   const ObLSID &ls_id = locate_param.ls_id_;
@@ -170,11 +172,14 @@ int ObCdcStartLsnLocator::do_locate_ls_(const ObLocateLSNByTsReq::LocateParam &l
     } else {
       LOG_WARN("init_palf_handle_guard_ fail", KR(ret), K(ls_id));
     }
+  // Note: us
+  } else if (OB_FAIL(start_scn.convert_from_ts(start_ts_ns / 1000L))) {
+    LOG_WARN("convert_from_ts failed", KR(ret), K(start_ts_ns), K(start_scn), K(ls_id));
   // - OB_SUCCESS: seek success
   // - OB_ENTRY_NOT_EXIST: there is no log's log_ts is higher than ts_ns
   // - OB_ERR_OUT_OF_LOWER_BOUND: ts_ns is too old, log files may have been recycled
-  } else if (OB_FAIL(palf_handle_guard.seek(start_ts_ns, group_iter))) {
-    LOG_WARN("PalfHandle seek fail", KR(ret), K(tenant_id_), K(locate_param));
+  } else if (OB_FAIL(palf_handle_guard.seek(start_scn, group_iter))) {
+    LOG_WARN("PalfHandle seek fail", KR(ret), K(tenant_id_), K(start_ts_ns), K(start_scn), K(locate_param));
   } else if (OB_FAIL(group_iter.next())) {
     LOG_WARN("PalfGroupBufferIterator next failed, unexpected", KR(ret), K_(tenant_id), K(ls_id));
   } else if (OB_FAIL(group_iter.get_entry(log_group_entry, result_lsn))) {
