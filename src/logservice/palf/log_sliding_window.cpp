@@ -1878,7 +1878,7 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       log_submit_to_slide_cost_stat_.stat(fs_cb_begin_ts - log_submit_ts);
 
       if (log_life_time > 100 * 1000) {
-        if (palf_reach_time_interval(10 * 1000, log_life_long_warn_time_)) {
+        if (palf_reach_time_interval(100 * 1000, log_life_long_warn_time_)) {
           PALF_LOG(WARN, "log_task life cost too much time", K_(palf_id), K_(self), K(log_id), KPC(log_task),
               K(fs_cb_begin_ts), K(log_life_time));
         }
