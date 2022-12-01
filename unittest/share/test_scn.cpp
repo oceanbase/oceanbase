@@ -110,6 +110,46 @@ TEST(TestSCN, test_scn)
   EXPECT_EQ(4611686018427387903, scn_max.get_val_for_inner_table_field());
   EXPECT_EQ(1, scn_base.get_val_for_inner_table_field());
 
+  //test get_val_for_tx() and get_val_for_tx()
+  //
+  scn1.reset();
+  scn2.reset();
+  EXPECT_EQ(OB_INVALID_ARGUMENT, scn1.convert_for_tx(-1));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, scn1.convert_for_tx(INT64_MAX-1));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, scn1.convert_for_tx(4611686018427387904));
+  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_tx(4611686018427387903));
+  EXPECT_TRUE(scn1.is_max());
+  EXPECT_EQ(INT64_MAX, scn1.get_val_for_tx());
+  scn1.reset();
+  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_tx(INT64_MAX));
+  EXPECT_TRUE(scn1.is_max());
+  EXPECT_EQ(INT64_MAX, scn1.get_val_for_tx());
+
+  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_tx(0));
+  EXPECT_TRUE(scn1.is_min());
+  EXPECT_EQ(0, scn1.get_val_for_tx());
+
+  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_tx(1));
+  EXPECT_TRUE(scn1 == SCN::base_scn());
+  EXPECT_EQ(1, scn1.get_val_for_tx());
+
+  EXPECT_TRUE(scn1.is_valid());
+  scn1.reset();
+  EXPECT_EQ(OB_INVALID_ARGUMENT, scn1.convert_for_inner_table_field(-1));
+  EXPECT_FALSE(scn1.is_valid());
+  scn1.reset();
+  EXPECT_EQ(OB_INVALID_ARGUMENT, scn1.convert_for_inner_table_field(4611686018427387904));
+  EXPECT_FALSE(scn1.is_valid());
+  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_inner_table_field(4611686018427387903));
+  EXPECT_TRUE(scn1.is_valid());
+  EXPECT_EQ(4611686018427387903, scn1.get_val_for_inner_table_field());
+  EXPECT_EQ(OB_SUCCESS, scn1.convert_for_inner_table_field(100000));
+  EXPECT_TRUE(scn1.is_valid());
+  EXPECT_EQ(OB_SUCCESS, scn2.convert_for_inner_table_field(90000));
+  EXPECT_TRUE(scn2.is_valid());
+
+
+
   // Test operator <
   EXPECT_FALSE(scn1 == scn2);
   EXPECT_TRUE(scn1 == scn3);
