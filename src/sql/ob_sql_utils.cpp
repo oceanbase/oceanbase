@@ -3331,11 +3331,7 @@ int ObVirtualTableResultConverter::convert_output_row(ObNewRow*& src_row)
         // extra tenant id
         LOG_WARN("failed to process tenant id", K(ret));
       }
-      LOG_DEBUG("debug type",
-          K(obj_meta.get_type()),
-          K(obj_meta.get_collation_type()),
-          K(src_obj),
-          K(convert_row_.cells_[i]));
+      LOG_DEBUG("debug type", K(obj_meta.get_type()), K(obj_meta.get_collation_type()), K(src_obj));
       if (OB_FAIL(ret)) {
       } else if (need_cast) {
         if (OB_FAIL(ObObjCaster::to_type(obj_meta.get_type(),
