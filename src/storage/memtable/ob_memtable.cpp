@@ -1653,6 +1653,13 @@ bool ObMemtable::ready_for_flush_()
   int ret = OB_SUCCESS;
   int64_t current_right_boundary = ObLogTsRange::MIN_TS;
   share::ObLSID ls_id = freezer_->get_ls_id();
+  int64_t migration_clog_checkpoint_ts = get_migration_clog_checkpoint_ts();
+  if (ObLogTsRange::MIN_TS != migration_clog_checkpoint_ts &&
+      migration_clog_checkpoint_ts >= get_end_log_ts() &&
+      0 != get_unsynced_cnt() &&
+      multi_source_data_.get_all_unsync_cnt_for_multi_data() == get_unsynced_cnt()) {
+    bool_ret = true;
+  }
   if (bool_ret) {
     if (OB_FAIL(resolve_snapshot_version_())) {
       TRANS_LOG(WARN, "fail to resolve snapshot version", K(ret), KPC(this), K(ls_id));

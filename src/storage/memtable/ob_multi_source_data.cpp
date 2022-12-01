@@ -223,5 +223,20 @@ int ObMultiSourceData::get_unsync_cnt_for_multi_data(const MultiSourceDataUnitTy
   return ret;
 }
 
+int64_t ObMultiSourceData::get_all_unsync_cnt_for_multi_data()
+{
+  int ret = OB_SUCCESS;
+  int64_t unsynced_cnt_for_multi_data = 0;
+
+  for (int i = 0; i < MAX_PTR_COUNT; ++i) {
+    ObIMultiSourceDataUnit *value = units_[i];
+    if (nullptr != value && value->is_valid()) {
+      int64_t cnt = value->get_unsync_cnt_for_multi_data();
+      unsynced_cnt_for_multi_data += cnt;
+    }
+  }
+
+  return unsynced_cnt_for_multi_data;
+}
 } // namespace memtable
 } // namespace oceanbase
