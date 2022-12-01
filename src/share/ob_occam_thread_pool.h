@@ -394,6 +394,7 @@ private:
       queue_size_(0),
       mask_value_(0),
       buffer_(nullptr),
+      lock_(common::ObLatchIds::THREAD_POOL_LOCK),
       head_(0),
       tail_(0) {}
     ~InnerTaskQueue() { destroy(); }

@@ -143,7 +143,7 @@ int MonitorEntry::callback()
 
 MonitorEntryStack::MonitorEntryStack() : curr_idx_(0),
                                          inner_entry_(),
-                                         lock_()
+                                         lock_(ObLatchIds::BG_THREAD_MONITOR_LOCK)
 {
 }
 

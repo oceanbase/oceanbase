@@ -296,7 +296,7 @@ int ObNodeArray<T>::free_node(const int64_t idx)
  * */
 template <typename Key, typename Value>
 ObInfoManager<Key, Value>::ObInfoManager() :
-        lock_(),
+        lock_(common::ObLatchIds::INFO_MGR_LOCK),
         max_cnt_(0),
         node_array_(),
         is_inited_(false),

@@ -41,69 +41,6 @@ class ObMemtable;
 struct ObMvccRow;
 struct ObMvccTransNode;
 
-class ICompactMap
-{
-public:
-  ICompactMap() {}
-  virtual ~ICompactMap() {}
-  virtual int init() = 0;
-  virtual void destroy() = 0;
-  virtual int set(const uint64_t col_id, const common::ObObj &cell) = 0;
-  virtual int get_next(uint64_t &col_id, common::ObObj &cell) = 0;
-};
-
-// Map with thread local array, which runs faster.
-class CompactMapImproved : public ICompactMap
-{
-private:
-  struct Node
-  {
-    uint32_t ver_;
-    uint32_t col_id_;
-    common::ObObj cell_;
-    Node *next_;
-  };
-private:
-  static const int64_t BKT_N_BIT_SHIFT = 9; // 2^9=512. Perf opt.
-  static const int64_t BKT_N = 1 << BKT_N_BIT_SHIFT; // 512
-  static const int64_t BKT_N_MOD_MASK = BKT_N - 1;
-  static const uint32_t INVALID_COL_ID = UINT16_MAX;
-  static const uint32_t MAX_VER = UINT32_MAX;
-private:
-  class StaticMemoryHelper
-  {
-  public:
-    StaticMemoryHelper();
-    ~StaticMemoryHelper();
-  public:
-    Node *get_tl_arr();
-    uint32_t &get_tl_arr_ver();
-    Node *get_node();
-    void revert_node(Node *n);
-  private:
-    RLOCAL_STATIC(Node*, bkts_); // Thread local array.
-    RLOCAL_STATIC(uint32_t, ver_); // Thread local array version.
-    common::PageArena<> arr_arena_;
-    common::ObSpinLock arr_arena_lock_;
-    common::ObSmallAllocator node_alloc_;
-  };
-public:
-  CompactMapImproved() : bkts_(NULL), ver_(0), scan_cur_bkt_(NULL), scan_cur_node_(NULL) { }
-  virtual ~CompactMapImproved() { }
-  int init();
-  void destroy();
-  int set(const uint64_t col_id, const common::ObObj &cell);
-  int get_next(uint64_t &col_id, common::ObObj &cell);
-private:
-  DISALLOW_COPY_AND_ASSIGN(CompactMapImproved);
-private:
-  Node *bkts_;
-  uint32_t ver_;
-  Node *scan_cur_bkt_;
-  Node *scan_cur_node_;
-  static StaticMemoryHelper mem_helper_;
-};
-
 // Memtable Row Compactor.
 class ObMemtableRowCompactor
 {
@@ -134,8 +71,6 @@ private:
   ObMemtable *memtable_;
   common::ObIAllocator *node_alloc_;
   bool for_replay_;
-  CompactMapImproved map_ins_;
-  ICompactMap &map_;
 };
 
 

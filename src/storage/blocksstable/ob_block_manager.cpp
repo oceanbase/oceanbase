@@ -77,7 +77,7 @@ int ObSuperBlockPreadChecker::do_check(void *read_buf, const int64_t read_size)
  * ------------------------------------ObMacroBlockSeqGenerator-------------------------------------
  */
 ObMacroBlockSeqGenerator::ObMacroBlockSeqGenerator()
-  : rewrite_seq_(0), lock_()
+  : rewrite_seq_(0), lock_(common::ObLatchIds::BLOCK_ID_GENERATOR_LOCK)
 {
 }
 
@@ -116,7 +116,7 @@ int ObMacroBlockSeqGenerator::generate_next_sequence(uint64_t &blk_seq)
  * -----------------------------------------ObBlockManager------------------------------------------
  */
 ObBlockManager::ObBlockManager()
-  : lock_(),
+  : lock_(common::ObLatchIds::BLOCK_MANAGER_LOCK),
     bucket_lock_(),
     block_map_(),
     super_block_fd_(),

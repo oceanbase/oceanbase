@@ -264,7 +264,11 @@ public:
 class CalcUpperTransSCNCache
 {
 public:
-  CalcUpperTransSCNCache() : is_inited_(false), cache_version_(), commit_scns_() {}
+  CalcUpperTransSCNCache()
+      : is_inited_(false),
+        cache_version_(),
+        lock_(common::ObLatchIds::TX_TABLE_LOCK),
+        commit_scns_() {}
 
   void reset()
   {

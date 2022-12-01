@@ -41,7 +41,7 @@ int ObPxWorkerStat::init(uint64_t session_id, uint64_t tenant_id, const TraceId&
 }
 
 //------------------------------------------------------
-ObPxWorkerStatList::ObPxWorkerStatList()
+ObPxWorkerStatList::ObPxWorkerStatList() : lock_(common::ObLatchIds::PX_WORKER_STAT_LOCK)
 {
 }
 

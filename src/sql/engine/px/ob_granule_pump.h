@@ -423,7 +423,7 @@ private:
   };
 public:
   ObGranulePump() :
-  lock_(),
+  lock_(common::ObLatchIds::SQL_GI_SHARE_POOL_LOCK),
   parallelism_(-1),
   tablet_size_(common::OB_DEFAULT_TABLET_SIZE),
   partition_wise_join_(false),

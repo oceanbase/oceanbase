@@ -94,9 +94,11 @@ bool is_rowkey_hash(const uint64_t hash)
   return (hash & ~HASH_MASK) == ROW_FLAG;
 }
 
-ObLockWaitMgr::ObLockWaitMgr(): is_inited_(false),
-                                hash_(hash_buf_, sizeof(hash_buf_)),
-                                deadlocked_sessions_index_(0)
+ObLockWaitMgr::ObLockWaitMgr()
+    : is_inited_(false),
+      hash_(hash_buf_, sizeof(hash_buf_)),
+      deadlocked_sessions_lock_(common::ObLatchIds::DEADLOCK_DETECT_LOCK),
+      deadlocked_sessions_index_(0)
 {
   memset(sequence_, 0, sizeof(sequence_));
 }

@@ -87,7 +87,8 @@ public:
   } CACHE_ALIGNED;
 public:
   ObSimpleFifoAlloc(const ObMemAttr &attr, int block_size = BLOCK_SIZE, BlockAlloc &blk_alloc = default_blk_alloc)
-    : nway_(1), bsize_(block_size), bytes_alloc_(0), mattr_(attr), blk_alloc_(blk_alloc)
+    : nway_(1), bsize_(block_size), bytes_alloc_(0), mattr_(attr), blk_alloc_(blk_alloc),
+      dlink_rwlock_(ObLatchIds::SIMPLE_FIFO_ALLOCATOR_LOCK)
   {
     head_.next_ = &head_;
     head_.prev_ = &head_;

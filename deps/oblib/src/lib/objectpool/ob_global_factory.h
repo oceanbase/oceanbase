@@ -199,7 +199,7 @@ class ObGlobalFreeList
   typedef typename ObGlobalFactory<T, MAX_CLASS_NUM, LABEL>::create_method_t create_method_t;
 public:
   ObGlobalFreeList()
-    : lock_(),
+    : lock_(ObLatchIds::OB_GLOBAL_FREE_LIST_LOCK),
       next_cache_line_(0),
       objs_cache_(),
       empty_blocks_(),

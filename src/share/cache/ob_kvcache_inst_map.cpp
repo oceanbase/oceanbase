@@ -140,10 +140,10 @@ ObKVCacheInstHandle& ObKVCacheInstHandle::operator = (const ObKVCacheInstHandle&
 }
 
 ObKVCacheInstMap::ObKVCacheInstMap()
-  : lock_(),
+  : lock_(common::ObLatchIds::KV_CACHE_INST_LOCK),
     inst_map_(),
     inst_pool_(),
-    list_lock_(),
+    list_lock_(common::ObLatchIds::KV_CACHE_LIST_LOCK),
     list_map_(),
     list_pool_(),
     configs_(NULL),

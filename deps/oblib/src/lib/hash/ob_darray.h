@@ -81,7 +81,7 @@ public:
   typedef ObSpinLockGuard LockGuard;
   struct Item
   {
-    Item(): lock_(), addr_(NULL), val_(0) {}
+    Item(): lock_(common::ObLatchIds::HASH_MAP_LOCK), addr_(NULL), val_(0) {}
     ~Item() {}
     void flush()
     {

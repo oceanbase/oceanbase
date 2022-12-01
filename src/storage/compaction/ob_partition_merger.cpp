@@ -1960,7 +1960,7 @@ int ObPartitionMergeDumper::generate_dump_table_name(const char *dir_name,
   return ret;
 }
 
-lib::ObMutex ObPartitionMergeDumper::lock;
+lib::ObMutex ObPartitionMergeDumper::lock(common::ObLatchIds::MERGER_DUMP_LOCK);
 
 int ObPartitionMergeDumper::check_disk_free_space(const char *dir_name)
 {

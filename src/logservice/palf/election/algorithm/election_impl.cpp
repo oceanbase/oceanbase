@@ -55,14 +55,15 @@ void DefaultRoleChangeCallBack::operator()(ElectionImpl *election,
   }
 }
 
-ElectionImpl::ElectionImpl() :
-proposer_(this),
-acceptor_(this),
-priority_(nullptr),
-msg_handler_(nullptr),
-is_inited_(false),
-is_running_(false),
-event_recorder_(id_, self_addr_, timer_)
+ElectionImpl::ElectionImpl()
+    : lock_(common::ObLatchIds::ELECTION_LOCK),
+      proposer_(this),
+      acceptor_(this),
+      priority_(nullptr),
+      msg_handler_(nullptr),
+      is_inited_(false),
+      is_running_(false),
+      event_recorder_(id_, self_addr_, timer_)
 {}
 
 ElectionImpl::~ElectionImpl()

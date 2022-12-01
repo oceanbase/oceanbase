@@ -51,8 +51,8 @@ namespace sql
 ObBasicSessionInfo::SysVarsCacheData ObBasicSessionInfo::SysVarsCache::base_data_;
 
 ObBasicSessionInfo::ObBasicSessionInfo()
-    : query_mutex_(),
-      thread_data_mutex_(),
+    : query_mutex_(common::ObLatchIds::SESSION_QUERY_LOCK),
+      thread_data_mutex_(common::ObLatchIds::SESSION_THREAD_DATA_LOCK),
       is_valid_(true),
       is_deserialized_(false),
       tenant_id_(OB_INVALID_ID),

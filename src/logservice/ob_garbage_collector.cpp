@@ -298,7 +298,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObGCLSLog)
 
 //---------------ObGCHandler---------------//
 ObGCHandler::ObGCHandler() : is_inited_(false),
-                             rwlock_(),
+                             rwlock_(common::ObLatchIds::GC_HANDLER_LOCK),
                              ls_(NULL),
                              gc_seq_invalid_member_(-1),
                              gc_start_ts_(OB_INVALID_TIMESTAMP)

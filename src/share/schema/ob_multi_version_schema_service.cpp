@@ -1657,12 +1657,19 @@ int ObMultiVersionSchemaService::retry_get_schema_guard(
   return ret;
 }
 
-ObMultiVersionSchemaService::ObMultiVersionSchemaService()
+ObMultiVersionSchemaService::ObMultiVersionSchemaService() :
+    init_(false),
+    schema_refresh_mutex_(common::ObLatchIds::REFRESH_SCHEMA_LOCK),
+    schema_cache_(),
+    schema_mgr_cache_(),
+    schema_mgr_cache_for_liboblog_(),
+    schema_fetcher_(),
+    schema_info_rwlock_(common::ObLatchIds::REFRESHED_SCHEMA_CACHE_LOCK),
+    last_refreshed_schema_info_(),
+    init_version_cnt_(OB_INVALID_COUNT),
+    init_version_cnt_for_liboblog_(OB_INVALID_COUNT),
+    schema_store_map_()
 {
-  init_ = false;
-  init_version_cnt_ = OB_INVALID_COUNT;
-  init_version_cnt_for_liboblog_ = OB_INVALID_COUNT;
-  last_refreshed_schema_info_.reset();
 }
 
 ObMultiVersionSchemaService::~ObMultiVersionSchemaService()

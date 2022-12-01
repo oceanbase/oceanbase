@@ -32,7 +32,7 @@ using namespace oceanbase::sql;
 ObDynamicSamplePieceMsg::ObDynamicSamplePieceMsg()
   : expect_range_count_(), tablet_ids_(),
     sample_type_(NOT_INIT_SAMPLE_TYPE), part_ranges_(),
-    row_stores_(), arena_(), spin_lock_()
+    row_stores_(), arena_(), spin_lock_(common::ObLatchIds::SQL_DYN_SAMPLE_MSG_LOCK)
 {
 
 }
@@ -216,7 +216,8 @@ ObDynamicSamplePieceMsgCtx::ObDynamicSamplePieceMsgCtx(
     exec_ctx_(exec_ctx),
     last_store_row_(),
     coord_(coord),
-    sort_def_(sort_def)
+    sort_def_(sort_def),
+    mutex_(common::ObLatchIds::SQL_DYN_SAMPLE_MSG_LOCK)
 {
 
 }

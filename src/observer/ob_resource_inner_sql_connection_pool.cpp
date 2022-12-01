@@ -40,7 +40,7 @@ int ObResourceInnerSQLConnectionPool::init(ObMultiVersionSchemaService *schema_s
                                            const bool is_ddl)
 {
   int ret = OB_SUCCESS;
-  ObLatchWGuard guard(lock_, ObLatchIds::DEFAULT_MUTEX);
+  ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -82,7 +82,7 @@ int ObResourceInnerSQLConnectionPool::acquire(
     common::sqlclient::ObISQLConnection *&conn, sql::ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
-  ObLatchWGuard guard(lock_, ObLatchIds::DEFAULT_MUTEX);
+  ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
   ObInnerSQLConnection *inner_conn = NULL;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -200,7 +200,7 @@ int ObResourceInnerSQLConnectionPool::release(
     common::sqlclient::ObISQLConnection *&conn)
 {
   int ret = OB_SUCCESS;
-  ObLatchWGuard guard(lock_, ObLatchIds::DEFAULT_MUTEX);
+  ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
 
   if (OB_ISNULL(conn)) {
     if (reuse_conn) {

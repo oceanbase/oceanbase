@@ -177,8 +177,8 @@ public:
       shared_hj_info->close_cnt_ = 0;
       shared_hj_info->ret_ = OB_SUCCESS;
       shared_hj_info->read_null_in_naaj_ = false;
-      new (&shared_hj_info->cond_)(common::SimpleCond);
-      new (&shared_hj_info->lock_)(ObSpinLock);
+      new (&shared_hj_info->cond_)common::SimpleCond(common::ObWaitEventIds::SQL_SHARED_HJ_COND_WAIT);
+      new (&shared_hj_info->lock_)ObSpinLock(common::ObLatchIds::SQL_SHARED_HJ_COND_LOCK);
       reset();
     }
     return ret;

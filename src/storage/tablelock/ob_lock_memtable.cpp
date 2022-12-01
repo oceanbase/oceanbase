@@ -52,7 +52,8 @@ ObLockMemtable::ObLockMemtable()
     pre_rec_scn_(),
     max_committed_scn_(),
     is_frozen_(false),
-    freezer_(nullptr)
+    freezer_(nullptr),
+    flush_lock_(common::ObLatchIds::CLOG_CKPT_LOCK)
 {
 }
 

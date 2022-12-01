@@ -68,7 +68,8 @@ void do_with_segv_catch(Function &&func, bool &has_segv, decltype(func()) &ret)
 
 
 ObMemoryDump::ObMemoryDump()
-  : avaliable_task_set_((1 << TASK_NUM) - 1),
+  : task_mutex_(ObLatchIds::ALLOC_MEM_DUMP_TASK_LOCK),
+    avaliable_task_set_((1 << TASK_NUM) - 1),
     print_buf_(nullptr),
     dump_context_(nullptr),
     iter_lock_(),

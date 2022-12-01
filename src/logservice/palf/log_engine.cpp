@@ -38,10 +38,11 @@ namespace palf
 
 // ===================== LogEngine start =======================
 LogEngine::LogEngine() :
+    block_gc_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     min_block_max_scn_(),
     min_block_id_(LOG_INVALID_BLOCK_ID),
     base_lsn_for_block_gc_(PALF_INITIAL_LSN_VAL),
-    log_meta_lock_(),
+    log_meta_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     log_meta_(),
     log_meta_storage_(),
     log_storage_(),

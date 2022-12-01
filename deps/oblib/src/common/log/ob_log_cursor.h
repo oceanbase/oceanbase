@@ -52,7 +52,7 @@ ObLogCursor &set_cursor(ObLogCursor &cursor, const int64_t file_id, const int64_
 class ObAtomicLogCursor
 {
 public:
-  ObAtomicLogCursor() {}
+  ObAtomicLogCursor() : cursor_lock_(ObLatchIds::DEFAULT_SPIN_RWLOCK) {}
   ~ObAtomicLogCursor() {}
   int get_cursor(ObLogCursor &cursor) const;
   int set_cursor(ObLogCursor &cursor);

@@ -55,7 +55,8 @@ ObLCLNode::ObLCLNode(const UserBinaryKey &user_key,
   is_timer_task_canceled_(false),
   lcl_period_(0),
   last_report_waiting_for_period_(0),
-  last_send_collect_info_period_(0)
+  last_send_collect_info_period_(0),
+  lock_(ObLatchIds::DEADLOCK_LOCK)
 {
   #define PRINT_WRAPPER K(*this), K(resource_id), K(on_detect_operation),\
                         K(priority), K(auto_activate_when_detected)

@@ -60,7 +60,7 @@ public:
   {
   public:
     ObDtlBufferInfoAllocator() :
-      spin_lock_(), allocator_(), free_list_()
+      spin_lock_(common::ObLatchIds::DTL_CACHED_BUFFER_LIST_LOCK), allocator_(), free_list_()
     {}
     ~ObDtlBufferInfoAllocator();
 

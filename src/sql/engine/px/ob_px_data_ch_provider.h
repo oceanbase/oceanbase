@@ -64,7 +64,7 @@ private:
 class ObPxReceiveChProvider
 {
 public:
-  ObPxReceiveChProvider()
+  ObPxReceiveChProvider() : lock_(common::ObLatchIds::DTL_RECV_CHANNEL_PROVIDER_LOCK)
   {
   }
   virtual ~ObPxReceiveChProvider() = default;

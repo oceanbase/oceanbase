@@ -73,13 +73,13 @@ class ObDataCheckpoint : public ObCommonCheckpoint
 public:
   ObDataCheckpoint()
     : is_inited_(false),
-      lock_(),
+      lock_(common::ObLatchIds::CLOG_CKPT_LOCK),
       ls_(nullptr),
       new_create_list_(),
       active_list_(),
       prepare_list_(),
       ls_frozen_list_(),
-      ls_frozen_list_lock_(),
+      ls_frozen_list_lock_(common::ObLatchIds::CLOG_CKPT_LOCK),
       ls_freeze_finished_(true)
   {}
   ~ObDataCheckpoint() {}

@@ -37,7 +37,7 @@ namespace compaction
 
 ObTabletMergeInfo::ObTabletMergeInfo()
   :  is_inited_(false),
-     lock_(),
+     lock_(common::ObLatchIds::TABLET_MERGE_INFO_LOCK),
      block_ctxs_(),
      bloom_filter_block_ctx_(nullptr),
      bloomfilter_block_id_(),

@@ -160,8 +160,7 @@ ObDDLService::ObDDLService()
     server_mgr_(NULL),
     zone_mgr_(NULL),
     unit_mgr_(NULL),
-    snapshot_mgr_(NULL),
-    pz_entity_cnt_lock_()
+    snapshot_mgr_(NULL)
 {
 }
 

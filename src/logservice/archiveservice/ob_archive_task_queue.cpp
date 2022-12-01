@@ -26,7 +26,7 @@ ObArchiveTaskStatus::ObArchiveTaskStatus(const ObLSID &id) :
   num_(0),
   id_(id),
   queue_(),
-  rwlock_()
+  rwlock_(common::ObLatchIds::ARCHIVE_TASK_QUEUE_LOCK)
 {
 }
 

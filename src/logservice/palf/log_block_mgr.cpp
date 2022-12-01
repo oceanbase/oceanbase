@@ -32,6 +32,7 @@ namespace palf
 LogBlockMgr::LogBlockMgr() : curr_writable_handler_(),
                              curr_writable_block_id_(LOG_INVALID_BLOCK_ID),
                              log_block_size_(LOG_INVALID_LSN_VAL),
+                             block_id_cache_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
                              min_block_id_(LOG_INVALID_BLOCK_ID),
                              max_block_id_(LOG_INVALID_BLOCK_ID),
                              log_block_pool_(NULL),

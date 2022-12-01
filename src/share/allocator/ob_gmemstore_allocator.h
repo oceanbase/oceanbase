@@ -103,7 +103,11 @@ public:
   };
 
 public:
-  ObGMemstoreAllocator(): hlist_(), arena_(), last_freeze_timestamp_(0) {}
+  ObGMemstoreAllocator():
+      lock_(common::ObLatchIds::MEMSTORE_ALLOCATOR_LOCK),
+      hlist_(),
+      arena_(),
+      last_freeze_timestamp_(0) {}
   ~ObGMemstoreAllocator() {}
 public:
   int init(uint64_t tenant_id)

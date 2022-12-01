@@ -19,7 +19,7 @@ namespace common
 
 const char *OB_STORAGE_ACCESS_TYPES_STR[] = {"reader", "overwriter", "appender", "random_write"};
 
-ObObjectDevice::ObObjectDevice() : oss_account_(), base_info_(NULL), is_started_(false), lock_()
+ObObjectDevice::ObObjectDevice() : oss_account_(), base_info_(NULL), is_started_(false), lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK)
 {
 }
 

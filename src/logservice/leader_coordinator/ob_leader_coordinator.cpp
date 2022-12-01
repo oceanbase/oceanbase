@@ -31,7 +31,10 @@ using namespace common;
 using namespace share;
 
 ObLeaderCoordinator::ObLeaderCoordinator()
-: all_ls_election_reference_info_(nullptr), is_inited_(false) {}
+    : all_ls_election_reference_info_(nullptr),
+      is_inited_(false),
+      lock_(common::ObLatchIds::ELECTION_LOCK)
+{}
 
 int ObLeaderCoordinator::mtl_init(ObLeaderCoordinator *&p_coordinator)
 {

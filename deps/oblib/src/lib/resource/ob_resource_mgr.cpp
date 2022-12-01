@@ -507,6 +507,9 @@ int ObTenantResourceMgrList::pop(ObTenantResourceMgr *&tenant_resource_mgr)
 ObResourceMgr::ObResourceMgr()
   : inited_(false), cache_washer_(NULL), locks_(), tenant_resource_mgrs_(), free_list_()
 {
+  for (int64_t i = 0; i < MAX_TENANT_COUNT; ++i) {
+    locks_[i].set_latch_id(common::ObLatchIds::TENANT_RES_MGR_LIST_LOCK);
+  }
 }
 
 ObResourceMgr::~ObResourceMgr()

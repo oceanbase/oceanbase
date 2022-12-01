@@ -52,8 +52,9 @@ public:
     }
   };
 public:
-  ObTCFreeList(): inited_(false), key_(OB_INVALID_PTHREAD_KEY), free_handler_(NULL), allocator_(NULL), global_free_list_(NULL),
-                  glimit_(0), tclimit_(0)
+  ObTCFreeList(): inited_(false), key_(OB_INVALID_PTHREAD_KEY), free_handler_(NULL),
+                  allocator_(NULL), lock_(common::ObLatchIds::TC_FREE_LIST_LOCK),
+                  global_free_list_(NULL), glimit_(0), tclimit_(0)
   {}
   ~ObTCFreeList()
   {

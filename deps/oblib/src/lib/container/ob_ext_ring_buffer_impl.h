@@ -221,7 +221,7 @@ public:
     begin_sn_(0),
     end_sn_(0),
     dir_(0),
-    es_lock_(),
+    es_lock_(common::ObLatchIds::ALLOC_ESS_LOCK),
     allocator_(NULL)
   { }
   virtual ~ObExtendibleRingBufferBase() { }

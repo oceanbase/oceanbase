@@ -360,7 +360,7 @@ ObSSTableIndexBuilder::ObSSTableIndexBuilder()
   : orig_allocator_("SSTMidIdxData", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     allocator_(orig_allocator_),
     self_allocator_("SSTMidIdxSelf", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    mutex_(),
+    mutex_(common::ObLatchIds::INDEX_BUILDER_LOCK),
     index_store_desc_(),
     container_store_desc_(),
     index_write_ctxs_(),
@@ -2173,7 +2173,7 @@ int ObMetaIndexBlockBuilder::build_single_node_tree(
 
 ObIndexBlockRebuilder::ObIndexBlockRebuilder()
   :is_inited_(false),
-   mutex_(),
+   mutex_(common::ObLatchIds::INDEX_BUILDER_LOCK),
    index_store_desc_(nullptr),
    block_write_ctx_(),
    macro_id_set_(),

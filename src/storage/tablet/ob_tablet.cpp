@@ -79,7 +79,7 @@ ObTablet::ObTablet()
     medium_info_list_(compaction::ObMediumCompactionInfoList::MEDIUM_LIST_IN_STORAGE),
     memtable_mgr_(nullptr),
     log_handler_(nullptr),
-    table_store_lock_(),
+    table_store_lock_(common::ObLatchIds::TABLET_TABLE_STORE_LOCK),
     full_read_info_(),
     allocator_(nullptr),
     next_tablet_guard_(),

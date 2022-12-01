@@ -45,7 +45,7 @@ WriteSlog ObLSMeta::write_slog_ = [](ObLSMeta &ls_meta) {
 };
 
 ObLSMeta::ObLSMeta()
-  : lock_(),
+  : lock_(common::ObLatchIds::LS_META_LOCK),
     tenant_id_(OB_INVALID_TENANT_ID),
     ls_id_(),
     replica_type_(REPLICA_TYPE_MAX),

@@ -63,7 +63,7 @@ void ObSimpleBackupStat::reset()
 /* ObSimpleBackupStatMgr */
 
 ObSimpleBackupStatMgr::ObSimpleBackupStatMgr()
-    : is_inited_(false), backup_dest_(), backup_set_desc_(), tenant_id_(OB_INVALID_ID), ls_id_(), stat_list_()
+    : mutex_(common::ObLatchIds::BACKUP_LOCK), is_inited_(false), backup_dest_(), backup_set_desc_(), tenant_id_(OB_INVALID_ID), ls_id_(), stat_list_()
 {}
 
 ObSimpleBackupStatMgr::~ObSimpleBackupStatMgr()
@@ -933,7 +933,7 @@ void ObBackupRecoverRetryCtx::reset()
 
 ObLSBackupCtx::ObLSBackupCtx()
     : is_inited_(),
-      mutex_(),
+      mutex_(common::ObLatchIds::BACKUP_LOCK),
       cond_(),
       is_finished_(false),
       result_code_(OB_SUCCESS),

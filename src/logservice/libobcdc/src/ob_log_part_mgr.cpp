@@ -84,7 +84,7 @@ int ObLogPartMgr::init(const uint64_t tenant_id,
       || OB_UNLIKELY(0 >= start_schema_version)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid arguemnts", KR(ret), K(tenant_id), K(start_schema_version));
-  } else if (OB_FAIL(schema_cond_.init(common::ObWaitEventIds::OBLOG_PART_MGR_SCHEMA_VERSION_WAIT))) {
+  } else if (OB_FAIL(schema_cond_.init(common::ObWaitEventIds::OBCDC_PART_MGR_SCHEMA_VERSION_WAIT))) {
     LOG_ERROR("schema_cond_ init fail", KR(ret));
   } else if (OB_FAIL(tablet_to_table_info_.init(tenant_id))) {
     LOG_ERROR("init tablet_to_table_info fail", KR(ret), K(tenant_id));

@@ -2341,7 +2341,7 @@ const char *oceanbase::common::device_health_status_to_str(const ObDeviceHealthS
 
 ObIOFaultDetector::ObIOFaultDetector(const ObIOConfig &io_config)
   : is_inited_(false),
-    lock_(),
+    lock_(ObLatchIds::IO_FAULT_DETECTOR_LOCK),
     io_config_(io_config),
     is_device_warning_(false),
     last_device_warning_ts_(0),

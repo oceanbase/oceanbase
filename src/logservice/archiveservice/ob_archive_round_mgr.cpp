@@ -30,7 +30,7 @@ ObArchiveRoundMgr::ObArchiveRoundMgr() :
   compatible_(false),
   log_archive_state_(),
   backup_dest_(),
-  rwlock_()
+  rwlock_(common::ObLatchIds::ARCHIVE_ROUND_MGR_LOCK)
 {
 }
 

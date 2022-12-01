@@ -355,7 +355,7 @@ void ObTmpFileExtent::get_global_offset(int64_t &g_offset_start, int64_t &g_offs
 ObTmpFileExtent::ObTmpFileExtent(ObTmpFile *file)
   : is_alloced_(false), fd_(file->get_fd()), g_offset_start_(0), g_offset_end_(0),
     owner_(file), start_page_id_(-1), page_nums_(0), block_id_(-1), offset_(0),
-    is_closed_(false)
+    lock_(common::ObLatchIds::TMP_FILE_EXTENT_LOCK), is_closed_(false)
 {
 }
 
@@ -588,6 +588,7 @@ ObTmpFile::ObTmpFile()
     last_extent_id_(0),
     last_extent_min_offset_(0),
     last_extent_max_offset_(INT64_MAX),
+    lock_(common::ObLatchIds::TMP_FILE_LOCK),
     is_inited_(false)
 {
 }
@@ -1438,7 +1439,8 @@ int ObTmpFileManager::sync(const int64_t fd, const int64_t timeout_ms)
 }
 
 ObTmpFileManager::ObTmpFileManager()
-  : files_(), next_fd_(-1), next_dir_(-1), rm_file_lock_(), is_inited_(false)
+  : files_(), next_fd_(-1), next_dir_(-1),
+    rm_file_lock_(common::ObLatchIds::TMP_FILE_MGR_LOCK), is_inited_(false)
 {
 }
 

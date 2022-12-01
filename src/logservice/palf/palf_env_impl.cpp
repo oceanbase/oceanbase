@@ -109,7 +109,7 @@ int PalfDiskOptionsWrapper::update_disk_options_not_guarded_by_lock_(const PalfD
 }
 
 
-PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(),
+PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              log_alloc_mgr_(NULL),
                              log_block_pool_(NULL),
                              fetch_log_engine_(),

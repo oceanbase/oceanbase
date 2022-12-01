@@ -25,7 +25,8 @@ namespace share
 class ObGAISClient
 {
 public:
-  ObGAISClient() : is_inited_(false), self_(), gais_request_rpc_(nullptr), gais_cache_leader_() { }
+  ObGAISClient() : is_inited_(false), self_(), gais_request_rpc_(nullptr), gais_cache_leader_(),
+  cache_leader_mutex_(common::ObLatchIds::AUTO_INCREMENT_LEADER_LOCK) { }
   ~ObGAISClient() { }
   int init(const common::ObAddr &self, share::ObGAISRequestRpc *gais_request_rpc);
   void reset();

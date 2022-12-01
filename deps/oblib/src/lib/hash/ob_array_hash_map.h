@@ -48,7 +48,7 @@ public:
     val_t val_;
   };
 
-  ObArrayHashMap(): size_(0), capacity_(0), items_(NULL) {}
+  ObArrayHashMap(): lock_(common::ObLatchIds::HASH_MAP_LOCK), size_(0), capacity_(0), items_(NULL) {}
   ~ObArrayHashMap() { destroy(); }
 
   int init(const lib::ObLabel &label, int64_t capacity)

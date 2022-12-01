@@ -78,7 +78,7 @@ public:
       tenant_id_(common::OB_INVALID_ID),
       sql_proxy_(nullptr),
       merge_info_mgr_(nullptr), 
-      lock_(), 
+      lock_(common::ObLatchIds::OB_FREEZE_INFO_MANAGER_LOCK),
       freeze_info_()
   {}
   virtual ~ObFreezeInfoManager() {}

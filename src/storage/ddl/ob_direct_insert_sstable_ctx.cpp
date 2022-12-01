@@ -190,7 +190,7 @@ int ObSSTableInsertRowIterator::get_sql_mode(ObSQLMode &sql_mode) const
 /***************              ObSSTableInsertTabletContext              *****************/
 
 ObSSTableInsertTabletContext::ObSSTableInsertTabletContext()
-  : allocator_(), ls_handle_(), tablet_handle_(), data_sstable_redo_writer_(),
+  : mutex_(ObLatchIds::SSTABLE_INSERT_TABLET_CONTEXT_LOCK), allocator_(), ls_handle_(), tablet_handle_(), data_sstable_redo_writer_(),
     sstable_created_(false), task_finish_count_(0), index_builder_(nullptr),
     task_id_(0)
 {
@@ -759,7 +759,7 @@ int ObSSTableInsertTableParam::assign(const ObSSTableInsertTableParam &other)
 }
 
 ObSSTableInsertTableContext::ObSSTableInsertTableContext()
-  : is_inited_(false), param_(), allocator_(), tablet_ctx_map_(), finishing_idx_(0)
+  : is_inited_(false), lock_(ObLatchIds::SSTABLE_INSERT_TABLE_CONTEXT_LOCK), param_(), allocator_(), tablet_ctx_map_(), finishing_idx_(0)
 {
 }
 
@@ -1061,7 +1061,7 @@ int ObSSTableInsertTableContext::get_tablet_cache_interval(const ObTabletID &tab
 
 /***************              ObSSTableInsertManager              *****************/
 ObSSTableInsertManager::ObSSTableInsertManager()
-  : is_inited_(false), context_id_generator_(0)
+  : is_inited_(false), mutex_(ObLatchIds::SSTABLE_INSERT_TABLE_MANAGER_LOCK), context_id_generator_(0)
 {
 
 }

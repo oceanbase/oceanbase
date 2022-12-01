@@ -113,7 +113,7 @@ ObTabletRestoreCtx::ObTabletRestoreCtx()
     ha_table_info_mgr_(nullptr),
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
-    lock_(),
+    lock_(common::ObLatchIds::RESTORE_LOCK),
     status_(ObCopyTabletStatus::MAX_STATUS)
 {
 }

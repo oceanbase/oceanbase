@@ -516,7 +516,7 @@ int ObBackupTabletCtx::record_macro_block_physical_id(const storage::ObITable::T
 
 ObBackupTabletStat::ObBackupTabletStat()
     : is_inited_(false),
-      mutex_(),
+      mutex_(common::ObLatchIds::BACKUP_LOCK),
       tenant_id_(OB_INVALID_ID),
       backup_set_id_(0),
       ls_id_(),
@@ -1356,7 +1356,7 @@ ObBackupTabletProvider::ObBackupTabletProvider()
       is_run_out_(false),
       meet_end_(false),
       sort_ret_(0),
-      mutex_(),
+      mutex_(common::ObLatchIds::BACKUP_LOCK),
       param_(),
       backup_data_type_(),
       cur_task_id_(),
@@ -2096,7 +2096,7 @@ ObBackupMacroBlockTaskMgr::ObBackupMacroBlockTaskMgr()
     : is_inited_(false),
       backup_data_type_(),
       batch_size_(0),
-      mutex_(),
+      mutex_(common::ObLatchIds::BACKUP_LOCK),
       cond_(),
       max_task_id_(0),
       file_id_(0),

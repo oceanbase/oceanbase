@@ -34,6 +34,7 @@ ObDelayFreeAllocator::ObDelayFreeAllocator()
     total_size_(0),
     expire_duration_us_(0),
     label_(nullptr),
+    mutex_(ObLatchIds::OB_DELAY_FREE_ALLOCATOR_LOCK),
     inited_(false)
 {
 }

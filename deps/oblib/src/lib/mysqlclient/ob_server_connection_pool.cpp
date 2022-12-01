@@ -27,7 +27,7 @@ ObServerConnectionPool::ObServerConnectionPool() :
     root_(NULL),
     dblink_id_(OB_INVALID_ID),
     server_(),
-    pool_lock_(),
+    pool_lock_(common::ObLatchIds::INNER_CONN_POOL_LOCK),
     last_renew_timestamp_(0),
     connection_version_(0),
     max_allowed_conn_count_(0),

@@ -107,7 +107,9 @@ struct CacheHandle
 struct TableNode: public common::LinkHashValue<AutoincKey>
 {
   TableNode()
-    : table_id_(0),
+    : sync_mutex_(common::ObLatchIds::AUTO_INCREMENT_SYNC_LOCK),
+      alloc_mutex_(common::ObLatchIds::AUTO_INCREMENT_ALLOC_LOCK),
+      table_id_(0),
       next_value_(0),
       local_sync_(0),
       last_refresh_ts_(common::ObTimeUtility::current_time()),

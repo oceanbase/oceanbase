@@ -152,7 +152,6 @@ ObPlanCacheValue::ObPlanCacheValue()
     stmt_type_(stmt::T_MAX)
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
-  //pthread_rwlock_init(&rwlock_, NULL);
 }
 
 int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj, ObPlanCacheCtx &pc_ctx)

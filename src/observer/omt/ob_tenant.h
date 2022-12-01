@@ -251,6 +251,7 @@ public:
 
   ObResourceGroup(int32_t group_id, ObTenant *tenant, ObWorkerPool *worker_pool, share::ObCgroupCtrl *cgroup_ctrl):
     ObResourceGroupNode(group_id),
+    workers_lock_(common::ObLatchIds::TENANT_WORKER_LOCK),
     inited_(false),
     recv_req_cnt_(0),
     pop_req_cnt_(0),

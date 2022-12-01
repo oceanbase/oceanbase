@@ -31,7 +31,7 @@ ObKVCacheStore::ObKVCacheStore()
       block_payload_size_(0),
       mb_handles_(NULL),
       mb_handles_pool_(),
-      wash_out_lock_(),
+      wash_out_lock_(common::ObLatchIds::WASH_OUT_LOCK),
       tenant_ids_(),
       inst_handles_(),
       wash_info_free_heap_(),

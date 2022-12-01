@@ -73,6 +73,7 @@ ObArchivePersistMgr::ObArchivePersistMgr() :
   tenant_id_(OB_INVALID_TENANT_ID),
   tenant_key_(),
   state_(),
+  state_rwlock_(common::ObLatchIds::ARCHIVE_PERSIST_MGR_LOCK),
   proxy_(NULL),
   ls_svr_(NULL),
   ls_mgr_(NULL),

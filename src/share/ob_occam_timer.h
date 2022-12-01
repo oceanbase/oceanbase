@@ -132,7 +132,9 @@ public:
     function_class_(function_class),
     function_name_(function_name),
     file_(file),
-    line_(line) {}
+    line_(line),
+    lock_(ObLatchIds::TIME_WHEEL_TASK_LOCK)
+  {}
   ~ObOccamTimerTask() {
     time_wheel_ = nullptr;
     thread_pool_ = nullptr;
@@ -359,7 +361,7 @@ class ObOccamTimerTaskRAIIHandle
 {
   friend class ObOccamTimer;
 public:
-  ObOccamTimerTaskRAIIHandle() : task_(nullptr), is_inited_(false), is_running_(false) { OCCAM_LOG(INFO, "task handle constructed", K(*this)); }
+  ObOccamTimerTaskRAIIHandle() : task_(nullptr), is_inited_(false), is_running_(false), lock_(ObLatchIds::TIME_WHEEL_TASK_LOCK) { OCCAM_LOG(INFO, "task handle constructed", K(*this)); }
   ObOccamTimerTaskRAIIHandle(ObOccamTimerTaskRAIIHandle&&) = delete;
   ObOccamTimerTaskRAIIHandle(const ObOccamTimerTaskRAIIHandle&) = delete;
   ObOccamTimerTaskRAIIHandle& operator=(const ObOccamTimerTaskRAIIHandle&) = delete;

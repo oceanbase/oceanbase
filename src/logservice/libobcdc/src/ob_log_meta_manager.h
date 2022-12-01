@@ -337,7 +337,7 @@ ObLogMetaManager::MetaInfo<Type>::MetaInfo() :
     num_(0),
     head_(NULL),
     tail_(NULL),
-    lock_(),
+    lock_(common::ObLatchIds::OBCDC_METAINFO_LOCK),
     base_allocator_(common::ObModIds::OB_LOG_META_INFO),
     fifo_allocator_()
 {

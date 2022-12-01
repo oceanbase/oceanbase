@@ -113,7 +113,6 @@ private:
   GetFunc might_contain_;       // function pointer for might contain
 private:
   common::ObArenaAllocator allocator_;
-  mutable common::ObSpinLock lock_;
 public:
   //无需序列化
    int64_t px_bf_recieve_count_;  // 当前收到bloom filter的个数

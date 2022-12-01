@@ -90,7 +90,7 @@ ObITabletLogicMacroIdReader::~ObITabletLogicMacroIdReader()
 /* ObTabletLogicMacroIdReader */
 
 ObTabletLogicMacroIdReader::ObTabletLogicMacroIdReader()
-    : ObITabletLogicMacroIdReader(), lock_(), allocator_(), datum_range_(), meta_iter_()
+    : ObITabletLogicMacroIdReader(), lock_(common::ObLatchIds::BACKUP_LOCK), allocator_(), datum_range_(), meta_iter_()
 {}
 
 ObTabletLogicMacroIdReader::~ObTabletLogicMacroIdReader()

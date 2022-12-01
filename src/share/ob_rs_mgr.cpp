@@ -167,8 +167,13 @@ int ObRsMgr::ObRemoteClusterIdGetter::operator() (
 /////////////////////
 
 ObRsMgr::ObRsMgr()
-  : inited_(false), srv_rpc_proxy_(NULL),
-    config_(NULL), addr_agent_()
+  : inited_(false),
+    srv_rpc_proxy_(NULL),
+    config_(NULL),
+    addr_agent_(),
+    lock_(common::ObLatchIds::MASTER_RS_CACHE_LOCK),
+    master_rs_(),
+    remote_master_rs_map_()
 {
 }
 

@@ -27,7 +27,8 @@ namespace oceanbase
 {
 namespace libobcdc
 {
-FetchStreamContainer::FetchStreamContainer()
+FetchStreamContainer::FetchStreamContainer():
+    lock_(ObLatchIds::OBCDC_FETCHSREAM_CONTAINER_LOCK)
 {
   reset();
 }

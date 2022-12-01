@@ -2192,7 +2192,6 @@ private:
   ObZoneManager *zone_mgr_;
   ObUnitManager *unit_mgr_;
   ObSnapshotInfoManager *snapshot_mgr_;
-  mutable common::SpinRWLock pz_entity_cnt_lock_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLService);

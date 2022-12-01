@@ -281,6 +281,9 @@ int ObTabletAutoincrementService::init()
   } else if (OB_FAIL(tablet_autoinc_mgr_map_.init())) {
     LOG_WARN("failed to init table node map", K(ret));
   } else {
+    for (int64_t i = 0; i < INIT_NODE_MUTEX_NUM; ++i) {
+      init_node_mutexs_[i].set_latch_id(common::ObLatchIds::TABLET_AUTO_INCREMENT_SERVICE_LOCK);
+    }
     is_inited_ = true;
   }
   return ret;

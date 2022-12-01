@@ -24,7 +24,7 @@ using namespace logservice;
 
 ObLSRestoreTaskMgr::ObLSRestoreTaskMgr()
   : is_inited_(false),
-    mtx_(),
+    mtx_(ObLatchIds::RESTORE_LOCK),
     tablet_map_(),
     schedule_tablet_set_(),
     wait_tablet_set_()

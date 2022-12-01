@@ -63,7 +63,7 @@ ObSysTaskStat::ObSysTaskStat()
 }
 
 ObSysTaskStatMgr::ObSysTaskStatMgr()
-  : lock_(),
+  : lock_(common::ObLatchIds::SYS_TASK_STAT_LOCK),
     task_array_()
 {
   task_array_.set_label(ObModIds::OB_SYS_TASK_STATUS);

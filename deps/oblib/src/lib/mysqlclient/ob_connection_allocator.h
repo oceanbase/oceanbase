@@ -29,7 +29,7 @@ class ObIConnectionAllocator
 {
 public:
   ObIConnectionAllocator()
-      : pool_(sizeof(T))
+      : lock_(common::ObLatchIds::INNER_CONN_POOL_LOCK), pool_(sizeof(T))
   {}
   virtual ~ObIConnectionAllocator() {}
 

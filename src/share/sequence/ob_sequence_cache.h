@@ -103,6 +103,7 @@ public:
         with_prefetch_node_(false),
         base_on_last_number_(false),
         last_refresh_ts_(0),
+        alloc_mutex_(common::ObLatchIds::SEQUENCE_VALUE_ALLOC_LOCK),
         last_number_()
   {}
   int combine_prefetch_node()

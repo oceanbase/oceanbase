@@ -43,7 +43,7 @@ class ObDListWithLock
 {
 public:
   typedef ObDLink DLink;
-  ObDListWithLock(): lock_() {
+  ObDListWithLock(): lock_(ObLatchIds::OB_DLIST_LOCK) {
     head_.next_ = &head_;
     head_.prev_ = &head_;
   }

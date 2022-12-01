@@ -33,7 +33,8 @@ using namespace oceanbase::share;
 using namespace oceanbase::palf;
 
 ObZoneMergeManagerBase::ObZoneMergeManagerBase()
-  : lock_(), is_inited_(false), is_loaded_(false),
+  : lock_(ObLatchIds::ZONE_MERGE_MANAGER_READ_LOCK),
+    is_inited_(false), is_loaded_(false),
     tenant_id_(common::OB_INVALID_ID), zone_count_(0),
     zone_merge_infos_(), global_merge_info_(), proxy_(NULL)
 {}
@@ -1150,7 +1151,7 @@ ObZoneMergeManager::ObZoneMergeMgrGuard::~ObZoneMergeMgrGuard()
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 ObZoneMergeManager::ObZoneMergeManager()
-  : write_lock_(), shadow_()
+  : write_lock_(ObLatchIds::ZONE_MERGE_MANAGER_WRITE_LOCK), shadow_()
 {}
 
 ObZoneMergeManager::~ObZoneMergeManager()

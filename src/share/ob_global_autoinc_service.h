@@ -83,7 +83,8 @@ class ObGlobalAutoIncService : public logservice::ObIReplaySubHandler,
                                public logservice::ObIRoleChangeSubHandler
 {
 public:
-  ObGlobalAutoIncService() : is_inited_(false), is_leader_(false), cache_ls_(NULL) {}
+  ObGlobalAutoIncService() : is_inited_(false), is_leader_(false),
+    cache_ls_lock_(common::ObLatchIds::AUTO_INCREMENT_LEADER_LOCK), cache_ls_(NULL) {}
   virtual ~ObGlobalAutoIncService() {}
 
   const static int MUTEX_NUM = 1024;

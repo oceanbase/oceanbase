@@ -33,7 +33,7 @@ using namespace palf::election;
 namespace palf
 {
 PalfHandleImpl::PalfHandleImpl()
-  : lock_(),
+  : lock_(common::ObLatchIds::PALF_HANDLE_IMPL_LOCK),
     sw_(),
     config_mgr_(),
     mode_mgr_(),

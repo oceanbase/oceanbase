@@ -561,7 +561,7 @@ ObPhysicalCopyFinishTask::ObPhysicalCopyFinishTask()
   : ObITask(TASK_TYPE_MIGRATE_FINISH_PHYSICAL),
     is_inited_(false),
     copy_ctx_(),
-    lock_(),
+    lock_(common::ObLatchIds::BACKUP_LOCK),
     sstable_param_(nullptr),
     sstable_macro_range_info_(),
     macro_range_info_index_(0),
@@ -1110,7 +1110,7 @@ int ObPhysicalCopyFinishTask::check_sstable_meta_(
 ObTabletCopyFinishTask::ObTabletCopyFinishTask()
   : ObITask(TASK_TYPE_MIGRATE_FINISH_PHYSICAL),
     is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::BACKUP_LOCK),
     tablet_id_(),
     ls_(nullptr),
     reporter_(nullptr),

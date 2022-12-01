@@ -37,7 +37,7 @@ using namespace obrpc;
 
 ObPxBloomFilter::ObPxBloomFilter() : data_length_(0), bits_count_(0), fpp_(0.0),
     hash_func_count_(0), is_inited_(false), bits_array_length_(0),
-    bits_array_(NULL), true_count_(0), begin_idx_(0), end_idx_(0), allocator_(), lock_(),
+    bits_array_(NULL), true_count_(0), begin_idx_(0), end_idx_(0), allocator_(),
     px_bf_recieve_count_(0), px_bf_recieve_size_(0), px_bf_merge_filter_count_(0)
 {
 

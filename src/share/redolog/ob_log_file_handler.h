@@ -130,7 +130,6 @@ private:
   ObLogFileGroup file_group_;
   int64_t file_size_;
   bool is_disk_warning_;
-  common::ObSpinLock lock_;
   uint64_t tenant_id_;
 };
 

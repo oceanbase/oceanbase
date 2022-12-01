@@ -146,7 +146,7 @@ class ElectionPriorityImpl : public palf::election::ElectionPriority
   friend class unittest::TestElectionPriority;
 public:
   ElectionPriorityImpl() {}
-  ElectionPriorityImpl(const share::ObLSID ls_id) : ls_id_(ls_id) {}
+  ElectionPriorityImpl(const share::ObLSID ls_id) : ls_id_(ls_id), lock_(common::ObLatchIds::ELECTION_LOCK) {}
   virtual ~ElectionPriorityImpl() {}
   void set_ls_id(const share::ObLSID ls_id);
   // 优先级需要序列化能力，以便通过消息传递给其他副本

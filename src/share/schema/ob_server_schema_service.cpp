@@ -45,7 +45,9 @@ using namespace oceanbase::common::hash;
 using namespace oceanbase::common::sqlclient;
 
 ObServerSchemaService::ObServerSchemaService()
-    : schema_service_(NULL),
+    : schema_manager_rwlock_(common::ObLatchIds::SCHEMA_MGR_CACHE_LOCK),
+      mem_mgr_for_liboblog_mutex_(common::ObLatchIds::SCHEMA_MGR_CACHE_LOCK),
+      schema_service_(NULL),
       sql_proxy_(NULL),
       config_(NULL),
       refresh_full_schema_map_(),

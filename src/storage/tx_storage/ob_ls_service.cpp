@@ -53,6 +53,7 @@ ObLSService::ObLSService()
     ls_map_(),
     ls_allocator_(),
     iter_allocator_(),
+    change_lock_(common::ObLatchIds::LS_CHANGE_LOCK),
     rs_reporter_(nullptr),
     storage_svr_rpc_proxy_(),
     storage_rpc_(),

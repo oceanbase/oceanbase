@@ -115,7 +115,8 @@ class ObTenantResourceMgrList
 {
 public:
   ObTenantResourceMgrList()
-    : inited_(false), mutex_(), header_(NULL), chunk_(NULL)
+    : inited_(false), mutex_(common::ObLatchIds::TENANT_RES_MGR_LIST_LOCK),
+      header_(NULL), chunk_(NULL)
     {
       mutex_.enable_record_stat(false);
     }

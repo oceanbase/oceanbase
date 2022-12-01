@@ -231,7 +231,8 @@ ObAutoincrementService::ObAutoincrementService()
     handle_allocator_(),
     mysql_proxy_(NULL),
     srv_proxy_(NULL),
-    schema_service_(NULL)
+    schema_service_(NULL),
+    map_mutex_(common::ObLatchIds::AUTO_INCREMENT_INIT_LOCK)
 {
 }
 
@@ -267,6 +268,10 @@ int ObAutoincrementService::init(ObAddr &addr,
     LOG_WARN("failed to init cache handle allocator", K(ret));
   } else if (OB_FAIL(node_map_.init())) {
     LOG_WARN("failed to init table node map", K(ret));
+  } else {
+    for (int64_t i = 0; i < INIT_NODE_MUTEX_NUM; ++i) {
+      init_node_mutex_[i].set_latch_id(common::ObLatchIds::AUTO_INCREMENT_INIT_LOCK);
+    }
   }
   return ret;
 }

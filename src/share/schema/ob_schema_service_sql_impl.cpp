@@ -223,7 +223,6 @@ int ObSchemaServiceSQLImpl::retrieve_schema_version(T &result, int64_t &schema_v
 ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
     : mysql_proxy_(NULL),
       dblink_proxy_(NULL),
-      mutex_(),
       last_operation_schema_version_(OB_INVALID_VERSION),
       tenant_service_(*this),
       database_service_(*this),
@@ -247,7 +246,7 @@ ObSchemaServiceSQLImpl::ObSchemaServiceSQLImpl()
       tablespace_service_(*this),
       profile_service_(*this),
       audit_service_(*this),
-      rw_lock_(),
+      rw_lock_(common::ObLatchIds::SCHEMA_REFRESH_INFO_LOCK),
       last_operation_tenant_id_(OB_INVALID_TENANT_ID),
       sequence_id_(OB_INVALID_ID),
       schema_info_(),
@@ -282,7 +281,6 @@ int ObSchemaServiceSQLImpl::init(
     const ObServerSchemaService *schema_service)
 {
   int ret = OB_SUCCESS;
-  lib::ObMutexGuard guard(mutex_);
   if (OB_ISNULL(sql_proxy)
       || OB_ISNULL(schema_service)) {
     ret = OB_INVALID_ARGUMENT;

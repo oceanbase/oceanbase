@@ -15,8 +15,6 @@
 
 #include "lib/list/ob_dlist.h"
 #include "lib/string/ob_string.h"
-#include "lib/lock/ob_spin_rwlock.h"
-#include "lib/lock/ob_tc_rwlock.h"
 #include "lib/stat/ob_latch_define.h"
 #include "sql/session/ob_basic_session_info.h"
 #include "sql/plan_cache/ob_plan_cache_value.h"

@@ -262,7 +262,7 @@ ObApplyStatus::ObApplyStatus()
       palf_handle_(),
       fs_cb_(),
       lock_(ObLatchIds::APPLY_STATUS_LOCK),
-      mutex_(),
+      mutex_(common::ObLatchIds::MAX_APPLY_SCN_LOCK),
       get_info_debug_time_(OB_INVALID_TIMESTAMP),
       try_wrlock_debug_time_(OB_INVALID_TIMESTAMP),
       cb_append_stat_("[cb append statistic]", 5 * 1000 * 1000),

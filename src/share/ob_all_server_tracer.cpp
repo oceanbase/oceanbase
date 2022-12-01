@@ -19,7 +19,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 
 ObServerTraceMap::ObServerTraceMap()
-  : is_inited_(false), lock_(), server_status_arr_()
+  : is_inited_(false), lock_(ObLatchIds::ALL_SERVER_TRACER_LOCK), server_status_arr_()
 {
 }
 

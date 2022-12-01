@@ -29,7 +29,8 @@ namespace checkpoint
 {
 
 ObCheckpointExecutor::ObCheckpointExecutor()
-  : update_checkpoint_enabled_(false)
+    : lock_(common::ObLatchIds::CLOG_CKPT_LOCK),
+      update_checkpoint_enabled_(false)
 {
   reset();
 }

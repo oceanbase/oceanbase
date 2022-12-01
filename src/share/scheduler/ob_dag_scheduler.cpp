@@ -367,6 +367,7 @@ ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
     priority_(OB_DAG_TYPES[type].init_dag_prio_),
     dag_status_(ObIDag::DAG_STATUS_INITING),
     running_task_cnt_(0),
+    lock_(common::ObLatchIds::WORK_DAG_LOCK),
     is_stop_(false),
     max_retry_times_(0),
     running_times_(0),
@@ -837,7 +838,7 @@ int ObIDag::inner_add_child_without_inheritance(ObIDag &child)
 ObIDagNet::ObIDagNet(
     const ObDagNetType::ObDagNetTypeEnum type)
    : is_stopped_(false),
-     lock_(),
+     lock_(common::ObLatchIds::WORK_DAG_NET_LOCK),
      allocator_("DagNet", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
      type_(type),
      add_time_(0),
@@ -1470,6 +1471,7 @@ int ObTenantDagScheduler::mtl_init(ObTenantDagScheduler* &scheduler)
 
 ObTenantDagScheduler::ObTenantDagScheduler()
   : is_inited_(false),
+    dag_net_map_lock_(common::ObLatchIds::WORK_DAG_NET_LOCK),
     dag_cnt_(0),
     dag_limit_(0),
     check_period_(0),

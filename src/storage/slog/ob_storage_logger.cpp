@@ -39,7 +39,7 @@ namespace storage
 ObStorageLogger::ObStorageLogger()
   : is_inited_(false), log_writer_(nullptr),
     tenant_log_writer_(), server_log_writer_(),
-    slogger_mgr_(nullptr), log_seq_(0),
+    slogger_mgr_(nullptr), log_seq_(0), build_log_mutex_(common::ObLatchIds::SLOG_PROCESSING_MUTEX),
     log_file_spec_(), is_start_(false)
 {
 }
