@@ -354,7 +354,7 @@ int SCN::convert_for_tx(int64_t val)
   int ret = OB_SUCCESS;
   if (INT64_MAX == val) {
     val_ = OB_MAX_SCN_TS_NS;
-  } else if (OB_UNLIKELY(OB_MAX_SCN_TS_NS < val || OB_MIN_SCN_TS_NS > val)) {
+  } else if (OB_UNLIKELY(val < 0 || OB_MAX_SCN_TS_NS < val)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid argument", K(val), K(lbt()));
   } else {
@@ -366,10 +366,10 @@ int SCN::convert_for_tx(int64_t val)
 int64_t SCN::get_val_for_tx() const
 {
   int64_t result_val = 0;
-  if (OB_MAX_SCN_TS_NS == ts_ns_) {
-    result_val = INT64_MAX;
-  } else if (!is_valid()) {
+  if (!is_valid()) {
     PALF_LOG(ERROR, "invalid SCN", K(val_));
+  } else if (OB_MAX_SCN_TS_NS == ts_ns_) {
+    result_val = INT64_MAX;
   } else {
     result_val = ts_ns_;
   }
