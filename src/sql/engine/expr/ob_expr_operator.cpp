@@ -268,10 +268,12 @@ int OB_INLINE ObExprOperator::cast_operand_type(
       } else if (share::is_mysql_mode() && ob_is_json(calc_type)) {
          cast_ctx.dest_collation_ = CS_TYPE_UTF8MB4_BIN;
       }
-      ObObj res_obj_copy = res_obj;
+      ObObj tmp_obj;
       cast_ctx.expect_obj_collation_ = cast_ctx.dest_collation_;
-      if (OB_FAIL(ObObjCaster::to_type(res_type.get_calc_type(), cast_ctx, res_obj_copy, res_obj))) {
+      if (OB_FAIL(ObObjCaster::to_type(res_type.get_calc_type(), cast_ctx, res_obj, tmp_obj))) {
         LOG_WARN("fail to convert type", K(ret), K(res_type.get_calc_type()), K(res_obj));
+      } else {
+        res_obj = tmp_obj;
       }
       if (OB_SUCC(ret) && ob_is_string_or_lob_type(param_type) && ob_is_string_or_lob_type(calc_type) &&
           param_collation_type != calc_collation_type && calc_collation_type != CS_TYPE_INVALID) {
