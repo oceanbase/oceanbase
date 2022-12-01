@@ -1013,7 +1013,7 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
   }
   // before revert self
   if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "get_gts_callback end", KR(ret), K(*this));
+    TRANS_LOG(WARN, "get_gts_callback end", KR(ret), K(*this), K(srr), K(gts), K(receive_gts_ts));
   }
   if (need_revert_ctx) {
     ret = ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
@@ -1953,19 +1953,23 @@ int ObPartTransCtx::try_submit_next_log_()
   int ret = OB_SUCCESS;
   ObTxLogType log_type = ObTxLogType::UNKNOWN;
   if (ObPartTransAction::COMMIT == part_trans_action_ && !is_2pc_logging_() && !is_in_2pc_()) {
-    if (is_sub2pc() || exec_info_.is_dup_tx_) {
-      log_type = ObTxLogType::TX_COMMIT_INFO_LOG;
+    if (is_follower_()) {
+      ret = OB_NOT_MASTER;
     } else {
-      if (is_local_tx_()) {
-        log_type = ObTxLogType::TX_COMMIT_LOG;
+      if (is_sub2pc() || exec_info_.is_dup_tx_) {
+        log_type = ObTxLogType::TX_COMMIT_INFO_LOG;
       } else {
-        log_type = ObTxLogType::TX_PREPARE_LOG;
+        if (is_local_tx_()) {
+          log_type = ObTxLogType::TX_COMMIT_LOG;
+        } else {
+          log_type = ObTxLogType::TX_PREPARE_LOG;
+        }
       }
-    }
-    if (OB_FAIL(submit_log_impl_(log_type))) {
-      TRANS_LOG(WARN, "submit log for commit failed", K(ret), K(log_type), KPC(this));
-    } else {
-      TRANS_LOG(INFO, "submit log for commit success", K(log_type), KPC(this));
+      if (OB_FAIL(submit_log_impl_(log_type))) {
+        TRANS_LOG(WARN, "submit log for commit failed", K(ret), K(log_type), KPC(this));
+      } else {
+        TRANS_LOG(INFO, "submit log for commit success", K(log_type), KPC(this));
+      }
     }
   }
   return ret;

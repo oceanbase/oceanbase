@@ -43,10 +43,13 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
   palf::LSN lsn;
   SCN ts;
 
-  if (OB_ISNULL(log_handler_) || !log_handler_->is_valid() || NULL == buf || 0 == size
-      || (base_ts.is_valid() && base_ts.convert_to_ts() > ObTimeUtility::current_time() + 86400000000L)) {
+  if (NULL == buf || 0 >= size || OB_ISNULL(cb) || !base_ts.is_valid() ||
+      base_ts.convert_to_ts() > ObTimeUtility::current_time() + 86400000000L) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_), KP(buf), K(size), K(base_ts));
+    TRANS_LOG(WARN, "invalid argument", K(ret), KP(buf), K(size), K(base_ts), KP(cb));
+  } else if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
   } else if (OB_FAIL(log_handler_->append(buf, size, base_ts, need_nonblock, cb, lsn, ts))) {
     TRANS_LOG(WARN, "append log to palf failed", K(ret), KP(log_handler_), KP(buf), K(size), K(base_ts),
               K(need_nonblock));
