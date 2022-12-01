@@ -776,7 +776,8 @@ private:
                                    ObIArray<ObObjAccessIdx> &access_idxs);
 
 private:
-  int check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt, const ObPLConditionValue &value, bool &dup);
+  int check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt, const ObPLConditionValue &value,
+                                bool &dup, ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc* cur_desc);
   int analyze_actual_condition_type(const ObPLConditionValue &value, ObPLConditionType &type);
   int check_subprogram_variable_read_only(ObPLBlockNS &ns, uint64_t subprogram_id, int64_t var_idx);
   int check_package_variable_read_only(uint64_t package_id, uint64_t var_idx);

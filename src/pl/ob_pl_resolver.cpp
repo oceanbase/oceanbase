@@ -5204,7 +5204,7 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
             ObPLConditionType actual_type = INVALID_TYPE;
             if (OB_FAIL(resolve_handler_condition(handler_list->children_[i], value, func))) {
               LOG_WARN("failed to resolve condition value", K(handler_list->children_[i]), K(ret));
-            } else if (OB_FAIL(check_duplicate_condition(*stmt, value, dup))) {
+            } else if (OB_FAIL(check_duplicate_condition(*stmt, value, dup, desc))) {
               LOG_WARN("failed to check duplication", K(value), K(ret));
             } else if (dup) {
               ret = OB_ERR_SP_DUP_HANDLER;
@@ -5289,6 +5289,8 @@ int ObPLResolver::resolve_resignal(
     if (lib::is_oracle_mode()) {
       ret = OB_ERR_SP_COND_MISMATCH;
       LOG_WARN("PLS-00367: a RAISE statement with no exception name must be inside an exception handler", K(ret));
+    } else if(OB_NOT_NULL(parse_tree->children_[0]) && OB_FAIL(resolve_signal(parse_tree, stmt, func))) {
+      LOG_WARN("resolve resignal fail", K(ret));
     } else {
       ret = OB_ERR_RESIGNAL_WITHOUT_ACTIVE_HANDLER;
       LOG_WARN("RESIGNAL when handler not active", K(ret));
@@ -12215,7 +12217,8 @@ int ObPLResolver::resolve_condition_value(const ObStmtNodeTree *parse_tree,
 
 int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
                                             const ObPLConditionValue &value,
-                                            bool &dup)
+                                            bool &dup,
+                                            ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc* cur_desc)
 {
   int ret = OB_SUCCESS;
   dup = false;
@@ -12256,6 +12259,16 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
       }
     } else {
       break;
+    }
+  }
+  if (OB_NOT_NULL(cur_desc)) {
+    for (int64_t j = 0; !dup && j < cur_desc->get_conditions().count(); ++j) {
+      if (value.type_ == cur_desc->get_condition(j).type_ &&
+          value.error_code_ == cur_desc->get_condition(j).error_code_ &&
+          value.str_len_ == cur_desc->get_condition(j).str_len_ &&
+          0 == STRNCMP(value.sql_state_, cur_desc->get_condition(j).sql_state_, value.str_len_)) {
+        dup = true;
+      }
     }
   }
   return ret;

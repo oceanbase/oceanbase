@@ -4243,7 +4243,7 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
         if (result.is_null()) {
           ret = OB_ERR_WRONG_VALUE_FOR_VAR;
           LOG_WARN("error code is NULL", K(ret));
-          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, static_cast<int32_t>(STRLEN("MYSQL_ERRNO")), "MYSQL_ERRNO",
+          LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, static_cast<int32_t>(STRLEN("MESSAGE_TEXT")), "MESSAGE_TEXT",
                         static_cast<int32_t>(STRLEN("NULL")), "NULL");
         }
       }
