@@ -117,7 +117,7 @@ struct ObIndexMetaInfo
   uint64_t index_id_; // index id
   int64_t index_micro_block_size_; //index micro block size, same as main table when path is primary
   uint64_t index_part_count_;
-  double index_part_size_; //index table partitoin(0) data size, same as main table when path is primary
+  double index_part_size_; //index table partition(0) data size, same as main table when path is primary
   int64_t index_column_count_; //index column count
   bool is_index_back_; // is index back
   bool is_unique_index_; // is unique index
