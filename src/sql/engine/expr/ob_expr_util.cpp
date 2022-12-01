@@ -158,7 +158,7 @@ int kmp_next(const char* x, int64_t m, ObArray<int64_t>& next)
     int64_t i = 0;
     int64_t j = -1;
     next[0] = -1;
-    while (i < m) {
+    while (i < m - 1) {
       while (-1 < j && x[i] != x[j]) {
         j = next[j];
       }
@@ -230,7 +230,7 @@ int kmp_next_reverse(const char* x, int64_t m, ObArray<int64_t>& next)
     LOG_WARN("null ptr", K(ret));
   } else {
     next[0] = m;
-    while (0 <= i) {
+    while (0 < i) {
       while (j < m && x[i] != x[j]) {
         j = next[m - 1 - j];
       }
