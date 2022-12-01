@@ -316,7 +316,7 @@ int ObPlanMatchHelper::check_partition_constraint(
       } else if (loc_cons.at(i).is_subpartition_single()) {
         // is_subpartition_single requires that each primary partition of the current
         // secondary partition table involves only one secondary partition
-        ObSqlBitSet<> part_ids;
+        ObSEArray<int64_t, 4> part_ids;
         for (int64_t j = 0; OB_SUCC(ret) && is_match && j < phy_part_loc_info_list.count(); ++j) {
           ObTabletID cur_tablet_id =
               phy_part_loc_info_list.at(j).get_partition_location().get_tablet_id();
@@ -324,10 +324,22 @@ int ObPlanMatchHelper::check_partition_constraint(
           int64_t cur_subpart_id = OB_INVALID_ID;
           if (OB_FAIL(table_schema->get_part_id_by_tablet(cur_tablet_id, cur_part_id, cur_subpart_id))) {
             LOG_WARN("failed to get part id by tablet", K(ret));
-          } else if (part_ids.has_member(cur_part_id)) {
-            is_match = false;
-          } else if (OB_FAIL(part_ids.add_member(cur_part_id))) {
-            LOG_WARN("failed to add member", K(ret));
+          } else {
+            for (int64_t k = 0; OB_SUCC(ret) && is_match && k < part_ids.count(); ++k) {
+              if (part_ids.at(k) == cur_part_id) {
+                is_match = false;
+              }
+            }
+
+            if (OB_FAIL(ret)) {
+              // do nothing
+            } else if (!is_match) {
+              // do nothing
+            } else if (OB_FAIL(part_ids.push_back(cur_part_id))) {
+              LOG_WARN("failed to add member", K(ret));
+            } else {
+              // do nothing
+            }
           }
         }
       }
