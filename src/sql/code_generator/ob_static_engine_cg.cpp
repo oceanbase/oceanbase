@@ -3843,7 +3843,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   }
 
   bool is_equal_and = true;
-  ObKeyPart* root = spec.tsc_ctdef_.pre_query_range_.get_table_grapth().key_part_head_;
+  ObKeyPart* root = spec.tsc_ctdef_.pre_query_range_.get_table_graph().key_part_head_;
   ObSEArray<ObQueryRange::ObEqualOff, 1> equal_offs;
   while (OB_SUCC(ret) && NULL != root && is_equal_and) {
     is_equal_and = is_equal_and & root->is_equal_condition();

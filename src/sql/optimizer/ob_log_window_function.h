@@ -65,7 +65,7 @@ namespace sql
     virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
     void set_single_part_parallel(bool v) { single_part_parallel_ = v; }
     bool is_single_part_parallel() const { return single_part_parallel_; }
-    void set_ragne_dist_parallel(bool v) { range_dist_parallel_ = v; }
+    void set_range_dist_parallel(bool v) { range_dist_parallel_ = v; }
     bool is_range_dist_parallel() const { return range_dist_parallel_; }
     int get_winfunc_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
     void set_role_type(WindowFunctionRoleType v) { role_type_ = v; }

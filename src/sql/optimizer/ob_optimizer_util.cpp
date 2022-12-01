@@ -7075,7 +7075,7 @@ int ObOptimizerUtil::check_expr_contain_subquery(const ObIArray<ObRawExpr*> &exp
   return ret;
 }
 
-bool ObOptimizerUtil::has_psedu_column(const ObRawExpr &expr)
+bool ObOptimizerUtil::has_pseud_column(const ObRawExpr &expr)
 {
   return expr.has_flag(CNT_ROWNUM) ||
          expr.has_flag(CNT_SEQ_EXPR) ||

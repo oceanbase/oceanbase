@@ -47,7 +47,7 @@ class QueryRangeInfo;
 
 #define OPT_CTX (get_plan()->get_optimizer_context())
 
-int ConflictDetector::build_confict(common::ObIAllocator &allocator, ConflictDetector* &detector)
+int ConflictDetector::build_conflict(common::ObIAllocator &allocator, ConflictDetector* &detector)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(detector = static_cast<ConflictDetector*>(allocator.alloc(sizeof(ConflictDetector))))) {
@@ -1020,7 +1020,7 @@ int ObJoinOrder::get_preliminary_prefix_info(ObQueryRange &query_range,
   int64_t equal_prefix_count = 0;
   int64_t range_prefix_count = 0;
   bool contain_always_false = false;
-  const ObKeyPart *key_part_head = query_range.get_table_grapth().key_part_head_;
+  const ObKeyPart *key_part_head = query_range.get_table_graph().key_part_head_;
   if (OB_ISNULL(key_part_head)) {
     ret = OB_NOT_INIT;
     LOG_WARN("table_graph.key_part_head_ is not inited.", K(ret));
@@ -2946,7 +2946,7 @@ int ObJoinOrder::is_join_match(const ObIArray<OrderItem> &ordering,
   ObSEArray<ObRawExpr *, 4> related_join_keys;
   ObSEArray<ObRawExpr *, 4> other_join_keys;
   ObSEArray<bool, 4> null_safe_info;
-  bool dummy_is_coverd = false;
+  bool dummy_is_covered = false;
   int64_t match_prefix_count = 0;
   ObLogPlan *plan = get_plan();
   if (OB_ISNULL(plan)) {
@@ -2981,7 +2981,7 @@ int ObJoinOrder::is_join_match(const ObIArray<OrderItem> &ordering,
                                                               ordering_exprs,
                                                               get_output_equal_sets(),
                                                               get_output_const_exprs(),
-                                                              dummy_is_coverd,
+                                                              dummy_is_covered,
                                                               &match_prefix_count))) {
         LOG_WARN("failed to fidn common prefix ordering", K(ret));
       } else {
@@ -3008,7 +3008,7 @@ int ObJoinOrder::is_join_match(const ObIArray<OrderItem> &ordering,
   ObSEArray<ObRawExpr *, 4> related_join_keys;
   ObSEArray<ObRawExpr *, 4> other_join_keys;
   ObSEArray<bool, 4> null_safe_info;
-  bool dummy_is_coverd = false;
+  bool dummy_is_covered = false;
   ObLogPlan *plan = get_plan();
   if (OB_ISNULL(plan)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3064,7 +3064,7 @@ int ObJoinOrder::check_expr_overlap_index(const ObRawExpr* qual,
   return ret;
 }
 
-/* 拿到quals中涉及的 column的列的id 这个函数在抽取不出query range和 intersting order的情况下调用 */
+/* 拿到quals中涉及的 column的列的id 这个函数在抽取不出query range和 interesting order的情况下调用 */
 int ObJoinOrder::extract_filter_column_ids(const ObIArray<ObRawExpr*> &quals,
                                            const bool is_data_table,
                                            const ObTableSchema &index_schema,
@@ -3307,7 +3307,7 @@ int ObJoinOrder::get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
     std::sort(sorted_predicates.begin(), sorted_predicates.end(), compare_op);
     LOG_TRACE("sort predicates and calc cost", K(min_cost), K(sorted_predicates));
   }
-  //for earch candi range expr, check scan cost
+  //for each candi range expr, check scan cost
   for (int64_t i = 0; OB_SUCC(ret) && has_in_pred && i < sorted_predicates.count(); ++i) {
     CandiRangeExprs *candi_exprs = sorted_predicates.at(i);
     ObRawExpr *min_cost_in_expr = NULL;
@@ -4279,7 +4279,7 @@ int ObJoinOrder::add_path(Path* path)
         path->contain_match_all_fake_cte() &&
         !path->is_remote()) {
       should_add = false;
-      OPT_TRACE("containt match all fake cte, but not remote path, will not add path");
+      OPT_TRACE("contain match all fake cte, but not remote path, will not add path");
     }
     for (int64_t i = interesting_paths_.count() - 1; OB_SUCC(ret) && should_add && i >= 0; --i) {
       Path *cur_path = interesting_paths_.at(i);
@@ -4423,13 +4423,13 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
       OPT_TRACE("the sharding of the two paths is equal");
     } else if (temp_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
       left_dominated_count++;
-      OPT_TRACE("left path dominate right path beacuse of sharding");
+      OPT_TRACE("left path dominate right path because of sharding");
       if (right_dominated_count > 0) {
         relation = DominateRelation::OBJ_UNCOMPARABLE;
       }
     } else if (temp_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
       right_dominated_count++;
-      OPT_TRACE("right path dominate left path beacuse of sharding");
+      OPT_TRACE("right path dominate left path because of sharding");
       if (left_dominated_count > 0) {
         relation = DominateRelation::OBJ_UNCOMPARABLE;
       }
@@ -4450,12 +4450,12 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
         OPT_TRACE("both path is pipeline");
       } else if (temp_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
         left_dominated_count++;
-        OPT_TRACE("left path dominate right path beacuse of pipeline");
+        OPT_TRACE("left path dominate right path because of pipeline");
         if (right_dominated_count > 0) {
           relation = DominateRelation::OBJ_UNCOMPARABLE;
         }
       } else if (temp_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
-        OPT_TRACE("right path dominate left path beacuse of pipeline");
+        OPT_TRACE("right path dominate left path because of pipeline");
         right_dominated_count++;
         if (left_dominated_count > 0) {
           relation = DominateRelation::OBJ_UNCOMPARABLE;
@@ -4483,12 +4483,12 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
       OPT_TRACE("the interesting order of the two paths is equal");
     } else if (temp_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
       left_dominated_count++;
-      OPT_TRACE("left path dominate right path beacuse of interesting order");
+      OPT_TRACE("left path dominate right path because of interesting order");
       if (right_dominated_count > 0) {
         relation = DominateRelation::OBJ_UNCOMPARABLE;
       }
     } else if (temp_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
-      OPT_TRACE("right path dominate left path beacuse of interesting order");
+      OPT_TRACE("right path dominate left path because of interesting order");
       right_dominated_count++;
       if (left_dominated_count > 0) {
         relation = DominateRelation::OBJ_UNCOMPARABLE;
@@ -5109,21 +5109,21 @@ int AccessPath::re_estimate_cost(const EstimateCostInfo &param,
                                  ObCostTableScanInfo &est_cost_info,
                                  const SampleInfo &sample_info,
                                  const ObOptEstCost::MODEL_TYPE model_type,
-                                 const double orign_phy_query_range_row_count,
-                                 const double orign_query_range_row_count,
+                                 const double origin_phy_query_range_row_count,
+                                 const double origin_query_range_row_count,
                                  double &card,
                                  double &index_back_cost,
                                  double &cost)
 {
   int ret = OB_SUCCESS;
-  const double orign_card = card;
+  const double origin_card = card;
   index_back_cost = 0.0;
   cost = 0;
   est_cost_info.join_filter_sel_ = 1.0;
   double table_filter_sel = est_cost_info.table_filter_sel_;
-  if (OB_UNLIKELY(param.need_parallel_ < ObGlobalHint::DEFAULT_PARALLEL || orign_card < 0)) {
+  if (OB_UNLIKELY(param.need_parallel_ < ObGlobalHint::DEFAULT_PARALLEL || origin_card < 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected params", K(ret), K(param), K(orign_card));
+    LOG_WARN("get unexpected params", K(ret), K(param), K(origin_card));
   } else {
     //bloom filter selectivity
     for (int64_t i = 0; i < param.join_filter_infos_.count(); ++i) {
@@ -5135,8 +5135,8 @@ int AccessPath::re_estimate_cost(const EstimateCostInfo &param,
       }
     }
     //refine row count
-    double phy_query_range_row_count = orign_phy_query_range_row_count;
-    double query_range_row_count = orign_query_range_row_count;
+    double phy_query_range_row_count = origin_phy_query_range_row_count;
+    double query_range_row_count = origin_query_range_row_count;
     if (param.need_row_count_ >= 0) {
       if (OB_UNLIKELY(table_filter_sel <= 0.0)) {
         //do nothing
@@ -5153,16 +5153,16 @@ int AccessPath::re_estimate_cost(const EstimateCostInfo &param,
         if (sample_info.is_row_sample() && sample_info.percent_ > 0.0) {
           query_range_row_count = static_cast<double>(query_range_row_count) / sample_info.percent_;
         }
-        if (orign_query_range_row_count >= OB_DOUBLE_EPSINON) {
-          phy_query_range_row_count = query_range_row_count * orign_phy_query_range_row_count / orign_query_range_row_count;
+        if (origin_query_range_row_count >= OB_DOUBLE_EPSINON) {
+          phy_query_range_row_count = query_range_row_count * origin_phy_query_range_row_count / origin_query_range_row_count;
         }
-        phy_query_range_row_count = std::min(orign_phy_query_range_row_count, phy_query_range_row_count);
-        query_range_row_count = std::min(orign_query_range_row_count, query_range_row_count);
+        phy_query_range_row_count = std::min(origin_phy_query_range_row_count, phy_query_range_row_count);
+        query_range_row_count = std::min(origin_query_range_row_count, query_range_row_count);
         card = std::min(param.need_row_count_, card);
       }
     }
-    LOG_DEBUG("access path re estimate cost", K(param), K(orign_card), K(card),
-                          K(orign_phy_query_range_row_count), K(orign_query_range_row_count),
+    LOG_DEBUG("access path re estimate cost", K(param), K(origin_card), K(card),
+                          K(origin_phy_query_range_row_count), K(origin_query_range_row_count),
                           K(phy_query_range_row_count), K(query_range_row_count));
     if (OB_FAIL(ObOptEstCost::cost_table(est_cost_info,
                                         param.need_parallel_,
@@ -5605,7 +5605,7 @@ int JoinPath::compute_join_path_ordering()
       if (!is_left_need_sort()) {
         set_interesting_order_info(left_path_->get_interesting_order_info());
         if(OB_FAIL(append(ordering_, left_path_->ordering_))) {
-          LOG_WARN("failed to append join orderign", K(ret));
+          LOG_WARN("failed to append join ordering", K(ret));
         } else if (OB_FAIL(parent_->check_join_interesting_order(this))) {
           LOG_WARN("failed to update join interesting order info", K(ret));
         } else {
@@ -6659,7 +6659,7 @@ int JoinPath::cost_hash_join(int64_t join_parallel,
       right_rows /= in_parallel;
     } else if (DistAlgo::DIST_BC2HOST_NONE == join_dist_algo_) {
       // only for shared hash join
-      // right_rows is same as the impelentation of DIST_BROADCAST_NONE
+      // right_rows is same as the implementation of DIST_BROADCAST_NONE
       // left_rows is left_rows / parallel * server
       right_rows /= in_parallel;
       left_rows = left_rows / in_parallel * server_cnt_;
@@ -9342,7 +9342,7 @@ int ObJoinOrder::find_minimal_cost_merge_path(const Path &left_path,
                 DistAlgo::DIST_BASIC_METHOD == join_dist_algo) &&
                 left_merge_key.need_sort_ && right_need_sort && prune_mj) {
       // do nothing
-      OPT_TRACE("prune merge join,beacuse both left and right path need sort");
+      OPT_TRACE("prune merge join,because both left and right path need sort");
     } else if (OB_FAIL(JoinPath::compute_join_path_parallel_and_server_info(opt_ctx.get_local_server_addr(),
                                                                             &left_path,
                                                                             right_path,
@@ -10253,7 +10253,7 @@ int ObJoinOrder::remove_invalid_join_filter_infos(ObIArray<JoinFilterInfo> &join
   for (int i = 0; OB_SUCC(ret) && i < join_filter_infos.count(); ++i) {
     if (!join_filter_infos.at(i).can_use_join_filter_ &&
         !join_filter_infos.at(i).need_partition_join_filter_) {
-      //do nothong
+      //do nothing
     } else if (OB_FAIL(new_infos.push_back(join_filter_infos.at(i)))) {
       LOG_WARN("failed to push back join filter info", K(ret));
     }
@@ -10330,7 +10330,7 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
     } else if (OB_FAIL(append(join_path->right_sort_keys_, right_sort_keys))) {
       LOG_WARN("failed to append right expected ordering", K(ret));
     } else if (OB_FAIL(append(join_path->merge_directions_, merge_directions))) {
-      LOG_WARN("faield to append merge directions", K(ret));
+      LOG_WARN("failed to append merge directions", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
       LOG_WARN("failed to compute join path property", K(ret));
     } else if (OB_FAIL(create_subplan_filter_for_join_path(join_path,
@@ -10440,7 +10440,7 @@ int ObJoinOrder::classify_hashjoin_conditions(const ObJoinOrder &left_tree,
                                           other_join_conditions,
                                           join_type,
                                           naaj_info))) {
-    LOG_WARN("failed to extract hash join condtiions and filters", K(join_type), K(ret));
+    LOG_WARN("failed to extract hash join conditions and filters", K(join_type), K(ret));
   } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type)
             && OB_FAIL(append(filters, where_filters))) {
     LOG_WARN("failed to append join quals", K(ret));
@@ -10663,9 +10663,9 @@ int ObJoinOrder::is_onetime_expr(const ObRelIds &ignore_relids,ObRawExpr* expr, 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else {
-    // if a expr contain psedu column, hierachical expr, any column
+    // if a expr contain pseud column, hierarchical expr, any column
     is_valid =
-        !ObOptimizerUtil::has_psedu_column(*expr) &&
+        !ObOptimizerUtil::has_pseud_column(*expr) &&
         !ObOptimizerUtil::has_hierarchical_expr(*expr) &&
         expr->get_relation_ids().is_subset(ignore_relids) &&
         !expr->has_flag(CNT_AGG) &&
@@ -10714,7 +10714,7 @@ int ObJoinOrder::create_onetime_expr(const ObRelIds &ignore_relids, ObRawExpr* &
     ObExecParamRawExpr *new_expr = NULL;
     ObRawExprFactory &expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
     if (OB_FAIL(expr_factory.create_raw_expr(T_QUESTIONMARK, new_expr))) {
-      LOG_WARN("faield to create exec param expr", K(ret));
+      LOG_WARN("failed to create exec param expr", K(ret));
     } else if (OB_ISNULL(new_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new expr is null", K(ret), K(new_expr));
@@ -11180,7 +11180,7 @@ int ObJoinOrder::get_simple_index_info(const uint64_t table_id,
 /**
   * prefix_filters: 影响query_range range范围的filter
   * pushdown prefix filters: push down filters that can contribute query range
-  * posfix_filters: filters that can be evaluated on index
+  * postfix_filters: filters that can be evaluated on index
   * table_filters: filters that can be evaluated after index back
   */
 int ObJoinOrder::fill_filters(const ObIArray<ObRawExpr*> &all_filters,
@@ -11508,7 +11508,7 @@ int ObJoinOrder::fill_path_index_meta_info(const uint64_t table_id,
   } else if (OB_ISNULL(get_plan()) ||
              OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("nulll point error", K(schema_guard), K(get_plan()), K(ret));
+    LOG_WARN("null point error", K(schema_guard), K(get_plan()), K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
     AccessPath *ap = access_paths.at(i);
@@ -12268,7 +12268,7 @@ int ObJoinOrder::calc_join_output_rows(ObLogPlan *plan,
         }
       }
       if (OB_SUCC(ret)) {
-        // although we compute join row count as anti join, but here selectivity is trated as join
+        // although we compute join row count as anti join, but here selectivity is treated as join
         // selectivity. So refine selectivity as output_row / (left_row * right_row)
         selectivity = new_rows / (left_output_rows * right_output_rows);
       }
@@ -12972,7 +12972,7 @@ int ObJoinOrder::generate_inner_base_table_paths(const ObIArray<ObRawExpr *> &jo
     // do nothing
   } else if (OB_FAIL(helper.filters_.assign(right_tree.get_restrict_infos()))) {
     LOG_WARN("failed to assign restrict infos", K(ret));
-  } else if (OB_FAIL(remove_redudant_filter(left_tree,
+  } else if (OB_FAIL(remove_redundant_filter(left_tree,
                                             right_tree,
                                             join_conditions,
                                             helper.filters_,
@@ -13050,7 +13050,7 @@ int ObJoinOrder::check_inner_path_valid(const ObIArray<ObRawExpr *> &join_condit
   return ret;
 }
 
-int ObJoinOrder::remove_redudant_filter(ObJoinOrder &left_tree,
+int ObJoinOrder::remove_redundant_filter(ObJoinOrder &left_tree,
                                         ObJoinOrder &right_tree,
                                         const ObIArray<ObRawExpr *> &join_conditions,
                                         ObIArray<ObRawExpr *> &filters,
@@ -13076,13 +13076,13 @@ int ObJoinOrder::remove_redudant_filter(ObJoinOrder &left_tree,
   }
   for (int i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
     ObRawExpr *expr = filters.at(i);
-    bool is_redunant = false;
+    bool is_redundant = false;
     if (OB_FAIL(check_filter_is_redundant(left_tree,
                                           expr,
                                           context,
-                                          is_redunant))) {
-      LOG_WARN("failed to check filter is redunant", K(ret));
-    } else if (!is_redunant) {
+                                          is_redundant))) {
+      LOG_WARN("failed to check filter is redundant", K(ret));
+    } else if (!is_redundant) {
       if (OB_FAIL(new_filters.push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       }
@@ -13099,7 +13099,7 @@ int ObJoinOrder::remove_redudant_filter(ObJoinOrder &left_tree,
 int ObJoinOrder::check_filter_is_redundant(ObJoinOrder &left_tree,
                                            ObRawExpr *expr,
                                            ObExprParamCheckContext &context,
-                                           bool &is_redunant)
+                                           bool &is_redundant)
 {
   int ret = OB_SUCCESS;
   if (ACCESS == left_tree.get_type() ||
@@ -13108,7 +13108,7 @@ int ObJoinOrder::check_filter_is_redundant(ObJoinOrder &left_tree,
                                            expr,
                                            NULL,
                                            &context)) {
-      is_redunant = true;
+      is_redundant = true;
     }
   } else if (JOIN == left_tree.get_type()) {
     if (left_tree.interesting_paths_.empty()) {
@@ -13130,9 +13130,9 @@ int ObJoinOrder::check_filter_is_redundant(ObJoinOrder &left_tree,
                  OB_FAIL(SMART_CALL(check_filter_is_redundant(*join_path->left_path_->parent_,
                                                               expr,
                                                               context,
-                                                              is_redunant)))) {
-        LOG_WARN("failed to check filter is redunant", K(ret));
-      } else if (is_redunant) {
+                                                              is_redundant)))) {
+        LOG_WARN("failed to check filter is redundant", K(ret));
+      } else if (is_redundant) {
         //do nothing
       } else if ((INNER_JOIN == join_path->join_type_ ||
                   RIGHT_OUTER_JOIN == join_path->join_type_ ||
@@ -13141,8 +13141,8 @@ int ObJoinOrder::check_filter_is_redundant(ObJoinOrder &left_tree,
                  OB_FAIL(SMART_CALL(check_filter_is_redundant(*join_path->right_path_->parent_,
                                                               expr,
                                                               context,
-                                                              is_redunant)))) {
-        LOG_WARN("failed to check filter is redunant", K(ret));
+                                                              is_redundant)))) {
+        LOG_WARN("failed to check filter is redundant", K(ret));
       }
     }
   }
@@ -13499,7 +13499,7 @@ int ObJoinOrder::extract_pushdown_quals(const ObIArray<ObRawExpr *> &quals,
     ObRawExpr *qual = quals.at(i);
     if (OB_ISNULL(qual)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexplected null", K(qual), K(ret));
+      LOG_WARN("get unexpected null", K(qual), K(ret));
     // can not push down expr with subquery
     } else if (qual->has_flag(CNT_PSEUDO_COLUMN) ||
                qual->has_flag(CNT_PRIOR) ||
@@ -13708,7 +13708,7 @@ int ObJoinOrder::deduce_prefix_str_idx_exprs(ObRawExpr *expr,
                                           type,
                                           new_expr,
                                           helper))) {
-        LOG_WARN("get_prefix str idx exprs faield", K(ret));
+        LOG_WARN("get_prefix str idx exprs failed", K(ret));
       } else {
         //do nothing
       }

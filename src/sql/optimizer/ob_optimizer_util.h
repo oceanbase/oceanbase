@@ -1250,7 +1250,7 @@ public:
   static int check_expr_contain_subquery(const ObIArray<ObRawExpr*> &exprs,
                                          bool &has_subquery);
 
-  static bool has_psedu_column(const ObRawExpr &expr);
+  static bool has_pseud_column(const ObRawExpr &expr);
 
   static bool has_hierarchical_expr(const ObRawExpr &expr);
 

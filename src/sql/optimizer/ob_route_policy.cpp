@@ -209,7 +209,7 @@ int ObRoutePolicy::get_server_locality(const ObAddr &addr,
     const ObServerLocality &cur_locality = server_locality_array.at(i);
     if (addr == cur_locality.get_addr()) {
       if (OB_FAIL(svr_locality.assign(cur_locality))) {
-        LOG_WARN("fail to assgin locality", K(addr), K(cur_locality), K(server_locality_array), K(ret));
+        LOG_WARN("fail to assign locality", K(addr), K(cur_locality), K(server_locality_array), K(ret));
       } else {
         is_found = true;
       }
@@ -280,7 +280,7 @@ int ObRoutePolicy::select_replica_with_priority(const ObRoutePolicyCtx &route_po
   return ret;
 }
 
-int ObRoutePolicy::calc_intersect_repllica(const common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
+int ObRoutePolicy::calc_intersect_replica(const common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                            ObList<ObRoutePolicy::CandidateReplica, ObArenaAllocator> &intersect_server_list)
 {
   int ret = OB_SUCCESS;
@@ -361,7 +361,7 @@ int ObRoutePolicy::select_intersect_replica(ObRoutePolicyCtx &route_policy_ctx,
 {
   UNUSED(route_policy_ctx);
   int ret = OB_SUCCESS;
-  if (OB_FAIL(calc_intersect_repllica(phy_tbl_loc_info_list, intersect_server_list))) {
+  if (OB_FAIL(calc_intersect_replica(phy_tbl_loc_info_list, intersect_server_list))) {
     LOG_WARN("fail to calc intersect replica", K(phy_tbl_loc_info_list), K(ret));
   } else if (intersect_server_list.empty()) {//没有交集的情况，每个partition单独选择replica
     is_proxy_hit = true;

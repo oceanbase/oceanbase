@@ -211,7 +211,7 @@ protected:
                              CandidateReplica &candi_replica);
   int calc_position_type(const share::ObServerLocality &candi_locality,
                          CandidateReplica &candi_replica);
-  int calc_intersect_repllica(const common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
+  int calc_intersect_replica(const common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                               common::ObList<ObRoutePolicy::CandidateReplica, common::ObArenaAllocator> &intersect_server_list);
   int get_merge_status(const share::ObServerLocality &candi_locality, CandidateReplica &candi_replica);
   int get_zone_status(const share::ObServerLocality &candi_locality, CandidateReplica &candi_replica);

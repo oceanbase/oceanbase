@@ -114,7 +114,7 @@ namespace sql
 
     virtual ~ConflictDetector() {}
 
-    static int build_confict(common::ObIAllocator &allocator, ConflictDetector* &detector);
+    static int build_conflict(common::ObIAllocator &allocator, ConflictDetector* &detector);
 
     TO_STRING_KV(K_(join_info),
                  K_(CR),
@@ -2392,7 +2392,7 @@ struct NullAwareAntiJoinInfo {
                                ObIArray<ObRawExpr *> &subquery_exprs,
                                bool &is_valid);
 
-    int remove_redudant_filter(ObJoinOrder &left_tree,
+    int remove_redundant_filter(ObJoinOrder &left_tree,
                               ObJoinOrder &right_tree,
                               const ObIArray<ObRawExpr *> &join_conditions,
                               ObIArray<ObRawExpr *> &filters,

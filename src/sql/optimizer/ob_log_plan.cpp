@@ -1107,7 +1107,7 @@ int ObLogPlan::generate_semi_join_detectors(const ObIArray<SemiInfo*> &semi_info
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null semi info", K(ret));
       //1. create conflict detector
-    } else if (OB_FAIL(ConflictDetector::build_confict(get_allocator(), detector))) {
+    } else if (OB_FAIL(ConflictDetector::build_conflict(get_allocator(), detector))) {
       LOG_WARN("failed to build conflict detector", K(ret));
     } else if (OB_ISNULL(detector)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1237,7 +1237,7 @@ int ObLogPlan::generate_inner_join_detectors(const ObIArray<TableItem*> &table_i
                                                     detector))) {
       LOG_WARN("failed to find conflict detector", K(ret));
     } else if (NULL == detector) {
-      if (OB_FAIL(ConflictDetector::build_confict(get_allocator(), detector))) {
+      if (OB_FAIL(ConflictDetector::build_conflict(get_allocator(), detector))) {
         LOG_WARN("failed to build conflict detector", K(ret));
       } else if (OB_ISNULL(detector)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1356,7 +1356,7 @@ int ObLogPlan::mock_base_rel_detectors(ObJoinOrder *&base_rel)
   } else if (base_rel->get_restrict_infos().empty() ||
              !base_rel->get_conflict_detectors().empty()) {
     // do nothing
-  } else if (OB_FAIL(ConflictDetector::build_confict(get_allocator(), detector))) {
+  } else if (OB_FAIL(ConflictDetector::build_conflict(get_allocator(), detector))) {
     LOG_WARN("failed to build conflict detector", K(ret));
   } else if (OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1516,7 +1516,7 @@ int ObLogPlan::inner_generate_outer_join_detectors(JoinedTable *joined_table,
   } else if (OB_FAIL(append(outer_join_detectors, right_detectors))) {
     LOG_WARN("failed to append detectors", K(ret));
     //5. create outer join detector
-  } else if (OB_FAIL(ConflictDetector::build_confict(get_allocator(),
+  } else if (OB_FAIL(ConflictDetector::build_conflict(get_allocator(),
                                                       detector))) {
     LOG_WARN("failed to build conflict detector", K(ret));
   } else if (OB_ISNULL(detector)) {
@@ -1594,7 +1594,7 @@ int ObLogPlan::inner_generate_outer_join_detectors(JoinedTable *joined_table,
     }
     //7. generate conflict detector for table filter
     if (OB_SUCC(ret) && !table_filter.empty()) {
-      if (OB_FAIL(ConflictDetector::build_confict(get_allocator(), detector))) {
+      if (OB_FAIL(ConflictDetector::build_conflict(get_allocator(), detector))) {
         LOG_WARN("failed to build conflict detector", K(ret));
       } else if (OB_ISNULL(detector)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1786,7 +1786,7 @@ int ObLogPlan::generate_cross_product_detector(const ObIArray<TableItem*> &table
     //do nothing
   } else if (OB_FAIL(get_table_ids(table_items, table_ids))) {
     LOG_WARN("failed to get table ids", K(ret));
-  } else if (OB_FAIL(ConflictDetector::build_confict(get_allocator(), detector))) {
+  } else if (OB_FAIL(ConflictDetector::build_conflict(get_allocator(), detector))) {
     LOG_WARN("failed to build conflict detector", K(ret));
   } else if (OB_ISNULL(detector)) {
     ret = OB_ERR_UNEXPECTED;
@@ -9956,7 +9956,7 @@ int ObLogPlan::extract_onetime_subquery(ObRawExpr *expr,
     LOG_WARN("expr is null", K(ret));
   } else {
     // if a expr contain psedu column, hierachical expr, any column
-    is_valid = !ObOptimizerUtil::has_psedu_column(*expr)
+    is_valid = !ObOptimizerUtil::has_pseud_column(*expr)
               && !ObOptimizerUtil::has_hierarchical_expr(*expr)
               && !expr->has_flag(CNT_COLUMN)
               && !expr->has_flag(CNT_AGG)

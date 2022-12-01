@@ -635,7 +635,7 @@ private:
                            const ObIArray<std::pair<int64_t, int64_t>> &pby_oby_prefixes,
                            const ObIArray<int64_t> &split,
                            const ObIArray<WinDistAlgo> &methods,
-                           const int64_t splict_idx,
+                           const int64_t split_idx,
                            ObIArray<ObOpPseudoColumnRawExpr*> &status_exprs,
                            WinFuncOpHelper &win_func_helper);
   int get_next_group_window_exprs(const ObIArray<OrderItem> &op_ordering,

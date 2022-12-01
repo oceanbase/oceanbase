@@ -481,7 +481,7 @@ public:
   bool need_deep_copy() const { return !table_graph_.is_standard_range_; }
   inline bool has_range() const { return column_count_ > 0; }
   inline int64_t get_column_count() const { return column_count_; }
-  const ObRangeGraph &get_table_grapth() const { return table_graph_; }
+  const ObRangeGraph &get_table_graph() const { return table_graph_; }
   int get_result_value(common::ObObj &val, ObExecContext &exec_ctx, ObIAllocator *allocator) const;
   int get_result_value_with_rowid(const ObKeyPart &key_part,
                                   ObObj &val,
