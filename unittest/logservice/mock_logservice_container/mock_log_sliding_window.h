@@ -324,8 +324,15 @@ public:
     int ret = OB_SUCCESS;
     return ret;
   }
-  int config_change_update_match_lsn_map(const ObMemberList &added_memberlist, const ObMemberList &removed_memberlist)
+  int config_change_update_match_lsn_map(const ObMemberList &added_memberlist,
+      const ObMemberList &removed_memberlist,
+      const ObMemberList &new_log_sync_memberlist,
+      const int64_t new_replica_num)
   {
+    UNUSED(added_memberlist);
+    UNUSED(removed_memberlist);
+    UNUSED(new_log_sync_memberlist);
+    UNUSED(new_replica_num);
     return OB_SUCCESS;
   }
 public:
