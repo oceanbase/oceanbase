@@ -1647,6 +1647,13 @@ bool ObMemtable::ready_for_flush_()
   int ret = OB_SUCCESS;
   SCN current_right_boundary = ObScnRange::MIN_SCN;
   share::ObLSID ls_id = freezer_->get_ls_id();
+  const SCN migration_clog_checkpoint_scn = get_migration_clog_checkpoint_scn();
+  if (!migration_clog_checkpoint_scn.is_min() &&
+      migration_clog_checkpoint_scn >= get_end_scn() &&
+      0 != get_unsynced_cnt() &&
+      multi_source_data_.get_all_unsync_cnt_for_multi_data() == get_unsynced_cnt()) {
+    bool_ret = true;
+  }
   if (bool_ret) {
     if (OB_FAIL(resolve_snapshot_version_())) {
       TRANS_LOG(WARN, "fail to resolve snapshot version", K(ret), KPC(this), K(ls_id));

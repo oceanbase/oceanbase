@@ -128,6 +128,7 @@ public:
   int save_multi_source_data_unit(const T *const src, bool is_callback);
   int update_unsync_cnt_for_multi_data(const MultiSourceDataUnitType multi_source_type, const bool is_inc);
   int get_unsync_cnt_for_multi_data(const MultiSourceDataUnitType multi_source_type, int &unsynced_cnt_for_multi_data);
+  int64_t get_all_unsync_cnt_for_multi_data();
 private:
   int inner_mark_unit_sync_finish(
       const int64_t unit_type,
