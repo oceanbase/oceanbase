@@ -3436,7 +3436,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
       ObObj& cur = root->normal_keypart_->start_;
       ObQueryRange::ObEqualOff equal_off;
       if (cur.is_ext() || root->null_safe_) {
-        is_equal_and = false; //roolback old version
+        is_equal_and = false; //rollback old version
       } else if (root->is_rowid_key_part()) {
         is_equal_and = false; //not deal with rowid
       } else if (cur.is_unknown()) {

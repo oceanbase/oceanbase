@@ -82,7 +82,7 @@ int ObDMLStmtPrinter::print_hint()
       if (OB_FAIL(query_hint.print_stmt_hint(plan_text, *stmt_))) {
         LOG_WARN("failed to print stmt hint", K(ret));
       } else if (plan_text.pos == *pos_) {
-        // no hint, roolback buffer!
+        // no hint, rollback buffer!
         *pos_ -= strlen(hint_begin);
       } else {
         *pos_ = plan_text.pos;
