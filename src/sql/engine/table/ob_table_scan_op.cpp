@@ -974,11 +974,6 @@ int ObTableScanOp::build_bnlj_params()
         OZ(tsc_rtdef_.bnlj_params_.push_back(BNLJParamInfo(param_idx, array_obj)));
       }
     }
-    if (OB_SUCC(ret) && tsc_rtdef_.bnlj_params_.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("batch param is empty in batch rescan", K(ret),
-               K(MY_CTDEF.bnlj_param_idxs_), K(plan_ctx->get_param_store()));
-    }
   }
   return ret;
 }
