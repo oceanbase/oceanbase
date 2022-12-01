@@ -710,7 +710,7 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
                                          idx))) {
       LOG_WARN("get param value failed", K(param));
     } else {
-      LOG_INFO("resolve execute with param", K(param));
+      LOG_DEBUG("resolve execute with param", K(param));
     }
   }
   return ret;
