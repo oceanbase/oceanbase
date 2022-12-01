@@ -1592,7 +1592,7 @@ int ObMultiTenant::get_tenant_with_tenant_lock(
     if (OB_FAIL(tenant_tmp->try_rdlock(handle))) {
       if (tenant_tmp->has_stopped()) {
         // in some cases this error code is handled specially
-        ret = OB_IN_STOP_STATE;
+        ret = OB_TENANT_NOT_IN_SERVER;
         LOG_WARN("fail to try rdlock tenant", K(ret), K(tenant_id));
       }
     } else {
