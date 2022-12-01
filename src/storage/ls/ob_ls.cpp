@@ -373,7 +373,7 @@ bool ObLS::is_need_gc() const
   return bool_ret;
 }
 
-bool ObLS::is_need_load_inner_tablet() const
+bool ObLS::is_enable_for_restore() const
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
@@ -381,7 +381,7 @@ bool ObLS::is_need_load_inner_tablet() const
   if (OB_FAIL(ls_meta_.get_restore_status(restore_status))) {
     LOG_WARN("fail to get restore status", K(ret), K(ls_meta_.ls_id_));
   } else {
-    bool_ret = restore_status.is_need_load_inner_tablet();
+    bool_ret = restore_status.is_enable_for_restore();
   }
   return bool_ret;
 }
@@ -684,6 +684,8 @@ int ObLS::offline_()
   } else if (FALSE_IT(is_offlined_ = true)) {
   } else if (FALSE_IT(checkpoint_executor_.offline())) {
     LOG_WARN("checkpoint executor offline failed", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(ls_restore_handler_.offline())) {
+    LOG_WARN("failed to offline ls restore handler", K(ret));
   } else if (OB_FAIL(offline_compaction_())) {
     LOG_WARN("compaction offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_wrs_handler_.offline())) {
@@ -720,6 +722,30 @@ int ObLS::offline()
     {
       ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
       // only follower can do this.
+      if (OB_FAIL(offline_())) {
+        LOG_WARN("ls offline failed", K(ret), K(ls_meta_));
+      }
+    }
+    if (OB_EAGAIN == ret) {
+      ob_usleep(100 * 1000); // 100 ms
+      if (retry_times % 100 == 0) { // every 10 s
+        LOG_WARN("ls offline use too much time.", K(ls_meta_), K(start_ts));
+      }
+    }
+  } while (OB_EAGAIN == ret);
+  FLOG_INFO("ls offline end", KR(ret), "ls_id", get_ls_id());
+  return ret;
+}
+
+int ObLS::offline_without_lock()
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::current_time();
+  int64_t retry_times = 0;
+
+  do {
+    retry_times++;
+    {
       if (OB_FAIL(offline_())) {
         LOG_WARN("ls offline failed", K(ret), K(ls_meta_));
       }
@@ -777,6 +803,8 @@ int ObLS::online()
     LOG_WARN("weak read handler online failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(online_compaction_())) {
     LOG_WARN("compaction online failed", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(ls_restore_handler_.online())) {
+    LOG_WARN("ls restore handler online failed", K(ret));
   } else if (FALSE_IT(checkpoint_executor_.online())) {
   } else if (FALSE_IT(tablet_gc_handler_.online())) {
   } else {
@@ -785,6 +813,23 @@ int ObLS::online()
   }
 
   FLOG_INFO("ls online end", KR(ret), "ls_id", get_ls_id());
+  return ret;
+}
+
+int ObLS::enable_for_restore()
+{
+  int ret = OB_SUCCESS;
+  int64_t read_lock = 0;
+  int64_t write_lock = LSLOCKALL;
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else if (OB_FAIL(log_handler_.enable_sync())) {
+    LOG_WARN("failed to enable sync", K(ret));
+  } else if (OB_FAIL(ls_restore_handler_.online())) {
+    LOG_WARN("failed to online restore", K(ret));
+  }
   return ret;
 }
 
@@ -1024,10 +1069,18 @@ int ObLS::finish_slog_replay()
     LOG_INFO("this ls should be gc later", KPC(this));
     // ls will be gc later and tablets in the ls are not complete,
     // so skip the following steps, otherwise load_ls_inner_tablet maybe encounter error.
-  } else if (is_need_load_inner_tablet() && OB_FAIL(load_ls_inner_tablet())) {
-    LOG_WARN("ls load inner tablet failed", K(ret), KPC(this));
   } else if (OB_FAIL(start())) {
     LOG_WARN("ls can not start to work", K(ret));
+  } else if (is_enable_for_restore()) {
+    if (OB_FAIL(offline_())) {
+      LOG_WARN("failed to offline", K(ret), KPC(this));
+    } else if (OB_FAIL(log_handler_.enable_sync())) {
+      LOG_WARN("failed to enable sync", K(ret), KPC(this));
+    } else if (OB_FAIL(ls_restore_handler_.online())) {
+      LOG_WARN("failed to online ls restore handler", K(ret), KPC(this));
+    }
+  } else if (OB_FAIL(load_ls_inner_tablet())) {
+    LOG_WARN("ls load inner tablet failed", K(ret), KPC(this));
   } else {
     // do nothing
   }

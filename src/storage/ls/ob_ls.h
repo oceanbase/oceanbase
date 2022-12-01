@@ -149,6 +149,8 @@ public:
   void destroy();
   int offline();
   int online();
+  int offline_without_lock();
+  int enable_for_restore();
   bool is_offline() const { return is_offlined_; } // mock function, TODO(@yanyuan)
 
   ObLSTxService *get_tx_svr() { return &ls_tx_svr_; }
@@ -195,7 +197,7 @@ public:
   void set_create_state(const ObInnerLSStatus new_status);
   ObInnerLSStatus get_create_state() const;
   bool is_need_gc() const;
-  bool is_need_load_inner_tablet() const;
+  bool is_enable_for_restore() const;
   // for rebuild
   // remove inner tablet, the memtable and minor sstable of data tablet, disable replay
   // int prepare_rebuild();

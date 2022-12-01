@@ -42,12 +42,13 @@ using namespace logservice;
 ObLSRestoreHandler::ObLSRestoreHandler()
   : is_inited_(false),
     is_stop_(false),
+    is_online_(true),
+    rebuild_seq_(0),
     result_mgr_(),
     ls_(nullptr),
     ls_restore_arg_(),
     state_handler_(nullptr),
-    allocator_(),
-    rebuild_seq_(0)
+    allocator_()
 {
 }
 
@@ -86,6 +87,74 @@ void ObLSRestoreHandler::destroy()
     state_handler_ = nullptr;
   }
   ls_ = nullptr;
+}
+
+int ObLSRestoreHandler::offline()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    lib::ObMutexGuard guard(mtx_);
+    if (OB_FAIL(cancel_task_())) {
+      LOG_WARN("failed to cancel task", K(ret), KPC(ls_));
+    } else {
+      is_online_ = false;
+    }
+  }
+  return ret;
+}
+
+int ObLSRestoreHandler::online()
+{
+  int ret = OB_SUCCESS;
+  share::ObLSRestoreStatus new_status;
+  ObILSRestoreState *new_state_handler = nullptr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (is_online_) {
+    // do nothing
+    LOG_INFO("ls is online", KPC(ls_));
+  } else if (OB_FAIL(ls_->get_restore_status(new_status))) {
+    LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
+  } else if (new_status.is_restore_none()) {
+    is_online_ = true;
+  } else {
+    lib::ObMutexGuard guard(mtx_);
+    // online after rebuild or migrate. the restore status may changed.
+    // so, we refresh the restore state handler according to the new ls restore status.
+    if (OB_FAIL(fill_restore_arg_())) {
+      LOG_WARN("fail to fill restore arg", K(ret));
+    } else if (OB_FAIL(get_restore_state_handler_(new_status, new_state_handler))) {
+      LOG_WARN("fail to get restore state handler", K(ret), K(new_status));
+    } else {
+      if (nullptr != state_handler_) {
+        // when online, the old task should be cancel.
+        if (OB_FAIL(state_handler_->get_tablet_mgr().cancel_task())) {
+          LOG_WARN("failed to cancel task", K(ret));
+        } else {
+          state_handler_->~ObILSRestoreState();
+          allocator_.free(state_handler_);
+          state_handler_ = nullptr;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        state_handler_ = new_state_handler;
+        is_online_ = true;
+        new_state_handler = nullptr;
+      }
+    }
+
+    if (OB_FAIL(ret) && nullptr != new_state_handler) {
+      new_state_handler->~ObILSRestoreState();
+      allocator_.free(new_state_handler);
+      new_state_handler = nullptr;
+    }
+  }
+  return ret;
 }
 
 int ObLSRestoreHandler::record_clog_failed_info(
@@ -128,7 +197,10 @@ int ObLSRestoreHandler::handle_execute_over(
         status = state_handler_->get_restore_status();
       }
     }
-    if (status.is_restore_sys_tablets()) {
+    if (OB_CANCELED == result) {
+      //do nothing
+      LOG_WARN("task has been canceled", KPC(ls_), K(task_id));
+    } else if (status.is_restore_sys_tablets()) {
       state_handler_->set_retry_flag();
       result_mgr_.set_result(result, task_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
       LOG_WARN("restore sys tablets dag failed, need retry", K(ret));
@@ -157,9 +229,11 @@ int ObLSRestoreHandler::handle_pull_tablet(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (is_stop_ || !is_online_) {
+    LOG_WARN("ls stopped or disabled", KPC(ls_));
   } else if (OB_ISNULL(state_handler_)) {
     // server may downtime and restart, but it has't inited state handler, so state_handler_ may be null.
-    LOG_WARN("need restart, wait later");
+    LOG_WARN("need restart, wait later", KPC(ls_));
   } else if (OB_FAIL(state_handler_->handle_pull_tablet(tablet_ids, leader_restore_status))) {
     LOG_WARN("fail to handl pull tablet", K(ret), K(leader_restore_status));
   }
@@ -188,7 +262,10 @@ int ObLSRestoreHandler::process()
     // it tasks a period of time for the ls leader is ready after the shutdown and restart of observer usually, 
     // and an ls leader not exist error will be returned before leader is ready. 
     // so in order to improve availability, we need control the retry frequency and the default retry time interval is 10s.
-    if (OB_FAIL(state_handler_->do_restore())) {
+    lib::ObMutexGuard guard(mtx_);
+    if (is_stop_ || !is_online_) {
+      LOG_INFO("ls stopped or disabled", KPC(ls_));
+    } else if (OB_FAIL(state_handler_->do_restore())) {
       ObTaskId trace_id(*ObCurTraceId::get_trace_id());
       result_mgr_.set_result(ret, trace_id, ObLSRestoreResultMgr::RestoreFailedType::DATA_RESTORE_FAILED_TYPE);
       LOG_WARN("fail to do restore", K(ret), KPC(state_handler_));
@@ -489,27 +566,33 @@ void ObLSRestoreHandler::wakeup()
 int ObLSRestoreHandler::safe_to_destroy(bool &is_safe)
 {
   int ret = OB_SUCCESS;
-  const int64_t start_ts = ObTimeUtil::current_time();
-  const int64_t OB_WAIT_LS_RESTORE_STOP_MS = 200 * 1000; // 200ms
   is_safe = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls restore handler do not init", K(ret));
   } else {
     lib::ObMutexGuard guard(mtx_);
-    if (OB_ISNULL(state_handler_)) {
-      is_safe = true;
+    if (OB_FAIL(cancel_task_())) {
+      LOG_WARN("failed to cancel tasks", K(ret), KPC(ls_));
     } else {
-      ObLSRestoreTaskMgr &restore_tablet_mgr = state_handler_->get_tablet_mgr();
-      bool is_done = false;
-      if (OB_FAIL(restore_tablet_mgr.check_all_task_done(is_done))) {
-        LOG_WARN("fail to check all task done", K(ret));
-      } else if (is_done) {
-        is_safe = true;
-      } 
+      is_safe = true;
+      is_stop_ = true;
     }
   }
   LOG_INFO("wait ls restore stop", K(ret), K(is_safe), KPC(ls_));
+  return ret;
+}
+
+int ObLSRestoreHandler::cancel_task_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(state_handler_)) {
+  } else {
+    ObLSRestoreTaskMgr &restore_tablet_mgr = state_handler_->get_tablet_mgr();
+    if (OB_FAIL(restore_tablet_mgr.cancel_task())) {
+      LOG_WARN("fail to check all task done", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -520,16 +603,14 @@ int ObLSRestoreHandler::update_rebuild_seq()
     ret = OB_NOT_INIT;
     LOG_WARN("ls restore handler do not init", K(ret));
   } else {
-    lib::ObMutexGuard guard(mtx_);
-    rebuild_seq_ = ls_->get_rebuild_seq();
+    ATOMIC_STORE(&rebuild_seq_, ls_->get_rebuild_seq());
   }
   return ret;
 }
 
 int64_t ObLSRestoreHandler::get_rebuild_seq()
 {
-  lib::ObMutexGuard guard(mtx_);
-  return rebuild_seq_;
+  return ATOMIC_LOAD(&rebuild_seq_);
 }
 
 //================================ObILSRestoreState=======================================
@@ -1170,21 +1251,13 @@ int ObILSRestoreState::check_restore_concurrency_limit_()
   return ret;
 }
 
-int ObILSRestoreState::enable_replay_()
+int ObILSRestoreState::online_()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ls_->enable_replay())) {
-    LOG_WARN("enable ls replay failed", K(ret), KPC(ls_));
+  if (OB_FAIL(ls_->online())) {
+    LOG_WARN("online ls failed", K(ret), KPC(ls_));
   }
   return ret;
-}
-
-void ObILSRestoreState::disable_replay_()
-{
-  int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (tmp_ret = ls_->disable_replay())) {
-    LOG_WARN("fail to disable replay", K(tmp_ret), KPC(ls_));
-  }
 }
 
 int ObILSRestoreState::schedule_tablet_group_restore_(
@@ -1390,15 +1463,12 @@ int ObLSRestoreStartState::do_with_no_ls_meta_()
   // this ls doesn't have ls meta and tablet in backup, it only needs to replay clog.
   // so just advance to qucik restore and start replay clog. 
   ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::QUICK_RESTORE);
-  if (OB_FAIL(enable_replay_())) {
+  if (OB_FAIL(online_())) {
     LOG_WARN("fail to enable log", K(ret));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), K(*ls_), K(next_status));
   } 
 
-  if (OB_FAIL(ret)) {
-    disable_replay_();
-  }
   return ret;
 }
 
@@ -1415,7 +1485,7 @@ int ObLSRestoreStartState::do_with_uncreated_ls_()
     LOG_WARN("fail to check ls created", K(ret), KPC(ls_));
   } else if (is_created) {
     // creating ls finished after sys ls restored. cur ls need to do restore.
-  } else if (OB_FAIL(enable_replay_())) {
+  } else if (OB_FAIL(online_())) {
     LOG_WARN("fail to enable log", K(ret));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
@@ -1424,9 +1494,6 @@ int ObLSRestoreStartState::do_with_uncreated_ls_()
     LOG_INFO("no need to restore when sys ls has been restored and the ls doesn't created.", KPC(ls_));
   }
 
-  if (OB_FAIL(ret)) {
-    disable_replay_();
-  }
   return ret;
 }
 
@@ -1630,7 +1697,7 @@ int ObLSRestoreSysTabletState::leader_restore_sys_tablet_()
   } else if (!tablet_mgr_.is_restore_completed()) {// TODO: check restore finish, should read from extern. fix later
   } else if (is_need_retry_()) {
     // next term to retry
-  } else if (OB_FAIL(ls_->load_ls_inner_tablet())) {
+  } else if (OB_FAIL(online_())) {
     LOG_WARN("fail to load ls inner tablet", K(ret));
   } else if (OB_FAIL(ls_->get_ls_restore_handler()->update_rebuild_seq())) {
     LOG_WARN("failed to update rebuild seq", K(ret), KPC(ls_));
@@ -1639,6 +1706,7 @@ int ObLSRestoreSysTabletState::leader_restore_sys_tablet_()
   } else {
     LOG_INFO("leader succ to restore sys tablet", KPC(ls_));
   }
+
   return ret;
 }
 
@@ -1661,7 +1729,7 @@ int ObLSRestoreSysTabletState::follower_restore_sys_tablet_()
   } else if (!tablet_mgr_.is_restore_completed()) {
   } else if (is_need_retry_()) {
     // next term to retry
-  } else if (OB_FAIL(ls_->load_ls_inner_tablet())) {
+  } else if (OB_FAIL(online_())) {
     LOG_WARN("fail to load ls inner tablet", K(ret));
   } else if (OB_FAIL(ls_->get_ls_restore_handler()->update_rebuild_seq())) {
     LOG_WARN("failed to update rebuild seq", K(ret), KPC(ls_));
@@ -1670,6 +1738,7 @@ int ObLSRestoreSysTabletState::follower_restore_sys_tablet_()
   } else {
     LOG_INFO("follower succ to restore sys tablet", KPC(ls_));
   }
+
   return ret;
 }
 
@@ -1791,16 +1860,11 @@ int ObLSRestoreCreateUserTabletState::leader_create_user_tablet_()
   } else if (tablet_need_restore.empty()) {
     ObLSRestoreStatus next_status(ObLSRestoreStatus::Status::WAIT_RESTORE_TABLETS_META);
     if (!tablet_mgr_.is_restore_completed()) {
-    } else if (OB_FAIL(enable_replay_())) {
-      LOG_WARN("fail to enable log", K(ret), KPC(ls_));
     } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
       LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
     } else {
       LOG_INFO("success create leader user tablets", KPC(ls_));
       tablet_mgr_.reuse_set();
-    }
-    if (OB_FAIL(ret)) {
-      disable_replay_();
     }
   } else if (OB_FAIL(do_create_user_tablet_(tablet_need_restore))) {
     LOG_WARN("fail to do quick restore", K(ret), K(tablet_need_restore), KPC(ls_));
@@ -1836,16 +1900,11 @@ int ObLSRestoreCreateUserTabletState::follower_create_user_tablet_()
       if (OB_FAIL(reload_miss_tablet_(all_finish))) {
         LOG_WARN("fail to check follower restore tablet all finish", K(ret), KPC(ls_));
       } else if (all_finish) {
-        if (OB_FAIL(enable_replay_())) {
-          LOG_WARN("fail to enable log", K(ret), KPC(ls_));
-        } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
+        if (OB_FAIL(advance_status_(*ls_, next_status))) {
           LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
         } else {
           LOG_INFO("success create follower user tablets", KPC(ls_));
           tablet_mgr_.reuse_set();
-        }
-        if (OB_FAIL(ret)) {
-          disable_replay_();
         }
       }
     }

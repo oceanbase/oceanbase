@@ -82,10 +82,10 @@ public:
   bool is_wait_status() const { return is_wait_restore_sys_tablets() || is_wait_restore_tablets_meta()
                                     || is_wait_quick_restore() || is_wait_restore_major_data(); }
 
-  // Don't load inner tablet while downtime and restart if restore status is in [RESTORE_START, RESTORE_SYS_TABLETS] or RESTORE_FAILED
-  bool is_need_load_inner_tablet() const
+  // enable sync and online ls restore handler in [RESTORE_START, RESTORE_SYS_TABLETS] or RESTORE_FAILED
+  bool is_enable_for_restore() const
   {
-    return !((status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_SYS_TABLETS) ||
+    return ((status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_SYS_TABLETS) ||
              status_ == Status::RESTORE_FAILED);
   }
   // if restore status is not in [RESTORE_START, WAIT_RESTORE_TABLETS_META], log_replay_service can replay log.

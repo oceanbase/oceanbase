@@ -1032,7 +1032,6 @@ int ObStartMigrationTask::deal_with_local_ls_()
   int64_t proposal_id = 0;
   ObLSMeta local_ls_meta;
   logservice::ObLogService *log_service = nullptr;
-
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start migration task do not init", K(ret));
@@ -1392,20 +1391,14 @@ int ObStartMigrationTask::deal_local_restore_ls_(bool &need_generate_dag)
   } else if (ls_restore_status.is_restore_failed()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls restore status is not expected", K(ret), KPC(ctx_), KPC(ls), K(ls_restore_status));
-  } else if (ls_restore_status.is_restore_start() || ls_restore_status.is_restore_sys_tablets()) {
-    if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
-      LOG_WARN("failed to enable log sync", K(ret), KPC(ctx_), KPC(ls));
-    } else if (OB_FAIL(ls->get_tablet_svr()->online())) {
-      LOG_WARN("failed to online tablet svr", K(ret), KPC(ctx_), KPC(ls));
-    } else if (OB_FAIL(ls->get_tx_svr()->online())) {
-      LOG_WARN("failed to online tx svr", K(ret), KPC(ctx_), KPC(ls));
-    } else if (OB_FAIL(ls->get_ddl_log_handler()->online())) {
-      LOG_WARN("failed to online ddl log handler", K(ret), KPC(ctx_), KPC(ls));
-    } else if (OB_FAIL(ls->get_ls_wrs_handler()->online())) {
-      LOG_WARN("failed to online ls wrs handler", K(ret), KPC(ctx_), KPC(ls));
-    } else if (OB_FALSE_IT(ls->get_checkpoint_executor()->online())) {
+  } else if (ls_restore_status.is_restore_start()) {
+    ret = OB_SRC_DO_NOT_ALLOWED_MIGRATE;
+    LOG_WARN("src ls is in restore start, wait later", K(ret), KPC(ls));
+  } else if (ls_restore_status.is_restore_sys_tablets()) {
+    need_generate_dag = false;
+    if (OB_FAIL(ls->enable_for_restore())) {
+      LOG_WARN("failed to enable for restore", K(ret));
     } else {
-      need_generate_dag = false;
       LOG_INFO("ls restore status is in restore start or in restore sys tablets, no need generate dag",
           K(ls_restore_status), "ls_id", ctx_->arg_.ls_id_);
     }
