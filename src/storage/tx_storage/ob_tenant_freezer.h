@@ -37,9 +37,11 @@ class ObTenantTxDataFreezeGuard;
 class ObTenantFreezer
 {
 friend ObTenantTxDataFreezeGuard;
+friend class ObFreezer;
   const static int64_t TIME_WHEEL_PRECISION = 100_ms;
   const static int64_t SLOW_FREEZE_INTERVAL = 30_s;
   const static int FREEZE_TRIGGER_THREAD_NUM= 1;
+  const static int FREEZE_THREAD_NUM= 5;
   const static int64_t FREEZE_TRIGGER_INTERVAL = 2_s;
   const static int64_t UPDATE_INTERVAL = 100_ms;
   // replay use 1G/s
@@ -172,6 +174,8 @@ private:
   common::ObOccamThreadPool freeze_trigger_pool_;
   common::ObOccamTimer freeze_trigger_timer_;
   common::ObOccamTimerTaskRAIIHandle timer_handle_;
+  common::ObOccamThreadPool freeze_thread_pool_;
+  ObSpinLock freeze_thread_pool_lock_;
   bool exist_ls_freezing_;
   int64_t last_update_ts_;
 };

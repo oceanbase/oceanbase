@@ -118,6 +118,8 @@ public:
 
   bool has_prepared_flush_checkpoint();
 
+  bool is_empty();
+
 private:
   // traversal prepare_list to flush memtable
   // case1: some memtable flush failed when ls freeze

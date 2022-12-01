@@ -41,6 +41,8 @@ ObTenantFreezer::ObTenantFreezer()
     rs_mgr_(nullptr),
     config_(nullptr),
     allocator_mgr_(nullptr),
+    freeze_thread_pool_(),
+    freeze_thread_pool_lock_(common::ObLatchIds::FREEZE_THREAD_POOL_LOCK),
     exist_ls_freezing_(false),
     last_update_ts_(0)
 {}
@@ -87,6 +89,8 @@ int ObTenantFreezer::init()
              K(GCONF.self_addr_));
   } else if (OB_FAIL(freeze_trigger_pool_.init_and_start(FREEZE_TRIGGER_THREAD_NUM))) {
     LOG_WARN("[TenantFreezer] fail to initialize freeze trigger pool", KR(ret));
+  } else if (OB_FAIL(freeze_thread_pool_.init_and_start(FREEZE_THREAD_NUM))) {
+    LOG_WARN("[TenantFreezer] fail to initialize freeze thread pool", KR(ret));
   } else if (OB_FAIL(freeze_trigger_timer_.init_and_start(freeze_trigger_pool_,
                                                           TIME_WHEEL_PRECISION,
                                                           "FrzTrigger"))) {

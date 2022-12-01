@@ -29,6 +29,7 @@
 #include "storage/tx/ob_trans_define_v4.h"
 #include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "share/scn.h"
+#include "storage/ls/ob_ls.h"
 
 namespace oceanbase
 {
@@ -98,7 +99,7 @@ int ObMvccRow::check_double_insert_(const share::SCN ,
 class TestMemtable : public testing::Test
 {
 public:
-  TestMemtable() : tenant_base_(1001),tablet_id_(1000),rowkey_cnt_(1) {}
+  TestMemtable() : tenant_base_(1001),tablet_id_(1000),rowkey_cnt_(1) { freezer_.init(&ls_); }
   void SetUp() override {
     share::ObTenantEnv::set_tenant(&tenant_base_);
     // mock columns
@@ -177,6 +178,7 @@ public:
     read_info_.reset();
   }
 public:
+  ObLS ls_;
   share::ObTenantBase tenant_base_;
   storage::ObFreezer freezer_;
   storage::ObTabletMemtableMgr memtable_mgr_;

@@ -59,7 +59,7 @@ const uint64_t ObLS::INNER_TABLET_ID_LIST[TOTAL_INNER_TABLET_NUM] = {
 ObLS::ObLS()
   : ls_tx_svr_(this),
     replay_handler_(this),
-    ls_freezer_(&ls_wrs_handler_, &ls_tx_svr_, &ls_tablet_svr_, &data_checkpoint_, &log_handler_, ls_meta_.ls_id_),
+    ls_freezer_(this),
     ls_sync_tablet_seq_handler_(),
     ls_ddl_log_handler_(),
     is_inited_(false),
@@ -113,7 +113,7 @@ int ObLS::init(const share::ObLSID &ls_id,
     LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id), K(replica_type));
   } else {
     rs_reporter_ = reporter;
-    ls_freezer_.init(&ls_wrs_handler_, &ls_tx_svr_, &ls_tablet_svr_, &data_checkpoint_, &log_handler_, ls_meta_.ls_id_);
+    ls_freezer_.init(this);
     transaction::ObTxPalfParam tx_palf_param(get_log_handler());
 
     // tx_table_.init() should after ls_table_svr.init()
