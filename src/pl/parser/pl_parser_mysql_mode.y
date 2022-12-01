@@ -1489,7 +1489,7 @@ sp_hcond_list:
 
 sp_hcond:
     sp_cond { $$ = $1; }
-  | IDENT { $$ = $1; }
+  | ident { $$ = $1; }
   | SQLWARNING { malloc_terminal_node($$, parse_ctx->mem_pool_, T_SQL_WARNING); }
   | NOT FOUND { malloc_terminal_node($$, parse_ctx->mem_pool_, T_SQL_NOT_FOUND); }
   | SQLEXCEPTION { malloc_terminal_node($$, parse_ctx->mem_pool_, T_SQL_EXCEPTION); }
