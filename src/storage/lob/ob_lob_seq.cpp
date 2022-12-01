@@ -309,7 +309,7 @@ int ObLobSeqId::parse()
         uint32_t val = load32be(tmp_seq.ptr() + sizeof(uint32_t) * cur_pos);
         if (OB_FAIL(add_digits(val))) {
           LOG_WARN("add_digits failed.", K(ret), K(val));
-        } else if (OB_FAIL(OB_FAIL(append_seq_buf(val)))) {
+        } else if (OB_FAIL(append_seq_buf(val))) {
           LOG_WARN("append_seq_buf failed.", K(ret), K(val));
         } else {
           cur_pos++;

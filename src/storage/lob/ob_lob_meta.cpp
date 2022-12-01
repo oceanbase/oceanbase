@@ -247,6 +247,7 @@ ObLobMetaWriteIter::ObLobMetaWriteIter(
     uint32_t piece_block_size
     ) : seq_id_(allocator),
     lob_id_(),
+    coll_type_(CS_TYPE_BINARY),
     scan_iter_()
 {
   data_ = data;
