@@ -313,6 +313,54 @@ int ObTablet::init(
 }
 
 int ObTablet::init(
+    const ObIArray<ObTableHandleV2> &table_handles,
+    const ObTablet &old_tablet,
+    const ObTabletTxMultiSourceDataUnit &tx_data,
+    const ObTabletBindingInfo &ddl_data,
+    const share::ObTabletAutoincSeq &autoinc_seq)
+{
+  int ret = OB_SUCCESS;
+  allocator_ = &(MTL(ObTenantMetaMemMgr*)->get_tenant_allocator());
+
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("tablet has been inited", K(ret));
+  } else if (OB_UNLIKELY(!old_tablet.is_valid() || 0 == table_handles.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("old tablet is invalid", K(ret), K(old_tablet));
+  } else if (OB_UNLIKELY(!pointer_hdl_.is_valid())
+      || OB_ISNULL(memtable_mgr_)
+      || OB_ISNULL(log_handler_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(memtable_mgr), K_(log_handler));
+  } else if (OB_FAIL(tablet_meta_.init(*allocator_, old_tablet.tablet_meta_, old_tablet.get_snapshot_version(),
+      old_tablet.get_multi_version_start(), tx_data, ddl_data, autoinc_seq, old_tablet.tablet_meta_.max_sync_storage_schema_version_))) {
+    LOG_WARN("fail to init tablet_meta", K(ret), K(old_tablet.tablet_meta_), K(tx_data), K(ddl_data), K(autoinc_seq));
+  } else if (OB_FAIL(table_store_.batch_replace_sstables(*allocator_, this, table_handles, old_tablet.table_store_))) {
+    LOG_WARN("fail to init table store", K(ret), K(old_tablet), K(table_handles));
+  } else if (OB_FAIL(storage_schema_.init(*allocator_, old_tablet.storage_schema_))) {
+    LOG_WARN("fail to init storage schema", K(ret), K(old_tablet.storage_schema_));
+  } else if (OB_FAIL(medium_info_list_.init(*allocator_, &(old_tablet.get_medium_compaction_info_list())))) {
+    LOG_WARN("fail to init medium info list", K(ret));
+  } else if (OB_FAIL(build_read_info(*allocator_))) {
+    LOG_WARN("fail to build read info", K(ret));
+  } else if (OB_FAIL(pre_transform_sstable_root_block(*full_read_info_.get_index_read_info()))) {
+    LOG_WARN("failed to pre-transform sstable root block", K(ret), K(full_read_info_));
+  } else {
+    if (old_tablet.get_tablet_meta().has_next_tablet_) {
+      set_next_tablet_guard(old_tablet.next_tablet_guard_);
+    }
+    is_inited_ = true;
+    LOG_INFO("succeeded to init tablet", K(ret), K(old_tablet), KPC(this));
+  }
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
+int ObTablet::init(
     const ObBatchUpdateTableStoreParam &param,
     const ObTablet &old_tablet,
     const ObTabletTxMultiSourceDataUnit &tx_data,

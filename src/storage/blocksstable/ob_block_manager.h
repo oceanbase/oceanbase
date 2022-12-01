@@ -197,7 +197,7 @@ public:
   int64_t get_free_macro_block_count() const;
   int64_t get_used_macro_block_count() const;
 
-  int get_macro_block_info(const MacroBlockId &macro_id, ObMacroBlockInfo &macro_block_info) const;
+  int check_macro_block_free(const MacroBlockId &macro_id, bool &is_free) const;
   int get_bad_block_infos(common::ObIArray<ObBadBlockInfo> &bad_block_infos);
   int report_bad_block(
       const MacroBlockId &macro_block_id,
@@ -324,6 +324,7 @@ private:
   };
 
 private:
+  int get_macro_block_info(const MacroBlockId &macro_id, ObMacroBlockInfo &macro_block_info) const;
   bool is_bad_block(const MacroBlockId &macro_block_id);
 
   void reset_mark_status();

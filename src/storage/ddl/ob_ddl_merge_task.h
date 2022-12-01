@@ -154,6 +154,7 @@ public:
 
   static int prepare_index_builder(const ObTabletDDLParam &ddl_param,
                                    ObIAllocator &allocator,
+                                   const blocksstable::ObSSTableIndexBuilder::ObSpaceOptimizationMode mode,
                                    blocksstable::ObSSTableIndexBuilder *&sstable_index_builder,
                                    blocksstable::ObIndexBlockRebuilder *&index_block_rebuilder);
 

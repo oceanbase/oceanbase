@@ -155,7 +155,8 @@ protected:
         agg_column_schema_,
         index_read_info_,
         *access_ctx_->stmt_allocator_,
-        access_ctx_->query_flag_);
+        access_ctx_->query_flag_,
+        sstable_->get_macro_offset());
   }
   int check_bloom_filter(const ObMicroIndexInfo &index_info, ObSSTableReadHandle &read_handle);
   int prefetch_block_data(
@@ -346,7 +347,7 @@ private:
     void reset()
     {
       is_prefetch_end_ = false;
-      is_row_lock_checked_ = false; 
+      is_row_lock_checked_ = false;
       can_blockscan_ = false;
       read_idx_ = 0;
       fetch_idx_ = -1;
@@ -411,7 +412,9 @@ private:
         const blocksstable::ObDatumRowkey &border_rowkey,
         const int64_t level,
         ObIndexTreeMultiPassPrefetcher &prefetcher);
-    int forward(const ObTableReadInfo &read_info, const blocksstable::ObDatumRowkey &border_rowkey);
+    int forward(
+        const ObTableReadInfo &read_info,
+        const blocksstable::ObDatumRowkey &border_rowkey);
     OB_INLINE int check_blockscan(const blocksstable::ObDatumRowkey &border_rowkey)
     {
       int ret = OB_SUCCESS;
@@ -445,7 +448,7 @@ public:
   int32_t cur_range_prefetch_idx_;
   int64_t cur_micro_data_fetch_idx_;
   int64_t micro_data_prefetch_idx_;
-  int64_t row_lock_check_version_; 
+  int64_t row_lock_check_version_;
   ObAggregatedStore *agg_row_store_;
 private:
   bool can_blockscan_;

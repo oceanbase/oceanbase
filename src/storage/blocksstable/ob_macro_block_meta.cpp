@@ -337,7 +337,9 @@ DEFINE_GET_SERIALIZE_SIZE(ObDataBlockMetaVal)
 //================================== ObDataMacroBlockMeta ==================================
 ObDataMacroBlockMeta::ObDataMacroBlockMeta()
   : val_(),
-    end_key_()
+    end_key_(),
+    nested_offset_(0),
+    nested_size_(0)
 {
 }
 

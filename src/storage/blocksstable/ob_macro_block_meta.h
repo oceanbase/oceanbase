@@ -67,8 +67,8 @@ public:
   int64_t data_zsize_;    // sum of size of compressed/encrypted micro blocks
   int64_t original_size_; // sum of size of original micro blocks
   int64_t progressive_merge_round_;
-  int64_t block_offset_;
-  int64_t block_size_;
+  int64_t block_offset_;  // offset of n-1 level index micro blocks
+  int64_t block_size_;    // size of n-1 level index micro blocks
   int64_t row_count_;
   int64_t row_count_delta_;
   int64_t max_merged_trans_version_;
@@ -120,11 +120,15 @@ public:
   {
     val_.reset();
     end_key_.reset();
+    nested_offset_ = 0;
+    nested_size_ = 0;
   }
   TO_STRING_KV(K_(val), K_(end_key));
 public:
   ObDataBlockMetaVal val_;
   ObDatumRowkey end_key_; // rowkey is primary key
+  int64_t nested_offset_;
+  int64_t nested_size_;
   DISALLOW_COPY_AND_ASSIGN(ObDataMacroBlockMeta);
 };
 

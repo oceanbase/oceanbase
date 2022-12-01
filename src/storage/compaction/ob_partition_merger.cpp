@@ -579,7 +579,7 @@ int ObPartitionMajorMerger::init_merge_iters(ObIPartitionMergeFuser &fuser,
       // do nothing. don't need to construct iter for empty sstable
       FLOG_INFO("table is empty, need not create iter", K(i), KPC(sstable), K(sstable->get_meta()));
       continue;
-    } else if (0 == i && !merge_param.is_full_merge_) {
+    } else if (0 == i && !merge_param.is_full_merge_ && !sstable->is_small_sstable()) {
       if (MICRO_BLOCK_MERGE_LEVEL == merge_param.merge_level_) {
         merge_iter = alloc_merge_helper<ObPartitionMicroMergeIter>();
       } else {
@@ -657,8 +657,6 @@ int ObPartitionMajorMerger::merge_partition(ObTabletMergeCtx &ctx, const int64_t
       } else if (is_reuse_base_sstable) {
         if (OB_FAIL(reuse_base_sstable(merge_iters)) && OB_ITER_END != ret) {
           STORAGE_LOG(WARN, "Failed to reuse base sstable", K(ret), K(merge_iters));
-        } else {
-          FLOG_INFO("succeed to reuse base sstable", K(merge_iters));
         }
       }
 
@@ -1000,13 +998,17 @@ int ObPartitionMajorMerger::check_need_reuse_base_sstable(MERGE_ITER_ARRAY &merg
   if (is_full_merge || need_rewrite_count != 0) {
     is_need_reuse_sstable = false;
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < merge_iters.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < merge_iters.count() && is_need_reuse_sstable; ++i) {
       if (OB_ISNULL(iter = merge_iters.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null iter", K(ret), K(merge_iters));
+      } else if (!iter->is_iter_end() && iter->is_base_sstable_iter()) {
+        const ObSSTable *sstable = static_cast<const ObSSTable *>(iter->get_table());
+        if (sstable->is_small_sstable()) {
+          is_need_reuse_sstable = false;
+        }
       } else if (!iter->is_iter_end() && !iter->is_base_sstable_iter()) {
         is_need_reuse_sstable = false;
-        break;
       }
     }
   }
@@ -1322,7 +1324,8 @@ int ObPartitionMinorMerger::init_merge_iters(ObIPartitionMergeFuser &fuser,
     } else if (storage::is_backfill_tx_merge(merge_param.merge_type_)) {
       merge_iter = alloc_merge_helper<ObPartitionMinorRowMergeIter> ();
     } else if (merge_param.is_multi_version_minor_merge()) {
-      if (!merge_param.is_mini_merge() && 0 == i && !merge_param.is_full_merge_) {
+      if (!merge_param.is_mini_merge() && 0 == i && !merge_param.is_full_merge_ &&
+          !(static_cast<ObSSTable *>(table))->is_small_sstable()) {
         merge_iter = alloc_merge_helper<ObPartitionMinorMacroMergeIter>();
       } else {
         merge_iter = alloc_merge_helper<ObPartitionMinorRowMergeIter> ();

@@ -83,6 +83,7 @@
 #include "logservice/leader_coordinator/ob_leader_coordinator.h"
 #include "storage/lob/ob_lob_manager.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
+#include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/tx_storage/ob_tablet_gc_service.h"
 #include "share/ob_occam_time_guard.h"
 
@@ -103,6 +104,7 @@ using namespace oceanbase::logservice;
 using namespace oceanbase::archive;
 using namespace oceanbase::observer;
 using namespace oceanbase::rootserver;
+using namespace oceanbase::blocksstable;
 
 #define OB_TENANT_LOCK_BUCKET_NUM 10000L
 
@@ -324,6 +326,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     //MTL_BIND(ObTransAuditRecordMgr::mtl_init, ObTransAuditRecordMgr::mtl_destroy);
     MTL_BIND(ObTenantSqlMemoryManager::mtl_init, ObTenantSqlMemoryManager::mtl_destroy);
     MTL_BIND(ObPlanMonitorNodeList::mtl_init, ObPlanMonitorNodeList::mtl_destroy);
+    MTL_BIND2(mtl_new_default, ObSharedMacroBlockMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
   }
 
   if (OB_SUCC(ret)) {

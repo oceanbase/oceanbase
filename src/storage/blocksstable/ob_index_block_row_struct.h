@@ -199,7 +199,8 @@ public:
       query_range_(nullptr),
       flag_(0),
       range_idx_(-1),
-      parent_macro_id_()
+      parent_macro_id_(),
+      nested_offset_(0)
   {
   }
   OB_INLINE void reset()
@@ -211,6 +212,7 @@ public:
     flag_ = 0;
     range_idx_ = -1;
     parent_macro_id_.reset();
+    nested_offset_ = 0;
   }
   OB_INLINE bool is_valid() const
   {
@@ -249,7 +251,7 @@ public:
   OB_INLINE uint64_t get_block_offset() const
   {
     OB_ASSERT(nullptr != row_header_);
-    return row_header_->get_block_offset();
+    return row_header_->get_block_offset() + nested_offset_;
   }
   OB_INLINE uint64_t get_block_size() const
   {
@@ -346,7 +348,7 @@ public:
   }
 
   TO_STRING_KV(KP_(query_range), KPC_(row_header), KPC_(minor_meta_info), KPC_(endkey),
-      K_(flag), K_(range_idx), K_(parent_macro_id));
+      K_(flag), K_(range_idx), K_(parent_macro_id), K_(nested_offset));
 
 public:
   const ObIndexBlockRowHeader *row_header_;
@@ -371,6 +373,7 @@ public:
   };
   int16_t range_idx_;
   MacroBlockId parent_macro_id_;
+  int64_t nested_offset_;
 };
 
 

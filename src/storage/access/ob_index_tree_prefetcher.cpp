@@ -296,11 +296,12 @@ int ObIndexTreePrefetcher::prefetch_block_data(
   bool need_submit_io = false;
   uint64_t tenant_id = MTL_ID();
   const MacroBlockId &macro_id = index_block_info.get_macro_id();
+  const int64_t offset = index_block_info.get_block_offset();
 
   if (is_rescan_ &&
       tenant_id == micro_handle.tenant_id_ &&
       macro_id == micro_handle.macro_block_id_ &&
-      index_block_info.row_header_->get_block_offset() == micro_handle.micro_info_.offset_ &&
+      offset == micro_handle.micro_info_.offset_ &&
       index_block_info.row_header_->get_block_size() == micro_handle.micro_info_.size_) {
     LOG_DEBUG("Cur micro handle is still valid");
     if (is_data) {
@@ -310,8 +311,7 @@ int ObIndexTreePrefetcher::prefetch_block_data(
     }
   } else if (OB_FAIL(micro_block_handle_mgr_.get_micro_block_handle(
               tenant_id,
-              macro_id,
-              *index_block_info.row_header_,
+              index_block_info,
               is_data,
               micro_handle))) {
     //cache miss
@@ -332,7 +332,7 @@ int ObIndexTreePrefetcher::prefetch_block_data(
     }
   }
   if (OB_SUCC(ret)) {
-    micro_handle.micro_info_.offset_ = index_block_info.get_block_offset();
+    micro_handle.micro_info_.offset_ = offset;
     micro_handle.micro_info_.size_ = index_block_info.get_block_size();
     if (need_submit_io) {
       ObMacroBlockHandle macro_handle;
@@ -508,7 +508,8 @@ int ObIndexTreeMultiPassPrefetcher::switch_context(
     index_read_info_ = &index_read_info;
     for (int64_t level = 0; OB_SUCC(ret) && level < index_tree_height_; level++) {
       if (tree_handles_[level].index_scanner_.is_valid()) {
-        tree_handles_[level].index_scanner_.set_index_read_info(&index_read_info);
+        tree_handles_[level].index_scanner_.switch_context(
+          &index_read_info, sstable.get_macro_offset());
       } else if (OB_FAIL(init_index_scanner(tree_handles_[level].index_scanner_))) {
         LOG_WARN("Fail to init index_scanner", K(ret), K(level));
       }
@@ -609,7 +610,7 @@ int ObIndexTreeMultiPassPrefetcher::prefetch()
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("Fail to prefetch", K(ret));
-    } 
+    }
   }
   return ret;
 }
@@ -1098,10 +1099,10 @@ int ObIndexTreeMultiPassPrefetcher::check_row_lock(
   } else if (ObStoreRowIterator::IteratorRowLockCheck == iter_type_
                && !is_row_lock_checked) {
     const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;
-    if (!index_info.contain_uncommitted_row() 
+    if (!index_info.contain_uncommitted_row()
           && index_info.get_max_merged_trans_version() <= read_snapshot_version) {
       ++cur_range_fetch_idx_;
-      row_lock_check_version_ = index_info.get_max_merged_trans_version(); 
+      row_lock_check_version_ = index_info.get_max_merged_trans_version();
       ret = OB_ITER_END;
     }
     is_row_lock_checked = true;

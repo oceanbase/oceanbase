@@ -258,18 +258,25 @@ int ObBackupDataFileTrailer::check_valid() const
 
 /* ObBackupMacroBlockId */
 
-ObBackupMacroBlockId::ObBackupMacroBlockId() : logic_id_(), macro_block_id_()
+ObBackupMacroBlockId::ObBackupMacroBlockId()
+ : logic_id_(), macro_block_id_(),
+   nested_offset_(0), nested_size_(0)
 {}
 
-bool ObBackupMacroBlockId::is_valid()
+bool ObBackupMacroBlockId::is_valid() const
 {
-  return logic_id_.is_valid() && macro_block_id_.is_valid();
+  return logic_id_.is_valid() &&
+         macro_block_id_.is_valid() &&
+         nested_offset_ >= 0 &&
+         nested_size_ >= 0;
 }
 
 void ObBackupMacroBlockId::reset()
 {
   logic_id_.reset();
   macro_block_id_.reset();
+  nested_offset_ = 0;
+  nested_size_ = 0;
 }
 
 /* ObBackupPhysicalID */

@@ -123,7 +123,10 @@ int ObFakeBackupTabletProvider::get_next_batch_items(common::ObIArray<ObBackupPr
       storage::ObITable::TableKey fake_table_key;
       common::ObTabletID tablet_id(supplied_item_count_ + 1);
       ObBackupProviderItem item;
-      if (OB_FAIL(item.set(PROVIDER_ITEM_TABLET_META, fake_logic_id, fake_macro_block_id, fake_table_key, tablet_id))) {
+      ObBackupMacroBlockId backup_macro_id;
+      backup_macro_id.macro_block_id_ = fake_macro_block_id;
+      backup_macro_id.logic_id_ = fake_logic_id;
+      if (OB_FAIL(item.set(PROVIDER_ITEM_TABLET_META, backup_macro_id, fake_table_key, tablet_id))) {
         LOG_WARN("failed to set item", K(ret));
       } else if (OB_FAIL(items.push_back(item))) {
         LOG_WARN("failed to push back", K(ret), K(item));

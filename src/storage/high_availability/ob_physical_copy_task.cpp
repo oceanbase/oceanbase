@@ -799,6 +799,8 @@ int ObPhysicalCopyFinishTask::prepare_sstable_index_builder_(
 {
   int ret = OB_SUCCESS;
   ObDataStoreDesc desc;
+  const ObSSTableIndexBuilder::ObSpaceOptimizationMode mode = sstable_param->table_key_.is_ddl_sstable()
+      ? ObSSTableIndexBuilder::DISABLE : ObSSTableIndexBuilder::AUTO;
 
   if (!tablet_id.is_valid() || OB_ISNULL(sstable_param)) {
     ret = OB_INVALID_ARGUMENT;
@@ -807,7 +809,10 @@ int ObPhysicalCopyFinishTask::prepare_sstable_index_builder_(
     LOG_INFO("sstable is empty, no need build sstable index builder", K(ret), K(tablet_id), KPC(sstable_param));
   } else if (OB_FAIL(prepare_data_store_desc_(ls_id, tablet_id, sstable_param, cluster_version, desc))) {
     LOG_WARN("failed to prepare data store desc", K(ret), K(tablet_id), K(cluster_version));
-  } else if (OB_FAIL(sstable_index_builder_.init(desc))) {
+  } else if (OB_FAIL(sstable_index_builder_.init(
+      desc,
+      nullptr, // macro block flush callback, default value is nullptr
+      mode))) {
     LOG_WARN("failed to init sstable index builder", K(ret), K(desc));
   }
   return ret;
@@ -939,6 +944,7 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
         param.root_block_addr_, param.root_block_data_);
     ObSSTableMergeRes::fill_addr_and_data(res.data_root_desc_,
         param.data_block_macro_meta_addr_, param.data_block_macro_meta_);
+    param.is_meta_root_ = res.data_root_desc_.is_meta_root_;
     param.root_row_store_type_ = res.root_desc_.row_type_;
     param.data_index_tree_height_ = res.root_desc_.height_;
     param.index_blocks_cnt_ = res.index_blocks_cnt_;
@@ -955,6 +961,8 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
     param.compressor_type_ = res.compressor_type_;
     param.encrypt_id_ = res.encrypt_id_;
     param.master_key_id_ = res.master_key_id_;
+    param.nested_size_ = res.nested_size_;
+    param.nested_offset_ = res.nested_offset_;
     param.data_block_ids_ = res.data_block_ids_;
     param.other_block_ids_ = res.other_block_ids_;
     param.rowkey_column_cnt_ = sstable_param_->basic_meta_.rowkey_column_count_;

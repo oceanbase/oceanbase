@@ -54,9 +54,12 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     ddl_scn_(SCN::min_scn()),
     filled_tx_scn_(SCN::min_scn()),
     contain_uncommitted_row_(false),
+    is_meta_root_(false),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     encrypt_id_(0),
     master_key_id_(0),
+    nested_offset_(0),
+    nested_size_(0),
     data_block_ids_(),
     other_block_ids_()
 {

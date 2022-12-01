@@ -242,6 +242,102 @@ int ObTabletTableStore::build_ha_new_table_store(
   return ret;
 }
 
+int ObTabletTableStore::batch_replace_sstables(
+    common::ObIAllocator &allocator,
+    ObTablet *tablet,
+    const ObIArray<ObTableHandleV2> &table_handles,
+    const ObTabletTableStore &old_store)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(tablet) || !old_store.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init tablet table store get invalid argument", K(ret), KP(tablet), K(old_store));
+  } else if (OB_FAIL(init(allocator, tablet))) {
+    LOG_WARN("failed to init a new empty table store", K(ret));
+  } else if (OB_FAIL(inner_replace_sstables(allocator, table_handles, old_store))) {
+    LOG_WARN("failed to build new table store with old store", K(ret));
+  }
+  return ret;
+}
+
+int ObTabletTableStore::inner_replace_sstables(
+    common::ObIAllocator &allocator,
+    const ObIArray<ObTableHandleV2> &table_handles,
+    const ObTabletTableStore &old_store)
+{
+  int ret = OB_SUCCESS;
+  const ObITableArray &old_extend = old_store.extend_tables_;
+  // check table key first
+  ObTableHandleV2 tmp_handle;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_handles.count(); ++i) {
+    const ObITable *table = table_handles.at(i).get_table();
+    if (OB_UNLIKELY(nullptr == table || !table->is_sstable())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table must be sstable", K(ret), KPC(table));
+    } else if (OB_FAIL(old_store.get_table(table->get_key(), tmp_handle))) {
+      LOG_WARN("failed to get the same key sstable in old store", K(ret), KPC(table), K(old_store));
+    }
+  }
+  ObSEArray<ObITable *, 8> major_tables;
+  ObSEArray<ObITable *, 8> minor_tables;
+  ObSEArray<ObITable *, 8> ddl_tables;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_replaced_tables(table_handles, old_store.major_tables_, major_tables))) {
+    LOG_WARN("failed to get replaced major tables", K(ret));
+  } else if (OB_FAIL(get_replaced_tables(table_handles, old_store.minor_tables_, minor_tables))) {
+    LOG_WARN("failed to get replaced minor tables", K(ret));
+  } else if (OB_FAIL(get_replaced_tables(table_handles, old_store.ddl_sstables_, ddl_tables))) {
+    LOG_WARN("failed to get replaced ddl tables", K(ret));
+  } else if (!major_tables.empty() && OB_FAIL(major_tables_.init_and_copy(allocator, major_tables))) {
+    LOG_WARN("failed to init major tables", K(ret));
+  } else if (!minor_tables.empty() && OB_FAIL(minor_tables_.init_and_copy(allocator, minor_tables))) {
+    LOG_WARN("failed to init minor tables", K(ret));
+  } else if (!ddl_tables.empty() && OB_FAIL(ddl_sstables_.init_and_copy(allocator, ddl_tables))) {
+    LOG_WARN("failed to init ddl tables", K(ret));
+  } else if (nullptr != old_extend[BUF_MINOR] && OB_FAIL(extend_tables_.assign(BUF_MINOR, old_extend[BUF_MINOR]))) {
+    LOG_WARN("failed to build buf minor table", K(ret), K(old_extend));
+  } else if (OB_FAIL(pull_memtables())) {
+    LOG_WARN("failed to pull memtable from memtable_mgr", K(ret));
+  } else if (OB_FAIL(check_ready_for_read())) {
+    LOG_WARN("failed to check ready for read", K(ret));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = init_read_cache())) {
+      if (OB_SNAPSHOT_DISCARDED != tmp_ret) {
+        LOG_WARN("failed to cache read iterator", K(tmp_ret));
+      }
+    }
+    FLOG_INFO("succeed to batch replace table store", K(major_tables_), K(minor_tables_), K(memtables_), K(PRINT_TS(*this)));
+  }
+  return ret;
+}
+
+int ObTabletTableStore::get_replaced_tables(
+    const ObIArray<ObTableHandleV2> &table_handles,
+    const ObITableArray &old_tables,
+    ObSEArray<ObITable *, 8> &replaced_tables) const
+{
+  int ret = OB_SUCCESS;
+  replaced_tables.reset();
+  if (OB_FAIL(old_tables.get_all_tables(replaced_tables))) {
+    LOG_WARN("failed to get all table from old tables", K(ret), K(old_tables));
+  }
+  ObITable *table = nullptr;
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < replaced_tables.count(); ++idx) {
+    if (OB_ISNULL(table = replaced_tables.at(idx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null table", K(ret), K(replaced_tables));
+    }
+    for (int64_t pos = 0; OB_SUCC(ret) && idx < table_handles.count(); ++idx) {
+      if (table->get_key() == table_handles.at(pos).get_table()->get_key()) {
+        replaced_tables[idx] = const_cast<ObITable *>(table_handles.at(pos).get_table());
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTabletTableStore::get_table(const ObITable::TableKey &table_key, ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;

@@ -162,6 +162,7 @@ int ObBlockManager::init(
   } else if (OB_ISNULL(io_device) || OB_UNLIKELY(block_size < ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, ", K(ret), KP(io_device), K(block_size));
+  } else if (FALSE_IT(timer_.set_run_wrapper(MTL_CTX()))) {
   } else if (OB_FAIL(timer_.init("BlkMgr"))) {
     LOG_WARN("fail to init timer", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(DEFAULT_LOCK_BUCKET_COUNT, ObLatchIds::BLOCK_MANAGER_LOCK))) {
@@ -173,7 +174,6 @@ int ObBlockManager::init(
   } else if (OB_FAIL(super_block_buf_holder_.init(ObServerSuperBlockHeader::OB_MAX_SUPER_BLOCK_SIZE))) {
     LOG_WARN("fail to init super block buffer holder, ", K(ret));
   } else {
-    timer_.set_run_wrapper(MTL_CTX());
     MEMSET(used_macro_cnt_, 0, sizeof(used_macro_cnt_));
     mark_cost_time_ = 0;
     sweep_cost_time_= 0;
@@ -501,6 +501,31 @@ int ObBlockManager::get_macro_block_info(const MacroBlockId &macro_id,
     macro_block_info.is_free_ = !(block_info.mem_ref_cnt_ > 0 || block_info.disk_ref_cnt_ > 0 );
     macro_block_info.ref_cnt_ = block_info.mem_ref_cnt_ + block_info.disk_ref_cnt_;
     macro_block_info.access_time_ = block_info.access_time_;
+  }
+  return ret;
+}
+
+int ObBlockManager::check_macro_block_free(const MacroBlockId &macro_id, bool &is_free) const
+{
+  int ret = OB_SUCCESS;
+  is_free = false;
+  BlockInfo block_info;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!macro_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, ", K(ret), K(macro_id));
+  } else if (OB_FAIL(block_map_.get(macro_id, block_info))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("fail to get macro id, ", K(ret), K(macro_id));
+    } else {
+      is_free = true;
+      ret = OB_SUCCESS;
+    }
+  } else {
+    is_free = !(block_info.mem_ref_cnt_ > 0 || block_info.disk_ref_cnt_ > 0 );
   }
   return ret;
 }

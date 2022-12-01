@@ -729,8 +729,8 @@ int ObCopyMacroBlockObProducer::prefetch_()
     } else {
       copy_macro_block_handle_[handle_idx_].is_reuse_macro_block_ = false;
       read_info.macro_block_id_ = macro_meta.get_macro_id();
-      read_info.offset_ = 0;
-      read_info.size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
+      read_info.offset_ = sstable_->get_macro_offset();
+      read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_READ);
       if (OB_FAIL(ObBlockManager::async_read_block(read_info, copy_macro_block_handle_[handle_idx_].read_handle_))) {

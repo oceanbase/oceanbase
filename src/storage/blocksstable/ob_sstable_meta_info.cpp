@@ -371,7 +371,10 @@ ObSSTableMacroInfo::ObSSTableMacroInfo()
     data_block_ids_(),
     other_block_ids_(),
     linked_block_ids_(),
-    entry_id_()
+    entry_id_(),
+    is_meta_root_(false),
+    nested_offset_(0),
+    nested_size_(0)
 {
 }
 
@@ -392,6 +395,9 @@ int ObSSTableMacroInfo::init_macro_info(
       param.data_block_macro_meta_addr_, param.data_block_macro_meta_))) {
     LOG_WARN("fail to init macro meta info", K(ret), K(param));
   } else {
+    is_meta_root_ = param.is_meta_root_;
+    nested_offset_ = param.nested_offset_;
+    nested_size_ = 0 == param.nested_size_ ? OB_DEFAULT_MACRO_BLOCK_SIZE : param.nested_size_;
     data_block_ids_.set_allocator(allocator);
     other_block_ids_.set_allocator(allocator);
     linked_block_ids_.set_allocator(allocator);
@@ -420,7 +426,10 @@ void ObSSTableMacroInfo::reset()
   data_block_ids_.reset();
   other_block_ids_.reset();
   entry_id_.reset();
+  is_meta_root_ = false;
   reset_linked_block_list();
+  nested_offset_ = 0;
+  nested_size_ = 0;
 }
 
 int ObSSTableMacroInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -482,6 +491,15 @@ int ObSSTableMacroInfo::serialize_(char *buf, const int64_t buf_len, int64_t &po
     } else if (OB_FAIL(other_block_ids_.serialize(buf, buf_len, pos))) {
       LOG_WARN("fail to serialize other id array", K(ret), K(other_block_ids_), K(buf_len), K(pos));
     }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(serialization::encode_bool(buf, buf_len, pos, is_meta_root_))) {
+    LOG_WARN("fail to serialize is_meta_root_", K(ret), K(is_meta_root_), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, nested_offset_))) {
+    LOG_WARN("fail to serialize nested_offset_", K(ret), K(buf_len), K(pos), K(nested_offset_));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, nested_size_))) {
+    LOG_WARN("fail to serialize nested_size_", K(ret), K(buf_len), K(pos), K(nested_size_));
   }
 
   return ret;
@@ -596,6 +614,7 @@ int ObSSTableMacroInfo::deserialize_(
   int ret = OB_SUCCESS;
   data_block_ids_.set_allocator(allocator);
   other_block_ids_.set_allocator(allocator);
+  nested_size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
 
   if (OB_FAIL(macro_meta_info_.deserialize(allocator, des_meta, buf, data_len, pos))) {
     LOG_WARN("fail to deserialize macro meta info", K(ret), K(des_meta), K(data_len), K(pos));
@@ -610,6 +629,15 @@ int ObSSTableMacroInfo::deserialize_(
     } else if (pos < data_len && OB_FAIL(other_block_ids_.deserialize(buf, data_len, pos))) {
       LOG_WARN("fail to deserialize other block ids", K(ret), KP(buf), K(data_len), K(pos));
     }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (pos < data_len && OB_FAIL(serialization::decode_bool(buf, data_len, pos, &is_meta_root_))) {
+    LOG_WARN("fail to deserialize is_meta_root_", K(ret));
+  } else if (pos < data_len && OB_FAIL(serialization::decode_i64(buf, data_len, pos, &nested_offset_))) {
+    LOG_WARN("fail to deserialize nested_offset_", K(ret));
+  } else if (pos < data_len && OB_FAIL(serialization::decode_i64(buf, data_len, pos, &nested_size_))) {
+    LOG_WARN("fail to deserialize nested_size_", K(ret));
   }
 
   return ret;
@@ -660,6 +688,9 @@ int64_t ObSSTableMacroInfo::get_serialize_size_() const
     len += data_block_ids_.get_serialize_size();
     len += other_block_ids_.get_serialize_size();
   }
+  len += serialization::encoded_length_bool(is_meta_root_);
+  len += serialization::encoded_length_i64(nested_offset_);
+  len += serialization::encoded_length_i64(nested_size_);
   return len;
 }
 
@@ -670,7 +701,10 @@ DEF_TO_STRING(ObSSTableMacroInfo)
   J_KV(K_(macro_meta_info),
       K(data_block_ids_.count()),
       K(other_block_ids_.count()),
-      K(linked_block_ids_.count()));
+      K(linked_block_ids_.count()),
+      K(is_meta_root_),
+      K(nested_offset_),
+      K(nested_size_));
   J_OBJ_END();
   return pos;
 }

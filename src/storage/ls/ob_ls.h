@@ -618,6 +618,10 @@ public:
       const ObTabletID &tablet_id,
       const ObUpdateTableStoreParam &param,
       ObTabletHandle &handle);
+  int update_tablet_table_store(
+      const int64_t rebuild_seq,
+      const ObTabletHandle &old_tablet_handle,
+      const ObIArray<ObTableHandleV2> &table_handles);
   int build_ha_tablet_new_table_store(
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);

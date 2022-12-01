@@ -658,13 +658,16 @@ int ObBackupTabletStat::mark_item_reused(const share::ObBackupDataType &backup_d
   ObBackupProviderItem item;
   ObBackupProviderItemType item_type = PROVIDER_ITEM_MACRO_ID;
   blocksstable::MacroBlockId fake_macro_id;
+  ObBackupMacroBlockId macro_id;
+  macro_id.macro_block_id_ = fake_macro_id;
+  macro_id.logic_id_ = id_pair.logic_id_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup tablet stat do not init", K(ret));
   } else if (backup_data_type.type_ != backup_data_type_.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup data type not match", K(backup_data_type), K(backup_data_type_));
-  } else if (OB_FAIL(item.set(item_type, id_pair.logic_id_, fake_macro_id, table_key, ObTabletID(id_pair.logic_id_.tablet_id_)))) {
+  } else if (OB_FAIL(item.set(item_type, macro_id, table_key, ObTabletID(id_pair.logic_id_.tablet_id_)))) {
     LOG_WARN("failed to set provider item", K(ret), K(item));
   } else if (OB_FAIL(do_with_stat_when_reused_(item, id_pair.physical_id_))) {
     LOG_WARN("failed to do with stat when reused", K(ret));
@@ -1114,29 +1117,33 @@ int ObBackupDiskChecker::check_disk_space()
 /* ObBackupProviderItem */
 
 ObBackupProviderItem::ObBackupProviderItem()
-    : item_type_(PROVIDER_ITEM_MAX), logic_id_(), macro_block_id_(), table_key_(), tablet_id_()
+    : item_type_(PROVIDER_ITEM_MAX), logic_id_(),
+      macro_block_id_(), table_key_(), tablet_id_(),
+      nested_offset_(0), nested_size_(0)
 {}
 
 ObBackupProviderItem::~ObBackupProviderItem()
 {}
 
-int ObBackupProviderItem::set(const ObBackupProviderItemType &item_type, const blocksstable::ObLogicMacroBlockId &logic_id,
-    const blocksstable::MacroBlockId &macro_block_id, const ObITable::TableKey &table_key,
-    const common::ObTabletID &tablet_id)
+int ObBackupProviderItem::set(const ObBackupProviderItemType &item_type, const ObBackupMacroBlockId &macro_id,
+     const ObITable::TableKey &table_key, const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   item_type_ = item_type;
-  logic_id_ = logic_id;
-  macro_block_id_ = macro_block_id;
+  logic_id_ = macro_id.logic_id_;
+  macro_block_id_ = macro_id.macro_block_id_;
   table_key_ = table_key;
   tablet_id_ = tablet_id;
+  nested_offset_ = macro_id.nested_offset_;
+  nested_size_ = macro_id.nested_size_;
   return ret;
 }
 
 bool ObBackupProviderItem::operator==(const ObBackupProviderItem &other) const
 {
-  return item_type_ == other.item_type_ && logic_id_ == other.logic_id_ && macro_block_id_ == other.macro_block_id_ &&
-         table_key_ == other.table_key_ && tablet_id_ == other.tablet_id_;
+  return item_type_ == other.item_type_ && logic_id_ == other.logic_id_ &&
+         macro_block_id_ == other.macro_block_id_ && table_key_ == other.table_key_ &&
+         tablet_id_ == other.tablet_id_ && nested_size_ == other.nested_size_ && nested_offset_ == other.nested_offset_;
 }
 
 bool ObBackupProviderItem::operator!=(const ObBackupProviderItem &other) const
@@ -1169,6 +1176,16 @@ common::ObTabletID ObBackupProviderItem::get_tablet_id() const
   return tablet_id_;
 }
 
+int64_t ObBackupProviderItem::get_nested_offset() const
+{
+  return nested_offset_;
+}
+
+int64_t ObBackupProviderItem::get_nested_size() const
+{
+  return nested_size_;
+}
+
 int64_t ObBackupProviderItem::get_deep_copy_size() const
 {
   return 0;
@@ -1183,6 +1200,8 @@ int ObBackupProviderItem::deep_copy(const ObBackupProviderItem &src, char *buf, 
   macro_block_id_ = src.macro_block_id_;
   table_key_ = src.table_key_;
   tablet_id_ = src.tablet_id_;
+  nested_offset_ = src.nested_offset_;
+  nested_size_ = src.nested_size_;
   return ret;
 }
 
@@ -1208,6 +1227,8 @@ void ObBackupProviderItem::reset()
   macro_block_id_.reset();
   table_key_.reset();
   tablet_id_.reset();
+  nested_offset_ = 0;
+  nested_size_ = 0;
 }
 
 DEFINE_SERIALIZE(ObBackupProviderItem)
@@ -1223,6 +1244,10 @@ DEFINE_SERIALIZE(ObBackupProviderItem)
     LOG_WARN("failed to serialize table key", K(ret));
   } else if (OB_FAIL(tablet_id_.serialize(buf, buf_len, pos))) {
     LOG_WARN("failed to serialize tablet id", K(ret));
+  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, nested_offset_))) {
+    LOG_WARN("failed to serialize nested_offset_", K(ret));
+  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, nested_size_))) {
+    LOG_WARN("failed to serialize nested_size_", K(ret));
   }
   return ret;
 }
@@ -1231,16 +1256,20 @@ DEFINE_DESERIALIZE(ObBackupProviderItem)
 {
   int ret = OB_SUCCESS;
   int64_t item_type_value = 0;
-  if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &item_type_value))) {
-    LOG_WARN("failed to decode key", K(ret));
-  } else if (OB_FAIL(logic_id_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("failed to deserialize logic id", K(ret));
-  } else if (OB_FAIL(macro_block_id_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("failed to deserialize macro block id", K(ret));
-  } else if (OB_FAIL(table_key_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("failed to deserialize table key", K(ret));
-  } else if (OB_FAIL(tablet_id_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("failed to deserialize tablet id", K(ret));
+  if (pos < data_len && OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &item_type_value))) {
+    LOG_WARN("failed to decode key", K(ret), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(logic_id_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("failed to deserialize logic id", K(ret), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(macro_block_id_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("failed to deserialize macro block id", K(ret), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(table_key_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("failed to deserialize table key", K(ret), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(tablet_id_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("failed to deserialize tablet id", K(ret), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &nested_offset_))) {
+    LOG_WARN("failed to deserialize nested_offset_", K(ret), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &nested_size_))) {
+    LOG_WARN("failed to deserialize nested_size_", K(ret), K(data_len), K(pos));
   } else {
     item_type_ = static_cast<ObBackupProviderItemType>(item_type_value);
   }
@@ -1255,6 +1284,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObBackupProviderItem)
   size += macro_block_id_.get_serialize_size();
   size += table_key_.get_serialize_size();
   size += tablet_id_.get_serialize_size();
+  size += serialization::encoded_length_vi64(nested_offset_);
+  size += serialization::encoded_length_vi64(nested_size_);
   return size;
 }
 
@@ -1810,8 +1841,7 @@ int ObBackupTabletProvider::add_macro_block_id_item_list_(const common::ObTablet
       LOG_WARN("failed to check macro block need skip", K(ret), K(macro_id));
     } else if (need_skip) {
       // do nothing
-    } else if (OB_FAIL(item.set(
-                   PROVIDER_ITEM_MACRO_ID, macro_id.logic_id_, macro_id.macro_block_id_, table_key, tablet_id))) {
+    } else if (OB_FAIL(item.set(PROVIDER_ITEM_MACRO_ID, macro_id, table_key, tablet_id))) {
       LOG_WARN("failed to set item", K(ret), K(macro_id), K(table_key), K(tablet_id));
     } else if (!item.is_valid()) {
       ret = OB_INVALID_DATA;
@@ -1832,7 +1862,10 @@ int ObBackupTabletProvider::add_sstable_item_(const common::ObTabletID &tablet_i
   ObLogicMacroBlockId fake_logic_id;
   MacroBlockId fake_macro_block_id;
   ObITable::TableKey fake_table_key;
-  if (OB_FAIL(item.set(PROVIDER_ITEM_SSTABLE_META, fake_logic_id, fake_macro_block_id, fake_table_key, tablet_id))) {
+  ObBackupMacroBlockId macro_id;
+  macro_id.macro_block_id_ = fake_macro_block_id;
+  macro_id.logic_id_ = fake_logic_id;
+  if (OB_FAIL(item.set(PROVIDER_ITEM_SSTABLE_META, macro_id, fake_table_key, tablet_id))) {
     LOG_WARN("failed to set item", K(ret), K(tablet_id));
   } else if (!item.is_valid()) {
     ret = OB_INVALID_DATA;
@@ -1852,7 +1885,10 @@ int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id
   ObLogicMacroBlockId fake_logic_id;
   MacroBlockId fake_macro_block_id;
   ObITable::TableKey fake_table_key;
-  if (OB_FAIL(item.set(PROVIDER_ITEM_TABLET_META, fake_logic_id, fake_macro_block_id, fake_table_key, tablet_id))) {
+  ObBackupMacroBlockId macro_id;
+  macro_id.macro_block_id_ = fake_macro_block_id;
+  macro_id.logic_id_ = fake_logic_id;
+  if (OB_FAIL(item.set(PROVIDER_ITEM_TABLET_META, macro_id, fake_table_key, tablet_id))) {
     LOG_WARN("failed to set item", K(ret), K(fake_table_key), K(tablet_id));
   } else if (!item.is_valid()) {
     ret = OB_INVALID_DATA;

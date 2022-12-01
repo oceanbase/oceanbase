@@ -93,7 +93,8 @@ public:
       const ObIArray<share::schema::ObColumnSchemaV2> &agg_column_schema,
       const storage::ObTableReadInfo *index_read_info,
       ObIAllocator &allocator,
-      const common::ObQueryFlag &query_flag);
+      const common::ObQueryFlag &query_flag,
+      const int64_t nested_offset);
   int open(
       const MacroBlockId &macro_id,
       const ObMicroBlockData &idx_block_data,
@@ -111,7 +112,10 @@ public:
   int get_index_row_count(int64_t &index_row_count) const;
   int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan);
   OB_INLINE bool is_valid() const { return is_inited_; }
-  OB_INLINE void set_index_read_info(const ObTableReadInfo *index_read_info) { index_read_info_ = index_read_info; }
+  OB_INLINE void switch_context(const ObTableReadInfo *index_read_info, const int64_t nested_offset) {
+    index_read_info_ = index_read_info;
+    nested_offset_ = nested_offset;
+  }
   TO_STRING_KV(K_(current), K_(start), K_(end), K_(step),
                K_(range_idx), K_(is_get), K_(is_reverse_scan),
                K_(is_left_border), K_(is_right_border),
@@ -144,6 +148,7 @@ private:
   int64_t end_;                 // inclusive
   int64_t step_;
   int16_t range_idx_;
+  int64_t nested_offset_;
   bool is_transformed_;
   bool is_get_;
   bool is_reverse_scan_;

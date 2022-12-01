@@ -244,6 +244,9 @@ public:
       const common::ObTabletID &tablet_id,
       const ObUpdateTableStoreParam &param,
       ObTabletHandle &handle);
+  int update_tablet_table_store( // only for small sstables defragmentation
+      const ObTabletHandle &old_tablet_handle,
+      const ObIArray<ObTableHandleV2> &table_handles);
   int update_tablet_report_status(const common::ObTabletID &tablet_id);
   int update_tablet_restore_status(
       const common::ObTabletID &tablet_id,

@@ -131,8 +131,13 @@ public:
   int dec_disk_ref();
   int pre_transform_root_block(const ObTableReadInfo &index_read_info);
   int set_status_for_read(const ObSSTableStatus status);
+  OB_INLINE int64_t get_macro_offset() const { return meta_.get_macro_info().get_nested_offset(); }
   OB_INLINE bool is_valid() const { return valid_for_reading_; }
   OB_INLINE const blocksstable::ObSSTableMeta &get_meta() const { return meta_; }
+  OB_INLINE int64_t get_macro_read_size() const { return meta_.get_macro_info().get_nested_size(); }
+  OB_INLINE bool is_small_sstable() const {
+      return OB_DEFAULT_MACRO_BLOCK_SIZE != meta_.get_macro_info().get_nested_size()
+             && 0 < meta_.get_macro_info().get_nested_size(); }
   OB_INLINE int get_index_tree_root(
       const ObTableReadInfo &index_read_info,
       blocksstable::ObMicroBlockData &index_data,
@@ -174,6 +179,8 @@ public:
 private:
   int check_valid_for_reading();
   int add_macro_ref();
+  int add_used_size();
+  int dec_used_size();
   int build_exist_iterator(
       const ObTableIterParam &iter_param,
       const ObDatumRowkey &rowkey,

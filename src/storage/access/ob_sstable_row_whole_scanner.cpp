@@ -231,8 +231,8 @@ int ObSSTableRowWholeScanner::open(
       scan_handle.is_left_border_ = true;
       scan_handle.is_right_border_ = true;
       read_info.macro_block_id_ = macro_desc.macro_block_id_;
-      read_info.offset_ = 0;
-      read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      read_info.offset_ = sstable_->get_macro_offset();
+      read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_category(ObIOCategory::SYS_IO);
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
       if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
@@ -317,8 +317,8 @@ int ObSSTableRowWholeScanner::prefetch()
     } else {
       scan_handle.is_left_border_ = (0 == prefetch_macro_cursor_);
       scan_handle.is_right_border_ = false; // set right border correctly when open macro block
-      read_info.offset_ = 0;
-      read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+      read_info.offset_ = sstable_->get_macro_offset();
+      read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_category(common::ObIOCategory::SYS_IO);
       read_info.io_desc_.set_wait_event(common::ObWaitEventIds::DB_FILE_COMPACT_READ);
       if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {

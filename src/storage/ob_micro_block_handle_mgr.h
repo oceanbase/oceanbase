@@ -76,8 +76,7 @@ public:
   int init(const bool is_multi, const bool is_ordered, common::ObIAllocator &allocator);
   int get_micro_block_handle(
       const uint64_t tenant_id,
-      const blocksstable::MacroBlockId macro_id,
-      const blocksstable::ObIndexBlockRowHeader &idx_header,
+      const blocksstable::ObMicroIndexInfo &index_block_info,
       const bool is_data_block,
       ObMicroBlockDataHandle &micro_block_handle);
 private:
