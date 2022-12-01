@@ -388,9 +388,10 @@ int ObSSTableSecMetaIterator::adjust_index(const int64_t begin_idx, const int64_
     if (OB_UNLIKELY(curr_block_idx_ < prev_block_row_cnt_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Invalid current block index on sequential scan", K(ret), K_(curr_block_idx),
-          K_(curr_block_start_idx), K_(curr_block_end_idx), K(begin_idx), K(end_idx));
-    } else if (curr_block_idx_ - prev_block_row_cnt_ < curr_block_row_cnt) {
-      // next row in this block
+          K_(curr_block_start_idx), K_(curr_block_end_idx), K(begin_idx), K(end_idx), K_(prev_block_row_cnt));
+    } else if (curr_block_idx_ - prev_block_row_cnt_ < row_cnt) {
+      // First block in scan : begin_idx may larger than 0, update curr_block_idx_
+      // Non-first block : next row in this block
       curr_block_idx_ = begin_idx + (curr_block_idx_ - prev_block_row_cnt_);
     } else {
       curr_block_idx_ -= prev_block_row_cnt_;
