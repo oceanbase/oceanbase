@@ -657,6 +657,8 @@ int ObPartitionMajorMerger::merge_partition(ObTabletMergeCtx &ctx, const int64_t
       } else if (is_reuse_base_sstable) {
         if (OB_FAIL(reuse_base_sstable(merge_iters)) && OB_ITER_END != ret) {
           STORAGE_LOG(WARN, "Failed to reuse base sstable", K(ret), K(merge_iters));
+        } else {
+          FLOG_INFO("succeed to reuse base sstable", K(merge_iters));
         }
       }
 
