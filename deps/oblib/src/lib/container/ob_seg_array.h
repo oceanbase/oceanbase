@@ -666,7 +666,7 @@ private:
   };
 
 public:
-  ObSegArray() : is_inited_(false), rwlock_(), dir_(), allocator_(NULL), total_count_(0) {}
+  ObSegArray() : is_inited_(false), rwlock_(ObLatchIds::OB_SEG_ARRAY_LOCK), dir_(), allocator_(NULL), total_count_(0) {}
   virtual int init(ObSmallAllocator *allocator) override;
   bool is_inited() const { return is_inited_; }
   virtual void destroy() override;

@@ -34,7 +34,7 @@ ObLogTimeZoneInfoGetter::ObLogTimeZoneInfoGetter() : inited_(false),
                                          mysql_proxy_(NULL),
                                          systable_helper_(NULL),
                                          err_handler_(NULL),
-                                         lock_(),
+                                         lock_(ObLatchIds::OBCDC_TIMEZONE_GETTER_LOCK),
                                          tenant_mgr_(NULL),
                                          timezone_str_(NULL)
 {

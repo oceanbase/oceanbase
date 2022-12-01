@@ -39,7 +39,7 @@ ObPsCache::ObPsCache()
     mem_low_pct_(0),
     hit_count_(0),
     access_count_(0),
-    mutex_(),
+    mutex_(common::ObLatchIds::PS_CACHE_EVICT_MUTEX_LOCK),
     mem_context_(NULL),
     inner_allocator_(NULL)
 {

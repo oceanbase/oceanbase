@@ -288,7 +288,7 @@ int build_md5_str(MD5_CTX *c, char *buf, int64_t size)
 }
 
 ObOssEnvIniter::ObOssEnvIniter()
-  : lock_(),
+  : lock_(common::ObLatchIds::OBJECT_DEVICE_LOCK),
     is_global_inited_(false)
 {
 }

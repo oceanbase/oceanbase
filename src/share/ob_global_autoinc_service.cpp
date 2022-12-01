@@ -126,6 +126,9 @@ int ObGlobalAutoIncService::init(const ObAddr &addr, ObMySQLProxy *mysql_proxy)
                                          ObModIds::OB_AUTOINCREMENT))) {
     LOG_WARN("init autoinc_map_ failed", K(ret));
   } else {
+    for (int64_t i = 0; i < MUTEX_NUM; ++i) {
+      op_mutex_[i].set_latch_id(common::ObLatchIds::AUTO_INCREMENT_GAIS_LOCK);
+    }
     self_ = addr;
     is_inited_ = true;
   }

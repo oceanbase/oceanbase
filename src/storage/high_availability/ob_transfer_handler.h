@@ -13,7 +13,6 @@
 #ifndef OCEABASE_STORAGE_TRANSFER_HANDLER_
 #define OCEABASE_STORAGE_TRANSFER_HANDLER_
 
-#include "ob_storage_ha_handler.h"
 #include "ob_storage_ha_struct.h"
 #include "share/ob_define.h"
 
@@ -62,7 +61,7 @@ struct ObTablesTransferTask
 };
 
 
-class ObTransferHandler : public ObIHighAvaiableHandler
+class ObTransferHandler
 {
 public:
   ObTransferHandler();
@@ -91,7 +90,7 @@ private:
   int transfer_out_finish_();
 private:
   bool is_inited_;
-  common::SpinRWLock lock_;
+//  common::SpinRWLock lock_; not used yet
   ObSEArray<ObTablesTransferTask, 1> tablets_transfer_array_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };

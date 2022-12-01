@@ -57,7 +57,7 @@ ObTenantCheckpointSlogHandler::ObTenantCheckpointSlogHandler()
     is_writing_checkpoint_(false),
     last_ckpt_time_(0),
     last_frozen_version_(0),
-    lock_(),
+    lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
     ls_block_handle_(),
     tablet_block_handle_(),
     tg_id_(-1),

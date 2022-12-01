@@ -120,13 +120,11 @@ ob_set_subtarget(ob_storage ckpt
 ob_set_subtarget(ob_storage high_availability
   high_availability/ob_ls_migration.cpp
   high_availability/ob_physical_copy_task.cpp
-  high_availability/ob_storage_ha_handler.cpp
   high_availability/ob_storage_ha_macro_block_writer.cpp
   high_availability/ob_storage_ha_reader.cpp
   high_availability/ob_storage_ha_service.cpp
   high_availability/ob_storage_ha_struct.cpp
   high_availability/ob_storage_ha_src_provider.cpp
-  high_availability/ob_tablets_transfer.cpp
   high_availability/ob_transfer_handler.cpp
   high_availability/ob_storage_restore_struct.cpp
   high_availability/ob_tablet_group_restore.cpp

@@ -43,8 +43,10 @@ public:
     : resource_handle_(), tenant_id_(tenant_id),
       ctx_id_(ctx_id), has_deleted_(false),
       obj_mgr_(*this, tenant_id_, ctx_id_),
-      idle_size_(0), head_chunk_(), chunk_cnt_(0), using_list_head_(),
-      wash_related_chunks_(0), washed_blocks_(0), washed_size_(0)
+      idle_size_(0), head_chunk_(), chunk_cnt_(0),
+      chunk_freelist_mutex_(common::ObLatchIds::CHUNK_FREE_LIST_LOCK),
+      using_list_mutex_(common::ObLatchIds::CHUNK_USING_LIST_LOCK),
+      using_list_head_(), wash_related_chunks_(0), washed_blocks_(0), washed_size_(0)
   {
     MEMSET(&head_chunk_, 0, sizeof(AChunk));
     using_list_head_.prev2_ = &using_list_head_;

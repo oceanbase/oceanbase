@@ -1085,7 +1085,7 @@ class ObSafeArenaAllocator : public ObIAllocator
 public:
   ObSafeArenaAllocator(ObArenaAllocator &arena)
       : arena_(arena),
-        lock_()
+        lock_(ObLatchIds::OB_AREAN_ALLOCATOR_LOCK)
   {}
   virtual ~ObSafeArenaAllocator() {}
 public:

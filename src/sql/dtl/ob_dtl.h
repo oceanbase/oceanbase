@@ -70,7 +70,7 @@ class ObDtlChannelManager
 {
 public:
   ObDtlChannelManager(int64_t idx, ObDtlHashTable &hash_table) :
-    idx_(idx), spin_lock_(), hash_table_(hash_table)
+    idx_(idx), spin_lock_(common::ObLatchIds::DTL_CHANNEL_MGR_LOCK), hash_table_(hash_table)
   {}
   ~ObDtlChannelManager();
 

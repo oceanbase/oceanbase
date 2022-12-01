@@ -33,8 +33,8 @@ LogStorage::LogStorage() :
     need_append_block_header_(false),
     palf_id_(INVALID_PALF_ID),
     logical_block_size_(0),
-    tail_info_lock_(),
-    delete_block_lock_(),
+    tail_info_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
+    delete_block_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     switch_next_block_cb_(),
     is_inited_(false)
 {}

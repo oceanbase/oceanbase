@@ -24,7 +24,7 @@ using namespace share;
 namespace storage
 {
 ObLocalityManager::ObLocalityManager()
-  : rwlock_(), ssl_invited_nodes_buf_(NULL)
+  : rwlock_(ObLatchIds::SERVER_LOCALITY_MGR_LOCK), ssl_invited_nodes_buf_(NULL)
 {
   reset();
   ssl_invited_nodes_buf_ = new (std::nothrow) char[common::OB_MAX_CONFIG_VALUE_LEN];

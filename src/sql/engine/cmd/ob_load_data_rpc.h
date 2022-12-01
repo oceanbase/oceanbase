@@ -273,7 +273,8 @@ template <typename T>
 class ObConcurrentFixedCircularArray
 {
 public:
-  ObConcurrentFixedCircularArray() : array_size_(0), data_(NULL), head_pos_(0), tail_pos_(0) {}
+  ObConcurrentFixedCircularArray() : array_size_(0), data_(NULL), head_pos_(0), tail_pos_(0),
+    lock_(common::ObLatchIds::LOAD_DATA_RPC_CB_LOCK) {}
   ~ObConcurrentFixedCircularArray() {
     if (data_ != NULL) {
       ob_free_align((void *)(data_));

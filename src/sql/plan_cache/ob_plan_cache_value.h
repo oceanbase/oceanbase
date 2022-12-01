@@ -356,7 +356,6 @@ private:
   ObPCVSet *pcv_set_;
   common::ObIAllocator *pc_alloc_;
   common::ObIAllocator *pc_malloc_;
-  common::SpinRWLock rwlock_;
   //plan id
   int64_t last_plan_id_;
   // a list of plan sets with different param types combination

@@ -37,7 +37,10 @@ namespace coordinator
 
 using namespace common;
 
-ObFailureDetector::ObFailureDetector() : coordinator_(nullptr) {}
+ObFailureDetector::ObFailureDetector()
+    : coordinator_(nullptr),
+      lock_(common::ObLatchIds::ELECTION_LOCK)
+{}
 
 constexpr int VALUE_BUFFER_SIZE = 512;
 

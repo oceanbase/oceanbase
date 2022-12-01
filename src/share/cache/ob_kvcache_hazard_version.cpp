@@ -158,7 +158,7 @@ void KVCacheHazardThreadStore::add_nodes(KVCacheHazardNode &list)
 GlobalHazardVersion::GlobalHazardVersion()
     : version_(0), 
       thread_waiting_node_threshold_(0),
-      thread_store_lock_(),
+      thread_store_lock_(common::ObLatchIds::THREAD_STORE_LOCK),
       thread_stores_(nullptr),
       thread_store_allocator_(),
       ts_key_(OB_INVALID_PTHREAD_KEY), 

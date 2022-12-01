@@ -31,7 +31,9 @@ class ObMajorFreezeService : public logservice::ObIReplaySubHandler,
 public:
   ObMajorFreezeService() 
     : is_inited_(false), tenant_id_(common::OB_INVALID_ID), 
-      is_launched_(false), lock_(), rw_lock_(), switch_lock_(),
+      is_launched_(false), lock_(common::ObLatchIds::MAJOR_FREEZE_SERVICE_LOCK),
+      rw_lock_(common::ObLatchIds::MAJOR_FREEZE_LOCK),
+      switch_lock_(common::ObLatchIds::MAJOR_FREEZE_SWITCH_LOCK),
       tenant_major_freeze_(nullptr)
   {}
   virtual ~ObMajorFreezeService();

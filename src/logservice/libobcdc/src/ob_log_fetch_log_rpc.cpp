@@ -307,7 +307,7 @@ FetchLogARpc::FetchLogARpc(FetchStream &host) :
     cur_req_(NULL),
     flying_req_list_(),
     res_queue_(),
-    lock_()
+    lock_(ObLatchIds::OBCDC_FETCHLOG_ARPC_LOCK)
 {
   int ret = OB_SUCCESS;
 

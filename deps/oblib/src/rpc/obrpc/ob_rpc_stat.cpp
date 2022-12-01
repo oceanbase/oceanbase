@@ -22,7 +22,7 @@ using namespace oceanbase::common;
 ////////////////////////////////////////////////////////
 // RocStatItem
 RpcStatItem::RpcStatItem()
-    : lock_(), time_(0), size_(0), count_(0),
+    : lock_(ObLatchIds::RPC_STAT_LOCK), time_(0), size_(0), count_(0),
       max_rt_(0), min_rt_(0),
       max_sz_(0), min_sz_(0),
       failures_(0), timeouts_(0), sync_(0), async_(0),

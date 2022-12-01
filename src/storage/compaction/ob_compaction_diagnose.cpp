@@ -71,7 +71,7 @@ int64_t ObScheduleSuspectInfo::gen_hash(int64_t tenant_id, int64_t dag_hash)
 ObScheduleSuspectInfoMgr::ObScheduleSuspectInfoMgr()
   : is_inited_(false),
     allocator_("scheSuspectInfo", OB_SERVER_TENANT_ID),
-    lock_()
+    lock_(common::ObLatchIds::INFO_MGR_LOCK)
 {
 }
 

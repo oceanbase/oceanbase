@@ -99,7 +99,10 @@ public:
     MAX_STATUS = 3
   };
 
-  PalfDiskOptionsWrapper() : disk_opts_for_stopping_writing_(), disk_opts_for_recycling_blocks_(), status_(Status::INVALID_STATUS) {}
+  PalfDiskOptionsWrapper() : disk_opts_for_stopping_writing_(),
+                             disk_opts_for_recycling_blocks_(),
+                             status_(Status::INVALID_STATUS),
+                             disk_opts_lock_(common::ObLatchIds::PALF_ENV_LOCK) {}
   ~PalfDiskOptionsWrapper() { reset(); }
 
   int init(const PalfDiskOptions &disk_opts);

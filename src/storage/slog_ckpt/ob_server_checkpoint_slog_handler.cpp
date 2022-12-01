@@ -47,7 +47,7 @@ ObServerCheckpointSlogHandler::ObServerCheckpointSlogHandler()
     is_started_(false),
     is_writing_checkpoint_(false),
     server_slogger_(nullptr),
-    lock_(),
+    lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
     server_meta_block_handle_(),
     task_timer_(),
     write_ckpt_task_(this)

@@ -136,7 +136,7 @@ void ObRsReentrantThread::check_alert(const ObRsReentrantThread &thread)
 }
 
 CheckThreadSet::CheckThreadSet() 
-  : arr_(), rwlock_()
+  : arr_(), rwlock_(ObLatchIds::THREAD_HANG_CHECKER_LOCK)
 {
 }
 

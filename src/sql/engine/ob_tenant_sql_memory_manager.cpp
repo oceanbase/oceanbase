@@ -646,7 +646,7 @@ int ObTenantSqlMemoryManager::try_fill_workarea_stat(
 {
   int ret = OB_SUCCESS;
   need_insert = false;
-  ObLatchRGuard guard(lock_, ObLatchIds::CONFIG_LOCK);
+  ObLatchRGuard guard(lock_, ObLatchIds::SQL_WA_STAT_MAP_LOCK);
   ObSqlWorkAreaStat *wa_stat = nullptr;
   if (OB_FAIL(wa_ht_.get_refactored(workarea_key, wa_stat))) {
     if (OB_HASH_NOT_EXIST == ret) {
@@ -684,7 +684,7 @@ int ObTenantSqlMemoryManager::new_and_fill_workarea_stat(
 {
   int ret = OB_SUCCESS;
   ObSqlWorkAreaStat *wa_stat = nullptr;
-  ObLatchWGuard guard(lock_, ObLatchIds::CONFIG_LOCK);
+  ObLatchWGuard guard(lock_, ObLatchIds::SQL_WA_STAT_MAP_LOCK);
   if (OB_FAIL(wa_ht_.get_refactored(workarea_key, wa_stat))) {
   }
   if (OB_HASH_NOT_EXIST == ret) {
@@ -1254,7 +1254,7 @@ int ObTenantSqlMemoryManager::calculate_global_bound_size(ObIAllocator *allocato
 int ObTenantSqlMemoryManager::get_workarea_stat(ObIArray<ObSqlWorkAreaStat> &wa_stats)
 {
   int ret = OB_SUCCESS;
-  ObLatchRGuard guard(lock_, ObLatchIds::CONFIG_LOCK);
+  ObLatchRGuard guard(lock_, ObLatchIds::SQL_WA_STAT_MAP_LOCK);
   for (int64_t i = wa_start_; i < wa_start_ + wa_cnt_ && OB_SUCC(ret); ++i) {
     int64_t nth = i % MAX_WORKAREA_STAT_CNT;
     if (OB_FAIL(wa_stats.push_back(workarea_stats_.at(nth)))) {

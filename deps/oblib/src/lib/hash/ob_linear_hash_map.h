@@ -364,7 +364,7 @@ public:
     load_factor_u_limit_(0.0),
     load_factor_l_limit_(0.0),
     Lp_(0),
-    eslock_(),
+    eslock_(common::ObLatchIds::HASH_MAP_LOCK),
     m_seg_sz_(0),
     m_seg_bkt_n_(0),
     m_seg_n_lmt_(0),
@@ -623,6 +623,7 @@ ObConcurrentFIFOAllocator& ObLinearHashMap<Key, Value, MemMgrTag>::HashMapMemMgr
 /* Hash Map memory manager. */
 template <typename Key, typename Value, typename MemMgrTag>
 ObLinearHashMap<Key, Value, MemMgrTag>::HashMapMemMgrCore::HashMapMemMgrCore()
+  : map_array_lock_(common::ObLatchIds::HASH_MAP_LOCK)
 {
   attr_.label_ = ObModIds::OB_LINEAR_HASH_MAP;
   // Init node alloc.

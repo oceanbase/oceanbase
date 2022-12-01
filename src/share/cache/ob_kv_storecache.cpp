@@ -145,6 +145,7 @@ ObKVGlobalCache::ObKVGlobalCache()
     : inited_(false),
       mem_limit_getter_(nullptr),
       cache_num_(0),
+      mutex_(common::ObLatchIds::GLOBAL_KV_CACHE_CONFIG_LOCK),
       map_clean_pos_(0),
       map_once_clean_num_(0),
       map_replace_pos_(0),

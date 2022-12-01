@@ -58,7 +58,7 @@ int ObLogLSMgr::init(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(schema_cond_.init(common::ObWaitEventIds::OBLOG_PART_MGR_SCHEMA_VERSION_WAIT))) {
+  if (OB_FAIL(schema_cond_.init(common::ObWaitEventIds::OBCDC_PART_MGR_SCHEMA_VERSION_WAIT))) {
     LOG_ERROR("schema_cond_ init fail", KR(ret));
   } else {
     tenant_id_ = tenant_id;

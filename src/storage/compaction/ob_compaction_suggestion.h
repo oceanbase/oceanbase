@@ -29,7 +29,7 @@ public:
   ObInfoRingArray(ObIAllocator &allocator)
     : is_inited_(false),
       allocator_(allocator),
-      lock_(),
+      lock_(common::ObLatchIds::INFO_MGR_LOCK),
       pos_(0),
       max_cnt_(0),
       array_(NULL)

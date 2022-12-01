@@ -56,7 +56,13 @@ class ObLSTxService : public logservice::ObIReplaySubHandler,
                       public logservice::ObICheckpointSubHandler
 {
 public:
-  ObLSTxService(ObLS *parent) : parent_(parent), tenant_id_(0), ls_id_(), mgr_(NULL), trans_service_(NULL) {
+  ObLSTxService(ObLS *parent)
+      : parent_(parent),
+        tenant_id_(0),
+        ls_id_(),
+        mgr_(NULL),
+        trans_service_(NULL),
+        lock_(common::ObLatchIds::CLOG_CKPT_LOCK) {
     reset_();
   }
   ~ObLSTxService() {}

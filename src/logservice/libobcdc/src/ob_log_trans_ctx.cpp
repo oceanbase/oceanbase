@@ -103,7 +103,7 @@ TransCtx::TransCtx() :
     is_trans_sorted_(false),
     br_out_queue_(),
     allocator_(ObModIds::OB_LOG_TRANS_CTX, PAGE_SIZE),
-    lock_()
+    lock_(ObLatchIds::OBCDC_TRANS_CTX_LOCK)
 {}
 
 TransCtx::~TransCtx()

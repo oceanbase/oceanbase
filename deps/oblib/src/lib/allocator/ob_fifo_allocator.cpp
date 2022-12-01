@@ -29,7 +29,7 @@ ObFIFOAllocator::ObFIFOAllocator(const uint64_t tenant_id /*= OB_SERVER_TENANT_I
       current_using_(nullptr),
       normal_used_(0),
       special_total_(0),
-      lock_()
+      lock_(ObLatchIds::OB_FIFO_ALLOCATOR_LOCK)
 {
 }
 

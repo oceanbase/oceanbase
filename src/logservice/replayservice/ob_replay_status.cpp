@@ -26,7 +26,7 @@ namespace logservice
 {
 //---------------ObReplayServiceTask---------------//
 ObReplayServiceTask::ObReplayServiceTask()
-  : lock_(),
+  : lock_(common::ObLatchIds::REPLAY_STATUS_TASK_LOCK),
     type_(ObReplayServiceTaskType::INVALID_LOG_TASK),
     replay_status_(NULL),
     lease_()
@@ -556,8 +556,8 @@ ObReplayStatus::ObReplayStatus():
     err_info_(),
     pending_task_count_(0),
     last_check_memstore_lsn_(),
-    rwlock_(),
-    spinlock_(),
+    rwlock_(common::ObLatchIds::REPLAY_STATUS_LOCK),
+    spinlock_(common::ObLatchIds::REPLAY_STATUS_LOCK),
     rp_sv_(NULL),
     submit_log_task_(),
     palf_env_(NULL),

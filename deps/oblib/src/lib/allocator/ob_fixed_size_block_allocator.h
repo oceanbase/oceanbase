@@ -124,7 +124,7 @@ typedef ObFixedSizeBlockMemoryContext<OB_DEFAULT_MACRO_BLOCK_SIZE> ObMacroBlockS
 template<int64_t SIZE>
 ObFixedSizeBlockAllocator<SIZE>::ObFixedSizeBlockAllocator() :
     is_inited_(false),
-    lock_(),
+    lock_(common::ObLatchIds::FIXED_SIZE_ALLOCATOR_LOCK),
     total_block_num_(0),
     max_block_num_(0),
     allocator_(ObModIds::OB_FIXED_SIZE_BLOCK_ALLOCATOR),

@@ -33,7 +33,7 @@ namespace rootserver
 {
 ObBackupTaskSchedulerQueue::ObBackupTaskSchedulerQueue()
   : is_inited_(false),
-    mutex_(),
+    mutex_(common::ObLatchIds::BACKUP_LOCK),
     max_size_(0),
     tenant_stat_map_(nullptr),
     server_stat_map_(nullptr),
@@ -1060,7 +1060,7 @@ ObBackupTaskScheduler::ObBackupTaskScheduler()
   : ObRsReentrantThread(true),
     is_inited_(false),
     idling_(stop_),
-    scheduler_mtx_(),
+    scheduler_mtx_(common::ObLatchIds::BACKUP_LOCK),
     tenant_stat_map_(),
     server_stat_map_(),
     queue_(),

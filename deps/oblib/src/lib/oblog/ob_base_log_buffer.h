@@ -62,10 +62,9 @@ struct ObBaseLogBuffer
 
 struct ObBaseLogBufferCtrl
 {
-  ObBaseLogBufferCtrl() : base_buf_(NULL), data_buf_(NULL), buf_mutex_() {}
+  ObBaseLogBufferCtrl() : base_buf_(NULL), data_buf_(NULL) {}
   ObBaseLogBuffer *base_buf_;
   char *data_buf_;
-  lib::ObMutex buf_mutex_;
 };
 
 class ObBaseLogBufferMgr
@@ -86,7 +85,6 @@ private:
   static const int32_t SHM_HEADER_SIZE = 4 * 1024;
   static const int32_t SHM_BUFFER_SIZE = SHM_HEADER_SIZE + MAX_LOG_BUFFER_SIZE;
   int64_t log_buf_cnt_;
-  lib::ObMutex mutex_;
   ObBaseLogBufferCtrl log_ctrls_[MAX_LOG_BUF_CNT];
 };
 

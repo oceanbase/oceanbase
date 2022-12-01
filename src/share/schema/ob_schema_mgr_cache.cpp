@@ -124,7 +124,8 @@ inline void ObSchemaMgrHandle::revert()
 }
 
 ObSchemaMgrCache::ObSchemaMgrCache()
-    : schema_mgr_items_(NULL),
+    : lock_(common::ObLatchIds::SCHEMA_MGR_CACHE_LOCK),
+      schema_mgr_items_(NULL),
       max_cached_num_(0),
       last_get_schema_idx_(0),
       cur_cached_num_(0),

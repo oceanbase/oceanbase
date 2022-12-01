@@ -24,7 +24,8 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 
 ObSequenceCache::ObSequenceCache()
-  : inited_(false)
+  : inited_(false),
+    cache_mutex_(common::ObLatchIds::SEQUENCE_CACHE_LOCK)
 {
 }
 

@@ -48,7 +48,7 @@ public:
       memtable_head_(0),
       memtable_tail_(0),
       t3m_(nullptr),
-      lock_()
+      lock_(common::ObLatchIds::TABLET_MEMTABLE_LOCK)
   {
     memset(tables_, 0, sizeof(tables_));
   }

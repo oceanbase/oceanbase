@@ -38,7 +38,7 @@ ObjectSet::ObjectSet(__MemoryContext__ *mem_context, const uint32_t ablock_size)
   : check_unfree_(false), mem_context_(mem_context), locker_(nullptr),
     blk_mgr_(nullptr), blist_(NULL), last_remainder_(NULL),
     bm_(NULL), free_lists_(NULL),
-    dirty_list_mutex_(), dirty_list_(nullptr), dirty_objs_(0),
+    dirty_list_mutex_(common::ObLatchIds::ALLOC_OBJECT_LOCK), dirty_list_(nullptr), dirty_objs_(0),
     alloc_bytes_(0), used_bytes_(0), hold_bytes_(0), allocs_(0),
     normal_alloc_bytes_(0), normal_used_bytes_(0),
     normal_hold_bytes_(0), ablock_size_(ablock_size),

@@ -72,6 +72,7 @@ class IObDedupTask
 public:
   explicit IObDedupTask(const int type) : type_(type),
                                           stat_(ST_WAITING),
+                                          sync_(common::ObLatchIds::DEDUP_QUEUE_LOCK),
                                           memory_(NULL),
                                           prev_(NULL),
                                           next_(NULL)

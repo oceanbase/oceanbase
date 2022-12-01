@@ -24,11 +24,12 @@ using namespace oceanbase::common;
 ObIOManager::ObIOManager()
   : is_inited_(false),
     is_working_(false),
-    mutex_(),
+    mutex_(ObLatchIds::GLOBAL_IO_CONFIG_LOCK),
     io_config_(),
     allocator_(),
     fault_detector_(io_config_),
-    io_scheduler_(io_config_, allocator_)
+    io_scheduler_(io_config_, allocator_),
+    tenant_map_lock_(ObLatchIds::TENANT_IO_MANAGE_LOCK)
 {
 }
 

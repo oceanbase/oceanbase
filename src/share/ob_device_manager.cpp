@@ -22,7 +22,7 @@ namespace common
 {
 
 const int ObDeviceManager::MAX_DEVICE_INSTANCE;
-ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), lock_(), is_init_(false)
+ObDeviceManager::ObDeviceManager() : allocator_(), device_count_(0), lock_(ObLatchIds::LOCAL_DEVICE_LOCK), is_init_(false)
 {
 }
 

@@ -268,6 +268,7 @@ ObMacroBlockWriter::ObMacroBlockWriter()
    rowkey_allocator_("MaBlkWriter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
    macro_reader_(),
    micro_rowkey_hashs_(),
+   lock_(common::ObLatchIds::MACRO_WRITER_LOCK),
    datum_row_(),
    check_datum_row_(),
    callback_(nullptr),

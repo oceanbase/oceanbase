@@ -166,7 +166,7 @@ private:
     SessionPoolMap(ObIAllocator &alloc)
       : pool_blocks_(ObWrapperAllocator(alloc)),
         alloc_(alloc),
-        lock_()
+        lock_(common::ObLatchIds::SESSION_POOL_MAP_LOCK)
     {}
     int get_session_pool(uint64_t tenant_id, SessionPool *&session_pool);
   private:
@@ -215,9 +215,8 @@ private:
   private:
     bool is_valid_tenant_id(uint64_t tenant_id) const;
   private:
-    SessionPoolMap session_pool_map_;
     ObArenaAllocator allocator_;
-    common::ObSpinLock lock_;
+    SessionPoolMap session_pool_map_;
     volatile int64_t alloc_total_count_;
     volatile int64_t alloc_from_pool_count_;
     volatile int64_t free_total_count_;

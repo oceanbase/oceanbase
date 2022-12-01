@@ -162,7 +162,7 @@ namespace common
 const char *ObOptStatSqlService::bitmap_compress_lib_name = "zlib_1.0";
 
 ObOptStatSqlService::ObOptStatSqlService()
-    : inited_(false), mysql_proxy_(nullptr), config_(nullptr)
+    : inited_(false), mysql_proxy_(nullptr), mutex_(ObLatchIds::DEFAULT_MUTEX), config_(nullptr)
 {
 }
 

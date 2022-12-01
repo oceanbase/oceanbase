@@ -895,7 +895,6 @@ private:
 private:
   common::ObMySQLProxy *mysql_proxy_;
   common::ObDbLinkProxy *dblink_proxy_;
-  lib::ObMutex mutex_;
   // record last schema version of log operation while execute ddl
   int64_t last_operation_schema_version_;
   ObTenantSqlService tenant_service_;

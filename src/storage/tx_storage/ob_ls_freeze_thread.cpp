@@ -49,7 +49,7 @@ void ObLSFreezeTask::handle()
 }
 
 ObLSFreezeThread::ObLSFreezeThread()
-  : inited_(false), tg_id_(-1), available_index_(-1)
+    : inited_(false), tg_id_(-1), available_index_(-1), lock_(common::ObLatchIds::THREAD_POOL_LOCK)
 {
   for (int64_t i = 0; i < MAX_FREE_TASK_NUM; i++) {
     task_array_[i] = NULL;

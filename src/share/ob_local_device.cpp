@@ -80,7 +80,7 @@ ObLocalDevice::ObLocalDevice()
   : is_inited_(false),
     is_marked_(false),
     block_fd_(0),
-    block_lock_(),
+    block_lock_(common::ObLatchIds::LOCAL_DEVICE_LOCK),
     block_size_(0),
     block_file_size_(0),
     disk_percentage_(0),

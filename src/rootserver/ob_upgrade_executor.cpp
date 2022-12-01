@@ -68,7 +68,7 @@ int ObUpgradeTask::process()
 }
 
 ObUpgradeExecutor::ObUpgradeExecutor()
-    : inited_(false), stopped_(false), execute_(false), rwlock_(),
+    : inited_(false), stopped_(false), execute_(false), rwlock_(ObLatchIds::DEFAULT_SPIN_RWLOCK),
       sql_proxy_(NULL), rpc_proxy_(NULL), common_rpc_proxy_(NULL), schema_service_(NULL),
       upgrade_processors_()
 {}

@@ -37,7 +37,7 @@ ObLSArchiveTask::ObLSArchiveTask() :
   round_start_scn_(),
   dest_(),
   allocator_(NULL),
-  rwlock_()
+  rwlock_(common::ObLatchIds::LS_ARCHIVE_TASK_LOCK)
 {}
 
 ObLSArchiveTask::~ObLSArchiveTask()

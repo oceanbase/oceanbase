@@ -471,7 +471,7 @@ class ObSqlMemoryList
 {
 public:
   ObSqlMemoryList(int64_t seqno) :
-    seqno_(seqno)
+    seqno_(seqno), lock_(common::ObLatchIds::SQL_WA_PROFILE_LIST_LOCK)
   {}
   ~ObSqlMemoryList() { reset(); }
 
@@ -563,11 +563,12 @@ private:
 public:
   ObTenantSqlMemoryManager(int64_t tenant_id) :
     wa_intervals_(nullptr), min_bound_size_(0), tenant_id_(tenant_id),
-    enable_auto_memory_mgr_(false), mutex_(), profile_lists_(nullptr),
+    enable_auto_memory_mgr_(false), mutex_(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK), profile_lists_(nullptr),
     drift_size_(0), profile_cnt_(0), pre_profile_cnt_(0), global_bound_size_(0),
     mem_target_(0), max_workarea_size_(0), workarea_hold_size_(0), max_auto_workarea_size_(0),
     max_tenant_memory_size_(0),
-    manual_calc_cnt_(0), wa_start_(0), wa_end_(0), wa_cnt_(0), lock_()
+    manual_calc_cnt_(0), wa_start_(0), wa_end_(0), wa_cnt_(0),
+    lock_()
   {}
   ~ObTenantSqlMemoryManager() {}
 public:

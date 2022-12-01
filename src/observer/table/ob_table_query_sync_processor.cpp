@@ -138,6 +138,9 @@ ObQuerySyncMgr &ObQuerySyncMgr::get_instance()
 int ObQuerySyncMgr::init()
 {
   int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < DEFAULT_LOCK_ARR_SIZE; ++i) {
+    locker_arr_[i].set_latch_id(ObLatchIds::TABLE_API_LOCK);
+  }
   if (OB_FAIL(query_session_map_.create(QUERY_SESSION_MAX_SIZE, ObModIds::TABLE_PROC, ObModIds::TABLE_PROC))) {
     LOG_WARN("fail to create query session map", K(ret));
   } else if (OB_FAIL(timer_.init())) {

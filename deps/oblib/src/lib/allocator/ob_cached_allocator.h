@@ -46,7 +46,7 @@ private:
 
 template<typename T>
 ObCachedAllocator<T>::ObCachedAllocator()
-    : pool_(sizeof(T)), allocated_count_(0), cached_count_(0)
+    : lock_(ObLatchIds::OB_CACHED_ALLOCATOR_LOCK), pool_(sizeof(T)), allocated_count_(0), cached_count_(0)
 {
 }
 

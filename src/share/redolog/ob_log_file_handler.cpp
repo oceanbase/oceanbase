@@ -49,7 +49,6 @@ ObLogFileHandler::ObLogFileHandler()
     file_group_(),
     file_size_(0),
     is_disk_warning_(false),
-    lock_(),
     tenant_id_(OB_INVALID_TENANT_ID)
 {
 }

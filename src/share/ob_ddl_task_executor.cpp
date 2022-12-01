@@ -25,7 +25,7 @@ namespace oceanbase
 namespace share
 {
 ObDDLTaskQueue::ObDDLTaskQueue()
-  : task_list_(), task_set_(), lock_(), is_inited_(false), allocator_()
+  : task_list_(), task_set_(), lock_(ObLatchIds::DDL_LOCK), is_inited_(false), allocator_()
 {
   allocator_.set_label(common::ObModIds::OB_BUILD_INDEX_SCHEDULER);
 }

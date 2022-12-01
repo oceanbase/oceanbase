@@ -31,7 +31,7 @@ ObBackupLeaseService::ObBackupLeaseService()
   : is_inited_(false),
     can_be_leader_ts_(0),
     expect_round_(0),
-    lock_(),
+    lock_(common::ObLatchIds::BACKUP_LOCK),
     backup_lease_info_mgr_(),
     lease_info_(),
     sql_proxy_(nullptr),

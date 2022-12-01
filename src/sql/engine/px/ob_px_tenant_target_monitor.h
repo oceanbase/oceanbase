@@ -113,7 +113,7 @@ class ObPxTenantTargetMonitor
 {
 #define PX_SERVER_TARGET_BUCKET_NUM (hash::cal_next_prime(100))
 public:
-  ObPxTenantTargetMonitor() : spin_lock_() { reset(); }
+  ObPxTenantTargetMonitor() : spin_lock_(common::ObLatchIds::PX_TENANT_TARGET_LOCK) { reset(); }
   virtual ~ObPxTenantTargetMonitor() {}
   int init(const uint64_t tenant_id, ObAddr &server);
   void reset();

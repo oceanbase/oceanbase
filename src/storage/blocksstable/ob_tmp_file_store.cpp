@@ -419,6 +419,7 @@ ObTmpMacroBlock::ObTmpMacroBlock()
     macro_block_handle_(),
     tmp_file_header_(),
     io_desc_(),
+    lock_(common::ObLatchIds::TMP_FILE_MACRO_LOCK),
     is_washing_(false),
     is_disked_(false),
     is_inited_(false)
@@ -816,6 +817,7 @@ ObTmpTenantFileStore::ObTmpTenantFileStore()
     allocator_(),
     io_allocator_(),
     tmp_mem_block_manager_(),
+    lock_(common::ObLatchIds::TMP_FILE_STORE_LOCK),
     is_inited_(false),
     page_cache_num_(0),
     block_cache_num_(0),
@@ -1410,7 +1412,7 @@ ObTmpFileStore &ObTmpFileStore::get_instance()
 }
 
 ObTmpFileStore::ObTmpFileStore()
-  : tenant_file_stores_(), lock_(), is_inited_(false), allocator_()
+  : tenant_file_stores_(), lock_(common::ObLatchIds::TMP_FILE_STORE_LOCK), is_inited_(false), allocator_()
 {
 }
 
