@@ -797,34 +797,59 @@ int ObService::check_not_backup_tablet_create_scn(const obrpc::ObBackupCheckTabl
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("log stream should not be NULL", KR(ret), K(arg.tenant_id_), K(arg.ls_id_), KPC(ls));
-      } else if (OB_ISNULL(ls_tablet_svr = ls->get_tablet_svr())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls tablet service should not be NULL", KR(ret), K(arg.tenant_id_), K(arg.ls_id_), KPC(ls));
       } else {
-        const int64_t timeout_us = ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US;
-        ObTabletHandle tablet_handle;
-        for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-          const ObTabletID &tablet_id = tablet_ids.at(i);
-          tablet_handle.reset();
-          if (OB_FAIL(ls_tablet_svr->get_tablet(tablet_id, tablet_handle, timeout_us))) {
-            if (OB_TABLET_NOT_EXIST == ret) {
-              LOG_INFO("tablet has been deleted, no need to check", K(tablet_id));
-              ret = OB_SUCCESS;
-            } else {
-              LOG_WARN("failed to get tablet", KR(ret), K(tablet_id), K(timeout_us));
-            }
-          } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+        const int64_t rebuild_seq = ls->get_rebuild_seq();
+        ObMigrationStatus migration_status;
+        share::ObLSRestoreStatus restore_status;
+        if (OB_FAIL(ls->is_offline())) {
+          ret = OB_EAGAIN;
+          LOG_WARN("ls is offline, retry later", K(ret), KPC(ls));
+        } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+          LOG_WARN("failed to get migration status", K(ret), KPC(ls));
+        } else if (storage::ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+          ret = OB_EAGAIN;
+          LOG_WARN("ls is in migration, retry later", K(ret), KPC(ls));
+        } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
+          LOG_WARN("failed to get restore status", K(ret), KPC(ls));
+        } else if (share::ObLSRestoreStatus::RESTORE_NONE != restore_status) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("restore ls is unexpected", K(ret), KPC(ls));
+        } else {
+          if (OB_ISNULL(ls_tablet_svr = ls->get_tablet_svr())) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected error : tablet handle is invalid", KR(ret), K(tablet_handle));
+            LOG_WARN("ls tablet service should not be NULL", KR(ret), K(arg.tenant_id_), K(arg.ls_id_), KPC(ls));
           } else {
-            const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
-            if (OB_UNLIKELY(tablet_meta.create_scn_ <= arg.backup_scn_)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected error : tablet has't been backup", KR(ret),
-                  K(arg.tenant_id_), K(arg.ls_id_), K(tablet_id),
-                  K(tablet_meta), "backup_scn", arg.backup_scn_);
+            const int64_t timeout_us = ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US;
+            ObTabletHandle tablet_handle;
+            for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+              const ObTabletID &tablet_id = tablet_ids.at(i);
+              tablet_handle.reset();
+              if (OB_FAIL(ls_tablet_svr->get_tablet(tablet_id, tablet_handle, timeout_us))) {
+                if (OB_TABLET_NOT_EXIST == ret) {
+                  LOG_INFO("tablet has been deleted, no need to check", K(tablet_id));
+                  ret = OB_SUCCESS;
+                } else {
+                  LOG_WARN("failed to get tablet", KR(ret), K(tablet_id), K(timeout_us));
+                }
+              } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected error : tablet handle is invalid", KR(ret), K(tablet_handle));
+              } else {
+                const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
+                if (OB_UNLIKELY(tablet_meta.create_scn_ <= arg.backup_scn_)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("unexpected error : tablet has't been backup", KR(ret),
+                      K(arg.tenant_id_), K(arg.ls_id_), K(tablet_id),
+                      K(tablet_meta), "backup_scn", arg.backup_scn_);
+                }
+              }
             }
           }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (rebuild_seq != ls->get_rebuild_seq()) {
+          ret = OB_EAGAIN;
+          LOG_WARN("ls has rebuild, retry later", K(ret), KPC(ls));
         }
       }
     }

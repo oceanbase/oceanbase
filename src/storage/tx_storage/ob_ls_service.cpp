@@ -460,13 +460,21 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     } else {
       state = ObLSCreateState::CREATE_STATE_FINISH;
       ls->finish_create(is_commit);
-      if (OB_SUCCESS != (tmp_ret = ls->start())) {
-        LOG_ERROR("ls start failed", K(tmp_ret), K(arg));
-      } else {
-        FLOG_INFO("add ls to ls service succ", K(ls->get_ls_id()), K(arg));
-        if (OB_SUCCESS != (tmp_ret = ls->report_replica_info())) {
-          LOG_WARN("fail to report ls", KR(tmp_ret), K(arg));
+      if (OB_FAIL(ls->start())) {
+        LOG_ERROR("ls start failed", K(ret), K(arg));
+      } else if (is_ls_to_restore_(arg)) {
+        if (OB_FAIL(ls->offline_without_lock())) {
+          LOG_WARN("failed to offline", K(ret), K(arg));
+        } else if (OB_FAIL(ls->get_log_handler()->enable_sync())) {
+          LOG_WARN("failed to enable sync", K(ret), K(arg));
+        } else if (OB_FAIL(ls->get_ls_restore_handler()->online())) {
+          LOG_WARN("failed to online restore handler", K(ret), K(arg));
         }
+      }
+
+      FLOG_INFO("add ls to ls service succ", K(ls->get_ls_id()), K(arg));
+      if (OB_SUCCESS != (tmp_ret = ls->report_replica_info())) {
+        LOG_WARN("fail to report ls", KR(tmp_ret), K(arg));
       }
     }
     if (OB_FAIL(ret)) {

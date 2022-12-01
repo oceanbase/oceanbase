@@ -209,10 +209,9 @@ int ObLSRestoreTaskMgr::schedule_tablet(const ObTaskId &task_id, const ObSArray<
   return ret;
 }
 
-int ObLSRestoreTaskMgr::check_all_task_done(bool &is_all_done)
+int ObLSRestoreTaskMgr::cancel_task()
 {
   int ret = OB_SUCCESS;
-  is_all_done = true;
   bool is_exist = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -221,11 +220,36 @@ int ObLSRestoreTaskMgr::check_all_task_done(bool &is_all_done)
     lib::ObMutexGuard guard(mtx_);
     TaskMap::iterator iter = tablet_map_.begin();
     for (; OB_SUCC(ret) && iter != tablet_map_.end(); ++iter) {
+      is_exist = false;
       if (OB_FAIL(check_task_exist_(iter->first, is_exist))) {
         LOG_WARN("fail to check task exist", K(ret), "taks_id", iter->first);
       } else if (is_exist) {
-        is_all_done = false;
+        ObTenantDagScheduler *scheduler = nullptr;
+        if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KP(scheduler));
+        } else if (OB_FAIL(scheduler->cancel_dag_net(iter->first))) {
+          LOG_WARN("failed to check dag net exist", K(ret), K(iter->first));
+        }
       }
+    }
+
+    int64_t start_ts = ObTimeUtil::current_time();
+    for (; OB_SUCC(ret) && iter != tablet_map_.end(); ++iter) {
+      is_exist = true;
+      do {
+        if (OB_FAIL(check_task_exist_(iter->first, is_exist))) {
+          LOG_WARN("fail to check task exist", K(ret), "taks_id", iter->first);
+        } else if (is_exist && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+          LOG_WARN("cancel dag next task cost too much time", K(ret), "task_id", iter->first,
+              "cost_time", ObTimeUtil::current_time() - start_ts);
+        }
+      } while (is_exist && OB_SUCC(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      reuse_set();
+      tablet_map_.reuse();
     }
   }
   return ret;
