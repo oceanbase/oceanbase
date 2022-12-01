@@ -4037,7 +4037,7 @@ int ObPreCalcExprConstraint::check_is_match(const ObObjParam &obj_param, bool &i
     case PRE_CALC_PRECISE:
     case PRE_CALC_NOT_PRECISE: {
       //default escape
-      //@todu JueHui: make escape value can be paramterized
+      //@todu JueHui: make escape value can be parameterized
       char escape = '\\';
       bool is_precise = false;
       bool expect_precise = PRE_CALC_PRECISE == expect_result_;
