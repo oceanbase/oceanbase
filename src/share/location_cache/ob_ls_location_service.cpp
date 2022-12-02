@@ -656,6 +656,7 @@ int ObLSLocationService::renew_all_ls_locations()
   ObArray<uint64_t> tenant_ids;
   const bool can_erase = true;
   const int64_t renew_all_ls_loc_timeout = GCONF.location_cache_refresh_sql_timeout;
+  const bool inner_table_only = false;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("service not init", KR(ret));
@@ -678,7 +679,7 @@ int ObLSLocationService::renew_all_ls_locations()
               ctx,
               renew_all_ls_loc_timeout))) {
         LOG_WARN("fail to set default_timeout_ctx", KR(ret));
-      } else if (OB_FAIL(lst_->get_by_tenant(tenant_id, ls_infos))) {
+      } else if (OB_FAIL(lst_->get_by_tenant(tenant_id, inner_table_only, ls_infos))) {
         LOG_WARN("fail to get all ls info", KR(ret), K(tenant_id), K(ls_infos));
       } else {
         ARRAY_FOREACH_N(ls_infos, i, cnt) {
@@ -798,7 +799,8 @@ int ObLSLocationService::renew_location(
 
   if (FAILEDx(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout))) {
     LOG_WARN("fail to set default_timeout_ctx", KR(ret));
-  } else if (OB_FAIL(lst_->get(cluster_id, tenant_id, ls_id, ls_info))) {
+  } else if (OB_FAIL(lst_->get(cluster_id, tenant_id,
+             ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("fail to get log stream info by operator",
         KR(ret), K(cluster_id), K(tenant_id), K(ls_id));
     if (ObLocationServiceUtility::treat_sql_as_timeout(ret)) {

@@ -1147,7 +1147,8 @@ int ObLSMigrationHandler::get_ls_info_(
   } else if (nullptr == lst_operator) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, ls_->get_ls_id(), ls_info))) {
+  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id,
+             ls_->get_ls_id(), share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), "ls id", ls_->get_ls_id());
   }
   return ret;

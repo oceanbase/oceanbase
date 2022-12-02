@@ -334,6 +334,7 @@ int ObRsMgr::renew_master_rootserver(const int64_t cluster_id)
   } else if (OB_FAIL(GCTX.lst_operator_->get(cluster_id,
                                         OB_SYS_TENANT_ID,
                                         SYS_LS,
+                                        share::ObLSTable::DEFAULT_MODE,
                                         ls_info))) {
     LOG_WARN("get root log stream failed",
              KR(ret), K(cluster_id),

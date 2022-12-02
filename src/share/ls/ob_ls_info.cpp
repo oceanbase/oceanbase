@@ -608,10 +608,47 @@ int ObLSInfo::assign(const ObLSInfo &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
+    reset();
     tenant_id_ = other.get_tenant_id();
     ls_id_ = other.get_ls_id();
     if (OB_FAIL(copy_assign(replicas_, other.replicas_))) {
       LOG_WARN("failed to copy replicas_", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLSInfo::composite_with(const ObLSInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(
+      tenant_id_ != other.get_tenant_id()
+      || ls_id_ != other.get_ls_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_id or ls_id not matched", KR(ret), KPC(this), K(other));
+  } else {
+    ObLSReplica tmp_replica;
+    int64_t idx = OB_INVALID_INDEX; // not used
+    int tmp_ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.get_replicas().count(); i++) {
+      const ObLSReplica &ls_replica = other.get_replicas().at(i);
+      tmp_ret = find_idx_(ls_replica, idx);
+      if (OB_ENTRY_NOT_EXIST != tmp_ret) {
+        // ls replica exist or warn, do nothing
+        ret = tmp_ret;
+      } else {
+        tmp_replica.reset();
+        if (OB_FAIL(tmp_replica.assign(ls_replica))) {
+          LOG_WARN("fail to assign replica", KR(ret), K(ls_replica));
+        } else if (FALSE_IT(tmp_replica.update_to_follower_role())) {
+        } else if (OB_FAIL(add_replica(tmp_replica))) {
+          LOG_WARN("fail to add replica", KR(ret), K(tmp_replica));
+        }
+      }
+    } // end for
+
+    if (FAILEDx(update_replica_status())) {
+      LOG_WARN("fail to update replica status", KR(ret), KPC(this));
     }
   }
   return ret;

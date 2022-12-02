@@ -1825,6 +1825,7 @@ int ObDRWorker::check_tenant_locality_match(
                 GCONF.cluster_id,
                 ls_status_info.tenant_id_,
                 ls_status_info.ls_id_,
+                share::ObLSTable::COMPOSITE_MODE,
                 ls_info))) {
           LOG_WARN("fail to get log stream info", KR(ret));
         } else if (OB_FAIL(dr_ls_info.init())) {
@@ -1886,6 +1887,7 @@ int ObDRWorker::check_ls_locality_match_(
 int ObDRWorker::try_disaster_recovery()
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFORE_TRY_DISASTER_RECOVERY);
   ObCurTraceId::init(GCONF.self_addr_);
   ObArray<uint64_t> tenant_id_array;
   if (OB_UNLIKELY(!inited_)) {
@@ -1968,6 +1970,7 @@ int ObDRWorker::try_tenant_disaster_recovery(
                   GCONF.cluster_id,
                   ls_status_info.tenant_id_,
                   ls_status_info.ls_id_,
+                  share::ObLSTable::COMPOSITE_MODE,
                   ls_info))) {
             LOG_WARN("fail to get log stream info", KR(tmp_ret));
           } else if (OB_SUCCESS != (tmp_ret = dr_ls_info.init())) {
