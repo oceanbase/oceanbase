@@ -155,6 +155,7 @@ int ObPartTransCtx::post_msg_(const ObTwoPhaseCommitMsgType& msg_type,
   case ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_REQ: {
     Ob2pcAbortReqMsg abort_req;
     build_tx_common_msg_(receiver, abort_req);
+    abort_req.upstream_ = ls_id_;
     if (OB_FAIL(post_msg_(receiver, abort_req))) {
       TRANS_LOG(WARN, "rpc post msg failed", K(ret), K(*this), K(receiver), K(msg_type));
     }
@@ -704,6 +705,9 @@ int ObPartTransCtx::handle_tx_2pc_abort_req(const Ob2pcAbortReqMsg &msg)
 
   if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
     TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
+  } else if (msg.upstream_.is_valid() && // upstream may be invalid for orphan msg
+             OB_FAIL(set_2pc_upstream_(msg.upstream_))) {
+    TRANS_LOG(WARN, "set upstream failed", KR(ret), K(msg), K(*this));
   } else if (OB_FAIL(handle_2pc_req(msg_type))) {
     TRANS_LOG(WARN, "handle 2pc request failed", KR(ret), K(msg), K(*this));
   }
