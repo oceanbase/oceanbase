@@ -104,6 +104,7 @@ public:
   virtual ~ObLSTabletService();
 public:
   int init(ObLS *ls, observer::ObIMetaReport *rs_reporter);
+  int stop();
   void destroy();
   int offline();
   int online();
@@ -780,6 +781,7 @@ private:
   observer::ObIMetaReport *rs_reporter_;
   AllowToReadMgr allow_to_read_mgr_;
   bool is_inited_;
+  bool is_stopped_;
 };
 
 inline int64_t ObLSTabletService::get_tablet_count() const
