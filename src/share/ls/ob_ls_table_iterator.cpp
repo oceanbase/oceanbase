@@ -26,11 +26,15 @@ ObLSTableIterator::ObLSTableIterator()
       inner_idx_(0),
       lst_operator_(NULL),
       inner_ls_infos_(),
-      filters_()
+      filters_(),
+      inner_table_only_(false)
 {
 }
 
-int ObLSTableIterator::init(ObLSTableOperator &lst_operator, const uint64_t tenant_id)
+int ObLSTableIterator::init(
+    ObLSTableOperator &lst_operator,
+    const uint64_t tenant_id,
+    const share::ObLSTable::Mode mode)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -39,9 +43,15 @@ int ObLSTableIterator::init(ObLSTableOperator &lst_operator, const uint64_t tena
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(
+             share::ObLSTable::DEFAULT_MODE != mode
+             && share::ObLSTable::INNER_TABLE_ONLY_MODE != mode)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid mode", KR(ret), K(mode));
   } else {
     lst_operator_ = &lst_operator;
     tenant_id_ = tenant_id;
+    inner_table_only_ = (share::ObLSTable::INNER_TABLE_ONLY_MODE == mode);
     inited_ = true;
   }
   return ret;
@@ -88,8 +98,10 @@ int ObLSTableIterator::inner_open_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inner_idx_ should be equal to the count of inner array",
         KR(ret), K_(inner_idx), "inner_ls_infos count", inner_ls_infos_.count());
-  } else if (OB_FAIL(lst_operator_->get_by_tenant(tenant_id_, inner_ls_infos_))) {
-    LOG_WARN("fail to get ls infos by tenant", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(lst_operator_->get_by_tenant(
+             tenant_id_, inner_table_only_, inner_ls_infos_))) {
+    LOG_WARN("fail to get ls infos by tenant",
+             KR(ret), K_(tenant_id), K_(inner_table_only));
   }
   return ret;
 }

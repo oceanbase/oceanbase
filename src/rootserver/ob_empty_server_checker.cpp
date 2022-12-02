@@ -22,7 +22,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_rpc_struct.h"//GetLSReportCnt
-#include "share/ls/ob_ls_table_iterator.h"//ObLSTableIterator
+#include "share/ls/ob_ls_table_iterator.h"//ObAllLSTableIterator
 #include "share/ls/ob_ls_info.h"//ObLSInfo
 
 #include "observer/ob_server_struct.h"

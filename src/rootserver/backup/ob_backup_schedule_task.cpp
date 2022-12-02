@@ -461,7 +461,8 @@ int ObBackupDataLSTask::set_optional_servers_(const ObIArray<common::ObAddr> &bl
   if (nullptr == lst_operator) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, ls_id_, ls_info))) {
+  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id,
+             ls_id_, share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id_));
   } else {
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();
@@ -816,7 +817,8 @@ int ObBackupBuildIndexTask::set_optional_servers_(const ObIArray<common::ObAddr>
   if (nullptr == lst_operator) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, ls_id, ls_info))) {
+  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id,
+             ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
   } else {
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();

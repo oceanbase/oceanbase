@@ -191,7 +191,8 @@ int ObAdminSwitchReplicaRole::execute(const ObAdminSwitchReplicaRoleArg &arg)
   } else if (OB_ISNULL(GCTX.lst_operator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.lst_operator_ is NULL", K(arg), KR(ret), K(tenant_id));
-  } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id, tenant_id, ls_id, ls_info))) {
+  } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id, tenant_id,
+                     ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("get ls info from GCTX.lst_operator_ failed", K(arg), KR(ret), K(tenant_id));
   } else if (OB_FAIL(update_ls_election_reference_info_table(arg, tenant_id, ls_info))) {
     LOG_WARN("fail to update ls election reference info", K(arg), KR(ret), K(tenant_id));

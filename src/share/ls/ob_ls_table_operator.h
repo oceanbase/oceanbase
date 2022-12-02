@@ -66,40 +66,51 @@ public:
   // @param [in] cluster_id, belong to which cluster
   // @parma [in] tenant_id, get whose ls info
   // @param [in] ls_id, get which ls info
+  // @param [in] mode, determine data source of sys tenant's ls info
   // @param [out] ls_info, informations about a certain ls
   // TODO: make sure how to enable cluster_id
   virtual int get(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
+      const ObLSTable::Mode mode,
       ObLSInfo &ls_info) override;
 
   // operator for report - update a certain log stream's info
   // @param [in] replica, new replica informations to update
-  virtual int update(const ObLSReplica &replica) override;
-  // get all ls info in __all_ls_meta_table according to tenant_id
-  //
-  // @param [in] tenant_id, target tenant
-  // @param [out] ls_infos, all ls infos in __all_ls_meta_table
-  int get_by_tenant(const uint64_t tenant_id, ObIArray<ObLSInfo> &ls_infos);
-
-  // load all ls info in __all_ls_meta_table of the tenant_id
-  //
-  // @param [in] tenant_id, target tenant, only sys and meta tenant
-  // @param [out] ls_infos, all ls infos in __all_ls_meta_table or __all_virtual_core_meta_table
-  int load_all_ls_in_tenant(const uint64_t exec_tenant_id, ObIArray<ObLSInfo> &ls_infos);
+  // @param [in] inner_table_only, determine whether the sys tenant's ls info is recorded in inner table or in memory.
+  virtual int update(const ObLSReplica &replica, const bool inner_table_only) override;
 
   // remove ls replica from __all_ls_meta_table
   //
   // @param [in] tenant_id, the tenant which the ls belongs to
   // @param [in] ls_id, the ls which you want to remove
   // @param [in] server, address of the ls replica
+  // @param [in] inner_table_only, determine whether the sys tenant's ls info is recorded in inner table or in memory.
   virtual int remove(
       const uint64_t tenant_id,
       const ObLSID &ls_id,
-      const ObAddr &server) override;
-  // remove residual ls in __all_ls_meta_table for ObServerMetaTableChecker
+      const ObAddr &server,
+      const bool inner_table_only) override;
+
+  // get all ls info in __all_ls_meta_table according to tenant_id
+  // used for ObLSTableIterator in ObTenantMetaChecker
+  // @param [in] tenant_id, target tenant
+  // @param [out] ls_infos, all ls infos in __all_ls_meta_table
+  // @param [in] inner_table_only, determine whether the sys tenant's ls info is recorded in inner table or in memory.
+  int get_by_tenant(const uint64_t tenant_id, const bool inner_table_only, ObIArray<ObLSInfo> &ls_infos);
+
+  // load all ls info in __all_ls_meta_table of the tenant_id
   //
+  // used by ObAllLSTableIterator/ObTenantLSTableIterator in ObEmptyServerChecker/ObLostReplicaChecker
+  // will use share::ObLSTable::COMPOSITE_MODE to fetch sys tenant's ls
+  //
+  // @param [in] tenant_id, target tenant, only sys and meta tenant
+  // @param [out] ls_infos, all ls infos in __all_ls_meta_table or __all_virtual_core_meta_table
+  int load_all_ls_in_tenant(const uint64_t exec_tenant_id, ObIArray<ObLSInfo> &ls_infos);
+
+  // remove residual ls in __all_ls_meta_table for ObServerMetaTableChecker
+  // won't deal with sys tenant
   // @param [in] tenant_id, tenant for query
   // @param [in] server, target ObAddr
   // @param [out] residual_count, count of residual ls in table
@@ -125,11 +136,13 @@ private:
   // decide which ls_table to use according to ls_id: inmemory/rpc/persistent
   // @param [in] tenant_id, get whose ls info
   // @param [in] ls_id, get which ls info
+  // @param [in] inner_table_only, determine whether the sys tenant's ls info is recorded in inner table or in memory.
   // @param [out] ls_table, decide inmemory/rpc/persistent ls_table to use
   int get_ls_table_(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
+      const bool inner_table_only,
       ObLSTable *&ls_table);
 
 private:

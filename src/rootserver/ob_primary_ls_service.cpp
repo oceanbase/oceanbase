@@ -1603,7 +1603,8 @@ int ObTenantLSInfo::check_ls_can_offline_by_rpc_(const share::ObLSStatusInfo &in
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst operator or proxy is null", KR(ret), KP(lst_operator_),
              KP(rpc_proxy_));
-  } else if (OB_FAIL(lst_operator_->get(GCONF.cluster_id, info.tenant_id_, info.ls_id_, ls_info))) {
+  } else if (OB_FAIL(lst_operator_->get(GCONF.cluster_id, info.tenant_id_,
+             info.ls_id_, share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("failed to get ls info", KR(ret), K(info));
   } else if (OB_FAIL(ls_info.find_leader(replica))) {
     LOG_WARN("failed to find leader", KR(ret), K(ls_info));

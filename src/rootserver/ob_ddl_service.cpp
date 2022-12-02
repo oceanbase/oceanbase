@@ -19490,8 +19490,8 @@ int ObDDLService::broadcast_sys_table_schemas(
     ObArray<ObAddr> addrs;
     const ObLSReplica *leader = NULL;
     ObLSReplica::MemberList member_list;
-    if (OB_FAIL(lst_operator_->get(
-        GCONF.cluster_id, tenant_id, SYS_LS, ls_info))) {
+    if (OB_FAIL(lst_operator_->get(GCONF.cluster_id, tenant_id,
+        SYS_LS, share::ObLSTable::DEFAULT_MODE, ls_info))) {
       LOG_WARN("fail to get sys ls info", KR(ret), K(tenant_id));
     } else if (OB_FAIL(ls_info.find_leader(leader))) {
       LOG_WARN("fail to get leader", KR(ret), K(tenant_id));
@@ -19777,6 +19777,7 @@ int ObDDLService::init_tenant_schema(
           GCONF.cluster_id,
           tenant_id,
           SYS_LS,
+          share::ObLSTable::DEFAULT_MODE,
           sys_ls_info))) {
         LOG_WARN("fail to get sys ls info by operator", KR(ret), K(tenant_id));
       } else if (OB_FAIL(sys_ls_info.get_paxos_member_addrs(addrs))) {

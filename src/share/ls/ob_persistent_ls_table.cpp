@@ -95,11 +95,13 @@ int ObPersistentLSTable::get(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id,
+    const ObLSTable::Mode mode,
     ObLSInfo &ls_info)
 {
   int ret = OB_SUCCESS;
   const bool filter_flag_replica = true;
   const bool lock_replica = false;
+  UNUSED(mode);
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPersistentLSTable not init", KR(ret));
@@ -315,9 +317,12 @@ int ObPersistentLSTable::construct_ls_info(
   return ret;
 }
 
-int ObPersistentLSTable::update(const ObLSReplica &replica)
+int ObPersistentLSTable::update(
+    const ObLSReplica &replica,
+    const bool inner_table_only)
 {
   int ret = OB_SUCCESS;
+  UNUSED(inner_table_only);
   DEBUG_SYNC(BEFORE_UPDATE_LS_META_TABLE);
   const bool lock_replica = replica.is_strong_leader();
   AutoTransProxy proxy(*sql_proxy_);
@@ -715,9 +720,11 @@ int ObPersistentLSTable::construct_ls_infos_(
 int ObPersistentLSTable::remove(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
-    const ObAddr &server)
+    const ObAddr &server,
+    const bool inner_table_only)
 {
   int ret = OB_SUCCESS;
+  UNUSED(inner_table_only);
   char ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   ObSqlString sql;
   const uint64_t sql_tenant_id = get_private_table_exec_tenant_id(tenant_id);

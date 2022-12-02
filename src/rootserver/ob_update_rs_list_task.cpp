@@ -233,7 +233,8 @@ int ObUpdateRsListTask::get_rs_list(
   int ret = OB_SUCCESS;
   ObLSInfo ls_info;
   const int64_t tenant_id = OB_SYS_TENANT_ID;
-  if (OB_FAIL(lst.get(GCONF.cluster_id, tenant_id, SYS_LS, ls_info))) {
+  if (OB_FAIL(lst.get(GCONF.cluster_id, tenant_id,
+      SYS_LS, share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("lst_operator get failed", KR(ret), K(tenant_id), K(SYS_LS), K(ls_info));
   } else {
     const ObLSReplica *leader_replica = NULL;

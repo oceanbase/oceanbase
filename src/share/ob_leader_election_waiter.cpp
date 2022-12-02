@@ -172,7 +172,8 @@ int ObLSLeaderElectionWaiter::wait_elect_leader(
     int64_t sleep_interval = std::max(1l, check_interval / 100);
     while (!stop_) {
       const int64_t cluster_id = GCONF.cluster_id;
-      if (OB_FAIL(lst_operator_.get(cluster_id, tenant_id, ls_id, ls_info))) {
+      if (OB_FAIL(lst_operator_.get(cluster_id, tenant_id,
+          ls_id, share::ObLSTable::DEFAULT_MODE,ls_info))) {
         LOG_WARN("get partition info failed", K(tenant_id), K(ls_id), KR(ret));
       } else if (OB_FAIL(ls_info.find_leader(leader_replica))) {
         // failure is normal, since leader may have not taked over
