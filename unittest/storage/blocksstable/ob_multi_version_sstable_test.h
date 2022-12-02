@@ -442,7 +442,7 @@ void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
 
   ObLSID ls_id(ls_id_);
   ObTabletID tablet_id(tablet_id_);
-  ASSERT_EQ(OB_SUCCESS, data_desc_.init(table_schema_, ls_id, tablet_id, merge_type_, snapshot_version));
+  ASSERT_EQ(OB_SUCCESS, data_desc_.init(table_schema_, ls_id, tablet_id, merge_type_, snapshot_version, 1000000));
   void *builder_buf = allocator_.alloc(sizeof(ObSSTableIndexBuilder));
   root_index_builder_ = new (builder_buf) ObSSTableIndexBuilder();
   ASSERT_NE(nullptr, root_index_builder_);
@@ -452,7 +452,7 @@ void ObMultiVersionSSTableTest::reset_writer(const int64_t snapshot_version)
   data_desc_.row_store_type_ = row_store_type_;
   ASSERT_TRUE(data_desc_.is_valid());
 
-  ASSERT_EQ(OB_SUCCESS, index_desc_.init(index_schema_, ls_id, tablet_id, merge_type_, snapshot_version));
+  ASSERT_EQ(OB_SUCCESS, index_desc_.init(index_schema_, ls_id, tablet_id, merge_type_, snapshot_version, 1000000));
   ASSERT_TRUE(index_desc_.is_valid());
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(index_desc_));
 

@@ -1613,6 +1613,7 @@ int ObMockDirectReadIterator::init(ObStoreRowIterator *iter,
     end_ = scanner_->last_;
     row_.init(alloc, column_cnt);
     read_info_ = &read_info;
+    sstable_row_.capacity_ = read_info.get_request_count();
     sstable_row_.row_val_.cells_ = reinterpret_cast<common::ObObj *>(alloc.alloc(sizeof(ObObj) * column_cnt));
     sstable_row_.row_val_.count_ = read_info.get_request_count();
     const ObIArray<ObColDesc> &cols_desc = read_info.get_columns_desc();

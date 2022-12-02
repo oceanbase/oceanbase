@@ -1067,7 +1067,7 @@ int ObTableStoreUtil::compare_table_by_snapshot_version(const ObITable *ltable, 
   return ret;
 }
 
-int ObTableStoreUtil::sort_major_tables(ObArray<ObITable *> &tables)
+int ObTableStoreUtil::sort_major_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &tables)
 {
   int ret = OB_SUCCESS;
 

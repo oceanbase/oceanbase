@@ -53,7 +53,7 @@ public:
         K_(row_count_delta), K_(max_merged_trans_version), K_(is_encrypted),
         K_(is_deleted), K_(contain_uncommitted_row), K_(compressor_type),
         K_(master_key_id), K_(encrypt_id), K_(encrypt_key), K_(row_store_type),
-        K_(schema_version), K_(snapshot_version),
+        K_(schema_version), K_(snapshot_version), K_(is_last_row_last_flag),
         K_(logic_id), K_(macro_id), K_(column_checksums));
 public:
   int32_t version_;
@@ -75,6 +75,7 @@ public:
   bool is_encrypted_;
   bool is_deleted_;
   bool contain_uncommitted_row_;
+  bool is_last_row_last_flag_;
   ObCompressorType compressor_type_;
   int64_t master_key_id_;
   int64_t encrypt_id_;
@@ -111,6 +112,10 @@ public:
   OB_INLINE int get_rowkey(ObDatumRowkey &rowkey) const
   {
     return rowkey.assign(end_key_.datums_, end_key_.datum_cnt_);
+  }
+  OB_INLINE bool is_last_row_last_flag() const
+  {
+    return val_.is_last_row_last_flag_;
   }
   OB_INLINE bool is_valid() const
   {

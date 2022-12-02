@@ -225,6 +225,8 @@ struct ObTabletMergeCtx
   ObLSHandle ls_handle_;
   ObTabletHandle tablet_handle_;
 
+  int16_t sstable_logic_seq_;
+
   int64_t progressive_merge_num_;
   int64_t progressive_merge_round_;
   int64_t progressive_merge_step_;

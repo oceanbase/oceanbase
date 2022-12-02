@@ -44,16 +44,15 @@ struct TestItem
 class TestCompator
 {
 public:
-  int get_error_code() { return OB_SUCCESS; }
-  int64_t operator()(const TestItem &a, const TestItem &b)
+  int cmp(const TestItem &a, const TestItem &b, int64_t &cmp_ret)
   {
-    int64_t cmp_ret = 0;
+    cmp_ret = 0;
     if (a.v_ < b.v_) {
       cmp_ret = -1;
     } else if (a.v_ > b.v_) {
       cmp_ret = 1;
     }
-    return cmp_ret;
+    return OB_SUCCESS;
   }
 };
 
@@ -399,7 +398,8 @@ TEST_F(ObSimpleRowsMergerTest, reset_range)
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "item or row is null", K(ret), KP(top_item));
     } else {
-      const int64_t tree_ret = tc(gap_item, *top_item);
+      int64_t tree_ret = 0;
+      ASSERT_EQ(tc.cmp(gap_item, *top_item, tree_ret), OB_SUCCESS);
       if (top_item->iter_idx_ < gap_idx || tree_ret < 0) {
         items[remain_item++] = *top_item;
         // must set to false if using simple row merger

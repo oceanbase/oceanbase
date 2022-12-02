@@ -60,7 +60,8 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     row_store_type_(ObRowStoreType::MAX_ROW_STORE),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     encrypt_id_(0),
-    master_key_id_(0)
+    master_key_id_(0),
+    sstable_logic_seq_(0)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -91,9 +92,11 @@ bool ObSSTableBasicMeta::operator==(const ObSSTableBasicMeta &other) const
       && progressive_merge_step_ == other.progressive_merge_step_
       && upper_trans_version_ == other.upper_trans_version_
       && max_merged_trans_version_ == other.max_merged_trans_version_
+      && recycle_version_ == other.recycle_version_
       && ddl_scn_ == other.ddl_scn_
       && filled_tx_scn_ == other.filled_tx_scn_
       && data_index_tree_height_ == other.data_index_tree_height_
+      && sstable_logic_seq_ == other.sstable_logic_seq_
       && table_mode_ == other.table_mode_
       && status_ == other.status_
       && contain_uncommitted_row_ == other.contain_uncommitted_row_
@@ -127,6 +130,7 @@ bool ObSSTableBasicMeta::is_valid() const
            && ddl_scn_.is_valid()
            && filled_tx_scn_.is_valid()
            && data_index_tree_height_ >= 0
+           && sstable_logic_seq_ >= 0
            && row_store_type_ < ObRowStoreType::MAX_ROW_STORE);
   return ret;
 }
@@ -164,6 +168,7 @@ void ObSSTableBasicMeta::reset()
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   encrypt_id_ = 0;
   master_key_id_ = 0;
+  sstable_logic_seq_ = 0;
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
 
@@ -218,7 +223,8 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   row_store_type_,
                   compressor_type_,
                   encrypt_id_,
-                  master_key_id_);
+                  master_key_id_,
+                  sstable_logic_seq_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -248,45 +254,54 @@ DEFINE_DESERIALIZE(ObSSTableBasicMeta)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect buf_len", K(ret), K(data_len), K(pos));
     } else {
-      MEMCPY(encrypt_key_, buf + pos, sizeof(encrypt_key_));
-      pos += sizeof(encrypt_key_);
-      LST_DO_CODE(OB_UNIS_DECODE,
-                  row_count_,
-                  occupy_size_,
-                  original_size_,
-                  data_checksum_,
-                  index_type_,
-                  rowkey_column_count_,
-                  column_cnt_,
-                  data_macro_block_count_,
-                  data_micro_block_count_,
-                  use_old_macro_block_count_,
-                  index_macro_block_count_,
-                  sstable_format_version_,
-                  schema_version_,
-                  create_snapshot_version_,
-                  progressive_merge_round_,
-                  progressive_merge_step_,
-                  upper_trans_version_,
-                  max_merged_trans_version_,
-                  recycle_version_,
-                  ddl_scn_,
-                  filled_tx_scn_,
-                  data_index_tree_height_,
-                  table_mode_,
-                  status_,
-                  contain_uncommitted_row_,
-                  row_store_type_,
-                  compressor_type_,
-                  encrypt_id_,
-                  master_key_id_);
-      if (OB_FAIL(ret)) {
+      //Since the data len is greater than the actual length_, it is not compatible when adding a field
+      if (OB_FAIL(decode_for_compat(buf, start_pos + length_, pos))) {
+        LOG_WARN("failed to decode", K(ret), K(pos), K(start_pos), KPC(this));
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, deserialize may has bug", K(ret), K(pos), K(start_pos), KPC(this));
       }
     }
   }
+  return ret;
+}
+
+int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  MEMCPY(encrypt_key_, buf + pos, sizeof(encrypt_key_));
+  pos += sizeof(encrypt_key_);
+  LST_DO_CODE(OB_UNIS_DECODE,
+              row_count_,
+              occupy_size_,
+              original_size_,
+              data_checksum_,
+              index_type_,
+              rowkey_column_count_,
+              column_cnt_,
+              data_macro_block_count_,
+              data_micro_block_count_,
+              use_old_macro_block_count_,
+              index_macro_block_count_,
+              sstable_format_version_,
+              schema_version_,
+              create_snapshot_version_,
+              progressive_merge_round_,
+              progressive_merge_step_,
+              upper_trans_version_,
+              max_merged_trans_version_,
+              recycle_version_,
+              ddl_scn_,
+              filled_tx_scn_,
+              data_index_tree_height_,
+              table_mode_,
+              status_,
+              contain_uncommitted_row_,
+              row_store_type_,
+              compressor_type_,
+              encrypt_id_,
+              master_key_id_,
+              sstable_logic_seq_);
   return ret;
 }
 
@@ -325,7 +340,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               row_store_type_,
               compressor_type_,
               encrypt_id_,
-              master_key_id_);
+              master_key_id_,
+              sstable_logic_seq_);
   return len;
 }
 
@@ -356,11 +372,6 @@ ObSSTableMeta::ObSSTableMeta()
 ObSSTableMeta::~ObSSTableMeta()
 {
   reset();
-}
-
-int64_t ObSSTableBasicMeta::get_recycle_version() const
-{
-  return recycle_version_;
 }
 
 int ObSSTableMeta::load_root_block_data()
@@ -456,11 +467,13 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.table_mode_ = param.table_mode_;
     basic_meta_.contain_uncommitted_row_ = param.contain_uncommitted_row_;
     basic_meta_.max_merged_trans_version_ = param.max_merged_trans_version_;
+    basic_meta_.recycle_version_ = param.recycle_version_;
     basic_meta_.upper_trans_version_ = contain_uncommitted_row() ?
         INT64_MAX : basic_meta_.max_merged_trans_version_;
     basic_meta_.ddl_scn_ = param.ddl_scn_;
     basic_meta_.filled_tx_scn_ = param.filled_tx_scn_;
     basic_meta_.data_index_tree_height_ = param.data_index_tree_height_;
+    basic_meta_.sstable_logic_seq_ = param.sstable_logic_seq_;
     basic_meta_.row_store_type_ = param.root_row_store_type_;
     basic_meta_.compressor_type_ = param.compressor_type_;
     basic_meta_.encrypt_id_ = param.encrypt_id_;

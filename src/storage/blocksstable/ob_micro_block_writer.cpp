@@ -159,6 +159,7 @@ int ObMicroBlockWriter::build_block(char *&buf, int64_t &size)
     header_->row_index_offset_ = static_cast<int32_t>(data_buffer_.length());
     header_->contain_uncommitted_rows_ = contain_uncommitted_row_;
     header_->max_merged_trans_version_ = max_merged_trans_version_;
+    header_->is_last_row_last_flag_ = is_last_row_last_flag_;
     if (data_buffer_.remain() < get_index_size()) {
       ret = OB_SIZE_OVERFLOW;
       STORAGE_LOG(WARN, "row data buffer is overflow.",

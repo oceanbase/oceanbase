@@ -121,6 +121,10 @@ public:
   {
     return meta_.basic_meta_.recycle_version_;
   }
+  int16_t get_sstable_seq() const
+  {
+    return meta_.basic_meta_.sstable_logic_seq_;
+  }
   share::SCN get_filled_tx_scn() const
   {
     return meta_.basic_meta_.filled_tx_scn_;

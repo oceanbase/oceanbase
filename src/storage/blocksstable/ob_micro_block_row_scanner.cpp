@@ -1302,7 +1302,6 @@ void ObMultiVersionMicroBlockMinorMergeRowScanner::clear_scan_status()
   committed_trans_version_ = INT64_MAX;
   is_last_multi_version_row_ = false;
   have_output_row_flag_ = false;
-  is_first_row_filtered_ = false;
 }
 
 int ObMultiVersionMicroBlockMinorMergeRowScanner::init_row_queue(const int64_t row_col_cnt)

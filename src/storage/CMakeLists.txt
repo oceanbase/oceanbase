@@ -26,6 +26,7 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_macro_block_reader.cpp
   blocksstable/ob_macro_block_struct.cpp
   blocksstable/ob_macro_block_writer.cpp
+  blocksstable/ob_data_macro_block_merge_writer.cpp
   blocksstable/ob_micro_block_cache.cpp
   blocksstable/ob_micro_block_reader.cpp
   blocksstable/ob_micro_block_row_exister.cpp
@@ -438,6 +439,7 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_sstable_merge_info_mgr.cpp
   compaction/ob_tenant_compaction_progress.cpp
   compaction/ob_server_compaction_event_history.cpp
+  compaction/ob_partition_rows_merger.cpp
 )
 
 ob_set_subtarget(ob_storage memtable
