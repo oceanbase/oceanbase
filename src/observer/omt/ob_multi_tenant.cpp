@@ -1466,7 +1466,7 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
       tenant->set_unit_status(ObUnitInfoGetter::UNIT_DELETING_IN_OBSERVER);
       tenant->set_create_status(ObTenantCreateStatus::DELETING);
       if (OB_FAIL(write_delete_tenant_prepare_slog(tenant_id))) {
-        LOG_ERROR("fail to write delete tenant slog", K(ret), K(tenant_id), K(old_unit_status));
+        LOG_WARN("fail to write delete tenant slog", K(ret), K(tenant_id), K(old_unit_status));
         tenant->set_unit_status(old_unit_status);
       }
     }
@@ -1493,7 +1493,7 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
         LOG_ERROR("fail to clear persistent_data", K(ret), K(tenant_id));
         SLEEP(1);
       } else if (OB_FAIL(write_delete_tenant_commit_slog(tenant_id))) {
-        LOG_ERROR("fail to write delete tenant commit slog", K(ret), K(tenant_id));
+        LOG_WARN("fail to write delete tenant commit slog", K(ret), K(tenant_id));
       }
     } while (OB_FAIL(ret));
   }
