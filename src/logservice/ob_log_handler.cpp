@@ -604,7 +604,7 @@ int ObLogHandler::change_replica_num(const common::ObMemberList &member_list,
         K(new_replica_num), K(timeout_us));
   } else {
     LogConfigChangeCmd req(self_, id_, member_list, curr_replica_num, new_replica_num,
-        CHANGE_REPLICA_NUM_CMD, timeout_us * 1000);
+        CHANGE_REPLICA_NUM_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, "submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -638,7 +638,7 @@ int ObLogHandler::add_member(const common::ObMember &added_member,
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(added_member), K(new_replica_num), K(timeout_us));
   } else {
     common::ObMember dummy_member;
-    LogConfigChangeCmd req(self_, id_, added_member, dummy_member, new_replica_num, ADD_MEMBER_CMD, timeout_us * 1000);
+    LogConfigChangeCmd req(self_, id_, added_member, dummy_member, new_replica_num, ADD_MEMBER_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -671,7 +671,7 @@ int ObLogHandler::remove_member(const common::ObMember &removed_member,
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(removed_member), K(new_replica_num), K(timeout_us));
   } else {
     common::ObMember dummy_member;
-    LogConfigChangeCmd req(self_, id_, dummy_member, removed_member, new_replica_num, REMOVE_MEMBER_CMD, timeout_us * 1000);
+    LogConfigChangeCmd req(self_, id_, dummy_member, removed_member, new_replica_num, REMOVE_MEMBER_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -705,7 +705,7 @@ int ObLogHandler::replace_member(const common::ObMember &added_member,
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(added_member), K(removed_member), K(timeout_us));
   } else {
-    LogConfigChangeCmd req(self_, id_, added_member, removed_member, 0, REPLACE_MEMBER_CMD, timeout_us * 1000);
+    LogConfigChangeCmd req(self_, id_, added_member, removed_member, 0, REPLACE_MEMBER_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -736,7 +736,7 @@ int ObLogHandler::add_learner(const common::ObMember &added_learner,
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(added_learner), K(timeout_us));
   } else {
     common::ObMember dummy_member;
-    LogConfigChangeCmd req(self_, id_, added_learner, dummy_member, 0, ADD_LEARNER_CMD, timeout_us * 1000);
+    LogConfigChangeCmd req(self_, id_, added_learner, dummy_member, 0, ADD_LEARNER_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -767,7 +767,7 @@ int ObLogHandler::remove_learner(const common::ObMember &removed_learner,
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(removed_learner), K(timeout_us));
   } else {
     common::ObMember dummy_member;
-    LogConfigChangeCmd req(self_, id_, dummy_member, removed_learner, 0, REMOVE_LEARNER_CMD, timeout_us * 1000);
+    LogConfigChangeCmd req(self_, id_, dummy_member, removed_learner, 0, REMOVE_LEARNER_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -798,7 +798,7 @@ int ObLogHandler::switch_learner_to_acceptor(const common::ObMember &learner,
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(learner), K(timeout_us));
   } else {
-    LogConfigChangeCmd req(self_, id_, learner, learner, 0, SWITCH_TO_ACCEPTOR_CMD, timeout_us * 1000);
+    LogConfigChangeCmd req(self_, id_, learner, learner, 0, SWITCH_TO_ACCEPTOR_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -828,7 +828,7 @@ int ObLogHandler::switch_acceptor_to_learner(const common::ObMember &member,
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(member), K(timeout_us));
   } else {
-    LogConfigChangeCmd req(self_, id_, member, member, 0, SWITCH_TO_LEARNER_CMD, timeout_us * 1000);
+    LogConfigChangeCmd req(self_, id_, member, member, 0, SWITCH_TO_LEARNER_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -861,7 +861,7 @@ int ObLogHandler::add_arb_member(const common::ObMember &added_member,
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(added_member), K(new_replica_num), K(timeout_us));
   } else {
     common::ObMember dummy_member;
-    LogConfigChangeCmd req(self_, id_, added_member, dummy_member, new_replica_num, ADD_ARB_MEMBER_CMD, timeout_us * 1000);
+    LogConfigChangeCmd req(self_, id_, added_member, dummy_member, new_replica_num, ADD_ARB_MEMBER_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -894,7 +894,7 @@ int ObLogHandler::remove_arb_member(const common::ObMember &removed_member,
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(removed_member), K(new_replica_num), K(timeout_us));
   } else {
     common::ObMember dummy_member;
-    LogConfigChangeCmd req(self_, id_, dummy_member, removed_member, new_replica_num, REMOVE_ARB_MEMBER_CMD, timeout_us * 1000);
+    LogConfigChangeCmd req(self_, id_, dummy_member, removed_member, new_replica_num, REMOVE_ARB_MEMBER_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -928,7 +928,7 @@ int ObLogHandler::replace_arb_member(const common::ObMember &added_member,
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(added_member), K(removed_member), K(timeout_us));
   } else {
-    LogConfigChangeCmd req(self_, id_, added_member, removed_member, 0, REPLACE_ARB_MEMBER_CMD, timeout_us * 1000);
+    LogConfigChangeCmd req(self_, id_, added_member, removed_member, 0, REPLACE_ARB_MEMBER_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
@@ -955,7 +955,7 @@ int ObLogHandler::degrade_acceptor_to_learner(const common::ObMemberList &member
              timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(member_list), K(timeout_us));
-  } else if (OB_FAIL(palf_handle_.degrade_acceptor_to_learner(member_list, timeout_us * 1000L))) {
+  } else if (OB_FAIL(palf_handle_.degrade_acceptor_to_learner(member_list, timeout_us))) {
     CLOG_LOG(WARN, "degrade_acceptor_to_learner failed", KR(ret), K_(id), K(member_list), K(timeout_us));
   } else {
     CLOG_LOG(INFO, "degrade_acceptor_to_learner success", KR(ret), K_(id), K(member_list));
@@ -980,7 +980,7 @@ int ObLogHandler::upgrade_learner_to_acceptor(const common::ObMemberList &learne
              timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(learner_list), K(timeout_us));
-  } else if (OB_FAIL(palf_handle_.upgrade_learner_to_acceptor(learner_list, timeout_us * 1000L))) {
+  } else if (OB_FAIL(palf_handle_.upgrade_learner_to_acceptor(learner_list, timeout_us))) {
     CLOG_LOG(WARN, "upgrade_learner_to_acceptor failed", KR(ret), K_(id), K(learner_list), K(timeout_us));
   } else {
     CLOG_LOG(INFO, "upgrade_learner_to_acceptor success", KR(ret), K_(id), K(learner_list));
@@ -1008,6 +1008,7 @@ int ObLogHandler::submit_config_change_cmd_(const LogConfigChangeCmd &req)
     while(OB_SUCCESS == ret || OB_NOT_MASTER == ret) {
       if (common::ObTimeUtility::current_time() - start_time_us >= req.timeout_us_) {
         ret = OB_TIMEOUT;
+        FLOG_WARN("config_change timeout", KR(ret), KPC(this), K(req), K(start_time_us));
         break;
       }
       // need to remove added member from election blacklist before adding member
