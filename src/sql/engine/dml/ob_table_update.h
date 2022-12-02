@@ -120,6 +120,8 @@ public:
   virtual int rescan(ObExecContext& ctx) const override;
   int get_next_row(ObExecContext& ctx, const common::ObNewRow*& row) const override;
   virtual int switch_iterator(ObExecContext& ctx) const override;
+  int get_next_row_from_iter(
+      ObExecContext &ctx, ObTableUpdateCtx *update_ctx, const common::ObNewRow *&row, bool is_old_row) const;
   int init_updated_column_count(common::ObIAllocator& allocator, int64_t count)
   {
     UNUSED(allocator);

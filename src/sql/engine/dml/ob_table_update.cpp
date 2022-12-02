@@ -461,7 +461,24 @@ int ObTableUpdate::init_op_ctx(ObExecContext& ctx) const
   return ret;
 }
 
-inline int ObTableUpdate::update_rows(ObExecContext& ctx, int64_t& affected_rows) const
+int ObTableUpdate::get_next_row_from_iter(
+    ObExecContext &ctx, ObTableUpdateCtx *update_ctx, const common::ObNewRow *&row, bool is_old_row) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_next_row(ctx, row))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("get next row failed", K(ret));
+    }
+  } else if (row != nullptr) {
+    int64_t row_idx = is_old_row ? 0 : 1;
+    if (OB_FAIL(copy_cur_row_by_projector(update_ctx->cur_rows_[row_idx], row))) {
+      LOG_WARN("copy old row failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+inline int ObTableUpdate::update_rows(ObExecContext &ctx, int64_t &affected_rows) const
 {
   int ret = OB_SUCCESS;
   ObTableUpdateCtx* update_ctx = NULL;
@@ -506,12 +523,9 @@ inline int ObTableUpdate::update_rows(ObExecContext& ctx, int64_t& affected_rows
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("create current rows failed", K(ret), K_(projector_size));
     }
-    while (OB_SUCC(ret) && OB_SUCC(get_next_row(ctx, old_row)) && OB_SUCC(get_next_row(ctx, new_row))) {
-      if (OB_FAIL(copy_cur_row_by_projector(update_ctx->cur_rows_[0], old_row))) {
-        LOG_WARN("copy old row failed", K(ret));
-      } else if (OB_FAIL(copy_cur_row_by_projector(update_ctx->cur_rows_[1], new_row))) {
-        LOG_WARN("copy new row failed", K(ret));
-      } else if (OB_FAIL(partition_service->update_row(my_session->get_trans_desc(),
+    while (OB_SUCC(ret) && OB_SUCC(get_next_row_from_iter(ctx, update_ctx, old_row, true)) &&
+           OB_SUCC(get_next_row_from_iter(ctx, update_ctx, new_row, false))) {
+      if (OB_FAIL(partition_service->update_row(my_session->get_trans_desc(),
                      update_ctx->dml_param_,
                      update_ctx->part_key_,
                      column_ids_,
