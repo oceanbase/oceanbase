@@ -95,12 +95,15 @@ int ObLSRestoreHandler::offline()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (!is_online_) {
+    LOG_INFO("ls restore handler is already offline");
   } else {
     lib::ObMutexGuard guard(mtx_);
     if (OB_FAIL(cancel_task_())) {
       LOG_WARN("failed to cancel task", K(ret), KPC(ls_));
     } else {
       is_online_ = false;
+      LOG_INFO("ls restore handler offline finish");
     }
   }
   return ret;
@@ -117,41 +120,26 @@ int ObLSRestoreHandler::online()
     LOG_WARN("not init", K(ret));
   } else if (is_online_) {
     // do nothing
-    LOG_INFO("ls is online", KPC(ls_));
+    LOG_INFO("ls restore handler is already online");
   } else if (OB_FAIL(ls_->get_restore_status(new_status))) {
     LOG_WARN("fail to get_restore_status", K(ret), KPC(ls_));
   } else if (new_status.is_restore_none()) {
     is_online_ = true;
   } else {
     lib::ObMutexGuard guard(mtx_);
-    // online after rebuild or migrate. the restore status may changed.
-    // so, we refresh the restore state handler according to the new ls restore status.
-    if (OB_FAIL(fill_restore_arg_())) {
-      LOG_WARN("fail to fill restore arg", K(ret));
-    } else if (OB_FAIL(get_restore_state_handler_(new_status, new_state_handler))) {
-      LOG_WARN("fail to get restore state handler", K(ret), K(new_status));
-    } else {
-      if (nullptr != state_handler_) {
-        // when online, the old task should be cancel.
-        if (OB_FAIL(state_handler_->get_tablet_mgr().cancel_task())) {
-          LOG_WARN("failed to cancel task", K(ret));
-        } else {
-          state_handler_->~ObILSRestoreState();
-          allocator_.free(state_handler_);
-          state_handler_ = nullptr;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        state_handler_ = new_state_handler;
-        is_online_ = true;
-        new_state_handler = nullptr;
+    if (nullptr != state_handler_) {
+      // when online, the old task should be cancel.
+      if (OB_FAIL(state_handler_->get_tablet_mgr().cancel_task())) {
+        LOG_WARN("failed to cancel task", K(ret));
+      } else {
+        state_handler_->~ObILSRestoreState();
+        allocator_.free(state_handler_);
+        state_handler_ = nullptr;
       }
     }
-
-    if (OB_FAIL(ret) && nullptr != new_state_handler) {
-      new_state_handler->~ObILSRestoreState();
-      allocator_.free(new_state_handler);
-      new_state_handler = nullptr;
+    if (OB_SUCC(ret)) {
+      is_online_ = true;
+      LOG_INFO("ls restore handler online finish");
     }
   }
   return ret;

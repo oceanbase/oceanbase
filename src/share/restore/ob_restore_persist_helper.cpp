@@ -766,7 +766,7 @@ int ObRestorePersistHelper::insert_initial_ls_restore_progress(
     LOG_WARN("ObRestorePersistHelper not init", K(ret));
   } else if (OB_FAIL(ls_restore_progress_table_operator.init(OB_ALL_LS_RESTORE_PROGRESS_TNAME, *this))) {
     LOG_WARN("failed to init ls restore progress table", K(ret));
-  } else if (OB_FAIL(ls_restore_progress_table_operator.insert_row(proxy, persist_info, affected_rows))) {
+  } else if (OB_FAIL(ls_restore_progress_table_operator.insert_or_update_row(proxy, persist_info, affected_rows))) {
     LOG_WARN("failed to insert initial ls restore progress", K(ret));
   }
 
