@@ -1488,8 +1488,15 @@ int ObWhereSubQueryPullup::wrap_case_when(ObSelectStmt &child_stmt,
                                                               case_when_expr,
                                                               ctx_))) {
       LOG_WARN("failed to build case when expr", K(ret));
-    } else {
-      expr = case_when_expr;
+    } else if (OB_ISNULL(case_when_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("case when expr is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
+                                                               ctx_->session_info_,
+                                                               *case_when_expr,
+                                                               expr->get_result_type(),
+                                                               expr))) {
+      LOG_WARN("failed to add cast expr above", K(ret));
     }
   }
   return ret;

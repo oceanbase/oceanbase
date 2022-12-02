@@ -158,23 +158,6 @@ int ObTransformGroupByPushdown::adjust_transform_types(uint64_t &transform_types
   return ret;
 }
 
-int ObTransformGroupByPushdown::check_join_condition_contain_lob(ObDMLStmt &stmt, bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-  bool has_lob = false;;
-  ObSEArray<ObRawExpr *, 4> conditions;
-  if (OB_FAIL(append(conditions, stmt.get_condition_exprs()))) {
-    LOG_WARN("extract colum failed", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_on_conditions(stmt, conditions))) {
-    LOG_WARN("failed to get all on conditions", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::check_exprs_contain_lob_type(conditions, has_lob))) {
-    LOG_WARN("check lob failed", K(ret));
-  } else {
-    is_valid = !has_lob;
-  }
-  return ret;
-}
-
 int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *stmt,
                                                                   bool &is_valid)
 {
@@ -222,8 +205,6 @@ int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *s
     LOG_WARN("failed to check collation validity", K(ret));
   } else if (!is_valid) {
     // do nothing
-  } else if (OB_FAIL(check_join_condition_contain_lob(*stmt, is_valid))) {
-     LOG_WARN("check join condition contain clob failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt->get_aggr_item_size(); ++i) {
     ObAggFunRawExpr *aggr_expr = NULL;
