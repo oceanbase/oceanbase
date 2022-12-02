@@ -19269,6 +19269,30 @@ static const _error _error_OB_ESI_SESSION_NOT_EXIST = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9090, obesi process session not exist",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9090, obesi process session not exist"
 };
+static const _error _error_OB_ALREADY_IN_ARCHIVE_MODE = {
+      .error_name            = "OB_ALREADY_IN_ARCHIVE_MODE",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "Already in ARCHIVELOG mode",
+      .str_user_error        = "Already in ARCHIVELOG mode",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9091, Already in ARCHIVELOG mode",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9091, Already in ARCHIVELOG mode"
+};
+static const _error _error_OB_ALREADY_IN_NOARCHIVE_MODE = {
+      .error_name            = "OB_ALREADY_IN_NOARCHIVE_MODE",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "Already in NOARCHIVELOG mode",
+      .str_user_error        = "Already in NOARCHIVELOG mode",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9092, Already in NOARCHIVELOG mode",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9092, Already in NOARCHIVELOG mode"
+};
 static const _error _error_OB_NO_SUCH_FILE_OR_DIRECTORY = {
       .error_name            = "OB_NO_SUCH_FILE_OR_DIRECTORY",
       .error_cause           = "Internal Error",
@@ -23592,6 +23616,8 @@ struct ObStrErrorInit
     _errors[-OB_BACKUP_MAJOR_NOT_COVER_MINOR] = &_error_OB_BACKUP_MAJOR_NOT_COVER_MINOR;
     _errors[-OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT] = &_error_OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT;
     _errors[-OB_ESI_SESSION_NOT_EXIST] = &_error_OB_ESI_SESSION_NOT_EXIST;
+    _errors[-OB_ALREADY_IN_ARCHIVE_MODE] = &_error_OB_ALREADY_IN_ARCHIVE_MODE;
+    _errors[-OB_ALREADY_IN_NOARCHIVE_MODE] = &_error_OB_ALREADY_IN_NOARCHIVE_MODE;
     _errors[-OB_NO_SUCH_FILE_OR_DIRECTORY] = &_error_OB_NO_SUCH_FILE_OR_DIRECTORY;
     _errors[-OB_FILE_OR_DIRECTORY_EXIST] = &_error_OB_FILE_OR_DIRECTORY_EXIST;
     _errors[-OB_FILE_OR_DIRECTORY_PERMISSION_DENIED] = &_error_OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;

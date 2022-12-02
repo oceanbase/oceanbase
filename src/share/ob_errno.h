@@ -1373,6 +1373,8 @@ constexpr int OB_BACKUP_FORMAT_FILE_NOT_MATCH = -9081;
 constexpr int OB_BACKUP_MAJOR_NOT_COVER_MINOR = -9085;
 constexpr int OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT = -9086;
 constexpr int OB_ESI_SESSION_NOT_EXIST = -9090;
+constexpr int OB_ALREADY_IN_ARCHIVE_MODE = -9091;
+constexpr int OB_ALREADY_IN_NOARCHIVE_MODE = -9092;
 constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
@@ -3205,6 +3207,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_MAJOR_NOT_COVER_MINOR__USER_ERROR_MSG "backup major sstable range not cover minor sstable"
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__USER_ERROR_MSG "backup advance checkpoint by flush timeout"
 #define OB_ESI_SESSION_NOT_EXIST__USER_ERROR_MSG "obesi process session not exist"
+#define OB_ALREADY_IN_ARCHIVE_MODE__USER_ERROR_MSG "Already in ARCHIVELOG mode"
+#define OB_ALREADY_IN_NOARCHIVE_MODE__USER_ERROR_MSG "Already in NOARCHIVELOG mode"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
@@ -5038,6 +5042,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_MAJOR_NOT_COVER_MINOR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9085, backup major sstable range not cover minor sstable"
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9086, backup advance checkpoint by flush timeout"
 #define OB_ESI_SESSION_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9090, obesi process session not exist"
+#define OB_ALREADY_IN_ARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9091, Already in ARCHIVELOG mode"
+#define OB_ALREADY_IN_NOARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9092, Already in NOARCHIVELOG mode"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"
