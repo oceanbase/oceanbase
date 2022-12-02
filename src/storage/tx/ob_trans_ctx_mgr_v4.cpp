@@ -366,6 +366,8 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
   ObTransCtx *tmp_ctx = NULL, *exist_ctx = NULL;
   bool leader = false, insert_succ = false;
   int64_t epoch = 0;
+
+  exist = false;
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
     ret = OB_NOT_INIT;
@@ -391,7 +393,6 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
     TRANS_LOG(WARN, "alloc transaction context error", K(arg));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    exist = false;
     CtxLockGuard ctx_lock_guard;
     ObPartTransCtx *tmp = static_cast<ObPartTransCtx *>(tmp_ctx);
     if (OB_FAIL(tmp->init(arg.tenant_id_,
