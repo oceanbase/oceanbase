@@ -3471,8 +3471,9 @@ bool ObPartTransCtx::is_root() const { return !exec_info_.upstream_.is_valid(); 
 bool ObPartTransCtx::is_leaf() const
 {
   return exec_info_.participants_.empty()
-         // TODO(handora.qc): is root also a leaf?
-         && !is_root();
+    // root must not be leaf, because the distributed txn must be composed by
+    // more than one participants.
+    && !is_root();
 }
 
 //***************************** for 4.0
