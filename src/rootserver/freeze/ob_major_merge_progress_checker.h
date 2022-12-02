@@ -26,6 +26,7 @@ class ObTabletTableOperator;
 class ObLSInfo;
 class ObLSTableOperator; 
 class ObIServerTrace;
+class ObLSReplica;
 namespace schema
 {
 class ObSchemaGetterGuard;
@@ -75,6 +76,13 @@ private:
                                  int64_t &full_replica_num,
                                  int64_t &all_replica_num,
                                  int64_t &majority);
+  // get member_list of ls leader replica
+  int get_member_list(const share::ObLSInfo &ls_info,
+                      share::ObLSReplica::MemberList &member_list) const;
+  int is_replica_in_ls_member_list(const share::ObTabletReplica &replica,
+                                   const share::ObLSReplica::MemberList &member_list,
+                                   bool &is_in_member_list) const;
+
 private:
   bool is_inited_;
   uint64_t tenant_id_;
