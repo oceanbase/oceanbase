@@ -150,8 +150,8 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
         ret = OB_SUCCESS;
         break;
     }
-    error_info.collect_error_info(package_info);
   }
+  OZ (error_info.collect_error_info(package_info));
   return ret;
 }
 
@@ -247,7 +247,6 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
         LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR, "PACKAGE",
                       db_name.length(), db_name.ptr(),
                       package_name.length(), package_name.ptr());
-        collec_error_info(package_spec_info, error_info);
       }
     }
     if (OB_FAIL(ret)) {
@@ -290,6 +289,14 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                                                   spec_routine_table,
                                                                   body_routine_table,
                                                                   routine_infos));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!(compile_body || (!compile_body && !compile_spec))) {
+        OV (OB_NOT_NULL(package_spec_info), OB_INVALID_ARGUMENT);
+        OX (pkg_arg.tenant_id_ = package_spec_info->get_tenant_id());
+        OX (pkg_arg.package_type_ = package_spec_info->get_type());
+        OX (pkg_arg.compatible_mode_ = package_spec_info->get_compatibility_mode());
       }
     }
   }
