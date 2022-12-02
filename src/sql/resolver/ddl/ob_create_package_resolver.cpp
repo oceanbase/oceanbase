@@ -167,10 +167,9 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
             } else {}
           }
           if (OB_SUCC(ret) && resolve_success) {
-            if (OB_FAIL(resolve_functions_spec(package_info, create_package_arg.public_routine_infos_,
-                                   package_ast.get_routine_table()))) {
-              LOG_WARN("failed to resolve function spec", K(ret));
-            }
+            OZ (resolve_functions_spec(package_info,
+                                       create_package_arg.public_routine_infos_,
+                                       package_ast.get_routine_table()));
           }
           if (OB_SUCC(ret)) {
             ObString dep_attr;
@@ -315,6 +314,8 @@ int ObCreatePackageResolver::resolve_functions_spec(const ObPackageInfo &package
     //process basic info
     routine_info.set_tenant_id(package_info.get_tenant_id());
     routine_info.set_owner_id(package_info.get_owner_id());
+    routine_info.set_database_id(package_info.get_database_id());
+    routine_info.set_package_id(package_info.get_package_id());
     routine_info.set_routine_type(routine_type);
     routine_info.set_subprogram_id(i);
     routine_info.set_exec_env(package_info.get_exec_env());
@@ -563,13 +564,25 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
           const ObPLRoutineTable &body_routine_table = package_body_ast.get_routine_table();
           ObRoutineInfo routine_info;
           const ObPLRoutineInfo *pl_routine_info = NULL;
-          ObArray<const ObRoutineInfo *> routine_infos;
+          ObSEArray<const ObRoutineInfo *, 2> routine_infos;
+          ObSEArray<ObRoutineInfo, 2> routine_spec_infos;
           uint64_t database_id = OB_INVALID_ID;
           OZ (schema_checker_->get_schema_guard()->get_database_id(
             session_info_->get_effective_tenant_id(), db_name, database_id));
           OZ (schema_checker_->get_schema_guard()->get_routine_infos_in_package(
             session_info_->get_effective_tenant_id(), package_spec_info->get_package_id(),
             routine_infos));
+
+          if (OB_SUCC(ret) && routine_infos.empty() && package_spec_ast.get_routine_table().get_count() > 1) {
+            OZ (ObCreatePackageResolver::resolve_functions_spec(
+              *package_spec_info, routine_spec_infos, package_spec_ast.get_routine_table()));
+            CK (routine_spec_infos.count() > 0);
+            for (int64_t i = 0; OB_SUCC(ret) && i < routine_spec_infos.count(); ++i) {
+              OZ (routine_infos.push_back(&routine_spec_infos.at(i)));
+            }
+          }
+
+
           OZ (update_routine_route_sql(*allocator_, *session_info_, routine_list,
                                        spec_routine_table, body_routine_table, routine_infos));
         }
@@ -659,7 +672,7 @@ int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocato
                                                           ObIArray<ObRoutineInfo> &public_routine_list,
                                                           const ObPLRoutineTable &spec_routine_table,
                                                           const ObPLRoutineTable &body_routine_table,
-                                                          ObArray<const ObRoutineInfo *> &routine_infos)
+                                                          ObIArray<const ObRoutineInfo *> &routine_infos)
 {
   int ret = OB_SUCCESS;
   const ObPLRoutineInfo *pl_routine_info = NULL;
