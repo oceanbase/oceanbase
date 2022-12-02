@@ -37,6 +37,7 @@ public:
                            const blocksstable::ObMicroBlockData &data) const;
 
   TO_STRING_KV(K_(table_key),
+      K_(sstable_logic_seq),
       K_(schema_version),
       K_(create_snapshot_version),
       K_(progressive_merge_round),
@@ -68,6 +69,7 @@ public:
       K_(compressor_type),
       K_(encrypt_id),
       K_(master_key_id),
+      K_(recycle_version),
       K_(nested_offset),
       K_(nested_size),
       KPHEX_(encrypt_key, sizeof(encrypt_key_)));
@@ -75,6 +77,7 @@ private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
 public:
   ObITable::TableKey table_key_;
+  int16_t sstable_logic_seq_;
   int64_t schema_version_;
   int64_t create_snapshot_version_;
   int64_t progressive_merge_round_;
@@ -107,6 +110,7 @@ public:
   common::ObCompressorType compressor_type_;
   int64_t encrypt_id_;
   int64_t master_key_id_;
+  int64_t recycle_version_;
   int64_t nested_offset_;
   int64_t nested_size_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];

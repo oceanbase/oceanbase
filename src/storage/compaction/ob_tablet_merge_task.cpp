@@ -61,11 +61,11 @@ ObMergeParameter::ObMergeParameter()
     table_schema_(nullptr),
     merge_schema_(nullptr),
     merge_range_(),
+    sstable_logic_seq_(0),
     version_range_(),
     scn_range_(),
     full_read_info_(nullptr),
-    is_full_merge_(false),
-    is_sstable_cut_(false)
+    is_full_merge_(false)
 {
 }
 
@@ -74,6 +74,7 @@ bool ObMergeParameter::is_valid() const
   return (ls_id_.is_valid() && tablet_id_.is_valid())
          && ls_handle_.is_valid()
          && tables_handle_ != nullptr
+         && sstable_logic_seq_ >= 0
          && !tables_handle_->empty()
          && is_schema_valid()
          && merge_type_ > INVALID_MERGE_TYPE
@@ -104,11 +105,11 @@ void ObMergeParameter::reset()
   merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
   table_schema_ = nullptr;
   merge_schema_ = nullptr;
+  sstable_logic_seq_ = 0;
   merge_range_.reset();
   version_range_.reset();
   scn_range_.reset();
   is_full_merge_ = false;
-  is_sstable_cut_ = false;
 }
 
 int ObMergeParameter::init(compaction::ObTabletMergeCtx &merge_ctx, const int64_t idx)
@@ -130,6 +131,7 @@ int ObMergeParameter::init(compaction::ObTabletMergeCtx &merge_ctx, const int64_
     table_schema_ = merge_ctx.schema_ctx_.table_schema_;
     merge_schema_ = merge_ctx.get_merge_schema();
     version_range_ = merge_ctx.sstable_version_range_;
+    sstable_logic_seq_ = merge_ctx.sstable_logic_seq_;
     if (is_major_merge()) {
       // major merge should only read data between two major freeze points
       // but there will be some minor sstables which across major freeze points
@@ -140,13 +142,11 @@ int ObMergeParameter::init(compaction::ObTabletMergeCtx &merge_ctx, const int64_
     } else if (is_multi_version_minor_merge()) {
       // minor compaction always need to read all the data from input table
       // rewrite version to whole version range
-      version_range_.base_version_ = 0;
       version_range_.snapshot_version_ = MERGE_READ_SNAPSHOT_VERSION;
     }
     scn_range_ = merge_ctx.scn_range_;
     is_full_merge_ = merge_ctx.is_full_merge_;
     full_read_info_ = &(merge_ctx.tablet_handle_.get_obj()->get_full_read_info());
-    is_sstable_cut_ = false;
   }
 
   return ret;

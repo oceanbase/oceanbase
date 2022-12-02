@@ -39,6 +39,7 @@ ObDataBlockMetaVal::ObDataBlockMetaVal()
     is_encrypted_(false),
     is_deleted_(false),
     contain_uncommitted_row_(false),
+    is_last_row_last_flag_(false),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
     master_key_id_(0),
     encrypt_id_(0),
@@ -77,6 +78,7 @@ void ObDataBlockMetaVal::reset()
   is_encrypted_ = false;
   is_deleted_ = false;
   contain_uncommitted_row_ = false;
+  is_last_row_last_flag_ = false;
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   master_key_id_ = 0;
   encrypt_id_ = 0;
@@ -139,6 +141,7 @@ int ObDataBlockMetaVal::assign(const ObDataBlockMetaVal &val)
     is_encrypted_ = val.is_encrypted_;
     is_deleted_ = val.is_deleted_;
     contain_uncommitted_row_ = val.contain_uncommitted_row_;
+    is_last_row_last_flag_ = val.is_last_row_last_flag_;
     compressor_type_ = val.compressor_type_;
     master_key_id_ = val.master_key_id_;
     encrypt_id_ = val.encrypt_id_;
@@ -222,7 +225,8 @@ DEFINE_SERIALIZE(ObDataBlockMetaVal)
                   logic_id_,
                   macro_id_,
                   column_checksums_,
-                  original_size_);
+                  original_size_,
+                  is_last_row_last_flag_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -280,7 +284,8 @@ DEFINE_DESERIALIZE(ObDataBlockMetaVal)
                   logic_id_,
                   macro_id_,
                   column_checksums_,
-                  original_size_);
+                  original_size_,
+                  is_last_row_last_flag_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -330,7 +335,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObDataBlockMetaVal)
               logic_id_,
               macro_id_,
               column_checksums_,
-              original_size_);
+              original_size_,
+              is_last_row_last_flag_);
   return len;
 }
 

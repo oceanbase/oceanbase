@@ -284,6 +284,7 @@ protected:
   bool can_mark_deletion_;
   bool contain_uncommitted_row_;
   bool has_out_row_column_;
+  bool is_last_row_last_flag_;
 private:
   ObBaseIndexBlockBuilder *next_level_builder_;
   int64_t level_; // default 0

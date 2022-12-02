@@ -1097,6 +1097,7 @@ ObBaseIndexBlockBuilder::ObBaseIndexBlockBuilder()
    can_mark_deletion_(true),
    contain_uncommitted_row_(false),
    has_out_row_column_(false),
+   is_last_row_last_flag_(false),
    next_level_builder_(nullptr),
    level_(0)
 {
@@ -1208,6 +1209,8 @@ int ObBaseIndexBlockBuilder::append_row(const ObIndexBlockRowDesc &row_desc)
     has_out_row_column_ = has_out_row_column_ || row_desc.has_out_row_column_;
     micro_block_count_ += row_desc.micro_block_count_;
     macro_block_count_ += row_desc.macro_block_count_;
+    // use the flag of the last row in last micro block
+    is_last_row_last_flag_ = row_desc.is_last_row_last_flag_;
   }
   return ret;
 }
@@ -1358,6 +1361,7 @@ void ObBaseIndexBlockBuilder::update_accumulative_info(ObIndexBlockRowDesc &next
   next_row_desc.has_out_row_column_ = has_out_row_column_;
   next_row_desc.macro_block_count_ = macro_block_count_;
   next_row_desc.micro_block_count_ = micro_block_count_;
+  next_row_desc.is_last_row_last_flag_ = is_last_row_last_flag_;
 }
 
 int ObBaseIndexBlockBuilder::close_index_tree(ObBaseIndexBlockBuilder *&root_builder)
@@ -1397,6 +1401,7 @@ void ObBaseIndexBlockBuilder::block_to_row_desc(
   row_desc.is_deleted_ = micro_block_desc.can_mark_deletion_;
   row_desc.max_merged_trans_version_ = micro_block_desc.max_merged_trans_version_;
   row_desc.contain_uncommitted_row_ = micro_block_desc.contain_uncommitted_row_;
+  row_desc.is_last_row_last_flag_ = micro_block_desc.is_last_row_last_flag_;
 }
 
 int ObBaseIndexBlockBuilder::meta_to_row_desc(
@@ -1451,6 +1456,7 @@ void ObBaseIndexBlockBuilder::row_desc_to_meta(
   macro_meta.val_.is_deleted_ = macro_row_desc.is_deleted_;
   macro_meta.val_.max_merged_trans_version_ = macro_row_desc.max_merged_trans_version_;
   macro_meta.val_.contain_uncommitted_row_ = macro_row_desc.contain_uncommitted_row_;
+  macro_meta.val_.is_last_row_last_flag_ = macro_row_desc.is_last_row_last_flag_;
 }
 
 //===================== ObBaseIndexBlockBuilder(private) ================
@@ -1462,6 +1468,7 @@ void ObBaseIndexBlockBuilder::reset_accumulative_info()
   max_merged_trans_version_ = 0;
   contain_uncommitted_row_ = false;
   has_out_row_column_ = false;
+  is_last_row_last_flag_ = false;
   macro_block_count_ = 0;
   micro_block_count_ = 0;
 }

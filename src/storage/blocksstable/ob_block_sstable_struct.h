@@ -74,9 +74,11 @@ struct ObMacroDataSeq
   static const int64_t BIT_PARALLEL_IDX = 11;
   static const int64_t BIT_BLOCK_TYPE = 3;
   static const int64_t BIT_MERGE_TYPE = 2;
-  static const int64_t BIT_RESERVED = 15;
+  static const int64_t BIT_SSTABLE_SEQ = 10;
+  static const int64_t BIT_RESERVED = 5;
   static const int64_t BIT_SIGN = 1;
   static const int64_t MAX_PARALLEL_IDX = (0x1UL << BIT_PARALLEL_IDX) - 1;
+  static const int64_t MAX_SSTABLE_SEQ = (0x1UL << BIT_SSTABLE_SEQ) - 1;
   enum BlockType {
     DATA_BLOCK = 0,
     INDEX_BLOCK = 1,
@@ -106,6 +108,17 @@ struct ObMacroDataSeq
   OB_INLINE bool is_index_block() const { return block_type_ == INDEX_BLOCK; }
   OB_INLINE bool is_meta_block() const { return block_type_ == META_BLOCK; }
   OB_INLINE bool is_major_merge() const { return merge_type_ == MAJOR_MERGE; }
+  OB_INLINE int set_sstable_seq(const int16_t sstable_logic_seq)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_UNLIKELY(sstable_logic_seq >= MAX_SSTABLE_SEQ || sstable_logic_seq < 0)) {
+      ret = common::OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "Invalid sstable seq", K(ret), K(sstable_logic_seq));
+    } else {
+      sstable_logic_seq_ = sstable_logic_seq;
+    }
+    return ret;
+  }
   OB_INLINE int set_parallel_degree(const int64_t parallel_idx)
   {
     int ret = common::OB_SUCCESS;
@@ -131,6 +144,7 @@ struct ObMacroDataSeq
       uint64_t parallel_idx_ : BIT_PARALLEL_IDX;
       uint64_t block_type_ : BIT_BLOCK_TYPE;
       uint64_t merge_type_ : BIT_MERGE_TYPE;
+      uint64_t sstable_logic_seq_ : BIT_SSTABLE_SEQ;
       uint64_t reserved_ : BIT_RESERVED;
       uint64_t sign_ : BIT_SIGN;
     };

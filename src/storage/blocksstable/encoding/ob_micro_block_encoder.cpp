@@ -345,9 +345,13 @@ void ObMicroBlockEncoder::update_estimate_size_limit(const ObMicroBlockEncodingC
   header_size_ =
       ObMicroBlockHeader::get_serialize_size(ctx.column_cnt_, ctx.need_calc_column_chksum_)
       + (sizeof(ObColumnHeader)) * ctx.column_cnt_;
-  const int64_t data_size_limit = (2 * ctx.micro_block_size_ - header_size_) > 0
+  int64_t data_size_limit = (2 * ctx.micro_block_size_ - header_size_) > 0
                                   ? (2 * ctx.micro_block_size_ - header_size_)
                                   : (2 * ctx.micro_block_size_);
+//TODO huronghui.hrh@oceanbase.com use 4.1.0.0 for version judgment
+  if(ctx.major_working_cluster_version_ > CLUSTER_VERSION_4_0_0_0 ) {
+    data_size_limit = MAX(data_size_limit, DEFAULT_MICRO_MAX_SIZE);
+  }
   estimate_size_limit_ = std::min(data_size_limit * expand_pct_ / 100, ctx.macro_block_size_);
   LOG_TRACE("estimate size expand percent", K(expand_pct_), K_(estimate_size_limit), K(ctx));
 }

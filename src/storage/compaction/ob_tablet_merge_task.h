@@ -76,11 +76,11 @@ struct ObMergeParameter {
   const share::schema::ObTableSchema *table_schema_; //table's schema need merge
   const share::schema::ObMergeSchema *merge_schema_;
   blocksstable::ObDatumRange merge_range_;
+  int16_t sstable_logic_seq_;
   ObVersionRange version_range_;
   share::ObScnRange scn_range_;
   const ObTableReadInfo *full_read_info_; // full read info of old tablet
   bool is_full_merge_;               // full merge or increment merge, duplicated with merge_level
-  bool is_sstable_cut_;              // only used for faked-flashback with restore or standby cluster
 
   OB_INLINE bool is_major_merge() const { return storage::is_major_merge(merge_type_); }
   OB_INLINE bool is_buf_minor_merge() const { return storage::is_buf_minor_merge(merge_type_);}
@@ -88,7 +88,7 @@ struct ObMergeParameter {
   OB_INLINE bool is_mini_merge() const { return storage::is_mini_merge(merge_type_); }
   OB_INLINE bool need_checksum() const { return storage::is_major_merge(merge_type_); }
   TO_STRING_KV(KPC_(tables_handle), K_(merge_type), K_(merge_level), KP_(table_schema),
-               KP_(merge_schema), K_(merge_range), K_(version_range), K_(scn_range), K_(is_full_merge), K_(is_sstable_cut));
+               KP_(merge_schema), K_(merge_range), K_(version_range), K_(scn_range), K_(is_full_merge));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeParameter);
 };

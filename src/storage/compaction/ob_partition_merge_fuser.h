@@ -17,6 +17,7 @@
 #include "lib/container/ob_raw_se_array.h"
 #include "ob_column_checksum_calculator.h"
 #include "ob_partition_merge_iter.h"
+#include "ob_tablet_merge_task.h"
 #include "share/schema/ob_table_schema.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "storage/memtable/ob_nop_bitmap.h"
@@ -28,10 +29,6 @@ namespace oceanbase
 namespace sql
 {
 struct ObTempExpr;
-}
-namespace storage
-{
-struct ObMergeParameter;
 }
 namespace compaction
 {

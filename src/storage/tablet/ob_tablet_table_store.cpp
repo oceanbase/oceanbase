@@ -789,7 +789,7 @@ int ObTabletTableStore::inner_build_major_tables_(
 {
   int ret = OB_SUCCESS;
   inc_base_snapshot_version = -1;
-  ObArray<ObITable *> major_tables;
+  ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> major_tables;
   bool need_add = true;
 
   if (!old_store.major_tables_.empty() && OB_FAIL(old_store.major_tables_.get_all_tables(major_tables))) {
@@ -1739,6 +1739,34 @@ int ObTabletTableStore::build_ha_minor_tables_(
       LOG_WARN("failed to replace ha minor tables", K(ret), K(param), K(old_store));
     }
   }
+  return ret;
+}
+
+int ObTabletTableStore::get_recycle_version(
+    const int64_t multi_version_start,
+    int64_t &recycle_version) const
+{
+  int ret = OB_SUCCESS;
+  recycle_version = 0;
+  ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> major_tables;
+  if (major_tables_.empty()) {
+  } else if (OB_FAIL(major_tables_.get_all_tables(major_tables))) {
+    LOG_WARN("failed to get major tables from old store", K(ret), KPC(this));
+  } else if (OB_FAIL(ObTableStoreUtil::sort_major_tables(major_tables))) {
+    LOG_WARN("failed to sort major tables", K(ret));
+  } else {
+    for (int64_t i = major_tables.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      if (major_tables.at(i)->get_snapshot_version() <= multi_version_start) {
+        recycle_version = major_tables.at(i)->get_snapshot_version();
+        break;
+      }
+    }
+    if (0 == recycle_version && major_tables.count() > 0) {
+      recycle_version = major_tables.at(0)->get_snapshot_version();
+      LOG_WARN("not found inc base snapshot version, use the oldest major table", K(ret));
+    }
+  }
+
   return ret;
 }
 

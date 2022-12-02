@@ -37,6 +37,7 @@ class ObMacroBlockHandle;
 struct ObDataStoreDesc
 {
   static const int64_t DEFAULT_RESERVE_PERCENT = 90;
+  static const int64_t MIN_MICRO_BLOCK_SIZE = 4 * 1024; //4KB
   static const int64_t MIN_RESERVED_SIZE = 1024; //1KB;
   static const int64_t MIN_SSTABLE_SNAPSHOT_VERSION = 1; // ref to ORIGIN_FOZEN_VERSION
   static const int64_t MIN_SSTABLE_END_LOG_TS = 1; // ref to ORIGIN_FOZEN_VERSION
@@ -92,6 +93,7 @@ struct ObDataStoreDesc
   int assign(const ObDataStoreDesc &desc);
   bool encoding_enabled() const { return ObStoreFormat::is_row_store_type_with_encoding(row_store_type_); }
   OB_INLINE bool is_major_merge() const { return storage::is_major_merge(merge_type_); }
+  OB_INLINE bool is_use_pct_free() const { return macro_block_size_ != macro_store_size_; }
   int64_t get_logical_version() const
   {
     return is_major_merge() ? snapshot_version_ : end_scn_.get_val_for_tx();

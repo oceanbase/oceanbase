@@ -102,6 +102,7 @@ public:
 
   int get_ddl_sstable_handles(ObTablesHandleArray &ddl_sstable_handles) const;
   int get_mini_minor_sstables(ObTablesHandleArray &minor_sstables) const;
+  int get_recycle_version(const int64_t multi_version_start, int64_t &recycle_version) const;
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
 

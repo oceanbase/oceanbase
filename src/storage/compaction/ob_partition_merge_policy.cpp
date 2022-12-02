@@ -247,6 +247,14 @@ int ObPartitionMergePolicy::deal_with_minor_result(
       LOG_TRACE("no need keep multi version", "multi_version_start", result.version_range_.multi_version_start_,
                 K(expect_multi_version_start));
     }
+    result.version_range_.base_version_ = 0;
+
+    if (OB_SUCC(ret) && MINI_MERGE != merge_type) {
+      const ObTabletTableStore &table_store = tablet.get_table_store();
+      if (OB_FAIL(table_store.get_recycle_version(result.version_range_.multi_version_start_, result.version_range_.base_version_))) {
+        LOG_WARN("Fail to get table store recycle version", K(ret), K(result.version_range_), K(table_store));
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {

@@ -66,13 +66,15 @@ struct ObIndexBlockRowDesc
   bool is_secondary_meta_;
   bool is_macro_node_;
   bool has_out_row_column_;
+  bool is_last_row_last_flag_;
 
   TO_STRING_KV(KP_(data_store_desc), K_(row_key), K_(macro_id),
       K_(block_offset), K_(row_count), K_(row_count_delta),
       K_(max_merged_trans_version), K_(block_size),
       K_(macro_block_count), K_(micro_block_count),
       K_(is_deleted), K_(contain_uncommitted_row), K_(is_data_block),
-      K_(is_secondary_meta), K_(is_macro_node), K_(has_out_row_column));
+      K_(is_secondary_meta), K_(is_macro_node), K_(has_out_row_column),
+      K_(is_last_row_last_flag));
 };
 
 struct ObIndexBlockRowHeader

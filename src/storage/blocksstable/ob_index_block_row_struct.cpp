@@ -28,14 +28,16 @@ ObIndexBlockRowDesc::ObIndexBlockRowDesc()
     row_count_(0), row_count_delta_(0), max_merged_trans_version_(0), block_size_(0),
     macro_block_count_(0), micro_block_count_(0),
     is_deleted_(false), contain_uncommitted_row_(false), is_data_block_(false),
-    is_secondary_meta_(false), is_macro_node_(false), has_out_row_column_(false) {}
+    is_secondary_meta_(false), is_macro_node_(false), has_out_row_column_(false),
+    is_last_row_last_flag_(false) {}
 
 ObIndexBlockRowDesc::ObIndexBlockRowDesc(ObDataStoreDesc &data_store_desc)
   : data_store_desc_(&data_store_desc), row_key_(), macro_id_(), block_offset_(0),
     row_count_(0), row_count_delta_(0), max_merged_trans_version_(0), block_size_(0),
     macro_block_count_(0), micro_block_count_(0),
     is_deleted_(false), contain_uncommitted_row_(false), is_data_block_(false),
-    is_secondary_meta_(false), is_macro_node_(false), has_out_row_column_(false) {}
+    is_secondary_meta_(false), is_macro_node_(false), has_out_row_column_(false),
+    is_last_row_last_flag_(false) {}
 
 MacroBlockId ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID(0, DEFAULT_IDX_ROW_MACRO_IDX, 0);
 

@@ -249,6 +249,106 @@ int ObMicroBlockBufferHelper::dump_micro_block_writer_buffer(const char *buf, co
 }
 
 /**
+ * ---------------------------------------------------------ObMicroBlockAdaptiveSplitter--------------------------------------------------------------
+ */
+ObMicroBlockAdaptiveSplitter::ObMicroBlockAdaptiveSplitter()
+  : macro_store_size_(0),
+    is_use_adaptive_(false)
+{}
+
+ObMicroBlockAdaptiveSplitter::~ObMicroBlockAdaptiveSplitter()
+{
+}
+
+int ObMicroBlockAdaptiveSplitter::init(const int64_t macro_store_size, const bool is_use_adaptive)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(macro_store_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid micro block adaptive split input argument", K(ret), K(macro_store_size));
+  } else {
+    reset();
+    macro_store_size_ = macro_store_size;
+    is_use_adaptive_ = is_use_adaptive;
+  }
+
+  return ret;
+}
+
+void ObMicroBlockAdaptiveSplitter::reset()
+{
+  for (int64_t i = 0; i <= DEFAULT_MICRO_ROW_COUNT; i++) {
+    compression_infos_[i].reset();
+  }
+}
+
+int ObMicroBlockAdaptiveSplitter::check_need_split(const int64_t micro_size,
+                                                   const int64_t micro_row_count,
+                                                   const int64_t split_size,
+                                                   const int64_t current_macro_size,
+                                                   const bool is_keep_space,
+                                                   bool &is_split) const
+{
+  int ret = OB_SUCCESS;
+  is_split = false;
+  if(OB_UNLIKELY(micro_size <= 0 || split_size <= 0 || micro_row_count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid size argument", K(ret), K(micro_size), K(split_size), K(micro_row_count));
+  } else if (micro_size < split_size) {
+    is_split = false;
+  } else if (!is_use_adaptive_ || micro_size >= ObIMicroBlockWriter::DEFAULT_MICRO_MAX_SIZE) {
+    is_split = true;
+  } else {
+    const int64_t adaptive_row_count = MAX(MICRO_ROW_MIN_COUNT, DEFAULT_MICRO_ROW_COUNT - (micro_size - split_size) / split_size);
+    const int64_t compression_ratio = micro_row_count <= DEFAULT_MICRO_ROW_COUNT ?
+      compression_infos_[micro_row_count].compression_ratio_ : compression_infos_[0].compression_ratio_;
+    const int64_t estimate_micro_size = micro_size * compression_ratio / 100;
+    if (estimate_micro_size < split_size) {
+      is_split = false;
+    } else if (micro_row_count >= adaptive_row_count ||
+      (is_keep_space && current_macro_size + estimate_micro_size > macro_store_size_ /* for pct_free */)) {
+      is_split = true;
+    }
+  }
+
+  return ret;
+}
+
+int ObMicroBlockAdaptiveSplitter::update_compression_info(const int64_t micro_row_count,
+                                                          const int64_t original_size,
+                                                          const int64_t compressed_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(micro_row_count <= 0 || original_size < compressed_size || compressed_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid compression info argument", K(micro_row_count), K(original_size), K(compressed_size));
+  } else {
+    compression_infos_[0].update(original_size, compressed_size);
+    if (micro_row_count <= DEFAULT_MICRO_ROW_COUNT) {
+      compression_infos_[micro_row_count].update(original_size, compressed_size);
+    }
+  }
+  return ret;
+}
+
+ObMicroBlockAdaptiveSplitter::ObMicroCompressionInfo::ObMicroCompressionInfo()
+  : original_size_(0),
+    compressed_size_(0),
+    compression_ratio_(100)
+{}
+
+void ObMicroBlockAdaptiveSplitter::ObMicroCompressionInfo::update(const int64_t original_size, const int64_t compressed_size)
+{
+    original_size_ += original_size;
+    compressed_size_ += compressed_size;
+    if (OB_UNLIKELY(original_size_ <= 0)) {
+      compression_ratio_ = 100;
+    } else {
+      compression_ratio_ = 100 * compressed_size_ / original_size_;
+    }
+}
+
+/**
  * ---------------------------------------------------------ObMacroBlockWriter--------------------------------------------------------------
  */
 ObMacroBlockWriter::ObMacroBlockWriter()
@@ -312,6 +412,7 @@ void ObMacroBlockWriter::reset()
     builder_->~ObDataIndexBlockBuilder();
     builder_ = nullptr;
   }
+  micro_block_adaptive_splitter_.reset();
   allocator_.reset();
   rowkey_allocator_.reset();
 }
@@ -334,8 +435,7 @@ int ObMacroBlockWriter::open(
   } else {
     STORAGE_LOG(DEBUG, "open macro block writer: ", K(data_store_desc), K(start_seq));
     ObSSTableIndexBuilder *sstable_index_builder = data_store_desc.sstable_index_builder_;
-    ObMacroDataSeq index_start_seq = start_seq;
-    index_start_seq.set_index_block();
+
     if (OB_NOT_NULL(sstable_index_builder)) {
       if (OB_FAIL(sstable_index_builder->new_index_builder(builder_, data_store_desc, allocator_))) {
         STORAGE_LOG(WARN, "fail to alloc index builder", K(ret));
@@ -369,6 +469,13 @@ int ObMacroBlockWriter::open(
         STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K_(read_info));
       } else if (OB_FAIL(reader_helper_.init(allocator_))) {
         STORAGE_LOG(WARN, "Failed to init reader helper", K(ret));
+      } else {
+        //TODO huronghui.hrh@oceanbase.com use 4.1.0.0 for version judgment
+        const bool is_use_adaptive = !data_store_desc_->is_major_merge()
+         || data_store_desc_->major_working_cluster_version_ > CLUSTER_VERSION_4_0_0_0;
+        if (OB_FAIL(micro_block_adaptive_splitter_.init(data_store_desc.macro_store_size_, is_use_adaptive))) {
+          STORAGE_LOG(WARN, "Failed to init micro block adaptive split", K(ret), K(data_store_desc.macro_store_size_));
+        }
       }
       if (OB_SUCC(ret) && data_store_desc_->is_major_merge()) {
         if (OB_ISNULL(curr_micro_column_checksum_ = static_cast<int64_t *>(
@@ -385,9 +492,11 @@ int ObMacroBlockWriter::open(
   return ret;
 }
 
-int ObMacroBlockWriter::append_row(const ObDatumRow &row)
+int ObMacroBlockWriter::append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc)
 {
   int ret = OB_SUCCESS;
+
+  UNUSED(curr_macro_desc);
   STORAGE_LOG(DEBUG, "append row", K(row));
   if (OB_FAIL(append_row(row, data_store_desc_->micro_block_size_))) {
     STORAGE_LOG(WARN, "Fail to append row", K(ret));
@@ -402,6 +511,8 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
 {
   int ret = OB_SUCCESS;
   const ObDatumRow *row_to_append = &row;
+  bool is_need_set_micro_upper_bound = false;
+  int64_t estimate_remain_size = 0;
   if (NULL == data_store_desc_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The ObMacroBlockWriter has not been opened, ", K(ret));
@@ -443,6 +554,7 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
         STORAGE_LOG(WARN, "Fail to append row to micro block, ", K(ret), K(row));
       }
     } else {
+      bool is_split = false;
       if (data_store_desc_->need_prebuild_bloomfilter_) {
         ObDatumRowkey rowkey;
         uint64_t hash = 0;
@@ -459,10 +571,11 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(save_last_key(*row_to_append))) {
         STORAGE_LOG(WARN, "Fail to save last key, ", K(ret), K(row));
-      } else if (micro_writer_->get_block_size() >= split_size) {
-        if (OB_FAIL(build_micro_block())) {
-          STORAGE_LOG(WARN, "Fail to build micro block, ", K(ret));
-        }
+      } else if (OB_FAIL(micro_block_adaptive_splitter_.check_need_split(micro_writer_->get_block_size(), micro_writer_->get_row_count(),
+            split_size, macro_blocks_[current_index_].get_data_size(), is_keep_freespace(), is_split))) {
+        STORAGE_LOG(WARN, "Failed to check need split", K(ret), KPC(micro_writer_));
+      } else if (is_split && OB_FAIL(build_micro_block())) {
+        STORAGE_LOG(WARN, "Fail to build micro block, ", K(ret));
       }
     }
   }
@@ -518,9 +631,11 @@ int ObMacroBlockWriter::append_macro_block(const ObMacroBlockDesc &macro_desc)
   return ret;
 }
 
-int ObMacroBlockWriter::append_micro_block(const ObMicroBlock &micro_block)
+int ObMacroBlockWriter::append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc)
 {
   int ret = OB_SUCCESS;
+
+  UNUSED(curr_macro_desc);
   bool need_merge = false;
   STORAGE_LOG(DEBUG, "append micro_block", K(micro_block));
   if (NULL == data_store_desc_) {
@@ -766,10 +881,9 @@ int ObMacroBlockWriter::build_micro_block()
   } else {
     if (OB_FAIL(write_micro_block(micro_block_desc))) {
       STORAGE_LOG(WARN, "fail to write micro block ", K(ret), K(micro_block_desc));
-    } else if (macro_blocks_[current_index_].get_data_size() >= data_store_desc_->macro_store_size_) {
-      if (OB_FAIL(try_switch_macro_block())) {
-        STORAGE_LOG(WARN, "macro block writer fail to try switch macro block.", K(ret));
-      }
+    } else if (OB_FAIL(micro_block_adaptive_splitter_.update_compression_info(micro_block_desc.row_count_,
+       block_size, micro_block_desc.buf_size_))) {
+      STORAGE_LOG(WARN, "Fail to update_compression_info", K(ret), K(micro_block_desc));
     }
   }
   if (OB_SUCC(ret)) {
