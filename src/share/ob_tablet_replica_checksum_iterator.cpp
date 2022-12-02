@@ -103,7 +103,7 @@ int ObTabletReplicaChecksumIterator::fetch_next_batch()
     ObTabletLSPair start_pair;
     if (checksum_items_.count() > 0) {
       ObTabletReplicaChecksumItem tmp_item;
-      if (OB_FAIL(checksum_items_.at(checksum_items_.count() - 1, tmp_item))) {
+      if (OB_FAIL(tmp_item.assign(checksum_items_.at(checksum_items_.count() - 1)))) {
         LOG_WARN("fail to fetch last checksum item", KR(ret), K_(tenant_id), K_(checksum_items));
       } else if (OB_FAIL(start_pair.init(tmp_item.tablet_id_, tmp_item.ls_id_))) {
         LOG_WARN("fail to init start tablet_ls_pair", KR(ret), K(tmp_item));

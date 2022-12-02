@@ -1083,6 +1083,8 @@ int ObTabletReplicaChecksumOperator::check_local_index_column_checksum(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet count of local index table is not same with data table", KR(ret), "data_table_tablet_cnt",
           data_schema_tablet_ids.count(), "index_table_tablet_cnt", index_schema_tablet_ids.count());
+      } else if (!need_verify) {
+        LOG_INFO("do not need verify checksum", K(index_table_id), K(data_table_id), K(compaction_scn));
       } else {
         // map element: <column_id, checksum>
         hash::ObHashMap<int64_t, int64_t> data_column_ckm_map;
