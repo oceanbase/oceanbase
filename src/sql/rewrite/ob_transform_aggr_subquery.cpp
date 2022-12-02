@@ -872,6 +872,7 @@ int ObTransformAggrSubquery::deduce_query_values(ObDMLStmt &stmt,
       // replace_columns_and_aggrs() may change expr result type, e.g.: sum() from ObNumberType
       // to ObNullType. This may cause operand implicit cast be added twice, so we erase it first.
       ObRawExpr *default_expr = NULL;
+      ObRawExpr *case_when_expr = NULL;
       if (OB_FAIL(real_values.push_back(view_columns.at(i)))) {
         LOG_WARN("failed to push back view columns", K(ret));
       } else if (is_null_prop.at(i) || !is_outer_join) {
@@ -890,9 +891,18 @@ int ObTransformAggrSubquery::deduce_query_values(ObDMLStmt &stmt,
                                                                 not_null_expr,
                                                                 view_columns.at(i),
                                                                 default_expr,
-                                                                real_values.at(i),
+                                                                case_when_expr,
                                                                 ctx_))) {
         LOG_WARN("failed to build case when expr", K(ret));
+      } else if (OB_ISNULL(case_when_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("case when expr is null", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
+                                                                 ctx_->session_info_,
+                                                                 *case_when_expr,
+                                                                 view_columns.at(i)->get_result_type(),
+                                                                 real_values.at(i)))) {
+        LOG_WARN("failed to add cast expr", K(ret));
       }
     }
   }
