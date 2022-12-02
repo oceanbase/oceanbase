@@ -3795,6 +3795,7 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
                                               const ObStmtNodeTree *param_list,
                                               const ObStmtNodeTree *return_type,
                                               const ObString &body,
+                                              const ObString &clause,
                                               char* buf,
                                               const int64_t& buf_len,
                                               int64_t &pos,
@@ -3815,16 +3816,18 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
   OX (routine_type = routine_info->is_procedure() ? "PROCEDURE" : "FUNCTION");
   OZ (databuff_printf(buf, buf_len, pos,
                       lib::is_oracle_mode() ?
-                      "CREATE OR REPLACE%s%.*s %s \"%.*s\".\"%.*s\"\n" :
-                      "CREATE DEFINER =%s %.*s %s `%.*s`.`%.*s`\n",
+                      "CREATE OR REPLACE%s%.*s %s " :
+                      "CREATE DEFINER =%s %.*s %s ",
                       routine_info->is_noneditionable() ? " NONEDITIONABLE" : "",
                       routine_info->get_priv_user().length(),
                       routine_info->get_priv_user().ptr(),
-                      routine_type,
+                      routine_type));
+  OZ (databuff_printf(buf, buf_len, pos,
+                      lib::is_oracle_mode() ? "\"%.*s\".\"%.*s\"\n" : "`%.*s`.`%.*s`\n",
                       db_schema->get_database_name_str().length(),
                       db_schema->get_database_name_str().ptr(),
                       routine_info->get_routine_name().length(),
-                      routine_info->get_routine_name().ptr()), routine_type, db_name, routine_info);
+                      routine_info->get_routine_name().ptr()), K(routine_type), K(db_name), K(routine_info));
   if (OB_SUCC(ret) && routine_info->get_param_count() > 0) {
     OZ (databuff_printf(buf, buf_len, pos, "(\n"));
     OZ (print_routine_definition_param(*routine_info, param_list, buf, buf_len, pos, tz_info));
@@ -3850,7 +3853,12 @@ int ObSchemaPrinter::print_routine_definition(const ObRoutineInfo *routine_info,
           "`"));
     }
   }
-  OZ (databuff_printf(buf, buf_len, pos, lib::is_oracle_mode() ? " IS\n%.*s" : " %.*s", body.length(), body.ptr()));
+  if (OB_SUCC(ret) && lib::is_oracle_mode() && !clause.empty()) {
+    OZ (databuff_printf(buf, buf_len, pos, " %.*s", clause.length(), clause.ptr()));
+  }
+  OZ (databuff_printf(buf, buf_len, pos,
+      lib::is_oracle_mode() ? (routine_info->is_aggregate() ? "\nAGGREGATE USING %.*s" : " IS\n%.*s")
+                              : " %.*s", body.length(), body.ptr()));
   return ret;
 }
 
@@ -3869,16 +3877,19 @@ int ObSchemaPrinter::print_routine_definition(
     ret = OB_ERR_SP_DOES_NOT_EXIST;
     SHARE_SCHEMA_LOG(WARN, "Unknow routine", K(ret), K(routine_id));
   } else if (lib::is_mysql_mode()) {
-    OZ (print_routine_definition(routine_info, NULL, NULL, routine_info->get_routine_body(), buf, buf_len, pos, tz_info));
+    ObString clause;
+    OZ (print_routine_definition(routine_info, NULL, NULL, routine_info->get_routine_body(), clause, buf, buf_len, pos, tz_info));
   } else { // oracle mode
     ObString routine_body = routine_info->get_routine_body();
     ObString actully_body;
+    ObString routine_clause;
     ObStmtNodeTree *parse_tree = NULL;
     const ObStmtNodeTree *routine_tree = NULL;
     ObArenaAllocator allocator;
     pl::ObPLParser parser(allocator, CS_TYPE_UTF8MB4_BIN);
-    const ObStmtNodeTree *param_list = NULL;
-    const ObStmtNodeTree *return_type = NULL;
+    ObStmtNodeTree *param_list = NULL;
+    ObStmtNodeTree *return_type = NULL;
+    ObStmtNodeTree *clause_list = NULL;
     CK (!routine_body.empty());
     OZ (parser.parse_routine_body(routine_body, parse_tree, false));
     CK (OB_NOT_NULL(parse_tree));
@@ -3901,6 +3912,7 @@ int ObSchemaPrinter::print_routine_definition(
     CK (OB_NOT_NULL(routine_tree));
     LOG_INFO("print routine define", K(routine_tree->type_), K(routine_info->is_function()), K(routine_body));
     CK (routine_info->is_function() ? T_SF_SOURCE == routine_tree->type_
+                                      || T_SF_AGGREGATE_SOURCE == routine_tree->type_
                                     : T_SP_SOURCE == routine_tree->type_);
     CK (routine_info->is_function() ? 6 == routine_tree->num_child_
                                     : 4 == routine_tree->num_child_);
@@ -3909,10 +3921,14 @@ int ObSchemaPrinter::print_routine_definition(
     OX (actully_body = routine_info->is_function() ?
           ObString(routine_tree->children_[5]->str_len_, routine_tree->children_[5]->str_value_)
         : ObString(routine_tree->children_[3]->str_len_, routine_tree->children_[3]->str_value_));
+    OX (clause_list = routine_info->is_function() ? routine_tree->children_[3] : routine_tree->children_[2]);
+    if (OB_SUCC(ret) && OB_NOT_NULL(clause_list)) {
+      OX (routine_clause = ObString(clause_list->str_len_, clause_list->str_value_));
+    }
     OX (param_list = routine_tree->children_[1]);
     OX (return_type = (routine_info->is_function() ? routine_tree->children_[2] : NULL));
     CK (!actully_body.empty());
-    OZ (print_routine_definition(routine_info, param_list, return_type, actully_body, buf, buf_len, pos, tz_info));
+    OZ (print_routine_definition(routine_info, param_list, return_type, actully_body, routine_clause, buf, buf_len, pos, tz_info));
   }
   return ret;
 }

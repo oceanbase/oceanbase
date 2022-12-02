@@ -327,6 +327,7 @@ public:
                                const ObStmtNodeTree *param_list,
                                const ObStmtNodeTree *return_type,
                                const common::ObString &body,
+                               const common::ObString &clause,
                                char* buf,
                                const int64_t& buf_len,
                                int64_t &pos,
