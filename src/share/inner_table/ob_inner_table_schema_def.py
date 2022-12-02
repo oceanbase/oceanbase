@@ -39852,6 +39852,19 @@ def_table_schema(
 
 # 25208: DBA_OB_TENANTS
 
+# 25209: DBA_POLICIES
+# 25210: ALL_POLICIES
+# 25211: USER_POLICIES
+# 25212: DBA_POLICY_GROUPS
+# 25213: ALL_POLICY_GROUPS
+# 25214: USER_POLICY_GROUPS
+# 25215: DBA_POLICY_CONTEXTS
+# 25216: ALL_POLICY_CONTEXTS
+# 25217: USER_POLICY_CONTEXTS
+# 25218: DBA_SEC_RELEVANT_COLS
+# 25219: ALL_SEC_RELEVANT_COLS
+# 25220: USER_SEC_RELEVANT_COLS
+
 #### End Data Dictionary View
 ################################################################################
 
@@ -44858,18 +44871,6 @@ FROM (
 # 28157: USER_TRIGGER_ORDERING
 # 28158: DBA_OB_SWITCHOVER_CHECKPOINTS
 
-# 28159: DBA_POLICIES
-# 28160: ALL_POLICIES
-# 28161: USER_POLICIES
-# 28162: DBA_POLICY_GROUPS
-# 28163: ALL_POLICY_GROUPS
-# 28164: USER_POLICY_GROUPS
-# 28165: DBA_POLICY_CONTEXTS
-# 28166: ALL_POLICY_CONTEXTS
-# 28167: USER_POLICY_CONTEXTS
-# 28168: DBA_SEC_RELEVANT_COLS
-# 28169: ALL_SEC_RELEVANT_COLS
-# 28170: USER_SEC_RELEVANT_COLS
 # 28171: DBA_OB_USER_DEFINED_RULES
 
 # 28172: GV$OB_SQL_PLAN
@@ -45585,3 +45586,11 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_database_privilege'])
+
+# 101082: idx_rls_policy_table_id
+# 101083: idx_rls_policy_group_id
+# 101084: idx_rls_policy_his_table_id
+# 101085: idx_rls_group_table_id
+# 101086: idx_rls_group_his_table_id
+# 101087: idx_rls_policy_table_id
+# 101088: idx_rls_context_his_table_id
