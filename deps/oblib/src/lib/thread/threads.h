@@ -81,6 +81,7 @@ public:
   int do_set_thread_count(int64_t n_threads);
   int set_thread_count(int64_t n_threads);
   int inc_thread_count(int64_t inc = 1);
+  int thread_recycle();
 
   int init();
   // IRunWrapper 用于创建多租户线程时指定租户上下文
@@ -121,6 +122,7 @@ private:
   virtual void run(int64_t idx);
   virtual void run1() {}
 
+  int do_thread_recycle();
   /// \brief Create thread with start entry \c entry.
   int create_thread(Thread *&thread, std::function<void()> entry);
 

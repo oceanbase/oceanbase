@@ -106,6 +106,14 @@ public:
     virtual ~DeletePoolFunc() = default;
     int operator()(common::hash::HashMapPair<int64_t, ObPxPool*> &kv);
   };
+
+  class ThreadRecyclePoolFunc
+  {
+  public:
+    ThreadRecyclePoolFunc() {}
+    virtual ~ThreadRecyclePoolFunc() = default;
+    int operator()(common::hash::HashMapPair<int64_t, ObPxPool*> &kv);
+  };
 public:
   static int mtl_init(ObPxPools *&pools)
   {
@@ -132,6 +140,7 @@ public:
   }
   int init(uint64_t tenant_id);
   int get_or_create(int64_t group_id, ObPxPool *&pool);
+  int thread_recycle();
 private:
   void destroy();
   int create_pool(int64_t group_id, ObPxPool *&pool);
@@ -566,6 +575,7 @@ private:
 
   // read tenant variable PARALLEL_SERVERS_TARGET
   void check_parallel_servers_target();
+  void check_px_thread_recycle();
 
   // The update of the resource manager is applied to the cgroup
   void check_resource_manager_plan();
