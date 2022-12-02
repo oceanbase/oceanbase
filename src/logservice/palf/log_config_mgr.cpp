@@ -1004,6 +1004,7 @@ int LogConfigMgr::pre_sync_config_log(const common::ObMember &server, const int6
   int ret = OB_SUCCESS;
   SpinLockGuard guard(lock_);
   common::ObMemberList member_list;
+  LogMeta log_meta;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (false == server.is_valid()) {
@@ -1011,8 +1012,16 @@ int LogConfigMgr::pre_sync_config_log(const common::ObMember &server, const int6
   } else if (CHANGING == state_) {
     ret = OB_EAGAIN;
   } else if (FALSE_IT(member_list.add_member(server))) {
+  } else if (OB_FAIL(log_meta.generate_by_default(AccessMode::APPEND))) {
+    PALF_LOG(WARN, "generate_default_log_meta failed", KR(ret), K_(palf_id), K_(self));
+    // Generate default log barrier for pre_sync config log. Therefore, the added member will
+    // accept this config log as long as receiving it, without waiting for log barrier.
+    // The config meta has been accepted by majority, so it's safe to skip log barrier
   } else if (OB_FAIL(log_engine_->submit_change_config_meta_req(member_list, proposal_id,
-      prev_log_proposal_id_, prev_lsn_, prev_mode_pid_, log_ms_meta_))) {
+      INVALID_PROPOSAL_ID,
+      log_meta.get_log_snapshot_meta().base_lsn_,
+      log_meta.get_log_prepare_meta().log_proposal_id_,
+      log_ms_meta_))) {
     PALF_LOG(WARN, "submit_change_config_meta_req failed", KR(ret), K_(palf_id), K_(self), K(proposal_id), K(server));
   }
   return ret;
