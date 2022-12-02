@@ -1657,15 +1657,20 @@ int ObLogJoin::can_use_batch_nlj(bool& use_batch_nlj)
             !is_virtual_table(ts->get_ref_table_id())
             && !ts->get_is_fake_cte_table()
             && !ts->is_for_update()
-            && !ts->is_sample_scan();
+            && !ts->is_sample_scan()
+            && NULL == ts->get_limit_expr();
       } else {
         use_batch_nlj = false;
       }
     }
     if (OB_SUCC(ret) && use_batch_nlj) {
-      const ObIArray<ObRawExpr*>& table_filters = ts->get_filter_exprs();
+      ObSEArray<ObRawExpr *, 4> table_filters;
       bool contain_nl_param = false;
-      if (OB_FAIL(ObOptimizerUtil::is_contain_nl_params(table_filters, params->count(), contain_nl_param))) {
+      if (OB_FAIL(append_array_no_dup(table_filters, ts->get_filter_exprs()))) {
+        LOG_WARN("failed to push back filter exprs", K(ret));
+      } else if (OB_FAIL(append_array_no_dup(table_filters, ts->get_startup_exprs()))) {
+        LOG_WARN("failed to push back startup filter exprs", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::is_contain_nl_params(table_filters, params->count(), contain_nl_param))) {
         LOG_WARN("fail to check nl param", K(ret), K(table_filters), K(params->count()));
       } else if (contain_nl_param) {
         use_batch_nlj = false;
