@@ -133,27 +133,33 @@ int ObTenantChecker::check_create_tenant_end_()
   } else {
     const ObSimpleTenantSchema *tenant_schema = NULL;
     int64_t schema_version = OB_INVALID_VERSION;
+    int64_t baseline_schema_version = OB_INVALID_VERSION;
     FOREACH_CNT(tenant_id, tenant_ids) {
       // overwrite ret
       if (OB_FAIL(schema_service_->get_tenant_schema_guard(*tenant_id, schema_guard))) {
-        LOG_WARN("get_schema_guard failed", K(ret), K(*tenant_id));
+        LOG_WARN("get_schema_guard failed", KR(ret), K(*tenant_id));
       } else if (OB_FAIL(schema_guard.get_schema_version(*tenant_id, schema_version))) {
-        LOG_WARN("fail to get tenant schema version", K(ret), K(*tenant_id));
+        LOG_WARN("fail to get tenant schema version", KR(ret), K(*tenant_id));
       } else if (!share::schema::ObSchemaService::is_formal_version(schema_version)) {
         // tenant is still in creating
       } else if (OB_FAIL(schema_guard.get_tenant_info(*tenant_id, tenant_schema))) {
-        LOG_WARN("fail to get tenant schema", K(ret), K(*tenant_id));
+        LOG_WARN("fail to get tenant schema", KR(ret), K(*tenant_id));
       } else if (OB_ISNULL(tenant_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant not exist", K(ret), K(*tenant_id));
+        LOG_WARN("tenant not exist", KR(ret), K(*tenant_id));
+      } else if (OB_FAIL(schema_service_->get_baseline_schema_version(*tenant_id, false/*auto update*/,
+                                                                      baseline_schema_version))) {
+        LOG_WARN("fail to get baseline schema_version", KR(ret), K(*tenant_id));
+      } else if (OB_INVALID_VERSION == baseline_schema_version) {
+        //baseline_schema_version is not valid, just skip to create this kind of tenant
       } else if (tenant_schema->is_creating()) {
         obrpc::ObCreateTenantEndArg arg;
         arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
         arg.tenant_id_ = *tenant_id;
         if (OB_FAIL(rpc_proxy_.create_tenant_end(arg))) {
-          LOG_WARN("fail to execute create tenant end", K(ret), K(*tenant_id));
+          LOG_WARN("fail to execute create tenant end", KR(ret), K(*tenant_id));
         } else {
-          LOG_INFO("execute create_tenant_end", K(ret), K(*tenant_id), K(schema_version));
+          LOG_INFO("execute create_tenant_end", KR(ret), K(*tenant_id), K(schema_version));
           ROOTSERVICE_EVENT_ADD("inspector", "tenant_checker", "info", "execute create_tenant_end", "tenant_id", *tenant_id);
         }
       }
