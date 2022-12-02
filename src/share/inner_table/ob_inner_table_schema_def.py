@@ -5127,6 +5127,8 @@ def_table_schema(
 # 441 : __all_tenant_rls_attribute
 # 442 : __all_tenant_rls_attribute_history
 # 443 : __all_tenant_rewrite_rules
+
+# 444 : __all_reserved_snapshot
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
