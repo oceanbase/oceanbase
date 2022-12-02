@@ -58,7 +58,7 @@ public:
                                       ObIArray<ObRoutineInfo> &public_routine_list,
                                       const pl::ObPLRoutineTable &spec_routine_table,
                                       const pl::ObPLRoutineTable &body_routine_table,
-                                      ObArray<const ObRoutineInfo *> &routine_infos);
+                                      ObIArray<const ObRoutineInfo *> &routine_infos);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreatePackageBodyResolver);
 };

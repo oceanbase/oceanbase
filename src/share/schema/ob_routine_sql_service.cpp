@@ -200,7 +200,7 @@ int ObRoutineSqlService::update_routine(ObRoutineInfo &routine_info,
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(sql_client));
-  CK (routine_info.is_valid());
+  OV (routine_info.is_valid(), OB_ERR_UNEXPECTED, K(routine_info));
   OZ (add_routine(*sql_client, routine_info, true));
   if (OB_SUCC(ret)) {
     ObSchemaOperation opt;

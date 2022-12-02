@@ -1015,7 +1015,8 @@ private:
                            int64_t tenant_id,
                            int64_t parent_id,
                            int64_t owner_id,
-                           int64_t database_id);
+                           int64_t database_id,
+                           int64_t routine_id);
 
 private:
   int drop_fk_cascade(
