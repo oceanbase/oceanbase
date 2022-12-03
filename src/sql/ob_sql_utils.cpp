@@ -1821,7 +1821,7 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
                                                                     fix_param_store,
                                                                     is_transform_outline))) {
       if (OB_NOT_SUPPORTED != ret) {
-        SQL_PC_LOG(WARN, "fail to tranform syntax_tree", K(ret));
+        SQL_PC_LOG(WARN, "fail to transform syntax_tree", K(ret));
       }
     } else if (OB_FAIL(ObSqlParameterization::raw_fast_parameterize_sql(allocator,
                                                                         *session,
