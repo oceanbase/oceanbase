@@ -839,6 +839,8 @@ int ObMetaPointerMap<Key, T>::wash_meta_obj_with_func(
        t_ptr->set_addr_without_reset_obj(new_addr);
        if (OB_FAIL(t_ptr->dump_meta_obj(is_washed))){
          STORAGE_LOG(ERROR, "fail to dump met obj", K(ret), K(key));
+       }  else {
+         STORAGE_LOG(INFO, "wash tablet with slog succeed", K(key), K(old_addr), K(new_addr));
        }
      }
    }
