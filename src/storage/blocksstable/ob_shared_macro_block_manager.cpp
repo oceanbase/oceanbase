@@ -583,6 +583,7 @@ int ObSharedMacroBlockMgr::create_new_sstable(
   param.filled_tx_scn_ = basic_meta.filled_tx_scn_;
   param.ddl_scn_ = basic_meta.ddl_scn_;
   param.table_key_ = old_table.get_key();
+  param.sstable_logic_seq_ = old_table.get_sstable_seq();
   param.table_mode_ = basic_meta.table_mode_;
   param.index_type_ = static_cast<share::schema::ObIndexType>(basic_meta.index_type_);
   param.schema_version_ = basic_meta.schema_version_;

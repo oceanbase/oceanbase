@@ -933,6 +933,7 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
   } else {
     const ObStorageSchema &storage_schema = tablet->get_storage_schema();
     param.table_key_ = sstable_param_->table_key_;
+    param.sstable_logic_seq_ = sstable_param_->basic_meta_.sstable_logic_seq_;
     param.schema_version_ = sstable_param_->basic_meta_.schema_version_;
     param.table_mode_ = sstable_param_->basic_meta_.table_mode_;
     param.index_type_ = static_cast<share::schema::ObIndexType>(sstable_param_->basic_meta_.index_type_);
@@ -992,6 +993,7 @@ int ObPhysicalCopyFinishTask::build_create_sstable_param_(
     LOG_WARN("sstable param has data macro block, can not build sstable from basic meta", K(ret), KPC(sstable_param_));
   } else {
     param.table_key_ = sstable_param_->table_key_;
+    param.sstable_logic_seq_ = sstable_param_->basic_meta_.sstable_logic_seq_;
     param.schema_version_ = sstable_param_->basic_meta_.schema_version_;
     param.create_snapshot_version_ = sstable_param_->basic_meta_.create_snapshot_version_;
     param.table_mode_ = sstable_param_->basic_meta_.table_mode_;
