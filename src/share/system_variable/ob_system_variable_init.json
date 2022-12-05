@@ -1265,6 +1265,48 @@
     "background_cn": "",
     "ref_url": ""
   },
+  "cte_max_recursion_depth": {
+    "id": 94,
+    "name": "cte_max_recursion_depth",
+    "value": "1000",
+    "data_type": "uint",
+    "info": "Abort a recursive common table expression if it does more than this number of iterations.",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "min_val": "0",
+    "max_val": "4294967295",
+    "publish_version": "400",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "https://aone.alibaba-inc.com/task/45803397"
+  },
+  "regexp_stack_limit": {
+    "id": 95,
+    "name": "regexp_stack_limit",
+    "value": "8000000",
+    "data_type": "int",
+    "info": "The maximum available memory in bytes for the internal stack used for regular expression matching operations",
+    "flags": "GLOBAL",
+    "min_val": "0",
+    "max_val": "2147483647",
+    "publish_version": "410",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "regexp_time_limit": {
+    "id": 96,
+    "name": "regexp_time_limit",
+    "value": "32",
+    "data_type": "int",
+    "info": "The time limit for regular expression matching operations, default unit is milliseconds",
+    "flags": "GLOBAL",
+    "min_val": "0",
+    "max_val": "2147483647",
+    "publish_version": "410",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
   "ob_interm_result_mem_limit": {
     "id": 10001,
     "name": "ob_interm_result_mem_limit",
@@ -2852,5 +2894,19 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/zst4cy"
+  },
+  "ob_sql_plan_memory_percentage": {
+    "id": 10135,
+    "name": "ob_sql_plan_memory_percentage",
+    "value": "5",
+    "data_type": "int",
+    "info": "The limited percentage of tenant memory for sql plan",
+    "flags": "GLOBAL | NEED_SERIALIZE",
+    "min_val": "0",
+    "max_val": "80",
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }
