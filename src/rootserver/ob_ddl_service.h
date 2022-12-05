@@ -126,16 +126,13 @@ public:
   // create_index_table will fill table_id and frozen_version to table_schema
   virtual int create_index_table(const obrpc::ObCreateIndexArg &arg,
                                  share::schema::ObTableSchema &table_schema,
-                                 const share::SCN &frozen_scn,
                                  ObMySQLTransaction &sql_trans);
 
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg,
-                    const share::SCN &frozen_scn,
                     obrpc::ObAlterTableRes &res);
 
   int rebuild_index_in_trans(share::schema::ObSchemaGetterGuard &schema_guard,
                              share::schema::ObTableSchema &table_schema,
-                             const share::SCN &frozen_scn,
                              const ObString *ddl_stmt_str,
                              ObMySQLTransaction *sql_trans);
 
@@ -144,7 +141,6 @@ public:
                               share::schema::ObTableSchema &new_table_schema,
                               common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
                               share::schema::ObTableSchema &index_schema,
-                              const share::SCN &frozen_scn,
                               const common::ObString *ddl_stmt_str);
   // check whether the foreign key related table is executing offline ddl, creating index, and constrtaint task.
   // And ddl should be refused if the foreign key related table is executing above ddl.
@@ -154,16 +150,14 @@ public:
       ObMySQLTransaction &trans,
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &table_schema,
-      share::schema::ObTableSchema &index_schema,
-      const share::SCN &frozen_scn);
+      share::schema::ObTableSchema &index_schema);
   int create_global_inner_expr_index(
       ObMySQLTransaction &trans,
       const obrpc::ObCreateIndexArg &arg,
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::ObTableSchema &new_table_schema,
       common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
-      share::schema::ObTableSchema &index_schema,
-      const share::SCN &frozen_scn);
+      share::schema::ObTableSchema &index_schema);
   template <typename SCHEMA>
   int check_primary_zone_locality_condition(
       const SCHEMA &schema,
@@ -203,18 +197,15 @@ public:
       const common::ObString &ddl_stmt_str,
       const share::schema::ObErrorInfo &error_info,
       common::ObIArray<share::schema::ObTableSchema> &table_schemas,
-      const share::SCN &frozen_scn,
       share::schema::ObSchemaGetterGuard &schema_guard,
       const obrpc::ObSequenceDDLArg &sequence_ddl_arg,
       const uint64_t last_replay_log_id,
       const common::ObIArray<share::schema::ObDependencyInfo> *dependency_infos,
       ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array);
 
-  virtual int create_table_like(const obrpc::ObCreateTableLikeArg &arg,
-                                const share::SCN &frozen_scn);
+  virtual int create_table_like(const obrpc::ObCreateTableLikeArg &arg);
 
   virtual int alter_table(obrpc::ObAlterTableArg &alter_table_arg,
-                          const share::SCN &frozen_scn,
                           obrpc::ObAlterTableRes &res);
   virtual int drop_table(const obrpc::ObDropTableArg &drop_table_arg, const obrpc::ObDDLRes &res);
   int check_table_exists(const uint64_t tenant_id,
@@ -257,8 +248,7 @@ public:
   virtual int alter_tablegroup(const obrpc::ObAlterTablegroupArg &arg);
   virtual int try_format_partition_schema(share::schema::ObPartitionSchema &table_schema);
   virtual int generate_schema(const obrpc::ObCreateTableArg &arg,
-                              share::schema::ObTableSchema &schema,
-                              const share::SCN &frozen_scn);
+                              share::schema::ObTableSchema &schema);
   int create_index_tablet(const ObTableSchema &index_schema,
                           ObMySQLTransaction &trans,
                           share::schema::ObSchemaGetterGuard &schema_guard);
@@ -266,7 +256,6 @@ public:
                                 const share::schema::ObTableSchema &orgin_table_schema,
                                 share::schema::ObTableSchema &new_table_schema,
                                 share::schema::ObSchemaGetterGuard &schema_guard,
-                                const share::SCN &frozen_scn,
                                 ObDDLOperator &ddl_operator,
                                 ObMySQLTransaction &trans,
                                 common::ObArenaAllocator &allocator,
@@ -283,7 +272,6 @@ public:
   int alter_table_column(
       const share::schema::ObTableSchema &origin_table_schema,
       const share::schema::AlterTableSchema & alter_table_schema,
-      const share::SCN &frozen_scn,
       share::schema::ObTableSchema &new_table_schema,
       obrpc::ObAlterTableArg &alter_table_arg,
       share::schema::ObSchemaGetterGuard &schema_guard,
@@ -494,7 +482,6 @@ public:
    * @param [out] index_ids: new index table id
    */
   int rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table_arg,
-                                 const share::SCN &frozen_scn,
                                  common::ObSArray<uint64_t> &index_ids);
   /**
    * This function is called by the storage layer in the fourth stage of offline ddl
@@ -556,7 +543,6 @@ public:
       const common::ObSArray<common::ObString> &index_columns,
       const share::schema::ObTableSchema &orgin_table_schema,
       share::schema::ObTableSchema &new_table_schema,
-      const share::SCN &frozen_scn,
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
@@ -924,8 +910,7 @@ public:
       const ObTableSchema &hidden_table_schema,
       ObSchemaGetterGuard &schema_guard,
       ObSArray<ObTableSchema> &table_schemas,
-      common::ObMySQLTransaction &trans,
-      const share::SCN &frozen_scn);
+      common::ObMySQLTransaction &trans);
   int swap_orig_and_hidden_table_state(
       obrpc::ObAlterTableArg &alter_table_arg,
       const ObTableSchema &orig_table_schema,
@@ -935,8 +920,7 @@ public:
       common::ObMySQLTransaction &trans,
       ObSArray<ObTableSchema> &new_table_schemas);
   int remap_index_tablets_and_take_effect(
-      obrpc::ObAlterTableArg &alter_table_arg,
-      const share::SCN &frozen_scn);
+      obrpc::ObAlterTableArg &alter_table_arg);
   int update_autoinc_schema(obrpc::ObAlterTableArg &alter_table_arg);
   int build_aux_lob_table_schema_if_need(ObTableSchema &data_table_schema,
                                          ObIArray<ObTableSchema> &table_schemas);
@@ -1028,7 +1012,6 @@ private:
       const uint64_t tenant_id,
       const share::schema::ObTableSchema &orig_table_schema,
       ObDDLOperator &ddl_operator,
-      const share::SCN &frozen_scn,
       ObMySQLTransaction &trans);
   int fill_interval_info_for_set_interval(const ObTableSchema &orig_table_schema,
       ObTableSchema &new_table_schema,
@@ -1067,7 +1050,6 @@ private:
   template<typename SCHEMA>
   int set_default_tablegroup_id(SCHEMA &schema);
   int create_table_in_trans(share::schema::ObTableSchema &table_schema,
-                            const share::SCN &frozen_scn,
                             const common::ObString *ddl_stmt_str,
                             ObMySQLTransaction *sql_trans,
                             share::schema::ObSchemaGetterGuard &schema_guard);
@@ -1166,7 +1148,6 @@ private:
               const common::ObString &ddl_stmt_str,
               const share::schema::ObErrorInfo &error_info,
               common::ObIArray<share::schema::ObTableSchema> &table_schemas,
-              const share::SCN &frozen_scn,
               const obrpc::ObSequenceDDLArg &sequence_ddl_arg,
               const uint64_t last_replay_log_id,
               const common::ObIArray<share::schema::ObDependencyInfo> *dep_infos,
@@ -1183,7 +1164,6 @@ private:
                               const share::schema::ObSchemaOperationType operation_type,
                               const common::ObString &ddl_stmt_str);
   int alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                           const share::SCN &frozen_scn,
                            obrpc::ObAlterTableRes &res);
   int need_modify_not_null_constraint_validate(const obrpc::ObAlterTableArg &alter_table_arg,
                                                bool &is_add_not_null_col,
@@ -1198,7 +1178,6 @@ private:
   int check_ddl_with_primary_key_operation(const obrpc::ObAlterTableArg &alter_table_arg,
                                            bool &with_primary_key_operation);
   int do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                              const share::SCN &frozen_scn,
                               obrpc::ObAlterTableRes &res);
   int gen_new_index_table_name(
       const common::ObString &orig_index_table_name,
@@ -1223,7 +1202,6 @@ private:
                                const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
                                const bool bind_tablets,
                                share::schema::ObSchemaGetterGuard &schema_guard,
-                               const share::SCN &frozen_scn,
                                ObDDLOperator &ddl_operator,
                                common::ObMySQLTransaction &trans,
                                common::ObIAllocator &allocator);
@@ -1258,7 +1236,6 @@ private:
       common::ObIAllocator &allocator);
   int prepare_hidden_table_schema(
       const share::schema::ObTableSchema &orig_table_schema,
-      const share::SCN &frozen_scn,
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &hidden_table_schema);
   int rebuild_hidden_table_priv(
@@ -1318,7 +1295,6 @@ private:
                               const share::schema::ObTableSchema &orgin_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
                               share::schema::ObSchemaGetterGuard &schema_guard,
-                              const share::SCN &frozen_scn,
                               ObDDLOperator &ddl_operator,
                               common::ObMySQLTransaction &trans,
                               common::ObArenaAllocator &allocator);
@@ -1326,7 +1302,6 @@ private:
                               const share::schema::ObTableSchema &orgin_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
                               share::schema::ObSchemaGetterGuard &schema_guard,
-                              const share::SCN &frozen_scn,
                               ObDDLOperator &ddl_operator,
                               common::ObMySQLTransaction &trans);
   int convert_to_character_for_partition(const ObCollationType &to_collation,
@@ -1335,7 +1310,6 @@ private:
                            const share::schema::ObTableSchema &orgin_table_schema,
                            share::schema::ObTableSchema &new_table_schema,
                            share::schema::ObSchemaGetterGuard &schema_guard,
-                           const share::SCN &frozen_scn,
                            ObDDLOperator &ddl_operator,
                            common::ObMySQLTransaction &trans);
   int check_alter_table_constraint(
@@ -1408,7 +1382,6 @@ private:
       const share::schema::ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
       ObSchemaGetterGuard &schema_guard,
-      const share::SCN &frozen_scn,
       ObSArray<ObTableSchema> &new_table_schemas,
       ObSArray<uint64_t> &index_ids);
   int check_index_table_need_rebuild(
@@ -1423,7 +1396,6 @@ private:
       const common::ObIArray<int64_t> &drop_cols_id_arr,
       const share::ObColumnNameMap &col_name_map,
       const common::ObTimeZoneInfo &tz_info,
-      const share::SCN &frozen_scn,
       common::ObIAllocator &allocator,
       common::ObSArray<share::schema::ObTableSchema> &new_table_schemas,
       common::ObSArray<uint64_t> &index_ids);
@@ -1434,7 +1406,6 @@ private:
       share::schema::ObTableSchema &new_table_schema,
       share::schema::ObTableSchema &index_schema);
   int alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                                            const share::SCN &frozen_scn,
                                             obrpc::ObAlterTableRes &res);
   int truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
                               const share::schema::ObTableSchema &orig_table_schema,
@@ -1969,7 +1940,6 @@ private:
                                        const int64_t session_id,
                                        const share::schema::ObTableType table_type_,
                                        share::schema::ObSchemaService &schema_service,
-                                       const share::SCN &frozen_scn,
                                        common::ObIArray<share::schema::ObTableSchema> &new_scheams,
                                        common::ObArenaAllocator &allocator,
                                        const uint64_t define_user_id);

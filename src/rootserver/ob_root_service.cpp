@@ -2925,7 +2925,6 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
     ObArray<ObTableSchema> table_schemas;
-    SCN frozen_scn;
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *db_schema = NULL;
     schema_guard.set_session_id(arg.schema_.get_session_id());
@@ -2938,9 +2937,6 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
     } else if (OB_ISNULL(schema_service)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema_service is null", KP(schema_service), K(ret));
-    } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(
-            table_schema.get_tenant_id(), frozen_scn))) {
-      LOG_WARN("get_frozen_scn failed", K(ret));
     } else if (OB_FAIL(generate_table_schema_in_tenant_space(arg, table_schema))) {
       LOG_WARN("fail to generate table schema in tenant space", K(ret), K(arg));
     } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
@@ -3089,8 +3085,8 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
       //do nothing
     } else if (OB_FAIL(mock_fk_parent_table_map.create(16, "MockFKParentTbl"))) {
       LOG_WARN("fail to create mock_fk_parent_table_map", K(ret));
-    } else if (OB_FAIL(ddl_service_.generate_schema(arg, table_schema, frozen_scn))) {
-      LOG_WARN("generate_schema for table failed", K(frozen_scn), K(ret));
+    } else if (OB_FAIL(ddl_service_.generate_schema(arg, table_schema))) {
+      LOG_WARN("generate_schema for table failed", K(ret));
       //} else if (OB_FAIL(check_rs_capacity(table_schema, can_hold_new_table))) {
       //  LOG_WARN("fail to check rs capacity", K(ret), K(table_schema));
       //} else if (!can_hold_new_table) {
@@ -3135,11 +3131,10 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
         } else if (OB_FAIL(ObIndexBuilderUtil::adjust_expr_index_args(index_arg, table_schema, *allocator, gen_columns))) {
             LOG_WARN("fail to adjust expr index args", K(ret));
         } else if (OB_FAIL(index_builder.generate_schema(index_arg,
-                                                         frozen_scn,
                                                          table_schema,
                                                          global_index_without_column_info,
                                                          index_schema))) {
-          LOG_WARN("generate_schema for index failed", K(index_arg), K(frozen_scn), K(table_schema), K(ret));
+          LOG_WARN("generate_schema for index failed", K(index_arg), K(table_schema), K(ret));
         }
         if (OB_SUCC(ret)) {
           uint64_t new_table_id = OB_INVALID_ID;
@@ -3420,14 +3415,13 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
                                       arg.ddl_stmt_str_,
                                       arg.error_info_,
                                       table_schemas,
-                                      frozen_scn,
                                       schema_guard,
                                       arg.sequence_ddl_arg_,
                                       arg.last_replay_log_id_,
                                       &arg.dep_infos_,
                                       mock_fk_parent_table_schema_array))) {
         LOG_WARN("create_user_tables failed", "if_not_exist", arg.if_not_exist_,
-                 "ddl_stmt_str", arg.ddl_stmt_str_, K(frozen_scn), K(ret));
+                 "ddl_stmt_str", arg.ddl_stmt_str_, K(ret));
       }
     }
     if (OB_ERR_TABLE_EXIST == ret) {
@@ -3675,20 +3669,17 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
 {
   LOG_DEBUG("receive execute ddl task arg", K(arg));
   int ret = OB_SUCCESS;
-  SCN frozen_scn;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(arg.exec_tenant_id_, frozen_scn))) {
-    LOG_WARN("get_frozen_scn failed", K(ret), K(arg));
   } else {
     switch (arg.ddl_task_type_) {
       case share::REBUILD_INDEX_TASK: {
         if (OB_FAIL(ddl_service_.rebuild_hidden_table_index(
-            const_cast<obrpc::ObAlterTableArg &>(arg), frozen_scn, obj_ids))) {
+            const_cast<obrpc::ObAlterTableArg &>(arg), obj_ids))) {
           LOG_WARN("failed to rebuild hidden table index", K(ret));
         }
         break;
@@ -3737,7 +3728,7 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
       // remap all index tables to hidden table and take effect concurrently.
       case share::REMAP_INDEXES_AND_TAKE_EFFECT_TASK: {
         if (OB_FAIL(ddl_service_.remap_index_tablets_and_take_effect(
-            const_cast<obrpc::ObAlterTableArg &>(arg), frozen_scn))) {
+            const_cast<obrpc::ObAlterTableArg &>(arg)))) {
           LOG_WARN("fail to remap index tables to hidden table and take effect", K(ret));
         }
         break;
@@ -3858,10 +3849,7 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
       LOG_WARN("fail to precheck_interval_part", K(arg), KR(ret));
     }
   } else {
-    SCN frozen_scn;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
-      LOG_WARN("get_frozen_scn failed", K(ret), K(arg));
     } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
     } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
@@ -3916,8 +3904,8 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
           res.task_id_ = task_record.task_id_;
         }
       }
-    } else if (OB_FAIL(ddl_service_.alter_table(nonconst_arg, frozen_scn, res))) {
-      LOG_WARN("alter_user_table failed", K(arg), K(frozen_scn), K(ret));
+    } else if (OB_FAIL(ddl_service_.alter_table(nonconst_arg, res))) {
+      LOG_WARN("alter_user_table failed", K(arg), K(ret));
     } else {
       const ObSimpleTableSchemaV2 *simple_table_schema = NULL;
       // there are multiple DDL except alter table, ctas, comment on, eg.
@@ -3951,16 +3939,13 @@ int ObRootService::create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTable
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    SCN frozen_scn;
     ObIndexBuilder index_builder(ddl_service_);
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
     } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
       LOG_WARN("check parallel ddl conflict failed", K(ret));
-    } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(arg.tenant_id_, frozen_scn))) {
-      LOG_WARN("get_frozen_scn failed", K(ret), K(arg));
-    } else if (OB_FAIL(index_builder.create_index(arg, frozen_scn, res))) {
-      LOG_WARN("create_index failed", K(arg), K(frozen_scn), K(ret));
+    } else if (OB_FAIL(index_builder.create_index(arg, res))) {
+      LOG_WARN("create_index failed", K(arg), K(ret));
     }
   }
   return ret;
@@ -4187,14 +4172,8 @@ int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObA
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else {
-    SCN frozen_scn;
-    if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(arg.tenant_id_, frozen_scn))) {
-      LOG_WARN("get_frozen_scn failed", K(ret));
-    } else if (OB_FAIL(ddl_service_.rebuild_index(arg, frozen_scn, res))) {
-      LOG_WARN("ddl_service rebuild index failed", K(arg), K(ret));
-    }
-
+  } else if (OB_FAIL(ddl_service_.rebuild_index(arg, res))) {
+    LOG_WARN("ddl_service rebuild index failed", K(arg), K(ret));
   }
   return ret;
 }
@@ -4311,10 +4290,7 @@ int ObRootService::create_table_like(const ObCreateTableLikeArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    SCN frozen_scn;
-    if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(arg.tenant_id_, frozen_scn))) {
-      LOG_WARN("get_frozen_scn failed", K(ret));
-    } else if (OB_FAIL(ddl_service_.create_table_like(arg, frozen_scn))) {
+    if (OB_FAIL(ddl_service_.create_table_like(arg))) {
       if (OB_ERR_TABLE_EXIST == ret) {
         //create table xx if not exist like
         if (arg.if_not_exist_) {
