@@ -96,7 +96,7 @@ ERROR HY000: Invalid argument
 select regexp_instr('', 'a. ', 1, 2, 1, 'x') from dual;
 ERROR HY000: Invalid argument
 select regexp_instr('abcadef', '', 1, 2, 1, 'x') from dual;
-ERROR 42000: Got error 'empty (sub)expression' from regexp
+ERROR 42000: Got error from regexp
 select regexp_instr('abcadef', 'a. ', NULL, 2, 1, 'x') from dual;
 ERROR HY000: Invalid argument
 select regexp_instr('abcadef', 'a. ', 1, NULL, 1, 'x') from dual;
@@ -156,7 +156,7 @@ ERROR HY000: Invalid argument
 select regexp_substr('', 'a. ', 1, 2, 'x') from dual;
 ERROR HY000: Invalid argument
 select regexp_substr('abcadef', '', 1, 2, 'x') from dual;
-ERROR 42000: Got error 'empty (sub)expression' from regexp
+ERROR 42000: Got error from regexp
 select regexp_substr('abcadef', 'a. ', NULL, 2, 'x') from dual;
 ERROR HY000: Invalid argument
 select regexp_substr('abcadef', 'a. ', 1, NULL, 'x') from dual;
@@ -256,7 +256,7 @@ ERROR HY000: Invalid argument
 select regexp_replace('', 'a. ', 'X', 1, 2, 'x') from dual;
 ERROR HY000: Invalid argument
 select regexp_replace('abcadef', '', 'X', 1, 2, 'x') from dual;
-ERROR 42000: Got error 'empty (sub)expression' from regexp
+ERROR 42000: Got error from regexp
 select regexp_replace('abcadef', 'a. ', NULL, 1, 2, 'x') from dual;
 ERROR HY000: Invalid argument
 select regexp_replace('abcadef', 'a. ', 'X', NULL, 2, 'x') from dual;

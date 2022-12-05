@@ -942,6 +942,9 @@
 #define ER_WINDOW_ILLEGAL_ORDER_BY 3592
 #define ER_WINDOW_ROWS_INTERVAL_USE 3596
 
+//for the cte table which is compatible with mysql 8.0.30
+#define ER_CTE_MAX_RECURSION_DEPTH 3636
+
 //for the check constraint which is compatible with mysql 8.0.25
 #define ER_FK_CANNOT_DROP_PARENT 3730
 #define ER_NON_BOOLEAN_EXPR_FOR_CHECK_CONSTRAINT 3812

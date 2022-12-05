@@ -764,6 +764,10 @@ constexpr int OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED = -5
 constexpr int OB_ERR_GET_STACKED_DIAGNOSTICS = -5402;
 constexpr int OB_DDL_SCHEMA_VERSION_NOT_MATCH = -5403;
 constexpr int OB_ERR_COLUMN_GROUP_DUPLICATE = -5404;
+constexpr int OB_ERR_RESERVED_SYNTAX = -5405;
+constexpr int OB_ERR_INVALID_PARAM_TO_PROCEDURE = -5406;
+constexpr int OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT = -5407;
+constexpr int OB_ERR_CTE_MAX_RECURSION_DEPTH = -5408;
 constexpr int OB_SQL_RETRY_SPM = -5434;
 constexpr int OB_OUTLINE_NOT_REPRODUCIBLE = -5435;
 constexpr int OB_EER_WINDOW_NO_CHILD_PARTITIONING = -5438;
@@ -2230,7 +2234,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_USER_VARIABLE_UNKNOWN__USER_ERROR_MSG "Variable %.*s does not exists"
 #define OB_ILLEGAL_USAGE_OF_MERGING_FROZEN_TIME__USER_ERROR_MSG "MERGING_FROZEN_TIME() system function only be used in daily merging."
 #define OB_INVALID_NUMERIC__USER_ERROR_MSG "Invalid numeric char '%c'"
-#define OB_ERR_REGEXP_ERROR__USER_ERROR_MSG "Got error 'empty (sub)expression' from regexp"
+#define OB_ERR_REGEXP_ERROR__USER_ERROR_MSG "Got error '%s' from regexp"
 #define OB_SQL_LOG_OP_SETCHILD_OVERFLOW__USER_ERROR_MSG "Logical operator child index overflow"
 #define OB_SQL_EXPLAIN_FAILED__USER_ERROR_MSG "fail to explain plan"
 #define OB_SQL_OPT_COPY_OP_FAILED__USER_ERROR_MSG "fail to copy logical operator"
@@ -2496,6 +2500,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__USER_ERROR_MSG "GET STACKED DIAGNOSTICS when handler not active"
 #define OB_DDL_SCHEMA_VERSION_NOT_MATCH__USER_ERROR_MSG "ddl schema version not match"
 #define OB_ERR_COLUMN_GROUP_DUPLICATE__USER_ERROR_MSG "Duplicate column group name '%.*s'"
+#define OB_ERR_RESERVED_SYNTAX__USER_ERROR_MSG "The \'%.*s\' syntax is reserved for purposes internal to the OceanBase Server"
+#define OB_ERR_INVALID_PARAM_TO_PROCEDURE__USER_ERROR_MSG "Incorrect parameters to procedure \'%.*s\'"
+#define OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT__USER_ERROR_MSG "Incorrect parameters in the call to native function '%.*s'"
+#define OB_ERR_CTE_MAX_RECURSION_DEPTH__USER_ERROR_MSG "Recursive query aborted after %lu iterations. Try increasing @@cte_max_recursion_depth to a larger value."
 #define OB_ERR_INVALID_JSON_TEXT__USER_ERROR_MSG "Invalid JSON text."
 #define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__USER_ERROR_MSG "Invalid JSON text in argument."
 #define OB_ERR_INVALID_JSON_BINARY_DATA__USER_ERROR_MSG "The JSON binary value contains invalid data."
@@ -4065,7 +4073,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_USER_VARIABLE_UNKNOWN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5112, Variable %.*s does not exists"
 #define OB_ILLEGAL_USAGE_OF_MERGING_FROZEN_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5113, MERGING_FROZEN_TIME() system function only be used in daily merging."
 #define OB_INVALID_NUMERIC__ORA_USER_ERROR_MSG "ORA-01722: invalid number char '%c'"
-#define OB_ERR_REGEXP_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5115, Got error 'empty (sub)expression' from regexp"
+#define OB_ERR_REGEXP_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5115, Got error '%s' from regexp"
 #define OB_SQL_LOG_OP_SETCHILD_OVERFLOW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5116, Logical operator child index overflow"
 #define OB_SQL_EXPLAIN_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5117, fail to explain plan"
 #define OB_SQL_OPT_COPY_OP_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5118, fail to copy logical operator"
@@ -4331,6 +4339,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5402, GET STACKED DIAGNOSTICS when handler not active"
 #define OB_DDL_SCHEMA_VERSION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5403, ddl schema version not match"
 #define OB_ERR_COLUMN_GROUP_DUPLICATE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5404, Duplicate column group name '%.*s'"
+#define OB_ERR_RESERVED_SYNTAX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5405, The \'%.*s\' syntax is reserved for purposes internal to the OceanBase Server"
+#define OB_ERR_INVALID_PARAM_TO_PROCEDURE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5406, Incorrect parameters to procedure \'%.*s\'"
+#define OB_ERR_WRONG_PARAMETERS_TO_NATIVE_FCT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5407, Incorrect parameters in the call to native function '%.*s'"
+#define OB_ERR_CTE_MAX_RECURSION_DEPTH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5408, Recursive query aborted after %lu iterations. Try increasing @@cte_max_recursion_depth to a larger value."
 #define OB_ERR_INVALID_JSON_TEXT__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON text."
 #define OB_ERR_INVALID_JSON_TEXT_IN_PARAM__ORA_USER_ERROR_MSG "ORA-00600: Invalid JSON text in argument."
 #define OB_ERR_INVALID_JSON_BINARY_DATA__ORA_USER_ERROR_MSG "ORA-00600: The JSON binary value contains invalid data."

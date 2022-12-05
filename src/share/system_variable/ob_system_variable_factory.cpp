@@ -166,6 +166,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "collation_server",
   "concurrent_insert",
   "connect_timeout",
+  "cte_max_recursion_depth",
   "cursor_sharing",
   "datadir",
   "debug_sync",
@@ -257,6 +258,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_route_policy",
   "ob_safe_weak_read_snapshot",
   "ob_sql_audit_percentage",
+  "ob_sql_plan_memory_percentage",
   "ob_sql_work_area_percentage",
   "ob_statement_trace_id",
   "ob_tcp_invited_nodes",
@@ -280,6 +282,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "query_cache_wlock_invalidate",
   "read_only",
   "recyclebin",
+  "regexp_stack_limit",
+  "regexp_time_limit",
   "resource_manager_plan",
   "secure_file_priv",
   "server_id",
@@ -384,6 +388,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_COLLATION_SERVER,
   SYS_VAR_CONCURRENT_INSERT,
   SYS_VAR_CONNECT_TIMEOUT,
+  SYS_VAR_CTE_MAX_RECURSION_DEPTH,
   SYS_VAR_CURSOR_SHARING,
   SYS_VAR_DATADIR,
   SYS_VAR_DEBUG_SYNC,
@@ -475,6 +480,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ROUTE_POLICY,
   SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT,
   SYS_VAR_OB_SQL_AUDIT_PERCENTAGE,
+  SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE,
   SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE,
   SYS_VAR_OB_STATEMENT_TRACE_ID,
   SYS_VAR_OB_TCP_INVITED_NODES,
@@ -498,6 +504,8 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_QUERY_CACHE_WLOCK_INVALIDATE,
   SYS_VAR_READ_ONLY,
   SYS_VAR_RECYCLEBIN,
+  SYS_VAR_REGEXP_STACK_LIMIT,
+  SYS_VAR_REGEXP_TIME_LIMIT,
   SYS_VAR_RESOURCE_MANAGER_PLAN,
   SYS_VAR_SECURE_FILE_PRIV,
   SYS_VAR_SERVER_ID,
@@ -648,6 +656,9 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "log_bin",
   "server_uuid",
   "default_storage_engine",
+  "cte_max_recursion_depth",
+  "regexp_stack_limit",
+  "regexp_time_limit",
   "ob_interm_result_mem_limit",
   "ob_proxy_partition_hit",
   "ob_log_level",
@@ -768,7 +779,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "sql_notes",
   "innodb_strict_mode",
   "_windowfunc_optimization_settings",
-  "ob_enable_rich_error_msg"
+  "ob_enable_rich_error_msg",
+  "ob_sql_plan_memory_percentage"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1030,6 +1042,9 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarLogBin)
         + sizeof(ObSysVarServerUuid)
         + sizeof(ObSysVarDefaultStorageEngine)
+        + sizeof(ObSysVarCteMaxRecursionDepth)
+        + sizeof(ObSysVarRegexpStackLimit)
+        + sizeof(ObSysVarRegexpTimeLimit)
         + sizeof(ObSysVarObIntermResultMemLimit)
         + sizeof(ObSysVarObProxyPartitionHit)
         + sizeof(ObSysVarObLogLevel)
@@ -1151,6 +1166,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarInnodbStrictMode)
         + sizeof(ObSysVarWindowfuncOptimizationSettings)
         + sizeof(ObSysVarObEnableRichErrorMsg)
+        + sizeof(ObSysVarObSqlPlanMemoryPercentage)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -2003,6 +2019,33 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DEFAULT_STORAGE_ENGINE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarDefaultStorageEngine));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCteMaxRecursionDepth())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCteMaxRecursionDepth", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CTE_MAX_RECURSION_DEPTH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarCteMaxRecursionDepth));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRegexpStackLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRegexpStackLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_REGEXP_STACK_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRegexpStackLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRegexpTimeLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRegexpTimeLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_REGEXP_TIME_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRegexpTimeLimit));
       }
     }
     if (OB_SUCC(ret)) {
@@ -3094,6 +3137,15 @@ int ObSysVarFactory::create_all_sys_vars()
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnableRichErrorMsg));
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSqlPlanMemoryPercentage())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObSqlPlanMemoryPercentage", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObSqlPlanMemoryPercentage));
+      }
+    }
 
   }
   return ret;
@@ -4151,6 +4203,39 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultStorageEngine())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarDefaultStorageEngine", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_CTE_MAX_RECURSION_DEPTH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarCteMaxRecursionDepth)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarCteMaxRecursionDepth)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCteMaxRecursionDepth())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCteMaxRecursionDepth", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_REGEXP_STACK_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRegexpStackLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRegexpStackLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRegexpStackLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRegexpStackLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_REGEXP_TIME_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRegexpTimeLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRegexpTimeLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRegexpTimeLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRegexpTimeLimit", K(ret));
       }
       break;
     }
@@ -5482,6 +5567,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableRichErrorMsg())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObEnableRichErrorMsg", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObSqlPlanMemoryPercentage)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObSqlPlanMemoryPercentage)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSqlPlanMemoryPercentage())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObSqlPlanMemoryPercentage", K(ret));
       }
       break;
     }
