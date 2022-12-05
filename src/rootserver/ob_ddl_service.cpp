@@ -326,7 +326,6 @@ int ObDDLService::create_user_tables(
     const ObString &ddl_stmt_str,
     const ObErrorInfo &error_info,
     ObIArray<ObTableSchema> &table_schemas,
-    const SCN &frozen_scn,
     ObSchemaGetterGuard &schema_guard,
     const obrpc::ObSequenceDDLArg &sequence_ddl_arg,
     const uint64_t last_replay_log_id,
@@ -381,7 +380,7 @@ int ObDDLService::create_user_tables(
   if (OB_FAIL(ret)) {
     //do nothing
   } else if (OB_FAIL(create_tables_in_trans(if_not_exist, ddl_stmt_str, error_info, table_schemas,
-                                            frozen_scn, sequence_ddl_arg,
+                                            sequence_ddl_arg,
                                             last_replay_log_id, dep_infos, mock_fk_parent_table_schema_array))) {
     LOG_WARN("create_tables_in_trans failed", K(ret));
   }
@@ -404,7 +403,6 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
                                           ObTableSchema &new_table_schema,
                                           ObIArray<ObColumnSchemaV2*> &new_columns,
                                           ObTableSchema &index_schema,
-                                          const SCN &frozen_scn,
                                           const ObString *ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
@@ -481,15 +479,14 @@ int ObDDLService::create_global_index(
     ObMySQLTransaction &trans,
     const obrpc::ObCreateIndexArg &arg,
     const share::schema::ObTableSchema &table_schema,
-    share::schema::ObTableSchema &index_schema,
-    const SCN &frozen_scn)
+    share::schema::ObTableSchema &index_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (OB_FAIL(table_schema.check_create_index_on_hidden_primary_key(index_schema))) {
     LOG_WARN("fail to check create global index on table", K(ret), K(index_schema));
-  } else if (OB_FAIL(create_index_table(arg, index_schema, frozen_scn, trans))) {
+  } else if (OB_FAIL(create_index_table(arg, index_schema, trans))) {
     LOG_WARN("fail to create global index", K(ret));
   }
   return ret;
@@ -501,15 +498,14 @@ int ObDDLService::create_global_inner_expr_index(
     const share::schema::ObTableSchema &orig_table_schema,
     share::schema::ObTableSchema &new_table_schema,
     common::ObIArray<share::schema::ObColumnSchemaV2*> &new_columns,
-    share::schema::ObTableSchema &index_schema,
-    const SCN &frozen_scn)
+    share::schema::ObTableSchema &index_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
   } else if (OB_FAIL(create_inner_expr_index(trans, orig_table_schema,
           new_table_schema, new_columns, index_schema,
-          frozen_scn, &arg.ddl_stmt_str_))) {
+          &arg.ddl_stmt_str_))) {
     LOG_WARN("fail to create inner expr index", K(ret));
   }
   return ret;
@@ -519,7 +515,6 @@ int ObDDLService::create_global_inner_expr_index(
 int ObDDLService::create_index_table(
   const obrpc::ObCreateIndexArg &arg,
   ObTableSchema &table_schema,
-  const SCN &frozen_scn,
   ObMySQLTransaction &sql_trans)
 {
   int ret = OB_SUCCESS;
@@ -571,10 +566,9 @@ int ObDDLService::create_index_table(
     }
     if (OB_SUCC(ret)) {
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(create_table_in_trans(table_schema, frozen_scn,
+        if (OB_FAIL(create_table_in_trans(table_schema,
                 ddl_stmt_str, &sql_trans, schema_guard))) {
-          LOG_WARN("create_table_in_trans failed", KR(ret), K(frozen_scn),
-                   K(ddl_stmt_str), K(table_schema));
+          LOG_WARN("create_table_in_trans failed", KR(ret), K(ddl_stmt_str), K(table_schema));
         }
       }
     }
@@ -896,8 +890,7 @@ int ObDDLService::try_format_partition_schema(ObPartitionSchema &partition_schem
  */
 int ObDDLService::generate_schema(
     const ObCreateTableArg &arg,
-    ObTableSchema &schema,
-    const SCN &frozen_scn)
+    ObTableSchema &schema)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObConstraint> &constraints = arg.constraint_list_;
@@ -1685,13 +1678,11 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
                                          const ObString &ddl_stmt_str,
                                          const ObErrorInfo &error_info,
                                          ObIArray<ObTableSchema> &table_schemas,
-                                         const SCN &ref_frozen_scn,
                                          const obrpc::ObSequenceDDLArg &sequence_ddl_arg,
                                          const uint64_t last_replay_log_id,
                                          const ObIArray<ObDependencyInfo> *dep_infos,
                                          ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array)
 {
-  UNUSED(ref_frozen_scn);
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
   RS_TRACE(create_tables_in_trans_begin);
@@ -2001,12 +1992,10 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
 // If sql_trans is NULL, it need to create a transaction inside the function.
 int ObDDLService::create_table_in_trans(
     ObTableSchema &table_schema,
-    const SCN &frozen_scn,
     const ObString *ddl_stmt_str,
     ObMySQLTransaction *sql_trans,
     share::schema::ObSchemaGetterGuard &schema_guard)
 {
-  UNUSED(frozen_scn);
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
@@ -2788,7 +2777,6 @@ int ObDDLService::create_hidden_table_with_pk_changed(
                   const ObSArray<ObString> &index_columns,
                   const ObTableSchema &origin_table_schema,
                   ObTableSchema &new_table_schema,
-                  const SCN &frozen_scn,
                   ObSchemaGetterGuard &schema_guard,
                   ObDDLOperator &ddl_operator,
                   ObMySQLTransaction &trans,
@@ -2816,7 +2804,6 @@ int ObDDLService::create_hidden_table_with_pk_changed(
                                               &alter_table_arg.sequence_ddl_arg_,
                                               bind_tablets,
                                               schema_guard,
-                                              frozen_scn,
                                               ddl_operator,
                                               trans,
                                               allocator))) {
@@ -3542,7 +3529,6 @@ int ObDDLService::alter_table_partition_by(
     const ObTableSchema &orig_table_schema,
     ObTableSchema &new_table_schema,
     ObSchemaGetterGuard &schema_guard,
-    const SCN &frozen_scn,
     ObDDLOperator &ddl_operator,
     ObMySQLTransaction &trans)
 {
@@ -3556,7 +3542,6 @@ int ObDDLService::alter_table_partition_by(
                               &alter_table_arg.sequence_ddl_arg_,
                               bind_tablets,
                               schema_guard,
-                              frozen_scn,
                               ddl_operator,
                               trans,
                               alter_table_arg.allocator_));
@@ -3655,7 +3640,6 @@ int ObDDLService::convert_to_character(
     const ObTableSchema &orig_table_schema,
     ObTableSchema &new_table_schema,
     ObSchemaGetterGuard &schema_guard,
-    const SCN &frozen_scn,
     ObDDLOperator &ddl_operator,
     ObMySQLTransaction &trans)
 {
@@ -3711,7 +3695,6 @@ int ObDDLService::convert_to_character(
                                 &alter_table_arg.sequence_ddl_arg_,
                                 bind_tablets,
                                 schema_guard,
-                                frozen_scn,
                                 ddl_operator,
                                 trans,
                                 alter_table_arg.allocator_));
@@ -3778,7 +3761,6 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
                                           const ObTableSchema &origin_table_schema,
                                           ObTableSchema &new_table_schema,
                                           ObSchemaGetterGuard &schema_guard,
-                                          const SCN &frozen_scn,
                                           ObDDLOperator &ddl_operator,
                                           ObMySQLTransaction &trans,
                                           common::ObArenaAllocator &allocator)
@@ -3807,7 +3789,6 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
                                                                 index_columns,
                                                                 origin_table_schema,
                                                                 new_table_schema,
-                                                                frozen_scn,
                                                                 schema_guard,
                                                                 ddl_operator,
                                                                 trans,
@@ -3849,7 +3830,6 @@ int ObDDLService::alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_ar
                                                             index_columns,
                                                             origin_table_schema,
                                                             new_table_schema,
-                                                            frozen_scn,
                                                             schema_guard,
                                                             ddl_operator,
                                                             trans,
@@ -4287,8 +4267,7 @@ int ObDDLService::remap_index_tablets_to_new_indexs(
     const ObTableSchema &hidden_table_schema,
     ObSchemaGetterGuard &schema_guard,
     ObSArray<ObTableSchema> &table_schemas,
-    common::ObMySQLTransaction &trans,
-    const SCN &frozen_scn)
+    common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   int64_t new_schema_version = OB_INVALID_VERSION;
@@ -4457,8 +4436,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(
 }
 
 int ObDDLService::remap_index_tablets_and_take_effect(
-    obrpc::ObAlterTableArg &alter_table_arg,
-    const SCN &frozen_scn)
+    obrpc::ObAlterTableArg &alter_table_arg)
 {
   int ret = OB_SUCCESS;
   ObSArray<uint64_t> index_ids;
@@ -4492,8 +4470,7 @@ int ObDDLService::remap_index_tablets_and_take_effect(
                                                           *hidden_table_schema,
                                                           schema_guard,
                                                           table_schemas,
-                                                          trans,
-                                                          frozen_scn))) {
+                                                          trans))) {
       LOG_WARN("fail to remap all index tables to the hidden table", K(ret));
     } else if (OB_FAIL(swap_orig_and_hidden_table_state(alter_table_arg,
                                                         *orig_table_schema,
@@ -4772,7 +4749,6 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                                     const ObTableSchema &origin_table_schema,
                                     ObTableSchema &new_table_schema,
                                     ObSchemaGetterGuard &schema_guard,
-                                    const SCN &frozen_scn,
                                     ObDDLOperator &ddl_operator,
                                     ObMySQLTransaction &trans,
                                     ObArenaAllocator &allocator,
@@ -4900,13 +4876,11 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                       *create_index_arg, new_table_schema, allocator, gen_columns))) {
                 LOG_WARN("adjust fulltext args failed", K(ret));
               } else if (OB_FAIL(index_builder.generate_schema(*create_index_arg,
-                                                        frozen_scn,
                                                         new_table_schema,
                                                         global_index_without_column_info,
                                                         index_schema))) {
                 LOG_WARN("failed to generate index schema!", K(ret));
               } else if (OB_FAIL(ddl_operator.alter_table_create_index(new_table_schema,
-                                                                      frozen_scn,
                                                                       gen_columns,
                                                                       index_schema,
                                                                       trans))) {
@@ -7850,7 +7824,6 @@ int ObDDLService::update_prev_id_for_add_column(const ObTableSchema &origin_tabl
 
 int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                      const AlterTableSchema &alter_table_schema,
-                                     const SCN &frozen_scn,
                                      ObTableSchema &new_table_schema,
                                      obrpc::ObAlterTableArg &alter_table_arg,
                                      ObSchemaGetterGuard &schema_guard,
@@ -9101,7 +9074,6 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
                                       const uint64_t tenant_id,
                                       const ObTableSchema &orig_table_schema,
                                       ObDDLOperator &ddl_operator,
-                                      const SCN &frozen_scn,
                                       ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -9149,7 +9121,7 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
             ObTableSchema new_table_schema;
             if (OB_FAIL(new_table_schema.assign(*index_table_schema))) {
               LOG_WARN("fail to assign schema", K(ret));
-            } else if (OB_FAIL(rebuild_index_in_trans(schema_guard, new_table_schema, frozen_scn,
+            } else if (OB_FAIL(rebuild_index_in_trans(schema_guard, new_table_schema,
                                                       NULL, &trans))) {
               LOG_WARN("ddl_service_ rebuild_index failed", KR(ret));
             } else {
@@ -9633,7 +9605,6 @@ int ObDDLService::check_enable_sys_table_ddl(const ObTableSchema &table_schema,
 
 // FIXME: this function should move to observer
 int ObDDLService::alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                                                        const SCN &frozen_scn,
                                                         obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -9683,11 +9654,11 @@ int ObDDLService::alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &
               } else {
                 // offline ddl cannot appear at the same time with other ddl types
                 if (is_long_running_ddl(res.ddl_type_)) {
-                  if (OB_FAIL(do_offline_ddl_in_trans(alter_table_arg, frozen_scn, res))) {
+                  if (OB_FAIL(do_offline_ddl_in_trans(alter_table_arg, res))) {
                     LOG_WARN("failed to do offline ddl in trans", K(ret), K(alter_table_arg));;
                   }
                 } else {
-                  if (OB_FAIL(alter_table_in_trans(alter_table_arg, frozen_scn, res))) {
+                  if (OB_FAIL(alter_table_in_trans(alter_table_arg, res))) {
                     LOG_WARN("refresh sess active time of temporary table failed", K(alter_table_arg), K(ret));
                   } else {
                     LOG_INFO("a temporary table just refreshed sess active time", K(alter_table_arg));
@@ -9732,7 +9703,6 @@ int ObDDLService::update_tables_attribute(ObIArray<ObTableSchema*> &new_table_sc
 //fix me :Check whether the newly added index column covers the partition column --by rongxuan.lc
 // It can be repaired after the featrue that add index in alter_table statement
 int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                                       const SCN &frozen_scn,
                                        obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -9879,7 +9849,6 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             LOG_WARN("fail to can alter column", K(ret), K(alter_table_arg));
           } else if (OB_FAIL(alter_table_column(*orig_table_schema,
                                                 alter_table_schema,
-                                                frozen_scn,
                                                 new_table_schema,
                                                 alter_table_arg,
                                                 schema_guard,
@@ -9929,7 +9898,6 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                *orig_table_schema,
                                                new_table_schema,
                                                schema_guard,
-                                               frozen_scn,
                                                ddl_operator,
                                                trans,
                                                alter_table_arg.allocator_,
@@ -9971,7 +9939,6 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                  tenant_id,
                                                  *orig_table_schema,
                                                  ddl_operator,
-                                                 frozen_scn,
                                                  trans))) {
             LOG_WARN("update_global_index failed", K(ret));
           } else if (OB_FAIL(generate_tables_array(alter_table_arg.alter_part_type_,
@@ -10634,7 +10601,6 @@ int ObDDLService::check_ddl_with_primary_key_operation(
 }
 
 int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                                          const SCN &frozen_scn,
                                           obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -10690,7 +10656,6 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                             *orig_table_schema,
                             new_table_schema,
                             schema_guard,
-                            frozen_scn,
                             ddl_operator,
                             trans,
                             alter_table_arg.allocator_))) {
@@ -10741,7 +10706,6 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                                     &alter_table_arg.sequence_ddl_arg_,
                                                     bind_tablets,
                                                     schema_guard,
-                                                    frozen_scn,
                                                     ddl_operator,
                                                     trans,
                                                     alter_table_arg.allocator_))) {
@@ -10756,7 +10720,6 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                                     *orig_table_schema,
                                                     new_table_schema,
                                                     schema_guard,
-                                                    frozen_scn,
                                                     ddl_operator,
                                                     trans))) {
           LOG_WARN("failed to alter table partition by", K(ret));
@@ -10784,7 +10747,6 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                          *orig_table_schema,
                                          new_table_schema,
                                          schema_guard,
-                                         frozen_scn,
                                          ddl_operator,
                                          trans))) {
           LOG_WARN("failed to convert to character", K(ret));
@@ -11838,7 +11800,6 @@ int ObDDLService::check_add_list_subpartition(const ObPartition &orig_part, cons
   return ret;
 }
 int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
-                              const SCN &frozen_scn,
                               obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
@@ -11921,9 +11882,8 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
     if (OB_SUCC(ret)) {
       if (is_alter_sess_active_time) {
         if (OB_FAIL(alter_table_sess_active_time_in_trans(alter_table_arg,
-                                                          frozen_scn,
                                                           res))) {
-          LOG_WARN("alter_table_in_trans failed", K(frozen_scn), K(ret));
+          LOG_WARN("alter_table_in_trans failed", K(ret));
         } else {
           LOG_INFO("refresh session active time of temp tables succeed!", K(ret));
         }
@@ -11932,12 +11892,12 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
       } else {
         // offline ddl cannot appear at the same time with other ddl types
         if (is_long_running_ddl(ddl_type)) {
-          if (OB_FAIL(do_offline_ddl_in_trans(alter_table_arg, frozen_scn, res))) {
+          if (OB_FAIL(do_offline_ddl_in_trans(alter_table_arg, res))) {
             LOG_WARN("failed to do offline ddl in trans", K(ret), K(alter_table_arg), K(ddl_type));
           }
         } else {
-          if (OB_FAIL(alter_table_in_trans(alter_table_arg, frozen_scn, res))) {
-            LOG_WARN("alter_table_in_trans failed", K(frozen_scn), K(ret));
+          if (OB_FAIL(alter_table_in_trans(alter_table_arg, res))) {
+            LOG_WARN("alter_table_in_trans failed", K(ret));
           }
         }
       }
@@ -13124,7 +13084,6 @@ int ObDDLService::is_foreign_key_name_prefix_match(const ObForeignKeyInfo &origi
 }
 
 int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_schema,
-                                              const SCN &frozen_scn,
                                               ObIAllocator &allocator,
                                               ObTableSchema &hidden_table_schema)
 {
@@ -13230,7 +13189,6 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
                                            const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
                                            const bool bind_tablets,
                                            ObSchemaGetterGuard &schema_guard,
-                                           const SCN &ref_frozen_scn,
                                            ObDDLOperator &ddl_operator,
                                            ObMySQLTransaction &trans,
                                            ObIAllocator &allocator)
@@ -13251,7 +13209,6 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
   } else if (OB_FAIL(check_is_add_identity_column(orig_table_schema, hidden_table_schema, is_add_identity_column))) {
     LOG_WARN("failed to check is add identity column", K(ret));
   } else if (OB_FAIL(prepare_hidden_table_schema(orig_table_schema,
-                                          ref_frozen_scn,
                                           allocator,
                                           hidden_table_schema))) {
     LOG_WARN("failed to prepare hidden table schema", K(ret));
@@ -13572,7 +13529,6 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                                        const share::schema::ObTableSchema &orig_table_schema,
                                        const ObTableSchema &hidden_table_schema,
                                        ObSchemaGetterGuard &schema_guard,
-                                       const SCN &frozen_scn,
                                        ObSArray<ObTableSchema> &new_table_schemas,
                                        ObSArray<uint64_t> &index_ids)
 {
@@ -13688,7 +13644,6 @@ int ObDDLService::add_new_index_schema(obrpc::ObAlterTableArg &alter_table_arg,
                         *create_index_arg, new_table_schema, alter_table_arg.allocator_, gen_columns))) {
                   LOG_WARN("adjust fulltext args failed", K(ret));
                 } else if (OB_FAIL(index_builder.generate_schema(*create_index_arg,
-                                                          frozen_scn,
                                                           new_table_schema,
                                                           global_index_without_column_info,
                                                           index_schema))) {
@@ -13825,7 +13780,6 @@ int ObDDLService::reconstruct_index_schema(const ObTableSchema &orig_table_schem
                                            const common::ObIArray<int64_t> &drop_cols_id_arr,
                                            const ObColumnNameMap &col_name_map,
                                            const common::ObTimeZoneInfo &tz_info,
-                                           const SCN &frozen_scn,
                                            ObIAllocator &allocator,
                                            ObSArray<ObTableSchema> &new_table_schemas,
                                            ObSArray<uint64_t> &index_ids)
@@ -13997,7 +13951,6 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(
 }
 
 int ObDDLService::rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table_arg,
-                                             const SCN &frozen_scn,
                                              ObSArray<uint64_t> &index_ids)
 {
   int ret = OB_SUCCESS;
@@ -14042,7 +13995,6 @@ int ObDDLService::rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table
                                                 drop_cols_id_arr,
                                                 col_name_map,
                                                 *tz_info_wrap.get_time_zone_info(),
-                                                frozen_scn,
                                                 alter_table_arg.allocator_,
                                                 new_table_schemas,
                                                 index_ids))) {
@@ -14051,7 +14003,6 @@ int ObDDLService::rebuild_hidden_table_index(obrpc::ObAlterTableArg &alter_table
                                             *orig_table_schema,
                                             *hidden_table_schema,
                                             schema_guard,
-                                            frozen_scn,
                                             new_table_schemas,
                                             index_ids))) {
       LOG_WARN("failed to add new index schema", K(ret));
@@ -15971,7 +15922,6 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
                                                    const int64_t session_id,
                                                    const share::schema::ObTableType table_type_,
                                                    ObSchemaService &schema_service,
-                                                   const SCN &frozen_scn,
                                                    ObIArray<ObTableSchema> &new_schemas,
                                                    ObArenaAllocator &allocator,
                                                    const uint64_t define_user_id)
@@ -16156,8 +16106,7 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
   return ret;
 }
 
-int ObDDLService::create_table_like(const ObCreateTableLikeArg &arg,
-                                    const SCN &frozen_scn)
+int ObDDLService::create_table_like(const ObCreateTableLikeArg &arg)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
@@ -16258,7 +16207,6 @@ int ObDDLService::create_table_like(const ObCreateTableLikeArg &arg,
                                                      arg.session_id_,
                                                      arg.table_type_,
                                                      *schema_service,
-                                                     frozen_scn,
                                                      table_schemas,
                                                      allocator,
                                                      arg.define_user_id_))) {
@@ -16300,7 +16248,6 @@ int ObDDLService::create_table_like(const ObCreateTableLikeArg &arg,
                                               arg.ddl_stmt_str_,
                                               error_info,
                                               table_schemas,
-                                              frozen_scn,
                                               schema_guard,
                                               arg.sequence_ddl_arg_,
                                               0,
@@ -18380,7 +18327,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
   return ret;
 }
 
-int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, const SCN &frozen_scn, obrpc::ObAlterTableRes &res)
+int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.tenant_id_;
@@ -18452,7 +18399,6 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, const SCN &frozen_
           LOG_WARN("fail to assign schema", KR(ret));
         } else if (OB_FAIL(rebuild_index_in_trans(schema_guard,
                                                   new_table_schema,
-                                                  frozen_scn,
                                                   &ddl_stmt_str,
                                                   &trans))) {
           LOG_WARN("ddl_service_ rebuild_index failed", K(tenant_id), KR(ret));
@@ -18507,7 +18453,6 @@ int ObDDLService::rebuild_index(const ObRebuildIndexArg &arg, const SCN &frozen_
 int ObDDLService::rebuild_index_in_trans(
     ObSchemaGetterGuard &schema_guard,
     ObTableSchema &index_schema,
-    const SCN &frozen_scn,
     const ObString *ddl_stmt_str,
     ObMySQLTransaction *sql_trans)
 {
@@ -18542,9 +18487,9 @@ int ObDDLService::rebuild_index_in_trans(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_tablet_id(index_schema))) {
     LOG_WARN("failed to generate tablet id", K(ret));
-  } else if (OB_FAIL(create_table_in_trans(index_schema, frozen_scn,
+  } else if (OB_FAIL(create_table_in_trans(index_schema,
                               ddl_stmt_str, &trans, schema_guard))) {
-    LOG_WARN("create_table_in_trans failed", K(index_schema), KR(ret), K(frozen_scn), K(ddl_stmt_str));
+    LOG_WARN("create_table_in_trans failed", K(index_schema), KR(ret), K(ddl_stmt_str));
   }
 
   if (OB_ISNULL(sql_trans) && trans.is_started()) {
@@ -18718,7 +18663,6 @@ int ObDDLService::create_system_table_(
 {
   int ret = OB_SUCCESS;
   bool if_not_exist = true;
-  SCN frozen_scn = SCN::min_scn();
   ObArray<ObTableSchema> table_schemas;
   // the following variable is not used
   ObString ddl_stmt_str;
@@ -18730,11 +18674,8 @@ int ObDDLService::create_system_table_(
   // sys index、sys lob table will be added in create_user_tables()
   if (OB_FAIL(table_schemas.push_back(hard_code_schema))) {
     LOG_WARN("fail to push back new table schema", KR(ret));
-  } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(
-             hard_code_schema.get_tenant_id(), frozen_scn))) {
-    LOG_WARN("get_frozen_scn failed", KR(ret), "tenant_id", hard_code_schema.get_tenant_id());
   } else if (OB_FAIL(create_user_tables(if_not_exist, ddl_stmt_str,
-             error_info, table_schemas, frozen_scn, schema_guard, sequence_ddl_arg,
+             error_info, table_schemas, schema_guard, sequence_ddl_arg,
              last_replay_log_id, &dep_infos, mock_fk_parent_table_schema_array))) {
     LOG_WARN("fail to create system table", KR(ret), K(hard_code_schema));
   }
@@ -18828,7 +18769,7 @@ int ObDDLService::add_table_schema(
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
-  } else if (OB_FAIL(create_table_in_trans(table_schema, SCN::min_scn(), NULL, NULL, schema_guard))) {
+  } else if (OB_FAIL(create_table_in_trans(table_schema, NULL, NULL, schema_guard))) {
     LOG_WARN("create_table_in_trans failed", KR(ret), K(table_schema));
   }
   return ret;
