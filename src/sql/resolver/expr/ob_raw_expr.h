@@ -4426,6 +4426,7 @@ public:
   int get(ObRawExpr *&expr);
   int set(ObRawExpr *expr);
   int add_ref(ObRawExpr **expr);
+  int assign(const ObRawExprPointer &other);
   TO_STRING_KV("", "");
 private:
   common::ObSEArray<ObRawExpr **, 1> expr_group_;
