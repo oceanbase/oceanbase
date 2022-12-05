@@ -440,6 +440,7 @@ struct EstimateCostInfo {
     {		
       return NULL != strong_sharding_ && parallel_ > strong_sharding_->get_part_cnt();		
     }
+    int compute_path_property_from_log_op();
     TO_STRING_KV(K_(is_local_order),
                  K_(ordering),
                  K_(interesting_order_info),
@@ -1553,6 +1554,9 @@ struct NullAwareAntiJoinInfo {
                           const bool has_equal_cond);
 
     int create_plan_for_inner_path(Path *path);
+
+    int create_subplan_filter_for_join_path(Path *path,
+                                            ObIArray<ObRawExpr*> &subquery_filters);
 
     int check_valid_for_inner_path(const ObIArray<ObRawExpr*> &join_conditions,
                                    const ValidPathInfo &path_info,

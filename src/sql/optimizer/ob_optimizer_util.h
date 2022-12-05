@@ -552,7 +552,8 @@ public:
                                    const EqualSets &equal_sets);
   static int classify_subquery_exprs(const ObIArray<ObRawExpr*> &exprs,
                                      ObIArray<ObRawExpr*> &subquery_exprs,
-                                     ObIArray<ObRawExpr*> &non_subquery_exprs);
+                                     ObIArray<ObRawExpr*> &non_subquery_exprs,
+                                     const bool with_onetime = true);
 
   static int get_subquery_exprs(const ObIArray<ObRawExpr*> &exprs,
                                 ObIArray<ObRawExpr*> &subquery_exprs,
