@@ -226,7 +226,7 @@ int LogStorage::locate_log_tail_and_last_valid_entry_header_(const block_id_t mi
   int ret = OB_SUCCESS;
   using EntryType = typename EntryHeaderType::ENTRYTYPE;
   block_id_t iterate_block_id = max_block_id;
-  log_tail_ = (max_block_id + 1) * logical_block_size_;
+  log_tail_ = LSN((max_block_id + 1) * logical_block_size_);
   // the last block may has not valid data, we need iterate prev block
   // for GC, we must ensure that the block which include 'max_committed_lsn' will no be reused
   while (OB_SUCC(ret) && true == is_valid_block_id(iterate_block_id)
@@ -265,7 +265,7 @@ int LogStorage::locate_log_tail_and_last_valid_entry_header_(const block_id_t mi
                    K(ret),
                    K(iterate_block_id));
           // NB: nowdays, each block' will be full of data.
-          log_tail_ = iterate_block_id * logical_block_size_;
+          log_tail_ = LSN(iterate_block_id * logical_block_size_);
           iterate_block_id--;
         }
       } else {

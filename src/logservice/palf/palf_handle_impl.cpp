@@ -1516,7 +1516,7 @@ int PalfHandleImpl::locate_by_scn_coarsely(const SCN &scn, LSN &result_lsn)
     }
     // 2. convert block_id to lsn
     if (OB_SUCC(ret)) {
-      result_lsn = result_block_id * PALF_BLOCK_SIZE;
+      result_lsn = LSN(result_block_id * PALF_BLOCK_SIZE);
       inc_update_last_locate_block_scn_(result_block_id, scn);
     }
   }
