@@ -1315,7 +1315,8 @@ int ObPartTransCtx::recover_tx_ctx_table_info(const ObTxCtxTableInfo &ctx_info)
                    || ObTxState::CLEAR == exec_info_.state_)) {
       if (OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG,
                                               exec_info_.max_applying_log_ts_,
-                                              exec_info_.max_durable_lsn_))) {
+                                              exec_info_.max_durable_lsn_,
+                                              false))) {
         TRANS_LOG(WARN, "insert into retain ctx mgr failed", K(ret), KPC(this));
       } else if ((exec_info_.trans_type_ == TransType::SP_TRANS
                   && ObTxState::COMMIT == exec_info_.state_)
@@ -1832,7 +1833,7 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
       } else if (ObTxLogType::TX_COMMIT_LOG == log_type) {
         tg.click();
         if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
-            && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, log_ts, log_lsn))) {
+            && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, log_ts, log_lsn, false))) {
           TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(log_cb), KPC(this));
         }
         if (is_local_tx_()) {
@@ -1864,7 +1865,7 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
         }
       } else if (ObTxLogType::TX_ABORT_LOG == log_type) {
         if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
-            && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, log_ts, log_lsn))) {
+            && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, log_ts, log_lsn, false))) {
           TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(log_cb), KPC(this));
         }
         if (is_local_tx_() || sub_state_.is_force_abort()) {
@@ -4095,7 +4096,7 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
     TRANS_LOG(WARN, "set incremental_participants error", K(ret), K(*this));
   } else {
     if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
-        && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, timestamp, offset))) {
+        && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, timestamp, offset, true))) {
       TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(this));
     }
     if (is_local_tx_()) {
@@ -4263,7 +4264,7 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
     TRANS_LOG(WARN, "update replaying log no failed", K(ret), K(timestamp), K(part_log_no));
   } else {
     if (exec_info_.multi_data_source_.count() > 0 && get_retain_cause() == RetainCause::UNKOWN
-        && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, timestamp, offset))) {
+        && OB_FAIL(insert_into_retain_ctx_mgr_(RetainCause::MDS_WAIT_GC_COMMIT_LOG, timestamp, offset, true))) {
       TRANS_LOG(WARN, "insert into retain_ctx_mgr failed", K(ret), KPC(this));
     }
     if (is_local_tx_()) {
@@ -5883,10 +5884,16 @@ int ObPartTransCtx::tx_keepalive_response_(const int64_t status)
 }
 
 int ObPartTransCtx::insert_into_retain_ctx_mgr_(RetainCause cause,
-    const SCN &log_ts, palf::LSN lsn)
+                                                const SCN &log_ts,
+                                                palf::LSN lsn,
+                                                bool for_replay)
 {
   int ret = OB_SUCCESS;
   ObMDSRetainCtxFunctor *retain_func_ptr = nullptr;
+  int64_t retain_lock_timeout = INT64_MAX;
+  if (for_replay) {
+    retain_lock_timeout = 10 * 1000;
+  }
 
   if (OB_ISNULL(ls_tx_ctx_mgr_) || RetainCause::UNKOWN == cause) {
     ret = OB_INVALID_ARGUMENT;
@@ -5902,7 +5909,7 @@ int ObPartTransCtx::insert_into_retain_ctx_mgr_(RetainCause cause,
     } else if (OB_FALSE_IT(new (retain_func_ptr) ObMDSRetainCtxFunctor())) {
     } else if (OB_FAIL(retain_func_ptr->init(this, cause, log_ts, lsn))) {
       TRANS_LOG(WARN, "init retain ctx functor failed", K(ret), KPC(this));
-    } else if (OB_FAIL(retain_ctx_mgr.push_retain_ctx(retain_func_ptr))) {
+    } else if (OB_FAIL(retain_ctx_mgr.push_retain_ctx(retain_func_ptr, retain_lock_timeout))) {
       TRANS_LOG(WARN, "push into retain_ctx_mgr failed", K(ret), KPC(this));
     }
     // if (OB_FAIL(retain_ctx_mgr.reset()))
