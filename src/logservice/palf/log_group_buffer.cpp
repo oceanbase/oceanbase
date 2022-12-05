@@ -304,12 +304,12 @@ int LogGroupBuffer::fill_padding(const LSN &lsn,
 
 void LogGroupBuffer::get_buffer_start_lsn_(LSN &start_lsn) const
 {
-  start_lsn = ATOMIC_LOAD(&start_lsn_.val_);
+  start_lsn.val_ = ATOMIC_LOAD(&start_lsn_.val_);
 }
 
 void LogGroupBuffer::get_reuse_lsn_(LSN &reuse_lsn) const
 {
-  reuse_lsn = ATOMIC_LOAD(&reuse_lsn_.val_);
+  reuse_lsn.val_ = ATOMIC_LOAD(&reuse_lsn_.val_);
 }
 
 int LogGroupBuffer::check_log_buf_wrapped(const LSN &lsn, const int64_t log_len, bool &is_buf_wrapped) const

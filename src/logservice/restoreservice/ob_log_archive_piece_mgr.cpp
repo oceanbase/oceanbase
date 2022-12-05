@@ -100,13 +100,13 @@ void ObLogArchivePieceContext::InnerPieceContext::reset()
   state_ = InnerPieceContext::State::INVALID;
   piece_id_ = 0;
   round_id_ = 0;
-  min_lsn_in_piece_ = palf::LOG_INVALID_LSN_VAL;
-  max_lsn_in_piece_ = palf::LOG_INVALID_LSN_VAL;
+  min_lsn_in_piece_.reset();
+  max_lsn_in_piece_.reset();
   min_file_id_ = 0;
   max_file_id_ = 0;
   file_id_ = 0;
   file_offset_ = 0;
-  max_lsn_ = palf::LOG_INVALID_LSN_VAL;
+  max_lsn_.reset();
 }
 
 bool ObLogArchivePieceContext::InnerPieceContext::is_valid() const
@@ -880,8 +880,8 @@ int ObLogArchivePieceContext::get_ls_inner_piece_info_(const share::ObLSID &id, 
         K(round_id), K(piece_id), K(id), K(desc));
   } else {
     exist = true;
-    min_lsn = desc.min_lsn_;
-    max_lsn = desc.max_lsn_;
+    min_lsn = LSN(desc.min_lsn_);
+    max_lsn = LSN(desc.max_lsn_);
   }
   return ret;
 }
@@ -1001,7 +1001,7 @@ int ObLogArchivePieceContext::get_min_lsn_in_piece_()
     ret = OB_INVALID_DATA;
     CLOG_LOG(WARN, "archive file header not valid", K(ret), K(header), K(path));
   } else {
-    inner_piece_context_.min_lsn_in_piece_ = header.start_lsn_;
+    inner_piece_context_.min_lsn_in_piece_ = LSN(header.start_lsn_);
     CLOG_LOG(INFO, "get min lsn in piece succ", K(ret), K(header), KPC(this));
   }
   if (NULL != buf) {
