@@ -5129,6 +5129,7 @@ def_table_schema(
 # 443 : __all_tenant_rewrite_rules
 
 # 444 : __all_reserved_snapshot
+# 445 : __all_cluster_event_history
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -10849,6 +10850,8 @@ def_table_schema(
 # 12359: __all_virtual_sql_plan
 # 12360: __all_virtual_plan_table
 # 12361: __all_virtual_plan_real_info
+
+# 12362: __all_virtual_core_table
 
 #
 # 余留位置
@@ -23273,6 +23276,8 @@ def_table_schema(
 # 21342: V$OB_SQL_PLAN
 # 21343: GV$OB_PLAN_REAL_INFO
 # 21344: V$OB_PLAN_REAL_INFO
+
+# 21345: DBA_OB_CLUSTER_EVENT_HISTORY
 
 ################################################################################
 # Oracle System View (25000, 30000]
