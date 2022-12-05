@@ -342,6 +342,7 @@ if (NOT OB_USE_ASAN)
 endif()
 
 add_library(ob_main OBJECT main.cpp)
+config_ccls_flag(ob_main)
 target_link_libraries(ob_main PUBLIC ob_base)
 add_executable(observer)
 target_link_libraries(observer
