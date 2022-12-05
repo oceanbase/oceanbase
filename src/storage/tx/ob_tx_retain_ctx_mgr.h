@@ -111,7 +111,7 @@ public:
   void *alloc_object(const int64_t size);
   void free_object(void *ptr);
 
-  int push_retain_ctx(ObIRetainCtxCheckFunctor *retain_func);
+  int push_retain_ctx(ObIRetainCtxCheckFunctor *retain_func, int64_t timeout_us);
   int try_gc_retain_ctx(storage::ObLS *ls);
   int print_retain_ctx_info(share::ObLSID ls_id);
   int force_gc_retain_ctx();
@@ -136,6 +136,8 @@ private:
 
   share::SCN max_wait_ckpt_ts_;
   int64_t last_push_gc_task_ts_;
+
+  int64_t skip_remove_cnt_;
 
   TransModulePageAllocator reserve_allocator_;
 };

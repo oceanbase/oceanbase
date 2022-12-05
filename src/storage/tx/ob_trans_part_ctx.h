@@ -473,7 +473,10 @@ private:
     ATOMIC_STORE(&retain_cause_, static_cast<int16_t>(RetainCause::UNKOWN));
   }
 
-  int insert_into_retain_ctx_mgr_(RetainCause cause, const share::SCN &log_ts, palf::LSN lsn);
+  int insert_into_retain_ctx_mgr_(RetainCause cause,
+                                  const share::SCN &log_ts,
+                                  palf::LSN lsn,
+                                  bool for_replay);
 
   int prepare_mul_data_source_tx_end_(bool is_commit);
 

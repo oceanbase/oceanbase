@@ -302,7 +302,7 @@ private:
 };
 
 class ObMemtable;
-typedef ObMemtableCtxFactory::IDMap MemtableIDMap;
+typedef common::ObIDMap<ObIMemtableCtx, uint32_t> MemtableIDMap;
 class ObMemtableCtx final : public ObIMemtableCtx
 {
   using RWLock = common::SpinRWLock;
