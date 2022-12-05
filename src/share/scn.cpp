@@ -363,11 +363,15 @@ int SCN::convert_for_tx(int64_t val)
   return ret;
 }
 
-int64_t SCN::get_val_for_tx() const
+int64_t SCN::get_val_for_tx(const bool ignore_invalid_scn) const
 {
-  int64_t result_val = 0;
+  int64_t result_val = -1;
   if (!is_valid()) {
-    PALF_LOG(ERROR, "invalid SCN", K(val_));
+    if (!ignore_invalid_scn) {
+      PALF_LOG(ERROR, "invalid SCN", K(val_));
+    } else {
+      PALF_LOG(WARN, "invalid SCN", K(val_));
+    }
   } else if (OB_MAX_SCN_TS_NS == ts_ns_) {
     result_val = INT64_MAX;
   } else {
