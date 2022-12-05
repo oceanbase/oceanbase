@@ -300,6 +300,11 @@ public:
     const common::ObTabletID &tablet_id,
     ObLSLocation &location);
 
+  static int check_table_exist(
+     const uint64_t tenant_id,
+     const uint64_t table_id,
+     share::schema::ObSchemaGetterGuard &schema_guard);
+
 private:
   static int generate_column_name_str(
     const common::ObIArray<ObColumnNameInfo> &column_names,
