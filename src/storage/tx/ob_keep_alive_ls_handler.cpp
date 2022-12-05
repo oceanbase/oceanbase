@@ -204,10 +204,10 @@ void ObKeepAliveLSHandler::print_stat_info()
                                                           "Near_To_GTS_Cnt",    stat_info_.near_to_gts_cnt,
                                                           "Other_Error_Cnt",    stat_info_.other_error_cnt,
                                                           "Submit_Succ_Cnt",    stat_info_.submit_succ_cnt,
-                                                          "last_scn",           stat_info_.stat_keepalive_info_.scn_.get_val_for_tx(),
+                                                          "last_scn",           to_cstring(stat_info_.stat_keepalive_info_.scn_),
                                                           "last_lsn",           stat_info_.stat_keepalive_info_.lsn_,
                                                           "last_gts",           last_gts_,
-                                                          "min_start_scn",      stat_info_.stat_keepalive_info_.min_start_scn_.get_val_for_tx(),
+                                                          "min_start_scn",      to_cstring(stat_info_.stat_keepalive_info_.min_start_scn_),
                                                           "min_start_status",   stat_info_.stat_keepalive_info_.min_start_status_);
   stat_info_.clear_cnt();
 }

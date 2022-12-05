@@ -96,7 +96,7 @@ public:
   uint64_t get_val_for_sql() const;
 
   //only for tx, include transform from SCN_MAX to INT64_MAX
-  int64_t get_val_for_tx() const;
+  int64_t get_val_for_tx(const bool ignore_invalid_scn = false) const;
 
   // compare function
   bool operator==(const SCN &scn) const;
