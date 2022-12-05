@@ -652,6 +652,8 @@ bool ObDDLTask::is_replica_build_need_retry(
     const ObTableSchema *table_schema = nullptr;
     if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret), K_(tenant_id));
+    } else if (OB_FAIL(ObDDLUtil::check_table_exist(tenant_id_, object_id_, schema_guard))) {
+      LOG_WARN("failed to check table exist", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(object_id_));
     } else if (OB_ISNULL(table_schema)) {
@@ -668,24 +670,15 @@ bool ObDDLTask::is_replica_build_need_retry(
           if (target_object_id_ != fk_infos.at(i).foreign_key_id_) {
           } else {
             found = true;
-            if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, fk_infos.at(i).parent_table_id_, is_table_exist))) {
-              LOG_WARN("check schema exist failed", K(ret), K(tenant_id_), K(fk_infos.at(i)));
-            } else if (!is_table_exist) {
-              ret = OB_TABLE_NOT_EXIST;
-              LOG_INFO("table schema not exist", K(ret), K(tenant_id_), K(object_id_), K(fk_infos.at(i)));
-            } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, fk_infos.at(i).child_table_id_, is_table_exist))) {
-              LOG_WARN("check schema exist failed", K(ret), K(tenant_id_), K(fk_infos.at(i)));
-            } else if (!is_table_exist) {
-              ret = OB_TABLE_NOT_EXIST;
-              LOG_INFO("table schema not exist", K(ret), K(tenant_id_), K(object_id_), K(fk_infos.at(i)));
+            if (OB_FAIL(ObDDLUtil::check_table_exist(tenant_id_, fk_infos.at(i).parent_table_id_, schema_guard))) {
+              LOG_WARN("failed to check table exist", K(ret));
+            } else if (OB_FAIL(ObDDLUtil::check_table_exist(tenant_id_, fk_infos.at(i).child_table_id_, schema_guard))) {
+              LOG_WARN("failed to check table exist", K(ret));
             }
           }
         }
-      } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, target_object_id_, is_table_exist))) {
-        LOG_WARN("check table exist failed", K(ret), K(tenant_id_), K(target_object_id_));
-      } else if (!is_table_exist) {
-        ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("not exist", K(ret), K(tenant_id_), K(target_object_id_));
+      } else if (OB_FAIL(ObDDLUtil::check_table_exist(tenant_id_, target_object_id_, schema_guard))) {
+        LOG_WARN("failed to check table exist", K(ret));
       }
     }
   } else {
