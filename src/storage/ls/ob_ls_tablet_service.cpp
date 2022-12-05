@@ -959,6 +959,8 @@ int ObLSTabletService::rebuild_tablet_with_old(
     ob_abort();
   } else if (OB_FAIL(new_tablet->start_ddl_if_need())) {
     LOG_WARN("start ddl if need failed", K(ret), K(key));
+  } else {
+    LOG_INFO("rebuild tablet with old succeed", K(ret), K(key), K(disk_addr));
   }
 
   return ret;
@@ -994,6 +996,8 @@ int ObLSTabletService::migrate_update_tablet(
     ob_abort();
   } else if (OB_FAIL(new_tablet->start_ddl_if_need())) {
     LOG_WARN("start ddl if need failed", K(ret));
+  } else {
+    LOG_INFO("migrate update tablet succeed", K(ret), K(key), K(disk_addr));
   }
 
   return ret;
@@ -1027,6 +1031,8 @@ int ObLSTabletService::migrate_create_tablet(
     LOG_WARN("start ddl if need failed", K(ret));
   } else if (OB_FAIL(try_pin_tablet_if_needed(tablet_handle))) {
     LOG_WARN("failed to try pin tablet", K(ret), K(ls_id), K(tablet_id));
+  } else {
+    LOG_INFO("migrate create tablet succeed", K(ret), K(key), K(disk_addr));
   }
 
   if (OB_SUCC(ret)) {
@@ -1103,7 +1109,8 @@ int ObLSTabletService::update_tablet_table_store(
         ob_abort();
       } else {
         time_guard.click("CASwap");
-        LOG_INFO("succeeded to build new tablet", K(ret), K(new_tablet_handle), KPC(new_tablet_handle.get_obj()));
+        LOG_INFO("succeeded to build new tablet", K(ret), K(disk_addr),
+            K(new_tablet_handle), KPC(new_tablet_handle.get_obj()));
       }
     }
   }
@@ -1166,7 +1173,7 @@ int ObLSTabletService::update_tablet_table_store(
       } else if (FALSE_IT(time_guard.click("CASwap"))) {
       } else {
         handle = new_tablet_handle;
-        LOG_INFO("succeeded to build new tablet", K(ret), K(tablet_id), K(param), K(handle));
+        LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(param), K(handle));
       }
     }
   }
@@ -1227,7 +1234,7 @@ int ObLSTabletService::update_tablet_report_status(const common::ObTabletID &tab
         ob_usleep(1000 * 1000);
         ob_abort();
       } else {
-        LOG_INFO("succeeded to build new tablet", K(ret), K(tablet_id), K(tablet_handle));
+        LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(tablet_handle));
       }
     } else {
       FLOG_INFO("tablet doesn't need to report", K(ret));
@@ -1276,7 +1283,7 @@ int ObLSTabletService::update_tablet_restore_status(
       LOG_ERROR("failed to compare and swap tablet", K(key), K(disk_addr));
       ob_abort();
     } else {
-      LOG_INFO("succeeded to build new tablet", K(ret), K(tablet_id), K(restore_status), K(tablet_handle));
+      LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(restore_status), K(tablet_handle));
     }
   }
 
@@ -1330,7 +1337,7 @@ int ObLSTabletService::update_tablet_ha_data_status(
       ob_usleep(1000 * 1000);
       ob_abort();
     } else {
-      LOG_INFO("succeeded to build new tablet", K(ret), K(tablet_id), K(data_status), K(tablet_handle));
+      LOG_INFO("succeeded to build new tablet", K(ret), K(key), K(disk_addr), K(data_status), K(tablet_handle));
     }
   }
 
@@ -1386,7 +1393,7 @@ int ObLSTabletService::update_tablet_ha_expected_status(
         usleep(1000 * 1000);
         ob_abort();
       } else {
-        LOG_INFO("succeeded to update tablet meta status", K(ret), K(tablet_id), K(expected_status), KPC(tablet));
+        LOG_INFO("succeeded to update tablet meta status", K(ret), K(key), K(disk_addr), K(expected_status), KPC(tablet));
       }
     }
   }
@@ -2978,6 +2985,8 @@ int ObLSTabletService::finish_copy_migration_sstable(
     LOG_ERROR("failed to create tablet", K(ret), K(key), K(disk_addr), K(tablet_handle), K(lbt()));
     ob_usleep(1000 * 1000);
     ob_abort();
+  } else {
+    LOG_INFO("copy migration sstable succeed", K(ret), K(key), K(disk_addr));
   }
   return ret;
 }
@@ -3094,7 +3103,7 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
         ob_usleep(1000 * 1000);
         ob_abort();
       } else {
-        LOG_INFO("succeed to build ha tablet new table store", K(ret), K(tablet_id), K(param));
+        LOG_INFO("succeed to build ha tablet new table store", K(ret), K(key), K(disk_addr), K(param));
       }
     }
   }
