@@ -724,7 +724,8 @@ int ObBackupSetTaskMgr::get_dst_server_(const ObLSID &ls_id, ObAddr &dst)
   } else if (OB_ISNULL(lst_operator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]lst_operator ptr is null", K(ret));
-  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id, ls_id, ls_info))) {
+  } else if (OB_FAIL(lst_operator->get(cluster_id, tenant_id,
+             ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
     LOG_WARN("[DATA_BACKUP]failed to get log stream info", K(ret), K(cluster_id), K(tenant_id), K(ls_id));
   } else {
     const ObLSInfo::ReplicaArray &replica_array = ls_info.get_replicas();

@@ -193,7 +193,8 @@ int ObMajorMergeProgressChecker::check_tablet(
     ObLSInfo ls_info;
     int64_t cluster_id = GCONF.cluster_id;
     const ObLSID &ls_id = tablet.get_ls_id();
-    if (OB_FAIL(lst_operator_->get(cluster_id, tenant_id_, ls_id, ls_info))) {
+    if (OB_FAIL(lst_operator_->get(cluster_id, tenant_id_,
+        ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
       LOG_WARN("fail to get ls info", KR(ret), K_(tenant_id), K(ls_id));
     } else if (OB_FAIL(check_majority_integrated(schema_guard, tablet, ls_info))) {
       LOG_WARN("fail to check majority integrated", KR(ret));

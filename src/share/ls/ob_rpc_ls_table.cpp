@@ -82,6 +82,7 @@ int ObRpcLSTable::get(
     const int64_t cluster_id,
     const uint64_t tenant_id,
     const ObLSID &ls_id,
+    const ObLSTable::Mode mode,
     ObLSInfo &ls_info)
 {
   int ret = OB_SUCCESS;
@@ -90,9 +91,12 @@ int ObRpcLSTable::get(
     LOG_WARN("fail to init ls info", KR(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (!is_sys_tenant(tenant_id) || !ls_id.is_sys_ls()) {
+  } else if (OB_UNLIKELY(!is_sys_tenant(tenant_id)
+             || !ls_id.is_sys_ls()
+             || ObLSTable::INNER_TABLE_ONLY_MODE == mode)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument for sys tenant's sys ls", KR(ret), KT(tenant_id), K(ls_id));
+    LOG_WARN("invalid argument for sys tenant's sys ls",
+             KR(ret), KT(tenant_id), K(ls_id), K(mode));
   } else if (local_cluster_id == cluster_id) {
     if (OB_FAIL(get_ls_info_(ls_info))) {
       LOG_WARN("failed to get ls info", KR(ret));
@@ -160,7 +164,9 @@ int ObRpcLSTable::get_ls_info_across_cluster_(const int64_t cluster_id, ObLSInfo
   return ret;
 }
 
-int ObRpcLSTable::update(const ObLSReplica &replica)
+int ObRpcLSTable::update(
+    const ObLSReplica &replica,
+    const bool inner_table_only)
 {
   int ret = OB_SUCCESS;
   ObAddr rs_addr;
@@ -168,9 +174,10 @@ int ObRpcLSTable::update(const ObLSReplica &replica)
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (!replica.is_valid()
       || !is_sys_tenant(replica.get_tenant_id())
-      || !replica.get_ls_id().is_sys_ls()) {
+      || !replica.get_ls_id().is_sys_ls()
+      || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(replica));
+    LOG_WARN("invalid argument", KR(ret), K(replica), K(inner_table_only));
   } else if(OB_FAIL(rs_mgr_->get_master_root_server(rs_addr))) {
     LOG_WARN("get master root service failed", KR(ret));
   } else {
@@ -367,7 +374,8 @@ int ObRpcLSTable::deal_with_result_ls_(
 int ObRpcLSTable::remove(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
-    const ObAddr &server)
+    const ObAddr &server,
+    const bool inner_table_only)
 {
   int ret = OB_SUCCESS;
   ObAddr rs_addr;
@@ -375,14 +383,16 @@ int ObRpcLSTable::remove(
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(!is_sys_tenant(tenant_id)
       || !ls_id.is_sys_ls()
-      || !server.is_valid())) {
+      || !server.is_valid())
+      || inner_table_only) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(server));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id),
+             K(ls_id), K(server), K(inner_table_only));
   } else if(OB_FAIL(rs_mgr_->get_master_root_server(rs_addr))) {
     LOG_WARN("get master root service failed", KR(ret));
   } else {
     int64_t timeout_us = 0;
-	  obrpc::ObRemoveSysLsArg arg(server);
+    obrpc::ObRemoveSysLsArg arg(server);
     if (OB_FAIL(get_timeout_(timeout_us))) {
       LOG_WARN("get timeout failed", KR(ret));
     } else if (timeout_us <= 0) {

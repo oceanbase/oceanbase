@@ -47,26 +47,31 @@ public:
   // @param [in] cluster_id, belong to which cluste
   // @parma [in] tenant_id, get whose ls info
   // @param [in] ls_id, get which ls info
+  // @param [in] mode, should not be ObLSTable::INNER_TABLE_ONLY_MODE
   // @param [out] ls_info, informations about a certain ls
   // TODO: enable cluster_id
   virtual int get(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
+      const ObLSTable::Mode mode,
       ObLSInfo &ls_info) override;
 
   // update a certain log stream's replica info to meta table
   // @param [in] replica, the new replica infos to update
-  virtual int update(const ObLSReplica &replica) override;
+  // @param [in] inner_table_only, should be false.
+  virtual int update(const ObLSReplica &replica, const bool inner_table_only) override;
 
   // remove ls replica
   // @param [in] tenant_id, which tenant's log stream
   // @param [in] ls_id, identifier for log stream
   // @param [in] server, where is this replica
+  // @param [in] inner_table_only, should be false.
   virtual int remove(
       const uint64_t tenant_id,
       const ObLSID &ls_id,
-      const ObAddr &server) override;
+      const ObAddr &server,
+      const bool inner_table_only) override;
 
 private:
   // the real action to read LSinfo directly from memory

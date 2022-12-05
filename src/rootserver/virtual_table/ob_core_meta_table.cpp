@@ -73,7 +73,7 @@ int ObCoreMetaTable::inner_get_next_row(ObNewRow *&row)
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("get_table_schema failed", K(table_id), KR(ret));
     } else if (OB_FAIL(lst_operator_->get(GCONF.cluster_id, OB_SYS_TENANT_ID,
-          SYS_LS, ls_info))) {
+               SYS_LS, share::ObLSTable::DEFAULT_MODE, ls_info))) {
       LOG_WARN("lst_operator get failed", KR(ret), K(ls_info));
     } else {
       ObArray<Column> columns;

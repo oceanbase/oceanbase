@@ -570,6 +570,7 @@ int ObMigrateLSReplicaTask::check_before_execute(
           GCONF.cluster_id,
           get_tenant_id(),
           get_ls_id(),
+          share::ObLSTable::COMPOSITE_MODE,
           ls_info))) {
     LOG_WARN("fail to get log stream info", KR(ret),
              "tenant_id", get_tenant_id(),
@@ -1022,6 +1023,7 @@ int ObAddLSReplicaTask::check_before_execute(
           GCONF.cluster_id,
           get_tenant_id(),
           get_ls_id(),
+          share::ObLSTable::COMPOSITE_MODE,
           ls_info))) {
     LOG_WARN("fail to get log stream info", KR(ret),
              "tenant_id", get_tenant_id(),
@@ -1494,6 +1496,7 @@ int ObLSTypeTransformTask::check_before_execute(
           GCONF.cluster_id,
           get_tenant_id(),
           get_ls_id(),
+          share::ObLSTable::COMPOSITE_MODE,
           ls_info))) {
     LOG_WARN("fail to get log stream info", KR(ret),
              "tenant_id", get_tenant_id(),

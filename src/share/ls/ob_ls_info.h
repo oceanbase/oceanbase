@@ -217,6 +217,8 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(replicas));
   // operator-related functions
   int assign(const ObLSInfo &other);
+  // composite with other ls to add missing follower replica
+  int composite_with(const ObLSInfo &other);
   // other functions
   virtual int add_replica(const ObLSReplica &replica);
   int update_replica_status();   // TODO: have to make sure actions in this function

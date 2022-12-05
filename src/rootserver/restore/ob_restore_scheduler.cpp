@@ -25,7 +25,6 @@
 #include "share/ls/ob_ls_status_operator.h" //ObLSStatusOperator
 #include "share/ls/ob_ls_operator.h"//ObLSAttr
 #include "share/backup/ob_backup_data_store.h"//ObBackupDataLSAttrDesc
-#include "share/ls/ob_ls_table_iterator.h"//ObLSTableIterator
 #include "share/restore/ob_physical_restore_info.h"//ObPhysicalRestoreInfo
 #include "share/restore/ob_physical_restore_table_operator.h"//ObPhysicalRestoreTableOperator
 #include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo

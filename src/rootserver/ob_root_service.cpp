@@ -283,6 +283,7 @@ int ObRootService::ObOfflineServerTask::process()
                                       cluster_id,
                                       tenant_id,
                                       SYS_LS,
+                                      share::ObLSTable::DEFAULT_MODE,
                                       ls_info))) {
     LOG_WARN("fail to get", KR(ret));
   } else {
@@ -2244,6 +2245,7 @@ int ObRootService::report_sys_ls(const share::ObLSReplica &replica)
   int ret = OB_SUCCESS;
   ObInMemoryLSTable *inmemory_ls = NULL;
   ObRole role = FOLLOWER;
+  bool inner_table_only = false;
   LOG_INFO("receive request to report sys ls", K(replica));
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(lst_operator_)) {
     ret = OB_NOT_INIT;
@@ -2259,7 +2261,7 @@ int ObRootService::report_sys_ls(const share::ObLSReplica &replica)
   } else if (OB_ISNULL(inmemory_ls = lst_operator_->get_inmemory_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get inmemory ls", KR(ret), K(replica));
-  } else if (OB_FAIL(inmemory_ls->update(replica))) {
+  } else if (OB_FAIL(inmemory_ls->update(replica, inner_table_only))) {
     LOG_WARN("update sys ls failed", KR(ret), K(replica));
   } else {
     LOG_INFO("update sys ls on rs success", K(replica));
@@ -2272,6 +2274,7 @@ int ObRootService::remove_sys_ls(const obrpc::ObRemoveSysLsArg &arg)
   int ret = OB_SUCCESS;
   ObInMemoryLSTable *inmemory_ls = NULL;
   ObRole role = FOLLOWER;
+  bool inner_table_only = false;
   LOG_INFO("receive request to remove sys ls", K(arg));
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(lst_operator_)) {
     ret = OB_NOT_INIT;
@@ -2290,7 +2293,8 @@ int ObRootService::remove_sys_ls(const obrpc::ObRemoveSysLsArg &arg)
   } else if (OB_FAIL(inmemory_ls->remove(
       OB_SYS_TENANT_ID,
       SYS_LS,
-      arg.server_))) {
+      arg.server_,
+      inner_table_only))) {
     LOG_WARN("remove sys ls failed", KR(ret), K(arg));
   } else {
     LOG_INFO("remove sys ls on rs success", K(arg));
@@ -5173,6 +5177,7 @@ int ObRootService::fetch_sys_tenant_ls_info()
   int ret = OB_SUCCESS;
   ObLSReplica replica;
   ObRole role = FOLLOWER;
+  bool inner_table_only = false;
   ObMemberList member_list;
   // TODO: automatically decide to use rpc or inmemory
   ObLSTable* inmemory_ls;
@@ -5205,7 +5210,7 @@ int ObRootService::fetch_sys_tenant_ls_info()
           SYS_LS,
           replica))) {
       LOG_WARN("fail to fill log stream replica", KR(ret), K(replica));
-    } else if (OB_FAIL(inmemory_ls->update(replica))) {
+    } else if (OB_FAIL(inmemory_ls->update(replica, inner_table_only))) {
       LOG_WARN("fail to update ls replica", KR(ret), K(replica));
     }
   }
@@ -5225,7 +5230,7 @@ int ObRootService::fetch_sys_tenant_ls_info()
       } else if (replica.is_strong_leader()) {
         ret = OB_ENTRY_EXIST;
         LOG_WARN("role should be follower", KR(ret), K(replica));
-      } else if (OB_FAIL(inmemory_ls->update(replica))) {
+      } else if (OB_FAIL(inmemory_ls->update(replica, inner_table_only))) {
         LOG_WARN("update sys_ls info failed", KR(ret), K(replica));
       } else {
         LOG_INFO("update sys_tenant ls replica succeed", K(replica), "server", addr);
@@ -6641,6 +6646,7 @@ int ObRootService::construct_rs_list_arg(
           GCONF.cluster_id,
           tenant_id,
           SYS_LS,
+          share::ObLSTable::DEFAULT_MODE,
           ls_info))) {
     LOG_WARN("fail to get", KR(ret));
   } else {

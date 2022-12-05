@@ -14924,7 +14924,7 @@ def_table_schema(
           ELSE NULL END) AS REPLICA_TYPE
   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE
   WHERE
-    TENANT_ID = EFFECTIVE_TENANT_ID()
+    TENANT_ID = EFFECTIVE_TENANT_ID() AND TENANT_ID != 1
   )
   """.replace("\n", " "),
 )
@@ -14979,6 +14979,7 @@ def_table_schema(
           WHEN 261 THEN "ENCRYPTION LOGONLY"
           ELSE NULL END) AS REPLICA_TYPE
   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE
+  WHERE TENANT_ID != 1
   )
   """.replace("\n", " "),
 )
