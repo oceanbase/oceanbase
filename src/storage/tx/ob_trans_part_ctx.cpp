@@ -5915,7 +5915,7 @@ int ObPartTransCtx::insert_into_retain_ctx_mgr_(RetainCause cause,
     // if (OB_FAIL(retain_ctx_mgr.reset()))
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && !(OB_EAGAIN == ret && for_replay)) {
     TRANS_LOG(ERROR, "insert into retain_ctx_mgr error, retain ctx will not deleted from ctx_mgr",
               K(ret), KPC(this));
     // ob_abort();
