@@ -379,27 +379,23 @@ public:
   ~ObDMLPeerServerStateUncertainPolicy() = default;
   virtual void test(ObRetryParam &v) const override
   {
-    if (ObStmt::is_dml_write_stmt(v.result_.get_stmt_type())) {
-      if (OB_ISNULL(v.result_.get_physical_plan())) {
-        // issue#43741246
+    if (OB_ISNULL(v.result_.get_physical_plan())) {
+      // issue#43741246, plan not generated, won't be a remote trans
+      // safe to continue with other retry test
+    } else if (ObStmt::is_dml_write_stmt(v.result_.get_stmt_type())) {
+      // bugfix: https://aone.alibaba-inc.com/issue/16625449
+      // bugfix: https://work.aone.alibaba-inc.com/issue/22734058
+      bool autocommit = v.session_.get_local_autocommit();
+      ObPhyPlanType plan_type = v.result_.get_physical_plan()->get_plan_type();
+      bool in_transaction = v.session_.is_in_transaction();
+      if (ObSqlTransUtil::is_remote_trans(autocommit, in_transaction, plan_type)) {
+        // 当前observer内部无法进行重试
+        // err是OB_RPC_CONNECT_ERROR
         v.client_ret_ = v.err_;
         v.retry_type_ = RETRY_TYPE_NONE;
         v.no_more_test_ = true;
-      } else {
-        // bugfix: https://aone.alibaba-inc.com/issue/16625449
-        // bugfix: https://work.aone.alibaba-inc.com/issue/22734058
-        bool autocommit = v.session_.get_local_autocommit();
-        ObPhyPlanType plan_type = v.result_.get_physical_plan()->get_plan_type();
-        bool in_transaction = v.session_.is_in_transaction();
-        if (ObSqlTransUtil::is_remote_trans(autocommit, in_transaction, plan_type)) {
-          // 当前observer内部无法进行重试
-          // err是OB_RPC_CONNECT_ERROR
-          v.client_ret_ = v.err_;
-          v.retry_type_ = RETRY_TYPE_NONE;
-          v.no_more_test_ = true;
-          LOG_WARN("server down error, the write dml is remote, don't retry",
-                   K(autocommit), K(plan_type), K(in_transaction), K(v));
-        }
+        LOG_WARN("server down error, the write dml is remote, don't retry",
+                 K(autocommit), K(plan_type), K(in_transaction), K(v));
       }
     }
   }
