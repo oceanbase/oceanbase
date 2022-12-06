@@ -177,7 +177,7 @@ public:
 
   ObMergeProgress() 
     : tenant_id_(0), zone_(), unmerged_tablet_cnt_(0), unmerged_data_size_(0),
-      merged_tablet_cnt_(0), merged_data_size_(0), smallest_snapshot_scn_()
+      merged_tablet_cnt_(0), merged_data_size_(0), smallest_snapshot_scn_(SCN::min_scn())
   {}
   ~ObMergeProgress() {}
 
