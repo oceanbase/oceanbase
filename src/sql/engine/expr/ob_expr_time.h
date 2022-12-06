@@ -116,8 +116,10 @@ inline int ObExprSecond::calc_result_type1(ObExprResType &type,
   type.set_precision(4);
   type.set_scale(0);
   common::ObObjTypeClass tc1 = ob_obj_type_class(type1.get_type());
-  if ((common::ObEnumSetTC == tc1) || (common::ObFloatTC == tc1) || (common::ObDoubleTC == tc1)) {
+  if ((common::ObEnumSetTC == tc1)) {
     type1.set_calc_type_default_varchar();
+  } else if ((common::ObFloatTC == tc1) || (common::ObDoubleTC == tc1)) {
+    type1.set_calc_type(common::ObNumberType);
   }
   return common::OB_SUCCESS;
 }
@@ -144,8 +146,10 @@ inline int ObExprMicrosecond::calc_result_type1(ObExprResType &type,
   type.set_precision(4);
   type.set_scale(0);
   common::ObObjTypeClass tc1 = ob_obj_type_class(type1.get_type());
-  if ((common::ObEnumSetTC == tc1) || (common::ObFloatTC == tc1) || (common::ObDoubleTC == tc1)) {
+  if ((common::ObEnumSetTC == tc1)) {
     type1.set_calc_type_default_varchar();
+  } else if ((common::ObFloatTC == tc1) || (common::ObDoubleTC == tc1)) {
+    type1.set_calc_type(common::ObNumberType);
   }
   return common::OB_SUCCESS;
 }

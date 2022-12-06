@@ -32,7 +32,6 @@ namespace oceanbase
 namespace sql
 {
 using namespace oceanbase::common;
-
 //// common function and macro
 #define CAST_FUNC_NAME(intype, outtype)                    \
   int intype##_##outtype(const sql::ObExpr &expr,          \
@@ -959,7 +958,8 @@ static OB_INLINE int common_string_time(const ObExpr &expr,
   int warning = OB_SUCCESS;
   int64_t out_val = 0;
   ObScale res_scale; // useless
-  if (CAST_FAIL(ObTimeConverter::str_to_time(in_str, out_val, &res_scale))) {
+  ObScale time_scale = expr.datum_meta_.scale_;
+  if (CAST_FAIL(ObTimeConverter::str_to_time(in_str, out_val, &res_scale, time_scale))) {
     LOG_WARN("str_to_time failed", K(ret), K(in_str));
   } else {
     SET_RES_TIME(out_val);
@@ -9234,7 +9234,7 @@ int ob_datum_to_ob_time_without_date(const ObDatum &datum, const ObObjType type,
         LOG_WARN("int to ob time without date failed", K(ret));
       } else {
         //mysql中intTC转time时，如果hour超过838，那么time应该为null，而不是最大值。
-        const int64_t time_max_val = 3020399 * 1000000LL;    // 838:59:59 .
+        const int64_t time_max_val = TIME_MAX_VAL;    // 838:59:59 .
         int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
         if (value > time_max_val) {
           ret = OB_INVALID_DATE_VALUE;
@@ -9279,21 +9279,23 @@ int ob_datum_to_ob_time_without_date(const ObDatum &datum, const ObObjType type,
       break;
     }
     case ObNumberTC: {
-      number::ObNumber num(datum.get_number());
-      const char *num_format = num.format();
-      if (OB_ISNULL(num_format)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("number format value is null", K(ret));
+      int64_t int_part = 0;
+      int64_t dec_part = 0;
+      const number::ObNumber num(datum.get_number());
+      if (!num.is_int_parts_valid_int64(int_part, dec_part)) {
+        ret = OB_INVALID_DATE_FORMAT;
+        LOG_WARN("invalid date format", K(ret), K(num));
       } else {
-        ObString num_str(num_format);
-        if (OB_FAIL(ObTimeConverter::str_to_ob_time_without_date(num_str, ob_time))) {
-          LOG_WARN("str to obtime without date failed", K(ret));
+        if (OB_FAIL(ObTimeConverter::int_to_ob_time_without_date(int_part, ob_time, dec_part))) {
+          LOG_WARN("int to ob time without date failed", K(ret));
         } else {
-          int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
-          int64_t tmp_value = value;
-          ObTimeConverter::time_overflow_trunc(value);
-          if (value != tmp_value) {
-            ObTimeConverter::time_to_ob_time(value, ob_time);
+          if ((!ob_time.parts_[DT_YEAR]) && (!ob_time.parts_[DT_MON]) && (!ob_time.parts_[DT_MDAY])) {
+            //mysql中intTC转time时，如果超过838:59:59.999999，那么time应该为null，而不是最大值。
+            const int64_t time_max_val = TIME_MAX_VAL + 999999;    // 838:59:59.999999 .
+            int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
+            if(value > time_max_val) {
+              ret = OB_INVALID_DATE_VALUE;
+            }
           }
         }
       }
