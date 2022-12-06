@@ -153,7 +153,7 @@ int ObBackupDataScheduler::do_get_need_reload_task_(
       } else if (ObBackupTaskStatus::Status::PENDING == ls_task.status_.status_
           || ObBackupTaskStatus::Status::DOING == ls_task.status_.status_) {
         if (OB_FAIL(tasks.push_back(task))) {
-          LOG_WARN("[DATA_BACKUP]failed to push back task", K(ret), K(*task));
+          LOG_WARN("[DATA_BACKUP]failed to push back task", K(ret), KPC(task));
         }
       }
     }
@@ -835,7 +835,7 @@ int ObBackupDataScheduler::handle_execute_over(
       LOG_WARN("[DATA_BACKUP]failed to start trans", K(ret));
     } else {
       if (OB_FAIL(ObBackupLSTaskOperator::get_ls_task(trans, true/*for update*/, task->get_task_id(), task->get_tenant_id(), ls_id, ls_attr))) {
-        LOG_WARN("[DATA_BACKUP]failed to get log stream task", K(ret), K(*task));
+        LOG_WARN("[DATA_BACKUP]failed to get log stream task", K(ret), KPC(task));
       } else if (OB_FAIL(ObBackupDataLSTaskMgr::statistic_info(*lease_service_, trans, ls_attr))) { 
   // TODO: delete this when observer support the function that backup progress statistics
         LOG_WARN("[DATA_BACKUP]failed to update statistic infomation of ls task", K(ret), K(ls_attr));
@@ -1032,12 +1032,12 @@ int ObUserTenantBackupJobMgr::deal_non_reentrant_job(const int err)
   job_attr_->end_ts_ = ObTimeUtility::current_time();
   bool is_exist_set_task = true;
   bool is_start = false;
-  LOG_INFO("start to deal non reentrant job", K(*job_attr_), KP(err));
+  LOG_INFO("start to deal non reentrant job", KPC(job_attr_), KP(err));
   if (IS_NOT_INIT) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]not init", K(ret));
   } else if (OB_FAIL(task_scheduler_->cancel_tasks(BackupJobType::BACKUP_DATA_JOB, job_attr_->job_id_, job_attr_->tenant_id_))) {
-    LOG_WARN("[DATA_BACKUP]failed to cancel backup tasks", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to cancel backup tasks", K(ret), KPC(job_attr_));
   } else if (ObBackupStatus::Status::INIT == job_attr_->status_.status_) {
     if (OB_FAIL(advance_job_status(*sql_proxy_, next_status, err, job_attr_->end_ts_))) {
       LOG_WARN("[DATA_BACKUP]failed to move job status to FAILED", K(ret), KPC(job_attr_));
@@ -1056,7 +1056,7 @@ int ObUserTenantBackupJobMgr::deal_non_reentrant_job(const int err)
       if (OB_FAIL(set_task_mgr.deal_failed_set_task(trans))) {
         LOG_WARN("[DATA_BACKUP]failed to deal failed set task", K(ret));
       } else if (OB_FAIL(advance_job_status(trans, next_status, err, job_attr_->end_ts_))) {
-        LOG_WARN("[DATA_BACKUP]failed to move job status to FAILED", K(ret), K(*job_attr_));
+        LOG_WARN("[DATA_BACKUP]failed to move job status to FAILED", K(ret), KPC(job_attr_));
       } 
       if (OB_SUCC(ret)) {
         if (OB_FAIL(trans.end(true))) {
@@ -1096,13 +1096,13 @@ int ObUserTenantBackupJobMgr::process()
         if (OB_FAIL(check_dest_validity_())) {
           LOG_WARN("[DATA_BACKUP]fail to check dest validity", K(ret));
         } else if (OB_FAIL(persist_set_task_())) {
-          LOG_WARN("[DATA_BACKUP]failed to persist log stream task", K(ret), K(*job_attr_));
+          LOG_WARN("[DATA_BACKUP]failed to persist log stream task", K(ret), KPC(job_attr_));
         }
         break;
       }
       case ObBackupStatus::Status::DOING: {
         if (OB_FAIL(do_set_task_())) {
-          LOG_WARN("[DATA_BACKUP]failed to backup data", K(ret), K(*job_attr_));
+          LOG_WARN("[DATA_BACKUP]failed to backup data", K(ret), KPC(job_attr_));
         }
         break;
       }
@@ -1110,19 +1110,19 @@ int ObUserTenantBackupJobMgr::process()
       case ObBackupStatus::Status::FAILED:
       case ObBackupStatus::Status::CANCELED: {
         if (OB_FAIL(move_to_history_())) {
-          LOG_WARN("[DATA_BACKUP]failed to move job and set to histroy", K(ret), K(*job_attr_));
+          LOG_WARN("[DATA_BACKUP]failed to move job and set to histroy", K(ret), KPC(job_attr_));
         }
         break;
       }
       case ObBackupStatus::Status::CANCELING: {
         if (OB_FAIL(cancel_())) {
-          LOG_WARN("[DATA_BACKUP]failed to cancel backup", K(ret), K(*job_attr_));
+          LOG_WARN("[DATA_BACKUP]failed to cancel backup", K(ret), KPC(job_attr_));
         }
         break;
       }
       default: {
         ret = OB_ERR_SYS;
-        LOG_ERROR("[DATA_BACKUP]unknown backup status", K(ret), K(*job_attr_));
+        LOG_ERROR("[DATA_BACKUP]unknown backup status", K(ret), KPC(job_attr_));
       }
     }
   }
@@ -1158,7 +1158,7 @@ int ObUserTenantBackupJobMgr::move_to_history_()
   ObMySQLTransaction trans;
   ObBackupSetTaskMgr set_task_mgr;
   if (is_sys_tenant(job_attr_->initiator_tenant_id_) && OB_FAIL(report_failed_to_initiator_())) {
-    LOG_WARN("fail to report job finish to initiator tenant id", K(ret), K(*job_attr_));
+    LOG_WARN("fail to report job finish to initiator tenant id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to start trans", K(ret));
   } else {
@@ -1167,7 +1167,7 @@ int ObUserTenantBackupJobMgr::move_to_history_()
       if (OB_ENTRY_NOT_EXIST == ret) { // when job was canceled in INIT STATUS, there are no set task in task table.
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("[DATA_BACKUP]failed to init set task mgr", K(ret), K(*job_attr_));
+        LOG_WARN("[DATA_BACKUP]failed to init set task mgr", K(ret), KPC(job_attr_));
       }
     } else if (OB_FAIL(set_task_mgr.do_clean_up(trans))) {
       LOG_WARN("[DATA_BACKUP]failed to do clean up", K(ret), K(set_task_mgr));
@@ -1175,7 +1175,7 @@ int ObUserTenantBackupJobMgr::move_to_history_()
     
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObBackupJobOperator::move_job_to_his(trans, job_attr_->tenant_id_, job_attr_->job_id_))) {
-      LOG_WARN("[DATA_BACKUP]failed to move job to history", K(ret), K(*job_attr_));
+      LOG_WARN("[DATA_BACKUP]failed to move job to history", K(ret), KPC(job_attr_));
     } 
 
     if (OB_SUCC(ret)) {
@@ -1255,7 +1255,7 @@ int ObUserTenantBackupJobMgr::cancel_()
   int ret = OB_SUCCESS;
   ObBackupSetTaskMgr set_task_mgr;
   if (OB_FAIL(check_can_backup_())) {
-    LOG_WARN("[DATA_BACKUP]failed to check can backup", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to check can backup", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(update_set_task_to_canceling_())) {
     LOG_WARN("[DATA_BACKUP]failed to update set task to canceling", K(ret));
   } else {
@@ -1266,7 +1266,7 @@ int ObUserTenantBackupJobMgr::cancel_()
         is_set_task_exist = false;
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("[DATA_BACKUP]failed to init set task mgr", K(ret), K(*job_attr_));
+        LOG_WARN("[DATA_BACKUP]failed to init set task mgr", K(ret), KPC(job_attr_));
       }
     } else if (OB_FAIL(set_task_mgr.process())) {
       LOG_WARN("[DATA_BACKUP]failed to persist ls task", K(ret), K(set_task_mgr));
@@ -1279,7 +1279,7 @@ int ObUserTenantBackupJobMgr::cancel_()
       if (OB_FAIL(advance_job_status(*sql_proxy_, next_status, OB_CANCELED, job_attr_->end_ts_))) {
         LOG_WARN("[DATA_BACKUP]failed to advance_job_status", K(ret));
       } else {
-        LOG_INFO("succeed to cancel job, advance job status to CANCELED", K(*job_attr_));
+        LOG_INFO("succeed to cancel job, advance job status to CANCELED", KPC(job_attr_));
       }
     }
   }
@@ -1313,7 +1313,7 @@ int ObUserTenantBackupJobMgr::update_set_task_to_canceling_()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("[DATA_BACKUP]invalid affected_rows", K(ret), K(affected_rows), K(sql), K(next_status));
   } else {
-    LOG_INFO("[DATA_BACKUP]advance set task status", K(*job_attr_), K(next_status), K(sql));
+    LOG_INFO("[DATA_BACKUP]advance set task status", KPC(job_attr_), K(next_status), K(sql));
   }
   return ret;
 }
@@ -1323,7 +1323,7 @@ int ObUserTenantBackupJobMgr::do_set_task_()
   int ret = OB_SUCCESS;
   LOG_INFO("job is in doing backup set task", KPC(job_attr_));
   if (OB_FAIL(check_can_backup_())) {
-    LOG_WARN("[DATA_BACKUP]failed to check can backup", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to check can backup", K(ret), KPC(job_attr_));
   } else { 
     ObBackupStatus next_status;
     ObBackupSetTaskMgr set_task_mgr;
@@ -1337,7 +1337,7 @@ int ObUserTenantBackupJobMgr::do_set_task_()
         || ObBackupStatus::Status::FAILED == next_status.status_) {
       job_attr_->end_ts_ = ObTimeUtility::current_time();
       if (OB_FAIL(advance_job_status(*sql_proxy_, next_status, job_attr_->result_, job_attr_->end_ts_))) {
-        LOG_WARN("[DATA_BACKUP]failed to advance status", K(ret), K(next_status), K(*job_attr_));
+        LOG_WARN("[DATA_BACKUP]failed to advance status", K(ret), K(next_status), KPC(job_attr_));
       } else {
         LOG_INFO("[DATA_BACKUP]succeed doing backup set task, and advancing job status to next status", 
             K(next_status), "tenant_id", job_attr_->tenant_id_, "job_id", job_attr_->job_id_);
@@ -1354,15 +1354,15 @@ int ObUserTenantBackupJobMgr::persist_set_task_()
   ObMySQLTransaction trans;
   LOG_INFO("start to persist set task", KPC(job_attr_));
   if (OB_FAIL(check_can_backup_())) {
-    LOG_WARN("[DATA_BACKUP]failed to check can backup", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to check can backup", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
       LOG_WARN("[DATA_BACKUP]failed to start trans", K(ret));
   } else {
     ObBackupStatus next_status(ObBackupStatus::Status::DOING);
     if (OB_FAIL(insert_backup_set_task_(trans))) {
-      LOG_WARN("[DATA_BACKUP]failed to insert backup set task", K(ret), K(*job_attr_));
+      LOG_WARN("[DATA_BACKUP]failed to insert backup set task", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(insert_backup_set_file_(trans))) {
-      LOG_WARN("[DATA_BACKUP]failed to insert backup set file", K(ret), K(*job_attr_));
+      LOG_WARN("[DATA_BACKUP]failed to insert backup set file", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(advance_job_status(trans, next_status))) {
       LOG_WARN("fail to advance job status to doing", K(ret), KPC(job_attr_));
     } 
@@ -1398,9 +1398,9 @@ int ObUserTenantBackupJobMgr::insert_backup_set_task_(common::ObISQLClient &sql_
   int ret = OB_SUCCESS;
   ObBackupSetTaskAttr backup_set_task;
   if (OB_FAIL(backup_set_task.passwd_.assign(job_attr_->passwd_))) {
-    LOG_WARN("[DATA_BACKUP]failed to assign passwd", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to assign passwd", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(backup_set_task.backup_path_.assign(job_attr_->backup_path_))) {
-    LOG_WARN("[DATA_BACKUP]failed to assign backup dest", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to assign backup dest", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(get_next_task_id_(sql_proxy, backup_set_task.task_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to get next task id", K(ret));
   } else if (OB_FAIL(ObBackupDataScheduler::get_scn(sql_proxy, job_attr_->tenant_id_, backup_set_task.start_scn_))) {
@@ -1438,17 +1438,17 @@ int ObUserTenantBackupJobMgr::insert_backup_set_file_(common::ObISQLClient &sql_
   ObBackupDest backup_dest;
   if (OB_FAIL(ObBackupSetFileOperator::get_prev_backup_set_id(sql_proxy, job_attr_->tenant_id_, job_attr_->backup_set_id_, 
       job_attr_->backup_type_, job_attr_->backup_path_, prev_full_backup_set_id, prev_inc_backup_set_id))) {
-    LOG_WARN("[DATA_BACKUP]fail to get prev backup set id", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]fail to get prev backup set id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(sql_proxy, job_attr_->tenant_id_, job_attr_->backup_path_, backup_dest))) {
-    LOG_WARN("[DATA_BACKUP]fail to get backup dest", K(ret), K(*job_attr_)); 
+    LOG_WARN("[DATA_BACKUP]fail to get backup dest", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(sql_proxy, job_attr_->tenant_id_, backup_dest, dest_id))) {
-    LOG_WARN("[DATA_BACKUP]fail to get dest id", K(ret), K(*job_attr_)); 
+    LOG_WARN("[DATA_BACKUP]fail to get dest id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(fill_backup_set_desc_(*job_attr_, prev_full_backup_set_id, prev_inc_backup_set_id, dest_id, backup_set_desc))) {
-    LOG_WARN("[DATA_BACKUP]fail to fill backup set desc", K(ret), K(*job_attr_), K(prev_full_backup_set_id), K(prev_inc_backup_set_id));
+    LOG_WARN("[DATA_BACKUP]fail to fill backup set desc", K(ret), KPC(job_attr_), K(prev_full_backup_set_id), K(prev_inc_backup_set_id));
   } else if (OB_FAIL(lease_service_->check_lease())) {
     LOG_WARN("fail to check leader", K(ret));
   } else if (OB_FAIL(ObBackupSetFileOperator::insert_backup_set_file(sql_proxy, backup_set_desc))) {
-    LOG_WARN("[DATA_BACKUP]fail to insert backup set file", K(ret), K(backup_set_desc), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]fail to insert backup set file", K(ret), K(backup_set_desc), KPC(job_attr_));
   }
   return ret;
 }
@@ -1517,7 +1517,7 @@ int ObUserTenantBackupJobMgr::advance_job_status(
   if (OB_FAIL(lease_service_->check_lease())) {
     LOG_WARN("fail to check leader", K(ret));
   } else if (OB_FAIL(ObBackupJobOperator::advance_job_status(trans, *job_attr_, next_status, result, end_ts))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance job status", K(ret), K(*job_attr_), K(next_status), K(result), K(end_ts));
+    LOG_WARN("[DATA_BACKUP]failed to advance job status", K(ret), KPC(job_attr_), K(next_status), K(result), K(end_ts));
   } 
   return ret;
 }
@@ -1543,7 +1543,7 @@ int ObSysTenantBackupJobMgr::process()
       } 
       case ObBackupStatus::Status::DOING: {
         if (OB_FAIL(statistic_user_tenant_job_())) {
-          LOG_WARN("[DATA_BACKUP]failed to backup data", K(ret), K(*job_attr_));
+          LOG_WARN("[DATA_BACKUP]failed to backup data", K(ret), KPC(job_attr_));
         }
         break;
       }
@@ -1551,19 +1551,19 @@ int ObSysTenantBackupJobMgr::process()
       case ObBackupStatus::Status::FAILED: 
       case ObBackupStatus::Status::CANCELED: {
         if (OB_FAIL(move_to_history_())) {
-          LOG_WARN("[DATA_BACKUP]failed to move job to histroy", K(ret), K(*job_attr_));
+          LOG_WARN("[DATA_BACKUP]failed to move job to histroy", K(ret), KPC(job_attr_));
         }
         break;
       }
       case ObBackupStatus::Status::CANCELING: {
         if (OB_FAIL(cancel_user_tenant_job_())) {
-          LOG_WARN("[DATA_BACKUP]failed to cancel backup job", K(ret), K(*job_attr_));
+          LOG_WARN("[DATA_BACKUP]failed to cancel backup job", K(ret), KPC(job_attr_));
         }
         break;
       }
       default: {
         ret = OB_ERR_SYS;
-        LOG_ERROR("[DATA_BACKUP]unknown backup status", K(ret), K(*job_attr_));
+        LOG_ERROR("[DATA_BACKUP]unknown backup status", K(ret), KPC(job_attr_));
       }
     }
   }
@@ -1600,10 +1600,10 @@ int ObSysTenantBackupJobMgr::handle_user_tenant_backupdatabase_()
   if (OB_SUCC(ret)) {
     ObBackupStatus next_status(ObBackupStatus::Status::DOING);
     if (OB_FAIL(advance_status_(*sql_proxy_, next_status))) {
-      LOG_WARN("fail to advance sys job status", K(ret), K(*job_attr_), K(next_status));
+      LOG_WARN("fail to advance sys job status", K(ret), KPC(job_attr_), K(next_status));
     } else {
       backup_service_->wakeup();
-      LOG_INFO("succeed handle user tenant backupdatabase, advance sys job to DOING", K(*job_attr_), K(next_status));
+      LOG_INFO("succeed handle user tenant backupdatabase, advance sys job to DOING", KPC(job_attr_), K(next_status));
     }
   }
   return ret;
@@ -1654,7 +1654,7 @@ int ObSysTenantBackupJobMgr::statistic_user_tenant_job_()
   bool is_valid = false;
   int64_t finish_user_backup_job  = 0;
   ObBackupJobAttr tmp_job_attr;
-  LOG_INFO("sys tenant start to statistic user tenant job", K(*job_attr_));
+  LOG_INFO("sys tenant start to statistic user tenant job", KPC(job_attr_));
   for (int64_t i = 0; OB_SUCC(ret) && i < job_attr_->executor_tenant_id_.count(); ++i) {
     const uint64_t user_tenant_id = job_attr_->executor_tenant_id_.at(i);
     is_valid = false;
@@ -1690,9 +1690,9 @@ int ObSysTenantBackupJobMgr::statistic_user_tenant_job_()
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(advance_status_(*sql_proxy_, next_status, tmp_job_attr.result_, ObTimeUtility::current_time()))) {
-        LOG_WARN("fail to advance sys job status", K(ret), K(*job_attr_), K(next_status));
+        LOG_WARN("fail to advance sys job status", K(ret), KPC(job_attr_), K(next_status));
       } else {
-        LOG_INFO("[DATA_BACKUP]user job finished, sys job move to next status", K(next_status), K(*job_attr_));
+        LOG_INFO("[DATA_BACKUP]user job finished, sys job move to next status", K(next_status), KPC(job_attr_));
       }
     }
   }
@@ -1705,9 +1705,9 @@ int ObSysTenantBackupJobMgr::move_to_history_()
   if (OB_FAIL(lease_service_->check_lease())) {
     LOG_WARN("fail to check leader", K(ret));
   } else if (OB_FAIL(ObBackupJobOperator::move_job_to_his(*sql_proxy_, job_attr_->tenant_id_, job_attr_->job_id_))) {
-    LOG_WARN("[DATA_BACKUP]failed to move job to history table", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to move job to history table", K(ret), KPC(job_attr_));
   } else {
-    LOG_INFO("sys tenant backup job succeed move to history table", K(*job_attr_));
+    LOG_INFO("sys tenant backup job succeed move to history table", KPC(job_attr_));
   }
   return ret;
 }
@@ -1752,9 +1752,9 @@ int ObSysTenantBackupJobMgr::cancel_user_tenant_job_()
     ObBackupStatus next_status(ObBackupStatus::Status::CANCELED);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(advance_status_(*sql_proxy_, next_status, OB_CANCELED, ObTimeUtility::current_time()))) {
-        LOG_WARN("fail to advance sys job status", K(ret), K(*job_attr_), K(next_status));
+        LOG_WARN("fail to advance sys job status", K(ret), KPC(job_attr_), K(next_status));
       } else {
-        FLOG_INFO("[DATA_BACKUP]succeed schedule sys backup job", K(*job_attr_));
+        FLOG_INFO("[DATA_BACKUP]succeed schedule sys backup job", KPC(job_attr_));
       }
     }
   }
@@ -1771,7 +1771,7 @@ int ObSysTenantBackupJobMgr::advance_status_(
   if (OB_FAIL(lease_service_->check_lease())) {
     LOG_WARN("fail to check leader", K(ret));
   } else if (OB_FAIL(ObBackupJobOperator::advance_job_status(sql_proxy, *job_attr_, next_status, result, end_ts))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance job status", K(ret), K(*job_attr_), K(next_status), K(result), K(end_ts));
+    LOG_WARN("[DATA_BACKUP]failed to advance job status", K(ret), KPC(job_attr_), K(next_status), K(result), K(end_ts));
   }
   return ret;
 }
