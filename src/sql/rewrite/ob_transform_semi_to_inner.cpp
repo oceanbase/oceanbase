@@ -16,6 +16,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_join.h"
+#include "sql/optimizer/ob_log_function_table.h"
 #include "common/ob_smart_call.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -621,20 +622,28 @@ int ObTransformSemiToInner::find_basic_table(ObSelectStmt* stmt, uint64_t &table
 {
   int ret = OB_SUCCESS;
   bool find = false;
+  table_id = OB_INVALID_ID;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && !find && i < stmt->get_table_items().count(); ++i) {
-    TableItem *table = stmt->get_table_item(i);
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (!table->is_generated_table()) {
-      table_id = table->table_id_;
-      find = true;
-    } else if (OB_FAIL(SMART_CALL(find_basic_table(table->ref_query_, table_id)))) {
-      LOG_WARN("failed to find basic table item", K(ret));
+  } else if (stmt->is_set_stmt()) {
+    for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_ID == table_id && i < stmt->get_set_query().count(); ++i) {
+      if (OB_FAIL(SMART_CALL(find_basic_table(stmt->get_set_query(i),table_id)))) {
+        LOG_WARN("fail to find basic table in set stmt", K(ret));
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !find && i < stmt->get_table_items().count(); ++i) {
+      TableItem *table = stmt->get_table_item(i);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null table item", K(ret));
+      } else if (!table->is_generated_table()) {
+        table_id = table->table_id_;
+        find = true;
+      } else if (OB_FAIL(SMART_CALL(find_basic_table(table->ref_query_, table_id)))) {
+        LOG_WARN("failed to find basic table item", K(ret));
+      }
     }
   }
   return ret;
@@ -785,6 +794,11 @@ int ObTransformSemiToInner::find_operator(ObLogicalOperator* root,
     LOG_WARN("unexpect null logical operator", K(ret));
   } else if (log_op_def::LOG_TABLE_SCAN == root->get_type()) {
     ObLogTableScan *scan = static_cast<ObLogTableScan *>(root);
+    if (scan->get_table_id() == table_id) {
+      table_op = scan;
+    }
+  } else if (log_op_def::LOG_FUNCTION_TABLE == root->get_type()) {
+    ObLogFunctionTable *scan = static_cast<ObLogFunctionTable *>(root);
     if (scan->get_table_id() == table_id) {
       table_op = scan;
     }
