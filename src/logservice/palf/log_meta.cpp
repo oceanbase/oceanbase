@@ -40,7 +40,7 @@ int LogMeta::generate_by_default(const AccessMode &access_mode)
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(INFO, "invalid argument", KPC(this), K(access_mode));
   } else {
-    const int64_t init_log_proposal_id(0);
+    const int64_t init_log_proposal_id(PALF_INITIAL_PROPOSAL_ID);
     const LSN init_base_lsn(PALF_INITIAL_LSN_VAL);
     SCN init_ref_scn;
     init_ref_scn.set_min();
@@ -73,7 +73,8 @@ int LogMeta::generate_by_palf_base_info(const PalfBaseInfo &palf_base_info, cons
   } else {
     const int64_t prev_log_proposal_id = palf_base_info.prev_log_info_.log_proposal_id_;
     const SCN &prev_scn = palf_base_info.prev_log_info_.scn_;
-    const int64_t init_log_proposal_id = (prev_log_proposal_id != INVALID_PROPOSAL_ID)? prev_log_proposal_id: 0;
+    const int64_t init_log_proposal_id = (prev_log_proposal_id != INVALID_PROPOSAL_ID)? \
+        prev_log_proposal_id: PALF_INITIAL_PROPOSAL_ID;
     const SCN init_ref_scn = (prev_scn.is_valid() ? prev_scn: SCN::min_scn());
     LogConfigInfo init_config_info;
     LogConfigVersion init_config_version;

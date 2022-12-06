@@ -1015,6 +1015,7 @@ bool PalfHandleImpl::check_follower_sync_status_(const LogConfigChangeArgs &args
   (void) sw_.get_committed_end_lsn(first_leader_committed_end_lsn);
 
   added_member_has_new_version = true;
+  const int64_t max_log_gap_time = PALF_LEADER_ACTIVE_SYNC_TIMEOUT_US / 4;
   if (new_member_list.get_member_number() == 0) {
   } else if (FALSE_IT(conn_timeout_us = half_timeout_us / (new_member_list.get_member_number()))) {
   } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num,
@@ -1049,16 +1050,16 @@ bool PalfHandleImpl::check_follower_sync_status_(const LogConfigChangeArgs &args
       PALF_LOG(WARN, "follwer is not sync with leader after waiting 500 ms", KPC(this), K(sync_speed_gap),
               K(bool_ret), K(second_committed_end_lsn), K(second_leader_committed_end_lsn));
     } else if (FALSE_IT(expected_sync_time_s = (second_leader_committed_end_lsn - second_committed_end_lsn) / sync_speed_gap)) {
-    } else if ((expected_sync_time_s * 1E6) <= half_timeout_us) {
+    } else if ((expected_sync_time_s * 1E6) <= max_log_gap_time) {
       bool_ret = true;
       PALF_LOG(INFO, "majority of new_member_list are sync with leader, start config change",
               KPC(this), K(bool_ret), K(second_committed_end_lsn), K(first_committed_end_lsn), K(sync_speed_gap),
-              K(second_leader_committed_end_lsn), K(half_timeout_us));
+              K(second_leader_committed_end_lsn), K(max_log_gap_time));
     } else {
       bool_ret = false;
       PALF_LOG(INFO, "majority of new_member_list are far behind, can not change member",
               KPC(this), K(bool_ret), K(second_committed_end_lsn), K(first_committed_end_lsn), K(sync_speed_gap),
-              K(second_leader_committed_end_lsn), K(half_timeout_us));
+              K(second_leader_committed_end_lsn), K(max_log_gap_time));
     }
   }
   bool_ret = bool_ret && added_member_has_new_version;
@@ -3061,7 +3062,7 @@ int PalfHandleImpl::receive_config_log(const common::ObAddr &server,
              false == meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(server),
-        K(msg_proposal_id), K(prev_lsn), K(meta));
+        K(msg_proposal_id), K(prev_lsn), K(prev_mode_pid), K(meta));
   } else if (OB_FAIL(try_update_proposal_id_(server, msg_proposal_id))) {
     PALF_LOG(WARN, "try_update_proposal_id_ failed", KR(ret), KPC(this), K(server), K(msg_proposal_id));
   } else {
