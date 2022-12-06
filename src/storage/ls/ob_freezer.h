@@ -161,6 +161,7 @@ public:
   int remove_memtable_info(const ObTabletID &tablet_id);
   int get_memtables_info(common::ObSArray<ObFrozenMemtableInfo> &memtables_info);
   void add_diagnose_info(const ObString &str);
+  int get_diagnose_info(ObStringHolder &diagnose_info);
 
 public:
   ObTabletID tablet_id_;
