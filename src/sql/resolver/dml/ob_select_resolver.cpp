@@ -2373,7 +2373,7 @@ int ObSelectResolver::is_need_check_col_dup(const ObRawExpr *expr, bool &need_ch
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("is null", K(ret));
-  } else if (!params_.is_prepare_protocol_ || !params_.is_by_ordinal_) {
+  } else if (params_.need_check_col_dup_) {
     need_check = true;
   } else if (T_QUESTIONMARK == expr->get_expr_type()) {
     need_check = false;

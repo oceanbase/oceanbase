@@ -293,6 +293,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       fixed_param_idx_(allocator),
       need_add_obj_stat_(true),
       is_inner_sql_(false),
+      is_original_ps_mode_(false),
       ab_params_(NULL)
   {
     fp_result_.pc_key_.is_ps_mode_ = is_ps_mode_;
@@ -351,7 +352,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(ps_need_parameterized_),
     K(fixed_param_idx_),
     K(need_add_obj_stat_),
-    K(is_inner_sql_)
+    K(is_inner_sql_),
+    K(is_original_ps_mode_)
     );
   bool is_ps_mode_; //control use which variables to do match
 
@@ -398,6 +400,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   common::ObFixedArray<int64_t, common::ObIAllocator> fixed_param_idx_;
   bool need_add_obj_stat_;
   bool is_inner_sql_;
+  bool is_original_ps_mode_;
   ParamStore *ab_params_;  // arraybinding batch parameters,
 };
 
