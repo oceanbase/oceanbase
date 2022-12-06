@@ -227,7 +227,7 @@ int ObSSTableMacroBlockHeader::deserialize(const char *buf, const int64_t data_l
           "get_serialize_size()", get_serialize_size());
     } else if (OB_UNLIKELY(!is_valid())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("macro block header is invalid", K(ret), K(*this));
+      LOG_WARN("macro block header is invalid", K(ret), KPC(this));
     } else {
       pos += get_serialize_size();
       is_inited_ = true;
