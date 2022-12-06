@@ -587,8 +587,8 @@ public:
 
   // ObFreezer interface:
   // logstream freeze
-  // @param [in] null
-  int logstream_freeze();
+  // @param [in] is_tenant_freeze: only used for ObTenantFreezer::tenant_freeze_()
+  int logstream_freeze(bool is_tenant_freeze=false);
   // tablet freeze
   // @param [in] tablet_id
   // int tablet_freeze(const ObTabletID &tablet_id);
