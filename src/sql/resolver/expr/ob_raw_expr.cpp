@@ -4116,6 +4116,11 @@ int ObRawExprPointer::add_ref(ObRawExpr** expr)
   return expr_group_.push_back(expr);
 }
 
+int ObRawExprPointer::assign(const ObRawExprPointer &other)
+{
+  return expr_group_.assign(other.expr_group_);
+}
+
 int ObMultiSetRawExpr::assign(const ObMultiSetRawExpr& other)
 {
   int ret = OB_SUCCESS;
