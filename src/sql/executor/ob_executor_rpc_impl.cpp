@@ -36,10 +36,15 @@ int ObExecutorRpcImpl::mini_task_execute(ObExecutorRpcCtx& rpc_ctx, ObMiniTask& 
   int ret = OB_SUCCESS;
   uint64_t tenant_id = rpc_ctx.get_rpc_tenant_id();
   const ObAddr& svr = task.get_runner_server();
+  ObExecContext *exec_ctx = task.get_exec_context();
   int64_t timeout_timestamp = rpc_ctx.get_timeout_timestamp();
   int64_t timeout = timeout_timestamp - ::oceanbase::common::ObTimeUtility::current_time();
   obrpc::ObExecutorRpcProxy to_proxy = proxy_->to(svr);
-  if (OB_UNLIKELY(timeout <= 0)) {
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec_ctx is NULL", K(ret), KP(exec_ctx));
+  } else if (FALSE_IT(exec_ctx->set_mini_task(true))) {
+  } else if (OB_UNLIKELY(timeout <= 0)) {
     ret = OB_TIMEOUT;
     LOG_WARN("task_execute timeout before rpc", K(ret), K(svr), K(timeout), K(timeout_timestamp));
   } else if (OB_FAIL(to_proxy.by(tenant_id).as(OB_SYS_TENANT_ID).timeout(timeout).mini_task_execute(task, result))) {
@@ -50,6 +55,9 @@ int ObExecutorRpcImpl::mini_task_execute(ObExecutorRpcCtx& rpc_ctx, ObMiniTask& 
     }
     deal_with_rpc_timeout_err(rpc_ctx, ret, svr);
   }
+  if (OB_NOT_NULL(exec_ctx)) {
+    exec_ctx->set_mini_task(false);
+  }
   return ret;
 }
 
@@ -59,12 +67,17 @@ int ObExecutorRpcImpl::mini_task_submit(ObExecutorRpcCtx& rpc_ctx, ObMiniTask& t
   uint64_t tenant_id = rpc_ctx.get_rpc_tenant_id();
   ObCurTraceId::TraceId* cur_trace_id = NULL;
   const ObAddr& svr = task.get_runner_server();
+  ObExecContext *exec_ctx = task.get_exec_context();
   if (THIS_WORKER.get_rpc_tenant() > 0) {
     tenant_id = THIS_WORKER.get_rpc_tenant();
   }
 
   int64_t timeout_timestamp = rpc_ctx.get_timeout_timestamp();
-  if (OB_ISNULL(proxy_)) {
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec_ctx is NULL", K(ret), KP(exec_ctx));
+  } else if (FALSE_IT(exec_ctx->set_mini_task(true))) {
+  } else if (OB_ISNULL(proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("proxy_ is NULL", K(ret), K(proxy_));
   } else if (OB_UNLIKELY(!rpc_ctx.min_cluster_version_is_valid())) {  // only local execution
@@ -95,6 +108,9 @@ int ObExecutorRpcImpl::mini_task_submit(ObExecutorRpcCtx& rpc_ctx, ObMiniTask& t
         deal_with_rpc_timeout_err(rpc_ctx, ret, svr);
       }
     }
+  }
+  if (OB_NOT_NULL(exec_ctx)) {
+    exec_ctx->set_mini_task(false);
   }
   return ret;
 }

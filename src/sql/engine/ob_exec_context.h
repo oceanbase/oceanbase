@@ -667,6 +667,9 @@ public:
 
   int push_back_iter(common::ObNewRowIterator *iter);
   int remove_iter(common::ObNewRowIterator *iter);
+
+  void set_mini_task(bool is_mini_task) { is_mini_task_ = is_mini_task; }
+  bool is_mini_task() const { return is_mini_task_; }
 private:
   int set_phy_op_ctx_ptr(uint64_t index, void* phy_op);
   void* get_phy_op_ctx_ptr(uint64_t index) const;
@@ -814,6 +817,10 @@ protected:
   int64_t expr_partition_id_;
   ObSEArray<common::ObNewRowIterator*, 1, common::ObIAllocator&> iters_;
   int64_t check_status_times_;
+
+  // for multi part dml
+  bool is_mini_task_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

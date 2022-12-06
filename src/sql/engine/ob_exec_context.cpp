@@ -163,7 +163,8 @@ ObExecContext::ObExecContext(ObIAllocator& allocator)
       fixed_id_(OB_INVALID_ID),
       expr_partition_id_(OB_INVALID_ID),
       iters_(256, allocator),
-      check_status_times_(0)
+      check_status_times_(0),
+      is_mini_task_(false)
 {}
 
 ObExecContext::ObExecContext()
@@ -932,11 +933,14 @@ int ObExecContext::serialize_operator_input(char*& buf, int64_t buf_len, int64_t
       for (int64_t index = 0; OB_SUCC(ret) && index < phy_op_size_; ++index) {
         if (NULL != (input_param = static_cast<ObIPhyOperatorInput*>(phy_op_input_store_[index])) &&
             input_param->need_serialized()) {
-          OB_UNIS_ENCODE(index);                                                 // serialize index
-          OB_UNIS_ENCODE(static_cast<int64_t>(input_param->get_phy_op_type()));  // serialize operator type
-          OB_UNIS_ENCODE(*input_param);                                          // serialize input parameter
-          if (OB_SUCC(ret)) {
-            ++real_input_count;
+          if ((is_mini_task_ && input_param->is_multi_part_)
+              || (!is_mini_task_ && !input_param->is_multi_part_)) {
+            OB_UNIS_ENCODE(index);                                                 // serialize index
+            OB_UNIS_ENCODE(static_cast<int64_t>(input_param->get_phy_op_type()));  // serialize operator type
+            OB_UNIS_ENCODE(*input_param);                                          // serialize input parameter
+            if (OB_SUCC(ret)) {
+              ++real_input_count;
+            }
           }
         }
       }
@@ -958,11 +962,14 @@ int ObExecContext::serialize_operator_input_recursively(const ObPhyOperator* op,
     int64_t index = op->get_id();
     if (NULL != (input_param = static_cast<ObIPhyOperatorInput*>(phy_op_input_store_[index])) &&
         input_param->need_serialized()) {
-      OB_UNIS_ENCODE(index);                                                 // serialize index
-      OB_UNIS_ENCODE(static_cast<int64_t>(input_param->get_phy_op_type()));  // serialize operator type
-      OB_UNIS_ENCODE(*input_param);                                          // serialize input parameter
-      if (OB_SUCC(ret)) {
-        ++real_input_count;
+      if ((is_mini_task_ && input_param->is_multi_part_)
+          || (!is_mini_task_ && !input_param->is_multi_part_)) {
+        OB_UNIS_ENCODE(index);                                                 // serialize index
+        OB_UNIS_ENCODE(static_cast<int64_t>(input_param->get_phy_op_type()));  // serialize operator type
+        OB_UNIS_ENCODE(*input_param);                                          // serialize input parameter
+        if (OB_SUCC(ret)) {
+          ++real_input_count;
+        }
       }
     }
     if (!is_full_tree && IS_PX_COORD(op->get_type())) {
@@ -991,9 +998,12 @@ int ObExecContext::serialize_operator_input_len_recursively(
     int64_t index = op->get_id();
     if (NULL != (input_param = static_cast<ObIPhyOperatorInput*>(phy_op_input_store_[index])) &&
         input_param->need_serialized()) {
-      OB_UNIS_ADD_LEN(index);                                                 // serialize index
-      OB_UNIS_ADD_LEN(static_cast<int64_t>(input_param->get_phy_op_type()));  // serialize operator type
-      OB_UNIS_ADD_LEN(*input_param);                                          // serialize input parameter
+      if ((is_mini_task_ && input_param->is_multi_part_)
+          || (!is_mini_task_ && !input_param->is_multi_part_)) {
+        OB_UNIS_ADD_LEN(index);                                                 // serialize index
+        OB_UNIS_ADD_LEN(static_cast<int64_t>(input_param->get_phy_op_type()));  // serialize operator type
+        OB_UNIS_ADD_LEN(*input_param);                                          // serialize input parameter
+      }
     }
     if (!is_full_tree && IS_PX_COORD(op->get_type())) {
       is_full_tree = true;
@@ -1147,10 +1157,13 @@ DEFINE_GET_SERIALIZE_SIZE(ObExecContext)
       if (OB_ISNULL(root_op_)) {
         for (int64_t index = 0; index < phy_op_size_; ++index) {
           if (NULL != (input_param = phy_op_input_store_[index]) && input_param->need_serialized()) {
-            int64_t op_type = static_cast<int64_t>(input_param->get_phy_op_type());
-            OB_UNIS_ADD_LEN(index);
-            OB_UNIS_ADD_LEN(op_type);
-            OB_UNIS_ADD_LEN(*input_param);
+            if ((is_mini_task_ && input_param->is_multi_part_)
+                || (!is_mini_task_ && !input_param->is_multi_part_)) {
+              int64_t op_type = static_cast<int64_t>(input_param->get_phy_op_type());
+              OB_UNIS_ADD_LEN(index);
+              OB_UNIS_ADD_LEN(op_type);
+              OB_UNIS_ADD_LEN(*input_param);
+            }
           }
         }
       } else {

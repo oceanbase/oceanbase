@@ -728,6 +728,7 @@ int ObDMLMiniTaskExecutor::build_mini_task_op_input(
   if (OB_SUCC(ret) && op_input != NULL) {
     op_input->reset();
     op_input->set_deserialize_allocator(&ctx.get_allocator());
+    op_input->is_multi_part_ = true;
     if (OB_FAIL(op_input->init(ctx, task_info, root_op))) {
       LOG_WARN("init operator input failed", K(ret));
     }
@@ -920,6 +921,7 @@ int ObLookupMiniTaskExecutor::fill_lookup_task_op_input(ObExecContext& ctx, ObMi
   } else {
     task_info->set_task_split_type(ObTaskSpliter::DISTRIBUTED_SPLIT);
     op_input->reset();
+    op_input->is_multi_part_ = true;
     if (OB_FAIL(op_input->init(ctx, *task_info, root_op))) {
       LOG_WARN("init operator input failed", K(ret));
     } else if (PHY_MULTI_PART_TABLE_SCAN == op_input->get_phy_op_type()) {

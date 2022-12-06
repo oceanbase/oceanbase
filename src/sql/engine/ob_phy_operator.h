@@ -70,7 +70,7 @@ class ObIPhyOperatorInput {
   OB_UNIS_VERSION_PV();
 
 public:
-  ObIPhyOperatorInput()
+  ObIPhyOperatorInput() : is_multi_part_(false)
   {}
   virtual ~ObIPhyOperatorInput()
   {}
@@ -98,6 +98,10 @@ public:
     return true;
   }
   virtual void reset() = 0;
+
+public:
+  // for mini task executor, only serialize multi part inputs
+  bool is_multi_part_;
 };
 
 struct ColumnContent {
