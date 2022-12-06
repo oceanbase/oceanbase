@@ -29,6 +29,7 @@ namespace common {
 class ObISQLClient;
 class ObServerConfig;
 class ObMySQLTransaction;
+class ObSqlString;
 }  // namespace common
 namespace share {
 class ObServerStatus;
@@ -497,8 +498,8 @@ protected:
   int complete_shrink_pool_unit_num_rs_job(
       const uint64_t resource_pool_id, const uint64_t tenant_id, common::ObMySQLTransaction& trans);
   int complete_migrate_unit_rs_job_in_pool(
-      const int64_t resource_pool_id, const int result_ret, common::ObMySQLTransaction& trans);
-  int check_unit_can_migrate(const uint64_t tenant_id, bool& can_migrate);
+      const int64_t resource_pool_id, const int result_ret, common::ObMySQLTransaction &trans);
+  int check_unit_can_migrate(const uint64_t tenant_id, bool &can_migrate, common::ObSqlString &reason);
 
   // alter pool related
   struct UnitNum {

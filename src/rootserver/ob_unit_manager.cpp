@@ -6009,6 +6009,7 @@ int ObUnitManager::shrink_granted_pool(
   int ret = OB_SUCCESS;
   common::ObMySQLTransaction trans;
   bool is_allowed = true;
+  ObSqlString reason;
   if (OB_UNLIKELY(NULL == pool || alter_unit_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(pool), K(alter_unit_num));
@@ -6048,11 +6049,13 @@ int ObUnitManager::shrink_granted_pool(
     } else if (output_delete_unit_ptr_array.count() <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("zone unit ptrs has no element", K(ret), "zone_unit_cnt", output_delete_unit_ptr_array.count());
-    } else if (OB_FAIL(check_unit_can_migrate(pool->tenant_id_, is_allowed))) {
+    } else if (OB_FAIL(check_unit_can_migrate(pool->tenant_id_, is_allowed, reason))) {
       LOG_WARN("fail to check shrink_unit can migrate", K(ret));
     } else if (!is_allowed) {
       ret = OB_OP_NOT_ALLOW;
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "shrink pool unit num but unit can't migrate");
+      if (OB_SUCCESS == reason.append_fmt(", unit cannot migrate, shrink pool unit num")) {
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, reason.string().ptr());
+      }
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < output_delete_unit_ptr_array.count(); ++i) {
         const ObUnit* unit = output_delete_unit_ptr_array.at(i);
@@ -7748,6 +7751,7 @@ int ObUnitManager::admin_migrate_unit(
   common::ObMySQLTransaction trans;
   AlterResourceErr err_index = ALT_ERR;
   bool can_migrate = false;
+  ObSqlString can_not_migrate_reason;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check inner stat failed", K_(inited), K_(loaded), K(ret));
@@ -7807,11 +7811,13 @@ int ObUnitManager::admin_migrate_unit(
         "config",
         unit_info.config_,
         K(ret));
-  } else if (OB_FAIL(check_unit_can_migrate(unit_info.pool_.tenant_id_, can_migrate))) {
-    LOG_WARN("fail to check unit can migrate", K(ret));
+  } else if (OB_FAIL(check_unit_can_migrate(unit_info.pool_.tenant_id_, can_migrate, can_not_migrate_reason))) {
+    LOG_WARN("fail to check unit can migrate", KR(ret), K(unit_info.pool_.tenant_id_));
   } else if (!can_migrate) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "unit migrate may no has leader");
+    if (OB_SUCCESS == can_not_migrate_reason.append_fmt(", migrate unit")) {
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, can_not_migrate_reason.string().ptr());
+    }
   } else if (OB_FAIL(migrate_unit(unit_id, dst, is_manual))) {
     LOG_WARN("migrate unit failed", K(unit_id), "destination", dst, K(ret));
   }
@@ -7819,13 +7825,14 @@ int ObUnitManager::admin_migrate_unit(
   return ret;
 }
 
-int ObUnitManager::check_unit_can_migrate(const uint64_t tenant_id, bool& can_migrate)
+int ObUnitManager::check_unit_can_migrate(const uint64_t tenant_id, bool &can_migrate, ObSqlString &reason)
 {
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard schema_guard;
   const share::schema::ObTenantSchema* tenant_schema = NULL;
   int64_t num = 0;
   can_migrate = false;
+  reason.reset();
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check inner stat failed", K_(inited), K(ret));
@@ -7843,6 +7850,9 @@ int ObUnitManager::check_unit_can_migrate(const uint64_t tenant_id, bool& can_mi
   } else if (num > 2) {
     // The tenant's quorum value needs to be at least greater than 2 in order to migrate successfully
     can_migrate = true;
+  } else if (OB_FAIL(reason.assign_fmt(
+                 "Tenant '%s' paxos replica number is little than 3", tenant_schema->get_tenant_name()))) {
+    can_migrate = false;
   }
   return ret;
 }
@@ -8237,10 +8247,11 @@ int ObUnitManager::try_migrate_unit(const uint64_t unit_id, const uint64_t tenan
 
     if (OB_SUCC(ret)) {
       bool can_migrate = false;
-      if (OB_FAIL(check_unit_can_migrate(tenant_id, can_migrate))) {
+      ObSqlString reason;
+      if (OB_FAIL(check_unit_can_migrate(tenant_id, can_migrate, reason))) {
         LOG_WARN("fail to check unit can migrate", KR(ret), K(tenant_id), K(can_migrate));
       } else if (!can_migrate) {
-        LOG_INFO("can't migrate unit, don't need auto migrate unit", K(tenant_id));
+        LOG_INFO("can't migrate unit, don't need auto migrate unit", K(tenant_id), K(reason));
       } else if (OB_FAIL(migrate_unit(unit_id, dst, is_manual))) {
         LOG_WARN("fail migrate unit", K(unit_id), K(dst), K(ret));
       }
