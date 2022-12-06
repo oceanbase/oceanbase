@@ -85,7 +85,7 @@ int ObBackupSetTaskMgr::init(
     desc.backup_type_ = job_attr.backup_type_;
     if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(sql_proxy, job_attr.tenant_id_, 
         job_attr.backup_path_, backup_dest))) {
-      LOG_WARN("fail to get backup dest", K(ret), K(*job_attr_));
+      LOG_WARN("fail to get backup dest", K(ret), K(job_attr));
     } else if (OB_FAIL(store_.init(backup_dest, desc))) {
       LOG_WARN("fail to init backup data store", K(ret));
     } 
@@ -198,7 +198,7 @@ int ObBackupSetTaskMgr::persist_sys_ls_task_()
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(write_backup_set_placeholder(true/*start*/))) {
-    LOG_WARN("fail to write backup set start placeholder", K(ret), K(*job_attr_));
+    LOG_WARN("fail to write backup set start placeholder", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret), K(meta_tenant_id_));
   } else {
@@ -357,7 +357,7 @@ int ObBackupSetTaskMgr::backup_sys_meta_()
     } else {
       share::ObBackupDataTaskType type(share::ObBackupDataTaskType::Type::BACKUP_META);
       if (OB_FAIL(generate_ls_tasks_(ls_ids, type))) {
-        LOG_WARN("failed to generate log stream tasks", K(ret), K(*job_attr_), K(ls_ids));
+        LOG_WARN("failed to generate log stream tasks", K(ret), KPC(job_attr_), K(ls_ids));
       } else if (OB_FAIL(advance_status_(trans_, next_status_))) {
         LOG_WARN("fail to advance status", K(ret), K(next_status_));
       } 
@@ -475,7 +475,7 @@ int ObBackupSetTaskMgr::change_meta_turn_()
       LOG_WARN("fail to delete ls task", K(ret), "tenant_id", set_task_attr_.tenant_id_, "job_id", 
           set_task_attr_.job_id_);
     } else if (OB_FAIL(generate_ls_tasks_(ls_ids, type))) {
-      LOG_WARN("failed to generate log stream tasks", K(ret), K(*job_attr_), K(ls_ids));
+      LOG_WARN("failed to generate log stream tasks", K(ret), KPC(job_attr_), K(ls_ids));
     } else if (OB_FAIL(ObBackupTaskOperator::update_meta_turn_id(trans_, set_task_attr_.task_id_, 
         set_task_attr_.tenant_id_, next_meta_turn_id))) {
       LOG_WARN("fail to update meta turn id", K(ret), K(set_task_attr_));
@@ -508,7 +508,7 @@ int ObBackupSetTaskMgr::merge_ls_meta_infos_(const ObIArray<share::ObBackupLSTas
   ObBackupLSMetaInfosDesc ls_meta_infos;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, 
     job_attr_->backup_path_, backup_dest))) {
-    LOG_WARN("fail to get backup dest", K(ret), K(*job_attr_));
+    LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_));
   } else {
     ARRAY_FOREACH_X(ls_tasks, i, cnt, OB_SUCC(ret)) {
       const ObBackupLSTaskAttr &ls_task_attr = ls_tasks.at(i);
@@ -868,7 +868,7 @@ int ObBackupSetTaskMgr::backup_data_()
       if (OB_FAIL(ObBackupDataScheduler::get_scn(*sql_proxy_, job_attr_->tenant_id_, end_scn))) {
         LOG_WARN("[DATA_BACKUP]failed to get end ts", K(ret), "tenant_id", job_attr_->tenant_id_);
       } else if (OB_FAIL(build_index_(build_index_attr, set_task_attr_.data_turn_id_, set_task_attr_.task_id_, finish_build_index))) {
-        LOG_WARN("[DATA_BACKUP]failed to wait build index", K(ret), K(set_task_attr_), K(*build_index_attr));
+        LOG_WARN("[DATA_BACKUP]failed to wait build index", K(ret), K(set_task_attr_), KPC(build_index_attr));
       } else if (!finish_build_index) {
       } else if (OB_FAIL(check_change_task_turn_(ls_task, need_change_turn, tablets_to_ls, new_ls_array))) {
         LOG_WARN("[DATA_BACKUP]failed to check change task turn", K(ret), K(set_task_attr_));
@@ -996,7 +996,7 @@ int ObBackupSetTaskMgr::update_inner_task_(
   // TODO use another error code to determine change turn in 4.1
     } else if (OB_FAIL(ObBackupDataLSTaskMgr::redo_ls_task(
         *lease_service_, trans_, *ls_attr, ls_attr->start_turn_id_, set_task_attr_.data_turn_id_, 0/*retry_id*/))) {
-      LOG_WARN("[DATA_BACKUP]failed to update ls task result to success", K(ret), K(*ls_attr));
+      LOG_WARN("[DATA_BACKUP]failed to update ls task result to success", K(ret), KPC(ls_attr));
     }
   } 
   ObBackupDataTaskType type;
@@ -1076,7 +1076,7 @@ int ObBackupSetTaskMgr::build_index_(
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("[DATA_BACKUP]unexpected err", K(ret), K(*build_index_attr));
+    LOG_WARN("[DATA_BACKUP]unexpected err", K(ret), KPC(build_index_attr));
   }
   return ret;
 }
@@ -1503,15 +1503,15 @@ int ObBackupSetTaskMgr::write_extern_infos()
       (ObExternBackupSetInfoDesc, backup_set_info)) {
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(write_extern_locality_info_(locality_info))) {
-      LOG_WARN("[DATA_BACKUP]failed to write extern tenant locality info", K(ret), K(*job_attr_));
+      LOG_WARN("[DATA_BACKUP]failed to write extern tenant locality info", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(write_backup_set_info_(set_task_attr_, backup_set_info))) { 
-      LOG_WARN("[DATA_BACKUP]failed to write backup set info", K(ret), K(*job_attr_));
+      LOG_WARN("[DATA_BACKUP]failed to write backup set info", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(write_tenant_backup_set_infos_())) {
       LOG_WARN("[DATA_BACKUP]failed to write tenant backup set infos", K(ret));
     } else if (OB_FAIL(write_extern_diagnose_info_(locality_info, backup_set_info))) { // 
-      LOG_WARN("[DATA_BACKUP]failed to write extern tenant diagnose info", K(ret), K(*job_attr_));
+      LOG_WARN("[DATA_BACKUP]failed to write extern tenant diagnose info", K(ret), KPC(job_attr_));
     } else if (OB_FAIL(write_backup_set_placeholder(false/*finish job*/))) {
-      LOG_WARN("[DATA_BACKUP]failed to write backup set finish placeholder", K(ret), K(*job_attr_));
+      LOG_WARN("[DATA_BACKUP]failed to write backup set finish placeholder", K(ret), KPC(job_attr_));
     } 
   }
   return ret;
@@ -1527,12 +1527,12 @@ int ObBackupSetTaskMgr::write_backup_set_info_(
   ObBackupSetFileDesc &backup_set_file = backup_set_info.backup_set_file_;
   ObBackupDest backup_dest;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_, set_task_attr.backup_path_, backup_dest))) {
-    LOG_WARN("[DATA_BACKUP]fail to get backup dest", K(ret), K(*job_attr_)); 
+    LOG_WARN("[DATA_BACKUP]fail to get backup dest", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, job_attr_->tenant_id_, backup_dest, dest_id))) {
-    LOG_WARN("[DATA_BACKUP]failed to get dest id", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to get dest id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(*sql_proxy_, false/*for update*/, job_attr_->backup_set_id_, job_attr_->incarnation_id_, 
       job_attr_->tenant_id_, dest_id, backup_set_file))) {
-    LOG_WARN("[DATA_BACKUP]failed to get backup set", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to get backup set", K(ret), KPC(job_attr_));
   } else if (cluster_version != backup_set_file.tenant_compatible_) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("[DATA_BACKUP]when cluster_version change, backup can't continue", K(ret), K(cluster_version), K(backup_set_file.tenant_compatible_));
@@ -1663,7 +1663,7 @@ int ObBackupSetTaskMgr::write_tenant_backup_set_infos_()
   int ret = OB_SUCCESS;
   share::ObTenantBackupSetInfosDesc tenant_backup_set_infos;
   if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_files(*sql_proxy_, job_attr_->tenant_id_, tenant_backup_set_infos))) {
-    LOG_WARN("[DATA_BACKUP]failed to get backup set", K(ret), K(*job_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to get backup set", K(ret), KPC(job_attr_));
   } else if (!tenant_backup_set_infos.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tenant backup set infos", K(ret), K(tenant_backup_set_infos));
@@ -1685,12 +1685,12 @@ int ObBackupSetTaskMgr::set_backup_set_files_failed_(ObMySQLTransaction &trans)
   ObBackupSetFileDesc backup_set_file;
   ObBackupDest backup_dest;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(trans, job_attr_->tenant_id_, set_task_attr_.backup_path_, backup_dest))) {
-    LOG_WARN("fail to get backup dest", K(ret), K(*job_attr_)); 
+    LOG_WARN("fail to get backup dest", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(trans, job_attr_->tenant_id_, backup_dest, dest_id))) {
-    LOG_WARN("failed to get dest id", K(ret), K(*job_attr_));
+    LOG_WARN("failed to get dest id", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(ObBackupSetFileOperator::get_backup_set_file(trans, true/*for update*/, job_attr_->backup_set_id_, job_attr_->incarnation_id_, 
       job_attr_->tenant_id_, dest_id, backup_set_file))) {
-    LOG_WARN("failed to get backup set", K(ret), K(*job_attr_));
+    LOG_WARN("failed to get backup set", K(ret), KPC(job_attr_));
   } else {
     backup_set_file.backup_set_id_ = job_attr_->backup_set_id_;
     backup_set_file.incarnation_ = job_attr_->incarnation_id_;
