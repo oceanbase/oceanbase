@@ -14,7 +14,7 @@
 #include <thread>
 #include <vector>
 
-#include "share/lock/ob_qsync_lock.h"
+#include "lib/lock/ob_qsync_lock.h"
 #include "lib/time/ob_time_utility.h"
 
 namespace oceanbase

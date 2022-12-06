@@ -234,7 +234,6 @@ ob_set_subtarget(ob_share common_mixed
   system_variable/ob_system_variable_init.cpp
   table/ob_table.cpp
   table/ob_table_rpc_struct.cpp
-  lock/ob_qsync_lock.cpp
 )
 
 ob_set_subtarget(ob_share tablet

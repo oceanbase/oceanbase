@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2021, 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -18,6 +18,13 @@
 namespace obutil
 {
 template<class T> class ObMonitor;
+
+/**
+ * A wrapper class of pthread condition that implements a condition variable.
+ * @note The condition variable itself is not thread safe and should be protected
+ * by a mutex.
+ * See also ObThreadCond which is suitable for most situations.
+ */
 class ObUtilMutex;
 typedef ObUtilMutex Mutex;
 class Cond
