@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_STORAGE_OB_CHECKPOINT_EXECUTOR_H_
 #define OCEANBASE_STORAGE_OB_CHECKPOINT_EXECUTOR_H_
 
-#include "lib/lock/ob_spin_lock.h"
+#include "lib/lock/ob_spin_rwlock.h"           // SpinRWLock
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
 #include "share/scn.h"
@@ -89,7 +89,10 @@ private:
   // be used to avoid checkpoint concurrently,
   // no need to protect handlers_[] because ls won't be destroyed(hold lshandle)
   // when the public interfaces are invoked
-  mutable common::ObSpinLock lock_;
+  typedef common::SpinRWLock RWLock;
+  typedef common::SpinRLockGuard  RLockGuard;
+  typedef common::SpinWLockGuard  WLockGuard;
+  RWLock rwlock_;
 
   bool update_checkpoint_enabled_;
 };
