@@ -29,6 +29,7 @@ ObAllVirtualMinorFreezeInfo::ObAllVirtualMinorFreezeInfo()
     addr_(),
     ls_id_(share::ObLSID::INVALID_LS_ID),
     ls_iter_guard_(),
+    diagnose_info_(),
     memtables_info_()
 {
 }
@@ -44,6 +45,7 @@ void ObAllVirtualMinorFreezeInfo::reset()
   addr_.reset();
   ls_id_ = share::ObLSID::INVALID_LS_ID;
   ls_iter_guard_.reset();
+  diagnose_info_.reset();
   memtables_info_.reset();
   memset(ip_buf_, 0, common::OB_IP_STR_BUFF);
   memset(memtables_info_string_, 0, OB_MAX_CHAR_LENGTH);
@@ -54,6 +56,7 @@ void ObAllVirtualMinorFreezeInfo::release_last_tenant()
 {
   ls_id_ = share::ObLSID::INVALID_LS_ID;
   ls_iter_guard_.reset();
+  diagnose_info_.reset();
   memtables_info_.reset();
   memset(memtables_info_string_, 0, OB_MAX_CHAR_LENGTH);
 }
@@ -205,8 +208,10 @@ int ObAllVirtualMinorFreezeInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 12:
           // diagnose_info
-          cur_row_.cells_[i].set_varchar(freeze_stat.diagnose_info_.get_ob_string());
-          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          if (OB_SUCC(freeze_stat.get_diagnose_info(diagnose_info_))) {
+            cur_row_.cells_[i].set_varchar(diagnose_info_.get_ob_string());
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
           break;
         case OB_APP_MIN_COLUMN_ID + 13:
           // memtables_info
@@ -255,7 +260,7 @@ int ObAllVirtualMinorFreezeInfo::generate_memtables_info()
       strcat(memtables_info_string_, ", unsubmitted_cnt:");
       strcat(memtables_info_string_, to_cstring(memtables_info_[i].unsubmitted_cnt_));
       // unsynced_cnt
-      strcat(memtables_info_string_, ", unsubmitted_cnt:");
+      strcat(memtables_info_string_, ", unsynced_cnt:");
       strcat(memtables_info_string_, to_cstring(memtables_info_[i].unsynced_cnt_));
       // current_right_boundary
       strcat(memtables_info_string_, ", current_right_boundary:");

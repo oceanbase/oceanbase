@@ -193,6 +193,18 @@ void ObFreezerStat::add_diagnose_info(const ObString &str)
   diagnose_info_.assign(str);
 }
 
+int ObFreezerStat::get_diagnose_info(ObStringHolder &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+
+  ObSpinLockGuard guard(diagnose_info_lock_);
+  if (OB_FAIL(diagnose_info.assign(diagnose_info_))) {
+    TRANS_LOG(WARN, "fail to assign diagnose_info", K(ret));
+  }
+
+  return ret;
+}
+
 ObFreezer::ObFreezer()
   : freeze_flag_(0),
     freeze_snapshot_version_(),

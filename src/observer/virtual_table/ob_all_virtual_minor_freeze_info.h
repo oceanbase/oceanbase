@@ -51,6 +51,7 @@ private:
   int64_t ls_id_;
   ObSharedGuard<storage::ObLSIterator> ls_iter_guard_;
   char ip_buf_[common::OB_IP_STR_BUFF];
+  ObStringHolder diagnose_info_;
   common::ObSArray<ObFrozenMemtableInfo> memtables_info_;
   char memtables_info_string_[OB_MAX_CHAR_LENGTH];
 private:
