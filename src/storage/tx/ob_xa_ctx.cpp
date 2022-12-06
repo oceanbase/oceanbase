@@ -2115,7 +2115,8 @@ int ObXACtx::try_heartbeat()
   const int64_t now = ObTimeUtility::current_time();
   if (original_sche_addr_ != GCTX.self_addr()) {
     // temproray scheduler, do nothing
-  } else if (OB_ISNULL(xa_branch_info_) && xa_trans_state_ > ObXATransState::IDLE) {
+  } else if (OB_ISNULL(xa_branch_info_)
+      && (ObXATransState::IDLE < xa_trans_state_ || ObXATransState::UNKNOWN == xa_trans_state_)) {
     // do nothing
   } else if (OB_ISNULL(xa_branch_info_)) {
     ret = OB_ERR_UNEXPECTED;
