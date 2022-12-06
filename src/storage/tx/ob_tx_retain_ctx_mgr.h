@@ -122,7 +122,10 @@ public:
 
   void try_advance_retain_ctx_gc(share::ObLSID ls_id);
 
-  TO_STRING_KV(K(retain_ctx_list_.size()));
+  TO_STRING_KV(K(retain_ctx_list_.size()),
+               K(max_wait_ckpt_ts_),
+               K(last_push_gc_task_ts_),
+               K(skip_remove_cnt_));
 
 private:
   int remove_ctx_func_(RetainCtxList::iterator remove_iter);

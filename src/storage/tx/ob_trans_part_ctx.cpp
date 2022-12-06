@@ -5895,11 +5895,11 @@ int ObPartTransCtx::insert_into_retain_ctx_mgr_(RetainCause cause,
     retain_lock_timeout = 10 * 1000;
   }
 
+  ObTxRetainCtxMgr &retain_ctx_mgr = ls_tx_ctx_mgr_->get_retain_ctx_mgr();
   if (OB_ISNULL(ls_tx_ctx_mgr_) || RetainCause::UNKOWN == cause) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(cause), KP(ls_tx_ctx_mgr_), KPC(this));
   } else {
-    ObTxRetainCtxMgr &retain_ctx_mgr = ls_tx_ctx_mgr_->get_retain_ctx_mgr();
 
     if (OB_ISNULL(retain_func_ptr = static_cast<ObMDSRetainCtxFunctor *>(
                       retain_ctx_mgr.alloc_object((sizeof(ObMDSRetainCtxFunctor)))))) {
@@ -5915,12 +5915,18 @@ int ObPartTransCtx::insert_into_retain_ctx_mgr_(RetainCause cause,
     // if (OB_FAIL(retain_ctx_mgr.reset()))
   }
 
-  if (OB_FAIL(ret) && !(OB_EAGAIN == ret && for_replay)) {
-    TRANS_LOG(ERROR, "insert into retain_ctx_mgr error, retain ctx will not deleted from ctx_mgr",
-              K(ret), KPC(this));
-    // ob_abort();
+  if (OB_FAIL(ret)) {
+    clean_retain_cause_();
+    if (retain_func_ptr != nullptr) {
+      retain_ctx_mgr.free_object(retain_func_ptr);
+      retain_func_ptr = nullptr;
+    }
+    if (!(OB_EAGAIN == ret && for_replay)) {
+      TRANS_LOG(ERROR, "insert into retain_ctx_mgr error, retain ctx will not deleted from ctx_mgr",
+                K(ret), KPC(this));
+      // ob_abort();
+    }
   }
-
   return ret;
 }
 
