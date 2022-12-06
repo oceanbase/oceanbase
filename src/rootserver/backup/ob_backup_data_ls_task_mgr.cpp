@@ -84,11 +84,11 @@ int ObBackupDataLSTaskMgr::process(int64_t &finish_cnt)
     ret = OB_NOT_INIT;
     LOG_WARN("[DATA_BACKUP]not init", K(ret));
   } else {
-    FLOG_INFO("[DATA_BACKUP]schedule backup ls task", K(*ls_attr_));
+    FLOG_INFO("[DATA_BACKUP]schedule backup ls task", KPC(ls_attr_));
     switch (ls_attr_->status_.status_) {
       case ObBackupTaskStatus::Status::INIT: {
         if (OB_FAIL(gen_and_add_task_())) {
-          LOG_WARN("[DATA_BACKUP]failed to gen and add task into task schedulers", K(ret), K(*ls_attr_));
+          LOG_WARN("[DATA_BACKUP]failed to gen and add task into task schedulers", K(ret), KPC(ls_attr_));
         }
         break;
       }
@@ -97,13 +97,13 @@ int ObBackupDataLSTaskMgr::process(int64_t &finish_cnt)
         break;
       case ObBackupTaskStatus::Status::FINISH: {
         if (OB_FAIL(finish_(finish_cnt))) {
-          LOG_WARN("[DATA_BACKUP]failed to finish task", K(ret), K(*ls_attr_));
+          LOG_WARN("[DATA_BACKUP]failed to finish task", K(ret), KPC(ls_attr_));
         }
         break;
       }
       default: {
         ret = OB_ERR_SYS;
-        LOG_ERROR("[DATA_BACKUP]unknown backup task status", K(ret), K(*ls_attr_));
+        LOG_ERROR("[DATA_BACKUP]unknown backup task status", K(ret), KPC(ls_attr_));
       }
     }
   }
@@ -127,31 +127,31 @@ int ObBackupDataLSTaskMgr::gen_and_add_task_()
 #endif
       }
       if (OB_FAIL(gen_and_add_backup_data_task_())) {
-        LOG_WARN("[DATA_BACKUP]failed to gen and add backup data task", K(ret), K(*ls_attr_));
+        LOG_WARN("[DATA_BACKUP]failed to gen and add backup data task", K(ret), KPC(ls_attr_));
       }
       break;
     }
     case ObBackupDataTaskType::Type::BACKUP_PLUS_ARCHIVE_LOG: {
       if (OB_FAIL(gen_and_add_backup_compl_log_())) {
-        LOG_WARN("[DATA_BACKUP]failed to gen and add backup complement task", K(ret), K(*ls_attr_));
+        LOG_WARN("[DATA_BACKUP]failed to gen and add backup complement task", K(ret), KPC(ls_attr_));
       }
       break;
     }
     case ObBackupDataTaskType::Type::BACKUP_BUILD_INDEX: {
       if (OB_FAIL(gen_and_add_build_index_task_())) {
-        LOG_WARN("[DATA_BACKUP]failed to gen and add build index task", K(ret), K(*ls_attr_));
+        LOG_WARN("[DATA_BACKUP]failed to gen and add build index task", K(ret), KPC(ls_attr_));
       }
       break;
     }
     case ObBackupDataTaskType::Type::BACKUP_META: {
       if (OB_FAIL(gen_and_add_backup_meta_task_())) {
-        LOG_WARN("[DATA_BACKUP]failed to gen and add build index task", K(ret), K(*ls_attr_));
+        LOG_WARN("[DATA_BACKUP]failed to gen and add build index task", K(ret), KPC(ls_attr_));
       }
       break;
     }
     default: {
       ret = OB_ERR_SYS;
-      LOG_ERROR("[DATA_BACKUP]unknown backup ls task type", K(ret), K(*ls_attr_));
+      LOG_ERROR("[DATA_BACKUP]unknown backup ls task type", K(ret), KPC(ls_attr_));
     }
   }
   return ret;
@@ -194,11 +194,11 @@ int ObBackupDataLSTaskMgr::gen_and_add_backup_meta_task_()
       LOG_WARN("fail to advance ls task status to finish", K(ret));
     }
   } else if (OB_FAIL(task.build(*job_attr_, *set_task_attr_, *ls_attr_))) {
-    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(*job_attr_), K(*set_task_attr_), K(*ls_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), KPC(job_attr_), KPC(set_task_attr_), KPC(ls_attr_));
   } else if (OB_FAIL(advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), K(*ls_attr_), K(next_status));
+    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), KPC(ls_attr_), K(next_status));
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
-    LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), K(*job_attr_), K(task));
+    LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), KPC(job_attr_), K(task));
   } 
   return ret;
 }
@@ -221,11 +221,11 @@ int ObBackupDataLSTaskMgr::gen_and_add_backup_data_task_()
       LOG_WARN("fail to advance ls task status to finish", K(ret));
     }
   } else if (OB_FAIL(task.build(*job_attr_, *set_task_attr_, *ls_attr_))) {
-    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(*job_attr_), K(*set_task_attr_), K(*ls_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), KPC(job_attr_), KPC(set_task_attr_), KPC(ls_attr_));
   } else if (OB_FAIL(advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), K(*ls_attr_), K(next_status));
+    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), KPC(ls_attr_), K(next_status));
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
-    LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), K(*job_attr_), K(task));
+    LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), KPC(job_attr_), K(task));
   }
   return ret;
 }
@@ -239,11 +239,11 @@ int ObBackupDataLSTaskMgr::gen_and_add_backup_compl_log_()
   ObBackupTaskStatus next_status;
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   if (OB_FAIL(task.build(*job_attr_, *set_task_attr_, *ls_attr_))) {
-    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(*job_attr_), K(*set_task_attr_), K(*ls_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), KPC(job_attr_), KPC(set_task_attr_), KPC(ls_attr_));
   } else if (OB_FAIL(advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), K(*ls_attr_), K(next_status));
+    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), KPC(ls_attr_), K(next_status));
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
-    LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), K(*ls_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), KPC(ls_attr_));
   }
   return ret;
 }
@@ -257,11 +257,11 @@ int ObBackupDataLSTaskMgr::gen_and_add_build_index_task_()
   ObBackupTaskStatus next_status;
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   if (OB_FAIL(task.build(*job_attr_, *set_task_attr_, *ls_attr_))) {
-    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(*job_attr_), K(*set_task_attr_), K(*ls_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), KPC(job_attr_), KPC(set_task_attr_), KPC(ls_attr_));
   } else if (OB_FAIL(advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), K(*ls_attr_), K(next_status));
+    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), KPC(ls_attr_), K(next_status));
   } else if (OB_FAIL(task_scheduler_->add_task(task))) {
-    LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), K(*ls_attr_));
+    LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), KPC(ls_attr_));
   }
   return ret;
 }
@@ -396,7 +396,7 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
       } else {
         if (OB_FAIL(redo_ls_task(*lease_service_, trans, *ls_attr_, ls_attr_->start_turn_id_, 
           ls_attr_->turn_id_, next_retry_id))) {
-            LOG_WARN("[DATA_BACKUP]failed to redo ls task", K(ret), K(*ls_attr_));
+            LOG_WARN("[DATA_BACKUP]failed to redo ls task", K(ret), KPC(ls_attr_));
         } 
         if (OB_SUCC(ret)) {
           if (OB_FAIL(trans.end(true))) {
@@ -415,7 +415,7 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
       }
     } else {
       ret = ls_attr_->result_;
-      LOG_WARN("ls task failed, backup can't not continue", K(ret), K(*ls_attr_));
+      LOG_WARN("ls task failed, backup can't not continue", K(ret), KPC(ls_attr_));
     }
   }
   return ret;
@@ -491,13 +491,13 @@ int ObBackupDataLSTaskMgr::cancel(int64_t &finish_cnt)
       if (ret == OB_ENTRY_NOT_EXIST) {
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("[DATA_BACKUP]failed to cancel task", K(ret), K(*ls_attr_));
+        LOG_WARN("[DATA_BACKUP]failed to cancel task", K(ret), KPC(ls_attr_));
       }
     }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(advance_status(*lease_service_, *sql_proxy_, *ls_attr_, next_status, OB_CANCELED, end_ts))) {
-    LOG_WARN("[DATA_BACKUP]failed to advance status", K(ret), K(*ls_attr_), K(next_status));
+    LOG_WARN("[DATA_BACKUP]failed to advance status", K(ret), KPC(ls_attr_), K(next_status));
   } else {
     ++finish_cnt;
   }
