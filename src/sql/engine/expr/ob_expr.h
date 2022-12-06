@@ -794,6 +794,8 @@ public:
 
   OB_INLINE void set_meta(const ObDatumMeta &meta)
   {
+    accuracy_.scale_ = meta.scale_;
+    accuracy_.precision_ = meta.precision_;
     meta_ = meta;
   }
   // accuracy.
