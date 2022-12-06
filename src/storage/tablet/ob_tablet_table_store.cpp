@@ -528,6 +528,10 @@ int ObTabletTableStore::calculate_read_tables(
         LOG_WARN("no base table found for specific version",
                  K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
       }
+    } else if (!major_tables_.empty()) {
+      ret = OB_SNAPSHOT_DISCARDED;
+      LOG_WARN("exist major table, allow_no_ready_read can not be true",
+               K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
     } else if (!minor_tables_.empty() && OB_FAIL(iterator.add_tables(minor_tables_.array_, minor_tables_.count_))) {
       LOG_WARN("failed to add all minor tables to iterator", K(ret));
     } else {
