@@ -331,6 +331,7 @@ OB_DEF_SERIALIZE(ObRemoteTask)
   for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
     OB_UNIS_ENCODE(ps_params->at(i).get_param_flag());
   }
+  OB_UNIS_ENCODE(remote_sql_info_->is_original_ps_mode_);
   return ret;
 }
 
@@ -367,6 +368,7 @@ OB_DEF_SERIALIZE_SIZE(ObRemoteTask)
     for (int64_t i = 0; i < param_meta_count; ++i) {
       OB_UNIS_ADD_LEN(ps_params->at(i).get_param_flag());
     }
+    OB_UNIS_ADD_LEN(remote_sql_info_->is_original_ps_mode_);
   }
   return len;
 }
@@ -429,6 +431,7 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
         }
       }
     }
+    OB_UNIS_DECODE(remote_sql_info_->is_original_ps_mode_);
   }
   return ret;
 }

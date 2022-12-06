@@ -53,6 +53,7 @@ struct ObRemoteSqlInfo
   ObRemoteSqlInfo() :
     use_ps_(false),
     is_batched_stmt_(false),
+    is_original_ps_mode_(false),
     ps_param_cnt_(0),
     remote_sql_(),
     ps_params_(nullptr)
@@ -63,6 +64,7 @@ struct ObRemoteSqlInfo
 
   bool use_ps_;
   bool is_batched_stmt_;
+  bool is_original_ps_mode_;
   int32_t ps_param_cnt_;
   common::ObString remote_sql_;
   ParamStore *ps_params_;

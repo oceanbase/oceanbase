@@ -35,6 +35,7 @@ DEF_TO_STRING(ObRemoteSqlInfo)
   J_OBJ_START();
   J_KV(K_(use_ps),
        K_(is_batched_stmt),
+       K_(is_original_ps_mode),
        K_(ps_param_cnt),
        K_(remote_sql));
   J_COMMA();
