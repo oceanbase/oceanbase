@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2021, 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -10,11 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/lock/ob_qsync_lock.h"
+#include "ob_qsync_lock.h"
 
 namespace oceanbase
 {
-namespace share
+namespace common
 {
 int ObQSyncLock::init(const lib::ObMemAttr &mem_attr)
 {

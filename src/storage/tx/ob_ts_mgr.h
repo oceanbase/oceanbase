@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2021, 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -23,7 +23,7 @@
 #include "lib/container/ob_iarray.h"
 #include "share/ob_errno.h"
 #include "share/ob_thread_pool.h"
-#include "share/lock/ob_qsync_lock.h"
+#include "lib/lock/ob_qsync_lock.h"
 #include "ob_gts_source.h"
 #include "ob_gts_define.h"
 #include "ob_ts_worker.h"
@@ -174,7 +174,7 @@ private:
   ObITsSource *ts_source_[MAX_TS_SOURCE];
   int cur_ts_type_;
   ObGtsSource gts_source_;
-  mutable share::ObQSyncLock rwlock_;
+  mutable common::ObQSyncLock rwlock_;
   int64_t last_access_ts_ CACHE_ALIGNED;
 };
 
@@ -408,7 +408,7 @@ private:
   ObLocationAdapter *location_adapter_;
   ObLocationAdapter location_adapter_def_;
   ObTsWorker ts_worker_;
-  share::ObQSyncLock lock_;
+  common::ObQSyncLock lock_;
   ObTsSourceInfo *ts_source_infos_[TS_SOURCE_INFO_CACHE_NUM];
 };
 

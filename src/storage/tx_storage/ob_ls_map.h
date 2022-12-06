@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2021, 2022 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -16,7 +16,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"
 #include "lib/container/ob_iarray.h"
-#include "share/lock/ob_qsync_lock.h"
+#include "lib/lock/ob_qsync_lock.h"
 #include "storage/ls/ob_ls.h"
 #include "share/leak_checker/obj_leak_checker.h"
 
@@ -77,7 +77,7 @@ private:
   int64_t ls_cnt_;
   ObLS **ls_buckets_;
   const static int64_t BUCKETS_CNT = 1 << 8;
-  share::ObQSyncLock *buckets_lock_;
+  common::ObQSyncLock *buckets_lock_;
 };
 
 //iterate all lss
@@ -129,7 +129,7 @@ int ObLSMap::operate_ls(const share::ObLSID &ls_id,
   } else {
     const int64_t pos = ls_id.hash() % BUCKETS_CNT;
     ObLS *ls = ls_buckets_[pos];
-    share::ObQSyncLockReadGuard bucket_guard(buckets_lock_[pos]);
+    common::ObQSyncLockReadGuard bucket_guard(buckets_lock_[pos]);
     while (OB_NOT_NULL(ls)) {
       if (ls->get_ls_id() == ls_id) {
         break;
