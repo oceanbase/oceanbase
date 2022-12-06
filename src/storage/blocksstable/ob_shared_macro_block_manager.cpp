@@ -560,7 +560,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
     } else if (OB_UNLIKELY(new_sstable->get_key() != old_sstable.get_key())
         || OB_FAIL(ObSSTableMetaChecker::check_sstable_meta_strict_equality(old_sstable.get_meta(), new_sstable->get_meta()))) {
       ret = OB_INVALID_DATA;
-      LOG_WARN("new sstable is not equal to old sstable", K(ret), K(new_sstable->get_key()), K(old_sstable.get_key()));
+      LOG_WARN("new sstable is not equal to old sstable", K(ret), KPC(new_sstable), K(old_sstable));
     }
   }
 
