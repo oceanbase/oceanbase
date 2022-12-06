@@ -1166,7 +1166,7 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
   return ret;
 }
 
-int ObLS::logstream_freeze()
+int ObLS::logstream_freeze(bool is_tenant_freeze)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
@@ -1181,7 +1181,7 @@ int ObLS::logstream_freeze()
   } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
-  } else if (OB_FAIL(ls_freezer_.logstream_freeze())) {
+  } else if (OB_FAIL(ls_freezer_.logstream_freeze(is_tenant_freeze))) {
     LOG_WARN("logstream freeze failed", K(ret), K_(ls_meta));
   } else {
     // do nothing

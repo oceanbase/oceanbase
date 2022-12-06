@@ -194,7 +194,7 @@ public:
 
 public:
   /* freeze */
-  int logstream_freeze();
+  int logstream_freeze(bool is_tenant_freeze=false);
   int tablet_freeze(const ObTabletID &tablet_id);
   int force_tablet_freeze(const ObTabletID &tablet_id);
   int tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id, memtable::ObIMemtable *&imemtable);
@@ -239,6 +239,8 @@ public:
   ObFreezerStat& get_stat() { return stat_; }
   bool need_resubmit_log() { return ATOMIC_LOAD(&need_resubmit_log_); }
   void set_need_resubmit_log(bool flag) { return ATOMIC_STORE(&need_resubmit_log_, flag); }
+  bool is_ready_for_flush();
+  void set_ready_for_flush(bool ready_for_flush);
 
 private:
   class ObLSFreezeGuard
@@ -269,11 +271,11 @@ private:
   void undo_freeze_();
 
   /* inner subfunctions for freeze process */
-  int inner_logstream_freeze();
+  int inner_logstream_freeze(bool is_tenant_freeze);
   int submit_log_for_freeze();
-  void ls_freeze_task();
+  void ls_freeze_task(bool is_tenant_freeze);
   int tablet_freeze_task(memtable::ObIMemtable *imemtable);
-  int submit_freeze_task(bool is_ls_freeze, memtable::ObIMemtable *imemtable = nullptr);
+  int submit_freeze_task(bool is_ls_freeze, bool is_tenant_freeze, memtable::ObIMemtable *imemtable = nullptr);
   void wait_memtable_ready_for_flush(memtable::ObMemtable *memtable);
   int wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *memtable);
   int handle_memtable_for_tablet_freeze(memtable::ObIMemtable *imemtable);
@@ -307,6 +309,7 @@ private:
 
   bool need_resubmit_log_;
   bool enable_;                     // whether we can do freeze now
+  bool ready_for_flush_;
 
   bool is_inited_;
 };

@@ -199,13 +199,18 @@ int ObTenantFreezer::ls_freeze_(ObLS *ls)
   // wait if there is a freeze is doing
   do {
     retry_times++;
-    if (OB_FAIL(ls->logstream_freeze()) && OB_ENTRY_EXIST == ret) {
+    if (OB_FAIL(ls->logstream_freeze(true/*is_tenant_freeze*/)) && OB_ENTRY_EXIST == ret) {
       ob_usleep(SLEEP_TS);
     }
     if (retry_times % 10 == 0) {
       LOG_WARN("wait ls freeze finished cost too much time", K(retry_times));
     }
   } while (ret == OB_ENTRY_EXIST);
+  if (OB_SUCC(ret)) {
+    while (!ls->get_freezer()->is_ready_for_flush()) {
+      ob_usleep(100);
+    }
+  }
   return ret;
 }
 
