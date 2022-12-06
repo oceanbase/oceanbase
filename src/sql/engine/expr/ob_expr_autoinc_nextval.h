@@ -43,7 +43,7 @@ private:
       share::AutoincParam* autoinc_param, ObPhysicalPlanCtx* plan_ctx);
 
   // get the input value && check need generate
-  static int get_input_value(const ObExpr& input_expr, ObEvalCtx& ctx, ObDatum* input_value,
+  static int get_input_value(const ObExpr& expr, ObEvalCtx& ctx, ObDatum* input_value,
       share::AutoincParam& autoinc_param, bool& is_to_generate, uint64_t& casted_value);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprAutoincNextval);

@@ -259,7 +259,7 @@ int ObExprAutoincNextval::get_uint_value(
   return ret;
 }
 
-int ObExprAutoincNextval::get_input_value(const ObExpr& input_expr, ObEvalCtx& ctx, ObDatum* input_value,
+int ObExprAutoincNextval::get_input_value(const ObExpr& expr, ObEvalCtx& ctx, ObDatum* input_value,
     share::AutoincParam& autoinc_param, bool& is_to_generate, uint64_t& casted_value)
 {
   int ret = OB_SUCCESS;
@@ -267,8 +267,13 @@ int ObExprAutoincNextval::get_input_value(const ObExpr& input_expr, ObEvalCtx& c
     is_to_generate = true;
   } else {
     bool is_zero = false;
-    if (OB_FAIL(get_uint_value(input_expr, input_value, is_zero, casted_value))) {
-      LOG_WARN("get casted unsigned int value failed", K(ret));
+    if (expr.arg_cnt_ == 2) {
+      if (OB_ISNULL(expr.args_[1])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr.args_ is null", K(ret));
+      } else if (OB_FAIL(get_uint_value(*expr.args_[1], input_value, is_zero, casted_value))) {
+        LOG_WARN("get casted unsigned int value failed", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
       if (!(SMO_NO_AUTO_VALUE_ON_ZERO & ctx.exec_ctx_.get_my_session()->get_sql_mode())) {
@@ -393,7 +398,7 @@ int ObExprAutoincNextval::eval_nextval(const ObExpr& expr, ObEvalCtx& ctx, ObDat
     uint64_t new_val = 0;
     if (OB_SUCC(ret)) {
       // check : to generate auto-increment value or not
-      if (OB_FAIL(get_input_value(*expr.args_[1], ctx, input_value, *autoinc_param, is_to_generate, new_val))) {
+      if (OB_FAIL(get_input_value(expr, ctx, input_value, *autoinc_param, is_to_generate, new_val))) {
         LOG_WARN("check generation failed", K(ret));
       } else if (is_to_generate && OB_FAIL(generate_autoinc_value(new_val, auto_service, autoinc_param, plan_ctx))) {
         LOG_WARN("generate autoinc value failed", K(ret));
