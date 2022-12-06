@@ -794,8 +794,9 @@ int ObTablet::save_multi_source_data_unit(
       TRANS_LOG(WARN, "failed to save multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn), K(ref_op));
     }
   }
-  // for tx_end, binding_info must be prepared after tablet_state is prepared
-  else if (memtable::MultiSourceDataUnitType::TABLET_BINDING_INFO == msd->type()) {
+  // for tx_end(inf_ref), binding_info must be prepared after tablet_state is prepared
+  else if (memtable::MemtableRefOp::INC_REF == ref_op
+           && memtable::MultiSourceDataUnitType::TABLET_BINDING_INFO == msd->type()) {
     memtable::ObMemtable *memtable = nullptr;
     if (OB_FAIL(memtable_mgr_->get_memtable_for_multi_source_data_unit(memtable, memtable::MultiSourceDataUnitType::TABLET_TX_DATA))) {
       TRANS_LOG(WARN, "failed to get multi source data unit", K(ret), K(ls_id), K(tablet_id), K(memtable_scn));
