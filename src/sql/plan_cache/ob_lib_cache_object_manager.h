@@ -30,7 +30,7 @@ class ObLCObjectManager
 public:
   typedef common::hash::ObHashMap<ObCacheObjID, ObILibCacheObject*> IdCacheObjectMap;
   
-  ObLCObjectManager() {}
+  ObLCObjectManager() : object_id_(0) {}
   int init(int64_t hash_bucket, uint64_t tenant_id);
   int alloc(ObCacheObjGuard& guard,
             ObLibCacheNameSpace ns,
