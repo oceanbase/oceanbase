@@ -156,6 +156,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
   memtable::ObMemtable *active_memtable = nullptr;
   uint32_t memtable_freeze_clock = UINT32_MAX;
   const share::ObLSID ls_id = ls_->get_ls_id();
+  SCN new_clog_checkpoint_scn;
   if (has_memtable && OB_NOT_NULL(active_memtable = get_active_memtable_())) {
     memtable_freeze_clock = active_memtable->get_freeze_clock();
   }
@@ -175,6 +176,11 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
                K(get_memtable_count_()),
                KPC(first_frozen_memtable.get_table()));
     }
+  } else if (OB_FAIL(get_newest_clog_checkpoint_scn(new_clog_checkpoint_scn))) {
+    LOG_WARN("failed to get newest clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id_), K(new_clog_checkpoint_scn));
+  } else if (for_replay && clog_checkpoint_scn != new_clog_checkpoint_scn) {
+    ret = OB_EAGAIN;
+    LOG_INFO("clog_checkpoint_scn changed, need retry to replay", K(ls_id), K(tablet_id_), K(clog_checkpoint_scn), K(new_clog_checkpoint_scn));
   } else {
     ObITable::TableKey table_key;
     table_key.table_type_ = ObITable::DATA_MEMTABLE;
@@ -198,8 +204,6 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
       LOG_WARN("failed to init memtable", K(ret), K(ls_id), K(table_key), KP(freezer_), KP(this),
                K(schema_version), K(logstream_freeze_clock));
     } else {
-      SCN new_clog_checkpoint_scn;
-      SCN new_snapshot_version;
       memtable::ObMemtable *last_frozen_memtable = get_last_frozen_memtable_();
       if (OB_NOT_NULL(last_frozen_memtable)) {
         // keep the check order: is_frozen, write_ref_cnt, then unsubmitted_cnt and unsynced_cnt
@@ -227,11 +231,6 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
       // there is no frozen memtable and new sstable will not be generated,
       // meaning that clog_checkpoint_scn will not be updated now,
       // so get newest clog_checkpoint_scn to set left boundary
-      } else if (OB_FAIL(get_newest_clog_checkpoint_scn(new_clog_checkpoint_scn))){
-        LOG_WARN("failed to get newest clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id_),
-                 K(new_clog_checkpoint_scn));
-      } else if (OB_FAIL(get_newest_snapshot_version(new_snapshot_version))){
-        LOG_WARN("failed to get newest snapshot_version", K(ret), K(ls_id), K(tablet_id_), K(new_snapshot_version));
       } else {
         memtable->resolve_left_boundary(new_clog_checkpoint_scn);
       }
