@@ -142,7 +142,6 @@ int ObSSTableSecMetaIterator::open(
 
     if (OB_FAIL(ret) || is_prefetch_end_) {
     } else if (OB_UNLIKELY(start_key_beyond_range)) {
-      ret = OB_BEYOND_THE_RANGE;
       set_iter_end();
     }
   }
@@ -189,7 +188,7 @@ int ObSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             LOG_WARN("Fail to open next micro block", K(ret));
           }
-        } else if (is_data_block && OB_FAIL(open_data_root_block())) {
+        } else if (is_data_block && OB_FAIL(open_meta_root_block())) {
           LOG_WARN("Fail to open data root block", K(ret));
         }
       }
@@ -330,7 +329,7 @@ int ObSSTableSecMetaIterator::open_next_micro_block()
   return ret;
 }
 
-int ObSSTableSecMetaIterator::open_data_root_block()
+int ObSSTableSecMetaIterator::open_meta_root_block()
 {
   int ret = OB_SUCCESS;
   const ObMicroBlockData &micro_data = sstable_meta_->get_macro_info().get_macro_meta_data();
@@ -354,7 +353,12 @@ int ObSSTableSecMetaIterator::open_data_root_block()
         begin_idx,
         end_idx,
         is_index_scan))) {
-      LOG_WARN("Fail to locate range", K(ret), KPC(query_range_));
+      if (OB_BEYOND_THE_RANGE == ret) {
+        ret = OB_ITER_END;
+        FLOG_INFO("this special sstable only locates range during iteration, so beyong range err should be transformed into iter end", K(ret));
+      } else {
+        LOG_WARN("Fail to locate range", K(ret), KPC(query_range_));
+      }
     }
     LOG_DEBUG("Open next micro block", K(ret), K(begin_idx), K(end_idx), K(is_index_scan));
   }
