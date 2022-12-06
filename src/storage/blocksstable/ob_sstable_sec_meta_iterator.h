@@ -67,7 +67,7 @@ private:
       bool &is_beyond_range);
   int prefetch_micro_block(int64_t prefetch_depth);
   int open_next_micro_block();
-  int open_data_root_block();
+  int open_meta_root_block();
 
   // TODO: opt with prefetch
   int get_micro_block(
