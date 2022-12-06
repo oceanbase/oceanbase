@@ -29,7 +29,7 @@ namespace checkpoint
 {
 
 ObCheckpointExecutor::ObCheckpointExecutor()
-    : lock_(common::ObLatchIds::CLOG_CKPT_LOCK),
+    : rwlock_(common::ObLatchIds::CLOG_CKPT_LOCK),
       update_checkpoint_enabled_(false)
 {
   reset();
@@ -95,13 +95,13 @@ void ObCheckpointExecutor::start()
 
 void ObCheckpointExecutor::online()
 {
-  ObSpinLockGuard guard(lock_);
+  WLockGuard guard(rwlock_);
   update_checkpoint_enabled_ = true;
 }
 
 void ObCheckpointExecutor::offline()
 {
-  ObSpinLockGuard guard(lock_);
+  WLockGuard guard(rwlock_);
   update_checkpoint_enabled_ = false;
 }
 
@@ -134,7 +134,8 @@ inline void get_min_rec_scn_service_type_by_index_(int index, char* service_type
 int ObCheckpointExecutor::update_clog_checkpoint()
 {
   int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
+  //avoid checkpoint concurrently
+  WLockGuard guard(rwlock_);
   if (update_checkpoint_enabled_) {
     ObFreezer *freezer = ls_->get_freezer();
     if (OB_NOT_NULL(freezer)) {
@@ -202,7 +203,7 @@ int ObCheckpointExecutor::update_clog_checkpoint()
 int ObCheckpointExecutor::advance_checkpoint_by_flush(SCN recycle_scn) {
   int ret = OB_SUCCESS;
 
-  ObSpinLockGuard guard(lock_);
+  RLockGuard guard(rwlock_);
   if (update_checkpoint_enabled_) {
     int tmp_ret = OB_SUCCESS;
 
@@ -286,7 +287,7 @@ int64_t ObCheckpointExecutor::get_cannot_recycle_log_size()
 int ObCheckpointExecutor::diagnose(CheckpointDiagnoseInfo &diagnose_info) const
 {
   int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
+  RLockGuard guard(rwlock_);
   int log_type_index = 0;
   diagnose_info.checkpoint_ = ls_->get_clog_checkpoint_scn();
   diagnose_info.min_rec_scn_.set_max();
