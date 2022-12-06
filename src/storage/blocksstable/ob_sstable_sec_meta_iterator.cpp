@@ -345,7 +345,7 @@ int ObSSTableSecMetaIterator::open_meta_root_block()
     LOG_WARN("Fail to get end index", K(ret));
   } else {
     end_idx = row_cnt;
-    const bool is_index_scan = !is_range_end_key_multi_version_ || !query_range_->get_border_flag().inclusive_end();
+    const bool is_index_scan = true;
     if (OB_FAIL(micro_reader_->locate_range(
         *query_range_,
         true,
