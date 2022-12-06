@@ -800,6 +800,12 @@ int ObLogMetaManager::set_column_meta_(IColMeta *col_meta,
         col_meta->setLength(column_schema.get_data_length());
       }
 
+      if (column_schema.is_tbl_part_key_column()) {
+        col_meta->setPartitioned(true);
+      }
+      if (column_schema.has_generated_column_deps()) {
+        col_meta->setDependent(true);
+      }
       col_meta->setName(column_schema.get_column_name());
       col_meta->setType(static_cast<int>(mysql_type));
       col_meta->setSigned(signed_flag);
@@ -826,7 +832,9 @@ int ObLogMetaManager::set_column_meta_(IColMeta *col_meta,
           "encoding", col_meta->getEncoding(),
           "default", col_meta->getDefault(),
           "isHiddenRowKey", col_meta->isHiddenRowKey(),
-          "isGeneratedColumn", col_meta->isGenerated());
+          "isGeneratedColumn", col_meta->isGenerated(),
+          "isPartitionColumn", col_meta->isPartitioned(),
+          "isGenerateDepColumn", col_meta->isDependent());
 
       // Do not need
       //col_meta->setLength(data_length);
