@@ -240,9 +240,13 @@ int ObTxRetainCtxMgr::force_gc_retain_ctx()
   SpinWLockGuard guard(retain_ctx_lock_);
   tg.click();
 
+  const int64_t before_remove_count = retain_ctx_list_.size();
   if (OB_FAIL(for_each_remove_(&ObTxRetainCtxMgr::force_gc_, nullptr, INT64_MAX))) {
     TRANS_LOG(WARN, "[RetainCtxMgr] force gc all retain ctx faild", K(ret));
   }
+
+  TRANS_LOG(INFO, "[RetainCtxMgr] force gc all retain ctx", K(ret), K(before_remove_count),
+            KPC(this));
 
   return ret;
 }
