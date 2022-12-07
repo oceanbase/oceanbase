@@ -468,7 +468,8 @@ void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSes
 int ObPLContext::init(ObSQLSessionInfo &session_info,
                        ObExecContext &ctx,
                        bool is_autonomous,
-                       bool is_function_or_trigger)
+                       bool is_function_or_trigger,
+                       ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   int64_t pl_block_timeout = 0;
@@ -552,8 +553,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       }
     }
 
-    OZ (ob_write_string(
-      ctx.get_allocator(), session_info.get_current_query_string(), cur_query_));
+    OZ (ob_write_string(allocator != NULL ? *allocator : ctx.get_allocator(), session_info.get_current_query_string(), cur_query_));
 
     OZ (recursion_ctx_.init(session_info));
     OX (session_info.set_pl_stack_ctx(this));
@@ -1500,7 +1500,8 @@ int ObPL::execute(ObExecContext &ctx,
                       routine->is_function()
                       || in_function
                       || (package_id != OB_INVALID_ID
-                          && ObTriggerInfo::is_trigger_package_id(package_id))));
+                          && ObTriggerInfo::is_trigger_package_id(package_id)),
+                      &allocator));
     OZ (stack_ctx.inc_and_check_depth(package_id, routine_id, routine->is_function()));
     OZ (stack_ctx.set_exec_env(*routine));
     OZ (stack_ctx.set_default_database(*routine, *(ctx.get_sql_ctx()->schema_guard_)));
