@@ -123,7 +123,7 @@ private:
 
 private:
   int defragment();
-  int get_recyclable_blocks(ObIArray<MacroBlockId> &block_ids, common::ObIAllocator &allocator);
+  int get_recyclable_blocks(common::ObIAllocator &allocator, ObIArray<MacroBlockId> &block_ids);
   int update_tablet(
       const ObTabletHandle &tablet_handle,
       const ObIArray<MacroBlockId> &macro_ids,
