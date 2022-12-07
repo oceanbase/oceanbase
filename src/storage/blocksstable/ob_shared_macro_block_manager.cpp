@@ -591,6 +591,8 @@ int ObSharedMacroBlockMgr::create_new_sstable(
   param.progressive_merge_round_ = basic_meta.progressive_merge_round_;
   param.progressive_merge_step_ = basic_meta.progressive_merge_step_;
   param.rowkey_column_cnt_ = basic_meta.rowkey_column_count_;
+  param.recycle_version_ = basic_meta.recycle_version_;
+  param.is_ready_for_read_ = true;
 
   ObSSTableMergeRes::fill_addr_and_data(res.root_desc_,
       param.root_block_addr_, param.root_block_data_);
