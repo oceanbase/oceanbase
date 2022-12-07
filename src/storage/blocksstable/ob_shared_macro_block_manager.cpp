@@ -341,7 +341,7 @@ int ObSharedMacroBlockMgr::free_block(const MacroBlockId &block_id, const int64_
   return ret;
 }
 
-int ObSharedMacroBlockMgr::get_recyclable_blocks(ObIArray<MacroBlockId> &block_ids, ObIAllocator &allocator)
+int ObSharedMacroBlockMgr::get_recyclable_blocks(ObIAllocator &allocator, ObIArray<MacroBlockId> &block_ids)
 {
   int ret = OB_SUCCESS;
   {
@@ -391,7 +391,7 @@ int ObSharedMacroBlockMgr::defragment()
     LOG_WARN("ObSharedMacroBlockMgr hasn't been initiated", K(ret));
   } else if (OB_FAIL(macro_ids.init(MAX_RECYCLABLE_BLOCK_CNT))) {
     LOG_WARN("fail to init macro ids", K(ret));
-  } else if (OB_FAIL(get_recyclable_blocks(macro_ids, task_allocator))) {
+  } else if (OB_FAIL(get_recyclable_blocks(task_allocator, macro_ids))) {
     LOG_WARN("fail to get recycle blocks", K(ret));
   } else if (macro_ids.empty()) {
     // skip following steps
@@ -413,7 +413,7 @@ int ObSharedMacroBlockMgr::defragment()
           rewrite_cnt,
           *sstable_index_builder,
           *index_block_rebuilder))) {
-        LOG_WARN("fail to update tablet", K(ret));
+        LOG_WARN("fail to update tablet", K(ret), K(tablet_handle), K(macro_ids));
       }
       if (OB_UNLIKELY(OB_EAGAIN == ret)) {
         ret = OB_SUCCESS;
@@ -478,7 +478,7 @@ int ObSharedMacroBlockMgr::update_tablet(
             sstable_handle))) {
           LOG_WARN("fail to rebuild sstable and update tablet", K(ret));
         } else if (OB_FAIL(table_handles.push_back(sstable_handle))) {
-          LOG_WARN("fail to push table handle to array", K(ret));
+          LOG_WARN("fail to push table handle to array", K(ret), K(sstable_handle));
         }
       }
     }
@@ -538,7 +538,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
   } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder))) {
     LOG_WARN("fail to init index block rebuilder", K(ret));
   } else if (OB_FAIL(read_sstable_block(old_sstable, block_handle))) {
-    LOG_WARN("fail to read old_sstable's block", K(ret));
+    LOG_WARN("fail to read old_sstable's block", K(ret), K(old_sstable));
   } else if (OB_FAIL(write_block(
       block_handle.get_buffer(), block_handle.get_data_size(), block_info, write_ctx))) {
     LOG_WARN("fail to write old_sstable's buf to new block", K(ret));
@@ -550,7 +550,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
   } else if (OB_FAIL(sstable_index_builder.close(column_count, res))) {
     LOG_WARN("fail to close sstable index builder", K(ret), K(column_count));
   } else if (OB_FAIL(create_new_sstable(res, tablet, old_sstable, block_info, table_handle))) {
-    LOG_WARN("fail to create new sstable", K(ret));
+    LOG_WARN("fail to create new sstable", K(ret), K(tablet.get_tablet_meta()), K(old_sstable));
   } else {
     ObSSTable *new_sstable = nullptr;
     if (OB_FAIL(table_handle.get_sstable(new_sstable))) {
