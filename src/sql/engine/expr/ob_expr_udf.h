@@ -122,7 +122,7 @@ public:
   {
     return subprogram_path_.assign(path);
   }
-  inline void set_result_type(ObExprResType result_type) { result_type_ = result_type; }
+  inline void set_result_type(const ObExprResType &result_type) { result_type_ = result_type; }
   inline int set_params_type(common::ObIArray<ObExprResType> &params_type)
   {
     return params_type_.assign(params_type);
