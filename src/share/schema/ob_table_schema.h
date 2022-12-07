@@ -240,9 +240,9 @@ public:
   {
     return (ObTableAutoIncrementMode)((table_mode >> TM_TABLE_AUTO_INCREMENT_MODE_OFFSET) & AUTO_INCREMENT_MODE_MASK);
   }
-  static ObTableAutoIncrementMode get_rowid_mode(int32_t table_mode)
+  static ObTableRowidMode get_rowid_mode(int32_t table_mode)
   {
-    return (ObTableAutoIncrementMode)((table_mode >> TM_TABLE_ROWID_MODE_OFFSET) & ROWID_MODE_MASK);
+    return (ObTableRowidMode)((table_mode >> TM_TABLE_ROWID_MODE_OFFSET) & ROWID_MODE_MASK);
   }
   TO_STRING_KV("table_mode_flag", mode_flag_,
                "pk_mode", pk_mode_,
