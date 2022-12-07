@@ -23279,6 +23279,8 @@ def_table_schema(
 
 # 21345: DBA_OB_CLUSTER_EVENT_HISTORY
 
+# 21346: PARAMETERS
+
 ################################################################################
 # Oracle System View (25000, 30000]
 # Data Dictionary View (25000, 28000]
