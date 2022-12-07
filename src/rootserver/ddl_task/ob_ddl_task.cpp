@@ -297,7 +297,7 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
   if (OB_TMP_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(trace_id_, is_cancel))) {
     LOG_WARN("check task is canceled", K(tmp_ret), K(trace_id_));
   } else if (is_cancel) {
-    real_ret_code = OB_SUCCESS == ret_code ? OB_CANCELED : ret_code;
+    real_ret_code = (OB_SUCCESS == ret_code || is_error_need_retry(ret_code)) ? OB_CANCELED : ret_code;
   } else if (SUCCESS == old_status || (OB_SUCCESS != ret_code && is_error_need_retry(ret_code))) {
     LOG_INFO("error code found, but execute again", K(ret_code), K(ret_code_), K(old_status), K(new_status), K(err_code_occurence_cnt_));
     ret_code_ = OB_SUCCESS;
