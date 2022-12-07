@@ -194,6 +194,10 @@ private:
                   bool &has_limit,
                   bool &need_add_limit_constraint) const;
   int check_const_select(const ObSelectStmt &stmt, bool &is_const_select) const;
+  int get_push_down_conditions(ObDMLStmt *stmt,
+                               JoinedTable *join_table,
+                               ObIArray<ObRawExpr *> &join_conds,
+                               ObIArray<ObRawExpr *> &push_down_conds);
 };
 
 }
