@@ -319,7 +319,7 @@ int ObMicroBlockAdaptiveSplitter::update_compression_info(const int64_t micro_ro
                                                           const int64_t compressed_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(micro_row_count <= 0 || original_size < compressed_size || compressed_size <= 0)) {
+  if (OB_UNLIKELY(micro_row_count <= 0 || original_size < 0 || compressed_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid compression info argument", K(micro_row_count), K(original_size), K(compressed_size));
   } else {
