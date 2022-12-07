@@ -159,7 +159,7 @@ void ObSQLUtils::check_if_need_disconnect_after_end_trans(const int end_trans_er
 {
   // 1.对于commit操作（不管是隐式还是显式），失败的时候遇到事务模块目前没有明确指明的错误码，都采取断连接操作。
   // 2.对于显式rollback操作，如果失败，由于客户端就算收到错误码也不知道怎么处理，因此统一都断连接。
-  // 3.对于隐式rollback操作，如果失败，这种情况是autocommit=1的情况，由于autocomit=1的分布式查询经常遇到rollback失败，
+  // 3.对于隐式rollback操作，如果失败，这种情况是autocommit=1的情况，由于autocommit=1的分布式查询经常遇到rollback失败，
   // 所以这种情况不断连接，如果这种情况下有特殊情况需要断连接，需要在外层调用implicit_end_trans之后自行加上断连接的逻辑。
   is_need_disconnect = false;
   if (is_rollback) {
@@ -483,7 +483,7 @@ int ObSQLUtils::calc_raw_expr_without_row(
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_overflow) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recusive", K(ret));
+    LOG_WARN("too deep recursive", K(ret));
   }
   if (OB_FAIL(ret)) {
     // do nothing
@@ -1821,7 +1821,7 @@ int ObSQLUtils::get_outline_key(ObIAllocator &allocator,
                                                                     fix_param_store,
                                                                     is_transform_outline))) {
       if (OB_NOT_SUPPORTED != ret) {
-        SQL_PC_LOG(WARN, "fail to tranform syntax_tree", K(ret));
+        SQL_PC_LOG(WARN, "fail to transform syntax_tree", K(ret));
       }
     } else if (OB_FAIL(ObSqlParameterization::raw_fast_parameterize_sql(allocator,
                                                                         *session,
@@ -2509,7 +2509,7 @@ int ObSQLUtils::revise_hash_part_object(common::ObObj &obj,
  * choose best replica for storage row estimation with following priority:
  *  1. local replica
  *  2. random replica in local idc
- *  3. random replica in local regin
+ *  3. random replica in local region
  *  4. other
  */
 int ObSQLUtils::choose_best_replica_for_estimation(
@@ -2562,7 +2562,7 @@ int ObSQLUtils::choose_best_replica_for_estimation(
 }
 
 /*
- * 选择副本优先级： 本机-->本idc(随机)-->本regin(随机) --> 其他regin(随机)
+ * 选择副本优先级： 本机-->本idc(随机)-->本region(随机) --> 其他region(随机)
  * */
 int ObSQLUtils::choose_best_partition_replica_addr(const ObAddr &local_addr,
                                                    const ObCandiTabletLoc &phy_part_loc_info,
@@ -4037,7 +4037,7 @@ int ObPreCalcExprConstraint::check_is_match(const ObObjParam &obj_param, bool &i
     case PRE_CALC_PRECISE:
     case PRE_CALC_NOT_PRECISE: {
       //default escape
-      //@todu JueHui: make escape value can be paramterized
+      //@todu JueHui: make escape value can be parameterized
       char escape = '\\';
       bool is_precise = false;
       bool expect_precise = PRE_CALC_PRECISE == expect_result_;
@@ -4359,7 +4359,7 @@ int ObSQLUtils::create_multi_stmt_param_store(common::ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(param_store.reserve(param_num))) {
-    LOG_WARN("failed to reserver param num", K(param_num), K(ret));
+    LOG_WARN("failed to reserve param num", K(param_num), K(ret));
   } else {
     void *ptr = NULL;
     void *data_ptr = NULL;
