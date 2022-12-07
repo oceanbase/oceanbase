@@ -25,6 +25,8 @@ namespace oceanbase
 using namespace share;
 namespace storage
 {
+// if you add membership for this param, plz check all paths that use it, including
+// but not limited to unittest, merge, ddl, shared_macro_block
 ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
   : table_key_(),
     sstable_logic_seq_(0),
