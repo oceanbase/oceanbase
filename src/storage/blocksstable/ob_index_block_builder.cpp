@@ -2136,6 +2136,7 @@ int ObMetaIndexBlockBuilder::build_single_macro_row_desc(const IndexMicroBlockDe
     last_leaf_rowkey_.reset();
     row_desc.is_data_block_ = true;
     row_desc.is_secondary_meta_ = true;
+    row_desc.micro_block_count_ = 1;
     if (OB_FAIL(ObBaseIndexBlockBuilder::append_row(row_desc))) {
       STORAGE_LOG(WARN, "fail to append n-1 level index row of meta", K(ret), K(roots));
     }
