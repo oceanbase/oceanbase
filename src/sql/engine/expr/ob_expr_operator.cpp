@@ -3668,7 +3668,7 @@ int ObBitwiseExprOperator::get_uint64(const ObObj& obj, ObExprCtx& expr_ctx, boo
     }
   } else {
     // need add CM_NO_RANGE_CHECK, otherwise 1 & -3.5(float) return 0.
-    EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NO_RANGE_CHECK);
+    EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NO_RANGE_CHECK | CM_STRING_INTEGER_TRUNC);
     EXPR_GET_UINT64_V2(obj, out);
   }
   return ret;
