@@ -480,13 +480,14 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       CK (0 < udf_params->count());
       OZ (ns.init_complex_obj(alloc, pl_type, udf_params->at(0), false, false));
     }
-    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+
+    ObArenaAllocator allocator;
     try {
       int64_t package_id = info->is_udt_udf_ ?
            share::schema::ObUDTObjectType::mask_object_id(info->udf_package_id_)
            : info->udf_package_id_;
       OZ(pl_engine->execute(ctx.exec_ctx_,
-                            info->is_called_in_sql_ ? tmp_alloc_g.get_allocator()
+                            info->is_called_in_sql_ ? allocator
                                                     : alloc,
                             package_id,
                             info->udf_id_,
