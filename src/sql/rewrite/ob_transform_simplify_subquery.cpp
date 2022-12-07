@@ -522,8 +522,52 @@ int ObTransformSimplifySubquery::push_down_outer_join_condition(ObDMLStmt *stmt,
   return ret;
 }
 
-//当 left join 右表为 basic/generate/join table 时, 对 on condition 中包含 subquery
-//且仅包含本层右表列的条件进行下压:
+int ObTransformSimplifySubquery::get_push_down_conditions(ObDMLStmt *stmt,
+                                                          JoinedTable *join_table,
+                                                          ObIArray<ObRawExpr *> &join_conds,
+                                                          ObIArray<ObRawExpr *> &push_down_conds) {
+  int ret = OB_SUCCESS;
+  ObSqlBitSet<> right_table_ids;
+  if (OB_ISNULL(stmt) || OB_ISNULL(join_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret));
+  } else if (OB_FAIL(stmt->get_table_rel_ids(*join_table->right_table_, right_table_ids))) {
+    LOG_WARN("failed to get target table rel ids", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < join_conds.count(); ++i) {
+    ObSEArray<ObQueryRefRawExpr *, 4> query_refs;
+    if (OB_ISNULL(join_conds.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL", K(ret));
+    } else if (!join_conds.at(i)->get_relation_ids().is_subset(right_table_ids) ||
+               !join_conds.at(i)->has_flag(CNT_SUB_QUERY)) {
+      // do nothing
+    } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(join_conds.at(i), query_refs))) {
+      LOG_WARN("extract_query_ref_expr failed", K(ret), K(join_conds), K(i));
+    } else {
+      bool can_push_down = false;
+      for (int64_t j = 0; OB_SUCC(ret) && j < query_refs.count(); ++j) {
+        if (OB_ISNULL(query_refs.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL", K(ret));
+        } else if (query_refs.at(j)->get_ref_count() == 1){
+          can_push_down = true;
+        } else {
+          can_push_down = false;
+        }
+      }
+
+      if (can_push_down && OB_FAIL(push_down_conds.push_back(join_conds.at(i)))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+// 当 left join 右表为 basic/generate/join table 时
+// 对 on condition 中包含 subquery（要求ref_count = 1）仅包含本层右表列的条件进行下压:
 //  1. 由右表生成generate table;
 //  2. 下压满足条件 on condition.
 int ObTransformSimplifySubquery::try_push_down_outer_join_conds(ObDMLStmt *stmt,
@@ -532,7 +576,6 @@ int ObTransformSimplifySubquery::try_push_down_outer_join_conds(ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
-  ObSqlBitSet<> right_table_ids;
   if (OB_ISNULL(stmt) || OB_ISNULL(join_table) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret));
@@ -546,25 +589,15 @@ int ObTransformSimplifySubquery::try_push_down_outer_join_conds(ObDMLStmt *stmt,
              && !join_table->right_table_->is_temp_table()
              && !join_table->right_table_->is_joined_table()) {
     /*do nothing*/
-  } else if (OB_FAIL(stmt->get_table_rel_ids(*join_table->right_table_, right_table_ids))) {
-    LOG_WARN("failed to get target table rel ids", K(ret));
   } else {
     ObSEArray<ObRawExpr*, 16> push_down_conds;
-    ObIArray<ObRawExpr *> &join_conds = join_table->get_join_conditions();
-    for (int64_t i = 0; OB_SUCC(ret) && i < join_conds.count(); ++i) {
-      if (OB_ISNULL(join_conds.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected NULL", K(ret));
-      } else if (join_conds.at(i)->get_relation_ids().is_subset(right_table_ids)
-                 && join_conds.at(i)->has_flag(CNT_SUB_QUERY)) {
-        if (OB_FAIL(push_down_conds.push_back(join_conds.at(i)))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        }
-      }
-    }
-
     TableItem *view_item = NULL;
-    if (OB_FAIL(ret) || push_down_conds.empty()) {
+    if (OB_FAIL(get_push_down_conditions(stmt,
+                                         join_table,
+                                         join_table->get_join_conditions(),
+                                         push_down_conds))) {
+      LOG_WARN("failed to get_push_down_conditions", K(ret), K(join_table));
+    } else if (push_down_conds.empty()) {
       /*do nothing*/
     } else if (OB_FAIL(ObTransformUtils::create_view_with_table(stmt, ctx_,
                                                                 join_table->right_table_,
