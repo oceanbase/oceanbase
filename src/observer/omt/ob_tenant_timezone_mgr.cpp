@@ -24,7 +24,7 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace omt {
 
-void ObTenantTimezoneMgr::UpdateAllTenantTask::runTimerTask()
+void ObTenantTimezoneMgr::AddTenantTZTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   int64_t delay = SLEEP_USECONDS;
@@ -54,8 +54,34 @@ void ObTenantTimezoneMgr::DeleteTenantTZTask::runTimerTask()
   } else if (tenant_tz_mgr_->get_start_refresh()) {
     if (OB_FAIL(tenant_tz_mgr_->remove_nonexist_tenant())) {
       LOG_WARN("remove nonexist tenants failed", K(ret));
-    } else if (OB_FAIL(tenant_tz_mgr_->delete_tenant_timezone())) {
-      LOG_ERROR("tenant timezone mgr delete tenant timezone failed", K(ret));
+    }
+  }
+  const int64_t delay = SLEEP_USECONDS;
+  const bool repeat = false;
+  if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, *this, delay, repeat))) {
+    LOG_ERROR("schedule timezone delete task failed", K(ret));
+  }
+}
+
+void ObTenantTimezoneMgr::UpdateTenantTZOp::operator() (common::hash::HashMapPair<uint64_t, ObTenantTimezone*> &entry)
+{
+  int ret = OB_SUCCESS;
+  ObTenantTimezone &tenant_tz = *entry.second;
+  if (OB_FAIL(tenant_tz.get_tz_mgr()->fetch_time_zone_info())) {
+    LOG_WARN("fail to update time zone info", K(ret));
+  }
+}
+
+void ObTenantTimezoneMgr::UpdateTenantTZTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  UpdateTenantTZOp update_op;
+  if (OB_ISNULL(tenant_tz_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("delete tenant task, tenant tz mgr is null", K(ret));
+  } else if (tenant_tz_mgr_->get_start_refresh()) {
+    if (OB_FAIL(tenant_tz_mgr_->timezone_map_.foreach_refactored(update_op))) {
+      LOG_WARN("update tenant time zone failed", K(ret));
     }
   }
   const int64_t delay = SLEEP_USECONDS;
@@ -66,18 +92,11 @@ void ObTenantTimezoneMgr::DeleteTenantTZTask::runTimerTask()
 }
 
 ObTenantTimezoneMgr::ObTenantTimezoneMgr()
-    : allocator_("TenantTZ"),
-      is_inited_(false),
-      self_(),
-      sql_proxy_(nullptr),
+    : allocator_("TenantTZ"), is_inited_(false), self_(), sql_proxy_(nullptr),
       rwlock_(),
-      timezone_map_(),
-      update_task_(this),
-      delete_task_(this),
-      start_refresh_(false),
-      usable_(false),
-      schema_service_(nullptr),
-      drop_tenant_tz_(allocator_)
+      timezone_map_(), add_task_(this), delete_task_(this), update_task_(this),
+      start_refresh_(false), usable_(false),
+      schema_service_(nullptr)
 {
   tenant_tz_map_getter_ = ObTenantTimezoneMgr::get_tenant_timezone_default;
 }
@@ -110,9 +129,11 @@ int ObTenantTimezoneMgr::init(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(add_tenant_timezone(OB_SYS_TENANT_ID))) {
     LOG_WARN("add tenant timezone info failed", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, update_task_, delay, repeat))) {
+  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, add_task_, delay, repeat))) {
     LOG_WARN("schedual time zone mgr failed", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, delete_task_, delay, repeat))) {
+    LOG_WARN("schedual time zone mgr failed", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, update_task_, delay, repeat))) {
     LOG_WARN("schedual time zone mgr failed", K(ret));
   } else {
     tenant_tz_map_getter_ = ObTenantTimezoneMgr::get_tenant_timezone_static;
@@ -141,26 +162,20 @@ int ObTenantTimezoneMgr::add_tenant_timezone(uint64_t tenant_id)
     LOG_WARN("tenant timezone mgr not inited", K(ret));
   } else if (is_virtual_tenant_id(tenant_id) || OB_NOT_NULL(timezone = timezone_map_.get(tenant_id))) {
   } else {
-    ObTenantTimezone* new_timezone = nullptr;
-    new_timezone = OB_NEW(ObTenantTimezone, ObModIds::OMT, tenant_id);
+    ObTenantTimezone *new_timezone = nullptr;
+    new_timezone = OB_NEW(ObTenantTimezone, "TenantTZ", tenant_id);
     if (OB_ISNULL(new_timezone)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc new tenant timezone failed", K(ret));
+    } else if(OB_FAIL(new_timezone->init(this))) {
+      LOG_WARN("new tenant timezone init failed", K(ret));
+    } else if (OB_FAIL(timezone_map_.set_refactored(tenant_id, new_timezone, 1))) {
+      LOG_WARN("add new tenant timezone failed", K(ret));
     } else {
-      const int64_t delay = 0;
-      const bool repeat = false;
-      if (OB_FAIL(new_timezone->init(this))) {
-        LOG_WARN("new tenant timezone init failed", K(ret));
-      } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::TIMEZONE_MGR, new_timezone->update_tz_task_, delay, repeat))) {
-        LOG_WARN("schedule update time zone task failed", K(delay), K(repeat), K(ret));
-      } else if (OB_FAIL(timezone_map_.set_refactored(tenant_id, new_timezone, 1))) {
-        LOG_WARN("add new tenant timezone failed", K(ret));
-      } else {
-        LOG_INFO("add tenant timezone success!", K(tenant_id));
-      }
-      if (OB_FAIL(ret)) {
-        ob_delete(new_timezone);
-      }
+      LOG_INFO("add tenant timezone success!", K(tenant_id));
+    }
+    if (OB_FAIL(ret)) {
+      ob_delete(new_timezone);
     }
   }
   return ret;
@@ -183,10 +198,12 @@ int ObTenantTimezoneMgr::del_tenant_timezone(uint64_t tenant_id)
     LOG_WARN("time zone is null", K(ret), K(tenant_id));
   } else if (OB_FAIL(timezone_map_.erase_refactored(tenant_id))) {
     LOG_WARN("erase tenant timezone failed", K(ret), K(tenant_id));
-  } else if (OB_FAIL(drop_tenant_tz_.push_back(timezone))) {
-    LOG_WARN("push back timezone failed", K(ret));
   } else {
-    LOG_INFO("drop tenant tz push back succeed", K(timezone->get_tz_map()), K(timezone->get_tenant_id()));
+    ObTZInfoMap *tz_map = timezone->get_tz_map();
+    LOG_INFO("drop tenant tz push back succeed", K(timezone->get_tz_map()),
+             K(timezone->get_tenant_id()));
+    timezone->destroy();
+    ob_delete(timezone);
   }
   return ret;
 }
@@ -333,64 +350,8 @@ int ObTenantTimezoneMgr::update_timezone_map()
   }
   return ret;
 }
-
-// delete all tenant timezone in array drop_tenant_tz_ whose ref_count is zero.
-int ObTenantTimezoneMgr::delete_tenant_timezone()
-{
-  int ret = OB_SUCCESS;
-  FOREACH_X(it, drop_tenant_tz_, OB_SUCC(ret))
-  {
-    ObTenantTimezone* tenant_tz = *it;
-    int64_t ref_count = 0;
-    if (OB_ISNULL(tenant_tz)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant timezone in array is null", K(ret));
-    } else if (OB_FAIL(tenant_tz->get_ref_count(ref_count))) {
-      LOG_WARN("get ref count failed", K(ret));
-    } else if (0 == ref_count) {
-      const int try_times = 30;
-      const int64_t period = 1000;
-      ObTenantTimezone::TenantTZUpdateTask& task = tenant_tz->get_update_tz_task();
-      bool locked = false;
-      // waiting for running task with lock finished
-      for (int64_t j = 0; j < try_times; ++j) {
-        if (task.task_lock_.trylock()) {
-          locked = true;
-          break;
-        }
-        usleep(period);
-      }
-      if (!locked) {
-      } else if (OB_FAIL(TG_CANCEL_R(lib::TGDefIDs::TIMEZONE_MGR, task))) {
-        LOG_WARN("cancel tenant timezone update task failed", K(ret));
-      } else {
-        bool is_exist = true;
-        for (int64_t j = 0; j < try_times; ++j) {
-          if (OB_FAIL(TG_TASK_EXIST(lib::TGDefIDs::TIMEZONE_MGR, task, is_exist))) {
-            LOG_WARN("check task exist failed", K(ret));
-          } else if (!is_exist) {
-            break;
-          } else {
-            // waiting for running task without lock finished, it should be very soon.
-          }
-          usleep(period);
-        }  // for
-        if (!is_exist) {
-          if (OB_FAIL(drop_tenant_tz_.erase(it))) {
-            LOG_WARN("erase failed", K(ret));
-          } else {
-            LOG_INFO("ref count is zero, drop tenant timezone", K(tenant_tz->get_tenant_id()));
-            task.task_lock_.unlock();
-            ob_delete(tenant_tz);
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTenantTimezoneMgr::get_tenant_timezone_static(const uint64_t tenant_id, ObTZMapWrap& timezone_wrap)
+int ObTenantTimezoneMgr::get_tenant_timezone_static(const uint64_t tenant_id,
+                                                        ObTZMapWrap &timezone_wrap)
 {
   ObTimeZoneInfoManager* tz_info_mgr = NULL;
   return get_instance().get_tenant_timezone(tenant_id, timezone_wrap, tz_info_mgr);
@@ -412,7 +373,8 @@ int ObTenantTimezoneMgr::get_tenant_timezone_default(const uint64_t tenant_id, O
   int ret = OB_SUCCESS;
   static ObTZInfoMap tz_map;
   UNUSED(tenant_id);
-  if (OB_UNLIKELY(!tz_map.is_inited()) && OB_FAIL(tz_map.init(ObModIds::OB_HASH_BUCKET_TIME_ZONE_INFO_MAP))) {
+  if (OB_UNLIKELY(! tz_map.is_inited()) &&
+      OB_FAIL(tz_map.init("TzMapStatic"))) {
     LOG_WARN("init time zone info map failed", K(ret));
   } else {
     timezone_wrap.set_tz_map(&tz_map);

@@ -36,7 +36,7 @@ public:
   static int eval_convert_tz(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int find_time_zone_pos(const ObString &tz_name,
                                         const ObTimeZoneInfo &tz_info,
-                                        ObTimeZoneInfoPos *&tz_info_pos);
+                                        ObTimeZoneInfoPos &tz_info_pos);
   template <typename T>
   static int calc_convert_tz(int64_t timestamp_data, const ObString &tz_str_s,//source time zone (input2)
                         const ObString &tz_str_d,//destination time zone (input3)

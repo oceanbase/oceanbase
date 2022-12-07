@@ -32,7 +32,7 @@ namespace oceanbase {
 namespace common {
 
 int check_and_get_tz_info(ObTime &ob_time, const ObTimeConvertCtx &cvrt_ctx, const ObTimeZoneInfo *&tz_info,
-    ObTimeZoneInfoPos *&literal_tz_info, ObTZInfoIDPosMap *&tz_id_pos_map);
+    ObTimeZoneInfoPos &literal_tz_info);
 
 ObTimeConverter::ObTimeConverter()
 {}
@@ -680,12 +680,11 @@ int ObTimeConverter::calc_tz_offset_by_tz_name(const ObTimeConvertCtx &cvrt_ctx,
   int ret = OB_SUCCESS;
   int64_t usec = ob_time.parts_[DT_DATE] * USECS_PER_DAY + ob_time_to_time(ob_time);
   const ObTimeZoneInfo *tz_info = NULL;
-  ObTimeZoneInfoPos *literal_tz_info = NULL;
-  ObTZInfoIDPosMap *tz_id_pos_map = NULL;
+  ObTimeZoneInfoPos literal_tz_info;
   int32_t tz_id = OB_INVALID_INDEX;
   int32_t tran_type_id = OB_INVALID_INDEX;
   int32_t offset_min = 0;
-  if (OB_FAIL(check_and_get_tz_info(ob_time, cvrt_ctx, tz_info, literal_tz_info, tz_id_pos_map))) {
+  if (OB_FAIL(check_and_get_tz_info(ob_time, cvrt_ctx, tz_info, literal_tz_info))) {
     LOG_WARN("fail to check time zone info", K(ob_time));
   } else if (OB_ISNULL(tz_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -699,11 +698,6 @@ int ObTimeConverter::calc_tz_offset_by_tz_name(const ObTimeConvertCtx &cvrt_ctx,
     ob_time.transition_type_id_ = tran_type_id;
   }
 
-  if (NULL != literal_tz_info && NULL != tz_id_pos_map) {
-    tz_id_pos_map->revert(literal_tz_info);
-    tz_id_pos_map = NULL;
-    literal_tz_info = NULL;
-  }
   return ret;
 }
 
@@ -1237,7 +1231,7 @@ int ObTimeConverter::extract_offset_from_otimestamp(
   int ret = OB_SUCCESS;
   if (in_value.time_ctx_.store_tz_id_) {
     ObTZInfoMap *tz_info_map = NULL;
-    ObTimeZoneInfoPos *literal_tz_info = NULL;
+    ObTimeZoneInfoPos literal_tz_info;
     ObString tz_name_str;
     ObString tz_abbr_str;
     int32_t offset_sec = 0;
@@ -1250,11 +1244,10 @@ int ObTimeConverter::extract_offset_from_otimestamp(
     } else if (OB_FAIL(tz_info_map->get_tz_info_by_id(in_value.time_ctx_.tz_id_, literal_tz_info))) {
       LOG_WARN("fail to get_tz_info_by_id", "tz_id", in_value.time_ctx_.tz_id_, K(ret));
       ret = OB_ERR_INVALID_TIMEZONE_REGION_ID;
-    } else if (OB_FAIL(
-                   literal_tz_info->get_timezone_offset(in_value.time_ctx_.tran_type_id_, tz_abbr_str, offset_sec))) {
+    } else if (OB_FAIL(literal_tz_info.get_timezone_offset(in_value.time_ctx_.tran_type_id_, tz_abbr_str, offset_sec))) {
       LOG_WARN("fail to get_timezone_offset", K(in_value), K(ret));
       ret = OB_ERR_INVALID_TIMEZONE_REGION_ID;
-    } else if (OB_FAIL(literal_tz_info->get_tz_name(tz_name_str))) {
+    } else if (OB_FAIL(literal_tz_info.get_tz_name(tz_name_str))) {
       LOG_WARN("fail to get_tz_name", K(tz_name_str), K(ret));
     } else if (OB_FAIL(ob_time.set_tz_name(tz_name_str))) {
       LOG_WARN("fail to set_tz_name", K(tz_name_str), K(ret));
@@ -1268,9 +1261,6 @@ int ObTimeConverter::extract_offset_from_otimestamp(
     }
     LOG_DEBUG("extract_offset_from_otimestamp", K(ob_time), K(offset_min), K(offset_sec), K(ret));
 
-    if (NULL != tz_info_map && NULL != literal_tz_info) {
-      tz_info_map->free_tz_info_pos(literal_tz_info);
-    }
   } else {
     offset_min = in_value.time_ctx_.get_offset_min();
     ob_time.parts_[DT_OFFSET_MIN] = offset_min;
@@ -4842,8 +4832,10 @@ int ObTimeConverter::ob_time_to_str_format(
   return ret;
 }
 
-int check_and_get_tz_info(ObTime &ob_time, const ObTimeConvertCtx &cvrt_ctx, const ObTimeZoneInfo *&tz_info,
-    ObTimeZoneInfoPos *&literal_tz_info, ObTZInfoIDPosMap *&tz_id_pos_map)
+int check_and_get_tz_info(ObTime &ob_time,
+                          const ObTimeConvertCtx &cvrt_ctx,
+                          const ObTimeZoneInfo *&tz_info,
+                          ObTimeZoneInfoPos &literal_tz_info)
 {
   int ret = OB_SUCCESS;
   ObTZInfoMap *tz_info_map = NULL;
@@ -4859,12 +4851,9 @@ int check_and_get_tz_info(ObTime &ob_time, const ObTimeConvertCtx &cvrt_ctx, con
       LOG_WARN("tz_info_map is NULL", K(ret));
     } else if (OB_FAIL(tz_info_map->get_tz_info_by_name(ob_time.get_tz_name_str(), literal_tz_info))) {
       LOG_WARN("fail to get_tz_info_by_name", K(ob_time), K(ret));
-      tz_info_map->id_map_.revert(literal_tz_info);
-      literal_tz_info = NULL;
     } else {
-      literal_tz_info->set_error_on_overlap_time(cvrt_ctx.tz_info_->is_error_on_overlap_time());
-      tz_info = literal_tz_info;
-      tz_id_pos_map = &(tz_info_map->id_map_);
+      literal_tz_info.set_error_on_overlap_time(cvrt_ctx.tz_info_->is_error_on_overlap_time());
+      tz_info = &literal_tz_info;
     }
   } else {  // use session tz_info
     tz_info = cvrt_ctx.tz_info_;
@@ -4882,24 +4871,17 @@ int ObTimeConverter::ob_time_to_datetime(ObTime &ob_time, const ObTimeConvertCtx
     // so we don't handle leap second and shift things, delete all related codes.
     int64_t usec = ob_time.parts_[DT_DATE] * USECS_PER_DAY + ob_time_to_time(ob_time);
     const ObTimeZoneInfo *tz_info = NULL;
-    ObTimeZoneInfoPos *literal_tz_info = NULL;
-    ObTZInfoIDPosMap *tz_id_pos_map = NULL;
+    ObTimeZoneInfoPos literal_tz_info;
     if (usec > DATETIME_MAX_VAL || usec < DATETIME_MIN_VAL) {
       ret = OB_DATETIME_FUNCTION_OVERFLOW;
       LOG_WARN("datetime filed overflow", K(ret), K(usec));
     } else {
       value = usec;
-      if (OB_FAIL(check_and_get_tz_info(ob_time, cvrt_ctx, tz_info, literal_tz_info, tz_id_pos_map))) {
+      if (OB_FAIL(check_and_get_tz_info(ob_time, cvrt_ctx, tz_info, literal_tz_info))) {
         LOG_WARN("fail to check_and_get_tz_info", K(ob_time), K(ret));
       } else if (OB_FAIL(sub_timezone_offset(tz_info, cvrt_ctx.is_timestamp_, ob_time.get_tzd_abbr_str(), value))) {
         LOG_WARN("failed to adjust value with time zone offset", K(ret));
       }
-    }
-
-    if (NULL != literal_tz_info && NULL != tz_id_pos_map) {
-      tz_id_pos_map->revert(literal_tz_info);
-      tz_id_pos_map = NULL;
-      literal_tz_info = NULL;
     }
   }
   return ret;

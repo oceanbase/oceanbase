@@ -237,7 +237,8 @@ class ObTZMapWrap {
 public:
   ObTZMapWrap() : tz_info_map_(nullptr)
   {}
-  ~ObTZMapWrap();
+  ~ObTZMapWrap()
+  {}
   const ObTZInfoMap* get_tz_map() const
   {
     return tz_info_map_;
@@ -691,37 +692,20 @@ typedef common::ObLinkHashMap<ObTZNameKey, ObTZNameIDInfo, ObTZNameIDAlloc> ObTZ
 
 class ObTZInfoMap {
 public:
-  ObTZInfoMap() : inited_(false), id_map_(), name_map_(), ref_count_(0)
+  ObTZInfoMap() : inited_(false), id_map_(), name_map_()
   {}
   ~ObTZInfoMap()
   {}
   int init(const lib::ObLabel& label);
   int reset();
+  void destroy();
   int print_tz_info_map();
-  bool is_inited()
-  {
-    return inited_;
-  }
-  int get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos*& tz_info_by_id);
-  int get_tz_info_by_name(const common::ObString& tz_name, ObTimeZoneInfoPos*& tz_info_by_name);
-  void free_tz_info_pos(ObTimeZoneInfoPos*& tz_info)
-  {
-    id_map_.revert(tz_info);
-    tz_info = NULL;
-  }
-  void inc_ref_count()
-  {
-    ATOMIC_INC(&ref_count_);
-  }
-  void dec_ref_count()
-  {
-    ATOMIC_DEC(&ref_count_);
-  }
-  int64_t get_ref_count()
-  {
-    return ATOMIC_LOAD64(&ref_count_);
-  }
-
+  bool is_inited() { return inited_; }
+  int get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos &tz_info_by_id);
+  int get_tz_info_by_name(const common::ObString &tz_name, ObTimeZoneInfoPos &tz_info_by_name);
+  int get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos *&tz_info_by_id);
+  int get_tz_info_by_name(const common::ObString &tz_name, ObTimeZoneInfoPos *&tz_info_by_name);
+  void free_tz_info_pos(ObTimeZoneInfoPos *&tz_info) { id_map_.revert(tz_info); tz_info = NULL; }
 public:
   bool inited_;
   ObTZInfoIDPosMap id_map_;
@@ -729,7 +713,6 @@ public:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTZInfoMap);
-  int64_t ref_count_;
 };
 
 class ObTimeZoneInfoWrap {
