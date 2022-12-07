@@ -209,12 +209,8 @@ int ObTimeZoneInfoManager::fetch_time_zone_info_from_tenant_table(const int64_t 
         LOG_ERROR("fail to fill tz_info_map", K(ret));
       } else {
         last_version_ = current_tz_version;
-        LOG_INFO("success to fetch tz_info map",
-            K(ret),
-            K(last_version_),
-            "new_last_version",
-            current_tz_version,
-            K(tz_info_map_.id_map_.size()));
+        LOG_INFO("success to fetch tz_info map", K(ret), K(last_version_), K(tenant_id_),
+                  "new_last_version", current_tz_version, K(tz_info_map_.id_map_.size()));
       }
     }
   }
@@ -546,14 +542,9 @@ int ObTimeZoneInfoManager::print_tz_info_map()
 int ObTimeZoneInfoManager::find_time_zone_info(const common::ObString& tz_name, ObTimeZoneInfoPos& tz_info)
 {
   int ret = OB_SUCCESS;
-  ObTimeZoneInfoPos* tmp_tz_info = NULL;
-  if (OB_FAIL(tz_info_map_.get_tz_info_by_name(tz_name, tmp_tz_info))) {
+  if (OB_FAIL(tz_info_map_.get_tz_info_by_name(tz_name, tz_info))) {
     LOG_WARN("fail to get time zone info", K(tz_name), K(ret));
-  } else if (OB_FAIL(tz_info.assign(*tmp_tz_info))) {
-    LOG_WARN("fail to assign time zone info", KPC(tmp_tz_info), K(ret));
   }
-
-  tz_info_map_.free_tz_info_pos(tmp_tz_info);
 
   if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_ERR_UNKNOWN_TIME_ZONE;

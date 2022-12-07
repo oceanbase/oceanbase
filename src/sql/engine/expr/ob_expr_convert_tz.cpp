@@ -104,7 +104,7 @@ int ObExprConvertTZ::parse_string(
     LOG_WARN("direct str_to_offset failed");
     if (OB_LIKELY(OB_ERR_UNKNOWN_TIME_ZONE == ret)) {
       const ObTimeZoneInfo *tz_info = NULL;
-      ObTimeZoneInfoPos *target_tz_pos = NULL;
+      ObTimeZoneInfoPos target_tz_pos;
       if (OB_ISNULL(tz_info = TZ_INFO(session))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tz info is null", K(ret), K(session));
@@ -113,7 +113,7 @@ int ObExprConvertTZ::parse_string(
         if (OB_ERR_UNKNOWN_TIME_ZONE == ret && OB_SUCCESS != ret_more) {
           ret = ret_more;
         }
-      } else if (OB_FAIL(calc(timestamp_data, *target_tz_pos, input_utc_time))) {
+      } else if (OB_FAIL(calc(timestamp_data, target_tz_pos, input_utc_time))) {
         LOG_WARN("calc failed", K(ret), K(timestamp_data));
       }
     } else {
@@ -126,21 +126,19 @@ int ObExprConvertTZ::parse_string(
   return ret;
 }
 
-int ObExprConvertTZ::find_time_zone_pos(
-    const ObString &tz_name, const ObTimeZoneInfo &tz_info, ObTimeZoneInfoPos *&tz_info_pos)
+int ObExprConvertTZ::find_time_zone_pos(const ObString &tz_name,
+                                        const ObTimeZoneInfo &tz_info,
+                                        ObTimeZoneInfoPos &tz_info_pos)
 {
   int ret = OB_SUCCESS;
-  tz_info_pos = NULL;
   ObTZInfoMap *tz_info_map = NULL;
   if (OB_ISNULL(tz_info_map = const_cast<ObTZInfoMap *>(tz_info.get_tz_info_map()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tz_info_map is NULL", K(ret));
   } else if (OB_FAIL(tz_info_map->get_tz_info_by_name(tz_name, tz_info_pos))) {
     LOG_WARN("fail to get_tz_info_by_name", K(tz_name), K(ret));
-    tz_info_map->id_map_.revert(tz_info_pos);
-    tz_info_pos = NULL;
   } else {
-    tz_info_pos->set_error_on_overlap_time(tz_info.is_error_on_overlap_time());
+    tz_info_pos.set_error_on_overlap_time(tz_info.is_error_on_overlap_time());
   }
   return ret;
 }

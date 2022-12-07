@@ -39065,21 +39065,8 @@ uint64_t ObTZNameKey::hash(uint64_t seed) const
 
 void ObTZMapWrap::set_tz_map(const common::ObTZInfoMap* timezone_info_map)
 {
-  if (OB_NOT_NULL(tz_info_map_)) {
-    tz_info_map_->dec_ref_count();
-  }
   ObTZInfoMap* non_const_tz_map = const_cast<ObTZInfoMap*>(timezone_info_map);
-  if (!OB_ISNULL(timezone_info_map)) {
-    non_const_tz_map->inc_ref_count();
-  }
   tz_info_map_ = non_const_tz_map;
-}
-
-ObTZMapWrap::~ObTZMapWrap()
-{
-  if (!OB_ISNULL(tz_info_map_)) {
-    tz_info_map_->dec_ref_count();
-  }
 }
 
 // just for unittest
@@ -39785,6 +39772,12 @@ int ObTZInfoMap::reset()
   return ret;
 }
 
+void ObTZInfoMap::destroy()
+{
+  id_map_.destroy();
+  name_map_.destroy();
+}
+
 static bool print_tz_info(ObTZIDKey& key, ObTimeZoneInfoPos* tz_info)
 {
   int ret = OB_SUCCESS;
@@ -39807,33 +39800,33 @@ int ObTZInfoMap::print_tz_info_map()
   return ret;
 }
 
-int ObTZInfoMap::get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos*& tz_info_by_id)
+int ObTZInfoMap::get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos &tz_info_by_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(tz_info_by_id)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tz_info_by_id should be null here", K(ret));
-  } else if (OB_FAIL(id_map_.get(tz_id, tz_info_by_id))) {
+  ObTimeZoneInfoPos *tmp_tz_info = NULL;
+  if (OB_FAIL(id_map_.get(tz_id, tmp_tz_info))) {
     LOG_WARN("fail to get tz_info_by_id, should not happened", K(tz_id), K(ret));
+  } else if (OB_FAIL(tz_info_by_id.assign(*tmp_tz_info))) {
+    LOG_WARN("assign time zone info pos failed", K(ret));
   } else {
-    LOG_DEBUG("succ to get tz_info_by_id", K(tz_id), KPC(tz_info_by_id), K(ret));
+    LOG_DEBUG("succ to get tz_info_by_id", K(tz_id), KPC(tmp_tz_info), K(ret));
+  }
+  if (NULL != tmp_tz_info) {
+    id_map_.revert(tmp_tz_info);
   }
   return ret;
 }
 
-int ObTZInfoMap::get_tz_info_by_name(const ObString& tz_name, ObTimeZoneInfoPos*& tz_info_by_name)
+int ObTZInfoMap::get_tz_info_by_name(const ObString &tz_name, ObTimeZoneInfoPos &tz_info_by_name)
 {
   int ret = OB_SUCCESS;
-  ObTZNameIDInfo* name_id_info = NULL;
-  if (OB_NOT_NULL(tz_info_by_name)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("v should be null here", K(ret));
-  } else if (OB_FAIL(name_map_.get(ObTZNameKey(tz_name), name_id_info))) {
+  ObTZNameIDInfo *name_id_info = NULL;
+  if (OB_FAIL(name_map_.get(ObTZNameKey(tz_name), name_id_info))) {
     LOG_WARN("fail to get get_tz_info_by_name", K(tz_name), K(ret));
   } else if (OB_FAIL(get_tz_info_by_id(name_id_info->tz_id_, tz_info_by_name))) {
     LOG_WARN("fail to get get_tz_info_by_name", KPC(name_id_info), K(ret));
   } else {
-    LOG_DEBUG("succ to get get_tz_info_by_name", K(tz_name), KPC(name_id_info), KPC(tz_info_by_name), K(ret));
+    LOG_DEBUG("succ to get get_tz_info_by_name", K(tz_name), KPC(name_id_info), K(tz_info_by_name), K(ret));
   }
 
   if (OB_ENTRY_NOT_EXIST == ret) {
@@ -39848,7 +39841,43 @@ int ObTZInfoMap::get_tz_info_by_name(const ObString& tz_name, ObTimeZoneInfoPos*
   return ret;
 }
 
-void ObTimeZoneInfoWrap::set_tz_info_map(const ObTZInfoMap* tz_info_map)
+// get value pointer of id_map_, only used for updating ObTimeZoneInfoPos by ObTimeZoneInfoManager.
+int ObTZInfoMap::get_tz_info_by_id(const int64_t tz_id, ObTimeZoneInfoPos *&tz_info_by_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(tz_info_by_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tz_info_by_id should be null here", K(ret));
+  } else if (OB_FAIL(id_map_.get(tz_id, tz_info_by_id))) {
+    LOG_WARN("fail to get tz_info_by_id, should not happened", K(tz_id), K(ret));
+  }
+  return ret;
+}
+
+int ObTZInfoMap::get_tz_info_by_name(const ObString &tz_name, ObTimeZoneInfoPos *&tz_info_by_name)
+{
+  int ret = OB_SUCCESS;
+  ObTZNameIDInfo *name_id_info = NULL;
+  if (OB_NOT_NULL(tz_info_by_name)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("v should be null here", K(ret));
+  } else if (OB_FAIL(name_map_.get(ObTZNameKey(tz_name), name_id_info))) {
+    LOG_WARN("fail to get get_tz_info_by_name", K(tz_name), K(ret));
+  } else if (OB_FAIL(get_tz_info_by_id(name_id_info->tz_id_, tz_info_by_name))) {
+    LOG_WARN("fail to get get_tz_info_by_name", KPC(name_id_info), K(ret));
+  }
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    ret = OB_ERR_UNKNOWN_TIME_ZONE;
+  }
+  if (NULL != name_id_info) {
+    name_map_.revert(name_id_info);
+    name_id_info = NULL;
+  }
+
+  return ret;
+}
+
+void ObTimeZoneInfoWrap::set_tz_info_map(const ObTZInfoMap *tz_info_map)
 {
   tz_info_pos_.set_tz_info_map(tz_info_map);
   tz_info_offset_.set_tz_info_map(tz_info_map);
@@ -39889,18 +39918,8 @@ int ObTimeZoneInfoWrap::init_time_zone(const ObString& str_val, const int64_t cu
     ObString tz_name(no_sp_len, str_val.ptr());
     tz_name = tz_name.trim();
 
-    ObTimeZoneInfoPos* tmp_tz_info = NULL;
-    if (OB_FAIL(tz_info_map.get_tz_info_by_name(tz_name, tmp_tz_info))) {
+    if (OB_FAIL(tz_info_map.get_tz_info_by_name(tz_name, tz_info_pos_))) {
       LOG_WARN("fail to get time zone info", K(tz_name), K(ret));
-    } else if (OB_ISNULL(tmp_tz_info)) {
-      ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("tmp_tz_info is null", K(tz_name), K(ret));
-    } else if (OB_FAIL(tz_info_pos_.assign(*tmp_tz_info))) {
-      LOG_WARN("fail to assign time zone info", KPC(tmp_tz_info), K(ret));
-    }
-
-    if (NULL != tmp_tz_info) {
-      tz_info_map.free_tz_info_pos(tmp_tz_info);
     }
 
     if (OB_ENTRY_NOT_EXIST == ret) {
