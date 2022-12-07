@@ -2639,11 +2639,12 @@ int sys_pkg_need_priv_check(uint64_t pkg_id, ObSchemaGetterGuard *schema_guard,
 {
   static const char *pkg_name_need_priv[] = {
     /* add package's name here, who need to be check priv, for example */
-    "dbms_plan_cache"/* dbms_plan_cache */
+    "dbms_plan_cache",
+    "dbms_resource_manager",
   };
   static const char *pkg_name_only_need_obj_priv[] = {
     /* add package's name here, who need to be check priv, for example */
-    "dbms_plan_cache"/* dbms_plan_cache */
+    "dbms_plan_cache",
   };
   int ret = OB_SUCCESS;
   int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
