@@ -1158,7 +1158,9 @@ int ObLogJoin::set_use_batch(ObLogicalOperator* root)
   } else if (root->is_table_scan()) {
     ObLogTableScan *ts = static_cast<ObLogTableScan*>(root);
     // dblink can not support batch nlj
-    ts->set_use_batch(can_use_batch_nlj_);
+    if (!ts->get_range_conditions().empty()) {
+      ts->set_use_batch(can_use_batch_nlj_);
+    }
   } else if (root->get_num_of_child() == 1) {
     if (log_op_def::LOG_TABLE_LOOKUP == root->get_type()) {
       ObLogTableLookup *tlu = static_cast<ObLogTableLookup*>(root);
