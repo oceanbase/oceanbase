@@ -2602,7 +2602,7 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
 /*
 * 1. cursor is local cursor, which mean it is alloc ObPLCursorInfo when in spi_cursor_init
 * in this case, param 'cursor' is not null, wo don't have to do anything
-* 2. curosr is a ref cursor, in this case, ObPLCursorInfo is not alloc during cursor init
+* 2. cursor is a ref cursor, in this case, ObPLCursorInfo is not alloc during cursor init
 * so we have to alloc it. may local or session according to how this cursor is using. it may
 * also reopened, see the case below
 */
@@ -3501,7 +3501,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(cursor));
   if (OB_FAIL(ret)) {
-  } else if (cursor->is_need_check_snapshot()) { /* case: select * from dual, snapshot do not initilize, so it's invlid */
+  } else if (cursor->is_need_check_snapshot()) { /* case: select * from dual, snapshot do not initilize, so it's invalid */
     if (lib::is_oracle_mode()) {
       if (!cursor->get_snapshot().valid_) {
         ret = OB_ERR_FETCH_OUT_SEQUENCE;
