@@ -438,7 +438,7 @@ int ObSharedMacroBlockMgr::defragment()
   }
 
   if (OB_FAIL(ret) && REACH_COUNT_INTERVAL(FAILURE_COUNT_INTERVAL)) {
-    LOG_ERROR("defragmentation can't be finished, something is wrong", K(ret), K(macro_ids), K(*this));
+    LOG_ERROR("defragmentation can't be finished, something is wrong", K(ret), K(macro_ids));
   }
 
   return ret;
