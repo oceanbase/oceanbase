@@ -131,7 +131,7 @@ int ObTableStoreStat::add(const ObTableStoreStat& other)
     LOG_WARN("other is invalid", K(ret), K(other));
   } else if (other.ls_id_ != ls_id_ || other.tablet_id_ != tablet_id_ || other.table_id_ != table_id_) {
     ret = OB_NOT_THE_OBJECT;
-    LOG_WARN("not the same table store", K(ret), K(other));
+    LOG_DEBUG("not the same table store", K(ret), K(other));
   } else {
     row_cache_hit_cnt_ += other.row_cache_hit_cnt_;
     row_cache_miss_cnt_ += other.row_cache_miss_cnt_;
