@@ -1008,7 +1008,7 @@ int ObPxCoordOp::batch_rescan()
 int ObPxCoordOp::erase_dtl_interm_result()
 {
   int ret = OB_SUCCESS;
-  if (enable_px_batch_rescan()) {
+  if (static_cast<const ObPxCoordSpec&>(get_spec()).batch_op_info_.is_inited()) {
     ObDTLIntermResultKey key;
     ObDtlChannelInfo ci;
     // no need OB_SUCCESS in for-loop.
