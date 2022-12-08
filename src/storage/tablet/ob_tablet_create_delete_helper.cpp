@@ -2332,7 +2332,6 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
     param.data_blocks_cnt_ = 0;
     param.micro_block_cnt_ = 0;
     param.use_old_macro_block_count_ = 0;
-    param.column_cnt_ = table_schema.get_column_count() + multi_version_col_cnt;
     param.data_checksum_ = 0;
     param.occupy_size_ = 0;
     param.ddl_scn_.set_min();
@@ -2340,7 +2339,10 @@ int ObTabletCreateDeleteHelper::build_create_sstable_param(
     param.original_size_ = 0;
     param.ddl_scn_.set_min();
     param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
-    if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_,
+    if (OB_FAIL(table_schema.get_store_column_count(param.column_cnt_, true/*is_full*/))) {
+      LOG_WARN("fail to get stored col cnt of table schema", K(ret), K(table_schema));
+    } else if (FALSE_IT(param.column_cnt_ += multi_version_col_cnt)) {
+    } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_,
         param.column_checksums_))) {
       LOG_WARN("fail to fill column checksum for empty major", K(ret), K(param));
     }

@@ -168,6 +168,8 @@ int ObTablet::init(
     LOG_WARN("failed to build read info", K(ret));
   } else if (OB_FAIL(pre_transform_sstable_root_block(*full_read_info_.get_index_read_info()))) {
     LOG_WARN("failed to pre-transform sstable root block", K(ret), K(full_read_info_));
+  } else if (OB_FAIL(check_sstable_column_checksum())) {
+    LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else {
     is_inited_ = true;
     LOG_INFO("succeeded to init tablet", K(ret), KP(this), K(ls_id), K(tablet_id), K(data_tablet_id),
@@ -236,6 +238,8 @@ int ObTablet::init(
   } else if (OB_FAIL(check_max_sync_schema_version())) {
     LOG_WARN("unexpected max sync schema version", K(ret), K(param), K(old_tablet),
         K(max_sync_schema_version), K(storage_schema_));
+  } else if (OB_FAIL(check_sstable_column_checksum())) {
+    LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -300,6 +304,8 @@ int ObTablet::init(
     LOG_WARN("failed to pre-transform sstable root block", K(ret), K(full_read_info_));
   } else if (OB_FAIL(check_max_sync_schema_version())) {
     LOG_WARN("unexpected max sync schema version", K(ret), K(param), K(is_update), K(storage_schema_));
+  } else if (OB_FAIL(check_sstable_column_checksum())) {
+    LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else {
     is_inited_ = true;
     LOG_INFO("succeeded to init tablet", K(ret), K(param), KPC(this));
@@ -346,6 +352,8 @@ int ObTablet::init(
     LOG_WARN("fail to build read info", K(ret));
   } else if (OB_FAIL(pre_transform_sstable_root_block(*full_read_info_.get_index_read_info()))) {
     LOG_WARN("failed to pre-transform sstable root block", K(ret), K(full_read_info_));
+  } else if (OB_FAIL(check_sstable_column_checksum())) {
+    LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -408,6 +416,8 @@ int ObTablet::init(
     LOG_WARN("failed to pre-transform sstable root block", K(ret), K(full_read_info_));
   } else if (OB_FAIL(check_max_sync_schema_version())) {
     LOG_WARN("unexpected max sync schema version", K(ret), K(param), K(old_tablet), K(storage_schema_));
+  } else if (OB_FAIL(check_sstable_column_checksum())) {
+    LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
   } else {
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
@@ -432,6 +442,34 @@ int ObTablet::init(
   return ret;
 }
 
+int ObTablet::check_sstable_column_checksum() const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> sstables;
+  int64_t schema_col_cnt = 0;
+  int64_t sstable_col_cnt = 0;
+  if (OB_UNLIKELY(!table_store_.is_valid() || !storage_schema_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to check tablet ", K(ret), K(table_store_), K(storage_schema_));
+  } else if (OB_FAIL(storage_schema_.get_stored_column_count_in_sstable(schema_col_cnt))) {
+    LOG_WARN("failed to get stored column count of storage schema", K(ret), KPC(this));
+  } else if (OB_FAIL(inner_get_all_sstables(sstables))) {
+    LOG_WARN("failed to get stored column count of storage schema", K(ret), KPC(this));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); ++i) {
+      ObSSTable *cur = reinterpret_cast<ObSSTable *>(sstables.at(i));
+      if (OB_ISNULL(cur)) {
+        ret = OB_ERR_NULL_VALUE;
+        LOG_WARN("invalid null sstable", K(ret), K(i), KP(cur), KPC(this));
+      } else if ((sstable_col_cnt = cur->get_meta().get_col_checksum().count()) > schema_col_cnt) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("The storage schema is older than the sstable, and cann’t explain the data.",
+            K(ret), K(i), K(sstable_col_cnt), K(schema_col_cnt), KPC(cur), K_(storage_schema));
+      }
+    }
+  }
+  return ret;
+}
 int ObTablet::serialize(char *buf, const int64_t len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -1971,6 +2009,11 @@ int ObTablet::build_migration_sstable_param(
     } else if (OB_FAIL(ObSSTableMergeRes::fill_column_default_checksum_from_schema(&storage_schema_,
         mig_sstable_param.column_default_checksums_))) {
       LOG_WARN("fail to assign column default checksums", K(ret), K(storage_schema_));
+    } else if (OB_UNLIKELY(mig_sstable_param.column_default_checksums_.count()
+        < mig_sstable_param.column_checksums_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected column count", K(ret),
+          KP(this), K(mig_sstable_param), K(sstable_meta), K(storage_schema_));
     } else {
       mig_sstable_param.table_key_ = sstable->get_key();
     }
