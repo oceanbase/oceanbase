@@ -428,8 +428,6 @@ private:
   int add_name_for_anonymous_view();
   int add_name_for_anonymous_view_recursive(TableItem *table_item);
 
-  int replace_stmt_expr_with_groupby_exprs(ObSelectStmt *select_stmt, ObQueryCtx *query_ctx);
-
   int is_need_check_col_dup(const ObRawExpr *expr, bool &need_check);
 protected:
   // data members

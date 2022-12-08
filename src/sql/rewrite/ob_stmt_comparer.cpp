@@ -189,6 +189,8 @@ bool ObStmtCompareContext::compare_const(const ObConstRawExpr &left, const ObCon
         }
       } else if (is_left_calc_item || is_right_calc_item) {
         bret = false;
+      } else if (ignore_param_) {
+        bret = ObExprEqualCheckContext::compare_const(left, right);
       } else if (left.get_result_type().get_param().is_equal(
                    right.get_result_type().get_param(), CS_TYPE_BINARY)) {
         ObPCParamEqualInfo info;

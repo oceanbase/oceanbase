@@ -37,7 +37,8 @@ public:
       query_ctx_(nullptr),
       has_nested_aggr_(false),
       is_check_order_by_(false),
-      dblink_groupby_expr_(NULL)
+      dblink_groupby_expr_(NULL),
+      only_need_contraints_(false)
   {}
   virtual ~ObGroupByChecker()
   {}
@@ -74,6 +75,8 @@ private:
   bool has_nested_aggr_;
   bool is_check_order_by_;
   common::ObIArray<ObRawExpr*> *dblink_groupby_expr_;
+  // if true, only add constraints for shared exprs which will be replaced in replace_stmt_expr_with_groupby_exprs
+  bool only_need_contraints_;
 private:
   // Top select stmt 是指当前调用group by checker的select_stmt，不是select_stmt的level
   // 其他select_stmt会每进入一层，递增一层，同时检查结束退出，会递减一层
@@ -100,7 +103,8 @@ public:
   // all functions below should only called in resolver
   static int check_group_by(ObSelectStmt *ref_stmt,
                             bool has_having_self_column,
-                            bool has_group_by_clause);
+                            bool has_group_by_clause,
+                            bool only_need_constraints);
   static int check_groupby_valid(ObRawExpr *expr);
   static int check_by_expr(
     const ObSelectStmt *ref_stmt,
