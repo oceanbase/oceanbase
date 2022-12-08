@@ -23281,6 +23281,10 @@ def_table_schema(
 
 # 21346: PARAMETERS
 
+# 21347: INFORMATION_SCHEMA.TABLE_PRIVILEGES
+# 21348: INFORMATION_SCHEMA.USER_PRIVILEGES
+# 21349: INFORMATION_SCHEMA.SCHEMA_PRIVILEGES
+
 ################################################################################
 # Oracle System View (25000, 30000]
 # Data Dictionary View (25000, 28000]
