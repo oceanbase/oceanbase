@@ -143,11 +143,14 @@ int ObSSTableSecMetaIterator::open(
     if (OB_FAIL(ret) || is_prefetch_end_) {
     } else if (OB_UNLIKELY(start_key_beyond_range)) {
       set_iter_end();
+      is_inited_ = true;
     }
   }
 
-  if (OB_FAIL(ret) || is_prefetch_end_) {
+  if (OB_FAIL(ret)) {
     // do nothing
+  } else if (is_prefetch_end_) {
+    is_inited_ = true;
   } else if (!is_meta_root && OB_FAIL(prefetch_micro_block(1 /* fetch first micro block */))) {
     LOG_WARN("Fail to prefetch next micro block", K(ret), K_(is_prefetch_end));
   } else if (OB_FAIL(row_.init(allocator, index_read_info_->get_request_count()))) {
@@ -354,6 +357,7 @@ int ObSSTableSecMetaIterator::open_meta_root_block()
         end_idx,
         is_index_scan))) {
       if (OB_BEYOND_THE_RANGE == ret) {
+        set_iter_end();
         ret = OB_ITER_END;
         FLOG_INFO("this special sstable only locates range during iteration, so beyong range err should be transformed into iter end", K(ret));
       } else {
