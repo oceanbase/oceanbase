@@ -1941,27 +1941,25 @@ bool ObOpRawExpr::inner_same_as(
   } else if (expr.get_expr_type() != get_expr_type()) {
     need_cmp = false;
   }
-
   if (need_cmp) {
-    const ObOpRawExpr *m_expr = static_cast<const ObOpRawExpr *>(&expr);
     if (BOTH_CMP == cmp_type || REGULAR_CMP == cmp_type) {
-      if (this->get_param_count() == m_expr->get_param_count()) {
+      if (this->get_param_count() == expr.get_param_count()) {
         bool_ret = true;
-        for (int64_t i = 0; bool_ret && i < m_expr->get_param_count(); ++i) {
-          if (NULL == this->get_param_expr(i) || NULL == m_expr->get_param_expr(i)
-              || !(this->get_param_expr(i)->same_as(*m_expr->get_param_expr(i), check_context))) {
+        for (int64_t i = 0; bool_ret && i < expr.get_param_count(); ++i) {
+          if (NULL == this->get_param_expr(i) || NULL == expr.get_param_expr(i)
+              || !(this->get_param_expr(i)->same_as(*expr.get_param_expr(i), check_context))) {
             bool_ret = false;
           }
         }
       }
     }
     if (!bool_ret && (BOTH_CMP == cmp_type || REVERSE_CMP == cmp_type)) {
-      if (NULL == this->get_param_expr(0) || NULL == m_expr->get_param_expr(0)
-          || NULL == this->get_param_expr(1) || NULL == m_expr->get_param_expr(1)) {
+      if (NULL == this->get_param_expr(0) || NULL == expr.get_param_expr(0)
+          || NULL == this->get_param_expr(1) || NULL == expr.get_param_expr(1)) {
         /* bool_ret = false; */
       } else {
-        bool_ret = this->get_param_expr(0)->same_as(*m_expr->get_param_expr(1), check_context)
-            && this->get_param_expr(1)->same_as(*m_expr->get_param_expr(0), check_context);
+        bool_ret = this->get_param_expr(0)->same_as(*expr.get_param_expr(1), check_context)
+            && this->get_param_expr(1)->same_as(*expr.get_param_expr(0), check_context);
       }
     }
   }
@@ -3387,11 +3385,11 @@ bool ObSysFunRawExpr::inner_same_as(
     ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
-  const ObSysFunRawExpr *s_expr = static_cast<const ObSysFunRawExpr *>(&expr);
   if (get_expr_type() != expr.get_expr_type()) {
   } else if (T_FUN_SYS_RAND == get_expr_type()
              || T_FUN_SYS_GUID == get_expr_type()) {
-  } else {
+  } else if (expr.is_sys_func_expr()) {
+    const ObSysFunRawExpr *s_expr = static_cast<const ObSysFunRawExpr *>(&expr);
     if (ObCharset::case_insensitive_equal(func_name_, s_expr->get_func_name())
         && this->get_param_count() == s_expr->get_param_count()) {
       bool_ret = true;
@@ -3432,6 +3430,18 @@ bool ObSysFunRawExpr::inner_same_as(
               || T_FUN_SYS_UTC_TIMESTAMP == get_expr_type()
               || T_FUN_SYS_UTC_TIME == get_expr_type())) {
         bool_ret = result_type_.get_scale() == s_expr->get_result_type().get_scale();
+      }
+    }
+  } else if (expr.is_op_expr() && T_OP_CNN == expr.get_expr_type()) {
+    //for cases which compares concat('xxx','xxx') with 'xxx'||'xxx'
+    const ObOpRawExpr *m_expr = static_cast<const ObOpRawExpr *>(&expr);
+    if (this->get_param_count() == m_expr->get_param_count()) {
+      bool_ret = true;
+      for (int64_t i = 0; bool_ret && i < m_expr->get_param_count(); ++i) {
+        if (NULL == this->get_param_expr(i) || NULL == m_expr->get_param_expr(i)
+            || !(this->get_param_expr(i)->same_as(*m_expr->get_param_expr(i), check_context))) {
+          bool_ret = false;
+        }
       }
     }
   }
