@@ -5370,7 +5370,7 @@ OB_INLINE bool ObTimeConverter::is_year4(int64_t first_token_len)
 
 OB_INLINE bool ObTimeConverter::is_single_colon(const ObTimeDelims &delims)
 {
-  return (NULL != delims.ptr_ && ':' == *delims.ptr_ && 1 == delims.len_);
+  return (1 == delims.len_ && NULL != delims.ptr_ && ':' == *delims.ptr_);
 }
 
 OB_INLINE bool ObTimeConverter::is_space_end_with_single_colon(const ObTimeDelims &delims)
