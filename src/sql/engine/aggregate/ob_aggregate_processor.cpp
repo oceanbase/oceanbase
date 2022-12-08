@@ -2095,7 +2095,6 @@ int ObAggregateProcessor::collect_aggr_result(AggrCell& aggr_cell, const ObExpr*
           ret = OB_SUCCESS;
           result.set_null();
           eval_info.evaluated_ = true;
-          LOG_DEBUG("result is null", K(*storted_row), K(row_cnt));
         } else if (OB_FAIL(ret)) {
           LOG_WARN("failed to get dest loc row", K(ret), K(dest_loc), K(row_cnt));
         } else if (OB_FAIL(prev_row.save_store_row(*storted_row))) {
