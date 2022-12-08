@@ -163,6 +163,8 @@ private:
   int try_push_down_outer_join_conds(ObDMLStmt* stmt, JoinedTable* join_table, bool& trans_happened);
   int create_view_with_left_table(ObDMLStmt* stmt, JoinedTable* joined_table);
   int push_down_on_condition(ObDMLStmt* stmt, JoinedTable* join_table, ObIArray<ObRawExpr*>& conds);
+  int get_push_down_conditions(ObDMLStmt *stmt, JoinedTable *join_table, ObIArray<ObRawExpr *> &join_conds,
+      ObIArray<ObRawExpr *> &push_down_conds);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformSimplify);
