@@ -419,7 +419,7 @@ int ObInnerSqlRpcP::process()
           }
           case ObInnerSQLTransmitArg::OPERATION_TYPE_EXECUTE_READ: {
             if (OB_FAIL(process_read(conn, sql_str, transmit_arg, transmit_result))) {
-              LOG_WARN("process_read failed", K(ret), K(transmit_arg), K(sql_str));
+              LOG_WARN("process_read failed", K(ret), K(sql_str));
             }
             break;
           }
