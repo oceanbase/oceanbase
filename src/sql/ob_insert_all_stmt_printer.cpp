@@ -211,7 +211,7 @@ int ObInsertAllStmtPrinter::print_subquery(const ObInsertAllStmt *insert_stmt)
     } else {
       ObSelectStmtPrinter printer(buf_, buf_len_, pos_,
                                   static_cast<const ObSelectStmt*>(sub_select_stmt),
-                                  print_params_, NULL, false);
+                                  print_params_, NULL, false, false, true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("failed to print sub select printer", K(ret));
       }
@@ -256,7 +256,8 @@ int ObInsertAllStmtPrinter::print_into_table_values(const ObInsertAllStmt *inser
         DATA_PRINTF("(");
         for (int64_t p = 0; OB_SUCC(ret) && p < col_count; ++p) {
           if (OB_FAIL(expr_printer_.do_print(table_info.values_vector_.at(k * col_count + p),
-                                             T_INSERT_SCOPE))) {
+                                             T_INSERT_SCOPE,
+                                             true))) {
             LOG_WARN("fail to print where expr", K(ret));
           } else {
             DATA_PRINTF(",");

@@ -231,7 +231,7 @@ int ObInsertStmtPrinter::print_subquery(const ObInsertStmt *insert_stmt)
     } else {
       ObSelectStmtPrinter printer(buf_, buf_len_, pos_,
                                   static_cast<const ObSelectStmt*>(sub_select_stmt),
-                                  print_params_, NULL, false);
+                                  print_params_, NULL, false, false, true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("failed to print sub select printer", K(ret));
       }
