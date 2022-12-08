@@ -805,11 +805,15 @@ bool ObExprEqualCheckContext::compare_const(const ObConstRawExpr &left,
   int &ret = err_code_;
   bool result = false;
   if (left.get_result_type() == right.get_result_type()) {
-    const ObObj &this_value = left.get_value().is_unknown() ?
+    if (ignore_param_ && (left.get_value().is_unknown() || right.get_value().is_unknown())) {
+      result = true;
+    } else {
+      const ObObj &this_value = left.get_value().is_unknown() ?
           left.get_result_type().get_param() : left.get_value();
-    const ObObj &other_value = right.get_value().is_unknown() ?
+      const ObObj &other_value = right.get_value().is_unknown() ?
           right.get_result_type().get_param() : right.get_value();
-    result = this_value.is_equal(other_value, CS_TYPE_BINARY);
+      result = this_value.is_equal(other_value, CS_TYPE_BINARY);
+    }
   }
   if (OB_SUCC(ret) && result && left.get_value().is_unknown()) {
     if (OB_FAIL(add_param_pair(left.get_value().get_unknown(), NULL))) {
