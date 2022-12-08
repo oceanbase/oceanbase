@@ -1581,7 +1581,9 @@ int ObTenantMetaMemMgr::try_wash_tablet(const int64_t expect_wash_cnt)
       if (OB_FAIL(do_wash_candidate_tablet(expect_wash_cnt, heap, wash_inner_cnt, wash_user_cnt))) {
         LOG_WARN("fail to do wash candidate tablet", K(ret), K(expect_wash_cnt));
       } else if (FALSE_IT(time_guard.click("wash_candidate_tablet_cost"))) {
-      } else if (wash_inner_cnt + wash_user_cnt < expect_wash_cnt) {
+      }
+      /* do_wash_mem_addr_tablet has concurrent issue with normal tablet update, disable it
+      else if (wash_inner_cnt + wash_user_cnt < expect_wash_cnt) {
         std::sort(mem_addr_tablet_info.begin(), mem_addr_tablet_info.end());
         if (OB_FAIL(do_wash_mem_addr_tablet(expect_wash_cnt, mem_addr_tablet_info, wash_inner_cnt,
             wash_user_cnt, wash_mem_addr_cnt))) {
@@ -1590,6 +1592,7 @@ int ObTenantMetaMemMgr::try_wash_tablet(const int64_t expect_wash_cnt)
           time_guard.click("wash_mem_addr_tablet_cost");
         }
       }
+      */
       if (OB_SUCC(ret)) {
         if (0 == wash_inner_cnt + wash_user_cnt) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
