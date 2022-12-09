@@ -318,7 +318,9 @@ int ObDDLKV::close()
     // do nothing
     LOG_INFO("ddl kv already closed", K(*this));
   } else if (OB_FAIL(wait_pending())) {
-    LOG_WARN("wait pending failed", K(ret));
+    if (OB_EAGAIN != ret) {
+      LOG_WARN("wait pending failed", K(ret));
+    }
   } else if (!is_rebuilder_closed_) {
     if (OB_FAIL(index_block_rebuilder_->close())) {
       LOG_WARN("index block rebuilder close failed", K(ret));
@@ -373,34 +375,16 @@ int ObDDLKV::wait_pending()
     LOG_WARN("get ls handle failed", K(ret), K(ls_id_));
   } else {
     int64_t max_decided_log_ts = 0;
-    bool wait_ls_ts = true;
-    bool wait_ddl_redo = true;
-    const int64_t abs_timeout_ts = ObTimeUtility::fast_current_time() + 1000L * 1000L * 10L;
-    while (OB_SUCC(ret)) {
-      if (wait_ls_ts) {
-        if (OB_FAIL(ls_handle.get_ls()->get_max_decided_log_ts_ns(max_decided_log_ts))) {
-          LOG_WARN("get max decided log ts failed", K(ret), K(ls_id_));
-        } else {
-          // max_decided_log_ts is the left border log_ts - 1
-          wait_ls_ts = max_decided_log_ts + 1 < freeze_log_ts_;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (!wait_ls_ts) {
-          wait_ddl_redo = is_pending();
-        }
-        if (wait_ls_ts || wait_ddl_redo) {
-          if (ObTimeUtility::fast_current_time() > abs_timeout_ts) {
-            ret = OB_TIMEOUT;
-            LOG_WARN("wait pending ddl kv timeout", K(ret), K(*this), K(max_decided_log_ts), K(wait_ls_ts), K(wait_ddl_redo));
-          } else {
-            ob_usleep(1L * 1000L); // 1 ms
-          }
-          if (REACH_TIME_INTERVAL(1000L * 1000L * 1L)) {
-            LOG_INFO("wait pending ddl kv", K(ret), K(*this));
-          }
-        } else {
-          break;
+    if (OB_FAIL(ls_handle.get_ls()->get_max_decided_log_ts_ns(max_decided_log_ts))) {
+      LOG_WARN("get max decided log ts failed", K(ret), K(ls_id_));
+    } else {
+      // max_decided_log_ts is the left border log_ts - 1
+      // the min deciding(replay or apply) log_ts (aka left border) is max_decided_log_ts + 1
+      const bool pending_finished = max_decided_log_ts + 1 >= freeze_log_ts_ && !is_pending();
+      if (!pending_finished) {
+        ret = OB_EAGAIN;
+        if (REACH_TIME_INTERVAL(1000L * 1000L)) {
+          LOG_INFO("wait pending not finish", K(ret), K(*this), K(max_decided_log_ts));
         }
       }
     }
