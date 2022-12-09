@@ -360,16 +360,22 @@ int ObMySQLUtil::int_cell_str(
       }
       /* skip bytes_to_store_len bytes to store length */
       int64_t bytes_to_store_len = get_number_store_len(length);
-      MEMCPY(buf + pos + bytes_to_store_len, ffi.ptr(), ffi.length());
-      if (zero_cnt > 0) {
-        /*zero_cnt > 0 indicates that zerofill is true */
-        MEMSET(buf + pos + bytes_to_store_len, '0', zero_cnt);
-        MEMCPY(buf + pos + bytes_to_store_len + zero_cnt, ffi.ptr(), ffi.length());
+      if (OB_UNLIKELY(pos + bytes_to_store_len + ffi.length() > len)) {
+        ret = OB_SIZE_OVERFLOW;
+      } else if (zero_cnt > 0 && OB_UNLIKELY(pos + bytes_to_store_len + zero_cnt > len)) {
+        ret = OB_SIZE_OVERFLOW;
       } else {
         MEMCPY(buf + pos + bytes_to_store_len, ffi.ptr(), ffi.length());
+        if (zero_cnt > 0) {
+          /*zero_cnt > 0 indicates that zerofill is true */
+          MEMSET(buf + pos + bytes_to_store_len, '0', zero_cnt);
+          MEMCPY(buf + pos + bytes_to_store_len + zero_cnt, ffi.ptr(), ffi.length());
+        } else {
+          MEMCPY(buf + pos + bytes_to_store_len, ffi.ptr(), ffi.length());
+        }
+        ret = ObMySQLUtil::store_length(buf, pos + bytes_to_store_len, length, pos);
+        pos += length;
       }
-      ret = ObMySQLUtil::store_length(buf, pos + bytes_to_store_len, length, pos);
-      pos += length;
     } else {
       switch (obj_type) {
         case ObTinyIntType:
