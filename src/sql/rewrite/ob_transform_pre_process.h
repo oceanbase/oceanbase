@@ -436,6 +436,22 @@ struct DistinctObjMeta
   int extract_idx_from_table_items(ObDMLStmt *sub_stmt,
                                    const TableItem *table_item,
                                    ObSqlBitSet<> &rel_ids);
+  int transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_happened);
+  int get_rollup_const_exprs(ObSelectStmt *stmt,
+                             ObIArray<ObRawExpr*> &const_exprs,
+                             ObIArray<ObRawExpr*> &const_remove_const_exprs,
+                             ObIArray<ObRawExpr*> &exec_params,
+                             ObIArray<ObRawExpr*> &exec_params_remove_const_exprs,
+                             ObIArray<ObRawExpr*> &column_ref_exprs,
+                             ObIArray<ObRawExpr*> &column_ref_remove_const_exprs,
+                             bool &trans_happened);
+  int replace_remove_const_exprs(ObSelectStmt *stmt,
+                                ObIArray<ObRawExpr*> &const_exprs,
+                                ObIArray<ObRawExpr*> &const_remove_const_exprs,
+                                ObIArray<ObRawExpr*> &exec_params,
+                                ObIArray<ObRawExpr*> &exec_params_remove_const_exprs,
+                                ObIArray<ObRawExpr*> &column_ref_exprs,
+                                ObIArray<ObRawExpr*> &column_ref_remove_const_exprs);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);
 };

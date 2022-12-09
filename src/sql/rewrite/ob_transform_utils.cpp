@@ -9330,8 +9330,9 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
       if (OB_ISNULL(rollup_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("got an unexpected null", K(ret));
-      } else if (rollup_exprs.at(i)->same_as(*expr, &check_context) &&
-                 (lib::is_mysql_mode() || !expr->is_const_expr())) {
+      } else if (((lib::is_mysql_mode() && !(expr->has_flag(IS_CONST) && ob_is_integer_type(expr->get_result_type().get_type())))||
+                 (lib::is_oracle_mode() && !expr->is_static_const_expr()))
+                  && rollup_exprs.at(i)->same_as(*expr, &check_context)) {
         if (OB_FAIL(append(param_exprs_local, check_context.param_expr_))) {
           LOG_WARN("fail to append param expr", K(ret));
         } else if (OB_FAIL(append(equal_params_local, check_context.equal_param_info_))) {
