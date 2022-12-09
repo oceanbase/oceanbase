@@ -1685,6 +1685,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
       pc_ctx->fp_result_.pc_key_.key_id_ = 0;
       pc_ctx->fp_result_.pc_key_.name_ = trimed_stmt;
       pc_ctx->normal_parse_const_cnt_ = remote_sql_info.ps_params_->count();
+      pc_ctx->is_original_ps_mode_ = remote_sql_info.is_original_ps_mode_;
       pc_ctx->set_is_ps_execute_stage();
       if (OB_FAIL(construct_param_store(*remote_sql_info.ps_params_, param_store))) {
         LOG_WARN("construct param store failed", K(ret));
@@ -2044,7 +2045,13 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     resolver_ctx.is_ddl_from_primary_ = context.is_ddl_from_primary_;
     resolver_ctx.is_cursor_ = context.is_cursor_;
     resolver_ctx.is_batch_stmt_ = context.multi_stmt_item_.is_batched_multi_stmt();
-    resolver_ctx.is_by_ordinal_ = parse_result.question_mark_ctx_.by_ordinal_;
+    if (NULL != pc_ctx && pc_ctx->is_remote_executor_) {
+      resolver_ctx.need_check_col_dup_
+        = !(context.is_prepare_protocol_ && parse_result.question_mark_ctx_.by_ordinal_ && pc_ctx->is_original_ps_mode_);
+    } else {
+      resolver_ctx.need_check_col_dup_
+        = !(context.is_prepare_protocol_ && parse_result.question_mark_ctx_.by_ordinal_);
+    }
     resolver_ctx.external_param_info_.by_name_
         = parse_result.question_mark_ctx_.by_name_ || NULL != context.secondary_namespace_; //static sql in PL must be by name
     resolver_ctx.outline_parse_result_ = outline_parse_result;
@@ -3579,6 +3586,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
             param_store.pop_back();
           }
           pctx->get_remote_sql_info().use_ps_ = true;
+          pctx->get_remote_sql_info().is_original_ps_mode_ = true;
           //从ps sql info中取出要执行的sql
           pctx->get_remote_sql_info().remote_sql_ = pc_ctx.sql_ctx_.cur_sql_;
           pctx->get_remote_sql_info().ps_params_ = &param_store;
