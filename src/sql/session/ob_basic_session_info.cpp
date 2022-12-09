@@ -98,6 +98,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       is_first_gen_config_(true),
       sys_var_fac_(),
       next_frag_mem_point_(OB_MALLOC_NORMAL_BLOCK_SIZE), // 8KB
+      sys_vars_encode_max_size_(0),
       consistency_level_(INVALID_CONSISTENCY),
       tz_info_wrap_(),
       next_tx_read_only_(-1),
@@ -1451,19 +1452,45 @@ int ObBasicSessionInfo::gen_sys_var_in_pc_str()
     if (NULL == (buf = (char *)name_pool_.alloc(MAX_SYS_VARS_STR_SIZE))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocator memory", K(ret), K(MAX_SYS_VARS_STR_SIZE));
+    } else {
+      set_sys_vars_encode_max_size(MAX_SYS_VARS_STR_SIZE);
+      is_first_gen_ = false;
     }
-    is_first_gen_ = false;
   } else {
     buf = sys_var_in_pc_str_.ptr();
     MEMSET(buf, 0, sys_var_in_pc_str_.length());
     sys_var_in_pc_str_.reset();
   }
-
+  int64_t sys_var_encode_max_size = get_sys_vars_encode_max_size();
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_influence_plan_sys_var(sys_vars))) {
     LOG_WARN("fail to get influence plan system variables", K(ret));
-  } else if (OB_FAIL(sys_vars.serialize_sys_vars(buf, MAX_SYS_VARS_STR_SIZE, pos))) {
-    LOG_WARN("fail to serialize system vars");
+  } else if (OB_FAIL(sys_vars.serialize_sys_vars(buf, sys_var_encode_max_size, pos))) {
+    if (OB_BUF_NOT_ENOUGH == ret || OB_SIZE_OVERFLOW ==ret) {
+      ret = OB_SUCCESS;
+      // expand MAX_SYS_VARS_STR_SIZE 3 times.
+      for (int64_t i = 0; OB_SUCC(ret) && i < 3; ++i) {
+        sys_var_encode_max_size = 2 * sys_var_encode_max_size;
+        if (NULL == (buf = (char *)name_pool_.alloc(sys_var_encode_max_size))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocator memory", K(ret), K(sys_var_encode_max_size));
+        } else if (OB_FAIL(sys_vars.serialize_sys_vars(buf, sys_var_encode_max_size, pos))) {
+          if (i != 2 && (OB_BUF_NOT_ENOUGH == ret || OB_SIZE_OVERFLOW ==ret)) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to serialize system vars", K(ret));
+          }
+        } else {
+          break;
+        }
+      }
+    } else {
+      LOG_WARN("fail to serialize system vars", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      set_sys_vars_encode_max_size(sys_var_encode_max_size);
+      (void)sys_var_in_pc_str_.assign(buf, int32_t(pos));
+    }
   } else {
     (void)sys_var_in_pc_str_.assign(buf, int32_t(pos));
   }

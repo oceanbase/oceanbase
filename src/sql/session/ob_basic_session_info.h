@@ -426,6 +426,8 @@ public:
   void set_valid(const bool valid) {is_valid_ = valid;};
   int set_client_version(const common::ObString &client_version);
   int set_driver_version(const common::ObString &driver_version);
+  int64_t get_sys_vars_encode_max_size() { return sys_vars_encode_max_size_; }
+  void set_sys_vars_encode_max_size(int64_t size) { sys_vars_encode_max_size_ = size; }
   void set_sql_mode(const ObSQLMode sql_mode)
   {
     // Compatibility mode store in sql_mode_ but controlled by ob_compatibility_mode variable,
@@ -1914,6 +1916,7 @@ private:
   share::ObSysVarFactory sys_var_fac_;
   char trace_id_buff_[64];//由于trace_id系统变量在出现slow query的情况下会进行更新，因此通过一个buffer来存储其内容，防止内存频繁分配
   int64_t next_frag_mem_point_; // 用于控制 sys var 内存占用的碎片整理（反复设置同一个 varchar 值会产生内存碎片）
+  int64_t sys_vars_encode_max_size_;
 
   //==============系统变量相关的变量，需要序列化到远端==============
   common::ObConsistencyLevel consistency_level_;
