@@ -199,7 +199,7 @@ int ObMajorMergeProgressChecker::check_tablet(
     } else if (OB_FAIL(check_majority_integrated(schema_guard, tablet, ls_info))) {
       LOG_WARN("fail to check majority integrated", KR(ret));
     } else if (OB_FAIL(check_tablet_data_version(all_progress, global_broadcast_scn, tablet, ls_info))) {
-      LOG_WARN("fail to check majority integrated", KR(ret));
+      LOG_WARN("fail to check data version", KR(ret));
     }
   }
 
@@ -216,8 +216,19 @@ int ObMajorMergeProgressChecker::check_tablet_data_version(
 
   const ObLSReplica *ls_r = nullptr;
   FOREACH_CNT_X(r, tablet.get_replicas(), OB_SUCCESS == ret) {
-    if (OB_FAIL(ls_info.find(r->get_server(), ls_r))) {
-      LOG_WARN("fail to find lfs replica", "addr", r->get_server(), KR(ret));
+    if (OB_ISNULL(r)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid replica", KR(ret), K_(tenant_id), K(tablet));
+    } else if (OB_FAIL(ls_info.find(r->get_server(), ls_r))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // Ignore tablet replicas that are not in ls_info. E.g., after ls replica migration,
+        // source ls meta has been deleted, but source tablet meta has not been deleted yet.
+        ret = OB_SUCCESS;  // ignore ret
+        LOG_INFO("ignore this tablet replica, sicne it is not in ls_info", K_(tenant_id),
+                 KPC(r), K(ls_info));
+      } else {
+        LOG_WARN("fail to find ls replica", KR(ret), "addr", r->get_server());
+      }
     } else if (OB_UNLIKELY(nullptr == ls_r)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid ls replica", KR(ret), KPC(r));
@@ -264,10 +275,14 @@ int ObMajorMergeProgressChecker::check_majority_integrated(
   int64_t all_replica_num = OB_INVALID_COUNT;
   int64_t full_replica_num = OB_INVALID_COUNT;
   int64_t paxos_replica_num = OB_INVALID_COUNT;
+  bool is_in_member_list = false;
+  ObLSReplica::MemberList member_list;
 
   if (OB_FAIL(get_associated_replica_num(schema_guard, paxos_replica_num,
           full_replica_num, all_replica_num, majority))) {
     LOG_WARN("fail to get associated replica num", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(get_member_list(ls_info, member_list))) { // member_list of ls leader replica
+    LOG_WARN("fail to get member_list", KR(ret), K_(tenant_id), K(ls_info));
   } else {
     const int64_t tablet_replica_cnt = tablet.replica_count();
     int64_t paxos_cnt = 0;
@@ -275,7 +290,15 @@ int ObMajorMergeProgressChecker::check_majority_integrated(
     FOREACH_CNT_X(r, tablet.get_replicas(), OB_SUCC(ret)) {
       if (OB_ISNULL(r)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid replica", KR(ret), K_(tenant_id), K(r));
+        LOG_WARN("invalid replica", KR(ret), K_(tenant_id), K(tablet));
+      } else if (OB_FAIL(is_replica_in_ls_member_list(*r, member_list, is_in_member_list))) {
+        LOG_WARN("fail to check if replica is in ls member_list", KR(ret), K_(tenant_id),
+                 KPC(r), K(member_list));
+      } else if (!is_in_member_list) {
+        // Ignore tablet replicas that are not in member list. E.g., after ls replica migration,
+        // source ls meta has been deleted, but source tablet meta has not been deleted yet.
+        LOG_INFO("ignore this tablet replica, sicne it is not in ls member_list", K_(tenant_id),
+                 KPC(r), K(member_list));
       } else if (OB_FAIL(ls_info.find(r->get_server(), ls_r))) {
         LOG_WARN("fail to find", "addr", r->get_server(), KR(ret));
       } else if (OB_UNLIKELY(nullptr == ls_r)) {
@@ -341,6 +364,47 @@ int ObMajorMergeProgressChecker::get_associated_replica_num(
     majority = rootserver::majority(paxos_replica_num);
   }
 
+  return ret;
+}
+
+int ObMajorMergeProgressChecker::get_member_list(
+    const share::ObLSInfo &ls_info,
+    share::ObLSReplica::MemberList &member_list) const
+{
+  int ret = OB_SUCCESS;
+  const ObLSReplica *ls_leader_replica = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ls_info.find_leader(ls_leader_replica))) {
+    LOG_WARN("fail to find ls leader replica", KR(ret), K_(tenant_id), K(ls_info));
+  } else if (OB_ISNULL(ls_leader_replica)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls leader replica is null", KR(ret), K_(tenant_id), K(ls_info));
+  } else {
+    member_list = ls_leader_replica->get_member_list();
+  }
+  return ret;
+}
+
+int ObMajorMergeProgressChecker::is_replica_in_ls_member_list(
+    const share::ObTabletReplica &replica,
+    const ObLSReplica::MemberList &member_list,
+    bool &is_in_member_list) const
+{
+  int ret = OB_SUCCESS;
+  is_in_member_list = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else {
+    for (int i = 0; i < member_list.count(); ++i) {
+      if (replica.get_server() == member_list.at(i).get_server()) {
+        is_in_member_list = true;
+        break;
+      }
+    }
+  }
   return ret;
 }
 
