@@ -6920,9 +6920,11 @@ int ObTransformUtils::construct_simple_view(ObDMLStmt *stmt,
     }
   }
 
-  // rebuild relation id info
+  // rebuild subquery list and relation id info
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(simple_stmt->rebuild_tables_hash())) {
+    if (OB_FAIL(simple_stmt->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(simple_stmt->rebuild_tables_hash())) {
       LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(simple_stmt->update_column_item_rel_id())) {
       LOG_WARN("failed to update column item by id", K(ret));
@@ -6945,6 +6947,9 @@ int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
       OB_ISNULL(view_stmt = table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(table));
+  } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(),
+                                                  view_stmt->get_subquery_exprs()))) {
+    LOG_WARN("failed to remove item", K(ret));
   } else if (OB_FAIL(extract_shared_exprs(stmt, view_stmt, shared_exprs))) {
     LOG_WARN("failed to extract shared expr", K(ret));
   } else if (OB_FAIL(remove_const_exprs(shared_exprs, shared_exprs))) {
@@ -6963,8 +6968,6 @@ int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(stmt->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
-    } else if (OB_FAIL(view_stmt->adjust_subquery_list())) {
       LOG_WARN("failed to adjust subquery list", K(ret));
     } else if (OB_FAIL(adjust_pseudo_column_like_exprs(*stmt))) {
       LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
