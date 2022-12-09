@@ -1350,8 +1350,7 @@ int ObTransformSubqueryCoalesce::transform_or_expr(ObDMLStmt *stmt,
     ObRawExpr *first_expr_param = NULL;
     ObQueryRefRawExpr *first_subquery_expr = NULL;
     ObSEArray<ObSelectStmt*, 8> subqueries;
-    ObStmtCompareContext compare_ctx;
-    compare_ctx.init(&stmt->get_query_ctx()->calculable_items_);
+    ObStmtCompareContext compare_ctx(&stmt->get_query_ctx()->calculable_items_);
     //Check whether each independent or condition can pull up related conditions
     for (int64_t i = 0; OB_SUCC(ret) && can_be_transform && i < expr->get_param_count(); ++i) {
       ObRawExpr *expr_param = expr->get_param_expr(i);
@@ -1837,7 +1836,8 @@ int ObTransformSubqueryCoalesce::coalesce_subquery(StmtCompareHelper &helper,
                                         helper.stmt_map_infos_.at(i),
                                         select_exprs, 
                                         index_map, 
-                                        coalesce_query))) {
+                                        coalesce_query,
+                                        i == 0))) {
       LOG_WARN("failed to inner coalesce subquery", K(ret));
     } else if (OB_FAIL(append(query_ctx->all_equal_param_constraints_, 
                               helper.stmt_map_infos_.at(i).equal_param_map_))) {
@@ -1852,10 +1852,10 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
                                                   ObStmtMapInfo &map_info,
                                                   ObIArray<ObRawExpr*> &select_exprs, 
                                                   ObIArray<int64_t> &index_map, 
-                                                  ObSelectStmt *coalesce_query)
+                                                  ObSelectStmt *coalesce_query,
+                                                  const bool is_first_subquery)
 {
   int ret = OB_SUCCESS;
-  ObStmtCompareContext context;
   //select items in subquery
   ObSEArray<ObRawExpr*, 16> subquery_select_list;
   //select items in coalesce query
@@ -1867,12 +1867,20 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
   //column items in subquery trans to column items in coalesce query
   ObSEArray<ObRawExpr*, 16> new_column_list;
   ObSEArray<ColumnItem, 16> new_column_items;
+
+  // if the select items have same udf, need check if they are deterministic
+  // eg: select func(c1), func(c1) from t1;
+  bool need_check_deterministic = true;
+  ObStmtCompareContext context(coalesce_query,
+                               subquery,
+                               map_info,
+                               &query_ctx->calculable_items_,
+                               need_check_deterministic);
   if (OB_ISNULL(subquery) || OB_ISNULL(coalesce_query) || 
       OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
       OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
-  } else if (OB_FALSE_IT(context.init(coalesce_query, subquery, map_info, &query_ctx->calculable_items_))) {
   } else if (OB_FAIL(subquery->get_select_exprs(subquery_select_list))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(subquery->get_column_exprs(subquery_column_list))) {
@@ -1953,7 +1961,12 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
         LOG_WARN("unexpect null select expr", K(ret));
       } else if (!coalesce_select->same_as(*subquery_select, &context)) {
         // do nothing
-      } else if (OB_FAIL(index_map.push_back(coalesce_query->get_select_item_size() - 1))) {
+      } else if (!is_first_subquery &&
+                  OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
+                                                               coalesce_select,
+                                                               coalesce_query))) {
+        LOG_WARN("failed to create column for subquery", K(ret));
+      } else if (OB_FAIL(index_map.push_back(is_first_subquery ? j : coalesce_query->get_select_item_size() - 1))) {
         LOG_WARN("failed to push back index", K(ret));
       } else {
         find = true;
