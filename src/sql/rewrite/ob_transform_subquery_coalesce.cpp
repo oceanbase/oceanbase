@@ -1962,13 +1962,11 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
       } else if (!coalesce_select->same_as(*subquery_select, &context)) {
         // do nothing
       } else if (!is_first_subquery &&
-                 !coalesce_select->is_column_ref_expr() &&
-                 !coalesce_select->is_const_expr() &&
                   OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
                                                                coalesce_select,
                                                                coalesce_query))) {
         LOG_WARN("failed to create column for subquery", K(ret));
-      } else if (OB_FAIL(index_map.push_back(coalesce_query->get_select_item_size() - 1))) {
+      } else if (OB_FAIL(index_map.push_back(is_first_subquery ? j : coalesce_query->get_select_item_size() - 1))) {
         LOG_WARN("failed to push back index", K(ret));
       } else {
         find = true;
