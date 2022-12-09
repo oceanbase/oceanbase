@@ -545,12 +545,7 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
       audit_record.update_stage_stat();
       bool need_retry = (THIS_THWORKER.need_retry()
                          || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());
-      if (NULL != result.get_exec_context().get_sql_ctx()) {
-        ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_PREPARE, session,
-          result.get_exec_context().get_sql_ctx()->is_sensitive_);
-      } else {
-        ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_PREPARE, session);
-      }
+      ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_PREPARE, session, ctx_.is_sensitive_);
     }
   }
 

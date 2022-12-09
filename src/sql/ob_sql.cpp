@@ -3715,6 +3715,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   bool add_plan_to_pc = false;
   ObSQLSessionInfo &session = result.get_session();
   ObPlanCache *plan_cache = session.get_plan_cache();
+  ObSpmCacheCtx &spm_ctx = context.spm_ctx_;
   bool use_plan_cache = session.get_local_ob_enable_plan_cache();
   // recorde whether needs to do parameterization at this time,
   // if exact mode is on, not do parameterizaiton
@@ -3725,7 +3726,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   bool plan_added = false;
   bool need_get_baseline = false;
   session.set_process_query_time(ObTimeUtility::current_time());
-  LOG_DEBUG("gen plan info", K(context.spm_ctx_.bl_key_), K(get_plan_err));
+  LOG_DEBUG("gen plan info", K(spm_ctx.bl_key_), K(get_plan_err));
   // for batched multi stmt, we only parse and optimize the first statement
   // only in multi_query, need do this
   if (!is_psmode &&
