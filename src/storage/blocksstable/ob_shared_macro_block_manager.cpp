@@ -200,12 +200,14 @@ int ObSharedMacroBlockMgr::write_block(
       write_info.offset_ = offset_;
       if (OB_FAIL(do_write_block(write_info, block_info))) {
         LOG_WARN("fail to do write block", K(ret), K(write_info), K(block_info));
-      } else if (FALSE_IT(write_ctx.reset())) {
-      } else if (OB_FAIL(write_ctx.add_macro_block_id(macro_handle_.get_macro_id()))) {
-        LOG_WARN("fail to add macro block id into write_ctx",
-          K(ret), K(macro_handle_.get_macro_id()), K(write_ctx));
       } else {
-        FLOG_INFO("successfully write small sstable", K(ret), K(block_info), K(offset_));
+        FLOG_INFO("successfully write small sstable",
+          K(ret), K(write_ctx.get_macro_block_list()), K(block_info), K(offset_));
+        write_ctx.reset();
+        if (OB_FAIL(write_ctx.add_macro_block_id(macro_handle_.get_macro_id()))) {
+          LOG_WARN("fail to add macro block id into write_ctx",
+            K(ret), K(macro_handle_.get_macro_id()), K(write_ctx));
+        }
       }
     }
   }
@@ -218,21 +220,24 @@ int ObSharedMacroBlockMgr::do_write_block(
     ObBlockInfo &block_info)
 {
   int ret = OB_SUCCESS;
+  ObMacroBlockHandle write_macro_handle;
   const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
 
-  if (OB_FAIL(macro_handle_.async_write(write_info))) {
-    LOG_WARN("fail to async write virtual macro block", K(ret), K(macro_handle_));
-  } else if (OB_FAIL(macro_handle_.wait(io_timeout_ms))) {
+  if (OB_FAIL(write_macro_handle.set_macro_block_id(macro_handle_.get_macro_id()))) {
+    LOG_WARN("fail to set macro block id", K(ret), K(macro_handle_.get_macro_id()));
+  } else if (OB_FAIL(write_macro_handle.async_write(write_info))) {
+    LOG_WARN("fail to async write virtual macro block", K(ret), K(write_macro_handle));
+  } else if (OB_FAIL(write_macro_handle.wait(io_timeout_ms))) {
     LOG_WARN("fail to wait previous io", K(ret), K(io_timeout_ms));
-  } else if (!macro_handle_.is_empty() && MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION_AND_WRITE_COMPLETE ==
+  } else if (!write_macro_handle.is_empty() && MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION_AND_WRITE_COMPLETE ==
       GCONF.micro_block_merge_verify_level && 0 != offset_) {
-    if (OB_FAIL(check_write_complete(macro_handle_.get_macro_id(), write_info.size_))) {
+    if (OB_FAIL(check_write_complete(write_macro_handle.get_macro_id(), write_info.size_))) {
       LOG_WARN("fail to check write completion", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
-    block_info.macro_id_ = macro_handle_.get_macro_id();
+    block_info.macro_id_ = write_macro_handle.get_macro_id();
     block_info.nested_size_ = write_info.size_;
     block_info.nested_offset_ = offset_;
     offset_ += write_info.size_;
