@@ -21969,6 +21969,18 @@ static const _error _error_OB_ERR_NAME_HAS_TOO_MANY_PARTS = {
       .oracle_str_error      = "ORA-06563: name has too many parts",
       .oracle_str_user_error = "ORA-06563: name has too many parts"
 };
+static const _error _error_OB_ERR_LOB_SPAN_TRANSACTION = {
+      .error_name            = "OB_ERR_LOB_SPAN_TRANSACTION",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "LOB locators cannot span transactions",
+      .str_user_error        = "LOB locators cannot span transactions",
+      .oracle_errno          = 22990,
+      .oracle_str_error      = "ORA-22990: LOB locators cannot span transactions",
+      .oracle_str_user_error = "ORA-22990: LOB locators cannot span transactions"
+};
 static const _error _error_OB_SP_RAISE_APPLICATION_ERROR = {
       .error_name            = "OB_SP_RAISE_APPLICATION_ERROR",
       .error_cause           = "Internal Error",
@@ -23889,6 +23901,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_MISSING_INTO_KEYWORD] = &_error_OB_ERR_MISSING_INTO_KEYWORD;
     _errors[-OB_ERR_CLAUSE_RETURN_ILLEGAL] = &_error_OB_ERR_CLAUSE_RETURN_ILLEGAL;
     _errors[-OB_ERR_NAME_HAS_TOO_MANY_PARTS] = &_error_OB_ERR_NAME_HAS_TOO_MANY_PARTS;
+    _errors[-OB_ERR_LOB_SPAN_TRANSACTION] = &_error_OB_ERR_LOB_SPAN_TRANSACTION;
     _errors[-OB_SP_RAISE_APPLICATION_ERROR] = &_error_OB_SP_RAISE_APPLICATION_ERROR;
     _errors[-OB_SP_RAISE_APPLICATION_ERROR_NUM] = &_error_OB_SP_RAISE_APPLICATION_ERROR_NUM;
     _errors[-OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN] = &_error_OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN;
