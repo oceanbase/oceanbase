@@ -98,13 +98,22 @@ int ObLSRestoreHandler::offline()
   } else if (!is_online_) {
     LOG_INFO("ls restore handler is already offline");
   } else {
-    lib::ObMutexGuard guard(mtx_);
-    if (OB_FAIL(cancel_task_())) {
-      LOG_WARN("failed to cancel task", K(ret), KPC(ls_));
-    } else {
-      is_online_ = false;
-      LOG_INFO("ls restore handler offline finish");
-    }
+    int retry_cnt = 0;
+    do {
+      // if lock failed, retry 3 times.
+      if (OB_FAIL(mtx_.trylock())) {
+        LOG_WARN("lock restore handler failed, retry later", K(ret), KPC(ls_));
+        sleep(1);
+      } else {
+        if (OB_FAIL(cancel_task_())) {
+          LOG_WARN("failed to cancel task", K(ret), KPC(ls_));
+        } else {
+          is_online_ = false;
+          LOG_INFO("ls restore handler offline finish");
+        }
+        mtx_.unlock();
+      }
+    } while (retry_cnt ++ < 3/*max retry cnt*/ && OB_EAGAIN == ret);
   }
   return ret;
 }
