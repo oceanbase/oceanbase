@@ -207,9 +207,18 @@ int ObTenantFreezer::ls_freeze_(ObLS *ls)
     }
   } while (ret == OB_ENTRY_EXIST);
   if (OB_SUCC(ret)) {
+    const int64_t start = ObTimeUtility::current_time();
     while (!ls->get_freezer()->is_ready_for_flush()) {
+      const int64_t cost_time = ObTimeUtility::current_time() - start;
+      if (cost_time > 5 * 1000 * 1000) {
+        if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+          TRANS_LOG(WARN, "[TenantFreezer] cost too much time to wait ls ready_for_flush", K(ls->get_ls_id()), K(cost_time));
+        }
+      }
       ob_usleep(100);
     }
+  } else if (OB_NOT_RUNNING == ret) {
+    ret = OB_SUCCESS;
   }
   return ret;
 }

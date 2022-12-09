@@ -330,6 +330,7 @@ int ObFreezer::logstream_freeze(bool is_tenant_freeze)
     ret = OB_NOT_INIT;
     LOG_WARN("[Freezer] not inited", K(ret), K(ls_id));
   } else if (OB_UNLIKELY(!enable_)) {
+    ret = OB_NOT_RUNNING;
     LOG_WARN("freezer is offline, can not freeze now", K(ret), K(ls_id));
   } else if (OB_FAIL(decide_max_decided_scn(max_decided_scn))) {
     TRANS_LOG(WARN, "[Freezer] decide max decided log ts failure", K(ret), K(ls_id));
@@ -469,6 +470,7 @@ int ObFreezer::tablet_freeze(const ObTabletID &tablet_id)
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_UNLIKELY(!enable_)) {
+    ret = OB_NOT_RUNNING;
     LOG_WARN("freezer is offline, can not freeze now", K(ret), K(ls_id));
   } else if (OB_FAIL(guard.try_set_tablet_freeze_begin())) {
     // no need freeze now, a ls freeze is running or will be running
@@ -546,6 +548,7 @@ int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_UNLIKELY(!enable_)) {
+    ret = OB_NOT_RUNNING;
     LOG_WARN("freezer is offline, can not freeze now", K(ret), K(ls_id));
   } else if (OB_FAIL(loop_set_freeze_flag())) {
     TRANS_LOG(WARN, "[Freezer] failed to set freeze_flag", K(ret), K(ls_id), K(tablet_id));
@@ -689,6 +692,9 @@ int ObFreezer::tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_UNLIKELY(!enable_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("freezer is offline, can not freeze now", K(ret), K(ls_id));
   } else if (OB_FAIL(guard.try_set_tablet_freeze_begin())) {
     // no need freeze now, a ls freeze is running or will be running
     ret = OB_SUCCESS;
