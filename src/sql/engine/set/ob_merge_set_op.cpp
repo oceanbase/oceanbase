@@ -368,6 +368,9 @@ int ObMergeSetOp::locate_next_left_inside(ObOperator &child_op,
                 && OB_FAIL(cmp_(*last_row_.store_row_, child_op.get_spec().output_,
                                 curr_idx, eval_ctx_, cmp))) {
         LOG_WARN("failed to compare row", K(ret));
+      } else if (nullptr == last_row_.store_row_ && last_idx < 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get wrong last idx", K(ret));
       } else if (nullptr == last_row_.store_row_
                  && OB_FAIL(cmp_(child_op.get_spec().output_, child_op.get_spec().output_,
                                  last_idx, curr_idx, eval_ctx_, cmp))) {
