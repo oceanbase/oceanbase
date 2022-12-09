@@ -319,7 +319,7 @@ public:
     is_batched_multi_stmt_ = is_batched_multi_stmt;}
   inline bool get_is_batched_multi_stmt() const { return is_batched_multi_stmt_; }
   inline void set_use_pdml(bool value) { use_pdml_ = value; }
-  inline bool is_use_pdml() { return use_pdml_; }
+  inline bool is_use_pdml() const { return use_pdml_; }
   inline void set_use_temp_table(bool value) { use_temp_table_ = value; }
   inline bool is_use_temp_table() const { return use_temp_table_; }
   inline void set_has_link_table(bool value) { has_link_table_ = value; }

@@ -521,7 +521,7 @@ private:
                int64_t tablet_size,
                uint64_t gi_attri_flag);
 
-  int check_need_start_ddl(ObGranulePumpArgs &args, bool &need_start_ddl);
+  int check_can_randomize(ObGranulePumpArgs &args, bool &can_randomize);
 
 private:
   //TODO::muhang 自旋锁还是阻塞锁，又或者按静态划分任务避免锁竞争？
