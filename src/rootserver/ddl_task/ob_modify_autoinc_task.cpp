@@ -544,6 +544,8 @@ int ObModifyAutoincTask::check_health()
     need_retry_ = false;
   } else if (OB_FAIL(refresh_status())) { // refresh task status
     LOG_WARN("refresh status failed", K(ret));
+  } else if (OB_FAIL(refresh_schema_version())) {
+    LOG_WARN("refresh schema version failed", K(ret));
   } else {
     ObMultiVersionSchemaService &schema_service = root_service->get_schema_service();
     ObSchemaGetterGuard schema_guard;

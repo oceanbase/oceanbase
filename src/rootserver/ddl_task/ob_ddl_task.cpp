@@ -364,6 +364,29 @@ int ObDDLTask::refresh_status()
   return ret;
 }
 
+int ObDDLTask::refresh_schema_version()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLTask has not been inited", K(ret));
+  } else if (schema_version_ > 0 && schema_version_ != UINT64_MAX) {
+    ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
+    int64_t refreshed_schema_version = 0;
+    if (OB_FAIL(schema_service.async_refresh_schema(tenant_id_, schema_version_))) {
+      LOG_WARN("async refresh schema version failed", K(ret), K(tenant_id_), K(schema_version_));
+    } else if (OB_FAIL(schema_service.get_tenant_refreshed_schema_version(tenant_id_, refreshed_schema_version))) {
+      LOG_WARN("get refreshed schema version failed", K(ret), K(tenant_id_));
+    } else if (refreshed_schema_version < schema_version_) {
+      ret = OB_SCHEMA_EAGAIN;
+      if (REACH_TIME_INTERVAL(1000L * 1000L)) {
+        LOG_INFO("tenant schema not refreshed to the target version", K(ret), K(tenant_id_), K(schema_version_), K(refreshed_schema_version));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLTask::remove_task_record()
 {
   int ret = OB_SUCCESS;
