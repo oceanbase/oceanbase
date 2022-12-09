@@ -170,8 +170,13 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
             }
             session_info_->set_stmt_type(session_ori_stmt_type);
           }
-          if (OB_SUCC(ret) && OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
-            LOG_WARN("Add set entry failed", K(ret));
+          if (OB_SUCC(ret)) {
+            if (OB_NOT_NULL(var_node.value_expr_) && var_node.value_expr_->has_flag(CNT_AGG)) {
+              ret = OB_ERR_INVALID_GROUP_FUNC_USE;
+              LOG_WARN("invalid scope for agg function", K(ret));
+            } else if (OB_FAIL(variable_set_stmt->add_variable_node(var_node))) {
+              LOG_WARN("Add set entry failed", K(ret));
+            }
           }
         }
       }
