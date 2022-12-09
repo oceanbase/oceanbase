@@ -66,7 +66,8 @@ public:
   static int get_mysql_type(ObObjType ob_type, obmysql::EMySQLFieldType &mysql_type,
                             uint16_t &flags, ObScale &num_decimals);
 
-  static int get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType mysql_type);
+  static int get_ob_type(ObObjType &ob_type, obmysql::EMySQLFieldType mysql_type,
+                         const bool is_unsigned = false);
 };
 
 } // end of namespace common

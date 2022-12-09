@@ -62,7 +62,8 @@ public:
                                     const char *& data,
                                     const common::ObTimeZoneInfo *tz_info,
                                     ObObj &param,
-                                    bool is_complex_element = false);
+                                    bool is_complex_element = false,
+                                    bool is_unsigned = false);
   static int parse_mysql_timestamp_value(const obmysql::EMySQLFieldType field_type,
                                     const char *&data,
                                     ObObj &param,
@@ -71,7 +72,8 @@ public:
                                  const char *&data,
                                  ObObj &param,
                                  ObIAllocator &allocator,
-                                 bool is_complex_element = false);
+                                 bool is_complex_element = false,
+                                 bool is_unsigned = false);
   static int parse_oracle_timestamp_value(const obmysql::EMySQLFieldType field_type, const char *&data,
                                     const ObTimeConvertCtx &cvrt_ctx, ObObj &param);
   static int parse_mysql_time_value(const char *&data, ObObj &param);
