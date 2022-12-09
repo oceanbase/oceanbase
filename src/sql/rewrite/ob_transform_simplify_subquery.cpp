@@ -130,7 +130,8 @@ int ObTransformSimplifySubquery::try_trans_subquery_in_expr(ObDMLStmt *stmt,
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else if (IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type()) ||
              T_OP_EXISTS == expr->get_expr_type() ||
-             T_OP_NOT_EXISTS == expr->get_expr_type()) {
+             T_OP_NOT_EXISTS == expr->get_expr_type() ||
+             expr->is_alias_ref_expr()) {
     // 如果 expr 的param 必须是 subquery，那么不去改写它包含的子查询
     //do nothing
   } else if (expr->is_query_ref_expr()) {
