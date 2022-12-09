@@ -660,7 +660,8 @@ bool ObArchiveSender::is_retry_ret_code_(const int ret_code) const
 bool ObArchiveSender::is_ignore_ret_code_(const int ret_code) const
 {
   return is_retry_ret_code_(ret_code)
-    || OB_LOG_ARCHIVE_LEADER_CHANGED == ret_code;
+    || OB_LOG_ARCHIVE_LEADER_CHANGED == ret_code
+    || OB_ENTRY_NOT_EXIST == ret_code;
 }
 
 void ObArchiveSender::statistic(const ObArchiveSendTask &task, const int64_t cost_ts)

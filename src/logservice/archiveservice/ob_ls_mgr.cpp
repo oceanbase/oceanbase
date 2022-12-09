@@ -79,24 +79,25 @@ public:
 
     if (! is_in_archive_) {
       bret = true;
+      ARCHIVE_LOG(INFO, "tenant not in archive, need gc ls archive task", K(id));
     } else if (OB_ISNULL(ls_svr_) || OB_ISNULL(log_service_)) {
       bret = true;
       ret = OB_ERR_UNEXPECTED;
-      ARCHIVE_LOG(ERROR, "ls_svr_ or log_service_ is NULL", K(ret), K(ls_svr_), K(log_service_));
+      ARCHIVE_LOG(ERROR, "ls_svr_ or log_service_ is NULL, gc ls archive task", K(ret), K(id), K(ls_svr_), K(log_service_));
     } else if (OB_FAIL(log_service_->open_palf(id, palf_handle_guard))) {
       bret = true;
-      ARCHIVE_LOG(WARN, "open ls failed", K(ret), K(id));
+      ARCHIVE_LOG(WARN, "open ls failed, gc ls archive task", K(ret), K(id));
     } else if (OB_FAIL(palf_handle_guard.get_role(role, epoch))) {
-      ARCHIVE_LOG(WARN, "get role failed", K(ret), K(id));
+      ARCHIVE_LOG(WARN, "get role failed, gc ls archive task", K(ret), K(id));
     } else if (! check_ls_need_do_archive(role)) {
       bret = true;
+      ARCHIVE_LOG(INFO, "check_ls_need_do_archive return false, gc ls archive task", K(id), K(epoch), K(role));
     } else {
       // TODO: fake lease
       ObArchiveLease lease(epoch, 0, 0);
       ArchiveWorkStation station(key_, lease);
       bret = task->check_task_valid(station);
     }
-    ARCHIVE_LOG(INFO, "ls archive task need delete", K(id));
     return bret;
   }
 
