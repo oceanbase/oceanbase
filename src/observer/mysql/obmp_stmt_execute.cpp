@@ -687,7 +687,8 @@ int ObMPStmtExecute::parse_request_param_value(ObIAllocator &alloc,
   }
   // Step5: decode value
   ObObjType ob_type;
-  if (OB_FAIL(ObSMUtils::get_ob_type(
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObSMUtils::get_ob_type(
         ob_type, static_cast<EMySQLFieldType>(param_type)))) {
     LOG_WARN("cast ob type from mysql type failed",
               K(ob_type), K(param_type), K(ret));

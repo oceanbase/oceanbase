@@ -2203,6 +2203,8 @@ int ObPLExecState::check_routine_param_legal(ParamStore *params)
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("incorrect argument type, expected complex, but get basic type", K(ret));
         }
+      } else if (NULL == reinterpret_cast<const ObPLComposite *>(params->at(i).get_ext())) {
+        // do nothing
       } else {
         const pl::ObPLComposite *src_composite = NULL;
         uint64_t udt_id = params->at(i).get_udt_id();
