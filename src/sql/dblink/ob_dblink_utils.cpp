@@ -13,8 +13,31 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "sql/dblink/ob_dblink_utils.h"
+#include "common/object/ob_object.h"
 
 using namespace oceanbase::sql;
+
+int ObDblinkService::check_lob_in_result(common::sqlclient::ObMySQLResult *result, bool &have_lob)
+{
+  int ret = OB_SUCCESS;
+  have_lob = false;
+  if (OB_ISNULL(result)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else {
+    int64_t column_count = result->get_column_count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
+      ObObjMeta type;
+      if (OB_FAIL(result->get_type(i, type))) {
+        LOG_WARN("failed to get column meta", K(i), K(ret));
+      } else if (ObLobType == type.get_type()) {
+        have_lob = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
 
 int GenUniqueAliasName::init()
 {

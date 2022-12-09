@@ -15,13 +15,18 @@
 
 #include "lib/allocator/page_arena.h"
 #include "lib/hash/ob_hashmap.h"
+#include "lib/mysqlclient/ob_mysql_result.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 
-
+class ObDblinkService
+{
+public:
+  static int check_lob_in_result(common::sqlclient::ObMySQLResult *result, bool &have_lob);
+};
 
 class GenUniqueAliasName
 {

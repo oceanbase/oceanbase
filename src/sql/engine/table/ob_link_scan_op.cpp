@@ -19,6 +19,7 @@
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
 #include "sql/ob_sql_utils.h"
+#include "sql/dblink/ob_dblink_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -205,6 +206,7 @@ int ObLinkScanOp::read(const char *link_stmt)
   ObCommonServerConnectionPool *common_server_pool_ptr = NULL;
   uint16_t charset_id = 0;
   uint16_t ncharset_id = 0;
+  bool have_lob = false;
   if (OB_ISNULL(dblink_proxy_) || OB_ISNULL(link_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dblink_proxy or link_stmt is NULL", K(ret), KP(dblink_proxy_), KP(link_stmt));
@@ -214,6 +216,12 @@ int ObLinkScanOp::read(const char *link_stmt)
   } else if (OB_ISNULL(result_ = res_.get_result())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get result", K(ret));
+  } else if (DBLINK_DRV_OCI == link_type_ && ObDblinkService::check_lob_in_result(result_, have_lob)) {
+    LOG_WARN("failed to check lob result", K(ret));
+  } else if (have_lob) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("dblink not support lob type", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink fetch lob type data");
   } else if (OB_FAIL(ObLinkScanOp::get_charset_id(ctx_, charset_id, ncharset_id))) {
     LOG_WARN("failed to get charset id", K(ret));
   } else if (OB_FAIL(result_->set_expected_charset_id(charset_id, ncharset_id))) {
