@@ -545,7 +545,8 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     ObAggregatedStore *agg_row_store = reinterpret_cast<ObAggregatedStore *>(block_row_store_);
     agg_row_store->reuse_aggregated_row();
     if (OB_NOT_NULL(access_param_->op_)) {
-      access_param_->op_->get_eval_ctx().reuse(1);
+      int64_t batch_size = max(1, access_param_->op_->get_batch_size());
+      access_param_->op_->get_eval_ctx().reuse(batch_size);
     }
     while (OB_SUCC(ret) && !agg_row_store->is_end()) {
       bool can_batch = false;
