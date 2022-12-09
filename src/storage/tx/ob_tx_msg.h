@@ -271,7 +271,7 @@ namespace transaction
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(status));
       OB_UNIS_VERSION(1);
     };
-    
+
     struct Ob2pcPrepareReqMsg : public ObTxMsg
     {
     public:
@@ -368,11 +368,13 @@ namespace transaction
     {
     public:
       Ob2pcAbortReqMsg() :
-          ObTxMsg(TX_2PC_ABORT_REQ)
+        ObTxMsg(TX_2PC_ABORT_REQ),
+        upstream_(share::ObLSID::INVALID_LS_ID)
       {}
     public:
       bool is_valid() const;
-      // INHERIT_TO_STRING_KV("txMsg", ObTxMsg);
+      share::ObLSID upstream_;
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(upstream));
       OB_UNIS_VERSION(1);
     };
 
