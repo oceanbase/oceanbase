@@ -2747,12 +2747,6 @@ int ObTablet::get_tablet_status(ObTabletStatus::Status &tablet_status)
     LOG_WARN("not inited", K(ret), K_(is_inited), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(inner_get_tx_data(tx_data, exist_on_memtable))) {
     LOG_WARN("failed to get tx data", K(ret), K(ls_id), K(tablet_id));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_UNLIKELY(ObTabletStatus::MAX == tx_data.tablet_status_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, tablet status is invalid", K(ret), K(ls_id), K(tablet_id), K(tx_data));
   } else {
     tablet_status = tx_data.tablet_status_;
   }
