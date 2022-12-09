@@ -31,6 +31,7 @@ class ObSSTableIndexBuilder;
 class ObIndexBlockRebuilder;
 class ObSSTableSecMetaIterator;
 class ObSSTableMergeRes;
+struct ObSSTableBasicMeta;
 struct ObBlockInfo
 {
 public:
@@ -138,6 +139,7 @@ private:
       ObTableHandleV2 &table_handle);
   int prepare_data_desc(
       const ObTablet &tablet,
+      const ObSSTableBasicMeta &basic_meta,
       const ObMergeType &merge_type,
       const int64_t snapshot_version,
       const int64_t cluster_version,

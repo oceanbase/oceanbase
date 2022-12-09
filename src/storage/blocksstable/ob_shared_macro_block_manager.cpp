@@ -536,7 +536,12 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
   if (OB_FAIL(parse_merge_type(old_sstable, merge_type))) {
     LOG_WARN("fail to parse merge type from old_sstable", K(ret));
   } else if (OB_FAIL(prepare_data_desc(
-      tablet, merge_type, tablet.get_snapshot_version(), GET_MIN_CLUSTER_VERSION(), data_desc))) {
+      tablet,
+      old_sstable.get_meta().get_basic_meta(),
+      merge_type,
+      tablet.get_snapshot_version(),
+      GET_MIN_CLUSTER_VERSION(),
+      data_desc))) {
     LOG_WARN("fail to prepare data desc", K(ret), K(merge_type), K(tablet.get_snapshot_version()));
   } else if (OB_FAIL(sstable_index_builder.init(data_desc, nullptr, ObSSTableIndexBuilder::DISABLE))) {
     LOG_WARN("fail to init sstable index builder", K(ret), K(data_desc));
@@ -642,6 +647,7 @@ int ObSharedMacroBlockMgr::create_new_sstable(
 
 int ObSharedMacroBlockMgr::prepare_data_desc(
     const ObTablet &tablet,
+    const ObSSTableBasicMeta &basic_meta,
     const ObMergeType &merge_type,
     const int64_t snapshot_version,
     const int64_t cluster_version,
@@ -659,6 +665,13 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
     LOG_WARN("fail to init data store desc", K(ret),
       K(tablet), K(merge_type), K(snapshot_version), K(cluster_version));
   } else {
+    // overwrite the encryption related memberships, otherwise these memberships of new sstable may differ
+    // from that of old sstable, since the encryption method of one tablet may change before defragmentation
+    data_desc.row_store_type_ = basic_meta.row_store_type_;
+    data_desc.compressor_type_ = basic_meta.compressor_type_;
+    data_desc.master_key_id_ = basic_meta.master_key_id_;
+    data_desc.encrypt_id_ = basic_meta.encrypt_id_;
+    MEMCPY(data_desc.encrypt_key_, basic_meta.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     data_desc.row_column_count_ = data_desc.rowkey_column_count_ + 1;
     data_desc.col_desc_array_.reset();
     data_desc.need_prebuild_bloomfilter_ = false;
