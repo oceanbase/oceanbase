@@ -140,7 +140,6 @@ static const int32_t DAYS_PER_YEAR[2]=
 #define EPOCH_WDAY    4       // 1970-1-1 is thursday.
 #define LEAP_YEAR_COUNT(y)  ((y) / 4 - (y) / 100 + (y) / 400)
 #define IS_LEAP_YEAR(y) ((((y) % 4) == 0 && (((y) % 100) != 0 || ((y) % 400) == 0)) ? 1 : 0)
-#define TIME_MAX_VAL (3020399 * 1000000LL)    // 838:59:59 .
 #define YEAR_MAX_YEAR 2155
 #define YEAR_MIN_YEAR 1901
 #define YEAR_BASE_YEAR 1900
@@ -793,7 +792,7 @@ int ObTimeConverter::str_to_date(const ObString &str, int32_t &value,
   return ret;
 }
 
-int ObTimeConverter::str_to_time(const ObString &str, int64_t &value, int16_t *scale)
+int ObTimeConverter::str_to_time(const ObString &str, int64_t &value, int16_t *scale, const ObScale &time_scale)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_TIME);
@@ -801,14 +800,14 @@ int ObTimeConverter::str_to_time(const ObString &str, int64_t &value, int16_t *s
     LOG_WARN("failed to convert string to time", K(ret), K(str));
     if (OB_ERR_TRUNCATED_WRONG_VALUE == ret) {
       value = ob_time_to_time(ob_time);
-      time_overflow_trunc(value);
+      time_overflow_trunc(value, time_scale);
       if (DT_MODE_NEG & ob_time.mode_) {
         value = -value;
       }
     }
   } else {
     value = ob_time_to_time(ob_time);
-    ret = time_overflow_trunc(value);
+    ret = time_overflow_trunc(value, time_scale);
     if (DT_MODE_NEG & ob_time.mode_) {
       value = -value;
     }
@@ -1710,39 +1709,45 @@ int ObTimeConverter::int_to_ob_time_with_date(int64_t int64, ObTime &ob_time, bo
   return ret;
 }
 
-int ObTimeConverter::int_to_ob_time_without_date(int64_t int64, ObTime &ob_time)
+int ObTimeConverter::int_to_ob_time_without_date(int64_t time_second, ObTime &ob_time, int64_t nano_second)
 {
   int ret = OB_SUCCESS;
   int32_t *parts = ob_time.parts_;
   ObDTMode mode = DT_TYPE_TIME;
-  if (int64 < 0) {
+  if (time_second < 0) {
     ob_time.mode_ |= DT_MODE_NEG;
-    if (INT64_MIN == int64) {
-      int64 = INT64_MAX;
+    if (INT64_MIN == time_second) {
+      time_second = INT64_MAX;
     } else {
-      int64 = -int64;
+      time_second = -time_second;
     }
   }
-  if (int64 / power_of_10[4] < power_of_10[6]) {
+  if (time_second / power_of_10[4] < power_of_10[6]) {
     // [H]HHMMSS, like 123:45:56.
-    parts[DT_SEC]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_MIN]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_HOUR] = static_cast<int32_t>(int64 % power_of_10[6]);
-    if (OB_FAIL(validate_time(ob_time))) {
-      LOG_WARN("time integer is invalid", K(ret), K(int64));
+    if(nano_second) {
+      parts[DT_USEC] = static_cast<int32_t>((nano_second + 500) / power_of_10[3]);
     }
-  } else if (int64 / power_of_10[6] < power_of_10[8]) {
+    parts[DT_SEC]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_MIN]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_HOUR] = static_cast<int32_t>(time_second % power_of_10[6]);
+    if (OB_FAIL(validate_time(ob_time))) {
+      LOG_WARN("time integer is invalid", K(ret), K(time_second));
+    }
+  } else if (time_second / power_of_10[6] < power_of_10[8]) {
     // HHHHMMDDHHMMSS.
     mode = DT_TYPE_DATETIME;
-    parts[DT_SEC]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_MIN]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_HOUR] = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_MDAY]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_MON]  = static_cast<int32_t>(int64 % power_of_10[2]); int64 /= power_of_10[2];
-    parts[DT_YEAR] = static_cast<int32_t>(int64 % power_of_10[4]);
+    if(nano_second) {
+      parts[DT_USEC] = static_cast<int32_t>((nano_second + 500) / power_of_10[3]);
+    }
+    parts[DT_SEC]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_MIN]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_HOUR] = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_MDAY]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_MON]  = static_cast<int32_t>(time_second % power_of_10[2]); time_second /= power_of_10[2];
+    parts[DT_YEAR] = static_cast<int32_t>(time_second % power_of_10[4]);
     apply_date_year2_rule(parts[DT_YEAR]);
     if (OB_FAIL(validate_datetime(ob_time, false, 0))) {
-      LOG_WARN("datetime is invalid or out of range", K(ret), K(int64));
+      LOG_WARN("datetime is invalid or out of range", K(ret), K(time_second), K(nano_second));
     } else if (ZERO_DATE != parts[DT_DATE]) {
       parts[DT_DATE] = ob_time_to_date(ob_time);
     }
@@ -5362,10 +5367,11 @@ int ObTimeConverter::set_ob_time_year_may_conflict(ObTime &ob_time, int32_t &jul
   return ret;
 }
 
-int ObTimeConverter::time_overflow_trunc(int64_t &value)
+int ObTimeConverter::time_overflow_trunc(int64_t &value, const ObScale &time_scale)
 {
   int ret = OB_SUCCESS;
-  if (value > TIME_MAX_VAL) {
+  int64_t increment = (6 == time_scale) ? 999999 : 0;
+  if (value > (TIME_MAX_VAL + increment)) {
     // we need some ob error codes that map to ER_TRUNCATED_WRONG_VALUE,
     // so we get OB_INVALID_DATE_FORMAT / OB_INVALID_DATE_VALUE / OB_ERR_TRUNCATED_WRONG_VALUE.
     // another requirement comes from cast function in ob_obj_cast.cpp is this time object will be
@@ -5373,7 +5379,7 @@ int ObTimeConverter::time_overflow_trunc(int64_t &value)
     // so we get the ONLY one: OB_ERR_TRUNCATED_WRONG_VALUE, because the other two will direct to
     // ZERO_VAL of the temporal types, like cast 'abc' or '1998-76-54' to date.
     ret = OB_ERR_TRUNCATED_WRONG_VALUE;
-    value = TIME_MAX_VAL;
+    value = TIME_MAX_VAL + increment;
   }
   return ret;
 }
