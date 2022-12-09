@@ -2096,8 +2096,6 @@ int ObPrefetchBackupInfoTask::inner_process_()
       } else if (OB_FAIL(get_need_copy_item_list_(
                      sorted_items, need_copy_item_list, no_need_copy_item_list, no_need_copy_macro_index_list))) {
         LOG_WARN("failed to check need reuse", K(ret), K(sorted_items));
-      } else if (OB_FAIL(task_mgr_->receive(task_id, need_copy_item_list))) {
-        LOG_WARN("failed to receive items", K(ret), K(task_id), K(need_copy_item_list));
       } else if (OB_FAIL(ls_backup_ctx_->tablet_stat_.mark_items_pending(backup_data_type_, need_copy_item_list))) {
         LOG_WARN("failed to mark items pending", K(ret), K_(backup_data_type), K(need_copy_item_list));
       } else if (OB_FAIL(ls_backup_ctx_->tablet_stat_.mark_items_reused(
@@ -2107,6 +2105,8 @@ int ObPrefetchBackupInfoTask::inner_process_()
             K_(backup_data_type),
             K(no_need_copy_item_list),
             K(no_need_copy_macro_index_list));
+      } else if (OB_FAIL(task_mgr_->receive(task_id, need_copy_item_list))) {
+        LOG_WARN("failed to receive items", K(ret), K(task_id), K(need_copy_item_list));
       } else {
         LOG_INFO(
             "receive backup items", K(task_id), K_(backup_data_type), "count", need_copy_item_list.count(), K_(param));
