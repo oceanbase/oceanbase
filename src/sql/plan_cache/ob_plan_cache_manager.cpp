@@ -263,7 +263,6 @@ int ObPlanCacheManager::revert_plan_cache(const uint64_t &tenant_id)
                "pc ref_count", ppc->get_ref_count(),
                K(tenant_id));
     //cancel scheduled task
-    ppc->set_valid(false);
     ppc->dec_ref_count();
   } else if (OB_HASH_NOT_EXIST == tmp_ret) { // maybe erase by other thread
     SQL_PC_LOG(INFO, "Plan Cache not exist", K(tenant_id));
@@ -742,7 +741,6 @@ int ObPlanCacheManager::revert_ps_cache(const uint64_t &tenant_id)
                K(tenant_id));
     //cancel scheduled task
     ppc->dec_ref_count();
-    ppc->set_valid(false);
   } else if (OB_HASH_NOT_EXIST == tmp_ret) { // maybe erase by other thread
     SQL_PC_LOG(INFO, "PS Plan Cache not exist", K(tenant_id));
   } else {

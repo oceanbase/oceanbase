@@ -28,7 +28,6 @@ namespace sql
 ObPsCache::ObPsCache()
   : next_ps_stmt_id_(0),
     inited_(false),
-    valid_(false),
     tenant_id_(OB_INVALID_ID),
     host_(),
     ref_count_(0),
@@ -96,7 +95,6 @@ int ObPsCache::init(const int64_t hash_bucket,
       tenant_id_ = tenant_id;
       host_ = addr;
       inited_ = true;
-      valid_ = true;
       LOG_INFO("init ps plan cache success", K(addr), K(tenant_id), K(hash_bucket));
     }
   }
@@ -492,9 +490,6 @@ int ObPsCache::get_all_stmt_id(ObIArray<ObPsStmtId> *id_array)
   } else if (!is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ps_cache is not init yet", K(ret));
-  } else if (!is_valid()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ps_cache is not valid anymore", K(ret));
   } else if (OB_FAIL(stmt_info_map_.foreach_refactored(op))) {
     LOG_WARN("traverse stmt_info_map_ failed", K(ret));
   } else if (OB_FAIL(op.get_callback_ret())) {
@@ -771,9 +766,6 @@ int ObPsCache::inner_cache_evict(bool is_evict_all)
     if (!is_inited()) {
       ret = OB_NOT_INIT;
       LOG_WARN("ps_cache is not init yet", K(ret));
-    } else if (!is_valid()) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("ps_cache is not valid anymore", K(ret));
     } else if (OB_FAIL(stmt_info_map_.foreach_refactored(op))) {
       LOG_WARN("traverse stmt_info_map_ failed", K(ret));
     } else if (OB_FAIL(op.get_callback_ret())) {
@@ -835,7 +827,7 @@ int ObPsCache::mem_total(int64_t &mem_total) const
 {
   int ret = OB_SUCCESS;
   mem_total = 0;
-  if (true == is_inited() && true == is_valid()) {
+  if (true == is_inited()) {
     if (OB_ISNULL(inner_allocator_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("inner_allocator_ is NULL", K(ret));
@@ -843,7 +835,7 @@ int ObPsCache::mem_total(int64_t &mem_total) const
       mem_total = inner_allocator_->total();
     }
   } else {
-    LOG_DEBUG("ps cache is not init or not valid", K(ret), K(is_inited()), K(is_valid()));
+    LOG_DEBUG("ps cache is not init", K(ret), K(is_inited()));
   }
   return ret;
 }

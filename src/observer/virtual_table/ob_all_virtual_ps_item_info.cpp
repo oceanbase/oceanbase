@@ -198,10 +198,9 @@ int ObAllVirtualPsItemInfo::get_next_row_from_specified_tenant(uint64_t tenant_i
     } else if (NULL == (ps_cache_ = pcm_->get_ps_cache(tenant_id))) {
       is_end = true;
       SERVER_LOG(DEBUG, "plan cache not exists for this tenant yet", K(ret));
-    } else if (false == ps_cache_->is_inited() || false == ps_cache_->is_valid()) {
+    } else if (false == ps_cache_->is_inited()) {
       is_end = true;
-      SERVER_LOG(DEBUG, "ps cache is not ready, ignore this", K(ret), K(ps_cache_->is_inited()),
-                                                              K(ps_cache_->is_valid()));
+      SERVER_LOG(DEBUG, "ps cache is not ready, ignore this", K(ret), K(ps_cache_->is_inited()));
     } else if (OB_FAIL(ps_cache_->get_all_stmt_id(&stmt_id_array_))) {
       SERVER_LOG(WARN, "get_all_stmt_id failed", K(ret));
     } else {
