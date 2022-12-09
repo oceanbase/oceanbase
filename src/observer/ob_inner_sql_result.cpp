@@ -127,10 +127,8 @@ int ObInnerSQLResult::open()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (has_tenant_resource() && OB_FAIL(GCTX.omt_->get_tenant_with_tenant_lock(session_.get_effective_tenant_id(), handle_, tenant_))) {
-    if (OB_IN_STOP_STATE == ret) {
-      ret = OB_TENANT_NOT_IN_SERVER;
-    }
+  } else if (has_tenant_resource() &&
+      OB_FAIL(GCTX.omt_->get_tenant_with_tenant_lock(session_.get_effective_tenant_id(), handle_, tenant_))) {
     LOG_WARN("get tenant lock fail", K(ret), K(session_.get_effective_tenant_id()));
   } else if (has_tenant_resource() && OB_FAIL(tenant_guard.switch_to(tenant_))) {
     LOG_WARN("switch tenant failed", K(ret), K(session_.get_effective_tenant_id()));
