@@ -808,9 +808,9 @@ DEF_BOOL(_ob_enable_fast_freeze, OB_TENANT_PARAMETER, "True",
 DEF_INT(sys_bkgd_migration_retry_num, OB_CLUSTER_PARAMETER, "3", "[3,100]",
         "retry num limit during migration. Range: [3, 100] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(sys_bkgd_migration_change_member_list_timeout, OB_CLUSTER_PARAMETER, "1h", "[0s,24h]",
+DEF_TIME(sys_bkgd_migration_change_member_list_timeout, OB_CLUSTER_PARAMETER, "20s", "[0s,24h]",
          "the timeout for migration change member list retry. "
-         "The default value is 1h. Range: [0s,24h]",
+         "The default value is 20s. Range: [0s,24h]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //Tablet config
