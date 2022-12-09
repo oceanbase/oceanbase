@@ -442,6 +442,7 @@ int ObLS::stop_()
     LOG_WARN("stop log handler failed", K(ret), KPC(this));
   }
   ls_migration_handler_.stop();
+  ls_tablet_svr_.stop();
   is_stopped_ = true;
 
   if (OB_SUCC(ret)) {

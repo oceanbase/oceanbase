@@ -81,7 +81,8 @@ ObLSTabletService::ObLSTabletService()
     bucket_lock_(),
     rs_reporter_(nullptr),
     allow_to_read_mgr_(),
-    is_inited_(false)
+    is_inited_(false),
+    is_stopped_(false)
 {
 }
 
@@ -110,6 +111,7 @@ int ObLSTabletService::init(
   } else {
     ls_ = ls;
     rs_reporter_ = rs_reporter;
+    is_stopped_ = false;
     is_inited_ = true;
   }
 
@@ -130,7 +132,20 @@ void ObLSTabletService::destroy()
   bucket_lock_.destroy();
   rs_reporter_ = nullptr;
   ls_= nullptr;
+  is_stopped_ = false;
   is_inited_ = false;
+}
+
+int ObLSTabletService::stop()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    is_stopped_ = true;
+  }
+  return ret;
 }
 
 int ObLSTabletService::offline()
@@ -1202,6 +1217,9 @@ int ObLSTabletService::update_tablet_ha_data_status(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("tablet service stopped", K(ret));
   } else if (OB_UNLIKELY(!tablet_id.is_valid())
       || OB_UNLIKELY(!ObTabletDataStatus::is_valid(data_status))) {
     ret = OB_INVALID_ARGUMENT;
@@ -1253,6 +1271,9 @@ int ObLSTabletService::update_tablet_ha_expected_status(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("tablet service stopped", K(ret));
   } else if (OB_UNLIKELY(!tablet_id.is_valid())
       || OB_UNLIKELY(!ObTabletExpectedStatus::is_valid(expected_status))) {
     ret = OB_INVALID_ARGUMENT;
@@ -2676,7 +2697,13 @@ int ObLSTabletService::trim_rebuild_tablet(
 {
   int ret = OB_SUCCESS;
   ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
-  if (OB_UNLIKELY(!tablet_id.is_valid())) {
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("tablet service stopped", K(ret));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablet_id));
   } else if (is_rollback && OB_FAIL(rollback_rebuild_tablet(tablet_id))) {
@@ -2703,6 +2730,9 @@ int ObLSTabletService::create_or_update_migration_tablet(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("tablet service stopped", K(ret));
   } else if (OB_UNLIKELY(!mig_tablet_param.is_valid())
       || OB_UNLIKELY(ls_id != ls_->get_ls_id())) {
     ret = OB_INVALID_ARGUMENT;
@@ -2735,6 +2765,9 @@ int ObLSTabletService::rebuild_create_tablet(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("tablet service stopped", K(ret));
   } else if (OB_UNLIKELY(!mig_tablet_param.is_valid())
       || OB_UNLIKELY(ls_id != ls_->get_ls_id())) {
     ret = OB_INVALID_ARGUMENT;
@@ -2813,6 +2846,9 @@ int ObLSTabletService::finish_copy_migration_sstable(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("tablet service stopped", K(ret));
   } else if (OB_UNLIKELY(!tablet_id.is_valid() || !sstable_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(sstable_key));
@@ -2855,6 +2891,9 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(is_stopped_)) {
+    ret = OB_NOT_RUNNING;
+    LOG_WARN("tablet service stopped", K(ret));
   } else if (OB_UNLIKELY(!tablet_id.is_valid() || !param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(param));
