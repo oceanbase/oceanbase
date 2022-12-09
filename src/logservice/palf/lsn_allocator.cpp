@@ -353,12 +353,12 @@ int LSNAllocator::alloc_lsn_ts(const int64_t base_ts,
           break;
         }
 
-        uint64_t tmp_next_block_id = lsn_2_block(last.lsn_val_, PALF_BLOCK_SIZE);
+        uint64_t tmp_next_block_id = lsn_2_block(LSN(last.lsn_val_), PALF_BLOCK_SIZE);
         uint64_t tmp_next_log_id_delta = last.log_id_delta_;
         int64_t tmp_next_log_ts_delta = tmp_next_log_ts - log_ts_base_;
         // 下一条日志是否需要cut
         bool is_next_need_cut = false;
-        const uint64_t last_block_offset = lsn_2_offset(last.lsn_val_, PALF_BLOCK_SIZE);
+        const uint64_t last_block_offset = lsn_2_offset(LSN(last.lsn_val_), PALF_BLOCK_SIZE);
         uint64_t tmp_next_block_offset = 0;
         if (last.is_need_cut_) {
           // 上一条日志不再聚合，需生成新日志

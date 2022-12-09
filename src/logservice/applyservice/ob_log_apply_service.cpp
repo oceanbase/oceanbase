@@ -398,8 +398,8 @@ int ObApplyStatus::push_append_cb(AppendCb *cb)
       CLOG_LOG(ERROR, "push_append_cb failed", K(thread_index), K(cb_lsn), K(cb_ts_ns),
                K(cb_queues_[thread_index]), KPC(this));
     } else {
-      CLOG_LOG(TRACE, "push_append_cb", K(thread_index), K(cb_lsn), K(cb_ts_ns), K(cb_queues_[thread_index]), KPC(this));
-      palf_committed_end_lsn = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
+      CLOG_LOG(TRACE, "push_append_cb", K(thread_index), K(cb_lsn), K(cb_queues_[thread_index]), KPC(this));
+      palf_committed_end_lsn.val_ = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
       if (cb_lsn < palf_committed_end_lsn) {
         // 需要调用on_success的cb进入队列时需要主动触发推入线程池
         if (OB_FAIL(submit_task_to_apply_service_(cb_queues_[thread_index]))) {
@@ -470,7 +470,7 @@ int ObApplyStatus::try_handle_cb_queue(ObApplyServiceQueueTask *cb_queue,
       } else if (OB_ISNULL(cb = AppendCb::__get_class_address(link))) {
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(ERROR, "cb is NULL", KPC(cb_queue), KPC(this), K(ret));
-      } else if ((lsn = cb->__get_lsn()) < ATOMIC_LOAD(&palf_committed_end_lsn_.val_)) {
+      } else if ((lsn = cb->__get_lsn()).val_ < ATOMIC_LOAD(&palf_committed_end_lsn_.val_)) {
         // 小于确认日志位点的cb可以回调on_success
         if (OB_FAIL(cb_queue->pop())) {
           CLOG_LOG(ERROR, "cb_queue pop failed", KPC(cb_queue), KPC(this), K(ret));
@@ -540,7 +540,7 @@ int ObApplyStatus::is_apply_done(bool &is_done,
       }
     }
     if (is_done) {
-      end_lsn = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
+      end_lsn.val_ = ATOMIC_LOAD(&palf_committed_end_lsn_.val_);
     }
   }
   return ret;

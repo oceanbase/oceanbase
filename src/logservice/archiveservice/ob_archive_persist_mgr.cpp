@@ -172,7 +172,7 @@ int ObArchivePersistMgr::get_ls_archive_progress(const ObLSID &id, LSN &lsn, boo
       ARCHIVE_LOG(WARN, "ls archive progress not match with tenant, need retry",
           K(key), "PersistInfo", value->info_);
     } else {
-      lsn = value->info_.lsn_;
+      lsn = LSN(value->info_.lsn_);
     }
     map_.revert(value);
   }

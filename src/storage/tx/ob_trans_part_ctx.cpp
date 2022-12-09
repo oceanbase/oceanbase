@@ -3306,7 +3306,7 @@ int ObPartTransCtx::get_max_submitting_log_info_(palf::LSN &lsn, int64_t &log_ts
 {
   int ret = OB_SUCCESS;
   ObTxLogCb *log_cb = NULL;
-  lsn = 0;
+  lsn = LSN(palf::PALF_INITIAL_LSN_VAL);
   log_ts = OB_INVALID_TIMESTAMP;
   if (!busy_cbs_.is_empty()) {
     log_cb = busy_cbs_.get_last();

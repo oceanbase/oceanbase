@@ -307,7 +307,7 @@ static int extract_archive_file_header_(char *buf,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid file header", K(ret), K(pos), K(file_header));
   } else {
-    lsn = file_header.start_lsn_;
+    lsn = LSN(file_header.start_lsn_);
     LOG_INFO("extract_archive_file_header_ succ", K(pos), K(file_header));
   }
   return ret;
@@ -399,7 +399,7 @@ int LocationDataGenerator::fetch_log_from_location_(char *&buf, int64_t &buf_siz
   int ret = OB_SUCCESS;
   int64_t file_id = 0;
   int64_t file_offset = 0;
-  palf::LSN max_lsn_in_file = palf::LOG_INVALID_LSN_VAL;
+  palf::LSN max_lsn_in_file (palf::LOG_INVALID_LSN_VAL);
   share::ObBackupPath piece_path;
   if (OB_FAIL(get_precise_file_and_offset_(file_id, file_offset, max_lsn_in_file, piece_path))) {
     LOG_WARN("get precise file and offset failed", K(ret));
@@ -585,7 +585,7 @@ int RawPathDataGenerator::extract_archive_file_header_()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid file header", K(ret), K(pos), K(file_header), KPC(this));
   } else {
-    base_lsn_ = file_header.start_lsn_;
+    base_lsn_ = LSN(file_header.start_lsn_);
     LOG_INFO("extract_archive_file_header_ succ", K(pos), K(file_header), KPC(this));
   }
   return ret;

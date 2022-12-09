@@ -1272,7 +1272,7 @@ int64_t LogSlidingWindow::get_last_submit_log_id_() const
 
 void LogSlidingWindow::get_last_submit_end_lsn_(LSN &end_lsn) const
 {
-  end_lsn = ATOMIC_LOAD(&last_submit_end_lsn_.val_);
+  end_lsn.val_ = ATOMIC_LOAD(&last_submit_end_lsn_.val_);
 }
 
 void LogSlidingWindow::get_last_submit_log_info_(LSN &lsn, LSN &end_lsn,
@@ -1300,7 +1300,7 @@ int LogSlidingWindow::get_max_flushed_log_info(LSN &lsn,
 
 void LogSlidingWindow::get_max_flushed_end_lsn(LSN &end_lsn) const
 {
-  end_lsn = ATOMIC_LOAD(&max_flushed_end_lsn_.val_);
+  end_lsn.val_ = ATOMIC_LOAD(&max_flushed_end_lsn_.val_);
 }
 
 int LogSlidingWindow::get_max_flushed_log_info_(LSN &lsn,
@@ -3227,7 +3227,7 @@ int LogSlidingWindow::get_committed_end_lsn(LSN &committed_end_lsn) const
 
 void LogSlidingWindow::get_committed_end_lsn_(LSN &out_lsn) const
 {
-  out_lsn = ATOMIC_LOAD(&committed_end_lsn_.val_);
+  out_lsn.val_ = ATOMIC_LOAD(&committed_end_lsn_.val_);
 }
 
 bool LogSlidingWindow::is_empty() const

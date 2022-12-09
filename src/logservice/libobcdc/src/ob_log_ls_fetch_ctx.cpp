@@ -128,7 +128,7 @@ int LSFetchCtx::init_group_iterator_(const palf::LSN &start_lsn)
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("start_lsn is not valid", KR(ret), K(tls_id_), K(start_lsn));
   } else {
-    palf::GetFileEndLSN group_iter_end_func = [&](){ return INT64_MAX; };
+    palf::GetFileEndLSN group_iter_end_func = [&](){ return palf::LSN(palf::LOG_MAX_LSN_VAL); };
 
     if (OB_FAIL(mem_storage_.init(start_lsn))) {
       LOG_ERROR("init mem_storage_ failed", KR(ret), K_(tls_id), K(start_lsn));

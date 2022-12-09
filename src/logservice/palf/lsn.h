@@ -22,7 +22,7 @@ namespace palf {
 struct LSN
 {
   LSN();
-  LSN(const offset_t offset);
+  explicit LSN(const offset_t offset);
   LSN(const LSN & lsn);
   ~LSN() {}
 

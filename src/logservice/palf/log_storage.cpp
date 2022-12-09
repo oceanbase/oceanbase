@@ -123,7 +123,7 @@ int LogStorage::writev(const LSN &lsn, const LogWriteBuf &write_buf, const int64
              K(log_tail_), K(lsn));
     // NB: 'switch_next_block' firstly, and then write BlockHeader of this block
   } else if (lsn + write_buf.get_total_size()
-             > (lsn_2_block(lsn, logical_block_size_) + 1) * logical_block_size_) {
+             > LSN((lsn_2_block(lsn, logical_block_size_) + 1) * logical_block_size_)) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "not support cross-file write", K(ret), KPC(this), K(lsn), K(write_buf));
   } else if (true == need_switch_block_() && OB_FAIL(inner_switch_block_())) {
@@ -220,7 +220,7 @@ int LogStorage::append_meta(const char *buf, const int64_t buf_len)
   } else if (NULL == buf || 0 >= buf_len || buf_len != MAX_INFO_BLOCK_SIZE) {
     ret = OB_INVALID_ARGUMENT;
   } else if (log_tail_ + buf_len
-             > (lsn_2_block(log_tail_, logical_block_size_) + 1) * logical_block_size_) {
+             > LSN((lsn_2_block(log_tail_, logical_block_size_) + 1) * logical_block_size_)) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "not support cross-file write", K(ret), KPC(this));
   } else if (true == need_switch_block && OB_FAIL(inner_switch_block_())) {

@@ -30,7 +30,7 @@ ObLSSavedInfo::ObLSSavedInfo()
 void ObLSSavedInfo::reset()
 {
   clog_checkpoint_ts_ = 0;
-  clog_base_lsn_ = palf::PALF_INITIAL_LSN_VAL;
+  clog_base_lsn_.reset();
   replayable_point_ = 0;
   tablet_change_checkpoint_ts_ = 0;
 }
