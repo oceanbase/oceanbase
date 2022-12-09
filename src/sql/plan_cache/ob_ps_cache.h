@@ -48,8 +48,6 @@ public:
            const common::ObAddr addr,
            const uint64_t tenant_id);
   bool is_inited() const { return inited_; }
-  bool is_valid() const { return valid_; }
-  void set_valid(bool valid) { valid_ = valid; }
   int64_t inc_ref_count();
   void dec_ref_count();
   int64_t get_ref_count() const { return ref_count_; }
@@ -144,7 +142,6 @@ private:
 
   ObPsStmtId next_ps_stmt_id_;
   bool inited_;
-  bool valid_;
   int64_t tenant_id_;
   common::ObAddr host_;
   volatile int64_t ref_count_;

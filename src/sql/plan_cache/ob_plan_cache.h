@@ -275,8 +275,6 @@ public:
   int foreach_cache_evict(CallBack &cb);
   //asynchronous update plan baseline
   int asyn_update_baseline();
-  bool is_valid() {return valid_;}
-  void set_valid(bool valid) {valid_ = valid;}
   void destroy();
   int64_t inc_ref_count();
   void dec_ref_count();
@@ -368,7 +366,6 @@ private:
   const static int64_t SLICE_SIZE = 1024; //1k
 private:
   bool inited_;
-  bool valid_;
   int64_t tenant_id_;
   int64_t mem_limit_pct_;
   int64_t mem_high_pct_;                     // high water mark percentage
