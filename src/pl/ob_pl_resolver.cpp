@@ -2228,6 +2228,8 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
                   record_type = static_cast<ObRecordType *>(const_cast<void *>(dup_type));
                   OV (OB_NOT_NULL(record_type));
                   OX (pl_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id()));
+                  OZ (func.add_dependency_object(ObSchemaObjVersion(table_schema->get_table_id(),
+                      table_schema->get_schema_version(), ObDependencyTableType::DEPENDENCY_TABLE)));
                 }
               } else {
                 OZ (build_record_type_by_schema(resolve_ctx_, table_schema, record_type, with_rowid));
