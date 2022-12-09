@@ -3833,6 +3833,48 @@ int oceanbase::sql::Path::compute_pipeline_info()
   return ret;
 }
 
+int oceanbase::sql::Path::compute_path_property_from_log_op()
+{
+  int ret = OB_SUCCESS;
+  int64_t interesting_order_info;
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(log_op_) || OB_ISNULL(parent_) ||
+      OB_ISNULL(parent_->get_plan()) ||
+      OB_ISNULL(stmt=parent_->get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null log op", K(ret));
+  } else if (OB_FAIL(get_ordering().assign(log_op_->get_op_ordering()))) {
+    LOG_WARN("failed to assign ordering", K(ret));
+  } else if (OB_FAIL(weak_sharding_.assign(log_op_->get_weak_sharding()))) {
+    LOG_WARN("failed to assign weak sharding", K(ret));
+  } else if (OB_FAIL(parent_->check_all_interesting_order(get_ordering(),
+                                                          stmt,
+                                                          interesting_order_info))) {
+    LOG_WARN("failed to check all interesting order", K(ret));
+  } else {
+    strong_sharding_ = log_op_->get_strong_sharding();
+    set_interesting_order_info(interesting_order_info);
+    is_local_order_ = log_op_->get_is_local_order();
+    is_range_order_ = log_op_->get_is_range_order();
+    exchange_allocated_ = log_op_->is_exchange_allocated();
+    phy_plan_type_ = log_op_->get_phy_plan_type();
+    location_type_ = log_op_->get_location_type();
+    contain_fake_cte_ = log_op_->get_contains_fake_cte();
+    contain_pw_merge_op_ = log_op_->get_contains_pw_merge_op();
+    contain_match_all_fake_cte_ = log_op_->get_contains_match_all_fake_cte();
+    contain_das_op_ = log_op_->get_contains_das_op();
+    parallel_ = log_op_->get_parallel();
+    server_cnt_ = log_op_->get_server_cnt();
+    is_pipelined_path_ = log_op_->is_pipelined_plan();
+    is_nl_style_pipelined_path_ = log_op_->is_nl_style_pipelined_plan();
+    cost_ = log_op_->get_cost();
+    op_cost_ = log_op_->get_op_cost();
+    contain_pw_merge_op_ = log_op_->get_contains_pw_merge_op();
+    inner_row_count_ = log_op_->get_card();
+  }
+  return ret;
+}
+
 int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
@@ -6864,19 +6906,35 @@ int ObJoinOrder::create_plan_for_inner_path(Path *path)
     //do nothing
   } else if (OB_FAIL(get_plan()->create_plan_tree_from_path(path, op))) {
     LOG_WARN("failed to create plan from path", K(ret));
+  } else if (OB_FAIL(path->compute_path_property_from_log_op())) {
+    LOG_WARN("failed to compute path property", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::create_subplan_filter_for_join_path(Path *path,
+                                                    ObIArray<ObRawExpr*> &subquery_filters)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *op = NULL;
+  if (OB_ISNULL(path) || OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null path", K(ret));
+  } else if (subquery_filters.empty()) {
+    //do nothing
+  } else if (OB_FAIL(get_plan()->create_plan_tree_from_path(path, op))) {
+    LOG_WARN("failed to create plan from path", K(ret));
   } else if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null op", K(ret));
-  } else if (OB_FAIL(path->weak_sharding_.assign(op->get_weak_sharding()))) {
-    LOG_WARN("failed to assign weak sharding", K(ret));
-  } else {
-    path->strong_sharding_ = op->get_strong_sharding();
-    path->cost_ = op->get_cost();
-    path->op_cost_ = op->get_op_cost();
-    path->inner_row_count_ = op->get_card();
-    path->exchange_allocated_ = op->is_exchange_allocated();
-    path->phy_plan_type_ = op->get_phy_plan_type();
-    path->location_type_ = op->get_location_type();
+  } else if (OB_FAIL(get_plan()->allocate_subplan_filter_as_top(op,
+                                                                subquery_filters,
+                                                                true,
+                                                                true))) {
+    LOG_WARN("failed to allocate subplan filter", K(ret));
+  } else if (OB_FALSE_IT(path->log_op_ = op)) {
+  } else if (OB_FAIL(path->compute_path_property_from_log_op())) {
+    LOG_WARN("failed to compute path property", K(ret));
   }
   return ret;
 }
@@ -7790,7 +7848,7 @@ int ObJoinOrder::alloc_join_path(JoinPath *&join_path)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate a join path", K(join_path), K(ret));
   } else {
-    // do nothing
+    //do nothing
   }
   return ret;
 }
@@ -7810,9 +7868,16 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
 {
   int ret = OB_SUCCESS;
   JoinPath *join_path = NULL;
+  ObSEArray<ObRawExpr*, 4> normal_filters;
+  ObSEArray<ObRawExpr*, 4> subquery_filters;
   if (OB_ISNULL(left_path) || OB_ISNULL(right_path) || OB_ISNULL(get_plan())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(left_path), K(right_path), K(get_plan()), K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(filters,
+                                                              subquery_filters,
+                                                              normal_filters,
+                                                              false))) {
+    LOG_WARN("failed to classify subquery exprs", K(ret));
   } else if (OB_FAIL(alloc_join_path(join_path))) {
     LOG_WARN("failed to allocate a hash join path", K(ret));
   } else {
@@ -7832,7 +7897,7 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
       LOG_WARN("failed to append join conditions", K(ret));
     } else if (OB_FAIL(append(join_path->other_join_conditions_, other_join_conditions))) {
       LOG_WARN("failed to append join filters", K(ret));
-    } else if (OB_FAIL(append(join_path->filter_, filters))) {
+    } else if (OB_FAIL(append(join_path->filter_, normal_filters))) {
       LOG_WARN("failed to append join quals", K(ret));
     } else if (DistAlgo::DIST_PULL_TO_LOCAL != join_dist_algo &&
                OB_FAIL(generate_join_filter_infos(left_path,
@@ -7845,6 +7910,9 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
       LOG_WARN("failed to generate join filter info", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
       LOG_WARN("failed to compute join path property", K(ret));
+    } else if (OB_FAIL(create_subplan_filter_for_join_path(join_path,
+                                                           subquery_filters))) {
+      LOG_WARN("failed to create subplan filter for join path", K(ret));
     } else if (OB_FAIL(add_path(join_path))) {
       LOG_WARN("failed to add path", K(ret));
     } else {
@@ -8423,11 +8491,18 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
   int ret = OB_SUCCESS;
   JoinPath *join_path = NULL;
   const ObDMLStmt *stmt = NULL;
+  ObSEArray<ObRawExpr*, 4> normal_filters;
+  ObSEArray<ObRawExpr*, 4> subquery_filters;
   if (OB_ISNULL(left_path) || OB_ISNULL(right_path) || OB_ISNULL(left_path->get_sharding()) ||
       OB_ISNULL(right_path->get_sharding()) || OB_ISNULL(get_plan()) ||
       OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(left_path), K(right_path), K(get_plan()), K(stmt), K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(filters,
+                                                              subquery_filters,
+                                                              normal_filters,
+                                                              false))) {
+    LOG_WARN("failed to classify subquery exprs", K(ret));
   } else if (RIGHT_SEMI_JOIN == join_type || RIGHT_ANTI_JOIN == join_type) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected right semt/anti merge join", K(ret), K(join_type));
@@ -8451,7 +8526,7 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
       LOG_WARN("failed to append join conditions", K(ret));
     } else if (OB_FAIL(append(join_path->other_join_conditions_, other_join_conditions))) {
       LOG_WARN("failed to append join filters", K(ret));
-    } else if (OB_FAIL(append(join_path->filter_, filters))) {
+    } else if (OB_FAIL(append(join_path->filter_, normal_filters))) {
       LOG_WARN("failed to append join quals", K(ret));
     } else if (OB_FAIL(append(join_path->left_sort_keys_, left_sort_keys))) {
       LOG_WARN("failed to append left expected ordering", K(ret));
@@ -8461,6 +8536,9 @@ int ObJoinOrder::create_and_add_mj_path(const Path *left_path,
       LOG_WARN("faield to append merge directions", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
       LOG_WARN("failed to compute join path property", K(ret));
+    } else if (OB_FAIL(create_subplan_filter_for_join_path(join_path,
+                                                           subquery_filters))) {
+      LOG_WARN("failed to create subplan filter for join path", K(ret));
     } else if (OB_FAIL(add_path(join_path))) {
       LOG_WARN("failed to add join path", K(ret));
     } else {
@@ -9628,10 +9706,21 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
 {
   int ret = OB_SUCCESS;
   JoinPath *join_path = NULL;
+  ObSEArray<ObRawExpr*, 4> normal_filters;
+  ObSEArray<ObRawExpr*, 4> subquery_filters;
   if (OB_ISNULL(left_path) || OB_ISNULL(right_path) ||
       OB_ISNULL(get_plan()) || OB_ISNULL(left_path->get_sharding())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(left_path), K(right_path), K(get_plan()), K(ret));
+  } else if (IS_OUTER_OR_CONNECT_BY_JOIN(join_type) &&
+             OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(where_conditions,
+                                                              subquery_filters,
+                                                              normal_filters,
+                                                              false))) {
+    LOG_WARN("failed to classify subquery exprs", K(ret));
+  } else if (!(IS_OUTER_OR_CONNECT_BY_JOIN(join_type)) &&
+             OB_FAIL(normal_filters.assign(where_conditions))) {
+    LOG_WARN("failed to assign filters", K(ret));
   } else if (OB_FAIL(alloc_join_path(join_path))) {
     LOG_WARN("failed to allocate a nl join path", K(ret));
   } else {
@@ -9648,13 +9737,16 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
                                right_path,
                                join_type,
                                on_conditions,
-                               where_conditions))) {
+                               normal_filters))) {
       LOG_WARN("failed to remove filters", K(ret));
     } else if (CONNECT_BY_JOIN == join_type &&
                OB_FAIL(push_down_order_siblings(join_path, right_path))) {
       LOG_WARN("push down order siblings by condition failed", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
       LOG_WARN("failed to compute join path property", K(ret));
+    } else if (OB_FAIL(create_subplan_filter_for_join_path(join_path,
+                                                           subquery_filters))) {
+      LOG_WARN("failed to create subplan filter for join path", K(ret));
     } else if (OB_FAIL(add_path(join_path))) {
       LOG_WARN("failed to add path", K(ret));
     } else {

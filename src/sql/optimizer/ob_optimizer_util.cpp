@@ -2722,7 +2722,8 @@ bool ObOptimizerUtil::same_partition_exprs(const common::ObIArray<ObRawExpr *> &
 
 int ObOptimizerUtil::classify_subquery_exprs(const ObIArray<ObRawExpr*> &exprs,
                                              ObIArray<ObRawExpr*> &subquery_exprs,
-                                             ObIArray<ObRawExpr*> &non_subquery_exprs)
+                                             ObIArray<ObRawExpr*> &non_subquery_exprs,
+                                             const bool with_onetime)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
@@ -2731,7 +2732,7 @@ int ObOptimizerUtil::classify_subquery_exprs(const ObIArray<ObRawExpr*> &exprs,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null expr", K(ret), K(temp_expr));
     } else if (temp_expr->has_flag(CNT_SUB_QUERY) ||
-               temp_expr->has_flag(CNT_ONETIME)) {
+               (with_onetime && temp_expr->has_flag(CNT_ONETIME))) {
       // used to allocate subplan filter
       if (OB_FAIL(subquery_exprs.push_back(temp_expr))) {
         LOG_WARN("failed to push back subquery exprs", K(ret));
