@@ -2908,5 +2908,18 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "log_row_value_options": {
+    "id": 10136,
+    "name": "log_row_value_options",
+    "value": "",
+    "data_type": "varchar",
+    "info": "control whether lob use partial update",
+    "flags": "Global | SESSION",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid",
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "https://yuque.antfin-inc.com/ob/product_functionality_review/wan7iw4mox8vgkfm"
   }
 }

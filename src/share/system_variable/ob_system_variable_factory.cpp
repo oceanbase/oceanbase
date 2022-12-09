@@ -197,6 +197,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "local_infile",
   "lock_wait_timeout",
   "log_bin",
+  "log_row_value_options",
   "long_query_time",
   "lower_case_table_names",
   "max_allowed_packet",
@@ -419,6 +420,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_LOCAL_INFILE,
   SYS_VAR_LOCK_WAIT_TIMEOUT,
   SYS_VAR_LOG_BIN,
+  SYS_VAR_LOG_ROW_VALUE_OPTIONS,
   SYS_VAR_LONG_QUERY_TIME,
   SYS_VAR_LOWER_CASE_TABLE_NAMES,
   SYS_VAR_MAX_ALLOWED_PACKET,
@@ -780,7 +782,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "innodb_strict_mode",
   "_windowfunc_optimization_settings",
   "ob_enable_rich_error_msg",
-  "ob_sql_plan_memory_percentage"
+  "ob_sql_plan_memory_percentage",
+  "log_row_value_options"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1167,6 +1170,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarWindowfuncOptimizationSettings)
         + sizeof(ObSysVarObEnableRichErrorMsg)
         + sizeof(ObSysVarObSqlPlanMemoryPercentage)
+        + sizeof(ObSysVarLogRowValueOptions)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3144,6 +3148,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_SQL_PLAN_MEMORY_PERCENTAGE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObSqlPlanMemoryPercentage));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogRowValueOptions())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogRowValueOptions", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_LOG_ROW_VALUE_OPTIONS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarLogRowValueOptions));
       }
     }
 
@@ -5578,6 +5591,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSqlPlanMemoryPercentage())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObSqlPlanMemoryPercentage", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_LOG_ROW_VALUE_OPTIONS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarLogRowValueOptions)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarLogRowValueOptions)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarLogRowValueOptions())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarLogRowValueOptions", K(ret));
       }
       break;
     }

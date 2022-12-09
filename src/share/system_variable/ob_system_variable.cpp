@@ -1966,6 +1966,27 @@ int ObSysVarOnCheckFuncs::check_update_resource_manager_plan(ObExecContext &ctx,
   return ret;
 }
 
+int ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid(sql::ObExecContext &ctx,
+                                                                 const ObSetVar &set_var,
+                                                                 const ObBasicSysVar &sys_var,
+                                                                 const common::ObObj &in_val,
+                                                                 common::ObObj &out_val)
+{
+  int ret = OB_SUCCESS;
+  ObString val = in_val.get_string();
+  if (!val.empty()) {
+    if (val.case_compare("partial_lob") != 0) {
+      ret = OB_ERR_PARAM_VALUE_INVALID;
+      LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
+    } else {
+      out_val = in_val;
+    }
+  } else {
+    out_val = in_val;
+  }
+  return ret;
+}
+
 bool ObSysVarOnCheckFuncs::can_set_trans_var(ObSetVar::SetScopeType scope,
                                              ObBasicSessionInfo &session)
 {

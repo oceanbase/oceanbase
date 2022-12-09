@@ -2024,6 +2024,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_STATEMENT_STRING_IN_EXECUTE_IMMEDIATE_IS_NULL_OR_ZERO
 DEFINE_ORACLE_ERROR(OB_ERR_MISSING_INTO_KEYWORD, -9712, -1, "HY000", "missing INTO keyword", 925, "missing INTO keyword");
 DEFINE_ORACLE_ERROR(OB_ERR_CLAUSE_RETURN_ILLEGAL, -9713, -1, "HY000", "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements", 6547, "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements");
 DEFINE_ORACLE_ERROR(OB_ERR_NAME_HAS_TOO_MANY_PARTS, -9714, -1, "HY000", "name has too many parts", 6563, "name has too many parts");
+DEFINE_ORACLE_ERROR(OB_ERR_LOB_SPAN_TRANSACTION, -9715, -1, "HY000", "LOB locators cannot span transactions", 22990, "LOB locators cannot span transactions");
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!

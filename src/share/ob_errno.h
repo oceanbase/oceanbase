@@ -1597,6 +1597,7 @@ constexpr int OB_ERR_STATEMENT_STRING_IN_EXECUTE_IMMEDIATE_IS_NULL_OR_ZERO_LENGT
 constexpr int OB_ERR_MISSING_INTO_KEYWORD = -9712;
 constexpr int OB_ERR_CLAUSE_RETURN_ILLEGAL = -9713;
 constexpr int OB_ERR_NAME_HAS_TOO_MANY_PARTS = -9714;
+constexpr int OB_ERR_LOB_SPAN_TRANSACTION = -9715;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -3436,6 +3437,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MISSING_INTO_KEYWORD__USER_ERROR_MSG "missing INTO keyword"
 #define OB_ERR_CLAUSE_RETURN_ILLEGAL__USER_ERROR_MSG "RETURNING clause must be used with INSERT, UPDATE, or DELETE statements"
 #define OB_ERR_NAME_HAS_TOO_MANY_PARTS__USER_ERROR_MSG "name has too many parts"
+#define OB_ERR_LOB_SPAN_TRANSACTION__USER_ERROR_MSG "LOB locators cannot span transactions"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -5275,6 +5277,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MISSING_INTO_KEYWORD__ORA_USER_ERROR_MSG "ORA-00925: missing INTO keyword"
 #define OB_ERR_CLAUSE_RETURN_ILLEGAL__ORA_USER_ERROR_MSG "ORA-06547: RETURNING clause must be used with INSERT, UPDATE, or DELETE statements"
 #define OB_ERR_NAME_HAS_TOO_MANY_PARTS__ORA_USER_ERROR_MSG "ORA-06563: name has too many parts"
+#define OB_ERR_LOB_SPAN_TRANSACTION__ORA_USER_ERROR_MSG "ORA-22990: LOB locators cannot span transactions"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"

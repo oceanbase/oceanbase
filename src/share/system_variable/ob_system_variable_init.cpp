@@ -2879,13 +2879,26 @@ static struct VarsInit{
     ObSysVars[218].alias_ = "OB_SV_SQL_PLAN_MEMORY_PERCENTAGE" ;
     }();
 
+    [&] (){
+      ObSysVars[219].info_ = "control whether lob use partial update" ;
+      ObSysVars[219].name_ = "log_row_value_options" ;
+      ObSysVars[219].data_type_ = ObVarcharType ;
+      ObSysVars[219].value_ = "" ;
+      ObSysVars[219].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[219].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid" ;
+      ObSysVars[219].id_ = SYS_VAR_LOG_ROW_VALUE_OPTIONS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LOG_ROW_VALUE_OPTIONS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_LOG_ROW_VALUE_OPTIONS] = 219 ;
+    ObSysVars[219].alias_ = "OB_SV_LOG_ROW_VALUE_OPTIONS" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 219;
+static int64_t var_amount = 220;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
