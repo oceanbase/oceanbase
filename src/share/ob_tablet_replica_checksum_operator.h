@@ -103,10 +103,12 @@ public:
 class ObTabletReplicaChecksumOperator
 {
 public:
+  // This function is specifically designed for ObTabletReplicaChecksumIterator.
+  // This function would remove the last several checksum items in some cases.
+  // Please do not call this function in any other place, except ObTabletReplicaChecksumIterator.
   static int batch_get(
       const uint64_t tenant_id,
       const ObTabletLSPair &start_pair,
-      const int64_t batch_cnt,
       const int64_t snapshot_version,
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);

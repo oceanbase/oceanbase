@@ -445,76 +445,45 @@ int ObTabletReplicaChecksumOperator::inner_batch_remove_by_sql_(
 int ObTabletReplicaChecksumOperator::batch_get(
     const uint64_t tenant_id,
     const ObTabletLSPair &start_pair,
-    const int64_t batch_cnt,
     const int64_t snapshot_version,
     ObISQLClient &sql_proxy,
     ObIArray<ObTabletReplicaChecksumItem> &items)
 {
   int ret = OB_SUCCESS;
-
   ObSqlString sql;
-  int64_t remain_cnt = batch_cnt;
-  int64_t ori_items_cnt = 0;
-
-  while (OB_SUCC(ret) && (remain_cnt > 0)) {
-    sql.reuse();
-    const int64_t limit_cnt = ((remain_cnt >= MAX_BATCH_COUNT) ? MAX_BATCH_COUNT : remain_cnt);
-    ori_items_cnt = items.count();
-    ObTabletLSPair last_pair;
-    if (remain_cnt == batch_cnt) {
-      last_pair = start_pair;
-    } else {
-      if (ori_items_cnt > 0) {
-        const ObTabletReplicaChecksumItem &last_item = items.at(ori_items_cnt - 1);
-        if (OB_FAIL(last_pair.init(last_item.tablet_id_, last_item.ls_id_))) {
-          LOG_WARN("fail to init last tablet_ls_pair", KR(ret), K(last_item));
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("err unexpected, about tablet replica items count", KR(ret), K(tenant_id), K(start_pair),
-          K(batch_cnt), K(remain_cnt), K(ori_items_cnt));
+  if (OB_FAIL(construct_batch_get_sql_str_(tenant_id, start_pair, MAX_BATCH_COUNT,
+                                           snapshot_version, sql))) {
+    LOG_WARN("fail to construct load sql", KR(ret), K(tenant_id), K(start_pair), K(snapshot_version));
+  } else if (OB_FAIL(batch_get(tenant_id, sql, sql_proxy, items))) {
+    LOG_WARN("fail to batch get tablet replica checksum items", KR(ret), K(tenant_id), K(sql));
+  } else {
+    const int64_t items_cnt = items.count();
+    if (MAX_BATCH_COUNT == items_cnt) {
+      // in case the checksum of three replica belong to one tablet, were split into two batch-get,
+      // we will remove the last several item which belong to one tablet
+      // if current round item's count less than limit_cnt, it means already to the end, no need to handle.
+      int64_t tmp_items_cnt = items_cnt;
+      ObTabletReplicaChecksumItem tmp_item;
+      if (OB_FAIL(tmp_item.assign_key(items.at(tmp_items_cnt - 1)))) {
+        LOG_WARN("fail to assign key", KR(ret), "tmp_item", items.at(tmp_items_cnt - 1));
       }
-    }
-
-    if (FAILEDx(construct_batch_get_sql_str_(tenant_id, last_pair, limit_cnt, snapshot_version, sql))) {
-      LOG_WARN("fail to construct load sql", KR(ret), K(tenant_id), K(last_pair), K(limit_cnt),
-        K(snapshot_version));
-    } else if (OB_FAIL(batch_get(tenant_id, sql, sql_proxy, items))) {
-      LOG_WARN("fail to batch get tablet replica checksum items", KR(ret), K(tenant_id), K(sql));
-    } else {
-      const int64_t curr_items_cnt = items.count();
-      if (curr_items_cnt - ori_items_cnt == limit_cnt) {
-        // in case the checksum of three replica belong to one tablet, were split into two batch-get,
-        // we will remove the last several item which belong to one tablet
-        // if current round item's count less than limit_cnt, it means already to the end, no need to handle.    
-        int64_t tmp_items_cnt = curr_items_cnt;
-        ObTabletReplicaChecksumItem tmp_item;
-        if (OB_FAIL(tmp_item.assign_key(items.at(tmp_items_cnt - 1)))) {
-          LOG_WARN("fail to assign key", KR(ret), "tmp_item", items.at(tmp_items_cnt - 1));
-        }
-        
-        while (OB_SUCC(ret) && (tmp_items_cnt > 0)) {
-          if (tmp_item.is_same_tablet(items.at(tmp_items_cnt - 1))) {
-            if (OB_FAIL(items.remove(tmp_items_cnt - 1))) {
-              LOG_WARN("fail to remove item from array", KR(ret), K(tmp_items_cnt), K(items));
-            } else {
-              --tmp_items_cnt;
-            }
+      while (OB_SUCC(ret) && (tmp_items_cnt > 0)) {
+        if (tmp_item.is_same_tablet(items.at(tmp_items_cnt - 1))) {
+          if (OB_FAIL(items.remove(tmp_items_cnt - 1))) {
+            LOG_WARN("fail to remove item from array", KR(ret), K(tmp_items_cnt), K(items));
           } else {
-            break;
-          } 
-        }
-        
-        if (OB_SUCC(ret)) {
-          if (tmp_items_cnt == 0) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected err about item count", KR(ret), K(tmp_item), K(curr_items_cnt), K(ori_items_cnt));
-          } else {
-            remain_cnt -= limit_cnt;
+            --tmp_items_cnt;
           }
+        } else {
+          break;
         }
-      } else {
-        remain_cnt = 0; // already get all checksum item, finish batch_get
+      }
+
+      if (OB_SUCC(ret)) {
+        if (tmp_items_cnt == 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected err about item count", KR(ret), K(tmp_item), K(items_cnt));
+        }
       }
     }
   }
