@@ -536,6 +536,7 @@ public:
   ObPrivSet get_user_priv_set() const { return user_priv_set_; }
   ObPrivSet get_db_priv_set() const { return db_priv_set_; }
   ObPlanCache *get_plan_cache();
+  ObPlanCache *get_plan_cache_directly() const { return plan_cache_; };
   ObPsCache *get_ps_cache();
   ObPlanCacheManager *get_plan_cache_manager() { return plan_cache_manager_; }
   obmysql::ObMySQLRequestManager *get_request_manager();
