@@ -47,6 +47,8 @@ namespace transaction {
 using namespace memtable;
 using namespace share;
 
+static const int64_t POST_COMMIT_REQ_RETRY_INTERVAL = 100 * 1000; // 100msg
+
 int ObTransService::create_ls(const share::ObLSID &ls_id,
                               ObLS &ls,
                               ObITxLogParam *param,
@@ -226,21 +228,33 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
  * if msg send fail, the retry task will retry later
  * if both register task fail and send are failed, the commit failed
  */
-int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx, const int64_t expire_ts) {
+int ObTransService::do_commit_tx_slowpath_(ObTxDesc &tx, const int64_t expire_ts)
+{
   int ret = OB_SUCCESS;
   ObTxCommitMsg commit_msg;
-  if (OB_FAIL(register_commit_retry_task_(tx))) {
-    TRANS_LOG(WARN, "register retry commit task fail", K(ret), K(tx));
-  } else if (OB_FAIL(build_tx_commit_msg_(tx, commit_msg))) {
+  bool post_msg_fail = false;
+  if (OB_FAIL(build_tx_commit_msg_(tx, commit_msg))) {
     TRANS_LOG(WARN, "build tx commit msg fail", K(ret), K(tx));
     // build msg fail won't cause commit fail, later driven by retry timer
+    post_msg_fail = true;
     ret = OB_SUCCESS;
   } else if (OB_FAIL(rpc_->post_msg(tx.coord_id_, commit_msg))) {
     TRANS_LOG(WARN, "post tx commit msg fail", K(ret), K(tx), K(commit_msg));
     // send msg fail won't cause commit fail, later driven by retry timer
+    post_msg_fail = true;
     ret = OB_SUCCESS;
   }
-  TRANS_LOG(TRACE, "do commit tx slowpath", K(ret), K(tx));
+
+  if (post_msg_fail) {
+    if (OB_FAIL(register_commit_retry_task_(tx, POST_COMMIT_REQ_RETRY_INTERVAL))) {
+      TRANS_LOG(WARN, "register retry commit task fail", K(ret), K(tx));
+    }
+  } else {
+    if (OB_FAIL(register_commit_retry_task_(tx))) {
+      TRANS_LOG(WARN, "register retry commit task fail", K(ret), K(tx));
+    }
+  }
+  TRANS_LOG(TRACE, "do commit tx slowpath", K(ret), K(post_msg_fail), K(tx));
   return ret;
 }
 
@@ -336,8 +350,14 @@ int ObTransService::handle_tx_commit_timeout(ObTxDesc &tx, const int64_t delay)
         TRANS_LOG(WARN, "post commit msg fail", K(ret), K(tx));
       }
       // register again
-      if (OB_FAIL(register_commit_retry_task_(tx))) {
-        TRANS_LOG(WARN, "reregister task fail", K(ret), K(tx));
+      if (OB_FAIL(ret)) {
+        if (OB_FAIL(register_commit_retry_task_(tx, POST_COMMIT_REQ_RETRY_INTERVAL))) {
+          TRANS_LOG(WARN, "reregister task fail", K(ret), K(tx));
+        }
+      } else {
+        if (OB_FAIL(register_commit_retry_task_(tx))) {
+          TRANS_LOG(WARN, "reregister task fail", K(ret), K(tx));
+        }
       }
     }
     tx.lock_.unlock();
