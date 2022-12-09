@@ -74,6 +74,8 @@ public:
       memtable_tail_ = -1;
       memtable_handles_.reset();
     }
+
+    TO_STRING_KV(K(memtable_head_), K(memtable_tail_), K(memtable_handles_));
   };
 
   struct CalcUpperInfo
@@ -236,6 +238,7 @@ public:  // ObTxDataTable
                K_(is_started),
                K_(tablet_id),
                K_(calc_upper_info),
+               K_(memtables_cache),
                KP_(ls),
                KP_(ls_tablet_svr),
                KP_(memtable_mgr),
@@ -262,7 +265,7 @@ private:
 
   int get_tx_data_in_cache_(const transaction::ObTransID tx_id, ObTxData *&tx_data);
 
-  int get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData *&tx_data);
+  int get_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObTxData &tx_data);
 
   int insert_(ObTxData *&tx_data, ObTxDataMemtableWriteGuard &write_guard);
 
