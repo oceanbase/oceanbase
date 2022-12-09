@@ -626,7 +626,8 @@ private:
                                    const ObSqlExpression **into_exprs,
                                    int64_t into_count,
                                    ParamStore &exec_params,
-                                   ObSPIOutParams &out_params);
+                                   ObSPIOutParams &out_params,
+                                   bool is_forall = false);
 
   static int inner_open(pl::ObPLExecCtx *ctx,
                         ObIAllocator &param_allocator, //用于拷贝执行期参数
