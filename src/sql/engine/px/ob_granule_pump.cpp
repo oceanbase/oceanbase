@@ -533,12 +533,12 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args)
   ObGITaskSet::ObGIRandomType random_type = ObGITaskSet::GI_RANDOM_NONE;
   if (OB_SUCC(ret)) {
     // only GIT_FULL_PARTITION_WISE and GIT_RANDOM are possible now
-    bool is_online_ddl = false;
-    if (OB_FAIL(check_need_start_ddl(args, is_online_ddl))) {
-      LOG_WARN("check need start ddl failed", K(ret));
-    } else if (is_online_ddl) {
+    bool can_randomize = false;
+    if (OB_FAIL(check_can_randomize(args, can_randomize))) {
+      LOG_WARN("check can randomize failed", K(ret));
+    } else if (can_randomize) {
       random_type = ObGITaskSet::GI_RANDOM_RANGE;
-      LOG_TRACE("split random task/range for online ddl");
+      LOG_TRACE("split random task/range for online ddl and pdml");
     }
   }
 
@@ -603,11 +603,15 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args)
   return ret;
 }
 
-int ObGranulePump::check_need_start_ddl(ObGranulePumpArgs &args, bool &need_start_ddl)
+int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_randomize)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *my_session = nullptr;
-  need_start_ddl = false;
+  ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  const ObPhysicalPlan *phy_plan = NULL;
+  bool need_start_ddl = false;
+  bool need_start_pdml = false;
+
   if (OB_ISNULL(args.ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, arg ctx must not be nullptr", K(ret));
@@ -617,6 +621,20 @@ int ObGranulePump::check_need_start_ddl(ObGranulePumpArgs &args, bool &need_star
   } else if (my_session->get_ddl_info().is_ddl()) {
     need_start_ddl = true;
   }
+
+  if(OB_SUCC(ret)) {
+    if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(*args.ctx_)) ||
+        OB_ISNULL(phy_plan = phy_plan_ctx->get_phy_plan())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("some params are NULL", K(ret), K(phy_plan_ctx), K(phy_plan));
+    } else if(phy_plan->is_use_pdml()) {
+      need_start_pdml = true;
+    }
+  }
+
+  // Only when in ddl and pdml, can randomize. Specially, can not randomize when sql specifies the order
+  can_randomize = (need_start_ddl || need_start_pdml) && (!(args.asc_order() || args.desc_order()));
+  LOG_DEBUG("scan order is ", K(args.asc_order()), K(args.desc_order()), K(can_randomize), K(need_start_ddl), K(need_start_pdml));
   return ret;
 }
 
