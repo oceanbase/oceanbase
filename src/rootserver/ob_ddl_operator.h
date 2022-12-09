@@ -342,6 +342,7 @@ public:
                                        const uint64_t data_table_id,
                                        const uint64_t database_id,
                                        const obrpc::ObRenameIndexArg &rename_index_arg,
+                                       const ObIndexStatus *new_index_status,
                                        common::ObMySQLTransaction &trans,
                                        share::schema::ObTableSchema &new_index_table_schema);
   virtual int alter_index_table_parallel(const uint64_t tenant_id,

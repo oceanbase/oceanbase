@@ -156,15 +156,13 @@ int ObDropIndexTask::prepare(const ObDDLTaskStatus new_status)
   return ret;
 }
 
-int ObDropIndexTask::set_write_only(const ObDDLTaskStatus new_status)
+// Disused stage, just for compatibility.
+int ObDropIndexTask::set_write_only(const share::ObDDLTaskStatus new_status)
 {
   int ret = OB_SUCCESS;
-  DEBUG_SYNC(DROP_INDEX_SET_WRITE_ONLY);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDropIndexTask has not been inited", K(ret));
-  } else if (OB_FAIL(update_index_status(INDEX_STATUS_UNAVAILABLE))) {
-    LOG_WARN("update index status failed", K(ret));
   } else if (OB_FAIL(switch_status(new_status, ret))) {
     LOG_WARN("switch status failed", K(ret));
   }
@@ -311,7 +309,7 @@ int ObDropIndexTask::process()
         break;
       case ObDDLTaskStatus::SET_WRITE_ONLY:
         if (OB_FAIL(set_write_only(WAIT_TRANS_END_FOR_WRITE_ONLY))) {
-          LOG_WARN("prepare failed", K(ret));
+          LOG_WARN("set write only failed", K(ret));
         }
         break;
       case ObDDLTaskStatus::WAIT_TRANS_END_FOR_WRITE_ONLY:

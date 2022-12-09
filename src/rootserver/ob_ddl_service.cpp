@@ -5195,6 +5195,7 @@ int ObDDLService::alter_table_index(const obrpc::ObAlterTableArg &alter_table_ar
                           origin_table_schema.get_table_id(),
                           origin_table_schema.get_database_id(),
                           *rename_index_arg,
+                          nullptr /* new_index_status */,
                           trans,
                           new_index_schema))) {
                 LOG_WARN("failed to rename index", K(*rename_index_arg), K(ret));
@@ -5860,22 +5861,24 @@ int ObDDLService::rename_dropping_index_name(
   if (OB_FAIL(get_index_schema_by_name(data_table_id, database_id, drop_index_arg, 
                                       schema_guard, index_table_schema))) {
     LOG_WARN("get index schema by name", K(ret), K(data_table_id), K(database_id));
-  } else if ((nwrite = snprintf(buf, buf_size, "%s_%s_%lu", 
-    index_name.ptr(), "DELETING", ObTimeUtility::current_time())) >= buf_size || nwrite < 0) {
+  } else if ((nwrite = snprintf(buf, buf_size, "%s_%lu",
+    "DELETING", ObTimeUtility::current_time())) >= buf_size || nwrite < 0) {
     ret = common::OB_BUF_NOT_ENOUGH;
     LOG_WARN("buf is not large enough", K(ret), K(buf_size));
   } else {
+    const ObIndexStatus new_index_status = INDEX_STATUS_UNAVAILABLE;
     ObString new_index_name = ObString::make_string(buf);
     obrpc::ObRenameIndexArg rename_index_arg;
     rename_index_arg.tenant_id_         = index_table_schema->get_tenant_id();
     rename_index_arg.origin_index_name_ = index_name;
     rename_index_arg.new_index_name_    = new_index_name;
     if (OB_FAIL(ddl_operator.alter_table_rename_index(index_table_schema->get_tenant_id(),
-                                                      index_table_schema->get_data_table_id(),
-                                                      index_table_schema->get_database_id(),
-                                                      rename_index_arg,
-                                                      trans,
-                                                      new_index_schema))) {
+                                                            index_table_schema->get_data_table_id(),
+                                                            index_table_schema->get_database_id(),
+                                                            rename_index_arg,
+                                                            &new_index_status,
+                                                            trans,
+                                                            new_index_schema))) {
       LOG_WARN("rename index failed", K(ret));
     }
   }
@@ -10494,17 +10497,17 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       }
     }
     if (OB_SUCC(ret) && is_double_table_long_running_ddl(ddl_type)) {
-      bool is_building_index = false;
+      bool has_index_operation = false;
       bool is_adding_constraint = false;
       uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
-      if (OB_FAIL(check_is_building_index(schema_guard,
+      if (OB_FAIL(check_has_index_operation(schema_guard,
                                           tenant_id,
                                           table_id,
-                                          is_building_index))) {
-        LOG_WARN("failed to call check_is_building_index", K(ret));
+                                          has_index_operation))) {
+        LOG_WARN("check has index operation failed", K(ret));
       } else if (OB_FAIL(check_is_adding_constraint(table_id, is_adding_constraint))) {
         LOG_WARN("failed to call check_is_adding_constraint", K(ret));
-      } else if (is_building_index) {
+      } else if (has_index_operation) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run concurrently with creating index.");
       } else if (is_adding_constraint) {
@@ -10516,13 +10519,14 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
   return ret;
 }
 
-int ObDDLService::check_is_building_index(ObSchemaGetterGuard &schema_guard,
+// check whether there is index operation, including add index and drop index.
+int ObDDLService::check_has_index_operation(ObSchemaGetterGuard &schema_guard,
                                           const uint64_t tenant_id,
                                           const uint64_t table_id,
-                                          bool &is_building_index)
+                                          bool &has_index_operation)
 {
   int ret = OB_SUCCESS;
-  is_building_index = false;
+  has_index_operation = false;
   // 1. get table schema
   const ObTableSchema *orig_table = nullptr;
   ObSEArray<ObAuxTableMetaInfo, 16> index_infos;
@@ -10550,7 +10554,7 @@ int ObDDLService::check_is_building_index(ObSchemaGetterGuard &schema_guard,
         LOG_WARN("invalid index table id", "index_table_id", index_infos.at(i).table_id_);
       } else if (index_schema->is_unavailable_index()) {
         // 3. check if index is still constructing
-        is_building_index = true;
+        has_index_operation = true;
         break;
       }
     }
