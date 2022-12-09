@@ -114,7 +114,6 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
   int ret = OB_SUCCESS;
   TCWLockGuard guard(lock_);
   UNUSED(tablet_id);
-  bool is_latest_execution_id = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableRedefinitionTask has not been inited", K(ret));
@@ -123,10 +122,8 @@ int ObTableRedefinitionTask::update_complete_sstable_job_status(const common::Ob
   } else if (OB_UNLIKELY(snapshot_version_ != snapshot_version)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, snapshot version is not equal", K(ret), K(snapshot_version_), K(snapshot_version));
-  } else if (OB_FAIL(check_is_latest_execution_id(execution_id, is_latest_execution_id))) {
-    LOG_WARN("failed to check latest execution id", K(ret), K(execution_id));
-  } else if (!is_latest_execution_id) {
-    LOG_INFO("receive a mismatch execution result, ignore", K(execution_id), K(execution_id_));
+  } else if (execution_id < execution_id_) {
+    LOG_INFO("receive a mismatch execution result, ignore", K(ret_code), K(execution_id), K(execution_id_));
   } else {
     complete_sstable_job_ret_code_ = ret_code;
     LOG_INFO("table redefinition task callback", K(complete_sstable_job_ret_code_));
