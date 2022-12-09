@@ -454,44 +454,27 @@ int ObLSTabletService::batch_remove_tablets(
 int ObLSTabletService::delete_all_tablets()
 {
   int ret = OB_SUCCESS;
-
   if (OB_NOT_NULL(ls_)) {
+    const ObLSID &ls_id = ls_->get_ls_id();
     ObSArray<ObTabletID> tablet_id_array;
-    ObSArray<uint64_t> tablet_id_hash_array;
     GetAllTabletIDOperator op(tablet_id_array);
+    common::ObBucketWLockAllGuard lock_guard(bucket_lock_);
     if (OB_FAIL(tablet_id_set_.foreach(op))) {
-      LOG_WARN("failed to traverse tablet id set", K(ret));
+      LOG_WARN("failed to traverse tablet id set", K(ret), K(ls_id));
     } else if (tablet_id_array.empty()) {
       // tablet id array is empty, do nothing
-    } else if (OB_FAIL(tablet_id_hash_array.reserve(tablet_id_array.count()))) {
-      LOG_WARN("failed to reserver memory for array", K(ret), "cnt", tablet_id_array.count());
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
         const ObTabletID &tablet_id = tablet_id_array.at(i);
-        if (OB_FAIL(tablet_id_hash_array.push_back(tablet_id.hash()))) {
-          LOG_WARN("failed to push back tablet id hash value", K(ret), K(tablet_id));
+        if (OB_FAIL(do_remove_tablet(ls_id, tablet_id))) {
+          LOG_ERROR("failed to do remove tablet", K(ret), K(ls_id), K(tablet_id));
+          ob_usleep(1000 * 1000);
+          ob_abort();
         }
       }
 
       if (OB_SUCC(ret)) {
-        ObMultiBucketLockGuard lock_guard(bucket_lock_, true/*is_write_lock*/);
-        if (OB_FAIL(lock_guard.lock_multi_buckets(tablet_id_hash_array))) {
-          LOG_WARN("failed to lock multi buckets", K(ret));
-        } else {
-          const ObLSID &ls_id = ls_->get_ls_id();
-          for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
-            const ObTabletID &tablet_id = tablet_id_array.at(i);
-            if (OB_FAIL(do_remove_tablet(ls_id, tablet_id))) {
-              LOG_ERROR("failed to do remove tablet", K(ret), K(ls_id), K(tablet_id));
-              ob_usleep(1000 * 1000);
-              ob_abort();
-            }
-          }
-
-          if (OB_SUCC(ret)) {
-            report_tablet_to_rs(tablet_id_array);
-          }
-        }
+        report_tablet_to_rs(tablet_id_array);
       }
     }
   }
