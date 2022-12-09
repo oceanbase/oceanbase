@@ -7988,20 +7988,23 @@ int ObDDLOperator::update_routine_info(ObRoutineInfo &routine_info,
                                       int64_t tenant_id,
                                       int64_t parent_id,
                                       int64_t owner_id,
-                                      int64_t database_id)
+                                      int64_t database_id,
+                                      int64_t routine_id = OB_INVALID_ID)
 {
   int ret = OB_SUCCESS;
-  uint64_t new_routine_id = OB_INVALID_ID;
+  uint64_t new_routine_id = routine_id;
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schema_service must not null", K(ret));
-  } else if (OB_SYS_TENANT_ID == tenant_id
+  } else if (OB_INVALID_ID == new_routine_id
+        && OB_SYS_TENANT_ID == tenant_id
         && OB_FAIL(schema_service->fetch_new_sys_pl_object_id(tenant_id, new_routine_id))) {
-    LOG_WARN("failed to fetch new_routine_id", K(tenant_id), K(ret));    
-  } else if (OB_SYS_TENANT_ID != tenant_id
+    LOG_WARN("failed to fetch new_routine_id", K(tenant_id), K(ret));
+  } else if (OB_INVALID_ID == new_routine_id
+        && OB_SYS_TENANT_ID != tenant_id
         && OB_FAIL(schema_service->fetch_new_routine_id(tenant_id, new_routine_id))) {
     LOG_WARN("failed to fetch new_routine_id", K(tenant_id), K(ret));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
@@ -8066,22 +8069,29 @@ int ObDDLOperator::create_package(const ObPackageInfo *old_package_info,
         LOG_WARN("insert package info failed", K(new_package_info), K(ret));
       } else {
         ARRAY_FOREACH(public_routine_infos, routine_idx) {
+          ObRoutineInfo &routine_info = public_routine_infos.at(routine_idx);
           if (new_package_info.is_package()) {
-            ObRoutineInfo &routine_info = public_routine_infos.at(routine_idx);
             if (OB_FAIL(update_routine_info(routine_info,
-                                          tenant_id,
-                                          new_package_info.get_package_id(),
-                                          new_package_info.get_owner_id(),
-                                          new_package_info.get_database_id()))) {
+                                            tenant_id,
+                                            new_package_info.get_package_id(),
+                                            new_package_info.get_owner_id(),
+                                            new_package_info.get_database_id(),
+                                            routine_info.get_routine_id()))) {
               LOG_WARN("failed to update routine info", K(ret));
             } else if (OB_FAIL(schema_service->get_routine_sql_service().create_routine(routine_info,
                                                                          &trans, NULL))) {
               LOG_WARN("insert routine info failed", K(routine_info), K(ret));
             }
+          } else if (OB_INVALID_ID == routine_info.get_routine_id()) {
+            OZ (update_routine_info(routine_info,
+                                    tenant_id,
+                                    routine_info.get_package_id(),
+                                    routine_info.get_owner_id(),
+                                    routine_info.get_database_id()));
+            OZ (schema_service->get_routine_sql_service().create_routine(routine_info, &trans, NULL));
           } else {
             // update routine route sql
             int64_t new_schema_version = OB_INVALID_VERSION;
-            ObRoutineInfo &routine_info = public_routine_infos.at(routine_idx);
             OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version));
             OX (routine_info.set_schema_version(new_schema_version));
             OZ (schema_service->get_routine_sql_service().update_routine(routine_info, &trans));
