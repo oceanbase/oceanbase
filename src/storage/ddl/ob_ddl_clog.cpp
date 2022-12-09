@@ -17,6 +17,7 @@
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 
 namespace oceanbase
 {
@@ -154,6 +155,73 @@ int ObDDLMacroBlockClogCb::on_failure()
   try_release();
   return OB_SUCCESS;
 }
+
+ObDDLCommitClogCb::ObDDLCommitClogCb()
+  : is_inited_(false), status_(), ls_id_(), tablet_id_(), start_log_ts_(0)
+{
+
+}
+
+int ObDDLCommitClogCb::init(const share::ObLSID &ls_id,
+                            const common::ObTabletID &tablet_id,
+                            const int64_t start_log_ts)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || start_log_ts <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(start_log_ts));
+  } else {
+    ls_id_ = ls_id;
+    tablet_id_ = tablet_id;
+    start_log_ts_ = start_log_ts;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDDLCommitClogCb::on_success()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObTabletHandle tablet_handle;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle;
+  if (!is_inited_) {
+    // ddl prepare will not init this cb, so do nothing
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
+                                                    tablet_handle,
+                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+    LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->unregister_from_tablet(start_log_ts_, ddl_kv_mgr_handle))) {
+    LOG_WARN("unregister ddl kv manager from tablet failed", K(ret), K(ls_id_), K(tablet_id_));
+  }
+  status_.set_ret_code(ret);
+  status_.set_state(STATE_SUCCESS);
+  try_release();
+  return OB_SUCCESS; // force return success
+}
+
+int ObDDLCommitClogCb::on_failure()
+{
+  status_.set_state(STATE_FAILED);
+  try_release();
+  return OB_SUCCESS;
+}
+
+void ObDDLCommitClogCb::try_release()
+{
+  if (status_.try_set_release_flag()) {
+  } else {
+    op_free(this);
+  }
+}
+
 
 DEFINE_SERIALIZE(ObDDLClogHeader)
 {

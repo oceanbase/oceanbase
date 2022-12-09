@@ -461,7 +461,7 @@ int ObTabletDDLKvMgr::unregister_from_tablet(const int64_t ddl_start_log_ts, ObD
       LOG_WARN("ddl kv mgr register before start", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_), K(ddl_start_log_ts));
     } else {
       if (OB_FAIL(tablet_handle.get_obj()->remove_ddl_kv_mgr(kv_mgr_handle))) {
-        LOG_WARN("set ddl kv mgr into tablet failed", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_));
+        LOG_WARN("remove ddl kv mgr from tablet failed", K(ret), K(ls_id_), K(tablet_id_), K(start_log_ts_));
       }
     }
   }

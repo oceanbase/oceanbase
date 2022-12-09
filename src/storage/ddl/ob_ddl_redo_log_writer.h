@@ -176,7 +176,7 @@ public:
   void reset();
   int64_t get_commit_log_ts() const { return commit_log_ts_; }
 public:
-  ObDDLClogCb *cb_;
+  ObDDLCommitClogCb *cb_;
   int64_t commit_log_ts_;
 };
 
@@ -198,9 +198,10 @@ public:
                           int64_t &start_log_ts);
   template <typename T>
   int write_ddl_finish_log(const T &log,
-                          const ObDDLClogType clog_type,
-                          logservice::ObLogHandler *log_handler,
-                          ObDDLCommitLogHandle &handle);
+                           const ObDDLClogType clog_type,
+                           const share::ObLSID &ls_id,
+                           logservice::ObLogHandler *log_handler,
+                           ObDDLCommitLogHandle &handle);
 private:
   ObDDLRedoLogWriter();
   ~ObDDLRedoLogWriter();

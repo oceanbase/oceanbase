@@ -52,6 +52,7 @@ public:
   bool try_set_release_flag();
   void set_ret_code(const int ret_code) { ret_code_ = ret_code; }
   int get_ret_code() const { return ret_code_; }
+  TO_STRING_KV(K(the_other_release_this_), K(state_), K(ret_code_));
 private:
   bool the_other_release_this_;
   ObDDLClogState state_;
@@ -97,6 +98,30 @@ private:
   ObArenaAllocator arena_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
+};
+
+class ObDDLCommitClogCb : public logservice::AppendCb
+{
+public:
+  ObDDLCommitClogCb();
+  virtual ~ObDDLCommitClogCb() = default;
+  int init(const share::ObLSID &ls_id,
+           const common::ObTabletID &tablet_id,
+           const int64_t start_log_ts);
+  virtual int on_success() override;
+  virtual int on_failure() override;
+  inline bool is_success() const { return status_.is_success(); }
+  inline bool is_failed() const { return status_.is_failed(); }
+  inline bool is_finished() const { return status_.is_finished(); }
+  int get_ret_code() const { return status_.get_ret_code(); }
+  void try_release();
+  TO_STRING_KV(K(is_inited_), K(status_), K(ls_id_), K(tablet_id_), K(start_log_ts_));
+private:
+  bool is_inited_;
+  ObDDLClogCbStatus status_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  int64_t start_log_ts_;
 };
 
 class ObDDLClogHeader final
