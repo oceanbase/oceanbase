@@ -374,12 +374,13 @@ void ObMultiTenant::stop()
     TenantIdList ids;
     ids.set_label(ObModIds::OMT);
     get_tenant_ids(ids);
+    bool lock_succ = false;
     while (ids.size() > 0) {
       LOG_INFO("there're some tenants need destroy", "count", ids.size());
 
       for (TenantIdList::iterator it = ids.begin(); it != ids.end(); it++) {
         uint64_t id = *it;
-        remove_tenant(id);
+        remove_tenant(id, lock_succ);
       }
       get_tenant_ids(ids);
     }
@@ -711,7 +712,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     LOG_WARN("init ctx fail", K(tenant_id), K(ret));
   } else if (write_slog) {
     if (OB_FAIL(write_create_tenant_prepare_slog(meta))) {
-      LOG_ERROR("fail to write create tenant prepare slog", K(ret));
+      LOG_WARN("fail to write create tenant prepare slog", K(ret));
     } else {
       create_step = ObTenantCreateStep::STEP_WRITE_PREPARE_SLOG; // step3
     }
@@ -745,7 +746,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
 
   if (OB_SUCC(ret)) {
     if (write_slog && OB_FAIL(write_create_tenant_commit_slog(tenant_id))) {
-      LOG_ERROR("fail to write create tenant commit slog", K(ret), K(tenant_id));
+      LOG_WARN("fail to write create tenant commit slog", K(ret), K(tenant_id));
     } else {
       tenant->set_create_status(ObTenantCreateStatus::CREATE_COMMIT);
       create_step = ObTenantCreateStep::STEP_FINISH; // step4
@@ -1269,11 +1270,12 @@ int ObMultiTenant::mark_del_tenant(const uint64_t tenant_id)
 
 // 确保remove_tenant函数可以重复调用, 因为在删除租户时失败会不断重试,
 // 这里只是删除内存结构，持久化的数据还在。
-int ObMultiTenant::remove_tenant(const uint64_t tenant_id)
+int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &try_clock_succ)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObTenant *removed_tenant = nullptr;
+  try_clock_succ = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1293,18 +1295,18 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id)
     LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
   } else {
     LOG_INFO("removed_tenant begin to try wlock", K(tenant_id));
-    bool locked = false;
     ObLDHandle handle;
-    for (int i = 0; i < DEL_TRY_TIMES && !locked; ++i) {
+    for (int i = 0; i < DEL_TRY_TIMES && !try_clock_succ; ++i) {
       if (OB_SUCC(removed_tenant->try_wrlock(handle))) {
-        locked = true;
+        try_clock_succ = true;
       } else {
         ob_usleep(TIME_SLICE_PERIOD);
       }
     }
 
     if (OB_FAIL(ret)) {
-      LOG_WARN("can't get tenant wlock to remove tenant", K(tenant_id), K(ret));
+      LOG_WARN("can't get tenant wlock to remove tenant", K(ret), K(tenant_id),
+          KP(removed_tenant), K(removed_tenant->lock_));
       removed_tenant->lock_.ld_.print();
     } else {
       LOG_INFO("removed_tenant begin to stop", K(tenant_id));
@@ -1456,20 +1458,36 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
   } else if (tenant->is_hidden()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("hidden tenant can't be deleted", K(ret), K(tenant_id));
-  } else if (FALSE_IT(tenant->set_create_status(ObTenantCreateStatus::DELETING))) {
-  } else if (FALSE_IT(tenant->set_unit_status(ObUnitInfoGetter::UNIT_DELETING_IN_OBSERVER))) {
-  } else if (OB_FAIL(write_delete_tenant_prepare_slog(tenant_id))) {
-    LOG_ERROR("fail to write delete tenant slog", K(ret), K(tenant_id));
+  } else  {
+    // Ensure to write delete_tenant_prepare_slog only once
+    ObUnitInfoGetter::ObUnitStatus old_unit_status = tenant->get_unit_status();
+    if (old_unit_status != ObUnitInfoGetter::UNIT_DELETING_IN_OBSERVER) {
+      tenant->set_unit_status(ObUnitInfoGetter::UNIT_DELETING_IN_OBSERVER);
+      tenant->set_create_status(ObTenantCreateStatus::DELETING);
+      if (OB_FAIL(write_delete_tenant_prepare_slog(tenant_id))) {
+        LOG_ERROR("fail to write delete tenant slog", K(ret), K(tenant_id), K(old_unit_status));
+        tenant->set_unit_status(old_unit_status);
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {
     do {
       // 保证remove_tenant, clear_persistent_data可以幂等重试,
-      // 如果失败会一直无限重试, 这样可以保证如果prepare log写成功一定会有commit日志，
+      // 如果失败会但不是加锁失败会一直无限重试, 保证如果prepare log写成功一定会有commit日志，
       // 即使这个过程中宕机重启, 重启回放日志时会继续删除并且补一条delete commit log
-      if (OB_FAIL(remove_tenant(tenant_id))) {
+      bool lock_tenant_succ = false;
+      if (OB_FAIL(remove_tenant(tenant_id, lock_tenant_succ))) {
         LOG_WARN("fail to remove tenant", K(ret), K(tenant_id));
-        SLEEP(1);
+        // If lock failed, the tenant is not removed from tenants_list,
+        // Here can break and leave ObTenantNodeBalancer::check_del_tenant to retry again,
+        // in this case, the deletion of other tenants does not get stuck.
+        // Otherwise it will have to retry indefinitely here, because the tenant cannot be obtained
+        if (false == lock_tenant_succ) {
+          break;
+        } else {
+          SLEEP(1);
+        }
       } else if (OB_FAIL(clear_persistent_data(tenant_id))) {
         LOG_ERROR("fail to clear persistent_data", K(ret), K(tenant_id));
         SLEEP(1);
@@ -1478,6 +1496,7 @@ int ObMultiTenant::del_tenant(const uint64_t tenant_id)
       }
     } while (OB_FAIL(ret));
   }
+
   if (lock_succ) {
     bucket_lock_.unlock(bucket_lock_idx);
   }

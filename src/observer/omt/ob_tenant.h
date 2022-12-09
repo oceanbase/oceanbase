@@ -427,6 +427,7 @@ public:
   void set_tenant_super_block(const storage::ObTenantSuperBlock &super_block);
   void mark_tenant_is_removed();
   void set_unit_status(const share::ObUnitInfoGetter::ObUnitStatus status);
+  share::ObUnitInfoGetter::ObUnitStatus get_unit_status();
 
   void set_unit_max_cpu(double cpu);
   double unit_max_cpu() const;
