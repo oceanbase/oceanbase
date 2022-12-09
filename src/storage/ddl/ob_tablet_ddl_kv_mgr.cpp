@@ -94,7 +94,8 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key,
 {
   int ret = OB_SUCCESS;
   bool is_brand_new = false;
-  TCWLockGuard guard(lock_);
+  int64_t saved_start_log_ts = 0;
+  int64_t saved_snapshot_version = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
@@ -105,31 +106,39 @@ int ObTabletDDLKvMgr::ddl_start(const ObITable::TableKey &table_key,
   } else if (table_key.get_tablet_id() != tablet_id_) {
     ret = OB_ERR_SYS;
     LOG_WARN("tablet id not same", K(ret), K(table_key), K(tablet_id_));
-  } else if (0 != start_log_ts_) {
-    if (execution_id >= execution_id_ && start_log_ts >= start_log_ts_) {
-      LOG_INFO("execution id changed, need cleanup", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_log_ts_), K(start_log_ts));
-      cleanup_unlock();
-      is_brand_new = true;
-    } else {
-      if (checkpoint_log_ts <= 0) {
-        // only return error code when not start from checkpoint.
-        ret = OB_TASK_EXPIRED;
-      }
-      LOG_INFO("ddl start ignored", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_log_ts_), K(start_log_ts));
-    }
   } else {
-    is_brand_new = true;
-  }
-  if (OB_SUCC(ret) && is_brand_new) {
-    table_key_ = table_key;
-    cluster_version_ = cluster_version;
-    execution_id_ = execution_id;
-    start_log_ts_ = start_log_ts;
-    max_freeze_log_ts_ = max(start_log_ts, checkpoint_log_ts);
+    TCWLockGuard guard(lock_);
+    if (0 != start_log_ts_) {
+      if (execution_id >= execution_id_ && start_log_ts >= start_log_ts_) {
+        LOG_INFO("execution id changed, need cleanup", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_log_ts_), K(start_log_ts));
+        cleanup_unlock();
+        is_brand_new = true;
+      } else {
+        if (checkpoint_log_ts <= 0) {
+          // only return error code when not start from checkpoint.
+          ret = OB_TASK_EXPIRED;
+        }
+        LOG_INFO("ddl start ignored", K(ls_id_), K(tablet_id_), K(execution_id_), K(execution_id), K(start_log_ts_), K(start_log_ts));
+      }
+    } else {
+      is_brand_new = true;
+    }
+    if (OB_SUCC(ret) && is_brand_new) {
+      table_key_ = table_key;
+      cluster_version_ = cluster_version;
+      execution_id_ = execution_id;
+      start_log_ts_ = start_log_ts;
+      max_freeze_log_ts_ = max(start_log_ts, checkpoint_log_ts);
+    }
+    if (OB_SUCC(ret)) {
+      // save variables under lock
+      saved_start_log_ts = start_log_ts_;
+      saved_snapshot_version = table_key_.get_snapshot_version();
+    }
   }
   if (OB_SUCC(ret) && checkpoint_log_ts <= 0) {
     // remove ddl sstable if exists and flush ddl start log ts and snapshot version into tablet meta
-    if (OB_FAIL(update_tablet(start_log_ts_, table_key_.get_snapshot_version(), start_log_ts_))) {
+    if (OB_FAIL(update_tablet(saved_start_log_ts, saved_snapshot_version, saved_start_log_ts))) {
       LOG_WARN("clean up ddl sstable failed", K(ret), K(ls_id_), K(tablet_id_));
     }
   }
