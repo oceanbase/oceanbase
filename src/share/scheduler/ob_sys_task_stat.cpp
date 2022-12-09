@@ -31,8 +31,8 @@ const static char *ObSysTaskTypeStr[] = {
     "BACKUP_BACKUPSET",
     "BACKUP_ARCHIVELOG",
     "DDL_KV_MERGE",
-    "RESTORE",
     "COMPLEMENT_DATA",
+    "RESTORE",
     "BACKUP_CLEAN",
     "BACKFILL_TX",
     "REMOVE_MEMBER"
