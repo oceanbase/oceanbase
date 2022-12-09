@@ -159,7 +159,6 @@ private:
   int try_switch_macro_block();
   int check_write_complete(const MacroBlockId &macro_id, const int64_t macro_size);
   int do_write_block(const ObMacroBlockWriteInfo &write_info, ObBlockInfo &block_info);
-  int init_block();
   DISALLOW_COPY_AND_ASSIGN(ObSharedMacroBlockMgr);
 
 private:
