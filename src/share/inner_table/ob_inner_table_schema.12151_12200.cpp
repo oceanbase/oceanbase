@@ -6061,7 +6061,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("TRACE_ID", //column_name
-      column_id + 6, //column_id
+      column_id + 5, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6078,7 +6078,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_TS_WITH_COLUMN_FLAGS("FIRST_REFRESH_TIME", //column_name
-      column_id + 7, //column_id
+      column_id + 6, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6096,7 +6096,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_TS_WITH_COLUMN_FLAGS("LAST_REFRESH_TIME", //column_name
-      column_id + 8, //column_id
+      column_id + 7, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6114,7 +6114,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_TS_WITH_COLUMN_FLAGS("FIRST_CHANGE_TIME", //column_name
-      column_id + 9, //column_id
+      column_id + 8, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6132,7 +6132,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_TS_WITH_COLUMN_FLAGS("LAST_CHANGE_TIME", //column_name
-      column_id + 10, //column_id
+      column_id + 9, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6150,7 +6150,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_1_ID", //column_name
-      column_id + 11, //column_id
+      column_id + 10, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6167,7 +6167,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_1_VALUE", //column_name
-      column_id + 12, //column_id
+      column_id + 11, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6184,7 +6184,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_2_ID", //column_name
-      column_id + 13, //column_id
+      column_id + 12, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6201,7 +6201,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_2_VALUE", //column_name
-      column_id + 14, //column_id
+      column_id + 13, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6218,7 +6218,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_3_ID", //column_name
-      column_id + 15, //column_id
+      column_id + 14, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6235,7 +6235,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_3_VALUE", //column_name
-      column_id + 16, //column_id
+      column_id + 15, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6252,7 +6252,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_4_ID", //column_name
-      column_id + 17, //column_id
+      column_id + 16, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6269,7 +6269,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_4_VALUE", //column_name
-      column_id + 18, //column_id
+      column_id + 17, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6286,7 +6286,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_5_ID", //column_name
-      column_id + 19, //column_id
+      column_id + 18, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6303,7 +6303,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_5_VALUE", //column_name
-      column_id + 20, //column_id
+      column_id + 19, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6320,7 +6320,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_6_ID", //column_name
-      column_id + 21, //column_id
+      column_id + 20, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6337,7 +6337,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_6_VALUE", //column_name
-      column_id + 22, //column_id
+      column_id + 21, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6354,7 +6354,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_7_ID", //column_name
-      column_id + 23, //column_id
+      column_id + 22, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6371,7 +6371,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_7_VALUE", //column_name
-      column_id + 24, //column_id
+      column_id + 23, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6388,7 +6388,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_8_ID", //column_name
-      column_id + 25, //column_id
+      column_id + 24, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6405,7 +6405,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_8_VALUE", //column_name
-      column_id + 26, //column_id
+      column_id + 25, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6422,7 +6422,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_9_ID", //column_name
-      column_id + 27, //column_id
+      column_id + 26, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6439,7 +6439,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_9_VALUE", //column_name
-      column_id + 28, //column_id
+      column_id + 27, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6456,7 +6456,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_10_ID", //column_name
-      column_id + 29, //column_id
+      column_id + 28, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6473,7 +6473,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OTHERSTAT_10_VALUE", //column_name
-      column_id + 30, //column_id
+      column_id + 29, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6490,7 +6490,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("THREAD_ID", //column_name
-      column_id + 31, //column_id
+      column_id + 30, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6507,7 +6507,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("PLAN_OPERATION", //column_name
-      column_id + 32, //column_id
+      column_id + 31, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6524,7 +6524,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("STARTS", //column_name
-      column_id + 33, //column_id
+      column_id + 32, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6541,7 +6541,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OUTPUT_ROWS", //column_name
-      column_id + 34, //column_id
+      column_id + 33, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6558,7 +6558,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("PLAN_LINE_ID", //column_name
-      column_id + 35, //column_id
+      column_id + 34, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6575,7 +6575,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("PLAN_DEPTH", //column_name
-      column_id + 36, //column_id
+      column_id + 35, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6592,7 +6592,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("OUTPUT_BATCHES", //column_name
-      column_id + 37, //column_id
+      column_id + 36, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6609,7 +6609,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("SKIPPED_ROWS_COUNT", //column_name
-      column_id + 38, //column_id
+      column_id + 37, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6626,7 +6626,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("DB_TIME", //column_name
-      column_id + 39, //column_id
+      column_id + 38, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6643,7 +6643,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA_WITH_COLUMN_FLAGS("USER_IO_WAIT_TIME", //column_name
-      column_id + 40, //column_id
+      column_id + 39, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
@@ -6658,7 +6658,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       true);//is_storing_column
   }
 
-  table_schema.set_max_used_column_id(column_id + 4);
+  table_schema.set_max_used_column_id(column_id + 39);
   return ret;
 }
 
