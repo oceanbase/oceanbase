@@ -230,9 +230,18 @@ ObStorageHADag::~ObStorageHADag()
 int ObStorageHADag::inner_reset_status_for_retry()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
   if (OB_ISNULL(ha_dag_net_ctx_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha dag do not init", K(ret), KP(ha_dag_net_ctx_));
+  } else if (ha_dag_net_ctx_->is_failed()) {
+    if (OB_SUCCESS != (tmp_ret = ha_dag_net_ctx_->get_result(ret))) {
+      LOG_WARN("failed to get ha dag net ctx result", K(tmp_ret), KPC(ha_dag_net_ctx_));
+      ret = tmp_ret;
+    } else {
+      LOG_INFO("set inner set status for retry failed", K(ret), KPC(ha_dag_net_ctx_));
+    }
   } else {
     LOG_INFO("start retry", KPC(this));
     result_mgr_.reuse();

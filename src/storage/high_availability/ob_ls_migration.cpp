@@ -2116,6 +2116,7 @@ int ObTabletMigrationDag::generate_next_dag(share::ObIDag *&dag)
 int ObTabletMigrationDag::inner_reset_status_for_retry()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObMigrationCtx *ctx = nullptr;
   int32_t result = OB_SUCCESS;
   int32_t retry_count = 0;
@@ -2127,6 +2128,13 @@ int ObTabletMigrationDag::inner_reset_status_for_retry()
   } else if (OB_ISNULL(ctx = get_migration_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
+  } else if (ctx->is_failed()) {
+    if (OB_SUCCESS != (tmp_ret = ctx->get_result(ret))) {
+      LOG_WARN("failed to get result", K(tmp_ret), KPC(ctx));
+      ret = tmp_ret;
+    } else {
+      LOG_INFO("set inner set status for retry failed", K(ret), KPC(ctx));
+    }
   } else if (OB_FAIL(result_mgr_.get_result(result))) {
     LOG_WARN("failed to get result", K(ret), KP(ctx));
   } else if (OB_FAIL(result_mgr_.get_retry_count(retry_count))) {
