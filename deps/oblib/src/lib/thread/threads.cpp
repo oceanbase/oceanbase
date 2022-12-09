@@ -112,6 +112,48 @@ int Threads::inc_thread_count(int64_t inc)
   return do_set_thread_count(n_threads);
 }
 
+int Threads::thread_recycle()
+{
+  // check if any idle threads and notify them to exit
+  // idle defination: not working for more than N minutes
+  common::SpinWLockGuard g(lock_);
+  // int target = 10; // leave at most 10 threads as cached thread
+  return do_thread_recycle();
+}
+
+int Threads::do_thread_recycle()
+{
+  int ret = OB_SUCCESS;
+  int n_threads = n_threads_;
+  // destroy all stopped threads
+  // px threads mark itself as stopped when it is idle for more than 10 minutes.
+  for (int i = 0; i < n_threads_; i++) {
+    if (nullptr != threads_[i]) {
+      if (threads_[i]->has_set_stop()) {
+        destroy_thread(threads_[i]);
+        threads_[i] = nullptr;
+        n_threads--;
+        LOG_INFO("recycle one thread", "total", n_threads_, "remain", n_threads);
+      }
+    }
+  }
+  // for simplicity, don't free threads_ buffer, only reduce n_threads_ size
+  if (n_threads != n_threads_) {
+    int from = 0;
+    int to = 0;
+    // find non-empty slot, set it to threads_[i]
+    while (from < n_threads_ && to < n_threads_) {
+      if (nullptr != threads_[from]) {
+        threads_[to] = threads_[from];
+        to++;
+      }
+      from++;
+    }
+    n_threads_ = n_threads;
+  }
+  return ret;
+}
+
 int Threads::init()
 {
   return OB_SUCCESS;

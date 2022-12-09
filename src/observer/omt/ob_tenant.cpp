@@ -123,6 +123,30 @@ int ObPxPools::create_pool(int64_t group_id, ObPxPool *&pool)
   return ret;
 }
 
+int ObPxPools::thread_recycle()
+{
+  int ret = OB_SUCCESS;
+  common::SpinWLockGuard g(lock_);
+  ThreadRecyclePoolFunc recycle_pool_func;
+  if (OB_FAIL(pool_map_.foreach_refactored(recycle_pool_func))) {
+    LOG_WARN("failed to do foreach", K(ret));
+  }
+  return ret;
+}
+
+int ObPxPools::ThreadRecyclePoolFunc::operator() (common::hash::HashMapPair<int64_t, ObPxPool*> &kv)
+{
+  int ret = OB_SUCCESS;
+  int64_t &group_id = kv.first;
+  ObPxPool *pool = kv.second;
+  if (NULL == pool) {
+    LOG_WARN("pool is null", K(group_id));
+  } else {
+    pool->thread_recycle();
+  }
+  return ret;
+}
+
 int ObPxPools::DeletePoolFunc::operator() (common::hash::HashMapPair<int64_t, ObPxPool*> &kv)
 {
   int ret = OB_SUCCESS;
@@ -214,12 +238,26 @@ void ObPxPool::run1()
   }
 
   ObLink *task = nullptr;
+  int64_t idle_time = 0;
   while (!Thread::current().has_set_stop()) {
 	  if (!is_inited_) {
       ob_usleep(10 * 1000L);
     } else {
       if (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
         handle(task);
+        idle_time = 0; // reset recycle timer
+      } else {
+        // recycle thread policy:
+        // 1. first N threads reserved for first 10min idle period
+        // 2. no thread reserved after 1h idle period
+        const int N = 10;
+        idle_time += QUEUE_WAIT_TIME;
+        // if idle for more than 10 min, exit thread
+        if (idle_time > 10LL * 60 * 1000 * 1000 && get_thread_idx() >= N) {
+          Thread::current().stop();
+        } else if (idle_time > 60LL * 60 * 1000 * 1000) {
+          Thread::current().stop();
+        }
       }
     }
   }
@@ -1796,6 +1834,7 @@ void ObTenant::periodically_check()
     check_parallel_servers_target();
     check_resource_manager_plan();
     check_dtl();
+    check_px_thread_recycle();
   }
 }
 
@@ -1850,7 +1889,7 @@ void ObTenant::check_parallel_servers_target()
 {
   int ret = OB_SUCCESS;
   int64_t val = 0;
-  if (OB_SYS_TENANT_ID != id_ && OB_MAX_RESERVED_TENANT_ID >= id_) {
+  if (is_virtual_tenant_id(id_)) {
     // Except for system rentals, internal tenants do not allocate px threads
   } else if (OB_FAIL(ObSchemaUtils::get_tenant_int_variable(
               id_,
@@ -1859,5 +1898,22 @@ void ObTenant::check_parallel_servers_target()
     LOG_WARN("fail read tenant variable", K_(id), K(ret));
   } else if (OB_FAIL(OB_PX_TARGET_MGR.set_parallel_servers_target(id_, val))) {
     LOG_WARN("set parallel_servers_target failed", K(ret), K(id_), K(val));
+  }
+}
+
+void ObTenant::check_px_thread_recycle()
+{
+  int ret = OB_SUCCESS;
+  if (is_virtual_tenant_id(id_)) {
+    // Except for system rentals, internal tenants do not allocate px threads
+  } else {
+    ObTenantSwitchGuard guard(this);
+    auto px_pools = MTL(ObPxPools*);
+    if (OB_NOT_NULL(px_pools)) {
+      px_pools->thread_recycle();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to switch to tenant", K(id_), K(ret));
+    }
   }
 }
