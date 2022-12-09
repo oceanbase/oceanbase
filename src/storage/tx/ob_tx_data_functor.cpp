@@ -94,7 +94,8 @@ int CheckRowLockedFunctor::operator() (const ObTxData &tx_data, ObTxCCCtx *tx_cc
     lock_state_.trans_version_ = commit_version;
     break;
   }
-  case ObTxData::RUNNING: {
+  case ObTxData::RUNNING:
+  case ObTxData::ELR_COMMIT: {
     if (read_tx_id_ == data_tx_id_) {
       // Case 2: data is during execution and it is owned by the checker, so
       // whether the lock is locked by the data depends on whether undo status
@@ -118,6 +119,8 @@ int CheckRowLockedFunctor::operator() (const ObTxData &tx_data, ObTxCCCtx *tx_cc
     lock_state_.trans_version_ = 0;
     break;
   default:
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "wrong state", K(tx_data), KPC(tx_cc_ctx));
     break;
   }
   }
@@ -162,9 +165,14 @@ int GetTxStateWithLogTSFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *t
     // ts, so we return the abort state with 0 as txn version
     state_ = ObTxData::ABORT;
     trans_version_ = 0;
+  } else if (ObTxData::ELR_COMMIT == state) {
+    // Case 5: data is elr committed and the required state is after the merge log
+    // ts, it means tx's state is completely decided so it must not be elr commit
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "unexpected state", K(ret), K(tx_data), KPC(tx_cc_ctx));
   } else {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected transaction state_", K(ret), K(tx_data));
+    STORAGE_LOG(ERROR, "unexpected transaction state_", K(ret), K(tx_data));
   }
 
   return ret;
@@ -397,7 +405,7 @@ int ObCleanoutTxNodeOperation::operator()(const ObTxData &tx_data, ObTxCCCtx *tx
         } else {
           (void)tnode_.trans_abort(end_log_ts);
         }
-      } else if (ObTxData::RUNNING == state) {
+      } else if (ObTxData::RUNNING == state || ObTxData::ELR_COMMIT == state) {
         if (INT64_MAX != tx_cc_ctx->prepare_version_) {
           // Case 3: data is prepared, we also donot write back the prepare state
         }
