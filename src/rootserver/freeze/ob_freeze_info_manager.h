@@ -44,7 +44,7 @@ public:
   share::SCN latest_snapshot_gc_scn_;
 
   ObFreezeInfo()
-    : frozen_statuses_(), latest_snapshot_gc_scn_()
+    : frozen_statuses_(), latest_snapshot_gc_scn_(share::SCN::min_scn())
   {}
   ~ObFreezeInfo() {}
 
