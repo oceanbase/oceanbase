@@ -786,7 +786,7 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
   int64_t global_merge_start_time = -1;
   int64_t max_merge_time = -1;
   int64_t start_service_time = -1;
-  int64_t all_service_time = -1;
+  int64_t total_service_time = -1;
   if (OB_ISNULL(zone_merge_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("zone_merge_mgr_ is unexpected nullptr", KR(ret), K_(tenant_id));
@@ -815,18 +815,23 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
       } else if (OB_FAIL(st_operator.get_start_service_time(GCONF.self_addr_, start_service_time))) {
         LOG_WARN("fail to get start service time", KR(ret), K_(tenant_id));
       } else {
-        all_service_time = now - start_service_time;
+        total_service_time = now - start_service_time;
       }
     }
-    // LOG_ERROR should satisfy one additional condition: all_service_time > MAX_NO_MERGE_INTERVAL.
-    // So as to avoid LOG_ERROR when the tenant miss daily merge due to the cluster restarted.
-    if (OB_SUCC(ret) && !is_paused() && (all_service_time > MAX_NO_MERGE_INTERVAL)) {
+    // In order to avoid LOG_ERROR when the tenant miss daily merge due to the cluster restarted.
+    // LOG_ERROR should satisfy two additional condition:
+    // 1. start_service_time > 0. start_service_time is initialized to 0 when observer starts.
+    // Then it will be updated to the time when observer starts through heartbeat, which is
+    // scheduled every 2 seconds.
+    // 2. total_service_time > MAX_NO_MERGE_INTERVAL.
+    if (OB_SUCC(ret) && !is_paused() && (start_service_time > 0)
+        && (total_service_time > MAX_NO_MERGE_INTERVAL)) {
       if (is_merging) {
         if ((now - max_merge_time) > MAX_NO_MERGE_INTERVAL) {
           if (TC_REACH_TIME_INTERVAL(30 * 60 * 1000 * 1000)) {
             LOG_ERROR("long time major freeze not finish, please check it", KR(ret),
               K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
-              K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(all_service_time));
+              K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
           }
         }
       } else {
@@ -840,7 +845,7 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
           if (TC_REACH_TIME_INTERVAL(30 * 60 * 1000 * 1000)) {
             LOG_ERROR("long time no major freeze, please check it", KR(ret),
               K(global_last_merged_time), K(global_merge_start_time), K(max_merge_time),
-              K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(all_service_time));
+              K(now), K_(tenant_id), K(is_merging), K(start_service_time), K(total_service_time));
           }
         }
       }
