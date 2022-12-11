@@ -31,6 +31,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
+#include "share/ob_server_table_operator.h"
 
 namespace oceanbase
 {
@@ -614,6 +615,8 @@ int ObFreezeInfoManager::check_snapshot_gc_ts()
   int64_t cur_gts = 0;
   int64_t snapshot_gc_ts = 0;
   int64_t delay = 0;
+  int64_t start_service_time = -1;
+  int64_t total_service_time = -1;
 
   ObRecursiveMutexGuard guard(lock_);
   if (OB_FAIL(check_inner_stat())) {
@@ -630,8 +633,23 @@ int ObFreezeInfoManager::check_snapshot_gc_ts()
       delay = ((snapshot_gc_ts == 0) ? 0 : (cur_gts - snapshot_gc_ts));
       if (TC_REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
         if (delay > SNAPSHOT_GC_TS_ERROR) {
-          LOG_ERROR("rs_monitor_check : snapshot_gc_ts delay for a long time",
-                    K(snapshot_gc_ts), K(delay), K_(tenant_id));
+          // In order to avoid LOG_ERROR when the tenant reloads old snapshot_gc_scn due to the
+          // cluster restarted. LOG_ERROR should satisfy two additional conditions:
+          // 1. start_service_time > 0. start_service_time is initialized to 0 when observer starts.
+          // Then it will be updated to the time when observer starts through heartbeat, which is
+          // scheduled every 2 seconds.
+          // 2. total_service_time > SNAPSHOT_GC_TS_ERROR.
+          ObServerTableOperator st_operator;
+          if (OB_FAIL(st_operator.init(sql_proxy_))) {
+            LOG_WARN("fail to init server table operator", K(ret), K_(tenant_id));
+          } else if (OB_FAIL(st_operator.get_start_service_time(GCONF.self_addr_, start_service_time))) {
+            LOG_WARN("fail to get start service time", KR(ret), K_(tenant_id));
+          } else if (FALSE_IT(total_service_time = ObTimeUtility::current_time() - start_service_time)) {
+          } else if ((start_service_time > 0) && (total_service_time > SNAPSHOT_GC_TS_ERROR)) {
+            LOG_ERROR("rs_monitor_check : snapshot_gc_ts delay for a long time",
+                      K(snapshot_gc_ts), K(delay), K_(tenant_id), K(start_service_time),
+                      K(total_service_time));
+          }
         } else if (delay > SNAPSHOT_GC_TS_WARN) {
           LOG_WARN("rs_monitor_check : snapshot_gc_ts delay for a long time",
                   K(snapshot_gc_ts), K(delay), K_(tenant_id));
