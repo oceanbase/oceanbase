@@ -578,6 +578,7 @@ int ObLSMigrationHandler::do_init_status_()
         } else {
           if (OB_FAIL(build_rebuild_task_())) {
             LOG_WARN("failed to build rebuild task", K(ret), KPC(ls_));
+            reuse_();
           } else {
             is_empty = false;
           }
