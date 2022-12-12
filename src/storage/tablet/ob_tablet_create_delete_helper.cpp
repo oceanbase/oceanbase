@@ -1349,7 +1349,10 @@ int ObTabletCreateDeleteHelper::tx_end_remove_tablets(
   return ret;
 }
 
-int ObTabletCreateDeleteHelper::get_tablet(const ObTabletMapKey &key, ObTabletHandle &handle)
+int ObTabletCreateDeleteHelper::get_tablet(
+    const ObTabletMapKey &key,
+    ObTabletHandle &handle,
+    const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   static const int64_t SLEEP_TIME_US = 10;
@@ -1367,9 +1370,9 @@ int ObTabletCreateDeleteHelper::get_tablet(const ObTabletMapKey &key, ObTabletHa
       LOG_DEBUG("tablet does not exist", K(ret), K(key));
     } else if (OB_ITEM_NOT_SETTED == ret) {
       current_time = ObTimeUtility::current_time();
-      if (current_time - begin_time > ObTabletCommon::MAX_GET_TABLET_DURATION_US) {
-        LOG_WARN("continuously meet item not set error", K(ret), K(begin_time), K(current_time));
-        break;
+      if (current_time - begin_time > timeout_us) {
+        ret = OB_TABLET_NOT_EXIST;
+        LOG_WARN("continuously meet item not set error", K(ret), K(begin_time), K(current_time), K(timeout_us));
       } else {
         ret = OB_SUCCESS;
         ob_usleep(SLEEP_TIME_US);
@@ -1397,11 +1400,11 @@ int ObTabletCreateDeleteHelper::check_and_get_tablet(
   ObTimeGuard time_guard(__func__, 5 * 1000 * 1000); // 5s
 
   // TODO(bowen.gbw): optimize this logic, refactor ObTabletStatusChecker
-  if (OB_FAIL(get_tablet(key, tablet_handle))) {
+  if (OB_FAIL(get_tablet(key, tablet_handle, timeout_us))) {
     if (OB_TABLET_NOT_EXIST == ret) {
-      LOG_DEBUG("tablet does not exist", K(ret), K(key));
+      LOG_DEBUG("tablet does not exist", K(ret), K(key), K(timeout_us));
     } else {
-      LOG_WARN("failed to get tablet", K(ret), K(key));
+      LOG_WARN("failed to get tablet", K(ret), K(key), K(timeout_us));
     }
   } else if (FALSE_IT(time_guard.click("DirectGet"))) {
   } else if (tablet_handle.get_obj()->is_ls_inner_tablet()) {

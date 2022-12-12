@@ -21,6 +21,7 @@
 #include "storage/memtable/ob_memtable.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tablet/ob_tablet_status.h"
+#include "storage/tablet/ob_tablet_common.h"
 
 namespace oceanbase
 {
@@ -116,7 +117,8 @@ public:
 public:
   static int get_tablet(
       const ObTabletMapKey &key,
-      ObTabletHandle &handle);
+      ObTabletHandle &handle,
+      const int64_t timeout_us = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US);
   static int check_and_get_tablet(
       const ObTabletMapKey &key,
       ObTabletHandle &handle,

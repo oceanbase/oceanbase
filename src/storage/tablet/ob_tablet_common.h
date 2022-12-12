@@ -32,7 +32,7 @@ public:
   static const int64_t DEFAULT_ITERATOR_TABLET_ID_CNT = 128;
   static const int64_t BUCKET_LOCK_BUCKET_CNT = 10243L;
   static const int64_t TABLET_ID_SET_BUCKET_CNT = 10243L;
-  static const int64_t MAX_GET_TABLET_DURATION_US = 1 * 1000 * 1000; // 1s
+  static const int64_t DEFAULT_GET_TABLET_DURATION_US = 1 * 1000 * 1000; // 1s
 
   static const int64_t FINAL_TX_ID = 0;
 };
