@@ -8670,6 +8670,9 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
     LOG_WARN("failed to check whether contains recursive cte", K(ret));
   } else if (is_recursive_cte) {
     dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
+  } else if (!get_optimizer_context().is_var_assign_only_in_root_stmt() &&
+              get_optimizer_context().has_var_assign()) {
+    dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
   } else if (OB_FAIL(check_if_subplan_filter_match_partition_wise(top,
                                                                   subquery_ops,
                                                                   params,

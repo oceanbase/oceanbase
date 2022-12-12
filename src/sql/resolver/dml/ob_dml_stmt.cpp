@@ -3889,14 +3889,10 @@ int ObDMLStmt::inner_get_share_exprs(ObIArray<ObRawExpr *> &candi_share_exprs) c
   return ret;
 }
 
-/**
- * has_ref_assign_user_var
- * 检查stmt及其child stmt中是否包含涉及到赋值操作的用户变量
- */
-int ObDMLStmt::has_ref_assign_user_var(bool &has_ref_user_var) const
+int ObDMLStmt::find_var_assign_in_query_ctx(bool &is_found) const
 {
   int ret = OB_SUCCESS;
-  has_ref_user_var = false;
+  is_found = false;
   if (OB_ISNULL(query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -3904,58 +3900,125 @@ int ObDMLStmt::has_ref_assign_user_var(bool &has_ref_user_var) const
     // do nothing
   } else {
     // quick check
-    bool find = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !find && i < query_ctx_->all_user_variable_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < query_ctx_->all_user_variable_.count(); ++i) {
       const ObUserVarIdentRawExpr *cur_expr = query_ctx_->all_user_variable_.at(i);
       if (OB_ISNULL(cur_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null expr", K(ret));
       } else if (cur_expr->get_is_contain_assign() || cur_expr->get_query_has_udf()) {
-        find = true;
-      }
-    }
-
-    if (OB_SUCC(ret)){
-      if (!find) {
-        // no user variable assignment in query
-      } else if (OB_FAIL(recursive_check_has_ref_assign_user_var(has_ref_user_var))) {
-        LOG_WARN("failed to recursive check has assignment ref user var", K(ret));
+        is_found = true;
       }
     }
   }
   return ret;
 }
 
-int ObDMLStmt::recursive_check_has_ref_assign_user_var(bool &has_ref_user_var) const
+/**
+ * @brief
+ *
+ * @param has_var_assign check if has var assign expr
+ * @param need_check_child need to check child stmt
+ * @return int
+ */
+int ObDMLStmt::has_ref_assign_user_var(bool &has_var_assign, bool need_check_child) const
 {
   int ret = OB_SUCCESS;
-  bool is_stack_overflow = false;
-  has_ref_user_var = false;
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
+  has_var_assign = false;
+  bool find = false;
+  if (OB_FAIL(find_var_assign_in_query_ctx(find))) {
+    LOG_WARN("failed to find var assign", K(ret));
+  } else if (!find) {
+    // no user variable assignment in query
+  } else if (OB_FAIL(check_has_var_assign_rec(has_var_assign, need_check_child))) {
+    LOG_WARN("failed to recursive check has assignment ref user var", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && !has_ref_user_var && i < get_user_var_size(); ++i) {
+  return ret;
+}
+
+int ObDMLStmt::check_has_var_assign_rec(bool &has_var_assign, bool need_check_child) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_user_vars_has_var_assign(has_var_assign))) {
+    LOG_WARN("failed to check user vars has var assign expr", K(ret));
+  } else if (!has_var_assign && need_check_child) {
+    ObSEArray<ObSelectStmt *, 4> child_stmts;
+    if (OB_FAIL(get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child stmts", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && !has_var_assign && i < child_stmts.count(); ++i) {
+        if (OB_ISNULL(child_stmts.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(SMART_CALL(child_stmts.at(i)->check_has_var_assign_rec(has_var_assign,
+                                                                                  need_check_child)))) {
+          LOG_WARN("failed to recursive check has assignment ref user var", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::check_user_vars_has_var_assign(bool &has_var_assign) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_var_assign && i < get_user_var_size(); ++i) {
     const ObUserVarIdentRawExpr *cur_expr = get_user_vars().at(i);
     if (OB_ISNULL(cur_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null expr", K(ret));
     } else if (cur_expr->get_is_contain_assign() || cur_expr->get_query_has_udf()) {
-      has_ref_user_var = true;
+      has_var_assign = true;
     }
   }
-  if (OB_SUCC(ret) && !has_ref_user_var) {
+  return ret;
+}
+
+/**
+ * @brief
+ *  this stmt should be root stmt
+ * @param has_var_assign check has var assign in root stmt
+ * @param is_var_assign_only_in_root check if var assign expr only existed in root stmt
+ * @return int
+ */
+int ObDMLStmt::check_var_assign(bool &has_var_assign, bool &is_var_assign_only_in_root) const
+{
+  int ret = OB_SUCCESS;
+  has_var_assign = false;
+  is_var_assign_only_in_root = false;
+  bool find = false;
+  if (OB_FAIL(find_var_assign_in_query_ctx(find))) {
+    LOG_WARN("failed to find var assign", K(ret));
+  } else if (!find) {
+    // no user variable assignment in query
+  } else if (OB_FAIL(check_has_var_assign_rec(has_var_assign, is_var_assign_only_in_root, true))) {
+    LOG_WARN("failed to recursive check has assignment ref user var", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLStmt::check_has_var_assign_rec(bool &has_var_assign, bool &is_var_assign_only_in_root, bool is_root) const
+{
+  int ret = OB_SUCCESS;
+  bool tmp_has_var_assign = false;
+  if (OB_FAIL(check_user_vars_has_var_assign(tmp_has_var_assign))) {
+    LOG_WARN("failed to check user vars has var assign expr", K(ret));
+  } else if (tmp_has_var_assign) {
+    has_var_assign = true;
+    is_var_assign_only_in_root = is_root;
+  }
+  if (OB_SUCC(ret)) {
     ObSEArray<ObSelectStmt *, 4> child_stmts;
     if (OB_FAIL(get_child_stmts(child_stmts))) {
       LOG_WARN("failed to get child stmts", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && !has_ref_user_var && i < child_stmts.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
         if (OB_ISNULL(child_stmts.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (child_stmts.at(i)->recursive_check_has_ref_assign_user_var(has_ref_user_var)) {
+        } else if (OB_FAIL(SMART_CALL(child_stmts.at(i)->check_has_var_assign_rec(has_var_assign,
+                                                                                  is_var_assign_only_in_root,
+                                                                                  false)))) {
           LOG_WARN("failed to recursive check has assignment ref user var", K(ret));
         }
       }

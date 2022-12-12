@@ -769,7 +769,6 @@ public:
   static const int64_t second_child = 1;
   static const int64_t third_child = 2;
   static const int64_t fourth_child = 3;
-  static const int64_t SEQUENTIAL_EXECUTION_THRESHOLD = 1000;
 
   ObLogicalOperator(ObLogPlan &plan);
   virtual ~ObLogicalOperator();
@@ -1480,7 +1479,7 @@ public:
   inline const ObShardingInfo *get_strong_sharding() const { return strong_sharding_; }
   inline void set_strong_sharding(ObShardingInfo* strong_sharding) { strong_sharding_ = strong_sharding; }
 
-  bool check_stmt_can_be_packed(const ObDMLStmt *stmt);
+  int check_stmt_can_be_packed(const ObDMLStmt *stmt, bool &need_pack);
   inline ObIArray<ObShardingInfo*> &get_weak_sharding() { return weak_sharding_; }
 
   inline const ObIArray<ObShardingInfo*> &get_weak_sharding() const { return weak_sharding_; }
