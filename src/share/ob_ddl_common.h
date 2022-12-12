@@ -16,6 +16,7 @@
 #include "lib/allocator/page_arena.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_service.h"
+#include "storage/tablet/ob_tablet_common.h"
 
 namespace oceanbase
 {
@@ -28,6 +29,11 @@ namespace sql
 {
 class ObPhysicalPlan;
 class ObOpSpec;
+}
+namespace storage
+{
+class ObTabletHandle;
+class ObLSHandle;
 }
 namespace share
 {
@@ -255,6 +261,12 @@ public:
       const int64_t schema_version,
       const bool is_oracle_mode,
       ObSqlString &sql_string);
+
+  static int ddl_get_tablet(
+      storage::ObLSHandle &ls_handle,
+      const ObTabletID &tablet_id,
+      storage::ObTabletHandle &tablet_handle,
+      const int64_t timeout_us = storage::ObTabletCommon::DEFAULT_GET_TABLET_TIMEOUT_US);
 
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
   

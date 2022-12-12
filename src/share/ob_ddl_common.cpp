@@ -24,6 +24,9 @@
 #include "share/location_cache/ob_location_service.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/table/ob_table_scan_op.h"
+#include "storage/tablet/ob_tablet.h"
+#include "storage/tx_storage/ob_ls_handle.h"
+#include "storage/tx_storage/ob_ls_map.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -739,6 +742,31 @@ int ObDDLUtil::find_table_scan_table_id(const ObOpSpec *spec, uint64_t &table_id
       if (OB_FAIL(SMART_CALL(find_table_scan_table_id(spec->get_child(i), table_id)))) {
         LOG_WARN("fail to find sample scan", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLUtil::ddl_get_tablet(
+    ObLSHandle &ls_handle,
+    const ObTabletID &tablet_id,
+    storage::ObTabletHandle &tablet_handle,
+    const int64_t get_timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  const int64_t DDL_GET_TABLET_RETRY_TIMEOUT = 30 * 1000 * 1000; // 30s
+  const int64_t timeout_ts = ObTimeUtility::current_time() + DDL_GET_TABLET_RETRY_TIMEOUT;
+  if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ls should not be null", K(ret));
+  } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet_with_timeout(tablet_id,
+                                                                   tablet_handle,
+                                                                   timeout_ts,
+                                                                   get_timeout_ts))) {
+    LOG_WARN("fail to get tablet handle", K(ret), K(tablet_id));
+    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+      ret = OB_TIMEOUT;
     }
   }
   return ret;

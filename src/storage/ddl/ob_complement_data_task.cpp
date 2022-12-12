@@ -1183,7 +1183,6 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
   ObTablet *tablet = nullptr;
   ObTabletHandle tablet_handle;
   ObITable::TableKey hidden_table_key;
@@ -1198,11 +1197,7 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
     LOG_WARN("error unexpected", K(ret), KP(param_), KP(context_));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(param_->ls_id_));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls is unexpected null", K(ret));
-  } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(param_->dest_tablet_id_,
-                                                      tablet_handle))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, param_->dest_tablet_id_, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(param_->ls_id_), K(param_->dest_tablet_id_));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;

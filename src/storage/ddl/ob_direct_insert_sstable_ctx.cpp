@@ -214,6 +214,7 @@ int ObSSTableInsertTabletContext::init(const ObSSTableInsertTabletParam &build_p
   const int64_t memory_limit = 1024L * 1024L * 1024L * 10L; // 10GB
   const ObTabletID &tablet_id = build_param.tablet_id_;
   const ObLSID &ls_id = build_param.ls_id_;
+  share::ObLocationService *location_service = GCTX.location_service_;
   ObLS *ls = nullptr;
   ObLSService *ls_service = nullptr;
   lib::ObMutexGuard guard(mutex_);
@@ -228,10 +229,7 @@ int ObSSTableInsertTabletContext::init(const ObSSTableInsertTabletParam &build_p
     LOG_ERROR("ls service should not be null", K(ret));
   } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle_, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls should not be null", K(ret));
-  } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle_))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, tablet_id, tablet_handle_))) {
     LOG_WARN("fail to get tablet handle", K(ret), K(tablet_id));
   } else if (OB_FAIL(data_sstable_redo_writer_.init(ls_id, tablet_id))) {
     LOG_WARN("fail to init sstable redo writer", K(ret), K(ls_id), K(tablet_id));
@@ -693,7 +691,7 @@ int ObSSTableInsertTabletContext::create_sstable_with_clog(
     const ObLSID &ls_id = ls->get_ls_id();
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
     const int64_t ddl_start_log_ts = data_sstable_redo_writer_.get_start_log_ts();
-    if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {
+    if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle_, tablet_id, tablet_handle))) {
       LOG_WARN("get tablet failed", K(ret));
     } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
       LOG_WARN("get ddl kv manager failed", K(ret), K(ls_id), K(tablet_id));
