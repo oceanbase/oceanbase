@@ -290,13 +290,13 @@ public:
       const ObDictDecoder *decoder,
       const ObColumnDecoderCtx *ctx,
       int64_t index,
-      uint16_t meta_length)
+      int64_t meta_length)
       : decoder_(decoder), ctx_(ctx), index_(index), meta_length_(meta_length), cell_() {}
   explicit ObDictDecoderIterator(
       const ObDictDecoder *decoder,
       const ObColumnDecoderCtx *ctx,
       int64_t index,
-      uint16_t meta_length,
+      int64_t meta_length,
       ObObj& cell)
   {
     decoder_ = decoder;
@@ -391,7 +391,7 @@ private:
   const ObDictDecoder *decoder_;
   const ObColumnDecoderCtx *ctx_;
   int64_t index_;
-  uint16_t meta_length_;
+  int64_t meta_length_;
   value_type cell_;
 };
 
