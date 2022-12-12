@@ -104,6 +104,7 @@ public:
   bool in_major_version_upgrade_mode() const { return in_upgrade_mode() && is_major_version_upgrade(); }
   bool enable_new_major() const {  return true; }
   bool in_upgrade_mode() const;
+  bool is_valid() const { return  system_config_!= NULL; };
   int64_t get_current_version() { return system_config_->get_version(); }
 
   // 兼容性需求，兼容老的SPFILE格式
