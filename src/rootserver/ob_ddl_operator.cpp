@@ -3192,6 +3192,7 @@ int ObDDLOperator::alter_table_rename_index(
     const uint64_t data_table_id,
     const uint64_t database_id,
     const obrpc::ObRenameIndexArg &rename_index_arg,
+    const ObIndexStatus *new_index_status,
     common::ObMySQLTransaction &trans,
     schema::ObTableSchema &new_index_table_schema)
 {
@@ -3244,6 +3245,9 @@ int ObDDLOperator::alter_table_rename_index(
           LOG_WARN("fail to assign schema", K(ret));
         } else {
           new_index_table_schema.set_schema_version(new_schema_version);
+          if (nullptr != new_index_status) {
+            new_index_table_schema.set_index_status(*new_index_status);
+          }
         }
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(new_index_table_schema.set_table_name(new_index_table_name))) {
