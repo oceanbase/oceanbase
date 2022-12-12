@@ -2007,15 +2007,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
       ctx_tx_data_.set_start_log_ts(SCN());
     }
     if (ObTxLogTypeChecker::is_state_log(log_type)) {
-      if (is_local_tx_()) {
-        if (ObTxLogType::TX_COMMIT_LOG == log_type) {
-          sub_state_.clear_state_log_submitting();
-        }
-      } else {
-        if (ObTxLogType::TX_PREPARE_LOG == log_type) {
-          sub_state_.clear_state_log_submitting();
-        }
-      }
+      sub_state_.clear_state_log_submitting();
     }
     if (OB_FAIL(fix_redo_lsns_(log_cb))) {
       TRANS_LOG(ERROR, "fix redo lsns failed", KR(ret), K(*this));
