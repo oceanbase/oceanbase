@@ -169,11 +169,15 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
         }
       }
       if (OB_SUCCESS == tmp_ret) {
-        while (OB_FAIL(ret) && is_retryable(ret) && retry_times < RETRY_TIMES_LIMIT) {
+        bool worker_err = false;
+        while (OB_FAIL(ret) && !worker_err && is_retryable(ret)) {
           ++retry_times;
           ob_usleep<common::ObWaitEventIds::STORAGE_AUTOINC_FETCH_RETRY_SLEEP>(RETRY_INTERVAL);
           res.reset();
-          if (OB_FAIL(srv_rpc_proxy->to(leader_addr).fetch_tablet_autoinc_seq_cache(arg, res))) {
+          if (OB_FAIL(THIS_WORKER.check_status())) {
+            worker_err = true;
+            LOG_WARN("failed to check status", K(ret));
+          } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).fetch_tablet_autoinc_seq_cache(arg, res))) {
             LOG_WARN("fail to fetch autoinc cache for tablets", K(ret), K(retry_times), K(arg));
           }
         }

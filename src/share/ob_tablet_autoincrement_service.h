@@ -85,7 +85,6 @@ private:
 private:
   static const int64_t PREFETCH_THRESHOLD = 4;
   static const int64_t RETRY_INTERVAL = 100 * 1000L; // 100ms
-  static const int64_t RETRY_TIMES_LIMIT = 10;
   lib::ObMutex mutex_;
   common::ObTabletID tablet_id_;
   uint64_t next_value_;
