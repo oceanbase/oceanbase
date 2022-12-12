@@ -742,27 +742,18 @@ int ObTabletCreateDeleteHelper::do_tx_end_create_tablets(
     }
   }
 
-  // modify data_tablet status_info and binding_info for pure_aux_table
-  ObSArray<int64_t> skip_idx;
+  // modify data_tablet status_info and binding_info
   for (int64_t i = 0; OB_SUCC(ret) && i < arg.tablets_.count(); i++) {
     const ObCreateTabletInfo &info = arg.tablets_[i];
     bool need_modify = false;
-    if (is_contain(skip_idx, i)) {
-      // do nothing
-    } else if (is_pure_hidden_tablets(info)) {
+    if (is_pure_hidden_tablets(info)) {
       need_modify = true;
-      for (int64_t j = 0; OB_SUCC(ret) && j < info.tablet_ids_.count(); ++j) {
-        int64_t aux_idx = -1;
-        if (find_related_aux_info(arg, info.tablet_ids_.at(j), aux_idx)
-            && OB_FAIL(skip_idx.push_back(aux_idx))) {
-          LOG_WARN("failed to push related aux idx", K(ret), K(aux_idx));
-        }
-      }
-    } else if (is_pure_aux_tablets(info)) {
+    } else if (is_pure_aux_tablets(info) || is_mixed_tablets(info)) {
       if (ObTabletBindingHelper::has_lob_tablets(arg, info)) {
         need_modify = true;
       }
     }
+
     if (OB_SUCC(ret) && need_modify) {
       bool skip = false;
       if (trans_flags.for_replay_
@@ -1497,25 +1488,6 @@ int ObTabletCreateDeleteHelper::create_sstable(
     } else {
       table_handle = handle;
     }
-  }
-
-  return ret;
-}
-
-int ObTabletCreateDeleteHelper::verify_tablets_existence(
-    const ObBatchCreateTabletArg &arg,
-    ObIArray<ObTabletCreateInfo> &tablet_create_info_array)
-{
-  int ret = OB_SUCCESS;
-  bool is_valid = false;
-
-  if (OB_FAIL(check_tablet_existence(arg, is_valid))) {
-    LOG_WARN("failed to check tablet existence", K(ret), K(PRINT_CREATE_ARG(arg)));
-  } else if (!is_valid) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, some tablet does not exist", K(ret));
-  } else if (OB_FAIL(build_tablet_create_info(arg, tablet_create_info_array))) {
-    LOG_WARN("failed to build tablet create info", K(ret));
   }
 
   return ret;

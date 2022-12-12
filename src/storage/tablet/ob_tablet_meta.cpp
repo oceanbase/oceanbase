@@ -282,12 +282,16 @@ int ObTabletMeta::init(
     if (OB_NOT_NULL(tablet_meta) && tablet_meta->clog_checkpoint_ts_ > old_tablet_meta.clog_checkpoint_ts_) {
       if (OB_FAIL(autoinc_seq_.assign(tablet_meta->autoinc_seq_))) {
         LOG_WARN("failed to assign autoinc seq", K(ret));
+      } else if (OB_FAIL(ddl_data_.assign(tablet_meta->ddl_data_))) {
+        LOG_WARN("failed to assign ddl data", K(ret));
       } else {
         tx_data_ = tablet_meta->tx_data_;
       }
     } else {
       if (OB_FAIL(autoinc_seq_.assign(autoinc_seq))) {
         LOG_WARN("failed to assign autoinc seq", K(ret));
+      } else if (OB_FAIL(ddl_data_.assign(ddl_data))) {
+        LOG_WARN("failed to assign ddl data", K(ret));
       } else {
         tx_data_ = tx_data;
       }
@@ -307,9 +311,6 @@ int ObTabletMeta::init(
     compat_mode_ = old_tablet_meta.compat_mode_;
     ha_status_ = old_tablet_meta.ha_status_;
     report_status_ = old_tablet_meta.report_status_; //old tablet meta report status already reset
-    if (FAILEDx(ddl_data_.assign(ddl_data))) {
-      LOG_WARN("failed to assign ddl data", K(ret));
-    }
     table_store_flag_ = table_store_flag;
     ddl_checkpoint_ts_ = old_tablet_meta.ddl_checkpoint_ts_;
     ddl_start_log_ts_ = old_tablet_meta.ddl_start_log_ts_;
