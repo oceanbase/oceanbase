@@ -138,9 +138,8 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
   }
 
   if (OB_SUCC(ret)) {
-    const uint64_t table_id = table_schema->get_table_id();
+    const uint64_t data_table_id = table_schema->get_table_id();
     const ObTableSchema *index_table_schema = NULL;
-
     if (OB_INVALID_ID != arg.index_table_id_) {
       LOG_DEBUG("drop index with index_table_id", K(arg.index_table_id_));
       if (OB_FAIL(schema_guard.get_table_schema(tenant_id, arg.index_table_id_, index_table_schema))) {
@@ -149,8 +148,8 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
     } else {
       ObString index_table_name;
       if (OB_FAIL(ObTableSchema::build_index_table_name(
-        allocator, table_id, arg.index_name_, index_table_name))) {
-      LOG_WARN("build_index_table_name failed", K(arg), K(table_id), K(ret));
+        allocator, data_table_id, arg.index_name_, index_table_name))) {
+      LOG_WARN("build_index_table_name failed", K(arg), K(data_table_id), K(ret));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
               table_schema->get_database_id(),
               index_table_name,
