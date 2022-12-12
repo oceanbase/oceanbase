@@ -771,3 +771,27 @@ int ObDDLUtil::ddl_get_tablet(
   }
   return ret;
 }
+
+int ObDDLUtil::check_table_exist(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
+  const ObDatabaseSchema *database_schema = nullptr;
+  uint64_t database_id = OB_INVALID_ID;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_schema) || table_schema->is_in_recyclebin()) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(tenant_id), K(table_id), K(table_schema));
+  } else if (OB_FALSE_IT(database_id = table_schema->get_database_id())) {
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_id, database_schema))) {
+    LOG_WARN("failed to get database schema", K(ret), K(tenant_id), K(table_id), K(database_id));
+  } else if (OB_ISNULL(database_schema) || database_schema->is_in_recyclebin()) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("database not exist", K(ret), K(tenant_id), K(table_id), K(database_id), K(database_schema));
+  }
+  return ret;
+}

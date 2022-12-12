@@ -211,6 +211,7 @@ int ObForeignKeyConstraintValidationTask::check_fk_by_send_sql() const
   // for example: data_table_id will be parent_table_id when altering non-ref column type of parent table.
   // https://work.aone.alibaba-inc.com/issue/38544828
   const ObTableSchema *data_table_schema = nullptr;
+  const ObDatabaseSchema *data_database_schema = nullptr;
   const ObTableSchema *child_table_schema = nullptr;
   const ObDatabaseSchema *child_database_schema = nullptr;
   const ObTableSchema *parent_table_schema = nullptr;
@@ -220,9 +221,15 @@ int ObForeignKeyConstraintValidationTask::check_fk_by_send_sql() const
     LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id_, data_table_schema))) {
     LOG_WARN("get table schema failed", K(ret), K(tenant_id_), K(data_table_id_));
-  } else if (OB_ISNULL(data_table_schema)) {
+  } else if (OB_ISNULL(data_table_schema) || data_table_schema->is_in_recyclebin()) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema not exist", K(ret));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, data_table_schema->get_database_id(), data_database_schema))) {
+    LOG_WARN("failed to get database schema", K(ret));
+  } else if (OB_ISNULL(data_database_schema) || data_database_schema->is_in_recyclebin()) {
+    // ob drop database to recyclebin won't drop its tables to recyclebin, but will drop fk of its tables directly.
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("database schema not exist", K(ret));
   } else if (OB_FAIL(get_foreign_key_info(data_table_schema, fk_info))) {
     LOG_WARN("get foreign key info failed", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, fk_info.parent_table_id_, parent_table_schema))) {
