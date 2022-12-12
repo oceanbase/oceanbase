@@ -204,9 +204,10 @@ namespace sql
                            const ObSelectStmt *table_query) const;
     int init_env_info(ObDMLStmt &stmt);
     int get_stmt_max_table_dop(ObDMLStmt &stmt,
-                               int64_t &max_dop);
-    int get_stmt_max_table_parallel_hint(ObDMLStmt &stmt,
-                                         int64_t &max_table_parallel);
+                               int64_t &max_table_dop);
+    int get_stmt_parallel_info(ObDMLStmt *stmt,
+                               int64_t &max_table_dop,
+                               int64_t &max_table_parallel);
     int get_session_parallel_info(ObDMLStmt &stmt,
                                   bool use_pdml,
                                   bool &session_px_enable_parallel,

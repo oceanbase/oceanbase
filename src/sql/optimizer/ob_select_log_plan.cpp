@@ -1888,6 +1888,11 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
                               | DistAlgo::DIST_PARTITION_WISE
                               | DistAlgo::DIST_PULL_TO_LOCAL
                               | DistAlgo::DIST_SET_RANDOM;
+
+  if (!get_optimizer_context().is_var_assign_only_in_root_stmt() &&
+      get_optimizer_context().has_var_assign()) {
+    set_dist_methods &= DistAlgo::DIST_PULL_TO_LOCAL | DistAlgo::DIST_BASIC_METHOD;
+  }
   int64_t random_none_idx = OB_INVALID_INDEX;
   DistAlgo hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo(&random_none_idx);
   if (!ignore_hint && DistAlgo::DIST_INVALID_METHOD != hint_dist_methods) {
@@ -2482,7 +2487,10 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
       }
     }
   }
-
+  if (OB_SUCC(ret) && !get_optimizer_context().is_var_assign_only_in_root_stmt() &&
+      get_optimizer_context().has_var_assign()) {
+    set_dist_methods &= DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
+  }
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_NONE_ALL)) {
     if (left_sharding->is_distributed() && right_sharding->is_match_all() &&
         !right_child.get_contains_das_op() && !right_child.get_contains_fake_cte() &&

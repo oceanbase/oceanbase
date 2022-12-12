@@ -947,10 +947,12 @@ public:
   int get_column_exprs(uint64_t table_id, ObIArray<ObRawExpr*> &table_cols) const;
 
   virtual int inner_get_share_exprs(ObIArray<ObRawExpr *> &share_exprs) const;
-
-  int has_ref_assign_user_var(bool &has_ref_user_var) const;
-
-  int recursive_check_has_ref_assign_user_var(bool &has_ref_user_var) const;
+  int find_var_assign_in_query_ctx(bool &is_found) const;
+  int check_user_vars_has_var_assign(bool &has_var_assign) const;
+  int has_ref_assign_user_var(bool &has_ref_user_var, bool need_check_child = true) const;
+  int check_has_var_assign_rec(bool &has_ref_user_var, bool need_check_child) const;
+  int check_var_assign(bool &has_var_assign, bool &is_var_assign_only_in_root) const;
+  int check_has_var_assign_rec(bool &has_var_assign, bool &is_var_assign_only_in_root, bool is_root) const;
 
   int get_temp_table_ids(ObIArray<uint64_t> &temp_table_ids);
   virtual int refill_global_index_dml_info(ObRawExprFactory &expr_factory)
