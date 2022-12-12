@@ -21,6 +21,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/ob_rpc_intrusion_detect.h"
 #include "storage/ob_locality_manager.h"
+#include "lib/ssl/ob_ssl_config.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "storage/ob_locality_manager.h"
@@ -366,6 +367,16 @@ int ObSrvNetworkFrame::reload_ssl_config()
           last_ssl_info_hash_ = new_hash_value;
           LOG_INFO("finish reload_ssl_config", K(use_bkmi), K(use_bkmi), K(use_sm),
                    "ssl_key_expired_time", GCTX.ssl_key_expired_time_, K(new_hash_value));
+          if (OB_SUCC(ret)) {
+            if (enable_new_sql_nio()) {
+              common::ObSSLConfig ssl_config(!use_bkmi, use_sm, ca_cert, public_cert, private_key, NULL, NULL);
+              if (OB_FAIL(ob_ssl_load_config(OB_SSL_CTX_ID_SQL_NIO, ssl_config))) {
+                LOG_WARN("create ssl ctx failed!", K(ret));
+              } else {
+                LOG_INFO("create ssl ctx success!", K(use_bkmi), K(use_sm));
+              }
+            }
+          }
         }
       }
     }

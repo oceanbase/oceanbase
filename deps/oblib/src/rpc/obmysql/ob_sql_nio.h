@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <stdint.h>
 #include "lib/thread/threads.h"
+#include "lib/ssl/ob_ssl_config.h"
 
 namespace oceanbase
 {
@@ -43,6 +44,8 @@ public:
   void set_sql_session_info(void* sess, void* sql_session);
   void set_shutdown(void* sess);
   void shutdown(void* sess);
+  int set_ssl_enabled(void* sess);
+  SSL* get_ssl_st(void* sess);
 private:
   void run(int64_t idx);
 private:

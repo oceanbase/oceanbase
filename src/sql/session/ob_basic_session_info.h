@@ -47,6 +47,9 @@
 
 namespace oceanbase
 {
+namespace observer {
+class ObSMConnection;
+}
 using sql::FLTControlInfo;
 namespace sql
 {
@@ -683,7 +686,7 @@ public:
   const common::ObString &get_user_at_host() const { return thread_data_.user_at_host_name_;}
   const common::ObString &get_user_at_client_ip() const { return thread_data_.user_at_client_ip_;}
   rpc::ObSqlSockDesc& get_sock_desc() { return thread_data_.sock_desc_;}
-
+  observer::ObSMConnection *get_sm_connection();
   void set_peer_addr(common::ObAddr peer_addr)
   {
     LockGuard lock_guard(thread_data_mutex_);

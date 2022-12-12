@@ -14,7 +14,7 @@
 #define OCEANBASE_OBMYSQL_OB_SQL_SOCK_HANDLER_H_
 #include "rpc/obmysql/ob_i_sm_conn_callback.h"
 #include "rpc/obmysql/ob_i_sql_sock_handler.h"
-#include "rpc/obmysql/ob_sql_sock_processor.h"
+#include "rpc/obmysql/ob_sql_sock_session.h"
 
 namespace oceanbase
 {
@@ -23,6 +23,7 @@ namespace frame { class ObReqDeliver;};
 };
 namespace obmysql
 {
+class ObSqlSockProcessor;
 class ObSqlNio;
 class ObSqlSockHandler: public ObISqlSockHandler
 {

@@ -187,6 +187,10 @@ ob_set_subtarget(oblib_lib ash
   ash/ob_active_session_guard.cpp
 )
 
+ob_set_subtarget(oblib_lib ssl
+  ssl/ob_ssl_config.cpp
+)
+
 ob_lib_add_target(oblib_lib)
 
 ob_set_subtarget(ob_malloc_object_list common_alloc

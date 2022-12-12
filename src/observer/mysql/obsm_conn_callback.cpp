@@ -92,14 +92,15 @@ static int sm_conn_build_handshake(ObSMConnection& conn, obmysql::OMPKHandshake&
   int ret = OB_SUCCESS;
   RLOCAL(common::ObMysqlRandom, thread_scramble_rand);
   hsp.set_thread_id(conn.sessid_);
-  hsp.set_ssl_cap(false);
+  const bool support_ssl = GCONF.ssl_client_authentication;
+  hsp.set_ssl_cap(support_ssl);
   const int64_t BUF_LEN = sizeof(conn.scramble_buf_);
   if (OB_FAIL(create_scramble_string(conn.scramble_buf_, BUF_LEN, thread_scramble_rand))) {
     LOG_WARN("create scramble string failed", K(ret));
   } else if (OB_FAIL(hsp.set_scramble(conn.scramble_buf_, BUF_LEN))) {
     LOG_WARN("set scramble failed", K(ret));
   } else {
-    LOG_INFO("new mysql sessid created", K(conn.sessid_));
+    LOG_INFO("new mysql sessid created", K(conn.sessid_), K(support_ssl));
   }
   return ret;
 }

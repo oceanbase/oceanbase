@@ -37,6 +37,7 @@
 #include "observer/omt/ob_tenant.h" //ObTenant
 #include "rootserver/freeze/ob_major_freeze_helper.h" //ObMajorFreezeHelper
 #include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "rpc/obmysql/ob_sql_sock_session.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1573,13 +1574,8 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
   } else {
     // switch connection
     if (OB_SUCC(ret)) {
-      rpc::ObSqlSockDesc& sock_desc = session_info->get_sock_desc();
-      easy_connection_t* easy_conn = nullptr;
       observer::ObSMConnection* conn = nullptr;
-      if (OB_ISNULL((easy_conn = static_cast<easy_connection_t*>(sock_desc.sock_desc_)))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sock_desc is null", KR(ret), KPC(session_info));
-      } else if (OB_ISNULL(conn = static_cast<observer::ObSMConnection*>(easy_conn->user_data))) {
+      if (OB_ISNULL(conn = session_info->get_sm_connection())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("connection is null", KR(ret), KPC(session_info));
       } else {

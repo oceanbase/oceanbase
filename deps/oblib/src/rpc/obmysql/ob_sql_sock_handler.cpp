@@ -11,10 +11,9 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBMYSQL
-#include "rpc/frame/ob_req_deliver.h"
 #include "rpc/obmysql/ob_sql_sock_handler.h"
+#include "rpc/frame/ob_req_deliver.h"
 #include "rpc/obmysql/ob_sql_sock_processor.h"
-#include "rpc/obmysql/ob_sql_sock_session.h"
 
 namespace oceanbase
 {
@@ -148,7 +147,6 @@ int ObSqlSockHandler::on_readable(void* udata)
 
   return ret;
 }
-
 
 }; // end namespace obmysql
 }; // end namespace oceanbase
