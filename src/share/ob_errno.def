@@ -628,6 +628,7 @@ DEFINE_ERROR(OB_PACKET_STATUS_UNKNOWN, -4746, -1, "HY000", "Network error and pa
 //4748: OB_ARBITRATION_SERVICE_ALREADY_EXIST
 //-4749: OB_UNEXPECTED_TABLET_STATUS
 //-4750: OB_INVALID_TABLE_STORE
+//-4751: OB_WAIT_DEGRATION_TIMEOUT
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
