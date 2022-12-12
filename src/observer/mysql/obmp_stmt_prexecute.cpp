@@ -279,6 +279,10 @@ int ObMPStmtPrexecute::before_process()
             stmt_type_ = ps_session_info->get_stmt_type();
             if (is_arraybinding_has_result_type(stmt_type_) && iteration_count_ > 1) {
               set_arraybounding(true);
+              if (get_ctx().can_reroute_sql_) {
+                get_ctx().can_reroute_sql_ = false;
+                LOG_INFO("arraybinding not support reroute sql.");
+              }
               // only init param_store
               // array_binding_row_ and array_binding_columns_ will init later
               OZ (init_arraybinding_paramstore(*allocator_));
