@@ -10484,6 +10484,26 @@ int ObLogPlan::check_stmt_need_multi_partition_dml(const ObDMLStmt &stmt,
     } else {
       is_multi_part_dml = !ObSQLUtils::is_one_part_table_can_skip_part_calc(*table_schema);
     }
+  } else if (!is_multi_part_dml && stmt.is_select_stmt() && stmt.has_for_update()) {
+    ObSchemaGetterGuard *schema_guard = get_optimizer_context().get_schema_guard();
+    ObSQLSessionInfo* session_info = get_optimizer_context().get_session_info();
+    const ObTableSchema *table_schema = NULL;
+    if (OB_ISNULL(index_dml_infos.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid index dml info", K(ret));
+    } else if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(schema_guard), K(session_info), K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                      index_dml_infos.at(0)->ref_table_id_,
+                                                      table_schema))) {
+      LOG_WARN("get table schema failed", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      is_multi_part_dml = table_schema->is_partitioned_table();
+    }
   }
   return ret;
 }
@@ -12071,7 +12091,6 @@ int ObLogPlan::create_for_update_plan(ObLogicalOperator *&top,
                                       ObRawExpr *lock_rownum)
 {
   int ret = OB_SUCCESS;
-  ObExchangeInfo exch_info;
   bool is_multi_part_dml = false;
   bool is_result_local = false;
   if (OB_ISNULL(top) || OB_ISNULL(get_stmt())) {
@@ -12083,9 +12102,6 @@ int ObLogPlan::create_for_update_plan(ObLogicalOperator *&top,
                                                     is_multi_part_dml,
                                                     is_result_local))) {
     LOG_WARN("failed to check need multi-partition dml", K(ret));
-  } else if (top->is_sharding() && (is_multi_part_dml || is_result_local) &&
-             OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
-    LOG_WARN("failed to allocate exchange as top", K(ret));
   } else if (OB_FAIL(allocate_for_update_as_top(top,
                                                 is_multi_part_dml,
                                                 index_dml_infos,
@@ -12093,8 +12109,6 @@ int ObLogPlan::create_for_update_plan(ObLogicalOperator *&top,
                                                 skip_locked,
                                                 lock_rownum))) {
     LOG_WARN("failed to allocate delete as top", K(ret));
-  } else if (top->is_distributed() && OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
-    LOG_WARN("failed to allocate exchange as top", K(ret));
   } else {
     optimizer_context_.set_for_update();
   }

@@ -220,6 +220,8 @@ int ObPXServerAddrUtil::find_dml_ops_inner(common::ObIArray<const ObTableModifyS
     if (static_cast<const ObTableModifySpec &>(op).use_dist_das() &&
         PHY_MERGE != op.get_type()) {
       // px no need schedule das except merge
+    } else if (PHY_LOCK == op.get_type()) {
+      // no need lock op
     } else if (OB_FAIL(insert_ops.push_back(static_cast<const ObTableModifySpec *>(&op)))) {
       LOG_WARN("fail to push back table insert op", K(ret));
     }
