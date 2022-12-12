@@ -3388,7 +3388,8 @@ bool ObSysFunRawExpr::inner_same_as(
   if (get_expr_type() != expr.get_expr_type()) {
   } else if (T_FUN_SYS_RAND == get_expr_type()
              || T_FUN_SYS_GUID == get_expr_type()) {
-  } else if (expr.is_sys_func_expr()) {
+  } else if (get_expr_class() == expr.get_expr_class()) {
+    //for EXPR_UDF and EXPR_SYS_FUNC
     const ObSysFunRawExpr *s_expr = static_cast<const ObSysFunRawExpr *>(&expr);
     if (ObCharset::case_insensitive_equal(func_name_, s_expr->get_func_name())
         && this->get_param_count() == s_expr->get_param_count()) {

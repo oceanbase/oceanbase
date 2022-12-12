@@ -9256,7 +9256,8 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
       if (OB_ISNULL(groupby_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("got an unexpected null", K(ret));
-      } else if (groupby_exprs.at(i)->same_as(*expr, &check_context)) {
+      } else if ((is_mysql_mode() || !expr->is_static_const_expr())
+                  && groupby_exprs.at(i)->same_as(*expr, &check_context)) {
         expr = groupby_exprs.at(i);
         is_existed = true;
       } else { /*do nothing.*/ }

@@ -326,6 +326,7 @@ int ObGroupByChecker::add_pc_const_param_info(ObExprEqualCheckContext &check_ctx
 bool ObGroupByChecker::find_in_rollup(ObRawExpr &expr)
 {
   bool found = false;
+  bool found_same_structure = false;
   ObStmtCompareContext check_ctx;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(query_ctx_)) {
@@ -352,7 +353,7 @@ bool ObGroupByChecker::find_in_rollup(ObRawExpr &expr)
           check_ctx.override_const_compare_ = true;
           check_ctx.override_query_compare_ = true;
           if (expr.same_as(*rollup_exprs_->at(nth_rollup), &check_ctx)) {
-            found = true;
+            found_same_structure = true;
             LOG_DEBUG("found same structure in rollup exprs", K(expr));
           }
         }
@@ -360,7 +361,7 @@ bool ObGroupByChecker::find_in_rollup(ObRawExpr &expr)
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (found && OB_SUCCESS == check_ctx.err_code_) {
+  } else if ((found || found_same_structure) && OB_SUCCESS == check_ctx.err_code_) {
     if (OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
                        check_ctx.equal_param_info_))) {
       LOG_WARN("failed to append equal params constraints", K(ret));
@@ -416,6 +417,7 @@ bool ObGroupByChecker::find_in_grouping_sets(ObRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   bool found = false;
+  bool found_same_structure = false;
   ObStmtCompareContext check_ctx;
   if (OB_ISNULL(query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -436,9 +438,26 @@ bool ObGroupByChecker::find_in_grouping_sets(ObRawExpr &expr)
         }
       }
     }
+    if (OB_SUCCESS == check_ctx.err_code_ && !found && is_top_select_stmt()) {
+      for (int64_t nth_gs = 0; !found && nth_gs < gs_cnt; ++nth_gs) {
+        int64_t group_by_cnt = grouping_sets_exprs_->at(nth_gs).groupby_exprs_.count();
+        //in oracle mode, only non static const expr will be replaced later in replace_group_by_exprs
+        for (int64_t nth_group_by = 0; !found && nth_group_by < group_by_cnt; ++nth_group_by) {
+          check_ctx.reset();
+          check_ctx.ignore_param_ = true;
+          check_ctx.override_const_compare_ = true;
+          check_ctx.override_query_compare_ = true;
+          if (expr.same_as(*grouping_sets_exprs_->at(nth_gs).groupby_exprs_.at(nth_group_by),
+                          &check_ctx)) {
+            found_same_structure = true;
+            LOG_DEBUG("found in grouping sets exprs", K(expr));
+          }
+        }
+      }
+    }
   }
   if (OB_FAIL(ret)) {
-  } else if (found && OB_SUCCESS == check_ctx.err_code_ && lib::is_oracle_mode()) {
+  } else if ((found || found_same_structure) && OB_SUCCESS == check_ctx.err_code_ && lib::is_oracle_mode()) {
     if (OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
                        check_ctx.equal_param_info_))) {
       LOG_WARN("failed to append equal params constraints", K(ret));
@@ -605,7 +624,7 @@ int ObGroupByChecker::visit(ObConstRawExpr &expr)
     }
   } else if (find_in_rollup(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
-  }  else if (OB_FAIL(add_abs_equal_constraint_in_grouping_sets(expr))) {
+  } else if (OB_FAIL(add_abs_equal_constraint_in_grouping_sets(expr))) {
     LOG_WARN("fail to add abs_equal constraintd", K(ret));
   }
   return ret;
