@@ -9313,7 +9313,11 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
       break;
     }
     case BLOOM_FILTER: {
-      ctx = &bf_ctx;
+      if (OB_FAIL(bf_ctx.current_dfo_has_shuffle_bf_.push_back(false))) {
+        LOG_WARN("failed to push back join filter count", K(ret));
+      } else {
+        ctx = &bf_ctx;
+      }
       break;
     }
     case PROJECT_PRUNING: {

@@ -438,6 +438,7 @@ public:
   AllocBloomFilterContext() : filter_id_(0) {};
   ~AllocBloomFilterContext() = default;
   int64_t filter_id_;
+  common::ObSEArray<bool, 4> current_dfo_has_shuffle_bf_;
 };
 
 struct ObExchangeInfo
@@ -1380,7 +1381,9 @@ public:
   /**
    * Allocate bloom filter operator.
    */
-  int allocate_bf_node_for_hash_join(AllocBloomFilterContext &ctx);
+  int allocate_bf_node_for_hash_join_post(AllocBloomFilterContext &ctx);
+
+  int allocate_bf_node_for_hash_join_pre(AllocBloomFilterContext &ctx);
 
   static int check_is_table_scan(const ObLogicalOperator &op,
                                  bool &is_table_scan);
@@ -1782,7 +1785,8 @@ private:
   //private function, just used for allocating join filter node.
   int allocate_partition_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                      int64_t &filter_id);
-  int allocate_normal_join_filter(const ObIArray<JoinFilterInfo> &infos,
+  int allocate_normal_join_filter(AllocBloomFilterContext &ctx,
+                                  const ObIArray<JoinFilterInfo> &infos,
                                   int64_t &filter_id);
   int mark_bloom_filter_id_to_receive_op(ObLogicalOperator *filter_use, int64_t filter_id);
   int push_down_bloom_filter_expr(ObLogicalOperator *op,

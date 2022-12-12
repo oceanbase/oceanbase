@@ -1612,6 +1612,13 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
       break;
     }
     case BLOOM_FILTER: {
+      AllocBloomFilterContext *alloc_bf_ctx = static_cast<AllocBloomFilterContext *>(ctx);
+      if (OB_ISNULL(alloc_bf_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(allocate_bf_node_for_hash_join_pre(*alloc_bf_ctx))) {
+        LOG_WARN("Project pruning pre error", K(ret));
+      } else { /* Do nothing */ }
       break;
     }
     case PROJECT_PRUNING: {
@@ -1780,7 +1787,7 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
       case BLOOM_FILTER: {
         AllocBloomFilterContext *alloc_bf_ctx = static_cast<AllocBloomFilterContext *>(ctx);
         CK( OB_NOT_NULL(alloc_bf_ctx));
-        OC( (allocate_bf_node_for_hash_join)(*alloc_bf_ctx));
+        OC( (allocate_bf_node_for_hash_join_post)(*alloc_bf_ctx));
         break;
       }
       case ALLOC_MONITORING_DUMP: {
@@ -5087,7 +5094,8 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
   return ret;
 }
 
-int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo> &infos,
+int ObLogicalOperator::allocate_normal_join_filter(AllocBloomFilterContext &ctx,
+                                                   const ObIArray<JoinFilterInfo> &infos,
                                                    int64_t &filter_id)
 {
   int ret = OB_SUCCESS;
@@ -5096,9 +5104,16 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
   ObLogJoinFilter *join_filter_create = NULL;
   ObLogJoinFilter *join_filter_use = NULL;
   ObLogOperatorFactory &factory = get_plan()->get_log_op_factory();
-  CK(LOG_JOIN == get_type());
-  if (OB_SUCC(ret)) {
+
+  if (OB_UNLIKELY(LOG_JOIN != get_type())
+      || OB_UNLIKELY(ctx.current_dfo_has_shuffle_bf_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret));
+  } else {
     DistAlgo join_dist_algo = static_cast<ObLogJoin*>(this)->get_join_distributed_method();
+    bool has_shuffle_bf = false;
+    bool &cur_dfo_has_shuffle_bf = ctx.current_dfo_has_shuffle_bf_
+                                      .at(ctx.current_dfo_has_shuffle_bf_.count() - 1);
     for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
       bool right_has_exchange = false;
       filter_create = NULL;
@@ -5106,6 +5121,10 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
       const JoinFilterInfo &info = infos.at(i);
       ObLogicalOperator *node = NULL;
       if (!info.can_use_join_filter_) {
+        //do nothing
+      } else if (cur_dfo_has_shuffle_bf && !info.in_current_dfo_) {
+        //do nothing
+      } else if (OB_FALSE_IT(has_shuffle_bf |= !info.in_current_dfo_)) {
         //do nothing
       } else if (OB_ISNULL(filter_create = factory.allocate(*(get_plan()), LOG_JOIN_FILTER))
           || OB_ISNULL(filter_use = factory.allocate(*(get_plan()), LOG_JOIN_FILTER))) {
@@ -5172,6 +5191,9 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
         OZ(push_down_bloom_filter_expr(node, join_filter_use, info.join_filter_selectivity_));
       }
     }
+    if (OB_SUCC(ret)) {
+      cur_dfo_has_shuffle_bf |= has_shuffle_bf;
+    }
   }
   return ret;
 }
@@ -5199,18 +5221,34 @@ int ObLogicalOperator::mark_bloom_filter_id_to_receive_op(ObLogicalOperator *fil
   return ret;
 }
 
-int ObLogicalOperator::allocate_bf_node_for_hash_join(AllocBloomFilterContext &ctx)
+int ObLogicalOperator::allocate_bf_node_for_hash_join_pre(AllocBloomFilterContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (LOG_EXCHANGE == get_type() &&
+      static_cast<ObLogExchange*>(this)->is_consumer()) {
+    if (OB_FAIL(ctx.current_dfo_has_shuffle_bf_.push_back(false))) {
+      LOG_WARN("failed to push back has shuffle join filter", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::allocate_bf_node_for_hash_join_post(AllocBloomFilterContext &ctx)
 {
   int ret = OB_SUCCESS;
   ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
-  if (LOG_JOIN != get_type()) {
+  if (LOG_EXCHANGE == get_type() &&
+      static_cast<ObLogExchange*>(this)->is_consumer()) {
+    ctx.current_dfo_has_shuffle_bf_.pop_back();
+  } else if (LOG_JOIN != get_type()) {
     //do nothing
   } else if (join_op->get_join_filter_infos().empty()) {
     //do nothing
   } else if (OB_FAIL(allocate_partition_join_filter(join_op->get_join_filter_infos(),
                                                     ctx.filter_id_))) {
     LOG_WARN("fail to allocate partition join filter", K(ret));
-  } else if (OB_FAIL(allocate_normal_join_filter(join_op->get_join_filter_infos(),
+  } else if (OB_FAIL(allocate_normal_join_filter(ctx,
+                                                 join_op->get_join_filter_infos(),
                                                  ctx.filter_id_))) {
     LOG_WARN("fail to allocate normal join filter", K(ret));
   }
