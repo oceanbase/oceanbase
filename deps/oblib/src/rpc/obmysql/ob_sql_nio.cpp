@@ -220,9 +220,22 @@ private:
   }
   int do_read_fd(int64_t sz) {
     int ret = OB_SUCCESS;
+    const int MAX_SSL_REQ_PKT_SIZE = 36;
     while(remain() < sz && OB_SUCCESS == ret) {
       int64_t rbytes = 0;
-      if ((rbytes = read(fd_, data_end_, buf_end_ - data_end_)) > 0) {
+      size_t read_size = 0;
+      if (OB_UNLIKELY(0 == consume_sz_)) {
+        /*
+          set read size for ssl, when client want to open ssl, it will send a 36 bytes
+          incomplete Login Request packet and then do SSL_connect, the data flow will be
+          like this |Login Request (36 bytes)|SSL handshake message|.To avoid read the SSL
+          handshake message by us, we read 36 bytes for the first packet.
+        */
+        read_size = MAX_SSL_REQ_PKT_SIZE;
+      } else {
+        read_size = buf_end_ - data_end_;
+      }
+      if ((rbytes = ob_read_regard_ssl(fd_, data_end_, read_size)) > 0) {
         data_end_ += rbytes;
       } else if (0 == rbytes) {
         LOG_INFO("read fd return EOF", K_(fd));
@@ -292,7 +305,7 @@ private:
     int64_t pos = 0;
     while(pos < sz && OB_SUCCESS == ret) {
       int64_t wbytes = 0;
-      if ((wbytes = write(fd, buf + pos, sz - pos)) >= 0) {
+      if ((wbytes = ob_write_regard_ssl(fd, buf + pos, sz - pos)) >= 0) {
         pos += wbytes;
       } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
         LOG_INFO("write return EAGAIN");
@@ -331,6 +344,7 @@ public:
 
   void do_close() {
     if (fd_ >= 0) {
+      ob_fd_disable_ssl(fd_);
       close(fd_);
       read_buffer_.set_fd(-1);
       fd_ = -1;
@@ -368,7 +382,7 @@ public:
     int64_t pos = 0;
     while(pos < sz && OB_SUCCESS == ret) {
       int64_t wbytes = 0;
-      if ((wbytes = write(fd_, buf + pos, sz - pos)) >= 0) {
+      if ((wbytes = ob_write_regard_ssl(fd_, buf + pos, sz - pos)) >= 0) {
         pos += wbytes;
         LOG_DEBUG("write fd", K(wbytes));
       } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
@@ -384,6 +398,7 @@ public:
     last_write_time_ = ObTimeUtility::current_time();
     return ret;
   }
+
   const rpc::TraceId* get_trace_id() const {
     ObSqlSockSession* sess = (ObSqlSockSession *)sess_;
     return &(sess->sql_req_.get_trace_id());
@@ -416,6 +431,8 @@ public:
   void set_shutdown() { ATOMIC_STORE(&need_shutdown_, true); }
   bool need_shutdown() const { return ATOMIC_LOAD(&need_shutdown_); }
   void shutdown() { ::shutdown(fd_, SHUT_RD); }
+  int set_ssl_enabled();
+  SSL* get_ssl_st();
 public:
   ObDLink dlink_;
   ObDLink all_list_link_;
@@ -438,6 +455,20 @@ private:
 public:
   char sess_[3000] __attribute__((aligned(16)));
 };
+
+int ObSqlSock::set_ssl_enabled()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ob_fd_enable_ssl_for_server(fd_, OB_SSL_CTX_ID_SQL_NIO))) {
+    LOG_WARN("sqlnio enable ssl for server failed", K(ret), K(fd_));
+  }
+  return ret;
+}
+
+SSL* ObSqlSock::get_ssl_st()
+{
+  return ob_fd_get_ssl_st(fd_);
+}
 
 static struct epoll_event *__make_epoll_event(struct epoll_event *event, uint32_t event_flag, void* val) {
   event->events = event_flag;
@@ -942,5 +973,16 @@ void ObSqlNio::async_write_data(void* sess, const char* buf, int64_t sz)
   sock->get_nio_impl().push_write_req(sock);
 }
 
+int ObSqlNio::set_ssl_enabled(void* sess)
+{
+  ObSqlSock* sock = sess2sock(sess);
+  return sock->set_ssl_enabled();
+}
+
+SSL* ObSqlNio::get_ssl_st(void* sess)
+{
+  ObSqlSock* sock = sess2sock(sess);
+  return sock->get_ssl_st();
+}
 }; // end namespace obmysql
 }; // end namespace oceanbase

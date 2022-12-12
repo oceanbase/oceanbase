@@ -59,6 +59,8 @@ public:
   int on_disconnect();
   void clear_sql_session_info();
   void set_sql_session_info(void* sess);
+  int set_ssl_enabled();
+  SSL* get_ssl_st();
   ObSqlNio& nio_;
   ObISMConnectionCallback& sm_conn_cb_;
   rpc::ObRequest sql_req_;

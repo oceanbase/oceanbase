@@ -63,6 +63,19 @@ int ObMysqlProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPool& pool
       } else {
         ObMySQLCapabilityFlags capability;
         capability.capability_ = uint2korr(start);
+        /*
+          connection_phase_ state transition
+          (1)use ssl:
+          1.when tcp connection establised, the state is initialized as CPE_CONNECTED
+          2.if client decide to open ssl,  after decode the first incomplete
+          login request packet, the state is changed to CPE_SSL_CONNECT, and the packet will be droped (not processed by processor)
+          3.after ssl handshake finished, after decode the complete login request
+          packet, the state changed to CPE_CONNECTED and deliver the packet to processor(ObMPConnect)
+          4.when complete the authentication operations, the state is changed to CPE_AUTHED
+          CPE_CONNECTED -> CPE_SSL_CONNECT -> CPE_CONNECTED -> CPE_AUTHED
+          (2)do not use ssl
+          CPE_CONNECTED -> CPE_AUTHED
+        */
         if (conn.is_in_connected_phase()) {
           if (1 == capability.cap_flags_.OB_CLIENT_SSL) {
             if (OB_FAIL(decode_sslr_body(pool, start, pktlen, pktseq, pkt))) {

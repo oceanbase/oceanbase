@@ -36,6 +36,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/ob_pl_package_state.h"
+#include "rpc/obmysql/ob_sql_sock_session.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -5816,5 +5817,29 @@ void ObBasicSessionInfo::on_revert_session()
                                 K(sessid_), "backtrace", lbt());
 }
 
+observer::ObSMConnection *ObBasicSessionInfo::get_sm_connection()
+{
+  observer::ObSMConnection *conn = nullptr;
+  rpc::ObSqlSockDesc &sock_desc = thread_data_.sock_desc_;
+  if (rpc::ObRequest::TRANSPORT_PROTO_EASY == sock_desc.type_) {
+    easy_connection_t* easy_conn = nullptr;
+    if (OB_ISNULL((easy_conn = static_cast<easy_connection_t *>(sock_desc.sock_desc_)))) {
+      LOG_ERROR("easy sock_desc is null");
+    } else {
+      conn = static_cast<observer::ObSMConnection*>(easy_conn->user_data);
+    }
+  } else if (rpc::ObRequest::TRANSPORT_PROTO_POC == sock_desc.type_) {
+    obmysql::ObSqlSockSession *sess = nullptr;
+    if (OB_ISNULL(sess = static_cast<obmysql::ObSqlSockSession *>(sock_desc.sock_desc_))) {
+      LOG_ERROR("sql nio sock_desc is null");
+    } else {
+      conn = &sess->conn_;
+    }
+  }
+    else {
+    LOG_ERROR("invalid sock_desc type", K(sock_desc.type_));
+  }
+  return conn;
+}
 }//end of namespace sql
 }//end of namespace oceanbase

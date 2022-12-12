@@ -161,5 +161,15 @@ void ObSqlSockSession::set_sql_session_info(void* sess)
   nio_.set_sql_session_info((void *)this, sess);
 }
 
+int ObSqlSockSession::set_ssl_enabled()
+{
+  return nio_.set_ssl_enabled((void *)this);
+}
+
+SSL* ObSqlSockSession::get_ssl_st()
+{
+  return nio_.get_ssl_st((void *)this);
+}
+
 }; // end namespace obmysql
 }; // end namespace oceanbase

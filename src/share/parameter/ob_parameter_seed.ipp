@@ -1253,7 +1253,7 @@ DEF_TIME(ob_query_switch_leader_retry_timeout, OB_TENANT_PARAMETER, "0ms", "[0ms
 DEF_BOOL(default_enable_extended_rowid, OB_TENANT_PARAMETER, "false",
          "specifies whether to create table as extended rowid mode or not",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_new_sql_nio, OB_CLUSTER_PARAMETER, "false",
+DEF_BOOL(_enable_new_sql_nio, OB_CLUSTER_PARAMETER, "true",
 "specifies whether SQL serial network is turned on. Turned on to support mysql_send_long_data"
 "The default value is FALSE. Value: TRUE: turned on FALSE: turned off",
 ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
