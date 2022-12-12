@@ -1612,9 +1612,13 @@ int ObLS::set_ls_rebuild()
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKLS;
   int64_t write_lock = LSLOCKLOGMETA;
-  ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+  const bool try_lock = true; // the upper layer should deal with try lock fail.
+  ObLSLockGuard lock_myself(lock_, read_lock, write_lock, try_lock);
 
-  if (IS_NOT_INIT) {
+  if (!lock_myself.locked()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("try lock failed, please retry later", K(ret), K(ls_meta_));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ls is not inited", K(ret), K(ls_meta_));
   } else if (OB_UNLIKELY(is_stopped_)) {
