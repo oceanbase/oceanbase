@@ -305,7 +305,8 @@ int ObSSTableMergeRes::fill_column_checksum(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(column_default_checksum.empty() || column_default_checksum.count() < data_column_cnt_)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(column_default_checksum), K(data_column_cnt_));
+    STORAGE_LOG(WARN, "invalid argument", K(ret),
+        K(column_default_checksum.count()), K(data_column_cnt_), K(column_default_checksum));
   } else {
     if (OB_UNLIKELY(data_column_cnt_ != column_default_checksum.count())) {
       STORAGE_LOG(INFO, "column default count doesn't equal to data column count in merge res", K(column_default_checksum.count()), K(data_column_cnt_));
