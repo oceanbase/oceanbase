@@ -576,6 +576,7 @@ int ObService::calc_column_checksum_request(const obrpc::ObCalcColumnChecksumReq
               STORAGE_LOG(WARN, "fail to add dag to queue", KR(tmp_ret));
             }
           }
+          saved_ret = OB_SUCCESS != saved_ret ? saved_ret : tmp_ret;
           if (OB_SUCCESS != saved_ret && NULL != dag) {
             dag_scheduler->free_dag(*dag);
             dag = NULL;
