@@ -83,6 +83,7 @@ int ObWinbufPieceMsgListener::on_message(
       LOG_WARN("failed to wait response", K(ret));
     }
     ctx.whole_msg_.reset();
+    ctx.received_ = 0;
   }
   return ret;
 }
