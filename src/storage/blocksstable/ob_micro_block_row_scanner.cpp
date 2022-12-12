@@ -1744,7 +1744,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::add_row_into_row_queue(
 
   LOG_DEBUG("prepare row queue, get row", K(ret), KPC(this), K(row_), K(trans_version), K(version_range));
   if (trans_version <= version_range.base_version_) {  // too old data
-    LOG_WARN("find too old row", "count", row_queue_.count(), K_(row));
+    LOG_DEBUG("find too old row", "count", row_queue_.count(), K_(row));
   }
 
   if (is_last_multi_version_row_ && row_queue_.is_empty()) { // return this row
