@@ -6651,6 +6651,19 @@ private:
 };
 
 common::ObIAllocator *&schema_stack_allocator();
+class ObSchemaStackAllocatorGuard
+{
+public:
+  ObSchemaStackAllocatorGuard() = delete;
+  explicit ObSchemaStackAllocatorGuard(ObIAllocator *allocator)
+  {
+    schema_stack_allocator() = allocator;
+  }
+  ~ObSchemaStackAllocatorGuard()
+  {
+    schema_stack_allocator() = NULL;
+  }
+};
 
 class ObLabelSePolicySchema : public ObSchema
 {//simple schema

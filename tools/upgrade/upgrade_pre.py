@@ -1242,6 +1242,9 @@
 #        logging.warn("invalid job status: {0}".format(results[0][0]))
 #        raise e
 #
+#      if times >= 180:
+#        logging.warn("run upgrade job timeout")
+#        raise e
 #      times = times + 1
 #      time.sleep(10)
 #  except Exception, e:
@@ -2259,7 +2262,7 @@
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_post_checker.log'
-#  new_version = '4.0.0.0'
+#  new_version = '4.1.0.0'
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
 #  def __init__(self, value):

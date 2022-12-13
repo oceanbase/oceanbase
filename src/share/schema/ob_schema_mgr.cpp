@@ -3011,6 +3011,7 @@ int ObSchemaMgr::rebuild_schema_meta_if_not_consistent()
     }
     // Check whether db and table are consistent
     if (!check_schema_meta_consistent()) {
+      ret = OB_ERROR;
       LOG_ERROR("schema meta is still not consistent after rebuild, need fixing", K(ret));
       right_to_die_or_duty_to_live();
     }
