@@ -41,10 +41,13 @@ int ObTransformExprPullup::transform_one_stmt(ObIArray<ObParentDMLStmt> &parent_
     bool stmt_may_reduce_row_count = false;
     //for exprs in the first calcing scope which may reduce result row count of the stmt
     ObExprNodeMap parent_reject_expr_map;
+    ObExprNodeMap parent_reject_subquery_map;
 
     if (OB_FAIL(is_stmt_may_reduce_row_count(select_stmt, stmt_may_reduce_row_count))) {
       LOG_WARN("fail to check if stmt may reduce row count", K(ret));
-    } else if (OB_FAIL(build_parent_reject_exprs_map(select_stmt, parent_reject_expr_map))) {
+    } else if (OB_FAIL(build_parent_reject_exprs_map(select_stmt,
+                                                     parent_reject_expr_map,
+                                                     parent_reject_subquery_map))) {
       LOG_WARN("fail to build parent expr map", K(ret));
     }
 
@@ -59,6 +62,7 @@ int ObTransformExprPullup::transform_one_stmt(ObIArray<ObParentDMLStmt> &parent_
       if (OB_FAIL(transform_view_recursively(table_item,
                                              select_stmt,
                                              parent_reject_expr_map,
+                                             parent_reject_subquery_map,
                                              transformed_views,
                                              stmt_may_reduce_row_count,
                                              trans_happened))) {
@@ -95,10 +99,13 @@ int ObTransformExprPullup::transform_one_stmt_with_outline(
     bool transform_happend_for_current_outline = false;
     //for exprs in the first calcing scope which may reduce result row count of the stmt
     ObExprNodeMap parent_reject_expr_map;
+    ObExprNodeMap parent_reject_subquery_map;
 
     if (OB_FAIL(is_stmt_may_reduce_row_count(select_stmt, stmt_may_reduce_row_count))) {
       LOG_WARN("fail to check if stmt may reduce row count", K(ret));
-    } else if (OB_FAIL(build_parent_reject_exprs_map(select_stmt, parent_reject_expr_map))) {
+    } else if (OB_FAIL(build_parent_reject_exprs_map(select_stmt,
+                                                     parent_reject_expr_map,
+                                                     parent_reject_subquery_map))) {
       LOG_WARN("fail to build parent expr map", K(ret));
     }
 
@@ -115,6 +122,7 @@ int ObTransformExprPullup::transform_one_stmt_with_outline(
         if (OB_FAIL(transform_view_recursively(table_item,
                                                select_stmt,
                                                parent_reject_expr_map,
+                                               parent_reject_subquery_map,
                                                transformed_views,
                                                stmt_may_reduce_row_count,
                                                transform_happend_for_current_outline))) {
@@ -188,6 +196,7 @@ int ObTransformExprPullup::need_transform(const ObIArray<ObParentDMLStmt> &paren
 int ObTransformExprPullup::transform_view_recursively(TableItem *table_item,
                                                       ObSelectStmt &stmt,
                                                       ObExprNodeMap &parent_reject_expr_map,
+                                                      ObExprNodeMap &parent_reject_subquery_map,
                                                       ObIArray<ObSelectStmt *> &transformed_views,
                                                       bool stmt_may_reduce_row_count,
                                                       bool &trans_happened)
@@ -204,7 +213,8 @@ int ObTransformExprPullup::transform_view_recursively(TableItem *table_item,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table item is null", K(ret));
   } else if (!table_item->is_joined_table()) {
-    if (OB_FAIL(pullup_expr_from_view(table_item, stmt, parent_reject_expr_map, transformed_views,
+    if (OB_FAIL(pullup_expr_from_view(table_item, stmt, parent_reject_expr_map,
+                                      parent_reject_subquery_map, transformed_views,
                                       stmt_may_reduce_row_count, trans_happened))) {
       LOG_WARN("fail to pullup epr from view", K(ret));
     }
@@ -219,24 +229,32 @@ int ObTransformExprPullup::transform_view_recursively(TableItem *table_item,
       // Do not rewrite for the non-determined side.
       if (joined_table->is_left_join()) {
         if (OB_FAIL(transform_view_recursively(joined_table->left_table_, stmt,
-                                               parent_reject_expr_map, transformed_views,
+                                               parent_reject_expr_map,
+                                               parent_reject_subquery_map,
+                                               transformed_views,
                                                stmt_may_reduce_row_count, trans_happened))) {
           LOG_WARN("fail to pullup epr from view", K(ret));
         }
       } else if (joined_table->is_right_join()) {
         if (OB_FAIL(transform_view_recursively(joined_table->right_table_, stmt,
-                                               parent_reject_expr_map, transformed_views,
+                                               parent_reject_expr_map,
+                                               parent_reject_subquery_map,
+                                               transformed_views,
                                                stmt_may_reduce_row_count, trans_happened))) {
           LOG_WARN("fail to pullup epr from view", K(ret));
         }
       }
     } else {
       if (OB_FAIL(transform_view_recursively(joined_table->left_table_, stmt,
-                                             parent_reject_expr_map, transformed_views,
+                                             parent_reject_expr_map,
+                                             parent_reject_subquery_map,
+                                             transformed_views,
                                              stmt_may_reduce_row_count, trans_happened))) {
         LOG_WARN("fail to pullup epr from view", K(ret));
       } else if (OB_FAIL(transform_view_recursively(joined_table->right_table_, stmt,
-                                                    parent_reject_expr_map, transformed_views,
+                                                    parent_reject_expr_map,
+                                                    parent_reject_subquery_map,
+                                                    transformed_views,
                                                     stmt_may_reduce_row_count, trans_happened))) {
         LOG_WARN("fail to pullup epr from view", K(ret));
       }
@@ -323,27 +341,43 @@ int ObExprNodeMap::get_ref_count(ObRawExpr *expr, int64_t &ref_count)
  * the calculation can not avoid.
  * To test expr can realy help reduce calcuation, we build a reject map.
  */
-int ObTransformExprPullup::build_parent_reject_exprs_map(ObSelectStmt &parent, ObExprNodeMap &expr_map)
+int ObTransformExprPullup::build_parent_reject_exprs_map(ObSelectStmt &parent,
+                                                         ObExprNodeMap &expr_reject_map,
+                                                         ObExprNodeMap &subquery_reject_map)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 16> exprs_need_check;
+  ObSEArray<ObRawExpr *, 16> exprs_need_check_subquery;
   ObIArray<ObRawExpr*> &group_exprs = parent.get_group_exprs();
+  ObIArray<ObQueryRefRawExpr*> &subquery_exprs = parent.get_subquery_exprs();
   int64_t the_first_scope_to_search = T_NONE_SCOPE;
 
-  if (OB_FAIL(expr_map.init())) {
+  if (OB_FAIL(expr_reject_map.init()) || OB_FAIL(subquery_reject_map.init())) {
     LOG_WARN("fail to init expr node map", K(ret));
   }
   
+  //check ref column in subqueries
+  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs.count(); ++i) {
+    if(OB_FAIL(ObRawExprUtils::extract_column_exprs(subquery_exprs.at(i),
+                                                    exprs_need_check_subquery))) {
+      LOG_WARN("extract column exprs failed", K(ret));
+    }
+  }
+
   //check where cond
   if (OB_SUCC(ret) && T_NONE_SCOPE == the_first_scope_to_search) {
-    if (OB_FAIL(parent.get_where_scope_conditions(exprs_need_check))) {
+    if (OB_FAIL(parent.get_where_scope_conditions(exprs_need_check, true))) {
       LOG_WARN("fail to get where conds", K(ret));
-    } else if (exprs_need_check.count() > 0) {
+    } else if (OB_FAIL(append(exprs_need_check_subquery, exprs_need_check))) {
+      LOG_WARN("fail to append array", K(ret));
+    } else if (exprs_need_check.count() + parent.get_condition_size() > 1) {
+      //if there are more than 1 filter, pullup expr maybe good.
+      exprs_need_check.reuse();
       the_first_scope_to_search = T_WHERE_SCOPE;
-      if (exprs_need_check.count() > 1) {
-        //if there are more than 1 filter, pullup expr maybe good.
-        exprs_need_check.reuse();
-      }
+    } else if (OB_FAIL(append(exprs_need_check, parent.get_condition_exprs()))) {
+      LOG_WARN("fail to append array", K(ret));
+    } else {
+      the_first_scope_to_search = T_WHERE_SCOPE;
     }
   }
 
@@ -380,7 +414,12 @@ int ObTransformExprPullup::build_parent_reject_exprs_map(ObSelectStmt &parent, O
 
   //build map
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs_need_check.count(); ++i) {
-    if (OB_FAIL(expr_map.add_expr_map(exprs_need_check.at(i)))) {
+    if (OB_FAIL(expr_reject_map.add_expr_map(exprs_need_check.at(i)))) {
+      LOG_WARN("fail to add where cond to expr map", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs_need_check_subquery.count(); ++i) {
+    if (OB_FAIL(subquery_reject_map.add_expr_map(exprs_need_check_subquery.at(i)))) {
       LOG_WARN("fail to add where cond to expr map", K(ret));
     }
   }
@@ -615,6 +654,7 @@ int ObTransformExprPullup::construct_transform_hint(ObDMLStmt &stmt, void *trans
 int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
                                                  ObSelectStmt &select_stmt,
                                                  ObExprNodeMap &parent_reject_expr_map,
+                                                 ObExprNodeMap &parent_reject_subquery_map,
                                                  ObIArray<ObSelectStmt *> &transformed_stmts,
                                                  bool stmt_may_reduce_row_count,
                                                  bool &trans_happened)
@@ -688,11 +728,22 @@ int ObTransformExprPullup::pullup_expr_from_view(TableItem *view,
         // parent_reject_map elimiates the expr that cannot help reduce calcuation when pullup to parent
         bool is_child_reject = false;
         bool is_parent_reject = false;
-        if (OB_FAIL(child_reject_map.is_exist(select_item.expr_, is_child_reject))) {
+        bool is_parent_reject_subquery = false;
+        if (OB_ISNULL(select_item.expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), K(select_item.expr_));
+        } else if (OB_FAIL(child_reject_map.is_exist(select_item.expr_, is_child_reject))) {
           LOG_WARN("fail to check expr exist", K(ret));
         } else if (OB_FAIL(parent_reject_expr_map.is_exist(view_project_column_expr, is_parent_reject))) {
           LOG_WARN("fail to check expr exist", K(ret));
-        } else if (!is_child_reject && !is_parent_reject && expr_need_pullup(select_item.expr_)) {
+        } else if (select_item.expr_->has_flag(CNT_SUB_QUERY)
+                   && OB_FAIL(parent_reject_subquery_map.is_exist(view_project_column_expr, is_parent_reject_subquery))) {
+          LOG_WARN("fail to check expr exist", K(ret));
+        } else if (is_child_reject || is_parent_reject || is_parent_reject_subquery
+                   || !expr_need_pullup(select_item.expr_)) {
+          LOG_DEBUG("can not pullup expr", K(is_child_reject), K(is_parent_reject),
+                                           K(is_parent_reject_subquery), KPC(select_item.expr_));
+        } else {
           ObSEArray<ObRawExpr *, 16> new_expr_params;
 
           if (OB_FAIL(extract_params(select_item.expr_, child_reject_map, new_expr_params))) {
