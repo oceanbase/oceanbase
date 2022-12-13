@@ -89,7 +89,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
     common::ObIArray<ObPartitionBuildInfo> &build_infos = partition_build_stat_;
     ObArray<int64_t> idxs;
     const int64_t current_time = ObTimeUtility::current_time();
-    const int64_t rpc_timeout = max(GCONF.rpc_timeout, 3 * 1000L * 1000L);
+    const int64_t rpc_timeout = ObDDLUtil::get_ddl_rpc_timeout();
     const bool force_renew = true;
     bool is_cache_hit = false;
     const int64_t expire_renew_time = force_renew ? INT64_MAX : 0;

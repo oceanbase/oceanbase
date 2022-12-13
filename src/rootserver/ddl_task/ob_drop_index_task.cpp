@@ -135,7 +135,7 @@ int ObDropIndexTask::update_index_status(const ObIndexStatus new_status)
     arg.in_offline_ddl_white_list_ = index_schema->get_table_state_flag() != TABLE_STATE_NORMAL;
 
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
-    if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).update_index_status(arg))) {
+    if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ObDDLUtil::get_ddl_rpc_timeout()).update_index_status(arg))) {
       LOG_WARN("update index status failed", K(ret), K(arg));
     } else {
       LOG_INFO("notify index status changed finish", K(new_status), K(target_object_id_));

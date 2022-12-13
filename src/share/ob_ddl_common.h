@@ -288,6 +288,8 @@ public:
      const uint64_t table_id,
      share::schema::ObSchemaGetterGuard &schema_guard);
 
+  static int64_t get_ddl_rpc_timeout();
+
 private:
   static int generate_column_name_str(
     const common::ObIArray<ObColumnNameInfo> &column_names,

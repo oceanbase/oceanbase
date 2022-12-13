@@ -803,3 +803,8 @@ bool ObDDLUtil::need_remote_write(const int ret_code)
     || OB_LS_LOCATION_LEADER_NOT_EXIST == ret_code
     || OB_EAGAIN == ret_code;
 }
+
+int64_t ObDDLUtil::get_ddl_rpc_timeout()
+{
+  return max(GCONF.rpc_timeout, 9 * 1000 * 1000L);
+}
