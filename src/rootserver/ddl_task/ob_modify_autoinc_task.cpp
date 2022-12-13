@@ -457,7 +457,8 @@ int ObModifyAutoincTask::set_schema_available()
   } else {
     ObSArray<uint64_t> unused_ids;
     alter_table_arg_.ddl_task_type_ = share::UPDATE_AUTOINC_SCHEMA;
-    if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).execute_ddl_task(alter_table_arg_, unused_ids))) {
+    if (OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
+        execute_ddl_task(alter_table_arg_, unused_ids))) {
       LOG_WARN("alter table failed", K(ret));
     }
   }
