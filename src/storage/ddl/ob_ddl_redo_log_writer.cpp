@@ -87,6 +87,10 @@ int ObDDLCtrlSpeedItem::refresh()
                                                            force_wait /* force_wait, which is unused */,
                                                            ignore))) {
     LOG_WARN("fail to get archive speed for ls", K(ret), K(ls_id_));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      ignore = true;
+    }
   }
 
   if (OB_FAIL(ret)) {
