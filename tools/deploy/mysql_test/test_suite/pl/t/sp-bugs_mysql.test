@@ -1,0 +1,252 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# Test file for stored procedure bugfixes
+
+#owner: linlin.xll
+#owner group: sql1
+#description: test pl transformed
+#tags: pl, funcs
+
+--result_format 4
+
+--echo #
+--echo # Bug #47412: Valgrind warnings / user can read uninitalized memory
+--echo # using SP variables
+--echo #
+
+--disable_warnings
+DROP SCHEMA IF EXISTS testdb;
+--enable_warnings
+
+CREATE SCHEMA testdb;
+USE testdb;
+DELIMITER |;
+
+CREATE FUNCTION f2 () RETURNS INTEGER
+BEGIN
+   DECLARE CONTINUE HANDLER FOR SQLSTATE '42000' SET @aux = 1;
+   RETURN f_not_exists () ;
+END|
+CREATE PROCEDURE p3 ( arg1 VARCHAR(32) )
+BEGIN
+   CALL p_not_exists();
+END|
+DELIMITER ;|
+--echo # should not return valgrind warnings
+### TODO : --error 1305
+--error 1321
+CALL p3(f2());
+
+DROP SCHEMA testdb;
+
+CREATE SCHEMA testdb;
+USE testdb;
+DELIMITER |;
+
+CREATE FUNCTION f2() RETURNS INTEGER
+BEGIN
+   DECLARE CONTINUE HANDLER FOR SQLSTATE '42000' SET @aux = 1;
+   RETURN f_not_exists();
+END|
+CREATE PROCEDURE p3(arg2 INTEGER)
+BEGIN
+   CALL p_not_exists();
+END|
+DELIMITER ;|
+--echo # should not return valgrind warnings
+### TODO : --error 1305
+--error 1321
+CALL p3(f2());
+
+DROP SCHEMA testdb;
+
+CREATE SCHEMA testdb;
+USE testdb;
+DELIMITER |;
+
+CREATE FUNCTION f2 () RETURNS INTEGER
+BEGIN
+   DECLARE CONTINUE HANDLER FOR SQLSTATE '42000' SET @aux = 1;
+   RETURN f_not_exists () ;
+END|
+DELIMITER ;|
+--echo # should not return valgrind warnings
+### TODO : --error 1305
+--error 1321
+SELECT f2();
+
+DROP SCHEMA testdb;
+
+USE test;
+
+--echo #
+--echo # Bug#50423: Crash on second call of a procedure dropping a trigger
+--echo #
+
+--disable_warnings
+## coeanbase not support trigger yet !
+##
+## DROP TABLE IF EXISTS t1;
+## DROP TRIGGER IF EXISTS tr1;
+## DROP PROCEDURE IF EXISTS p1;
+## --enable_warnings
+##
+## CREATE TABLE t1 (f1 INTEGER);
+## CREATE TRIGGER tr1 BEFORE INSERT ON t1 FOR EACH ROW SET @aux = 1;
+## CREATE PROCEDURE p1 () DROP TRIGGER tr1;
+##
+## CALL p1 ();
+## --error ER_TRG_DOES_NOT_EXIST
+## CALL p1 ();
+##
+## DROP TABLE t1;
+## DROP PROCEDURE p1;
+##
+## --echo #
+## --echo # Bug#50423: Crash on second call of a procedure dropping a trigger
+## --echo #
+##
+## --disable_warnings
+## DROP TABLE IF EXISTS t1;
+## DROP TRIGGER IF EXISTS tr1;
+## DROP PROCEDURE IF EXISTS p1;
+## --enable_warnings
+##
+## CREATE TABLE t1 (f1 INTEGER);
+## CREATE TRIGGER tr1 BEFORE INSERT ON t1 FOR EACH ROW SET @aux = 1;
+## CREATE PROCEDURE p1 () DROP TRIGGER tr1;
+##
+## CALL p1 ();
+## --error ER_TRG_DOES_NOT_EXIST
+## CALL p1 ();
+##
+## DROP TABLE t1;
+## DROP PROCEDURE p1;
+
+--echo #
+--echo # Bug#54375: Error in stored procedure leaves connection
+--echo # in different default schema
+--echo #
+
+--disable_warnings
+SET @SQL_MODE_SAVE = @@SQL_MODE;
+SET @@SQL_MODE = 'STRICT_ALL_TABLES';
+DROP DATABASE IF EXISTS db1;
+CREATE DATABASE db1;
+USE db1;
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (c1 int NOT NULL PRIMARY KEY);
+INSERT INTO t1 VALUES (1);
+DELIMITER $$;
+CREATE FUNCTION f1 (
+	some_value int
+)
+RETURNS smallint
+DETERMINISTIC
+BEGIN
+	INSERT INTO t1 SET c1 = some_value;
+        RETURN(LAST_INSERT_ID());
+END$$
+DELIMITER ;$$
+DROP DATABASE IF EXISTS db2;
+CREATE DATABASE db2;
+--enable_warnings
+USE db2;
+SELECT DATABASE();
+--error ER_DUP_ENTRY,1235
+SELECT db1.f1(1);
+SELECT DATABASE();
+USE test;
+DROP FUNCTION db1.f1;
+DROP TABLE db1.t1;
+DROP DATABASE db1;
+DROP DATABASE db2;
+
+--echo #
+--echo # Bug#13105873:valgrind warning:possible crash in foreign
+--echo # key handling on subsequent create table if not exists
+--echo #
+
+## oceanbase not support foreign key yet!
+## --disable_warnings
+## DROP DATABASE IF EXISTS testdb;
+## --enable_warnings
+## CREATE DATABASE testdb;
+## USE testdb;
+## CREATE TABLE t1 (id1 INT PRIMARY KEY);
+## DELIMITER $;
+## CREATE PROCEDURE `p1`()
+## BEGIN
+##     CREATE TABLE IF NOT EXISTS t2(id INT PRIMARY KEY,
+##     CONSTRAINT FK FOREIGN KEY (id) REFERENCES t1( id1 ));
+## END$
+## DELIMITER ;$
+## CALL p1();
+## --echo # below stmt should not return valgrind warnings
+## CALL p1();
+## DROP DATABASE testdb;
+## USE test;
+
+--echo End of 5.1 tests
+
+--echo #
+--echo # BUG#13489996 valgrind:conditional jump or move depends on
+--echo # uninitialised values-field_blob
+--echo #
+
+## oceanbase not support BLOB yet!
+## CREATE FUNCTION sf() RETURNS BLOB RETURN "";
+## SELECT sf();
+## DROP FUNCTION sf;
+
+--echo #
+--echo # Bug#11763507 - 56224: FUNCTION NAME IS CASE-SENSITIVE
+--echo #
+SET @@SQL_MODE = '';
+DELIMITER $;
+CREATE FUNCTION testf_bug11763507() RETURNS INT
+BEGIN
+    RETURN 0;
+END
+$
+
+CREATE PROCEDURE testp_bug11763507()
+BEGIN
+    SELECT "PROCEDURE testp_bug11763507";
+END
+$
+
+DELIMITER ;$
+
+# STORED FUNCTIONS
+SELECT testf_bug11763507();
+SELECT TESTF_bug11763507();
+
+#SHOW FUNCTION STATUS WHERE NAME='TESTF_bug11763507';
+
+#SHOW CREATE FUNCTION testf_bug11763507;
+#SHOW CREATE FUNCTION TESTF_bug11763507;
+
+# STORED PROCEDURE
+CALL testp_bug11763507();
+CALL TESTP_bug11763507();
+
+#SHOW PROCEDURE STATUS WHERE NAME='TESTP_bug11763507';
+
+#SHOW CREATE PROCEDURE testp_bug11763507;
+#SHOW CREATE PROCEDURE TESTP_bug11763507;
+
+# INFORMATION SCHEMA
+SELECT specific_name FROM INFORMATION_SCHEMA.ROUTINES WHERE specific_name LIKE 'testf_bug11763507';
+SELECT specific_name FROM INFORMATION_SCHEMA.ROUTINES WHERE specific_name LIKE 'TESTF_bug11763507';
+
+SELECT specific_name FROM INFORMATION_SCHEMA.ROUTINES WHERE specific_name='testf_bug11763507';
+SELECT specific_name FROM INFORMATION_SCHEMA.ROUTINES WHERE specific_name='TESTF_bug11763507';
+
+DROP PROCEDURE testp_bug11763507;
+DROP FUNCTION testf_bug11763507;
+
+SET @@SQL_MODE = @SQL_MODE_SAVE;
+
+--echo #END OF BUG#11763507 test.
