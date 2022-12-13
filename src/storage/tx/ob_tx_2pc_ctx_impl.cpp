@@ -199,7 +199,9 @@ int ObPartTransCtx::check_and_response_scheduler_(int result)
   if (!is_sub2pc() && OB_FAIL(ret)) {
     // when error inject, response scheduler delayed to CLEAR state
     if (ObTxState::CLEAR == get_upstream_state()) {
-      TRANS_LOG(INFO, "response scheduler in clear state", K(ret), K(*this));
+      if (REACH_TIME_INTERVAL(1000 * 1000)) {
+        TRANS_LOG(INFO, "response scheduler in clear state", K(ret), K(*this));
+      }
       ret = OB_SUCCESS;
     } else {
       return OB_SUCCESS;
