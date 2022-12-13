@@ -1507,7 +1507,6 @@ bool ObDDLTaskRecord::is_valid() const
     && task_version_ > 0
     && OB_INVALID_ID != object_id_
     && schema_version_ > 0
-    && ret_code_ >= 0
     && execution_id_ >= 0;
   return is_valid;
 }

@@ -190,6 +190,7 @@ protected:
                                     ObIArray<uint64_t> &constraint_ids,
                                     bool &need_rebuild_constraint);
   int check_need_check_table_empty(bool &need_check_table_empty);
+  int get_estimated_timeout(const share::schema::ObTableSchema *dst_table_schema, int64_t &estimated_timeout);
 protected:
   struct DependTaskStatus final
   {
