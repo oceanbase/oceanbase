@@ -3680,13 +3680,14 @@ int ObDMLStmt::get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
 // 1. where conditions
 // 2. join conditions in joined tables
 // 3. join conditions in semi/anti join
-int ObDMLStmt::get_where_scope_conditions(ObIArray<ObRawExpr *> &conditions) const
+int ObDMLStmt::get_where_scope_conditions(ObIArray<ObRawExpr *> &conditions,
+                                          bool outer_semi_only /* default false*/ ) const
 {
   int ret = OB_SUCCESS;
   RelExprChecker expr_checker(conditions);
   if (OB_FAIL(expr_checker.init())) {
     LOG_WARN("init relexpr checker failed", K(ret));
-  } else if (OB_FAIL(append(conditions, condition_exprs_))) {
+  } else if (!outer_semi_only && OB_FAIL(append(conditions, condition_exprs_))) {
     LOG_WARN("failed to append conditions", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < joined_tables_.count(); ++i) {
