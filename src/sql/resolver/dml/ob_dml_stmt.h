@@ -1033,7 +1033,8 @@ public:
   virtual int get_equal_set_conditions(ObIArray<ObRawExpr *> &conditions,
                                       const bool is_strict,
                                       const int check_scope) const;
-  int get_where_scope_conditions(ObIArray<ObRawExpr *> &conditions) const;
+  int get_where_scope_conditions(ObIArray<ObRawExpr *> &conditions,
+                                 bool outer_semi_only = false) const;
   static int extract_equal_condition_from_joined_table(const TableItem *table,
                                                        ObIArray<ObRawExpr *> &equal_set_conditions,
                                                        const bool is_strict);
