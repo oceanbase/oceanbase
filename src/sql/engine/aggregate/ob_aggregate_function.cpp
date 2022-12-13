@@ -2832,7 +2832,6 @@ int ObAggregateFunction::get_result(ObNewRow &row, const common::ObTimeZoneInfo 
       }
     }
   }
-  LOG_DEBUG("get result row", K(row));
   return ret;
 }
 
