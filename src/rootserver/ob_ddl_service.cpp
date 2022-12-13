@@ -15348,6 +15348,8 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
         if (OB_ISNULL(col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column schema not found", K(ret), K(hidden_column_id));
+        } else if (!col_schema->is_nullable()) {
+          LOG_INFO("column already not null", K(alter_table_arg.hidden_table_id_), K(hidden_column_id));
         } else {
           ObColumnSchemaV2 new_col_schema = *col_schema;
           new_col_schema.set_nullable(false);
@@ -15380,6 +15382,7 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
       }
     }
   }
+  DEBUG_SYNC(MODIFY_HIDDEN_TABLE_NOT_NULL_COLUMN_STATE_BEFORE_PUBLISH_SCHEMA);
   int tmp_ret = OB_SUCCESS;
   if (OB_FAIL(ret)) {
   } else if (OB_SUCCESS != (tmp_ret = publish_schema(tenant_id))) {
