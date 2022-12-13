@@ -784,7 +784,7 @@ int group_tablets_leader_addr(const uint64_t tenant_id, const ObIArray<ObTabletI
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tablet_ids.count()));
   } else {
-    const int64_t rpc_timeout = max(GCONF.rpc_timeout, 1000L * 1000L * 9L);
+    const int64_t rpc_timeout = ObDDLUtil::get_ddl_rpc_timeout();
     if (OB_FAIL(group_items.reserve(tablet_ids.count()))) {
       LOG_WARN("reserve send array failed", K(ret), K(tablet_ids.count()));
     }
@@ -830,7 +830,7 @@ int check_trans_end(const ObArray<SendItem> &send_array,
   } else {
     // group by leader addr and send batch rpc
     std::sort(tmp_send_array.begin(), tmp_send_array.end());
-    const int64_t rpc_timeout = max(GCONF.rpc_timeout, 1000L * 1000L * 9L);
+    const int64_t rpc_timeout = ObDDLUtil::get_ddl_rpc_timeout();
     ObAddr last_addr;
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_send_array.count(); ++i) {
       const SendItem &send_item = tmp_send_array.at(i);
@@ -1076,7 +1076,7 @@ int ObDDLWaitTransEndCtx::get_snapshot(int64_t &snapshot_version)
   ObRootService *root_service = nullptr;
   ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
   ObSimpleFrozenStatus frozen_status;
-  const int64_t timeout = 10 * 1000 * 1000;//  10s
+  const int64_t timeout = ObDDLUtil::get_ddl_rpc_timeout();
   SCN curr_ts;
   bool is_external_consistent = false;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -1370,7 +1370,7 @@ int send_batch_calc_rpc(obrpc::ObSrvRpcProxy &rpc_proxy,
                         int64_t &send_succ_count)
 {
   int ret = OB_SUCCESS;
-  const int64_t rpc_timeout = max(GCONF.rpc_timeout, 1000L * 1000L * 9L);
+  const int64_t rpc_timeout = ObDDLUtil::get_ddl_rpc_timeout();
   if (OB_FAIL(rpc_proxy.to(leader_addr)
                        .by(arg.tenant_id_)
                        .timeout(rpc_timeout)
@@ -1418,7 +1418,7 @@ int ObDDLWaitColumnChecksumCtx::send_calc_rpc(int64_t &send_succ_count)
     LOG_WARN("root service or location_cache is null", K(ret), KP(root_service), KP(location_service));
   } else {
     ObLSID ls_id;
-    const int64_t rpc_timeout = max(GCONF.rpc_timeout, 1000L * 1000L * 9L);
+    const int64_t rpc_timeout = ObDDLUtil::get_ddl_rpc_timeout();
     ObArray<SendItem> send_array;
     for (int64_t i = 0; OB_SUCC(ret) && i < stat_array_.count(); ++i) {
       PartitionColChecksumStat &item = stat_array_.at(i);

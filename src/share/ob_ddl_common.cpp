@@ -899,6 +899,11 @@ int ObDDLUtil::check_table_exist(
   return ret;
 }
 
+int64_t ObDDLUtil::get_ddl_rpc_timeout()
+{
+  return max(GCONF.rpc_timeout, 9 * 1000 * 1000L);
+}
+
 /******************           ObCheckTabletDataComplementOp         *************/
 
 int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(

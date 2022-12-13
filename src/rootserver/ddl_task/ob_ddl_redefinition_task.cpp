@@ -1228,7 +1228,7 @@ int ObDDLRedefinitionTask::finish()
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
     LOG_WARN("get data table schema failed", K(ret), K(tenant_id_), K(object_id_));
   } else if (nullptr != data_table_schema && data_table_schema->get_association_table_id() != OB_INVALID_ID &&
-            OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).
+            OB_FAIL(root_service->get_ddl_service().get_common_rpc()->to(obrpc::ObRpcProxy::myaddr_).timeout(ObDDLUtil::get_ddl_rpc_timeout()).
                 execute_ddl_task(alter_table_arg_, objs))) {
     LOG_WARN("cleanup garbage failed", K(ret));
   } else if (OB_FAIL(cleanup())) {
@@ -2011,7 +2011,7 @@ template<typename P, typename A>
 int ObSyncTabletAutoincSeqCtx::call_and_process_all_tablet_autoinc_seqs(P &proxy, A &arg, const bool is_get)
 {
   int ret = OB_SUCCESS;
-  const int64_t rpc_timeout = max(GCONF.rpc_timeout, 1000L * 1000L * 9L);
+  const int64_t rpc_timeout = ObDDLUtil::get_ddl_rpc_timeout();
   const bool force_renew = false;
   share::ObLocationService *location_service = nullptr;
   ObHashMap<ObLSID, ObSEArray<ObMigrateTabletAutoincSeqParam, 1>> ls_to_tablet_map;
