@@ -40,7 +40,7 @@ static const char* upgrade_stage_str[OB_UPGRADE_STAGE_MAX] = {
   "NONE",
   "PREUPGRADE",
   "DBUPGRADE",
-  "POSTUPRADE"
+  "POSTUPGRADE"
 };
 
 const char* get_upgrade_stage_str(ObUpgradeStage stage)

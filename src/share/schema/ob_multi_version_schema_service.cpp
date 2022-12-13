@@ -2302,7 +2302,7 @@ int ObMultiVersionSchemaService::refresh_and_add_schema(const ObIArray<uint64_t>
 
       // Ensure that the memory on the stack requested during the refresh schema process also uses the default 500 tenant
       ObArenaAllocator allocator(ObModIds::OB_MODULE_PAGE_ALLOCATOR, OB_MALLOC_BIG_BLOCK_SIZE, OB_SERVER_TENANT_ID);
-      schema_stack_allocator() = &allocator;
+      ObSchemaStackAllocatorGuard guard(&allocator);
 
       ObArray<uint64_t> all_tenant_ids;
       if (OB_FAIL(ret)) {
@@ -2351,7 +2351,6 @@ int ObMultiVersionSchemaService::refresh_and_add_schema(const ObIArray<uint64_t>
           }
         }
       }
-      schema_stack_allocator() = nullptr;
     };
     CREATE_WITH_TEMP_ENTITY_P(!ObSchemaService::g_liboblog_mode_, RESOURCE_OWNER, common::OB_SERVER_TENANT_ID)
     {
@@ -2458,7 +2457,7 @@ int ObMultiVersionSchemaService::auto_switch_mode_and_refresh_schema(
     auto func = [&]() {
       // Ensure that the memory on the stack requested during the refresh schema process also uses the default 500 tenant
       ObArenaAllocator allocator(ObModIds::OB_MODULE_PAGE_ALLOCATOR, OB_MALLOC_BIG_BLOCK_SIZE, OB_SERVER_TENANT_ID);
-      schema_stack_allocator() = &allocator;
+      ObSchemaStackAllocatorGuard guard(&allocator);
 
       bool need_refresh_schema = true; // The schema needs to be refreshed by default
       // If the user configures expected_schema_version, first obtain the latest schema version.
@@ -2561,7 +2560,6 @@ int ObMultiVersionSchemaService::auto_switch_mode_and_refresh_schema(
           }
         }
       }
-      schema_stack_allocator() = nullptr;
     };
 
     if (OB_SUCCESS == ret) {
