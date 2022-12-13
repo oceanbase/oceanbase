@@ -614,6 +614,9 @@ public:
   int add(ObObj &obj) {
     return objects_.push_back(obj);
   }
+  void clear() {
+    objects_.reset();
+  }
   void reset_obj();
   common::ObIArray<ObObj>& get_objects() { return objects_; }
 private:
@@ -622,6 +625,28 @@ private:
   // 这里的Allocator需要保证由ObExecContext->allocator分配,
   // 这样才能保证释放这里的allocator时指针是有效的
   ObSEArray<ObObj, 32> objects_;
+};
+
+class ObPLCtxGuard
+{
+public:
+  ObPLCtxGuard(ObPLCtx *ctx, int& ret) : ctx_(ctx), ret_(ret) {
+    if (OB_NOT_NULL(ctx)) {
+      ret_ = objects_.assign(ctx->get_objects());
+      ctx_->clear();
+    }
+  }
+
+  ~ObPLCtxGuard() {
+    if (OB_SUCCESS == ret_ && OB_NOT_NULL(ctx_)) {
+      ret_ = ctx_->get_objects().assign(objects_);
+    }
+  }
+
+private:
+  ObPLCtx *ctx_;
+  int &ret_;
+  ObSEArray<ObObj, 4> objects_;
 };
 
 

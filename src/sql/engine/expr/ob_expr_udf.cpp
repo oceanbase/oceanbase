@@ -480,7 +480,7 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       CK (0 < udf_params->count());
       OZ (ns.init_complex_obj(alloc, pl_type, udf_params->at(0), false, false));
     }
-
+    pl::ObPLCtxGuard guard(ctx.exec_ctx_.get_pl_ctx(), ret);
     ObArenaAllocator allocator;
     try {
       int64_t package_id = info->is_udt_udf_ ?
@@ -512,7 +512,9 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     }
     if (OB_FAIL(ret)) {
     } else if (info->is_called_in_sql_) {
-      if (tmp_result.is_pl_extend()) {
+      // memory of ref cursor on session, do not copy it.
+      if (tmp_result.is_pl_extend()
+          && tmp_result.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
         OZ (pl::ObUserDefinedType::deep_copy_obj(alloc, tmp_result, result, true));
         OZ (pl::ObUserDefinedType::destruct_obj(tmp_result, ctx.exec_ctx_.get_my_session()));
         CK (OB_NOT_NULL(ctx.exec_ctx_.get_pl_ctx()));
