@@ -2351,7 +2351,7 @@ int ObPartTransCtx::submit_redo_log_()
     // don't need to handle OB_BLOCK_FROZEN ret
     if (OB_BLOCK_FROZEN == ret) {
       TRANS_LOG(INFO, "submit log meets frozen memtable", KR(ret), K(*this));
-    } else {
+    } else if (REACH_TIME_INTERVAL(100 * 1000)) {
       TRANS_LOG(WARN, "submit redo log failed", KR(ret), K(*this));
     }
   } else if (!has_redo) {
@@ -3081,7 +3081,7 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
     }
   }
 
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && REACH_TIME_INTERVAL(100 * 1000)) {
     TRANS_LOG(WARN, "submit_log_impl_ failed", KR(ret), K(log_type), K(*this));
   } else {
 #ifndef NDEBUG
@@ -3089,7 +3089,7 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
 #endif
   }
   if (OB_TX_NOLOGCB == ret) {
-    if (REACH_COUNT_PER_SEC(10)) {
+    if (REACH_COUNT_PER_SEC(10) && REACH_TIME_INTERVAL(100 * 1000)) {
       TRANS_LOG(INFO, "can not get log_cb when submit_log", KR(ret), K(log_type),
                 KPC(busy_cbs_.get_first()));
     }
@@ -3236,7 +3236,7 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
 int ObPartTransCtx::prepare_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_log_cb_(need_final_cb, log_cb))) {
+  if (OB_FAIL(get_log_cb_(need_final_cb, log_cb)) && REACH_TIME_INTERVAL(100 * 1000)) {
     TRANS_LOG(WARN, "failed to get log_cb", KR(ret), K(*this));
   }
   return ret;

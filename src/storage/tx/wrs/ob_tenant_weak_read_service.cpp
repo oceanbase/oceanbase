@@ -531,7 +531,7 @@ void ObTenantWeakReadService::do_thread_task_(const int64_t begin_tstamp,
     int64_t &last_print_stat_ts)
 {
   bool need_print = false;
-  static const int64_t PRINT_INTERVAL = 500 * 1000L;
+  static const int64_t PRINT_INTERVAL = 5 * 1000 * 1000L;
   if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
     need_print = true;
   } else {
