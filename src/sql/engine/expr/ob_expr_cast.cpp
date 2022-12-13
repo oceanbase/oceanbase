@@ -504,10 +504,13 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
     } else if (ob_is_interval_tc(obj_type)) {
       if (CM_IS_EXPLICIT_CAST(cast_mode) &&
-          (!ObIntervalScaleUtil::scale_check(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX]) ||
+          ((ObIntervalYMType != obj_type && !ObIntervalScaleUtil::scale_check(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX])) ||
            !ObIntervalScaleUtil::scale_check(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]))) {
         ret = OB_ERR_DATETIME_INTERVAL_PRECISION_OUT_OF_RANGE;
         LOG_WARN("target interval type precision out of range", K(ret), K(obj_type));
+      } else if (ObIntervalYMType == obj_type) {
+        // interval year to month type has no precision
+        dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
       } else if (ob_is_interval_ds(obj_type)) {
         //scale in day seconds type is day_scale * 10 + seconds_scale.
         dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] * 10 +
