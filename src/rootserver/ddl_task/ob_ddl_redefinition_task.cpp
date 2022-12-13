@@ -1388,6 +1388,25 @@ int ObDDLRedefinitionTask::check_health()
   return ret;
 }
 
+int ObDDLRedefinitionTask::get_estimated_timeout(const ObTableSchema *dst_table_schema, int64_t &estimated_timeout)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObTabletID> tablet_ids;
+  ObArray<ObObjectID> partition_ids;
+  if (OB_ISNULL(dst_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(dst_table_schema));
+  } else if (OB_FAIL(dst_table_schema->get_all_tablet_and_object_ids(tablet_ids, partition_ids))) {
+    LOG_WARN("get all tablet and object ids failed", K(ret));
+  } else {
+    estimated_timeout = tablet_ids.count() * dst_table_schema->get_column_count() * 1000L; // 1ms for each column
+    estimated_timeout = max(estimated_timeout, 9 * 1000 * 1000);
+    estimated_timeout = min(estimated_timeout, 3600 * 1000 * 1000);
+    estimated_timeout = max(estimated_timeout, GCONF.rpc_timeout);
+  }
+  return ret;
+}
+
 int ObDDLRedefinitionTask::sync_stats_info()
 {
   int ret = OB_SUCCESS;
@@ -1402,6 +1421,9 @@ int ObDDLRedefinitionTask::sync_stats_info()
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *data_table_schema = nullptr;
     const ObTableSchema *new_table_schema = nullptr;
+    ObTimeoutCtx timeout_ctx;
+    int64_t timeout = 0;
+
     if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("get tanant schema guard failed", K(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
@@ -1411,6 +1433,12 @@ int ObDDLRedefinitionTask::sync_stats_info()
     } else if (OB_ISNULL(data_table_schema) || OB_ISNULL(new_table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", K(ret));
+    } else if (OB_FAIL(get_estimated_timeout(new_table_schema, timeout))) {
+      LOG_WARN("get estimated timeout failed", K(ret));
+    } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
+      LOG_WARN("set timeout ctx failed", K(ret));
+    } else if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
+      LOG_WARN("set timeout failed", K(ret));
     } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
       LOG_WARN("fail to start transaction", K(ret));
     } else if (OB_FAIL(sync_table_level_stats_info(trans, *data_table_schema))) {
