@@ -224,7 +224,6 @@ install(FILES
   deps/oblib/src/lib/lock/ob_spin_rwlock.h
   deps/oblib/src/lib/lock/ob_thread_cond.h
   deps/oblib/src/lib/lock/ob_rwlock.h
-  deps/oblib/src/lib/lock/threadmutex.h
   deps/oblib/src/lib/metrics/ob_counter.h
   deps/oblib/src/lib/net/ob_addr.h
   deps/oblib/src/lib/net/ob_net_util.h

@@ -1,0 +1,1559 @@
+result_format: 4
+drop table if exists a,b,t,t1;
+drop procedure if exists p;
+drop procedure if exists f;
+drop procedure if exists pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '42S02'
+BEGIN
+insert into a values(1);
+END;
+DECLARE CONTINUE HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from b;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+BEGIN
+insert into a values(1);
+END;
+DECLARE Exit HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from b;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '42S02'
+insert into a values(1);
+DECLARE CONTINUE HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from b;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+insert into a values(1);
+DECLARE Exit HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from b;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '42S02';
+DECLARE CONTINUE HANDLER FOR no_such_table
+insert into a values(1);
+DECLARE CONTINUE HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from a;
+if(1=1)
+then
+begin
+DECLARE no_such_table CONDITION FOR 1051;
+DECLARE CONTINUE HANDLER FOR no_such_table
+insert into a values(1);
+insert into a values(1);
+end;
+end if;
+end//
+call p;
+ERROR 42S02: Table 'test.a' doesn't exist
+drop procedure p;
+
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '42S02';
+DECLARE Exit HANDLER FOR no_such_table
+insert into a values(1);
+DECLARE Exit HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from a;
+if(1=1)
+then
+begin
+DECLARE no_such_table CONDITION FOR 1051;
+DECLARE Exit HANDLER FOR no_such_table
+insert into a values(1);
+insert into a values(1);
+end;
+end if;
+end//
+call p;
+Got one of the listed errors
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '42S02';
+DECLARE CONTINUE HANDLER FOR no_such_table
+insert into a values(1);
+DECLARE CONTINUE HANDLER FOR SQLexception
+BEGIN
+insert into a values(2);
+END;
+select * from a;
+if(1=1)
+then
+begin
+DECLARE no_such_table CONDITION FOR 1051;
+DECLARE CONTINUE HANDLER FOR no_such_table
+insert into a values(3);
+insert into a values(0);
+signal SQLSTATE '42S02';
+end;
+end if;
+end//
+call p;
++------+
+| a1   |
++------+
++------+
+select * from a;
++------+
+| a1   |
++------+
+|    0 |
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '42S02';
+DECLARE Exit HANDLER FOR no_such_table
+insert into a values(1);
+DECLARE Exit HANDLER FOR SQLexception
+BEGIN
+insert into a values(2);
+END;
+select * from a;
+if(1=1)
+then
+begin
+DECLARE no_such_table CONDITION FOR 1051;
+DECLARE Exit HANDLER FOR no_such_table
+insert into a values(3);
+insert into a values(0);
+signal SQLSTATE '42S02';
+end;
+end if;
+end//
+call p;
++------+
+| a1   |
++------+
++------+
+select * from a;
++------+
+| a1   |
++------+
+|    0 |
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+  DECLARE CONTINUE HANDLER FOR sqlstate '42S02'
+    insert into a values(2);
+    begin
+      DECLARE CONTINUE HANDLER FOR sqlstate '42S01'
+        begin
+          signal sqlstate '42S02';
+          insert into a values(1);
+        end;
+      signal sqlstate '42S01';
+      insert into a values(0);
+    end;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
+|    1 |
+|    0 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE Exit HANDLER FOR sqlstate '42S02'
+insert into a values(2);
+begin
+DECLARE Exit HANDLER FOR sqlstate '42S01'
+begin
+signal sqlstate '42S02';
+insert into a values(1);
+end;
+signal sqlstate '42S01';
+insert into a values(0);
+end;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE exit HANDLER FOR sqlstate '42S02'
+insert into a values(2);
+begin
+DECLARE CONTINUE HANDLER FOR sqlstate '42S01'
+begin
+signal sqlstate '42S02';
+insert into a values(1);
+end;
+signal sqlstate '42S01';
+insert into a values(0);
+end;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE CONTINUE HANDLER FOR sqlstate '42S02' insert into a values(3);
+if (1<2) then
+begin
+declare a bigint;
+signal sqlstate '42S02';
+set a=1;
+end;
+else
+begin
+declare b bigint;
+signal sqlstate '42S02';
+set b=2;
+end;
+end if;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    3 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE Exit HANDLER FOR sqlstate '42S02' insert into a values(3);
+if (1<2) then
+begin
+declare a bigint;
+signal sqlstate '42S02';
+set a=1;
+end;
+else
+begin
+declare b bigint;
+signal sqlstate '42S02';
+set b=2;
+end;
+end if;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    3 |
++------+
+drop table a;
+drop procedure p;
+
+create procedure p(x bigint)
+begin
+DECLARE CONTINUE HANDLER FOR 1051
+set x=1;
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '42S02'
+set x=2;
+signal SQLSTATE '42S02';
+end;
+end//
+call p;
+ERROR 42000: Incorrect number of arguments
+drop procedure p;
+
+create procedure p(x bigint)
+begin
+DECLARE Exit HANDLER FOR 1051
+set x=1;
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+set x=2;
+signal SQLSTATE '42S02';
+end;
+end//
+call p;
+ERROR 42000: Incorrect number of arguments
+call p(1);
+drop procedure p;
+
+create procedure p(x bigint)
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '42S02'
+set x=1;
+begin
+DECLARE CONTINUE HANDLER FOR 1051
+set x=2;
+signal SQLSTATE '42S02';
+end;
+end//
+call p(1);
+drop procedure p;
+
+create procedure p(x bigint)
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+set x=1;
+begin
+DECLARE Exit HANDLER FOR 1051
+set x=2;
+signal SQLSTATE '42S02';
+end;
+end//
+call p(1);
+drop procedure p;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '42S02'
+insert into a value(1);
+begin
+DECLARE CONTINUE HANDLER FOR 1051
+insert into a value(2);
+signal SQLSTATE '42S02';
+insert into a value(0);
+end;
+end//
+call p(1);
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
+|    0 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+insert into a value(1);
+begin
+DECLARE Exit HANDLER FOR 1051
+insert into a value(2);
+signal SQLSTATE '42S02';
+insert into a value(0);
+end;
+end//
+call p(1);
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+insert into a value(2);
+signal SQLSTATE '42S02';
+insert into a value(0);
+end;
+insert into a value(3);
+end//
+call p(1);
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
+|    3 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '42S03'
+insert into a value(2);
+signal SQLSTATE '42S02';
+insert into a value(0);
+end;
+insert into a value(1);
+end//
+call p(1);
+ERROR 42S02: Unhandled user-defined exception condition
+select * from a;
++------+
+| a1   |
++------+
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE EXIT HANDLER FOR SQLSTATE '42S02'
+insert into a value(1);
+begin
+DECLARE CONTINUE HANDLER FOR 1051
+insert into a value(2);
+signal SQLSTATE '42S02';
+insert into a value(0);
+end;
+end//
+call p(1);
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE EXIT HANDLER FOR SQLSTATE '42S02'
+insert into a value(1);
+begin
+DECLARE Exit HANDLER FOR 1051
+insert into a value(2);
+signal SQLSTATE '42S02';
+insert into a value(0);
+end;
+end//
+call p(1);
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '42S02'
+insert into a value(1);
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '42S02'
+insert into a value(2);
+signal SQLSTATE '42S02';
+insert into a value(0);
+end;
+end//
+call p(1);
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
+|    0 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+insert into a value(1);
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+insert into a value(2);
+signal SQLSTATE '42S02';
+insert into a value(0);
+end;
+end//
+call p(1);
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '42S02';
+DECLARE CONTINUE HANDLER FOR no_such_table
+insert into a values(1);
+DECLARE CONTINUE HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from b;
+if(1=1)
+then
+begin
+DECLARE CONTINUE HANDLER FOR no_such_table
+insert into a values(1);
+insert into a values(1);
+end;
+end if;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '42S02';
+DECLARE Exit HANDLER FOR no_such_table
+insert into a values(1);
+DECLARE Exit HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from b;
+if(1=1)
+then
+begin
+DECLARE Exit HANDLER FOR no_such_table
+insert into a values(1);
+insert into a values(1);
+end;
+end if;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p(no_such_table int)
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '42S02';
+DECLARE CONTINUE HANDLER FOR SQLSTATE '42S02'
+BEGIN
+insert into a values(1);
+END;
+DECLARE CONTINUE HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from b;
+end//
+call p(1);
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p(no_such_table int)
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '42S02';
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+BEGIN
+insert into a values(1);
+END;
+DECLARE Exit HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from b;
+end//
+call p(1);
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+declare no_such_table  bigint default 1;
+DECLARE no_such_table CONDITION FOR SQLSTATE '42S02';
+DECLARE CONTINUE HANDLER FOR SQLSTATE '42S02'
+BEGIN
+insert into a values(1);
+END;
+DECLARE CONTINUE HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from b;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+declare no_such_table  bigint default 1;
+DECLARE no_such_table CONDITION FOR SQLSTATE '42S02';
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+BEGIN
+insert into a values(1);
+END;
+DECLARE Exit HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+select * from b;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '42S02'
+BEGIN
+insert into a values(2);
+END;
+DECLARE CONTINUE HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+signal SQLSTATE '42S02';
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '42S02'
+BEGIN
+insert into a values(2);
+END;
+DECLARE Exit HANDLER FOR SQLexception
+BEGIN
+insert into a values(1);
+END;
+signal SQLSTATE '42S02';
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
++------+
+drop table a;
+drop procedure p;
+
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR 7777;
+DECLARE CONTINUE HANDLER FOR no_such_table
+BEGIN
+declare i bigint default 1;
+END;
+DECLARE CONTINUE HANDLER FOR SQLexception
+BEGIN
+declare i bigint default 1;
+END;
+signal no_such_table ;
+end//
+ERROR HY000: SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE
+
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR 7777;
+DECLARE Exit HANDLER FOR no_such_table
+BEGIN
+declare i bigint default 1;
+END;
+DECLARE Exit HANDLER FOR SQLexception
+BEGIN
+declare i bigint default 1;
+END;
+signal no_such_table ;
+end//
+ERROR HY000: SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE
+
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '77777';
+DECLARE Exit HANDLER FOR no_such_table
+BEGIN
+declare i bigint default 1;
+END;
+DECLARE Exit HANDLER FOR SQLexception
+BEGIN
+declare i bigint default 1;
+END;
+signal no_such_table ;
+end//
+call p;
+drop procedure p;
+
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR 7777;
+DECLARE CONTINUE HANDLER FOR no_such_table
+BEGIN
+declare a int;
+END;
+signal no_such_table ;
+end//
+ERROR HY000: SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE
+
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR 7777;
+DECLARE Exit HANDLER FOR no_such_table
+BEGIN
+declare a int;
+END;
+signal no_such_table ;
+end//
+ERROR HY000: SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE
+
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '77777';
+DECLARE Exit HANDLER FOR no_such_table
+BEGIN
+declare a int;
+END;
+signal no_such_table ;
+end//
+call p;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+signal sqlstate '01111';
+insert into a values(1);
+end//
+create procedure pp()
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '01111'
+BEGIN
+insert into a values(2);
+END;
+call p;
+end//
+call pp;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+signal sqlstate '01111';
+insert into a values(1);
+end//
+create procedure pp()
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '01111'
+BEGIN
+insert into a values(2);
+END;
+call p;
+end//
+call pp;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+signal sqlstate '02222';
+insert into a values(1);
+end//
+create procedure pp()
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '02222'
+BEGIN
+insert into a values(2);
+END;
+call p;
+end//
+call pp;
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+signal sqlstate '02222';
+insert into a values(1);
+end//
+create procedure pp()
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '02222'
+BEGIN
+insert into a values(2);
+END;
+call p;
+end//
+call pp;
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE exit HANDLER FOR SQLSTATE '02111'
+BEGIN
+insert into a values(3);
+END;
+signal sqlstate '01111';
+insert into a values(1);
+end//
+create procedure pp()
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '01111'
+BEGIN
+insert into a values(2);
+END;
+call p;
+end//
+call pp;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE exit HANDLER FOR SQLSTATE '02111'
+BEGIN
+insert into a values(3);
+END;
+signal sqlstate '01111';
+insert into a values(1);
+end//
+create procedure pp()
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '01111'
+BEGIN
+insert into a values(2);
+END;
+call p;
+end//
+call pp;
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '04111'
+BEGIN
+insert into a values(0);
+END;
+signal sqlstate '03111';
+insert into a values(1);
+end//
+create procedure pp()
+begin
+DECLARE CONTINUE HANDLER FOR SQLSTATE '03111'
+BEGIN
+insert into a values(2);
+END;
+call p;
+insert into a values(3);
+end//
+call pp;
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
+|    3 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '04111'
+BEGIN
+insert into a values(0);
+END;
+signal sqlstate '03111';
+insert into a values(1);
+end//
+create procedure pp()
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '03111'
+BEGIN
+insert into a values(2);
+END;
+call p;
+insert into a values(3);
+end//
+call pp;
+select * from a;
++------+
+| a1   |
++------+
+|    2 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR 1051;
+DECLARE CONTINUE HANDLER FOR 1052
+BEGIN
+declare a int;
+END;
+signal no_such_table;
+end//
+ERROR HY000: SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE
+create procedure pp(x bigint)
+begin
+DECLARE CONTINUE HANDLER FOR 1051
+BEGIN
+set x=1;
+END;
+call p;
+end//
+call pp;
+ERROR 42000: Incorrect number of arguments
+select * from a;
++------+
+| a1   |
++------+
++------+
+drop table a;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR 1051;
+DECLARE Exit HANDLER FOR 1052
+BEGIN
+declare a int;
+END;
+signal no_such_table;
+end//
+ERROR HY000: SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE
+create procedure pp(x bigint)
+begin
+DECLARE Exit HANDLER FOR 1051
+BEGIN
+set x=1;
+END;
+call p;
+end//
+call pp;
+ERROR 42000: Incorrect number of arguments
+call pp(1);
+ERROR 42000: procedure/function does not exist
+select * from a;
++------+
+| a1   |
++------+
++------+
+drop table a;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '10510';
+DECLARE Exit HANDLER FOR SQLSTATE '10520'
+BEGIN
+declare a int;
+END;
+signal no_such_table;
+end//
+create procedure pp(x bigint)
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '10510'
+BEGIN
+set x=1;
+END;
+call p;
+end//
+call pp;
+ERROR 42000: Incorrect number of arguments
+call pp(1);
+select * from a;
++------+
+| a1   |
++------+
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE no_such_table CONDITION FOR 1051;
+DECLARE CONTINUE HANDLER FOR 1052
+BEGIN
+declare a int;
+END;
+signal no_such_table;
+end//
+ERROR HY000: SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE
+create procedure pp(x bigint)
+begin
+DECLARE CONTINUE HANDLER FOR 1051
+BEGIN
+set x=1;
+END;
+call p(1);
+end//
+call pp;
+ERROR 42000: Incorrect number of arguments
+select * from a;
++------+
+| a1   |
++------+
++------+
+drop table a;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE no_such_table CONDITION FOR 1051;
+DECLARE Exit HANDLER FOR 1052
+BEGIN
+declare a int;
+END;
+signal no_such_table;
+end//
+ERROR HY000: SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE
+create procedure pp(x bigint)
+begin
+DECLARE Exit HANDLER FOR 1051
+BEGIN
+set x=1;
+END;
+call p(1);
+end//
+call pp;
+ERROR 42000: Incorrect number of arguments
+call pp(1);
+ERROR 42000: procedure/function does not exist
+select * from a;
++------+
+| a1   |
++------+
++------+
+drop table a;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '10051';
+DECLARE Exit HANDLER FOR 1052
+BEGIN
+declare a int;
+END;
+signal no_such_table;
+end//
+create procedure pp(x bigint)
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '10051'
+BEGIN
+set x=1;
+END;
+call p(1);
+end//
+call pp(1);
+select * from a;
++------+
+| a1   |
++------+
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '10510';
+DECLARE Exit HANDLER FOR SQLSTATE '10520'
+BEGIN
+declare a int;
+END;
+signal no_such_table;
+end//
+create procedure pp(x bigint)
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '10510'
+BEGIN
+set x=1;
+END;
+call p(1);
+end//
+call pp;
+ERROR 42000: Incorrect number of arguments
+call pp(1);
+select * from a;
++------+
+| a1   |
++------+
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE CONTINUE HANDLER FOR sqlstate '03001'
+BEGIN
+insert into a values(1);
+END;
+if(x>0)
+then
+signal sqlstate '03001';
+else
+signal sqlstate '03002';
+end if;
+end//
+create procedure pp(x bigint)
+begin
+call p(x);
+end//
+call pp(0);
+ERROR 03002: Unhandled user-defined exception condition
+select * from a;
++------+
+| a1   |
++------+
++------+
+call pp(1);
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p(x bigint)
+begin
+DECLARE Exit HANDLER FOR sqlstate '03001'
+BEGIN
+insert into a values(1);
+END;
+if(x>0)
+then
+signal sqlstate '03001';
+else
+signal sqlstate '03002';
+end if;
+end//
+create procedure pp(x bigint)
+begin
+call p(x);
+end//
+call pp(0);
+ERROR 03002: Unhandled user-defined exception condition
+select * from a;
++------+
+| a1   |
++------+
++------+
+call pp(1);
+select * from a;
++------+
+| a1   |
++------+
+|    1 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION insert into a values(3);
+select *,* from a;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    3 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE Exit HANDLER FOR SQLEXCEPTION insert into a values(3);
+select *,* from a;
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    3 |
++------+
+drop table a;
+drop procedure p;
+
+CREATE PROCEDURE p()
+BEGIN
+label1: LOOP
+begin
+DECLARE Exit HANDLER FOR SQLEXCEPTION
+begin
+leave label1;
+end;
+signal sqlstate '04001';
+end;
+END LOOP label1;
+END//
+ERROR 42000: no matching label: label1
+
+create table a(a1 int);
+create procedure p(x int)
+begin
+declare exit handler for SQLSTATE '20000'
+insert into a values(-1);
+case x
+when 1 then insert into a values(1);
+end case;
+end//
+call p(3);
+select * from a;
++------+
+| a1   |
++------+
+|   -1 |
++------+
+drop table a;
+drop procedure p;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR 1051;
+DECLARE Exit HANDLER FOR 1052
+BEGIN
+insert into a values(1052);
+END;
+signal no_such_table;
+end//
+ERROR HY000: SIGNAL/RESIGNAL can only use a CONDITION defined with SQLSTATE
+create procedure pp(x bigint)
+begin
+DECLARE Exit HANDLER FOR 1051
+BEGIN
+insert into a values(1051);
+END;
+call p;
+end//
+call pp(1);
+ERROR 42000: procedure/function does not exist
+select * from a;
++------+
+| a1   |
++------+
++------+
+drop table a;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p()
+begin
+DECLARE no_such_table CONDITION FOR SQLSTATE '10510';
+DECLARE Exit HANDLER FOR SQLSTATE '10520'
+BEGIN
+insert into a values(1052);
+END;
+signal no_such_table;
+end//
+create procedure pp(x bigint)
+begin
+DECLARE Exit HANDLER FOR SQLSTATE '10510'
+BEGIN
+insert into a values(1051);
+END;
+call p;
+end//
+call pp(1);
+select * from a;
++------+
+| a1   |
++------+
+| 1051 |
++------+
+drop table a;
+drop procedure p;
+drop procedure pp;
+
+create table a(a1 int);
+create procedure p(x int)
+begin
+declare exit handler for SQLSTATE '20000'
+insert into a values(-1);
+case x
+when 1 then insert into a values(x);
+end case;
+delete from a;
+end//
+select route_sql from oceanbase.__all_routine, oceanbase.__all_database where routine_name = 'p' and database_name = 'test';
++--------------------------+
+| route_sql                |
++--------------------------+
+| insert into a values(:0) |
++--------------------------+
+call p(1);
+drop procedure p;
+drop table a;
+
+create table a(a1 int);
+create table b(b1 int);
+create procedure p()
+begin
+declare x int;
+declare exit handler for not found insert into b values(-1);
+select a1 from a into x ;
+insert into b values(1);
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
++------+
+select * from b;
++------+
+| b1   |
++------+
+|   -1 |
++------+
+drop table a;
+drop table b;
+drop procedure p;
+
+create table a(a1 int);
+insert into a values(0);
+create table b(b1 int);
+create procedure p()
+begin
+declare x int;
+declare exit handler for not found insert into b values(-1);
+select a1 from a into x;
+insert into b values(1);
+end//
+call p;
+select * from a;
++------+
+| a1   |
++------+
+|    0 |
++------+
+select * from b;
++------+
+| b1   |
++------+
+|    1 |
++------+
+drop table a;
+drop table b;
+drop procedure p;
