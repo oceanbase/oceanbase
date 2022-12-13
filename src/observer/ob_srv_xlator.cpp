@@ -207,7 +207,7 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
         MYSQL_PROCESSOR(ObMPStmtPrexecute, gctx_);
         MYSQL_PROCESSOR(ObMPStmtSendPieceData, gctx_);
         MYSQL_PROCESSOR(ObMPStmtGetPieceData, gctx_);
-        //MYSQL_PROCESSOR(ObMPStmtSendLongData, gctx_);
+        MYSQL_PROCESSOR(ObMPStmtSendLongData, gctx_);
         MYSQL_PROCESSOR(ObMPResetConnection, gctx_);
         // ps stmt close request may not response packet.
         // Howerver, in get processor phase, it may report 
@@ -251,14 +251,6 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
             }
           } else {
             NEW_MYSQL_PROCESSOR(ObMPQuery, gctx_);
-          }
-          break;
-        }
-        case obmysql::COM_STMT_SEND_LONG_DATA: {
-          if (GCONF._enable_new_sql_nio) {
-            NEW_MYSQL_PROCESSOR(ObMPStmtSendLongData, gctx_);
-          } else {
-            NEW_MYSQL_PROCESSOR(ObMPDefault, gctx_);
           }
           break;
         }
