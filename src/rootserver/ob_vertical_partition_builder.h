@@ -30,7 +30,6 @@ public:
   int generate_aux_vp_table_schema(
       share::schema::ObSchemaService *schema_service,
       const obrpc::ObCreateVertialPartitionArg &vp_arg,
-      const int64_t frozen_version,
       share::schema::ObTableSchema &data_schema,
       share::schema::ObTableSchema &aux_vp_table_schema);
   
@@ -44,12 +43,10 @@ public:
 
 private:
   int generate_schema(const obrpc::ObCreateVertialPartitionArg &vp_arg,
-                      const int64_t frozen_version,
                       share::schema::ObTableSchema &data_schema,
                       share::schema::ObTableSchema &aux_vp_table_schema);
   
-  int set_basic_infos(const int64_t frozen_version,
-                      const share::schema::ObTableSchema &data_schema,
+  int set_basic_infos(const share::schema::ObTableSchema &data_schema,
                       share::schema::ObTableSchema &aux_vp_table_schema);
   
   int set_aux_vp_table_columns(const obrpc::ObCreateVertialPartitionArg &vp_arg,

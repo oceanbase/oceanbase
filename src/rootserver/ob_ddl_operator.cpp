@@ -2720,7 +2720,6 @@ int ObDDLOperator::delete_single_column(ObMySQLTransaction &trans,
 }
 
 int ObDDLOperator::alter_table_create_index(const ObTableSchema &new_table_schema,
-                                            const int64_t frozen_version,
                                             ObIArray<ObColumnSchemaV2*> &gen_columns,
                                             ObTableSchema &index_schema,
                                             common::ObMySQLTransaction &trans)

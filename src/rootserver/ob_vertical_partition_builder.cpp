@@ -36,7 +36,6 @@ ObVertialPartitionBuilder::~ObVertialPartitionBuilder()
 int ObVertialPartitionBuilder::generate_aux_vp_table_schema(
     ObSchemaService *schema_service,
     const obrpc::ObCreateVertialPartitionArg &vp_arg,
-    const int64_t frozen_version,
     share::schema::ObTableSchema &data_schema,
     share::schema::ObTableSchema &aux_vp_table_schema)
 {
@@ -44,17 +43,17 @@ int ObVertialPartitionBuilder::generate_aux_vp_table_schema(
   if (!ddl_service_.is_inited() || NULL == schema_service) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("ddl_service not init", "ddl_service inited", ddl_service_.is_inited(), K(ret));
-  } else if (frozen_version <= 0 || !data_schema.is_valid()) {
+  } else if (!data_schema.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(frozen_version), K(data_schema), K(ret));
+    LOG_WARN("invalid argument", K(data_schema), K(ret));
   } else {
     uint64_t new_table_id = OB_INVALID_ID;
     const int64_t buf_size = 64;
     char buf[buf_size];
     MEMSET(buf, 0, buf_size);
     int64_t pos = 0;
-    if (OB_FAIL(generate_schema(vp_arg, frozen_version, data_schema, aux_vp_table_schema))) {
-      LOG_WARN("generate_schema for aux vp table failed", K(vp_arg), K(frozen_version), K(data_schema), K(ret));
+    if (OB_FAIL(generate_schema(vp_arg, data_schema, aux_vp_table_schema))) {
+      LOG_WARN("generate_schema for aux vp table failed", K(vp_arg), K(data_schema), K(ret));
     } else if (OB_FAIL(schema_service->fetch_new_table_id(data_schema.get_tenant_id(), new_table_id))) {
       LOG_WARN("failed to fetch_new_table_id", "tenant_id", data_schema.get_tenant_id(), K(ret));
     } else if (OB_FAIL(generate_vp_table_name(new_table_id, buf, buf_size, pos))) {
@@ -74,7 +73,6 @@ int ObVertialPartitionBuilder::generate_aux_vp_table_schema(
 
 int ObVertialPartitionBuilder::generate_schema(
     const obrpc::ObCreateVertialPartitionArg &vp_arg,
-    const int64_t frozen_version,
     share::schema::ObTableSchema &data_schema,
     share::schema::ObTableSchema &aux_vp_table_schema)
 {
@@ -97,8 +95,8 @@ int ObVertialPartitionBuilder::generate_schema(
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(set_basic_infos(frozen_version, data_schema, aux_vp_table_schema))) {
-      LOG_WARN("set_basic_infos failed", K(vp_arg), K(frozen_version), K(data_schema), K(ret));
+    if (OB_FAIL(set_basic_infos(data_schema, aux_vp_table_schema))) {
+      LOG_WARN("set_basic_infos failed", K(vp_arg), K(data_schema), K(ret));
     } else if (OB_FAIL(set_aux_vp_table_columns(vp_arg, data_schema, aux_vp_table_schema))) {
       LOG_WARN("set_index_table_columns failed", K(vp_arg), K(data_schema), K(ret));
     }
@@ -108,7 +106,6 @@ int ObVertialPartitionBuilder::generate_schema(
 }
 
 int ObVertialPartitionBuilder::set_basic_infos(
-    const int64_t frozen_version,
     const share::schema::ObTableSchema &data_schema,
     share::schema::ObTableSchema &aux_vp_table_schema)
 {

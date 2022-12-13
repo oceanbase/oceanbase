@@ -1583,7 +1583,7 @@ int ObDDLTaskRecordOperator::update_ret_code(
   if (OB_ISNULL(sql_client.get_pool()) || OB_UNLIKELY(task_id <= 0 || tenant_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id), K(task_id));
-  } else if (OB_FAIL(sql_string.assign_fmt(" UPDATE %s SET ret_code=%lu WHERE task_id=%lu ",
+  } else if (OB_FAIL(sql_string.assign_fmt(" UPDATE %s SET ret_code=%ld WHERE task_id=%lu ",
           OB_ALL_DDL_TASK_STATUS_TNAME, ret_code, task_id))) {
     LOG_WARN("assign sql string failed", K(ret), K(ret_code), K(task_id));
   } else if (OB_FAIL(sql_client.write(tenant_id, sql_string.ptr(), affected_rows))) {
