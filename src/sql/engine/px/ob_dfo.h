@@ -227,7 +227,7 @@ public:
   int64_t get_px_sequence_id() { return px_sequence_id_; }
   void set_ignore_vtable_error(bool flag) { ignore_vtable_error_ = flag; }
   bool is_ignore_vtable_error() { return ignore_vtable_error_; }
-  void set_server_not_alive() { server_not_alive_ = true; }
+  void set_server_not_alive(bool not_alive) { server_not_alive_ = not_alive; }
   bool is_server_not_alive() { return server_not_alive_; }
   ObPxTransmitDataChannelMsg &get_transmit_channel_msg() { return transmit_channel_; }
   ObPxReceiveDataChannelMsg &get_receive_channel_msg() { return receive_channel_; }

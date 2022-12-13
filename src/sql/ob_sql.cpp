@@ -3722,7 +3722,6 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
   pc_ctx.neg_param_index_.reset();
   bool plan_added = false;
   bool need_get_baseline = false;
-  session.set_process_query_time(ObTimeUtility::current_time());
   LOG_DEBUG("gen plan info", K(context.spm_ctx_.bl_key_), K(get_plan_err));
   // for batched multi stmt, we only parse and optimize the first statement
   // only in multi_query, need do this

@@ -3506,7 +3506,7 @@ int ObExtraServerAliveCheck::do_check() const
                 query_start_time_))) {
               sqcs.at(j).set_need_report(false);
               sqcs.at(j).set_thread_finish(true);
-              sqcs.at(j).set_server_not_alive();
+              sqcs.at(j).set_server_not_alive(true);
               if (!sqcs.at(j).is_ignore_vtable_error()) {
                 ret = OB_RPC_CONNECT_ERROR;
                 LOG_WARN("server not in communication, maybe crashed.", K(ret),

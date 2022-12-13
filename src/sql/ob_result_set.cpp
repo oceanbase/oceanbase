@@ -140,6 +140,7 @@ OB_INLINE int ObResultSet::open_plan()
 int ObResultSet::open()
 {
   int ret = OB_SUCCESS;
+  my_session_.set_process_query_time(ObTimeUtility::current_time());
   LinkExecCtxGuard link_guard(my_session_, get_exec_context());
   if (lib::is_oracle_mode() &&
       get_exec_context().get_nested_level() >= OB_MAX_RECURSIVE_SQL_LEVELS) {
