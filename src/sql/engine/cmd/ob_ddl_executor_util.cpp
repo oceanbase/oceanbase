@@ -211,10 +211,14 @@ int ObDDLExecutorUtil::cancel_ddl_task(const int64_t tenant_id, obrpc::ObCommonR
   int ret = OB_SUCCESS;
   obrpc::ObCancelTaskArg rpc_arg;
   rpc_arg.task_id_ = *ObCurTraceId::get_trace_id();
-  if (OB_FAIL(GCTX.srv_rpc_proxy_->to(common_rpc_proxy->get_server()).cancel_sys_task(rpc_arg))) {
-    LOG_WARN("failed to cancel remote sys task", K(ret), K(rpc_arg));
+
+  ObAddr rs_leader_addr;
+  if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_leader_addr))) {
+    LOG_WARN("fail to get rootservice address", K(ret));
+  } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(rs_leader_addr).cancel_sys_task(rpc_arg))) {
+    LOG_WARN("failed to cancel remote sys task", K(ret), K(rpc_arg), K(rs_leader_addr));
   } else {
-    LOG_INFO("succeed to cancel sys task", K(rpc_arg));
+    LOG_INFO("succeed to cancel sys task", K(rpc_arg), K(rs_leader_addr));
   }
   return ret;
 }
