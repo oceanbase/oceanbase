@@ -2758,14 +2758,14 @@ int ObTablet::get_rec_log_scn(SCN &rec_scn) {
   int ret = OB_SUCCESS;
   rec_scn = SCN::max_scn();
   ObTableHandleV2 handle;
-  memtable::ObMemtable *mt;
+  memtable::ObMemtable *mt = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret), K_(is_inited));
   } else if (OB_ISNULL(memtable_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("memtable_mgr is NULL", KR(ret), KPC(this));
-  } else if (OB_FAIL(memtable_mgr_->get_first_memtable(handle))) {
+  } else if (OB_FAIL(memtable_mgr_->get_first_nonempty_memtable(handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {
