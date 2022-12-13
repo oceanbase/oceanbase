@@ -912,9 +912,11 @@ int ObComplementWriteTask::do_local_scan()
     }
 
     const int64_t timeout_ts = ObTimeUtility::current_time() + 3000000; // 3s
-    if (OB_SUCCESS != (end_trans_ret = ObInsertLobColumnHelper::end_trans(read_tx_desc, OB_SUCCESS != ret, timeout_ts))) {
-      LOG_WARN("fail to end read trans", K(ret), K(end_trans_ret));
-      ret = end_trans_ret; 
+    if (nullptr != read_tx_desc) {
+      if (OB_SUCCESS != (end_trans_ret = ObInsertLobColumnHelper::end_trans(read_tx_desc, OB_SUCCESS != ret, timeout_ts))) {
+        LOG_WARN("fail to end read trans", K(ret), K(end_trans_ret));
+        ret = end_trans_ret;
+      }
     }
   }
 
@@ -1257,12 +1259,11 @@ ObLocalScan::ObLocalScan() : is_inited_(false), extended_gc_(), data_table_schem
     hidden_table_schema_(nullptr), snapshot_version_(common::OB_INVALID_VERSION), txs_(nullptr),
     default_row_(), tmp_row_(), row_iter_(nullptr), scan_merge_(nullptr), ctx_(), access_param_(),
     access_ctx_(), get_table_param_(), allocator_("ObLocalScan"), calc_buf_(ObModIds::OB_SQL_EXPR_CALC),
-    expr_ctx_(), col_params_(), read_info_(), exist_column_mapping_(allocator_), checksum_calculator_()
+    col_params_(), read_info_(), exist_column_mapping_(allocator_), checksum_calculator_()
 {}
 
 ObLocalScan::~ObLocalScan()
 {
-  sql::ObSQLUtils::destruct_default_expr_context(expr_ctx_);
   if (OB_NOT_NULL(scan_merge_)) {
     scan_merge_->~ObMultipleScanMerge();
     scan_merge_ = NULL;
@@ -1325,9 +1326,7 @@ int ObLocalScan::init(
       default_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       tmp_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
       uint64_t tenant_id = hidden_table_schema->get_tenant_id();
-      if (OB_FAIL(sql::ObSQLUtils::make_default_expr_context(tenant_id, allocator_, expr_ctx_))) {
-        LOG_WARN("fail to make default expr context ", K(ret));
-      } else if (OB_FAIL(hidden_table_schema->get_orig_default_row(org_col_ids, default_row_))) {
+      if (OB_FAIL(hidden_table_schema->get_orig_default_row(org_col_ids, default_row_))) {
         LOG_WARN("fail to get default row from table schema", K(ret));
       } else {
         is_inited_ = true;
@@ -1634,9 +1633,9 @@ int ObLocalScan::get_next_row(const ObDatumRow *&tmp_row)
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to get next row", K(ret));
     }
-  } else if (OB_ISNULL(row) || !row->is_valid() || OB_ISNULL(expr_ctx_.exec_ctx_)) {
+  } else if (OB_ISNULL(row) || !row->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(row), KP(expr_ctx_.exec_ctx_));
+    LOG_WARN("invalid arguments", K(ret), KP(row));
   } else {
     for (int64_t i = 0, j = 0; OB_SUCC(ret) && i < exist_column_mapping_.size(); i++) {
       if (exist_column_mapping_.test(i)) {
