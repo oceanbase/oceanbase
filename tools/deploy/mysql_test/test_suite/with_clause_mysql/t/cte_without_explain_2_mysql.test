@@ -547,11 +547,11 @@ with RECURSIVE x(n) AS (SELECT a FROM y WHERE a = 1
 	SELECT x.n+1 FROM y RIGHT JOIN x ON x.n = y.a WHERE n < 10)
 SELECT * FROM x;
 
---error 5758
+--error 3575
 with RECURSIVE x(n) AS (SELECT 1 from dual UNION ALL SELECT count(*) FROM x)
   SELECT * FROM x;
 
---error 5758
+--error 3575
 with RECURSIVE x(n) AS (SELECT 1 from dual UNION ALL SELECT sum(n) FROM x)
   SELECT * FROM x;
 

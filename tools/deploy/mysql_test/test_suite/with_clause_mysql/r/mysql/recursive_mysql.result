@@ -158,9 +158,9 @@ with RECURSIVE cte(a,b) as (select 1,1 from dual union all select a+1, a+1 from 
 +------+------+
 
 with RECURSIVE cte(a,b,c) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 with RECURSIVE cte(a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 
 ##   PART 2.2.2 不使用定义列使用原来的列
 with RECURSIVE cte(a,b,c) as
@@ -981,7 +981,7 @@ ERROR HY000: recursive WITH clause must use a UNION ALL operation
 
 set @@ob_query_timeout=1000000;
 with RECURSIVE cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte) select * from cte;
-ERROR HY000: unsupported operation in recursive branch of recursive WITH clause
+ERROR HY000: Recursive Common Table Expression can contain neither aggregation nor window functions in recursive query block
 
 set @@ob_query_timeout=10000000;
 
@@ -993,17 +993,17 @@ with RECURSIVE cte(n) as (select 1 from dual union all select c1 from t1 union a
 ERROR HY000: cycle detected while executing recursive WITH query
 
 with RECURSIVE cte(n) as (select n from (select 1 from dual union all select n+1 from cte) tmp) select * from cte;
-ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
 
 ## 不能出现在right join的左边，left join的右边，full join的两边
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte right join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 left join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 full join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte full join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
-ERROR HY000: unsupported join in recursive WITH query
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must neither be in the right argument of a LEFT JOIN, nor be forced to be non-first with join order hints
 set @@ob_query_timeout=10000000;
 
 ##   PART 4.2 左支不停的变化

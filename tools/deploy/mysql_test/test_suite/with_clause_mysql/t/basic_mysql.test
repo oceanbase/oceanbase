@@ -117,10 +117,10 @@ with cte(a,a) as (select 1,1 from dual) select * from cte;
 explain basic with cte(a,b) as (select 1,1 from dual) select * from cte;
 with cte(a,b) as (select 1,1 from dual) select * from cte;
 
---error 5740
+--error 1353
 with cte(a,b) as (select 1 from dual) select * from cte;
 
---error 5740
+--error 1353
 with cte(a,b,c) as (select 1, 2, 3, 4 from dual) select * from cte;
 
 --echo ##   PART 2.2.2 不使用定义列使用原来的列
@@ -690,7 +690,7 @@ select c22 as c21, c21 from cte1 having c21 > 0;
 with 
   cte1 (c22, c21) AS (select c1, c2 from t1) 
 select c22 as c21, c21 from cte1 group by c21;
---error 5740
+--error 1353
 with
   cte1 (c22, c21) AS (select * from t1)
 select c22 as c21, c21 from cte1 group by c21;

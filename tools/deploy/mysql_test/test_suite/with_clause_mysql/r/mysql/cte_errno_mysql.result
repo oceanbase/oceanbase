@@ -3,7 +3,7 @@ create database cte_st;
 use cte_st;
 result_format: 4
 with cte(a,b) as (select 1 from dual) select * from cte;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 
 with cte(a,b) as (with cte2(a,b) as (select 1,1 from dual) select a,b from cte) select * from cte;
 ERROR 42S02: Table doesn't exist
@@ -78,18 +78,18 @@ with cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 ord
 ERROR 42S02: Table doesn't exist
 
 with RECURSIVE cte(n) as (select 1  union all select (select n+1 from cte where n < 1) ) select n from cte;
-ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
 
 with RECURSIVE cte(n) as (select 1 from dual union all select 1 + (select n+1 from cte where n < 1) from dual) select n from cte;
-ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
 
 with RECURSIVE cte(n) as (select 1 from dual union all select -(select n+1 from cte where n < 1) from dual) select n from cte;
-ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
 
 with RECURSIVE cte(n) as (select 1 from dual union all select 2 as c1 from dual where c1 in (select n + 1 from cte where n < 10)) select n from cte;
-ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
 
 with RECURSIVE cte(n) as (select 1 from dual union all select 2 from dual where EXISTS(select n + 1 from cte where n < 10)) select n from cte;
-ERROR HY000: recursive WITH clause must reference itself directly in one of the UNION ALL branches
+ERROR HY000: In recursive query block of Recursive Common Table Expression, the recursive table must be referenced only once, and not in any subquery
 
 drop database cte_st;

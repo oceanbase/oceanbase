@@ -60,7 +60,7 @@ qn AS (SELECT b as a FROM qn2)
 SELECT qn.a  FROM qn;
 
 --echo # recursive
---error 5742
+--error 3573
 with recursive qn AS (SELECT a FROM qn)
 SELECT qn.a FROM qn;
 
@@ -233,7 +233,7 @@ select * from t1 where t1.a in (select a+0 from cte);
 --error 1064
 with RECURSIVE qn () as (select 1) select * from qn, qn qn1;
 --echo # Materialization
---error 5740
+--error 1353
 with RECURSIVE qn (foo, bar) as (select 1 from dual) select * from qn, qn qn1;
 
 with RECURSIVE qn (foo, bar) as (select 1 as col, 2 as coll from dual union all
@@ -241,7 +241,7 @@ with RECURSIVE qn (foo, bar) as (select 1 as col, 2 as coll from dual union all
 
 
 --echo # Merge
---error 5740
+--error 1353
 with RECURSIVE qn (foo, bar) as (select 1 from t1) select * from qn, qn qn1;
 with RECURSIVE qn (foo, bar) as (select 1, 2 from t1) select * from qn, qn qn1;
 
@@ -1032,9 +1032,9 @@ with RECURSIVE t4(a) as (select 1 from dual union all select a+1 from t4 where a
 --error 5751
 with RECURSIVE cte(a,a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
 with RECURSIVE cte(a,b) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
---error 5740
+--error 1353
 with RECURSIVE cte(a,b,c) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
---error 5740
+--error 1353
 with RECURSIVE cte(a) as (select 1,1 from dual union all select a+1, a+1 from cte where a+1 < 10) select * from cte;
 --error 1054
 with RECURSIVE cte(a,b,c) as
@@ -1095,10 +1095,10 @@ select * from cte;
 with RECURSIVE cte(a) as (select 1 from dual union all select 2 from dual), cte_1(b) as (select 1 from dual union all select * from cte) select * from cte_1;
 --error 5743
 with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where n < 3 UNION ALL select 2 from dual) select * from cte;
---error 5742
+--error 3573
 with RECURSIVE cte(n) AS ( select 1 from cte) select * from cte;
 set @@ob_query_timeout=1000000;
---error 5758
+--error 3575
 with RECURSIVE cte(n) AS ( select 1 from dual UNION ALL select sum(n+1) from cte) select * from cte;
 set @@ob_query_timeout=10000000;
 --error 5743
@@ -1107,16 +1107,16 @@ with RECURSIVE cte(n) AS (select 1 from dual UNION ALL select n+1 from cte where
 with RECURSIVE cte(n) as (select 1 from dual union all select c1 from t1 union all (with RECURSIVE cte(n) as (select c1 from t1) select * from cte)) select * from cte;
 with RECURSIVE cte(n) as (select '1' from dual union all select n+1 from cte where n < 100) select * from cte;
 
---error 5744
+--error 3577
 with RECURSIVE cte(n) as (select n from (select 1 from dual union all select n+1 from cte) tmp) select * from cte;
 set @@ob_query_timeout=1000000;
---error 5759
+--error 3576
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte right join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
---error 5759
+--error 3576
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 left join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
---error 5759
+--error 3576
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from t2 full join cte on cte.n < 3 and t2.c1 < 22) select * from cte;
---error 5759
+--error 3576
 with RECURSIVE cte(n) AS (select c1 from t1 UNION ALL select n+1 from cte full join t2 on cte.n < 3 and t2.c1 < 22) select * from cte;
 set @@ob_query_timeout=10000000;
 
@@ -1153,7 +1153,7 @@ with RECURSIVE
   cte2(c,d) AS (select c1, c2 + 1 as c3 from t1 order by c2 union all select c+1, d+1 from cte2 where c < 30)
 select c,d from cte2;
 
---error 5740
+--error 1353
 explain basic with RECURSIVE
   cte2(c,d) AS (select * from t1 left join t2 on t1.c1=t2.c1 order by t1.c1 union all select c+1, d+1 from cte2 where c < 30)
 select c1 from cte2;

@@ -148,10 +148,10 @@ with cte(a,b) as (select 1,1 from dual) select * from cte;
 +---+---+
 
 with cte(a,b) as (select 1 from dual) select * from cte;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 
 with cte(a,b,c) as (select 1, 2, 3, 4 from dual) select * from cte;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 
 ##   PART 2.2.2 不使用定义列使用原来的列
 with cte(a,b) as (select c1,c2 from t1) select c1 from cte;
@@ -2251,7 +2251,7 @@ ERROR 23000: Column 'c21' in group statement is ambiguous
 with
   cte1 (c22, c21) AS (select * from t1)
 select c22 as c21, c21 from cte1 group by c21;
-ERROR HY000: number of WITH clause column names does not match number of elements in select list
+ERROR HY000: View's SELECT and view's field list have different column counts
 
 ##   cte的列名已经无法在被使用了，这种用法比较特殊
 explain basic with cte as (select count(*) as k from t1) select * from cte where k = 1;
