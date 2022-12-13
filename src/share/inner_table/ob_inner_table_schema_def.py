@@ -6205,6 +6205,8 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+# 11029: __all_virtual_trans_scheduler not used on 4.0
+
 def_table_schema(
   owner = 'xiaoyi.xy',
   tablegroup_id = 'OB_INVALID_ID',
@@ -11125,6 +11127,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_ke
 # 15284: __all_virtual_sql_plan
 # 15285: __all_virtual_plan_table
 # 15286: __all_virtual_plan_real_info
+
+# 15287: __all_virtual_trans_scheduler
 
 ################################################################################
 # System View (20000,30000]
@@ -23287,6 +23291,9 @@ def_table_schema(
 # 21350 : INFORMATION_SCHEMA.CHECK_CONSTRAINTS
 # 21351 : INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
 # 21352 : INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+
+# 21353 : GV$OB_TRANSACTION_SCHEDULERS
+# 21354 : V$OB_TRANSACTION_SCHEDULERS
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -44884,6 +44891,9 @@ FROM (
 # 28156: DBA_TRIGGER_ORDERING
 # 28157: USER_TRIGGER_ORDERING
 # 28158: DBA_OB_SWITCHOVER_CHECKPOINTS
+
+# 28159: GV$OB_TRANSACTION_SCHEDULERS
+# 28160: V$OB_TRANSACTION_SCHEDULERS
 
 # 28171: DBA_OB_USER_DEFINED_RULES
 
