@@ -407,7 +407,8 @@ public:
           }
         }
       }
-      if (that_count >= desc_.len_) {
+
+      if (OB_SUCC(ret) && that_count >= desc_.len_) {
         desc_.len_ = static_cast<int16_t>(that_count);
       }
 
