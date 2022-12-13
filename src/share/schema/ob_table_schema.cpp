@@ -2314,7 +2314,14 @@ int ObTableSchema::get_default_row(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column must not null", K(ret), K(j), K(column_cnt_));
       } else if (column->get_column_id() == column_ids.at(i).col_id_) {
-        default_row.cells_[i] = (column->*func)();
+        if (column->is_identity_column()) {
+          // Identity colunm's orig_default_value and cur_default_val are used to store sequence id
+          // and desc table, it does not have the same semantics as normal default. so here we set
+          // its default value as null to avoid type mismatch.
+          default_row.cells_[i].set_null();
+        } else {
+          default_row.cells_[i] = (column->*func)();
+        }
         found = true;
       }
     }
