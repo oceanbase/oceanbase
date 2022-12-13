@@ -41,9 +41,6 @@ public:
       } else {
         SERVER_LOG(WARN, "MySQL command not supported", "cmd", pkt.get_cmd());
       }
-      if (obmysql::COM_STMT_SEND_LONG_DATA == pkt.get_cmd()) {
-        disconnect();
-      }
     }
     return ret;
   }
