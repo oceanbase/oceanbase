@@ -13249,10 +13249,8 @@ int ObPLResolver::resolve_routine_decl_param_list(const ParseNode *param_list,
         LOG_WARN("name node or type node is null", K(name_node), K(type_node));
       } else {
         param_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
-        bool with_rowid = resolve_ctx_.session_info_.is_for_trigger_package()
-            && OB_NOT_NULL(parent)
-            && (ObPLBlockNS::BLOCK_PACKAGE_SPEC == parent->get_namespace().get_block_type()
-             || ObPLBlockNS::BLOCK_PACKAGE_BODY == parent->get_namespace().get_block_type());
+        bool with_rowid = check_with_rowid(routine_info.get_name(),
+                                           resolve_ctx_.session_info_.is_for_trigger_package());
         if (OB_FAIL(resolve_sp_data_type(type_node, param_name, unit_ast,
                                          param_type, &extern_type_info, with_rowid, true))) {
           LOG_WARN("resolve data type failed", K(ret), K(param_name));
@@ -14738,6 +14736,18 @@ int ObPLResolver::get_udt_database_name(ObSchemaGetterGuard &schema_guard, const
   return ret;
 }
 
+bool ObPLResolver::check_with_rowid(const ObString &routine_name, bool is_for_trigger)
+{
+  bool with_rowid = false;
+  if (is_for_trigger && lib::is_oracle_mode()) {
+    if (0 == routine_name.case_compare("calc_when") ||
+        0 == routine_name.case_compare("before_row") ||
+        0 == routine_name.case_compare("after_row")) {
+      with_rowid = true;
+    }
+  }
+  return with_rowid;
+}
 
 }
 }

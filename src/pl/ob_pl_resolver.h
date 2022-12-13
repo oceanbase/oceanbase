@@ -960,6 +960,8 @@ private:
   int check_update_column(const ObPLBlockNS &ns, const ObIArray<ObObjAccessIdx>& access_idxs);
   static int get_udt_database_name(ObSchemaGetterGuard &schema_guard,
                                    const uint64_t udt_id, ObString &db_name);
+  static bool check_with_rowid(const ObString &routine_name,
+                               bool is_for_trigger);
 private:
   ObPLResolveCtx resolve_ctx_;
   ObPLExternalNS external_ns_;
