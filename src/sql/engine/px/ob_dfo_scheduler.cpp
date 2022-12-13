@@ -492,7 +492,7 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
       LOG_WARN("no memory", K(ret));
     }
   }
-  bool ignore_vtable_error = true;
+  bool ignore_vtable_error = dfo.is_ignore_vtable_error();
   if (OB_SUCC(ret)) {
     ObDfo *child_dfo = nullptr;
     for (int i = 0; i < dfo.get_child_count() && OB_SUCC(ret); ++i) {
@@ -561,7 +561,7 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
                           .fast_init_sqc(args, &sqc_cb))) {
           LOG_WARN("fail to init sqc", K(ret), K(sqc));
           sqc.set_need_report(false);
-          sqc.set_server_not_alive();
+          sqc.set_server_not_alive(true);
         }
       }
     }
@@ -1139,11 +1139,20 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
     const ObArray<ObSqcAsyncCB *> &callbacks = proxy.get_callbacks();
     for (int i = 0; i < callbacks.count(); ++i) {
       cb = callbacks.at(i);
+      ObPxSqcMeta &sqc = *sqcs.at(i);
       if (OB_NOT_NULL(cb) && cb->is_processed() &&
           OB_SUCCESS == cb->get_ret_code().rcode_ &&
           OB_SUCCESS == cb->get_result().rc_) {
-        ObPxSqcMeta &sqc = *sqcs.at(i);
         sqc.set_need_report(true);
+      } else if (!cb->is_processed()) {
+        // if init_sqc_msg is not processed and the msg may be sent successfully, set server not alive.
+        // then when qc waiting_all_dfo_exit, it will push sqc.access_table_locations into trans_result,
+        // and the query can be retried.
+        bool msg_not_send_out = (cb->get_error() == EASY_TIMEOUT_NOT_SENT_OUT
+                                || cb->get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
+        if (!msg_not_send_out) {
+          sqc.set_server_not_alive(true);
+        }
       }
     }
   } else {

@@ -687,16 +687,15 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     while (OB_SUCC(ret) && wait_msg) {
       ObDtlChannelLoop &loop = msg_loop_;
       timeout_us = phy_plan_ctx->get_timeout_timestamp() - get_timestamp();
-      bool server_all_alive = true;
       /**
        * 开始收下一个消息。
        */
       if (OB_FAIL(check_all_sqc(active_dfos, times_offset, all_dfo_terminate,
-                                last_timestamp, server_all_alive))) {
+                                last_timestamp))) {
         LOG_WARN("fail to check sqc");
       } else if (all_dfo_terminate) {
         wait_msg = false;
-        collect_trans_result_ok = server_all_alive;
+        collect_trans_result_ok = true;
         LOG_TRACE("all dfo has been terminate", K(ret));
         break;
       } else if (OB_FAIL(ctx_.fast_check_status_ignore_interrupt())) {
@@ -750,12 +749,13 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
       && OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER != coord_info_.first_error_code_) {
     ret = coord_info_.first_error_code_;
   }
-  if (!collect_trans_result_ok && OB_FAIL(ret)) {
+  if (!collect_trans_result_ok) {
     ObSQLSessionInfo *session = ctx_.get_my_session();
     session->get_trans_result().set_incomplete();
     LOG_WARN("collect trans_result fail", K(ret),
              "session_id", session->get_sessid(),
              "trans_result", session->get_trans_result());
+
   }
   return ret;
 }
@@ -763,12 +763,10 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
 int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
                                int64_t &times_offset,
                                bool &all_dfo_terminate,
-                               int64_t &last_timestamp,
-                               bool &server_all_alive)
+                               int64_t &last_timestamp)
 {
   int ret = OB_SUCCESS;
   all_dfo_terminate = true;
-  server_all_alive = true;
   for (int64_t i = 0; i < active_dfos.count() && all_dfo_terminate && OB_SUCC(ret); ++i) {
     ObArray<ObPxSqcMeta *> sqcs;
     if (OB_FAIL(active_dfos.at(i)->get_sqcs(sqcs))) {
@@ -794,7 +792,14 @@ int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
           all_dfo_terminate = false;
           break;
         } else if (sqc->is_server_not_alive()) {
-          server_all_alive = false;
+          sqc->set_server_not_alive(false);
+          const DASTabletLocIArray &access_locations = sqc->get_access_table_locations();
+          for (int64_t i = 0; i < access_locations.count() && OB_SUCC(ret); i++) {
+            if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(access_locations.at(i)->ls_id_))) {
+              LOG_WARN("add touched ls failed", K(ret));
+            }
+          }
+          LOG_WARN("server not alive", K(access_locations), K(sqc->get_access_table_location_keys()));
         }
       }
     }
