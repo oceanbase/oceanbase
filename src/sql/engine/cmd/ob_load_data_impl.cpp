@@ -1691,6 +1691,7 @@ int ObLoadDataSPImpl::handle_returned_insert_task(ObExecContext &ctx,
                "task_id", insert_task.task_id_,
                "ret", result.exec_ret_,
                "row_count", insert_task.row_count_);
+      ret = result.exec_ret_;
       break;
     default:
       ret = OB_ERR_UNEXPECTED;

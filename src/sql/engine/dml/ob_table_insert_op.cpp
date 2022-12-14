@@ -193,6 +193,19 @@ int ObTableInsertOp::write_row_to_das_buffer()
   return ret;
 }
 
+void ObTableInsertOp::record_err_for_load_data(int err_ret, int row_num)
+{
+  UNUSED(err_ret);
+  if (OB_NOT_NULL(ctx_.get_my_session()) && ctx_.get_my_session()->is_load_data_exec_session()) {
+    //record failed line num in warning buffer for load data
+    ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
+    if (OB_NOT_NULL(buffer) && 0 == buffer->get_error_line()) {
+      buffer->set_error_line_column(row_num, 0);
+    }
+    LOG_DEBUG("load data exec log error line", K(err_ret), K(row_num));
+  }
+}
+
 OB_INLINE int ObTableInsertOp::insert_row_to_das()
 {
   int ret = OB_SUCCESS;
@@ -243,16 +256,8 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
                                                      ObTriggerEvents::get_insert_event()))) {
         LOG_WARN("failed to handle before trigger", K(ret));
       }
-
-      if (OB_FAIL(ret) && OB_NOT_NULL(ctx_.get_my_session())
-          && ctx_.get_my_session()->is_load_data_exec_session()) {
-        //record failed line num in warning buffer for load data
-        ObWarningBuffer *buffer = ob_get_tsi_warning_buffer();
-        if (OB_NOT_NULL(buffer) && 0 == buffer->get_error_line()) {
-          buffer->set_error_line_column(ins_rtdef.cur_row_num_, 0);
-        }
-        LOG_DEBUG("load data exec log error line", K(ret), K(ins_rtdef.cur_row_num_),
-                  K(buffer->get_error_line()));
+      if (OB_FAIL(ret)) {
+        record_err_for_load_data(ret, ins_rtdef.cur_row_num_);
       }
     } // end for global index ctdef loop
 

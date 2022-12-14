@@ -1104,6 +1104,7 @@ int ObTableModifyOp::inner_get_next_row()
     LOG_DEBUG("can't get gi task, iter end", K(MY_SPEC.id_), K(iter_end_));
     ret = OB_ITER_END;
   } else {
+    int64_t row_count = 0;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(try_check_status())) {
         LOG_WARN("check status failed", K(ret));
@@ -1127,6 +1128,11 @@ int ObTableModifyOp::inner_get_next_row()
       } else if (MY_SPEC.is_returning_) {
         break;
       }
+      row_count ++;
+    }
+
+    if (OB_FAIL(ret)) {
+      record_err_for_load_data(ret, row_count);
     }
 
     if (OB_SUCC(ret) && iter_end_ && dml_rtctx_.das_ref_.has_task()) {
