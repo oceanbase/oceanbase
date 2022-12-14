@@ -991,7 +991,10 @@ int ObDDLService::generate_schema(
     if (OB_FAIL(schema_service->fetch_new_constraint_id(tenant_id, new_cst_id))) {
       LOG_WARN("failed to fetch new constraint id", K(ret));
     } else if (FALSE_IT(cst.set_constraint_id(new_cst_id))) {
-    } else if (!cst.get_constraint_name_str().empty()) {
+    } else if (cst.get_constraint_name_str().empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cst name is empty", K(ret));
+    } else {
        // Check whether the name of the constraint is repeated
       bool is_constraint_name_exist = false;
       if (OB_FAIL(check_constraint_name_is_exist(guard, schema, cst.get_constraint_name_str(), false, is_constraint_name_exist))) {
@@ -1195,7 +1198,10 @@ int ObDDLService::deal_with_cst_for_alter_table(
     const ObCreateForeignKeyArg &foreign_key_arg = alter_table_arg.foreign_key_arg_list_.at(i);
     ObForeignKeyInfo foreign_key_info;
     // Check for duplicate foreign key constraint names
-    if (!foreign_key_arg.foreign_key_name_.empty()) {
+    if (foreign_key_arg.foreign_key_name_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fk name is empty", K(ret));
+    } else {
       bool is_foreign_key_name_exist = true;
       if (OB_FAIL(check_constraint_name_is_exist(schema_guard, *table_schema, foreign_key_arg.foreign_key_name_, true, is_foreign_key_name_exist))) {
         LOG_WARN("fail to check foreign key name is exist or not", K(ret), K(foreign_key_arg.foreign_key_name_));
