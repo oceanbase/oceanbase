@@ -1588,26 +1588,24 @@ int ObTabletTableStore::update_ha_minor_sstables_(
     LOG_INFO("start scn is bigger than clog checkpoint ts, no need keep local minor sstable", K(old_store));
   } else {
     int64_t index = 0;
-    bool found = false;
+    bool has_remote_logical_sstable = false;
     for (int64_t i = 0; i < old_minor_tables.count_; ++i) {
       const ObITable *table = old_minor_tables[i];
-      if (table->get_start_log_ts() <= param.start_scn_ && table->get_end_log_ts() > param.start_scn_) {
+      if (table->is_remote_logical_minor_sstable()) {
+        has_remote_logical_sstable = true;
         index = i;
-        found = true;
         break;
       }
     }
 
-    if (!found) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("No minor sstable inlcude start scn", K(ret), K(old_store));
-    } else {
+    if (has_remote_logical_sstable) {
       ObITable *table = old_minor_tables[index];
-      if (OB_ISNULL(table) || !table->is_minor_sstable()) {
+      if (!table->is_remote_logical_minor_sstable()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table should not be NULL or table type is not minor sstable", K(ret), KP(table), K(old_store));
-      } else if (!table->is_remote_logical_minor_sstable()) {
-        //do nothing
+        LOG_WARN("table type is unexpected", K(ret), KPC(table), K(old_store), K(param));
+      } else if (param.start_scn_ >= table->get_end_log_ts()) {
+        //no need remote logical sstable
+        index = index + 1;
       } else {
         ObSSTable *sstable = static_cast<ObSSTable *>(table);
         ObLogTsRange new_log_ts_range;
@@ -1617,11 +1615,16 @@ int ObTabletTableStore::update_ha_minor_sstables_(
         sstable->set_log_ts_range(new_log_ts_range);
         LOG_INFO("cut ha remote logical sstable log ts range", KPC(sstable), K(new_log_ts_range), K(original_log_ts_range));
       }
+    } else {
+      //local minor sstable contain param.start_scn, reuse local sstable
+      //index = 0
     }
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(old_minor_tables.get_all_tables(new_minor_tables))) {
         LOG_WARN("failed to get all minor tables", K(ret), K(old_minor_tables));
+      } else if (index >= new_minor_tables.count()) {
+        //reuse nothing, copy from src
       } else if (OB_FAIL(minor_tables_.init_and_copy(allocator, new_minor_tables, index))) {
         LOG_WARN("failed to init minor_tables", K(ret), K(new_minor_tables));
       }
