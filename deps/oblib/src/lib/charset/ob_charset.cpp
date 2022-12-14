@@ -126,8 +126,8 @@ int mk_wcwidth(ob_wc_t ucs)
     { 0x1B36, 0x1B3A }, { 0x1B3C, 0x1B3C }, { 0x1B42, 0x1B42 },
     { 0x1B6B, 0x1B73 }, { 0x1DC0, 0x1DCA }, { 0x1DFE, 0x1DFF },
     { 0x200B, 0x200F }, { 0x202A, 0x202E }, { 0x2060, 0x2063 },
-    { 0x206A, 0x206F }, { 0x20D0, 0x20EF }, { 0x302A, 0x302F },
-    { 0x3099, 0x309A }, { 0xA806, 0xA806 }, { 0xA80B, 0xA80B },
+    { 0x206A, 0x206F }, { 0x20D0, 0x20EF }, /*{ 0x302A, 0x302F },*/
+    /*{ 0x3099, 0x309A },*/ { 0xA806, 0xA806 }, { 0xA80B, 0xA80B },
     { 0xA825, 0xA826 }, { 0xFB1E, 0xFB1E }, { 0xFE00, 0xFE0F },
     { 0xFE20, 0xFE23 }, { 0xFEFF, 0xFEFF }, { 0xFFF9, 0xFFFB },
     { 0x10A01, 0x10A03 }, { 0x10A05, 0x10A06 }, { 0x10A0C, 0x10A0F },
@@ -1206,6 +1206,9 @@ int ObCharset::display_len(ObCollationType collation_type,
         } else {
           // get displayed width
           int w = ObCharset::is_cjk_charset(collation_type) ? mk_wcwidth_cjk(wc) : mk_wcwidth(wc);
+          if (w <= 0) {
+            w = 1;
+          }
           if (char_pos + bytes <= buf_size) {
             width += w;
             char_pos += bytes;
@@ -1252,6 +1255,9 @@ int ObCharset::max_display_width_charpos(ObCollationType collation_type, const c
         } else {
           // get displayed width
           int w = ObCharset::is_cjk_charset(collation_type) ? mk_wcwidth_cjk(wc) : mk_wcwidth(wc);
+          if (w <= 0) {
+            w = 1;
+          }
           if (char_pos + bytes <= mb_size && total_width + w <= max_width) {
             total_width += w;
             char_pos += bytes;
