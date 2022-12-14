@@ -183,6 +183,15 @@ int ObStorageHATabletsBuilder::create_or_update_tablets()
           LOG_WARN("failed to set tablet status info into map", K(ret), K(tablet_simple_info), K(tablet_info));
         }
       }
+#ifdef ERRSIM
+      if (OB_SUCC(ret)) {
+        if (GCONF.errsim_migration_tablet_id == tablet_info.tablet_id_.id()) {
+          SERVER_EVENT_SYNC_ADD("storage_ha", "after_migration_fetch_tablet_info",
+                                "tablet_id", tablet_info.tablet_id_);
+          DEBUG_SYNC(AFTER_MIGRATION_FETCH_TABLET_INFO);
+        }
+      }
+#endif
     }
   }
 
