@@ -6045,6 +6045,10 @@ int ObDDLResolver::resolve_check_constraint_node(
       } else {
         cst_name.assign_ptr(cst_name_node->children_[0]->str_value_, static_cast<int32_t>(cst_name_node->children_[0]->str_len_));
       }
+      if (cst_name.empty()) {
+        ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
+        SQL_RESV_LOG(WARN, "zero-length constraint name is illegal", K(ret));
+      }
     }
     if (OB_SUCC(ret)) {
       bool need_reset_generated_name = is_sys_generated_cst_name;
@@ -6208,6 +6212,9 @@ int ObDDLResolver::resolve_pk_constraint_node(const ParseNode &pk_cst_node,
         if (OB_FAIL(ObTableSchema::create_cons_name_automatically(cst_name, table_name_, *allocator_, CONSTRAINT_TYPE_PRIMARY_KEY, lib::is_oracle_mode()))) {
           SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
         }
+      } else if (NULL == cst_name_node->str_value_ || 0 == cst_name_node->str_len_) {
+        ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
+        SQL_RESV_LOG(WARN, "zero-length constraint name is illegal", K(ret));
       } else {
         cst_name.assign_ptr(cst_name_node->str_value_,static_cast<int32_t>(cst_name_node->str_len_));
       }
@@ -7252,7 +7259,34 @@ int ObDDLResolver::resolve_foreign_key_name(const ParseNode *constraint_node,
         ret = OB_INVALID_ARGUMENT;
         SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(constraint_node->type_), K(constraint_node->num_child_), KP(constraint_node->children_));
       } else if (OB_NOT_NULL(constraint_name = constraint_node->children_[0])) {
-        foreign_key_name.assign_ptr(constraint_name->str_value_, static_cast<int32_t>(constraint_name->str_len_));
+        if (NULL == constraint_name->str_value_ || 0 == constraint_name->str_len_) {
+          ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
+          SQL_RESV_LOG(WARN, "zero-length constraint name is illegal", K(ret));
+        } else {
+          foreign_key_name.assign_ptr(constraint_name->str_value_, static_cast<int32_t>(constraint_name->str_len_));
+          // 检查一条 create table 语句里连续建多个外键时，外键名是否重复
+          ObForeignKeyNameHashWrapper fk_key(foreign_key_name);
+          if (OB_HASH_EXIST == (ret = current_foreign_key_name_set_.exist_refactored(fk_key))) {
+            SQL_RESV_LOG(WARN, "duplicate fk name", K(ret), K(foreign_key_name));
+            ret = OB_ERR_CANNOT_ADD_FOREIGN;
+          } else {
+            ret = OB_SUCCESS;
+            // 向 hash set 插入 fk_name
+            if (OB_FAIL(current_foreign_key_name_set_.set_refactored(fk_key))) {
+              SQL_RESV_LOG(WARN, "set foreign key name to hash set failed", K(ret), K(foreign_key_name));
+            }
+          }
+        }
+      } else if (OB_FAIL(create_fk_cons_name_automatically(foreign_key_name))) {
+        SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
+      }
+    } else {
+      // oracle mode
+      if (NULL == constraint_node->str_value_ || 0 == constraint_node->str_len_) {
+        ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
+        SQL_RESV_LOG(WARN, "zero-length constraint name is illegal", K(ret));
+      } else {
+        foreign_key_name.assign_ptr(constraint_node->str_value_, static_cast<int32_t>(constraint_node->str_len_));
         // 检查一条 create table 语句里连续建多个外键时，外键名是否重复
         ObForeignKeyNameHashWrapper fk_key(foreign_key_name);
         if (OB_HASH_EXIST == (ret = current_foreign_key_name_set_.exist_refactored(fk_key))) {
@@ -7264,23 +7298,6 @@ int ObDDLResolver::resolve_foreign_key_name(const ParseNode *constraint_node,
           if (OB_FAIL(current_foreign_key_name_set_.set_refactored(fk_key))) {
             SQL_RESV_LOG(WARN, "set foreign key name to hash set failed", K(ret), K(foreign_key_name));
           }
-        }
-      } else if (OB_FAIL(create_fk_cons_name_automatically(foreign_key_name))) {
-        SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
-      }
-    } else {
-      // oracle mode
-      foreign_key_name.assign_ptr(constraint_node->str_value_, static_cast<int32_t>(constraint_node->str_len_));
-      // 检查一条 create table 语句里连续建多个外键时，外键名是否重复
-      ObForeignKeyNameHashWrapper fk_key(foreign_key_name);
-      if (OB_HASH_EXIST == (ret = current_foreign_key_name_set_.exist_refactored(fk_key))) {
-        SQL_RESV_LOG(WARN, "duplicate fk name", K(ret), K(foreign_key_name));
-        ret = OB_ERR_CANNOT_ADD_FOREIGN;
-      } else {
-        ret = OB_SUCCESS;
-        // 向 hash set 插入 fk_name
-        if (OB_FAIL(current_foreign_key_name_set_.set_refactored(fk_key))) {
-          SQL_RESV_LOG(WARN, "set foreign key name to hash set failed", K(ret), K(foreign_key_name));
         }
       }
     }
@@ -7681,8 +7698,11 @@ int ObDDLResolver::resolve_not_null_constraint_node(
                                                                 lib::is_oracle_mode()))) {
         SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
       }
+    } else if (NULL == cst_name_node->str_value_ || 0 == cst_name_node->str_len_) {
+      ret = OB_ERR_ZERO_LENGTH_IDENTIFIER;
+      SQL_RESV_LOG(WARN, "zero-length constraint name is illegal", K(ret));
     } else {
-      cst_name.assign_ptr(cst_name_node->str_value_,static_cast<int32_t>(cst_name_node->str_len_));
+      cst_name.assign_ptr(cst_name_node->str_value_, static_cast<int32_t>(cst_name_node->str_len_));
     }
     LOG_DEBUG("resolve not null constraint node mid", K(cst_name), K(cst_name_node));
     if (OB_SUCC(ret)) {
