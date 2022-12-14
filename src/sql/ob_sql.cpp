@@ -1096,7 +1096,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
     ectx.set_is_ps_prepare_stage(true);
 
 #ifndef NDEBUG
-    LOG_INFO("Begin to handle prepare stmtement", K(session.get_sessid()), K(stmt));
+    LOG_INFO("Begin to handle prepare statement", K(session.get_sessid()), K(stmt));
 #endif
 
     if (OB_ISNULL(ps_cache) || OB_ISNULL(pctx) || OB_ISNULL(schema_guard)) {
@@ -1536,7 +1536,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
           !ps_info->get_no_param_sql().empty() ? ps_info->get_no_param_sql() : ps_info->get_ps_sql();
       context.cur_sql_ = sql;
 #ifndef NDEBUG
-      LOG_INFO("Begin to handle execute stmtement", K(session.get_sessid()), K(sql));
+      LOG_INFO("Begin to handle execute statement", K(session.get_sessid()), K(sql));
 #endif
 
       if (!ps_info->get_fixed_raw_params().empty()) {
