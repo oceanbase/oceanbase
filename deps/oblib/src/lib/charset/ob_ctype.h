@@ -152,10 +152,10 @@ typedef size_t (*ob_charset_conv_case)(const struct ObCharsetInfo *,
                                        char *, size_t, char *, size_t);
 
 extern ObUCAInfo ob_uca_v400;
-extern uchar uca520_length[4352];
-extern uint16 *uca520_weight[4352];
-extern uchar uca_length[256];
-extern uint16 *uca_weight[256];
+extern uchar ob_uca520_length[4352];
+extern uint16 *ob_uca520_weight[4352];
+extern uchar ob_uca_length[256];
+extern uint16 *ob_uca_weight[256];
 
 typedef struct
 {
