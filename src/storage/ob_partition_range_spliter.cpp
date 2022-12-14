@@ -117,6 +117,7 @@ int ObMacroEndkeyIterator::open(
 
     if (OB_SUCC(ret)) {
       cur_idx_ = 0;
+      iter_idx_ = iter_idx;
       is_inited_ = true;
     }
   }
