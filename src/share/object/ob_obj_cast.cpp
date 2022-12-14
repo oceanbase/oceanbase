@@ -10615,6 +10615,8 @@ int ObObjCaster::to_type(const ObExpectType &expect_type,
   return ret;
 }
 
+const char OB_JSON_NULL[2] = {'\0', '\0'}; // binary json null
+
 int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType expect_cs_type, ObObj &zero_obj)
 {
   int ret = OB_SUCCESS;
@@ -10674,6 +10676,8 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
   } else if (ob_is_urowid(expect_type)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("urowid with default value not supported");
+  } else if (expect_type == ObJsonType) {
+    zero_obj.set_json_value(expect_type, OB_JSON_NULL, 2);
   }
   if (OB_SUCC(ret)) {
     zero_obj.set_collation_type(expect_cs_type);
