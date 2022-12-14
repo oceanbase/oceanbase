@@ -130,16 +130,16 @@ void ObTenantFreezeInfoMgr::destroy()
   TG_DESTROY(tg_id_);
 }
 
-SCN ObTenantFreezeInfoMgr::get_latest_frozen_scn()
+int64_t ObTenantFreezeInfoMgr::get_latest_frozen_version()
 {
-  SCN frozen_scn = SCN::min_scn();
+  int64_t frozen_version = 0;
   RLockGuard lock_guard(lock_);
   ObIArray<FreezeInfo> &info_list = info_list_[cur_idx_];
 
   if (0 != info_list.count()) {
-    frozen_scn = info_list.at(info_list.count()-1).freeze_scn;
+    frozen_version = info_list.at(info_list.count()-1).freeze_version;
   }
-  return frozen_scn;
+  return frozen_version;
 }
 
 int ObTenantFreezeInfoMgr::get_min_dependent_freeze_info(FreezeInfo &freeze_info)
@@ -223,9 +223,9 @@ int64_t ObTenantFreezeInfoMgr::find_pos_in_list_(
   while (l < r && ret_pos < 0) {
     mid = (l + r) >> 1;
     const FreezeInfo &tmp_info = info_list.at(mid);
-    if (snapshot_version < tmp_info.freeze_scn.get_val_for_tx()) {
+    if (snapshot_version < tmp_info.freeze_version) {
       r = mid;
-    } else if (snapshot_version > tmp_info.freeze_scn.get_val_for_tx()) {
+    } else if (snapshot_version > tmp_info.freeze_version) {
       l = mid + 1;
     } else {
       ret_pos = mid;
@@ -293,7 +293,7 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_snapshot_version_(
     bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && !found && i < info_list.count(); ++i) {
       FreezeInfo &tmp_info = info_list.at(i);
-      if (snapshot_version < tmp_info.freeze_scn.get_val_for_tx()) {
+      if (snapshot_version < tmp_info.freeze_version) {
         freeze_info = tmp_info;
         found = true;
       }
@@ -330,7 +330,7 @@ int ObTenantFreezeInfoMgr::inner_get_neighbour_major_freeze(
     bool found = false;
     for (int64_t i = 0; i < info_list.count() && OB_SUCC(ret) && !found; ++i) {
       FreezeInfo &next_info = info_list.at(i);
-      if (snapshot_version < next_info.freeze_scn.get_val_for_tx()) {
+      if (snapshot_version < next_info.freeze_version) {
         found = true;
         if (0 == i) {
           ret = OB_ENTRY_NOT_EXIST;
@@ -344,7 +344,7 @@ int ObTenantFreezeInfoMgr::inner_get_neighbour_major_freeze(
     }
 
     if (OB_SUCC(ret) && !found) {
-      info.next.freeze_scn.set_max();
+      info.next.freeze_version = INT64_MAX;
       info.prev = info_list.at(info_list.count() - 1);
     }
   }
@@ -436,17 +436,17 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
     STORAGE_LOG(WARN, "fail to get multi version duration", K(ret), K(tablet_id));
   } else {
     if (merged_version < 1) {
-      freeze_info.freeze_scn.set_min();
+      freeze_info.freeze_version = 0;
     } else if (OB_FAIL(get_freeze_info_behind_snapshot_version_(merged_version, freeze_info))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("failed to get freeze info behind snapshot", K(ret), K(merged_version));
       } else {
-        freeze_info.freeze_scn.set_max();
+        freeze_info.freeze_version = INT64_MAX;
         ret = OB_SUCCESS;
       }
     }
     snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L *1000L);
-    snapshot_version = std::min(snapshot_version, freeze_info.freeze_scn.get_val_for_tx());
+    snapshot_version = std::min(snapshot_version, freeze_info.freeze_version);
     for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
       bool related = false;
       const ObSnapshotInfo &snapshot = snapshots.at(i);
@@ -481,19 +481,19 @@ int ObTenantFreezeInfoMgr::diagnose_min_reserved_snapshot(
     STORAGE_LOG(WARN, "fail to get multi version duration", K(ret), K(tablet_id));
   } else {
     if (merge_snapshot_version < 1) {
-      freeze_info.freeze_scn.set_min();
+      freeze_info.freeze_version = 0;
     } else if (OB_FAIL(get_freeze_info_behind_snapshot_version_(merge_snapshot_version, freeze_info))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("failed to get freeze info behind snapshot", K(ret), K(merge_snapshot_version));
       } else {
-        freeze_info.freeze_scn.set_max();
+        freeze_info.freeze_version = INT64_MAX;
         ret = OB_SUCCESS;
       }
     }
     snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L * 1000L);
     snapshot_from_type = "undo_retention";
-    if (freeze_info.freeze_scn.get_val_for_tx() < snapshot_version) {
-      snapshot_version = freeze_info.freeze_scn.get_val_for_tx();
+    if (freeze_info.freeze_version < snapshot_version) {
+      snapshot_version = freeze_info.freeze_version;
       snapshot_from_type = "major_freeze_ts";
     }
     for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
@@ -561,7 +561,7 @@ int ObTenantFreezeInfoMgr::get_reserve_points(
 //   return ret;
 // }
 
-int ObTenantFreezeInfoMgr::get_latest_freeze_scn(SCN &freeze_scn)
+int ObTenantFreezeInfoMgr::get_latest_freeze_version(int64_t &freeze_version)
 {
   int ret = OB_SUCCESS;
 
@@ -572,17 +572,17 @@ int ObTenantFreezeInfoMgr::get_latest_freeze_scn(SCN &freeze_scn)
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else {
-    freeze_scn.set_min();
+    freeze_version = 0;
 
     if (info_list.count() > 0) {
-      freeze_scn = info_list.at(info_list.count() - 1).freeze_scn;
+      freeze_version = info_list.at(info_list.count() - 1).freeze_version;
     }
   }
 
   return ret;
 }
 
-int ObTenantFreezeInfoMgr::prepare_new_info_list(const SCN &min_major_snapshot)
+int ObTenantFreezeInfoMgr::prepare_new_info_list(const int64_t min_major_snapshot)
 {
   int ret = OB_SUCCESS;
 
@@ -591,9 +591,9 @@ int ObTenantFreezeInfoMgr::prepare_new_info_list(const SCN &min_major_snapshot)
   snapshots_[next_idx].reset();
 
   for (int64_t i = 0; i < info_list_[cur_idx_].count() && OB_SUCC(ret); ++i) {
-    if (SCN::max_scn() == min_major_snapshot || // no garbage collection is necessary
+    if (INT64_MAX == min_major_snapshot || // no garbage collection is necessary
         // or version is bigger or equal than the smallest major version currently
-        info_list_[cur_idx_].at(i).freeze_scn >= min_major_snapshot) {
+        info_list_[cur_idx_].at(i).freeze_version >= min_major_snapshot) {
       if (OB_FAIL(info_list_[next_idx].push_back(info_list_[cur_idx_].at(i)))) {
         STORAGE_LOG(WARN, "fail to push back info", K(ret));
       }
@@ -616,7 +616,7 @@ int ObTenantFreezeInfoMgr::update_next_info_list(const ObIArray<FreezeInfo> &inf
     const FreezeInfo &next = info_list.at(i);
     if (next_info_list.count() > 0) {
       FreezeInfo &prev = next_info_list.at(next_info_list.count() - 1);
-      if (OB_UNLIKELY(prev.freeze_scn > next.freeze_scn)) {
+      if (OB_UNLIKELY(prev.freeze_version > next.freeze_version)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "freeze version decrease is not allowed", K(ret), K(prev), K(next));
       }
@@ -654,7 +654,7 @@ int ObTenantFreezeInfoMgr::update_info(
     const int64_t snapshot_gc_ts,
     const ObIArray<FreezeInfo> &info_list,
     const ObIArray<ObSnapshotInfo> &snapshots,
-    const SCN &min_major_snapshot,
+    const int64_t min_major_snapshot,
     bool& gc_snapshot_ts_changed)
 {
   int ret = OB_SUCCESS;
@@ -735,29 +735,37 @@ int ObTenantFreezeInfoMgr::ReloadTask::get_global_info(int64_t &snapshot_gc_ts)
 }
 
 int ObTenantFreezeInfoMgr::ReloadTask::get_freeze_info(
-    SCN &min_major_version,
+    int64_t &min_major_version,
     ObIArray<FreezeInfo> &freeze_info)
 {
   int ret = OB_SUCCESS;
 
+  int64_t freeze_version = 0;
   SCN freeze_scn = SCN::min_scn();
-  min_major_version.set_max();
+  SCN min_major_scn = SCN::max_scn();
+  min_major_version = INT64_MAX;
   ObSEArray<ObSimpleFrozenStatus, 8> tmp;
   ObFreezeInfoProxy freeze_info_proxy(MTL_ID());
 
-  if (OB_FAIL(mgr_.get_latest_freeze_scn(freeze_scn))) {
+  if (OB_FAIL(mgr_.get_latest_freeze_version(freeze_version))) {
     STORAGE_LOG(WARN, "fail to get major version", K(ret));
+  } else if (OB_FAIL(freeze_scn.convert_for_tx(freeze_version))) {
+    STORAGE_LOG(WARN, "fail to convert to scn", K(ret), K(freeze_version));
   } else if (OB_FAIL(freeze_info_proxy.get_min_major_available_and_larger_info(
              *sql_proxy_,
              freeze_scn,
-             min_major_version,
+             min_major_scn,
              tmp))) {
     STORAGE_LOG(WARN, "fail to get freeze info", K(ret), K(freeze_scn));
+  } else if (OB_UNLIKELY(!min_major_scn.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "get unexpected invalid scn", K(ret), K(min_major_scn));
+  } else if (FALSE_IT(min_major_version = min_major_scn.get_val_for_tx())) {
   } else {
     for (int64_t i = 0; i < tmp.count() && OB_SUCC(ret); ++i) {
       ObSimpleFrozenStatus &status = tmp.at(i);
       if (OB_FAIL(freeze_info.push_back(
-            FreezeInfo(status.frozen_scn_, status.schema_version_, status.cluster_version_)))) {
+            FreezeInfo(status.frozen_scn_.get_val_for_tx(), status.schema_version_, status.cluster_version_)))) {
         STORAGE_LOG(WARN, "fail to push back freeze info", K(ret), K(status));
       }
     }
@@ -840,7 +848,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::try_update_info()
     ObSEArray<ObSnapshotInfo, 4> snapshots;
     bool changed = false;
     observer::ObService *ob_service = GCTX.ob_service_;
-    SCN min_major_snapshot = SCN::max_scn();
+    int64_t min_major_snapshot = INT64_MAX;
 
     if (OB_FAIL(get_global_info(snapshot_gc_ts))) {
       if (OB_TENANT_NOT_EXIST != ret) {

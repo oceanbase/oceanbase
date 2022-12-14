@@ -42,22 +42,22 @@ class ObTenantFreezeInfoMgr
 public:
 
   struct FreezeInfo {
-    share::SCN freeze_scn;
+    int64_t freeze_version;
     int64_t schema_version;
     int64_t cluster_version;
 
-    FreezeInfo() : freeze_scn(), schema_version(-1), cluster_version(0) {}
-    FreezeInfo(const share::SCN &scn, const int64_t schema_ver, const int64_t cluster_ver)
-      : freeze_scn(scn), schema_version(schema_ver), cluster_version(cluster_ver) {}
+    FreezeInfo() : freeze_version(-1), schema_version(-1), cluster_version(0) {}
+    FreezeInfo(const int64_t &freeze_ver, const int64_t schema_ver, const int64_t cluster_ver)
+      : freeze_version(freeze_ver), schema_version(schema_ver), cluster_version(cluster_ver) {}
     FreezeInfo &operator =(const FreezeInfo &o)
     {
-      freeze_scn = o.freeze_scn;
+      freeze_version = o.freeze_version;
       schema_version = o.schema_version;
       cluster_version = o.cluster_version;
       return *this;
     }
-    void reset() { freeze_scn.reset(); schema_version = -1; cluster_version = 0; }
-    TO_STRING_KV(K(freeze_scn), K(schema_version), K(cluster_version));
+    void reset() { freeze_version = -1; schema_version = -1; cluster_version = 0; }
+    TO_STRING_KV(K(freeze_version), K(schema_version), K(cluster_version));
   };
 
   struct NeighbourFreezeInfo {
@@ -85,7 +85,7 @@ public:
   void stop();
   void destroy();
 
-  share::SCN get_latest_frozen_scn();
+  int64_t get_latest_frozen_version();
 
   int get_freeze_info_behind_major_snapshot(const int64_t major_snapshot, common::ObIArray<FreezeInfo> &freeze_infos);
   int get_freeze_info_by_snapshot_version(const int64_t snapshot_version, FreezeInfo &freeze_info);
@@ -117,7 +117,7 @@ public:
       const int64_t snapshot_gc_ts,
       const common::ObIArray<FreezeInfo> &info_list,
       const common::ObIArray<share::ObSnapshotInfo> &snapshots,
-      const share::SCN &min_major_snapshot,
+      const int64_t min_major_snapshot,
       bool& changed);
 
   int64_t get_snapshot_gc_ts();
@@ -137,11 +137,11 @@ private:
       common::MODIFY_GC_SNAPSHOT_INTERVAL + 10L * 1000L * 1000L;
   static const int64_t MIN_DEPENDENT_FREEZE_INFO_GAP = 2;
 
-  int get_latest_freeze_scn(share::SCN &freeze_scn);
+  int get_latest_freeze_version(int64_t &freeze_version);
   int64_t get_next_idx() { return 1L - cur_idx_; }
   void switch_info() { cur_idx_ = get_next_idx(); }
   int get_info_nolock(const int64_t idx, FreezeInfo &freeze_info);
-  int prepare_new_info_list(const share::SCN &min_major_snapshot);
+  int prepare_new_info_list(const int64_t min_major_snapshot);
   virtual int get_multi_version_duration(int64_t &duration) const;
   int inner_get_neighbour_major_freeze(const int64_t snapshot_version,
                                        NeighbourFreezeInfo &info);
@@ -166,7 +166,7 @@ private:
 
   private:
     int get_global_info(int64_t &snapshot_gc_ts);
-    int get_freeze_info(share::SCN &min_major_snapshot,
+    int get_freeze_info(int64_t &min_major_snapshot,
                         common::ObIArray<FreezeInfo> &freeze_info);
 
     bool inited_;
