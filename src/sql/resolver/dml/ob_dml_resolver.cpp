@@ -591,7 +591,6 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
     ObRawExpr *expr = NULL;
     ParseNode *ch_node = NULL;
     ObBitSet<> user_var_idx;
-    common::hash::ObHashSet<ObString> pl_var_name;
     for (int64_t i = 0; OB_SUCC(ret) && i < into_node->num_child_; ++i) {
       ch_node = into_node->children_[i];
       expr = NULL;
@@ -601,29 +600,14 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
                     || T_OBJ_ACCESS_REF == ch_node->type_ /*Oracle Mode for pl_var*/
                     || T_QUESTIONMARK == ch_node->type_));/*Oracle Mode for dynamic sql*/
       if (OB_SUCC(ret)) {
-        ObString var_name(ch_node->str_len_, ch_node->str_value_);
         if (T_USER_VARIABLE_IDENTIFIER == ch_node->type_) {
+          ObString var_name(ch_node->str_len_, ch_node->str_value_);
           ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, var_name);
           OZ (user_vars.push_back(var_name));
           OZ (user_var_idx.add_member(i));
         } else {
           if (OB_NOT_NULL(params_.secondary_namespace_)) { //PL语句的Prepare阶段
             CK(OB_NOT_NULL(params_.allocator_), OB_NOT_NULL(params_.expr_factory_));
-            if (OB_FAIL(ret)) {
-            } else if (1 != node->value_ || var_name.empty()) { // bulk collect into
-              // do nothing
-            } else if (!pl_var_name.created() && OB_FAIL(pl_var_name.create(4))) {
-              LOG_WARN("init hash failed", K(ret));
-            } else if (OB_FAIL(pl_var_name.set_refactored(var_name, 0))) {
-              LOG_WARN("failed to set_refactored", K(ret));
-              //change error number
-              if (OB_HASH_EXIST == ret) {
-                ret = OB_NOT_SUPPORTED;
-                LOG_WARN("Bulk Collection Into not support use same var much times", K(ret), K(i), K(var_name));
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Bulk Collection use same var much times");
-              }
-            }
-
 
             OZ (pl::ObPLResolver::resolve_raw_expr(*ch_node,
                                                    *params_.allocator_,
@@ -666,10 +650,6 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
           }
         }
       }
-    }
-    //destory the hash table whether the ret is OB_SUCC or not
-    if (pl_var_name.created()) {
-      pl_var_name.destroy();
     }
     if (OB_SUCC(ret)) {
       if (NULL == params_.secondary_namespace_

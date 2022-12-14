@@ -5808,10 +5808,20 @@ int ObSPIService::store_result(ObIArray<ObPLCollection*> &bulk_tables,
     int64_t start_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < bulk_tables.count(); ++i) {
       ObPLCollection *table = bulk_tables.at(i);
+      bool need_ignore = false;
+      for (int64_t j = i + 1; OB_SUCC(ret) && j < bulk_tables.count(); ++j) {
+        if (table == bulk_tables.at(j)) {
+          need_ignore = true;
+          break;
+        }
+      }
       if (OB_ISNULL(table) || OB_ISNULL(table->get_allocator())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table or allocator is NULL", K(table), K(ret));
       } else {
+        start_idx += 0 == i ? 0 : bulk_tables.at(i - 1)->get_column_count();
+      }
+      if (OB_SUCC(ret) && !need_ignore) {
         int64_t old_count = table->get_count();
         void *old_data = table->get_data();
         ObIAllocator *allocator = table->get_allocator();
@@ -5838,7 +5848,7 @@ int ObSPIService::store_result(ObIArray<ObPLCollection*> &bulk_tables,
         }
 
         if (OB_SUCC(ret)) {
-          start_idx += 0 == i ? 0 : bulk_tables.at(i - 1)->get_column_count();
+
           //如果是复杂类型，暂不支持SQL类型是复杂类型，所以这里肯定是个record
           if (table->get_element_desc().is_composite_type()) {
             ObArray<ObObj> row;
