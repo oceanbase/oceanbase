@@ -2119,12 +2119,20 @@ int ObMetaIndexBlockBuilder::close(
 int ObMetaIndexBlockBuilder::build_single_macro_row_desc(const IndexMicroBlockDescList &roots)
 {
   int ret = OB_SUCCESS;
+  ObDataStoreDesc data_desc;
   if (OB_UNLIKELY(1 != roots.count() || 1 != roots[0]->macro_metas_->count())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "number of macro meta should be 1", K(ret), K(roots));
+  } else if (OB_FAIL(data_desc.assign(*index_store_desc_))) {
+    STORAGE_LOG(WARN, "fail to assign data desc", K(ret), KPC(index_store_desc_));
   } else {
-    ObIndexBlockRowDesc row_desc(*index_store_desc_);
     const ObDataBlockMetaVal &macro_meta_val = roots[0]->macro_metas_->at(0)->val_;
+    data_desc.row_store_type_ = macro_meta_val.row_store_type_;
+    data_desc.compressor_type_ = macro_meta_val.compressor_type_;
+    data_desc.master_key_id_ = macro_meta_val.master_key_id_;
+    data_desc.encrypt_id_ = macro_meta_val.encrypt_id_;
+    MEMCPY(data_desc.encrypt_key_, macro_meta_val.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+    ObIndexBlockRowDesc row_desc(data_desc);
     row_desc.row_key_ = roots[0]->macro_metas_->at(0)->end_key_;
     row_desc.macro_id_ = macro_meta_val.macro_id_;
     row_desc.block_offset_ = roots[0]->meta_block_offset_;
