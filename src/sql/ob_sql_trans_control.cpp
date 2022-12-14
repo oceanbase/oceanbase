@@ -461,7 +461,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OZ (get_tx_service(session, txs), tenant_id);
   OZ (acquire_tx_if_need_(txs, *session));
   OZ (stmt_sanity_check_(session, plan, plan_ctx));
-  OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc()));
+  OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_sessid()));
   if (OB_SUCC(ret)
       && txs->get_tx_elr_util().check_and_update_tx_elr_info(
                                          *session->get_tx_desc(),

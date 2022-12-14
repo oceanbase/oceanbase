@@ -1387,7 +1387,7 @@ int ObXAService::end_stmt(const ObXATransID &xid, ObTxDesc &tx_desc)
     if (NULL == xa_ctx) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected trans descriptor", K(ret), K(tx_id), K(xid));
-    } else if (xa_ctx->end_stmt(xid)) {
+    } else if (OB_FAIL(xa_ctx->end_stmt(xid))) {
       TRANS_LOG(WARN, "xa trans end stmt failed", K(ret), K(tx_id), K(xid));
     } else {
       TRANS_LOG(INFO, "xa trans end stmt", K(ret), K(tx_id), K(xid));
