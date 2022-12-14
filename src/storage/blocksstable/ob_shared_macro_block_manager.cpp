@@ -671,6 +671,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
     data_desc.compressor_type_ = basic_meta.compressor_type_;
     data_desc.master_key_id_ = basic_meta.master_key_id_;
     data_desc.encrypt_id_ = basic_meta.encrypt_id_;
+    data_desc.encoder_opt_.set_store_type(basic_meta.row_store_type_);
     MEMCPY(data_desc.encrypt_key_, basic_meta.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     data_desc.row_column_count_ = data_desc.rowkey_column_count_ + 1;
     data_desc.col_desc_array_.reset();

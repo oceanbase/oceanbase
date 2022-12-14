@@ -1705,14 +1705,16 @@ int ObTransService::is_tx_active(const ObTransID &tx_id, bool &active)
   }
   return ret;
 }
-int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx)
+int ObTransService::sql_stmt_start_hook(const ObXATransID &xid, ObTxDesc &tx, const uint32_t session_id)
 {
   int ret = OB_SUCCESS;
   if (tx.is_xa_trans()) {
     if (OB_FAIL(MTL(ObXAService*)->start_stmt(xid, tx))) {
       TRANS_LOG(WARN, "xa trans start stmt failed", K(ret), K_(tx.xid), K(xid));
+    } else {
+      tx.set_sessid(session_id);
     }
-    TRANS_LOG(INFO, "xa trans start stmt", K_(tx.xid), K(xid));
+    TRANS_LOG(INFO, "xa trans start stmt", K_(tx.xid), K(xid), K_(tx.sess_id), K(session_id));
   }
   return ret;
 }
