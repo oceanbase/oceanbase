@@ -374,6 +374,8 @@ int ObTransformExprPullup::build_parent_reject_exprs_map(ObSelectStmt &parent,
       //if there are more than 1 filter, pullup expr maybe good.
       exprs_need_check.reuse();
       the_first_scope_to_search = T_WHERE_SCOPE;
+    } else if (exprs_need_check.empty() && parent.get_condition_exprs().empty()) {
+      /* do nothing */
     } else if (OB_FAIL(append(exprs_need_check, parent.get_condition_exprs()))) {
       LOG_WARN("fail to append array", K(ret));
     } else {
