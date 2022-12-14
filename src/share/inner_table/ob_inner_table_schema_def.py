@@ -23295,6 +23295,8 @@ def_table_schema(
 # 21353 : GV$OB_TRANSACTION_SCHEDULERS
 # 21354 : V$OB_TRANSACTION_SCHEDULERS
 
+# 21355 : INFORMATION_SCHEMA.TRIGGERS
+
 ################################################################################
 # Oracle System View (25000, 30000]
 # Data Dictionary View (25000, 28000]
