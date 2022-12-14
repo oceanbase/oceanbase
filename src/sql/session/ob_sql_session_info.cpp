@@ -886,7 +886,7 @@ ObPsCache *ObSQLSessionInfo::get_ps_cache()
 {
   if (OB_ISNULL(plan_cache_manager_)) {
     LOG_WARN("invalid status", K_(ps_cache), K_(plan_cache_manager));
-  } else if (OB_NOT_NULL(ps_cache_) && ps_cache_->is_valid()) {
+  } else if (OB_NOT_NULL(ps_cache_)) {
     //do nothing
   } else {
     int ret = OB_SUCCESS;
@@ -906,7 +906,7 @@ ObPsCache *ObSQLSessionInfo::get_ps_cache()
       ps_cache_ = plan_cache_manager_->get_or_create_ps_cache(tenant_id,
                                                               pc_mem_conf);
       if (OB_ISNULL(ps_cache_)) {
-        LOG_WARN("failed to get ps pl an cache");
+        LOG_WARN("failed to get ps plan cache");
       } else {
         ps_session_info_allocator_.set_attr(mem_attr);
       }

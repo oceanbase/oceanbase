@@ -126,8 +126,6 @@ int ObAllVirtualPsStat::inner_get_next_row()
           K(effective_tenant_id_));
     } else if (false == ps_cache->is_inited()) {
       SERVER_LOG(DEBUG, "ps_cache is not init, ignore this", K(ret));
-    } else if (false == ps_cache->is_valid()) {
-      SERVER_LOG(DEBUG, "ps_cache is not valid, ignore this", K(ret));
     } else if (OB_FAIL(fill_cells(*ps_cache, tenant_id))) {
       SERVER_LOG(WARN, "fill_cells failed", K(ret), K(tenant_id));
     } else {

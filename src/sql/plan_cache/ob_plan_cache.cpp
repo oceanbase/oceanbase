@@ -322,7 +322,6 @@ struct ObNodeStatFilterOp : public ObKVEntryTraverseOp
 
 ObPlanCache::ObPlanCache()
   :inited_(false),
-   valid_(false),
    tenant_id_(OB_INVALID_TENANT_ID),
    mem_limit_pct_(OB_PLAN_CACHE_PERCENTAGE),
    mem_high_pct_(OB_PLAN_CACHE_EVICT_HIGH_PERCENTAGE),
@@ -376,7 +375,6 @@ int ObPlanCache::init(int64_t hash_bucket, common::ObAddr addr,
       tenant_id_ = tenant_id;
       ref_handle_mgr_.set_tenant_id(tenant_id_);
       inited_ = true;
-      valid_ = true;
       pcm_ = pcm;
     }
   }
