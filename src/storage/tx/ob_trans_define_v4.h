@@ -532,6 +532,7 @@ public:
   void set_xa_ctx(ObXACtx *xa_ctx) { xa_ctx_ = xa_ctx; }
   ObXACtx *get_xa_ctx() { return xa_ctx_; }
   void set_xid(const ObXATransID &xid) { xid_ = xid; }
+  void set_sessid(const uint32_t session_id) { sess_id_ = session_id; }
   const ObXATransID &get_xid() const { return xid_; }
   bool is_xa_trans() const { return !xid_.empty(); }
   void reset_for_xa() { xid_.reset(); xa_ctx_ = NULL; }
