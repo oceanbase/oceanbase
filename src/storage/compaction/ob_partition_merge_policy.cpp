@@ -70,11 +70,9 @@ int ObPartitionMergePolicy::get_neighbour_freeze_info(
     LOG_WARN("Failed to get freeze info, use snapshot_gc_ts instead", K(ret), K(snapshot_version));
     ret = OB_SUCCESS;
     freeze_info.reset();
-    freeze_info.next.freeze_scn.set_max();
+    freeze_info.next.freeze_version = INT64_MAX;
     if (OB_NOT_NULL(last_major)) {
-      if (OB_FAIL(freeze_info.prev.freeze_scn.convert_for_tx(last_major->get_snapshot_version()))) {
-        LOG_WARN("failed to convert scn", K(ret), K(last_major));
-      }
+      freeze_info.prev.freeze_version = last_major->get_snapshot_version();
     }
   } else {
     LOG_WARN("Failed to get neighbour major freeze info", K(ret), K(snapshot_version));
@@ -137,7 +135,7 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
   result.reset();
   // TODO: @dengzhi.ldz, remove max_snapshot_version, merge all forzen memtables
   // Keep max_snapshot_version currently because major merge must be done step by step
-  int64_t max_snapshot_version = freeze_info.next.freeze_scn.get_val_for_tx();
+  int64_t max_snapshot_version = freeze_info.next.freeze_version;
   const SCN &clog_checkpoint_scn = tablet.get_clog_checkpoint_scn();
 
   // Freezing in the restart phase may not satisfy end >= last_max_sstable,
@@ -342,8 +340,8 @@ int ObPartitionMergePolicy::get_boundary_snapshot_version(
       min_snapshot = last_major_table->get_snapshot_version();
     }
   } else {
-    min_snapshot = freeze_info.prev.freeze_scn.get_val_for_tx();
-    max_snapshot = freeze_info.next.freeze_scn.get_val_for_tx();
+    min_snapshot = freeze_info.prev.freeze_version;
+    max_snapshot = freeze_info.next.freeze_version;
   }
   return ret;
 }
@@ -510,7 +508,7 @@ int ObPartitionMergePolicy::get_major_merge_tables(
     LOG_WARN("failed to get freeze info", K(ret), K(base_table->get_snapshot_version()));
   } else if (OB_FAIL(result.handle_.add_table(base_table))) {
     LOG_WARN("failed to add base_table to result", K(ret));
-  } else if (base_table->get_snapshot_version() >= freeze_info.freeze_scn.get_val_for_tx()) {
+  } else if (base_table->get_snapshot_version() >= freeze_info.freeze_version) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected sstable with snapshot_version bigger than next freeze_scn",
              K(ret), K(freeze_info), KPC(base_table), K(tablet));
@@ -546,7 +544,7 @@ int ObPartitionMergePolicy::get_major_merge_tables(
     }
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(base_table)) {
-    const int64_t major_snapshot = MAX(base_table->get_snapshot_version(), freeze_info.freeze_scn.get_val_for_tx());
+    const int64_t major_snapshot = MAX(base_table->get_snapshot_version(), freeze_info.freeze_version);
     result.read_base_version_ = base_table->get_snapshot_version();
     result.version_range_.snapshot_version_ = major_snapshot;
     result.create_snapshot_version_ = base_table->get_meta().get_basic_meta().create_snapshot_version_;
@@ -799,7 +797,7 @@ int ObPartitionMergePolicy::deal_hist_minor_merge(
     LOG_WARN("failed to get freeze info mgr from MTL", K(ret));
   } else if (OB_ISNULL(first_major_table = table_store.get_major_sstables().get_boundary_table(false))) {
     // index table during building, need compat with continuous multi version
-    if (0 == (max_snapshot_version = freeze_info_mgr->get_latest_frozen_scn().get_val_for_tx())) {
+    if (0 == (max_snapshot_version = freeze_info_mgr->get_latest_frozen_version())) {
       // no freeze info found, wait normal mini minor to free sstable
       ret = OB_NO_NEED_MERGE;
       LOG_WARN("No freeze range to do hist minor merge for buiding index", K(ret), K(table_store));
@@ -891,7 +889,7 @@ int ObPartitionMergePolicy::check_need_major_merge(
           LOG_INFO("can't get freeze info after snapshot", K(ret), K(merge_version), K(major_sstable_version));
         }
       } else {
-        can_merge = last_sstable_snapshot >= freeze_info.freeze_scn.get_val_for_tx();
+        can_merge = last_sstable_snapshot >= freeze_info.freeze_version;
         if (!can_merge) {
           LOG_TRACE("tablet need merge, but cannot merge now", K(tablet_id), K(merge_version), K(last_sstable_snapshot), K(freeze_info));
         }
@@ -907,7 +905,7 @@ int ObPartitionMergePolicy::check_need_major_merge(
           // no frozen memtable, need force freeze
           need_force_freeze = true;
         } else {
-          need_force_freeze = last_frozen_memtable->get_snapshot_version() < freeze_info.freeze_scn.get_val_for_tx();
+          need_force_freeze = last_frozen_memtable->get_snapshot_version() < freeze_info.freeze_version;
           if (!need_force_freeze) {
             FLOG_INFO("tablet no need force freeze", K(ret), K(tablet_id), K(merge_version), K(freeze_info), KPC(last_frozen_memtable));
           }
