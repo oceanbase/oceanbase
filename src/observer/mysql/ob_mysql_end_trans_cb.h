@@ -54,7 +54,8 @@ public:
   int init(ObMPPacketSender& packet_sender, 
            sql::ObSQLSessionInfo *sess_info, 
            int32_t stmt_id = 0,
-           uint64_t params_num = 0);
+           uint64_t params_num = 0,
+           int64_t com_offset = 0);
   int set_packet_param(const sql::ObEndTransCbPacketParam &pkt_param);
   void destroy();
   void reset();
