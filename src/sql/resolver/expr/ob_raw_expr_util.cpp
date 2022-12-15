@@ -2047,12 +2047,14 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
   // 改写上面生成的表达式
   if (OB_SUCC(ret) && NULL != arg) {
     bool expr_changed = false;
-    if (OB_FAIL(try_modify_expr_for_gen_col_recursively(session_info, arg, expr_factory,
+    if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
+      LOG_WARN("fail to remove implicit cast", K(ret));
+    } else if (OB_FAIL(try_modify_expr_for_gen_col_recursively(session_info, arg, expr_factory,
                                                     expr, expr_changed))) {
       LOG_WARN("try_add_to_char_on_expr failed", K(ret));
     }
     // 只在必要的时候才会在做一次 formalize
-    if (OB_SUCC(ret) && expr_changed) {
+    if (OB_SUCC(ret)) {
       OZ (expr->formalize(&session_info));
     }
   }
