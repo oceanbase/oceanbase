@@ -1325,7 +1325,7 @@ int ObDDLWaitColumnChecksumCtx::update_status(const common::ObTabletID &tablet_i
         found = true;
         if (OB_SUCCESS == ret_code) {
           item.col_checksum_stat_ = ColChecksumStat::CCS_SUCCEED;
-        } else if (OB_NOT_MASTER == ret_code || OB_PARTITION_NOT_EXIST == ret_code) {
+        } else if (ObIDDLTask::in_ddl_retry_white_list(ret_code)) {
           item.col_checksum_stat_ = CCS_NOT_MASTER;
         } else {
           item.col_checksum_stat_ = CCS_FAILED;
