@@ -328,7 +328,7 @@ int ObTabletTableStore::get_replaced_tables(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table", K(ret), K(replaced_tables));
     }
-    for (int64_t pos = 0; OB_SUCC(ret) && idx < table_handles.count(); ++idx) {
+    for (int64_t pos = 0; OB_SUCC(ret) && pos < table_handles.count(); ++pos) {
       if (table->get_key() == table_handles.at(pos).get_table()->get_key()) {
         replaced_tables[idx] = const_cast<ObITable *>(table_handles.at(pos).get_table());
         break;
