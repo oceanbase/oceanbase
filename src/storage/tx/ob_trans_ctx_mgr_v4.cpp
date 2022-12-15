@@ -599,12 +599,18 @@ int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, SCN s
 int ObLSTxCtxMgr::on_start_working_log_cb_succ(SCN start_working_ts)
 {
   int ret = OB_SUCCESS;
+  bool ignore_ret = false;
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
   StateHelper state_helper(ls_id_, state_);
   if (State::T_PENDING == state_ || State::T_BLOCKED_PENDING == state_) {
     SwitchToLeaderFunctor fn(start_working_ts);
     if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
       TRANS_LOG(WARN, "switch to leader failed", KR(ret), K(ls_id_));
+      if (OB_NOT_MASTER == fn.get_ret()) {
+        // ignore ret
+        // PALF will switch to follower when submitting log return OB_NOT_MASTER
+        ignore_ret = true;
+      }
     }
   } else if (State::R_PENDING == state_ || State::R_BLOCKED_PENDING == state_) {
     ResumeLeaderFunctor fn(start_working_ts);
@@ -616,11 +622,15 @@ int ObLSTxCtxMgr::on_start_working_log_cb_succ(SCN start_working_ts)
     TRANS_LOG(ERROR, "unexpected state", KR(ret), K(ls_id_), K(state_));
   }
   if (OB_FAIL(ret)) {
+    if (ignore_ret) {
+      ret = OB_SUCCESS;
+    }
     // TODO dingxi, takeover failed, notify palf to revoke itself
     int tmp_ret = OB_SUCCESS;
     // restore to follower
     if (OB_TMP_FAIL(state_helper.switch_state(Ops::SWL_CB_FAIL))) {
       TRANS_LOG(ERROR, "restore follower failed", KR(tmp_ret), K(ls_id_), K(state_));
+      ret = tmp_ret;
     }
   } else {
     int tmp_ret = OB_SUCCESS;
