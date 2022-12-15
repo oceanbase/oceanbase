@@ -273,7 +273,9 @@ ObMvccWriteGuard::~ObMvccWriteGuard()
     ctx_->write_done();
     if (OB_NOT_NULL(memtable_) && memtable_->is_frozen_memtable()) {
       if (OB_FAIL(tx_ctx->submit_redo_log(true/*is_freeze*/))) {
-        TRANS_LOG(WARN, "failed to submit freeze log", K(ret), KPC(tx_ctx));
+        if (REACH_TIME_INTERVAL(100 * 1000)) {
+          TRANS_LOG(WARN, "failed to submit freeze log", K(ret), KPC(tx_ctx));
+        }
         memtable_->get_freezer()->set_need_resubmit_log(true);
       }
     }
