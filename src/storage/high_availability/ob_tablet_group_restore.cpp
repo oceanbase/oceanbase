@@ -2643,8 +2643,10 @@ int ObTabletRestoreTask::check_src_sstable_exist_()
         }
       } else if (ObTabletRestoreAction::is_restore_major(tablet_restore_ctx_->action_)) {
         if (!is_major_sstable_exist && tablet->get_tablet_meta().table_store_flag_.with_major_sstable()) {
-          ret = OB_SSTABLE_NOT_EXIST;
-          LOG_WARN("src restore sstable do not exist", K(ret), K(copy_table_key_array_), KPC(tablet_restore_ctx_));
+          if (tablet->get_table_store().get_major_sstables().empty()) {
+            ret = OB_SSTABLE_NOT_EXIST;
+            LOG_WARN("src restore sstable do not exist", K(ret), K(copy_table_key_array_), KPC(tablet_restore_ctx_));
+          }
         }
       }
     }
