@@ -1398,7 +1398,8 @@ int ObTabletCopyFinishTask::inner_update_tablet_table_store_with_major_(
                             ls_->get_rebuild_seq(),
                             true/*need_report*/,
                             SCN::min_scn()/*clog_checkpoint_scn*/,
-                            true/*need_check_sstable*/);
+                            true/*need_check_sstable*/,
+                            true/*allow_duplicate_sstable*/);
     if (tablet->get_storage_schema().get_version() < src_tablet_meta_->storage_schema_.get_version()) {
       SERVER_EVENT_ADD("storage_ha", "schema_change_need_merge_tablet_meta",
                       "tenant_id", MTL_ID(),

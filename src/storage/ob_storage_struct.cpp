@@ -224,6 +224,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     ddl_snapshot_version_(0),
     ddl_execution_id_(0),
     ddl_cluster_version_(0),
+    allow_duplicate_sstable_(false),
     tx_data_(),
     binding_info_(),
     auto_inc_seq_()
@@ -239,7 +240,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const int64_t rebuild_seq,
     const bool need_report,
     const SCN clog_checkpoint_scn,
-    const bool need_check_sstable)
+    const bool need_check_sstable,
+    const bool allow_duplicate_sstable)
   : table_handle_(table_handle),
     snapshot_version_(snapshot_version),
     clog_checkpoint_scn_(),
@@ -255,6 +257,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     ddl_snapshot_version_(0),
     ddl_execution_id_(0),
     ddl_cluster_version_(0),
+    allow_duplicate_sstable_(allow_duplicate_sstable),
     tx_data_(),
     binding_info_(),
     auto_inc_seq_()
@@ -285,6 +288,7 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     ddl_snapshot_version_(0),
     ddl_execution_id_(0),
     ddl_cluster_version_(0),
+    allow_duplicate_sstable_(false),
     tx_data_(),
     binding_info_(),
     auto_inc_seq_()
