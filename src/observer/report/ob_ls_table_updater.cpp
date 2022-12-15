@@ -285,7 +285,7 @@ int ObLSTableUpdater::async_update(
   } else if (OB_FAIL(update_queue_set_.add_task(task))) {
     LOG_WARN("async_update failed", KR(ret), K(tenant_id), K(ls_id));
   } else {
-    LOG_INFO("REPORT:add ls table update task success", K(task));
+    LOG_TRACE("add ls table update task success", K(task));
   }
   return ret;
 }
@@ -343,8 +343,7 @@ int ObLSTableUpdater::batch_process_tasks(
               LOG_WARN("fail to remove replica",
                   KR(ret), K(tenant_id), K(ls_id), "self_addr", server);
             } else {
-              ObTaskController::get().allow_next_syslog();
-              LOG_INFO("REPORT:remove ls from meta table success", K(tenant_id), K(ls_id), K(server));
+              FLOG_INFO("REPORT:remove ls from meta table success", K(tenant_id), K(ls_id), K(server));
             }
           } else {
             LOG_WARN("fail to fill log stream replica", KR(ret), K(tenant_id), K(ls_id));
@@ -352,8 +351,7 @@ int ObLSTableUpdater::batch_process_tasks(
         } else if (OB_FAIL(GCTX.lst_operator_->update(replica, inner_table_only))) {
           LOG_WARN("fail to update replica", KR(ret), K(tenant_id), K(ls_id), K(replica));
         } else {
-          ObTaskController::get().allow_next_syslog();
-          LOG_INFO("REPORT:success to process update task", K(replica));
+          FLOG_INFO("REPORT:success to process update task", K(replica));
         }
         execute_time_us = ObTimeUtility::current_time() - start_time;
       }
