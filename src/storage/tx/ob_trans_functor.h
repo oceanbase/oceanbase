@@ -184,7 +184,7 @@ private:
 class SwitchToLeaderFunctor
 {
 public:
-  explicit SwitchToLeaderFunctor(share::SCN &start_working_ts)
+  explicit SwitchToLeaderFunctor(share::SCN &start_working_ts) : ret_(common::OB_SUCCESS)
   {
     start_working_ts_ = start_working_ts;
 
@@ -200,14 +200,16 @@ public:
       TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
     } else if (OB_TMP_FAIL(tx_ctx->switch_to_leader(start_working_ts_))) {
       TRANS_LOG(WARN, "switch_to_leader error", "ret", tmp_ret, K(*tx_ctx));
+      ret_ = tmp_ret;
     } else {
       bool_ret = true;
     }
     return bool_ret;
   }
-
+  int get_ret() const { return ret_; }
 private:
   share::SCN start_working_ts_;
+  int ret_;
 };
 
 class SwitchToFollowerGracefullyFunctor
