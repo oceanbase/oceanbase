@@ -1088,6 +1088,7 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
         }
       }
       if (OB_SUCC(ret)) {
+        static const char SPACE = ' ';
         check_left_can_cmp_mem(expr, input_left, skip, eval_flags, batch_size, can_cmp_mem);
         if (can_cmp_mem) {
           const char *ptr0 = right_store[0]->ptr_;
@@ -1097,6 +1098,9 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
           for (int64_t i = 0; i < batch_size; ++i) {
             if (input_left[i].is_null()) {
               results[i].set_null();
+            } else if (input_left[i].len_ > 0 && SPACE == input_left[i].ptr_[input_left[i].len_ - 1]) {
+              can_cmp_mem = false;
+              break;
             } else {
               bool is_equal = false;
               left = &input_left[i];
@@ -1109,8 +1113,11 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
               results[i].set_int(is_equal);
             }
           }
-          eval_flags.set_all(batch_size);
-        } else {
+          if (can_cmp_mem) {
+            eval_flags.set_all(batch_size);
+          }
+        }
+        if (!can_cmp_mem) {
           for (int64_t i = 0; i < batch_size; ++i) {
             if (skip.at(i) || eval_flags.at(i)) {
               continue;
