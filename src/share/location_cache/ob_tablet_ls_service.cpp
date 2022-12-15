@@ -159,7 +159,7 @@ int ObTabletLSService::nonblock_renew(
     if (OB_FAIL(add_update_task(task))) {
       LOG_WARN("add tablet_cache update task failed", KR(ret), K(task));
     } else {
-      LOG_INFO("add update task succeed", KR(ret), K(task));
+      LOG_TRACE("add update task succeed", KR(ret), K(task));
     }
   }
   return ret;
@@ -344,8 +344,7 @@ int ObTabletLSService::renew_cache_(
   } else if (OB_FAIL(update_cache_(tablet_cache))) {
     LOG_WARN("fail to update cache", KR(ret), K(tablet_cache));
   } else {
-    ObTaskController::get().allow_next_syslog();
-    LOG_INFO("LOCATION:success to renew tablet cache", K(tablet_cache));
+    FLOG_INFO("[TABLET_LOCATION]success to renew tablet cache", K(tablet_cache));
   }
   return ret;
 }

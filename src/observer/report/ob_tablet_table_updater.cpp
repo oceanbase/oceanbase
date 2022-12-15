@@ -249,7 +249,7 @@ int ObTabletTableUpdater::add_task_(
       LOG_WARN("add tablet table update task failed", KR(ret), K(task));
     }
   } else {
-    LOG_INFO("REPORT:add tablet table update task success", KR(ret), K(task));
+    LOG_TRACE("add tablet table update task success", KR(ret), K(task));
   }
   return ret;
 }
@@ -358,7 +358,7 @@ int ObTabletTableUpdater::generate_tasks_(
             LOG_WARN("fail to fill tablet replica", KR(ret), K(task));
           }
         } else {
-          LOG_INFO("fill tablet success", K(task), K(replica));
+          LOG_TRACE("fill tablet success", K(task), K(replica));
           if (OB_FAIL(update_tablet_replicas.reserve(count))) {
             // reserve() is reentrant, do not have to check whether first time
             LOG_WARN("fail to reserve update_tablet_replicas", KR(ret), K(count));
@@ -426,8 +426,10 @@ int ObTabletTableUpdater::batch_process_tasks(
     (void)check_tenant_status_(meta_tenant_id, tenant_dropped, schema_not_ready);
   }
   if (tenant_dropped) { // do nothing to the tenant has been dropped
-    LOG_INFO("REPORT: tasks can't be processed because it's superior tenant has been dropped",
-        KR(ret), K(tenant_id));
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) { // 10s
+      FLOG_INFO("REPORT: tasks can't be processed because it's superior tenant has been dropped",
+          KR(ret), K(meta_tenant_id), K(batch_tasks));
+    }
   } else if (schema_not_ready) { // need wait schema refresh
     ret = OB_NEED_WAIT;
     if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
@@ -437,7 +439,7 @@ int ObTabletTableUpdater::batch_process_tasks(
     if (OB_FAIL(reput_to_queue_(batch_tasks))) {
       LOG_WARN("fail to reput remove task to queue", KR(ret), K(batch_tasks));
     }
-  } else if (FAILEDx(generate_tasks_(
+  } else if (OB_FAIL(generate_tasks_(
       batch_tasks,
       update_tablet_replicas,
       remove_tablet_replicas,
@@ -454,21 +456,17 @@ int ObTabletTableUpdater::batch_process_tasks(
     tmp_ret = do_batch_update_(start_time, update_tablet_tasks, update_tablet_replicas, update_tablet_checksums);
     if (OB_SUCCESS != tmp_ret) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
-      LOG_WARN("do_batch_update_ failed", KR(tmp_ret), K(start_time), K(update_tablet_tasks),
-               K(update_tablet_replicas), K(update_tablet_checksums));
-    } else {
-      ObTaskController::get().allow_next_syslog();
-      LOG_INFO("REPORT: success to update tablets", KR(tmp_ret), K(update_tablet_replicas));
+      LOG_WARN("do_batch_update_ failed", KR(tmp_ret), K(start_time),
+          "tasks count", update_tablet_tasks.count(),
+          "tablet replicas count", update_tablet_replicas.count());
     }
     if (remove_tablet_tasks.count() > 0) {
       tmp_ret = do_batch_remove_(start_time, remove_tablet_tasks, remove_tablet_replicas);
       if (OB_SUCCESS != tmp_ret) {
         ret = OB_SUCC(ret) ? tmp_ret : ret;
-        LOG_WARN("do_batch_remove_ failed", KR(tmp_ret),
-            K(start_time), K(remove_tablet_tasks), K(remove_tablet_replicas));
-      } else {
-        ObTaskController::get().allow_next_syslog();
-        LOG_INFO("REPORT: success to remove tablets", KR(tmp_ret), K(remove_tablet_replicas));
+        LOG_WARN("do_batch_remove_ failed", KR(tmp_ret), K(start_time),
+            "tasks count", remove_tablet_tasks.count(),
+            "remove replicas count", remove_tablet_replicas.count());
       }
     }
   }
@@ -484,6 +482,7 @@ int ObTabletTableUpdater::do_batch_remove_(
   int tmp_ret = OB_SUCCESS;
   int64_t tenant_id = OB_INVALID_TENANT_ID;
   const int64_t tasks_count = tasks.count();
+  const int64_t batch_remove_start_time = ObTimeUtility::current_time();
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(tablet_operator_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -516,13 +515,12 @@ int ObTabletTableUpdater::do_batch_remove_(
       if (OB_SUCCESS != (tmp_ret = reput_to_queue_(tasks))) {
         LOG_ERROR("fail to reput remove task to queue", KR(tmp_ret), K(tasks_count));
       } else {
-        LOG_INFO("reput remove task to queue success", K(tasks_count));
+        LOG_TRACE("reput remove task to queue success", K(tasks_count));
       }
-      } else {
-        LOG_INFO("batch process remove success", KR(ret), K(tasks_count),
-             "use_time", ObTimeUtility::current_time() - start_time);
-      }
+    }
   }
+  LOG_INFO("REPORT: batch remove tablets finished", KR(ret), K(tasks_count),
+      "cost_time", ObTimeUtility::current_time() - batch_remove_start_time);
   return ret;
 }
 
@@ -535,6 +533,7 @@ int ObTabletTableUpdater::do_batch_update_(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t tenant_id = OB_INVALID_TENANT_ID;
+  const int64_t batch_update_start_time = ObTimeUtility::current_time();
   if (tasks.count() != replicas.count()
       || tasks.count() != checksums.count()
       || OB_ISNULL(tablet_operator_)
@@ -568,13 +567,12 @@ int ObTabletTableUpdater::do_batch_update_(
       if (OB_SUCCESS != (tmp_ret = reput_to_queue_(tasks))) {
         LOG_ERROR("fail to reput update task to queue", KR(tmp_ret), K(tasks.count()));
       } else {
-        LOG_INFO("reput update task to queue success", K(tasks.count()));
+        LOG_TRACE("reput update task to queue success", K(tasks.count()));
       }
-      } else {
-        LOG_INFO("batch process update success", KR(ret), K(replicas.count()),
-             "use_time", ObTimeUtility::current_time() - start_time);
-      }
+    }
   }
+  LOG_INFO("REPORT: batch update tablets finished", KR(ret), K(replicas.count()),
+      "cost_time", ObTimeUtility::current_time() - batch_update_start_time);
   return ret;
 }
 

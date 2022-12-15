@@ -445,15 +445,13 @@ int ObLSLocationService::add_update_task(const ObLSLocationUpdateTask &task)
     if (OB_FAIL(local_async_queue_set_.add_task(task))) {
       LOG_WARN("fail to add task", KR(ret), K(task));
     } else {
-      ObTaskController::get().allow_next_syslog();
-      LOG_INFO("add update task in local_async_queue_set_", KR(ret), K(task));
+      LOG_TRACE("add update task in local_async_queue_set_", KR(ret), K(task));
     }
   } else {
     if (OB_FAIL(remote_async_queue_set_.add_task(task))) {
       LOG_WARN("fail to add task", KR(ret), K(task));
     } else {
-      ObTaskController::get().allow_next_syslog();
-      LOG_INFO("add update task in remote_async_queue_set_", KR(ret), K(task));
+      LOG_TRACE("add update task in remote_async_queue_set_", KR(ret), K(task));
     }
   }
   return ret;
@@ -711,7 +709,7 @@ int ObLSLocationService::renew_all_ls_locations()
             LOG_WARN("fail to update cache", KR(ret), K(tenant_id), K(new_location));
           }
           if (OB_SUCC(ret) && (OB_SUCCESS == tmp_ret) && !new_location.is_same_with(old_location)) {
-            FLOG_INFO("[LOCATION_CACHE]ls location cache has changed", KR(ret), K(old_location), K(new_location));
+            FLOG_INFO("[LS_LOCATION]ls location cache has changed", KR(ret), K(old_location), K(new_location));
           }
         }
       }
@@ -816,7 +814,7 @@ int ObLSLocationService::renew_location(
   }
   // print cache changes
   if (OB_SUCC(ret) && (OB_SUCCESS == tmp_ret) && !location.is_same_with(old_location)) {
-    FLOG_INFO("[LOCATION_CACHE]ls location cache has changed", KR(ret), K(old_location), "new_location", location);
+    FLOG_INFO("[LS_LOCATION]ls location cache has changed", KR(ret), K(old_location), "new_location", location);
   }
   return ret;
 }
@@ -1007,7 +1005,7 @@ int ObLSLocationService::dump_cache()
           fail_ret = ret;
           ret = OB_SUCCESS; // ignore ret between tenants
         } else {
-          FLOG_INFO("[LOCATION_CACHE]dump tenant ls location caches",
+          FLOG_INFO("[LS_LOCATION]dump tenant ls location caches",
               K(tenant_id), K(tenant_ls_locations));
         }
       } // end foreach tenant_ids
