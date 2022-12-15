@@ -67,7 +67,7 @@ public:
 
   virtual int get_active_memtable(ObTableHandleV2 &handle) const;
 
-  virtual int get_first_memtable(ObTableHandleV2 &handle) const;
+  virtual int get_first_nonempty_memtable(ObTableHandleV2 &handle) const;
 
   virtual int get_all_memtables(ObTableHdlArray &handle);
 

@@ -42,19 +42,43 @@ int ObIMemtableMgr::get_active_memtable(ObTableHandleV2 &handle) const
   return ret;
 }
 
-int ObIMemtableMgr::get_first_memtable(ObTableHandleV2 &handle) const
+int ObIMemtableMgr::get_first_nonempty_memtable(ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;
+  bool is_exist = false;
   SpinRLockGuard lock_guard(lock_);
-  if (memtable_head_ == memtable_tail_) {
-    ret = OB_ENTRY_NOT_EXIST;
-    STORAGE_LOG(DEBUG, "There is no memtable in ObIMemtableMgr.");
-  } else if (OB_FAIL(get_ith_memtable(memtable_head_, handle))) {
-    STORAGE_LOG(WARN, "fail to get ith memtable", K(ret), K(memtable_head_));
-  } else if (OB_UNLIKELY(!handle.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "get invalid table handle", K(ret), K(handle));
+
+  for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
+    ObTableHandleV2 tmp_handle;
+    memtable::ObMemtable *mt = NULL;
+    if (OB_FAIL(get_ith_memtable(i, tmp_handle))) {
+      STORAGE_LOG(WARN, "fail to get ith memtable", KR(ret), K(i));
+    } else if (OB_UNLIKELY(!tmp_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "get invalid tmp table handle", KR(ret), K(i), K(tmp_handle));
+    } else if (OB_FAIL(tmp_handle.get_data_memtable(mt))) {
+      STORAGE_LOG(WARN, "failed to get_data_memtable", KR(ret), K(i), K(tmp_handle));
+    } else if (OB_ISNULL(mt)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "mt is NULL", KR(ret), K(i), K(tmp_handle));
+    } else if (INT64_MAX == mt->get_rec_log_ts()) {
+    } else if (OB_FAIL(get_ith_memtable(i, handle))) {
+      STORAGE_LOG(WARN, "fail to get ith memtable", KR(ret), K(i));
+    } else if (OB_UNLIKELY(!handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "get invalid table handle", KR(ret), K(i), K(handle));
+    } else {
+      is_exist = true;
+      break;
+    }
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (!is_exist) {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
+
+
   return ret;
 }
 
