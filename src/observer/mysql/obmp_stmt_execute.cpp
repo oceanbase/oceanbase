@@ -1306,12 +1306,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
                        || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());
     if (!is_ps_cursor()) {
       // ps cursor has already record after inner_open in spi
-      if (NULL != result.get_exec_context().get_sql_ctx()) {
-        ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_EXECUTE, session,
-          result.get_exec_context().get_sql_ctx()->is_sensitive_);
-      } else {
-        ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_EXECUTE, session);
-      }
+      ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_EXECUTE, session, ctx_.is_sensitive_);
     }
   }
   return ret;
