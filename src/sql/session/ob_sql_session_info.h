@@ -906,6 +906,8 @@ public:
   }
   bool is_registered_to_deadlock() const { return ATOMIC_LOAD(&is_registered_to_deadlock_); }
   void set_registered_to_deadlock(bool state) { ATOMIC_SET(&is_registered_to_deadlock_, state); }
+  bool is_ps_prepare_stage() const { return is_ps_prepare_stage_; }
+  void set_is_ps_prepare_stage(bool v) { is_ps_prepare_stage_ = v; }
   int get_tenant_audit_trail_type(ObAuditTrailType &at_type)
   {
     cached_tenant_config_info_.refresh();
@@ -1080,6 +1082,7 @@ private:
   // 记录session是否注册过死锁检测的信息
   bool is_registered_to_deadlock_;
   ObSqlString pl_exact_err_msg_;
+  bool is_ps_prepare_stage_;
   // Record whether this session has got connection resource, which means it increased connections count.
   // It's used for on_user_disconnect.
   // No matter whether apply for resource successfully, a session will call on_user_disconnect when disconnect.

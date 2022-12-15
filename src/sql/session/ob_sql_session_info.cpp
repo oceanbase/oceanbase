@@ -168,6 +168,7 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       is_load_data_exec_session_(false),
       is_registered_to_deadlock_(false),
       pl_exact_err_msg_(),
+      is_ps_prepare_stage_(false),
       got_conn_res_(false),
       tx_level_temp_table_(false),
       mem_context_(nullptr),

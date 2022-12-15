@@ -32,6 +32,24 @@ using common::ObPsStmtId;
 namespace sql
 {
 
+class ObPsPrepareStatusGuard final
+{
+public:
+  explicit ObPsPrepareStatusGuard(ObSQLSessionInfo &session_info, bool is_from_pl)
+    : session_info_(session_info)
+  {
+    if (!is_from_pl) {
+      session_info_.set_is_ps_prepare_stage(true);
+    }
+  }
+  ~ObPsPrepareStatusGuard()
+  {
+    session_info_.set_is_ps_prepare_stage(false);
+  }
+private:
+  ObSQLSessionInfo &session_info_;
+};
+
 class ObPsCache
 {
 public:
