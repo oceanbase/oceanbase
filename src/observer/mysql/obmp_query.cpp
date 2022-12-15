@@ -1200,6 +1200,7 @@ OB_INLINE int ObMPQuery::response_result(ObMySQLResultSet &result,
   CHECK_COMPATIBILITY_MODE(&session);
 
   bool need_trans_cb  = result.need_end_trans_callback() && (!force_sync_resp);
+
   // 通过判断 plan 是否为 null 来确定是 plan 还是 cmd
   // 针对 plan 和 cmd 分开处理，逻辑会较为清晰。
   if (OB_LIKELY(NULL != result.get_physical_plan())) {
