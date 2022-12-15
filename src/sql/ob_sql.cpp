@@ -3451,7 +3451,17 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       ret = plan_cache->add_plan(phy_plan, pc_ctx);
     }
     plan_added = (OB_SUCCESS == ret);
-    if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
+
+    if (is_batch_exec) {
+      // 只有完整的插入了计划，才做batch优化执行，否则都认为需要回退成单行逐行执行
+      if (OB_FAIL(ret)) {
+        LOG_WARN("fail to add batch_execute_plan", K(ret));
+        ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+      } else {
+        pc_ctx.sql_ctx_.self_add_plan_ = true;
+        LOG_DEBUG("Successed to add batch plan to ObPlanCache", K(phy_plan));
+      }
+    } else if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
       ret = OB_SUCCESS;
       LOG_DEBUG("this plan has been added by others, need not add again", K(phy_plan));
     } else if (OB_REACH_MEMORY_LIMIT == ret || OB_SQL_PC_PLAN_SIZE_LIMIT == ret) {
@@ -3466,9 +3476,7 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       ret = OB_SUCCESS;
       LOG_DEBUG("plan cache don't support add this kind of plan now",  K(phy_plan));
     } else if (OB_FAIL(ret)) {
-      if (is_batch_exec && ret == OB_BATCHED_MULTI_STMT_ROLLBACK) {
-        // OB_BATCHED_MULTI_STMT_ROLLBACK 错误码不能覆盖，表示batch优化失败，需要拆分成单行执行
-      } else if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
+      if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
         ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
         LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
       }
