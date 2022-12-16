@@ -50,9 +50,10 @@ public:
   bool is_met_retry_time_interval();
   void set_result(const int result, const share::ObTaskId &trace_id, const RestoreFailedType &failed_type);
   int get_comment_str(Comment &comment) const;
+
+  bool can_retrieable_err(const int err) const;
+
   TO_STRING_KV(K_(result), K_(retry_cnt), K_(trace_id), K_(failed_type));
-private:
-  bool can_retrieable_err_(const int err) const;
 private:
   lib::ObMutex mtx_;
   int result_;
@@ -81,7 +82,7 @@ public:
       const ObIArray<common::ObTabletID> &restore_failed_tablets, const share::ObLSID &ls_id, const int &result);
   // when follower received rpc, call this
   int handle_pull_tablet(const ObIArray<common::ObTabletID> &tablet_ids, 
-      const share::ObLSRestoreStatus &leader_restore_status); 
+      const share::ObLSRestoreStatus &leader_restore_status, const int64_t leader_proposal_id);
   static int check_tablet_restore_finish_(const share::ObLSRestoreStatus &ls_restore_status, 
       const ObTabletMeta &tablet_meta, bool &is_finish);
   void wakeup();
@@ -127,8 +128,9 @@ public:
   virtual void set_retry_flag() {} // used by restore sys tablets
   int deal_failed_restore(const ObLSRestoreResultMgr &result_mgr);
   int handle_pull_tablet(const ObIArray<common::ObTabletID> &tablet_ids,
-      const share::ObLSRestoreStatus &leader_restore_status);
+      const share::ObLSRestoreStatus &leader_restore_status, const int64_t leader_proposal_id);
   share::ObLSRestoreStatus get_restore_status() const { return ls_restore_status_; }
+  common::ObRole get_role() const { return role_; }
   ObLSRestoreTaskMgr &get_tablet_mgr() { return tablet_mgr_; }
   TO_STRING_KV(K_(*ls), K_(ls_restore_status));
 protected:
@@ -180,6 +182,7 @@ protected:
   int update_restore_status_(
       storage::ObLS &ls,
       const share::ObLSRestoreStatus &next_status);
+  int check_new_election_(bool &is_changed) const;
 
 protected:
   bool is_inited_;
@@ -188,6 +191,7 @@ protected:
   share::ObLSRestoreStatus ls_restore_status_;
   ObTenantRestoreCtx *ls_restore_arg_;
   common::ObRole role_;
+  int64_t proposal_id_;
   ObLSRestoreTaskMgr tablet_mgr_;
   share::ObLocationService *location_service_;
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
