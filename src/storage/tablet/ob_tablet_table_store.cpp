@@ -676,11 +676,10 @@ int ObTabletTableStore::build_major_tables(
   inc_base_snapshot_version = -1;
   ObITable *new_table = const_cast<ObITable *>(param.table_handle_.get_table()); //table can be null
   ObTablesHandleArray tables_handle;
-  const bool allow_duplicate_sstable = false;
   if (OB_NOT_NULL(new_table) && OB_FAIL(tables_handle.add_table(new_table))) {
     LOG_WARN("failed to add table into tables handle", K(ret), K(param));
   } else if (OB_FAIL(inner_build_major_tables_(allocator, old_store, tables_handle,
-      param.multi_version_start_, allow_duplicate_sstable, inc_base_snapshot_version))) {
+      param.multi_version_start_, param.allow_duplicate_sstable_, inc_base_snapshot_version))) {
     LOG_WARN("failed to inner build major tables", K(ret), K(param), K(tables_handle));
   }
   return ret;
