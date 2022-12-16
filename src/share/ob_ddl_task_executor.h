@@ -54,6 +54,7 @@ public:
   static bool in_ddl_retry_white_list(const int ret_code)
   {
     return is_not_master(ret_code)
+      || is_stop_state(ret_code)
       || is_not_exist(ret_code)
       || is_retry(ret_code)
       || is_timeout(ret_code)
