@@ -347,9 +347,6 @@ int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
         curr_proposal_id, new_role, new_proposal_id, is_pending_state))) {
     CLOG_LOG(WARN, "ObLogHandler prepare_switch_role failed", K(ret), K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id));
-  } else if (true == is_pending_state) {
-    CLOG_LOG(INFO, "curr state of palf is follower pending, need ignore this signal", K(curr_role), K(curr_proposal_id),
-        K(new_role), K(new_proposal_id), K(is_pending_state));
   } else if (false == need_execute_role_change(curr_proposal_id, curr_role, new_proposal_id,
         new_role, is_pending_state, log_handler_is_offline)) {
     CLOG_LOG(INFO, "no need change role", K(ret), K(is_pending_state), K(curr_role), K(curr_proposal_id),
