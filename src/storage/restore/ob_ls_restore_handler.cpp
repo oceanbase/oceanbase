@@ -1230,8 +1230,8 @@ int ObILSRestoreState::check_follower_restore_finish(const share::ObLSRestoreSta
     is_finish = true;
   } else if (leader_status.is_wait_restore_major_data() && follower_status.is_restore_none()) {
     is_finish = true;
-  } else if (leader_status.get_status() + 1 == follower_status.get_status()) {
-    // when switch leader, follower may one state ahead of leader.
+  } else if (leader_status.get_status() < follower_status.get_status()) {
+    // when switch leader, follower state may ahead leader
     is_finish = true;
   }
   return ret;
