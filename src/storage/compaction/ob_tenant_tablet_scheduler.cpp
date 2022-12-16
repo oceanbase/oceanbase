@@ -913,10 +913,8 @@ int ObTenantTabletScheduler::restart_schedule_timer_task(const int64_t schedule_
   bool is_exist = false;
   if (OB_FAIL(TG_TASK_EXIST(merge_loop_tg_id_, merge_loop_task_, is_exist))) {
     LOG_ERROR("failed to check merge schedule task exist", K(ret));
-  } else if (is_exist) {
-    TG_CANCEL(merge_loop_tg_id_, merge_loop_task_);
-  }
-  if (OB_FAIL(ret)) {
+  } else if (is_exist && OB_FAIL(TG_CANCEL_R(merge_loop_tg_id_, merge_loop_task_))) {
+    LOG_WARN("failed to cancel timer task", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(merge_loop_tg_id_, merge_loop_task_, schedule_interval, true/*repeat*/))) {
     LOG_WARN("Fail to schedule minor merge scan task", K(ret));
   } else {
