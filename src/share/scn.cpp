@@ -476,7 +476,7 @@ int SCN::to_yson(char *buf, const int64_t buf_len, int64_t &pos) const
   return oceanbase::yson::databuff_encode_elements(buf, buf_len, pos, OB_ID(scn_val), val_);
 }
 
-int SCN::fixed_deserialize(const char* buf, const int64_t data_len, int64_t& pos)
+int SCN::fixed_deserialize_without_transform(const char* buf, const int64_t data_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
@@ -488,6 +488,16 @@ int SCN::fixed_deserialize(const char* buf, const int64_t data_len, int64_t& pos
     PALF_LOG(WARN, "failed to decode val_", K(buf), K(data_len), K(new_pos), K(ret));
   } else {
     pos = new_pos;
+  }
+  return ret;
+}
+
+int SCN::fixed_deserialize(const char* buf, const int64_t data_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(fixed_deserialize_without_transform(buf, data_len, pos))) {
+    PALF_LOG(WARN, "failed to fixed_deserialize_without_transform", K(buf), K(data_len), K(pos), K(ret));
+  } else {
     (void)transform_max_();
   }
   return ret;

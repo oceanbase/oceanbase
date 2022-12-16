@@ -109,6 +109,8 @@ public:
 
   //fixed length serialization
   int fixed_serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
+  //used for checksum with old value of INT64_MAX, if transforming max value, checksum will change;
+  int fixed_deserialize_without_transform(const char* buf, const int64_t data_len, int64_t& pos);
   int fixed_deserialize(const char* buf, const int64_t data_len, int64_t& pos);
   int64_t get_fixed_serialize_size(void) const;
 
