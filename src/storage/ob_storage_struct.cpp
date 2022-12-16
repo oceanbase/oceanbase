@@ -311,7 +311,6 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
   : tables_handle_(),
     snapshot_version_(0),
     multi_version_start_(0),
-    need_report_(false),
     rebuild_seq_(OB_INVALID_VERSION),
     update_logical_minor_sstable_(false),
     start_scn_(SCN::min_scn()),
@@ -323,7 +322,6 @@ void ObBatchUpdateTableStoreParam::reset()
 {
   tables_handle_.reset();
   multi_version_start_ = 0;
-  need_report_ = false;
   rebuild_seq_ = OB_INVALID_VERSION;
   update_logical_minor_sstable_ = false;
   start_scn_.set_min();
@@ -350,7 +348,6 @@ int ObBatchUpdateTableStoreParam::assign(
     LOG_WARN("failed to assign tables handle", K(ret), K(param));
   } else {
     multi_version_start_ = param.multi_version_start_;
-    need_report_ = param.need_report_;
     rebuild_seq_ = param.rebuild_seq_;
     update_logical_minor_sstable_ = param.update_logical_minor_sstable_;
     start_scn_ = param.start_scn_;
