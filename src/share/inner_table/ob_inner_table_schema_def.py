@@ -23296,6 +23296,7 @@ def_table_schema(
 # 21354 : V$OB_TRANSACTION_SCHEDULERS
 
 # 21355 : INFORMATION_SCHEMA.TRIGGERS
+# 21356 : INFORMATION_SCHEMA.PARTITIONS
 
 ################################################################################
 # Oracle System View (25000, 30000]
