@@ -605,7 +605,7 @@ OB_SERIALIZE_MEMBER(ObCopyTabletSSTableHeader,
     tablet_id_, status_, sstable_count_, tablet_meta_);
 
 ObNotifyRestoreTabletsArg::ObNotifyRestoreTabletsArg()
-  : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_array_(), restore_status_()
+  : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_array_(), restore_status_(), leader_proposal_id_(0)
 {
 }
 
@@ -614,16 +614,18 @@ void ObNotifyRestoreTabletsArg::reset()
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
   tablet_id_array_.reset();
+  leader_proposal_id_ = 0;
 }
 
 bool ObNotifyRestoreTabletsArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_
          && ls_id_.is_valid()
-         && restore_status_.is_valid();
+         && restore_status_.is_valid()
+         && leader_proposal_id_ > 0;
 }
 
-OB_SERIALIZE_MEMBER(ObNotifyRestoreTabletsArg, tenant_id_, ls_id_, tablet_id_array_, restore_status_);
+OB_SERIALIZE_MEMBER(ObNotifyRestoreTabletsArg, tenant_id_, ls_id_, tablet_id_array_, restore_status_, leader_proposal_id_);
 
 
 ObNotifyRestoreTabletsResp::ObNotifyRestoreTabletsResp()
@@ -1514,7 +1516,8 @@ int ObNotifyRestoreTabletsP::process()
       STORAGE_LOG(WARN, "I am not follower", K(ret), K(arg_));
     } else {
       ObLSRestoreHandler *ls_restore_handler = ls->get_ls_restore_handler();
-      if (OB_FAIL(ls_restore_handler->handle_pull_tablet(arg_.tablet_id_array_, arg_.restore_status_))) {
+      if (OB_FAIL(ls_restore_handler->handle_pull_tablet(
+          arg_.tablet_id_array_, arg_.restore_status_, arg_.leader_proposal_id_))) {
         LOG_WARN("fail to handle pull tablet", K(ret), K(arg_));
       } else if (OB_FAIL(ls->get_restore_status(result_.restore_status_))) {
         LOG_WARN("fail to get restore status", K(ret));

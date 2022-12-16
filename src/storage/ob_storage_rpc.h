@@ -348,11 +348,12 @@ public:
   bool is_valid() const;
   void reset();
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id_array), K_(restore_status));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id_array), K_(restore_status), K_(leader_proposal_id));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObSArray<common::ObTabletID> tablet_id_array_;
   share::ObLSRestoreStatus restore_status_; // indicate the type of data to restore
+  int64_t leader_proposal_id_;
 };
 
 struct ObNotifyRestoreTabletsResp
