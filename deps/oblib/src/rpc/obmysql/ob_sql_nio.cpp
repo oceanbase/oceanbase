@@ -589,8 +589,8 @@ public:
       ret = OB_IO_ERROR;
       LOG_WARN("epoll_create fail", K(ret), K(errno));
     } else if ((lfd_ = listen_create(port)) < 0) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("listen create fail", K(port), K(errno));
+      ret = OB_SERVER_LISTEN_ERROR;
+      LOG_WARN("listen create fail", K(ret), K(port), K(errno), KERRNOMSG(errno));
     } else if (0 != epoll_regist(epfd_, lfd_, epflag, NULL)) {
       ret = OB_IO_ERROR;
       LOG_WARN("regist listen fd fail", K(ret));
@@ -684,11 +684,11 @@ private:
       bool need_destroy = false;
       if (false == s->handler_close_been_called()) {
         if (false == s->get_may_handling_flag()) {
-          LOG_WARN("can close safely, do destroy", K(*s));
+          LOG_INFO("can close safely, do destroy", K(*s));
           need_destroy = true;
         } else {
           if (s->wait_handling()) {
-            LOG_WARN("sock ref clean, do destroy", K(*s));
+            LOG_INFO("sock ref clean, do destroy", K(*s));
             need_destroy = true;
           } else {
             LOG_WARN("wait handling done...", K(*s));
