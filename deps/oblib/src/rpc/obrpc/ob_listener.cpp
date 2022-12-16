@@ -62,32 +62,32 @@ int ObListener::listen_create(int port) {
 
   if (port <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    RPC_LOG(ERROR, "invalid param", K(port));
+    RPC_LOG(ERROR, "invalid port", K(ret), K(port));
   } else if ((fd = socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, 0)) < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_LOG(ERROR, "create socket failed!", K(errno));
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "create socket failed!", K(ret), K(fd), K(port), K(errno));
   } else if (ioctl(fd, FIONBIO, &no_block_flag) < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_LOG(ERROR, "set non block failed!", K(errno));
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "set non block failed!", K(ret), K(fd), K(port), K(errno));
   } else if (ob_listener_set_tcp_opt(fd, TCP_DEFER_ACCEPT, 1) < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_LOG(ERROR, "set tcp defer accept failed!", K(errno));
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "set tcp defer accept failed!", K(ret), K(fd), K(port), K(errno));
   } else if (ob_listener_set_opt(fd, SO_REUSEADDR, 1) < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_LOG(ERROR, "set reuse_addr fail!", K(errno));
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "set reuse_addr fail!", K(ret), K(fd), K(port), K(errno));
   }
 #ifdef SO_REUSEPORT
   else if (ob_listener_set_opt(fd, SO_REUSEPORT, 1) < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_LOG(ERROR, "set reuse port fail!", K(errno));
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "set reuse port fail!", K(fd), K(port), K(errno));
   }
 #endif
   else if (bind(fd, (sockaddr*)make_unix_sockaddr(&sin, 0, port), sizeof(sin)) < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_LOG(ERROR, "bind failed!", K(errno));
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "bind failed!", K(ret), K(fd), K(port), K(errno), KERRNOMSG(errno));
   } else if (listen(fd, 1024) < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_LOG(ERROR, "listen failed", K(errno));
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "listen failed", K(ret), K(fd), K(port), K(errno), KERRNOMSG(errno));
   }
 
   if (OB_FAIL(ret)) {
