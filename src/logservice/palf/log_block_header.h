@@ -48,7 +48,7 @@ public:
   void calc_checksum();
   bool check_integrity() const;
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(magic), K_(version), K_(min_lsn), K_(min_timestamp), K_(curr_block_id), K_(palf_id));
+  TO_STRING_KV(K_(magic), K_(version), K_(min_lsn), K_(min_timestamp), K_(max_timestamp), K_(curr_block_id), K_(palf_id));
   // 0x4942 means InfoBlock
   static constexpr int16_t MAGIC= 0x4942;
   static constexpr int16_t LOG_INFO_BLOCK_VERSION = 1;

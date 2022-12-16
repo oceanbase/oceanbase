@@ -48,6 +48,7 @@ void LogBlockHeader::reset()
   flag_ = 0;
   min_lsn_.reset();
   min_timestamp_ = OB_INVALID_TIMESTAMP;
+  max_timestamp_ = OB_INVALID_TIMESTAMP;
   curr_block_id_ = LOG_INVALID_BLOCK_ID;
   palf_id_ = INVALID_PALF_ID;
   checksum_ = 0;
