@@ -1145,7 +1145,7 @@ int ObILSRestoreState::notify_follower_restore_tablet_(const ObIArray<common::Ob
     for (int64_t i = 0; OB_SUCC(ret) && i < follower.count(); ++i) {
       const ObStorageHASrcInfo &follower_info = follower.at(i);
       if (OB_FAIL(storage_rpc->notify_restore_tablets(ls_restore_arg_->get_tenant_id(), follower_info, ls_->get_ls_id(),
-          tablet_ids, ls_restore_status_, restore_resp))) {
+          proposal_id_, tablet_ids, ls_restore_status_, restore_resp))) {
         LOG_WARN("fail to notify follower restore tablets", K(ret), K(follower_info), K(tablet_ids), KPC(ls_));
       }
     }
@@ -1185,7 +1185,7 @@ int ObILSRestoreState::request_follower_restore_status_(bool &finish)
   ObArray<ObStorageHASrcInfo> follower;
   ObLSService *ls_service = nullptr;
   ObStorageRpc *storage_rpc = nullptr;
-  obrpc::ObNotifyRestoreTabletsResp restore_resp;
+  obrpc::ObInquireRestoreResp restore_resp;
   finish = true;
   ObArray<ObTabletID> tablet_ids;
   if (OB_ISNULL(ls_service =  (MTL(ObLSService *)))) {
@@ -1201,7 +1201,8 @@ int ObILSRestoreState::request_follower_restore_status_(bool &finish)
   for (int64_t i = 0; OB_SUCC(ret) && i < follower.count(); ++i) {
     const ObStorageHASrcInfo &follower_info = follower.at(i);
     is_finish = false;
-    if (OB_FAIL(storage_rpc->notify_restore_tablets(ls_restore_arg_->get_tenant_id(), follower_info, ls_->get_ls_id(), tablet_ids, ls_restore_status_, restore_resp))) {
+    if (OB_FAIL(storage_rpc->inquire_restore(ls_restore_arg_->get_tenant_id(), follower_info, ls_->get_ls_id(),
+        ls_restore_status_, restore_resp))) {
       LOG_WARN("fail to inquire restore status", K(ret), K(follower_info), K(tablet_ids), KPC(ls_));
     } else if (OB_FAIL(check_follower_restore_finish(ls_restore_status_, restore_resp.restore_status_, is_finish))) {
       LOG_WARN("fail to check follower restore finish", K(ret), KPC(ls_), K(ls_restore_status_), K(restore_resp));

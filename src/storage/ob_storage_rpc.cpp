@@ -1551,7 +1551,7 @@ int ObInquireRestoreP::process()
     int64_t disk_abnormal_time = 0;
     bool is_follower = false;
 
-    LOG_INFO("start to inquire leader restore", K(arg_));
+    LOG_INFO("start to inquire restore status", K(arg_));
 
 #ifdef ERRSIM
     if (OB_SUCC(ret) && DEVICE_HEALTH_NORMAL == dhs && GCONF.fake_disk_error) {
@@ -1582,13 +1582,13 @@ int ObInquireRestoreP::process()
       LOG_WARN("log srv should not be null", K(ret), KP(log_srv));
     } else if (OB_FAIL(is_follower_ls(log_srv, ls, is_follower))) {
       LOG_WARN("failed to check is follower", K(ret), KP(ls), K(arg_));
+    } else if (OB_FAIL(ls->get_restore_status(result_.restore_status_))) {
+      LOG_WARN("fail to get restore status", K(ret));
     } else if (is_follower) {
       result_.tenant_id_ = arg_.tenant_id_;
       result_.ls_id_ = arg_.ls_id_;
       result_.is_leader_ = false;
-      LOG_INFO("ls may switch leader", K(result_));
-    } else if (OB_FAIL(ls->get_restore_status(result_.restore_status_))) {
-      LOG_WARN("fail to get restore status", K(ret));
+      LOG_INFO("succ to inquire restore status from follower", K(result_));
     } else {
       result_.tenant_id_ = arg_.tenant_id_;
       result_.ls_id_ = arg_.ls_id_;
@@ -1800,6 +1800,7 @@ int ObStorageRpc::notify_restore_tablets(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &follower_info,
       const share::ObLSID &ls_id,
+      const int64_t &proposal_id,
       const common::ObIArray<common::ObTabletID>& tablet_id_array,
       const share::ObLSRestoreStatus &restore_status,
       obrpc::ObNotifyRestoreTabletsResp &restore_resp)
@@ -1819,6 +1820,7 @@ int ObStorageRpc::notify_restore_tablets(
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
     arg.restore_status_ = restore_status;
+    arg.leader_proposal_id_ = proposal_id;
     if (OB_FAIL(rpc_proxy_->to(follower_info.src_addr_).dst_cluster_id(follower_info.cluster_id_).notify_restore_tablets(arg, restore_resp))) {
       LOG_WARN("failed to notify follower restore tablets", K(ret), K(arg), K(follower_info), K(ls_id), K(tablet_id_array));
     } else {
@@ -1830,7 +1832,7 @@ int ObStorageRpc::notify_restore_tablets(
 
 int ObStorageRpc::inquire_restore(
     const uint64_t tenant_id,
-    const ObStorageHASrcInfo &leader_info,
+    const ObStorageHASrcInfo &src_info,
     const share::ObLSID &ls_id,
     const share::ObLSRestoreStatus &restore_status,
     obrpc::ObInquireRestoreResp &restore_resp)
@@ -1839,18 +1841,18 @@ int ObStorageRpc::inquire_restore(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
-  } else if (!leader_info.is_valid() || !ls_id.is_valid()) {
+  } else if (!src_info.is_valid() || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "inquire leader restore get invalid argument", K(ret), K(leader_info), K(ls_id));
+    STORAGE_LOG(WARN, "inquire restore get invalid argument", K(ret), K(src_info), K(ls_id));
   } else {
     ObInquireRestoreArg arg;
     arg.tenant_id_ = tenant_id;
     arg.ls_id_ = ls_id;
     arg.restore_status_ = restore_status;
-    if (OB_FAIL(rpc_proxy_->to(leader_info.src_addr_).dst_cluster_id(leader_info.cluster_id_).inquire_restore(arg, restore_resp))) {
-      LOG_WARN("failed to inquire restore", K(ret), K(arg), K(leader_info));
+    if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_).inquire_restore(arg, restore_resp))) {
+      LOG_WARN("failed to inquire restore", K(ret), K(arg), K(src_info));
     } else {
-      FLOG_INFO("inquire leader restore successfully", K(arg), K(leader_info));
+      FLOG_INFO("inquire restore status successfully", K(arg), K(src_info));
     }
   }
   return ret;

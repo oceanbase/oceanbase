@@ -612,14 +612,15 @@ public:
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &follower_info,
       const share::ObLSID &ls_id,
+      const int64_t &proposal_id,
       const common::ObIArray<common::ObTabletID>& tablet_id_array,
       const share::ObLSRestoreStatus &restore_status,
       obrpc::ObNotifyRestoreTabletsResp &restore_resp) = 0;
 
-  // Notify follower restore from leader.
+  // inquire restore status from src.
   virtual int inquire_restore(
       const uint64_t tenant_id,
-      const ObStorageHASrcInfo &leader_info,
+      const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       const share::ObLSRestoreStatus &restore_status,
       obrpc::ObInquireRestoreResp &restore_resp) = 0;
@@ -662,14 +663,15 @@ public:
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &follower_info,
       const share::ObLSID &ls_id,
+      const int64_t &proposal_id,
       const common::ObIArray<common::ObTabletID>& tablet_id_array,
       const share::ObLSRestoreStatus &restore_status,
       obrpc::ObNotifyRestoreTabletsResp &restore_resp);
 
-  // Notify follower restore from leader.
+  // inquire restore status from src.
   virtual int inquire_restore(
       const uint64_t tenant_id,
-      const ObStorageHASrcInfo &follower_info,
+      const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
       const share::ObLSRestoreStatus &restore_status,
       obrpc::ObInquireRestoreResp &restore_resp);
