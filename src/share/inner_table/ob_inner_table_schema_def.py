@@ -10855,6 +10855,7 @@ def_table_schema(
 
 # 12362: __all_virtual_core_table
 
+# 12363: __all_virtual_malloc_sample_info
 #
 # 余留位置
 #
