@@ -158,6 +158,36 @@ int ObInsertAllStmt::get_view_check_exprs(ObIArray<ObRawExpr*>& view_check_exprs
   return ret;
 }
 
+int ObInsertAllStmt::get_all_values_vector(ObIArray<ObRawExpr*> &all_values_vector) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); ++i) {
+    ObInsertAllTableInfo* table_info = table_info_.at(i);
+    if (OB_ISNULL(table_info))  {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null table info", K(ret));
+    } else if (OB_FAIL(append(all_values_vector, table_info->values_vector_))) {
+      LOG_WARN("failed to append values vector", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObInsertAllStmt::get_all_when_cond_exprs(ObIArray<ObRawExpr*> &all_when_cond_exprs) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_info_.count(); ++i) {
+    ObInsertAllTableInfo* table_info = table_info_.at(i);
+    if (OB_ISNULL(table_info))  {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null table info", K(ret));
+    } else if (OB_FAIL(append(all_when_cond_exprs, table_info->when_cond_exprs_))) {
+      LOG_WARN("failed to append when cond exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
 int64_t ObInsertAllStmt::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;

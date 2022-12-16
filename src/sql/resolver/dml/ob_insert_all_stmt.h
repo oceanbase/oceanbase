@@ -62,6 +62,9 @@ public:
   virtual int get_dml_table_infos(ObIArray<const ObDmlTableInfo*>& dml_table_info) const override;
   virtual int get_view_check_exprs(ObIArray<ObRawExpr*>& view_check_exprs) const override;
   bool value_from_select() const { return !from_items_.empty(); }
+  int get_all_values_vector(ObIArray<ObRawExpr*> &all_values_vector) const;
+  int get_all_when_cond_exprs(ObIArray<ObRawExpr*> &all_when_cond_exprs) const;
+
   DECLARE_VIRTUAL_TO_STRING;
   // TO_STRING_KV(N_STMT_TYPE, stmt_type_,
   //     N_TABLE, table_items_,
