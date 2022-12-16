@@ -2234,6 +2234,7 @@ int ObAlterTableResolver::resolve_alter_index(const ParseNode &node)
 int ObAlterTableResolver::resolve_alter_index_parallel_oracle(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
+  ObString tmp_index_name;
   ObString index_name;
   if (T_PARALLEL != node.type_ || OB_ISNULL(node.children_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2244,8 +2245,10 @@ int ObAlterTableResolver::resolve_alter_index_parallel_oracle(const ParseNode &n
   } else if (OB_ISNULL(index_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the index schema is null", K(ret));
-  } else if (OB_FAIL(index_schema_->get_index_name(index_name))) {
+  } else if (OB_FAIL(index_schema_->get_index_name(tmp_index_name))) {
     LOG_WARN("failed get index name", K(ret));
+  } else if (OB_FAIL(deep_copy_str(tmp_index_name, index_name))) {
+    LOG_WARN("failed to deep copy new_db_name", K(ret));
   } else {
     int64_t index_dop = node.children_[0]->value_;
     LOG_DEBUG("alter index table dop",
@@ -2375,14 +2378,17 @@ int ObAlterTableResolver::resolve_rename_index(const ParseNode &node)
       } else if (OB_FAIL(ObSQLUtils::check_index_name(cs_type, tmp_new_index_name))) {
         LOG_WARN("fail to check index name", K(tmp_new_index_name), K(ret));
       } else {
+        ObString tmp_index_name;
         ObString ori_index_name;
         ObString new_index_name;
         if (lib::is_mysql_mode()) {
           ori_index_name.assign_ptr(index_node->str_value_,
                                     static_cast<int32_t>(index_node->str_len_));
         } else if (lib::is_oracle_mode()) {
-          if (OB_FAIL(index_schema_->get_index_name(ori_index_name))) {
+          if (OB_FAIL(index_schema_->get_index_name(tmp_index_name))) {
             LOG_WARN("fail to get origin index name", K(ret));
+          } else if (OB_FAIL(deep_copy_str(tmp_index_name, ori_index_name))) {
+            LOG_WARN("failed to deep copy new_db_name", K(ret));
           }
         }
         new_index_name.assign_ptr(new_name_node->str_value_, static_cast<int32_t>(new_name_node->str_len_));
@@ -2703,6 +2709,7 @@ int ObAlterTableResolver::resolve_drop_primary(const ParseNode &action_node_list
 int ObAlterTableResolver::resolve_alter_index_tablespace_oracle(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
+  ObString tmp_index_name;
   ObString index_name;
   if (T_TABLESPACE != node.type_|| OB_ISNULL(node.children_[0]) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2710,8 +2717,10 @@ int ObAlterTableResolver::resolve_alter_index_tablespace_oracle(const ParseNode 
   } else if (OB_ISNULL(index_schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the index schema is null", K(ret));
-  } else if (OB_FAIL(index_schema_->get_index_name(index_name))) {
+  } else if (OB_FAIL(index_schema_->get_index_name(tmp_index_name))) {
     LOG_WARN("failed to get index name", K(ret));
+  } else if (OB_FAIL(deep_copy_str(tmp_index_name, index_name))) {
+    LOG_WARN("failed to deep copy new_db_name", K(ret));
   } else {
     const uint64_t tenant_id = session_info_->get_effective_tenant_id();
     const ObTablespaceSchema *tablespace_schema = NULL;
