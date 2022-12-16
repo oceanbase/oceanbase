@@ -2028,71 +2028,76 @@ int ObQueryRange::pre_extract_single_in_op(const ObOpRawExpr *b_expr,
                                            const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
+  const ObOpRawExpr *r_expr = NULL;
   if (OB_ISNULL(b_expr) || OB_ISNULL(query_range_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr or query_range_ctx is null. ", K(b_expr), K_(query_range_ctx));
   } else if (2 != b_expr->get_param_count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("t_expr must be 3 argument", K(ret));
+  } else if (T_OP_ROW != b_expr->get_param_expr(1)->get_expr_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect row_expr in in_expr", K(ret));
+  } else if (OB_ISNULL(r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("r_expr is null.", K(ret));
+  } else if (r_expr->get_param_count() > MAX_RANGE_SIZE) {
+    // do not extract range over MAX_RANGE_SIZE
+    GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    query_range_ctx_->cur_expr_is_precise_ = false;
   } else {
-    const ObOpRawExpr *r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1));
-    if (NULL == r_expr) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("r_expr is null.", K(ret));
-    } else {
-      ObArenaAllocator alloc;
-      bool cur_in_is_precise = true;
-      ObKeyPart *tmp_tail = NULL;
-      ObKeyPart *find_false = NULL;
-      for (int64_t i = 0; OB_SUCC(ret) && i < r_expr->get_param_count(); i++) {
-        ObKeyPart *tmp = NULL;
-        ObExprResType res_type(alloc);
-        if (OB_FAIL(get_in_expr_res_type(b_expr, i, res_type))) {
-          LOG_WARN("get in expr element result type failed", K(ret), K(i));
-        } else if (OB_FAIL(get_basic_query_range(b_expr->get_param_expr(0),
-                                                 r_expr->get_param_expr(i),
-                                                 NULL,
-                                                 T_OP_EQ,
-                                                 res_type,
-                                                 tmp,
-                                                 dtc_params))) {
-          LOG_WARN("Get basic query range failed", K(ret));
-        } else if (OB_ISNULL(tmp) || NULL != tmp->or_next_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("tmp is null or tmp->or_next is not null", K(ret), K(tmp));
-        } else if (tmp->is_always_true()) { // find true , out_key_part -> true, ignore other
-          out_key_part = tmp;
-          cur_in_is_precise = (cur_in_is_precise && query_range_ctx_->cur_expr_is_precise_);
-          break;
-        } else if (tmp->is_always_false()) { // find false
-          find_false = tmp;
-        } else if (NULL == tmp_tail) {
-          tmp_tail = tmp;
-          out_key_part = tmp;
-        } else {
-          tmp_tail->or_next_ = tmp;
-          tmp_tail = tmp;
-        }
-        if (OB_SUCC(ret)) {
-          cur_in_is_precise = (cur_in_is_precise && query_range_ctx_->cur_expr_is_precise_);
-        }
+    ObArenaAllocator alloc;
+    bool cur_in_is_precise = true;
+    ObKeyPart *tmp_tail = NULL;
+    ObKeyPart *find_false = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < r_expr->get_param_count(); i++) {
+      ObKeyPart *tmp = NULL;
+      ObExprResType res_type(alloc);
+      if (OB_FAIL(get_in_expr_res_type(b_expr, i, res_type))) {
+        LOG_WARN("get in expr element result type failed", K(ret), K(i));
+      } else if (OB_FAIL(get_basic_query_range(b_expr->get_param_expr(0),
+                                                r_expr->get_param_expr(i),
+                                                NULL,
+                                                T_OP_EQ,
+                                                res_type,
+                                                tmp,
+                                                dtc_params))) {
+        LOG_WARN("Get basic query range failed", K(ret));
+      } else if (OB_ISNULL(tmp) || NULL != tmp->or_next_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tmp is null or tmp->or_next is not null", K(ret), K(tmp));
+      } else if (tmp->is_always_true()) { // find true , out_key_part -> true, ignore other
+        out_key_part = tmp;
+        cur_in_is_precise = (cur_in_is_precise && query_range_ctx_->cur_expr_is_precise_);
+        break;
+      } else if (tmp->is_always_false()) { // find false
+        find_false = tmp;
+      } else if (NULL == tmp_tail) {
+        tmp_tail = tmp;
+        out_key_part = tmp;
+      } else {
+        tmp_tail->or_next_ = tmp;
+        tmp_tail = tmp;
       }
       if (OB_SUCC(ret)) {
-        if (NULL != find_false && NULL == out_key_part) {
-          out_key_part = find_false;
-        }
-        query_range_ctx_->cur_expr_is_precise_ = cur_in_is_precise;
-        int64_t max_pos = -1;
-        bool is_strict_equal = true;
-        if (OB_FAIL(is_strict_equal_graph(out_key_part, out_key_part->pos_.offset_, max_pos, is_strict_equal))) {
-          LOG_WARN("is trict equal graph failed", K(ret));
-        } else if (NULL != out_key_part && !is_strict_equal) {
-          ObKeyPartList key_part_list;
-          if (OB_FAIL(split_or(out_key_part, key_part_list))) {
-            LOG_WARN("split temp_result to or_list failed", K(ret));
-          } else if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
-            LOG_WARN("or range graph failed", K(ret));
-          }
+        cur_in_is_precise = (cur_in_is_precise && query_range_ctx_->cur_expr_is_precise_);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (NULL != find_false && NULL == out_key_part) {
+        out_key_part = find_false;
+      }
+      query_range_ctx_->cur_expr_is_precise_ = cur_in_is_precise;
+      int64_t max_pos = -1;
+      bool is_strict_equal = true;
+      if (OB_FAIL(is_strict_equal_graph(out_key_part, out_key_part->pos_.offset_, max_pos, is_strict_equal))) {
+        LOG_WARN("is trict equal graph failed", K(ret));
+      } else if (NULL != out_key_part && !is_strict_equal) {
+        ObKeyPartList key_part_list;
+        if (OB_FAIL(split_or(out_key_part, key_part_list))) {
+          LOG_WARN("split temp_result to or_list failed", K(ret));
+        } else if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
+          LOG_WARN("or range graph failed", K(ret));
         }
       }
     }
@@ -2106,45 +2111,47 @@ int ObQueryRange::pre_extract_in_op(const ObOpRawExpr *b_expr,
 {
   int ret = OB_SUCCESS;
   // treat IN operation as 'left_param = right_item_1 or ... or left_param = right_item_n'
+  const ObOpRawExpr *r_expr = NULL;
   if (OB_ISNULL(b_expr) || OB_ISNULL(query_range_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr is null.", K(b_expr), K_(query_range_ctx));
   } else if (2 != b_expr->get_param_count()) {//binary op expr
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("t_expr must has 3 arguments", K(ret));
+  } else if (OB_ISNULL(r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("r_expr is null.", K(ret));
+  } else if (r_expr->get_param_count() > MAX_RANGE_SIZE) {
+    // do not extract range over MAX_RANGE_SIZE
+    GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    query_range_ctx_->cur_expr_is_precise_ = false;
   } else {
-    const ObOpRawExpr *r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1));
-    if (NULL == r_expr) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("r_expr is null.", K(ret));
-    } else {
-      ObKeyPartList key_part_list;
-      ObArenaAllocator alloc;
-      bool cur_in_is_precise = true;
-      for (int64_t i = 0; OB_SUCC(ret) && i < r_expr->get_param_count(); i++) {
-        ObKeyPart *tmp = NULL;
-        ObExprResType res_type(alloc);
-        if (OB_FAIL(get_in_expr_res_type(b_expr, i, res_type))) {
-          LOG_WARN("get in expr element result type failed", K(ret), K(i));
-        } else if (OB_FAIL(get_basic_query_range(b_expr->get_param_expr(0),
-                                                 r_expr->get_param_expr(i),
-                                                 NULL,
-                                                 T_OP_EQ,
-                                                 res_type,
-                                                 tmp,
-                                                 dtc_params))) {
-          LOG_WARN("Get basic query range failed", K(ret));
-        } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
-          LOG_WARN("push back failed", K(ret));
-        } else {
-          cur_in_is_precise = (cur_in_is_precise && query_range_ctx_->cur_expr_is_precise_);
-        }
+    ObKeyPartList key_part_list;
+    ObArenaAllocator alloc;
+    bool cur_in_is_precise = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < r_expr->get_param_count(); i++) {
+      ObKeyPart *tmp = NULL;
+      ObExprResType res_type(alloc);
+      if (OB_FAIL(get_in_expr_res_type(b_expr, i, res_type))) {
+        LOG_WARN("get in expr element result type failed", K(ret), K(i));
+      } else if (OB_FAIL(get_basic_query_range(b_expr->get_param_expr(0),
+                                                r_expr->get_param_expr(i),
+                                                NULL,
+                                                T_OP_EQ,
+                                                res_type,
+                                                tmp,
+                                                dtc_params))) {
+        LOG_WARN("Get basic query range failed", K(ret));
+      } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
+        LOG_WARN("push back failed", K(ret));
+      } else {
+        cur_in_is_precise = (cur_in_is_precise && query_range_ctx_->cur_expr_is_precise_);
       }
-      if (OB_SUCC(ret)) {
-        query_range_ctx_->cur_expr_is_precise_ = cur_in_is_precise;
-        if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
-          LOG_WARN("or range graph failed", K(ret));
-        }
+    }
+    if (OB_SUCC(ret)) {
+      query_range_ctx_->cur_expr_is_precise_ = cur_in_is_precise;
+      if (OB_FAIL(or_range_graph(key_part_list, NULL, out_key_part, dtc_params))) {
+        LOG_WARN("or range graph failed", K(ret));
       }
     }
   }
