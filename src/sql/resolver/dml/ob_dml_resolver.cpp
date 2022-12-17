@@ -4224,6 +4224,9 @@ int ObDMLResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subquer
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Too many levels of subquery");
   }
+  //resolve subquery in insert all need reset the flag.
+  bool is_multi_table_insert = params_.is_multi_table_insert_;
+  params_.is_multi_table_insert_ = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < subquery_info.count(); i++) {
     const ObSubQueryInfo &info = subquery_info.at(i);
     ObSelectResolver subquery_resolver(params_);
@@ -4245,6 +4248,7 @@ int ObDMLResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subquer
     }
     set_query_ref_expr(NULL);
   }
+  params_.is_multi_table_insert_ = is_multi_table_insert;
   return ret;
 }
 
