@@ -403,7 +403,7 @@ int ObDDLTableMergeTask::process()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ddl major sstable is null", K(ret), K(ddl_param));
       } else if (merge_param_.table_id_ > 0
-          && merge_param_.execution_id_ > 0
+          && merge_param_.execution_id_ >= 0
           && OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(merge_param_.ls_id_,
                                                           merge_param_.tablet_id_,
                                                           merge_param_.table_id_,
@@ -777,7 +777,7 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
   const ObTableSchema *table_schema = nullptr;
   const uint64_t tenant_id = MTL_ID();
   if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || OB_INVALID_ID == ddl_task_id
-        || !is_valid_id(table_id) || 0 == table_id || execution_id <= 0)) {
+        || !is_valid_id(table_id) || 0 == table_id || execution_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(table_id), K(execution_id));
   } else if (!is_valid_tenant_id(tenant_id) || OB_ISNULL(sql_proxy) || OB_ISNULL(schema_service)) {

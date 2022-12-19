@@ -38,7 +38,7 @@ public:
       const share::schema::ObTableSchema *data_table_schema,
       const share::schema::ObTableSchema *index_schema,
       const int64_t task_id,
-      const uint64_t execution_id = OB_INVALID_ID,
+      const int64_t execution_id = -1,
       const int64_t snapshot_version = OB_INVALID_VERSION);
   int check_unique_index(share::ObIDag *dag);
 private:
@@ -109,7 +109,7 @@ private:
   common::ObTabletID tablet_id_;
   const share::schema::ObTableSchema *index_schema_;
   const share::schema::ObTableSchema *data_table_schema_;
-  uint64_t execution_id_;
+  int64_t execution_id_;
   int64_t snapshot_version_;
   int64_t task_id_;
   ObTabletHandle tablet_handle_;
@@ -159,11 +159,11 @@ public:
       const bool is_scan_index,
       const uint64_t index_table_id, const int64_t schema_version,
       const int64_t task_id,
-      const uint64_t execution_id = OB_INVALID_ID,
+      const int64_t execution_id = -1,
       const int64_t snapshot_version = OB_INVALID_VERSION);
   const share::schema::ObTableSchema *get_index_schema() const { return index_schema_; }
   const share::schema::ObTableSchema *get_data_table_schema() const { return data_table_schema_; }
-  uint64_t get_execution_id() const { return execution_id_; }
+  int64_t get_execution_id() const { return execution_id_; }
   int64_t get_snapshot_version() const { return snapshot_version_; }
   int64_t get_task_id() const { return task_id_; }
   bool get_is_scan_index() const { return is_scan_index_; }
@@ -194,7 +194,7 @@ private:
   const share::schema::ObTableSchema *index_schema_;
   const share::schema::ObTableSchema *data_table_schema_;
   ObIUniqueCheckingCompleteCallback *callback_;
-  uint64_t execution_id_;
+  int64_t execution_id_;
   int64_t snapshot_version_;
   int64_t task_id_;
   lib::Worker::CompatMode compat_mode_;

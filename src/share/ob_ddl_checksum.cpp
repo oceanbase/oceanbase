@@ -207,7 +207,7 @@ int ObDDLChecksumOperator::get_column_checksum(const ObSqlString &sql, const uin
 
 int ObDDLChecksumOperator::get_table_column_checksum(
     const uint64_t tenant_id,
-    const uint64_t execution_id,
+    const int64_t execution_id,
     const uint64_t table_id,
     const int64_t ddl_task_id,
     common::hash::ObHashMap<int64_t, int64_t> &column_checksum_map,
@@ -216,7 +216,7 @@ int ObDDLChecksumOperator::get_table_column_checksum(
   int ret = OB_SUCCESS;
   ObSqlString sql;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == execution_id || OB_INVALID_ID == table_id
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || execution_id < 0 || OB_INVALID_ID == table_id
         || OB_INVALID_ID == ddl_task_id || !column_checksum_map.created())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(execution_id), K(table_id), K(ddl_task_id),
@@ -236,7 +236,7 @@ int ObDDLChecksumOperator::get_table_column_checksum(
 
 int ObDDLChecksumOperator::check_column_checksum(
     const uint64_t tenant_id,
-    const uint64_t execution_id,
+    const int64_t execution_id,
     const uint64_t data_table_id,
     const uint64_t index_table_id,
     const int64_t ddl_task_id,
@@ -247,7 +247,7 @@ int ObDDLChecksumOperator::check_column_checksum(
   hash::ObHashMap<int64_t, int64_t> data_table_column_checksums;
   hash::ObHashMap<int64_t, int64_t> index_table_column_checksums;
   is_equal = true;
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == execution_id || OB_INVALID_ID == data_table_id
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || execution_id < 0 || OB_INVALID_ID == data_table_id
         || OB_INVALID_ID == index_table_id || OB_INVALID_ID == ddl_task_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(execution_id), K(data_table_id), K(index_table_id), K(ddl_task_id));
@@ -286,7 +286,7 @@ int ObDDLChecksumOperator::check_column_checksum(
 
 int ObDDLChecksumOperator::delete_checksum(
     const uint64_t tenant_id,
-    const uint64_t execution_id,
+    const int64_t execution_id,
     const uint64_t source_table_id,
     const uint64_t dest_table_id,
     const int64_t ddl_task_id,
@@ -296,7 +296,7 @@ int ObDDLChecksumOperator::delete_checksum(
   ObSqlString sql;
   int64_t affected_rows = 0;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == execution_id || OB_INVALID_ID == ddl_task_id
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || execution_id < 0 || OB_INVALID_ID == ddl_task_id
                   || OB_INVALID_ID == source_table_id || OB_INVALID_ID == dest_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(execution_id), K(source_table_id), K(dest_table_id));

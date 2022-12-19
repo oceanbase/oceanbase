@@ -902,7 +902,7 @@ int ObDDLScheduler::recover_task()
       const ObDDLTaskRecord &cur_record = task_records.at(i);
       int64_t tenant_schema_version = 0;
       int64_t table_task_status = 0;
-      int64_t execution_id = 0;
+      int64_t execution_id = -1;
       ObMySQLTransaction trans;
       if (OB_FAIL(schema_service.get_tenant_schema_version(cur_record.tenant_id_, tenant_schema_version))) {
         LOG_WARN("failed to get tenant schema version", K(ret), K(cur_record));
@@ -1317,9 +1317,8 @@ int ObDDLScheduler::on_update_execution_id(
         K(ret), K(task_id), KPC(ddl_task));
     } else if (OB_FAIL(ddl_task->push_execution_id())) {
       LOG_WARN("fail to push execution id", K(ret), KPC(ddl_task));
-    } else {
-      ret_execution_id = ddl_task->get_execution_id();
     }
+    ret_execution_id = ddl_task->get_execution_id();  // ignore ret, if fail, take old execution id
   }
   return ret;
 }
@@ -1335,7 +1334,7 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!(task_key.is_valid() && snapshot_version > 0 && execution_id > 0))) {
+  } else if (OB_UNLIKELY(!(task_key.is_valid() && snapshot_version > 0 && execution_id >= 0))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_key), K(snapshot_version), K(execution_id), K(ret_code));
   } else {

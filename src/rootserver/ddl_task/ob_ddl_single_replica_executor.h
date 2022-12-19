@@ -36,14 +36,14 @@ public:
       snapshot_version_(0),
       task_id_(0),
       parallelism_(0),
-      execution_id_(0)
+      execution_id_(-1)
   {}
   ~ObDDLSingleReplicaExecutorParam() = default;
   bool is_valid() const {
     return common::OB_INVALID_TENANT_ID != tenant_id_ && share::DDL_INVALID != type_
            && source_tablet_ids_.count() > 0 && dest_tablet_ids_.count() > 0
            && common::OB_INVALID_ID != source_table_id_ && common::OB_INVALID_ID != dest_table_id_
-           && schema_version_ > 0 && snapshot_version_ > 0 && task_id_ > 0 && execution_id_ > 0;
+           && schema_version_ > 0 && snapshot_version_ > 0 && task_id_ > 0 && execution_id_ >= 0;
   }
   TO_STRING_KV(K_(tenant_id), K_(type), K_(source_tablet_ids), K_(dest_tablet_ids),
                K_(source_table_id), K_(dest_table_id), K_(schema_version),

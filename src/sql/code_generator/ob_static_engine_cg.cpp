@@ -6000,7 +6000,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
         if (log_plan.get_stmt()->get_table_items().count() > 0) {
           const TableItem *insert_table_item = log_plan.get_stmt()->get_table_item(0);
           if (nullptr != insert_table_item) {
-            int64_t ddl_execution_id = 0;
+            int64_t ddl_execution_id = -1;
             int64_t ddl_task_id = 0;
             const ObOptParamHint *opt_params = &log_plan.get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
             OZ(opt_params->get_integer_opt_param(ObOptParamHint::DDL_EXECUTION_ID, ddl_execution_id));

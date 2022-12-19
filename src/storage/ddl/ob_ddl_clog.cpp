@@ -265,7 +265,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObDDLClogHeader)
 }
 
 ObDDLStartLog::ObDDLStartLog()
-  : table_key_(), cluster_version_(0), execution_id_(0)
+  : table_key_(), cluster_version_(0), execution_id_(-1)
 {
 }
 

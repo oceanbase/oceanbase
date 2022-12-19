@@ -601,7 +601,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       break;
     }
     case DDL_EXECUTION_ID: {
-      is_valid = val.is_int() && (0 < val.get_int());
+      is_valid = val.is_int() && (0 <= val.get_int());
       break;
     }
     case DDL_TASK_ID: {

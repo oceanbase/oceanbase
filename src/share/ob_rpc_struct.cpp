@@ -2681,7 +2681,7 @@ OB_SERIALIZE_MEMBER(
 bool ObCalcColumnChecksumRequestArg::is_valid() const
 {
   bool bret = OB_INVALID_ID != tenant_id_ &&  OB_INVALID_ID != target_table_id_
-      && OB_INVALID_VERSION != schema_version_ && OB_INVALID_ID != execution_id_
+      && OB_INVALID_VERSION != schema_version_ && execution_id_ >= 0
       && OB_INVALID_VERSION != snapshot_version_ && OB_INVALID_ID != source_table_id_ && task_id_ > 0;
   for (int64_t i = 0; bret && i < calc_items_.count(); ++i) {
     bret = calc_items_.at(i).is_valid();
@@ -2694,9 +2694,9 @@ void ObCalcColumnChecksumRequestArg::reset()
   tenant_id_ = OB_INVALID_ID;
   target_table_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
-  execution_id_ = OB_INVALID_ID;
   snapshot_version_ = OB_INVALID_VERSION;
   source_table_id_ = OB_INVALID_ID;
+  execution_id_ = -1;
   task_id_ = 0;
   calc_items_.reset();
 }
@@ -6708,7 +6708,7 @@ OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLRedoLogArg, tenant_id_, ls_id_, redo_info
 
 ObRpcRemoteWriteDDLPrepareLogArg::ObRpcRemoteWriteDDLPrepareLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), table_key_(), start_scn_(SCN::min_scn()),
-    table_id_(0), execution_id_(0), ddl_task_id_(0)
+    table_id_(0), execution_id_(-1), ddl_task_id_(0)
 {}
 
 int ObRpcRemoteWriteDDLPrepareLogArg::init(const uint64_t tenant_id,
@@ -6721,7 +6721,7 @@ int ObRpcRemoteWriteDDLPrepareLogArg::init(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(tenant_id == OB_INVALID_ID || !ls_id.is_valid() || !table_key.is_valid() || !start_scn.is_valid_and_not_min()
-                  || table_id <= 0 || execution_id <= 0 || ddl_task_id <= 0)) {
+                  || table_id <= 0 || execution_id < 0 || ddl_task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(table_key), K(start_scn),
                                        K(table_id), K(execution_id), K(ddl_task_id));

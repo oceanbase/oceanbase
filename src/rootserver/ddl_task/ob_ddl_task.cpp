@@ -320,7 +320,7 @@ int ObDDLTask::switch_status(ObDDLTaskStatus new_status, const int ret_code)
     LOG_WARN("start transaction failed", K(ret));
   } else {
     int64_t table_task_status = 0;
-    int64_t execution_id = 0;
+    int64_t execution_id = -1;
     if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id_, task_id_, table_task_status, execution_id))) {
       LOG_WARN("select for update failed", K(ret), K(task_id_));
     } else if (old_status != task_status_) {
@@ -607,14 +607,17 @@ int ObDDLTask::push_execution_id()
       LOG_WARN("select for update failed", K(ret), K(task_id));
     } else if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id_, task_id_, table_execution_id + 1))) {
       LOG_WARN("update task status failed", K(ret));
-    } else {
-      execution_id_ = table_execution_id + 1;
     }
     bool commit = (OB_SUCCESS == ret);
     int tmp_ret = trans.end(commit);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("fail to end trans", K(tmp_ret));
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+    }
+    if (OB_SUCC(ret)) {
+      execution_id_ = table_execution_id + 1;
+    } else {
+      execution_id_ = execution_id_ >= 0 ? execution_id_ : 0; // use old execution or inner table default value(0)
     }
   }
   return ret;
@@ -1178,7 +1181,7 @@ int ObDDLWaitColumnChecksumCtx::init(
     const uint64_t target_table_id,
     const int64_t schema_version,
     const int64_t snapshot_version,
-    const uint64_t execution_id,
+    const int64_t execution_id,
     const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
@@ -1192,7 +1195,7 @@ int ObDDLWaitColumnChecksumCtx::init(
         || OB_INVALID_ID == target_table_id
         || schema_version <= 0
         || snapshot_version <= 0
-        || OB_INVALID_ID == execution_id
+        || execution_id < 0
         || timeout_us <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_id), K(tenant_id), K(source_table_id), K(target_table_id),
@@ -1248,7 +1251,7 @@ void ObDDLWaitColumnChecksumCtx::reset()
   target_table_id_ = OB_INVALID_ID;
   schema_version_ = 0;
   snapshot_version_ = 0;
-  execution_id_ = OB_INVALID_ID;
+  execution_id_ = -1;
   timeout_us_ = 0;
   last_drive_ts_ = 0;
   stat_array_.reset();
@@ -1507,7 +1510,7 @@ bool ObDDLTaskRecord::is_valid() const
     && task_version_ > 0
     && OB_INVALID_ID != object_id_
     && schema_version_ > 0
-    && execution_id_ >= 0;
+    && execution_id_ >= -1;
   return is_valid;
 }
 
@@ -1526,7 +1529,7 @@ void ObDDLTaskRecord::reset()
   message_.reset();
   task_version_ = 0;
   ret_code_ = OB_SUCCESS;
-  execution_id_ = 0;
+  execution_id_ = -1;  // -1 is invalid
 }
 
 
@@ -1612,7 +1615,7 @@ int ObDDLTaskRecordOperator::update_execution_id(
   int ret = OB_SUCCESS;
   ObSqlString sql_string;
   int64_t affected_rows = 0;
-  if (OB_ISNULL(sql_client.get_pool()) || OB_UNLIKELY(task_id <= 0 || tenant_id <= 0 || execution_id <= 0)) {
+  if (OB_ISNULL(sql_client.get_pool()) || OB_UNLIKELY(task_id <= 0 || tenant_id <= 0 || execution_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(sql_string.assign_fmt(" UPDATE %s SET execution_id=%lu WHERE task_id=%lu ",
@@ -1909,7 +1912,7 @@ int ObDDLTaskRecordOperator::insert_record(
       LOG_WARN("append hex escaped string failed", K(ret));
     } else if (OB_FAIL(sql_string.assign_fmt(
             " INSERT INTO %s (task_id, parent_task_id, tenant_id, object_id, schema_version, target_object_id, ddl_type, trace_id, status, task_version, execution_id, ret_code, ddl_stmt_str, message) "
-            " VALUES (%lu, %lu, %lu, %lu, %lu, %lu, %d, '%s', %ld, %lu, %lu, %lu, '%.*s', \"%.*s\") ",
+            " VALUES (%lu, %lu, %lu, %lu, %lu, %lu, %d, '%s', %ld, %lu, %ld, %lu, '%.*s', \"%.*s\") ",
             OB_ALL_DDL_TASK_STATUS_TNAME, record.task_id_, record.parent_task_id_,
             ObSchemaUtils::get_extract_tenant_id(record.tenant_id_, record.tenant_id_), record.object_id_, record.schema_version_,
             get_record_id(record.ddl_type_, record.target_object_id_), record.ddl_type_, trace_id_str, record.task_status_, record.task_version_, record.execution_id_, record.ret_code_,
@@ -2012,7 +2015,7 @@ int ObDDLTaskRecordOperator::select_for_update(
   int ret = OB_SUCCESS;
   ObSqlString sql_string;
   task_status = 0;
-  execution_id = 0;
+  execution_id = 0; // default in OB_ALL_DDL_TASK_STATUS_TNAME is 0
   if (OB_UNLIKELY(task_id <= 0 || tenant_id <= 0)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(tenant_id), K(task_id));
