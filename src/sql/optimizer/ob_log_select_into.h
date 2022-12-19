@@ -104,7 +104,7 @@ private:
   common::ObObj outfile_name_;
   common::ObObj filed_str_;
   common::ObObj line_str_;
-  common::ObSEArray<common::ObString, 16> user_vars_;
+  common::ObSEArray<common::ObString, 16, common::ModulePageAllocator, true> user_vars_;
   char closed_cht_;
   bool is_optional_;
 };
