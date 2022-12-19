@@ -267,6 +267,7 @@ void ObPartTransCtx::default_init_()
   clean_retain_cause_();
 
   upstream_state_ = ObTxState::INIT;
+  msg_2pc_cache_ = nullptr;
   exec_info_.reset();
   ctx_tx_data_.reset();
   sub_state_.reset();
@@ -482,11 +483,9 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
               bool unused = false;
               if (is_2pc_logging()) {
                 TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
-              } else if (OB_FAIL(do_prepare(unused))) {
+              } else if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
                 TRANS_LOG(WARN, "do prepare failed", K(ret), K(*this));
               } else {
-                set_upstream_state(ObTxState::PREPARE);
-                collected_.reset();
                 part_trans_action_ = ObPartTransAction::COMMIT;
               }
             }
@@ -1056,7 +1055,7 @@ int ObPartTransCtx::gts_elapse_callback(const MonotonicTs srr, const SCN &gts)
               KR(ret), KPC(this));
         } else if (is_follower_()) {
           TRANS_LOG(INFO, "current state is follower, do nothing", KPC(this));
-        } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::enter_pre_commit_state())) {
+        } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::try_enter_pre_commit_state())) {
           TRANS_LOG(WARN, "enter_pre_commit_state failed", K(ret), KPC(this));
         } else {
           // TODO, refine in 4.1
@@ -1065,26 +1064,6 @@ int ObPartTransCtx::gts_elapse_callback(const MonotonicTs srr, const SCN &gts)
               TRANS_LOG(ERROR, "fail to do sub prepare", K(ret), K(*this));
             }
             TRANS_LOG(INFO, "apply prepare log for sub trans", K(ret), K(*this));
-          }
-          // TODO, currently, if a trans only has one participant,
-          // the state can not be drived from pre commit to commit.
-          // Therefore, enter commit state directly.
-          const int64_t SINGLE_COUNT = 1;
-          if (SINGLE_COUNT == get_participants_size()) {
-            upstream_state_ = ObTxState::COMMIT;
-            collected_.reset();
-            // TODO, drive it and submit log via msg
-            if (OB_FAIL(do_commit())) {
-              TRANS_LOG(WARN, "do commit failed", K(ret), K(*this));
-            } else {
-              if (OB_FAIL(post_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_COMMIT_REQ))) {
-                TRANS_LOG(WARN, "post commit request failed", K(ret), K(*this));
-                ret = OB_SUCCESS;
-              }
-              if (OB_FAIL(submit_log(ObTwoPhaseCommitLogType::OB_LOG_TX_COMMIT))) {
-                TRANS_LOG(WARN, "submit commit log failed", K(ret), K(*this));
-              }
-            }
           }
         }
       }
@@ -3472,23 +3451,23 @@ int ObPartTransCtx::try_submit_next_log()
 
 bool ObPartTransCtx::is_2pc_logging() const { return is_2pc_logging_(); }
 
-uint64_t ObPartTransCtx::get_participant_id()
-{
-  int ret = OB_SUCCESS;
-  uint64_t participant_id = UINT64_MAX;
+// uint64_t ObPartTransCtx::get_participant_id()
+// {
+//   int ret = OB_SUCCESS;
+//   uint64_t participant_id = UINT64_MAX;
+//
+//   if (OB_FAIL(find_participant_id_(ls_id_, participant_id))) {
+//     TRANS_LOG(ERROR, "find participant id failed", K(*this));
+//   }
+//
+//   return participant_id;
+// }
 
-  if (OB_FAIL(find_participant_id_(ls_id_, participant_id))) {
-    TRANS_LOG(ERROR, "find participant id failed", K(*this));
-  }
-
-  return participant_id;
-}
-
-int ObPartTransCtx::find_participant_id_(const ObLSID &participant, uint64_t &participant_id)
+int ObPartTransCtx::find_participant_id_(const ObLSID &participant, int64_t &participant_id)
 {
   int ret = OB_SUCCESS;
   bool found = false;
-  participant_id = UINT64_MAX;
+  participant_id = INT64_MAX;
 
   for (int64_t i = 0; !found && i < exec_info_.participants_.count(); i++) {
     if (participant == exec_info_.participants_[i]) {
@@ -3502,16 +3481,6 @@ int ObPartTransCtx::find_participant_id_(const ObLSID &participant, uint64_t &pa
   }
 
   return ret;
-}
-
-bool ObPartTransCtx::is_root() const { return !exec_info_.upstream_.is_valid(); }
-
-bool ObPartTransCtx::is_leaf() const
-{
-  return exec_info_.participants_.empty()
-    // root must not be leaf, because the distributed txn must be composed by
-    // more than one participants.
-    && !is_root();
 }
 
 //***************************** for 4.0
@@ -3967,7 +3936,6 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
   } else if (OB_FAIL(set_app_trace_id_(commit_info_log.get_app_trace_id()))) {
     TRANS_LOG(WARN, "set app trace id error", K(ret), K(commit_info_log), K(*this));
   } else {
-    set_durable_state_(ObTxState::REDO_COMPLETE);
     set_2pc_upstream_(commit_info_log.get_upstream());
     exec_info_.xid_ = commit_info_log.get_xid();
     can_elr_ = commit_info_log.is_elr();
@@ -3993,6 +3961,9 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
     ObTwoPhaseCommitLogType two_phase_log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_MAX;
     if (is_incomplete_replay_ctx_) {
       // incomplete replay ctx will exiting by replay commit/abort/clear,  no need to depend on 2PC
+    } else if (is_local_tx_()) {
+      set_durable_state_(ObTxState::REDO_COMPLETE);
+      set_upstream_state(ObTxState::REDO_COMPLETE);
     } else if (OB_FAIL(switch_log_type_(commit_info_log.LOG_TYPE, two_phase_log_type))) {
       TRANS_LOG(WARN, "switch log type failed", KR(ret), KPC(this));
     } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::replay_log(two_phase_log_type))) {

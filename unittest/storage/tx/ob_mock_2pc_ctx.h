@@ -112,10 +112,9 @@ protected:
   // the 2pc state to the dst. Otherwise, the 2pc will invoke a cycle style commit
   // which the parent node waits for the node's 2pc state response before responsing
   // its 2pc state to his parent node.
-  virtual int64_t get_participants_size() override;
-  virtual uint64_t get_participant_id() override;
-  virtual bool is_root() const override;
-  virtual bool is_leaf() const override;
+  virtual int64_t get_downstream_size() const override;
+  virtual int64_t get_self_id() override;
+  virtual Ob2PCRole get_2pc_role() const override;
   virtual ObTxState get_downstream_state() const override;
   virtual int set_downstream_state(const ObTxState state) override;
   virtual ObTxState get_upstream_state() const override;
@@ -132,11 +131,12 @@ protected:
   virtual int submit_log(const ObTwoPhaseCommitLogType& log_type) override;
   // The msg poster is best effort, so we need rely on the timeout handler to retry the last
   // message should be sent
-  virtual int post_msg(const ObTwoPhaseCommitMsgType& msg_type) override;
+  // virtual int post_msg(const ObTwoPhaseCommitMsgType& msg_type) override;
   virtual int post_msg(const ObTwoPhaseCommitMsgType& msg_type,
-                       const uint8_t participant_id) override;
+                       const int64_t participant_id) override;
 private:
   int64_t find_participant_id(int64_t participant_key);
+  virtual int apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type) override;
 
 private:
   common::ObSpinLock latch_;
