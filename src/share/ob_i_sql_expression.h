@@ -148,8 +148,7 @@ public:
      session_(NULL),
      udf_meta_(NULL),
      cast_mode_(CM_NONE),
-     raw_expr_(NULL),
-     cur_row_idx_(0)
+     raw_expr_(NULL)
   {}
 
   inline ObCollationType get_coll_type() const {
@@ -196,9 +195,6 @@ public:
 
   void set_raw_expr(sql::ObRawExpr *expr) { raw_expr_ = expr; }
   sql::ObRawExpr *get_raw_expr() { return raw_expr_; }
-
-  inline void set_cur_row_idx(int64_t cur_row_idx) { cur_row_idx_ = cur_row_idx; }
-  inline int64_t get_cur_row_idx() { return cur_row_idx_; }
 
   TO_STRING_KV(K_(coll_type),
                K_(div_precision_increment),
