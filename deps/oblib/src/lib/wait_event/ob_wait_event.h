@@ -351,6 +351,8 @@ WAIT_EVENT_DEF(MAX_APPLY_SCN_WAIT, 16053, "max apply scn lock wait", "", "", "",
 WAIT_EVENT_DEF(GC_HANDLER_WAIT, 16054, "gc handler lock wait", "", "", "", CONCURRENCY, "GC_HANDLER_WAIT", true)
 WAIT_EVENT_DEF(FREEZE_THREAD_POOL_WAIT, 16055, "freeze thread pool wait", "", "", "", CONCURRENCY, "FREEZE_THREAD_POOL_WAIT", true)
 
+// WAIT_EVENT_DEF(TENANT_MGR_TENANT_BUCKET_LOCK_WAIT, 16056, "tenant mgr tenant bucket lock wait", "", "", "", CONCURRENCY, "TENANT_MGR_TENANT_BUCKET_LOCK_WAIT", true)
+
 //replication group
 WAIT_EVENT_DEF(RG_TRANSFER_LOCK_WAIT, 17000, "transfer lock wait", "src_rg", "dst_rg", "transfer_pkey", CONCURRENCY, "transfer lock wait", false)
 
