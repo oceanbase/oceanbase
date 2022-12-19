@@ -499,7 +499,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("error unexpected, ddl type is not supported", K(ret), K(param.type_));
     }
-    LOG_INFO("create ddl task", K(param), K(task_record));
+    LOG_INFO("create ddl task", K(ret), K(param), K(task_record));
   }
   return ret;
 }
@@ -1429,7 +1429,7 @@ int ObDDLScheduler::on_ddl_task_finish(
       ret = OB_ERR_SYS;
       LOG_WARN("ddl task must not be nullptr", K(ret));
     } else if (FALSE_IT(redefinition_task = static_cast<ObDDLRedefinitionTask *>(ddl_task))) {
-    } else if (OB_FAIL(redefinition_task->on_child_task_finish(child_task_key, ret_code))) {
+    } else if (OB_FAIL(redefinition_task->on_child_task_finish(child_task_key.object_id_, ret_code))) {
       LOG_WARN("on child task finish failed", K(ret), K(child_task_key));
     }
   }

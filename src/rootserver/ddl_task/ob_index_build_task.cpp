@@ -977,7 +977,7 @@ int ObIndexBuildTask::update_complete_sstable_job_status(
     sstable_complete_ts_ = ObTimeUtility::current_time();
     execution_id_ = execution_id; // update ObIndexBuildTask::execution_id_ from ObIndexSSTableBuildTask::execution_id_
   }
-  LOG_INFO("update complete sstable job return code", K(ret), K(tablet_id), K(snapshot_version), K(ret_code), K(execution_id_));
+  LOG_INFO("update complete sstable job return code", K(ret), K(target_object_id_), K(tablet_id), K(snapshot_version), K(ret_code), K(execution_id_));
   return ret;
 }
 
