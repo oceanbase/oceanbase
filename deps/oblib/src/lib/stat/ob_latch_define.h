@@ -299,6 +299,8 @@ LATCH_DEF(DEADLOCK_DETECT_LOCK, 288, "deadlock detect lock", LATCH_FIFO, 2000, 0
 LATCH_DEF(FREEZE_THREAD_POOL_LOCK, 289, "freeze thread pool lock", LATCH_FIFO, 2000, 0, FREEZE_THREAD_POOL_WAIT, "freeze thread pool lock")
 LATCH_DEF(DAS_ASYNC_RPC_LOCK, 290, "das wait remote response lock", LATCH_FIFO, 2000, 0, DAS_ASYNC_RPC_LOCK_WAIT, "das wait remote response lock")
 
+// LATCH_DEF(TENANT_MGR_TENANT_BUCKET_LOCK, 290, "tenant mgr tenant bucket lock", LATCH_READ_PREFER, INT64_MAX, 0, TENANT_MGR_TENANT_BUCKET_LOCK_WAIT, "tenant mgr tenant bucket lock")
+
 LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif
 
