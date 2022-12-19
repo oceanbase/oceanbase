@@ -269,6 +269,10 @@ private:
   int64_t small_file_prealloc_size();
   int64_t big_file_prealloc_size();
   int64_t find_first_extent(const int64_t offset);
+  void update_extent_idx_cache(const int64_t last_extent_id,
+                               const int64_t last_extent_min_offset,
+                               const int64_t last_extent_max_offset);
+  int64_t get_extent_idx_from_cache(const int64_t offset) const;
 
 private:
   // NOTE:
@@ -286,6 +290,7 @@ private:
   int64_t last_extent_id_;
   int64_t last_extent_min_offset_;
   int64_t last_extent_max_offset_;
+  common::SpinRWLock extent_idx_lock_;
   common::SpinRWLock lock_;
   bool is_inited_;
 
