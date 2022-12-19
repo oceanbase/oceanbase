@@ -131,22 +131,19 @@ int ObTenantMetaMemMgr::init()
 {
   int ret = OB_SUCCESS;
   lib::ObMemAttr mem_attr(tenant_id_, "MetaAllocator", ObCtxIds::META_OBJ_CTX_ID);
-  const int64_t mem_limit = get_tenant_memory_limit(tenant_id_);
-  const int64_t min_bkt_cnt = DEFAULT_BUCKET_NUM;
-  const int64_t max_bkt_cnt = 10000000L;
-  const int64_t tablet_bucket_num = std::min(std::max((mem_limit / (1024 * 1024 * 1024)) * 50000, min_bkt_cnt), max_bkt_cnt);
-  const int64_t bucket_num = common::hash::cal_next_prime(tablet_bucket_num);
+  const int64_t bucket_num = cal_adaptive_bucket_num();
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantMetaMemMgr has been initialized", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::BLOCK_MANAGER_LOCK))) {
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::BLOCK_MANAGER_LOCK, "T3MBucket",
+      tenant_id_))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(),
       OB_MALLOC_NORMAL_BLOCK_SIZE, mem_attr))) {
     LOG_WARN("fail to init tenant fifo allocator", K(ret));
-  } else if (OB_FAIL(tablet_map_.init(bucket_num, "TabletMap", TOTAL_LIMIT, HOLD_LIMIT,
+  } else if (OB_FAIL(tablet_map_.init(bucket_num, tenant_id_, "TabletMap", TOTAL_LIMIT, HOLD_LIMIT,
         common::OB_MALLOC_NORMAL_BLOCK_SIZE))) {
-    LOG_WARN("fail to initialize tablet map", K(ret));
+    LOG_WARN("fail to initialize tablet map", K(ret), K(bucket_num));
   } else if (OB_FAIL(last_min_minor_sstable_set_.create(DEFAULT_MINOR_SSTABLE_SET_COUNT))) {
     LOG_WARN("fail to create last min minor sstable set", K(ret));
   } else if (pinned_tablet_set_.create(DEFAULT_BUCKET_NUM)) {
@@ -1012,32 +1009,6 @@ int ObTenantMetaMemMgr::get_tablet_pointer_tx_data(
   return ret;
 }
 
-int ObTenantMetaMemMgr::set_tablet_pointer_tx_data(
-    const ObTabletMapKey &key,
-    const ObTabletTxMultiSourceDataUnit &tx_data)
-{
-  int ret = OB_SUCCESS;
-  ObTabletPointerHandle ptr_handle(tablet_map_);
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
-  } else if (OB_UNLIKELY(!key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(key));
-  } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
-    LOG_WARN("failed to get ptr handle", K(ret), K(key));
-  } else {
-    ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(ptr_handle.get_resource_ptr());
-    if (OB_ISNULL(tablet_ptr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet ptr is NULL", K(ret), K(ptr_handle));
-    } else if (OB_FAIL(tablet_ptr->set_tx_data(tx_data))) {
-      LOG_WARN("failed to set tx data in tablet pointer", K(ret), K(key), K(tx_data));
-    }
-  }
-  return ret;
-}
-
 int ObTenantMetaMemMgr::get_tablet_ddl_kv_mgr(
     const ObTabletMapKey &key,
     ObDDLKvMgrHandle &ddl_kv_mgr_handle)
@@ -1066,6 +1037,17 @@ int ObTenantMetaMemMgr::get_tablet_ddl_kv_mgr(
     }
   }
   return ret;
+}
+
+int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
+{
+  const int64_t mem_limit = get_tenant_memory_limit(tenant_id_);
+  const int64_t min_bkt_cnt = DEFAULT_BUCKET_NUM;
+  const int64_t max_bkt_cnt = 1000000L;
+  const int64_t tablet_bucket_num = std::min(std::max((mem_limit / (1024 * 1024 * 1024)) * 50000, min_bkt_cnt), max_bkt_cnt);
+  const int64_t bucket_num = common::hash::cal_next_prime(tablet_bucket_num);
+  LOG_INFO("cal adaptive bucket num", K(mem_limit), K(min_bkt_cnt), K(max_bkt_cnt), K(tablet_bucket_num), K(bucket_num));
+  return bucket_num;
 }
 
 int ObTenantMetaMemMgr::get_meta_mem_status(common::ObIArray<ObTenantMetaMemStatus> &info) const
@@ -1154,8 +1136,8 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(new_handle.get_obj()->set_tx_data_in_tablet_pointer())) {
-    LOG_WARN("failed to set tx data in tablet pointer", K(ret), K(key));
+  } else if (OB_FAIL(new_handle.get_obj()->update_msd_cache_on_pointer())) {
+    LOG_WARN("failed to update msd cache in tablet pointer", K(ret), K(key));
   }
   return ret;
 }

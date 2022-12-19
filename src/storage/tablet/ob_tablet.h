@@ -358,7 +358,9 @@ public:
       const bool for_replay,
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
       const bool is_callback = false);
-  int set_tx_data_in_tablet_pointer();
+  int update_msd_cache_on_pointer();
+  int get_redefined_schema_version_in_tablet_pointer(int64_t &schema_version) const;
+  int set_redefined_schema_version_in_tablet_pointer(const int64_t schema_version);
   int set_memtable_clog_checkpoint_scn(
       const ObMigrationTabletParam *tablet_meta);
 

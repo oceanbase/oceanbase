@@ -1114,7 +1114,8 @@ int ObTmpFileManager::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpFileManager has not been inited", K(ret));
-  } else if (OB_FAIL(files_.init(DEFAULT_BUCKET_NUM, ObModIds::OB_TMP_FILE_MANAGER,
+  } else if (OB_FAIL(files_.init(DEFAULT_BUCKET_NUM, OB_SERVER_TENANT_ID,
+      ObModIds::OB_TMP_FILE_MANAGER,
       TOTAL_LIMIT, HOLD_LIMIT, BLOCK_SIZE))) {
     STORAGE_LOG(WARN, "fail to init map for temporary files", K(ret));
   } else if (OB_FAIL(OB_TMP_FILE_STORE.init())) {

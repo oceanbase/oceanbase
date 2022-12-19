@@ -21,6 +21,7 @@
 #include "lib/container/ob_id_map.h"
 #include "lib/utility/utility.h"
 #include "lib/allocator/ob_fifo_allocator.h"
+#include "ob_clock_generator.h"
 
 DEFINE_HAS_MEMBER(RP_MAX_FREE_LIST_NUM);
 
@@ -154,7 +155,7 @@ public:
         ret = &(node->data);
         node->magic = ALLOC_MAGIC_NUM;
       }
-      const int64_t cur_ts = ObTimeUtility::fast_current_time();
+      const int64_t cur_ts = ObClockGenerator::getClock();
       if (cur_ts - last_check_ts_ > CHECK_INTERVAL &&
           ATOMIC_BCAS(&updating_, 0, 1)) {
         int64_t n = 0;

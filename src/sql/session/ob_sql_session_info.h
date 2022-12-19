@@ -466,6 +466,7 @@ public:
                                  enable_bloom_filter_(true),
                                  at_type_(ObAuditTrailType::NONE),
                                  sort_area_size_(128*1024*1024),
+                                 print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  session_(session)
     {
@@ -478,6 +479,7 @@ public:
     bool get_enable_sql_extension() const { return enable_sql_extension_; }
     ObAuditTrailType get_at_type() const { return at_type_; }
     int64_t get_sort_area_size() const { return ATOMIC_LOAD(&sort_area_size_); }
+    int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -487,6 +489,8 @@ public:
     bool enable_bloom_filter_;
     ObAuditTrailType at_type_;
     int64_t sort_area_size_;
+    // for record sys config print_sample_ppm
+    int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
     ObSQLSessionInfo *session_;
   };
@@ -918,6 +922,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_sort_area_size();
+  }
+  int64_t get_tenant_print_sample_ppm()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_print_sample_ppm();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);

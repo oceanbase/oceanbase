@@ -77,7 +77,7 @@ int ObTxDataMemtableMgr::init(const common::ObTabletID &tablet_id,
 
 void ObTxDataMemtableMgr::destroy()
 {
-  SpinWLockGuard guard(lock_);
+  MemMgrWLockGuard guard(lock_);
   reset_tables();
   ls_id_ = 0;
   tablet_id_ = 0;
@@ -139,7 +139,7 @@ int ObTxDataMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
     ret = OB_ERR_NULL_VALUE;
     STORAGE_LOG(WARN, "slice_allocator_ has not been set.");
   } else {
-    SpinWLockGuard lock_guard(lock_);
+    MemMgrWLockGuard lock_guard(lock_);
     if (OB_FAIL(create_memtable_(clog_checkpoint_scn, schema_version))) {
       STORAGE_LOG(WARN, "create memtable fail.", KR(ret));
     } else {
@@ -201,7 +201,7 @@ int ObTxDataMemtableMgr::freeze()
     ret = OB_ERR_NULL_VALUE;
     STORAGE_LOG(WARN, "slice_allocator_ has not been set.", KR(ret), KP(slice_allocator_));
   } else {
-    SpinWLockGuard lock_guard(lock_);
+    MemMgrWLockGuard lock_guard(lock_);
     if (OB_FAIL(freeze_())) {
       STORAGE_LOG(WARN, "freeze tx data memtable fail.", KR(ret));
     } else {
@@ -280,7 +280,7 @@ int ObTxDataMemtableMgr::freeze_()
 int ObTxDataMemtableMgr::get_active_memtable(ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   if (0 == memtable_tail_) {
     ret = OB_EAGAIN;
     STORAGE_LOG(INFO, "tx data memtable is not created yet. try agagin.", K(ret), K(memtable_tail_));
@@ -318,7 +318,7 @@ int ObTxDataMemtableMgr::get_all_memtables_(ObTableHdlArray &handles)
 int ObTxDataMemtableMgr::get_all_memtables(ObTableHdlArray &handles)
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   if (OB_FAIL(get_all_memtables_(handles))) {
     handles.reset();
     STORAGE_LOG(WARN, "get all memtables failed.", KR(ret));
@@ -329,7 +329,7 @@ int ObTxDataMemtableMgr::get_all_memtables(ObTableHdlArray &handles)
 int ObTxDataMemtableMgr::get_all_memtables_with_range(ObTableHdlArray &handles, int64_t &memtable_head, int64_t &memtable_tail)
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   if (OB_FAIL(get_all_memtables_(handles))) {
     handles.reset();
     STORAGE_LOG(WARN, "get all memtables failed.", KR(ret));
@@ -343,7 +343,7 @@ int ObTxDataMemtableMgr::get_all_memtables_with_range(ObTableHdlArray &handles, 
 int ObTxDataMemtableMgr::get_all_memtables_for_write(ObTxDataMemtableWriteGuard &write_guard)
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
     int64_t real_idx = get_memtable_idx(i);
     write_guard.handles_[i - memtable_head_].reset();
@@ -461,7 +461,7 @@ bool ObTxDataMemtableMgr::is_flushing() const
 int ObTxDataMemtableMgr::get_memtable_range(int64_t &memtable_head, int64_t &memtable_tail)
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   memtable_head = memtable_head_;
   memtable_tail = memtable_tail_;
   return ret;

@@ -19,6 +19,7 @@
 #include "lib/utility/ob_print_utils.h"                  // databuff_printf
 #include "lib/container/ob_fixed_array.h"                // ObFixedArray
 #include "share/ob_force_print_log.h"                    // force_print
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {
@@ -258,9 +259,9 @@ struct TimeoutChecker
 inline bool palf_reach_time_interval(const int64_t interval, int64_t &warn_time)
 {
   bool bool_ret = false;
-  if ((common::ObTimeUtility::current_time() - warn_time >= interval) ||
+  if ((ObClockGenerator::getClock() - warn_time >= interval) ||
       common::OB_INVALID_TIMESTAMP == warn_time) {
-    warn_time = common::ObTimeUtility::current_time();
+    warn_time = ObClockGenerator::getClock();
     bool_ret = true;
   }
   return bool_ret;

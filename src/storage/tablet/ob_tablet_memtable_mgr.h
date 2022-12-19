@@ -134,6 +134,7 @@ private:
 
 private:
   ObLS *ls_; //8B
+  common::SpinRWLock lock_def_; //8B
   ObStorageSchemaRecorder schema_recorder_;// 136B
 };
 }

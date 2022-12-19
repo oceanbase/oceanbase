@@ -140,7 +140,7 @@ const static char OB_SIMPLE_ITERATOR_LABEL_FOR_TX_ID[] = "ObTxCtxMgr";
 typedef common::ObSimpleIterator<ObTransID, OB_SIMPLE_ITERATOR_LABEL_FOR_TX_ID, 16> ObTxIDIterator;
 
 // LogStream Transaction Context Manager
-class ObLSTxCtxMgr: public ObLSTxCtxMgrHashValue
+class ObLSTxCtxMgr: public ObTransHashLink<ObLSTxCtxMgr>
 {
 // ut
   friend class unittest::TestTxCtxTable;
@@ -319,6 +319,12 @@ public:
   // @param [in] fd
   int dump_single_tx_data_2_text(const int64_t tx_id, FILE *fd);
 
+  // check this ObLSTxCtxMgr contains the specified ObLSID
+  bool contain(const share::ObLSID &ls_id)
+  {
+    return ls_id_ == ls_id;
+  }
+
 public:
   // Increase this ObLSTxCtxMgr's total_tx_ctx_count
   void inc_total_tx_ctx_count() { (void)ATOMIC_AAF(&total_tx_ctx_count_, 1); }
@@ -487,7 +493,7 @@ public:
                K_(aggre_rec_scn),
                K_(prev_aggre_rec_scn),
                "uref",
-               (!is_inited_ ? -1 : get_uref()));
+               (!is_inited_ ? -1 : get_ref()));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLSTxCtxMgr);
 
@@ -779,8 +785,8 @@ public:
   }
 };
 
-typedef common::ObLinkHashMap<share::ObLSID, ObLSTxCtxMgr,
-        ObLSTxCtxMgrAlloc, common::RefHandle> ObLSTxCtxMgrMap;
+typedef transaction::ObTransHashMap<share::ObLSID, ObLSTxCtxMgr,
+        ObLSTxCtxMgrAlloc, common::ObQSyncLock> ObLSTxCtxMgrMap;
 
 class ObTxCtxMgr
 {

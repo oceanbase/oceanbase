@@ -652,7 +652,7 @@ int ObMemtable::exist(
   ObQueryFlag query_flag;
   query_flag.read_latest_ = true;
   query_flag.prewarm_ = false;
-  get_begin(ctx.mvcc_acc_ctx_);
+  //get_begin(ctx.mvcc_acc_ctx_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(*this), K(ret));
@@ -693,7 +693,7 @@ int ObMemtable::exist(
     TRANS_LOG(DEBUG, "Check memtable exist rowkey, ", K(table_id), K(rowkey), K(is_exist),
         K(has_found));
   }
-  get_end(ctx.mvcc_acc_ctx_, ret);
+  //get_end(ctx.mvcc_acc_ctx_, ret);
   return ret;
 }
 
@@ -2276,7 +2276,7 @@ int ObMemtable::set_(ObStoreCtx &ctx,
   ObMemtableKey mtk;
   auto *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
 
-  set_begin(ctx.mvcc_acc_ctx_);
+  //set_begin(ctx.mvcc_acc_ctx_);
 
   if (OB_FAIL(tmp_key.assign(new_row.row_val_.cells_,
           read_info.get_schema_rowkey_count()))) {
@@ -2361,7 +2361,7 @@ int ObMemtable::set_(ObStoreCtx &ctx,
         "store_ctx", ctx);
   }
 
-  set_end(ctx.mvcc_acc_ctx_, ret);
+  //set_end(ctx.mvcc_acc_ctx_, ret);
   if (OB_SUCC(ret)) {
     set_max_schema_version(ctx.table_version_);
   }

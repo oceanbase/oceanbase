@@ -26,11 +26,13 @@ public:
   ObQSyncLock() : write_flag_(0) {}
   ~ObQSyncLock() {}
   int init(const lib::ObMemAttr &mem_attr);
+  bool is_inited() const { return qsync_.is_inited(); }
   void destroy();
   int rdlock();
   void rdunlock();
   int wrlock();
   void wrunlock();
+  int try_rdlock();
 private:
   int64_t write_flag_ CACHE_ALIGNED;
   common::ObDynamicQSync qsync_;

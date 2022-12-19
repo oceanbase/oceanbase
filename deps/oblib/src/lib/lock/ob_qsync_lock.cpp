@@ -28,20 +28,15 @@ void ObQSyncLock::destroy()
 
 int ObQSyncLock::rdlock()
 {
+  int ret = common::OB_SUCCESS;
+
   do {
-    if (OB_UNLIKELY(0 != ATOMIC_LOAD(&write_flag_))) {
+    if (common::OB_EAGAIN == (ret = try_rdlock())) {
       sched_yield();
-    } else {
-      const int64_t idx = qsync_.acquire_ref();
-      if (OB_UNLIKELY(0 != ATOMIC_LOAD(&write_flag_))) {
-        qsync_.release_ref(idx);
-        sched_yield();
-      } else {
-        break;
-      }
     }
-  } while (true);
-  return common::OB_SUCCESS;
+  } while (common::OB_EAGAIN == ret);
+
+  return ret;
 }
 
 void ObQSyncLock::rdunlock()
@@ -70,5 +65,21 @@ void ObQSyncLock::wrunlock()
   ATOMIC_STORE(&write_flag_, 0);
 }
 
+int ObQSyncLock::try_rdlock()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 != ATOMIC_LOAD(&write_flag_))) {
+    ret = OB_EAGAIN;
+  } else {
+    const int64_t idx = qsync_.acquire_ref();
+    if (OB_UNLIKELY(0 != ATOMIC_LOAD(&write_flag_))) {
+      qsync_.release_ref(idx);
+      ret = OB_EAGAIN;
+    } else {
+      // success, do nothing
+    }
+  }
+  return ret;
+}
 }
 }

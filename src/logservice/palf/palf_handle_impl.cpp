@@ -359,7 +359,7 @@ int PalfHandleImpl::submit_log(
     SCN &scn)
 {
   int ret = OB_SUCCESS;
-  const int64_t curr_ts_us = common::ObTimeUtility::current_time();
+  const int64_t curr_ts_us = ObClockGenerator::getClock();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret));

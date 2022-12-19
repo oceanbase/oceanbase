@@ -13,6 +13,8 @@
 #ifndef OCEANBASE_STORAGE_OB_I_MEMTABLE_MGR
 #define OCEANBASE_STORAGE_OB_I_MEMTABLE_MGR
 
+#include "lib/lock/ob_spin_rwlock.h"
+#include "lib/lock/ob_qsync_lock.h"
 #include "storage/ob_i_table.h"
 #include "storage/memtable/ob_multi_source_data.h"
 #include "storage/ob_storage_schema_recorder.h"
@@ -35,11 +37,164 @@ class ObFreezer;
 
 using ObTableHdlArray = common::ObIArray<ObTableHandleV2>;
 
+enum LockType
+{
+  OB_LOCK_UNKNOWN = 0,
+  OB_SPIN_RWLOCK,
+  OB_QSYNC_LOCK,
+  OB_LOCK_MAX
+};
+
+class MemtableMgrLock
+{
+public:
+  MemtableMgrLock(const LockType lock_type, void *lock) : lock_type_(lock_type), lock_(lock) {}
+  ~MemtableMgrLock() { reset(); }
+  void reset()
+  {
+    lock_type_ = LockType::OB_LOCK_UNKNOWN;
+    lock_ = NULL;
+  }
+
+  bool is_valid() const
+  {
+    return NULL != lock_
+          && (lock_type_ > OB_LOCK_UNKNOWN && lock_type_ < OB_LOCK_MAX)
+          && (OB_QSYNC_LOCK == lock_type_ ? static_cast<common::ObQSyncLock *>(lock_)->is_inited() : true);
+  }
+
+  int rdlock()
+  {
+    int ret = OB_SUCCESS;
+
+    if (!is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock or lock_type", K(ret), K_(lock_type), KP_(lock));
+    } else if (lock_type_ == OB_QSYNC_LOCK) {
+      ret = static_cast<common::ObQSyncLock *>(lock_)->rdlock();
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      ret = static_cast<common::SpinRWLock *>(lock_)->rdlock();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock_type", K(ret), K_(lock_type));
+    }
+    return ret;
+  }
+
+  void rdunlock()
+  {
+    if (lock_type_ == OB_QSYNC_LOCK) {
+      static_cast<common::ObQSyncLock *>(lock_)->rdunlock();
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      static_cast<common::SpinRWLock *>(lock_)->unlock();
+    } else {
+      STORAGE_LOG(ERROR, "unexpected lock_type", K_(lock_type));
+    }
+  }
+
+  int try_wrlock()
+  {
+    int ret = OB_SUCCESS;
+
+    if (!is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock or lock_type", K(ret), K_(lock_type), KP_(lock));
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      ret = static_cast<common::SpinRWLock *>(lock_)->try_wrlock();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock_type", K(ret), K_(lock_type));
+    }
+    return ret;
+  }
+
+  int wrlock()
+  {
+    int ret = OB_SUCCESS;
+
+    if (!is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock or lock_type", K(ret), K_(lock_type), KP_(lock));
+    } else if (lock_type_ == OB_QSYNC_LOCK) {
+      ret = static_cast<common::ObQSyncLock *>(lock_)->wrlock();
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      ret = static_cast<common::SpinRWLock *>(lock_)->wrlock();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected lock_type", K(ret), K_(lock_type));
+    }
+    return ret;
+  }
+
+  void wrunlock()
+  {
+    if (lock_type_ == OB_QSYNC_LOCK) {
+      static_cast<common::ObQSyncLock *>(lock_)->wrunlock();
+    } else if (lock_type_ == LockType::OB_SPIN_RWLOCK) {
+      static_cast<common::SpinRWLock *>(lock_)->unlock();
+    } else {
+      STORAGE_LOG(ERROR, "unexpected lock_type", K_(lock_type));
+    }
+  }
+
+private:
+  LockType lock_type_;
+  void *lock_;
+};
+
+class MemMgrRLockGuard
+{
+public:
+  explicit MemMgrRLockGuard(const MemtableMgrLock &lock)
+      : lock_(const_cast<MemtableMgrLock&>(lock)), ret_(OB_SUCCESS)
+  {
+    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock()))) {
+      COMMON_LOG(WARN, "Fail to read lock, ", K_(ret));
+    }
+  }
+  ~MemMgrRLockGuard()
+  {
+    if (OB_LIKELY(OB_SUCCESS == ret_)) {
+      lock_.rdunlock();
+    }
+  }
+  inline int get_ret() const { return ret_; }
+private:
+  MemtableMgrLock &lock_;
+  int ret_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(MemMgrRLockGuard);
+};
+
+class MemMgrWLockGuard
+{
+public:
+  explicit MemMgrWLockGuard(const MemtableMgrLock &lock)
+      : lock_(const_cast<MemtableMgrLock &>(lock)), ret_(OB_SUCCESS)
+  {
+    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock()))) {
+      COMMON_LOG(WARN, "Fail to write lock, ", K_(ret));
+    }
+  }
+  ~MemMgrWLockGuard()
+  {
+    if (OB_LIKELY(OB_SUCCESS == ret_)) {
+      lock_.wrunlock();
+    }
+  }
+  inline int get_ret() const { return ret_; }
+private:
+  MemtableMgrLock &lock_;
+  int ret_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(MemMgrWLockGuard);
+};
+
 class ObIMemtableMgr
 {
 
 public:
-  ObIMemtableMgr()
+  ObIMemtableMgr(const LockType lock_type, void *lock)
     : is_inited_(false),
       ref_cnt_(0),
       tablet_id_(),
@@ -48,7 +203,7 @@ public:
       memtable_head_(0),
       memtable_tail_(0),
       t3m_(nullptr),
-      lock_(common::ObLatchIds::TABLET_MEMTABLE_LOCK)
+      lock_(lock_type, lock)
   {
     memset(tables_, 0, sizeof(tables_));
   }
@@ -61,6 +216,7 @@ public:
       logservice::ObLogHandler *log_handler,
       ObFreezer *freezer,
       ObTenantMetaMemMgr *t3m);
+
   virtual int create_memtable(const share::SCN clog_checkpoint_scn,
                               const int64_t schema_version,
                               const bool for_replay = false)
@@ -101,7 +257,7 @@ public:
 
   bool has_memtable()
   {
-    SpinRLockGuard lock_guard(lock_);
+    MemMgrRLockGuard lock_guard(lock_);
     return has_memtable_();
   }
 
@@ -151,7 +307,6 @@ protected:
                    const share::ObLSID &ls_id,
                    ObFreezer *freezer,
                    ObTenantMetaMemMgr *t3m) = 0;
-
 protected:
   bool is_inited_;
   volatile int64_t ref_cnt_;
@@ -163,7 +318,7 @@ protected:
   int64_t memtable_tail_;
   ObTenantMetaMemMgr *t3m_;
   memtable::ObIMemtable *tables_[MAX_MEMSTORE_CNT];
-  mutable common::SpinRWLock lock_;
+  mutable MemtableMgrLock lock_;
 };
 
 class ObMemtableMgrHandle final

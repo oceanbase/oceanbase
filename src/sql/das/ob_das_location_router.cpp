@@ -317,12 +317,25 @@ int ObDASTabletMapper::get_non_partition_tablet_id(ObIArray<ObTabletID> &tablet_
                                                    ObIArray<ObObjectID> &out_part_ids)
 {
   int ret = OB_SUCCESS;
-  ObNewRange range;
-  // here need whole range, for virtual table calc tablet and object id
-  range.set_whole_range();
-  OZ(get_tablet_and_object_id(PARTITION_LEVEL_ZERO, OB_INVALID_ID,
-                              range, tablet_ids, out_part_ids));
-
+  if (is_non_partition_optimized_) {
+    if (OB_FAIL(tablet_ids.push_back(tablet_id_))) {
+      LOG_WARN("failed to push back tablet ids", K(ret));
+    } else if (OB_FAIL(out_part_ids.push_back(object_id_))) {
+      LOG_WARN("failed to push back partition ids", K(ret));
+    } else {
+      DASRelatedTabletMap *map = static_cast<DASRelatedTabletMap *>(related_info_.related_map_);
+      if (OB_NOT_NULL(map) && OB_NOT_NULL(related_list_)
+          && OB_FAIL(map->get_list().assign(*related_list_))) {
+        LOG_WARN("failed to assign related map list", K(ret));
+      }
+    }
+  } else {
+    ObNewRange range;
+    // here need whole range, for virtual table calc tablet and object id
+    range.set_whole_range();
+    OZ(get_tablet_and_object_id(PARTITION_LEVEL_ZERO, OB_INVALID_ID,
+                                range, tablet_ids, out_part_ids));
+  }
   return ret;
 }
 

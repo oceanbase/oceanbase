@@ -75,6 +75,7 @@ private:
 
 private:
   share::ObLSID ls_id_;
+  common::ObQSyncLock lock_def_;
 };
 
 } // namespace tablelock

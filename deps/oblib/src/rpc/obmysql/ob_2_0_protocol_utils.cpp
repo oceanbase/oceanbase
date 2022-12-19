@@ -310,7 +310,7 @@ int ObProto20Utils::encode_new_extra_info(char *buffer, int64_t length, int64_t 
       ret = OB_SIZE_OVERFLOW;
       OB_LOG(WARN,"buffer size overflow", K(ret), K(pos), K(length));
     } else {
-      MEMSET(buffer+pos, 0x00, length-pos);
+      //MEMSET(buffer+pos, 0x00, length-pos);
       pos += 4;
 
       for (int64_t i = 0; OB_SUCC(ret) && i < extra_info->count(); i++) {

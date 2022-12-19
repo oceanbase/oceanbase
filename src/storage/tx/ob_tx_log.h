@@ -910,6 +910,66 @@ private:
   ObTransID tx_id_;
 };
 
+class ObTxAdaptiveLogBuf
+{
+public:
+  ObTxAdaptiveLogBuf() : buf_(NULL), use_default_buf_(false)
+  {
+    default_buf_[0]='\0';
+  }
+  ~ObTxAdaptiveLogBuf() { reset(); }
+  int init(const bool use_local_buf)
+  {
+    int ret = OB_SUCCESS;
+
+    if (use_local_buf) {
+      // for performance optimization
+      use_default_buf_ = true;
+    } else {
+      if (OB_ISNULL(buf_ = ClogBufFactory::alloc())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        TRANS_LOG(ERROR, "alloc clog buffer error", KR(ret));
+      } else {
+        use_default_buf_ = false;
+      }
+    }
+
+    return ret;
+  }
+  void reset()
+  {
+    if (NULL != buf_) {
+      ClogBufFactory::release(buf_);
+      buf_ = NULL;
+    }
+    default_buf_[0]='\0';
+    use_default_buf_ = false;
+  }
+  char *get_buf()
+  {
+    char *buf = NULL;
+
+    if (use_default_buf_) {
+      buf = default_buf_;
+    } else if (NULL != buf_) {
+      buf = buf_->get_buf();
+    }
+    return buf;
+  }
+  int64_t get_length() const
+  {
+    return use_default_buf_ ? DEFAULT_MIN_LOG_BUF_SIZE : common::OB_MAX_LOG_ALLOWED_SIZE;
+  }
+  bool is_use_local_buf() const { return use_default_buf_; }
+  TO_STRING_KV(KP_(buf), K_(use_default_buf));
+public:
+  static const int64_t DEFAULT_MIN_LOG_BUF_SIZE = 2048;
+private:
+  ClogBuf *buf_;
+  char default_buf_[DEFAULT_MIN_LOG_BUF_SIZE];
+  bool use_default_buf_;
+};
+
 class ObTxLogBlock
 {
 public:
@@ -921,17 +981,18 @@ public:
   ObTxLogBlock();
   void reset();
   void reuse(const int64_t replay_hint, const ObTxLogBlockHeader &block_header);
-  int init(const int64_t replay_hint, const ObTxLogBlockHeader &block_header); // init before fill
-  int init_with_header(
-      const char *buf,
-      const int64_t &size,
-      int64_t &replay_hint,
-      ObTxLogBlockHeader &block_header); // init before replay , unused , only for test
+  int init(const int64_t replay_hint,
+           const ObTxLogBlockHeader &block_header,
+           const bool use_local_buf = false);
+  int init_with_header(const char *buf,
+                       const int64_t &size,
+                       int64_t &replay_hint,
+                       ObTxLogBlockHeader &block_header);
   int init(const char *buf,
            const int64_t &size,
            int skip_pos,
            ObTxLogBlockHeader &block_header); // init before replay
-  ~ObTxLogBlock();
+  ~ObTxLogBlock() { reset(); }
   int get_next_log(ObTxLogHeader &header);
   const ObTxCbArgArray &get_cb_arg_array() const { return cb_arg_array_; }
   template <typename T>
@@ -948,7 +1009,8 @@ public:
   int rewrite_barrier_log_block(int64_t replay_hint,
                                 const enum logservice::ObReplayBarrierType barrier_type);
 
-  TO_STRING_KV(KP(fill_buf_),
+  bool is_use_local_buf() const { return fill_buf_.is_use_local_buf(); }
+  TO_STRING_KV(K(fill_buf_),
                KP(replay_buf_),
                K(len_),
                K(pos_),
@@ -957,7 +1019,7 @@ public:
 
 public:
   // get fill buf for submit log
-  char *get_buf();
+  char *get_buf() { return fill_buf_.get_buf(); }
   const int64_t &get_size() { return pos_; }
 private:
   int serialize_log_block_header_(const int64_t replay_hint, const ObTxLogBlockHeader &block_header);
@@ -966,7 +1028,7 @@ private:
                               // DESERIALIZE_HEADER in ob_unify_serialize.h)
   DISALLOW_COPY_AND_ASSIGN(ObTxLogBlock);
 
-  ClogBuf *fill_buf_;
+  ObTxAdaptiveLogBuf fill_buf_;
   const char *replay_buf_;
   int64_t len_;
   int64_t pos_;
@@ -979,7 +1041,7 @@ int ObTxLogBlock::deserialize_log_body(T &tx_log_body)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_pos = pos_;
-  if (OB_ISNULL(replay_buf_) || OB_NOT_NULL(fill_buf_)) {
+  if (OB_ISNULL(replay_buf_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(*this));
   } else if (T::LOG_TYPE != cur_log_type_) {
@@ -1000,7 +1062,7 @@ int ObTxLogBlock::add_new_log(T &tx_log_body)
   int ret = OB_SUCCESS;
   int64_t tmp_pos = pos_;
   ObTxLogHeader header(T::LOG_TYPE);
-  if (OB_NOT_NULL(replay_buf_) || (OB_ISNULL(fill_buf_))) {
+  if ((OB_ISNULL(fill_buf_.get_buf()))) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(*this));
   } else if (T::LOG_TYPE == ObTxLogType::TX_REDO_LOG) {
@@ -1013,9 +1075,9 @@ int ObTxLogBlock::add_new_log(T &tx_log_body)
   } else if (ObTxLogType::TX_REDO_LOG == cur_log_type_) {
     ret = OB_EAGAIN;
     TRANS_LOG(WARN, "MutatorBuf is using");
-  } else if (OB_FAIL(header.serialize(fill_buf_->get_buf(), len_, tmp_pos))) {
+  } else if (OB_FAIL(header.serialize(fill_buf_.get_buf(), len_, tmp_pos))) {
     TRANS_LOG(WARN, "serialize log header error", K(ret), K(header), K(*this));
-  } else if (OB_FAIL(tx_log_body.serialize(fill_buf_->get_buf(), len_, tmp_pos))) {
+  } else if (OB_FAIL(tx_log_body.serialize(fill_buf_.get_buf(), len_, tmp_pos))) {
     TRANS_LOG(WARN, "serialize tx_log_body error", K(ret), K(tx_log_body), K(*this));
   } else {
     // do nothing

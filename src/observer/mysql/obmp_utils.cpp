@@ -341,7 +341,15 @@ int ObMPUtils::init_flt_info(Ob20ExtraInfo extra_info,
                               session));
     extra_info.get_full_link_trace().reset();
   }
-  OZ(init_flt_log_framework(session, is_client_support_flt));
+
+  if (session.get_control_info().is_valid()){
+    OZ(init_flt_log_framework(session, is_client_support_flt));
+  } else {
+    FLT_SET_TRACE_LEVEL(0);
+    FLT_SET_AUTO_FLUSH(false);
+    session.set_auto_flush_trace(false);
+    session.set_trace_enable(false);
+  }
 
   return ret;
 }
@@ -357,12 +365,10 @@ int ObMPUtils::append_flt_extra_info(common::ObIAllocator &allocator,
   int size = 0;
   FLTQueryInfo query_info;
 
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(sess.get_effective_tenant_id()));
-
   // reserver memory for control info
   // if sys config in control info and sys parameter has modified, resend this control info.
   if (sess.get_control_info().is_valid_sys_config()
-        && !((sess.get_control_info().print_sample_pct_ == ((double)(tenant_config->_print_sample_ppm))/1000000)
+        && !((sess.get_control_info().print_sample_pct_ == ((double)(sess.get_tenant_print_sample_ppm()))/1000000)
         && (sess.get_control_info().slow_query_thres_ == GCONF.trace_log_slow_query_watermark))) {
     sess.set_send_control_info(false);
   }
@@ -394,7 +400,7 @@ int ObMPUtils::append_flt_extra_info(common::ObIAllocator &allocator,
       if (!con.is_valid()) {
         con.reset();
       }
-      con.print_sample_pct_ = ((double)(tenant_config->_print_sample_ppm))/1000000;
+      con.print_sample_pct_ = ((double)(sess.get_tenant_print_sample_ppm()))/1000000;
       con.slow_query_thres_ = GCONF.trace_log_slow_query_watermark;
 
       sess.set_flt_control_info(con);
@@ -575,8 +581,7 @@ int ObMPUtils::init_flt_log_framework(sql::ObSQLSessionInfo &sess, bool is_clien
       FLTControlInfo con = sess.get_control_info();
       if (con.is_valid()) {
         // init trace enable
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(sess.get_effective_tenant_id()));
-        con.print_sample_pct_ = ((double)(tenant_config->_print_sample_ppm))/1000000;
+        con.print_sample_pct_ = ((double)(sess.get_tenant_print_sample_ppm()))/1000000;
         ObRandom r;
         double rand_num = 1.0 * (r.rand(0, RAND_MAX)/RAND_MAX);
         if (rand_num < con.sample_pct_) {

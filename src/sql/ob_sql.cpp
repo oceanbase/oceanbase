@@ -2774,6 +2774,18 @@ int ObSql::code_generate(
         } // for end
       }
     }
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < tbl_part_infos.count(); i++) {
+        ObTableLocation &tl = tbl_part_infos.at(i)->get_table_location();
+        if (tl.is_partitioned() || is_virtual_table(tl.get_loc_meta().ref_table_id_)) {
+          continue;
+        } else if (OB_FAIL(tl.calc_not_partitioned_table_ids(result.get_exec_context()))) {
+          LOG_WARN("failed to calc not partitioned table ids", K(ret));
+        } else {
+          tl.set_is_non_partition_optimized(true);
+        }
+      }
+    }
     // set table location for phy_plan
     if (OB_SUCC(ret)) {
       if (OB_FAIL(phy_plan->set_table_locations(tbl_part_infos, *sql_ctx.schema_guard_))) {

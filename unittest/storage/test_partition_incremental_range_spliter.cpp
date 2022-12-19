@@ -29,6 +29,11 @@ namespace storage
 using namespace blocksstable;
 using namespace common;
 
+int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
+{
+  return 1000;
+}
+
 static int get_number(const char *str, const char *&endpos, int64_t &num)
 {
   int ret = OB_SUCCESS;

@@ -37,8 +37,7 @@ public:
                  bool &update);
   int update_gts_and_check_barrier(const MonotonicTs srr,
                                    const int64_t gts,
-                                   const MonotonicTs receive_gts_ts,
-                                   bool &is_cross_barrier);
+                                   const MonotonicTs receive_gts_ts);
   int update_gts(const int64_t gts, bool &update);
   int get_gts(int64_t &gts) const;
   MonotonicTs get_latest_srr() const { return MonotonicTs(ATOMIC_LOAD(&latest_srr_.mts_)); }
@@ -46,16 +45,13 @@ public:
   int get_gts(const MonotonicTs stc, int64_t &gts, MonotonicTs &receive_gts_ts, bool &need_send_rpc) const;
   int get_srr_and_gts_safe(MonotonicTs &srr, int64_t &gts, MonotonicTs &receive_gts_ts) const;
   int update_latest_srr(const MonotonicTs latest_srr);
-  int update_base_ts(const int64_t base_ts);
 
-  TO_STRING_KV(K_(srr), K_(gts), K_(barrier_ts), K_(latest_srr));
+  TO_STRING_KV(K_(srr), K_(gts), K_(latest_srr));
 private:
   // send rpc request timestamp
   MonotonicTs srr_;
   // The latest local gts value is always less than or equal to the gts leader
   int64_t gts_;
-  // next timestamp
-  int64_t barrier_ts_;
   MonotonicTs latest_srr_;
   // receive gts
   MonotonicTs receive_gts_ts_;

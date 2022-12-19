@@ -100,7 +100,6 @@ int MockObTxCtx::init(const ObLSID &ls_id,
     // self end
     ObPartTransCtx::addr_.parse_from_cstring("127.0.0.1:3001");
     ObPartTransCtx::addr_.set_port(3001 + (int32_t)ls_id.id());
-    need_del_ctx_ = false;
     is_inited_ = true;
   }
 

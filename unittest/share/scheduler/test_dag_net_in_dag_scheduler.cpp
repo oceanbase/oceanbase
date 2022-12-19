@@ -49,6 +49,15 @@ namespace oceanbase
 using namespace common;
 using namespace share;
 using namespace omt;
+
+namespace storage
+{
+int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
+{
+  return 1000;
+}
+}
+
 namespace unittest
 {
 

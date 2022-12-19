@@ -52,10 +52,12 @@ public:
   virtual int64_t get_deep_copy_size() const override;
 
   INHERIT_TO_STRING_KV("ObMetaPointer", ObMetaPointer, K_(ls_handle), K_(ddl_kv_mgr_handle),
-      K_(memtable_mgr_handle), K_(ddl_info));
+      K_(memtable_mgr_handle), K_(ddl_info), K_(redefined_schema_version));
 public:
   int set_tx_data(const ObTabletTxMultiSourceDataUnit &tx_data);
   int get_tx_data(ObTabletTxMultiSourceDataUnit &tx_data) const;
+  int set_redefined_schema_version(const int64_t schema_version);
+  int get_redefined_schema_version(int64_t &schema_version) const;
   int create_ddl_kv_mgr(const share::ObLSID &ls_id, const ObTabletID &tablet_id, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   void get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
@@ -69,6 +71,7 @@ private:
   ObMemtableMgrHandle memtable_mgr_handle_;
   ObTabletDDLInfo ddl_info_;
   ObTabletTxMultiSourceDataUnit tx_data_;
+  int64_t redefined_schema_version_;
   common::ObThreadCond cond_;
   mutable common::TCRWLock msd_lock_;
   lib::ObMutex ddl_kv_mgr_lock_;

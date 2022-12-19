@@ -205,14 +205,14 @@ int ObLogHandler::append(const void *buffer,
   PalfAppendOptions opts;
   opts.need_nonblock = need_nonblock;
   opts.need_check_proposal_id = true;
-  const int64_t begin_ts = common::ObTimeUtility::current_time();
+  ObTimeGuard tg("ObLogHandler::append", 100000);
   while (true) {
     // generate opts
     opts.proposal_id = ATOMIC_LOAD(&proposal_id_);
     do {
       RLockGuard guard(lock_);
       CriticalGuard(ls_qs_);
-      cb->set_append_start_ts(ObTimeUtility::fast_current_time());
+      cb->set_append_start_ts(ObClockGenerator::getClock());
       if (IS_NOT_INIT) {
         ret = OB_NOT_INIT;
       } else if (is_in_stop_state_ || is_offline_) {
@@ -224,7 +224,7 @@ int ObLogHandler::append(const void *buffer,
           CLOG_LOG(WARN, "palf_handle_ append failed", K(ret), KPC(this));
         }
       } else {
-        cb->set_append_finish_ts(ObTimeUtility::fast_current_time());
+        cb->set_append_finish_ts(ObClockGenerator::getClock());
         cb->__set_lsn(lsn);
         cb->__set_scn(scn);
         ret = apply_status_->push_append_cb(cb);
@@ -249,8 +249,7 @@ int ObLogHandler::append(const void *buffer,
       break;
     }
   }
-  const int64_t cost_ts = common::ObTimeUtility::current_time() - begin_ts;
-  append_cost_stat_.stat(cost_ts);
+  append_cost_stat_.stat(tg.get_diff());
   return ret;
 }
 

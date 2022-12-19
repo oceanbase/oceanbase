@@ -269,8 +269,6 @@ protected:
   bool has_pending_callback_;
   // whether the trans can release locks early
   bool can_elr_;
-  // del part ctx from hashmap after unlock to avoid deadlock between foreach/remove_if and del
-  bool need_del_ctx_;
   // inc opid before ctx unlocked
   int64_t opid_;
 

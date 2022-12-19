@@ -25,6 +25,7 @@
 #include "sql/engine/px/ob_granule_util.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "lib/hash/ob_pointer_hashmap.h"
+#include "sql/das/ob_das_location_router.h"
 //#include "sql/resolver/ddl/ob_alter_table_stmt.h"
 
 namespace oceanbase
@@ -41,6 +42,7 @@ class ObColumnRefRawExpr;
 class ObExprEqualCheckContext;
 class ObDASTabletMapper;
 class ObDASCtx;
+class DASRelatedTabletMap;
 typedef common::ObSEArray<int64_t, 1> RowkeyArray;
 class ObPartIdRowMapManager
 {
@@ -491,7 +493,11 @@ public:
     is_valid_temporal_subpart_range_(false),
     is_link_(false),
     is_part_range_get_(false),
-    is_subpart_range_get_(false)
+    is_subpart_range_get_(false),
+    is_non_partition_optimized_(false),
+    tablet_id_(ObTabletID::INVALID_TABLET_ID),
+    object_id_(OB_INVALID_ID),
+    related_list_(allocator_)
   {
   }
 
@@ -535,7 +541,11 @@ public:
     is_valid_temporal_subpart_range_(false),
     is_link_(false),
     is_part_range_get_(false),
-    is_subpart_range_get_(false)
+    is_subpart_range_get_(false),
+    is_non_partition_optimized_(false),
+    tablet_id_(ObTabletID::INVALID_TABLET_ID),
+    object_id_(OB_INVALID_ID),
+    related_list_(allocator_)
   {
   }
   virtual ~ObTableLocation() { reset(); }
@@ -665,6 +675,12 @@ public:
 
   bool is_partitioned() const { return is_partitioned_; }
 
+  void set_is_non_partition_optimized(bool is_non_partition_optimized) {
+    is_non_partition_optimized_ = is_non_partition_optimized;
+  }
+
+  bool is_non_partition_optimized() const { return is_non_partition_optimized_; }
+
   share::schema::ObPartitionLevel get_part_level() const { return part_level_; }
 
   const stmt::StmtType &get_stmt_type() const { return stmt_type_; }
@@ -741,6 +757,8 @@ public:
                                           ObExecContext &exec_ctx,
                                           const bool is_dml_table = true,
                                           bool is_link = false);
+
+  int calc_not_partitioned_table_ids(ObExecContext &exec_ctx);
 
   TO_STRING_KV(K_(loc_meta),
                K_(part_projector),
@@ -1131,6 +1149,11 @@ private:
   bool is_link_;   //used to identify whether the table is a link_table
   bool is_part_range_get_;
   bool is_subpart_range_get_;
+
+  bool is_non_partition_optimized_;
+  ObTabletID tablet_id_;
+  ObObjectID object_id_;
+  common::ObList<DASRelatedTabletMap::MapEntry, common::ObIAllocator> related_list_;
 };
 
 }

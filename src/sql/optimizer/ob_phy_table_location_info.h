@@ -80,7 +80,7 @@ class ObCandiTabletLoc
 {
 public:
   ObCandiTabletLoc();
-  virtual ~ObCandiTabletLoc();
+  ~ObCandiTabletLoc();
 
   void reset();
   int assign(const ObCandiTabletLoc &other);

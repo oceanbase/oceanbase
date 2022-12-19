@@ -920,11 +920,8 @@ const int32_t ObTxLogBlock::DEFAULT_BIG_ROW_BLOCK_SIZE =
 
 void ObTxLogBlock::reset()
 {
-  if (nullptr != fill_buf_) {
-    ClogBufFactory::release(fill_buf_);
-  }
+  fill_buf_.reset();
   replay_buf_ = nullptr;
-  fill_buf_ = nullptr;
   len_ = pos_ = 0;
   cur_log_type_ = ObTxLogType::UNKNOWN;
   cb_arg_array_.reset();
@@ -941,22 +938,27 @@ void ObTxLogBlock::reuse(const int64_t replay_hint, const ObTxLogBlockHeader &bl
   }
 }
 
-ObTxLogBlock::ObTxLogBlock() : fill_buf_(nullptr), replay_buf_(nullptr)
+ObTxLogBlock::ObTxLogBlock() : replay_buf_(nullptr),
+                               len_(0),
+                               pos_(0),
+                               cur_log_type_(ObTxLogType::UNKNOWN),
+                               cb_arg_array_()
 {
-  reset();
+  // do nothing
 }
 
-int ObTxLogBlock::init(const int64_t replay_hint, const ObTxLogBlockHeader &block_header)
+int ObTxLogBlock::init(const int64_t replay_hint,
+                       const ObTxLogBlockHeader &block_header,
+                       const bool use_local_buf)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(replay_buf_) || OB_NOT_NULL(fill_buf_) || !block_header.is_valid()) {
+  if (OB_NOT_NULL(replay_buf_) || !block_header.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(replay_hint), K(*this), K(block_header));
-  } else if (OB_ISNULL(fill_buf_ = ClogBufFactory::alloc())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    TRANS_LOG(ERROR, "alloc clog buffer error", KR(ret));
+  } else if (OB_FAIL(fill_buf_.init(use_local_buf))) {
+    TRANS_LOG(WARN, "fill log buffer init error", K(ret), K(replay_hint), K(block_header), K(use_local_buf));
   } else {
-    len_ = fill_buf_->get_size();
+    len_ = fill_buf_.get_length();
     pos_ = 0;
     if (OB_FAIL(serialize_log_block_header_(replay_hint, block_header))) {
       ret = OB_SERIALIZE_ERROR;
@@ -972,8 +974,9 @@ int ObTxLogBlock::init_with_header(const char *buf,
                                    ObTxLogBlockHeader &block_header)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(replay_buf_) || OB_NOT_NULL(fill_buf_)
-      || OB_ISNULL(buf) || size <= 0) {
+  if (OB_NOT_NULL(replay_buf_)
+      || OB_ISNULL(buf)
+      || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(buf), K(size), K(*this));
   } else {
@@ -991,8 +994,7 @@ int ObTxLogBlock::init_with_header(const char *buf,
 int ObTxLogBlock::init(const char *buf, const int64_t &size, int skip_pos, ObTxLogBlockHeader &block_header)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(replay_buf_) || OB_NOT_NULL(fill_buf_)
-      || OB_ISNULL(buf) || size <= 0) {
+  if (OB_ISNULL(buf) || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(buf), K(size), K(*this));
   } else {
@@ -1015,20 +1017,21 @@ int ObTxLogBlock::rewrite_barrier_log_block(int64_t replay_hint,
   char *serialize_buf = nullptr;
   logservice::ObLogBaseHeader header(logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE,
                                      barrier_type, replay_hint);
-  if (OB_ISNULL(fill_buf_) || OB_NOT_NULL(replay_buf_)) {
+  if (OB_ISNULL(fill_buf_.get_buf())) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    serialize_buf = fill_buf_->get_buf();
+    serialize_buf = fill_buf_.get_buf();
   }
 
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_ISNULL(serialize_buf)) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "unexpected empty serialize_buf", KP(serialize_buf), K(*this));
+    TRANS_LOG(WARN, "unexpected empty serialize_buf", K(*this));
   } else if (OB_FAIL(header.serialize(serialize_buf, len_, tmp_pos))) {
     TRANS_LOG(WARN, "serialize log base header error", K(ret));
   }
+
 
   return ret;
 }
@@ -1040,10 +1043,10 @@ int ObTxLogBlock::serialize_log_block_header_(const int64_t replay_hint,
   char *serialize_buf = nullptr;
   logservice::ObLogBaseHeader header(logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE,
                                      logservice::ObReplayBarrierType::NO_NEED_BARRIER, replay_hint);
-  if (OB_ISNULL(fill_buf_) || OB_NOT_NULL(replay_buf_) || pos_ != 0) {
+  if (OB_ISNULL(fill_buf_.get_buf()) || pos_ != 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    serialize_buf = fill_buf_->get_buf();
+    serialize_buf = fill_buf_.get_buf();
   }
 
   if (OB_FAIL(ret)) {
@@ -1053,11 +1056,10 @@ int ObTxLogBlock::serialize_log_block_header_(const int64_t replay_hint,
     TRANS_LOG(WARN, "unexpected empty serialize_buf", K(*this));
   } else if (OB_FAIL(header.serialize(serialize_buf, len_, pos_))) {
     TRANS_LOG(WARN, "serialize log base header error", K(ret));
-  // } else if (OB_FAIL(block_header.before_serialize())) {
-  //   TRANS_LOG(WARN, "block header before serialize failed", K(ret));
   } else if (OB_FAIL(block_header.serialize(serialize_buf, len_, pos_))) {
     TRANS_LOG(WARN, "serialize block header error", K(ret));
   }
+
   return ret;
 }
 
@@ -1065,7 +1067,7 @@ int ObTxLogBlock::deserialize_log_block_header_(int64_t &replay_hint, ObTxLogBlo
 {
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader header;
-  if (OB_ISNULL(replay_buf_) || OB_NOT_NULL(fill_buf_) || pos_ != 0) {
+  if (OB_ISNULL(replay_buf_) || pos_ != 0) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(header.deserialize(replay_buf_, len_, pos_))) {
     TRANS_LOG(WARN, "deserialize log base header error", K(ret),K(len_),K(pos_));
@@ -1077,20 +1079,10 @@ int ObTxLogBlock::deserialize_log_block_header_(int64_t &replay_hint, ObTxLogBlo
   return ret;
 }
 
-ObTxLogBlock::~ObTxLogBlock()
-{
-  reset();
-  // if (nullptr != fill_buf_) {
-  //   ClogBufFactory::release(fill_buf_);
-  // }
-  // fill_buf_ = nullptr;
-  // replay_buf_ = nullptr;
-}
-
 int ObTxLogBlock::get_next_log(ObTxLogHeader &header)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(replay_buf_) || OB_NOT_NULL(fill_buf_)) {
+  if (OB_ISNULL(replay_buf_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(*this));
   } else if (OB_SUCC(update_next_log_pos_())) {
@@ -1104,20 +1096,11 @@ int ObTxLogBlock::get_next_log(ObTxLogHeader &header)
   return ret;
 }
 
-char *ObTxLogBlock::get_buf()
-{
-  char *tmp_buf = nullptr;
-  if (OB_NOT_NULL(fill_buf_)) {
-    tmp_buf = fill_buf_->get_buf();
-  }
-  return tmp_buf;
-}
-
 int ObTxLogBlock::prepare_mutator_buf(ObTxRedoLog &redo)
 {
   int ret = OB_SUCCESS;
   char *tmp_buf = get_buf();
-  if (OB_ISNULL(tmp_buf) || OB_NOT_NULL(replay_buf_)) {
+  if (OB_ISNULL(tmp_buf)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(*this));
   } else if (ObTxLogType::TX_REDO_LOG == cur_log_type_) {
@@ -1142,7 +1125,7 @@ int ObTxLogBlock::finish_mutator_buf(ObTxRedoLog &redo, const int64_t &mutator_s
   int64_t tmp_pos = pos_;
   char * tmp_buf = get_buf();
   ObTxLogHeader header(ObTxLogType::TX_REDO_LOG);
-  if (OB_ISNULL(tmp_buf) || OB_NOT_NULL(replay_buf_)) {
+  if (OB_ISNULL(tmp_buf)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(*this));
   } else if (ObTxLogType::TX_REDO_LOG != cur_log_type_) {

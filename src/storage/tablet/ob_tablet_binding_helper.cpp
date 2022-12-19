@@ -670,6 +670,8 @@ int ObTabletBindingHelper::modify_tablet_binding_for_unbind(
           info.schema_version_ = arg.schema_version_;
           if (OB_FAIL(tablet->set_multi_data_for_commit(info, scn, for_replay, MemtableRefOp::NONE))) {
             LOG_WARN("failed to save tablet binding info", K(ret));
+          } else if (OB_FAIL(tablet->set_redefined_schema_version_in_tablet_pointer(info.schema_version_))) {
+            LOG_WARN("failed to set redefined schema version in tablet pointer", K(ret));
           }
         }
       }
@@ -693,14 +695,12 @@ int ObTabletBindingHelper::check_schema_version(ObTabletHandle &handle, const in
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = handle.get_obj();
-  TCRWLock &lock = tablet->get_rw_lock();
-  TCRLockGuard guard(lock);
-  ObTabletBindingInfo info;
-  if (OB_FAIL(tablet->get_ddl_data(info))) {
+  int64_t redefined_schema_version = OB_INVALID_VERSION;
+  if (OB_FAIL(tablet->get_redefined_schema_version_in_tablet_pointer(redefined_schema_version))) {
     LOG_WARN("failed to get tablet binding info", K(ret));
-  } else if (OB_UNLIKELY(schema_version < info.schema_version_)) {
+  } else if (OB_UNLIKELY(schema_version < redefined_schema_version)) {
     ret = OB_SCHEMA_EAGAIN;
-    LOG_WARN("use stale schema before ddl", K(ret), K(tablet->get_tablet_meta().tablet_id_), K(info.schema_version_), K(schema_version));
+    LOG_WARN("use stale schema before ddl", K(ret), K(tablet->get_tablet_meta().tablet_id_), K(redefined_schema_version), K(schema_version));
   }
   return ret;
 }

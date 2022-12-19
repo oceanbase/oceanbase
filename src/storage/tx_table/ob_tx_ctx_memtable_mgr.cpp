@@ -40,7 +40,6 @@ int ObTxCtxMemtableMgr::init(const common::ObTabletID &tablet_id,
   t3m_ = t3m;
   table_type_ = ObITable::TableType::TX_CTX_MEMTABLE;
   is_inited_ = true;
-
   LOG_INFO("tx ctx memtable mgr init successfully", K(ls_id), K(tablet_id), K(this));
 
   return ret;
@@ -53,7 +52,7 @@ void ObTxCtxMemtableMgr::destroy()
 
 void ObTxCtxMemtableMgr::reset()
 {
-  SpinWLockGuard lock_guard(lock_);
+  MemMgrWLockGuard lock_guard(lock_);
   reset_tables();
   freezer_ = NULL;
   is_inited_ = false;
@@ -74,7 +73,7 @@ int ObTxCtxMemtableMgr::create_memtable(const SCN last_replay_scn,
   ObTxCtxMemtable *tx_ctx_memtable = nullptr;
   ObLSTxService *ls_tx_svr = nullptr;
 
-  SpinWLockGuard lock_guard(lock_);
+  MemMgrWLockGuard lock_guard(lock_);
 
   table_key.table_type_ = ObITable::TX_CTX_MEMTABLE;
   table_key.tablet_id_ = ObTabletID(ObTabletID::LS_TX_CTX_TABLET_ID);
@@ -136,7 +135,7 @@ int64_t ObTxCtxMemtableMgr::to_string(char *buf, const int64_t buf_len) const
 
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
-    SpinRLockGuard lock_guard(lock_);
+    MemMgrRLockGuard lock_guard(lock_);
     J_OBJ_START();
     J_ARRAY_START();
     for (int64_t i = memtable_head_; i < memtable_tail_; ++i) {
