@@ -838,6 +838,7 @@ void ObSSTableIndexBuilder::clean_status()
   // release memory to avoid occupying too much if retry frequently
   self_allocator_.reset();
 }
+
 int ObSSTableIndexBuilder::close(const int64_t column_cnt, ObSSTableMergeRes &res)
 {
   int ret = OB_SUCCESS;
@@ -861,7 +862,8 @@ int ObSSTableIndexBuilder::close(const int64_t column_cnt, ObSSTableMergeRes &re
     STORAGE_LOG(DEBUG, "sstable has no data", K(ret));
   } else if (OB_FAIL(sort_roots())) {
     STORAGE_LOG(WARN, "fail to sort roots", K(ret));
-  } else { // TODO GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_0_0_0
+  } else if (!index_store_desc_.is_major_merge()
+      || index_store_desc_.major_working_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
     const bool is_single_block = check_single_block();
     if (is_single_block) {
       switch (optimization_mode_) {
@@ -885,6 +887,9 @@ int ObSSTableIndexBuilder::close(const int64_t column_cnt, ObSSTableMergeRes &re
           break;
       }
     }
+  } else {
+    res.nested_offset_ = 0;
+    res.nested_size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
   }
 
   if (OB_FAIL(ret) || roots_.empty() || is_closed_) {
