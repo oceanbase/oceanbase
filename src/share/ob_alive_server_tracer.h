@@ -67,7 +67,8 @@ public:
 
 private:
   virtual int refresh_server_list(const common::ObIArray<common::ObAddr> &server_list,
-                                  common::hash::ObHashSet<common::ObAddr, common::hash::NoPthreadDefendMode> &servers);
+                                  common::hash::ObHashSet<common::ObAddr, common::hash::NoPthreadDefendMode> &servers,
+                                  const char *server_list_type);
 private:
   bool is_inited_;
   mutable common::ObLatch lock_;
