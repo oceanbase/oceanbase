@@ -2245,6 +2245,18 @@ OB_INLINE bool &get_ignore_mem_limit()
   return ignore_mem_limit;
 }
 
+OB_INLINE int64_t &get_seq()
+{
+  RLOCAL_INLINE(int64_t, seq);
+  return seq;
+}
+
+OB_INLINE bool &tl_need_speed_limit()
+{
+  RLOCAL_INLINE(bool, tl_need_speed_limit);
+  return tl_need_speed_limit;
+}
+
 OB_INLINE uint32_t &get_writing_throttling_sleep_interval()
 {
   RLOCAL_INLINE(uint32_t, writing_throttling_sleep_interval);
