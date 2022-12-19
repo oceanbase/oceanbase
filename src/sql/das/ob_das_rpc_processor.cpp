@@ -49,7 +49,7 @@ int ObDASSyncAccessP::before_process()
     LOG_WARN("das factory is not inited", K(ret));
   } else if (OB_FAIL(ObDASSyncRpcProcessor::before_process())) {
     LOG_WARN("do rpc processor before_process failed", K(ret));
-  } else if (das_remote_info_.need_calc_udf_ &&
+  } else if (das_remote_info_.need_calc_expr_ &&
       OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard_))) {
     LOG_WARN("fail to get schema guard", K(ret));
   } else if (OB_FAIL(das_factory->create_das_task_result(task.get_task_op()->get_type(),
