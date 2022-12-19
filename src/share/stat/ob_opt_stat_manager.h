@@ -140,6 +140,10 @@ public:
 
   int delete_table_stat(const uint64_t tenant_id,
                         const uint64_t ref_id,
+                        int64_t &affected_rows);
+
+  int delete_table_stat(uint64_t tenant_id,
+                        const uint64_t ref_id,
                         const ObIArray<int64_t> &part_ids,
                         const bool cascade_column,
                         int64_t &affected_rows);

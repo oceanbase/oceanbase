@@ -244,8 +244,8 @@ int ObDbmsStats::gather_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
     LOG_WARN("failed to get common rpc", K(ret));
   } else if (lib::is_oracle_mode() && !params.at(11).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
-    LOG_WARN("table name not should be specified in gather index stats", K(ret));
-    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"table name not should be specified in gather index stats");
+    LOG_WARN("table name shouldn't be specified in gather index stats", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"table name shouldn't be specified in gather index stats");
   } else if (lib::is_mysql_mode() && params.at(11).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("table name should be specified in gather index stats", K(ret));
@@ -639,8 +639,8 @@ int ObDbmsStats::set_index_stats(ObExecContext &ctx, ParamStore &params, ObObj &
     LOG_WARN("failed to get common rpc", K(ret));
   } else if (lib::is_oracle_mode() && !params.at(22).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
-    LOG_WARN("table name not should be specified in gather index stats", K(ret));
-    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"table name not should be specified in gather index stats");
+    LOG_WARN("table name shouldn't be specified in gather index stats", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"table name shouldn't be specified in gather index stats");
   } else if (lib::is_mysql_mode() && params.at(22).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("table name should be specified in gather index stats", K(ret));
@@ -1001,8 +1001,8 @@ int ObDbmsStats::delete_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
     LOG_WARN("failed to get common rpc", K(ret));
   } else if (lib::is_oracle_mode() && !params.at(10).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
-    LOG_WARN("table name not should be specified in gather index stats", K(ret));
-    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"table name not should be specified in gather index stats");
+    LOG_WARN("table name shouldn't be specified in gather index stats", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"table name shouldn't be specified in gather index stats");
   } else if (lib::is_mysql_mode() && params.at(10).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("table name should be specified in gather index stats", K(ret));
@@ -1245,10 +1245,6 @@ int ObDbmsStats::export_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                       K(stat_table_param.tab_name_));
       LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
                                         to_cstring(stat_table_param.tab_name_));
-    } else if (table_schema->is_tmp_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("dbms_stats with temp table not support", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
     } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_varchar(stat_param.stat_id_))) {
       LOG_WARN("failed to get stat id", K(ret));
     } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_bool(stat_param.cascade_))) {
@@ -1322,10 +1318,6 @@ int ObDbmsStats::export_column_stats(sql::ObExecContext &ctx,
                                      K(stat_table_param.db_name_), K(stat_table_param.tab_name_));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
                                        to_cstring(stat_table_param.tab_name_));
-  } else if (table_schema->is_tmp_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dbms_stats with temp table not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
   } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_varchar((stat_param.stat_id_)))) {
     LOG_WARN("failed to get stat id ", K(ret));
   } else {
@@ -1378,10 +1370,6 @@ int ObDbmsStats::export_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
                                       K(stat_table_param.db_name_), K(stat_table_param.tab_name_));
       LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
                                         to_cstring(stat_table_param.tab_name_));
-    } else if (table_schema->is_tmp_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("dbms_stats with temp table not support", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
     } else if (!params.at(2).is_null() && OB_FAIL(params.at(5).get_varchar((stat_table_param.stat_id_)))) {
       LOG_WARN("failed to get stat id ", K(ret));
     } else {
@@ -1437,8 +1425,8 @@ int ObDbmsStats::export_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
     LOG_WARN("failed to check tenant is restore", K(ret));
   } else if (lib::is_oracle_mode() && !params.at(6).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
-    LOG_WARN("table name not should be specified in gather index stats", K(ret));
-    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"table name not should be specified in gather index stats");
+    LOG_WARN("table name shouldn't be specified in gather index stats", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"table name shouldn't be specified in gather index stats");
   } else if (lib::is_mysql_mode() && params.at(6).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("table name should be specified in gather index stats", K(ret));
@@ -1463,10 +1451,6 @@ int ObDbmsStats::export_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                      K(stat_table_param.tab_name_));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
                                        to_cstring(stat_table_param.tab_name_));
-  } else if (table_schema->is_tmp_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dbms_stats with temp table not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
   } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_varchar(index_stat_param.stat_id_))) {
     LOG_WARN("failed to get stat id", K(ret));
   } else {
@@ -1563,10 +1547,6 @@ int ObDbmsStats::import_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                       K(stat_table_param.tab_name_));
       LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
                                         to_cstring(stat_table_param.tab_name_));
-    } else if (table_schema->is_tmp_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("dbms_stats with temp table not support", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
     } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_varchar(stat_param.stat_id_))) {
       LOG_WARN("failed to get stat id ", K(ret));
     } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_bool(stat_param.cascade_))) {
@@ -1679,10 +1659,6 @@ int ObDbmsStats::import_column_stats(sql::ObExecContext &ctx,
                                      K(stat_table_param.db_name_), K(stat_table_param.tab_name_));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
                                        to_cstring(stat_table_param.tab_name_));
-  } else if (table_schema->is_tmp_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dbms_stats with temp table not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
   } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_varchar(stat_param.stat_id_))) {
     LOG_WARN("failed to get stat id ", K(ret));
   } else if (!params.at(7).is_null() && OB_FAIL(params.at(7).get_bool(stat_param.no_invalidate_))) {
@@ -1767,10 +1743,6 @@ int ObDbmsStats::import_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
                                       K(stat_table_param.tab_name_));
       LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
                                         to_cstring(stat_table_param.tab_name_));
-    } else if (table_schema->is_tmp_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("dbms_stats with temp table not support", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
     } else if (!params.at(2).is_null() && OB_FAIL(params.at(4).get_varchar(stat_table_param.stat_id_))) {
       LOG_WARN("failed to get stat id ", K(ret));
     } else {
@@ -1852,8 +1824,8 @@ int ObDbmsStats::import_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
     LOG_WARN("failed to get common rpc", K(ret));
   } else if (lib::is_oracle_mode() && !params.at(8).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
-    LOG_WARN("table name not should be specified in gather index stats", K(ret));
-    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"table name not should be specified in gather index stats");
+    LOG_WARN("table name shouldn't be specified in gather index stats", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"table name shouldn't be specified in gather index stats");
   } else if (lib::is_mysql_mode() && params.at(8).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("table name should be specified in gather index stats", K(ret));
@@ -1878,10 +1850,6 @@ int ObDbmsStats::import_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                      K(stat_table_param.tab_name_));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(stat_table_param.db_name_),
                                        to_cstring(stat_table_param.tab_name_));
-  } else if (table_schema->is_tmp_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dbms_stats with temp table not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
   } else if (!params.at(4).is_null() && OB_FAIL(params.at(4).get_varchar(index_stat_param.stat_id_))) {
     LOG_WARN("failed to get stat id ", K(ret));
   } else if (!params.at(6).is_null() && OB_FAIL(params.at(6).get_bool(index_stat_param.no_invalidate_))) {
@@ -2384,6 +2352,7 @@ int ObDbmsStats::restore_table_stats(sql::ObExecContext &ctx,
     LOG_WARN("failed to get force", K(ret));
   } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_bool(stat_param.no_invalidate_))) {
     LOG_WARN("failed to get no_invalidate", K(ret));
+  } else if (stat_param.is_temp_table_) {//do nothing
   // oracle don't do this, compatible oracle temporarily
   // } else if (stat_param.force_ &&
   //            OB_FAIL(ObDbmsStatsLockUnlock::fill_stat_locked(ctx, stat_param))) {
@@ -3020,10 +2989,6 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(param.db_name_), K(param.tab_name_));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(param.db_name_), to_cstring(param.tab_name_));
-  } else if (table_schema->is_tmp_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dbms_stats with temp table not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
   } else if (OB_FAIL(get_table_part_infos(table_schema,
                                           param.part_infos_,
                                           param.subpart_infos_,
@@ -3074,7 +3039,7 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
     LOG_WARN("params have null", K(ret), K(schema_guard));
   } else if (OB_FAIL(parse_table_info(ctx, stat_table, table_schema, param))) {
     LOG_WARN("failed to parse table info", K(ret));
-  } else if (OB_UNLIKELY(table_schema->is_view_table() || table_schema->is_tmp_table())) {
+  } else if (OB_UNLIKELY(table_schema->is_view_table())) {
     ret = OB_TABLE_NOT_EXIST;
   } else if (OB_FAIL(get_table_part_infos(table_schema,
                                           param.part_infos_,
@@ -3138,10 +3103,6 @@ int ObDbmsStats::parse_index_part_info(ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(index_schema), K(param.db_name_),
                                      K(param.tab_name_));
-  } else if (table_schema->is_tmp_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dbms_stats with temp table not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
   } else if (OB_FAIL(set_param_global_part_id(ctx, param, true, table_schema->get_table_id()))) {
     LOG_WARN("fail to set global part id for index data table", K(ret));
   } else if (OB_FAIL(ob_write_string(ctx.get_allocator(),
@@ -3332,10 +3293,6 @@ int ObDbmsStats::parse_set_table_info(ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(param.db_name_), K(param.tab_name_));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(param.db_name_), to_cstring(param.tab_name_));
-  } else if (table_schema->is_tmp_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dbms_stats with temp table not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
   } else if (OB_FAIL(parse_set_partition_name(table_schema, part_name, param))) {
     LOG_WARN("failed to parser part info", K(ret));
   } else if (OB_FAIL(init_column_stat_params(ctx.get_allocator(),
@@ -3387,10 +3344,6 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_schema), K(param.db_name_), K(param.tab_name_));
     LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(param.db_name_), to_cstring(param.tab_name_));
-  } else if (table_schema->is_tmp_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dbms_stats with temp table not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dbms_stats with temp table");
   } else if (OB_FAIL(colname.get_string(column_name))) {
     LOG_WARN("failed to get column name", K(ret));
   } else if (OB_UNLIKELY(column_name.empty())) {
@@ -3660,6 +3613,7 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
     LOG_WARN("failed to write string", K(ret));
   } else {
     param.tenant_id_ = session->get_effective_tenant_id();
+    param.is_temp_table_ = table_schema->is_tmp_table();
   }
   if (OB_SUCC(ret) && table_schema != NULL) {
     param.table_id_ = table_schema->get_table_id();

@@ -49,6 +49,11 @@ enum StatOptionFlags
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
 const static int64_t OPT_STATS_MAX_VALUE_CAHR_LEN = 128;
+const int64_t MAGIC_SAMPLE_SIZE = 5500;
+const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
+const int64_t MAGIC_MIN_SAMPLE_SIZE = 2500;
+const int64_t MAGIC_BASE_SAMPLE_SIZE = 1000;
+const double MAGIC_SAMPLE_CUT_RATIO = 0.00962;
 
 enum StatLevel
 {
@@ -289,7 +294,8 @@ struct ObTableStatParam {
     duration_time_(-1),
     global_tablet_id_(0),
     global_data_part_id_(INVALID_GLOBAL_PART_ID),
-    data_table_id_(INVALID_GLOBAL_PART_ID)
+    data_table_id_(INVALID_GLOBAL_PART_ID),
+    is_temp_table_(false)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -360,6 +366,7 @@ struct ObTableStatParam {
   uint64_t global_tablet_id_;
   int64_t global_data_part_id_; // used to check wether table is locked, while gathering index stats.
   int64_t data_table_id_; // the data table id for index schema
+  bool is_temp_table_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -402,7 +409,8 @@ struct ObTableStatParam {
                K(duration_time_),
                K(global_tablet_id_),
                K(global_data_part_id_),
-               K(data_table_id_));
+               K(data_table_id_),
+               K(is_temp_table_));
 };
 
 struct ObOptStat

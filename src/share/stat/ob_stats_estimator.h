@@ -70,6 +70,9 @@ protected:
                        bool block_sample,
                        ObString &sample_hint);
 
+  int fill_sample_info(common::ObIAllocator &alloc,
+                       const ObAnalyzeSampleInfo &sample_info);
+
   int fill_parallel_info(common::ObIAllocator &alloc,
                          int64_t degree);
 
@@ -116,6 +119,7 @@ protected:
 
   ObArray<ObStatItem *> stat_items_;
   ObArray<ObObj> results_;
+  double sample_value_;
 };
 
 
