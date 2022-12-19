@@ -2860,27 +2860,65 @@ int ObTablet::set_tx_data_in_tablet_pointer(const ObTabletTxMultiSourceDataUnit 
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(tablet_meta_.ls_id_, tablet_meta_.tablet_id_);
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
 
-  if (OB_FAIL(t3m->set_tablet_pointer_tx_data(key, tx_data))) {
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(tablet_ptr->set_tx_data(tx_data))) {
     LOG_WARN("failed to set tx data in tablet pointer", K(ret), K(key), K(tx_data));
   }
 
   return ret;
 }
 
-int ObTablet::set_tx_data_in_tablet_pointer()
+int ObTablet::update_msd_cache_on_pointer()
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = tablet_meta_.ls_id_;
   const ObTabletID &tablet_id = tablet_meta_.tablet_id_;
   ObTabletTxMultiSourceDataUnit &tx_data = tablet_meta_.tx_data_;
+  ObTabletBindingInfo info;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(get_ddl_data(info))) {
+    LOG_WARN("failed to get ddl data", K(ret), K(ls_id));
   } else if (OB_FAIL(set_tx_data_in_tablet_pointer(tx_data))) {
     LOG_WARN("failed to set tx data in tablet pointer", K(ret), K(ls_id), K(tablet_id), K(tx_data));
+  } else if (OB_FAIL(set_redefined_schema_version_in_tablet_pointer(info.schema_version_))) {
+    LOG_WARN("failed to set redefined schema version in tablet pointer", K(ret), K(ls_id), K(tablet_id), K(info));
+  }
+
+  return ret;
+}
+
+int ObTablet::get_redefined_schema_version_in_tablet_pointer(int64_t &schema_version) const
+{
+  int ret = OB_SUCCESS;
+  ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(tablet_ptr->get_redefined_schema_version(schema_version))) {
+    LOG_WARN("failed to get redefined schema version from pointer", K(ret));
+  }
+
+  return ret;
+}
+
+int ObTablet::set_redefined_schema_version_in_tablet_pointer(const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObTabletPointer *tablet_ptr = static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(tablet_ptr->set_redefined_schema_version(schema_version))) {
+    LOG_WARN("failed to set redefined schema version in tablet pointer", K(ret), K(schema_version));
   }
 
   return ret;

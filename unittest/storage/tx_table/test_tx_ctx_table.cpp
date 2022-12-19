@@ -35,6 +35,14 @@ using namespace storage;
 using namespace blocksstable;
 using namespace share;
 
+namespace storage
+{
+int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
+{
+  return 1000;
+}
+}
+
 namespace unittest
 {
 

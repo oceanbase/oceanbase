@@ -406,7 +406,8 @@ int ObLongOpsMonitor::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLongOpsMonitor has been inited twice", K(ret));
-  } else if (OB_FAIL(map_.init(DEFAULT_BUCKET_NUM, ObModIds::OB_SSTABLE_LONG_OPS_MONITOR,
+  } else if (OB_FAIL(map_.init(DEFAULT_BUCKET_NUM, OB_SERVER_TENANT_ID,
+      ObModIds::OB_SSTABLE_LONG_OPS_MONITOR,
       TOTAL_LIMIT, HOLD_LIMIT, PAGE_SIZE))) {
     LOG_WARN("fail to init map", K(ret));
   } else {

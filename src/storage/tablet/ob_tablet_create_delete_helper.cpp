@@ -1349,7 +1349,7 @@ int ObTabletCreateDeleteHelper::get_tablet(
   static const int64_t SLEEP_TIME_US = 10;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ObTabletHandle tablet_handle;
-  const int64_t begin_time = ObTimeUtility::current_time();
+  const int64_t begin_time = ObClockGenerator::getClock();
   int64_t current_time = 0;
 
   while (OB_SUCC(ret)) {
@@ -1360,7 +1360,7 @@ int ObTabletCreateDeleteHelper::get_tablet(
       ret = OB_TABLET_NOT_EXIST;
       LOG_DEBUG("tablet does not exist", K(ret), K(key));
     } else if (OB_ITEM_NOT_SETTED == ret) {
-      current_time = ObTimeUtility::current_time();
+      current_time = ObClockGenerator::getClock();
       if (current_time - begin_time > timeout_us) {
         ret = OB_TABLET_NOT_EXIST;
         LOG_WARN("continuously meet item not set error", K(ret), K(begin_time), K(current_time), K(timeout_us));

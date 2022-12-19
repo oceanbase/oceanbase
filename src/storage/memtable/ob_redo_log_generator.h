@@ -85,11 +85,13 @@ private:
   int fill_row_redo(ObITransCallbackIterator &cursor,
                     ObMutatorWriter &mmw,
                     RedoDataNode &redo,
-                    const bool log_for_lock_node);
+                    const bool log_for_lock_node,
+                    bool &fake_fill);
   int fill_table_lock_redo(ObITransCallbackIterator &cursor,
                            ObMutatorWriter &mmw,
                            TableLockRedoDataNode &redo,
-                           const bool log_for_lock_node);
+                           const bool log_for_lock_node,
+                           bool &fake_fill);
   bool check_dup_tablet_(const ObITransCallback * callback_ptr) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRedoLogGenerator);

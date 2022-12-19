@@ -25,7 +25,6 @@ void ObGTSLocalCache::reset()
 {
   srr_.reset();
   gts_ = 0;
-  barrier_ts_ = 0;
   latest_srr_.reset();
   receive_gts_ts_.reset();
 }
@@ -48,7 +47,7 @@ int ObGTSLocalCache::update_gts(const MonotonicTs srr,
     //The update sequence must be receive_gts_ts first, then gts, then srr
     (void)atomic_update(&receive_gts_ts_.mts_, receive_gts_ts.mts_);
     (void)atomic_update(&gts_, gts);
-    update = (atomic_update(&srr_.mts_, srr.mts_) && (ATOMIC_LOAD(&barrier_ts_) <= gts));
+    update = atomic_update(&srr_.mts_, srr.mts_);
   }
 
   return ret;
@@ -57,8 +56,7 @@ int ObGTSLocalCache::update_gts(const MonotonicTs srr,
 // While updating srr and gts, it is also necessary to check whether gts crosses the barrier ts
 int ObGTSLocalCache::update_gts_and_check_barrier(const MonotonicTs srr,
                                                   const int64_t gts,
-                                                  const MonotonicTs receive_gts_ts,
-                                                  bool &is_cross_barrier)
+                                                  const MonotonicTs receive_gts_ts)
 {
   int ret = OB_SUCCESS;
 
@@ -71,7 +69,6 @@ int ObGTSLocalCache::update_gts_and_check_barrier(const MonotonicTs srr,
     (void)atomic_update(&receive_gts_ts_.mts_, receive_gts_ts.mts_);
     (void)atomic_update(&gts_, gts);
     (void)atomic_update(&srr_.mts_, srr.mts_);
-    is_cross_barrier = (ATOMIC_LOAD(&barrier_ts_) <= gts);
   }
 
   return ret;
@@ -85,7 +82,7 @@ int ObGTSLocalCache::update_gts(const int64_t gts, bool &update)
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(gts));
   } else {
-    update = (atomic_update(&gts_, gts) && (ATOMIC_LOAD(&barrier_ts_) <= gts));
+    update = atomic_update(&gts_, gts);
   }
 
   return ret;
@@ -95,8 +92,7 @@ int ObGTSLocalCache::get_gts(int64_t &gts) const
 {
   int ret = OB_SUCCESS;
   const int64_t tmp_gts = ATOMIC_LOAD(&gts_);
-  const int64_t barrier_ts = ATOMIC_LOAD(&barrier_ts_);
-  if (OB_UNLIKELY(barrier_ts > tmp_gts) || OB_UNLIKELY(0 == tmp_gts)) {
+  if (OB_UNLIKELY(0 == tmp_gts)) {
     ret = OB_EAGAIN;
   } else {
     //Here should not add 1
@@ -120,8 +116,7 @@ int ObGTSLocalCache::get_gts(const MonotonicTs stc,
     // Must get gts first, then receive_gts_ts
     const int64_t tmp_gts = ATOMIC_LOAD(&gts_);
     const int64_t tmp_receive_gts_ts = ATOMIC_LOAD(&receive_gts_ts_.mts_);
-    const int64_t barrier_ts = ATOMIC_LOAD(&barrier_ts_);
-    if (barrier_ts > tmp_gts || 0 == tmp_gts) {
+    if (0 == tmp_gts) {
       ret = OB_EAGAIN;
       need_send_rpc = true;
     } else if (stc.mts_ > srr) {
@@ -159,20 +154,6 @@ int ObGTSLocalCache::update_latest_srr(const MonotonicTs latest_srr)
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(latest_srr));
   } else {
     (void)atomic_update(&latest_srr_.mts_, latest_srr.mts_);
-  }
-
-  return ret;
-}
-
-int ObGTSLocalCache::update_base_ts(const int64_t base_ts)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(base_ts < 0) || base_ts >= INT64_MAX/2) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(base_ts));
-  } else {
-    (void)atomic_update(&barrier_ts_, base_ts);
   }
 
   return ret;

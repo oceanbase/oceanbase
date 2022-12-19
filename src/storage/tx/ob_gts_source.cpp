@@ -200,7 +200,6 @@ int ObGtsSource::get_gts(const MonotonicTs stc,
   int tmp_ret = OB_SUCCESS;
   int64_t tmp_gts = 0;
   bool need_send_rpc = false;
-  ObAddr leader;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -220,18 +219,18 @@ int ObGtsSource::get_gts(const MonotonicTs stc,
     TRANS_LOG(DEBUG, "query_gts", KR(ret), K(need_send_rpc), K(stc),
               K(gts_local_cache_.get_latest_srr()));
     // When getting gts, if the global timestamp service is locally, get gts directly
-    if (OB_SUCCESS != (tmp_ret = get_gts_leader_(leader))) {
-      TRANS_LOG(WARN, "get gts leader fail", K(tmp_ret), K_(tenant_id));
+    if (!gts_cache_leader_.is_valid() && OB_SUCCESS != (tmp_ret = refresh_gts_cache_leader_())) {
+      TRANS_LOG(WARN, "refresh gts leader fail", K(tmp_ret), K_(tenant_id));
       (void)refresh_gts_location_();
-    } else if (leader == server_) {
+    } else if (gts_cache_leader_ == server_) {
       MTL_SWITCH(tenant_id_) {
         ret = OB_EAGAIN;
         // When getting gts, if the global timestamp service is locally, get gts directly
         // Here the error code is overwritten by the result of the local call
-        if (OB_SUCCESS != (tmp_ret = get_gts_from_local_timestamp_service_(leader, gts, receive_gts_ts))) {
+        if (OB_SUCCESS != (tmp_ret = get_gts_from_local_timestamp_service_(gts, receive_gts_ts))) {
           if (OB_EAGAIN != tmp_ret) {
             if (EXECUTE_COUNT_PER_SEC(16)) {
-              TRANS_LOG(WARN, "get_gts_from_local_timestamp_service fail", K(leader), K_(server), K(tmp_ret));
+              TRANS_LOG(WARN, "get_gts_from_local_timestamp_service fail", K_(gts_cache_leader), K_(server), K(tmp_ret));
             }
             refresh_gts_location();
           }
@@ -245,11 +244,11 @@ int ObGtsSource::get_gts(const MonotonicTs stc,
     } else {
       // If not in local, refresh gts
       if (need_send_rpc) {
-        if (OB_SUCCESS != (tmp_ret = query_gts_(leader))) {
-          TRANS_LOG(WARN, "query gts fail", K(tmp_ret), K(leader));
+        if (OB_SUCCESS != (tmp_ret = query_gts_(gts_cache_leader_))) {
+          TRANS_LOG(WARN, "query gts fail", K(tmp_ret), K_(gts_cache_leader));
         }
       }
-      TRANS_LOG(DEBUG, "after query gts", KR(tmp_ret), K(leader), K(need_send_rpc));
+      TRANS_LOG(DEBUG, "after query gts", KR(tmp_ret), K_(gts_cache_leader), K(need_send_rpc));
     }
     // If ret is not OB_SUCCESS, it means that an asynchronous task needs to be added to wait for the subsequent gts value
     if (OB_FAIL(ret) && NULL != task) {
@@ -275,8 +274,7 @@ int ObGtsSource::get_gts(const MonotonicTs stc,
 }
 
 // Get the timestamp from the local timestamp service
-int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
-                                                       int64_t &gts,
+int ObGtsSource::get_gts_from_local_timestamp_service_(int64_t &gts,
                                                        MonotonicTs &receive_gts_ts)
 {
   int ret = OB_SUCCESS;
@@ -286,44 +284,34 @@ int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
   ObTimestampAccess *timestamp_access = MTL(ObTimestampAccess *);
   if (OB_ISNULL(timestamp_access)) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "timestamp access is null", KR(ret), KP(timestamp_access), K_(tenant_id), K(leader));
+    TRANS_LOG(ERROR, "timestamp access is null", KR(ret), KP(timestamp_access), K_(tenant_id));
   } else if (OB_FAIL(timestamp_access->get_number(ObTimeUtility::current_time_ns(), tmp_gts))) {
     if (EXECUTE_COUNT_PER_SEC(100)) {
-      TRANS_LOG(WARN, "global_timestamp_service get gts fail", K(leader), K(tmp_gts), KR(ret));
+      TRANS_LOG(WARN, "global_timestamp_service get gts fail", K(tmp_gts), KR(ret));
     }
     if (OB_NOT_MASTER == ret) {
         gts_cache_leader_.reset();
     }
   } else {
-    if (leader.is_valid()) {
-      gts_cache_leader_ = leader;
-    }
     const MonotonicTs tmp_receive_gts_ts = MonotonicTs::current_time();
-    bool is_cross_barrier = false;
     if (OB_FAIL(gts_local_cache_.update_gts_and_check_barrier(srr,
                                                               tmp_gts,
-                                                              tmp_receive_gts_ts,
-                                                              is_cross_barrier))) {
-      TRANS_LOG(WARN, "update gts fail", K(srr), K(gts), K(receive_gts_ts),
-                K(is_cross_barrier), KR(ret));
-    } else if (is_cross_barrier) {
+                                                              tmp_receive_gts_ts))) {
+      TRANS_LOG(WARN, "update gts fail", K(srr), K(gts), K(receive_gts_ts), KR(ret));
+    } else {
       // get gts success, need to overwrite the OB_EAGAIN error code to OB_SUCCESS
       gts = tmp_gts;
       receive_gts_ts = tmp_receive_gts_ts;
-      ret = OB_SUCCESS;
-    } else {
-      ret = OB_EAGAIN;
     }
   }
 
   return ret;
 }
 
-int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
-                                                       int64_t &gts)
+int ObGtsSource::get_gts_from_local_timestamp_service_(int64_t &gts)
 {
   MonotonicTs unused_receive_gts_ts;
-  return get_gts_from_local_timestamp_service_(leader, gts, unused_receive_gts_ts);
+  return get_gts_from_local_timestamp_service_(gts, unused_receive_gts_ts);
 }
 
 int ObGtsSource::get_srr(MonotonicTs &srr)
@@ -388,7 +376,6 @@ int ObGtsSource::wait_gts_elapse(const int64_t ts, ObTsCbTask *task, bool &need_
   } else {
     int64_t gts = 0;
     bool tmp_need_wait = false;
-    ObAddr leader;
     int tmp_ret = OB_SUCCESS;
     if (OB_FAIL(gts_local_cache_.get_gts(gts))) {
       if (OB_UNLIKELY(OB_EAGAIN != ret)) {
@@ -405,14 +392,14 @@ int ObGtsSource::wait_gts_elapse(const int64_t ts, ObTsCbTask *task, bool &need_
     }
     if (OB_SUCCESS == ret && tmp_need_wait) {
       // When getting gts, if the global timestamp service is locally, get gts directly
-      if (OB_SUCCESS != (tmp_ret = get_gts_leader_(leader))) {
-        TRANS_LOG(WARN, "get gts leader fail", K(tmp_ret), K_(tenant_id));
+      if (!gts_cache_leader_.is_valid() && OB_SUCCESS != (tmp_ret = refresh_gts_cache_leader_())) {
+        TRANS_LOG(WARN, "refresh gts leader fail", K(tmp_ret), K_(tenant_id));
         (void)refresh_gts_location_();
-      } else if (leader == server_) {
+      } else if (gts_cache_leader_ == server_) {
         // When getting gts, if the global timestamp service is locally, get gts directly
-        if (OB_SUCCESS != (tmp_ret = get_gts_from_local_timestamp_service_(leader, gts))) {
+        if (OB_SUCCESS != (tmp_ret = get_gts_from_local_timestamp_service_(gts))) {
           if (OB_EAGAIN != tmp_ret && EXECUTE_COUNT_PER_SEC(100)) {
-            TRANS_LOG(WARN, "get_gts_from_local_timestamp_service fail", K(leader), K_(server), K(tmp_ret));
+            TRANS_LOG(WARN, "get_gts_from_local_timestamp_service fail", K_(gts_cache_leader), K_(server), K(tmp_ret));
           }
         } else if (ts <= gts) {
           tmp_need_wait = false;
@@ -465,7 +452,6 @@ int ObGtsSource::wait_gts_elapse(const int64_t ts)
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(ts));
   } else {
     int64_t gts = 0;
-    ObAddr leader;
     if (OB_FAIL(gts_local_cache_.get_gts(gts))) {
       if (OB_UNLIKELY(OB_EAGAIN != ret)) {
         TRANS_LOG(WARN, "get gts failed", K(ret));
@@ -479,14 +465,14 @@ int ObGtsSource::wait_gts_elapse(const int64_t ts)
     if (OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
       // When getting gts, if the global timestamp service is locally, get gts directly
-      if (OB_SUCCESS != (tmp_ret = get_gts_leader_(leader))) {
+      if (!gts_cache_leader_.is_valid() && OB_SUCCESS != (tmp_ret = refresh_gts_cache_leader_())) {
         TRANS_LOG(WARN, "get gts leader fail", K(tmp_ret), K_(tenant_id));
         (void)refresh_gts_location_();
-      } else if (leader == server_) {
+      } else if (gts_cache_leader_ == server_) {
         // When getting gts, if the global timestamp service is locally, get gts directly
-        if (OB_SUCCESS != (tmp_ret = get_gts_from_local_timestamp_service_(leader, gts))) {
+        if (OB_SUCCESS != (tmp_ret = get_gts_from_local_timestamp_service_(gts))) {
           if (OB_EAGAIN != tmp_ret) {
-            TRANS_LOG(WARN, "get_gts_from_local_timestamp_service fail", K(leader), K_(server), K(tmp_ret));
+            TRANS_LOG(WARN, "get_gts_from_local_timestamp_service fail", K_(gts_cache_leader), K_(server), K(tmp_ret));
           }
         } else if (ts <= gts) {
           ret = OB_SUCCESS;
@@ -495,7 +481,7 @@ int ObGtsSource::wait_gts_elapse(const int64_t ts)
         }
       } else {
         // If the leader is not in local, gts needs to be refreshed
-        if (OB_SUCCESS != (tmp_ret = query_gts_(leader))) {
+        if (OB_SUCCESS != (tmp_ret = query_gts_(gts_cache_leader_))) {
           TRANS_LOG(WARN, "refresh gts failed", K(tmp_ret));
         }
       }
@@ -522,46 +508,7 @@ int ObGtsSource::refresh_gts(const bool need_refresh)
   return ret;
 }
 
-int ObGtsSource::update_base_ts(const int64_t base_ts)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 > base_ts)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(base_ts));
-  } else if (OB_FAIL(gts_local_cache_.update_base_ts(base_ts))) {
-    TRANS_LOG(WARN, "update base ts failed", KR(ret), K(base_ts));
-  } else {
-  }
-  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
-    TRANS_LOG(WARN, "update base ts failed", K(ret), K_(tenant_id), K(base_ts),
-        K_(gts_local_cache));
-  } else {
-    TRANS_LOG(INFO, "update base ts success", K_(tenant_id), K(base_ts),
-        K_(gts_local_cache));
-  }
-  return ret;
-}
-
-int ObGtsSource::get_base_ts(int64_t &base_ts)
-{
-  int ret = OB_SUCCESS;
-  int64_t tmp_base_ts = 0;
-  if (OB_UNLIKELY(!is_inited_)) {
-    TRANS_LOG(WARN, "not inited");
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(gts_local_cache_.get_gts(tmp_base_ts))) {
-  } else {
-    base_ts = tmp_base_ts;
-  }
-  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
-    TRANS_LOG(WARN, "get base ts failed", K(ret), K_(tenant_id));
-  } else {
-    TRANS_LOG(INFO, "get base ts success", K_(tenant_id), K(base_ts));
-  }
-  return ret;
-}
-
-int ObGtsSource::get_gts_leader_(ObAddr &leader)
+int ObGtsSource::refresh_gts_cache_leader_()
 {
   int ret = OB_SUCCESS;
   const int64_t cluster_id = GCONF.cluster_id;
@@ -572,19 +519,15 @@ int ObGtsSource::get_gts_leader_(ObAddr &leader)
     return ret;
   }
 #endif
-  if (gts_cache_leader_.is_valid()) {
-    leader = gts_cache_leader_;
-  } else if (OB_FAIL(location_adapter_->nonblock_get_leader(cluster_id, tenant_id_, GTS_LS, leader))) {
+  if (OB_FAIL(location_adapter_->nonblock_get_leader(cluster_id, tenant_id_, GTS_LS, gts_cache_leader_))) {
     if (EXECUTE_COUNT_PER_SEC(16)) {
       TRANS_LOG(WARN, "gts nonblock get leader failed", K(ret), K_(tenant_id), K(GTS_LS));
     }
-  } else {
-    gts_cache_leader_ = leader;
   }
-  if (OB_SUCC(ret) && !leader.is_valid()) {
+  if (OB_SUCC(ret) && !gts_cache_leader_.is_valid()) {
     ret = OB_LS_LOCATION_LEADER_NOT_EXIST;
     if (EXECUTE_COUNT_PER_SEC(16)) {
-      TRANS_LOG(WARN, "gts cache leader is invalid", KR(ret), K(leader), K(*this));
+      TRANS_LOG(WARN, "gts cache leader is invalid", KR(ret), K_(gts_cache_leader), K(*this));
     }
   }
 
@@ -606,7 +549,6 @@ int ObGtsSource::query_gts_(const ObAddr &leader)
     (void)refresh_gts_location_();
   } else {
     gts_statistics_.inc_gts_rpc_cnt();
-    ObTransStatistic::get_instance().add_gts_rpc_count(tenant_id_, 1);
     TRANS_LOG(DEBUG, "post gts request success", K(srr), K_(gts_local_cache));
   }
   return ret;
@@ -630,16 +572,15 @@ int ObGtsSource::refresh_gts_location_()
 int ObGtsSource::refresh_gts_(const bool need_refresh)
 {
   int ret = OB_SUCCESS;
-  ObAddr leader;
   bool need_refresh_gts_location = need_refresh;
 
-  if (OB_FAIL(get_gts_leader_(leader))) {
+  if (!gts_cache_leader_.is_valid() && OB_FAIL(refresh_gts_cache_leader_())) {
     if (EXECUTE_COUNT_PER_SEC(16)) {
       TRANS_LOG(WARN, "get gts leader failed", KR(ret), K_(tenant_id));
     }
     need_refresh_gts_location = true;
   } else {
-    ret = query_gts_(leader);
+    ret = query_gts_(gts_cache_leader_);
   }
   if (need_refresh_gts_location) {
     (void)refresh_gts_location_();

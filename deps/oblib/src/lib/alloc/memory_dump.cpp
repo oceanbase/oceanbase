@@ -162,10 +162,14 @@ void ObMemoryDump::destroy()
 int ObMemoryDump::push(void *task)
 {
   int ret = OB_SUCCESS;
+  const bool enable_dump = lib::is_trace_log_enabled();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (NULL == task) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (!enable_dump) {
+    // do nothing
+    free_task(task);
   } else {
     ret = queue_.push(task);
     if (OB_SIZE_OVERFLOW == ret) {
@@ -181,7 +185,8 @@ void ObMemoryDump::run1()
   int ret = OB_SUCCESS;
   lib::set_thread_name("MemoryDump");
   static int64_t last_dump_ts = ObTimeUtility::current_time();
-  while (!has_set_stop()) {
+  const bool enable_dump = lib::is_trace_log_enabled();
+  while (!has_set_stop() && enable_dump) {
     void *task = NULL;
     if (OB_SUCC(queue_.pop(task, 100 * 1000))) {
       handle(task);

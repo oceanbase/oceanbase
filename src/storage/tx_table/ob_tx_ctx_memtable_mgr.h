@@ -42,7 +42,7 @@ namespace storage
 class ObTxCtxMemtableMgr : public ObIMemtableMgr
 {
 public:
-  ObTxCtxMemtableMgr() {}
+  ObTxCtxMemtableMgr() : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_) {}
   ~ObTxCtxMemtableMgr() {}
   void reset();
 
@@ -71,7 +71,7 @@ protected:
   int unregister_from_common_checkpoint_(const ObTxCtxMemtable *memtable);
 private:
   share::ObLSID ls_id_;
-
+  common::SpinRWLock lock_def_;
 };
 
 } // namespace storage

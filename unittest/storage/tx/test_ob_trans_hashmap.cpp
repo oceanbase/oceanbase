@@ -44,6 +44,10 @@ class ObTransTestValue : public ObTransHashLink<ObTransTestValue>
 {
 public:
   ObTransTestValue() {}
+  ~ObTransTestValue()
+  {
+    TRANS_LOG(INFO, "ObTransTestValue destroyed");
+  }
   int init(const ObTransID &trans_id)
   {
     int ret = OB_SUCCESS;
@@ -54,9 +58,13 @@ public:
     }
     return ret;
   }
+  void reset()
+  {
+    TRANS_LOG(INFO, "ObTransTestValue reset", K(lbt()));
+  }
   bool contain(const ObTransID &trans_id) { return trans_id_ == trans_id; }
   const ObTransID &get_trans_id() const { return trans_id_; }
-  TO_STRING_KV(K_(trans_id));
+  TO_STRING_KV(K_(trans_id), "ref", get_ref());
 private:
   ObTransID trans_id_;
 };
@@ -84,7 +92,7 @@ public:
   ForeachFunctor(TestHashMap *map) : map_(map) {}
   bool operator() (ObTransTestValue *val)
   {
-    TRANS_LOG(INFO, "currnet val info,", "trans_id", val->get_trans_id());
+    TRANS_LOG(INFO, "currnet val info,", K(*val));
     if (NULL != map_) {
       map_->del(val->get_trans_id(), val);
     }
@@ -97,11 +105,17 @@ private:
 class RemoveFunctor
 {
 public:  
-  bool operator() (const ObTransTestValue *val)
+  RemoveFunctor(TestHashMap *map) : map_(map) {}
+  bool operator() (ObTransTestValue *val)
   {
-    TRANS_LOG(INFO, "currnet val info will be removed ", "trans_id", val->get_trans_id());
+    TRANS_LOG(INFO, "currnet val info will be removed ", K(*val));
+    if (NULL != map_) {
+      map_->del(val->get_trans_id(), val);
+    }
     return true;
   }
+private:
+  TestHashMap *map_;
 };
 
 TEST_F(TestObTrans, hashmap_init_invalid)
@@ -119,6 +133,7 @@ TEST_F(TestObTrans, hashmap_init_invalid)
   ObTransTestValue *val0 = NULL;
   EXPECT_EQ(OB_SUCCESS, map.alloc_value(val0));
   EXPECT_EQ(OB_INVALID_ARGUMENT, val0->init(trans_id0));
+  EXPECT_EQ(0, val0->get_ref());
   map.free_value(val0);
 
   TRANS_LOG(INFO, "case2");
@@ -130,12 +145,16 @@ TEST_F(TestObTrans, hashmap_init_invalid)
   // 2.1 insert
   ObTransTestValue *v = NULL;
   EXPECT_EQ(OB_SUCCESS, map.insert_and_get(trans_id1, val1, &v));
+  EXPECT_EQ(2, val1->get_ref());
+  EXPECT_EQ(NULL, v);
   map.revert(val1);
+  EXPECT_EQ(1, val1->get_ref());
   // 2.2 check
   ObTransTestValue *tmp = NULL;
   EXPECT_EQ(OB_SUCCESS, map.get(trans_id1, tmp));
   EXPECT_EQ(tmp, val1);
   map.revert(tmp);
+  EXPECT_EQ(1, val1->get_ref());
 
   TRANS_LOG(INFO, "case3");
   // 3 entry exist
@@ -143,7 +162,11 @@ TEST_F(TestObTrans, hashmap_init_invalid)
   ObTransTestValue *val2 = NULL;
   EXPECT_EQ(OB_SUCCESS, map.alloc_value(val2));
   EXPECT_EQ(OB_SUCCESS, val2->init(trans_id2));
-   EXPECT_EQ(OB_ENTRY_EXIST, map.insert_and_get(trans_id2, val2, &v));
+  EXPECT_EQ(0, val2->get_ref());
+  EXPECT_EQ(OB_ENTRY_EXIST, map.insert_and_get(trans_id2, val2, &v));
+  EXPECT_EQ(2, val1->get_ref());
+  EXPECT_EQ(0, val2->get_ref());
+  map.revert(v);
   map.free_value(val2);
 
   TRANS_LOG(INFO, "case4");
@@ -153,6 +176,7 @@ TEST_F(TestObTrans, hashmap_init_invalid)
   EXPECT_EQ(OB_SUCCESS, val3->init(trans_id3));
   EXPECT_EQ(OB_SUCCESS, map.insert_and_get(trans_id3, val3, &v));
   map.revert(val3);
+  EXPECT_EQ(1, val3->get_ref());
 
   TRANS_LOG(INFO, "case5");
   EXPECT_EQ(2, map.count());
@@ -161,7 +185,26 @@ TEST_F(TestObTrans, hashmap_init_invalid)
   // 4 foreach / remove if
   ForeachFunctor foreach_fn(&map);
   map.for_each(foreach_fn);
-  RemoveFunctor remove_if_fn;
+  EXPECT_EQ(0, map.count());
+
+  TRANS_LOG(INFO, "case7");
+  ObTransID trans_id4 = ObTransID(400);
+  ObTransTestValue *val4 = NULL;
+  EXPECT_EQ(OB_SUCCESS, map.alloc_value(val4));
+  EXPECT_EQ(OB_SUCCESS, val4->init(trans_id4));
+  EXPECT_EQ(OB_SUCCESS, map.insert_and_get(trans_id4, val4, &v));
+  map.revert(val4);
+
+  ObTransID trans_id5 = ObTransID(500);
+  ObTransTestValue *val5 = NULL;
+  EXPECT_EQ(OB_SUCCESS, map.alloc_value(val5));
+  EXPECT_EQ(OB_SUCCESS, val5->init(trans_id5));
+  EXPECT_EQ(OB_SUCCESS, map.insert_and_get(trans_id5, val5, &v));
+  map.revert(val5);
+
+  EXPECT_EQ(1, val4->get_ref());
+  EXPECT_EQ(1, val5->get_ref());
+  RemoveFunctor remove_if_fn(&map);
   map.remove_if(remove_if_fn);
   EXPECT_EQ(0, map.count());
 }

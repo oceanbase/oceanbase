@@ -80,7 +80,7 @@ enum
 namespace transaction
 {
 
-const static int64_t OB_TX_MAX_LOG_CBS = 32;
+const static int64_t OB_TX_MAX_LOG_CBS = 3;
 const static int64_t RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING = 1;
 
 // participant transaction context
@@ -257,6 +257,7 @@ private:
 
   int common_on_success_(ObTxLogCb * log_cb);
   int on_success_ops_(ObTxLogCb * log_cb);
+  void check_and_register_timeout_task_();
 
   // bool need_commit_barrier(); 
 
@@ -681,7 +682,6 @@ private:
 
   int64_t last_ask_scheduler_status_ts_;
   int64_t cur_query_start_time_;
-  mutable TransTableSeqLock trans_table_seqlock_;
   ObCLogEncryptInfo clog_encrypt_info_;
 
   /*

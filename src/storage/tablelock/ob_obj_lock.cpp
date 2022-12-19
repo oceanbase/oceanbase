@@ -91,7 +91,7 @@ int ObTableLockOpLinkNode::get_table_lock_store_info(ObTableLockOp &info)
   return ret;
 }
 
-ObOBJLock::ObOBJLock()
+ObOBJLock::ObOBJLock(const ObLockID &lock_id) : lock_id_(lock_id)
 {
   is_deleted_ = false;
   row_share_ = 0;
@@ -667,15 +667,14 @@ int ObOBJLock::get_table_lock_store_info(
 }
 
 bool ObOBJLockMap::GetTableLockStoreInfoFunctor::operator() (
-    const ObLockID &lock_id,
     ObOBJLock *obj_lock)
 {
   int ret = common::OB_SUCCESS;
   bool bool_ret = false;
 
-  if (!lock_id.is_valid() || OB_ISNULL(obj_lock)) {
+  if (OB_ISNULL(obj_lock)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(lock_id), "map", OB_P(obj_lock));
+    LOG_WARN("invalid argument", K(ret), "map", OB_P(obj_lock));
   } else if (OB_FAIL(obj_lock->get_table_lock_store_info(store_arr_, freeze_scn_))) {
     LOG_WARN("get table lock store info failed", K(ret));
   }
@@ -747,15 +746,14 @@ int ObOBJLockMap::get_lock_op_iter(const ObLockID &lock_id,
 }
 
 bool ObOBJLockMap::GetMinCommittedDDLLogtsFunctor::operator() (
-    const ObLockID &lock_id,
     ObOBJLock *obj_lock)
 {
   int ret = common::OB_SUCCESS;
   bool bool_ret = false;
 
-  if (!lock_id.is_valid() || OB_ISNULL(obj_lock)) {
+  if (OB_ISNULL(obj_lock)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(lock_id), "map", OB_P(obj_lock));
+    LOG_WARN("invalid argument", K(ret), "map", OB_P(obj_lock));
   } else {
     min_committed_scn_ = std::min(min_committed_scn_,
                                       obj_lock->get_min_ddl_lock_committed_scn(flushed_scn_));
@@ -1625,17 +1623,17 @@ void ObOBJLock::drop_op_list_if_empty_(
   }
 }
 
-ObOBJLock *ObOBJLockFactory::alloc(const uint64_t tenant_id)
+ObOBJLock *ObOBJLockFactory::alloc(const uint64_t tenant_id, const ObLockID &lock_id)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
   ObOBJLock* obj_lock = NULL;
   ObMemAttr attr(tenant_id, OB_TABLE_LOCK_NODE);
-  if (!is_valid_tenant_id(tenant_id)) {
+  if (!is_valid_tenant_id(tenant_id) || !lock_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", K(ret), K(tenant_id));
+    LOG_WARN("invalid tenant_id", K(ret), K(tenant_id), K(lock_id));
   } else if (NULL != (ptr = ob_malloc(sizeof(ObOBJLock), attr))) {
-    obj_lock = new(ptr) ObOBJLock;
+    obj_lock = new(ptr) ObOBJLock(lock_id);
     (void)ATOMIC_FAA(&alloc_count_, 1);
   }
   LOG_DEBUG( "alloc allock_count", K(alloc_count_), K(ptr));
@@ -1670,7 +1668,7 @@ int ObOBJLockMap::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObOBJLockMap has been inited already", K(ret));
-  } else if (OB_FAIL(lock_map_.init(OB_TABLE_LOCK_MAP_ELEMENT))) {
+  } else if (OB_FAIL(lock_map_.init(lib::ObMemAttr(MTL_ID(), "ObOBJLockMap")))) {
     LOG_WARN("ObOBJLockMap create lock map failed", K(ret));
   } else {
     is_inited_ = true;
@@ -1727,11 +1725,12 @@ int ObOBJLockMap::get_or_create_obj_lock_with_ref_(
     do {
       if (OB_FAIL(lock_map_.get(lock_id, obj_lock))) {
         if (ret == OB_ENTRY_NOT_EXIST) {
-          if (OB_ISNULL(obj_lock = ObOBJLockFactory::alloc(tenant_id))) {
+          if (OB_ISNULL(obj_lock = ObOBJLockFactory::alloc(tenant_id, lock_id))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to alllocate ObOBJLock ", K(ret));
-          } else if (OB_FAIL(lock_map_.insert_and_get(lock_id,
-                                                      obj_lock))) {
+          } else if (OB_FAIL(lock_map_.insert_and_get(obj_lock->get_lock_id(),
+                                                      obj_lock,
+                                                      NULL))) {
             ObOBJLockFactory::release(obj_lock);
             obj_lock = nullptr;
             if (ret != OB_ENTRY_EXIST) {
@@ -1920,7 +1919,7 @@ int ObOBJLockMap::remove_lock(const ObLockID &lock_id)
     WRLockGuard guard(obj_lock->rwlock_);
     obj_lock->set_deleted();
     obj_lock->reset_without_lock(allocator_);
-    if (OB_FAIL(lock_map_.del(lock_id))) {
+    if (OB_FAIL(lock_map_.del(lock_id, obj_lock))) {
       if (ret != OB_ENTRY_NOT_EXIST) {
         LOG_WARN("remove lock owner list map failed. ", K(ret), K(lock_id));
       } else {
@@ -2084,7 +2083,7 @@ void ObOBJLockMap::drop_obj_lock_if_empty_(
         } else if (obj_lock != recheck_ptr) {
           LOG_WARN("the obj lock at map is not me, do nothing", K(lock_id), KP(obj_lock),
                    KP(recheck_ptr));
-        } else if (OB_FAIL(lock_map_.del(lock_id))) {
+        } else if (OB_FAIL(lock_map_.del(lock_id, obj_lock))) {
           LOG_WARN("remove obj lock from map failed. ", K(ret), K(lock_id));
         }
       }

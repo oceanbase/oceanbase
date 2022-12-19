@@ -239,18 +239,18 @@ int ObMetaPointerMap<Key, T>::erase(const Key &key)
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
   } else {
-    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
-    if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
-      STORAGE_LOG(WARN, "fail to get from map", K(ret));
-    } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
-      STORAGE_LOG(WARN, "fail to erase from map", K(ret));
-    } else {
-      ObMetaPointer<T> *value = ptr->get_value_ptr();
-      value->reset_obj();
-      if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
-        STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
-      }
-    }
+     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+     if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
+       STORAGE_LOG(WARN, "fail to get from map", K(ret));
+     } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
+       STORAGE_LOG(WARN, "fail to erase from map", K(ret));
+     } else {
+       ObMetaPointer<T> *value = ptr->get_value_ptr();
+       value->reset_obj();
+       if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
+         STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
+       }
+     }
    }
   return ret;
 }

@@ -2331,6 +2331,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       }
       // 6. enable extended SQL syntax in the MySQL mode
       enable_sql_extension_ = tenant_config->enable_sql_extension;
+      // 7. print_sample_ppm_ for flt
+      ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
     }
     //timezone的更新频率非常低，放到后台驱动
     (void)session_->update_timezone_info();

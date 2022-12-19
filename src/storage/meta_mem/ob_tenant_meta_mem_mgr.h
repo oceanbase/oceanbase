@@ -186,7 +186,6 @@ public:
   int get_meta_mem_status(common::ObIArray<ObTenantMetaMemStatus> &info) const;
 
   int get_tablet_pointer_tx_data(const ObTabletMapKey &key, ObTabletTxMultiSourceDataUnit &tx_data);
-  int set_tablet_pointer_tx_data(const ObTabletMapKey &key, const ObTabletTxMultiSourceDataUnit &tx_data);
   int insert_pinned_tablet(const ObTabletMapKey &key);
   int erase_pinned_tablet(const ObTabletMapKey &key);
   int get_tablet_ddl_kv_mgr(const ObTabletMapKey &key, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
@@ -201,6 +200,8 @@ public:
 
   TO_STRING_KV(K_(tenant_id), K_(is_inited));
 private:
+  int64_t cal_adaptive_bucket_num();
+
   typedef ObResourceValueStore<ObMetaPointer<ObTablet>> TabletValueStore;
 
   struct CandidateTabletInfo final

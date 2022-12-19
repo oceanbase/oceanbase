@@ -1556,7 +1556,7 @@ int ObLSTabletService::get_tablet_with_timeout(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(get_timeout_us));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, get_timeout_us))) {
-    while (OB_ALLOCATE_MEMORY_FAILED == ret && ObTimeUtility::current_time() < retry_timeout_us) {
+    while (OB_ALLOCATE_MEMORY_FAILED == ret && ObClockGenerator::getClock() < retry_timeout_us) {
       ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle, get_timeout_us);
     }
     if (OB_ALLOCATE_MEMORY_FAILED == ret) {
@@ -2421,7 +2421,7 @@ int ObLSTabletService::update_rows(
       LOG_DEBUG("get_dml_update_row", KP(row_iter), K(old_tbl_row), K(new_tbl_row));
       bool duplicate = false;
       ++got_row_count;
-      cur_time = ObTimeUtility::current_time();
+      cur_time = ObClockGenerator::getClock();
       if ((0 == (0x1FF & got_row_count)) && (cur_time > dml_param.timeout_)) {
         //checking timeout cost too much, so check every 512 rows
         ret = OB_TIMEOUT;
@@ -2556,7 +2556,7 @@ int ObLSTabletService::put_rows(
 
     int64_t cur_time = 0;
     while (OB_SUCC(ret) && OB_SUCC(row_iter->get_next_row(row))) {
-      cur_time = ObTimeUtility::current_time();
+      cur_time = ObClockGenerator::getClock();
       tbl_row.row_val_ = *row;
       if (cur_time > dml_param.timeout_) {
         ret = OB_TIMEOUT;
@@ -2622,7 +2622,7 @@ int ObLSTabletService::delete_rows(
     // delete table rows
     int64_t cur_time = 0;
     while (OB_SUCC(ret) && OB_SUCC(row_iter->get_next_row(row))) {
-      cur_time = ObTimeUtility::current_time();
+      cur_time = ObClockGenerator::getClock();
       if (cur_time > run_ctx.dml_param_.timeout_) {
         ret = OB_TIMEOUT;
         LOG_WARN("query timeout", K(cur_time), K(run_ctx.dml_param_), K(ret));
@@ -2705,7 +2705,7 @@ int ObLSTabletService::lock_rows(
         bool is_exists = true;
         if (ObTimeUtility::current_time() > dml_param.timeout_) {
           ret = OB_TIMEOUT;
-          int64_t cur_time = ObTimeUtility::current_time();
+          int64_t cur_time = ObClockGenerator::getClock();
           LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
         } else if (GCONF.enable_defensive_check()
             && OB_FAIL(check_old_row_legitimacy(tablet_handle, run_ctx, *row))) {
@@ -2773,7 +2773,7 @@ int ObLSTabletService::lock_row(
         ObTablet::get_lock_wait_timeout(abs_lock_timeout, dml_param.timeout_);
       if (ObTimeUtility::current_time() > dml_param.timeout_) {
         ret = OB_TIMEOUT;
-        int64_t cur_time = ObTimeUtility::current_time();
+        int64_t cur_time = ObClockGenerator::getClock();
         LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
       } else if (OB_FAIL(tablet_handle.get_obj()->lock_row(run_ctx.relative_table_, ctx, row))) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -3201,6 +3201,14 @@ int ObLSTabletService::need_check_old_row_legitimacy(ObDMLRunningCtx &run_ctx,
     //batch stmt execution dependency defensive check to check
     //if the same row was modified multiple times
     need_check = true;
+    ret = E(EventTable::EN_INS_MULTI_VALUES_BATCH_OPT) OB_SUCCESS;
+    // no need to check old row, just for bmsql performance optimization
+    // TODO yuchen.ywc https://aone.alibaba-inc.com/project/81079/task/45910845
+    if (OB_SUCCESS != ret) {
+      LOG_INFO("error sim when current statement is batch update", K(ret), K(is_udf));
+      need_check = false;
+      ret = OB_SUCCESS;
+    }
   } else if (GCONF.enable_defensive_check()) {
     need_check = true;
     if (data_table.is_index_table() && !data_table.can_read_index()) {
@@ -3375,9 +3383,9 @@ int ObLSTabletService::insert_rows_to_tablet(
   const ObDMLBaseParam &dml_param = run_ctx.dml_param_;
   ObRelativeTable &data_table = run_ctx.relative_table_;
   if (OB_FAIL(ret)) {
-  } else if (ObTimeUtility::current_time() > dml_param.timeout_) {
+  } else if (ObClockGenerator::getClock() > dml_param.timeout_) {
     ret = OB_TIMEOUT;
-    int64_t cur_time = ObTimeUtility::current_time();
+    int64_t cur_time = ObClockGenerator::getClock();
     LOG_WARN("query timeout", K(cur_time), K(dml_param), K(ret));
   } else if (OB_FAIL(construct_table_rows(rows, tbl_rows, row_count))) {
     LOG_WARN("fail to construct table rows", K(ret));

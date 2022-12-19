@@ -29,7 +29,7 @@ namespace storage
 int ObIMemtableMgr::get_active_memtable(ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   if (OB_UNLIKELY(memtable_tail_ <= 0)) {
     ret = OB_ENTRY_NOT_EXIST;
     STORAGE_LOG(WARN, "There is no memtable in MemtableMgr", K(ret), K(memtable_tail_));
@@ -46,7 +46,7 @@ int ObIMemtableMgr::get_first_nonempty_memtable(ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
 
   for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
     ObTableHandleV2 tmp_handle;
@@ -86,7 +86,7 @@ int ObIMemtableMgr::get_all_memtables(ObTableHdlArray &handles)
 {
   int ret = OB_SUCCESS;
   // TODO(handora.qc): oblatchid
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
     ObTableHandleV2 handle;
     if (OB_FAIL(get_ith_memtable(i, handle))) {
@@ -135,7 +135,7 @@ int ObIMemtableMgr::get_newest_snapshot_version(SCN &snapshot_version)
 
 int ObIMemtableMgr::release_memtables(const SCN &scn)
 {
-  SpinWLockGuard lock_guard(lock_);
+  MemMgrWLockGuard lock_guard(lock_);
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
@@ -174,7 +174,7 @@ int ObIMemtableMgr::release_memtables()
 {
   int ret = OB_SUCCESS;
   const bool force_release = true;
-  SpinWLockGuard lock_guard(lock_);
+  MemMgrWLockGuard lock_guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));

@@ -121,6 +121,7 @@ public:
   };
   ObDynamicQSync(): is_inited_(false), ref_array_(NULL), ref_num_(0) {}
   virtual ~ObDynamicQSync() {destroy();}
+  bool is_inited() const { return is_inited_; }
 
   int init(const lib::ObMemAttr& mem_attr)
   {

@@ -678,7 +678,8 @@ ObTableLocation::ObTableLocation(const ObTableLocation &other) :
     gen_col_node_(NULL),
     subcalc_node_(NULL),
     sub_gen_col_node_(NULL),
-    part_projector_(allocator_)
+    part_projector_(allocator_),
+    related_list_(allocator_)
 {
   *this = other;
 }
@@ -718,6 +719,9 @@ int ObTableLocation::assign(const ObTableLocation &other)
     is_link_ = other.is_link_;
     is_part_range_get_ = other.is_part_range_get_;
     is_subpart_range_get_ = other.is_subpart_range_get_;
+    is_non_partition_optimized_ = other.is_non_partition_optimized_;
+    tablet_id_ = other.tablet_id_;
+    object_id_ = other.object_id_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
     }
@@ -786,6 +790,9 @@ int ObTableLocation::assign(const ObTableLocation &other)
     if (OB_SUCC(ret) && OB_NOT_NULL(other.se_sub_gen_col_expr_)) {
       OZ(other.se_sub_gen_col_expr_->deep_copy(allocator_, se_sub_gen_col_expr_));
     }
+    if (OB_SUCC(ret) && OB_FAIL(related_list_.assign(other.related_list_))) {
+      LOG_WARN("assign related list failed", K(ret));
+    }
   }
   if (OB_FAIL(ret)) {
     inited_ = false;
@@ -837,6 +844,10 @@ void ObTableLocation::reset()
   is_link_ = false;
   is_part_range_get_ = false;
   is_subpart_range_get_ = false;
+  is_non_partition_optimized_ = false;
+  tablet_id_.reset();
+  object_id_ = OB_INVALID_ID;
+  related_list_.reset();
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObDMLStmt &stmt,
@@ -1163,6 +1174,32 @@ int ObTableLocation::init_table_location_with_column_ids(ObSqlSchemaGuard &schem
   return ret;
 }
 
+int ObTableLocation::calc_not_partitioned_table_ids(ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTabletID, 1> tablet_ids;
+  ObSEArray<ObObjectID, 1> partition_ids;
+  ObDASTabletMapper tablet_mapper;
+  if (OB_FAIL(exec_ctx.get_das_ctx().get_das_tablet_mapper(
+                  loc_meta_.ref_table_id_, tablet_mapper, &loc_meta_.related_table_ids_))) {
+    LOG_WARN("fail to get das tablet mapper", K(ret));
+  } else if (OB_FAIL(tablet_mapper.get_non_partition_tablet_id(tablet_ids, partition_ids))) {
+    LOG_WARN("fail to get non partition tablet id", K(ret));
+  } else if (!(1 == tablet_ids.count() && 1 == partition_ids.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get tablet ids or partition ids size more than 1", K(ret));
+  } else {
+    tablet_id_ = tablet_ids.at(0);
+    object_id_ = partition_ids.at(0);
+    DASRelatedTabletMap *related_map = static_cast<DASRelatedTabletMap *>(
+          tablet_mapper.get_related_table_info().related_map_);
+    if (OB_NOT_NULL(related_map)) {
+      related_list_.assign(related_map->get_list());
+    }
+  }
+  return ret;
+}
+
 int ObTableLocation::init(
     const ObTableSchema *table_schema,
     const ObDMLStmt &stmt,
@@ -1339,8 +1376,11 @@ int ObTableLocation::calculate_partition_ids_by_rowkey(ObSQLSessionInfo &session
     sql_schema_guard.set_schema_guard(&schema_guard);
     exec_ctx.set_my_session(&session_info);
     ObDASTabletMapper tablet_mapper;
-    if (OB_FAIL(exec_ctx.get_das_ctx().get_das_tablet_mapper(table_id, tablet_mapper,
-                                                            &loc_meta_.related_table_ids_))) {
+    if (is_non_partition_optimized_ && table_id == loc_meta_.ref_table_id_) {
+      tablet_mapper.set_non_partitioned_table_ids(tablet_id_, object_id_, &related_list_);
+    }
+    if (OB_FAIL(exec_ctx.get_das_ctx().get_das_tablet_mapper(
+          table_id, tablet_mapper, &loc_meta_.related_table_ids_))) {
       LOG_WARN("fail to get das tablet mapper", K(ret));
     } else if (OB_UNLIKELY(is_virtual_table(table_id))) {
       ret = OB_NOT_SUPPORTED;
@@ -1388,6 +1428,9 @@ int ObTableLocation::calculate_tablet_id_by_row(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   ObDASTabletMapper tablet_mapper;
+  if (is_non_partition_optimized_ && table_id == loc_meta_.ref_table_id_) {
+    tablet_mapper.set_non_partitioned_table_ids(tablet_id_, object_id_, &related_list_);
+  }
   if (OB_FAIL(exec_ctx.get_das_ctx().get_das_tablet_mapper(table_id, tablet_mapper,
                                                           &loc_meta_.related_table_ids_))) {
     LOG_WARN("fail to get das tablet mapper", K(ret));
@@ -1439,6 +1482,9 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
     // skip dblink table
     tablet_ids.push_back(ObTabletID(0));
     partition_ids.push_back(0);
+  } else if (is_non_partition_optimized_
+             && FALSE_IT(tablet_mapper.set_non_partitioned_table_ids(
+                             tablet_id_, object_id_, &related_list_))) {
   } else if (OB_FAIL(exec_ctx.get_das_ctx().get_das_tablet_mapper(
                       loc_meta_.ref_table_id_, tablet_mapper, &loc_meta_.related_table_ids_))) {
     LOG_WARN("fail to get das tablet mapper", K(ret));
@@ -4031,6 +4077,9 @@ int ObTableLocation::replace_ref_table_id(const uint64_t ref_table_id, ObExecCon
   LOG_DEBUG("set log op infos", K(ref_table_id), K(loc_meta_));
   //replace the partition hint ids with local index object id
   ObDASTabletMapper tablet_mapper;
+  if (is_non_partition_optimized_) {
+    tablet_mapper.set_non_partitioned_table_ids(tablet_id_, object_id_, &related_list_);
+  }
   if (OB_FAIL(DAS_CTX(exec_ctx).get_das_tablet_mapper(loc_meta_.ref_table_id_, tablet_mapper))) {
     LOG_WARN("get das tablet mapper failed", K(ret));
   }
@@ -4505,6 +4554,10 @@ OB_DEF_SERIALIZE(ObTableLocation)
                 is_part_range_get_,
                 is_subpart_range_get_);
   }
+  OB_UNIS_ENCODE(is_non_partition_optimized_);
+  OB_UNIS_ENCODE(tablet_id_);
+  OB_UNIS_ENCODE(object_id_);
+  OB_UNIS_ENCODE(related_list_);
   return ret;
 }
 
@@ -4577,6 +4630,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               is_part_range_get_,
               is_subpart_range_get_);
+  OB_UNIS_ADD_LEN(is_non_partition_optimized_);
+  OB_UNIS_ADD_LEN(tablet_id_);
+  OB_UNIS_ADD_LEN(object_id_);
+  OB_UNIS_ADD_LEN(related_list_);
   return len;
 }
 
@@ -4727,6 +4784,10 @@ OB_DEF_DESERIALIZE(ObTableLocation)
                 is_part_range_get_,
                 is_subpart_range_get_);
   }
+  OB_UNIS_DECODE(is_non_partition_optimized_);
+  OB_UNIS_DECODE(tablet_id_);
+  OB_UNIS_DECODE(object_id_);
+  OB_UNIS_DECODE(related_list_);
   return ret;
 }
 
@@ -4749,6 +4810,9 @@ int ObTableLocation::get_partition_ids_by_range(ObExecContext &exec_ctx,
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLocation not inited", K(ret));
+  } else if (is_non_partition_optimized_
+             && FALSE_IT(tablet_mapper.set_non_partitioned_table_ids(
+                             tablet_id_, object_id_, &related_list_))) {
   } else if (OB_FAIL(exec_ctx.get_das_ctx().get_das_tablet_mapper(
                       loc_meta_.ref_table_id_, tablet_mapper, &loc_meta_.related_table_ids_))) {
     LOG_WARN("fail to get das tablet mapper", K(ret));

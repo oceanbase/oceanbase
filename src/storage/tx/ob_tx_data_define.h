@@ -268,7 +268,6 @@ public:
 
   void dump_2_text(FILE *fd) const;
   static void print_to_stderr(const ObTxData &tx_data);
-  
 
   DECLARE_TO_STRING;
 

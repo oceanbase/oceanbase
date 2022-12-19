@@ -470,7 +470,6 @@ int ObLSTxCtxMgr::get_tx_ctx_(const ObTransID &tx_id, const bool for_replay, ObP
   const int64_t MAX_LOOP_COUNT = 100;
   int64_t count = 0;
   int64_t gts = 0;
-  MonotonicTs unused_ts = MonotonicTs::current_time();
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited");
@@ -1507,8 +1506,8 @@ int ObTxCtxMgr::init(const int64_t tenant_id,
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     TRANS_LOG(WARN, "ObTxCtxMgr inited twice", K(*this));
-  } else if (OB_FAIL(ls_tx_ctx_mgr_map_.init(ObModIds::OB_HASH_BUCKET_PARTITION_TRANS_CTX))) {
-    TRANS_LOG(WARN, "ls_tx_ctx_mgr_map_ init error", KR(ret));
+  } else if (OB_FAIL(ls_tx_ctx_mgr_map_.init(lib::ObMemAttr(tenant_id, "TxCtxMgr")))) {
+    TRANS_LOG(WARN, "ls_tx_ctx_mgr_map_ init error", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(ts_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "ts mgr is null");
@@ -2072,7 +2071,7 @@ int ObTxCtxMgr::create_ls(const int64_t tenant_id,
     TRANS_LOG(WARN, "ls tx service init failed", K(ret), K(ls_id));
     ObLSTxCtxMgrFactory::release(ls_tx_ctx_mgr);
     ls_tx_ctx_mgr = NULL;
-  } else if (OB_FAIL(ls_tx_ctx_mgr_map_.insert_and_get(ls_id, ls_tx_ctx_mgr))) {
+  } else if (OB_FAIL(ls_tx_ctx_mgr_map_.insert_and_get(ls_id, ls_tx_ctx_mgr, NULL))) {
     TRANS_LOG(WARN, "ls_tx_ctx_mgr_map_ insert error", KR(ret), K(ls_id));
     ObLSTxCtxMgrFactory::release(ls_tx_ctx_mgr);
     ls_tx_ctx_mgr = NULL;
@@ -2153,7 +2152,7 @@ int ObTxCtxMgr::remove_ls(const ObLSID &ls_id, const bool graceful)
       // if ls_id has been removed, OB_SUCCESS is returned.
       if (OB_SUCC(get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
         // remove ls_id transaction context from map
-        if (OB_FAIL(ls_tx_ctx_mgr_map_.del(ls_id))) {
+        if (OB_FAIL(ls_tx_ctx_mgr_map_.del(ls_id, ls_tx_ctx_mgr))) {
           TRANS_LOG(WARN, "remove ls error", KR(ret), K(ls_id));
         } else {
           ATOMIC_INC(&ls_release_cnt_);

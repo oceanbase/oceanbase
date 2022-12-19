@@ -37,7 +37,8 @@ private:
 
 public:  // ObTxDataMemtableMgr
   ObTxDataMemtableMgr()
-    : is_freezing_(false),
+    : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
+      is_freezing_(false),
       ls_id_(0),
       tx_data_table_(nullptr),
       ls_tablet_svr_(nullptr),
@@ -136,6 +137,7 @@ private:  // ObTxDataMemtableMgr
   ObTxDataTable *tx_data_table_;
   ObLSTabletService *ls_tablet_svr_;
   SliceAllocator *slice_allocator_;
+  common::SpinRWLock lock_def_;
 };
 
 class TxDataMemtableMgrFreezeGuard

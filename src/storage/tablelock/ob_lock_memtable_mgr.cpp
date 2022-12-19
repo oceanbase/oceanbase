@@ -28,8 +28,14 @@ namespace transaction
 namespace tablelock
 {
 
-ObLockMemtableMgr::ObLockMemtableMgr()
-{}
+ObLockMemtableMgr::ObLockMemtableMgr() : ObIMemtableMgr(LockType::OB_QSYNC_LOCK, &lock_def_)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_def_.init(lib::ObMemAttr(MTL_ID(), "LockMemtableMgr")))) {
+    LOG_WARN("lock memtable mgr lock init error", K(ret), "tenant_id", MTL_ID());
+  }
+  UNUSED(ret);
+}
 
 int ObLockMemtableMgr::init(
     const common::ObTabletID &tablet_id,
@@ -47,6 +53,9 @@ int ObLockMemtableMgr::init(
              OB_ISNULL(t3m)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), KP(freezer), KP(t3m));
+  } else if (!lock_def_.is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("lock memtable mgr lock not init", K(ret), K(tablet_id), K(ls_id));
   } else {
     ls_id_ = ls_id;
     freezer_ = freezer;
@@ -65,7 +74,7 @@ void ObLockMemtableMgr::destroy()
 
 void ObLockMemtableMgr::reset()
 {
-  SpinWLockGuard lock_guard(lock_);
+  MemMgrWLockGuard lock_guard(lock_);
   reset_tables();
   freezer_ = NULL;
   is_inited_ = false;
@@ -86,7 +95,7 @@ int ObLockMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
   ObLockMemtable *memtable = nullptr;
   ObLSTxService *ls_tx_svr = nullptr;
 
-  SpinWLockGuard lock_guard(lock_);
+  MemMgrWLockGuard lock_guard(lock_);
 
   table_key.table_type_ = ObITable::LOCK_MEMTABLE;
   table_key.tablet_id_ = LS_LOCK_TABLET;

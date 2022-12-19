@@ -114,6 +114,7 @@ ob_set_subtarget(oblib_lib lock
   lock/ob_thread_cond.cpp
   lock/ob_rwlock.cpp
   lock/ob_futex.cpp
+  lock/ob_bucket_qsync_lock.cpp
   lock/ob_qsync_lock.cpp
 )
 

@@ -537,7 +537,7 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
 
     if (OB_SUCC(ret)) {
       if (!ok_param.take_trace_id_to_client_) {
-        const int64_t elapsed_time = ObTimeUtility::current_time() - query_receive_ts_;
+        const int64_t elapsed_time = ObClockGenerator::getClock() - query_receive_ts_;
         bool is_slow = (elapsed_time > GCONF.trace_log_slow_query_watermark);
         ok_param.take_trace_id_to_client_ = is_slow;
       }

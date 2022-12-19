@@ -33,11 +33,13 @@ namespace storage
 {
 
 ObTabletMemtableMgr::ObTabletMemtableMgr()
-  : ls_(NULL),
+  : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
+    ls_(NULL),
+    lock_def_(common::ObLatchIds::TABLET_MEMTABLE_LOCK),
     schema_recorder_()
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTabletMemtableMgr) <= 352, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletMemtableMgr) <= 370, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -48,7 +50,7 @@ ObTabletMemtableMgr::~ObTabletMemtableMgr()
 
 void ObTabletMemtableMgr::destroy()
 {
-  SpinWLockGuard lock_guard(lock_);
+  MemMgrWLockGuard lock_guard(lock_);
   // release memtable
   memtable::ObIMemtable *imemtable = nullptr;
   int ret = OB_SUCCESS;
@@ -146,7 +148,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
 {
   ObTimeGuard time_guard("ObTabletMemtableMgr::create_memtable", 10 * 1000);
   // Write lock
-  SpinWLockGuard lock_guard(lock_);
+  MemMgrWLockGuard lock_guard(lock_);
   time_guard.click("lock");
 
   int ret = OB_SUCCESS;
@@ -269,7 +271,7 @@ bool ObTabletMemtableMgr::has_active_memtable()
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    SpinRLockGuard lock_guard(lock_);
+    MemMgrRLockGuard lock_guard(lock_);
     if (NULL != get_active_memtable_()) {
       bool_ret = true;
     }
@@ -279,14 +281,14 @@ bool ObTabletMemtableMgr::has_active_memtable()
 
 int64_t ObTabletMemtableMgr::get_memtable_count() const
 {
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   return get_memtable_count_();
 }
 
 int ObTabletMemtableMgr::get_boundary_memtable(ObTableHandleV2 &handle)
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   memtable::ObIMemtable *memtable = nullptr;
   handle.reset();
 
@@ -307,7 +309,7 @@ int ObTabletMemtableMgr::get_boundary_memtable(ObTableHandleV2 &handle)
 int ObTabletMemtableMgr::get_active_memtable(ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   handle.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -344,7 +346,7 @@ int ObTabletMemtableMgr::get_active_memtable_(ObTableHandleV2 &handle) const
 ObMemtable *ObTabletMemtableMgr::get_last_frozen_memtable() const
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   memtable::ObMemtable *memtable = nullptr;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -476,7 +478,7 @@ int ObTabletMemtableMgr::get_memtable_for_replay(SCN replay_scn,
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    SpinRLockGuard lock_guard(lock_);
+    MemMgrRLockGuard lock_guard(lock_);
     int64_t i = 0;
     for (i = memtable_tail_ - 1; OB_SUCC(ret) && i >= memtable_head_; --i) {
       if (OB_FAIL(get_ith_memtable(i, handle))) {
@@ -520,7 +522,7 @@ int ObTabletMemtableMgr::get_memtables(
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    SpinRLockGuard lock_guard(lock_);
+    MemMgrRLockGuard lock_guard(lock_);
     if (reset_handle) {
       handle.reset();
     }
@@ -548,7 +550,7 @@ int ObTabletMemtableMgr::get_memtables_nolock(ObTableHdlArray &handle)
 int ObTabletMemtableMgr::get_all_memtables(ObTableHdlArray &handle)
 {
   int ret = OB_SUCCESS;
-  SpinRLockGuard lock_guard(lock_);
+  MemMgrRLockGuard lock_guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -598,7 +600,7 @@ int ObTabletMemtableMgr::get_first_frozen_memtable(ObTableHandleV2 &handle) cons
 {
   int ret = OB_SUCCESS;
   memtable::ObMemtable *memtable = NULL;
-  SpinRLockGuard guard(lock_);
+  MemMgrRLockGuard guard(lock_);
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -750,7 +752,7 @@ int64_t ObTabletMemtableMgr::to_string(char *buf, const int64_t buf_len) const
     J_COLON();
     pos += ObIMemtableMgr::to_string(buf + pos, buf_len - pos);
     J_COMMA();
-    SpinRLockGuard lock_guard(lock_);
+    MemMgrRLockGuard lock_guard(lock_);
     J_OBJ_START();
     J_ARRAY_START();
     for (int64_t i = memtable_head_; i < memtable_tail_; ++i) {
@@ -810,7 +812,7 @@ int ObTabletMemtableMgr::get_memtables_v2(
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    SpinRLockGuard guard(lock_);
+    MemMgrRLockGuard guard(lock_);
     if (reset_handle) {
       handle.reset();
     }
@@ -867,7 +869,7 @@ int ObTabletMemtableMgr::get_multi_source_data_unit(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(multi_source_data_unit));
   } else {
-    SpinRLockGuard lock_guard(lock_);
+    MemMgrRLockGuard lock_guard(lock_);
 
     if (!has_memtable_()) {
       ret = OB_ENTRY_NOT_EXIST;
@@ -910,7 +912,7 @@ int ObTabletMemtableMgr::get_memtable_for_multi_source_data_unit(
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    SpinRLockGuard lock_guard(lock_);
+    MemMgrRLockGuard lock_guard(lock_);
 
     if (!has_memtable_()) {
       ret = OB_ENTRY_NOT_EXIST;

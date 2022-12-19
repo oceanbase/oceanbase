@@ -7,7 +7,7 @@ target_include_directories(objit_base INTERFACE
 # GLOB all source files according to its suffix.
 file(GLOB_RECURSE objit_SRC "*.h" "*.cpp" "${CMAKE_CURRENT_SROUCE_DIR}/../include/*.h")
 
-set(CMAKE_CXX_STANDARD 14)
+add_definitions(-std=gnu++14)
 add_library(objit_objects OBJECT ${objit_SRC})
 target_link_libraries(objit_objects PRIVATE oblib_base_base objit_base)
 
