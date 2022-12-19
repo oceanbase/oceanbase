@@ -54,6 +54,7 @@ class ObTxCommitLog;
 class ObTxAbortLog;
 class ObTxClearLog;
 class ObIRetainCtxCheckFunctor; 
+struct ObTxMsg;
 }
 namespace palf
 {
@@ -226,6 +227,9 @@ private:
                 K(coord_prepare_info_arr_),
                 K_(upstream_state),
                 K_(retain_cause),
+                "2pc_role",
+                get_2pc_role(),
+                KPC(msg_2pc_cache_),
                 K_(collected),
                 K_(ref),
                 K_(rec_log_ts),
@@ -486,7 +490,7 @@ protected:
   virtual int wait_gts_elapse_commit_version_(bool &need_wait);
   virtual int get_local_max_read_version_(share::SCN &local_max_read_version);
   virtual int update_local_max_commit_version_(const share::SCN &commit_version);
-  virtual int check_and_response_scheduler_(int result);
+  virtual int check_and_response_scheduler_(ObTxState next_phase, int result);
 private:
 
   int init_log_cbs_(const share::ObLSID&ls_id, const ObTransID &tx_id);
@@ -537,10 +541,11 @@ public:
   int handle_tx_2pc_prepare_version_req(const Ob2pcPrepareVersionReqMsg &msg);
   int handle_tx_2pc_prepare_version_resp(const Ob2pcPrepareVersionRespMsg &msg);
 protected:
-  virtual int post_msg(const ObTwoPhaseCommitMsgType &msg_type) override;
+  // virtual int post_msg(const ObTwoPhaseCommitMsgType &msg_type);
   virtual int post_msg(const ObTwoPhaseCommitMsgType& msg_type,
-                       const uint8_t participant_id) override;
+                       const int64_t participant_id) override;
 private:
+  int apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type);
   int set_2pc_upstream_(const share::ObLSID&upstream);
   int set_2pc_participants_(const share::ObLSArray &participants);
   int set_2pc_incremental_participants_(const share::ObLSArray &participants);
@@ -550,7 +555,7 @@ private:
   int merge_prepare_log_info_(const ObLSLogInfo &prepare_info);
   int set_2pc_commit_version_(const share::SCN &commit_version);
   int find_participant_id_(const share::ObLSID&participant,
-                           uint64_t &participant_id);
+                           int64_t &participant_id);
   int post_tx_commit_resp_(const int status);
   int post_msg_(const ObTwoPhaseCommitMsgType& msg_type,
                 const share::ObLSID&ls);
@@ -586,11 +591,12 @@ private:
 
   // ========================== TX COMMITTER BEGIN ==========================
 protected:
-  virtual bool is_root() const    override;
-  virtual bool is_leaf() const    override;
-  virtual int64_t get_participants_size()     override
-  { return exec_info_.participants_.count(); }
-  virtual uint64_t get_participant_id()       override;
+  virtual Ob2PCRole get_2pc_role() const  override;
+  virtual int64_t get_downstream_size() const override
+  {
+    return exec_info_.participants_.count();
+  };
+  virtual int64_t get_self_id();
 
   virtual bool is_2pc_logging() const override;
   virtual ObTxState get_downstream_state() const override
@@ -614,14 +620,14 @@ protected:
   // Caller need ensuere the participants array has already been set and the
   // size of the participants array is larger or equal than one.
   virtual int do_prepare(bool &no_need_submit_log) override;
-  virtual int on_prepare()   override;
-  virtual int do_pre_commit(bool& need_wait) override;
-  virtual int do_commit()    override;
-  virtual int on_commit()    override;
-  virtual int do_abort()     override;
-  virtual int on_abort()     override;
-  virtual int do_clear()     override;
-  virtual int on_clear()     override;
+  virtual int on_prepare() override;
+  virtual int do_pre_commit(bool &need_wait) override;
+  virtual int do_commit() override;
+  virtual int on_commit() override;
+  virtual int do_abort() override;
+  virtual int on_abort() override;
+  virtual int do_clear() override;
+  virtual int on_clear() override;
   // for xa
   virtual int reply_to_scheduler_for_sub2pc(int64_t msg_type) override;
 
@@ -750,6 +756,7 @@ private:
   int16_t retain_cause_;
 
   ObTxState upstream_state_;
+  const ObTxMsg * msg_2pc_cache_;
   ObLSLogInfoArray coord_prepare_info_arr_;
   TransModulePageAllocator reserve_allocator_;
   // tmp scheduler addr is used to post response for the second phase of xa commit/rollback
