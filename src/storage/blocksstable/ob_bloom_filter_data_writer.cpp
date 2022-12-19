@@ -171,7 +171,7 @@ int ObBloomFilterMacroBlockWriter::init(const ObDataStoreDesc &desc)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init ObBloomFilterMacroBlockWriter", K(desc),
                 K(ret));
-  } else if (OB_UNLIKELY(is_major_merge(desc.merge_type_))) {
+  } else if (OB_UNLIKELY(is_major_merge_type(desc.merge_type_))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Major freeze would not build bloomfilter macro data", K(ret));
   } else if (OB_FAIL(data_buffer_.ensure_space(desc.macro_block_size_))) {

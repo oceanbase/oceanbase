@@ -786,7 +786,7 @@ int ObPartitionMergeHelper::find_rowkey_minimum_iters(MERGE_ITER_ARRAY &minimum_
           STORAGE_LOG(WARN, "Fail to push merge_iter to minimum_iters", K(ret), K(minimum_iters));
         } else if (OB_FAIL(consume_iter_idxs_.push_back(iter_idx))) {
           STORAGE_LOG(WARN, "Fail to push consume iter idx to consume_iters", K(ret), K(consume_iter_idxs_));
-        }else if (OB_FAIL(rows_merger_->pop())) {
+        } else if (OB_FAIL(rows_merger_->pop())) {
           STORAGE_LOG(WARN, "loser tree pop error", K(ret), K(has_same_rowkey), KPC(rows_merger_));
         }
       }
@@ -832,7 +832,7 @@ int ObPartitionMergeHelper::build_rows_merger()
           STORAGE_LOG(WARN, "failed to push item", K(ret), K(i), KPC(rows_merger_));
         }
       }
-    }// end for
+    } // end for
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(rows_merger_->rebuild())) {
@@ -864,7 +864,7 @@ int ObPartitionMergeHelper::rebuild_rows_merger()
       } else if (OB_ISNULL(iter = merge_iters_.at(iter_idx))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected null iter", K(ret), K(iter_idx), K(merge_iters_));
-      } else if (iter->is_iter_end()) {//skip iter end
+      } else if (iter->is_iter_end()) { //skip iter end
       } else {
         ObPartitionMergeLoserTreeItem item;
         item.iter_ = iter;
@@ -960,7 +960,7 @@ ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(const ObMerg
   ObPartitionMergeIter *merge_iter = nullptr;
   if (storage::is_backfill_tx_merge(merge_param.merge_type_)) {
     merge_iter = alloc_helper<ObPartitionMinorRowMergeIter> (allocator_);
-  } else if (!is_small_sstable && !merge_param.is_mini_merge() && !merge_param.is_full_merge_ && merge_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ) {
+  } else if (!is_small_sstable && !is_mini_merge(merge_param.merge_type_) && !merge_param.is_full_merge_ && merge_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ) {
     merge_iter = alloc_helper<ObPartitionMinorMacroMergeIter>(allocator_);
   } else {
     merge_iter = alloc_helper<ObPartitionMinorRowMergeIter>(allocator_);

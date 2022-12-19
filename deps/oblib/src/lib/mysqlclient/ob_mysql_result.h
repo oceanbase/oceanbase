@@ -180,6 +180,46 @@
     }\
   }
 
+#define EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, column_name, field, type, skip_null_error, skip_column_error, default_value) \
+  if (OB_SUCC(ret)) \
+  { \
+    uint64_t int_value = 0; \
+    if (OB_SUCCESS == (ret = (result).get_uint(column_name, int_value)))  \
+    { \
+      field = static_cast<type>(int_value); \
+    } \
+    else if (OB_ERR_NULL_VALUE == ret) \
+    { \
+      if (skip_null_error) \
+      { \
+        SQL_LOG(TRACE, "null value, ignore", K(column_name)); \
+        field = static_cast<type>(default_value); \
+        ret = OB_SUCCESS; \
+      } \
+      else \
+      { \
+        SQL_LOG(WARN, "null value", K(column_name), K(ret)); \
+      } \
+    } \
+    else if (OB_ERR_COLUMN_NOT_FOUND == ret) \
+    { \
+      if (skip_column_error) \
+      { \
+        SQL_LOG(INFO, "column not found, ignore", K(column_name)); \
+        field = static_cast<type>(default_value); \
+        ret = OB_SUCCESS; \
+      } \
+      else \
+      { \
+        SQL_LOG(WARN, "column not found", K(column_name), K(ret)); \
+      } \
+    } \
+    else \
+    { \
+      SQL_LOG(WARN, "fail to get column in row. ", K(column_name), K(ret)); \
+    }\
+  }
+
 #define EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, column_name, field, type) \
   if (OB_SUCC(ret)) \
   { \

@@ -36,10 +36,11 @@ ObTabletMemtableMgr::ObTabletMemtableMgr()
   : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
     ls_(NULL),
     lock_def_(common::ObLatchIds::TABLET_MEMTABLE_LOCK),
-    schema_recorder_()
+    schema_recorder_(),
+    medium_info_recorder_()
 {
 #if defined(__x86_64__)
-  static_assert(sizeof(ObTabletMemtableMgr) <= 370, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletMemtableMgr) <= 448, "The size of ObTabletMemtableMgr will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -68,7 +69,8 @@ void ObTabletMemtableMgr::destroy()
   tablet_id_ = 0;
   ls_ = NULL;
   freezer_ = nullptr;
-  schema_recorder_.reset();
+  schema_recorder_.destroy();
+  medium_info_recorder_.destroy();
   is_inited_ = false;
 }
 
@@ -114,27 +116,33 @@ int ObTabletMemtableMgr::init(const common::ObTabletID &tablet_id,
   return ret;
 }
 
-int ObTabletMemtableMgr::init_storage_schema_recorder(
+int ObTabletMemtableMgr::init_storage_recorder(
     const ObTabletID &tablet_id,
     const share::ObLSID &ls_id,
     const int64_t max_saved_schema_version,
+    const int64_t max_saved_medium_scn,
+    const lib::Worker::CompatMode compat_mode,
     logservice::ObLogHandler *log_handler)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(schema_recorder_.init(ls_id, tablet_id, max_saved_schema_version, log_handler))) {
+  if (OB_FAIL(schema_recorder_.init(ls_id, tablet_id, max_saved_schema_version, compat_mode, log_handler))) {
     TRANS_LOG(WARN, "failed to init schema recorder", K(ret), K(max_saved_schema_version), KP(log_handler));
+  } else if (OB_FAIL(medium_info_recorder_.init(ls_id, tablet_id, max_saved_medium_scn, log_handler))) {
+    TRANS_LOG(WARN, "failed to init medium info recorder", K(ret), K(max_saved_medium_scn), KP(log_handler));
   }
   return ret;
 }
 
-int ObTabletMemtableMgr::reset_storage_schema_recorder()
+int ObTabletMemtableMgr::reset_storage_recorder()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!schema_recorder_.is_inited())) {
+  if (OB_UNLIKELY(!schema_recorder_.is_inited() || !medium_info_recorder_.is_inited())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema recorder is not init", K(ret));
+    LOG_WARN("schema recorder or medium recorder is not init", K(ret), K_(schema_recorder),
+        K_(medium_info_recorder));
   } else {
     schema_recorder_.reset();
+    medium_info_recorder_.reset();
   }
   return ret;
 }

@@ -140,8 +140,6 @@ void ObMajorRowsMergerTest::prepare_merge_context(const ObMergeType &merge_type,
   merge_context.schema_ctx_.base_schema_version_ = table_schema_.get_schema_version();
   merge_context.schema_ctx_.schema_version_ = table_schema_.get_schema_version();
   merge_context.schema_ctx_.storage_schema_ = &table_merge_schema_;
-  merge_context.schema_ctx_.merge_schema_ = &table_merge_schema_;
-  merge_context.schema_ctx_.table_schema_ = &table_schema_;
 
   merge_context.is_full_merge_ = is_full_merge;
   merge_context.merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
@@ -225,7 +223,7 @@ TEST_F(ObMajorRowsMergerTest, tset_compare_func)
   trans_version_range.multi_version_start_ = 1;
   trans_version_range.base_version_ = 1;
 
-  prepare_merge_context(MINI_MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
   ObMergeParameter merge_param;
   OK(merge_param.init(merge_context, 0));
   ObPartitionMergeIter *iter_0 = nullptr;
@@ -335,7 +333,7 @@ TEST_F(ObMajorRowsMergerTest, single)
   trans_version_range.multi_version_start_ = 1;
   trans_version_range.base_version_ = 1;
 
-  prepare_merge_context(MINI_MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
   ObMergeParameter merge_param;
   OK(merge_param.init(merge_context, 0));
   ObPartitionMergeIter *iter_0 = nullptr;
@@ -411,7 +409,7 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, snapshot_version);
   reset_writer(snapshot_version);
   prepare_one_macro(micro_data, 1);
-  prepare_data_end(handle1);
+  prepare_data_end(handle1, storage::ObITable::MAJOR_SSTABLE);
   merge_context.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 

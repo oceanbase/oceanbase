@@ -318,6 +318,8 @@ ob_set_subtarget(ob_storage ls
   ls/ob_ls_tablet_service.cpp
   ls/ob_ls_tx_service.cpp
   ls/ob_ls_saved_info.cpp
+  ls/ob_ls_reserved_snapshot_mgr.cpp
+  ls/ob_ls_storage_clog_handler.cpp
 )
 
 ob_set_subtarget(ob_storage access
@@ -394,6 +396,7 @@ ob_set_subtarget(ob_storage common
   ob_storage_rpc.ipp
   ob_storage_schema.cpp
   ob_storage_schema_recorder.cpp
+  ob_storage_clog_recorder.cpp
   ob_storage_struct.cpp
   ob_storage_table_guard.cpp
   ob_storage_util.cpp
@@ -401,6 +404,7 @@ ob_set_subtarget(ob_storage common
   ob_sync_tablet_seq_clog.cpp
   ob_table_store_stat_mgr.cpp
   ob_value_row_iterator.cpp
+  ob_tenant_tablet_stat_mgr.cpp
 )
 
 ob_set_subtarget(ob_storage common_mixed
@@ -433,12 +437,14 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_tenant_freeze_info_mgr.cpp
   compaction/ob_tenant_tablet_scheduler.cpp
   compaction/ob_schedule_dag_func.cpp
+  compaction/ob_medium_compaction_func.cpp
   compaction/ob_medium_compaction_mgr.cpp
   compaction/ob_compaction_diagnose.cpp
   compaction/ob_compaction_suggestion.cpp
   compaction/ob_sstable_merge_info_mgr.cpp
   compaction/ob_tenant_compaction_progress.cpp
   compaction/ob_server_compaction_event_history.cpp
+  compaction/ob_compaction_util.cpp
   compaction/ob_partition_rows_merger.cpp
 )
 

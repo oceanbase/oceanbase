@@ -164,7 +164,7 @@ public:
       const int64_t micro_cnt,
       const int64_t max_merged_trans_version = INT64_MAX - 2,
       const bool contain_uncommitted = false);
-  void prepare_data_end(ObTableHandleV2 &handle);
+  void prepare_data_end(ObTableHandleV2 &handle, const ObITable::TableType &table_type = ObITable::MINI_SSTABLE);
   void append_micro_block(ObMockIterator &data_iter);
 
 protected:
@@ -294,13 +294,13 @@ ObITable::TableType ObMultiVersionSSTableTest::get_merged_table_type() const
   ObITable::TableType table_type = ObITable::MAX_TABLE_TYPE;
   if (MAJOR_MERGE == merge_type_) {
     table_type = ObITable::TableType::MAJOR_SSTABLE;
-  } else if (MINI_MERGE == merge_type_ || MINI_MINOR_MERGE == merge_type_) {
+  } else if (MINI_MERGE == merge_type_) {
     table_type = ObITable::TableType::MINI_SSTABLE;
-  } else if (BUF_MINOR_MERGE == merge_type_) {
-    table_type = ObITable::TableType::BUF_MINOR_SSTABLE;
+  } else if (META_MAJOR_MERGE == merge_type_) {
+    table_type = ObITable::TableType::META_MAJOR_SSTABLE;
   } else if (DDL_KV_MERGE == merge_type_) {
     table_type = ObITable::TableType::KV_DUMP_SSTABLE;
-  } else { // MINOR_MERGE || HISTORY_MINI_MINOR_MERGE
+  } else { // MINOR_MERGE
     table_type = ObITable::TableType::MINOR_SSTABLE;
   }
   return table_type;
@@ -509,7 +509,9 @@ void ObMultiVersionSSTableTest::append_micro_block(ObMockIterator &data_iter)
   }
 }
 
-void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
+void ObMultiVersionSSTableTest::prepare_data_end(
+    ObTableHandleV2 &handle,
+    const ObITable::TableType &table_type)
 {
   ASSERT_EQ(OB_SUCCESS, macro_writer_.close());
   ObSSTableMergeRes res;
@@ -518,6 +520,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->close(column_cnt, res));
 
   ObTabletCreateSSTableParam param;
+  table_key_.table_type_ = table_type;
   param.table_key_ = table_key_;
   param.schema_version_ = SCHEMA_VERSION;
   param.create_snapshot_version_ = 0;
@@ -548,7 +551,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(ObTableHandleV2 &handle)
   param.nested_size_ = res.nested_size_;
   param.nested_offset_ = res.nested_offset_;
   param.ddl_scn_.set_min();
-  if (merge_type_ == MAJOR_MERGE) {
+  if (table_type == ObITable::MAJOR_SSTABLE) {
     ASSERT_EQ(OB_SUCCESS, ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_));
   }
 

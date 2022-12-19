@@ -25,6 +25,7 @@
 #include "storage/memtable/ob_row_compactor.h"
 #include "storage/memtable/ob_multi_source_data.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
+#include "storage/compaction/ob_medium_compaction_mgr.h"
 
 namespace oceanbase
 {
@@ -437,7 +438,15 @@ public:
   int resolve_right_boundary_for_migration();
 
   /* multi source data operations */
-  virtual int get_multi_source_data_unit(ObIMultiSourceDataUnit *multi_source_data_unit, ObIAllocator *allocator);
+  virtual int get_multi_source_data_unit(
+      ObIMultiSourceDataUnit *multi_source_data_unit,
+      ObIAllocator *allocator,
+      const bool get_lastest = true);
+  template<class T>
+  int get_multi_source_data_unit_list(
+      const T * const useless_unit,
+      ObMultiSourceData::ObIMultiSourceDataUnitList &dst_list,
+      ObIAllocator *allocator);
   bool has_multi_source_data_unit(const MultiSourceDataUnitType type) const;
 
   template<class T>
@@ -611,6 +620,28 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
     }
     TRANS_LOG(INFO, "memtable save multi source data unit", K(ret), K(scn), K(ref_op),
               KPC(multi_source_data_unit), K(type), KPC(this));
+  }
+
+  return ret;
+}
+
+template<class T>
+int ObMemtable::get_multi_source_data_unit_list(
+    const T * const useless_unit,
+    ObMultiSourceData::ObIMultiSourceDataUnitList &dst_list,
+    ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  TCRLockGuard guard(multi_source_data_lock_);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not inited", K(ret));
+  } else if (OB_UNLIKELY(!multi_source_data_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "multi source data is invalid", K(ret));
+  } else if (OB_FAIL(multi_source_data_.get_multi_source_data_unit_list(useless_unit, dst_list, allocator))) {
+    TRANS_LOG(WARN, "fail to get multi source data unit", K(ret));
   }
 
   return ret;

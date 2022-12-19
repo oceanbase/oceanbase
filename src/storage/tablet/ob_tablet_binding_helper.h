@@ -57,7 +57,6 @@ public:
 
   ObTabletBindingInfo();
   virtual ~ObTabletBindingInfo() {}
-  int set_allocator(ObIAllocator &allocator);
   int assign(const ObTabletBindingInfo &arg);
 
   virtual int deep_copy(const memtable::ObIMultiSourceDataUnit *src, ObIAllocator *allocator = nullptr) override;

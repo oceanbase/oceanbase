@@ -61,7 +61,7 @@ const char* ObITable::table_type_name_[] =
   "MAJOR",
   "MINOR",
   "MINI",
-  "BUF_MINOR",
+  "META_MAJOR",
   "DDL_DUMP",
   "REMOTE_LOGICAL_MINOR",
 };
@@ -675,7 +675,7 @@ int ObTablesHandleArray::check_continues(const share::ObScnRange *scn_range) con
 
   if (!tables_.empty()) {
     // 1:check major sstable
-    // there can only be one major or buf minor
+    // there can only be one major or meta merge
     const ObITable *last_table = nullptr;
     const ObITable *table = nullptr;
     SCN base_end_scn = SCN::min_scn();
@@ -683,8 +683,8 @@ int ObTablesHandleArray::check_continues(const share::ObScnRange *scn_range) con
     if (OB_ISNULL(table = tables_.at(i))) {
       ret = OB_ERR_SYS;
       LOG_WARN("table is NULL", KPC(table));
-    } else if (table->is_major_sstable() || table->is_buf_minor_sstable()) {
-      base_end_scn = table->is_buf_minor_sstable() ? table->get_end_scn() : SCN::min_scn();
+    } else if (table->is_major_sstable() || table->is_meta_major_sstable()) {
+      base_end_scn = table->is_meta_major_sstable() ? table->get_end_scn() : SCN::min_scn();
       i++;
     }
     // 2:check minor sstable
@@ -693,9 +693,9 @@ int ObTablesHandleArray::check_continues(const share::ObScnRange *scn_range) con
       if (OB_ISNULL(table)) {
         ret = OB_ERR_SYS;
         LOG_WARN("table is NULL", KPC(table));
-      } else if (table->is_major_sstable() || table->is_buf_minor_sstable()) {
+      } else if (table->is_major_sstable() || table->is_meta_major_sstable()) {
         ret = OB_ERR_SYS;
-        LOG_WARN("major sstable or buf minor should be first", K(ret), K(i), K(table));
+        LOG_WARN("major sstable or meta merge should be first", K(ret), K(i), K(table));
       } else if (OB_ISNULL(last_table)) { // first table
         if (OB_NOT_NULL(scn_range)
             && table->get_start_scn() > scn_range->start_scn_) {

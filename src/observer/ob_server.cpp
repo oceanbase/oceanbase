@@ -72,7 +72,6 @@
 #include "storage/ob_i_store.h"
 #include "storage/ob_long_ops_monitor.h"
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
-#include "storage/ob_table_store_stat_mgr.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/ob_file_system_router.h"
@@ -323,8 +322,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     LOG_ERROR("set_use_rpc_table failed", KR(ret));
   } else if (OB_FAIL(ObSysTaskStatMgr::get_instance().set_self_addr(self_addr_))) {
     LOG_ERROR("set sys task status self addr failed", KR(ret));
-  } else if (OB_FAIL(ObTableStoreStatMgr::get_instance().init())) {
-    LOG_ERROR("init table store stat mgr failed", KR(ret));
   } else if (OB_FAIL(LONG_OPS_MONITOR_INSTANCE.init())) {
     LOG_ERROR("init long ops monitor instance failed", KR(ret));
   } else if (OB_FAIL(ObCompatModeGetter::instance().init(&sql_proxy_))) {

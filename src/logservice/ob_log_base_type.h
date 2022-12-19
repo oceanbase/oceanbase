@@ -63,9 +63,13 @@ enum ObLogBaseType
   DAS_ID_LOG_BASE_TYPE = 15,
   //for recovery_ls_service
   RESTORE_SERVICE_LOG_BASE_TYPE = 16,
+
+  RESERVED_SNAPSHOT_LOG_BASE_TYPE = 17,
+
+  MEDIUM_COMPACTION_LOG_BASE_TYPE = 18,
+
   // pay attention!!!
   // add log type in log_base_type_to_string
-
   // max value
   MAX_LOG_BASE_TYPE,
 };
@@ -110,6 +114,10 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"DAS_ID", str_len);
   } else if (log_type == RESTORE_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"RESTORE_SERVICE", str_len);
+  } else if (log_type == RESERVED_SNAPSHOT_LOG_BASE_TYPE) {
+    strncpy(str ,"RESERVED_SNAPSHOT", str_len);
+  } else if (log_type == MEDIUM_COMPACTION_LOG_BASE_TYPE) {
+    strncpy(str ,"MEDIUM_COMPACTION", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

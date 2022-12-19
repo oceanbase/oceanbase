@@ -283,6 +283,5 @@ int64_t ObNewVersionRange::hash() const
   return hash_value;
 }
 
-
 }
 }

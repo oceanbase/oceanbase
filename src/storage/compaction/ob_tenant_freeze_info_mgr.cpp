@@ -34,6 +34,8 @@
 #include "share/ob_zone_merge_table_operator.h"
 #include "storage/compaction/ob_server_compaction_event_history.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/tx_storage/ob_ls_map.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -49,6 +51,7 @@ namespace storage
 
 ObTenantFreezeInfoMgr::ObTenantFreezeInfoMgr()
   : reload_task_(*this),
+    update_reserved_snapshot_task_(*this),
     info_list_(),
     snapshots_(),
     lock_(),
@@ -109,7 +112,9 @@ int ObTenantFreezeInfoMgr::start()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(tg_id_, reload_task_, RELOAD_INTERVAL, true))) {
-    STORAGE_LOG(ERROR, "fail to schedule task", K(ret));
+    STORAGE_LOG(ERROR, "fail to schedule reload task", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(tg_id_, update_reserved_snapshot_task_, UPDATE_LS_RESERVED_SNAPSHOT_INTERVAL, true))) {
+    STORAGE_LOG(ERROR, "fail to schedule update reserved snapshot task", K(ret));
   }
 
   return ret;
@@ -199,7 +204,7 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_major_snapshot(
     int64_t ret_pos = find_pos_in_list_(major_snapshot_version, info_list);
     if (ret_pos < 0 || ret_pos >= info_list.count()) {
       ret = OB_ENTRY_NOT_EXIST;
-      STORAGE_LOG(WARN, "Freeze info of specified major version not found", K(ret), K(major_snapshot_version));
+      STORAGE_LOG(DEBUG, "Freeze info of specified major version not found", K(ret), K(major_snapshot_version));
     } else {
       for (int64_t i = ret_pos; OB_SUCC(ret) && i < info_list.count(); i++) {
         if (OB_FAIL(freeze_infos.push_back(info_list.at(i)))) {
@@ -288,7 +293,7 @@ int ObTenantFreezeInfoMgr::get_freeze_info_behind_snapshot_version_(
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (info_list.empty()) {
     ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("no freeze info in curr info_list", K(ret), K(cur_idx_), K(info_list_[0]), K(info_list_[1]));
+    LOG_INFO("no freeze info in curr info_list", K(ret), K(cur_idx_), K(info_list_[0]), K(info_list_[1]));
   } else {
     bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && !found && i < info_list.count(); ++i) {
@@ -319,15 +324,16 @@ int ObTenantFreezeInfoMgr::inner_get_neighbour_major_freeze(
   info.reset();
 
   ObIArray<FreezeInfo> &info_list = info_list_[cur_idx_];
-
+  bool found = false;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (info_list.empty()) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("no freeze info in curr info_list", K(ret), K(cur_idx_), K(info_list_[0]), K(info_list_[1]));
+  } else if (snapshot_version >= info_list.at(info_list.count() - 1).freeze_version) {
+    // use found = false setting
   } else {
-    bool found = false;
     for (int64_t i = 0; i < info_list.count() && OB_SUCC(ret) && !found; ++i) {
       FreezeInfo &next_info = info_list.at(i);
       if (snapshot_version < next_info.freeze_version) {
@@ -342,13 +348,11 @@ int ObTenantFreezeInfoMgr::inner_get_neighbour_major_freeze(
         }
       }
     }
-
-    if (OB_SUCC(ret) && !found) {
-      info.next.freeze_version = INT64_MAX;
-      info.prev = info_list.at(info_list.count() - 1);
-    }
   }
-
+  if (OB_SUCC(ret) && !found) {
+    info.next.freeze_version = INT64_MAX;
+    info.prev = info_list.at(info_list.count() - 1);
+  }
   return ret;
 }
 
@@ -425,6 +429,7 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
   FreezeInfo freeze_info;
   int64_t duration = 0;
   bool unused = false;
+  snapshot_version = 0;
 
   RLockGuard lock_guard(lock_);
   ObIArray<ObSnapshotInfo> &snapshots = snapshots_[cur_idx_];
@@ -445,7 +450,7 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
         ret = OB_SUCCESS;
       }
     }
-    snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L *1000L);
+    snapshot_version = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L * 1000L);
     snapshot_version = std::min(snapshot_version, freeze_info.freeze_version);
     for (int64_t i = 0; i < snapshots.count() && OB_SUCC(ret); ++i) {
       bool related = false;
@@ -456,6 +461,8 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
         snapshot_version = std::min(snapshot_version, snapshot.snapshot_scn_.get_val_for_tx());
       }
     }
+    LOG_DEBUG("get_min_reserved_snapshot", K(ret), K(duration), K(snapshot_version), K(freeze_info),
+        K(snapshot_gc_ts_));
   }
   return ret;
 }
@@ -624,8 +631,6 @@ int ObTenantFreezeInfoMgr::update_next_info_list(const ObIArray<FreezeInfo> &inf
     if (OB_SUCC(ret)) {
       if (OB_FAIL(next_info_list.push_back(next))) {
         STORAGE_LOG(WARN, "failed to push back freeze info", K(ret));
-      } else {
-        STORAGE_LOG(INFO, "update info", "freeze info", next);
       }
     }
   }
@@ -643,8 +648,6 @@ int ObTenantFreezeInfoMgr::update_next_snapshots(const ObIArray<ObSnapshotInfo> 
   for (int64_t i = 0; OB_SUCC(ret) && i < snapshots.count(); ++i) {
     if (OB_FAIL(next_snapshots.push_back(snapshots.at(i)))) {
       STORAGE_LOG(WARN, "fail to push back snapshot", K(ret));
-    } else {
-      STORAGE_LOG(INFO, "update info", "snapshot", snapshots.at(i));
     }
   }
   return ret;
@@ -808,6 +811,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::refresh_merge_info()
       LOG_WARN("fail to load zone merge info", KR(ret), K(zone_merge_info));
     } else {
       ObTenantTabletScheduler *scheduler = MTL(ObTenantTabletScheduler *);
+      scheduler->set_inner_table_merged_scn(global_merge_info.last_merged_scn_.get_scn().get_val_for_tx()); // set merged version
       if (global_merge_info.suspend_merging_.get_value()) { // suspend_merge
         scheduler->stop_major_merge();
         LOG_INFO("schedule zone to stop major merge", K(tenant_id), K(zone_merge_info), K(global_merge_info));
@@ -846,7 +850,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::try_update_info()
     // snapshot_gc_ts should be obtained before freeze_info and snapshots
     ObSEArray<FreezeInfo, 4> freeze_info;
     ObSEArray<ObSnapshotInfo, 4> snapshots;
-    bool changed = false;
+    bool gc_snapshot_ts_changed = false;
     observer::ObService *ob_service = GCTX.ob_service_;
     int64_t min_major_snapshot = INT64_MAX;
 
@@ -865,11 +869,11 @@ int ObTenantFreezeInfoMgr::ReloadTask::try_update_info()
                                         freeze_info,
                                         snapshots,
                                         min_major_snapshot,
-                                        changed))) {
+                                        gc_snapshot_ts_changed))) {
       STORAGE_LOG(WARN, "update info failed",
                   K(ret), K(snapshot_gc_ts), K(freeze_info), K(snapshots));
     } else {
-      if (changed || ob_service->is_heartbeat_expired()) {
+      if (gc_snapshot_ts_changed || ob_service->is_heartbeat_expired()) {
         last_change_ts_ = ObTimeUtility::current_time();
       } else {
         const int64_t last_not_change_interval_us = ObTimeUtility::current_time() - last_change_ts_;
@@ -900,11 +904,64 @@ void ObTenantFreezeInfoMgr::ReloadTask::runTimerTask()
   if (OB_TMP_FAIL(refresh_merge_info())) {
     LOG_WARN("fail to refresh merge info", KR(tmp_ret));
   }
-
-  tmp_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(try_update_info())) {
     LOG_WARN("fail to try update info", KR(tmp_ret));
   }
+}
+
+void ObTenantFreezeInfoMgr::UpdateLSResvSnapshotTask::runTimerTask()
+{
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(mgr_.try_update_reserved_snapshot())) {
+    LOG_WARN("fail to try reserved snapshot", KR(tmp_ret));
+  }
+}
+
+int ObTenantFreezeInfoMgr::try_update_reserved_snapshot()
+{
+  int ret = OB_SUCCESS;
+  int64_t duration = 0;
+  int64_t reserved_snapshot = 0;
+  int64_t cost_ts = ObTimeUtility::fast_current_time();
+  {
+    RLockGuard lock_guard(lock_);
+
+    if (OB_UNLIKELY(!inited_)) {
+      ret = OB_NOT_INIT;
+      STORAGE_LOG(WARN, "ObTenantFreezeInfoMgr not init", K(ret));
+    } else if (OB_FAIL(get_multi_version_duration(duration))) {
+      STORAGE_LOG(WARN, "fail to get multi version duration", K(ret));
+    } else {
+      reserved_snapshot = std::max(0L, snapshot_gc_ts_ - duration * 1000L * 1000L *1000L);
+      LOG_INFO("success to update min reserved snapshot", K(reserved_snapshot), K(duration), K(snapshot_gc_ts_));
+    }
+  } // end of lock
+
+  // loop all ls, try update reserved snapshot
+  ObSharedGuard<ObLSIterator> ls_iter_guard;
+  ObLS *ls = nullptr;
+  if (OB_FAIL(ret) || reserved_snapshot <= 0) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get ls iterator", K(ret));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(ls_iter_guard.get_ptr()->get_next(ls))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_ISNULL(ls)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls is null", K(ret), KP(ls));
+      } else if (OB_TMP_FAIL(ls->try_sync_reserved_snapshot(reserved_snapshot, true/*update_flag*/))) {
+        LOG_WARN("failed to update min reserved snapshot", K(tmp_ret), KPC(ls), K(reserved_snapshot));
+      }
+    } // end of while
+  }
+  cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
+  STORAGE_LOG(INFO, "update reserved snapshot finished", K(cost_ts), K(reserved_snapshot));
+  return ret;
 }
 
 } // storage

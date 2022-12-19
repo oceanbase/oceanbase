@@ -1333,6 +1333,7 @@ const int64_t OB_PARALLEL_MERGE_INFO_LENGTH = 512;
 const int64_t OB_COMPACTION_EVENT_STR_LENGTH = 256;
 const int64_t OB_PART_TABLE_INFO_LENGTH = 512;
 const int64_t OB_MACRO_ID_INFO_LENGTH = 256;
+const int64_t OB_COMPACTION_INFO_LENGTH = 128;
 
 // for erasure code
 const int64_t OB_MAX_EC_STRIPE_COUNT = 32;
@@ -1670,10 +1671,6 @@ const int64_t OB_DUMP_ROOT_TABLE_TYPE = 1;
 const int64_t OB_DUMP_UNUSUAL_TABLET_TYPE = 2;
 const int64_t OB_MAX_SYS_VAR_NON_STRING_VAL_LENGTH = 128;
 const int64_t OB_MAX_SYS_VAR_VAL_LENGTH = 4096;//original 128 is too small
-
-//mini minor merge related parameters
-const int64_t OB_MIN_MINOR_SSTABLE_ROW_COUNT = 2000000; // L0 -> L1 row count threashold
-const int64_t OB_DEFAULT_COMPACTION_AMPLIFICATION_FACTOR= 25; // / mini_sstable_total > minor_sstable_total * OB_DEFAULT_COMPACTION_AMPLIFICATION_FACTOR / 100
 
 // bitset defines
 const int64_t OB_DEFAULT_BITSET_SIZE = OB_MAX_TABLE_NUM_PER_STMT;

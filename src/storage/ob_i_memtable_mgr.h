@@ -17,7 +17,6 @@
 #include "lib/lock/ob_qsync_lock.h"
 #include "storage/ob_i_table.h"
 #include "storage/memtable/ob_multi_source_data.h"
-#include "storage/ob_storage_schema_recorder.h"
 
 namespace oceanbase
 {
@@ -213,6 +212,8 @@ public:
       const ObTabletID &tablet_id,
       const share::ObLSID &ls_id,
       const int64_t max_saved_schema_version,
+      const int64_t max_saved_medium_scn,
+      const lib::Worker::CompatMode compat_mode,
       logservice::ObLogHandler *log_handler,
       ObFreezer *freezer,
       ObTenantMetaMemMgr *t3m);
@@ -273,19 +274,23 @@ public:
     destroy();
     ATOMIC_STORE(&ref_cnt_, 0);
   }
-  virtual int init_storage_schema_recorder(
+  virtual int init_storage_recorder(
       const ObTabletID &tablet_id,
       const share::ObLSID &ls_id,
       const int64_t max_saved_schema_version,
+      const int64_t max_saved_medium_scn,
+      const lib::Worker::CompatMode compat_mode,
       logservice::ObLogHandler *log_handler)
   { // do nothing
     UNUSED(tablet_id);
     UNUSED(ls_id);
-    UNUSED(max_saved_schema_version),
+    UNUSED(max_saved_schema_version);
+    UNUSED(max_saved_medium_scn);
+    UNUSED(compat_mode);
     UNUSED(log_handler);
     return OB_NOT_SUPPORTED;
   }
-  virtual int reset_storage_schema_recorder()
+  virtual int reset_storage_recorder()
   { // do nothing
     return OB_NOT_SUPPORTED;
   }

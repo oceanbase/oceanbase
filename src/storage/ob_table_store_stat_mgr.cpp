@@ -368,21 +368,9 @@ int ObTableStoreStatMgr::report_stat(const ObTableStoreStat &stat)
 
 int ObTableStoreStatMgr::get_table_store_stat(const int64_t idx, ObTableStoreStat &stat)
 {
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableStoreStatMgr hasn't been initiated", K(ret));
-  } else if (idx < 0 || idx > limit_cnt_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid stat", K(ret), K(idx));
-  } else {
-    SpinRLockGuard guard(lock_);
-    if (idx >= cur_cnt_) {
-      ret = OB_ITER_END;
-    } else {
-      stat = stat_array_[idx];
-    }
-  }
+  UNUSED(idx);
+  UNUSED(stat);
+  int ret = OB_ITER_END;
   return ret;
 }
 

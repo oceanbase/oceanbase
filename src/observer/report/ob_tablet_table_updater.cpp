@@ -20,6 +20,7 @@
 #include "share/ob_tablet_replica_checksum_operator.h" // for ObTabletReplicaChecksumItem
 #include "lib/mysqlclient/ob_mysql_transaction.h" // ObMySQLTransaction
 #include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "share/ob_tablet_meta_table_compaction_operator.h"
 
 namespace oceanbase
 {
@@ -341,7 +342,9 @@ int ObTabletTableUpdater::generate_tasks_(
                 GCONF.self_addr_,
                 1/*snapshot_version*/,
                 1/*data_size*/,
-                1/*required_size*/))) {
+                1/*required_size*/,
+                0/*report_scn*/,
+                ObTabletReplica::SCN_STATUS_IDLE))) {
               LOG_WARN("fail to init ObTabletReplica", KR(ret),
                   KPC(task), "server", GCONF.self_addr_);
             } else if (OB_FAIL(remove_tablet_tasks.reserve(count))) {

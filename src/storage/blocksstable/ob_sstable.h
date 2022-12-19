@@ -162,7 +162,7 @@ public:
 public:
   int dump2text(
       const char *dir_name,
-      const share::schema::ObMergeSchema &schema,
+      const ObStorageSchema &schema,
       const char *fname)
   {
     // TODO: print sstable

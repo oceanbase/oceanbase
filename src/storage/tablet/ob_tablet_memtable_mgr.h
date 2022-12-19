@@ -17,6 +17,8 @@
 #include "storage/memtable/ob_memtable.h"
 #include "storage/ob_i_memtable_mgr.h"
 #include "storage/ob_storage_struct.h"
+#include "storage/ob_storage_schema_recorder.h"
+#include "storage/compaction/ob_medium_compaction_mgr.h"
 
 namespace oceanbase
 {
@@ -93,12 +95,18 @@ public:
   {
     return schema_recorder_;
   }
-  virtual int init_storage_schema_recorder(
+  compaction::ObTabletMediumCompactionInfoRecorder &get_medium_info_recorder()
+  {
+    return medium_info_recorder_;
+  }
+  virtual int init_storage_recorder(
       const ObTabletID &tablet_id,
       const share::ObLSID &ls_id,
       const int64_t max_saved_schema_version,
+      const int64_t max_saved_medium_scn,
+      const lib::Worker::CompatMode compat_mode,
       logservice::ObLogHandler *log_handler) override;
-  virtual int reset_storage_schema_recorder() override;
+  virtual int reset_storage_recorder() override;
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -133,9 +141,10 @@ private:
   static const int64_t PRINT_READABLE_INFO_DURATION_US = 1000 * 1000 * 60 * 10L; //10min
 
 private:
-  ObLS *ls_; //8B
+  ObLS *ls_; // 8B
   common::SpinRWLock lock_def_; //8B
-  ObStorageSchemaRecorder schema_recorder_;// 136B
+  ObStorageSchemaRecorder schema_recorder_; // 120B
+  compaction::ObTabletMediumCompactionInfoRecorder medium_info_recorder_; // 96B
 };
 }
 }

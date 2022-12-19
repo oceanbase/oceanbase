@@ -60,6 +60,7 @@ private:
   common::ObSEArray<ObTableHandleV2, 2> tables_handle_;
   int64_t memtable_array_pos_;
   char freeze_time_dist_[OB_MAX_CHAR_LENGTH];
+  char compaction_info_buf_[common::OB_COMPACTION_INFO_LENGTH];
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualMemstoreInfo);
 };

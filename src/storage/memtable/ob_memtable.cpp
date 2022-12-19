@@ -2131,7 +2131,8 @@ bool ObMemtable::is_partition_memtable_empty(const uint64_t table_id) const
 
 int ObMemtable::get_multi_source_data_unit(
     ObIMultiSourceDataUnit *const multi_source_data_unit,
-    ObIAllocator *allocator)
+    ObIAllocator *allocator,
+    const bool get_lastest)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard guard(multi_source_data_lock_);
@@ -2142,7 +2143,7 @@ int ObMemtable::get_multi_source_data_unit(
   } else if (OB_UNLIKELY(!multi_source_data_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "multi source data is invalid", K(ret));
-  } else if (OB_FAIL(multi_source_data_.get_multi_source_data_unit(multi_source_data_unit, allocator))) {
+  } else if (OB_FAIL(multi_source_data_.get_multi_source_data_unit(multi_source_data_unit, allocator, get_lastest))) {
     if (ret != OB_ENTRY_NOT_EXIST) {
       TRANS_LOG(WARN, "fail to get multi source data unit", K(ret));
     } else {

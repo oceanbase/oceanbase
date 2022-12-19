@@ -145,6 +145,7 @@
 #include "observer/virtual_table/ob_all_virtual_server_compaction_event_history.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_compaction_progress.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_compaction_history.h"
+#include "observer/virtual_table/ob_all_virtual_tablet_compaction_info.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_ddl_kv_info.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_pointer_status.h"
 #include "observer/virtual_table/ob_all_virtual_storage_meta_memory_status.h"
@@ -2133,6 +2134,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
                 SERVER_LOG(WARN, "fail to init ObAllVirtualIOQuota, ", K(ret));
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator *>(io_quota);
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TABLET_COMPACTION_INFO_TID: {
+            ObAllVirtualTabletCompactionInfo *info_mgr = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTabletCompactionInfo, info_mgr))) {
+              if (OB_FAIL(info_mgr->init(&allocator, addr_))) {
+                SERVER_LOG(WARN, "fail to init ObAllVirtualTabletCompactionInfo", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(info_mgr);
               }
             }
             break;

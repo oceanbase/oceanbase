@@ -99,7 +99,7 @@ public:
     UNUSED(read_handle);
     return OB_NOT_IMPLEMENT;
   }
-  int report_stat(ObTableStoreStat &stat);
+
   VIRTUAL_TO_STRING_KV(K_(type), K_(is_sstable_iter), KP_(block_row_store));
 
 protected:

@@ -16,6 +16,7 @@
 #include "share/ob_zone_merge_info.h"
 #include "share/tablet/ob_tablet_info.h"
 #include "rootserver/ob_root_utils.h"
+#include "rootserver/freeze/ob_checksum_validator.h"
 #include "common/ob_tablet_id.h"
 
 namespace oceanbase
@@ -26,6 +27,7 @@ class ObTabletTableOperator;
 class ObLSInfo;
 class ObLSTableOperator; 
 class ObIServerTrace;
+struct ObTabletInfo;
 class ObLSReplica;
 namespace schema
 {
@@ -40,6 +42,7 @@ class ObMySQLProxy;
 namespace rootserver
 {
 class ObZoneMergeManager;
+
 class ObMajorMergeProgressChecker
 {
 public:
@@ -53,22 +56,30 @@ public:
            share::ObLSTableOperator &lst_operator,
            share::ObIServerTrace &server_trace);
 
+  int prepare_handle(); // For each round major_freeze, need invoke this once.
+
   int check_merge_progress(const volatile bool &stop,
                            const share::SCN &global_broadcast_scn,
                            share::ObAllZoneMergeProgress &all_progress);
 
+  int check_verification(const share::SCN &global_broadcast_scn);
+
+  // @exist_uncompacted means not all table finished compaction
+  // @exist_unverified means not all table finished verification
+  int check_table_status(bool &exist_uncompacted, bool &exist_unverified);
+
 private:
-  int check_tablet(const share::ObTabletInfo &tablet,
+  int check_tablet(const share::ObTabletInfo &tablet_info,
                    const common::hash::ObHashMap<ObTabletID, uint64_t> &tablet_map,
                    share::ObAllZoneMergeProgress &all_progress,
                    const share::SCN &global_broadcast_scn,
                    share::schema::ObSchemaGetterGuard &schema_guard);
-  int check_tablet_data_version(share::ObAllZoneMergeProgress &all_progress,
-                                const share::SCN &global_broadcast_scn,
-                                const share::ObTabletInfo &tablet,
-                                const share::ObLSInfo &ls_info);
+  int check_tablet_compaction_scn(share::ObAllZoneMergeProgress &all_progress,
+                                  const share::SCN &global_broadcast_scn,
+                                  const share::ObTabletInfo &tablet,
+                                  const share::ObLSInfo &ls_info);
   int check_majority_integrated(share::schema::ObSchemaGetterGuard &schema_guard, 
-                                const share::ObTabletInfo &tablet,
+                                const share::ObTabletInfo &tablet_info,
                                 const share::ObLSInfo &ls_info);
 
   int get_associated_replica_num(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -91,6 +102,12 @@ private:
   ObZoneMergeManager *zone_merge_mgr_;
   share::ObLSTableOperator *lst_operator_;
   share::ObIServerTrace *server_trace_;
+  // record each tablet compaction status: INITIAL/COMPACTED/FINISHED
+  hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> tablet_compaction_map_;
+  int64_t table_count_;
+  // record each table compaction/verify status
+  hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> table_compaction_map_; // <table_id, conpaction_info>
+  ObIndexChecksumValidator index_validator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeProgressChecker);
 };

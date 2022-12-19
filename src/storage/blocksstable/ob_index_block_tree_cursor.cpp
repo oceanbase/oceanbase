@@ -367,6 +367,7 @@ int ObIndexBlockTreeCursor::drill_down(
     while (OB_SUCC(ret) && 0 == cmp_ret) {
       if (OB_FAIL(get_current_endkey(tmp_endkey, compare_schema_rowkey))) {
         LOG_WARN("Fail to get current endkey", K(ret));
+      } else if (FALSE_IT(tmp_endkey.datum_cnt_ = rowkey.datum_cnt_)) {
       } else if (OB_FAIL(tmp_endkey.compare(
           rowkey,
           read_info_->get_datum_utils(),

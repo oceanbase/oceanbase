@@ -740,13 +740,13 @@ int ObPhysicalCopyFinishTask::prepare_data_store_desc_(
       cluster_version))) {
     LOG_WARN("failed to init index store desc", K(ret), K(tablet_id), K(merge_type), KPC(sstable_param));
   } else {
-    const ObMergeSchema &merge_schema = tablet->get_storage_schema();
+    const ObStorageSchema &storage_schema = tablet->get_storage_schema();
     desc.row_column_count_ = desc.rowkey_column_count_ + 1;
     desc.col_desc_array_.reset();
     desc.need_prebuild_bloomfilter_ = false;
     if (OB_FAIL(desc.col_desc_array_.init(desc.row_column_count_))) {
       LOG_WARN("failed to reserve column desc array", K(ret));
-    } else if (OB_FAIL(merge_schema.get_rowkey_column_ids(desc.col_desc_array_))) {
+    } else if (OB_FAIL(storage_schema.get_rowkey_column_ids(desc.col_desc_array_))) {
       LOG_WARN("failed to get rowkey column ids", K(ret));
     } else if (OB_FAIL(ObMultiVersionRowkeyHelpper::add_extra_rowkey_cols(desc.col_desc_array_))) {
       LOG_WARN("failed to get extra rowkey column ids", K(ret));
@@ -831,7 +831,7 @@ int ObPhysicalCopyFinishTask::get_merge_type_(
   } else if (sstable_param->table_key_.is_major_sstable()) {
     merge_type = ObMergeType::MAJOR_MERGE;
   } else if (sstable_param->table_key_.is_minor_sstable()) {
-    merge_type = ObMergeType::MINI_MINOR_MERGE;
+    merge_type = ObMergeType::MINOR_MERGE;
   } else if (sstable_param->table_key_.is_ddl_sstable()) {
     merge_type = ObMergeType::DDL_KV_MERGE;
   } else {
@@ -1410,7 +1410,8 @@ int ObTabletCopyFinishTask::inner_update_tablet_table_store_with_major_(
                             true/*need_report*/,
                             SCN::min_scn()/*clog_checkpoint_scn*/,
                             true/*need_check_sstable*/,
-                            true/*allow_duplicate_sstable*/);
+                            true/*allow_duplicate_sstable*/,
+                            &src_tablet_meta_->medium_info_list_);
     if (tablet->get_storage_schema().get_version() < src_tablet_meta_->storage_schema_.get_version()) {
       SERVER_EVENT_ADD("storage_ha", "schema_change_need_merge_tablet_meta",
                       "tenant_id", MTL_ID(),

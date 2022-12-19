@@ -25,6 +25,7 @@ namespace oceanbase
 namespace compaction
 {
 struct ObTabletMergeCtx;
+struct ObMediumCompactionInfo;
 }
 namespace blocksstable
 {
@@ -41,7 +42,7 @@ public:
   enum ParallelMergeType {
     PARALLEL_MAJOR = 0,
     PARALLEL_MINI = 1,
-    PARALLEL_MINI_MINOR = 2,
+    PARALLEL_MINOR = 2,
     SERIALIZE_MERGE = 3,
     INVALID_PARALLEL_TYPE
   };
@@ -50,11 +51,16 @@ public:
   void reset();
   bool is_valid() const;
   int init(compaction::ObTabletMergeCtx &merge_ctx);
+  int init(const compaction::ObMediumCompactionInfo &medium_info);
   OB_INLINE int64_t get_concurrent_cnt() const { return concurrent_cnt_; }
   int get_merge_range(const int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
+  static int get_concurrent_cnt(
+      const int64_t tablet_size,
+      const int64_t macro_block_cnt,
+      int64_t &concurrent_cnt);
   TO_STRING_KV(K_(parallel_type), K_(range_array), K_(concurrent_cnt), K_(is_inited));
 private:
-  static const int64_t MIN_PARALLEL_MINI_MINOR_MERGE_THREASHOLD = 2;
+  static const int64_t MIN_PARALLEL_MINOR_MERGE_THREASHOLD = 2;
   static const int64_t MIN_PARALLEL_MERGE_BLOCKS = 32;
   static const int64_t PARALLEL_MERGE_TARGET_TASK_CNT = 20;
   //TODO @hanhui parallel in ai
@@ -67,10 +73,6 @@ private:
                                       const int64_t sstable_count,
                                       int64_t &parallel_degree);
 
-  int get_concurrent_cnt(
-      const int64_t tablet_size,
-      const int64_t macro_block_cnt,
-      int64_t &concurrent_cnt);
   int get_major_parallel_ranges(
       const blocksstable::ObSSTable *first_major_sstable,
       const int64_t tablet_size,

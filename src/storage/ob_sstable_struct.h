@@ -16,6 +16,7 @@
 #include "blocksstable/ob_block_sstable_struct.h"
 #include "ob_i_table.h"
 #include "compaction/ob_i_compaction_filter.h"
+#include "compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {
@@ -113,7 +114,7 @@ public:
   ~ObSSTableMergeInfo() = default;
   bool is_valid() const;
   int add(const ObSSTableMergeInfo &other);
-  OB_INLINE bool is_major_merge() const { return storage::is_major_merge(merge_type_); }
+  OB_INLINE bool is_major_merge_type() const { return storage::is_major_merge_type(merge_type_); }
   void dump_info(const char *msg);
   void reset();
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(compaction_scn),
@@ -155,17 +156,6 @@ public:
   char participant_table_str_[common::OB_PART_TABLE_INFO_LENGTH];
   char macro_id_list_[common::OB_MACRO_ID_INFO_LENGTH];
   char comment_[common::OB_COMPACTION_EVENT_STR_LENGTH];
-};
-
-struct ObMergeChecksumInfo final
-{
-public:
-  ObMergeChecksumInfo();
-  ~ObMergeChecksumInfo() = default;
-  int64_t *column_checksums_;
-  int64_t **increment_column_checksums_;
-  int64_t concurrent_cnt_;
-  int64_t column_count_;
 };
 
 }  // end namespace storage

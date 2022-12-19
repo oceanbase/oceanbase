@@ -142,6 +142,7 @@ int ObSSTableSecMetaIterator::open(
 
     if (OB_FAIL(ret) || is_prefetch_end_) {
     } else if (OB_UNLIKELY(start_key_beyond_range)) {
+      is_inited_ = true;
       set_iter_end();
       is_inited_ = true;
     }

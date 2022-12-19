@@ -659,6 +659,19 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
     bret; \
   })
 
+#define REACH_TENANT_TIME_INTERVAL(i) \
+  ({ \
+    bool bret = false; \
+    RLOCAL_STATIC(int64_t, last_time) = ::oceanbase::common::ObTimeUtility::fast_current_time(); \
+    int64_t cur_time = ::oceanbase::common::ObTimeUtility::fast_current_time(); \
+    int64_t old_time = last_time; \
+    if (OB_UNLIKELY((i + last_time) < cur_time) \
+        && old_time == ATOMIC_CAS(&last_time, old_time, cur_time)) \
+    { \
+      bret = true; \
+    } \
+    bret; \
+  })
 
 // reach count per secound
 #define REACH_COUNT_PER_SEC(i) \

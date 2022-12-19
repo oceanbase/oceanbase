@@ -448,9 +448,9 @@ int ObExtendTableArray::deserialize(
         LOG_WARN("unexpected error, sstable is nullptr", K(ret), K(table_handle));
       } else if (OB_FAIL(sstable->deserialize(allocator, buf, data_len, pos))) {
         LOG_WARN("failed to deserialize sstable", K(ret));
-      } else if (table_handle.get_table()->is_buf_minor_sstable()) {
-        if (OB_FAIL(assign(ObTabletTableStore::BUF_MINOR, table_handle.get_table()))) {
-          LOG_WARN("failed to add buf minor table", K(ret));
+      } else if (table_handle.get_table()->is_meta_major_sstable()) {
+        if (OB_FAIL(assign(ObTabletTableStore::META_MAJOR, table_handle.get_table()))) {
+          LOG_WARN("failed to add meta major table", K(ret));
         }
       }
     }
@@ -826,6 +826,18 @@ int ObTableStoreIterator::add_tables(ObITable **start, const int64_t count)
         LOG_WARN("failed to add table to iterator", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObTableStoreIterator::add_table(ObITable *input_table)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(input_table)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(input_table));
+  } else if (OB_FAIL(array_.push_back(input_table))) {
+    LOG_WARN("failed to add table to iterator", K(ret), KP(input_table));
   }
   return ret;
 }

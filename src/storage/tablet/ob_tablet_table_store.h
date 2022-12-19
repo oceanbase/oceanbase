@@ -40,7 +40,7 @@ public:
   friend class ObPrintTableStore;
   typedef common::ObSEArray<ObTableHandleV2, MAX_SSTABLE_CNT_IN_STORAGE> ObTableHandleArray;
   enum ExtendTable: int64_t {
-    BUF_MINOR = 0,
+    META_MAJOR = 0,
     EXTEND_CNT
   };
 
@@ -102,6 +102,7 @@ public:
 
   int get_ddl_sstable_handles(ObTablesHandleArray &ddl_sstable_handles) const;
   int get_mini_minor_sstables(ObTablesHandleArray &minor_sstables) const;
+  int assign(common::ObIAllocator &allocator, const ObTabletTableStore &other, ObTablet *new_tablet);
   int get_recycle_version(const int64_t multi_version_start, int64_t &recycle_version) const;
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
@@ -150,7 +151,7 @@ private:
       const ObUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store,
       const int64_t inc_base_snapshot_version);
-  int build_buf_minor_table(
+  int build_meta_major_table(
       const ObTableHandleV2 &new_handle,
       const ObTabletTableStore &old_store);
   int build_ddl_sstables(

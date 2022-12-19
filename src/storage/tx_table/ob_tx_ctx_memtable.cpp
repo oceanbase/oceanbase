@@ -289,7 +289,7 @@ int ObTxCtxMemtable::flush(SCN recycle_scn, bool need_freeze)
     param.ls_id_ = ls_id_;
     param.tablet_id_ = LS_TX_CTX_TABLET;
     param.merge_type_ = MINI_MERGE;
-    param.merge_version_ = ObVersion::MIN_VERSION;
+    param.merge_version_ = ObVersionRange::MIN_VERSION;
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
       if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
           TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));

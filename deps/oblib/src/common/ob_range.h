@@ -323,7 +323,6 @@ public:
   TO_STRING_KV(K_(base_version), K_(snapshot_version));
 };
 
-
 class ObNewRange
 {
 

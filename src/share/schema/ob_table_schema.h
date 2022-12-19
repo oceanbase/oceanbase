@@ -995,7 +995,7 @@ public:
   inline int64_t get_rowkey_split_pos() const { return rowkey_split_pos_; }
   inline int64_t get_block_size() const { return block_size_;}
   virtual inline bool is_use_bloomfilter() const override { return is_use_bloomfilter_; }
-  inline int64_t get_progressive_merge_num() const override { return progressive_merge_num_; }
+  virtual inline int64_t get_progressive_merge_num() const override { return progressive_merge_num_; }
   virtual inline int64_t get_progressive_merge_round() const override { return progressive_merge_round_; }
   inline uint64_t get_autoinc_column_id() const { return autoinc_column_id_; }
   inline uint64_t get_auto_increment() const { return auto_increment_; }

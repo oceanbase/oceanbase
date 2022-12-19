@@ -38,6 +38,7 @@ public:
 public:
   int to_store_rowkey(ObStoreRowkey &store_rowkey) const;
   void reset() {obj_ptr_ = NULL; obj_cnt_ = 0; }
+  void destroy(ObIAllocator &allocator);
   inline int64_t get_obj_cnt() const { return obj_cnt_; }
   inline const ObObj *get_obj_ptr() const { return obj_ptr_; }
   inline ObObj *get_obj_ptr() { return obj_ptr_; }

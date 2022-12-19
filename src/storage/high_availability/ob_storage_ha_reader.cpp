@@ -1036,7 +1036,10 @@ int ObCopyTabletInfoObProducer::build_deleted_tablet_info_(
       LOG_WARN("failed to set restore status", K(ret), K(restore_status));
     } else if (OB_FAIL(tablet_info.param_.ha_status_.set_data_status(data_status))) {
       LOG_WARN("failed to set data status", K(ret), K(data_status));
-    } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema(tablet_info.param_.allocator_, tablet_info.param_.storage_schema_))) {
+    } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
+        tablet_info.param_.allocator_,
+        tablet_info.param_.storage_schema_,
+        tablet_info.param_.medium_info_list_))) {
       LOG_WARN("failed to construct placeholder storage schema");
     } else if (!tablet_info.param_.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
@@ -1897,8 +1900,10 @@ int ObCopySSTableInfoObProducer::fake_deleted_tablet_meta_(
       LOG_WARN("failed to set restore status", K(ret), K(restore_status));
     } else if (OB_FAIL(tablet_meta.ha_status_.set_data_status(data_status))) {
       LOG_WARN("failed to set data status", K(ret), K(data_status));
-    } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema(tablet_meta.allocator_,
-        tablet_meta.storage_schema_))) {
+    } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
+        tablet_meta.allocator_,
+        tablet_meta.storage_schema_,
+        tablet_meta.medium_info_list_))) {
       LOG_WARN("failed to construct placeholder storage schema");
     } else if (!tablet_meta.is_valid()) {
       ret = OB_INVALID_ARGUMENT;

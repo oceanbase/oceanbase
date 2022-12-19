@@ -60,6 +60,8 @@ private:
   int parse_recovery_ls_service_log_();
   int parse_standby_timestamp_log_();
   int parse_gais_log_();
+  int parse_reserved_snapshot_log_();
+  int parse_medium_log_();
 
   //log type belong to trans_service
   int parse_trans_redo_log_(transaction::ObTxLogBlock &tx_log_block,

@@ -359,5 +359,17 @@ int64_t ObMergeProgress::get_merged_data_percentage() const
   return first_param_percnetage(merged_data_size_, unmerged_data_size_);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+ObTableCompactionInfo &ObTableCompactionInfo::operator=(const ObTableCompactionInfo &other)
+{
+  table_id_ = other.table_id_;
+  tablet_cnt_ = other.tablet_cnt_;
+  status_ = other.status_;
+  is_valid_data_table_ = other.is_valid_data_table_;
+  all_index_verified_ = other.all_index_verified_;
+  return *this;
+}
+
 } // end namespace share
 } // end namespace oceanbase

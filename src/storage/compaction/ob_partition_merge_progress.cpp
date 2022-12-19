@@ -139,7 +139,7 @@ int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
     if (OB_UNLIKELY(0 == tables.count() || NULL == tables.at(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected tables", K(ret), K(tables));
-    } else if (ctx->param_.is_mini_merge()) { // only mini merge use estimate row interface
+    } else if (is_mini_merge(ctx->param_.merge_type_)) { // only mini merge use estimate row interface
       ObQueryFlag query_flag(ObQueryFlag::Forward,
                              true,   /*is daily merge scan*/
                              true,   /*is read multiple macro block*/
@@ -197,7 +197,7 @@ int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
         avg_row_length_ = estimate_occupy_size_ * 1.0 / estimate_row_cnt_;
       }
       update_estimated_finish_time_();
-      if (ctx->param_.is_major_merge()) {
+      if (ctx->param_.is_tenant_major_merge_) {
           if (OB_FAIL(MTL(ObTenantCompactionProgressMgr*)->update_progress(
                     merge_dag_->get_ctx().param_.merge_version_,
                     estimate_occupy_size_ - old_major_data_size, // estimate_occupy_size_delta

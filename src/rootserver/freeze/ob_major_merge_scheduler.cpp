@@ -31,6 +31,7 @@
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_column_checksum_error_operator.h"
+#include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "share/ob_server_table_operator.h"
 
 namespace oceanbase
@@ -39,119 +40,6 @@ namespace rootserver
 {
 using namespace oceanbase::common;
 using namespace oceanbase::share;
-
-int ObMergeErrorCallback::init(
-    const uint64_t tenant_id,
-    ObZoneMergeManager &zone_merge_mgr)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", KR(ret));
-  } else if (tenant_id == OB_INVALID_TENANT_ID) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else {
-    zone_merge_mgr_ = &zone_merge_mgr;
-    tenant_id_ = tenant_id;
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObMergeErrorCallback::handle_merge_error(
-    const int64_t error_type,
-    const int64_t expected_epoch)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } else {
-    if (OB_FAIL(zone_merge_mgr_->set_merge_error(error_type, expected_epoch))) {
-      LOG_WARN("fail to set merge error", KR(ret), K_(tenant_id), K(error_type), K(expected_epoch));
-    }
-  }
-  return ret;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-int ObFullChecksumValidator::init(
-    const uint64_t tenant_id,
-    ObMySQLProxy &sql_proxy,
-    ObZoneMergeManager &zone_merge_mgr)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(tablet_validator_.init(tenant_id, &sql_proxy))) {
-    LOG_WARN("fail to init tablet checksum validator", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(cross_cluster_validator_.init(tenant_id, &sql_proxy))) {
-    LOG_WARN("fail to init cross cluster checksum validator", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(index_validator_.init(tenant_id, &sql_proxy))) {
-    LOG_WARN("fail to init index checksum validator", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(merge_err_cb_.init(tenant_id, zone_merge_mgr))) {
-    LOG_WARN("fail to init merge error callback", KR(ret), K(tenant_id));
-  } else {
-    tenant_id_ = tenant_id;
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObFullChecksumValidator::execute_check(
-    const ObSimpleFrozenStatus &frozen_status,
-    const int64_t expected_epoch)
-{
-  int ret = OB_SUCCESS;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } else {
-    // Set check condition for each validator here.
-    if (PRIMARY_CLUSTER == ObClusterInfoGetter::get_cluster_role_v2()) {
-      // no need to check cross-cluster checksum in primary cluster
-      cross_cluster_validator_.set_need_check(false);
-    }
-
-    if (OB_FAIL(tablet_validator_.check(frozen_status))) {
-      LOG_WARN("fail to do check of tablet validator", KR(ret));
-    } else if (/*OB_FAIL(cross_cluster_validator_.check(frozen_status))*/ false) {
-      LOG_WARN("fail to do check of cross_cluster validator", KR(ret));
-    } else if (OB_FAIL(index_validator_.check(frozen_status))) {
-      LOG_WARN("fail to do check of index validator", KR(ret));
-    }
-    last_check_time_ = ObTimeUtility::current_time();
-
-    if (OB_CHECKSUM_ERROR == ret) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(merge_err_cb_.handle_merge_error(ObZoneMergeInfo::CHECKSUM_ERROR, expected_epoch))) {
-        LOG_WARN("fail to handle merge error", K(tmp_ret), K_(tenant_id), K(expected_epoch));
-        ret = (OB_SUCC(ret) ? tmp_ret : ret);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObFullChecksumValidator::sync_tablet_checksum()
-{
-  int ret = OB_SUCCESS;
-  if (PRIMARY_CLUSTER == ObClusterInfoGetter::get_cluster_role_v2()) {
-    if (OB_FAIL(cross_cluster_validator_.write_tablet_checksum_item())) {
-      LOG_WARN("fail to sync tablet", KR(ret), K_(tenant_id));
-    } else {
-      // no need to check cross-cluster checksum if sync checksum failed.
-      cross_cluster_validator_.set_need_check(false);
-    }
-  } else {
-    LOG_TRACE("no need to sync tablet checksum in current cluster", K_(tenant_id));
-  }
-  return ret;
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -180,9 +68,9 @@ int64_t ObMajorMergeIdling::get_idle_interval_us()
 ///////////////////////////////////////////////////////////////////////////////
 
 ObMajorMergeScheduler::ObMajorMergeScheduler()
-  : ObFreezeReentrantThread(), is_inited_(false), fail_count_(0), first_check_merge_us_(0), 
-    idling_(stop_), zone_merge_mgr_(nullptr), freeze_info_mgr_(nullptr), config_(nullptr), 
-    merge_strategy_(), progress_checker_(), checksum_validator_()
+  : ObFreezeReentrantThread(), is_inited_(false), fail_count_(0), idling_(stop_),
+    zone_merge_mgr_(nullptr), freeze_info_mgr_(nullptr), config_(nullptr),
+    merge_strategy_(), progress_checker_(), cross_cluster_validator_()
 {
 }
 
@@ -207,8 +95,8 @@ int ObMajorMergeScheduler::init(
   } else if (OB_FAIL(progress_checker_.init(tenant_id, sql_proxy, schema_service,
           zone_merge_mgr, *GCTX.lst_operator_, server_trace))) {
     LOG_WARN("fail to init progress_checker", KR(ret));
-  } else if (OB_FAIL(checksum_validator_.init(tenant_id, sql_proxy, zone_merge_mgr))) {
-    LOG_WARN("fail to init checksum checker", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(cross_cluster_validator_.init(tenant_id, sql_proxy, zone_merge_mgr))) {
+    LOG_WARN("fail to init cross cluster validator", KR(ret), K(tenant_id));
   } else if (OB_FAIL(idling_.init(tenant_id))) {
     LOG_WARN("fail to init idling", KR(ret), K(tenant_id));
   } else {
@@ -349,7 +237,9 @@ int ObMajorMergeScheduler::do_work()
       }
 
       if (OB_SUCC(ret) && need_merge) {
-        if (OB_FAIL(do_one_round_major_merge(curr_round_epoch))) {
+        if (OB_FAIL(do_before_major_merge(curr_round_epoch))) {
+          LOG_WARN("fail to do before major merge", KR(ret), K(curr_round_epoch));
+        } else if (OB_FAIL(do_one_round_major_merge(curr_round_epoch))) {
           LOG_WARN("fail to do major merge", KR(ret), K(curr_round_epoch));
         }
       }
@@ -358,6 +248,23 @@ int ObMajorMergeScheduler::do_work()
     LOG_TRACE("finish do merge scheduler work", KR(ret), K(curr_round_epoch), K(global_info));
     // is_merging = false, except for switchover
     check_merge_interval_time(false);
+  }
+  return ret;
+}
+
+int ObMajorMergeScheduler::do_before_major_merge(const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  share::SCN global_broadcast_scn;
+  global_broadcast_scn.set_min();
+
+  if (OB_FAIL(progress_checker_.prepare_handle())) {
+    LOG_WARN("fail to do prepare handle of progress checker", KR(ret));
+  } else if (OB_FAIL(zone_merge_mgr_->get_global_broadcast_scn(global_broadcast_scn))) {
+    LOG_WARN("fail to get_global_broadcast_scn", KR(ret));
+  } else if (OB_FAIL(ObColumnChecksumErrorOperator::delete_column_checksum_err_info(
+      *sql_proxy_, tenant_id_, global_broadcast_scn))) {
+    LOG_WARN("fail to delete column checksum error info", KR(ret), K(global_broadcast_scn));
   }
   return ret;
 }
@@ -529,11 +436,12 @@ int ObMajorMergeScheduler::start_zones_merge(const ObZoneArray &to_merge, const 
 int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
   ObAllZoneMergeProgress all_progress;
   SCN global_broadcast_scn;
-  bool all_merged = true;
   ObSimpleFrozenStatus frozen_status;
-
+  DEBUG_SYNC(RS_VALIDATE_CHECKSUM);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
@@ -550,7 +458,43 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
                             "global_broadcast_scn", global_broadcast_scn.get_val_for_inner_table_field(),
                             "service_addr", GCONF.self_addr_);
     }
+  } else if (OB_FAIL(progress_checker_.check_verification(global_broadcast_scn))) {
+    LOG_WARN("fail to check verification", KR(ret), K_(tenant_id), K(global_broadcast_scn));
+    int64_t time_interval = 10L * 60 * 1000 * 1000;  // record every 10 minutes
+    if (TC_REACH_TIME_INTERVAL(time_interval)) {
+      ROOTSERVICE_EVENT_ADD("daily_merge", "verification", K_(tenant_id),
+                            "check verification fail", ret,
+                            "global_broadcast_scn", global_broadcast_scn,
+                            "service_addr", GCONF.self_addr_);
+    }
+  }
+
+  if (OB_CHECKSUM_ERROR == ret) {
+    if (OB_TMP_FAIL(zone_merge_mgr_->set_merge_error(ObZoneMergeInfo::ObMergeErrorType::CHECKSUM_ERROR,
+        expected_epoch))) {
+      LOG_WARN("fail to set merge error", KR(ret), KR(tmp_ret), K_(tenant_id), K(expected_epoch));
+    }
+  } else if (OB_SUCC(ret)) {
+    if (OB_FAIL(handle_all_zone_merge(all_progress, global_broadcast_scn, expected_epoch))) {
+      LOG_WARN("fail to handle all zone merge", KR(ret), K(global_broadcast_scn), K(expected_epoch));
+    }
+  }
+
+  return ret;
+}
+
+int ObMajorMergeScheduler::handle_all_zone_merge(
+    const ObAllZoneMergeProgress &all_progress,
+    const share::SCN &global_broadcast_scn,
+    const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  bool all_merged = true;
+  if (global_broadcast_scn.get_val_for_tx() < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(global_broadcast_scn));
   } else {
+    // 1. check all zone finished compaction
     HEAP_VAR(ObZoneMergeInfo, info) {
       FOREACH_X(progress, all_progress, OB_SUCC(ret)) {
         const ObZone &zone = progress->zone_;
@@ -583,10 +527,11 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
           LOG_INFO("broadcast_scn of this zone is larger than global_broadcast_scn, need to "
             "recheck merge progress again", K_(tenant_id), K(zone), K(global_broadcast_scn));
         } else {
-          merged = (0 == progress->unmerged_tablet_cnt_);
+          merged = progress->is_merge_finished();
           if (!merged) {
             all_merged = false;
-            LOG_INFO("zone merge not finish", "zone", progress->zone_, "unmerged_cnt", progress->unmerged_tablet_cnt_);
+            LOG_INFO("zone merge not finish", "zone", progress->zone_, "merged_cnt", progress->merged_tablet_cnt_,
+              "unmerged_cnt", progress->unmerged_tablet_cnt_);
           }
 
           SCN cur_all_merged_scn = SCN::min_scn();
@@ -598,8 +543,10 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
           } else {
             cur_all_merged_scn = progress->smallest_snapshot_scn_;
           }
-          LOG_INFO("check updating merge status", KR(ret), K_(tenant_id), K(zone), K(merged), K(cur_all_merged_scn),
-            K(cur_merged_scn), "smallest_snapshot_scn", progress->smallest_snapshot_scn_, K(info));
+
+          LOG_INFO("check updating merge status", K_(tenant_id), K(zone), K(merged), K(cur_all_merged_scn),
+            K(cur_merged_scn), K(info),"smallest_snapshot_scn", progress->smallest_snapshot_scn_,
+            "merged_cnt", progress->merged_tablet_cnt_, "unmerged_cnt", progress->unmerged_tablet_cnt_);
 
           if (OB_SUCC(ret) && merged) {
             // cur_all_merged_scn >= cur_merged_scn
@@ -612,7 +559,8 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
             // 2. Equal: In backup-restore situation, tablets may have higher snapshot_version(eg. version=10).
             // If major_freeze with version=4, all_merged_scn will be updated to 10; if major_freeze with version=5,
             // all_merged_scn will still be 10.
-            if ((cur_all_merged_scn < cur_merged_scn) || (cur_all_merged_scn < ori_all_merged_scn)
+            if ((cur_all_merged_scn < cur_merged_scn)
+                || (cur_all_merged_scn < ori_all_merged_scn)
                 || (cur_merged_scn < info.last_merged_scn())) {
               ret = OB_ERR_UNEXPECTED;
               LOG_ERROR("unexpected merged scn", KR(ret), K(merged), K(cur_merged_scn), K(cur_all_merged_scn),
@@ -625,10 +573,8 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
                 LOG_WARN("fail to finish zone merge", KR(ret), K(zone), K(expected_epoch), K(cur_merged_scn),
                   K(cur_all_merged_scn), K(info));
               } else {
-                ROOTSERVICE_EVENT_ADD("daily_merge", "zone_merge_finish", K_(tenant_id),
-                                      "last_merged_scn", cur_merged_scn,
-                                      "all_merged_scn", cur_all_merged_scn,
-                                      K(zone));
+                ROOTSERVICE_EVENT_ADD("daily_merge", "zone_merge_finish", K_(tenant_id), "last_merged_scn", cur_merged_scn,
+                                      "all_merged_scn", cur_all_merged_scn, K(zone));
               }
             }
           }
@@ -636,34 +582,35 @@ int ObMajorMergeScheduler::update_merge_status(const int64_t expected_epoch)
       }
     }
 
+    // 2. check all table finished compaction and verification
     if (OB_SUCC(ret) && all_merged) {
-      // MERGE_STATUS: MERGING -> VERIFYING CHECKSUM
-      if (OB_FAIL(update_global_merge_info_after_merge(expected_epoch))) {
-        LOG_WARN("fail to update global merge info after merge", KR(ret), K_(tenant_id), K(expected_epoch));
-      } else if (OB_FAIL(ObColumnChecksumErrorOperator::delete_column_checksum_err_info(*sql_proxy_,  
-          tenant_id_, global_broadcast_scn))) {
-        LOG_WARN("fail to delete column checksum error info", KR(ret), K_(tenant_id), K(global_broadcast_scn));
-      } else if (OB_FAIL(checksum_validator_.execute_check(frozen_status, expected_epoch))) { 
-        LOG_WARN("fail to execute checking checksum", KR(ret), K_(tenant_id), K(expected_epoch));
-      // TODO NOT support cross-cluster checksum verify
-      } else if (/*OB_FAIL(checksum_validator_.sync_tablet_checksum())*/ false) {
-        LOG_WARN("fail to sync tablet checksum item", KR(ret), K_(tenant_id));
+      bool exist_uncompacted = false;
+      bool exist_unverified = false;
+      if (OB_FAIL(progress_checker_.check_table_status(exist_uncompacted, exist_unverified))) {
+        LOG_WARN("fail to check table status", KR(ret), K_(tenant_id));
+      } else if (exist_uncompacted) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("should not exist uncompacted table after all zone merged", KR(ret), K(exist_unverified));
+      } else if (exist_unverified) {
+        all_merged = false;
+        LOG_INFO("although finished compaction, but not finish verification", K(all_merged), K(exist_uncompacted));
       }
+    }
 
-      // MERGE_STATUS: VERIFYING CHECKSUM -> IDLE
-      if (FAILEDx(try_update_global_merged_scn(expected_epoch))) {
+    // 3. execute final operations after all merged
+    if (OB_SUCC(ret) && all_merged) {
+      // MERGE_STATUS: change to IDLE
+      if (OB_FAIL(try_update_global_merged_scn(expected_epoch))) {
         LOG_WARN("fail to update global_merged_scn", KR(ret), K_(tenant_id), K(expected_epoch));
       }
     }
   }
-
   return ret;
 }
 
 int ObMajorMergeScheduler::update_global_merge_info_after_merge(const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
-  // need update global merge_status
   if (OB_FAIL(zone_merge_mgr_->update_global_merge_info_after_merge(expected_epoch))) {
     LOG_WARN("fail to update global merge info after merge", KR(ret), K_(tenant_id), K(expected_epoch));
   }
@@ -674,6 +621,7 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
 {
   int ret = OB_SUCCESS;
   HEAP_VARS_2((ObZoneMergeInfoArray, infos), (ObGlobalMergeInfo, global_info)) {
+    uint64_t global_broadcast_scn_val = UINT64_MAX;
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       LOG_WARN("not inited", KR(ret));
@@ -681,6 +629,9 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
       LOG_WARN("fail to get zone info", KR(ret));
     } else if (global_info.is_merge_error()) {
       LOG_WARN("should not update global merged scn, cuz is_merge_error is true", K(global_info));
+    } else if (FALSE_IT(global_broadcast_scn_val = global_info.global_broadcast_scn_.get_scn_val())) {
+    } else if (OB_FAIL(update_all_tablets_report_scn(global_broadcast_scn_val))) {
+      LOG_WARN("fail to update all tablets report_scn", KR(ret), K(expected_epoch), K(global_broadcast_scn_val));
     } else {
       if (global_info.last_merged_scn() != global_info.global_broadcast_scn()) {
         bool merged = true;
@@ -694,11 +645,24 @@ int ObMajorMergeScheduler::try_update_global_merged_scn(const int64_t expected_e
             LOG_WARN("try update global last_merged_scn failed", KR(ret), K(expected_epoch));
           } else {
             ROOTSERVICE_EVENT_ADD("daily_merge", "global_merged", K_(tenant_id),
-                                  "global_broadcast_scn", global_info.global_broadcast_scn_);
+                                  "global_broadcast_scn", global_broadcast_scn_val);
           }
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObMajorMergeScheduler::sync_tablet_checksum()
+{
+  int ret = OB_SUCCESS;
+  if (PRIMARY_CLUSTER == ObClusterInfoGetter::get_cluster_role_v2()) {
+    if (OB_FAIL(cross_cluster_validator_.write_tablet_checksum_item())) {
+      LOG_WARN("fail to sync tablet", KR(ret), K_(tenant_id));
+    }
+  } else {
+    LOG_INFO("no need to sync tablet checksum in non-primary cluster", K_(tenant_id));
   }
   return ret;
 }
@@ -775,6 +739,19 @@ int ObMajorMergeScheduler::do_update_freeze_service_epoch(
     LOG_WARN("not indeed update freeze_service_epoch", KR(ret), K(latest_epoch), K_(tenant_id), K(affected_rows));
   }
   LOG_INFO("finish to update freeze_service_epoch", KR(ret), K(latest_epoch), K_(tenant_id));
+  return ret;
+}
+
+int ObMajorMergeScheduler::update_all_tablets_report_scn(
+    const uint64_t global_braodcast_scn_val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTabletMetaTableCompactionOperator::batch_update_report_scn(
+          tenant_id_,
+          global_braodcast_scn_val,
+          ObTabletReplica::ScnStatus::SCN_STATUS_ERROR))) {
+    LOG_WARN("fail to batch update report_scn", KR(ret), K_(tenant_id), K(global_braodcast_scn_val));
+  }
   return ret;
 }
 

@@ -47,7 +47,7 @@ struct ObScheduleSuspectInfo : public common::ObDLinkBase<ObScheduleSuspectInfo>
   char suspect_info_[common::OB_DIAGNOSE_INFO_LENGTH];
 };
 
-class ObScheduleSuspectInfoMgr{
+class ObScheduleSuspectInfoMgr {
 public:
   ObScheduleSuspectInfoMgr();
   ~ObScheduleSuspectInfoMgr() { destroy(); }
@@ -125,6 +125,9 @@ public:
 private:
   int diagnose_tablet_mini_merge(const ObLSID &ls_id, ObTablet &tablet);
   int diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet);
+  int diagnose_tablet_medium_merge(
+      const ObLSID &ls_id,
+      ObTablet &tablet);
   int diagnose_tablet_major_merge(
       const int64_t compaction_scn,
       const ObLSID &ls_id,
@@ -147,6 +150,7 @@ private:
       const ObLSID ls_id,
       const ObTabletID tablet_id,
       ObScheduleSuspectInfo &info);
+  int diagnose_medium_scn_table(const int64_t compaction_scn);
   OB_INLINE bool can_add_diagnose_info() { return idx_ < max_cnt_; }
   int get_suspect_info(
       const ObMergeType merge_type,
@@ -155,7 +159,7 @@ private:
       ObScheduleSuspectInfo &ret_info);
 
 private:
-  static const int64_t SCHEDULE_MINI_INTERVAL = 1000L * 1000L * 30L; // 30 seconds
+  static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = 1000L * 1000L * 120L; // 120 seconds
   static const int64_t SUSPECT_INFO_WARNING_THRESHOLD = 1000L * 1000L * 60L * 5; // 5 mins
   bool is_inited_;
   ObCompactionDiagnoseInfo *info_array_;

@@ -16,6 +16,7 @@
 #include "share/ob_tablet_checksum_iterator.h"
 #include "share/ob_tablet_replica_checksum_iterator.h"
 #include "share/ob_freeze_info_proxy.h"
+#include "share/ob_zone_merge_info.h"
 
 namespace oceanbase
 {
@@ -25,42 +26,50 @@ class ObZoneMergeManager;
 class ObFreezeInfoManager;
 class ObServerManager;
 
+class ObMergeErrorCallback
+{
+public:
+  ObMergeErrorCallback()
+    : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID),
+      zone_merge_mgr_(nullptr)
+  {}
+  virtual ~ObMergeErrorCallback() {}
+
+  int init(const uint64_t tenant_id, ObZoneMergeManager &zone_merge_mgr);
+
+  int handle_merge_error(const int64_t error_type, const int64_t expected_epoch);
+
+private:
+  bool is_inited_;
+  uint64_t tenant_id_;
+  ObZoneMergeManager *zone_merge_mgr_;
+  DISALLOW_COPY_AND_ASSIGN(ObMergeErrorCallback);
+};
+
 class ObChecksumValidatorBase
 {
 public:
   ObChecksumValidatorBase()
-    : is_inited_(false), need_check_(true), tenant_id_(OB_INVALID_TENANT_ID),
-      sql_proxy_(NULL)
+    : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID),
+      sql_proxy_(NULL), zone_merge_mgr_(NULL), merge_err_cb_()
   {}
   virtual ~ObChecksumValidatorBase() {}
   virtual int init(const uint64_t tenant_id,
-                   common::ObMySQLProxy *sql_proxy);
+                   common::ObMySQLProxy &sql_proxy,
+                   ObZoneMergeManager &zone_merge_mgr);
+  virtual bool need_validate() const { return false; }
 
-  int check(const share::ObSimpleFrozenStatus &frozen_status);
-
-  void set_need_check(bool need_check) { need_check_ = need_check; }
+  bool is_primary_cluster() const;
+  bool is_standby_cluster() const;
 
   static const int64_t MIN_CHECK_INTERVAL = 10 * 1000 * 1000LL;
 
 protected:
-  virtual int do_check(const share::ObSimpleFrozenStatus &frozen_status) = 0;
-
-protected:
   bool is_inited_;
-  bool need_check_;
   uint64_t tenant_id_;
   common::ObMySQLProxy *sql_proxy_;
-};
-
-// Mainly to verify checksum between each tablet replicas in primary/standby cluster
-class ObTabletChecksumValidator : public ObChecksumValidatorBase
-{
-public:
-  ObTabletChecksumValidator() {}
-  virtual ~ObTabletChecksumValidator() {}
-
-protected:
-  virtual int do_check(const share::ObSimpleFrozenStatus &frozen_status) override;
+  ObZoneMergeManager *zone_merge_mgr_;
+  ObMergeErrorCallback merge_err_cb_;
 };
 
 // Mainly to verify checksum of cross-cluster's tablet which sync from primary cluster
@@ -70,11 +79,15 @@ public:
   ObCrossClusterTableteChecksumValidator() {}
   virtual ~ObCrossClusterTableteChecksumValidator() {}
 
+public:
+  int validate_checksum(const share::SCN &frozen_scn);
+  virtual bool need_validate() const override;
+
   // sync data from __all_tablet_replica_checksum to __all_tablet_checksum
   int write_tablet_checksum_item();
 
-protected:
-  virtual int do_check(const share::ObSimpleFrozenStatus &frozen_status) override;
+private:
+  int check_cross_cluster_checksum(const share::SCN &frozen_scn);
 
 private:
   bool is_first_tablet_in_sys_ls(const share::ObTabletReplicaChecksumItem &item) const;
@@ -90,8 +103,36 @@ public:
   ObIndexChecksumValidator() {}
   virtual ~ObIndexChecksumValidator() {}
 
-protected:
-  virtual int do_check(const share::ObSimpleFrozenStatus &frozen_status) override;
+public:
+  int validate_checksum(const share::SCN &frozen_scn,
+                        const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
+                        int64_t &table_count,
+                        hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+  virtual bool need_validate() const override;
+
+private:
+  // valid '<data table, index table>' pair should finish index column checksum verification, other tables just skip verification.
+  int check_all_table_verification_finished(const share::SCN &frozen_scn,
+                                            const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
+                                            int64_t &table_count,
+                                            hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+  int check_table_compaction_finished(const share::schema::ObTableSchema &table_schema,
+                                      const share::SCN &frozen_scn,
+                                      const hash::ObHashMap<share::ObTabletLSPair, share::ObTabletCompactionStatus> &tablet_compaction_map,
+                                      hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map,
+                                      share::ObTableCompactionInfo &latest_compaction_info);
+  // handle data table which has tablet and index table(s). its all index tables may finish virification or not
+  // If all finished, update tablet status.
+  int update_data_table_verified(const int64_t table_id,
+                                 const share::ObTableCompactionInfo &data_table_compaction,
+                                 const share::SCN &frozen_scn,
+                                 hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+  // handle the table, update its all tablets' status if needed. And update its compaction_info in @table_compaction_map
+  int handle_table_compaction_finished(const share::schema::ObTableSchema *table_schema,
+                                       const share::SCN &frozen_scn,
+                                       hash::ObHashMap<uint64_t, share::ObTableCompactionInfo> &table_compaction_map);
+  bool is_index_table(const share::schema::ObSimpleTableSchemaV2 &simple_schema);
+  bool exist_in_table_array(const uint64_t table_id, const common::ObIArray<uint64_t> &table_ids);
 };
 
 } // end namespace rootserver
