@@ -1241,6 +1241,7 @@ int ObPartTransCtx::check_scheduler_status()
                 *this);
       // scheduler已宕机
     } else if (!is_alive) {
+      TRANS_LOG(WARN, "scheduler server is not alive, tx ctx will do gc");
       if (OB_FAIL(gc_ctx_())) {
         TRANS_LOG(WARN, "force kill part_ctx error", KR(ret), "context", *this);
       }
