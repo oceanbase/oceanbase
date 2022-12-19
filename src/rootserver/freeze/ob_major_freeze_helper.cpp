@@ -49,12 +49,13 @@ int ObMajorFreezeHelper::major_freeze(
 {
   int ret = OB_SUCCESS;
   ObSEArray<obrpc::ObSimpleFreezeInfo, 32> freeze_info_array;
-  if (OB_UNLIKELY(!param.is_valid())) {
+  if (OB_UNLIKELY(!param.is_valid()
+                  || (!param.freeze_all_ && param.freeze_info_array_.empty()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(param), KR(ret));
   } else if (OB_FAIL(get_freeze_info(param, freeze_info_array))) {
     LOG_WARN("fail to get tenant id", KR(ret), K(param));
-  } else {
+  } else if (!freeze_info_array.empty()) { // may be empty due to skipping restore and standby tenants
     if (OB_FAIL(do_major_freeze(*param.transport_, freeze_info_array, merge_results))) {
       LOG_WARN("fail to do major freeze", KR(ret), K(freeze_info_array));
     }
