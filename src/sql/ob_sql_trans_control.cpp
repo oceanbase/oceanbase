@@ -559,7 +559,7 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
       ret = OB_NOT_SUPPORTED;
       TRANS_LOG(ERROR, "statement of weak consistency is not allowed under SERIALIZABLE isolation",
                 KR(ret), "trans_id", session->get_tx_id(), "consistency_level", cl);
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE isolation level");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE and REPEATABLE-READ isolation level");
     }
   }
   return ret;
