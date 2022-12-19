@@ -100,7 +100,7 @@ public:
   int64_t progressive_merge_round_;
   int64_t progressive_merge_step_;
   int64_t upper_trans_version_;
-  // major/buf minor: snapshot version; others: max commit version
+  // major/meta major: snapshot version; others: max commit version
   int64_t max_merged_trans_version_;
   // recycle_version only avaliable for minor sstable, recored recycled multi version start
   int64_t recycle_version_;

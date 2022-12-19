@@ -23,12 +23,18 @@
 #include "storage/ob_i_table.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/tablet/ob_tablet_table_store_flag.h"
+#include "storage/compaction/ob_compaction_util.h"
 #include "share/scn.h"
 #include "storage/tablet/ob_tablet_multi_source_data.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 
 namespace oceanbase
 {
+namespace compaction
+{
+struct ObMediumCompactionInfoList;
+}
+
 namespace transaction
 {
 class ObLSTxCtxMgr;
@@ -246,13 +252,11 @@ struct ObGetMergeTablesParam
 {
   ObMergeType merge_type_;
   int64_t merge_version_;
-
   ObGetMergeTablesParam();
   bool is_valid() const;
-  OB_INLINE bool is_major_merge() const { return MAJOR_MERGE == merge_type_; }
   OB_INLINE bool is_major_valid() const
   {
-    return is_major_merge() && merge_version_ > 0;
+    return storage::is_major_merge_type(merge_type_) && merge_version_ > 0;
   }
   TO_STRING_KV(K_(merge_type), K_(merge_version));
 };
@@ -265,12 +269,10 @@ struct ObGetMergeTablesResult
   int64_t base_schema_version_;
   int64_t schema_version_;
   int64_t create_snapshot_version_;
-  int64_t checksum_method_;
   ObMergeType suggest_merge_type_;
   bool update_tablet_directly_;
   bool schedule_major_;
   share::ObScnRange scn_range_;
-  int64_t dump_memtable_timestamp_;
   int64_t read_base_version_;
 
   static const int64_t INVALID_INT_VALUE = -1;
@@ -279,10 +281,11 @@ struct ObGetMergeTablesResult
   bool is_valid() const;
   void reset_handle_and_range();
   void reset();
-  int deep_copy(const ObGetMergeTablesResult &src);
-  TO_STRING_KV(K_(version_range), K_(merge_version), K_(base_schema_version), K_(schema_version),
-      K_(create_snapshot_version), K_(checksum_method), K_(suggest_merge_type), K_(handle),
-      K_(update_tablet_directly), K_(schedule_major), K_(scn_range), K_(dump_memtable_timestamp), K_(read_base_version));
+  int assign(const ObGetMergeTablesResult &src);
+  int copy_basic_info(const ObGetMergeTablesResult &src);
+  TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version), K_(base_schema_version), K_(schema_version),
+      K_(create_snapshot_version), K_(suggest_merge_type), K_(handle),
+      K_(update_tablet_directly), K_(schedule_major), K_(read_base_version));
 };
 
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)
@@ -306,7 +309,8 @@ struct ObUpdateTableStoreParam
     const bool need_report = false,
     const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
     const bool need_check_sstable = false,
-    const bool allow_duplicate_sstable = false);
+    const bool allow_duplicate_sstable = false,
+    const compaction::ObMediumCompactionInfoList *medium_info_list = nullptr);
 
   ObUpdateTableStoreParam( // for ddl merge task only
     const ObTableHandleV2 &table_handle,
@@ -321,7 +325,8 @@ struct ObUpdateTableStoreParam
   TO_STRING_KV(K_(table_handle), K_(snapshot_version), K_(clog_checkpoint_scn), K_(multi_version_start),
                K_(keep_old_ddl_sstable), K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
                K_(need_check_sstable), K_(ddl_checkpoint_scn), K_(ddl_start_scn), K_(ddl_snapshot_version),
-               K_(ddl_execution_id), K_(ddl_cluster_version), K_(allow_duplicate_sstable), K_(tx_data), K_(binding_info), K_(auto_inc_seq));
+               K_(ddl_execution_id), K_(ddl_cluster_version), K_(allow_duplicate_sstable), K_(tx_data), K_(binding_info), K_(auto_inc_seq),
+               KPC_(medium_info_list));
 
   ObTableHandleV2 table_handle_;
   int64_t snapshot_version_;
@@ -344,6 +349,8 @@ struct ObUpdateTableStoreParam
   ObTabletTxMultiSourceDataUnit tx_data_;
   ObTabletBindingInfo binding_info_;
   share::ObTabletAutoincSeq auto_inc_seq_;
+
+  const compaction::ObMediumCompactionInfoList *medium_info_list_;
 };
 
 struct ObBatchUpdateTableStoreParam final
@@ -482,7 +489,7 @@ struct ObMigrateRemoteTableInfo
     remote_max_end_log_ts_ = 0;
     remote_max_snapshot_version_ = 0;
     need_reuse_local_minor_ = true;
-    buffer_minor_end_log_ts_ = 0;
+    meta_merge_end_log_ts_ = 0;
   }
   bool has_major() const { return remote_min_major_version_ != INT64_MAX; }
   int64_t remote_min_major_version_;
@@ -491,7 +498,7 @@ struct ObMigrateRemoteTableInfo
   int64_t remote_max_end_log_ts_;
   int64_t remote_max_snapshot_version_;
   bool need_reuse_local_minor_;
-  bool buffer_minor_end_log_ts_;
+  bool meta_merge_end_log_ts_;
   TO_STRING_KV(
       K_(remote_min_major_version),
       K_(remote_min_start_log_ts),
@@ -499,7 +506,7 @@ struct ObMigrateRemoteTableInfo
       K_(remote_max_end_log_ts),
       K_(remote_max_snapshot_version),
       K_(need_reuse_local_minor),
-      K_(buffer_minor_end_log_ts));
+      K_(meta_merge_end_log_ts));
 };
 
 class ObRebuildListener

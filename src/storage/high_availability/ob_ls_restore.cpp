@@ -2064,7 +2064,10 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablet_(
       LOG_WARN("failed to set restore status", K(ret), K(restore_status));
     } else if (OB_FAIL(param.ha_status_.set_data_status(data_status))) {
       LOG_WARN("failed to set data status", K(ret), K(data_status));
-    } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema(param.allocator_, param.storage_schema_))) {
+    } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
+        param.allocator_,
+        param.storage_schema_,
+        param.medium_info_list_))) {
       LOG_WARN("failed to construct placeholder storage schema");
     } else if (!param.is_valid()) {
       ret = OB_INVALID_ARGUMENT;

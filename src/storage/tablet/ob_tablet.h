@@ -97,6 +97,7 @@ public:
   ObTablet(const ObTablet&) = delete;
   ObTablet &operator=(const ObTablet&) = delete;
   ~ObTablet();
+
 public:
   void reset();
   bool is_ls_inner_tablet() const;
@@ -113,6 +114,8 @@ public:
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
   int64_t get_wash_score() const { return ATOMIC_LOAD(&wash_score_); }
   int get_rec_log_scn(share::SCN &rec_scn);
+  int get_max_sync_medium_scn(int64_t &max_medium_scn) const;
+  int get_max_sync_storage_schema_version(int64_t &max_schema_version) const;
 public:
   // first time create tablet
   int init(
@@ -147,6 +150,8 @@ public:
       const ObTabletTxMultiSourceDataUnit &tx_data,
       const ObTabletBindingInfo &ddl_data,
       const share::ObTabletAutoincSeq &autoinc_seq);
+  // update medium compaction info mgr and build new tablet
+  int init_with_update_medium_info(const ObTablet &old_tablet);
   // batch replace sstables without data modification
   int init(
       const ObIArray<ObTableHandleV2> &table_handles,
@@ -203,6 +208,11 @@ public:
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
       const blocksstable::ObDatumRowkey &rowkey);
+  int try_update_storage_schema(
+      const int64_t table_id,
+      const int64_t schema_version,
+      ObIAllocator &allocator,
+      const int64_t timeout_ts);
 
   // table operation
   int get_read_tables(
@@ -327,6 +337,16 @@ public:
       const int64_t buf_size,
       int64_t &pos);
   int get_schema_version_from_storage_schema(int64_t &schema_version);
+
+  int submit_medium_compaction_clog(
+      compaction::ObMediumCompactionInfo &medium_info,
+      ObIAllocator &allocator);
+  int replay_medium_compaction_clog(
+      const share::SCN &scn,
+      const char *buf,
+      const int64_t buf_size,
+      int64_t &pos);
+
   int fetch_tablet_autoinc_seq_cache(
       const uint64_t cache_size,
       share::ObTabletAutoincInterval &result);
@@ -335,11 +355,10 @@ public:
   int update_tablet_autoinc_seq(
       const uint64_t autoinc_seq,
       const share::SCN &replay_scn);
-
-  int get_kept_multi_version_start(
-      int64_t &multi_version_start,
-      int64_t &min_reserved_snapshot);
-
+  static int get_kept_multi_version_start(
+      ObLS &ls,
+      const ObTablet &tablet,
+      int64_t &multi_version_start);
   int check_schema_version_elapsed(
       const int64_t schema_version,
       const bool need_wait_trans_end,
@@ -358,14 +377,21 @@ public:
       const bool for_replay,
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
       const bool is_callback = false);
+  int get_max_medium_snapshot(int64_t &max_medium_snapshot) const;
+  int get_msd_from_memtables(
+      memtable::ObIMultiSourceDataUnit &msd,
+      ObIAllocator *allocator = nullptr,
+      const bool get_latest = true) const;
+
   int update_msd_cache_on_pointer();
   int get_redefined_schema_version_in_tablet_pointer(int64_t &schema_version) const;
   int set_redefined_schema_version_in_tablet_pointer(const int64_t schema_version);
   int set_memtable_clog_checkpoint_scn(
       const ObMigrationTabletParam *tablet_meta);
-
-  TO_STRING_KV(KP(this), K_(wash_score), K_(ref_cnt), K_(tablet_meta), K_(table_store), K_(storage_schema));
+  TO_STRING_KV(KP(this), K_(wash_score), K_(ref_cnt), K_(tablet_meta), K_(table_store), K_(storage_schema),
+      K_(medium_info_list));
 private:
+  int get_min_medium_snapshot(int64_t &min_medium_snapshot) const;
   int64_t get_self_size() const;
   int get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const;
 
@@ -377,17 +403,14 @@ private:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const int64_t max_saved_schema_version,
+      const int64_t max_saved_medium_scn,
+      const lib::Worker::CompatMode compat_mode,
       ObFreezer *freezer);
   int build_read_info(common::ObIAllocator &allocator);
   int create_memtable(const int64_t schema_version, const bool for_replay=false);
   int try_update_start_scn();
   int try_update_ddl_checkpoint_scn();
   int try_update_table_store_flag(const ObUpdateTableStoreParam &param);
-  int try_update_storage_schema(
-      const int64_t table_id,
-      const int64_t schema_version,
-      ObIAllocator &allocator,
-      const int64_t timeout_ts);
   int get_max_schema_version(int64_t &schema_version);
   int inner_get_all_sstables(common::ObIArray<ObITable *> &sstables) const;
   int pre_transform_sstable_root_block(const ObTableReadInfo &index_read_info);
@@ -458,9 +481,7 @@ private:
       const bool for_replay,
       const memtable::MemtableRefOp ref_op = memtable::MemtableRefOp::NONE,
       const bool is_callback = false);
-  int get_msd_from_memtable(memtable::ObIMultiSourceDataUnit &msd) const;
   int set_tx_data_in_tablet_pointer(const ObTabletTxMultiSourceDataUnit &tx_data);
-  int get_max_sync_storage_schema_version(int64_t &max_schema_version) const;
   int check_max_sync_schema_version() const;
   int check_sstable_column_checksum() const;
 

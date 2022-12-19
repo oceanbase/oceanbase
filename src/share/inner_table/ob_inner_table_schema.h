@@ -829,6 +829,7 @@ public:
   static int all_virtual_query_response_time_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_checksum_error_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_kvcache_handle_leak_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tablet_compaction_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_replica_task_plan_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_schema_memory_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_schema_slot_schema(share::schema::ObTableSchema &table_schema);
@@ -2731,6 +2732,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_query_response_time_schema,
   ObInnerTableSchema::all_virtual_column_checksum_error_info_schema,
   ObInnerTableSchema::all_virtual_kvcache_handle_leak_info_schema,
+  ObInnerTableSchema::all_virtual_tablet_compaction_info_schema,
   ObInnerTableSchema::all_virtual_ls_replica_task_plan_schema,
   ObInnerTableSchema::all_virtual_schema_memory_schema,
   ObInnerTableSchema::all_virtual_schema_slot_schema,
@@ -4008,6 +4010,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_BACKUP_DELETE_POLICY_TID,
   OB_ALL_VIRTUAL_PRIVILEGE_TID,
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TID,
+  OB_ALL_VIRTUAL_TABLET_COMPACTION_INFO_TID,
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_PLAN_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
@@ -5794,6 +5797,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_BACKUP_DELETE_POLICY_TNAME,
   OB_ALL_VIRTUAL_PRIVILEGE_TNAME,
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TNAME,
+  OB_ALL_VIRTUAL_TABLET_COMPACTION_INFO_TNAME,
   OB_ALL_VIRTUAL_LS_REPLICA_TASK_PLAN_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
@@ -7121,6 +7125,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_ASH_TID,
   OB_ALL_VIRTUAL_DML_STATS_TID,
   OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TID,
+  OB_ALL_VIRTUAL_TABLET_COMPACTION_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -9155,11 +9160,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 212;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 551;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 552;
 const int64_t OB_SYS_VIEW_COUNT = 601;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1369;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1370;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1372;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1373;
 
 } // end namespace share
 } // end namespace oceanbase

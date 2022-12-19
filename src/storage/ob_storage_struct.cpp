@@ -119,14 +119,14 @@ int64_t ObPartitionBarrierLogState::get_serialize_size() const
 
 ObGetMergeTablesParam::ObGetMergeTablesParam()
   : merge_type_(INVALID_MERGE_TYPE),
-    merge_version_()
+    merge_version_(0)
 {
 }
 
 bool ObGetMergeTablesParam::is_valid() const
 {
   return (merge_type_ > INVALID_MERGE_TYPE && merge_type_ < MERGE_TYPE_MAX)
-    && (!is_major_merge() || merge_version_ > 0);
+    && (!storage::is_major_merge_type(merge_type_) || merge_version_ > 0);
 }
 
 ObGetMergeTablesResult::ObGetMergeTablesResult()
@@ -136,12 +136,10 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
     base_schema_version_(INVALID_INT_VALUE),
     schema_version_(INVALID_INT_VALUE),
     create_snapshot_version_(INVALID_INT_VALUE),
-    checksum_method_(INVALID_INT_VALUE),
     suggest_merge_type_(INVALID_MERGE_TYPE),
     update_tablet_directly_(false),
     schedule_major_(false),
     scn_range_(),
-    dump_memtable_timestamp_(0),
     read_base_version_(0)
 {
 }
@@ -154,7 +152,6 @@ bool ObGetMergeTablesResult::is_valid() const
       && base_schema_version_ >= 0
       && schema_version_ >= 0
       && create_snapshot_version_ >= 0
-      && dump_memtable_timestamp_ >= 0
       && (suggest_merge_type_ > INVALID_MERGE_TYPE && suggest_merge_type_ < MERGE_TYPE_MAX);
 }
 
@@ -175,31 +172,39 @@ void ObGetMergeTablesResult::reset()
   create_snapshot_version_ = 0;
   suggest_merge_type_ = INVALID_MERGE_TYPE;
   schedule_major_ = false;
-  checksum_method_ = INVALID_INT_VALUE;
   scn_range_.reset();
-  dump_memtable_timestamp_ = 0;
   read_base_version_ = 0;
 }
 
-int ObGetMergeTablesResult::deep_copy(const ObGetMergeTablesResult &src)
+int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
 {
   int ret = OB_SUCCESS;
-  if (!src.is_valid()) {
+  if (OB_UNLIKELY(!src.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(src));
-  } else if (OB_FAIL(handle_.assign(src.handle_))) {
-    LOG_WARN("failed to copy handle", K(ret));
   } else {
     version_range_ = src.version_range_;
     merge_version_ = src.merge_version_;
     base_schema_version_ = src.base_schema_version_;
     schema_version_ = src.schema_version_;
     create_snapshot_version_ = src.create_snapshot_version_;
-    checksum_method_ = src.checksum_method_;
     suggest_merge_type_ = src.suggest_merge_type_;
     schedule_major_ = src.schedule_major_;
     scn_range_ = src.scn_range_;
-    dump_memtable_timestamp_ = src.dump_memtable_timestamp_;
+  }
+  return ret;
+}
+
+int ObGetMergeTablesResult::assign(const ObGetMergeTablesResult &src)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!src.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(src));
+  } else if (OB_FAIL(handle_.assign(src.handle_))) {
+    LOG_WARN("failed to assign table handle", K(ret), K(src));
+  } else if (OB_FAIL(copy_basic_info(src))) {
+    LOG_WARN("failed to copy basic info", K(ret), K(src));
   }
   return ret;
 }
@@ -227,7 +232,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_duplicate_sstable_(false),
     tx_data_(),
     binding_info_(),
-    auto_inc_seq_()
+    auto_inc_seq_(),
+    medium_info_list_(nullptr)
 {
   clog_checkpoint_scn_.set_min();
 }
@@ -241,7 +247,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     const bool need_report,
     const SCN clog_checkpoint_scn,
     const bool need_check_sstable,
-    const bool allow_duplicate_sstable)
+    const bool allow_duplicate_sstable,
+    const compaction::ObMediumCompactionInfoList *medium_info_list)
   : table_handle_(table_handle),
     snapshot_version_(snapshot_version),
     clog_checkpoint_scn_(),
@@ -260,7 +267,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_duplicate_sstable_(allow_duplicate_sstable),
     tx_data_(),
     binding_info_(),
-    auto_inc_seq_()
+    auto_inc_seq_(),
+    medium_info_list_(medium_info_list)
 {
   clog_checkpoint_scn_ = clog_checkpoint_scn;
 }
@@ -291,7 +299,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_duplicate_sstable_(false),
     tx_data_(),
     binding_info_(),
-    auto_inc_seq_()
+    auto_inc_seq_(),
+    medium_info_list_(nullptr)
 {
   clog_checkpoint_scn_.set_min();
 }

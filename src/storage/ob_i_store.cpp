@@ -74,6 +74,7 @@ void ObStoreCtx::reset()
   table_version_ = INT64_MAX;
   timeout_ = -1;
   mvcc_acc_ctx_.reset();
+  tablet_stat_.reset();
   replay_log_scn_.set_max();
 }
 
@@ -315,29 +316,6 @@ int ObLockRowChecker::check_lock_row_valid(
     }
   }
   return ret;
-}
-
-const char * ObMergeTypeStr[] = {
-    "MINI_MINOR_MERGE",
-    "BUF_MINOR_MERGE",
-    "HISTORY_MINI_MINOR_MERGE",
-    "MINI_MERGE",
-    "MAJOR_MERGE",
-    "MINOR_MERGE",
-    "DDL_KV_MERGE",
-    "BACKFILL_TX_MERGE"
-};
-
-const char *merge_type_to_str(const ObMergeType &merge_type)
-{
-  STATIC_ASSERT(static_cast<int64_t>(MERGE_TYPE_MAX) == ARRAYSIZEOF(ObMergeTypeStr), "merge type str len is mismatch");
-  const char *str = "";
-  if (merge_type >= MERGE_TYPE_MAX || merge_type < MINI_MINOR_MERGE) {
-    str = "invalid_merge_type";
-  } else {
-    str = ObMergeTypeStr[merge_type];
-  }
-  return str;
 }
 
 }

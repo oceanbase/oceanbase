@@ -17,6 +17,7 @@
 #include "lib/hash/ob_linear_hash_map.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "lib/task/ob_timer.h"
+#include "storage/compaction/ob_compaction_util.h"
 
 namespace oceanbase
 {

@@ -139,7 +139,6 @@ private:
   int do_backfill_tx_();
   int prepare_partition_merge_();
   int update_merge_sstable_();
-  int prepare_index_tree_();
 
 private:
   bool is_inited_;

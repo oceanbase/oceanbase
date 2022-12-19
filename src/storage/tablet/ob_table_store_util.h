@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 #ifndef OCEANBASE_STORAGE_OB_TABLE_STORE_UTIL_H_
 #define OCEANBASE_STORAGE_OB_TABLE_STORE_UTIL_H_
 
@@ -147,6 +146,7 @@ public:
   int copy(const ObTableStoreIterator &other);
   int add_tables(ObMemtableArray &array, const int64_t start_pos = 0);
   int add_tables(ObITable **start, const int64_t count = 1);
+  int add_table(ObITable *input_table);
   int get_next(ObITable *&table);
 
   ObITable *get_boundary_table(const bool is_last);

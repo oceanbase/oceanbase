@@ -15,10 +15,12 @@
 
 #include "share/scheduler/ob_dag_scheduler.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/container/ob_se_array.h"
 #include "ob_partition_parallel_merge_ctx.h"
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/compaction/ob_partition_merge_progress.h"
 #include "storage/compaction/ob_tablet_merge_task.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "share/scn.h"
@@ -58,7 +60,7 @@ public:
   blocksstable::ObSSTableIndexBuilder *get_index_builder() const { return index_builder_; }
   void destroy();
   int get_data_macro_block_count(int64_t &macro_block_count);
-  TO_STRING_KV(K_(is_inited), K_(sstable_merge_info));
+  TO_STRING_KV(K_(is_inited), K_(sstable_merge_info), KP_(index_builder));
 
 private:
   static int build_create_sstable_param(const ObTabletMergeCtx &ctx,
@@ -95,19 +97,15 @@ struct ObSchemaMergeCtx
       storage_schema_ = nullptr;
     }
   }
+  int deep_copy(const ObSchemaMergeCtx &input_ctx);
 
   common::ObIAllocator &allocator_;
   int64_t base_schema_version_;
   int64_t schema_version_;
-  const share::schema::ObTableSchema *table_schema_; // schema for major merge, get from schema_service
-  share::schema::ObSchemaGetterGuard schema_guard_;
   bool allocated_storage_schema_;
-  const ObStorageSchema *storage_schema_; // schema for mini merge, persist on meta
-  // in mini merge, merge_schema = storage_schema
-  // in major merge, merge_schema = table_schema
-  const ObMergeSchema *merge_schema_;
+  const ObStorageSchema *storage_schema_; // schema for all merge
 
-  TO_STRING_KV(K_(base_schema_version), K_(schema_version), KPC_(merge_schema));
+  TO_STRING_KV(K_(base_schema_version), K_(schema_version), KPC_(storage_schema));
 };
 
 class ObCompactionTimeGuard : public common::occam::ObOccamTimeGuard
@@ -115,7 +113,6 @@ class ObCompactionTimeGuard : public common::occam::ObOccamTimeGuard
 public:
   enum ObTabletCompactionEvent{
     DAG_WAIT_TO_SCHEDULE = 0,
-    GET_MULTI_VERSION_START,
     COMPACTION_POLICY,
     GET_TABLE_SCHEMA,
     CALC_PROGRESSIVE_PARAM,
@@ -160,7 +157,6 @@ struct ObTabletMergeCtx
   virtual ~ObTabletMergeCtx();
   void destroy();
   virtual bool is_valid() const;
-  bool is_schema_valid() const;
   bool need_full_checksum() const { return is_full_merge_; }
   bool need_rewrite_macro_block(const blocksstable::ObMacroBlockDesc &macro_desc) const;
   int64_t get_storage_format_work_version() const { return param_.merge_version_; }
@@ -168,21 +164,21 @@ struct ObTabletMergeCtx
   int init_merge_progress(bool is_major);
   int get_merge_range(int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
 
-  int inner_init_for_major();
   int inner_init_for_minor(bool &skip_rest_operation);
+  int inner_init_for_medium();
+  int init_get_medium_compaction_info(const int64_t medium_snapshot, const ObMediumCompactionInfo *&medium_info);
+  int get_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
+  int get_storage_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_to_merge(const ObTablesHandleArray &merge_tables_handle, const bool get_schema_on_memtable = true);
-  int get_table_schema_to_merge();
-
-  static int get_table_id(
-      const ObTabletID &tablet_id,
-      const int64_t schema_version,
-      uint64_t &table_id);
+public:
+  int get_medium_compaction_info_to_store();
 
   int get_basic_info_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int cal_minor_merge_param();
   int cal_major_merge_param(const ObGetMergeTablesResult &get_merge_table_result);
   int init_merge_info();
-  int cal_progressive_merge_param(const bool is_schema_changed);
+  int prepare_index_tree();
+  int prepare_merge_progress();
   int generate_participant_table_info(char *buf, const int64_t buf_len) const;
   int generate_macro_id_list(char *buf, const int64_t buf_len) const;
   void collect_running_info();
@@ -192,12 +188,14 @@ struct ObTabletMergeCtx
   OB_INLINE int64_t get_concurrent_cnt() const { return parallel_merge_ctx_.get_concurrent_cnt(); }
   ObITable::TableType get_merged_table_type() const;
   ObTabletMergeInfo& get_merge_info() { return merge_info_; }
-  const ObMergeSchema *get_merge_schema() { return schema_ctx_.merge_schema_; }
+  const ObStorageSchema *get_schema() const { return schema_ctx_.storage_schema_; }
   int64_t get_compaction_scn() const {
     return
-        is_multi_version_minor_merge(param_.merge_type_) ?
+        is_multi_version_merge(param_.merge_type_) ?
             scn_range_.end_scn_.get_val_for_tx() : sstable_version_range_.snapshot_version_;
   }
+
+  typedef common::ObSEArray<ObGetMergeTablesResult, ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
 
   // 1. init in dag
   ObTabletMergeDagParam &param_;
@@ -217,6 +215,7 @@ struct ObTabletMergeCtx
 
   // 4. filled in ObTabletMergePrepareTask::cal_minior_merge_param
   bool is_full_merge_;               // full merge or increment merge
+  bool is_tenant_major_merge_;
   storage::ObMergeLevel merge_level_;
   ObTabletMergeInfo merge_info_;
 
@@ -243,6 +242,7 @@ struct ObTabletMergeCtx
   compaction::ObICompactionFilter *compaction_filter_;
   ObCompactionTimeGuard time_guard_;
   int64_t rebuild_seq_;
+  ObMediumCompactionInfoList merge_list_;
 
   TO_STRING_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version),
                K_(is_full_merge), K_(merge_level),
@@ -255,7 +255,7 @@ struct ObTabletMergeCtx
                K_(scn_range), K_(merge_scn), K_(read_base_version),
                K_(ls_handle), K_(tablet_handle),
                KPC_(merge_progress),
-               KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq));
+               KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq), K_(merge_list));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeCtx);
 };

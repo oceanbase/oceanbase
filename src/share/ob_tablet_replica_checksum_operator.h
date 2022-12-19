@@ -104,6 +104,9 @@ public:
 class ObTabletReplicaChecksumOperator
 {
 public:
+  // To get a batch of checksum_items
+  // We will get items whose compaction_scn >= @compaction_scn
+  //
   // This function is specifically designed for ObTabletReplicaChecksumIterator.
   // This function would remove the last several checksum items in some cases.
   // Please do not call this function in any other place, except ObTabletReplicaChecksumIterator.
@@ -113,9 +116,12 @@ public:
       const SCN &compaction_scn,
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
+  // get a batch of checksum_items, the count = @pairs.count()
+  // @compaction_scn means items' compaction_scn >= compaction_scn
   static int batch_get(
       const uint64_t tenant_id,
       const common::ObIArray<ObTabletLSPair> &pairs,
+      const SCN &compaction_scn,
       common::ObISQLClient &sql_proxy,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
   static int batch_get(
@@ -137,6 +143,32 @@ public:
       const ObAddr &server,
       const int64_t limit,
       int64_t &affected_rows);
+
+  static int get_specified_tablet_checksum(
+      const uint64_t tenant_id,
+      const int64_t ls_id,
+      const int64_t tablet_id,
+      const int64_t snapshot_version,
+      common::ObIArray<ObTabletReplicaChecksumItem> &items);
+
+  static int get_tablet_ls_pairs(
+      const uint64_t tenant_id,
+      const schema::ObTableSchema &table_schema,
+      common::ObMySQLProxy &sql_proxy,
+      common::ObIArray<ObTabletLSPair> &tablet_ls_pairs);
+
+  static int get_tablet_ls_pairs(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      common::ObMySQLProxy &sql_proxy,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObIArray<ObTabletLSPair> &tablet_ls_pairs);
+
+  static int check_tablet_replica_checksum(
+      const uint64_t tenant_id,
+      const common::ObIArray<ObTabletLSPair> &pairs,
+      const SCN &compaction_scn,
+      common::ObMySQLProxy &sql_proxy);
 
   static int check_column_checksum(
       const uint64_t tenant_id,
@@ -196,6 +228,7 @@ private:
 
   static int construct_batch_get_sql_str_(
       const uint64_t tenant_id,
+      const SCN &compaction_scn,
       const common::ObIArray<ObTabletLSPair> &pairs,
       const int64_t start_idx,
       const int64_t end_idx,
@@ -212,6 +245,9 @@ private:
   static int construct_tablet_replica_checksum_item_(
       common::sqlclient::ObMySQLResult &res,
       ObTabletReplicaChecksumItem &item);
+
+  static int innner_verify_tablet_replica_checksum(
+      const common::ObIArray<ObTabletReplicaChecksumItem> &ckm_items);
 
   static int check_global_index_column_checksum(
       const uint64_t tenant_id,
@@ -247,23 +283,30 @@ private:
       const uint64_t tenant_id,
       common::ObMySQLProxy &mysql_proxy,
       const schema::ObTableSchema &table_schema,
-      common::ObIArray<common::ObTabletID> &tablet_ids,
+      const SCN &compaction_scn,
+      common::ObIArray<ObTabletLSPair> &tablet_pairs,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
 
-  static int find_checksum_item_by_id_(
-      const common::ObTabletID &tablet_id,
+  static int get_table_all_tablet_ids_(
+      const schema::ObTableSchema &table_schema,
+      common::ObIArray<common::ObTabletID> &schema_tablet_ids);
+
+  static int find_checksum_item_(
+      const ObTabletLSPair &pair,
       common::ObIArray<ObTabletReplicaChecksumItem> &items,
       const SCN &compaction_scn,
       int64_t &idx);
 
-  static int get_table_all_tablet_id_(
-      const schema::ObTableSchema &table_schema,
-      common::ObIArray<common::ObTabletID> &schema_tablet_ids);
+  static int check_table_all_tablets_ckm_status_(
+      const uint64_t tenant_id,
+      common::ObIArray<ObTabletLSPair> &tablet_pairs,
+      bool &exist_error_status);
 
   static int need_verify_checksum_(
+      const uint64_t tenant_id,
       const SCN &compaction_scn,
       bool &need_verify,
-      common::ObIArray<common::ObTabletID> &schema_tablet_ids,
+      common::ObIArray<ObTabletLSPair> &tablet_pairs,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
 
   static int compare_column_checksum_(

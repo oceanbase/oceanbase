@@ -81,10 +81,10 @@ void ObPartitionMerger::reset()
 int ObPartitionMerger::init_data_store_desc(ObTabletMergeCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(data_store_desc_.init(*ctx.get_merge_schema(),
+  if (OB_FAIL(data_store_desc_.init(*ctx.get_schema(),
                                     ctx.param_.ls_id_,
                                     ctx.param_.tablet_id_,
-                                    ctx.param_.merge_type_,
+                                    ctx.param_.get_merge_type(),
                                     ctx.sstable_version_range_.snapshot_version_))) {
     STORAGE_LOG(WARN, "Failed to init data store desc", K(ret), K(ctx));
   } else {
@@ -120,7 +120,7 @@ int ObPartitionMerger::open_macro_writer(ObMergeParameter &merge_param)
   } else if (OB_ISNULL(table = merge_ctx_->tables_handle_.get_tables().at(0))) {
     ret = OB_ERR_SYS;
     STORAGE_LOG(WARN, "sstable is null", K(ret));
-  } else if (!table->is_sstable() && merge_ctx_->param_.is_major_merge()) {
+  } else if (!table->is_sstable() && is_major_merge_type(merge_ctx_->param_.merge_type_)) {
     ret = OB_ERR_SYS;
     STORAGE_LOG(WARN, "Unexpected first table for major merge", K(ret), KPC(merge_ctx_));
   } else if (OB_FAIL(macro_start_seq.set_parallel_degree(task_idx_))) {
@@ -229,6 +229,8 @@ int ObPartitionMerger::process(const ObMicroBlock &micro_block)
     STORAGE_LOG(WARN, "invalid argument to append micro block", K(ret), K(micro_block));
   } else if (OB_FAIL(macro_writer_->append_micro_block(micro_block, macro_desc))) {
     STORAGE_LOG(WARN, "Failed to append micro block to macro block writer", K(ret), K(micro_block));
+  } else {
+    LOG_DEBUG("append micro block", K(ret), K(micro_block));
   }
 
   return ret;
@@ -267,6 +269,8 @@ int ObPartitionMerger::process(const ObDatumRow &row)
     STORAGE_LOG(WARN, "Failed to check row columns", K(ret), K(row));
   } else if (OB_FAIL(inner_process(row))) {
     STORAGE_LOG(WARN, "Failed to inner append row", K(ret));
+  } else {
+    LOG_DEBUG("append row", K(ret), K(row));
   }
   return ret;
 }
@@ -296,7 +300,7 @@ int ObPartitionMerger::merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, i
     } else if (OB_FAIL(try_rewrite_macro_block(*macro_desc, rewrite))) {
       STORAGE_LOG(WARN, "Failed to try_rewrite_macro_block", K(ret));
     } else if (rewrite) {
-      if(OB_FAIL(rewrite_macro_block(minimum_iters))) {
+      if (OB_FAIL(rewrite_macro_block(minimum_iters))) {
         STORAGE_LOG(WARN, "Failed to open_curr_range", K(ret));
       }
     } else if (OB_FAIL(process(*macro_desc))) {
@@ -475,8 +479,8 @@ int ObPartitionMajorMerger::init_partition_fuser(const ObMergeParameter &merge_p
   int ret = OB_SUCCESS;
   partition_fuser_ = nullptr;
 
-  if (merge_param.is_buf_minor_merge()) {
-    partition_fuser_ = alloc_merge_helper<ObBufPartitionMergeFuser>();
+  if (is_meta_major_merge(merge_param.merge_type_)) {
+    partition_fuser_ = alloc_merge_helper<ObMetaPartitionMergeFuser>();
   } else {
     partition_fuser_ = alloc_merge_helper<ObMajorPartitionMergeFuser>();
   }
@@ -514,7 +518,7 @@ int ObPartitionMajorMerger::merge_partition(ObTabletMergeCtx &ctx, const int64_t
     bool has_incremental_data = false;
     if (merge_helper.is_iter_end()) {
       ret = OB_ITER_END;
-    } else if (merge_param.is_major_merge()
+    } else if (is_major_merge_type(merge_param.merge_type_)
         && OB_FAIL(get_macro_block_count_to_rewrite(merge_param.merge_range_, need_rewrite_block_cnt_))) {
       STORAGE_LOG(WARN, "Failed to compute the count of macro block to rewrite", K(ret));
     } else if (OB_FAIL(merge_helper.has_incremental_data(has_incremental_data))) {
@@ -611,7 +615,7 @@ int ObPartitionMajorMerger::get_macro_block_count_to_rewrite(const ObDatumRange 
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected null first sstable", K(ret), K(merge_ctx_->tables_handle_));
     } else if (merge_ctx_->progressive_merge_step_ < progressive_merge_num) {
-      ObSSTableSecMetaIterator *sec_meta_iter;
+      ObSSTableSecMetaIterator *sec_meta_iter = nullptr;
       ObDataMacroBlockMeta macro_meta;
       if (OB_FAIL(first_sstable->scan_secondary_meta(
           allocator_,
@@ -707,6 +711,9 @@ int ObPartitionMajorMerger::rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters)
 {
   int ret = OB_SUCCESS;
   ObPartitionMergeIter *iter = nullptr;
+  blocksstable::MacroBlockId curr_macro_id;
+  const ObMacroBlockDesc *curr_macro = nullptr;
+  const ObMacroBlockDesc *tmp_macro = nullptr;
   if (minimum_iters.count() != 1) {
     ret = OB_INNER_STAT_ERROR;
     STORAGE_LOG(WARN, "Unexpected minimum iters to rewrite macro block", K(ret), K(minimum_iters));
@@ -716,12 +723,26 @@ int ObPartitionMajorMerger::rewrite_macro_block(MERGE_ITER_ARRAY &minimum_iters)
   } else if (FALSE_IT(iter = minimum_iters.at(0))) {
   } else if (OB_FAIL(iter->open_curr_range(true /* rewrite */))) {
     STORAGE_LOG(WARN, "Failed to open the curr macro block", K(ret));
+  } else if (OB_FAIL(iter->get_curr_macro_block(curr_macro))) {
+    STORAGE_LOG(WARN, "failed to get curr macro block", K(ret), KPC(curr_macro));
+  } else if (OB_ISNULL(curr_macro)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "curr macro is null", K(ret), KPC(curr_macro));
   } else {
     STORAGE_LOG(DEBUG, "Rewrite macro block", KPC(iter));
+    curr_macro_id = curr_macro->macro_block_id_;
     // TODO maybe we need use macro_block_ctx to decide wheather the result row came from the same macro block
     while (OB_SUCC(ret) && !iter->is_iter_end() && iter->is_macro_block_opened()) {
       if (OB_FAIL(merge_same_rowkey_iters(minimum_iters))) {
         STORAGE_LOG(WARN, "failed to merge_same_rowkey_iters", K(ret), K(minimum_iters));
+      } else if (OB_FAIL(iter->get_curr_macro_block(tmp_macro))) {
+        STORAGE_LOG(WARN, "failed to get curr macro block", K(ret), KPC(tmp_macro));
+      } else if (OB_ISNULL(tmp_macro)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "tmp macro is null", K(ret), KPC(tmp_macro));
+      } else if (tmp_macro->macro_block_id_ != curr_macro_id) {
+        LOG_DEBUG("break for different macro", K(ret), KPC(tmp_macro), KPC(curr_macro));
+        break;
       }
     }
   }
@@ -746,9 +767,22 @@ int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMajorMergeHelper &merg
     while (OB_SUCC(ret)) {
       if (base_iter->is_iter_end()) {
         ret = OB_ITER_END;
-      } else if (base_iter->is_macro_block_opened()) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "unexpected macro block opened", K(ret), KPC(base_iter));
+      } else if (base_iter->is_macro_block_opened()) { // opend for cross range
+        // flush all row in curr macro block
+        while (OB_SUCC(ret) && base_iter->is_macro_block_opened()) {
+          if (OB_ISNULL(base_iter->get_curr_row())) {
+            STORAGE_LOG(WARN, "curr row is unexpected null", K(ret), KPC(base_iter));
+          } else if (OB_FAIL(process(*base_iter->get_curr_row()))) {
+            STORAGE_LOG(WARN, "Failed to process row", K(ret), K(*partition_fuser_->get_result_row()));
+            if (GCONF._enable_compaction_diagnose) {
+              ObPartitionMergeDumper::print_error_info(ret, minimum_iters, *merge_ctx_);
+            }
+          } else if (OB_FAIL(base_iter->next())) {
+            if (OB_ITER_END != ret) {
+              STORAGE_LOG(WARN, "Failed to get next", K(ret), KPC(base_iter));
+            }
+          }
+        } // end of while
       } else if (OB_FAIL(base_iter->get_curr_macro_block(macro_desc))) {
         STORAGE_LOG(WARN, "Failed to get current macro block", K(ret), KPC(base_iter));
       } else if (OB_ISNULL(macro_desc) || OB_UNLIKELY(!macro_desc->is_valid())) {
@@ -1631,7 +1665,7 @@ void ObPartitionMergeDumper::print_error_info(const int err_no,
         ret = OB_INVALID_ARGUMENT;
         STORAGE_LOG(WARN, "name too long", K(ret), K(file_name));
       } else if (table->is_sstable()) {
-        if (OB_FAIL(static_cast<ObSSTable *>(table)->dump2text(dump_table_dir, *ctx.schema_ctx_.table_schema_,
+        if (OB_FAIL(static_cast<ObSSTable *>(table)->dump2text(dump_table_dir, *ctx.schema_ctx_.storage_schema_,
                                                                file_name))) {
           if (OB_SERVER_OUTOF_DISK_SPACE != ret) {
             STORAGE_LOG(WARN, "failed to dump sstable", K(ret), K(file_name));

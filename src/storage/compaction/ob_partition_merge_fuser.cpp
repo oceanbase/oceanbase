@@ -75,7 +75,8 @@ int ObIPartitionMergeFuser::init(const ObMergeParameter &merge_param)
     STORAGE_LOG(WARN, "Failed to base init", K(ret), K(*this));
   } else {
     is_inited_ = true;
-    STORAGE_LOG(DEBUG, "Succ to init partition fuser", K(ret), K(*this));
+    STORAGE_LOG(DEBUG, "Succ to init partition fuser", K(ret), K(*this),
+        "merge_range", merge_param.merge_range_);
   }
   return ret;
 }
@@ -98,9 +99,6 @@ int ObIPartitionMergeFuser::check_merge_param(const ObMergeParameter &merge_para
   if (OB_UNLIKELY(!merge_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to init ObIPartitionMergeFuser", K(merge_param), K(ret));
-  } else if (OB_UNLIKELY(!merge_param.is_schema_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "schema is invalid", K(ret), K(merge_param));
   } else if (OB_FAIL(inner_check_merge_param(merge_param))) {
     STORAGE_LOG(WARN, "Unexcepted merge param to init merge fuser", K(merge_param), K(ret));
   }
@@ -151,21 +149,15 @@ ObMajorPartitionMergeFuser::~ObMajorPartitionMergeFuser()
 void ObMajorPartitionMergeFuser::reset()
 {
   default_row_.reset();
-  table_schema_ = NULL;
   generated_cols_.reset();
   ObIPartitionMergeFuser::reset();
-}
-
-bool ObMajorPartitionMergeFuser::is_valid() const
-{
-  return ObIPartitionMergeFuser::is_valid() && OB_NOT_NULL(table_schema_);
 }
 
 int ObMajorPartitionMergeFuser::inner_check_merge_param(const ObMergeParameter &merge_param)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(!merge_param.is_major_merge())) {
+  if (OB_UNLIKELY(!is_major_merge_type(merge_param.merge_type_))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected merge param with major fuser", K(merge_param), K(ret));
   } else {
@@ -173,7 +165,7 @@ int ObMajorPartitionMergeFuser::inner_check_merge_param(const ObMergeParameter &
     if (NULL == first_table) {
       ret =  OB_ERR_SYS;
       LOG_ERROR("first table must not null", K(ret), K(merge_param));
-    } else if (!first_table->is_major_sstable() && !first_table->is_buf_minor_sstable()) {
+    } else if (!first_table->is_major_sstable() && !first_table->is_meta_major_sstable()) {
       ret = OB_ERR_SYS;
       LOG_ERROR("invalid first table type", K(ret), K(*first_table));
     }
@@ -191,33 +183,36 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
     STORAGE_LOG(WARN, "ObIPartitionMergeFuser init twice", K(ret));
   } else if (OB_FAIL(default_row_.init(allocator_, multi_version_column_ids_.count()))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
-  } else if (OB_FAIL(merge_param.table_schema_->get_orig_default_row(multi_version_column_ids_, default_row_))) {
+  } else if (OB_FAIL(merge_param.merge_schema_->get_orig_default_row(multi_version_column_ids_, default_row_))) {
     STORAGE_LOG(WARN, "Failed to get default row from table schema", K(ret));
   } else if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, multi_version_column_ids_, default_row_))) {
     STORAGE_LOG(WARN, "fail to fill lob header for default row", K(ret));
   } else {
     default_row_.row_flag_.set_flag(ObDmlFlag::DF_UPDATE);
-    table_schema_ = merge_param.table_schema_;
     column_cnt_ = multi_version_column_ids_.count();
   }
   if (FAILEDx(generated_cols_.init(column_cnt_))) {
     LOG_WARN("Fail to init generated_cols", K(ret), K(column_cnt_));
   }
-  if (OB_SUCC(ret) && !merge_param.table_schema_->is_materialized_view()) {
+  if (OB_SUCC(ret) && !merge_param.merge_schema_->is_materialized_view()) {
     const ObColumnSchemaV2 *column_schema = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < multi_version_column_ids_.count(); ++i) {
       if (OB_HIDDEN_TRANS_VERSION_COLUMN_ID == multi_version_column_ids_.at(i).col_id_ ||
           OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == multi_version_column_ids_.at(i).col_id_) {
         // continue;
-      } else if (OB_ISNULL(column_schema = merge_param.table_schema_->get_column_schema(
+      } else {
+        const ObStorageSchema *storage_schema = static_cast<const ObStorageSchema *>(merge_param.merge_schema_);
+        const ObStorageColumnSchema *column_schema = NULL;
+        if (OB_ISNULL(column_schema = storage_schema->get_column_schema(
                   multi_version_column_ids_.at(i).col_id_))) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "The column schema is NULL", K(ret), K(i), K(multi_version_column_ids_.at(i)));
-      } else if (column_schema->is_generated_column()
-                 && !merge_param.table_schema_->is_storage_index_table()) {
-        // the generated columns in index are always filled before insert
-        if (OB_FAIL(generated_cols_.push_back(i))) {
-          LOG_WARN("Fail to push_back generated_cols", K(ret));
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "The column schema is NULL", K(ret), K(i), K(multi_version_column_ids_.at(i)));
+        } else if (column_schema->is_generated_column()
+                   && !merge_param.merge_schema_->is_storage_index_table()) {
+          // the generated columns in index are always filled before insert
+          if (OB_FAIL(generated_cols_.push_back(i))) {
+            LOG_WARN("Fail to push_back generated_cols", K(ret));
+          }
         }
       }
     }
@@ -247,7 +242,8 @@ int ObMajorPartitionMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters)
                                                       result_row_, nop_pos_, final_result))) {
         STORAGE_LOG(WARN, "Failed to fuse row", K(ret));
       } else {
-        STORAGE_LOG(DEBUG, "success to fuse row", K(ret), K(result_row_));
+        STORAGE_LOG(DEBUG, "success to fuse row", K(ret), K(i),
+            "curr_row", *macro_row_iters.at(i)->get_curr_row(), K(result_row_));
       }
     }
   }
@@ -340,16 +336,16 @@ int ObMajorPartitionMergeFuser::fuse_old_row(ObPartitionMergeIter *row_iter, blo
 }
 
 /*
- *ObBufPartitionMergeFuser
+ *ObMetaPartitionMergeFuser
  */
-int ObBufPartitionMergeFuser::inner_check_merge_param(const ObMergeParameter &merge_param)
+int ObMetaPartitionMergeFuser::inner_check_merge_param(const ObMergeParameter &merge_param)
 {
   int ret = OB_SUCCESS;
 
-  if (BUF_MINOR_MERGE != merge_param.merge_type_
+  if (META_MAJOR_MERGE != merge_param.merge_type_
       || merge_param.version_range_.multi_version_start_ != merge_param.version_range_.snapshot_version_) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "Unexpected merge param with buf fuser", K(ret), K(merge_param));
+    STORAGE_LOG(ERROR, "Unexpected merge param with meta fuser", K(ret), K(merge_param));
   }
 
   return ret;
@@ -378,7 +374,7 @@ int ObMinorPartitionMergeFuser::inner_check_merge_param(const ObMergeParameter &
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(merge_param.is_major_merge())) {
+  if (OB_UNLIKELY(is_major_merge_type(merge_param.merge_type_))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected merge param with major fuser", K(merge_param), K(ret));
   } else {

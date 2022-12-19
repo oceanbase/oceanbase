@@ -25,6 +25,7 @@
 #include "sql/engine/ob_operator.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -101,7 +102,7 @@ int ObMultipleMerge::init(
           || OB_UNLIKELY(!context.is_valid())
           || OB_UNLIKELY(!get_table_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument, ", K(ret), K(param), K(context), K(get_table_param));
+    STORAGE_LOG(WARN, "Invalid argument", K(ret), K(param), K(context), K(get_table_param));
   } else if (OB_FAIL(cur_row_.init(*context.stmt_allocator_, param.get_max_out_col_cnt()))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
   } else if (OB_FAIL(unprojected_row_.init(*context.stmt_allocator_, param.get_out_col_cnt()))) {
@@ -360,7 +361,7 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
     }
 
     if (OB_ITER_END == ret) {
-      update_and_report_scan_stat();
+      update_and_report_tablet_stat();
       scan_state_ = ScanState::NONE;
     }
     if (OB_SUCC(ret)) {
@@ -512,7 +513,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
     }
   }
   if (OB_ITER_END == ret) {
-    update_and_report_scan_stat();
+    update_and_report_tablet_stat();
     scan_state_ = ScanState::NONE;
   }
   LOG_TRACE("[Vectorized] get next rows", K(ret), K(count), K(capacity), KPC(block_row_store_));
@@ -630,10 +631,31 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     }
   }
   if (OB_ITER_END == ret) {
-    update_and_report_scan_stat();
+    update_and_report_tablet_stat();
     scan_state_ = ScanState::NONE;
   }
   return ret;
+}
+
+void ObMultipleMerge::report_tablet_stat()
+{
+  if (0 == access_ctx_->table_store_stat_.physical_read_cnt_ &&
+      0 == access_ctx_->table_store_stat_.micro_access_cnt_) {
+    // empty query, ignore it
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    storage::ObTabletStat tablet_stat;
+    tablet_stat.ls_id_ = access_ctx_->table_store_stat_.ls_id_.id();
+    tablet_stat.tablet_id_ = access_ctx_->table_store_stat_.tablet_id_.id();
+    tablet_stat.query_cnt_ = 1;
+    tablet_stat.scan_logical_row_cnt_ = access_ctx_->table_store_stat_.logical_read_cnt_;
+    tablet_stat.scan_physical_row_cnt_ = access_ctx_->table_store_stat_.physical_read_cnt_;
+    tablet_stat.scan_micro_block_cnt_ = access_ctx_->table_store_stat_.micro_access_cnt_;
+    tablet_stat.pushdown_micro_block_cnt_ = access_ctx_->table_store_stat_.pushdown_micro_access_cnt_;
+    if (OB_TMP_FAIL(MTL(storage::ObTenantTabletStatMgr *)->report_stat(tablet_stat))) {
+      STORAGE_LOG(WARN, "failed to report tablet stat", K(tmp_ret), K(tablet_stat));
+    }
+  }
 }
 
 int ObMultipleMerge::process_fuse_row(const bool not_using_static_engine,

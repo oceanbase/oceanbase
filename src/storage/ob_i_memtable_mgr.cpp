@@ -224,14 +224,16 @@ int ObIMemtableMgr::init(
     const ObTabletID &tablet_id,
     const share::ObLSID &ls_id,
     const int64_t max_saved_schema_version,
+    const int64_t max_saved_medium_scn,
+    const lib::Worker::CompatMode compat_mode,
     logservice::ObLogHandler *log_handler,
     ObFreezer *freezer,
     ObTenantMetaMemMgr *t3m)
 {
   int ret = OB_SUCCESS;
   if (!tablet_id.is_special_merge_tablet()
-      && OB_FAIL(init_storage_schema_recorder(tablet_id, ls_id, max_saved_schema_version, log_handler))) {
-    TRANS_LOG(WARN, "failed to init schema recorder", K(ret), K(max_saved_schema_version), KP(log_handler));
+      && OB_FAIL(init_storage_recorder(tablet_id, ls_id, max_saved_schema_version, max_saved_medium_scn, compat_mode, log_handler))) {
+    TRANS_LOG(WARN, "failed to init schema recorder", K(ret), K(max_saved_schema_version), K(max_saved_medium_scn), K(compat_mode), KP(log_handler));
   } else {
     ret = init(tablet_id, ls_id, freezer, t3m);
   }

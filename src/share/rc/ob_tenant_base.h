@@ -59,6 +59,7 @@ namespace storage {
   class ObStorageHAHandlerService;
   class ObLSRestoreService;
   class ObTenantSSTableMergeInfoMgr;
+  class ObTenantTabletStatMgr;
   namespace checkpoint {
     class ObCheckPointService;
     class ObTabletGCService;
@@ -164,6 +165,7 @@ namespace detector
       storage::ObTenantCheckpointSlogHandler*,       \
       compaction::ObTenantCompactionProgressMgr*,    \
       compaction::ObServerCompactionEventHistory*,   \
+      storage::ObTenantTabletStatMgr*,               \
       memtable::ObLockWaitMgr*,                      \
       logservice::ObGarbageCollector*,               \
       transaction::tablelock::ObTableLockService*,   \

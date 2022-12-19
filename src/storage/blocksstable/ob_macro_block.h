@@ -21,6 +21,7 @@
 #include "ob_sstable_meta.h"
 #include "share/ob_encryption_util.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
+#include "storage/compaction/ob_compaction_util.h"
 #include "share/scn.h"
 
 namespace oceanbase {
@@ -92,11 +93,12 @@ struct ObDataStoreDesc
   void reset();
   int assign(const ObDataStoreDesc &desc);
   bool encoding_enabled() const { return ObStoreFormat::is_row_store_type_with_encoding(row_store_type_); }
-  OB_INLINE bool is_major_merge() const { return storage::is_major_merge(merge_type_); }
+  OB_INLINE bool is_major_merge() const { return storage::is_major_merge_type(merge_type_); }
+  OB_INLINE bool is_meta_major_merge() const { return storage::is_meta_major_merge(merge_type_); }
   OB_INLINE bool is_use_pct_free() const { return macro_block_size_ != macro_store_size_; }
   int64_t get_logical_version() const
   {
-    return is_major_merge() ? snapshot_version_ : end_scn_.get_val_for_tx();
+    return (is_major_merge() || is_meta_major_merge()) ? snapshot_version_ : end_scn_.get_val_for_tx();
   }
   TO_STRING_KV(
       K_(ls_id),
@@ -125,7 +127,7 @@ struct ObDataStoreDesc
 
 private:
   int cal_row_store_type(
-      const share::schema::ObMergeSchema &table_schema,
+      const share::schema::ObMergeSchema &schema,
       const storage::ObMergeType merge_type);
   int set_major_working_cluster_version();
   int get_emergency_row_store_type();

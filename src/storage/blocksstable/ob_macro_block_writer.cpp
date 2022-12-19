@@ -827,7 +827,8 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
         }
       } else { // another schema rowkey
         if (nullptr != data_store_desc_->merge_info_
-            && MAJOR_MERGE != data_store_desc_->merge_info_->merge_type_
+            && !is_major_merge_type(data_store_desc_->merge_info_->merge_type_)
+            && !is_meta_major_merge(data_store_desc_->merge_info_->merge_type_)
             && !is_macro_or_micro_block_reused_
             && !last_key_with_L_flag_) {
           ret = OB_ERR_UNEXPECTED;

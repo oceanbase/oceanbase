@@ -53,6 +53,15 @@ int ObRowkey::to_store_rowkey(ObStoreRowkey &store_rowkey) const
   return ret;
 }
 
+void ObRowkey::destroy(ObIAllocator &allocator)
+{
+  if (OB_NOT_NULL(obj_ptr_)) {
+    allocator.free(obj_ptr_);
+    obj_ptr_ = nullptr;
+  }
+  obj_cnt_ = 0;
+}
+
 int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
 {
   int ret = OB_SUCCESS;

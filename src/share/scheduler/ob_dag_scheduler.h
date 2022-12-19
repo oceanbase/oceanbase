@@ -23,6 +23,7 @@
 #include "lib/profile/ob_trace_id.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_scheduler_config.h"
+#include "share/ob_table_range.h"
 
 namespace oceanbase
 {
@@ -30,6 +31,8 @@ namespace compaction
 {
 struct ObTabletCompactionProgress;
 struct ObDiagnoseTabletCompProgress;
+class ObMergeDagHash;
+struct ObTabletMergeDagParam;
 }
 namespace share
 {
@@ -498,7 +501,7 @@ struct ObDagInfo
 public:
   ObDagInfo();
   ~ObDagInfo() {}
-  TO_STRING_KV(K_(dag_type), K_(dag_net_type), K_(dag_key), K_(dag_net_key), K_(dag_id),
+  TO_STRING_KV(K_(tenant_id), K_(dag_type), K_(dag_net_type), K_(dag_key), K_(dag_net_key), K_(dag_id),
       "dag_status", ObIDag::get_dag_status_str(dag_status_),
       K_(running_task_cnt), K_(add_time), K_(start_time), K_(indegree), K_(comment));
   ObDagInfo & operator = (const ObDagInfo &other);
@@ -795,6 +798,12 @@ public:
   int get_all_compaction_dag_info(
       ObIAllocator &allocator,
       ObIArray<compaction::ObTabletCompactionProgress *> &progress_array);
+  int get_minor_exe_dag_info(
+      const compaction::ObTabletMergeDagParam &param,
+      ObIArray<share::ObScnRange> &merge_range_array);
+  int diagnose_minor_exe_dag(
+      const compaction::ObMergeDagHash *merge_dag_info,
+      compaction::ObDiagnoseTabletCompProgress &progress);
   int get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time);
   int diagnose_dag(const ObIDag *dag, compaction::ObDiagnoseTabletCompProgress &input_progress);
   int check_ls_compaction_dag_exist(const ObLSID &ls_id, bool &exist);
@@ -1084,20 +1093,6 @@ inline void dag_yield()
     worker->yield();
   }
 }
-
-#define REACH_TENANT_TIME_INTERVAL(i) \
-  ({ \
-    bool bret = false; \
-    RLOCAL_STATIC(int64_t, last_time) = ::oceanbase::common::ObTimeUtility::fast_current_time(); \
-    int64_t cur_time = ::oceanbase::common::ObTimeUtility::fast_current_time(); \
-    int64_t old_time = last_time; \
-    if (OB_UNLIKELY((i + last_time) < cur_time) \
-        && old_time == ATOMIC_CAS(&last_time, old_time, cur_time)) \
-    { \
-      bret = true; \
-    } \
-    bret; \
-  })
 
 } // namespace share
 } // namespace oceanbase

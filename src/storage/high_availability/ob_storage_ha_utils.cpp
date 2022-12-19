@@ -89,7 +89,7 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
     LOG_WARN("failed to init pair", K(ret), K(tablet_id), K(ls_id));
   } else if (OB_FAIL(pairs.push_back(pair))) {
     LOG_WARN("failed to push back", K(ret), K(pair));
-  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, sql_client, items))) {
+  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, compaction_scn, sql_client, items))) {
     LOG_WARN("failed to batch get replica checksum item", K(ret));
   } else {
     ObArray<share::ObTabletReplicaChecksumItem> filter_items;

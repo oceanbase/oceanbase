@@ -49,7 +49,7 @@ public:
   DECLARE_TO_STRING;
 public:
   static const int32_t UPDATE_INTERVAL = 2 * 1000 * 1000; // 2 second
-  static const int32_t NORMAL_UPDATE_PARAM = 120;
+  static const int32_t NORMAL_UPDATE_PARAM = 300;
 protected:
   int estimate(ObTabletMergeCtx *ctx);
   void update_estimated_finish_time_();

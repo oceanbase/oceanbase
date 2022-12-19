@@ -99,7 +99,6 @@ private:
   OB_INLINE int check_need_refresh_table(bool &need_refresh);
   int save_curr_rowkey();
   int reset_tables();
-  OB_INLINE int report_table_store_stat();
   int check_filtered(const blocksstable::ObDatumRow &row, bool &filtered);
   int alloc_row_store(ObTableAccessContext &context, const ObTableAccessParam &param);
   int alloc_iter_pool(common::ObIAllocator &allocator);
@@ -107,11 +106,13 @@ private:
                        blocksstable::ObDatumRow &in_row,
                        blocksstable::ObDatumRow *&out_row);
   int fill_group_idx_if_need(blocksstable::ObDatumRow &row);
-  OB_INLINE int update_and_report_scan_stat();
   int init_lob_reader(const ObTableIterParam &iter_param,
                      ObTableAccessContext &access_ctx);
   int read_lob_columns(blocksstable::ObDatumRow &row);
   bool need_read_lob_columns(const blocksstable::ObDatumRow &row);
+  void report_tablet_stat();
+  OB_INLINE int update_and_report_tablet_stat();
+
 protected:
   common::ObArenaAllocator padding_allocator_;
   MergeIterators iters_;
@@ -166,23 +167,9 @@ OB_INLINE int ObMultipleMerge::check_need_refresh_table(bool &need_refresh)
   return ret;
 }
 
-OB_INLINE int ObMultipleMerge::report_table_store_stat()
+OB_INLINE int ObMultipleMerge::update_and_report_tablet_stat()
 {
   int ret = OB_SUCCESS;
-  if (lib::is_diagnose_info_enabled())
-  {
-    collect_merge_stat(access_ctx_->table_store_stat_);
-    //report access cnt and output cnt to the main table, ignore ret
-    if(OB_FAIL(ObTableStoreStatMgr::get_instance().report_stat(access_ctx_->table_store_stat_))) {
-      STORAGE_LOG(WARN, "report tablestat to main table fail,", K(ret));
-    }
-  }
-  access_ctx_->table_store_stat_.reuse();
-  return ret;
-}
-
-OB_INLINE int ObMultipleMerge::update_and_report_scan_stat()
-{
   EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
   access_ctx_->table_store_stat_.access_row_cnt_ += row_stat_.filt_del_count_;
   if (NULL != access_ctx_->table_scan_stat_) {
@@ -198,7 +185,11 @@ OB_INLINE int ObMultipleMerge::update_and_report_scan_stat()
     access_ctx_->table_scan_stat_->row_cache_hit_cnt_ += access_ctx_->table_store_stat_.row_cache_hit_cnt_;
     access_ctx_->table_scan_stat_->row_cache_miss_cnt_ += access_ctx_->table_store_stat_.row_cache_miss_cnt_;
   }
-  return report_table_store_stat();
+  if (lib::is_diagnose_info_enabled()) {
+    collect_merge_stat(access_ctx_->table_store_stat_);
+  }
+  report_tablet_stat();
+  return ret;
 }
 
 }

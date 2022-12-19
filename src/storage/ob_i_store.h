@@ -31,6 +31,7 @@ MULTI_VERSION_EXTRA_ROWKEY_DEF(MAX_EXTRA_ROWKEY, 0, NULL, NULL)
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/ob_table_store_stat_mgr.h"
 #include "storage/memtable/mvcc/ob_mvcc_acc_ctx.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -79,22 +80,6 @@ public:
             access_type == ObStoreAccessType::TABLE_LOCK);
   }
 };
-
-enum ObMergeType
-{
-  INVALID_MERGE_TYPE = -1,
-  MINI_MINOR_MERGE = 0,  // mini minor merge, compaction several mini sstable into one larger mini sstable
-  BUF_MINOR_MERGE = 1,
-  HISTORY_MINI_MINOR_MERGE = 2,
-  MINI_MERGE = 3,  // mini merge, only flush memtable
-  MAJOR_MERGE = 4,
-  MINOR_MERGE = 5,
-  DDL_KV_MERGE = 6,
-  BACKFILL_TX_MERGE = 7,
-  MERGE_TYPE_MAX,
-};
-
-const char *merge_type_to_str(const ObMergeType &merge_type);
 
 enum ObMergeLevel
 {
@@ -434,6 +419,7 @@ struct ObStoreCtx
                KP_(table_iter),
                K_(table_version),
                K_(mvcc_acc_ctx),
+               K_(tablet_stat),
                K_(replay_log_scn));
   share::ObLSID ls_id_;
   storage::ObLS *ls_;                              // for performance opt
@@ -442,6 +428,7 @@ struct ObStoreCtx
   int64_t table_version_;                          // used to update memtable's max_schema_version
   int64_t timeout_;
   memtable::ObMvccAccessCtx mvcc_acc_ctx_;         // all txn relative context
+  storage::ObTabletStat tablet_stat_;              // used for collecting query statistics
   share::SCN replay_log_scn_;                         // used in replay pass log_ts
 };
 
@@ -488,38 +475,6 @@ OB_INLINE bool ObStoreRow::is_valid() const
   }
 
   return bool_ret;
-}
-
-
-OB_INLINE bool is_major_merge(const ObMergeType &merge_type)
-{
-  return MAJOR_MERGE == merge_type;
-}
-OB_INLINE bool is_mini_merge(const ObMergeType &merge_type)
-{
-  return MINI_MERGE == merge_type;
-}
-OB_INLINE bool is_mini_minor_merge(const ObMergeType &merge_type)
-{
-  return MINOR_MERGE == merge_type || MINI_MINOR_MERGE == merge_type || HISTORY_MINI_MINOR_MERGE == merge_type;
-}
-OB_INLINE bool is_multi_version_minor_merge(const ObMergeType &merge_type)
-{
-  return MINOR_MERGE == merge_type || MINI_MERGE == merge_type || MINI_MINOR_MERGE == merge_type
-      || HISTORY_MINI_MINOR_MERGE == merge_type || BACKFILL_TX_MERGE == merge_type;
-}
-OB_INLINE bool is_history_mini_minor_merge(const ObMergeType &merge_type)
-{
-  return HISTORY_MINI_MINOR_MERGE == merge_type;
-}
-OB_INLINE bool is_buf_minor_merge(const ObMergeType &merge_type)
-{
-  return BUF_MINOR_MERGE == merge_type;
-}
-
-OB_INLINE bool is_backfill_tx_merge(const ObMergeType &merge_type)
-{
-  return BACKFILL_TX_MERGE == merge_type;
 }
 
 } // storage

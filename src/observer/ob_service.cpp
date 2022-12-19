@@ -2096,7 +2096,9 @@ int ObService::inner_fill_tablet_info_(
         addr,
         snapshot_version,
         data_size,
-        required_size))) {
+        required_size,
+        0/*report_scn*/,
+        ObTabletReplica::SCN_STATUS_IDLE))) {
       LOG_WARN("fail to init a tablet replica", KR(ret), K(tenant_id),
           K(tablet_id), K(tablet_replica));
     } else if (!need_checksum) {

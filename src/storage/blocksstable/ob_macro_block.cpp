@@ -126,7 +126,7 @@ int ObDataStoreDesc::cal_row_store_type(const share::schema::ObMergeSchema &merg
 {
   int ret = OB_SUCCESS;
 
-  if (!storage::is_major_merge(merge_type) && !storage::is_buf_minor_merge(merge_type)) { // not major or buf minor
+  if (!storage::is_major_merge_type(merge_type) && !storage::is_meta_major_merge(merge_type)) { // not major or meta merge
     row_store_type_ = FLAT_ROW_STORE;
   } else {
     row_store_type_ = merge_schema.get_row_store_type();
@@ -144,7 +144,7 @@ int ObDataStoreDesc::cal_row_store_type(const share::schema::ObMergeSchema &merg
 int ObDataStoreDesc::set_major_working_cluster_version()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_major_merge() || snapshot_version_ <= 0)) {
+  if (OB_UNLIKELY((!is_major_merge() && !is_meta_major_merge()) || snapshot_version_ <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected data store to get major working cluster version",
                 K(ret), K_(merge_type), K_(snapshot_version));
@@ -187,7 +187,8 @@ int ObDataStoreDesc::init(
   } else {
     reset();
     const int64_t pct_free = merge_schema.get_pctfree();
-    const bool is_major = storage::is_major_merge(merge_type);
+    const bool is_major = (storage::is_major_merge_type(merge_type) || storage::is_meta_major_merge(merge_type));
+    micro_block_size_ = merge_schema.get_block_size();
     macro_block_size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
     if (pct_free >= 0 && pct_free <= 50) {
       macro_store_size_ = macro_block_size_ * (100 - pct_free) / 100;
@@ -249,7 +250,7 @@ int ObDataStoreDesc::init(
       encoder_opt_.set_store_type(row_store_type_);
     }
 
-    if (OB_SUCC(ret) && is_major) {
+    if (OB_SUCC(ret) && storage::is_major_merge(merge_type)) { // exactly MAJOR MERGE
       if (cluster_version > 0) {
         major_working_cluster_version_ = cluster_version;
       } else {

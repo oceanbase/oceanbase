@@ -706,7 +706,7 @@ int ObSharedMacroBlockMgr::parse_merge_type(const ObSSTable &sstable, ObMergeTyp
   if (sstable.is_major_sstable()) {
     merge_type = ObMergeType::MAJOR_MERGE;
   } else if (sstable.is_minor_sstable()) {
-    merge_type = ObMergeType::MINI_MINOR_MERGE;
+    merge_type = ObMergeType::MINOR_MERGE;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable type is unexpected", K(ret), K(sstable));

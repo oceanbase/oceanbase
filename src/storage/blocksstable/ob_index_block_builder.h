@@ -174,14 +174,14 @@ public:
   void reset();
   int assign(const ObSSTableMergeRes &src);
   int fill_column_checksum(
-      const ObMergeSchema *schema,
+      const ObStorageSchema *schema,
       common::ObIArray<int64_t> &column_checksums) const;
   int fill_column_checksum(
       const common::ObIArray<int64_t> &column_default_checksum,
       common::ObIArray<int64_t> &column_checksums) const;
   int prepare_column_checksum_array(const int64_t data_column_cnt);
   static int fill_column_default_checksum_from_schema(
-      const ObMergeSchema *schema,
+      const ObStorageSchema *schema,
       common::ObIArray<int64_t> &column_default_checksum);
   static int fill_column_checksum_for_empty_major(
       const int64_t column_count,

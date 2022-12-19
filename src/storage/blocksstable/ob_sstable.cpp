@@ -29,6 +29,7 @@
 #include "storage/tablet/ob_tablet_create_sstable_param.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 
 namespace oceanbase
@@ -411,9 +412,11 @@ int ObSSTable::exist(
     }
 
     if (OB_NOT_NULL(iter)) {
-      if (lib::is_diagnose_info_enabled()) {
-        iter->report_stat(access_context.table_store_stat_);
-      }
+      ObTabletStat &stat = ctx.tablet_stat_;
+      stat.ls_id_ = ctx.ls_id_.id();
+      stat.tablet_id_ = ctx.tablet_id_.id();
+      stat.query_cnt_ = access_context.table_store_stat_.exist_row_.empty_read_cnt_ > 0;
+
       iter->~ObStoreRowIterator();
       access_context.stmt_allocator_->free(iter);
     }
@@ -496,9 +499,6 @@ int ObSSTable::exist(ObRowsInfo &rows_info, bool &is_exist, bool &all_rows_found
     }
 
     if (OB_NOT_NULL(iter)) {
-      if (lib::is_diagnose_info_enabled()) {
-        iter->report_stat(rows_info.exist_helper_.table_access_context_.table_store_stat_);
-      }
       iter->~ObStoreRowIterator();
       rows_info.exist_helper_.table_access_context_.allocator_->free(iter);
       rows_info.reuse_scan_mem_allocator();
@@ -621,10 +621,8 @@ int ObSSTable::scan_secondary_meta(
       LOG_WARN("Unexpected null pointer of secondary meta iterator", K(ret));
     } else if (OB_FAIL(iter->open(
         query_range, meta_type, *this, index_read_info, allocator, is_reverse_scan, sample_step))) {
-      if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
-        LOG_WARN("Fail to open secondary meta iterator with range",
-            K(ret), K(query_range), K(meta_type), K_(meta), K(is_reverse_scan), K(sample_step));
-      }
+      LOG_WARN("Fail to open secondary meta iterator with range",
+          K(ret), K(query_range), K(meta_type), K_(meta), K(is_reverse_scan), K(sample_step));
     } else {
       meta_iter = iter;
     }

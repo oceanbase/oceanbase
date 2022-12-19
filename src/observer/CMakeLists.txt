@@ -147,6 +147,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_compaction_diagnose_info.cpp
   virtual_table/ob_all_virtual_server_compaction_event_history.cpp
   virtual_table/ob_all_virtual_compaction_suggestion.cpp
+  virtual_table/ob_all_virtual_tablet_compaction_info.cpp
   virtual_table/ob_all_virtual_dag.cpp
   virtual_table/ob_all_virtual_dag_warning_history.cpp
   virtual_table/ob_all_virtual_dblink_info.cpp

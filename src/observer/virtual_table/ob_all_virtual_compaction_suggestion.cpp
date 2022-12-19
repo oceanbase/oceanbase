@@ -11,7 +11,7 @@
  */
 
 #include "ob_all_virtual_compaction_suggestion.h"
-
+#include "storage/compaction/ob_compaction_util.h"
 namespace oceanbase
 {
 using namespace storage;

@@ -240,10 +240,30 @@ public:
   int get_bf_optimal_prefix(int64_t &prefix);
   int64_t get_tablet_count() const;
 
+  // clog replay
+  int replay_update_storage_schema(
+      const share::SCN &scn,
+      const char *buf,
+      const int64_t buf_size,
+      const int64_t pos);
+  int replay_medium_compaction_clog(
+      const share::SCN &scn,
+      const char *buf,
+      const int64_t buf_size,
+      const int64_t pos);
+  int replay_update_reserved_snapshot(
+      const share::SCN &scn,
+      const char *buf,
+      const int64_t buf_size,
+      const int64_t pos);
+
   // update tablet
   int update_tablet_table_store(
       const common::ObTabletID &tablet_id,
       const ObUpdateTableStoreParam &param,
+      ObTabletHandle &handle);
+  int update_medium_compaction_info(
+      const common::ObTabletID &tablet_id,
       ObTabletHandle &handle);
   int update_tablet_table_store( // only for small sstables defragmentation
       const ObTabletHandle &old_tablet_handle,
@@ -378,6 +398,7 @@ public:
       const ObBatchUpdateTableStoreParam &param);
   void enable_to_read();
   void disable_to_read();
+  int get_all_tablet_ids(const bool except_ls_inner_tablet, common::ObIArray<ObTabletID> &tablet_id_array);
 
 protected:
   virtual int prepare_dml_running_ctx(
@@ -440,11 +461,13 @@ private:
   class GetAllTabletIDOperator final
   {
   public:
-    explicit GetAllTabletIDOperator(common::ObIArray<common::ObTabletID> &tablet_ids)
-      : tablet_ids_(tablet_ids) {}
+    explicit GetAllTabletIDOperator(common::ObIArray<common::ObTabletID> &tablet_ids,
+        const bool except_ls_inner_tablet = false)
+    : except_ls_inner_tablet_(except_ls_inner_tablet), tablet_ids_(tablet_ids) {}
     ~GetAllTabletIDOperator() = default;
     int operator()(const common::ObTabletID &tablet_id);
   private:
+    bool except_ls_inner_tablet_;
     common::ObIArray<common::ObTabletID> &tablet_ids_;
   };
   class DestroyMemtableAndMemberOperator final

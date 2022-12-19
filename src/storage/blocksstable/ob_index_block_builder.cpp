@@ -274,8 +274,8 @@ int ObSSTableMergeRes::fill_column_checksum_for_empty_major(
 }
 
 int ObSSTableMergeRes::fill_column_default_checksum_from_schema(
-      const ObMergeSchema *schema,
-      common::ObIArray<int64_t> &column_default_checksum)
+    const ObStorageSchema *schema,
+    ObIArray<int64_t> &column_default_checksum)
 {
   int ret = OB_SUCCESS;
   common::ObArray<ObSSTableColumnMeta> meta_array;
@@ -295,7 +295,7 @@ int ObSSTableMergeRes::fill_column_default_checksum_from_schema(
 }
 
 int ObSSTableMergeRes::fill_column_checksum(
-    const ObMergeSchema *schema,
+    const ObStorageSchema *schema,
     ObIArray<int64_t> &column_checksums) const
 {
   int ret = OB_SUCCESS;

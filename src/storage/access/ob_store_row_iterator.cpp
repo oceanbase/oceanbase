@@ -38,7 +38,7 @@ void ObStoreRowIterator::reset()
 
 int ObStoreRowIterator::init(
     const ObTableIterParam &iter_param,
-    ObTableAccessContext &access_ctx,
+    storage::ObTableAccessContext &access_ctx,
     ObITable *table,
     const void *query_range)
 {
@@ -57,17 +57,6 @@ int ObStoreRowIterator::get_next_row(const ObDatumRow *&store_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(inner_get_next_row(store_row))) {
-  }
-  return ret;
-}
-
-int ObStoreRowIterator::report_stat(ObTableStoreStat &stat)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableStoreStatMgr::get_instance().report_stat(stat))) {
-    STORAGE_LOG(WARN, "report stat fail", K(ret), K(stat));
-  } else {
-    stat.reuse();
   }
   return ret;
 }

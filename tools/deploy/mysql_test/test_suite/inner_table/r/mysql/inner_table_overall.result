@@ -549,6 +549,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12325	__all_virtual_query_response_time	2	201001	1
 12330	__all_virtual_column_checksum_error_info	2	201001	1
 12331	__all_virtual_kvcache_handle_leak_info	2	201001	1
+12334	__all_virtual_tablet_compaction_info	2	201001	1
 12335	__all_virtual_ls_replica_task_plan	2	201001	1
 12336	__all_virtual_schema_memory	2	201001	1
 12337	__all_virtual_schema_slot	2	201001	1

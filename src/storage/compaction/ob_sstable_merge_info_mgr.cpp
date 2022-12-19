@@ -217,7 +217,7 @@ int ObTenantSSTableMergeInfoMgr::add_sstable_merge_info(ObSSTableMergeInfo &merg
   } else if (OB_UNLIKELY(!merge_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "merge info is invalid", K(ret), K(merge_info));
-  } else if (merge_info.is_major_merge()) {
+  } else if (merge_info.is_major_merge_type()) {
     if (OB_FAIL(major_merge_infos_.add(merge_info))) {
       STORAGE_LOG(WARN, "Fail to add into major merge info manager", K(ret), K(merge_info));
     }

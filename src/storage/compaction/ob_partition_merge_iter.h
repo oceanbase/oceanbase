@@ -91,6 +91,7 @@ public:
     }
     return bret;
   }
+  int check_merge_range_cross(ObDatumRange &data_range, bool &range_cross);
   OB_INLINE const ObTableReadInfo &get_read_info() const{ return read_info_; }
 
   VIRTUAL_TO_STRING_KV(K_(tablet_id), K_(iter_end), K_(schema_rowkey_column_cnt), K_(schema_version), K_(merge_range),

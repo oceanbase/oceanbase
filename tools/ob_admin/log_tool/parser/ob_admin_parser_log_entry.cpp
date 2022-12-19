@@ -483,6 +483,20 @@ int ObAdminParserLogEntry::parse_gais_log_()
   return ret;
 }
 
+int ObAdminParserLogEntry::parse_reserved_snapshot_log_()
+{
+  //not supported so far, just reserved
+  int ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
+int ObAdminParserLogEntry::parse_medium_log_()
+{
+  //not supported so far, just reserved
+  int ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
 int ObAdminParserLogEntry::parse_different_entry_type_(const logservice::ObLogBaseHeader &header)
 {
   int ret = OB_SUCCESS;
@@ -549,6 +563,15 @@ int ObAdminParserLogEntry::parse_different_entry_type_(const logservice::ObLogBa
         ret = parse_gais_log_();
         break;
       }
+      case oceanbase::logservice::ObLogBaseType::RESERVED_SNAPSHOT_LOG_BASE_TYPE: {
+        ret = parse_reserved_snapshot_log_();
+        break;
+      }
+      case oceanbase::logservice::ObLogBaseType::MEDIUM_COMPACTION_LOG_BASE_TYPE: {
+        ret = parse_medium_log_();
+        break;
+      }
+
       default: {
         fprintf(stdout, "  Unknown Base Log Type : %d\n", header.get_log_type());
         LOG_WARN("don't support this log type", K(header.get_log_type()));

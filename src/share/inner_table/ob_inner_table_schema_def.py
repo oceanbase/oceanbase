@@ -3418,6 +3418,8 @@ def_table_schema(
         # load balancing releated
         ('data_size', 'int'),
         ('required_size', 'int', 'false', '0'),
+        ('report_scn', 'uint', 'false', '0'),
+        ('status', 'int', 'false', '0'),
     ],
 )
 
@@ -5098,8 +5100,7 @@ def_table_schema(
 )
 
 # 417 : __all_switchover_checkpoint
-# 418 : __all_tablet_compaction_scn
-
+# 418 : EMPTY
 # 419 : __all_column_group
 # 420 : __all_column_group_history
 # 421 : __all_column_group_mapping
@@ -6121,7 +6122,8 @@ def_table_schema(
   ('delete_row_count', 'int'),
   ('freeze_ts', 'int'),
   ('freeze_state', 'varchar:OB_MAX_CHAR_LENGTH'),
-  ('freeze_time_dist', 'varchar:OB_MAX_CHAR_LENGTH')
+  ('freeze_time_dist', 'varchar:OB_MAX_CHAR_LENGTH'),
+  ('compaction_info_list', 'varchar:OB_COMPACTION_INFO_LENGTH'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -7658,6 +7660,10 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
+
+
+
 
 ################################################################
 ################################################################
@@ -10679,9 +10685,31 @@ def_table_schema(
 )
 
 # 12332: __all_virtual_switchover_checkpoint
+# 12333: EMPTY
 
-# 12333: __all_virtual_tablet_compaction_scn
-# 12334: __all_virtual_tablet_compaction_info
+def_table_schema(
+    owner = 'lixia.yq',
+    table_name     = '__all_virtual_tablet_compaction_info',
+    table_id       = '12334',
+    table_type     = 'VIRTUAL_TABLE',
+    in_tenant_space = True,
+    gm_columns     = [],
+    rowkey_columns = [],
+
+    normal_columns = [
+      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+      ('svr_port', 'int'),
+      ('tenant_id', 'int'),
+      ('ls_id', 'int'),
+      ('tablet_id', 'int'),
+      ('finished_scn', 'int'),
+      ('wait_check_scn', 'int'),
+      ('max_received_scn', 'int'),
+      ('serialize_scn_list', 'varchar:OB_MAX_VARCHAR_LENGTH')
+    ],
+    partition_columns = ['svr_ip', 'svr_port'],
+    vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'jingyu.cr',

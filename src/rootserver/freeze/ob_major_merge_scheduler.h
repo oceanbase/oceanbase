@@ -44,56 +44,6 @@ class ObZoneMergeManager;
 class ObFreezeInfoManager;
 class ObTenantMajorMergeStrategy;
 
-class ObMergeErrorCallback
-{
-public:
-  ObMergeErrorCallback() 
-    : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), 
-      zone_merge_mgr_(nullptr)
-  {}
-  virtual ~ObMergeErrorCallback() {}
-
-  int init(const uint64_t tenant_id, ObZoneMergeManager &zone_merge_mgr);
-
-  int handle_merge_error(const int64_t error_type, const int64_t expected_epoch);
-
-private:
-  bool is_inited_;
-  uint64_t tenant_id_;
-  ObZoneMergeManager *zone_merge_mgr_;
-  DISALLOW_COPY_AND_ASSIGN(ObMergeErrorCallback);
-};
-
-class ObFullChecksumValidator
-{
-public:
-  ObFullChecksumValidator() 
-    : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), last_check_time_(0),
-      tablet_validator_(), cross_cluster_validator_(), index_validator_(), 
-      merge_err_cb_()
-  {}
-  virtual ~ObFullChecksumValidator() {}
-
-  int init(const uint64_t tenant_id,
-           common::ObMySQLProxy &sql_proxy,
-           ObZoneMergeManager &zone_merge_mgr);
-
-  int execute_check(const share::ObSimpleFrozenStatus &frozen_status,
-                    const int64_t expected_epoch);
-
-  // sync tablet checksum data from __all_tablet_replica_checksum to __all_tablet_checksum
-  int sync_tablet_checksum();
-
-private:
-  bool is_inited_;
-  uint64_t tenant_id_;
-  int64_t last_check_time_;
-  ObTabletChecksumValidator tablet_validator_;
-  ObCrossClusterTableteChecksumValidator cross_cluster_validator_;
-  ObIndexChecksumValidator index_validator_;
-  ObMergeErrorCallback merge_err_cb_;
-};
-
 class ObMajorMergeIdling : public ObThreadIdling
 {
 public:
@@ -138,6 +88,7 @@ protected:
 private:
   int do_work();
 
+  int do_before_major_merge(const int64_t expected_epoch);
   int do_one_round_major_merge(const int64_t expected_epoch);
 
   int generate_next_global_broadcast_scn(const int64_t expected_epoch);
@@ -147,10 +98,18 @@ private:
   int set_zone_merging(const ObZone &zone, const int64_t expected_epoch);
 
   int update_merge_status(const int64_t expected_epoch);
+  int handle_all_zone_merge(const share::ObAllZoneMergeProgress &all_progress,
+                            const share::SCN &global_broadcast_scn,
+                            const int64_t expected_epoch);
   int try_update_global_merged_scn(const int64_t expected_epoch);
   int update_global_merge_info_after_merge(const int64_t expected_epoch);
 
   int do_update_freeze_service_epoch(const int64_t latest_epoch);
+
+  // sync tablet checksum data from __all_tablet_replica_checksum to __all_tablet_checksum
+  int sync_tablet_checksum();
+
+  int update_all_tablets_report_scn(const uint64_t global_broadcast_scn_val);
 
   void check_merge_interval_time(const bool is_merging);
 
@@ -171,7 +130,7 @@ private:
   ObTenantAllZoneMergeStrategy merge_strategy_;
   common::ObMySQLProxy *sql_proxy_;
   ObMajorMergeProgressChecker progress_checker_;
-  ObFullChecksumValidator checksum_validator_;
+  ObCrossClusterTableteChecksumValidator cross_cluster_validator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMajorMergeScheduler);
 };

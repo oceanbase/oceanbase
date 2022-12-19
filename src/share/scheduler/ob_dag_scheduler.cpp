@@ -27,6 +27,7 @@
 #include "ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
+#include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include <sys/sysinfo.h>
 #include <algorithm>
@@ -352,7 +353,7 @@ const ObDagPrio::ObDagPrioEnum ObIDag::MergeDagPrio[] = {
     ObDagPrio::DAG_PRIO_COMPACTION_LOW,
 };
 const ObDagType::ObDagTypeEnum ObIDag::MergeDagType[] = {
-    ObDagType::DAG_TYPE_MINOR_MERGE,
+    ObDagType::DAG_TYPE_MERGE_EXECUTE,
     ObDagType::DAG_TYPE_MAJOR_MERGE,
     ObDagType::DAG_TYPE_MINI_MERGE,
 };
@@ -2049,6 +2050,55 @@ int ObTenantDagScheduler::get_all_compaction_dag_info(
   return ret;
 }
 
+int ObTenantDagScheduler::get_minor_exe_dag_info(
+    const compaction::ObTabletMergeDagParam &param,
+    ObIArray<share::ObScnRange> &merge_range_array)
+{
+  int ret = OB_SUCCESS;
+  compaction::ObTabletMergeExecuteDag dag;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
+  } else if (OB_FAIL(dag.init_by_param(&param))) {
+    STORAGE_LOG(WARN, "failed to init dag", K(ret), K(param));
+  } else {
+    ObThreadCondGuard guard(scheduler_sync_);
+    ObIDag *head = dag_list_[READY_DAG_LIST].get_head(ObDagPrio::DAG_PRIO_COMPACTION_MID);
+    ObIDag *cur = head->get_next();
+    while (head != cur && OB_SUCC(ret)) {
+      if (cur->get_type() == ObDagType::DAG_TYPE_MERGE_EXECUTE) {
+        compaction::ObTabletMergeExecuteDag *other_dag = static_cast<compaction::ObTabletMergeExecuteDag *>(cur);
+        if (other_dag->belong_to_same_tablet(&dag)) {
+          if (OB_FAIL(merge_range_array.push_back(other_dag->get_merge_range()))) {
+            LOG_WARN("failed to push merge range into array", K(ret), K(other_dag->get_merge_range()));
+          }
+        }
+      }
+      cur = cur->get_next();
+    } // end of while
+
+    // get meta major
+    ObIDag *stored_dag = nullptr;
+    dag.merge_type_ = META_MAJOR_MERGE;
+    compaction::ObTabletMergeExecuteDag *other_dag = nullptr;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(dag_map_.get_refactored(&dag, stored_dag))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("failed to get from dag map", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_ISNULL(other_dag = static_cast<compaction::ObTabletMergeExecuteDag *>(stored_dag))) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("dag is null", K(ret));
+    } else if (OB_FAIL(merge_range_array.push_back(other_dag->get_merge_range()))) {
+      LOG_WARN("failed to push merge range into array", K(ret), K(other_dag->get_merge_range()));
+    }
+  }
+  return ret;
+}
+
 int ObTenantDagScheduler::check_ls_compaction_dag_exist(const ObLSID &ls_id, bool &exist)
 {
   int ret = OB_SUCCESS;
@@ -2066,6 +2116,39 @@ int ObTenantDagScheduler::check_ls_compaction_dag_exist(const ObLSID &ls_id, boo
       }
       cur = cur->get_next();
     }
+  }
+  return ret;
+}
+
+// get oldest minor execute dag
+int ObTenantDagScheduler::diagnose_minor_exe_dag(
+    const compaction::ObMergeDagHash *merge_dag_info,
+    compaction::ObDiagnoseTabletCompProgress &progress)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
+  } else if (OB_ISNULL(merge_dag_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid arugment", K(ret), KP(merge_dag_info));
+  } else {
+    ObThreadCondGuard guard(scheduler_sync_);
+    ObIDag *head = dag_list_[READY_DAG_LIST].get_head(ObDagPrio::DAG_PRIO_COMPACTION_MID);
+    ObIDag *cur = head->get_next();
+    while (head != cur && OB_SUCC(ret)) {
+      if (cur->get_type() == ObDagType::DAG_TYPE_MERGE_EXECUTE) {
+        compaction::ObTabletMergeExecuteDag *exe_dag = static_cast<compaction::ObTabletMergeExecuteDag *>(cur);
+        if (exe_dag->belong_to_same_tablet(merge_dag_info)) {
+          if (OB_FAIL(exe_dag->diagnose_compaction_info(progress))) {
+            LOG_WARN("failed to diagnose compaction dag", K(ret), K(exe_dag));
+          } else {
+            break;
+          }
+        }
+      }
+      cur = cur->get_next();
+    } // end of while
   }
   return ret;
 }

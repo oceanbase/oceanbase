@@ -153,6 +153,12 @@ int ObLS::init(const share::ObLSID &ls_id,
       LOG_WARN("failed to init ls rebuild cb impl", K(ret));
     } else if (OB_FAIL(tablet_gc_handler_.init(this))) {
       LOG_WARN("init tablet gc handler", K(ret));
+    } else if (OB_FAIL(reserved_snapshot_mgr_.init(this, &log_handler_))) {
+      LOG_WARN("failed to init reserved snapshot mgr", K(ret), K(ls_id));
+    } else if (OB_FAIL(reserved_snapshot_clog_handler_.init(this))) {
+      LOG_WARN("failed to init reserved snapshot clog handler", K(ret), K(ls_id));
+    } else if (OB_FAIL(medium_compaction_clog_handler_.init(this))) {
+      LOG_WARN("failed to init medium compaction clog handler", K(ret), K(ls_id));
     } else {
       REGISTER_TO_LOGSERVICE(logservice::TRANS_SERVICE_LOG_BASE_TYPE, &ls_tx_svr_);
       REGISTER_TO_LOGSERVICE(logservice::STORAGE_SCHEMA_LOG_BASE_TYPE, &ls_tablet_svr_);
@@ -160,6 +166,8 @@ int ObLS::init(const share::ObLSID &ls_id,
       REGISTER_TO_LOGSERVICE(logservice::DDL_LOG_BASE_TYPE, &ls_ddl_log_handler_);
       REGISTER_TO_LOGSERVICE(logservice::KEEP_ALIVE_LOG_BASE_TYPE, &keep_alive_ls_handler_);
       REGISTER_TO_LOGSERVICE(logservice::GC_LS_LOG_BASE_TYPE, &gc_handler_);
+      REGISTER_TO_LOGSERVICE(logservice::RESERVED_SNAPSHOT_LOG_BASE_TYPE, &reserved_snapshot_clog_handler_);
+      REGISTER_TO_LOGSERVICE(logservice::MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
 
       if (ls_id == IDS_LS) {
         REGISTER_TO_LOGSERVICE(logservice::TIMESTAMP_LOG_BASE_TYPE, MTL(transaction::ObTimestampService *));
@@ -586,7 +594,8 @@ void ObLS::destroy()
   UNREGISTER_FROM_LOGSERVICE(logservice::DDL_LOG_BASE_TYPE, &ls_ddl_log_handler_);
   UNREGISTER_FROM_LOGSERVICE(logservice::KEEP_ALIVE_LOG_BASE_TYPE, &keep_alive_ls_handler_);
   UNREGISTER_FROM_LOGSERVICE(logservice::GC_LS_LOG_BASE_TYPE, &gc_handler_);
-
+  UNREGISTER_FROM_LOGSERVICE(logservice::RESERVED_SNAPSHOT_LOG_BASE_TYPE, &reserved_snapshot_clog_handler_);
+  UNREGISTER_FROM_LOGSERVICE(logservice::MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
   if (ls_meta_.ls_id_ == IDS_LS) {
     MTL(transaction::ObTransIDService *)->reset_ls();
     MTL(transaction::ObTimestampService *)->reset_ls();
@@ -646,6 +655,9 @@ void ObLS::destroy()
   ls_migration_handler_.destroy();
   ls_remove_member_handler_.destroy();
   tablet_gc_handler_.reset();
+  reserved_snapshot_mgr_.destroy();
+  reserved_snapshot_clog_handler_.reset();
+  medium_compaction_clog_handler_.reset();
   rs_reporter_ = nullptr;
   is_inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
@@ -887,6 +899,52 @@ int ObLS::save_base_schema_version()
 {
   // TODO: yanyuan.cxf
   int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObLS::get_ls_role(ObRole &role)
+{
+  int ret = OB_SUCCESS;
+  role = INVALID_ROLE;
+  int64_t proposal_id = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else {
+    int64_t read_lock = LSLOCKLOG;
+    int64_t write_lock = 0;
+    ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+    if (OB_FAIL(log_handler_.get_role(role, proposal_id))) {
+      LOG_WARN("get ls role failed", K(ret), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObLS::try_sync_reserved_snapshot(
+    const int64_t new_reserved_snapshot,
+    const bool update_flag)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else {
+    ObRole role = INVALID_ROLE;
+    int64_t proposal_id = 0;
+    int64_t read_lock = LSLOCKLS | LSLOCKLOG;
+    int64_t write_lock = 0;
+    ObLSLockGuard lock_myself(lock_, read_lock, write_lock);
+    if (is_stopped_) {
+      // do nothing
+    } else if (OB_FAIL(log_handler_.get_role(role, proposal_id))) {
+      LOG_WARN("get ls role failed", K(ret), KPC(this));
+    } else if (LEADER != role) {
+      // do nothing
+    } else {
+      ret = reserved_snapshot_mgr_.try_sync_reserved_snapshot(new_reserved_snapshot, update_flag);
+    }
+  }
   return ret;
 }
 

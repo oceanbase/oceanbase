@@ -36,6 +36,13 @@ ObRowkey ObStoreRowkey::to_rowkey() const
   return key_;
 }
 
+void ObStoreRowkey::destroy(ObIAllocator &allocator)
+{
+  key_.destroy(allocator);
+  hash_ = 0;
+  group_idx_ = 0;
+}
+
 uint64_t ObStoreRowkey::murmurhash(const uint64_t hash) const
 {
   uint64_t hash_ret = hash;

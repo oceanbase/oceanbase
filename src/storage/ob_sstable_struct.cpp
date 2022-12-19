@@ -220,11 +220,3 @@ void ObSSTableMergeInfo::dump_info(const char *msg)
   FLOG_INFO("dump merge info", K(msg), K(output_row_per_s), K(new_macro_KB_per_s), K(*this));
 }
 
-ObMergeChecksumInfo::ObMergeChecksumInfo()
-  : column_checksums_(NULL),
-    increment_column_checksums_(NULL),
-    concurrent_cnt_(0),
-    column_count_(0)
-{
-}
-

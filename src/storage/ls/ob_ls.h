@@ -32,6 +32,8 @@
 #include "storage/ls/ob_ls_sync_tablet_seq_handler.h"
 #include "storage/ls/ob_ls_ddl_log_handler.h"
 #include "storage/tx/wrs/ob_ls_wrs_handler.h"
+#include "storage/ls/ob_ls_reserved_snapshot_mgr.h"
+#include "storage/ls/ob_ls_storage_clog_handler.h"
 #include "storage/checkpoint/ob_checkpoint_executor.h"
 #include "storage/checkpoint/ob_data_checkpoint.h"
 #include "storage/tx_table/ob_tx_table.h"
@@ -194,6 +196,7 @@ public:
 
   // get ls info
   int get_ls_info(ObLSVTInfo &ls_info);
+  int get_ls_role(ObRole &role);
   // report the ls replica info to RS.
   int report_replica_info();
 
@@ -270,6 +273,7 @@ public:
                         ObTabletHandle &handle) const;
 
   int flush_if_need(const bool need_flush);
+  int try_sync_reserved_snapshot(const int64_t new_reserved_snapshot, const bool update_flag);
   bool is_stopped() const { return is_stopped_; }
 
   TO_STRING_KV(K_(ls_meta), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler));
@@ -385,6 +389,8 @@ public:
   // int build_tablet_iter(ObLSTabletIterator &iter);
   // int build_tablet_iter(ObLSTabletIDIterator &iter);
   DELEGATE_WITH_RET(ls_tablet_svr_, build_tablet_iter, int);
+  // update medium compaction info for tablet
+  DELEGATE_WITH_RET(ls_tablet_svr_, update_medium_compaction_info, int);
   // trim rebuild tablet
   // @param [in] tablet_id ObTabletID, is_rollback bool
   // @param [out] null
@@ -632,6 +638,10 @@ public:
   int try_update_uppder_trans_version();
   int diagnose(DiagnoseInfo &info) const;
 
+  DELEGATE_WITH_RET(reserved_snapshot_mgr_, replay_reserved_snapshot_log, int);
+  DELEGATE_WITH_RET(reserved_snapshot_mgr_, get_min_reserved_snapshot, int64_t);
+  DELEGATE_WITH_RET(reserved_snapshot_mgr_, add_dependent_medium_tablet, int);
+  DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
 private:
   // StorageBaseUtil
   // table manager: create, remove and guard get.
@@ -685,6 +695,10 @@ private:
   ObLSRebuildCbImpl ls_rebuild_cb_impl_;
   // for tablet gc
   checkpoint::ObTabletGCHandler tablet_gc_handler_;
+  // record reserved snapshot
+  ObLSReservedSnapshotMgr reserved_snapshot_mgr_;
+  ObLSResvSnapClogHandler reserved_snapshot_clog_handler_;
+  ObMediumCompactionClogHandler medium_compaction_clog_handler_;
 private:
   bool is_inited_;
   uint64_t tenant_id_;

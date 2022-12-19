@@ -64,7 +64,8 @@ public:
       const int64_t snapshot_version,
       const lib::Worker::CompatMode compat_mode,
       const ObTabletTableStoreFlag &table_store_flag,
-      const int64_t max_sync_storage_schema_version);
+      const int64_t max_sync_storage_schema_version,
+      const int64_t max_serialized_medium_scn);
   int init(
       common::ObIAllocator &allocator,
       const ObTabletMeta &old_tablet_meta,
@@ -74,6 +75,7 @@ public:
       const ObTabletBindingInfo &ddl_data,
       const share::ObTabletAutoincSeq &autoinc_seq,
       const int64_t max_sync_storage_schema_version,
+      const int64_t max_serialized_medium_scn,
       const share::SCN clog_checkpoint_scn = share::SCN::min_scn(),
       const share::SCN ddl_checkpoint_scn = share::SCN::min_scn(),
       const share::SCN ddl_start_scn = share::SCN::min_scn(),
@@ -90,6 +92,9 @@ public:
       const ObTabletBindingInfo &ddl_data,
       const share::ObTabletAutoincSeq &autoinc_seq,
       const ObMigrationTabletParam *tablet_meta);
+  int init(
+      common::ObIAllocator &allocator,
+      const ObTabletMeta &old_tablet_meta);
 
   void reset();
   bool is_valid() const;
@@ -138,6 +143,7 @@ public:
                K_(ddl_start_scn),
                K_(ddl_snapshot_version),
                K_(max_sync_storage_schema_version),
+               K_(max_serialized_medium_scn),
                K_(ddl_execution_id),
                K_(ddl_cluster_version));
 
@@ -165,7 +171,11 @@ public:
   ObTabletTableStoreFlag table_store_flag_;
   share::SCN ddl_start_scn_;
   int64_t ddl_snapshot_version_;
+  // max_sync_storage_schema_version_ = MIN(serialized_schema_version, sync_schema_version)
+  // serialized_schema_version > sync_schema_version when major update storage schema
+  // sync_schema_version > serialized_schema_version when replay schema clog but not mini merge yet
   int64_t max_sync_storage_schema_version_;
+  int64_t max_serialized_medium_scn_; // update when serialized medium info
   int64_t ddl_execution_id_;
   int64_t ddl_cluster_version_;
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
@@ -199,9 +209,10 @@ public:
   int assign(const ObMigrationTabletParam &param);
 
   // used for restore PENDING tablet, the placeholder tablet doesn't have storage schema to use
-  static int construct_placeholder_storage_schema(
+  static int construct_placeholder_storage_schema_and_medium(
       ObIAllocator &allocator,
-      ObStorageSchema &storage_schema);
+      ObStorageSchema &storage_schema,
+      compaction::ObMediumCompactionInfoList &medium_info_list);
 
   TO_STRING_KV(K_(ls_id),
                K_(tablet_id),
@@ -224,7 +235,8 @@ public:
                K_(storage_schema),
                K_(medium_info_list),
                K_(table_store_flag),
-               K_(max_sync_storage_schema_version));
+               K_(max_sync_storage_schema_version),
+               K_(max_serialized_medium_scn));
 public:
 
   common::ObArenaAllocator allocator_; // for storage schema
@@ -251,6 +263,7 @@ public:
   int64_t ddl_snapshot_version_;
   // max_sync_version may less than storage_schema.schema_version_ when major update schema
   int64_t max_sync_storage_schema_version_;
+  int64_t max_serialized_medium_scn_;
   int64_t ddl_execution_id_;
   int64_t ddl_cluster_version_;
 };
