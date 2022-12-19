@@ -442,7 +442,7 @@ int ObDDLUtil::generate_build_replica_sql(
   const ObTableSchema *dest_table_schema = nullptr;
   bool oracle_mode = false;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id || OB_INVALID_ID == dest_table_id
-      || schema_version <= 0 || snapshot_version <= 0 || execution_id <= 0 || task_id <= 0)) {
+      || schema_version <= 0 || snapshot_version <= 0 || execution_id < 0 || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(data_table_id), K(dest_table_id), K(schema_version),
                                   K(snapshot_version), K(execution_id), K(task_id));

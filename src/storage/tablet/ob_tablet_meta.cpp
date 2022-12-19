@@ -56,7 +56,7 @@ ObTabletMeta::ObTabletMeta()
     ddl_start_scn_(SCN::min_scn()),
     ddl_snapshot_version_(OB_INVALID_TIMESTAMP),
     max_sync_storage_schema_version_(0),
-    ddl_execution_id_(0),
+    ddl_execution_id_(-1),
     ddl_cluster_version_(0),
     is_inited_(false)
 {
@@ -113,7 +113,7 @@ int ObTabletMeta::init(
     ddl_start_scn_.set_min();
     ddl_snapshot_version_ = 0;
     max_sync_storage_schema_version_ = max_sync_storage_schema_version;
-    ddl_execution_id_ = 0;
+    ddl_execution_id_ = -1;
     ddl_cluster_version_ = 0;
 
     report_status_.merge_snapshot_version_ = snapshot_version;
@@ -356,7 +356,7 @@ void ObTabletMeta::reset()
   ddl_start_scn_.set_min();
   ddl_snapshot_version_ = OB_INVALID_TIMESTAMP;
   max_sync_storage_schema_version_ = 0;
-  ddl_execution_id_ = 0;
+  ddl_execution_id_ = -1;
   ddl_cluster_version_ = 0;
   is_inited_ = false;
 }
@@ -745,7 +745,7 @@ ObMigrationTabletParam::ObMigrationTabletParam()
     ddl_start_scn_(SCN::min_scn()),
     ddl_snapshot_version_(OB_INVALID_TIMESTAMP),
     max_sync_storage_schema_version_(0),
-    ddl_execution_id_(0),
+    ddl_execution_id_(-1),
     ddl_cluster_version_(0)
 {
 }
@@ -958,7 +958,7 @@ void ObMigrationTabletParam::reset()
   ddl_start_scn_.set_min();
   ddl_snapshot_version_ = OB_INVALID_TIMESTAMP;
   max_sync_storage_schema_version_ = 0;
-  ddl_execution_id_ = 0;
+  ddl_execution_id_ = -1;
   ddl_cluster_version_ = 0;
 }
 

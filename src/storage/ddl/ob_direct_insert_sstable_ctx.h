@@ -148,7 +148,7 @@ public:
   int assign(const ObSSTableInsertTableParam &other);
   bool is_valid() const { return exec_ctx_ != nullptr && OB_INVALID_ID != dest_table_id_
     && schema_version_ >= 0 && snapshot_version_ >= 0 && task_cnt_ >= 0
-    && execution_id_ > 0 && ddl_task_id_ > 0 && ls_tablet_ids_.count() > 0; }
+    && execution_id_ >= 0 && ddl_task_id_ > 0 && ls_tablet_ids_.count() > 0; }
   TO_STRING_KV(K_(context_id), K_(dest_table_id), K_(write_major), K_(schema_version), K_(snapshot_version),
       K_(task_cnt), K_(execution_id), K_(ddl_task_id), K_(ls_tablet_ids));
 public:

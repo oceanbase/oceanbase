@@ -26,14 +26,14 @@ namespace share
 struct ObDDLChecksumItem
 {
   ObDDLChecksumItem()
-    : execution_id_(common::OB_INVALID_ID), tenant_id_(common::OB_INVALID_ID),
+    : execution_id_(-1), tenant_id_(common::OB_INVALID_ID),
       table_id_(common::OB_INVALID_ID), ddl_task_id_(0),
       column_id_(common::OB_INVALID_ID), task_id_(common::OB_INVALID_ID), checksum_(0)
   {}
   ~ObDDLChecksumItem() {};
   bool is_valid() const
   {
-    return common::OB_INVALID_ID != execution_id_
+    return 0 <= execution_id_
         && common::OB_INVALID_ID != tenant_id_
         && common::OB_INVALID_ID != table_id_
         && 0 < ddl_task_id_
@@ -41,7 +41,7 @@ struct ObDDLChecksumItem
   }
   TO_STRING_KV(K_(execution_id), K_(tenant_id), K_(table_id),
       K_(ddl_task_id), K_(column_id), K_(task_id), K_(checksum));
-  uint64_t execution_id_;
+  int64_t execution_id_;
   uint64_t tenant_id_;
   uint64_t table_id_;
   int64_t ddl_task_id_;
@@ -66,13 +66,13 @@ public:
       common::ObMySQLProxy &sql_proxy);
   static int get_table_column_checksum(
       const uint64_t tenant_id,
-      const uint64_t execution_id,
+      const int64_t execution_id,
       const uint64_t table_id,
       const int64_t ddl_task_id,
       common::hash::ObHashMap<int64_t, int64_t> &column_checksums, common::ObMySQLProxy &sql_proxy);
   static int check_column_checksum(
       const uint64_t tenant_id,
-      const uint64_t execution_id,
+      const int64_t execution_id,
       const uint64_t data_table_id,
       const uint64_t index_table_id,
       const int64_t ddl_task_id,
@@ -80,7 +80,7 @@ public:
       common::ObMySQLProxy &sql_proxy);
   static int delete_checksum(
       const uint64_t tenant_id,
-      const uint64_t execution_id,
+      const int64_t execution_id,
       const uint64_t source_table_id,
       const uint64_t dest_table_id,
       const int64_t ddl_task_id,

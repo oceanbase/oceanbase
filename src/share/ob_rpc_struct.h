@@ -2894,7 +2894,7 @@ public:
   uint64_t tenant_id_;
   uint64_t target_table_id_;
   int64_t schema_version_;
-  uint64_t execution_id_;
+  int64_t execution_id_;
   int64_t snapshot_version_;
   int64_t source_table_id_;
   int64_t task_id_;
@@ -7187,7 +7187,7 @@ public:
   ObDDLBuildSingleReplicaRequestArg() : tenant_id_(OB_INVALID_ID), ls_id_(), source_tablet_id_(), dest_tablet_id_(),
                                         source_table_id_(OB_INVALID_ID), dest_schema_id_(OB_INVALID_ID),
                                         schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0),
-                                        parallelism_(0), execution_id_(0), tablet_task_id_(0) {}
+                                        parallelism_(0), execution_id_(-1), tablet_task_id_(0) {}
   bool is_valid() const {
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
            && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_ && schema_version_ > 0 && snapshot_version_ > 0
@@ -7233,12 +7233,12 @@ struct ObDDLBuildSingleReplicaResponseArg final
 public:
   ObDDLBuildSingleReplicaResponseArg()
     : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), source_table_id_(), dest_schema_id_(OB_INVALID_ID),
-      ret_code_(OB_SUCCESS), snapshot_version_(0), schema_version_(0), task_id_(0), execution_id_(0)
+      ret_code_(OB_SUCCESS), snapshot_version_(0), schema_version_(0), task_id_(0), execution_id_(-1)
   {}
   ~ObDDLBuildSingleReplicaResponseArg() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && tablet_id_.is_valid()
                           && OB_INVALID_ID != source_table_id_ && OB_INVALID_ID != dest_schema_id_
-                          && snapshot_version_ > 0 && schema_version_ > 0 && task_id_ > 0 && execution_id_ > 0; }
+                          && snapshot_version_ > 0 && schema_version_ > 0 && task_id_ > 0 && execution_id_ >= 0; }
   int assign(const ObDDLBuildSingleReplicaResponseArg &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(source_table_id), K_(dest_schema_id), K_(ret_code), K_(snapshot_version), K_(schema_version), K_(task_id), K_(execution_id));
 public:
@@ -7526,7 +7526,7 @@ public:
   bool is_valid() const
   {
     return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && table_key_.is_valid() && start_scn_.is_valid_and_not_min()
-           && table_id_ > 0 && execution_id_ > 0 && ddl_task_id_ > 0;
+           && table_id_ > 0 && execution_id_ >= 0 && ddl_task_id_ > 0;
   }
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), K_(start_scn), K_(table_id),
                K_(execution_id), K_(ddl_task_id));

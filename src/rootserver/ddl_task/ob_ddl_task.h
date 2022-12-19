@@ -274,7 +274,7 @@ public:
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
-      delay_schedule_time_(0), next_schedule_ts_(0), execution_id_(0), sql_exec_addr_()
+      delay_schedule_time_(0), next_schedule_ts_(0), execution_id_(-1), sql_exec_addr_()
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -387,18 +387,18 @@ struct PartitionColChecksumStat
     : tablet_id_(),
       col_checksum_stat_(CCS_INVALID),
       snapshot_(-1),
-      execution_id_(common::OB_INVALID_ID),
+      execution_id_(-1),
       ret_code_(OB_SUCCESS)
   {}
   void reset() {
     tablet_id_.reset();
     col_checksum_stat_ = CCS_INVALID;
     snapshot_ = -1;
-    execution_id_ = common::OB_INVALID_ID;
+    execution_id_ = -1;
     ret_code_ = common::OB_SUCCESS;
     table_id_ = common::OB_INVALID_ID;
   }
-  bool is_valid() const { return tablet_id_.is_valid() && common::OB_INVALID_ID != execution_id_ && common::OB_INVALID_ID != table_id_; }
+  bool is_valid() const { return tablet_id_.is_valid() && execution_id_ >= 0 && common::OB_INVALID_ID != table_id_; }
   TO_STRING_KV(K_(tablet_id),
                K_(col_checksum_stat),
                K_(snapshot),
@@ -407,7 +407,7 @@ struct PartitionColChecksumStat
   ObTabletID tablet_id_; // may be data table, local index or global index
   ColChecksumStat col_checksum_stat_;
   int64_t snapshot_;
-  uint64_t execution_id_;
+  int64_t execution_id_;
   int ret_code_;
   int64_t table_id_;
 };
@@ -424,7 +424,7 @@ public:
       const uint64_t target_table_id,
       const int64_t schema_version,
       const int64_t snapshot_version,
-      const uint64_t execution_id,
+      const int64_t execution_id,
       const int64_t timeout_us);
   void reset();
   bool is_inited() const { return is_inited_; }

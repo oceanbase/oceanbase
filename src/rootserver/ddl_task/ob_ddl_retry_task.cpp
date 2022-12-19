@@ -620,7 +620,7 @@ int ObDDLRetryTask::update_task_status_wait_child_task_finish(
   int64_t affected_rows = 0;
   ObSqlString sql_string;
   int64_t curr_task_status = 0;
-  int64_t execution_id = 0; /*unused*/
+  int64_t execution_id = -1; /*unused*/
   const int64_t new_task_status = ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;

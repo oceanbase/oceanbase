@@ -41,7 +41,7 @@ using namespace oceanbase::palf;
 
 ObUniqueIndexChecker::ObUniqueIndexChecker()
   : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), tablet_id_(),
-    index_schema_(NULL), data_table_schema_(NULL), execution_id_(0), snapshot_version_(0), task_id_(0),
+    index_schema_(NULL), data_table_schema_(NULL), execution_id_(-1), snapshot_version_(0), task_id_(0),
     is_scan_index_(false)
 {
 }
@@ -54,7 +54,7 @@ int ObUniqueIndexChecker::init(
     const ObTableSchema *data_table_schema,
     const ObTableSchema *index_schema,
     const int64_t task_id,
-    const uint64_t execution_id,
+    const int64_t execution_id,
     const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
@@ -593,7 +593,7 @@ int ObUniqueIndexChecker::wait_trans_end(ObIDag *dag)
 ObUniqueCheckingDag::ObUniqueCheckingDag()
   : ObIDag(ObDagType::DAG_TYPE_UNIQUE_CHECKING), is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), tablet_id_(), is_scan_index_(false),
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_UNIQ_CHECK), index_schema_(nullptr), data_table_schema_(nullptr), callback_(nullptr),
-    execution_id_(0), snapshot_version_(0), compat_mode_(lib::Worker::CompatMode::INVALID)
+    execution_id_(-1), snapshot_version_(0), compat_mode_(lib::Worker::CompatMode::INVALID)
 {
 }
 
@@ -613,7 +613,7 @@ int ObUniqueCheckingDag::init(
     const uint64_t index_table_id,
     const int64_t schema_version,
     const int64_t task_id,
-    const uint64_t execution_id,
+    const int64_t execution_id,
     const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;

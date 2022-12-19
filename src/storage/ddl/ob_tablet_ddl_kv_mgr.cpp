@@ -30,7 +30,7 @@ using namespace oceanbase::storage;
 ObTabletDDLKvMgr::ObTabletDDLKvMgr()
   : is_inited_(false), success_start_scn_(SCN::min_scn()), ls_id_(), tablet_id_(), table_key_(), cluster_version_(0),
     start_scn_(SCN::min_scn()), max_freeze_scn_(SCN::min_scn()),
-    table_id_(0), execution_id_(0), head_(0), tail_(0), lock_(ObLatchIds::TABLET_DDL_KV_MGR_LOCK), ref_cnt_(0)
+    table_id_(0), execution_id_(-1), head_(0), tail_(0), lock_(ObLatchIds::TABLET_DDL_KV_MGR_LOCK), ref_cnt_(0)
 {
   MEMSET(ddl_kvs_, 0, MAX_DDL_KV_CNT_IN_STORAGE * sizeof(ddl_kvs_[0]));
 }
@@ -61,7 +61,7 @@ void ObTabletDDLKvMgr::destroy()
   start_scn_.set_min();
   max_freeze_scn_.set_min();
   table_id_ = 0;
-  execution_id_ = 0;
+  execution_id_ = -1;
   success_start_scn_.set_min();
   is_inited_ = false;
 }
@@ -345,7 +345,7 @@ void ObTabletDDLKvMgr::cleanup_unlock()
   start_scn_.set_min();
   max_freeze_scn_.set_min();
   table_id_ = 0;
-  execution_id_ = 0;
+  execution_id_ = -1;
   success_start_scn_.set_min();
 }
 

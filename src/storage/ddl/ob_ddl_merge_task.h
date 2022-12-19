@@ -46,7 +46,7 @@ public:
       is_commit_(false),
       start_scn_(share::SCN::min_scn()),
       table_id_(0),
-      execution_id_(0),
+      execution_id_(-1),
       ddl_task_id_(0)
   { }
   bool is_valid() const

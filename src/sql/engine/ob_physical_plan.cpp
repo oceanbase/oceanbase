@@ -115,7 +115,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     contain_pl_udf_or_trigger_(false),
     ddl_schema_version_(0),
     ddl_table_id_(0),
-    ddl_execution_id_(0),
+    ddl_execution_id_(-1),
     ddl_task_id_(0),
     is_packed_(false),
     has_instead_of_trigger_(false)

@@ -38,7 +38,7 @@ using namespace oceanbase::sql;
 /***************              ObSSTableInsertTabletParam              *****************/
 ObSSTableInsertTabletParam::ObSSTableInsertTabletParam()
   : context_id_(0), ls_id_(), tablet_id_(), table_id_(0), write_major_(false),
-    task_cnt_(0), schema_version_(0), snapshot_version_(0), execution_id_(0), ddl_task_id_(0)
+    task_cnt_(0), schema_version_(0), snapshot_version_(0), execution_id_(-1), ddl_task_id_(0)
 {
 
 }
@@ -56,7 +56,7 @@ bool ObSSTableInsertTabletParam::is_valid() const
               && table_id_ > 0
               && task_cnt_ >= 0
               && schema_version_ > 0
-              && execution_id_ > 0
+              && execution_id_ >= 0
               && ddl_task_id_ > 0;
   return bret;
 }
@@ -735,7 +735,7 @@ int ObSSTableInsertTabletContext::get_table_key(ObITable::TableKey &table_key)
 
 ObSSTableInsertTableParam::ObSSTableInsertTableParam()
   : exec_ctx_(nullptr), context_id_(0), dest_table_id_(OB_INVALID_ID), write_major_(false), schema_version_(0),
-    snapshot_version_(0), task_cnt_(0), execution_id_(0), ddl_task_id_(0), ls_tablet_ids_()
+    snapshot_version_(0), task_cnt_(0), execution_id_(-1), ddl_task_id_(0), ls_tablet_ids_()
 {
 }
 

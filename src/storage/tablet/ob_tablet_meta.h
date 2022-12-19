@@ -78,7 +78,7 @@ public:
       const share::SCN ddl_checkpoint_scn = share::SCN::min_scn(),
       const share::SCN ddl_start_scn = share::SCN::min_scn(),
       const int64_t ddl_snapshot_version = 0,
-      const int64_t ddl_execution_id = 0,
+      const int64_t ddl_execution_id = -1,
       const int64_t ddl_cluster_version = 0);
   int init(
       common::ObIAllocator &allocator,
