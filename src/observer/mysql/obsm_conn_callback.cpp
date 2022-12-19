@@ -20,6 +20,7 @@
 #include "observer/ob_server_struct.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "observer/omt/ob_tenant.h"
+#include "observer/ob_srv_task.h"
 
 namespace oceanbase
 {
@@ -132,35 +133,6 @@ int ObSMConnectionCallback::init(ObSqlSockSession& sess, ObSMConnection& conn)
   return ret;
 }
 
-static void kill_session(uint32_t sessid)
-{
-  int ret = OB_SUCCESS;
-  if (ObSMConnection::INITIAL_SESSID != sessid) {
-    sql::ObSQLSessionInfo *sess_info = NULL;
-    if (OB_UNLIKELY(OB_FAIL(GCTX.session_mgr_->get_session(sessid, sess_info)))) {
-      LOG_WARN("fail to  get session", K(ret), K(sessid));
-    } else if (OB_ISNULL(sess_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("session info is NULL", K(ret), K(sessid));
-    } else {
-      sess_info->set_session_state(sql::SESSION_KILLED);
-      sess_info->set_shadow(true);
-      (void)GCTX.session_mgr_->revert_session(sess_info);
-    }
-  }
-}
-
-static void free_session(ObSMConnection& conn)
-{
-  sql::ObFreeSessionCtx ctx;
-  ctx.tenant_id_ = conn.tenant_id_;
-  ctx.sessid_ = conn.sessid_;
-  ctx.proxy_sessid_ = conn.proxy_sessid_;
-  ctx.has_inc_active_num_ = conn.has_inc_active_num_;
-
-  GCTX.session_mgr_->free_session(ctx);
-}
-
 static void sm_conn_unlock_tenant(ObSMConnection& conn)
 {
   //unlock tenant
@@ -192,9 +164,38 @@ void ObSMConnectionCallback::destroy(ObSMConnection& conn)
   int ret = OB_SUCCESS;
   bool is_need_clear = false;
   if (conn.is_sess_alloc_ && !conn.is_sess_free_) {
-    kill_session(conn.sessid_);
-    free_session(conn);
+    sql::ObFreeSessionCtx ctx;
+    ctx.tenant_id_ = conn.tenant_id_;
+    ctx.sessid_ = conn.sessid_;
+    ctx.proxy_sessid_ = conn.proxy_sessid_;
+    ctx.has_inc_active_num_ = conn.has_inc_active_num_;
+
+    //free session in task
+    ObSrvTask *task = OB_NEW(ObDisconnectTask,
+                              ObModIds::OB_RPC,
+                              ctx);
+    if (OB_UNLIKELY(NULL == task)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (OB_UNLIKELY(NULL == conn.tenant_)) {
+      ret = OB_TENANT_NOT_EXIST;
+    } else if (OB_FAIL(conn.tenant_->recv_request(*task))) {
+      LOG_WARN("push disconnect task fail", K(conn.sessid_),
+                "proxy_sessid", conn.proxy_sessid_, K(ret));
+      ob_delete(task);
+    }
+    // free session locally
+    if (OB_FAIL(ret)) {
+      int tmp_ret = GCTX.session_mgr_->free_session(ctx);
+      if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+        LOG_WARN("free session fail", K(ctx), K(tmp_ret));
+        ret = tmp_ret;
+      } else {
+        LOG_INFO("free session successfully", K(conn.sessid_),
+                  "proxy_sessid", conn.proxy_sessid_, K(ctx));
+      }
+    }
   }
+
   if (OB_UNLIKELY(OB_FAIL(sql::ObSQLSessionMgr::is_need_clear_sessid(&conn, is_need_clear)))) {
     LOG_ERROR("fail to jugde need clear", K(ret));
   } else if (is_need_clear) {
