@@ -224,15 +224,9 @@ ObVTableScanParam() :
 
   void destroy()
   {
-    if (OB_UNLIKELY(column_ids_.get_capacity() > OB_PREALLOCATED_COL_ID_NUM)) {
-      column_ids_.destroy();
-    }
-    if (OB_UNLIKELY(key_ranges_.get_capacity() > OB_DEFAULT_RANGE_COUNT)) {
-      key_ranges_.destroy();
-    }
-    if (OB_UNLIKELY(range_array_pos_.get_capacity() > OB_DEFAULT_RANGE_COUNT)) {
-      range_array_pos_.destroy();
-    }
+    column_ids_.destroy();
+    key_ranges_.destroy();
+    range_array_pos_.destroy();
     destroy_schema_guard();
   }
   ObObjectID tenant_id_;
