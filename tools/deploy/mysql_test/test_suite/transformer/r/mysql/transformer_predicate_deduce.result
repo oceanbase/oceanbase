@@ -1408,7 +1408,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DOUBLE(-1, -1)) = cast(cast('2010-10-10 00:00:00', DATETIME(0, 0)), DOUBLE(-1, -1))], [cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=256,
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=256,
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
 
 select /*+no_rewrite*/* from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
@@ -1427,7 +1427,7 @@ Query Plan
 
 Outputs & filters: 
 -------------------------------------
-  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DOUBLE(-1, -1)) = cast(cast('2010-10-10 00:00:00', DATETIME(0, 0)), DOUBLE(-1, -1))], [cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=256,
+  0 - output([t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=256,
       access([t3.c1], [t3.c2], [t3.c3]), partitions(p0)
 
 select * from t3 where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
@@ -1450,7 +1450,7 @@ Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), table_columns([{t3: ({t3: (t3.__pk_increment, t3.c1, t3.c2, t3.c3)})}]),
       update([t3.c1=column_conv(BIGINT,PS:(20,0),NULL,1)])
-  1 - output([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DOUBLE(-1, -1)) = cast(cast('2010-10-10 00:00:00', DATETIME(0, 0)), DOUBLE(-1, -1))], [cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=256,
+  1 - output([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), filter([cast(t3.c1, DATETIME(-1, -1)) = cast('2010-10-10 00:00:00', DATETIME(0, 0))], [cast(t3.c1, DECIMAL(20, 0)) = cast(t3.c2, DECIMAL(-1, -1))]), rowset=256,
       access([t3.__pk_increment], [t3.c1], [t3.c2], [t3.c3]), partitions(p0)
 
 update t3 set c1 = 1  where c1=c2 and c1=cast('2010-10-10 00:00:00' as datetime);
