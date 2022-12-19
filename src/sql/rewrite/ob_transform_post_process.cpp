@@ -951,7 +951,9 @@ int ObTransformPostProcess::extract_exec_exprs(ObRawExpr *expr,
         LOG_WARN("failed to pullup exec exprs", K(ret));
       }
     }
-  } else if (OB_FAIL(candi_exprs.push_back(expr))) {
+  } else if (ObOptimizerUtil::find_item(candi_exprs, expr)) {
+    //do nothing
+  } else if(OB_FAIL(candi_exprs.push_back(expr))) {
     LOG_WARN("failed to push back expr", K(ret));
   }
   return ret;
