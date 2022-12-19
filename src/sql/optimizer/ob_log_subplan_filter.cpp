@@ -501,7 +501,9 @@ int ObLogSubPlanFilter::set_use_das_batch(ObLogicalOperator* root)
     LOG_WARN("invalid input", K(ret));
   } else if (root->is_table_scan()) {
     ObLogTableScan *ts = static_cast<ObLogTableScan*>(root);
-    ts->set_use_batch(true);
+    if (!ts->get_range_conditions().empty()) {
+      ts->set_use_batch(true);
+    }
   } else if (root->get_num_of_child() == 1) {
     if (log_op_def::LOG_TABLE_LOOKUP == root->get_type()) {
       ObLogTableLookup *tlu = static_cast<ObLogTableLookup*>(root);
