@@ -16,6 +16,7 @@
 #include "share/ob_freeze_info_proxy.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/ob_tenant_info_proxy.h"
 
 namespace oceanbase
 {
@@ -48,12 +49,13 @@ int ObMajorFreezeHelper::major_freeze(
 {
   int ret = OB_SUCCESS;
   ObSEArray<obrpc::ObSimpleFreezeInfo, 32> freeze_info_array;
-  if (OB_UNLIKELY(!param.is_valid())) {
+  if (OB_UNLIKELY(!param.is_valid()
+                  || (!param.freeze_all_ && param.freeze_info_array_.empty()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(param), KR(ret));
   } else if (OB_FAIL(get_freeze_info(param, freeze_info_array))) {
     LOG_WARN("fail to get tenant id", KR(ret), K(param));
-  } else {
+  } else if (!freeze_info_array.empty()) { // may be empty due to skipping restore and standby tenants
     if (OB_FAIL(do_major_freeze(*param.transport_, freeze_info_array, merge_results))) {
       LOG_WARN("fail to do major freeze", KR(ret), K(freeze_info_array));
     }
@@ -85,12 +87,27 @@ int ObMajorFreezeHelper::get_freeze_info(
   } else {
     const int64_t info_cnt = tmp_info_array.count();
     for (int64_t i = 0; OB_SUCC(ret) && (i < info_cnt); ++i) {
+      share::ObAllTenantInfo tenant_info;
       bool is_restore = false;
       const uint64_t tenant_id = tmp_info_array.at(i).tenant_id_;
       if (OB_FAIL(check_tenant_is_restore(tenant_id, is_restore))) {
         LOG_WARN("fail to check tenant is restore", KR(ret), K(i), "freeze_info", tmp_info_array.at(i));
       } else if (is_restore) {
         LOG_INFO("skip restoring tenant to do major freeze", K(tenant_id));
+      } else if (OB_FAIL(share::ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_,
+                                                                       false, tenant_info))) {
+        LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
+      }
+      // standby tenants do not support major freeze.
+      // 1. report OB_MAJOR_FREEZE_NOT_ALLOW when launching major freeze on one standby tenant.
+      // 2. skip major freeze for standby tenants when launching major freeze on more than one tenant.
+      else if (tenant_info.is_standby()) {
+        if (1 == info_cnt) {
+          ret = OB_MAJOR_FREEZE_NOT_ALLOW;
+          LOG_ERROR("major freeze on standby tenant is forbidden", KR(ret), K(tenant_info));
+        } else {  // info_cnt > 1
+          LOG_INFO("skip major freeze for standby tenant", K(tenant_info));
+        }
       } else if (OB_FAIL(freeze_info_array.push_back(tmp_info_array.at(i)))) {
         LOG_WARN("fail to push back freeze info", KR(ret), K(i), "freeze_info", tmp_info_array.at(i));
       }
