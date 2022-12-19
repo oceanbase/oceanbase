@@ -73,7 +73,7 @@ namespace sql
     virtual int print_outline(planText &plan_text) override;
 
   private:
-    ObSEArray<ObWinFunRawExpr *, 4> win_exprs_;
+    ObSEArray<ObWinFunRawExpr *, 4, common::ModulePageAllocator, true> win_exprs_;
 
     // Single partition (no partition by) window function parallel process, need the PX COORD
     // to collect the partial result and broadcast the final result to each worker.

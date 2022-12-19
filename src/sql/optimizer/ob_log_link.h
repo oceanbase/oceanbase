@@ -42,7 +42,7 @@ private:
   common::ObIAllocator &allocator_;
   char *stmt_fmt_buf_;
   int32_t stmt_fmt_len_;
-  common::ObSEArray<ObParamPosIdx, 16> param_infos_;
+  common::ObSEArray<ObParamPosIdx, 16, common::ModulePageAllocator, true> param_infos_;
 };
 
 } // namespace sql
