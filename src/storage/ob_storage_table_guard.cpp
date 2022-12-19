@@ -45,53 +45,68 @@ ObStorageTableGuard::ObStorageTableGuard(
     replay_scn_(replay_scn),
     for_multi_source_data_(for_multi_source_data)
 {
-  get_writing_throttling_sleep_interval() = 0;
+  init_ts_ = ObTimeUtility::current_time();
 }
 
 ObStorageTableGuard::~ObStorageTableGuard()
 {
-  uint32_t &interval = get_writing_throttling_sleep_interval();
-  if (need_control_mem_ && interval > 0) {
-    uint64_t timeout = 10000;//10s
-    common::ObWaitEventGuard wait_guard(common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT, timeout, 0, 0, interval);
+  bool &need_speed_limit = tl_need_speed_limit();
+  if (need_control_mem_ && need_speed_limit) {
     bool need_sleep = true;
-    const int32_t SLEEP_INTERVAL_PER_TIME = 100 * 1000;//100ms
-    int64_t left_interval = interval;
+    int64_t left_interval = SPEED_LIMIT_MAX_SLEEP_TIME;
     if (!for_replay_) {
-      int64_t query_left_time = store_ctx_.timeout_ - ObTimeUtility::current_time();
-      left_interval = common::min(left_interval, query_left_time);
+      left_interval = min(SPEED_LIMIT_MAX_SLEEP_TIME, store_ctx_.timeout_ - ObTimeUtility::current_time());
     }
     if (NULL != memtable_) {
       need_sleep = memtable_->is_active_memtable();
     }
+    uint64_t timeout = 10000;//10s
+    common::ObWaitEventGuard wait_guard(common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT, timeout, 0, 0, left_interval);
 
     reset();
     int tmp_ret = OB_SUCCESS;
     bool has_sleep = false;
-
-    while ((left_interval > 0) && need_sleep) {
-      //because left_interval and SLEEP_INTERVAL_PER_TIME both are greater than
-      //zero, so it's safe to convert to uint32_t, be careful with comparation between int and uint
-      uint32_t sleep_interval = static_cast<uint32_t>(min(left_interval, SLEEP_INTERVAL_PER_TIME));
-      if (for_replay_) {
-        if(MTL(ObTenantFreezer *)->exist_ls_freezing()) {
-          break;
-        }
-      }
-      ob_usleep<common::ObWaitEventIds::STORAGE_WRITING_THROTTLE_SLEEP>(sleep_interval);
-      has_sleep = true;
-      left_interval -= sleep_interval;
-      if (store_ctx_.mvcc_acc_ctx_.is_write()) {
-        ObGMemstoreAllocator* memstore_allocator = NULL;
-        if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(
-            MTL_ID(), memstore_allocator))) {
-        } else if (OB_ISNULL(memstore_allocator)) {
-          LOG_WARN("get_tenant_mutil_allocator failed", K(store_ctx_.tablet_id_), K(tmp_ret));
-        } else {
+    int64_t sleep_time = 0;
+    int time = 0;
+    int64_t &seq = get_seq();
+    if (store_ctx_.mvcc_acc_ctx_.is_write()) {
+      ObGMemstoreAllocator* memstore_allocator = NULL;
+      if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(
+          MTL_ID(), memstore_allocator))) {
+      } else if (OB_ISNULL(memstore_allocator)) {
+        LOG_WARN("get_tenant_mutil_allocator failed", K(store_ctx_.tablet_id_), K(tmp_ret));
+      } else {
+        while (need_sleep &&
+               !memstore_allocator->check_clock_over_seq(seq) &&
+               (left_interval > 0)) {
+          if (for_replay_) {
+            if(MTL(ObTenantFreezer *)->exist_ls_freezing()) {
+              break;
+            }
+          }
+          //because left_interval and SLEEP_INTERVAL_PER_TIME both are greater than
+          //zero, so it's safe to convert to uint32_t, be careful with comparation between int and uint
+          int64_t expected_wait_time = memstore_allocator->expected_wait_time(seq);
+          if (expected_wait_time == 0) {
+            break;
+          }
+          uint32_t sleep_interval =
+            static_cast<uint32_t>(min(min(left_interval, SLEEP_INTERVAL_PER_TIME), expected_wait_time));
+          ob_usleep<common::ObWaitEventIds::STORAGE_WRITING_THROTTLE_SLEEP>(sleep_interval);
+          sleep_time += sleep_interval;
+          time++;
+          left_interval -= sleep_interval;
+          has_sleep = true;
           need_sleep = memstore_allocator->need_do_writing_throttle();
         }
       }
     }
+
+    if (REACH_TIME_INTERVAL(100 * 1000L)) {
+      int64_t cost_time = ObTimeUtility::current_time() - init_ts_;
+      LOG_INFO("throttle situation", K(sleep_time), K(time), K(seq), K(for_replay_), K(cost_time));
+    }
+
     if (for_replay_ && has_sleep) {
       // avoid print replay_timeout
       get_replay_is_writing_throttling() = true;

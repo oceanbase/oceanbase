@@ -63,6 +63,8 @@ private:
 private:
   static const int64_t LOG_INTERVAL_US = 10 * 1000 * 1000;
   static const int64_t GET_TS_INTERVAL = 10 * 1000;
+  static const int64_t SPEED_LIMIT_MAX_SLEEP_TIME = 20 * 1000 * 1000;
+  static const int64_t SLEEP_INTERVAL_PER_TIME = 20 * 1000;
 
   ObTablet *tablet_;
   ObStoreCtx &store_ctx_;
@@ -70,6 +72,8 @@ private:
   memtable::ObIMemtable *memtable_;
   int64_t retry_count_;
   int64_t last_ts_;
+  // record write latency
+  int64_t init_ts_;
   bool for_replay_;
   share::SCN replay_scn_;
   bool for_multi_source_data_;
