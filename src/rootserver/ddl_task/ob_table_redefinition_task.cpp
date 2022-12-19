@@ -383,11 +383,15 @@ int ObTableRedefinitionTask::copy_table_indexes()
               }
             }
             if (OB_SUCC(ret) && need_rebuild_index) {
-              ObDDLTaskKey task_key(index_ids.at(i), index_schema->get_schema_version());
+              const uint64_t task_key = index_ids.at(i);
               DependTaskStatus status;
               status.task_id_ = task_record.task_id_;
-              if (OB_FAIL(dependent_task_result_map_.set_refactored(task_key, status, true/*overwrite*/))) {
-                LOG_WARN("set dependent task map failed", K(ret), K(task_key));
+              if (OB_FAIL(dependent_task_result_map_.set_refactored(task_key, status))) {
+                if (OB_HASH_EXIST == ret) {
+                  ret = OB_SUCCESS;
+                } else {
+                  LOG_WARN("set dependent task map failed", K(ret), K(task_key));
+                }
               } else {
                 LOG_INFO("add build index task", K(task_key));
               }
@@ -559,10 +563,9 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
   } else {
     // wait copy dependent objects to be finished
     ObAddr unused_addr;
-    for (common::hash::ObHashMap<ObDDLTaskKey, DependTaskStatus>::const_iterator iter = dependent_task_result_map_.begin();
+    for (common::hash::ObHashMap<uint64_t, DependTaskStatus>::const_iterator iter = dependent_task_result_map_.begin();
         iter != dependent_task_result_map_.end(); ++iter) {
-      const int64_t table_id = iter->first.object_id_;
-      const int64_t schema_version = iter->first.schema_version_;
+      const uint64_t task_key = iter->first;
       const int64_t target_object_id = -1;
       const int64_t child_task_id = iter->second.task_id_;
       if (iter->second.ret_code_ == INT64_MAX) {
@@ -573,9 +576,9 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
                   unused_addr, false /* is_ddl_retry_task */, *GCTX.sql_proxy_, error_message, unused_user_msg_len))) {
             if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
-              LOG_INFO("ddl task not finish", K(table_id), K(child_task_id), K(schema_version), K(target_object_id));
+              LOG_INFO("ddl task not finish", K(task_key), K(child_task_id), K(target_object_id));
             } else {
-              LOG_WARN("fail to get ddl error message", K(ret), K(table_id), K(child_task_id), K(schema_version), K(target_object_id));
+              LOG_WARN("fail to get ddl error message", K(ret), K(task_key), K(child_task_id), K(target_object_id));
             }
           } else {
             finished_task_cnt++;

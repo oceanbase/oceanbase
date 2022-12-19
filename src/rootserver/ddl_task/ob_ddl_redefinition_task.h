@@ -119,7 +119,7 @@ public:
       const int64_t execution_id,
       const int ret_code) = 0;
   int on_child_task_finish(
-      const ObDDLTaskKey &child_task_key,
+      const uint64_t child_task_key,
       const int ret_code);
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const override;
   virtual int deserlize_params_from_message(const char *buf, const int64_t buf_size, int64_t &pos) override;
@@ -212,7 +212,7 @@ protected:
   int64_t build_replica_request_time_;
   int64_t complete_sstable_job_ret_code_;
   obrpc::ObAlterTableArg alter_table_arg_;
-  common::hash::ObHashMap<ObDDLTaskKey, DependTaskStatus> dependent_task_result_map_;
+  common::hash::ObHashMap<uint64_t, DependTaskStatus> dependent_task_result_map_;
   bool snapshot_held_;
   bool has_synced_autoincrement_;
   bool has_synced_stats_info_;
