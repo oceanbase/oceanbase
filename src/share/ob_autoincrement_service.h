@@ -442,6 +442,8 @@ private:
     return service;
   }
 
+  int alloc_autoinc_try_lock(lib::ObMutex &alloc_mutex);
+
 private:
   common::ObSmallAllocator node_allocator_;
   common::ObSmallAllocator handle_allocator_;

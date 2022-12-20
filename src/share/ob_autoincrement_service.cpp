@@ -108,7 +108,7 @@ int TableNode::alloc_handle(ObSmallAllocator &allocator,
     needed_interval = max_value;
   } else if (min_value > node.cache_end_) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("fail to alloc handle; cache is not enough", K(min_value), K(max_value), K(node), K(*this), K(ret));
+    LOG_TRACE("fail to alloc handle; cache is not enough", K(min_value), K(max_value), K(node), K(*this), K(ret));
   } else {
     ret = ObAutoincrementService::calc_next_value(min_value,
                                                   offset,
@@ -346,7 +346,7 @@ int ObAutoincrementService::get_handle(AutoincParam &param,
   // alloc handle
   bool need_prefetch = false;
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_node->alloc_mutex_.lock())) {
+    if (OB_FAIL(alloc_autoinc_try_lock(table_node->alloc_mutex_))) {
       LOG_WARN("failed to get alloc lock", K(param), K(*table_node), K(ret));
     } else {
       if (OB_SIZE_OVERFLOW == (ret = table_node->alloc_handle(handle_allocator_,
@@ -401,7 +401,7 @@ int ObAutoincrementService::get_handle(AutoincParam &param,
       TableNode mock_node;
       if (OB_FAIL(fetch_table_node(param, &mock_node, true))) {
         LOG_WARN("failed to fetch table node", K(param), K(ret));
-      } else if (OB_FAIL(table_node->alloc_mutex_.lock())) {
+      } else if (OB_FAIL(alloc_autoinc_try_lock(table_node->alloc_mutex_))) {
         LOG_WARN("failed to get alloc mutex lock", K(ret));
       } else {
         LOG_INFO("fetch table node success", K(param), K(mock_node), K(*table_node));
@@ -699,6 +699,24 @@ int ObAutoincrementService::get_schema(share::schema::ObSchemaGetterGuard &schem
    return ret;
 }
 
+int ObAutoincrementService::alloc_autoinc_try_lock(lib::ObMutex &alloc_mutex)
+{
+  int ret = OB_SUCCESS;
+  static const int64_t SLEEP_TS_US = 10;
+  while (OB_SUCC(ret) && OB_FAIL(alloc_mutex.trylock())) {
+    if (OB_EAGAIN == ret) {
+      THIS_WORKER.check_wait();
+      ob_usleep(SLEEP_TS_US);
+      if (OB_FAIL(THIS_WORKER.check_status())) { // override ret code
+        LOG_WARN("fail to check worker status", K(ret));
+      }
+    } else {
+      LOG_WARN("fail to try lock mutex", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObAutoincrementService::fetch_table_node(const AutoincParam &param,
                                              TableNode *table_node,
                                              const bool fetch_prefetch)
@@ -954,7 +972,7 @@ int ObAutoincrementService::sync_insert_value(AutoincParam &param,
       } else if (OB_FAIL(service->local_push_to_global_value(key, max_value, value_to_sync, global_sync_value))) {
         LOG_WARN("fail sync value to global", K(key), K(insert_value), K(ret));
       } else {
-        if (OB_FAIL(table_node->alloc_mutex_.lock())) {
+        if (OB_FAIL(alloc_autoinc_try_lock(table_node->alloc_mutex_))) {
           LOG_WARN("fail to get alloc mutex", K(ret));
         } else {
           if (value_to_sync <= global_sync_value) {
@@ -1006,7 +1024,7 @@ int ObAutoincrementService::sync_insert_value(AutoincParam &param,
       //   - if we don't, and other thread fetchs a small cache value, it is not OK.
       // SO, we must fetch table node here.
       // syncing insert_value is not the common case. perf acceptable
-      if (OB_FAIL(table_node->alloc_mutex_.lock())) {
+      if (OB_FAIL(alloc_autoinc_try_lock(table_node->alloc_mutex_))) {
         LOG_WARN("fail to get alloc mutex", K(ret));
       } else {
         if (insert_value >= table_node->curr_node_.cache_end_
