@@ -48,6 +48,7 @@
 #include "lib/utility/utility.h"
 #include "lib/utility/ob_proto_trans_util.h"
 #include "lib/allocator/ob_mod_define.h"
+#include "share/stat/ob_opt_stat_manager.h"
 
 
 using namespace oceanbase::sql;
@@ -621,6 +622,11 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
             }
             if (OB_SUCC(ret)) {
               LOG_DEBUG("succeed to delete rows in oracle temporary table", K(sql), K(affect_rows));
+              //delete relation temp table stats.
+              if (OB_FAIL(ObOptStatManager::get_instance().delete_table_stat(tenant_id,
+                                                      table_schema->get_table_id(), affect_rows))) {
+                LOG_WARN("failed to delete table stats", K(ret));
+              }
             } else {
               LOG_WARN("failed to delete rows in oracle temporary table", K(ret), K(sql));
             }

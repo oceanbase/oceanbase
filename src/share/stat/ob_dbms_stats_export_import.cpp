@@ -604,7 +604,7 @@ int ObDbmsStatsExportImport::do_import_stats(ObExecContext &ctx,
           ObSEArray<ObOptTableStatHandle, 4> history_tab_handles;
           ObSEArray<ObOptColumnStatHandle, 4> history_col_handles;
           //before import, we need record history stats.
-          if (!is_index_stat && !all_tstats.empty() &&
+          if (!is_index_stat && !all_tstats.empty() && !param.is_temp_table_ &&
               OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, param,
                                                                           history_tab_handles,
                                                                           history_col_handles))) {

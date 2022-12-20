@@ -121,7 +121,8 @@ public:
       data_version_(0),
       last_analyzed_(0),
       stattype_locked_(0),
-      modified_count_(0) {}
+      modified_count_(0),
+      sample_size_(0) {}
   ObOptTableStat(uint64_t table_id,
                  int64_t partition_id,
                  int64_t object_type,
@@ -150,7 +151,8 @@ public:
       data_version_(data_version),
       last_analyzed_(0),
       stattype_locked_(0),
-      modified_count_(0) {}
+      modified_count_(0),
+      sample_size_(0) {}
 
   virtual ~ObOptTableStat() {}
 
@@ -202,6 +204,9 @@ public:
   int64_t get_modified_count() const { return modified_count_; }
   void set_modified_count(int64_t modified_count) {  modified_count_ = modified_count; }
 
+  int64_t get_sample_size() const { return sample_size_; }
+  void set_sample_size(int64_t sample_size) {  sample_size_ = sample_size; }
+
   virtual int64_t size() const
   {
     return sizeof(*this);
@@ -245,6 +250,7 @@ public:
     last_analyzed_ = 0;
     stattype_locked_ = 0;
     modified_count_ = 0;
+    sample_size_ = 0;
   }
 
   TO_STRING_KV(K(table_id_),
@@ -262,7 +268,8 @@ public:
                K(data_version_),
                K(last_analyzed_),
                K(stattype_locked_),
-               K(modified_count_));
+               K(modified_count_),
+               K(sample_size_));
 
 private:
   uint64_t table_id_;
@@ -283,6 +290,7 @@ private:
   int64_t last_analyzed_;
   uint64_t stattype_locked_;
   int64_t modified_count_;
+  int64_t sample_size_;
 };
 
 }
