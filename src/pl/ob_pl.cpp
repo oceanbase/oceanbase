@@ -2136,7 +2136,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   CK (OB_NOT_NULL(schema_guard = ctx_.exec_ctx_->get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(sql_proxy = ctx_.exec_ctx_->get_sql_proxy()));
   CK (OB_NOT_NULL(package_guard = ctx_.exec_ctx_->get_package_guard()));
-  if (pl_type.is_ref_cursor_type()) {
+  if (pl_type.is_ref_cursor_type() || pl_type.is_sys_refcursor_type()) {
     OX (obj.set_is_ref_cursor_type(true));
   } else if (pl_type.is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
@@ -2149,19 +2149,11 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
                       *sql_proxy,
                       false);
     OZ (ns.init_complex_obj(allocator, pl_type, obj, false));
-  } else if (pl_type.is_sys_refcursor_type()) {
-    OX (obj.set_is_ref_cursor_type(true));
-    // ObPLCursorInfo *cursor = NULL;
-    // if (obj.is_null()) {
-    //   OZ (session->make_cursor(cursor));
-    //   OX (obj.set_ext(reinterpret_cast<int64_t>(cursor)));
-    //   OX (obj.set_param_meta());
-    // } else {
-    //   cursor = reinterpret_cast<ObPLCursorInfo*>(obj.get_ext());
-    //   int64_t id = cursor->get_id(); //已经分配好的SYS REFCURSOR，关闭语句后id需要保留
-    //   OZ (cursor->close(*session));
-    //   OX (cursor->set_id(id));
-    // }
+  } else if (OB_NOT_NULL(session->get_pl_context())
+      && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
+    pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
+    CK (OB_NOT_NULL(ns));
+    OZ (ns->init_complex_obj(allocator, pl_type, obj, false));
   }
   OX (obj.set_udt_id(pl_type.get_user_type_id()));
   return ret;
@@ -2414,7 +2406,9 @@ do {                                                                  \
             OZ (init_complex_obj(
               (*get_allocator()), func_.get_variables().at(i), get_params().at(i)));
           }
-        } else if (pl_type.is_composite_type() && params->at(i).is_null()) {
+        } else if (pl_type.is_composite_type()
+                   && (params->at(i).is_null()
+                        || (params->at(i).is_ext() && params->at(i).get_ext() == 0))) {
           // 如果复杂类型传入了null则构造一个初始化的值
           OZ (init_complex_obj((*get_allocator()),
                                func_.get_variables().at(i),
