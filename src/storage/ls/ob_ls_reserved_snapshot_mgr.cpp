@@ -179,7 +179,7 @@ int ObLSReservedSnapshotMgr::update_min_reserved_snapshot_for_leader(const int64
   } // end of lock
 
   if (OB_SUCC(ret) && send_log_flag) {
-    if (OB_FAIL(try_update_for_leader(new_snapshot_version, nullptr/*allocator*/))) {
+    if (OB_FAIL(sync_clog(new_snapshot_version))) {
       LOG_WARN("failed to send update reserved snapshot log", K(ret), K(new_snapshot_version));
     } else if (need_print_log()) {
       LOG_INFO("submit reserved snapshot log success", "ls_id", ls_->get_ls_id(),
@@ -204,11 +204,25 @@ int ObLSReservedSnapshotMgr::try_sync_reserved_snapshot(
     if (OB_FAIL(update_min_reserved_snapshot_for_leader(new_reserved_snapshot))) {
       LOG_WARN("failed to update min_reserved_snapshot", K(ret), K(new_reserved_snapshot));
     }
-  } else if (OB_FAIL(try_update_for_leader(new_reserved_snapshot, nullptr/*allocator*/))) {
+  } else if (OB_FAIL(sync_clog(new_reserved_snapshot))) {
     LOG_WARN("failed to send update reserved snapshot log", K(ret), K(new_reserved_snapshot));
   } else if (need_print_log()) {
     LOG_INFO("submit reserved snapshot log success", "ls_id", ls_->get_ls_id(),
         K(new_reserved_snapshot));
+  }
+  return ret;
+}
+
+int ObLSReservedSnapshotMgr::sync_clog(const int64_t new_reserved_snapshot)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    LOG_WARN("fail to get data version", K(ret));
+  } else if (compat_version < DATA_VERSION_4_1_0_0) {
+    // do nothing, should sync clog
+  } else if (OB_FAIL(try_update_for_leader(new_reserved_snapshot, nullptr/*allocator*/))) {
+    LOG_WARN("failed to send update reserved snapshot log", K(ret), K(new_reserved_snapshot));
   }
   return ret;
 }

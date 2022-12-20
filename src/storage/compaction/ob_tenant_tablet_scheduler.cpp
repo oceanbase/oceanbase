@@ -708,7 +708,9 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
       } else {
         ObTabletMergeDagParam dag_param(MERGE_TYPES[i], ls_id, tablet_id);
         for (int k = 0; OB_SUCC(ret) && k < parallel_results.count(); ++k) {
-          if (OB_FAIL(schedule_merge_execute_dag<T>(dag_param, ls_handle, tablet_handle, parallel_results.at(k)))) {
+          if (OB_UNLIKELY(parallel_results.at(k).handle_.get_count() <= 1)) {
+            LOG_WARN("invalid parallel result", K(ret), K(k), K(parallel_results));
+          } else if (OB_FAIL(schedule_merge_execute_dag<T>(dag_param, ls_handle, tablet_handle, parallel_results.at(k)))) {
             LOG_WARN("failed to schedule minor execute dag", K(ret), K(k), K(parallel_results.at(k)));
           } else {
             LOG_INFO("success to schedule tablet minor merge", K(ret), K(ls_id), K(tablet_id),

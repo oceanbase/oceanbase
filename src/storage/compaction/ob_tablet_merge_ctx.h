@@ -242,6 +242,7 @@ public:
   compaction::ObICompactionFilter *compaction_filter_;
   ObCompactionTimeGuard time_guard_;
   int64_t rebuild_seq_;
+  uint64_t data_version_;
   ObMediumCompactionInfoList merge_list_;
 
   TO_STRING_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version),
@@ -255,7 +256,7 @@ public:
                K_(scn_range), K_(merge_scn), K_(read_base_version),
                K_(ls_handle), K_(tablet_handle),
                KPC_(merge_progress),
-               KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq), K_(merge_list));
+               KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq), K_(data_version), K_(merge_list));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeCtx);
 };

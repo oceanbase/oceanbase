@@ -30,7 +30,7 @@ public:
 
     medium_info_.compaction_type_ = ObMediumCompactionInfo::MEDIUM_COMPACTION;
     medium_info_.medium_snapshot_ = 100;
-    medium_info_.medium_scn_.convert_for_tx(100);
+    medium_info_.data_version_ = 100;
     medium_info_.cluster_id_ = INIT_CLUSTER_ID;
 
     medium_info_.storage_schema_.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL);

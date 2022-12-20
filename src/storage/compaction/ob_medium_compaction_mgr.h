@@ -128,10 +128,10 @@ public:
   int64_t get_serialize_size() const;
 
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;
-  TO_STRING_KV(K_(cluster_id), K_(medium_compat_version),
+  TO_STRING_KV(K_(cluster_id), K_(medium_compat_version), K_(data_version),
       "compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
       "medium_merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_), K_(cluster_id),
-      K_(medium_snapshot), K_(medium_scn), K_(storage_schema),
+      K_(medium_snapshot), K_(storage_schema),
       K_(contain_parallel_range), K_(parallel_merge_info));
 public:
   static const int64_t MEIDUM_COMPAT_VERSION = 1;
@@ -153,8 +153,8 @@ public:
   };
 
   uint64_t cluster_id_; // for backup database to throw MEDIUM_COMPACTION clog
+  uint64_t data_version_;
   int64_t medium_snapshot_;
-  share::SCN medium_scn_; // for follower minor merge
   storage::ObStorageSchema storage_schema_;
   ObParallelMergeInfo parallel_merge_info_;
 };

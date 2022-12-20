@@ -141,37 +141,6 @@ int ObDataStoreDesc::cal_row_store_type(const share::schema::ObMergeSchema &merg
   return ret;
 }
 
-int ObDataStoreDesc::set_major_working_cluster_version()
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY((!is_major_merge() && !is_meta_major_merge()) || snapshot_version_ <= 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected data store to get major working cluster version",
-                K(ret), K_(merge_type), K_(snapshot_version));
-  } else {
-    ObTenantFreezeInfoMgr::FreezeInfo freeze_info;
-    if (OB_SUCC(MTL_CALL_FREEZE_INFO_MGR(get_freeze_info_by_snapshot_version, snapshot_version_, freeze_info))) {
-      // succ to get freeze info
-    } else if (OB_ENTRY_NOT_EXIST != ret) {
-      STORAGE_LOG(WARN, "Failed to get freeze info", K(ret), K_(snapshot_version), "tenant_id", MTL_ID());
-    } else if (OB_FAIL(MTL_CALL_FREEZE_INFO_MGR(get_latest_freeze_info, freeze_info))) {
-      STORAGE_LOG(WARN, "Failed to get latest freeze info", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      if (freeze_info.cluster_version < 0) {
-        STORAGE_LOG(ERROR, "Unexpected cluster version of freeze info", K(ret), K(freeze_info));
-        major_working_cluster_version_ = 0;
-      } else {
-        major_working_cluster_version_ = freeze_info.cluster_version;
-      }
-      ObTaskController::get().allow_next_syslog();
-      STORAGE_LOG(INFO, "Succ to get major working cluster version",
-                  K_(major_working_cluster_version), K(freeze_info), K_(snapshot_version));
-    }
-  }
-  return ret;
-}
-
 int ObDataStoreDesc::init(
     const ObMergeSchema &merge_schema,
     const share::ObLSID &ls_id,
@@ -250,14 +219,17 @@ int ObDataStoreDesc::init(
       encoder_opt_.set_store_type(row_store_type_);
     }
 
-    if (OB_SUCC(ret) && storage::is_major_merge(merge_type)) { // exactly MAJOR MERGE
+    if (OB_SUCC(ret) && is_major) {
+      uint64_t compat_version = 0;
+      int tmp_ret = OB_SUCCESS;
       if (cluster_version > 0) {
         major_working_cluster_version_ = cluster_version;
+      } else if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+        STORAGE_LOG(WARN, "fail to get data version", K(tmp_ret));
       } else {
-        if (OB_FAIL(set_major_working_cluster_version())) {
-          STORAGE_LOG(WARN, "Failed to set major working cluster version", K(ret), K(*this));
-        }
+        major_working_cluster_version_ = compat_version;
       }
+      STORAGE_LOG(INFO, "success to set major working cluster version", K(tmp_ret), K(merge_type), K(cluster_version), K(major_working_cluster_version_));
     }
 
     if (OB_FAIL(ret)) {

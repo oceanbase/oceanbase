@@ -2425,10 +2425,12 @@ int ObTablet::get_kept_multi_version_start(
       int64_t &multi_version_start)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   multi_version_start = 0;
   int64_t max_merged_snapshot = 0;
   int64_t min_reserved_snapshot = 0;
   int64_t min_medium_snapshot = INT64_MAX;
+  int64_t ls_min_reserved_snapshot = INT64_MAX;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const ObTabletTableStore &table_store = tablet.get_table_store();
   if (0 != table_store.get_major_sstables().count()) {
@@ -2444,9 +2446,17 @@ int ObTablet::get_kept_multi_version_start(
       && OB_FAIL(tablet.get_min_medium_snapshot(min_medium_snapshot))) {
     LOG_WARN("failed to get min medium snapshot", K(ret), K(tablet));
   }
+
+  // for compat, if cluster not upgrade to 4.1, should not consider ls.get_min_reserved_snapshot()
+  uint64_t compat_version = 0;
+  if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    LOG_WARN("fail to get data version", K(tmp_ret));
+  } else if (compat_version >= DATA_VERSION_4_1_0_0) {
+    ls_min_reserved_snapshot = ls.get_min_reserved_snapshot();
+  }
   if (OB_SUCC(ret)) {
     min_reserved_snapshot = common::min(
-        ls.get_min_reserved_snapshot(),
+        ls_min_reserved_snapshot,
         common::min(min_reserved_snapshot, min_medium_snapshot));
     multi_version_start = MIN(MAX(min_reserved_snapshot, multi_version_start), tablet.get_snapshot_version());
   }

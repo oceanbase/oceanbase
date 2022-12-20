@@ -69,7 +69,6 @@ int ObMediumCompactionScheduleFunc::choose_medium_snapshot(
     medium_info.compaction_type_ = ObMediumCompactionInfo::MEDIUM_COMPACTION;
     medium_info.medium_merge_reason_ = merge_reason;
     medium_info.medium_snapshot_ = result.version_range_.snapshot_version_;
-    medium_info.medium_scn_ = result.scn_range_.end_scn_;
     LOG_TRACE("choose_medium_snapshot", K(ret), "ls_id", ls.get_ls_id(),
         "tablet_id", tablet.get_tablet_meta().tablet_id_, K(result), K(medium_info));
   }
@@ -94,8 +93,6 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
     } else {
       ret = OB_NO_NEED_MERGE;
     }
-  } else if (OB_FAIL(medium_info.medium_scn_.convert_for_tx(schedule_medium_snapshot))) {
-    LOG_WARN("failed to convert into scn", K(ret), K(schedule_medium_snapshot));
   } else {
     medium_info.compaction_type_ = ObMediumCompactionInfo::MAJOR_COMPACTION;
     medium_info.medium_merge_reason_ = ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE;
@@ -211,10 +208,17 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
     int64_t multi_version_start = 0;
     ObGetMergeTablesResult result;
     ObMediumCompactionInfo medium_info;
+    uint64_t compat_version = 0;
     if (OB_FAIL(choose_medium_scn[is_major](ls_, tablet_, schedule_medium_snapshot, merge_reason, medium_info, result))) {
       if (OB_NO_NEED_MERGE != ret) {
         LOG_WARN("failed to choose medium snapshot", K(ret), KPC(this));
       }
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+      LOG_WARN("fail to get data version", K(ret));
+    } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_1_0_0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid data version to schedule medium compaction", K(ret), K(compat_version));
+    } else if (FALSE_IT(medium_info.data_version_ = compat_version)) {
     } else if (is_major) {
       // do nothing
     } else if (medium_info.medium_snapshot_ <= max_sync_medium_scn) {
