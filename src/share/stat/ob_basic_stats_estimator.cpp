@@ -54,7 +54,7 @@ int ObBasicStatsEstimator::estimate(const ObTableStatParam &param,
   src_opt_stat.table_stat_ = &tab_stat;
   ObOptTableStat *src_tab_stat = src_opt_stat.table_stat_;
   ObIArray<ObOptColumnStat*> &src_col_stats = src_opt_stat.column_stats_;
-  ObArenaAllocator allocator(ObModIds::OB_SQL_PARSER);
+  ObArenaAllocator allocator("ObBasicStats");
   ObSqlString raw_sql;
   int64_t duration_time = -1;
   // Note that there are dependences between different kinds of statistics
@@ -68,11 +68,11 @@ int ObBasicStatsEstimator::estimate(const ObTableStatParam &param,
                                                       column_params.count(),
                                                       src_col_stats))) {
     LOG_WARN("failed init col stats", K(ret));
-  } else if (OB_FAIL(add_hint(no_rewrite, ctx_.get_allocator()))) {
+  } else if (OB_FAIL(add_hint(no_rewrite, allocator))) {
     LOG_WARN("failed to add no_rewrite", K(ret));
   } else if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
-  } else if (OB_FAIL(fill_parallel_info(ctx_.get_allocator(), param.degree_))) {
+  } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
     LOG_WARN("failed to add query sql parallel info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(extra.start_time_,
                                                                param.duration_time_,
@@ -80,13 +80,15 @@ int ObBasicStatsEstimator::estimate(const ObTableStatParam &param,
     LOG_WARN("failed to get valid duration time", K(ret));
   } else if (OB_FAIL(fill_query_timeout_info(ctx_.get_allocator(), duration_time))) {
     LOG_WARN("failed to fill query timeout info", K(ret));
+  } else if (OB_FAIL(fill_sample_info(allocator, param.sample_info_))) {
+    LOG_WARN("failed to fill sample info", K(ret));
   } else if (dst_opt_stats.count() > 1 &&
-             OB_FAIL(fill_group_by_info(ctx_.get_allocator(), param, extra, calc_part_id_str))) {
+             OB_FAIL(fill_group_by_info(allocator, param, extra, calc_part_id_str))) {
     LOG_WARN("failed to add query sql partition info", K(ret));
   } else if (OB_FAIL(add_stat_item(ObStatRowCount(&param, src_tab_stat)))) {
     LOG_WARN("failed to add row count", K(ret));
   } else if (calc_part_id_str.empty()) {
-    if (OB_FAIL(fill_partition_info(ctx_.get_allocator(), param, extra))) {
+    if (OB_FAIL(fill_partition_info(allocator, param, extra))) {
       LOG_WARN("failed to add query sql parallel info", K(ret));
     } else if (OB_UNLIKELY(dst_opt_stats.count() != 1) ||
                OB_ISNULL(dst_opt_stats.at(0).table_stat_)) {
@@ -118,6 +120,8 @@ int ObBasicStatsEstimator::estimate(const ObTableStatParam &param,
     } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), COPY_ALL_STAT,
                                    src_opt_stat, dst_opt_stats))) {
       LOG_WARN("failed to evaluate basic stats", K(ret));
+    } else if (OB_FAIL(refine_basic_stats(param, extra, dst_opt_stats))) {
+      LOG_WARN("failed to refine basic stats", K(ret));
     } else {
       LOG_TRACE("basic stats is collected", K(dst_opt_stats.count()));
     }
@@ -785,6 +789,125 @@ int ObBasicStatsEstimator::generate_first_part_idx_map(const ObIArray<PartInfo> 
       if (OB_FAIL(first_part_idx_map.set_refactored(all_part_infos.at(i).part_id_, i))) {
         LOG_WARN("failed to set refactored", K(ret));
       } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+/**
+ * @brief ObBasicStatsEstimator::refine_basic_stats
+ *   when the user specify estimate_percent is too small, the sample data isn't enough to describe the
+ * overall data distribution, So we need consider refine it, and reset the appropriate estimate_percent
+ * to regather basic stats.
+ */
+int ObBasicStatsEstimator::refine_basic_stats(const ObTableStatParam &param,
+                                              const ObExtraParam &extra,
+                                              ObIArray<ObOptStat> &dst_opt_stats)
+{
+  int ret = OB_SUCCESS;
+  if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < dst_opt_stats.count(); ++i) {
+      bool need_re_estimate = false;
+      ObExtraParam new_extra;
+      ObTableStatParam new_param;
+      ObSEArray<ObOptStat, 1> tmp_opt_stats;
+      ObBasicStatsEstimator basic_re_est(ctx_);
+      if (OB_FAIL(check_stat_need_re_estimate(param, extra, dst_opt_stats.at(i),
+                                              need_re_estimate, new_param, new_extra))) {
+        LOG_WARN("failed to check stat need re-estimate", K(ret));
+      } else if (!need_re_estimate) {
+        //do nothing
+      } else if (OB_FAIL(tmp_opt_stats.push_back(dst_opt_stats.at(i)))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(basic_re_est.estimate(new_param, new_extra, tmp_opt_stats))) {
+        LOG_WARN("failed to estimate basic statistics", K(ret));
+      } else {
+        LOG_TRACE("Suceed to re-estimate stats", K(new_param), K(param));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBasicStatsEstimator::check_stat_need_re_estimate(const ObTableStatParam &origin_param,
+                                                       const ObExtraParam &origin_extra,
+                                                       ObOptStat &opt_stat,
+                                                       bool &need_re_estimate,
+                                                       ObTableStatParam &new_param,
+                                                       ObExtraParam &new_extra)
+{
+  int ret = OB_SUCCESS;
+  need_re_estimate = false;
+  if (OB_ISNULL(opt_stat.table_stat_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(opt_stat.table_stat_));
+  } else if (opt_stat.table_stat_->get_row_count() * sample_value_ / 100 >= MAGIC_MIN_SAMPLE_SIZE) {
+    //do nothing
+  } else if (OB_FAIL(new_param.assign(origin_param))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    need_re_estimate = true;
+    int64_t total_row_count = opt_stat.table_stat_->get_row_count();
+    //1.set sample ratio
+    if (total_row_count <= MAGIC_SAMPLE_SIZE) {
+      new_param.sample_info_.is_sample_ = false;
+      new_param.sample_info_.sample_value_ = 0.0;
+      new_param.sample_info_.is_block_sample_ = false;
+    } else {
+      new_param.sample_info_.is_sample_ = true;
+      new_param.sample_info_.is_block_sample_ = false;
+      new_param.sample_info_.sample_value_ = (MAGIC_SAMPLE_SIZE * 100.0) / total_row_count;
+      new_param.sample_info_.sample_type_ = PercentSample;
+    }
+    //2.set partition info
+    new_extra.type_ = origin_extra.type_;
+    new_extra.nth_part_ = origin_extra.nth_part_;
+    bool find_it = (new_extra.type_ == TABLE_LEVEL);
+    if (new_extra.type_ == PARTITION_LEVEL) {
+      for (int64_t i = 0; !find_it && i < new_param.part_infos_.count(); ++i) {
+        if (opt_stat.table_stat_->get_partition_id() == new_param.part_infos_.at(i).part_id_) {
+          find_it = true;
+          new_extra.nth_part_ = i;
+          new_param.part_name_ = new_param.part_infos_.at(i).part_name_;
+          new_param.is_subpart_name_ = false;
+        }
+      }
+    } else if (new_extra.type_ == SUBPARTITION_LEVEL) {
+      for (int64_t i = 0; !find_it && i < new_param.subpart_infos_.count(); ++i) {
+        if (opt_stat.table_stat_->get_partition_id() == new_param.subpart_infos_.at(i).part_id_) {
+          find_it = true;
+          new_extra.nth_part_ = i;
+          new_param.part_name_ = new_param.subpart_infos_.at(i).part_name_;
+          new_param.is_subpart_name_ = true;
+        }
+      }
+    }
+    if (!find_it) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(new_param), KPC(opt_stat.table_stat_));
+    }
+    //3.reset opt stat
+    if (OB_SUCC(ret)) {
+      opt_stat.table_stat_->set_row_count(0);
+      opt_stat.table_stat_->set_avg_row_size(0);
+      for (int64_t i = 0; OB_SUCC(ret) && i < opt_stat.column_stats_.count(); ++i) {
+        if (OB_ISNULL(opt_stat.column_stats_.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret));
+        } else {
+          ObObj null_val;
+          null_val.set_null();
+          opt_stat.column_stats_.at(i)->set_max_value(null_val);
+          opt_stat.column_stats_.at(i)->set_min_value(null_val);
+          opt_stat.column_stats_.at(i)->set_num_not_null(0);
+          opt_stat.column_stats_.at(i)->set_num_null(0);
+          opt_stat.column_stats_.at(i)->set_num_distinct(0);
+          opt_stat.column_stats_.at(i)->set_avg_len(0);
+          opt_stat.column_stats_.at(i)->set_llc_bitmap_size(ObColumnStat::NUM_LLC_BUCKET);
+          MEMSET(opt_stat.column_stats_.at(i)->get_llc_bitmap(), 0, ObColumnStat::NUM_LLC_BUCKET);
+          opt_stat.column_stats_.at(i)->get_histogram().reset();
+        }
+      }
     }
   }
   return ret;

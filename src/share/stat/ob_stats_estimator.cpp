@@ -32,7 +32,8 @@ ObStatsEstimator::ObStatsEstimator(ObExecContext &ctx) :
   group_by_string_(),
   where_string_(),
   stat_items_(),
-  results_()
+  results_(),
+  sample_value_(100.0)
 {}
 
 int ObStatsEstimator::gen_select_filed()
@@ -112,6 +113,27 @@ int ObStatsEstimator::fill_sample_info(common::ObIAllocator &alloc,
         LOG_TRACE("succeed to add sample string", K(buf), K(real_len));
       }
     }
+  }
+  return ret;
+}
+
+int ObStatsEstimator::fill_sample_info(common::ObIAllocator &alloc,
+                                       const ObAnalyzeSampleInfo &sample_info)
+{
+  int ret = OB_SUCCESS;
+  if (!sample_info.is_sample_ || sample_info.sample_type_ == SampleType::RowSample) {
+  } else if (OB_UNLIKELY(sample_info.sample_value_ < 0.000001 || sample_info.sample_value_ > 100.0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(sample_info));
+  } else if (sample_info.sample_value_ == 100.0) {
+    //do nothing
+  } else if (OB_FAIL(fill_sample_info(alloc,
+                                      sample_info.sample_value_,
+                                      sample_info.is_block_sample_,
+                                      sample_hint_))) {
+    LOG_WARN("failed to fill sample info", K(ret));
+  } else {
+    sample_value_ = sample_info.sample_value_;
   }
   return ret;
 }
@@ -421,8 +443,13 @@ int ObStatsEstimator::copy_opt_stat(ObOptStat &src_opt_stat,
         LOG_WARN("get unexpected null", K(ret), K(dst_opt_stats.at(i).table_stat_));
       } else if (dst_opt_stats.at(i).table_stat_->get_partition_id() == partition_id) {
         find_it = true;
-        dst_opt_stats.at(i).table_stat_->set_row_count(tmp_tab_stat->get_row_count());
+        int64_t row_cnt = tmp_tab_stat->get_row_count();
+        if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
+          row_cnt = static_cast<int64_t>(row_cnt * 100 / sample_value_);
+        }
+        dst_opt_stats.at(i).table_stat_->set_row_count(row_cnt);
         dst_opt_stats.at(i).table_stat_->set_avg_row_size(tmp_tab_stat->get_avg_row_size());
+        dst_opt_stats.at(i).table_stat_->set_sample_size(tmp_tab_stat->get_row_count());
         if (OB_FAIL(copy_col_stats(tmp_col_stats, dst_opt_stats.at(i).column_stats_))) {
           LOG_WARN("failed to copy col stat", K(ret));
         } else {/*do nothing*/}
@@ -449,11 +476,19 @@ int ObStatsEstimator::copy_col_stats(ObIArray<ObOptColumnStat *> &src_col_stats,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(dst_col_stats.at(i)));
       } else {
+        int64_t num_not_null = src_col_stats.at(i)->get_num_not_null();
+        int64_t num_null = src_col_stats.at(i)->get_num_null();
+        int64_t num_distinct = src_col_stats.at(i)->get_num_distinct();
+        if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
+          num_not_null = static_cast<int64_t>(num_not_null * 100 / sample_value_);
+          num_null = static_cast<int64_t>(num_null * 100 / sample_value_);
+          num_distinct = static_cast<int64_t>(num_distinct * 100 / sample_value_);
+        }
         dst_col_stats.at(i)->set_max_value(src_col_stats.at(i)->get_max_value());
         dst_col_stats.at(i)->set_min_value(src_col_stats.at(i)->get_min_value());
-        dst_col_stats.at(i)->set_num_not_null(src_col_stats.at(i)->get_num_not_null());
-        dst_col_stats.at(i)->set_num_null(src_col_stats.at(i)->get_num_null());
-        dst_col_stats.at(i)->set_num_distinct(src_col_stats.at(i)->get_num_distinct());
+        dst_col_stats.at(i)->set_num_not_null(num_not_null);
+        dst_col_stats.at(i)->set_num_null(num_null);
+        dst_col_stats.at(i)->set_num_distinct(num_distinct);
         dst_col_stats.at(i)->set_avg_len(src_col_stats.at(i)->get_avg_len());
         if (OB_ISNULL(dst_col_stats.at(i)->get_llc_bitmap()) ||
             OB_ISNULL(src_col_stats.at(i)->get_llc_bitmap()) ||
@@ -471,7 +506,7 @@ int ObStatsEstimator::copy_col_stats(ObIArray<ObOptColumnStat *> &src_col_stats,
           dst_col_stats.at(i)->set_llc_bitmap_size(src_col_stats.at(i)->get_llc_bitmap_size());
           ObHistogram &src_hist = src_col_stats.at(i)->get_histogram();
           dst_col_stats.at(i)->get_histogram().set_type(src_hist.get_type());
-          dst_col_stats.at(i)->get_histogram().set_sample_size(src_hist.get_sample_size());
+          dst_col_stats.at(i)->get_histogram().set_sample_size(src_col_stats.at(i)->get_num_not_null());
           dst_col_stats.at(i)->get_histogram().set_bucket_cnt(src_hist.get_bucket_cnt());
           dst_col_stats.at(i)->get_histogram().set_density(src_hist.get_density());
           if (OB_FAIL(append(dst_col_stats.at(i)->get_histogram().get_buckets(),

@@ -279,7 +279,17 @@ int ObOptStatManager::update_table_stat(const uint64_t tenant_id,
   return ret;
 }
 
-int ObOptStatManager::delete_table_stat(const uint64_t tenant_id,
+int ObOptStatManager::delete_table_stat(uint64_t tenant_id,
+                                        const uint64_t ref_id,
+                                        int64_t &affected_rows)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 1> part_ids;
+  bool cascade_column = true;
+  return delete_table_stat(tenant_id, ref_id, part_ids, cascade_column, affected_rows);
+}
+
+int ObOptStatManager::delete_table_stat(uint64_t tenant_id,
                                         const uint64_t ref_id,
                                         const ObIArray<int64_t> &part_ids,
                                         const bool cascade_column,

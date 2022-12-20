@@ -55,7 +55,7 @@ int ObHybridHistEstimator::estimate(const ObTableStatParam &param,
   ObOptStat src_opt_stat;
   src_opt_stat.table_stat_ = &tab_stat;
   ObIArray<ObOptColumnStat*> &src_col_stats = src_opt_stat.column_stats_;
-  ObArenaAllocator allocator(ObModIds::OB_SQL_PARSER);
+  ObArenaAllocator allocator("ObHybridHist");
   ObString raw_sql;
   ObString refine_raw_sql;
   int64_t refine_cnt = 0;
@@ -462,8 +462,8 @@ int ObHybridHistEstimator::try_build_hybrid_hist(const ObColumnStatParam &param,
  *  b. if total_row_count >= MAGIC_MAX_AUTO_SAMPLE_SIZE then:
  *      i: if max_num_bkts <= DEFAULT_HISTOGRAM_BUCKET_NUM then choosing MAGIC_SAMPLE_SIZE;
  *      ii: if max_num_bkts > DEFAULT_HISTOGRAM_BUCKET_NUM:
- *          (1): if max_num_bkts >= total_row_count * MAX_CUT_RATIO then choosing full table scan;
- *          (2): if max_num_bkts <= total_row_count * MAX_CUT_RATIO then choosing:
+ *          (1): if max_num_bkts >= total_row_count * MAGIC_SAMPLE_CUT_RATIO then choosing full table scan;
+ *          (2): if max_num_bkts <= total_row_count * MAGIC_SAMPLE_CUT_RATIO then choosing:
  *               sample_size = MAGIC_SAMPLE_SIZE + MAGIC_BASE_SAMPLE_SIZE + (max_num_bkts -
  *                               DEFAULT_HISTOGRAM_BUCKET_NUM) * MAGIC_MIN_SAMPLE_SIZE * 0.01;
  *
@@ -481,11 +481,6 @@ int ObHybridHistEstimator::compute_estimate_percent(int64_t total_row_count,
                                                     bool &is_block_sample)
 {
   int ret = OB_SUCCESS;
-  const int64_t MAGIC_SAMPLE_SIZE = 5500;
-  const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
-  const int64_t MAGIC_MIN_SAMPLE_SIZE = 2500;
-  const int64_t MAGIC_BASE_SAMPLE_SIZE = 1000;
-  const double MAX_CUT_RATIO = 0.00962;
   if (0 == total_row_count) {
     need_sample = false;
   } else if (sample_info.is_sample_) {
@@ -521,7 +516,7 @@ int ObHybridHistEstimator::compute_estimate_percent(int64_t total_row_count,
       is_block_sample = false;
       est_percent = (MAGIC_SAMPLE_SIZE * 100.0) / total_row_count;
     } else {
-      int64_t num_bound_bkts = static_cast<int64_t>(std::round(total_row_count * MAX_CUT_RATIO));
+      int64_t num_bound_bkts = static_cast<int64_t>(std::round(total_row_count * MAGIC_SAMPLE_CUT_RATIO));
       if (max_num_bkts >= num_bound_bkts) {
         need_sample = false;
       } else {

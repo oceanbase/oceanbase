@@ -116,6 +116,7 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   global_data_part_id_ = other.global_data_part_id_;
   data_table_id_ = other.data_table_id_;
   need_estimate_block_ = other.need_estimate_block_;
+  is_temp_table_ = other.is_temp_table_;
   if (OB_FAIL(part_infos_.assign(other.part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(subpart_infos_.assign(other.subpart_infos_))) {

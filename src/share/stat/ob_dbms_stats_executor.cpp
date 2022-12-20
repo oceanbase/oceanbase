@@ -101,13 +101,15 @@ int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
     ObSEArray<ObOptTableStatHandle, 4> history_tab_handles;
     ObSEArray<ObOptColumnStatHandle, 4> history_col_handles;
     //before write, we need record history stats.
-    if (OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, param,
+    if (!param.is_temp_table_ &&
+        OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, param,
                                                                     history_tab_handles,
                                                                     history_col_handles))) {
       LOG_WARN("failed to get history stat handles", K(ret));
     } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, all_tstats, all_cstats))) {
       LOG_WARN("failed to split batch write", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsUtils::batch_write_history_stats(ctx,
+    } else if (!param.is_temp_table_ &&
+               OB_FAIL(ObDbmsStatsUtils::batch_write_history_stats(ctx,
                                                                    history_tab_handles,
                                                                    history_col_handles))) {
       LOG_WARN("failed to batch write history stats", K(ret));
@@ -245,7 +247,8 @@ int ObDbmsStatsExecutor::set_table_stats(ObExecContext &ctx,
     if (OB_FAIL(do_set_table_stats(param, &table_stat))) {
       LOG_WARN("failed to do set table stats", K(ret));
     ////before update, we need record history stats.
-    } else if (OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, param.table_param_,
+    } else if (!param.table_param_.is_temp_table_ &&
+               OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, param.table_param_,
                                                                            history_tab_handles,
                                                                            history_col_handles))) {
       LOG_WARN("failed to get history stat handles", K(ret));
@@ -478,7 +481,8 @@ int ObDbmsStatsExecutor::delete_table_stats(ObExecContext &ctx,
     ObSEArray<ObOptColumnStatHandle, 4> history_col_handles;
     int64_t affected_rows = 0;
     //before delete, we need record history stats.
-    if (OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, param,
+    if (!param.is_temp_table_ &&
+        OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, param,
                                                                     history_tab_handles,
                                                                     history_col_handles))) {
       LOG_WARN("failed to get history stat handles", K(ret));
@@ -488,7 +492,7 @@ int ObDbmsStatsExecutor::delete_table_stats(ObExecContext &ctx,
                                                                           cascade_columns,
                                                                           affected_rows))) {
       LOG_WARN("failed to delete table stats", K(ret));
-    } else if (affected_rows != 0 &&
+    } else if (affected_rows != 0 && !param.is_temp_table_ &&
                OB_FAIL(ObDbmsStatsUtils::batch_write_history_stats(ctx,
                                                                    history_tab_handles,
                                                                    history_col_handles))) {
