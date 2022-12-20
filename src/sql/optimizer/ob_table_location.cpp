@@ -830,6 +830,8 @@ void ObTableLocation::reset()
 
   part_hint_ids_.reset();
 
+  related_list_.reset();
+
   inner_allocator_.reset();
   part_collation_type_ = CS_TYPE_INVALID;
   subpart_col_type_ = ObNullType;
@@ -847,7 +849,6 @@ void ObTableLocation::reset()
   is_non_partition_optimized_ = false;
   tablet_id_.reset();
   object_id_ = OB_INVALID_ID;
-  related_list_.reset();
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObDMLStmt &stmt,
