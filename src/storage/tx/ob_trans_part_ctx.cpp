@@ -4141,7 +4141,7 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
                                          true,
                                          exec_info_.multi_data_source_))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(commit_log));
-    } else if (OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
+    } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else if (is_local_tx_()) {
       if (OB_FAIL(trans_clear_())) {
@@ -4300,12 +4300,12 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
       TRANS_LOG(WARN, "notify data source for TX_END failed", KR(ret), K(*this));
     } else if (OB_FAIL(trans_replay_abort_(timestamp))) {
       TRANS_LOG(WARN, "transaction replay end error", KR(ret), "context", *this);
-    } else if (OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
-      TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else if (OB_FAIL(trans_clear_())) {
       TRANS_LOG(WARN, "transaction clear error", KR(ret), "context", *this);
     } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT, timestamp, true, tmp_array))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(abort_log));
+    } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
+      TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else {
       reset_redo_lsns_();
       set_exiting_();

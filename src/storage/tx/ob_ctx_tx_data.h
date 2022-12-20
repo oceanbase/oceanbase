@@ -35,6 +35,8 @@ public:
   void destroy();
 
   int init(ObLSTxCtxMgr *ctx_mgr, int64_t tx_id);
+
+  bool is_read_only() const { return read_only_; }
   int insert_into_tx_table();
   int recover_tx_data(const storage::ObTxData *tmp_tx_data);
   int replace_tx_data(storage::ObTxData *&tmp_tx_data);
