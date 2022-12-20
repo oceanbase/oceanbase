@@ -407,7 +407,7 @@ private:
       const lib::Worker::CompatMode compat_mode,
       ObFreezer *freezer);
   int build_read_info(common::ObIAllocator &allocator);
-  int create_memtable(const int64_t schema_version, const bool for_replay=false);
+  int create_memtable(const int64_t schema_version, const share::SCN clog_checkpoint_scn, const bool for_replay=false);
   int try_update_start_scn();
   int try_update_ddl_checkpoint_scn();
   int try_update_table_store_flag(const ObUpdateTableStoreParam &param);

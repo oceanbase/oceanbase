@@ -57,7 +57,7 @@ private:
       const bool is_tablet_freeze,
       memtable::ObIMemtable *memtable,
       bool &bool_ret);
-  int check_freeze_to_inc_write_ref(ObITable *table, bool &bool_ret);
+  int check_freeze_to_inc_write_ref(ObITable *table, bool &bool_ret, bool &for_replace_tablet_meta);
   bool need_to_refresh_table(ObTableStoreIterator &iter);
   bool check_if_need_log();
 private:
