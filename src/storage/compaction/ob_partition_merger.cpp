@@ -85,7 +85,8 @@ int ObPartitionMerger::init_data_store_desc(ObTabletMergeCtx &ctx)
                                     ctx.param_.ls_id_,
                                     ctx.param_.tablet_id_,
                                     ctx.param_.get_merge_type(),
-                                    ctx.sstable_version_range_.snapshot_version_))) {
+                                    ctx.sstable_version_range_.snapshot_version_,
+                                    ctx.data_version_))) {
     STORAGE_LOG(WARN, "Failed to init data store desc", K(ret), K(ctx));
   } else {
     merge_info_.reset();

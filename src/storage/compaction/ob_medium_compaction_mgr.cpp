@@ -234,8 +234,8 @@ ObMediumCompactionInfo::ObMediumCompactionInfo()
     medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
     reserved_(0),
     cluster_id_(0),
+    data_version_(0),
     medium_snapshot_(0),
-    medium_scn_(),
     storage_schema_(),
     parallel_merge_info_()
 {
@@ -263,7 +263,7 @@ int ObMediumCompactionInfo::init(
     info_ = medium_info.info_;
     cluster_id_ = medium_info.cluster_id_;
     medium_snapshot_ = medium_info.medium_snapshot_;
-    medium_scn_ = medium_info.medium_scn_;
+    data_version_ = medium_info.data_version_;
   }
   return ret;
 }
@@ -272,7 +272,7 @@ bool ObMediumCompactionInfo::is_valid() const
 {
   return COMPACTION_TYPE_MAX != compaction_type_
       && medium_snapshot_ > 0
-      && medium_scn_.get_val_for_tx() > 0
+      && data_version_ > 0
       && storage_schema_.is_valid()
       && parallel_merge_info_.is_valid();
 }
@@ -284,7 +284,7 @@ void ObMediumCompactionInfo::reset()
   compaction_type_ = COMPACTION_TYPE_MAX;
   cluster_id_ = 0;
   medium_snapshot_ = 0;
-  medium_scn_.set_min();
+  data_version_ = 0;
   storage_schema_.reset();
   parallel_merge_info_.destroy();
 }
@@ -349,7 +349,7 @@ int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t 
         info_,
         cluster_id_,
         medium_snapshot_,
-        medium_scn_,
+        data_version_,
         storage_schema_);
     if (contain_parallel_range_) {
       LST_DO_CODE(
@@ -376,7 +376,7 @@ int ObMediumCompactionInfo::deserialize(
         info_,
         cluster_id_,
         medium_snapshot_,
-        medium_scn_);
+        data_version_);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(storage_schema_.deserialize(allocator, buf, data_len, pos))) {
       LOG_WARN("failed to deserialize storage schema", K(ret));
@@ -400,7 +400,7 @@ int64_t ObMediumCompactionInfo::get_serialize_size() const
       info_,
       cluster_id_,
       medium_snapshot_,
-      medium_scn_,
+      data_version_,
       storage_schema_);
   if (contain_parallel_range_) {
     LST_DO_CODE(OB_UNIS_ADD_LEN, parallel_merge_info_);
@@ -702,7 +702,7 @@ int ObTabletMediumCompactionInfoRecorder::submit_log(
   } else if (OB_FAIL(write_clog(clog_buf, clog_len))) {
     LOG_WARN("fail to submit log", K(ret), K_(tablet_id), K(medium_info_));
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(dec_ref_on_memtable(false))) {
+    if (clog_scn_.get_val_for_tx() > 0 && OB_TMP_FAIL(dec_ref_on_memtable(false))) {
       LOG_ERROR("failed to dec ref on memtable", K(tmp_ret), K_(ls_id), K_(tablet_id));
     }
   } else {

@@ -90,6 +90,7 @@ private:
     }
     return bret;
   }
+  int sync_clog(const int64_t new_reserved_snapshot);
 
   bool is_inited_;
   common::ObArenaAllocator allocator_;

@@ -129,7 +129,6 @@ private:
   int cal_row_store_type(
       const share::schema::ObMergeSchema &schema,
       const storage::ObMergeType merge_type);
-  int set_major_working_cluster_version();
   int get_emergency_row_store_type();
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDataStoreDesc);

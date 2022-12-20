@@ -780,7 +780,7 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
 {
   int ret = OB_SUCCESS;
   ObMergeType &merge_type = result.suggest_merge_type_;
-  if (result.handle_.get_count() <= minor_compact_trigger) {
+  if (result.handle_.get_count() <= MAX(minor_compact_trigger, 1)) {
     ret = OB_NO_NEED_MERGE;
     LOG_DEBUG("minor refine, no need to do minor merge", K(result));
     result.handle_.reset();

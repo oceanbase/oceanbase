@@ -524,6 +524,7 @@ ObTabletMergeCtx::ObTabletMergeCtx(
     compaction_filter_(nullptr),
     time_guard_(),
     rebuild_seq_(-1),
+    data_version_(0),
     merge_list_()
 {
   merge_scn_.set_max();
@@ -667,6 +668,7 @@ int ObTabletMergeCtx::inner_init_for_medium()
   } else if (OB_FAIL(init_get_medium_compaction_info(param_.merge_version_, medium_info))) { // have checked medium info inside
     LOG_WARN("failed to get medium compaction info", K(ret), KPC(this));
   } else if (FALSE_IT(get_merge_table_result.schema_version_ = medium_info->storage_schema_.schema_version_)) {
+  } else if (FALSE_IT(data_version_ = medium_info->data_version_)) {
   } else if (FALSE_IT(is_tenant_major_merge_ = medium_info->is_major_compaction())) {
   } else if (OB_FAIL(get_basic_info_from_result(get_merge_table_result))) {
     LOG_WARN("failed to set basic info to ctx", K(ret), K(get_merge_table_result), KPC(this));
@@ -1111,7 +1113,8 @@ int ObTabletMergeCtx::prepare_index_tree()
                                param_.ls_id_,
                                param_.tablet_id_,
                                param_.merge_type_,
-                               sstable_version_range_.snapshot_version_))) {
+                               sstable_version_range_.snapshot_version_,
+                               data_version_))) {
     LOG_WARN("failed to init index store desc", K(ret), KPC(this));
   } else {
     // TODO(zhuixin.gsy) modify index_desc.init to avoid reset col_desc_array_
