@@ -472,7 +472,6 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
     case ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REQ: {
       const Ob2pcPrepareReqMsg &msg = *(static_cast<const Ob2pcPrepareReqMsg *>(msg_2pc_cache_));
 
-      part_trans_action_ = ObPartTransAction::COMMIT;
       if (FALSE_IT(set_trans_type_(TransType::DIST_TRANS))) {
       } else if (OB_FAIL(set_app_trace_info_(msg.app_trace_info_))) {
         TRANS_LOG(WARN, "set app trace info failed", KR(ret), K(msg), K(*this));
