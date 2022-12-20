@@ -1894,6 +1894,34 @@ int ObDDLTaskRecordOperator::insert_record(
     if (OB_UNLIKELY(0 > (pos = record.trace_id_.to_string(trace_id_str, sizeof(trace_id_str))))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get task id string failed", K(ret), K(record), K(pos));
+    } else if (record.parent_task_id_ > 0) {
+      // for child task only.
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObSqlString query_string;
+        sqlclient::ObMySQLResult *result = NULL;
+        if (OB_FAIL(query_string.assign_fmt(
+            " SELECT * FROM %s WHERE object_id = %lu and target_object_id = %lu",
+            OB_ALL_DDL_TASK_STATUS_TNAME, record.object_id_, record.target_object_id_))) {
+          LOG_WARN("assign query string failed", K(ret), K(record));
+        } else if (OB_FAIL(proxy.read(res, record.tenant_id_, query_string.ptr()))) {
+          LOG_WARN("read record failed", K(ret), K(query_string));
+        } else if (OB_UNLIKELY(nullptr == (result = res.get_result()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get sql result", K(ret), KP(result));
+        } else if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("get next row failed", K(ret));
+          }
+        } else {
+          // do not insert duplicated record.
+          ret = OB_ENTRY_EXIST;
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(to_hex_str(record.ddl_stmt_str_, ddl_stmt_string))) {
       LOG_WARN("append hex escaped ddl stmt string failed", K(ret));
     } else if (OB_FAIL(to_hex_str(record.message_, message_string))) {

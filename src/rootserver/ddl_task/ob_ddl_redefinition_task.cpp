@@ -757,9 +757,8 @@ int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id, 
           if (OB_SUCC(ret)) {
             DependTaskStatus status;
             bool need_set_status = false;
-            ObDDLTaskKey task_key(constraint_id, table_schema->get_schema_version());
             status.task_id_ = task_id; // child task id, which is used to judge child task finish.
-            if (OB_FAIL(dependent_task_result_map_.get_refactored(task_key, status))) {
+            if (OB_FAIL(dependent_task_result_map_.get_refactored(constraint_id, status))) {
               if (OB_HASH_NOT_EXIST != ret) {
                 LOG_WARN("get from dependent task map failed", K(ret));
               } else {
@@ -769,10 +768,10 @@ int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id, 
             }
             if (OB_SUCC(ret) && need_set_status) {
               status.task_id_ = task_id; // child task id is used to judge whether child task finish.
-              if (OB_FAIL(dependent_task_result_map_.set_refactored(task_key, status))) {
-                LOG_WARN("set dependent task map failed", K(ret), K(task_key));
+              if (OB_FAIL(dependent_task_result_map_.set_refactored(constraint_id, status))) {
+                LOG_WARN("set dependent task map failed", K(ret), K(constraint_id));
               } else {
-                LOG_INFO("add constraint task", K(task_key));
+                LOG_INFO("add constraint task", K(constraint_id));
               }
             }
           }
@@ -844,7 +843,6 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id, ObSchemaGetterGu
           LOG_WARN("cannot find foreign key in table", K(ret), K(fk_id), K(fk_info_array));
         } else {
           DependTaskStatus status;
-          ObDDLTaskKey task_key(fk_id, hidden_table_schema->get_schema_version());
           fk_arg.foreign_key_name_ = fk_info.foreign_key_name_;
           fk_arg.enable_flag_ = fk_info.enable_flag_;
           fk_arg.is_modify_enable_flag_ = fk_info.enable_flag_;
@@ -874,10 +872,10 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id, ObSchemaGetterGu
           } else if (OB_FAIL(root_service->get_ddl_task_scheduler().schedule_ddl_task(task_record))) {
             LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
           } else if (FALSE_IT(status.task_id_ = task_record.task_id_)) { // child task id is used to judge whether child task finish.
-          } else if (OB_FAIL(dependent_task_result_map_.set_refactored(task_key, status))) {
+          } else if (OB_FAIL(dependent_task_result_map_.set_refactored(fk_id, status))) {
             LOG_WARN("set dependent task map failed", K(ret));
           } else {
-            LOG_INFO("add foregin key ddl task", K(fk_arg), "ddl_task_key", task_key);
+            LOG_INFO("add foregin key ddl task", K(fk_arg), K(fk_id));
           }
         }
       }
@@ -887,14 +885,14 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id, ObSchemaGetterGu
 }
 
 int ObDDLRedefinitionTask::on_child_task_finish(
-    const ObDDLTaskKey &child_task_key,
+    const uint64_t child_task_key,
     const int ret_code)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!child_task_key.is_valid())) {
+  } else if (OB_UNLIKELY(common::OB_INVALID_ID == child_task_key)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(child_task_key));
   } else {

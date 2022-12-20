@@ -56,6 +56,7 @@ private:
   int deep_copy_ddl_arg(common::ObIAllocator &allocator, const share::ObDDLType &ddl_type, const obrpc::ObDDLArg *source_arg);
   int init_compat_mode(const share::ObDDLType &ddl_type, const obrpc::ObDDLArg *source_arg);
   int get_forward_user_message(const obrpc::ObRpcResultCode &rcode);
+  int check_schema_change_done();
   virtual bool is_error_need_retry(const int ret_code) override
   {
     return common::OB_PARTITION_NOT_EXIST != ret_code && ObDDLTask::is_error_need_retry(ret_code);
@@ -68,6 +69,7 @@ private:
   common::ObString forward_user_message_;
   common::ObArenaAllocator allocator_;
   obrpc::ObAlterTableRes alter_table_res_; // in memory
+  bool is_schema_change_done_;
 };
 
 }  // end namespace rootserver

@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_ddl_retry_task.h"
+#include "lib/mysqlclient/ob_mysql_result.h"
 #include "lib/rc/context.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_error_message_table_operator.h"
@@ -30,7 +31,7 @@ using namespace oceanbase::obrpc;
 
 ObDDLRetryTask::ObDDLRetryTask()
   : ObDDLTask(share::DDL_INVALID), ddl_arg_(nullptr), root_service_(nullptr), affected_rows_(0), 
-    forward_user_message_(), allocator_(lib::ObLabel("RedefTask"))
+    forward_user_message_(), allocator_(lib::ObLabel("RedefTask")), is_schema_change_done_(false)
 {
 }
 
@@ -184,6 +185,7 @@ int ObDDLRetryTask::init(const uint64_t tenant_id,
     task_type_ = ddl_type;
     task_version_ = OB_DDL_RETRY_TASK_VERSION;
     task_status_ = static_cast<ObDDLTaskStatus>(task_status);
+    is_schema_change_done_ = false;
     is_inited_ = true;
   }
   return ret;
@@ -209,6 +211,7 @@ int ObDDLRetryTask::init(const ObDDLTaskRecord &task_record)
     task_version_ = task_record.task_version_;
     ret_code_ = task_record.ret_code_;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
+    is_schema_change_done_ = false; // do not worry about it, check_schema_change_done will correct it.
     if (nullptr != task_record.message_) {
       int64_t pos = 0;
       if (OB_FAIL(deserlize_params_from_message(task_record.message_.ptr(), task_record.message_.length(), pos))) {
@@ -281,6 +284,46 @@ int ObDDLRetryTask::get_forward_user_message(const obrpc::ObRpcResultCode &rcode
   return ret;
 }
 
+int ObDDLRetryTask::check_schema_change_done()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (is_schema_change_done_) {
+    // do nothing.
+  } else if (OB_ISNULL(root_service_)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  } else {
+    common::ObMySQLProxy &proxy = root_service_->get_sql_proxy();
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObSqlString query_string;
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_UNLIKELY(!proxy.is_inited())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, proxy is not inited", K(ret));
+      } else if (OB_FAIL(query_string.assign_fmt(
+          " SELECT status FROM %s WHERE task_id = %lu",
+          OB_ALL_DDL_TASK_STATUS_TNAME, task_id_))) {
+        LOG_WARN("assign query string failed", K(ret), KPC(this));
+      } else if (OB_FAIL(proxy.read(res, tenant_id_, query_string.ptr()))) {
+        LOG_WARN("read record failed", K(ret), K(query_string));
+      } else if (OB_UNLIKELY(nullptr == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("get record failed", K(ret), K(query_string));
+      } else {
+        int64_t table_task_status = 0;
+        EXTRACT_INT_FIELD_MYSQL(*result, "status", table_task_status, int64_t);
+        is_schema_change_done_ = ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH == table_task_status ? true : is_schema_change_done_;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLRetryTask::drop_schema(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
@@ -294,6 +337,11 @@ int ObDDLRetryTask::drop_schema(const ObDDLTaskStatus next_task_status)
   } else if (OB_ISNULL(ddl_arg_) || lib::Worker::CompatMode::INVALID == compat_mode_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error", K(ret), KP(ddl_arg_), K(compat_mode_));
+  } else if (OB_FAIL(check_schema_change_done())) {
+    LOG_WARN("check task finished failed", K(ret));
+  } else if (is_schema_change_done_) {
+    // schema has already changed.
+    new_status = next_task_status;
   } else {
     lib::Worker::CompatMode save_compat_mode = THIS_WORKER.get_compatibility_mode();
     THIS_WORKER.set_compatibility_mode(compat_mode_);
@@ -508,7 +556,7 @@ int ObDDLRetryTask::process()
       }
       case ObDDLTaskStatus::DROP_SCHEMA: {
         if (OB_FAIL(drop_schema(ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH))) {
-          LOG_WARN("fail to write barrier log", K(ret));
+          LOG_WARN("fail to drop schema", K(ret));
         }
         break;
       }
