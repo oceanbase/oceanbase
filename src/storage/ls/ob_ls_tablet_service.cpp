@@ -2065,7 +2065,8 @@ int ObLSTabletService::post_handle_batch_create_tablets(
 int ObLSTabletService::create_memtable(
     const common::ObTabletID &tablet_id,
     const int64_t schema_version,
-    const bool for_replay)
+    const bool for_replay,
+    const SCN clog_checkpoint_scn)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard time_guard("ObLSTabletService::create_memtable", 10 * 1000);
@@ -2087,7 +2088,7 @@ int ObLSTabletService::create_memtable(
     } else if (OB_UNLIKELY(!handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, invalid tablet handle", K(ret), K(handle));
-    } else if (OB_FAIL(handle.get_obj()->create_memtable(schema_version, for_replay))) {
+    } else if (OB_FAIL(handle.get_obj()->create_memtable(schema_version, clog_checkpoint_scn, for_replay))) {
       if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
         LOG_WARN("fail to create memtable", K(ret), K(handle), K(schema_version), K(tablet_id));
       }

@@ -290,7 +290,8 @@ public:
   int create_memtable(
       const common::ObTabletID &tablet_id,
       const int64_t schema_version,
-      const bool for_replay = false);
+      const bool for_replay = false,
+      const share::SCN clog_checkpoint_scn = share::SCN::min_scn());
   int get_read_tables(
       const common::ObTabletID &tablet_id,
       const int64_t snapshot_version,
