@@ -569,10 +569,13 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
   if (OB_FAIL(ret)) {
     // do nothing ...
   } else if (T_QUESTIONMARK == expr->get_expr_type()
+             && (resolve_ctx.is_prepare_protocol_
+                 || !resolve_ctx.is_sql_scope_
+                 || resolve_ctx.session_info_.get_pl_context() != NULL)
              && (ObUnknownType == expr->get_result_type().get_type()
-                 || (is_oracle_mode() ? expr->get_result_type().is_oracle_question_mark_type() :
-                    expr->get_result_type().is_mysql_question_mark_type()))) {
-    // TODO: prepare协议暂未处理
+                 || ObNullType == expr->get_result_type().get_type()
+                 || (is_oracle_mode() ? expr->get_result_type().is_oracle_question_mark_type()
+                                      : expr->get_result_type().is_mysql_question_mark_type()))) {
     OX (match_info =
       (ObRoutineMatchInfo::MatchInfo(false,
                                      ObUnknownType,
@@ -1224,7 +1227,10 @@ int ObResolverUtils::get_routine(ObResolverParams &params,
                                *(params.schema_checker_->get_schema_guard()),
                                package_guard,
                                *(GCTX.sql_proxy_),
-                               false);
+                               params.is_prepare_protocol_,
+                               false, /*check mode*/
+                               true, /*sql scope*/
+                               params.param_list_);
     resolve_ctx.params_.secondary_namespace_ = params.secondary_namespace_;
     resolve_ctx.params_.param_list_ = params.param_list_;
     resolve_ctx.params_.is_execute_call_stmt_ = params.is_execute_call_stmt_;
