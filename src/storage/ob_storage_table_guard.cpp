@@ -144,6 +144,7 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
   const common::ObTabletID &tablet_id = tablet_->get_tablet_meta().tablet_id_;
   int64_t clog_checkpoint_ts = ObTabletMeta::INIT_CLOG_CHECKPOINT_TS;
   bool bool_ret = true;
+  bool for_replace_tablet_meta = false;
   const int64_t start = ObTimeUtility::current_time();
 
   if (OB_ISNULL(memtable_mgr)) {
@@ -166,7 +167,7 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected error, invalid ls handle", K(ret), K(ls_handle), K(ls_id), K(tablet_id));
             } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(
-                                                                                     tablet_id, 0/*schema version*/, for_replay_))) {
+                                                                                     tablet_id, 0/*schema version*/, for_replay_, clog_checkpoint_ts))) {
               LOG_WARN("fail to create a boundary memtable", K(ret), K(ls_id), K(tablet_id));
             }
           } else { // replay_log_ts_ <= clog_checkpoint_ts
@@ -179,8 +180,9 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
         }
       } else if (OB_FAIL(handle.get_memtable(memtable))) {
         LOG_WARN("fail to get memtable from ObTableHandle", K(ret), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(check_freeze_to_inc_write_ref(memtable, bool_ret))) {
-        if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
+      } else if (OB_FAIL(check_freeze_to_inc_write_ref(memtable, bool_ret, for_replace_tablet_meta))) {
+        if (OB_EAGAIN == ret) {
+        } else if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
           LOG_WARN("fail to check_freeze", K(ret), K(tablet_id), K(bool_ret), KPC(memtable));
         }
       } else {
@@ -193,7 +195,7 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
                     K(ls_id), K(tablet_id), K(cost_time));
         }
       }
-    } while ((OB_SUCC(ret) || OB_ENTRY_NOT_EXIST == ret) && bool_ret);
+    } while ((OB_SUCC(ret) || OB_ENTRY_NOT_EXIST == ret || OB_EAGAIN == ret) && bool_ret);
   }
 
   return ret;
@@ -244,7 +246,7 @@ int ObStorageTableGuard::get_memtable_for_replay(memtable::ObIMemtable *&memtabl
   return ret;
 }
 
-int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bool_ret)
+int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bool_ret, bool &for_replace_tablet_meta)
 {
   int ret = OB_SUCCESS;
   bool_ret = true;
@@ -266,7 +268,7 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
     LOG_INFO("table is null, need to refresh", K(bool_ret), K(ls_id), K(tablet_id));
   } else if (FALSE_IT(old_freeze_flag = memtable->get_freeze_flag())) {
   } else if (FALSE_IT(is_tablet_freeze = memtable->get_is_tablet_freeze())) {
-  } else if (memtable->is_active_memtable()) {
+  } else if (memtable->is_active_memtable() || for_replace_tablet_meta) {
     // the most recent memtable is active
     // no need to create a new memtable
     if (for_replay_ || for_multi_source_data_) {
@@ -296,18 +298,42 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
     // need to create a new memtable
     // TODO: allow to write frozen memtables except for the boundary one when replaying
     const int64_t write_ref = memtable->get_write_ref();
-    if (write_ref == 0) {
-      // create a new memtable if no write in the old memtable
-      ObLSHandle ls_handle;
-      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-        LOG_WARN("failed to get log stream", K(ret), K(bool_ret), K(ls_id), K(tablet_id));
-      } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
+    if (0 == write_ref) {
+      int64_t clog_checkpoint_ts = ObLogTsRange::MIN_TS;
+      bool need_create_memtable = true;
+      const int64_t migration_clog_checkpoint_ts = static_cast<memtable::ObMemtable *>(memtable)->get_migration_clog_checkpoint_ts();
+      ObIMemtableMgr *memtable_mgr = tablet_->get_memtable_mgr();
+
+      if (OB_ISNULL(memtable_mgr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, invalid ls handle", K(ret), K(bool_ret), K(ls_handle), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(tablet_id,
-          memtable->get_max_schema_version()/*schema version*/, for_replay_))) {
-        if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
-          LOG_WARN("fail to create new memtable for freeze", K(ret), K(bool_ret), K(ls_id), K(tablet_id));
+        LOG_WARN("memtable mgr is null", K(ret), K(bool_ret), K(ls_id), K(tablet_id), KP(memtable_mgr));
+      } else if (OB_FAIL(memtable_mgr->get_newest_clog_checkpoint_ts(clog_checkpoint_ts))) {
+        LOG_WARN("failed to get newest clog_checkpoint_ts", K(ret), K(ls_id), K(tablet_id), K(clog_checkpoint_ts));
+      } else if (for_replay_ && migration_clog_checkpoint_ts != ObLogTsRange::MIN_TS) {
+        static_cast<memtable::ObMemtable *>(memtable)->resolve_right_boundary();
+        if (replay_log_ts_ <= clog_checkpoint_ts) {
+          for_replace_tablet_meta = true;
+          need_create_memtable = false;
+        }
+      }
+
+      // create a new memtable if no write in the old memtable
+      if (OB_FAIL(ret)) {
+      } else if (need_create_memtable) {
+        ObLSHandle ls_handle;
+        if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+          LOG_WARN("failed to get log stream", K(ret), K(bool_ret), K(ls_id), K(tablet_id));
+        } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, invalid ls handle", K(ret), K(bool_ret), K(ls_handle), K(ls_id), K(tablet_id));
+        } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(tablet_id,
+                                                                                 memtable->get_max_schema_version()/*schema version*/,
+                                                                                 for_replay_,
+                                                                                 clog_checkpoint_ts))) {
+          if (OB_EAGAIN == ret) {
+          } else if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
+            LOG_WARN("fail to create new memtable for freeze", K(ret), K(bool_ret), K(ls_id), K(tablet_id));
+          }
         }
       }
     }
@@ -320,6 +346,7 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
+  bool for_replace_tablet_meta = false;
   int exit_flag = -1;
 
   ObITable *table = iter.get_boundary_table(true);
@@ -336,7 +363,7 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
   } else if (iter.check_store_expire()) {
     bool_ret = true;
     exit_flag = 1;
-  } else if (OB_FAIL(check_freeze_to_inc_write_ref(table, bool_ret))) {
+  } else if (OB_FAIL(check_freeze_to_inc_write_ref(table, bool_ret, for_replace_tablet_meta))) {
     bool_ret = true;
     exit_flag = 2;
     if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {

@@ -1589,13 +1589,14 @@ int ObTablet::get_active_memtable(ObTableHandleV2 &handle) const
 }
 
 int ObTablet::create_memtable(const int64_t schema_version,
+                              const int64_t clog_checkpoint_ts,
                               const bool for_replay)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard time_guard("ObTablet::create_memtable", 10 * 1000);
   TCWLockGuard guard(table_store_lock_);
   time_guard.click("lock");
-  const int64_t clog_checkpoint_ts = tablet_meta_.clog_checkpoint_ts_;
+  const int64_t new_clog_checkpoint_ts = (ObLogTsRange::MIN_TS == clog_checkpoint_ts) ? tablet_meta_.clog_checkpoint_ts_ : clog_checkpoint_ts;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1606,11 +1607,11 @@ int ObTablet::create_memtable(const int64_t schema_version,
   } else if (OB_FAIL(table_store_.prepare_memtables())) {
     LOG_WARN("failed to pre-allocate memory for new memtable", K(ret), KPC(this));
   } else if (FALSE_IT(time_guard.click("prepare_memtables"))) {
-  } else if (OB_FAIL(inner_create_memtable(clog_checkpoint_ts, schema_version, for_replay))) {
+  } else if (OB_FAIL(inner_create_memtable(new_clog_checkpoint_ts, schema_version, for_replay))) {
     if (OB_ENTRY_EXIST == ret) {
       ret = OB_SUCCESS;
     } else if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
-      LOG_WARN("failed to create memtable", K(ret), K(clog_checkpoint_ts),
+      LOG_WARN("failed to create memtable", K(ret), K(new_clog_checkpoint_ts),
                K(schema_version), K(for_replay));
     }
   } else if (FALSE_IT(time_guard.click("inner_create_memtable"))) {
