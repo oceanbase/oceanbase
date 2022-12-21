@@ -100,11 +100,16 @@ int ObFunctionTableOp::get_current_result(ObObj &result)
     LOG_WARN("fail to get current result in table function",
               K(node_idx_), K(row_count_), K(col_count_));
   }
-  CK (node_idx_ >= 0 && node_idx_ < row_count_ * col_count_);
-  CK (OB_NOT_NULL(value_table_));
-  OX (data = value_table_->get_data());
-  CK (OB_NOT_NULL(data));
-  OX (result = (static_cast<ObObj*>(data))[node_idx_++]);
+  do {
+    CK (node_idx_ >= 0);
+    if (OB_SUCC(ret) && node_idx_ >= row_count_) {
+      ret = OB_ITER_END;
+    }
+    CK (OB_NOT_NULL(value_table_));
+    OX (data = value_table_->get_data());
+    CK (OB_NOT_NULL(data));
+    OX (result = (static_cast<ObObj*>(data))[node_idx_++]);
+  } while (OB_SUCC(ret) && result.get_meta().get_type() == ObMaxType);
   return ret;
 }
 
