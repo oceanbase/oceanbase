@@ -1529,15 +1529,16 @@ int ObJsonBin::get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_
       }
     }
 
-    if (OB_SUCC(ret) && max_val_offset > offset) {
-      uint64_t node_max_offset = 0;
-      if (!OB_JSON_TYPE_IS_INLINE(node_type) &&
-          OB_FAIL(get_max_offset(data + max_val_offset, static_cast<ObJsonNodeType>(max_offset_type), node_max_offset))) {
-        LOG_WARN("get max offset failed.", K(ret), K(cur_node));
-      } else {
-        max_val_offset += node_max_offset;
+    if (OB_SUCC(ret)) {
+      if (max_val_offset > offset) {
+        uint64_t node_max_offset = 0;
+        if (!OB_JSON_TYPE_IS_INLINE(node_type) &&
+            OB_FAIL(get_max_offset(data + max_val_offset, static_cast<ObJsonNodeType>(max_offset_type), node_max_offset))) {
+          LOG_WARN("get max offset failed.", K(ret), K(cur_node));
+        } else {
+          max_val_offset += node_max_offset;
+        }
       }
-
       if (max_val_offset < obj_size) {
         max_offset = obj_size;
       } else {
