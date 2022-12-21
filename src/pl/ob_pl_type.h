@@ -626,11 +626,11 @@ public:
   void reset();
   bool operator==(const ObObjAccessIdx &other) const;
 
-  TO_STRING_KV(K_(elem_type),
-               K_(access_type),
+  TO_STRING_KV(K_(access_type),
                K_(var_name),
                K_(var_type),
                K_(var_index),
+               K_(elem_type),
                K_(type_method_params),
                KP_(get_sysfunc));
 public:
