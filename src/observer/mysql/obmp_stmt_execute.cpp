@@ -2279,6 +2279,9 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
   } else if (NULL == piece->get_allocator()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("piece allocator is null.", K(stmt_id_), K(param_id), K(ret));
+  } else if (OB_SUCCESS != piece->get_error_ret()) {
+    ret = piece->get_error_ret();
+    LOG_WARN("send long data has error. ", K(stmt_id_), K(param_id), K(ret));
   } else {
     if (OB_UNLIKELY(MYSQL_TYPE_COMPLEX == type)) {
       // this must be array bounding.

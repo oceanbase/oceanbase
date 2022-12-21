@@ -160,7 +160,8 @@ public:
       pos_(0),
       buffer_array_(NULL),
       allocator_(NULL),
-      is_null_map_() {}
+      is_null_map_(),
+      err_ret_(OB_SUCCESS) {}
   ~ObPiece() { reset(); }
   void reset()
   {
@@ -173,6 +174,7 @@ public:
     stmt_id_ = 0;
     param_id_ = -1;
     pos_ = 0;
+    err_ret_ = OB_SUCCESS;
   }
   void reset_buffer_array()
   {
@@ -204,6 +206,8 @@ public:
   ObPieceBufferArray *get_buffer_array() { return buffer_array_; }
   void set_buffer_array(ObPieceBufferArray *array) { buffer_array_ = array; }
   int piece_init(sql::ObSQLSessionInfo &session, int32_t stmt_id, int16_t param_id);
+  void set_error_ret(int err_ret) { err_ret_ = err_ret; }
+  int get_error_ret() { return err_ret_; }
 private:
   int32_t stmt_id_;
   int16_t param_id_;
@@ -211,6 +215,7 @@ private:
   ObPieceBufferArray *buffer_array_;
   ObIAllocator *allocator_;
   common::ObBitSet<> is_null_map_;
+  int err_ret_;
 };  // end of class ObPiece
 
 class ObPieceCache {
