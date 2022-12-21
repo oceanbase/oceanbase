@@ -2022,6 +2022,27 @@ int ObPLExecState::final(int ret)
           LOG_WARN("failed to add allocator to pl ctx", K(tmp_ret), K(i));
         }
       }
+    } else if (func_.get_variables().at(i).is_cursor_type()
+      && func_.get_out_args().has_member(i) && !func_.get_in_args().has_member(i)) {
+      // the session cursor, be used as a out param should be closed from session when error happen
+      if (OB_FAIL(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        ObPLCursorInfo *cursor = NULL;
+        ObObjParam param;
+        ObSPIService::ObCusorDeclareLoc loc;
+        tmp_ret = ObSPIService::spi_get_cursor_info(&ctx_, func_.get_package_id(),
+                                          func_.get_routine_id(),
+                                          i, cursor, param, loc);
+        int64_t cursor_id = NULL == cursor ? -1 : cursor->get_id();
+        if (OB_SUCCESS == tmp_ret && NULL != cursor && cursor->is_session_cursor()
+            && NULL != ctx_.exec_ctx_->get_my_session()) {
+          ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
+          tmp_ret = session->close_cursor(cursor_id);
+        }
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("faild close cursor. ", K(tmp_ret), K(cursor_id));
+        }
+      }
     }
   }
   for (int64_t i = func_.get_arg_count(); i < func_.get_variables().count(); ++i) {
