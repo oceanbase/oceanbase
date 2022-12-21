@@ -5381,6 +5381,7 @@ int ObTransformPreProcess::switch_left_outer_to_semi_join(ObSelectStmt *&sub_stm
     LOG_WARN("failed to assign to condition exprs.", K(ret));
   } else {
     FromItem from_item;
+    TableItem* right_table_item = NULL;
     from_item.is_joined_ = joined_table->right_table_->type_ == TableItem::JOINED_TABLE;
     from_item.table_id_ = joined_table->right_table_->table_id_;
     semi_info->join_type_ = LEFT_ANTI_JOIN;
@@ -5388,6 +5389,10 @@ int ObTransformPreProcess::switch_left_outer_to_semi_join(ObSelectStmt *&sub_stm
     semi_info->semi_id_ = sub_stmt->get_query_ctx()->available_tb_id_--;
     if (OB_FAIL(from_items.push_back(from_item))) {
       LOG_WARN("failed to push back from item", K(ret));
+    } else if (OB_ISNULL(right_table_item = sub_stmt->get_table_item_by_id(semi_info->right_table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null pointer.", K(ret));
+    } else if (OB_FALSE_IT(right_table_item->for_update_ = false)) {
     } else if (from_item.is_joined_) {
       JoinedTable *table = static_cast<JoinedTable*>(joined_table->right_table_);
       ret = semi_info->left_table_ids_.assign(table->single_table_ids_);
