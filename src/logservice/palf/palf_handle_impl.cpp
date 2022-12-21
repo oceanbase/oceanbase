@@ -2126,6 +2126,8 @@ int PalfHandleImpl::handle_prepare_request(const common::ObAddr &server,
     } else if (OB_FAIL(state_mgr_.handle_prepare_request(server, proposal_id))) {
       PALF_LOG(WARN, "handle_prepare_request failed", K(ret), KPC(this), K(server), K(proposal_id));
     } else {
+      // Call clean_log() when updating proposal_id to delete phantom logs(if it exists).
+      (void) sw_.clean_log();
       PALF_LOG(INFO, "handle_prepare_request success", K(ret), KPC(this), K(server), K_(self), K(proposal_id));
     }
   }
@@ -2166,7 +2168,10 @@ int PalfHandleImpl::handle_prepare_response(const common::ObAddr &server,
           // can not handle prepare request
         } else if (OB_FAIL(state_mgr_.handle_prepare_request(server, proposal_id))) {
           PALF_LOG(WARN, "handle_prepare_request failed", K(ret), KPC(this));
-        } else {}
+        } else {
+          // Call clean_log() when updating proposal_id to delete phantom logs(if it exists).
+          (void) sw_.clean_log();
+        }
       }
     } else if (vote_granted) {
       // server grant vote for me, process preapre response
@@ -2391,7 +2396,11 @@ int PalfHandleImpl::try_update_proposal_id_(const common::ObAddr &server,
         // can not handle prepare request
       } else if (OB_FAIL(state_mgr_.handle_prepare_request(server, proposal_id))) {
         PALF_LOG(WARN, "handle_prepare_request failed", K(ret), K(server), K(proposal_id));
-      } else {}
+      } else {
+        // Call clean_log() when updating proposal_id to delete phantom logs(if it exists).
+        (void) sw_.clean_log();
+        PALF_LOG(INFO, "try_update_proposal_id_ finished", K(ret), K(server), K(proposal_id));
+      }
     }
   }
   return ret;
