@@ -175,6 +175,7 @@ int ObConnectByOpPump::free_pump_node(PumpNode &pop_node)
     }
 
     if (OB_NOT_NULL(pop_node.row_fetcher_.iterator_)) {
+      pop_node.row_fetcher_.iterator_->~Iterator();
       allocator_.free(pop_node.row_fetcher_.iterator_);
     }
 
