@@ -1401,6 +1401,7 @@ int ObDDLRedefinitionTask::get_estimated_timeout(const ObTableSchema *dst_table_
     estimated_timeout = max(estimated_timeout, 9 * 1000 * 1000);
     estimated_timeout = min(estimated_timeout, 3600 * 1000 * 1000);
     estimated_timeout = max(estimated_timeout, GCONF.rpc_timeout);
+    LOG_INFO("get estimate timeout", K(estimated_timeout));
   }
   return ret;
 }
@@ -1421,6 +1422,7 @@ int ObDDLRedefinitionTask::sync_stats_info()
     const ObTableSchema *new_table_schema = nullptr;
     ObTimeoutCtx timeout_ctx;
     int64_t timeout = 0;
+    const int64_t start_time = ObTimeUtility::current_time();
 
     if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("get tanant schema guard failed", K(ret), K(tenant_id_));
@@ -1460,6 +1462,8 @@ int ObDDLRedefinitionTask::sync_stats_info()
         has_synced_stats_info_ = (ret == OB_SUCCESS);
       }
     }
+    const int64_t end_time = ObTimeUtility::current_time();
+    LOG_INFO("sync table stat finished", "cost_time", end_time - start_time);
   }
   return ret;
 }
