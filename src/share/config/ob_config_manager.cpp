@@ -330,7 +330,8 @@ int ObConfigManager::update_local(int64_t expected_version)
                  "current_version", current_version_,
                  "expected_version", expected_version);
       } else {
-        LOG_INFO("read config from __all_sys_parameter succed", K(start));
+        current_version_ = system_config_.get_version();
+        LOG_INFO("read config from __all_sys_parameter succed", K(start), K(current_version_), K(expected_version));
       }
     }
   }
