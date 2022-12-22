@@ -175,9 +175,9 @@ public:
   // serialized_schema_version > sync_schema_version when major update storage schema
   // sync_schema_version > serialized_schema_version when replay schema clog but not mini merge yet
   int64_t max_sync_storage_schema_version_;
-  int64_t max_serialized_medium_scn_; // update when serialized medium info
   int64_t ddl_execution_id_;
   int64_t ddl_cluster_version_;
+  int64_t max_serialized_medium_scn_; // update when serialized medium info
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
   // yuque : https://yuque.antfin.com/ob/ob-backup/zzwpuh
