@@ -6052,7 +6052,11 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
       CK (OB_NOT_NULL(record_type->get_record_member_name(i)));
       OZ (ob_write_string(*(params_.allocator_), *(record_type->get_record_member_name(i)), column_name));
       CK (OB_NOT_NULL(column_name));
-      CK (pl_type->is_obj_type());
+      if (OB_SUCC(ret) && !pl_type->is_obj_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "table(coll(object)) : object`s element is not basic type");
+        LOG_WARN("table(coll(object)) : object`s element is not basic type not supported", K(ret), KPC(pl_type));
+      }
       CK (OB_NOT_NULL(pl_type->get_data_type()));
       if (OB_FAIL(ret)) { // do nothing ...
       } else if (NULL != (col_item = stmt->get_column_item(table_item.table_id_, column_name))) {
