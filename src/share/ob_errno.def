@@ -1787,6 +1787,7 @@ DEFINE_ERROR(OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT, -9086, -1, "HY000", "backup a
 DEFINE_ERROR(OB_ESI_SESSION_NOT_EXIST, -9090, -1, "HY000", "obesi process session not exist");
 DEFINE_ERROR(OB_ALREADY_IN_ARCHIVE_MODE, -9091, -1, "HY000", "Already in ARCHIVELOG mode");
 DEFINE_ERROR(OB_ALREADY_IN_NOARCHIVE_MODE, -9092, -1, "HY000", "Already in NOARCHIVELOG mode");
+DEFINE_ERROR(OB_RESTORE_LOG_TO_END, -9093, -1, "HY000", "Restore log to end");
 // end of backup and restore error codes 9001 ~ 9099
 
 ////////////////////////////////////////////////////////////////
