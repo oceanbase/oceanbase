@@ -262,8 +262,8 @@ void ObFastInitSqcReportQCMessageCall::operator()(hash::HashMapPair<ObInterrupti
       mock_sqc_finish_msg();
     } else {
       sqc_->set_need_report(false);
-      if (!sqc_alive_) {
-        sqc_->set_server_not_alive();
+      if (need_set_not_alive_) {
+        sqc_->set_server_not_alive(true);
       }
     }
   }
@@ -476,10 +476,7 @@ int ObFastInitSqcCB::deal_with_rpc_timeout_err_safely()
 
 {
   int ret = OB_SUCCESS;
-  // only if it's sure init_sqc msg is not sent to sqc successfully, we can retry the query.
-  bool init_sqc_not_send_out = (get_error() == EASY_TIMEOUT_NOT_SENT_OUT
-      || get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
-  ObDealWithRpcTimeoutCall call(addr_, retry_info_, timeout_ts_, trace_id_, init_sqc_not_send_out);
+  ObDealWithRpcTimeoutCall call(addr_, retry_info_, timeout_ts_, trace_id_);
   call.ret_ = OB_TIMEOUT;
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   if (OB_NOT_NULL(manager)) {
@@ -495,7 +492,11 @@ void ObFastInitSqcCB::interrupt_qc(int err, bool is_timeout)
   int ret = OB_SUCCESS;
   ObGlobalInterruptManager *manager = ObGlobalInterruptManager::getInstance();
   if (OB_NOT_NULL(manager)) {
-    ObFastInitSqcReportQCMessageCall call(sqc_, err, timeout_ts_, !is_timeout);
+    // if we are sure init_sqc msg is not sent to sqc successfully, we don't have to set sqc not alive.
+    bool init_sqc_not_send_out = (get_error() == EASY_TIMEOUT_NOT_SENT_OUT
+                                 || get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
+    const bool need_set_not_alive = is_timeout && !init_sqc_not_send_out;
+    ObFastInitSqcReportQCMessageCall call(sqc_, err, timeout_ts_, need_set_not_alive);
     if (OB_FAIL(manager->get_map().atomic_refactored(interrupt_id_, call))) {
       LOG_WARN("fail to set need report", K(interrupt_id_));
     } else if (!call.need_interrupt_) {
@@ -532,12 +533,7 @@ void ObDealWithRpcTimeoutCall::deal_with_rpc_timeout_err()
           LOG_WARN("fail to add invalid server distinctly", K_(trace_id), K(a_ret), K_(addr));
         }
       }
-      if (can_retry_) {
-        // return OB_RPC_CONNECT_ERROR to retry.
-        ret_ = OB_RPC_CONNECT_ERROR;
-      } else {
-        ret_ = OB_PACKET_STATUS_UNKNOWN;
-      }
+      ret_ = OB_RPC_CONNECT_ERROR;
     } else {
       LOG_DEBUG("rpc return OB_TIMEOUT, and it is actually timeout, "
                 "do not change error code", K(ret_),
