@@ -1650,14 +1650,16 @@ int ObJsonBin::get_free_space(size_t &space) const
   uint64_t actual_size = curr_.length();
   uint64_t used_size = 0;
 
-  uint8_t node_type, type, obj_size_type;
-  uint64_t count, obj_size, offset = 0;
-  parse_obj_header(curr_.ptr(), offset, node_type, type, obj_size_type, count, obj_size);
+  uint8_t node_type = *reinterpret_cast<const uint8_t*>(curr_.ptr());
   ObJBVerType node_type_val = static_cast<ObJBVerType>(OB_JSON_TYPE_GET_INLINE(node_type));
   if (ObJsonVerType::get_json_type(node_type_val) != ObJsonNodeType::J_ARRAY &&
       ObJsonVerType::get_json_type(node_type_val) != ObJsonNodeType::J_OBJECT) {
     space = 0;
   } else {
+    uint8_t type, obj_size_type;
+    uint64_t count, obj_size, offset = 0;
+    parse_obj_header(curr_.ptr(), offset, node_type, type, obj_size_type, count, obj_size);
+
     used_size = obj_size;
     if (used_size > actual_size) {
       ret = OB_ERR_INTERVAL_INVALID;
