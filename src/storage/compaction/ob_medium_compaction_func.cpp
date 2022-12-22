@@ -745,21 +745,28 @@ int ObMediumCompactionScheduleFunc::freeze_memtable_to_get_medium_info()
   } else {
     memtable::ObMemtable *memtable = nullptr;
     bool receive_medium_info = false;
+    bool has_medium_info = false;
     for (int i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
       if (OB_ISNULL(memtable = static_cast<memtable::ObMemtable*>(memtables.at(i)))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("memtable is null", K(ret), K(i), KPC(memtables.at(i)), K(memtable));
       } else if (memtable->has_multi_source_data_unit(memtable::MultiSourceDataUnitType::MEDIUM_COMPACTION_INFO)) {
-        receive_medium_info = true;
-        break;
+        has_medium_info = true;
+        if (memtable->is_active_memtable()) {
+          receive_medium_info = true;
+          break;
+        }
       }
     } // end of for
-    if (OB_SUCC(ret) && receive_medium_info) {
+    if (OB_FAIL(ret)) {
+    } else if (receive_medium_info) {
       if (OB_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(tablet_.get_tablet_meta().tablet_id_, false/*force_freeze*/))) {
         if (OB_TABLE_NOT_EXIST != ret) {
           LOG_WARN("failed to freeze tablet", K(ret), KPC(this));
         }
       }
+    } else if (has_medium_info) {
+      LOG_INFO("received medium info, the memtable is frozen, no need to freeze tablet again", K(ret), K(tablet_));
     }
   }
   return ret;

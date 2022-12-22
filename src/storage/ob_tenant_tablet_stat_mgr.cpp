@@ -465,8 +465,8 @@ void ObTenantTabletStatMgr::destroy()
   {
     ObBucketWLockAllGuard lock_guard(bucket_lock_);
     stream_map_.destroy();
-    stream_pool_.destroy();
     lru_list_.reset();
+    stream_pool_.destroy();
     report_cursor_ = 0;
     pending_cursor_ = 0;
     report_tg_id_ = 0;
