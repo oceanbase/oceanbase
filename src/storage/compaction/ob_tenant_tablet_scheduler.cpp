@@ -1023,7 +1023,7 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
         tenant_merge_finish = false;
         if (OB_SIZE_OVERFLOW == tmp_ret) {
           break;
-        } else if (OB_LS_NOT_EXIST != ret) {
+        } else if (OB_LS_NOT_EXIST != tmp_ret) {
           LOG_WARN("failed to schedule ls merge", K(tmp_ret), KPC(ls));
         }
       } else {
