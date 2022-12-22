@@ -98,6 +98,7 @@ int ObLockMemtable::init(
 void ObLockMemtable::reset()
 {
   rec_scn_.set_max();
+  pre_rec_scn_.reset();
   max_committed_scn_.reset();
   ls_id_.reset();
   ObITable::reset();
