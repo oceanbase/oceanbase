@@ -922,6 +922,7 @@ int ObSql::do_real_prepare(const ObString &sql,
   context.is_dynamic_sql_ = !context.is_dynamic_sql_ ? !is_inner_sql : context.is_dynamic_sql_;
 
   bool is_from_pl = (NULL != context.secondary_namespace_ || result.is_simple_ps_protocol());
+  ObPsPrepareStatusGuard ps_status_guard(session, is_from_pl);
   ObPlanCacheCtx pc_ctx(sql, true, /*is_ps_mode*/
                         allocator, context, ectx, session.get_effective_tenant_id());
   ParamStore param_store( (ObWrapperAllocator(&allocator)) );

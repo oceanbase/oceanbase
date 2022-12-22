@@ -559,10 +559,8 @@ int ObFreezer::tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id
     TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K_(ls_id), K(tablet_id));
   } else if (OB_FAIL(guard.try_set_tablet_freeze_begin())) {
     // no need freeze now, a ls freeze is running or will be running
-    ret = OB_SUCCESS;
     FLOG_INFO("[Freezer] ls freeze is running, no need freeze again", K(ret), K_(ls_id), K(tablet_id));
-  } else if (OB_FAIL(set_freeze_flag_without_inc_freeze_clock())) {
-    ret = OB_SUCCESS;
+  } else if (OB_FAIL(loop_set_freeze_flag())) {
     FLOG_INFO("[Freezer] freeze is running", K(ret), K_(ls_id), K(tablet_id));
   } else if (FALSE_IT(stat_.state_ = ObFreezeState::NOT_SUBMIT_LOG)) {
   } else {

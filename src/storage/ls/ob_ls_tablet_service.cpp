@@ -2946,11 +2946,7 @@ int ObLSTabletService::build_ha_tablet_new_table_store(
         } else if (nullptr != param.tablet_meta_
             && old_tablet->get_clog_checkpoint_ts() < param.tablet_meta_->clog_checkpoint_ts_) {
           if (OB_FAIL(freezer->tablet_freeze_for_replace_tablet_meta(tablet_id, imemtable))) {
-            if (OB_ENTRY_EXIST == ret) {
-              ret = OB_SUCCESS;
-            } else {
-              LOG_WARN("failed to freeze tablet", K(ret), K(tablet_id), KPC(old_tablet));
-            }
+            LOG_WARN("failed to freeze tablet", K(ret), K(tablet_id), KPC(old_tablet));
           } else {
             is_tablet_freeze = true;
           }
