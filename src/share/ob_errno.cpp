@@ -19341,6 +19341,18 @@ static const _error _error_OB_ALREADY_IN_NOARCHIVE_MODE = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -9092, Already in NOARCHIVELOG mode",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9092, Already in NOARCHIVELOG mode"
 };
+static const _error _error_OB_RESTORE_LOG_TO_END = {
+      .error_name            = "OB_RESTORE_LOG_TO_END",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = -1,
+      .sqlstate              = "HY000",
+      .str_error             = "Restore log to end",
+      .str_user_error        = "Restore log to end",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9093, Restore log to end",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9093, Restore log to end"
+};
 static const _error _error_OB_NO_SUCH_FILE_OR_DIRECTORY = {
       .error_name            = "OB_NO_SUCH_FILE_OR_DIRECTORY",
       .error_cause           = "Internal Error",
@@ -23682,6 +23694,7 @@ struct ObStrErrorInit
     _errors[-OB_ESI_SESSION_NOT_EXIST] = &_error_OB_ESI_SESSION_NOT_EXIST;
     _errors[-OB_ALREADY_IN_ARCHIVE_MODE] = &_error_OB_ALREADY_IN_ARCHIVE_MODE;
     _errors[-OB_ALREADY_IN_NOARCHIVE_MODE] = &_error_OB_ALREADY_IN_NOARCHIVE_MODE;
+    _errors[-OB_RESTORE_LOG_TO_END] = &_error_OB_RESTORE_LOG_TO_END;
     _errors[-OB_NO_SUCH_FILE_OR_DIRECTORY] = &_error_OB_NO_SUCH_FILE_OR_DIRECTORY;
     _errors[-OB_FILE_OR_DIRECTORY_EXIST] = &_error_OB_FILE_OR_DIRECTORY_EXIST;
     _errors[-OB_FILE_OR_DIRECTORY_PERMISSION_DENIED] = &_error_OB_FILE_OR_DIRECTORY_PERMISSION_DENIED;
