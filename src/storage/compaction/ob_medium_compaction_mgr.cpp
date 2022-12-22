@@ -702,7 +702,7 @@ int ObTabletMediumCompactionInfoRecorder::submit_log(
   } else if (OB_FAIL(write_clog(clog_buf, clog_len))) {
     LOG_WARN("fail to submit log", K(ret), K_(tablet_id), K(medium_info_));
     int tmp_ret = OB_SUCCESS;
-    if (clog_scn_.get_val_for_tx() > 0 && OB_TMP_FAIL(dec_ref_on_memtable(false))) {
+    if (OB_TMP_FAIL(dec_ref_on_memtable(false))) {
       LOG_ERROR("failed to dec ref on memtable", K(tmp_ret), K_(ls_id), K_(tablet_id));
     }
   } else {

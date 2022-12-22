@@ -80,7 +80,7 @@ void ObIStorageClogRecorder::destroy()
   lock_ = false;
   logcb_finish_flag_ = true;
   log_handler_ = NULL;
-  clog_scn_.set_min();
+  clog_scn_.reset();
 }
 
 void ObIStorageClogRecorder::reset()
@@ -267,7 +267,7 @@ int ObIStorageClogRecorder::write_clog(
   int ret = OB_SUCCESS;
   const bool need_nonblock = false;
   palf::LSN lsn;
-  clog_scn_.set_min();
+  clog_scn_.reset();
   if (OB_UNLIKELY(nullptr == buf || buf_len < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(buf), K(buf_len));
