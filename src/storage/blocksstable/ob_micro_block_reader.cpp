@@ -407,6 +407,7 @@ int ObMicroBlockReader::get_row_count(int64_t &row_count)
   return ret;
 }
 
+// notice, trans_version of ghost row is min(0)
 int ObMicroBlockReader::get_multi_version_info(
     const int64_t row_idx,
     const int64_t schema_rowkey_cnt,
@@ -448,7 +449,7 @@ int ObMicroBlockReader::get_multi_version_info(
     } else {
       if (!flag.is_uncommitted_row()) { // get trans_version for committed row
         sql_sequence = 0;
-        trans_version = -datum.get_int();
+        trans_version = flag.is_ghost_row() ? 0 : -datum.get_int();
       } else {
         // get sql_sequence for uncommitted row
         trans_version = INT64_MAX;

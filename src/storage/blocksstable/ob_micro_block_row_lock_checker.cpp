@@ -59,7 +59,6 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
                   sql_sequence))) {
         LOG_WARN("failed to get multi version info", K(ret), K_(current), K(flag), K(trans_id),
                  KPC_(lock_state), K(sql_sequence), K_(macro_id));
-        // TODO(handora.qc): fix it
       } else if (OB_FAIL(lock_state_->trans_version_.convert_for_tx(trans_version))) {
         LOG_ERROR("convert failed", K(ret), K(trans_version));
       } else if (flag.is_uncommitted_row()) {
