@@ -194,13 +194,19 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_request()
     break;
   }
   case ObTxState::ABORT: {
-    // Txn may go abort itself, so we need reply the response based on the state
-    // to advance the two phase commit protocol as soon as possible
-    if (OB_TMP_FAIL(retransmit_downstream_msg_())) {
-      TRANS_LOG(WARN, "retransmit downstream msg failed", KR(tmp_ret));
-    }
-    if (OB_TMP_FAIL(retransmit_upstream_msg_(ObTxState::ABORT))) {
-      TRANS_LOG(WARN, "retransmit upstream msg failed", KR(tmp_ret));
+    // NB: we must apply msg cache here because the retransmit needs the
+    // upstream_ from it to remind itself that it is during the 2pc.
+    if (OB_FAIL(apply_2pc_msg_(ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REQ))) {
+      TRANS_LOG(WARN, "apply msg failed", K(ret), KPC(this));
+    } else {
+      // Txn may go abort itself, so we need reply the response based on the state
+      // to advance the two phase commit protocol as soon as possible
+      if (OB_TMP_FAIL(retransmit_downstream_msg_())) {
+        TRANS_LOG(WARN, "retransmit downstream msg failed", KR(tmp_ret));
+      }
+      if (OB_TMP_FAIL(retransmit_upstream_msg_(ObTxState::ABORT))) {
+        TRANS_LOG(WARN, "retransmit upstream msg failed", KR(tmp_ret));
+      }
     }
     break;
   }
@@ -472,14 +478,20 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_abort_request()
       break;
     }
     case ObTxState::ABORT: {
-      // Downstream may lost the response, so we need reply the response based on
-      // the state to advance the two phase commit protocol as soon as possible
-      if (OB_FAIL(retransmit_downstream_msg_())) {
-        TRANS_LOG(WARN, "retransmit downstream msg failed", KR(ret));
-        ret = OB_SUCCESS;
-      }
-      if (OB_FAIL(retransmit_upstream_msg_(ObTxState::ABORT))) {
-        TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
+      // NB: we must apply msg cache here because the retransmit needs the
+      // upstream_ from it to remind itself that it is during the 2pc.
+      if (OB_FAIL(apply_2pc_msg_(ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_REQ))) {
+        TRANS_LOG(WARN, "apply msg failed", K(ret), KPC(this));
+      } else {
+        // Downstream may lost the response, so we need reply the response based on
+        // the state to advance the two phase commit protocol as soon as possible
+        if (OB_FAIL(retransmit_downstream_msg_())) {
+          TRANS_LOG(WARN, "retransmit downstream msg failed", KR(ret));
+          ret = OB_SUCCESS;
+        }
+        if (OB_FAIL(retransmit_upstream_msg_(ObTxState::ABORT))) {
+          TRANS_LOG(WARN, "retransmit upstream msg failed", KR(ret));
+        }
       }
       break;
     }
