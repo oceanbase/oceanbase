@@ -289,14 +289,14 @@ int ObTxCycleTwoPhaseCommitter::continue_execution(const bool is_rollback)
   } else {
     if (is_rollback) {
       if (OB_FAIL(drive_self_2pc_phase(ObTxState::ABORT))) {
-        TRANS_LOG(ERROR, "do abort failed", K(ret));
+        TRANS_LOG(WARN, "do abort failed", K(ret));
       } else if (OB_TMP_FAIL(post_downstream_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_ABORT_REQ))) {
         TRANS_LOG(WARN, "post abort request failed", K(tmp_ret), KPC(this));
       }
     } else {
       // TODO, switch state first if do preapre can be executed repeatedly
       if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
-        TRANS_LOG(ERROR, "do prepare failed", K(ret));
+        TRANS_LOG(WARN, "do prepare failed", K(ret));
       } else if (OB_TMP_FAIL(post_downstream_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REQ))) {
         TRANS_LOG(WARN, "post prepare request failed", K(tmp_ret), KPC(this));
       }

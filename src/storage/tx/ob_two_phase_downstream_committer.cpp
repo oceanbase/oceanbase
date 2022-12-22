@@ -335,7 +335,7 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_request_impl_() {
   } else if (OB_FAIL(apply_2pc_msg_(ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REQ))) {
     TRANS_LOG(WARN, "apply msg failed", K(ret), KPC(this));
   } else if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
-    TRANS_LOG(ERROR, "do prepare failed", K(ret), K(*this));
+    TRANS_LOG(WARN, "do prepare failed", K(ret), K(*this));
   } else {
     switch (get_2pc_role()) {
     case Ob2PCRole::ROOT: {
