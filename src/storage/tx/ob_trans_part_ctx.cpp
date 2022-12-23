@@ -2748,7 +2748,8 @@ int ObPartTransCtx::submit_commit_log_()
         } else if (use_local_block_buf) {
           // realloc log buf and retry submit log
           log_block.reset();
-          if (OB_FAIL(log_block.init(replay_hint, log_block_header, false /*use_local_block_buf*/))) {
+          ObTxLogBlockHeader tmp_log_block_header(cluster_id_, exec_info_.next_log_entry_no_, trans_id_);
+          if (OB_FAIL(log_block.init(replay_hint, tmp_log_block_header, false /*use_local_block_buf*/))) {
             TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
           } else if (OB_FAIL(submit_redo_commit_info_log_(log_block, has_redo, helper))) {
             TRANS_LOG(WARN, "submit redo commit state log failed", KR(ret), K(*this));
