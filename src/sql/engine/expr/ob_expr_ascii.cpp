@@ -26,6 +26,9 @@ using namespace common;
 
 namespace sql
 {
+static const int64_t DEFAULT_ASCII_PRECISION_FOR_MYSQL = 3;
+static const int64_t DEFAULT_ORD_PRECISION_FOR_MYSQL = 21;
+
 ObExprAscii::ObExprAscii(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc,
                          T_FUN_SYS_ASCII,
@@ -54,6 +57,8 @@ int ObExprAscii::calc_result_type1(ObExprResType &type,
       OZ(deduce_string_param_calc_type_and_charset(*session, tmp_type, params));
     } else {
       type.set_int32();
+      type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+      type.set_precision(DEFAULT_ASCII_PRECISION_FOR_MYSQL);
       if (ob_is_string_type(type1.get_type())) {
         type1.set_calc_type(type1.get_type());
         type1.set_calc_collation_type(type1.get_collation_type());
@@ -142,6 +147,8 @@ int ObExprOrd::calc_result_type1(ObExprResType &type,
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
   type.set_int();
+  type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+  type.set_precision(DEFAULT_ORD_PRECISION_FOR_MYSQL);
   if (ob_is_string_type(type1.get_type())) {
     type1.set_calc_type(type1.get_type());
     type1.set_calc_collation_type(type1.get_collation_type());
