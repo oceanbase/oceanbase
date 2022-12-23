@@ -226,19 +226,9 @@ private:
   int create_new_table_store_with_major_();
   int create_new_table_store_with_ddl_();
   int create_new_table_store_with_minor_();
-  int inner_update_tablet_table_store_with_minor_(
-      const bool &need_tablet_meta_merge,
-      ObTablesHandleArray *tables_handle_ptr);
-  int inner_update_tablet_table_store_with_major_(
-      const common::ObTabletID &tablet_id,
-      ObITable *table);
+  int trim_tablet_();
+
   int update_tablet_data_status_();
-  int check_need_merge_tablet_meta_(
-      ObTablet *tablet,
-      bool &need_merge);
-  int check_remote_logical_sstable_exist_(
-      ObTablet *tablet,
-      bool &is_exist);
   int get_tables_handle_ptr_(
       const ObITable::TableKey &table_key,
       ObTablesHandleArray *&table_handle_ptr);
