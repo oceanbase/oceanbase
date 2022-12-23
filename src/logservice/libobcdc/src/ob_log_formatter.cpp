@@ -758,10 +758,14 @@ int ObLogFormatter::build_row_value_(
   } else if (OB_ISNULL(meta_manager_)) {
     LOG_ERROR("meta_manager_ is null", K(meta_manager_));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(meta_manager_->get_table_schema_meta(simple_table_schema->get_schema_version(),
-          simple_table_schema->get_table_id(), tb_schema_info))) {
+  } else if (OB_FAIL(meta_manager_->get_table_schema_meta(
+        simple_table_schema->get_schema_version(),
+        simple_table_schema->get_tenant_id(),
+        simple_table_schema->get_table_id(),
+        tb_schema_info))) {
     LOG_ERROR("meta_manager_ get_table_schema_meta fail", KR(ret),
         "version", simple_table_schema->get_schema_version(),
+        "tenant_id", simple_table_schema->get_tenant_id(),
         "table_id", simple_table_schema->get_table_id(),
         "table_name", simple_table_schema->get_table_name(), KPC(tb_schema_info));
   } else if (OB_ISNULL(tb_schema_info)) {

@@ -130,6 +130,7 @@ int ObLogMetaManager::get_table_meta(
     ret = OB_INVALID_ARGUMENT;
   } else {
     MetaKey key;
+    key.tenant_id_ = simple_table_schema->get_tenant_id();
     key.id_ = simple_table_schema->get_table_id();
 
     if (OB_FAIL((get_meta_info_<TableMetaMap, TableMetaInfo>(tb_meta_map_, key, meta_info)))) {
@@ -222,6 +223,7 @@ int ObLogMetaManager::get_db_meta(
     ret = OB_INVALID_ARGUMENT;
   } else {
     MetaKey key;
+    key.tenant_id_ = tenant_id;
     key.id_ = db_id;
 
     if (OB_FAIL((get_meta_info_<DBMetaMap, DBMetaInfo>(db_meta_map_, key, meta_info)))) {
@@ -677,11 +679,18 @@ int ObLogMetaManager::build_column_metas_(ITableMeta *table_meta,
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(set_table_schema_(version, table_id, table_schema->get_table_name(), usr_column_idx,
-              tb_schema_info))) {
-        LOG_ERROR("set_table_schema_ fail", KR(ret), K(version), K(table_id),
-           "table_name", table_schema->get_table_name(),
-           "table_column_cnt", column_cnt, K(usr_column_idx), K(tb_schema_info));
+      if (OB_FAIL(set_table_schema_(
+            version,
+            table_schema->get_tenant_id(),
+            table_id,
+            table_schema->get_table_name(),
+            usr_column_idx,
+            tb_schema_info))) {
+        LOG_ERROR("set_table_schema_ fail", KR(ret), K(version),
+            "tenant_id", table_schema->get_tenant_id(),
+            K(table_id),
+            "table_name", table_schema->get_table_name(),
+            "table_column_cnt", column_cnt, K(usr_column_idx), K(tb_schema_info));
       } else {
         // succ
       }
@@ -1446,7 +1455,9 @@ void ObLogMetaManager::destroy_ddl_meta_()
   }
 }
 
-int ObLogMetaManager::get_table_schema_meta(const int64_t version,
+int ObLogMetaManager::get_table_schema_meta(
+    const int64_t version,
+    const uint64_t tenant_id,
     const uint64_t table_id,
     TableSchemaInfo *&tb_schema_info)
 {
@@ -1456,11 +1467,12 @@ int ObLogMetaManager::get_table_schema_meta(const int64_t version,
     LOG_ERROR("meta manager has not inited");
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == version)
+      || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
       || OB_UNLIKELY(OB_INVALID_ID == table_id)) {
-    LOG_ERROR("invalid argument", K(version), K(table_id));
+    LOG_ERROR("invalid argument", K(version), K(tenant_id), K(table_id));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    MulVerTableKey table_key(version, table_id);
+    MulVerTableKey table_key(version, tenant_id, table_id);
 
     if (OB_FAIL(tb_schema_info_map_.get(table_key, tb_schema_info))) {
       LOG_ERROR("tb_schema_info_map_ get fail", KR(ret), K(table_key), K(tb_schema_info));
@@ -1472,7 +1484,9 @@ int ObLogMetaManager::get_table_schema_meta(const int64_t version,
   return ret;
 }
 
-int ObLogMetaManager::set_table_schema_(const int64_t version,
+int ObLogMetaManager::set_table_schema_(
+    const int64_t version,
+    const uint64_t tenant_id,
     const uint64_t table_id,
     const char *table_name,
     const int64_t non_hidden_column_cnt,
@@ -1484,19 +1498,20 @@ int ObLogMetaManager::set_table_schema_(const int64_t version,
     LOG_ERROR("meta manager has not inited");
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == version)
+      || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
       || OB_UNLIKELY(OB_INVALID_ID == table_id)
       || OB_ISNULL(table_name)) {
-    LOG_ERROR("invalid argument", K(version), K(table_id), K(table_name));
+    LOG_ERROR("invalid argument", K(version), K(tenant_id), K(table_id), K(table_name));
     ret = OB_INVALID_ARGUMENT;
   } else {
     tb_schema_info.set_non_hidden_column_count(non_hidden_column_cnt);
 
-    MulVerTableKey table_key(version, table_id);
+    MulVerTableKey table_key(version, tenant_id, table_id);
 
     if (OB_FAIL(tb_schema_info_map_.insert(table_key, &tb_schema_info))) {
       LOG_ERROR("tb_schema_info_map_ insert fail", KR(ret), K(table_key), K(tb_schema_info));
     } else {
-      LOG_INFO("set_table_schema succ", "schema_version", version,
+      LOG_INFO("set_table_schema succ", "schema_version", version, K(tenant_id),
           K(table_id), K(table_name), K(tb_schema_info));
     }
   }
