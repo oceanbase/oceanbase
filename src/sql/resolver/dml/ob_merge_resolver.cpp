@@ -49,6 +49,9 @@ int ObMergeResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   ObMergeStmt *merge_stmt = NULL;
+  int64_t insert_idx = INSERT_CLAUSE_NODE;
+  int64_t update_idx = UPDATE_CLAUSE_NODE;
+
   if (OB_UNLIKELY(T_MERGE != parse_tree.type_)
       || OB_UNLIKELY(MERGE_FILED_COUNT != parse_tree.num_child_)
       || OB_ISNULL(parse_tree.children_)) {
@@ -59,15 +62,28 @@ int ObMergeResolver::resolve(const ParseNode &parse_tree)
     LOG_ERROR("create insert stmt failed", K(merge_stmt));
   } else if (OB_FAIL(resolve_outline_data_hints())) {
     LOG_WARN("resolve outline data hints failed", K(ret));
+  } else {
+    if (OB_NOT_NULL(parse_tree.children_[insert_idx]) &&
+          parse_tree.children_[insert_idx]->type_ != T_INSERT) {
+      insert_idx = UPDATE_CLAUSE_NODE;
+      update_idx = INSERT_CLAUSE_NODE;
+    } else {
+      insert_idx = INSERT_CLAUSE_NODE;
+      update_idx = UPDATE_CLAUSE_NODE;
+    }
+  }
+
+  if (OB_FAIL(ret)){
+
   } else if (OB_FAIL(resolve_target_relation(parse_tree.children_[TARGET_NODE]))) {
     LOG_WARN("fail to resolve target relation", K(ret));
   } else if (OB_FAIL(resolve_source_relation(parse_tree.children_[SOURCE_NODE]))) {
     LOG_WARN("fail to resolve target relation", K(ret));
   } else if (OB_FAIL(resolve_match_condition(parse_tree.children_[MATCH_COND_NODE]))) {
     LOG_WARN("fail to resolve match condition", K(ret));
-  } else if (OB_FAIL(resolve_insert_clause(parse_tree.children_[INSERT_CLAUSE_NODE]))) {
+  } else if (OB_FAIL(resolve_insert_clause(parse_tree.children_[insert_idx]))) {
     LOG_WARN("fail to resolve insert clause", K(ret));
-  } else if (OB_FAIL(resolve_update_clause(parse_tree.children_[UPDATE_CLAUSE_NODE]))) {
+  } else if (OB_FAIL(resolve_update_clause(parse_tree.children_[update_idx]))) {
     LOG_WARN("fail to resolve update clause", K(ret));
   } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE]))) {
     LOG_WARN("resolve hints failed", K(ret));
