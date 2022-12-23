@@ -5752,6 +5752,7 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
       spec.into_type_ = op.get_into_type();
       spec.closed_cht_ = op.get_closed_cht();
       spec.is_optional_ = op.get_is_optional();
+      spec.plan_->need_drive_dml_query_ = true;
     }
   }
   return ret;
